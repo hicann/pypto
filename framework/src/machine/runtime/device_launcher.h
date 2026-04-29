@@ -30,7 +30,7 @@
 #include "interface/function/function.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
 #include "machine/device/dynamic/device_common.h"
-#include "machine/runtime/device_memory_utils.h"
+#include "machine/runtime/memory_utils/device_memory_utils.h"
 #include "machine/runtime/distributed/distributed_context.h"
 #include "tilefwk/error_code.h"
 
@@ -431,7 +431,6 @@ public:
     static int DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStream);
     static void FillDeviceKernelArgs(
         std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames);
-    static int64_t GetL2Offset();
     static uint8_t* CopyControlFlowCache(DevControlFlowCache* ctrlCache);
     static void FreeControlFlowCache(uint8_t* ctrlCache);
     static void* RegisterKernelBin(const std::vector<uint8_t>& kernelBinary);

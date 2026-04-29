@@ -21,7 +21,7 @@
 #include <mutex>
 #include <limits.h>
 #include "securec.h"
-#include "machine/runtime/runtime.h"
+#include "machine/runtime/runtime_agent.h"
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/load_aicpu_op.h"
 #include "machine/utils/machine_ws_intf.h"

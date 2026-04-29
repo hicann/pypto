@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file runtime.h
+ * \file runtime_agent.h
  * \brief
  */
 
@@ -18,75 +18,15 @@
 #include <vector>
 
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_code.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/runtime_api.h"
-#include "tilefwk/error_code.h"
-#include "machine/runtime/memory_pool.h"
-
-constexpr int ADDR_MAP_TYPE_REG_AIC_CTRL = 2;
-constexpr int ADDR_MAP_TYPE_REG_AIC_PMU_CTRL = 3;
-
-static constexpr uint64_t SENTINEL_VALUE = 0xDEADBEEFDEADBEEF;
-static constexpr uint32_t SENTINEL_NUM = 64;
-static constexpr uint32_t SENTINEL_MEM_SIZE = 512;
-
-struct AddrMapInPara {
-    unsigned int addr_type;
-    unsigned int devid;
-};
-
-struct AddrMapOutPara {
-    unsigned long long ptr;
-    unsigned long long len;
-};
-
-typedef enum tagProcType {
-    PROCESS_CP1 = 0,
-    PROCESS_CP2,
-    PROCESS_DEV_ONLY,
-    PROCESS_QS,
-    PROCESS_HCCP,
-    PROCESS_USER,
-    PROCESS_CPTYPE_MAX
-} processType_t;
-
-enum res_map_type { RES_AICORE = 0, RES_HSCB_AICORE, RES_L2BUFF, RES_C2C, RES_MAP_TYPE_MAX };
-
-struct res_map_info {
-    processType_t target_proc_type;
-    enum res_map_type res_type;
-    unsigned int res_id;
-    unsigned int flag;
-    unsigned int rsv[1];
-};
+#include "machine/runtime/memory_utils/memory_pool.h"
+#include "machine/runtime/runtime_utils.h"
 
 namespace npu::tile_fwk {
-inline void CheckDeviceId()
-{
-    int32_t devId = 0;
-    int32_t getDeviceResult = RuntimeGetDevice(&devId);
-    if (getDeviceResult != RT_SUCCESS) {
-        MACHINE_LOGE(RtErr::RT_DEVICE_FAILED, "fail get device id, check if set device id");
-        return;
-    }
-}
-
-inline int32_t GetUserDeviceId()
-{
-    int32_t userDeviceId = 0;
-    RuntimeGetDevice(&userDeviceId);
-    return userDeviceId;
-}
-
-inline int32_t GetLogDeviceId()
-{
-    int32_t logicDeviceId = 0;
-    int32_t userDeviceId = GetUserDeviceId();
-    ASSERT(RtErr::RT_DEVICE_FAILED, RuntimeGetLogicDevIdByUserDevId(userDeviceId, &logicDeviceId) == RT_SUCCESS)
-        << "Trans usrDeviceId: " << userDeviceId << " to logDevId not success";
-    MACHINE_LOGD("Current userDeviceId=%d, logicDeviceId=%d.", userDeviceId, logicDeviceId);
-    return logicDeviceId;
-}
+constexpr int ADDR_MAP_TYPE_REG_AIC_CTRL = 2;
+constexpr int ADDR_MAP_TYPE_REG_AIC_PMU_CTRL = 3;
 
 class RuntimeAgentMemory {
 public:
@@ -200,16 +140,6 @@ protected:
 
 public:
     ~RuntimeAgent() { Finalize(); }
-
-public:
-    static uint64_t GetL2Offset()
-    {
-        uint64_t offset = 0;
-        int32_t userDeviceId = GetUserDeviceId();
-        RuntimeGetL2CacheOffset(userDeviceId, &offset);
-        MACHINE_LOGD("RuntimeGetL2CacheOffset=%lu", offset);
-        return offset;
-    }
 
     void CopyFromTensor(uint8_t* hostDstAddr, uint8_t* devSrcAddr, uint64_t size)
     {

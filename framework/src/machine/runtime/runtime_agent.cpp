@@ -9,22 +9,30 @@
  */
 
 /*!
- * \file runtime.cpp
+ * \file runtime_agent.cpp
  * \brief
  */
 
-#include "machine/runtime/runtime.h"
+#include "machine/runtime/runtime_agent.h"
 #include "tilefwk/platform.h"
 #include "adapter/api/hal_api.h"
 
-namespace {
-const int32_t MODULE_TYPE_AI_CORE = 4;
-const int32_t INFO_TYPE_OCCUPY = 8;
-const uint8_t AICORE_MAP_BUFF_LEN = 2;
-} // namespace
 namespace npu::tile_fwk {
+struct AddrMapInPara {
+    unsigned int addr_type;
+    unsigned int devid;
+};
 
-static bool GetPgMask(uint64_t& valid, int32_t& deviceId)
+struct AddrMapOutPara {
+    unsigned long long ptr;
+    unsigned long long len;
+};
+namespace {
+constexpr int32_t MODULE_TYPE_AI_CORE = 4;
+constexpr int32_t INFO_TYPE_OCCUPY = 8;
+constexpr uint8_t AICORE_MAP_BUFF_LEN = 2;
+
+bool GetPgMask(uint64_t& valid, int32_t& deviceId)
 {
     deviceId = GetLogDeviceId();
     uint64_t aicore_bitmap[AICORE_MAP_BUFF_LEN] = {0};
@@ -37,6 +45,7 @@ static bool GetPgMask(uint64_t& valid, int32_t& deviceId)
     }
     valid = aicore_bitmap[0];
     return true;
+}
 }
 
 constexpr uint32_t SUB_CORE_PER_AICORE = 3;

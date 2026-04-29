@@ -26,7 +26,7 @@
 #include "test_dev_func_runner.h"
 #include "test_data_loader.h"
 #define private public
-#include "machine/runtime/runtime.h"
+#include "machine/runtime/runtime_agent.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;

@@ -21,7 +21,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
-#include "machine/runtime/runtime.h"
+#include "machine/runtime/runtime_agent.h"
 #include "interface/tensor/logical_tensor.h"
 #include "cost_model/simulation/pv/PvData.h"
 #include "cost_model/simulation/emulator/SoftMemory.h"

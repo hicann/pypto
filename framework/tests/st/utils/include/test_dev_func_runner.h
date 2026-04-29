@@ -18,13 +18,14 @@
 #include <gtest/gtest.h>
 #include <thread>
 #include <cstdint>
+#include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_code.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/device_launcher.h"
-#include "tilefwk/pypto_fwk_log.h"
-#include "tilefwk/error_code.h"
+#include "machine/runtime/runtime_utils.h"
 #include "cost_model/simulation/backend.h"
 
 using namespace npu::tile_fwk::dynamic;
@@ -115,7 +116,7 @@ struct MemoryHelper {
         CopyFromDev(tensorData.data(), tensorData.GetDevPtr(), tensorData.size());
     }
 
-    uint64_t GetL2Offset() { return machine::GetRA()->GetL2Offset(); }
+    static uint64_t GetL2Offset() { return GetRuntimeL2Offset(); }
 
     bool isTest_{true};
     std::vector<std::shared_ptr<uint8_t>> testAllocatePtrs_;

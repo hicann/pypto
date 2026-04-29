@@ -25,7 +25,6 @@
 #include "securec.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
-#include "machine/runtime/runtime.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "machine/device/dynamic/aicpu_task_manager.h"
 #include "machine/device/dynamic/aicore_manager.h"

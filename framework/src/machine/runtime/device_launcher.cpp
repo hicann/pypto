@@ -551,11 +551,6 @@ void DeviceLauncher::FillDeviceKernelArgs(
     DeviceInitDistributedContext(deviceMemoryUtils, groupNames, kargs);
 }
 
-int64_t DeviceLauncher::GetL2Offset()
-{
-    return machine::GetRA()->GetL2Offset();
-}
-
 uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
 {
     uint8_t* devCache = nullptr;

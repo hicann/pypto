@@ -21,7 +21,7 @@
 #include "adapter/api/acl_api.h"
 #include "interface/utils/common.h"
 #include "tilefwk/error_code.h"
-#include "machine/runtime/runtime.h"
+#include "machine/runtime/runtime_agent.h"
 #include "machine/device/dynamic/device_utils.h"
 
 constexpr uint32_t COMM_IS_NOT_SET_DEVICE = 0;

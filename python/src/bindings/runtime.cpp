@@ -596,7 +596,7 @@ private:
         inputp[0] = dynAttr->startArgsInputLogicalTensorList.size();
         inputp[1] = dynAttr->startArgsOutputLogicalTensorList.size();
 
-        l2Offset = DeviceLauncher::GetL2Offset();
+        l2Offset = GetRuntimeL2Offset();
 
         for (auto& t : dynAttr->startArgsInputLogicalTensorList) {
             argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape(), t->Format());

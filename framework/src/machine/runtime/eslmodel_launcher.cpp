@@ -12,8 +12,9 @@
 #include <thread>
 #include "adapter/api/acl_api.h"
 #include "adapter/api/runtime_api.h"
-#include "machine/runtime/device_launcher.h"
 #include "interface/utils/op_info_manager.h"
+#include "machine/runtime/device_launcher.h"
+#include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
 namespace npu::tile_fwk::dynamic {
