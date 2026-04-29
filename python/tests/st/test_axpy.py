@@ -58,8 +58,8 @@ def test_axpy_onboard():
                                          ],
                                          )
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                res = pypto.axpy(view_tensor_a, view_tensor_b, alpha)
-                pypto.assemble(res, [
+                view_tensor_a.axpy_(view_tensor_b, alpha)
+                pypto.assemble(view_tensor_a, [
                              b_idx * view_shape[0], s_idx * view_shape[1]], output)
 
     assert isinstance(output, pypto.tensor)

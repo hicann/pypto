@@ -71,6 +71,44 @@ void UpdateOffset(
     }
 }
 
+static void AxpyOperationExeFunc1Dim(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+    {
+        std::vector<SymbolicScalar> yInputsShape = {inputs[0].GetShape()[0]};
+        std::vector<SymbolicScalar> xInputsShape = {inputs[1].GetShape()[0]};
+        std::vector<SymbolicScalar> outputsShape = {outputs[0].GetShape()[0]};
+        auto args = static_cast<const AxpyOpFuncArgs*>(opArgs);
+        std::vector<int64_t> viewShape = {args->viewShape_[0]};
+        std::vector<int64_t> yInputViewShape = viewShape;
+        std::vector<int64_t> xInputViewShape = viewShape;
+        UpdateInputBrcViewShape(yInputViewShape, yInputsShape, outputsShape);
+        UpdateInputBrcViewShape(xInputViewShape, xInputsShape, outputsShape);
+
+        const int sloop = CeilDiv(outputsShape[0], viewShape[0]);
+        LOOP("LOOP_L0_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
+        {
+            std::vector<SymbolicScalar> yInputValidShape = {
+                std::min(yInputsShape[0] - sIdx * yInputViewShape[0], yInputViewShape[0])};
+            std::vector<SymbolicScalar> xInputValidShape = {
+                std::min(xInputsShape[0] - sIdx * xInputViewShape[0], xInputViewShape[0])};
+            std::vector<SymbolicScalar> yOffset = {sIdx * yInputViewShape[0]};
+            std::vector<SymbolicScalar> xOffset = {sIdx * xInputViewShape[0]};
+
+            UpdateInputBrcVaildShape(yInputValidShape, yInputsShape, outputsShape);
+            UpdateInputBrcVaildShape(xInputValidShape, xInputsShape, outputsShape);
+            UpdateOffset(yOffset, yInputsShape, outputsShape);
+            UpdateOffset(xOffset, xInputsShape, outputsShape);
+            Tensor yTile = View(inputs[0], yInputViewShape, yInputValidShape, yOffset);
+            Tensor xTile = View(inputs[1], xInputViewShape, xInputValidShape, xOffset);
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = Axpy(yTile, xTile, args->alpha_);
+            Assemble(res, {sIdx * viewShape[0]}, outputs[0]);
+        }
+    }
+}
+
 static void AxpyOperationExeFunc2Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -98,10 +136,8 @@ static void AxpyOperationExeFunc2Dims(
                 std::vector<SymbolicScalar> xInputValidShape = {
                     std::min(xInputsShape[0] - bIdx * xInputViewShape[0], xInputViewShape[0]),
                     std::min(xInputsShape[1] - sIdx * xInputViewShape[1], xInputViewShape[1])};
-                std::vector<SymbolicScalar> yOffset = {
-                    bIdx * yInputViewShape[0], sIdx * yInputViewShape[1]};
-                std::vector<SymbolicScalar> xOffset = {
-                    bIdx * xInputViewShape[0], sIdx * xInputViewShape[1]};
+                std::vector<SymbolicScalar> yOffset = {bIdx * yInputViewShape[0], sIdx * yInputViewShape[1]};
+                std::vector<SymbolicScalar> xOffset = {bIdx * xInputViewShape[0], sIdx * xInputViewShape[1]};
 
                 UpdateInputBrcVaildShape(yInputValidShape, yInputsShape, outputsShape);
                 UpdateInputBrcVaildShape(xInputValidShape, xInputsShape, outputsShape);
@@ -214,11 +250,11 @@ static void AxpyOperationExeFunc4Dims(
                             std::min(xInputsShape[2] - nIdx * xInputViewShape[2], xInputViewShape[2]),
                             std::min(xInputsShape[3] - mIdx * xInputViewShape[3], xInputViewShape[3])};
                         std::vector<SymbolicScalar> yOffset = {
-                            bIdx * yInputViewShape[0], sIdx * yInputViewShape[1],
-                            nIdx * yInputViewShape[2], mIdx * yInputViewShape[3]};
+                            bIdx * yInputViewShape[0], sIdx * yInputViewShape[1], nIdx * yInputViewShape[2],
+                            mIdx * yInputViewShape[3]};
                         std::vector<SymbolicScalar> xOffset = {
-                            bIdx * xInputViewShape[0], sIdx * xInputViewShape[1],
-                            nIdx * xInputViewShape[2], mIdx * xInputViewShape[3]};
+                            bIdx * xInputViewShape[0], sIdx * xInputViewShape[1], nIdx * xInputViewShape[2],
+                            mIdx * xInputViewShape[3]};
 
                         UpdateInputBrcVaildShape(yInputValidShape, yInputsShape, outputsShape);
                         UpdateInputBrcVaildShape(xInputValidShape, xInputsShape, outputsShape);
@@ -242,9 +278,10 @@ class AxpyOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac
 
 INSTANTIATE_TEST_SUITE_P(
     TestAxpy, AxpyOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<AxpyOpMetaData>(
-        {AxpyOperationExeFunc2Dims, AxpyOperationExeFunc3Dims, AxpyOperationExeFunc4Dims},
-        "Axpy")));
+    ::testing::ValuesIn(
+        GetOpMetaData<AxpyOpMetaData>(
+            {AxpyOperationExeFunc1Dim, AxpyOperationExeFunc2Dims, AxpyOperationExeFunc3Dims, AxpyOperationExeFunc4Dims},
+            "Axpy")));
 
 TEST_P(AxpyOperationTest, TestAxpy)
 {
@@ -252,6 +289,9 @@ TEST_P(AxpyOperationTest, TestAxpy)
     float alpha = GetValueByName<float>(test_data, "alpha");
     auto args = AxpyOpFuncArgs(alpha, GetViewShape(test_data), GetTileShape(test_data));
     auto testCase = CreateTestCaseDesc<AxpyOpMetaData>(GetParam(), &args);
+    std::vector<OpFunc> opFuncs = {
+        AxpyOperationExeFunc1Dim, AxpyOperationExeFunc2Dims, AxpyOperationExeFunc3Dims, AxpyOperationExeFunc4Dims};
+    testCase.opFunc = opFuncs[GetViewShape(test_data).size() - 1];
     TestExecutor::runTest(testCase);
 }
 } // namespace

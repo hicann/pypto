@@ -85,7 +85,7 @@ def add(
 
 
 @op_wrapper
-def axpy(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
+def axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
     """Computes the element-wise AXPY operation: y = alpha * x + y.
 
     This function performs an in-place update on tensor y.
@@ -125,14 +125,15 @@ def axpy(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
     --------
     y = pypto.tensor([1, 3], pypto.DT_FP32)
     x = pypto.tensor([1, 3], pypto.DT_FP32)
-    out = pypto.axpy(y, x, alpha=2.0)
+    y.axpy_(x, alpha=2.0)
 
     Input y:    [[1.0 2.0 3.0]]
     Input x:    [[2.0 3.0 4.0]]
     alpha:      2.0
     Output:     [[5.0 8.0 11.0]]  (y = 2.0 * x + y)
     """
-    return pypto_impl.Axpy(y, x, float(alpha))
+    y.Move(pypto_impl.Axpy(y, x, float(alpha)))
+    return y
 
 
 

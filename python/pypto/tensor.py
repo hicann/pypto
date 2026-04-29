@@ -618,8 +618,8 @@ class Tensor:
         return pypto.add(self, other)
 
     @source_location
-    def axpy(self, x: 'Tensor', alpha: 'int | float' = 1.0) -> 'Tensor':
-        return pypto.axpy(self, x, alpha)
+    def axpy_(self, x: 'Tensor', alpha: 'int | float' = 1.0) -> 'Tensor':
+        return pypto.axpy_(self, x, alpha)
 
     @source_location
     def sub(self, other: 'Tensor | int | float') -> 'Tensor':
