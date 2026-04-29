@@ -1,6 +1,6 @@
 # 环境部署
 
-在使用PyPTO开发或运行算子之前，请您先参考下面步骤完成基础环境搭建和PyPTO安装。
+在使用PyPTO开发或运行算子之前，请您先参考下面步骤完成基础环境搭建。完成后请继续参考[PyPTO安装](./build_and_install.md)文档进行安装。
 
 PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环境**中运行：
 
@@ -36,11 +36,49 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
 > **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[LINK](https://gitcode.com/org/cann/discussions/54)。
 
-1. 进入开源项目，单击"`云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
-![image.png](https://raw.gitcode.com/user-images/assets/8766299/6b3edd4d-1c7b-496a-82ef-278f9c67113f/image.png 'image.png')
+#### 1-进入开源项目
 
-2. 根据页面提示创建并启动云开发环境，单击"`连接 > WebIDE`"进入算子一站式开发平台，开源项目的源码资源默认在`/mnt/workspace`目录下。
-![image.png](https://raw.gitcode.com/user-images/assets/8766299/648af2a7-1319-4518-ac97-9b2c2ccb1d17/image.png 'image.png')
+单击"`云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
+
+<p>
+  <img src="../tutorials/figures/webide1.png" alt="创建云开发环境" width="750px" height="90px">
+</p>
+
+#### 2-连接WebIDE
+
+根据页面提示创建并启动云开发环境，单击"`连接 > WebIDE`"进入算子一站式开发平台，开源项目的源码资源默认在`/mnt/workspace`目录下。
+
+<p>
+  <img src="../tutorials/figures/webide2.png" alt="启动并连接 WebIDE" width="1000px" height="150px">
+</p>
+
+#### 3-安装pto-isa
+
+**方法一：基于run包安装**
+
+根据实际环境下载对应的安装包，下载链接如下（如果浏览器不支持自动下载，请选择右键，"链接另存为..."）：
+
+- x86：[cann-pto-isa_linux-x86_64.run](https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-x86_64.run)
+- aarch64：[cann-pto-isa_linux-aarch64.run](https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-aarch64.run)
+
+```bash
+# 安装命令
+bash ./cann-pto-isa_linux-*.run --full
+```
+
+**方法二：基于源码安装**
+
+```bash
+# 创建用于存放第三方开源软件源码包的目录path-to-your-pto-isa
+mkdir -p ${path-to-your-pto-isa}
+git clone https://gitcode.com/cann/pto-isa.git
+# 设置环境变量
+export PTO_TILE_LIB_CODE_PATH="${path-to-your-pto-isa}/pto-isa"
+# 检查目录是否存在
+ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
+```
+
+- \$\{path-to-your-pto-isa\}：存放`pto-isa`源码的路径。
 
 ### 方式2：主机安装（自动安装/手动安装）
 
@@ -98,7 +136,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
     - PyTorch及Ascend Extension for PyTorch：
         - **顺序说明**：请务必参考下文"软件包安装"章节完成对应工具包安装后，再安装`Ascend Extension for PyTorch`。
-        - 请根据实际环境的Python版本单独安装，请参考[Ascend Extension for PyTorch文档中心]（https://hiascend.com/document/redirect/pytorchuserguide）中的《软件安装》手册。
+        - 请根据实际环境的Python版本单独安装，请参考[Ascend Extension for PyTorch文档中心](https://hiascend.com/document/redirect/pytorchuserguide)中的《软件安装》手册。
         - **重要**：需确保`PyTorch`、`Ascend Extension for PyTorch`与`PyPTO`三者的Python版本一致。
         - **仿真环境说明**：在仿真环境中可跳过`Ascend Extension for PyTorch`的安装，但仍需安装`PyTorch`。
 
@@ -182,7 +220,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2 --with-install-driver=tru
 
 | 参数                    | 类型   | 是否必须 | 说明                                       |
 |:----------------------|:-----|:-----|:-----------------------------------------|
-| --type                | str  | 是    | 脚本安装类型，可选：cann, third_party, all |
+| --type                | str  | 是    | 脚本安装类型，可选：cann, all |
 | --device-type         | str  | 是    | 指定NPU型号，可选：a2, a3              |
 | --install-path        | str  | 否    | 指定CANN包安装路径                            |
 | --download-path       | str  | 否    | 指定CANN包以及三方依赖包下载路径                     |
@@ -222,31 +260,9 @@ bash tools/prepare_env.sh --type=cann --device-type=a2 --with-install-driver=tru
         - \$\{soc\_name\}：表示NPU型号名称。
         - \$\{install\_path\}：表示指定安装路径，ops包需与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录。
 
-2. **获取pto-isa源码**
+2. **安装pto-isa**
 
-    > 方法一：安装CANN pto-isa包
-    > 根据实际环境下载对应的安装包，下载链接如下(如果浏览器不支持自动下载，请选择右键，"链接另存为...")：
-    > - x86：[cann-pto-isa_linux-x86_64.run](https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-x86_64.run)
-    > - aarch64：[cann-pto-isa_linux-aarch64.run](https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/cann-pto-isa_linux-aarch64.run)
-    >
-    > ```bash
-    > # 安装命令
-    > bash ./cann-pto-isa_linux-*.run --full
-    > ```
-    >
-    > 方法二：下载源码方式
-    >
-    > ```bash
-    > # 创建用于存放第三方开源软件源码包的目录path-to-your-pto-isa
-    > mkdir -p ${path-to-your-pto-isa}
-    > git clone https://gitcode.com/cann/pto-isa.git
-    > # 设置环境变量
-    > export PTO_TILE_LIB_CODE_PATH="${path-to-your-pto-isa}/pto-isa"
-    > # 检查目录是否存在
-    > ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
-    > ```
-    >
-    > - \$\{path-to-your-pto-isa\}：存放pto-isa源码的路径。
+    具体方法请参考[安装pto-isa](#3-安装pto-isa)。
 
 #### 环境变量配置
 
@@ -263,276 +279,13 @@ source ${install_path}/ascend-toolkit/set_env.sh
 
 ### 方式3：Docker安装
 
-对于有昇腾设备的开发者，若您想快速搭建昇腾环境，可使用Docker镜像部署。
+Docker安装相关内容请参考：
 
-> **说明**：
->
-> - 使用Docker前，请务必**完成宿主机NPU驱动和固件安装**，请参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》中"安装NPU驱动和固件"章节。
-> - 建议Docker版本：**v27.2.1及以上**。
-> - 镜像文件比较大，下载需要一定时间，请您耐心等待。关于docker命令的选项介绍可通过`docker --help`查询。
+- [Docker环境部署](./docker_environment.md)
 
-当前提供两类Dockerfile，均安装PyPTO运行所需依赖，区别在于是否在镜像内预装CANN包：
+在阅读Docker文档前，请先确保已完成宿主机NPU驱动和固件安装。
 
-| Dockerfile版本 | 说明 |
-|:---|:---|
-| 版本1：安装CANN包 | 基于Ascend CANN基础镜像，已预集成CANN包。适用于希望开箱即用的场景。 |
-| 版本2：不安装CANN包 | 仅安装基础依赖，CANN包需在容器内单独安装。适用于需要自定义CANN版本的场景。 |
-
-#### 版本1：安装CANN包的Dockerfile
-
-支持环境信息：OS支持Ubuntu22.04、OpenEuler24.03，架构支持x86_64和aarch64，Python 3.11，CANN 8.5.0，支持A2/A3。
-
-在使用前，请根据**操作系统 + 硬件类型**指定`CANN_VERSION`：
-
-- **Ubuntu + A3**：`ARG CANN_VERSION=8.5.0-a3-ubuntu22.04-py3.11`
-- **Ubuntu + A2**：`ARG CANN_VERSION=8.5.0-910b-ubuntu22.04-py3.11`
-- **openEuler + A3**：`ARG CANN_VERSION=8.5.0-a3-openeuler24.03-py3.11`
-- **openEuler + A2**：`ARG CANN_VERSION=8.5.0-910b-openeuler24.03-py3.11`
-
-根据CPU架构指定`TARGETPLATFORM`：
-
-- **x86_64**：`ARG TARGETPLATFORM=linux/amd64`
-- **aarch64**：`ARG TARGETPLATFORM=linux/arm64`
-
-> **说明**：若上述信息与实际硬件及驱动不匹配，将导致CANN包安装失败，从而导致镜像构建失败。
-
-```dockerfile
-# step1: 指定 CANN 基础镜像版本
-ARG CANN_VERSION=8.5.0-a3-ubuntu22.04-py3.11
-FROM quay.io/ascend/cann:$CANN_VERSION
-
-# 指定目标平台架构
-ARG TARGETPLATFORM=linux/amd64
-
-# [Optional] 设置 HTTP/HTTPS 代理（按需配置）
-ARG PROXY=""
-ENV https_proxy=$PROXY
-ENV http_proxy=$PROXY
-ENV GIT_SSL_NO_VERIFY=1
-
-# 工作目录
-WORKDIR /tmp
-
-# step2: 安装 PyPTO 项目构建/运行所需依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git gdb gawk wget curl tar lcov openssl ca-certificates \
-    gcc g++ make cmake zlib1g zlib1g-dev libsqlite3-dev \
-    libssl-dev libffi-dev libbz2-dev libxslt1-dev pciutils \
-    net-tools openssh-client libblas-dev gfortran libblas3 llvm ccache \
-    python-is-python3 python3-pip python3-venv ninja-build python3-dev \
- && rm -rf /var/lib/apt/lists/*
-
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
- && python -m pip install --no-cache-dir \
-    attrs cython numpy decorator sympy cffi pyyaml pathlib2 psutil>=5.9.0 protobuf scipy requests absl-py \
-    tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
-    tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
-
-# 安装指定版本 torch / torch-npu（CPU 源 + NPU 插件）
-RUN python -m pip install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu \
-    && python -m pip install --no-cache-dir torch-npu==2.6.0
-
-# [Optional] step3: 在镜像中安装由 PyPTO 提供的 CANN 包（按需开启）
-# 以下内容默认注释，如需要可取消注释并根据网络环境及仓库地址调整。
-#
-# WORKDIR /mount_home
-# RUN git clone https://gitcode.com/cann/pypto.git
-# WORKDIR /mount_home/pypto
-# ARG CANN_VERSION
-# RUN if echo "${CANN_VERSION}" | grep -iq "910b"; then \
-#         DEVICE_TYPE="a2"; \
-#     elif echo "${CANN_VERSION}" | grep -iq "a3"; then \
-#         DEVICE_TYPE="a3"; \
-#     else \
-#         echo "ERROR: Unsupported CANN_VERSION format: ${CANN_VERSION}" 1>&2 && \
-#         echo "Version should contain '910b' or 'a3' (case-insensitive)" 1>&2 && \
-#         exit 1; \
-#     fi && \
-#     echo "DEVICE_TYPE=${DEVICE_TYPE}" && \
-#     chmod +x tools/prepare_env.sh && \
-#     bash tools/prepare_env.sh --type=cann --device-type=${DEVICE_TYPE} --install-path=/usr/local/Ascend/CANN_pypto --quiet
-#
-# # Note: 设置环境变量，容器登录自动生效
-# RUN \
-#     CANN_TOOLKIT_ENV_FILE="/usr/local/Ascend/CANN_pypto/ascend-toolkit/set_env.sh" && \
-#     echo "source ${CANN_TOOLKIT_ENV_FILE}" >> /etc/profile && \
-#     echo "source ${CANN_TOOLKIT_ENV_FILE}" >> ~/.bashrc
-#
-# ENTRYPOINT ["/bin/bash", "-c", "\
-#     source /usr/local/Ascend/CANN_pypto/ascend-toolkit/set_env.sh && \
-#     exec \"$@\"", "--"]
-
-# step4: 安装 cann-pto-isa
-ARG PTO_ISA_INSTALL_PATH=/usr/local/Ascend
-ENV PTO_ISA_INSTALL_PATH=$PTO_ISA_INSTALL_PATH
-WORKDIR /tmp
-RUN set -e; \
-    ARCH="unknown"; \
-    URL_SUFFIX=""; \
-    case "${TARGETPLATFORM}" in \
-        "linux/amd64") \
-            ARCH="x86_64"; \
-            URL_SUFFIX="ubuntu_x86/cann-pto-isa_linux-x86_64.run"; \
-            ;; \
-        "linux/arm64") \
-            ARCH="aarch64"; \
-            URL_SUFFIX="ubuntu_aarch64/cann-pto-isa_linux-aarch64.run"; \
-            ;; \
-        *) \
-            echo "ERROR: Unsupported or undefined TARGETPLATFORM: ${TARGETPLATFORM}"; \
-            echo "Please set TARGETPLATFORM to 'linux/amd64' or 'linux/arm64' during build."; \
-            exit 1; \
-            ;; \
-    esac; \
-    echo "Target platform: ${TARGETPLATFORM}, architecture: ${ARCH}"; \
-    PACKAGE_URL="http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/${URL_SUFFIX}"; \
-    PACKAGE_NAME="cann-pto-isa_8.5.0_linux-${ARCH}.run"; \
-    echo "Downloading package from: ${PACKAGE_URL}"; \
-    wget --quiet --no-check-certificate -O "${PACKAGE_NAME}" "${PACKAGE_URL}"; \
-    chmod +x "${PACKAGE_NAME}"; \
-    echo "Installing ${PACKAGE_NAME} to ${PTO_ISA_INSTALL_PATH}"; \
-    ./"${PACKAGE_NAME}" --quiet --full --install-path="${PTO_ISA_INSTALL_PATH}"; \
-    echo "cann-pto-isa installation completed."
-
-# step5: [Optional] 设置默认代理（仅当需要统一代理时启用）
-ENV PROXY=""
-ENV https_proxy=$PROXY
-ENV http_proxy=$PROXY
-```
-
-若希望构建其他环境版本的镜像，可参考Ascend社区提供的基础镜像：[https://quay.io/repository/ascend/cann](https://quay.io/repository/ascend/cann)
-
-#### 版本2：不安装CANN包的Dockerfile
-
-支持环境信息：OS支持Ubuntu22.04、OpenEuler22.03，架构支持x86_64和aarch64，Python 3.11，支持A2/A3。
-
-根据操作系统指定`PY_VERSION`：
-
-- **Ubuntu 22.04**：`ARG PY_VERSION=3.11-ubuntu22.04`
-- **openEuler 22.03**：`ARG PY_VERSION=3.11-openeuler22.03`
-
-```dockerfile
-ARG PY_VERSION=3.11-ubuntu22.04
-FROM quay.io/ascend/python:$PY_VERSION
-
-# [Optional] 设置 HTTP/HTTPS 代理
-ARG PROXY=""
-ENV https_proxy=$PROXY
-ENV http_proxy=$PROXY
-ENV GIT_SSL_NO_VERIFY=1
-
-# 安装系统依赖并清理 APT 缓存索引
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git gdb gawk wget curl tar lcov openssl ca-certificates \
-    gcc g++ make cmake zlib1g zlib1g-dev libsqlite3-dev \
-    libssl-dev libffi-dev libbz2-dev libxslt1-dev pciutils \
-    net-tools openssh-client libblas-dev gfortran libblas3 llvm ccache \
-    python-is-python3 python3-pip python3-venv ninja-build python3-dev \
- && rm -rf /var/lib/apt/lists/*
-
-# 安装 Python 依赖
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
- && python -m pip install --no-cache-dir \
-    attrs cython numpy decorator sympy cffi pyyaml pathlib2 psutil>=5.9.0 protobuf scipy requests absl-py \
-    tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
-    tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
-
-# 升级 setuptools，满足 pypto 要求
-RUN pip install --no-cache-dir --upgrade setuptools
-
-# 安装 torch / torch-npu
-RUN pip install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir torch-npu==2.6.0
-
-# [Optional] 设置默认代理，便于容器内访问外网
-ENV PROXY=""
-ENV https_proxy=$PROXY
-ENV http_proxy=$PROXY
-```
-
-若希望构建其他Python/OS组合的镜像，可参考：[https://quay.io/repository/ascend/python](https://quay.io/repository/ascend/python)
-
-> **说明**：PyPTO考虑到会在国内外都有部署使用，因此提供的参考Dockerfile基于国内外更常用的quay.io。若在国内存在访问quay.io较慢的情况，可通过配置Docker代理解决：
->
-> ```bash
-> # 配置信任证书
-> mkdir -p /etc/systemd/system/docker.service.d/
-> tee -a /etc/docker/daemon.json > /dev/null << 'EOF'
-> {
->   "insecure-registries":["quay.io", "cdn01.quay.io"]
-> }
-> EOF
->
-> # 配置Docker代理
-> tee -a /etc/systemd/system/docker.service.d/http-proxy.conf > /dev/null << 'EOF'
-> [Service]
-> Environment="HTTP_PROXY=<代理地址>"
-> Environment="HTTPS_PROXY=<代理地址>"
-> EOF
->
-> systemctl daemon-reexec
-> systemctl daemon-reload
-> systemctl restart docker.service
-> ```
-
-#### 构建镜像
-
-在本地准备好对应版本的Dockerfile（例如保存为`Dockerfile`），执行镜像构建命令：
-
-```bash
-docker build -t <镜像名:版本> -f ./Dockerfile .
-# 示例：
-# docker build -t pyptox86/a3:latest -f ./Dockerfile .
-```
-
-#### 创建并启动容器
-
-仅有镜像无法直接作为开发环境使用，需要基于该镜像创建容器。为确保容器能够正确访问NPU硬件和相关驱动，需在启动时映射宿主机设备和驱动目录。示例命令如下：
-
-```bash
-sudo docker run -u root -itd --name <容器名> --ipc=host --net=host --privileged \
-    --device=/dev/davinci0 \
-    --device=/dev/davinci_manager \
-    --device=/dev/devmm_svm \
-    --device=/dev/hisi_hdc \
-    -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
-    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
-    -v /etc/ascend_install.info:/etc/ascend_install.info:ro \
-    -w /mount_home \
-    <镜像名:版本> \
-    /bin/bash
-```
-
-| 参数 | 说明 | 注意事项 |
-| :--- | :--- | :--- |
-| `-u root` | 以root用户运行容器。 | - |
-| `--name <容器名>` | 为容器指定名称，便于管理。 | 可自定义。 |
-| `--ipc=host` | 使用宿主机的IPC命名空间，便于进程间通信。 | - |
-| `--net=host` | 使用宿主机网络，便于网络访问。 | - |
-| `--privileged` | 赋予容器特权模式，确保设备访问权限。 | - |
-| `--device=/dev/davinci0` | 将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡。 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行`npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号。如需映射多张卡，增加多个`--device`参数即可。|
-| `--device=/dev/davinci_manager` | 映射NPU设备管理接口。 | - |
-| `--device=/dev/devmm_svm` | 映射设备内存管理接口。 | - |
-| `--device=/dev/hisi_hdc` | 映射主机与设备间的通信接口。 | - |
-| `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具。 | 使容器内可以直接运行此命令来查询NPU状态和性能信息。|
-| `-v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro` | 挂载宿主机的NPU驱动库到容器内（只读）。 | - |
-| `-v /etc/ascend_install.info:/etc/ascend_install.info:ro` | 挂载CANN软件安装信息文件（只读）。 | - |
-| `-w /mount_home` | 指定容器内工作目录。 | - |
-| `-itd` | `-i`（交互式）、`-t`（分配伪终端）、`-d`（后台运行）的组合参数。 | - |
-| `<镜像名:版本>` | 指定要运行的Docker镜像。 | 请确保与`docker build`时指定的镜像名和标签一致。 |
-| `/bin/bash` | 容器启动后立即执行的命令。 | - |
-
-启动并进入容器：
-
-```bash
-# 启动容器
-docker start <容器名>
-
-# 进入容器
-docker exec -it <容器名> /bin/bash
-```
-
-> **说明**：出于兼容性考虑，当前Docker环境中编译构建得到的`whl`包建议仅在对应Docker容器内使用。
+`pto-isa`安装具体方法请参考[安装pto-isa](#3-安装pto-isa)。
 ## 环境验证
 
 安装完CANN包后，需验证环境和驱动是否正常。
@@ -551,7 +304,7 @@ docker exec -it <容器名> /bin/bash
     cat /usr/local/Ascend/cann/${arch}-linux/ascend_toolkit_install.info
     # 查看CANN ops包版本信息（默认路径安装），WebIDE场景下将/usr/local替换为/home/developer
     cat /usr/
-环境准备完成后，请参考[PyPTO安装](#pypto安装)章节完成PyPTO的安装。
+环境准备完成后，请参考[PyPTO安装](./build_and_install.md)文档完成PyPTO的安装。
 ## 可选安装
 
 ### PyPTO Toolkit插件

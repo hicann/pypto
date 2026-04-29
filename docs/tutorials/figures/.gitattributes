@@ -27,3 +27,5 @@ zh-cn_image_0000002530981685.png filter=lfs diff=lfs merge=lfs -text
 view_swimlane_graph.png filter=lfs diff=lfs merge=lfs -text
 zh-cn_image_0000002499877218.png filter=lfs diff=lfs merge=lfs -text
 zh-cn_image_0000002500534720.png filter=lfs diff=lfs merge=lfs -text
+webide2.png filter=lfs diff=lfs merge=lfs -text
+webide1.png filter=lfs diff=lfs merge=lfs -text
