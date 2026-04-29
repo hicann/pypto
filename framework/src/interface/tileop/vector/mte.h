@@ -81,13 +81,13 @@ __aicore__ inline void TStore(T dst, U src, C coordinate)
             auto dstGlobal = PtoGlobal<T, typename U::Shape, typename T::Stride>(
                                  dst.GetAddr() + gmOffset, src.GetShape(), dst.GetStride())
                                  .Data();
-            auto srctTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
-            pto::TASSIGN(srctTile, (uint64_t)src.GetAddr());
-            pto::TSTORE(dstGlobal, srctTile);
+            auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
+            pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
+            pto::TSTORE(dstGlobal, srcTile);
             return;
         }
 
-        auto srctTile = PtoTile<U>(src);
+        auto srcTile = PtoTile<U>(src);
         auto dstGlobal = PtoGlobal<T, typename U::Shape, typename T::Stride, true>(src.GetShape(), dst.GetStride());
         for (LoopVar index0 = 0; index0 < srcShape0; ++index0) {
             for (LoopVar index1 = 0; index1 < srcShape1; ++index1) {
@@ -95,8 +95,112 @@ __aicore__ inline void TStore(T dst, U src, C coordinate)
                     dstGlobal.Assign(
                         dst.GetAddr() + gmOffset + index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2);
                     auto tileOffsets = TileOffset(index0, index1, index2);
-                    srctTile.Assign(src, tileOffsets);
-                    pto::TSTORE(dstGlobal.Data(), srctTile.Data());
+                    srcTile.Assign(src, tileOffsets);
+                    pto::TSTORE(dstGlobal.Data(), srcTile.Data());
+                }
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_RESHAPE_COPY_IN TReshapeLoad
+template <typename T, typename U, typename C>
+__aicore__ inline void TReshapeLoad(T dst, U src, C coordinate)
+{
+    if constexpr (T::FORMAT == Hardware::UB && U::FORMAT == Hardware::GM) {
+        // Reshape 场景：GM 侧数据按 reshape 后的 dst shape 行优先排列，
+        // 因此 GM stride 必须基于 dst shape 推导（reshapeStride），而非 src 原始 stride。
+        const auto dstLayout = dst.GetLayout();
+        auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+        auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+        auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+        auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+        auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+
+        size_t reshapeStride0 = dstShape1 * dstShape2 * dstShape3 * dstShape4;
+        size_t reshapeStride1 = dstShape2 * dstShape3 * dstShape4;
+        size_t reshapeStride2 = dstShape3 * dstShape4;
+        size_t reshapeStride3 = dstShape4;
+        size_t reshapeStride4 = 1;
+        Stride5Dim reshapeStride{reshapeStride0, reshapeStride1, reshapeStride2, reshapeStride3, reshapeStride4};
+
+        auto c0 = TileOp::GetTupleElement<C, DIM_1ST, MAX_DIMS, 0>(coordinate);
+        auto c1 = TileOp::GetTupleElement<C, DIM_2ND, MAX_DIMS, 0>(coordinate);
+        auto c2 = TileOp::GetTupleElement<C, DIM_3RD, MAX_DIMS, 0>(coordinate);
+        auto gmOffset = c0 * reshapeStride0 + c1 * reshapeStride1 + c2 * reshapeStride2;
+
+        if constexpr (TileOp::IsConstContinous<T>() == true) {
+            auto srcGlobal = PtoGlobal<U, typename T::Shape, Stride5Dim>(
+                                 src.GetAddr() + gmOffset, dst.GetShape(), reshapeStride)
+                                 .Data();
+            auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true>().Data();
+            pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
+            pto::TLOAD(dstTile, srcGlobal);
+            return;
+        }
+
+        auto dstTile = PtoTile<T>(dst);
+        auto srcGlobal = PtoGlobal<T, typename T::Shape, Stride5Dim, true>(dst.GetShape(), reshapeStride);
+        for (LoopVar index0 = 0; index0 < dstShape0; ++index0) {
+            for (LoopVar index1 = 0; index1 < dstShape1; ++index1) {
+                for (LoopVar index2 = 0; index2 < dstShape2; ++index2) {
+                    srcGlobal.Assign(src.GetAddr() + gmOffset +
+                                     index0 * reshapeStride0 + index1 * reshapeStride1 + index2 * reshapeStride2);
+                    auto tileOffsets = TileOffset(index0, index1, index2);
+                    dstTile.Assign(dst, tileOffsets);
+                    pto::TLOAD(dstTile.Data(), srcGlobal.Data());
+                }
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_RESHAPE_COPY_OUT TReshapeStore
+template <typename T, typename U, typename C>
+__aicore__ inline void TReshapeStore(T dst, U src, C coordinate)
+{
+    if constexpr (U::FORMAT == Hardware::UB && T::FORMAT == Hardware::GM) {
+        // Reshape 场景：GM 侧数据按 reshape 后的 src shape 行优先排列，
+        // 因此 GM stride 必须基于 src shape 推导（reshapeStride），而非 dst 原始 stride。
+        const auto srcLayout = src.GetLayout();
+        auto srcShape0 = srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+        auto srcShape1 = srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+        auto srcShape2 = srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+        auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+        auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+
+        size_t reshapeStride0 = srcShape1 * srcShape2 * srcShape3 * srcShape4;
+        size_t reshapeStride1 = srcShape2 * srcShape3 * srcShape4;
+        size_t reshapeStride2 = srcShape3 * srcShape4;
+        size_t reshapeStride3 = srcShape4;
+        size_t reshapeStride4 = 1;
+        Stride5Dim reshapeStride{reshapeStride0, reshapeStride1, reshapeStride2, reshapeStride3, reshapeStride4};
+
+        auto c0 = TileOp::GetTupleElement<C, DIM_1ST, MAX_DIMS, 0>(coordinate);
+        auto c1 = TileOp::GetTupleElement<C, DIM_2ND, MAX_DIMS, 0>(coordinate);
+        auto c2 = TileOp::GetTupleElement<C, DIM_3RD, MAX_DIMS, 0>(coordinate);
+        auto gmOffset = c0 * reshapeStride0 + c1 * reshapeStride1 + c2 * reshapeStride2;
+
+        if constexpr (TileOp::IsConstContinous<U>() == true) {
+            auto dstGlobal = PtoGlobal<T, typename U::Shape, Stride5Dim>(
+                                 dst.GetAddr() + gmOffset, src.GetShape(), reshapeStride)
+                                 .Data();
+            auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
+            pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
+            pto::TSTORE(dstGlobal, srcTile);
+            return;
+        }
+
+        auto srcTile = PtoTile<U>(src);
+        auto dstGlobal = PtoGlobal<T, typename U::Shape, Stride5Dim, true>(src.GetShape(), reshapeStride);
+        for (LoopVar index0 = 0; index0 < srcShape0; ++index0) {
+            for (LoopVar index1 = 0; index1 < srcShape1; ++index1) {
+                for (LoopVar index2 = 0; index2 < srcShape2; ++index2) {
+                    dstGlobal.Assign(dst.GetAddr() + gmOffset +
+                                     index0 * reshapeStride0 + index1 * reshapeStride1 + index2 * reshapeStride2);
+                    auto tileOffsets = TileOffset(index0, index1, index2);
+                    srcTile.Assign(src, tileOffsets);
+                    pto::TSTORE(dstGlobal.Data(), srcTile.Data());
                 }
             }
         }

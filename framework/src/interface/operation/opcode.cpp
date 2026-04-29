@@ -1242,6 +1242,8 @@ OpcodeManager::OpcodeManager()
 std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_UB_COPY_IN, "TLoad"},
     {Opcode::OP_UB_COPY_OUT, "TStore"},
+    {Opcode::OP_RESHAPE_COPY_IN, "TReshapeLoad"},
+    {Opcode::OP_RESHAPE_COPY_OUT, "TReshapeStore"},
     {Opcode::OP_TRANSPOSE_VNCHWCONV, "TTrans"},
     {Opcode::OP_TRANSPOSE_MOVEIN, "TTransMoveIn"},
     {Opcode::OP_TRANSPOSE_MOVEOUT, "TTransMoveOut"},
