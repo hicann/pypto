@@ -284,7 +284,10 @@ def softmax(x, is_fp16=False):
     pass_options={
     # Q常驻，0代表第一组mmad，4代表4次matmul合并
     "cube_l1_reuse_setting": {0: 4}},
-    host_options={"compile_monitor_enable": True},
+    host_options={"compile_monitor_enable": False,
+        "compile_timeout": 75,
+        "compile_timeout_stage": 30,
+        "compile_monitor_print_interval": 60},
     debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
 )
 def ifa_func_kernel(
@@ -449,7 +452,10 @@ def ifa_func_kernel(
     "cube_l1_reuse_setting": {-1: 8},
     "cube_nbuffer_setting": {-1: 4}
     },
-    host_options={"compile_monitor_enable": True},
+    host_options={"compile_monitor_enable": True,
+        "compile_timeout": 75,
+        "compile_timeout_stage": 30,
+        "compile_monitor_print_interval": 60},
     debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
 )
 def ifa_func_kernel_for_950(

@@ -1040,6 +1040,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     for (auto& devRoot : attr->funcGroup.devRootList) {
         std::function task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
             Function* devTile = attr->rootTileDict[devRoot];
+            MonitorManager::Instance().SetCurrentFuncOpSize(devTile->GetOperationSize());
+            MonitorManager::Instance().SetFuncSumOpSize(devTile->GetOperationSize());
             bool isDynamicAligned = devTile->paramConfigs_.dynamicAlignedOps;
             npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"), false, isDynamicAligned);
             npu::tile_fwk::CodeGen codeGen(codeGenCtx);
@@ -1065,6 +1067,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
         tasks.push_back(task);
     }
 
+    MonitorManager::Instance().PrintCurrentTotalElapsed("Stage CodeGen cce code generation completed");
     unsigned threadNum = GetCGThreadNum();
     ParallelExecuteAndWait(threadNum, tasks);
 
@@ -1148,6 +1151,8 @@ MachineTask* GenCode(MachineTask* task, FunctionCache& cache)
     if (function->GetGraphType() == GraphType::TILE_GRAPH) {
         MonitorManager::Instance().SetRootFuncCount(1);
         MonitorStageScope codeGenScope("CodeGen");
+        MonitorManager::Instance().SwitchStageReset();
+        MonitorManager::Instance().PrintCurrentTotalElapsed("Stage CodeGen start for TILE_GRAPH");
         COMPILER_LOGI("Start (TILE_GRAPH) CodeGen stage...");
         std::map<uint64_t, std::list<InvokeParaOffset>> invokeParaOffset;
         codeGen.GenCode(*function, {});
@@ -1155,6 +1160,8 @@ MachineTask* GenCode(MachineTask* task, FunctionCache& cache)
     } else {
         if (function->IsFunctionType(FunctionType::DYNAMIC)) {
             MonitorStageScope codeGenScope("CodeGen");
+            MonitorManager::Instance().SwitchStageReset();
+            MonitorManager::Instance().PrintCurrentTotalElapsed("Stage CodeGen start for DYNAMIC");
             COMPILER_LOGI("Start (DYNAMIC) CodeGen stage...");
             std::string cce_path = RealPath(codeGenCtx.cceDir) + "/";
             CompileDyndevFunction(function, cache, cce_path);

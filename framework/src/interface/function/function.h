@@ -624,6 +624,7 @@ public:
     bool IsEager() const { return functionType_ == FunctionType::EAGER; }
     bool IsStatic() const { return functionType_ == FunctionType::STATIC; }
     bool IsExplicit() const { return explicitArgSlots_.empty(); }
+    size_t GetOperationSize() const { return operations_.size(); }
     const std::string& GetMagicName() const { return funcMagicName_; }
     const std::string& GetRawName() const { return funcRawName_; }
     std::string GetOriginalRawName() const;

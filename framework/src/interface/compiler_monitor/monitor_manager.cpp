@@ -350,6 +350,13 @@ std::string MonitorManager::GetCurrentStageName() const
     return current_stage_;
 }
 
+void MonitorManager::SwitchStageReset()
+{
+    this->SetCurrentFuncOpSize(0);
+    this->SetFuncSumOpSize(0, true);
+    this->SetCurrentFunctionName("");
+}
+
 std::string MonitorManager::GetCurrentFunctionName() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -363,6 +370,53 @@ void MonitorManager::SetCurrentFunctionName(const std::string& name)
     }
     std::lock_guard<std::mutex> lock(mutex_);
     current_function_ = name;
+}
+
+int MonitorManager::GetCurrentFuncOpSize() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return current_func_opsize_;
+}
+
+void MonitorManager::SetCurrentFuncOpSize(size_t op_size)
+{
+    if (!enable_) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    current_func_opsize_ = static_cast<int>(op_size);
+}
+
+void MonitorManager::PrintCurrentTotalElapsed(std::string str_temp)
+{
+    if (!enable_) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto now = std::chrono::steady_clock::now();
+    double total_elapsed = std::chrono::duration<double>(now - total_start_).count();
+    std::string stage_finish_msg = "[Compiler Monitor] " + str_temp + " | Total elapsed: " +
+    FormatElapsed(total_elapsed);
+    (void)fprintf(stdout, "%s\n", stage_finish_msg.c_str());
+    (void)fflush(stdout);
+}
+
+int MonitorManager::GetFuncSumOpSize() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return func_sum_opsize_;
+}
+
+void MonitorManager::SetFuncSumOpSize(size_t op_size, bool reset)
+{
+    if (!enable_) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    func_sum_opsize_ += static_cast<int>(op_size);
+    if (reset) {
+        func_sum_opsize_ = 0;
+    }
 }
 
 std::chrono::steady_clock::time_point MonitorManager::GetStageStartTime() const
@@ -402,7 +456,9 @@ void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, cons
     if (!initialized_ || !impl_ || !enable_) {
         return;
     }
-    impl_->StartMonitoring();
+    if (rootFuncIndex == -1) {
+        impl_->StartMonitoring();
+    }
     MaybeStartTotalClock();
     current_stage_ = name;
     stage_start_ = std::chrono::steady_clock::now();
@@ -450,12 +506,12 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
     if (it != active_stages_.rend()) {
         active_stages_.erase(std::prev(it.base()));
     }
-    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime);
+    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex);
 }
 
 void MonitorManager::EndStageInternal(
     const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
-    const std::chrono::steady_clock::time_point& startTime)
+    const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal)
 {
     if (!initialized_ || !impl_ || !enable_) {
         return;
@@ -463,7 +519,9 @@ void MonitorManager::EndStageInternal(
     if (timeout_sec_.load() != 0) {
         stage_timeout_flag_[name] = false;
     }
-    impl_->StopMonitoring();
+    if (rootFuncIndexOriginal == -1) {
+        impl_->StopMonitoring();
+    }
     auto now = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(now - startTime).count();
     if (name != STAGE_FUNC_TO_BIN) {
