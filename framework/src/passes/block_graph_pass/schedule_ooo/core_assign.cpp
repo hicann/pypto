@@ -341,9 +341,9 @@ void CoreScheduler::SelectAIVCore(
     int64_t gap0 = calcGap(intervalAIV0);
     int64_t gap1 = calcGap(intervalAIV1);
 
-    auto getLastFinishBefore = [&](TargetCoreType core, std::pair<int, int> intervalAIV) -> int {
+    auto getLastFinishBefore = [&](TargetCoreType core, int intervalAIVFirstTime) -> int {
         for (auto& slot : availTime[core]) {
-            if (slot.second >= intervalAIV.first) {
+            if (slot.second >= intervalAIVFirstTime && slot.first <= intervalAIVFirstTime) {
                 return slot.first;
             }
         }
@@ -357,8 +357,8 @@ void CoreScheduler::SelectAIVCore(
         if (intervalAIV0.first < intervalAIV1.first) {
             chooseAIV0 = true;
         } else if (intervalAIV0.first == intervalAIV1.first) {
-            int lastFinish0 = getLastFinishBefore(TargetCoreType::AIV0, intervalAIV0);
-            int lastFinish1 = getLastFinishBefore(TargetCoreType::AIV1, intervalAIV1);
+            int lastFinish0 = getLastFinishBefore(TargetCoreType::AIV0, intervalAIV0.first);
+            int lastFinish1 = getLastFinishBefore(TargetCoreType::AIV1, intervalAIV1.first);
             chooseAIV0 = (lastFinish0 <= lastFinish1);
         }
     }
