@@ -233,9 +233,9 @@ INLINE uint64_t GetTensorAddr(CoreFuncParam* ctx, int idx)
 {
     auto func = ctx->funcData;
     auto desc = &func->rawTensorDesc[ctx->opAttrs[idx]];
-    if constexpr (mode == 2) {
+    if constexpr (mode == 2) {  // workspace
         return func->workspaceAddr + desc->offsetOrIndex;
-    } else if constexpr (mode == 3) {
+    } else if constexpr (mode == 3) {  // root function incast/outcast 内存
         return func->rawTensorAddr[desc->offsetOrIndex] & RAW_TENSOR_ADDR_MASK;
     } else {
         return (desc->location == npu::tile_fwk::RAW_TENSOR_LOCATION_LOCAL) ?
@@ -247,13 +247,13 @@ INLINE uint64_t GetTensorAddr(CoreFuncParam* ctx, int idx)
 template <int mode, int64_t constval>
 INLINE uint64_t GetCoa(CoreFuncParam* ctx, int idx)
 {
-    if constexpr (mode == 1) {
+    if constexpr (mode == 1) {  // 常量值
         return constval;
     }
     uint64_t val = ctx->opAttrs[idx];
-    if constexpr (mode == 2) {
+    if constexpr (mode == 2) {  // 非全常量
         return ctx->exprTbl[SYM_VALUE(val)];
-    } else if constexpr (mode == 3) {
+    } else if constexpr (mode == 3) {  //  全常量，但是每次取值不一样
         return SYM_VALUE(val);
     } else {
         return SYM_IS_EXPR(val) ? ctx->exprTbl[SYM_VALUE(val)] : SYM_VALUE(val);

@@ -42,6 +42,12 @@ struct CoaInfo {
         return std::regex_search(coaExpr, match, pattern);
     }
 
+    static bool ParseParamRawShape(const std::string& coaExpr, std::smatch& match)
+    {
+        static std::regex pattern("RUNTIME_COA_GET_PARAM_RAW_SHAPE\\((\\d+), (\\d+), (\\d+)\\)");
+        return std::regex_search(coaExpr, match, pattern);
+    }
+
     Status SToIParamShapeAndOffset(const std::smatch& match)
     {
         if (SToIWrapper(match[INPUT_PARAM_POS_ONE].str(), dim) != SUCCESS) {
@@ -95,7 +101,14 @@ struct CoaInfo {
         } else if (coaExpr.find(MAYBE_CONST_POSTFIX) != std::string::npos) {
             APASS_LOG_ERROR_F(Elements::Operation, "This coaExpr %s has been processed", coaExpr.c_str());
             return FAILED;
-        } else {
+        }  else if (ParseParamRawShape(coaExpr, match)) {
+ 	             macroType = CoaType::PARAM_RAW_SHAPE;
+ 	             if (SToIParamShapeAndOffset(match) != SUCCESS) {
+ 	                 APASS_LOG_ERROR_F(Elements::Operation,
+ 	                    "ParseCoaString failed to convert indices, CoaType::PARAM_RAW_SHAPE, input coaExpr %s.", coaExpr.c_str());
+ 	                 return FAILED;
+ 	             }
+ 	    } else {
             APASS_LOG_ERROR_F(
                 Elements::Operation, "ParseCoaString input coaExpr %s is not recognized.", coaExpr.c_str());
             return FAILED;
@@ -109,6 +122,8 @@ struct CoaInfo {
             return ((base) + 1) + OFFSET_INDEX_ORDER * (dim) + idx;
         } else if (macroType == CoaType::PARAM_VALID_SHAPE) {
             return ((base) + 1) + VALID_SHAPE_INDEX_ORDER * (dim) + idx;
+        } else if (macroType == CoaType::PARAM_RAW_SHAPE) {
+            return ((base) + 1) + RAWSHAPE_INDEX_ORDER * (dim) + idx;
         } else if (macroType == CoaType::PARAM) {
             return idx;
         }
@@ -124,29 +139,36 @@ struct CoaInfo {
             return MAYBE_CONST_COA_GetValidShape(isConst, attrValue, dim, base, idx);
         } else if (macroType == CoaType::PARAM) {
             return MAYBE_CONST_COA_GetParam(isConst, attrValue, idx);
-        }
+        }  else if (macroType == CoaType::PARAM_RAW_SHAPE) {
+            return MAYBE_CONST_COA_GetRawShape(isConst, attrValue, dim, base, idx);
+        } 
         APASS_LOG_ERROR_F(Elements::Operation, "BuildMaybeConstCoa Coa type is invalid.");
         return 0;
     }
 };
 
 struct IsConstMetric {
-    int isConst = 1;
-    int attrValue = -1;
+    int isConst = 1;  // not const = 2; const = 1; const but not static = 3; 
+    int attrValue = -2;  // static >= 0; else -1.
 
-    void MarkNotConst() { isConst = 0; }
+    void MarkNotConst() { isConst = 2; }
     int GetIsConst() { return isConst; }
     int GetAttrValue() { return attrValue; }
     bool TryInitAndCheckEqual(int newValue)
     {
-        if (attrValue == -1) {
+        if (newValue < 0) {
+            isConst = 0;
+            attrValue = -1;
+            return false;
+        }
+        if (attrValue == -2) {
             attrValue = newValue;
             return true;
         }
-
-        if (newValue < 0 || newValue != attrValue) {
-            isConst = 0;
-            return false;
+        if (newValue != attrValue) {
+            isConst = 3;
+            attrValue = -1;
+            return true;
         }
         return true;
     }
@@ -420,7 +442,7 @@ void ReBuildConcreteParam(Function* leafFunc, std::vector<std::vector<SymbolicSc
             }
             return true;
         };
-        if (!isConstParam(coaIdx)) {
+        if (!isConstParam(coaIdx) || scalarValue.attrValue < 0) {
             continue;
         }
         auto constParam = BuildMaybeConstCoa(scalarValue.attrValue, dynParam.second);
