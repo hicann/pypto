@@ -64,7 +64,7 @@ def kernel_function(...):
 ## 约束说明
 
 1. 张量参数，必须使用类型注解指定为 `pypto.Tensor` 类型
-2. 动态维度必须使用 `pypto.DYNAMIC` 或 `pypto.DYN` 在参数注解中标记
+2. 动态维度必须使用 `pypto.DYNAMIC` 或 `pypto.DYN` 在参数注解中标记，未标记时，默认按静态维度处理
 3. tensor format用format标记，format支持非显式标记(参考示例1中的a), 默认为pypto.TileOpFormat.TILEOP_ND;
    format显式标记时, 性能更优, 要求传入的torch tensor与pypto.Tensor声明的format一致，能获得更优的性能;
 4. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后

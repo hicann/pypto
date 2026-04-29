@@ -141,12 +141,14 @@ def gelu_activation_core(x: pypto.tensor) -> pypto.tensor:
         GELU activated tensor
     """
     pypto.set_vec_tile_shapes(*x.shape[:2] if len(x.shape) >= 2 else (32, 128))
-    x_scaled = pypto.mul(x, GELU_COEFF)
+    x_fp32 = pypto.cast(x, pypto.DT_FP32)
+    x_scaled = pypto.mul(x_fp32, GELU_COEFF)
     x_neg = pypto.mul(x_scaled, F_NEGA_1)
     exp_neg = pypto.exp(x_neg)
     ones = pypto.full(exp_neg.shape, 1.0, exp_neg.dtype, valid_shape=exp_neg.shape)
     sigmoid = pypto.div(ones, pypto.add(exp_neg, F_1))
-    return pypto.mul(x, sigmoid)
+    activated = pypto.cast(pypto.mul(x_fp32, sigmoid), pypto.DT_BF16)
+    return activated
 
 
 def swiglu_activation_core(gate: pypto.tensor, up: pypto.tensor) -> pypto.tensor:
@@ -166,16 +168,18 @@ def swiglu_activation_core(gate: pypto.tensor, up: pypto.tensor) -> pypto.tensor
     pypto.tensor
         SwiGLU activated tensor
     """
+    gate_fp32 = pypto.cast(gate, pypto.DT_FP32)
+    up_fp32 = pypto.cast(up, pypto.DT_FP32)
     pypto.set_vec_tile_shapes(*gate.shape[:2] if len(gate.shape) >= 2 else (32, 128))
 
-    gate_neg = pypto.mul(gate, F_NEGA_1)
+    gate_neg = pypto.mul(gate_fp32, F_NEGA_1)
     exp_neg = pypto.exp(gate_neg)
     ones = pypto.full(exp_neg.shape, F_1, exp_neg.dtype, valid_shape=exp_neg.shape)
     sigmoid = pypto.div(ones, pypto.add(exp_neg, ones))
-    swish = pypto.mul(gate, sigmoid)
+    swish = pypto.mul(gate_fp32, sigmoid)
 
     # Multiply with up projection
-    return pypto.mul(swish, up)
+    return pypto.cast(pypto.mul(swish, up_fp32), pypto.DT_BF16)
 
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
