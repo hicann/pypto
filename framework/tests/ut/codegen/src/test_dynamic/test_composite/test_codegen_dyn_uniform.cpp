@@ -58,13 +58,7 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP32)
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
     op.SetAttribute(OP_ATTR_PREFIX + "SHAPE", shape);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_TRUE(res.find("TUniform") != std::string::npos);
 }
 
@@ -93,13 +87,7 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP16)
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
     op.SetAttribute(OP_ATTR_PREFIX + "SHAPE", shape);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_TRUE(res.find("TUniform") != std::string::npos);
 }
 
@@ -128,13 +116,7 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorBF16)
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
     op.SetAttribute(OP_ATTR_PREFIX + "SHAPE", shape);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_TRUE(res.find("TUniform") != std::string::npos);
 }
 

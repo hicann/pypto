@@ -126,12 +126,7 @@ TEST_F(TestCodegenScalar, TestPipeAll)
     syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
                          AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *(function->rootFunc_->programs_[0]), syncOp});
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, syncOp);
     std::string expect = R"!!!(pipe_barrier(PIPE_ALL);
 )!!!";
 
@@ -146,12 +141,7 @@ TEST_F(TestCodegenScalar, TestAicpuCallOp)
     Operation& op = function->AddOperation(npu::tile_fwk::Opcode::OP_AICPU_CALL_AIV, {ubTensor}, {});
     op.SetAttribute(OpAttributeKey::aicpuCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *(function->rootFunc_->programs_[0]), op});
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TileOp::AicpuCall<0,0>(GET_CURRENT_TASKID());
 )!!!";
 
@@ -168,14 +158,7 @@ void TestCVSyncBody(Opcode syncOpcode)
 
     auto& op = function->AddOperation(syncOpcode, {localTensor}, {localOutTensor});
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect;
     if (syncOpcode == Opcode::OP_CV_SYNC_SRC) {
         expect = R"!!!(set_intra_block(PIPE_S, 0);

@@ -35,7 +35,12 @@ constexpr int64_t N0 = 16;
 class TestCodegenDynConv : public CodegenTestBase {
 public:
     TestCodegenDynConv()
-        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true, .resetTileTensorOnTearDown = true})
+        : CodegenTestBase(
+              {.compileStage = CS_CODEGEN_INSTRUCTION,
+               .setTileTensor = true,
+               .tileTensorValue = true,
+               .setIdGen = true,
+               .resetTileTensorOnTearDown = true})
     {}
 };
 
@@ -99,12 +104,7 @@ std::string TestConvL1CopyInBody(
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     SetConvL1CopyInOpAttr(op, isConv3D, gmShape, dstL1Shape);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cgop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    return cgop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynConv, L1CopyInTileTensorFmapConv2D)
@@ -221,13 +221,7 @@ std::string TestConvLoad3DBody(const std::string& funcName, const bool& isConv3D
     auto& op = function->AddOperation(Opcode::OP_LOAD3D_CONV, {l1Tensor}, {l0Tensor});
     SetConvLoad3DAttributes(op, isConv3D);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-
-    return cop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynConv, Load3DConv2D)
@@ -267,13 +261,7 @@ std::string TestConvLoad2DBody(const std::string& funcName)
     auto& op = function->AddOperation(Opcode::OP_LOAD2D_CONV, {l1Tensor}, {l0Tensor});
     SetConvLoad2DAttributes(op);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-
-    return cop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynConv, Load2DConv)

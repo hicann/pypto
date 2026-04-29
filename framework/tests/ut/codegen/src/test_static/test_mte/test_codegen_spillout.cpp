@@ -61,14 +61,7 @@ TEST_F(TestCodegenSpillOut, UBSpillOut)
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::UBCopyOut<float, 1, 1, 1, 64, 64, /*dst stride*/ 1, 1, 64, 64,/*src stride*/ 1, 1, 64, 64 >((__gm__ float*)GMStackBase, (__ubuf__ float*)UB_S0_E0);
 )!!!";
@@ -96,12 +89,8 @@ TEST_F(TestCodegenSpillOut, UBSpillOutTileTensor)
         std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({16, 16}), shapeImme, shapeImme));
     op.SetAttr(OpAttributeKey::workspaceBaseOffset, static_cast<int64_t>(16));
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
+    std::shared_ptr<SymbolManager> symbolManager;
+    auto cop = GenOpCloudNPUFromOp(*function, op, symbolManager);
 
     std::string res = symbolManager->GenTileTensorDefList();
     std::string expect =
@@ -132,13 +121,6 @@ TEST_F(TestCodegenSpillOut, L1SpillOut)
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-
-    cop.GenOpCode();
+    GenOpCodeFromOp(*function, op);
 }
 } // namespace npu::tile_fwk

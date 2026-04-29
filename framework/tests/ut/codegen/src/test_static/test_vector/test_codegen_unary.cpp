@@ -357,13 +357,7 @@ TEST_F(TestCodegenUnary, TestRowMaxLine)
     auto& op = function->AddOperation(Opcode::OP_ROWMAXLINE, {localTensorSrc}, {localTensorDst});
     op.SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::Trowmaxline_<float, 1, 2, 2, 64, 2, 2, 64, 2, 2, 64, 2>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0);
 )!!!";
@@ -381,13 +375,7 @@ TEST_F(TestCodegenUnary, TestExpDefaultPrecision)
 
     auto& op = function->AddOperation(Opcode::OP_EXP, {localTensorSrc}, {localTensorDst});
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TExp<pto::ExpAlgorithm::DEFAULT>(ubTensor_0, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
@@ -405,13 +393,7 @@ TEST_F(TestCodegenUnary, TestExpHighPrecision)
     auto& op = function->AddOperation(Opcode::OP_EXP, {localTensorSrc}, {localTensorDst});
     op.SetAttribute("precision_type", static_cast<int64_t>(1)); // HIGH_PRECISION
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TExp<pto::ExpAlgorithm::HIGH_PRECISION>(ubTensor_0, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
@@ -428,13 +410,7 @@ TEST_F(TestCodegenUnary, TestSqrtDefaultPrecision)
 
     auto& op = function->AddOperation(Opcode::OP_SQRT, {localTensorSrc}, {localTensorDst});
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TSqrt<pto::SqrtAlgorithm::DEFAULT>(ubTensor_0, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
@@ -452,13 +428,7 @@ TEST_F(TestCodegenUnary, TestSqrtHighPrecision)
     auto& op = function->AddOperation(Opcode::OP_SQRT, {localTensorSrc}, {localTensorDst});
     op.SetAttribute("precision_type", static_cast<int64_t>(1)); // HIGH_PRECISION
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TSqrt<pto::SqrtAlgorithm::HIGH_PRECISION>(ubTensor_0, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
@@ -475,13 +445,7 @@ TEST_F(TestCodegenUnary, TestLogDefaultPrecision)
 
     auto& op = function->AddOperation(Opcode::OP_LN, {localTensorSrc}, {localTensorDst});
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TLog<pto::LogAlgorithm::DEFAULT>(ubTensor_0, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
@@ -499,13 +463,7 @@ TEST_F(TestCodegenUnary, TestLogHighPrecision)
     auto& op = function->AddOperation(Opcode::OP_LN, {localTensorSrc}, {localTensorDst});
     op.SetAttribute("precision_type", static_cast<int64_t>(1)); // HIGH_PRECISION
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(TLog<pto::LogAlgorithm::HIGH_PRECISION>(ubTensor_0, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);

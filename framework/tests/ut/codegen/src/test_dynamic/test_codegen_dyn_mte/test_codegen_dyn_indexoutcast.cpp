@@ -93,14 +93,7 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast)
     op.SetOOpAttrOffset(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynTIndexoutcast<float, float, 1, 1, 16, 1, 1, 16, 1, 1, 1, 0, 1>((__gm__ float*)GET_PARAM_ADDR(param, 0, 0), (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, GET_PARAM_RAWSHAPE_2(param, 0, 0), 0, 0, 0, 0);
 )!!!";
@@ -139,14 +132,7 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor)
     indexoutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, to_offset, shapeImme, shapeImme));
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(indexoutOp.GetOpAttribute());
     indexoutOp.SetOOpAttrOffset(0, 0);
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(indexoutOp, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], indexoutOp, {}, true);
-    CodeGenOpCloudNPU cop(opCtx);
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, indexoutOp, {.isMainBlk = true});
     std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_0, ubTensor_1, ubTensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);

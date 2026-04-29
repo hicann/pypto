@@ -353,11 +353,8 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor)
     std::vector<int64_t> initVec(addShape.size(), false);
     op.SetAttribute(OpAttributeKey::lastUse, initVec);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
+    std::shared_ptr<SymbolManager> symbolManager;
+    auto cop = GenOpCloudNPUFromOp(*function, op, symbolManager);
     std::string res = cop.GenOpCode();
     std::string expect = R"!!!(TAdd<LastUse2Dim<0, 0>>(ubTensor_0, ubTensor_0, ubTensor_0);
 )!!!";
@@ -523,12 +520,7 @@ TEST_F(TestCodegenDynBinary, TestAxpyTileTensor)
     op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(1));
     op.SetAttribute(OpAttributeKey::brcpIdx, static_cast<int64_t>(1));
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TAxpy<TileOp::BroadcastOperand::LEFT_OPERAND, TileOp::PenuBroadcastOperand::LEFT_OPERAND>(ubTensor_0, ubTensor_0, (float)2);
 )!!!";

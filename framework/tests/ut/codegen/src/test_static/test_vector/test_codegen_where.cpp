@@ -86,14 +86,7 @@ void TestWhereBody(
     auto& op = GetWhereOp(
         function, opCode, {localTensorResult, localTensorCond, localTensorTmp, localTensorInput, localTensorOther});
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_EQ(res, expect);
 }
 

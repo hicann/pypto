@@ -40,9 +40,7 @@ constexpr const unsigned TOPK_OP_TMP_IDX = 2;
 
 class TestCodegenDynSort : public CodegenTestBase {
 public:
-    TestCodegenDynSort()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
-    {}
+    TestCodegenDynSort() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true}) {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };
@@ -55,16 +53,7 @@ struct TestContext {
     Operation* op;
 };
 
-std::string generateCodeForOp(TestContext& tc)
-{
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(*tc.op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *tc.function, *tc.function->rootFunc_->programs_[0], *tc.op, {}, true);
-    CodeGenOpCloudNPU cop(opCtx);
-    return cop.GenOpCode();
-}
+std::string generateCodeForOp(TestContext& tc) { return GenOpCodeFromOp(*tc.function, *tc.op, {.isMainBlk = true}); }
 
 TestContext prepareSortParamForUT(Opcode opcode)
 {
@@ -158,13 +147,7 @@ TEST_F(TestCodegenDynSort, TestDynTiledMgrSort)
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynTiledMrgSort<float, 1, 1, 64, 64, 1, 1, 64, 64, 64, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 64, 64, 64, 64, 64);
 )!!!";
@@ -197,13 +180,7 @@ void TestTopkBody(Opcode opCode, const std::string& expect)
 
     auto& op = GetTopkOp(function, opCode, {xVar, yVar, tmpVar});
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_EQ(res, expect);
 }
 
@@ -280,13 +257,7 @@ TEST_F(TestCodegenDynSort, TestRadixSelectFP32)
     op.SetAttribute(OP_ATTR_PREFIX + "kvalue", 16);
     op.SetAttribute(OP_ATTR_PREFIX + "order", 1);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TRadixSelect<16, 1>(ubTensor_0, ubTensor_1, ubTensor_2, ubTensor_3);
 )!!!";

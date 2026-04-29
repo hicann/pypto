@@ -49,13 +49,7 @@ TEST_F(TestCodegenDynMM, TestDynMatmulTileTensor)
         function->AddOperation(Opcode::OP_A_MUL_B, {localTensorA, localTensorB, localTensorBias}, {localOutTensor});
     op.SetAttribute(OP_ATTR_PREFIX + "has_bias", true);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TMatmul<TransMode::CAST_NONE>(l0cTensor_0, l0aTensor_1, l0bTensor_2, btTensor_3);
 )!!!";
@@ -84,13 +78,7 @@ TEST_F(TestCodegenDynMM, TestMatmulMXTileTensor)
         function->AddOperation(Opcode::OP_A_MUL_B, {localTensorAMX, localTensorBMX, localTensorBias}, {localOutTensor});
     op.SetAttribute(OP_ATTR_PREFIX + "has_bias", true);
 
-    std::shared_ptr<SymbolManager> symbolManagerMX = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManagerMX);
-    CodeGenOpCloudNPU cop({symbolManagerMX, *function, *function->rootFunc_->programs_[0], op, {}});
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect = R"!!!(MatmulMX(l0cTensor_0, l0a_mxTensor_1, l0b_mxTensor_2, btTensor_3);
 )!!!";
     EXPECT_EQ(res, expect);

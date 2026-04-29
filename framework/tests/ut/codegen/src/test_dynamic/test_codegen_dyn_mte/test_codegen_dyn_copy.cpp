@@ -35,7 +35,11 @@ constexpr const int dummyRawMagic = 123;
 class TestCodegenDynCopy : public CodegenTestBase {
 public:
     TestCodegenDynCopy()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .setIdGen = true, .resetTileTensorOnTearDown = true})
+        : CodegenTestBase(
+              {.compileStage = CS_EXECUTE_GRAPH,
+               .setTileTensor = true,
+               .setIdGen = true,
+               .resetTileTensorOnTearDown = true})
     {}
 };
 
@@ -61,13 +65,7 @@ std::string TestL0COutBody(const std::string& funcName, bool isDynamicAligned = 
         op.SetAttribute(OpAttributeKey::copyIsNZ, 1);
     }
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    return cop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynCopy, L0CToOut)
@@ -106,13 +104,7 @@ TEST_F(TestCodegenDynCopy, L1ToFB)
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_FIX, shapeImme, shapeImme));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynL1ToFB<float, 0>((__fbuf__ float*)FIXBUF_S0_E0, (__cbuf__ float*)L1_S0_E0, 64);
 )!!!";
@@ -152,12 +144,7 @@ std::string TestL1CopyInBody(
         op.SetAttribute(OP_ATTR_PREFIX + "copy_in_mode", 2);
     }
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    return cop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynCopy, L1CopyIn)
@@ -234,14 +221,7 @@ TEST_F(TestCodegenDynCopy, TestGatherInL1TileTensor)
     gatherL1Op.SetAttribute("op_attr_blocksize", blocksize);
     gatherL1Op.SetAttribute(OpAttributeKey::startOffset, blocksize);
     gatherL1Op.SetOOpAttrOffset(0, 0);
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(gatherL1Op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], gatherL1Op, {}, true);
-    CodeGenOpCloudNPU cop(opCtx);
-
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, gatherL1Op, {.isMainBlk = true});
     std::string expect =
         R"!!!(TGatherInL1<0>(l1Tensor_0, gmTensor_1, gmTensor_1, gmTensor_1, Coord1Dim(0), Coord2Dim(GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 1)), Coord2Dim(GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 1)));
 )!!!";
@@ -264,13 +244,7 @@ TEST_F(TestCodegenDynCopy, L1ToBt)
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_BT, shapeImme, shapeImme));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynL1ToBT<float, float, 0>((uint64_t)BIAS_S0_E0, (__cbuf__ float*)L1_S0_E0, 64);
 )!!!";
@@ -323,13 +297,7 @@ std::string TestMatmulMteBody(const std::string& funcName, Opcode opcode, Memory
         copyAttr->SetFromOffset(OpImmediate::Specified({0, 0}));
     }
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-
-    return cop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynCopy, L1CopyInTensor)
@@ -440,14 +408,7 @@ std::string TestCopyL1Body(Opcode opcode, MemoryType inputType, MemoryType outpu
         copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
     }
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-
-    return cop.GenOpCode();
+    return GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynCopy, UB2L1TileTensor)
@@ -490,13 +451,7 @@ void TestUBCopyInBody(const std::string funcName, const std::string& expect)
     op.SetIOpAttrOffset(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     EXPECT_EQ(res, expect);
 }
 
@@ -534,13 +489,7 @@ TEST_F(TestCodegenDynCopy, L0CToL1)
     copyAttr->SetToDynValidShape(OpImmediate::Specified(shape));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynL0CToL1<float, float, 0>((__cbuf__ float*)L1_S0_E0, (__cc__ float*)L0C_S0_E0, 64, 64, 64, 64, 0, 0, 64, 64, 0, 0, 0);
 )!!!";

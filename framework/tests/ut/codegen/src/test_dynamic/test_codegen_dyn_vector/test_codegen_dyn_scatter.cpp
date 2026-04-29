@@ -56,13 +56,7 @@ TEST_F(TestCodegenDynScatter, TestDynOpScatterElement)
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynTscatterElementS<float, float, float, 1, 1, 32, 1, 64, 64, 3, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (float)1, 1, 1, 1, 32);
 )!!!";
@@ -89,13 +83,7 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter)
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynTscatter<float, float, 1, 1, 32, 1, 64, 64, 1, 64, 64, 3, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 1, 32);
 )!!!";

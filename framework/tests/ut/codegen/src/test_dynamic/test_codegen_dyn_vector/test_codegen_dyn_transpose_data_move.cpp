@@ -32,8 +32,7 @@ namespace npu::tile_fwk {
 
 class TestCodegenDynTransposeDataMove : public CodegenTestBase {
 public:
-    TestCodegenDynTransposeDataMove()
-        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .setTileTensor = true})
+    TestCodegenDynTransposeDataMove() : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .setTileTensor = true})
     {}
 };
 
@@ -61,14 +60,7 @@ void TestTransposeDataMoveBody(int dim = 3)
     op.SetOOpAttrOffset(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-
-    cop.GenOpCode();
+    GenOpCodeFromOp(*function, op);
 }
 
 TEST_F(TestCodegenDynTransposeDataMove, TransposeDataMoveDim3) { TestTransposeDataMoveBody(); }

@@ -53,13 +53,7 @@ TEST_F(TestCodegenDynRange, TestDynOpRange)
     SymbolicScalar tileIdx(idx);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynRange<float, 64>((__ubuf__ float*)UB_S0_E0, 64, 1, 2, ((int64_t)(0)));
 )!!!";
@@ -84,13 +78,6 @@ TEST_F(TestCodegenDynRange, RangeTileTensor)
     op.SetAttribute(OP_ATTR_PREFIX + "STEP", start);
     op.SetAttribute(OP_ATTR_PREFIX + "SIZE", start);
 
-    std::shared_ptr<SymbolManager> rangeSymbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, rangeSymbolManager);
-    CodeGenOpNPUCtx opCtx(rangeSymbolManager, *function, *function->rootFunc_->programs_[0], op, {}, true);
-    CodeGenOpCloudNPU cop(opCtx);
-
-    cop.GenOpCode();
+    GenOpCodeFromOp(*function, op, {.isMainBlk = true});
 }
 } // namespace npu::tile_fwk

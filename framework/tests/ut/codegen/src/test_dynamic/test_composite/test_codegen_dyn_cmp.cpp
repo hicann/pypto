@@ -53,13 +53,7 @@ TEST_F(TestCodegenDynCmp, TestDynOpCmp)
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynCompare<float, 1, 64, 64, 1, 64, 64, 1, 64, 64, 0, 0>((__ubuf__ uint8_t*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 64, 64, (__ubuf__ uint8_t*)UB_S0_E0);
 )!!!";
@@ -86,13 +80,7 @@ TEST_F(TestCodegenDynCmp, TestDynOpCmpS)
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", 0);
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynCmps<float, 1, 64, 64, 1, 64, 64, 0, 0>((__ubuf__ uint8_t*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 64, 64, (__ubuf__ uint8_t*)UB_S0_E0, 1);
 )!!!";
@@ -120,14 +108,8 @@ TEST_F(TestCodegenDynCmp, CmpTileTensor)
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", cmpParam);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", cmpParam);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
+    std::string res = GenOpCodeFromOp(*function, op);
 
-    std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TCompare<0, 0>(ubTensor_0, ubTensor_0, ubTensor_0, ubTensor_0);
 )!!!";

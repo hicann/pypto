@@ -92,13 +92,7 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutDynUnaligned)
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
-    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
-    CodeGenCtx ctx;
-    CodeGenCloudNPU cga(ctx);
-    cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
-    CodeGenOpCloudNPU cop(opCtx);
-    std::string res = cop.GenOpCode();
+    std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
         R"!!!(TileOp::DynTIndexPut<float, float, 2, 1, 64, 64, 1>((__gm__ float*)GET_PARAM_ADDR(param, 0, 1), (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 64, 1, 1, GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 1, 2, 1));
 )!!!";

@@ -20,6 +20,9 @@
 #include "interface/operation/operation.h"
 #include "interface/program/program.h"
 #include "interface/utils/id_gen.h"
+#include "codegen/symbol_mgr/codegen_symbol.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_common.h"
 
 namespace npu::tile_fwk {
@@ -135,6 +138,17 @@ Function* GenMockFuncDynBinary(const std::string& funcName, const MockFuncDynBin
 std::shared_ptr<LogicalTensor> CreateConvTensor(
     Function& function, const DataType& dtype, const std::vector<int64_t>& shape, const MemoryType& memType,
     const bool& isCopyIn = true);
+
+struct GenOpCodeOptions {
+    std::map<int, int> lto = {};
+    bool isMainBlk = false;
+};
+
+std::string GenOpCodeFromOp(Function& function, const Operation& op, const GenOpCodeOptions& options = {});
+
+CodeGenOpCloudNPU GenOpCloudNPUFromOp(
+    Function& function, const Operation& op, std::shared_ptr<SymbolManager>& outSymbolManager,
+    const GenOpCodeOptions& options = {});
 
 } // namespace npu::tile_fwk
 

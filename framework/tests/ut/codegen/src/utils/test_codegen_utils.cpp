@@ -150,4 +150,29 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
     return tensorPtr;
 }
 
+std::string GenOpCodeFromOp(Function& function, const Operation& op, const GenOpCodeOptions& options)
+{
+    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
+    CodeGenCtx ctx;
+    CodeGenCloudNPU cga(ctx);
+    cga.GenAllocForLocalBuffer(op, symbolManager);
+    CodeGenOpNPUCtx opCtx(
+        symbolManager, function, *function.rootFunc_->programs_[0], op, options.lto, options.isMainBlk);
+    CodeGenOpCloudNPU cop(opCtx);
+    return cop.GenOpCode();
+}
+
+CodeGenOpCloudNPU GenOpCloudNPUFromOp(
+    Function& function, const Operation& op, std::shared_ptr<SymbolManager>& outSymbolManager,
+    const GenOpCodeOptions& options)
+{
+    outSymbolManager = std::make_shared<SymbolManager>();
+    CodeGenCtx ctx;
+    CodeGenCloudNPU cga(ctx);
+    cga.GenAllocForLocalBuffer(op, outSymbolManager);
+    CodeGenOpNPUCtx opCtx(
+        outSymbolManager, function, *function.rootFunc_->programs_[0], op, options.lto, options.isMainBlk);
+    return CodeGenOpCloudNPU(opCtx);
+}
+
 } // namespace npu::tile_fwk
