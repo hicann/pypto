@@ -21,6 +21,7 @@
 
 namespace npu::tile_fwk {
 constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
+constexpr const size_t MAX_RUNTIME_AND_NESTING_DEPTH = 7000;
 
 inline std::string GetEmitPath(const std::string& name)
 {
