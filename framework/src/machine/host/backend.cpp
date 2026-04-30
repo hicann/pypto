@@ -558,6 +558,7 @@ static void BuildControlFlow(
                 controlFlowOss << std::setw(indent * TABSIZE) << ' '
                                << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_CACHESTOP); // force stop cache due to value "
                                   "depend in control\n";
+                valDependTensorMeta.disableCtrlFlowCache = true;
             }
         }
 
@@ -636,6 +637,7 @@ static void BuildControlFlow(
                 controlFlowOss << std::setw(indent * TABSIZE) << ' '
                                << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_CACHESTOP); // force stop cache due to value "
                                   "depend in data\n";
+                valDependTensorMeta.disableCtrlFlowCache = true;
             }
         }
 
@@ -721,7 +723,7 @@ static void FindLiteNPUKernel(const std::map<uint64_t, Function*>& leafDict, std
     }
 }
 
-static void SetDyndevProgBinary(Function* function)
+static void SetDyndevProgBinary(Function* function, bool disableCtrlFlowCache)
 {
     if (function == nullptr || function->GetDyndevAttribute() == nullptr) {
         return;
@@ -733,6 +735,7 @@ static void SetDyndevProgBinary(Function* function)
 
     dynamic::DevAscendProgram* devProg = reinterpret_cast<dynamic::DevAscendProgram*>(&dynAttrPtr->devProgBinary[0]);
     dynamic::EncodeDevAscendProgram(function, size, devProg);
+    devProg->disableCtrlFlowCache = disableCtrlFlowCache ? 1 : 0;
 
     if (config::GetPassDefaultConfig(npu::tile_fwk::KEY_PRINT_PROGRAM, false)) {
         devProg->DumpFile(config::LogTopFolder() + "/program.tifwkbintxt");
@@ -1136,7 +1139,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
         }
     }
 
-    return SetDyndevProgBinary(function);
+    return SetDyndevProgBinary(function, valDependTensorMeta.disableCtrlFlowCache);
 }
 
 MachineTask* GenCode(MachineTask* task, FunctionCache& cache)

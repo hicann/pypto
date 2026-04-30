@@ -126,5 +126,6 @@ void ForceLinkLibraryCompiler();
 struct ValDependTensorMeta {
     std::unordered_map<std::string, bool> tensorNameToDependCore;
     std::unordered_map<RawSymbolicScalarPtr, bool> valDependMap;
+    bool disableCtrlFlowCache{false};
 };
 } // namespace npu::tile_fwk

@@ -89,6 +89,7 @@ struct DevAscendProgram {
     uint32_t stitchFunctionsize{0};
     uint32_t stitchMaxFunctionNum{0};
     uint32_t ctrlFlowCacheSize{0};
+    uint32_t disableCtrlFlowCache{0};
     DevRelocVector<DevAscendProgramSymbol> symbolTable;
     DevRelocVector<char> symbolTableNameList;
     uint64_t expressionTableSize;
@@ -375,7 +376,8 @@ struct DevAscendProgram {
     {
         uint64_t* RuntimePartialUpdateTable = cellMatchRuntimePartialUpdateTableList.Data();
         uint64_t RuntimePartialUpdateTableSize = cellMatchRuntimePartialUpdateTableList.DataSize();
-        memset_s(RuntimePartialUpdateTable, RuntimePartialUpdateTableSize, 0, RuntimePartialUpdateTableSize);
+        // Need set to AICORE_TASK_INIT
+        memset_s(RuntimePartialUpdateTable, RuntimePartialUpdateTableSize, 0xFF, RuntimePartialUpdateTableSize);
     }
 
     struct DevRelocRange {

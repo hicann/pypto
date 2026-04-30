@@ -567,6 +567,10 @@ public:
     void* GetKernelBin() { return kernelBin; }
     auto& GetArgTypes() { return argTypes; }
     Function* GetFunction() { return dynFunc.get(); }
+    bool DisableHostCtrlFlowCacheBuild() const
+    {
+        return devProg != nullptr && devProg->disableCtrlFlowCache != 0;
+    }
 
     ~KernelBinary()
     {
@@ -649,6 +653,10 @@ public:
 
     uint8_t* FindCtrlFlowCache(KernelBinary* kernel, py::object& module, std::vector<DeviceTensorData>& tensors)
     {
+        if (kernel->DisableHostCtrlFlowCacheBuild()) {
+            COMPILER_LOGI("Skip host control flow cache build due to RUNTIME_FUNCKEY_CACHESTOP.");
+            return nullptr;
+        }
         auto devCache = kernel->FindCtrlFlowCache(tensors, true);
         if (devCache == nullptr) {
             std::vector<std::vector<int64_t>> shape;
