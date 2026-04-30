@@ -21,7 +21,7 @@ Main Functions:
     - sparse_compress_flash_attention_d: JIT-compiled decode version
 
 Example:
-    See deepseekv4_sparse_compress_flash_attention.py for usage examples.
+    See test_sparse_compress_flash_attention.py for usage examples.
 """
 from dataclasses import dataclass
 import pypto
@@ -242,14 +242,19 @@ def sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_k
     return y
 
 
-@torch.library.impl(pyptolib, "sparse_compress_flash_attention", "NPU")
-def sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, 
-                                    cmp_block_table_npu, atten_sink_npu,
-                                    seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio):
-    print(f'xxxxxx scfa')
-    return npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 
-                                    ori_block_table_npu, cmp_block_table_npu, atten_sink_npu,
-                                    seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio)
+try:
+    @torch.library.impl(pyptolib, "sparse_compress_flash_attention", "NPU")
+    def sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, ori_block_table_npu, 
+                                        cmp_block_table_npu, atten_sink_npu,
+                                        seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio):
+        return npu_sparse_compress_flash_attention(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 
+                                        ori_block_table_npu, cmp_block_table_npu, atten_sink_npu,
+                                        seqused_kv_npu, cmp_sparse_indices_npu, softmax_scale, win_size, cmp_ratio)
+except Exception as e:
+    if "could not parse dispatch key: NPU" in str(e):
+        print(f"Skip: torchair not installed, skip NPU registration for operator 'sparse_compress_flash_attention'")
+    else:
+        print(f"Skip: Unexpected error : {e}")
 
 
 def sparse_compress_flash_attention_graph(query_npu, q_act_seqs_npu, ori_kv_npu, cmp_kv_npu, 

@@ -20,7 +20,7 @@ Main Functions:
     - lightning_indexer_prolog_compute: Main computation function
 
 Example:
-    See deepseekv33_lightning_indexer_prolog_quant.py for usage examples.
+    See test_lightning_indexer_prolog_quant.py for usage examples.
 """
 
 import pypto

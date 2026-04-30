@@ -48,26 +48,9 @@ def compressor(
     return out, kv_state, score_state
 
 
-@torch.library.impl(pyptolib, "compressor", "NPU")
-def compressor(
-    x,
-    kv_state,
-    score_state,
-    kv_block_table,
-    score_block_table,
-    sin,
-    cos,
-    wkv,
-    wgate,
-    ape,
-    weight,
-    hadamard,
-    start_pos,
-    ratio,
-    rope_head_dim,
-    rotate,
-):
-    return npu_compressor(
+try:
+    @torch.library.impl(pyptolib, "compressor", "NPU")
+    def compressor(
         x,
         kv_state,
         score_state,
@@ -84,7 +67,30 @@ def compressor(
         ratio,
         rope_head_dim,
         rotate,
-    )
+    ):
+        return npu_compressor(
+            x,
+            kv_state,
+            score_state,
+            kv_block_table,
+            score_block_table,
+            sin,
+            cos,
+            wkv,
+            wgate,
+            ape,
+            weight,
+            hadamard,
+            start_pos,
+            ratio,
+            rope_head_dim,
+            rotate,
+        )
+except Exception as e:
+    if "could not parse dispatch key: NPU" in str(e):
+        print(f"Skip: torchair not installed, skip NPU registration for operator 'compressor'")
+    else:
+        print(f"Skip: Unexpected error : {e}")
 
 
 def compressor_pypto(

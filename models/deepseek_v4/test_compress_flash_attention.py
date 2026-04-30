@@ -9,9 +9,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-deepseekv3.3 Attention Module
+deepseekv4 Attention Module
 
-This module implements the Attention mechanism for deepseekv3.3 model, which uses
+This module implements the Attention mechanism for deepseekv4 model, which uses
 a paged memory management approach similar to operating systems to efficiently
 handle variable-length sequences and dynamic batch sizes in cfa_attention computation.
 
@@ -29,7 +29,7 @@ import pytest
 import numpy as np
 import math
 import os
-from cfa_impl import cfa_attention, cfa_graph
+from compress_flash_attention_impl import cfa_attention, cfa_graph
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -438,8 +438,7 @@ def c128(enable_flash: bool, enable_high_perf: bool, enable_graph: bool, device:
     compare.compare(output_flash, attention_out, "golden vs npu", rtol=0.0078125, atol=0.0001)
 
 
-@pytest.mark.skip(reason="ci torch version")
-def test_c128_decode(enable_flash: bool=False, enable_high_perf: bool=False, enable_graph: bool=True, \
+def test_c128_decode(enable_flash: bool=False, enable_high_perf: bool=False, enable_graph: bool=False, \
                     device_id: int = 0):
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

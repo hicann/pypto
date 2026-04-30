@@ -87,7 +87,6 @@ def compute_attention_no_flash(input_data, params, s2_tile):
         origin_cur_k_seq = origin_actual_seq[b_idx]
         s1 = actual_seq_q[b_idx + 1] - actual_seq_q[b_idx]
 
-        print("===========cur s1: ", s1)
 
         for s1_idx in range(s1):
 
@@ -104,11 +103,6 @@ def compute_attention_no_flash(input_data, params, s2_tile):
 
             cur_seq = min(max(cur_k_seq - s1 + 1 + s1_idx, 0), topk)
 
-            print(f"=========== b_idx:{b_idx}, s1_idx: {s1_idx}, "
-                  f"start_block: {start_block}, end_block: {end_block}, "
-                  f"start_pos: {valid_start_pos}, end_pos: {valid_end_pos}, "
-                  f"cur_win_size: {origin_cur_win_size},"
-                  f"cur_topk_size: {cur_seq}")
 
             bn_per_batch = math.ceil(cur_seq / s2_tile)
             for s2_idx in range(bn_per_batch):
@@ -442,7 +436,6 @@ def test_sfa_bf16_b1_s16_seq64K_p():
     do_test_sfa_entry("sfa_bf16_b1_s16_seq64K_p")
 
 
-@pytest.mark.skip(reason="ci torch version")
 def test_sfa_bf16_b64_s2_seq8K_d():
     '''
     scfa decode, mtp 1

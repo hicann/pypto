@@ -24,7 +24,7 @@ import pypto
 MLA Prolog Quantization Module
 
 This module implements MLA (Multi-head Latent Attention) Prolog quantization
-for DeepSeek V32 model. It converts hidden states to query, key, and value
+for DeepSeek V4 model. It converts hidden states to query, key, and value
 projections with support for quantization and RoPE (Rotary Position Embedding).
 
 Main Functions:
@@ -38,7 +38,7 @@ Main Functions:
     - k_nope_quant: Key quantization function
 
 Example:
-    See testdsv32_mla_prolog_quant.py for usage examples.
+    See test_mla_prolog_quant_v4.py for usage examples.
 """
 
 SHAPE_DIM_2 = 2

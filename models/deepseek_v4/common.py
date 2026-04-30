@@ -9,9 +9,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-deepseekv3.3 common functions Module
+deepseekv4 common functions Module
 
-This module implements common functions of deepseekv3.3
+This module implements common functions of deepseekv4
 
 Main Functions:
     - interleaved_rope_3d: attention common RoPE computation

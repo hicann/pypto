@@ -233,7 +233,7 @@ def win_atten_main_tnd_mask(
 
 
 @allow_in_graph
-def deepseekv33_win_atten(q: torch.Tensor,
+def deepseekv4_win_atten(q: torch.Tensor,
                         ori_block_table: torch.Tensor,
                         ori_kv: torch.Tensor,
                         seqused_kv: torch.Tensor,
@@ -265,11 +265,17 @@ def sliding_window_attention(q, ori_block_table, ori_kv, seqused_kv, sinks, win_
     return y
 
 
-@torch.library.impl(pyptolib, "sliding_window_attention", "NPU")
-def sliding_window_attention(q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, \
-    mask, cu_seqlens_q):
-    return deepseekv33_win_atten(q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, \
-        mask, cu_seqlens_q)
+try:
+    @torch.library.impl(pyptolib, "sliding_window_attention", "NPU")
+    def sliding_window_attention(q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, \
+        mask, cu_seqlens_q):
+        return deepseekv4_win_atten(q, ori_block_table, ori_kv, seqused_kv, sinks, win_size, \
+            mask, cu_seqlens_q)
+except Exception as e:
+    if "could not parse dispatch key: NPU" in str(e):
+        print(f"Skip: torchair not installed, skip NPU registration for operator 'sliding_window_attention'")
+    else:
+        print(f"Skip: Unexpected error : {e}")
 
 
 def sliding_win_atten_graph(q: torch.Tensor,

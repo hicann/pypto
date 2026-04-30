@@ -199,12 +199,12 @@ def c128_decode_impl(
         pypto.set_pass_options(sg_set_scope=1)
         mm1 = pypto.view(mm1, [g_tile, combine_s2_tile], [0, 0], valid_shape=[g_tile, vld_win_len + vld_cmp_seq])
         muls = pypto.mul(mm1, softmax_scale)
-        max = pypto.amax(muls, dim=-1, keepdim=True)
-        sub = pypto.sub(muls, max)
+        max_dim = pypto.amax(muls, dim=-1, keepdim=True)
+        sub = pypto.sub(muls, max_dim)
         exp = pypto.exp(sub)
 
         sum = pypto.sum(exp, dim=-1, keepdim=True)
-        sum_local = pypto.add(sum, pypto.exp(attn_sink_2d - max))
+        sum_local = pypto.add(sum, pypto.exp(attn_sink_2d - max_dim))
         softmax = pypto.div(exp, sum_local)
         softmax_16 = pypto.cast(softmax, dtype)
         pypto.set_pass_options(sg_set_scope=-1)
@@ -224,9 +224,16 @@ def npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori
     return y
 
 
-@torch.library.impl(pyptolib, "npu_cfa_attention", "NPU")
-def npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio):
-    return cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio)
+try:
+    @torch.library.impl(pyptolib, "npu_cfa_attention", "NPU")
+    def npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio):
+        return cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio)
+except Exception as e:
+    if "could not parse dispatch key: NPU" in str(e):
+        print(f"Skip: torchair not installed, skip NPU registration for operator 'cfa_attention'")
+    else:
+        print(f"Skip: Unexpected error : {e}")
+
 
 def cfa_graph(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, ori_block_table, cmp_ratio):
     return torch.ops.pypto.npu_cfa_attention(q, cmp_kv, sinks, cmp_block_table, seqused_kv, ori_kv, \

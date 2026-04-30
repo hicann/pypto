@@ -14,10 +14,8 @@ import pypto
 import torch
 import pytest
 from hc_pre_impl import hc_pre_kernel, hc_pre_kernel_prefill, npu_hc_pre, check_input_output_shape_dtype
+from utils.compare import compare
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(current_dir, '../deepseek_v32_exp/utils'))
-from compare import compare
 
 hc, d, sinkhorn_iters, norm_eps, hc_eps = 4, 4096, 20, 1e-6, 1e-6
 mix_hc = (2 + hc) * hc
@@ -193,7 +191,6 @@ def test_hc_pre_inmodel(t=16):
     print("comb compare success!!!")
 
 
-@pytest.mark.skip(reason="ci torch version")
 def test_hc_pre(t=16, is_trans=False):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
@@ -236,4 +233,4 @@ def te_hc_pre_prefill(t=512):
 if __name__ == "__main__":
     print("start test !!!")
     test_hc_pre_inmodel(16)
-    test_hc_pre(127)
+    test_hc_pre(16)

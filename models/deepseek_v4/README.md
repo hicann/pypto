@@ -53,7 +53,7 @@ torch.ops.pypto.compress_flash_attention(
 ## 调用方法
 
 ```
-python3  models/deepseek_v4/test_cfa.py
+python3  models/deepseek_v4/test_compress_flash_attention.py
 ```
 
 # Compressor
@@ -96,11 +96,11 @@ torch.ops.pypto.compressor(
 - **score\_state**（`Tensor`）：必选参数，表示score\_state中的历史数据, 对应公式中的$score\_state$。不支持非连续，数据格式支持$ND$，数据类型支持`float32`。支持输入shape[block_num,block_size,coff*D]。
 - **kv\_block\_table**（`Tensor`）：必选参数，表示kv\_state中的历史数据的page table。不支持非连续，数据格式支持$ND$，数据类型支持`int32`。支持输入shape[B, ceil(max_S/block_size)]。
 - **score\_block\_table**（`Tensor`）：必选参数，表示score\_state中的历史数据的page table。不支持非连续，数据格式支持$ND$，数据类型支持`int32`。支持输入shape[B, ceil(max_S/block_size)]。
-- **rope\_sin**（`Tensor`）：必选参数，表示Rope计算的权重系数。数据类型支持`bfloat16`。支持输入shape[min(T,T//cmp_ratio+B),rope_head_dim]。
-- **rope\_cos**（`Tensor`）：必选参数，表示Rope计算的权重系数。数据类型支持`bfloat16`。支持输入shape[min(T,T//cmp_ratio+B),rope_head_dim]。
+- **sin**（`Tensor`）：必选参数，表示Rope计算的权重系数。数据类型支持`bfloat16`。支持输入shape[min(T,T//ratio+B),rope_head_dim]。
+- **cos**（`Tensor`）：必选参数，表示Rope计算的权重系数。数据类型支持`bfloat16`。支持输入shape[min(T,T//ratio+B),rope_head_dim]。
 - **wkv**（`Tensor`）：必选参数，表示KV和压缩权重的权重参数，对应公式中的$W^{KV}$。不支持非连续，数据格式支持$ND$，数据类型支持`bfloat16`。支持输入shape[coff*D,H]。
 - **wgate**（`Tensor`）：必选参数，表示KV和压缩权重的权重参数，对应公式中的$W^{Gate}$。不支持非连续，数据格式支持$ND$，数据类型支持`bfloat16`。支持输入shape[coff*D,H]。
-- **ape**（`Tensor`）：必选参数，表示输入的positional biases，对应公式中的$Ape$。不支持非连续，数据格式支持$ND$，数据类型支持`float32`。支持输入shape[cmp_ratio,coff*D]。
+- **ape**（`Tensor`）：必选参数，表示输入的positional biases，对应公式中的$Ape$。不支持非连续，数据格式支持$ND$，数据类型支持`float32`。支持输入shape[ratio,coff*D]。
 - **weight**（`Tensor`）：必选参数，表示计算RmsNorm时的权重系数。数据类型支持`bfloat16`。支持输入shape[D,]。
 - **start\_pos**（`Tensor`）：可选参数，表示计算起始位置。不支持非连续，数据格式支持$ND$，数据类型支持`int32`。支持输入shape[B,]。当输入为None时，表示从0开始进行计算。
 - **hadamard**（`Tensor`）：可选参数，表示 Hadamard Transform 的权重矩阵。不支持非连续，数据格式支持$ND$，数据类型支持`bfloat16`。支持输入shape[D, D]。
@@ -110,7 +110,7 @@ torch.ops.pypto.compressor(
 
 ## 返回值说明
 
-- **out**（`Tensor`）：必选输出，表示压缩后的数据。不支持非连续，数据格式支持$ND$。数据类型支持`bfloat16`。支持输出shape[min(T, T // cmp_ratio + B), D]。不压缩的条目的输出数据值是零。
+- **out**（`Tensor`）：必选输出，表示压缩后的数据。不支持非连续，数据格式支持$ND$。数据类型支持`bfloat16`。支持输出shape[min(T, T // ratio + B), D]。不压缩的条目的输出数据值是零。
 
 ## 约束说明
 
@@ -259,10 +259,10 @@ torch.ops.pypto.mla_prolog_quant(
 - **wq_a**（`Tensor`）：公式中用于计算Query的下采样权重矩阵$wq_a$，数据格式支持NZ/ND，数据类型支持`bfloat16`，shape为[h, q_lora_rank]。
 - **wq_b**（`Tensor`）：公式中用于计算Query的上采样权重矩阵$wq_b$，数据格式支持NZ/ND，数据类型支持`int8`，shape为[q_lora_rank, num_heads*head_dim]。
 - **wkv**（`Tensor`）：公式中用于计算Key-Value的下采样权重矩阵$wkv$，数据格式支持NZ/ND，数据类型支持`bfloat16`，shape为[h, head_dim]。
-- **rmsnorm_gamma_cq**（`Tensor`）：计算$c^Q$的RmsNorm公式中的$\gamma$参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[q_lora_rank]。
-- **rmsnorm_gamma_ckv**（`Tensor`）：计算$c^{KV}$的RmsNorm公式中的$\gamma$参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[head_dim]。
-- **cos**（`Tensor`）：用于计算旋转位置编码的余弦参数矩阵，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
-- **sin**（`Tensor`）：用于计算旋转位置编码的正弦参数矩阵，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
+- **rope_cos**（`Tensor`）：用于计算旋转位置编码的余弦参数矩阵，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
+- **rope_sin**（`Tensor`）：用于计算旋转位置编码的正弦参数矩阵，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
+- **gamma_cq**（`Tensor`）：计算$c^Q$的RmsNorm公式中的$\gamma$参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[q_lora_rank]。
+- **gamma_ckv**（`Tensor`）：计算$c^{KV}$的RmsNorm公式中的$\gamma$参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[head_dim]。
 - **wq_b_scale**（`Tensor`）：用于矩阵乘wq_b后反量化操作的per-channel参数，不支持非连续的 Tensor。数据格式支持ND，数据类型支持`float`，shape为[num_heads*head_dim, 1]。
 
 
@@ -287,10 +287,10 @@ torch.ops.pypto.mla_prolog_quant(
 
 ```
 量化：
-python3  models/deepseek_v4/test_mla_prolog_quant.py
+python3  models/deepseek_v4/test_mla_prolog_quant_v4.py
 
 非量化：
-python3  models/deepseek_v4/test_mla_prolog.py
+python3  models/deepseek_v4/test_mla_prolog_v4.py
 
 ```
 

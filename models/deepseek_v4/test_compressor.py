@@ -8,7 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""Test module for deepseekv33_compressor."""
+"""Test module for deepseekv4_compressor."""
 
 import os
 import sys
@@ -18,13 +18,12 @@ import torch_npu
 import pytest
 import numpy as np
 import torch.nn as nn
-from compressor_impl import compressor_pypto
+from compressor_impl import compressor_pypto, npu_compressor
 
 
 np.random.seed(0)
 torch.manual_seed(0)
 np.set_printoptions(formatter={"float": "{:.6f}".format})
-enable_acl_graph = False
 
 
 def overlap_transform(tensor: torch.Tensor, value: float) -> torch.Tensor:
@@ -276,8 +275,7 @@ def compile_model(model):
     return compile_model
 
 
-@pytest.mark.skip(reason="ci torch version")
-def test_comp_128():
+def test_comp_128(enable_acl_graph = False):
     """Test Compressor"""
     print("=" * 60)
     print("Test: Compressor")
@@ -309,7 +307,7 @@ def test_comp_128():
             sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
         torch_npu.npu.synchronize()
     else:
-        out, kv_state_out, score_state_out = compressor_pypto(x, kv_state, score_state, block_table, block_table, \
+        out, kv_state_out, score_state_out = npu_compressor(x, kv_state, score_state, block_table, block_table, \
                            sin, cos, wkv, wgate, ape, weight, hadamard, st, ra, rope_head_dim, ro)
 
     kv = golden_compress(x, sin, cos, wkv, wgate, ape, weight, \
@@ -328,7 +326,7 @@ def test_comp_128():
 
 
 @pytest.mark.skip(reason="large test case")
-def test_comp_4():
+def test_comp_4(enable_acl_graph = False):
     """Test Compressor"""
     print("Test: Compressor")
     print("=" * 60)
@@ -379,7 +377,7 @@ def test_comp_4():
 
 
 @pytest.mark.skip(reason="large test case")
-def test_comp_indexer():
+def test_comp_indexer(enable_acl_graph = False):
     """Test Compressor"""
     print("=" * 60)
     print("Test: Compressor")

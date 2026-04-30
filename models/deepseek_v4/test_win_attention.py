@@ -13,7 +13,8 @@
 import math
 import os
 import torch
-from win_attention_impl import deepseekv33_win_atten, get_mask, sliding_win_atten_graph
+import pytest
+from win_attention_impl import deepseekv4_win_atten, get_mask, sliding_win_atten_graph
 
 
 class SWA(torch.nn.Module):
@@ -143,7 +144,6 @@ def win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
     return atten_out
 
 
-@pytest.mark.skip(reason="ci torch version")
 def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
 
     for b in [64]:
@@ -192,7 +192,7 @@ def test_win_atten_tnd_mask(allow_in_graph=False) -> None:
                 attn_sinks_npu, win_size, mask2_npu, cu_seqlens_q_tenor_npu)
 
         else:
-            atten_out = deepseekv33_win_atten(q_tnd, block_table, kv_cache, seqused_kv_list_tensor, \
+            atten_out = deepseekv4_win_atten(q_tnd, block_table, kv_cache, seqused_kv_list_tensor, \
                 sinks, win_size, mask=mask2, cu_seqlens_q=cu_seqlens_q_tenor)
 
         golden = win_atten_calc_tnd(input_params_win_attn, seqused_kv_list, sinks, q_tnd, \
