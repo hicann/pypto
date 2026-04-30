@@ -100,15 +100,8 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
    详细安装指导详见《[CANN 软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)》。
 
-    CANN-8.5.0 社区版:
-
     - 推荐版本：Ascend HDK 25.5.0
     - 支持版本：Ascend HDK 25.5.0
-
-    CANN-8.5.0 商发版:
-
-    - 推荐版本：Ascend HDK 25.5.0
-    - 支持版本：Ascend HDK 25.5.0、Ascend HDK 25.3.0、Ascend HDK 25.2.0
 
 
 ### 安装工具包
