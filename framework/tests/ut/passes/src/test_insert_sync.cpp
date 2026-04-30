@@ -528,7 +528,7 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     EXPECT_EQ(ps.depOps_[IS_NUM2].waitPipe[0], 0);  // cast waits for copyin1
     EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM2);   // copyin1 sets for cast
 
-    ps.HandleEventID(handleOp, issueQ, issuenum, eventIdDeadlock, res);
+    ps.HandleEventID(handleOp, issueQ, issuenum, eventIdDeadlock, res, synced);
     issueQ.DumpIssueQueue(ps.oriOpList_);
     ps.DumpLatestPipeDepMap();
 
@@ -544,7 +544,7 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     PipeSync::CoreTypeDetail waitCore = {CoreType::AIV, AIVCore::AIV1};
     PipeSync::CorePair corePair = {setCore, waitCore};
     PipeSync::CorePair corePairReverse = {waitCore, setCore};
-    ps.InitCVEventIdQ(true, corePair, corePairReverse);
+    ps.InitCVEventIdQ(corePair);
     EXPECT_EQ(ps.crossCoreFreeEventId_[corePair].size(), IS_NUM16);
     EXPECT_EQ(ps.crossCoreFreeEventId_[corePairReverse].size(), IS_NUM16);
 }
@@ -756,7 +756,7 @@ TEST_F(InsertSyncTest, TestRelaxFakeDataDep)
         size_t issuedTest = IS_NUM100;
         for (int i = 0; i < static_cast<int>(PipeSeq::PIPE_END); i++) {
             std::vector<size_t> issuedOps;
-            ps.PopFromQueue(ps.issueState_[i], issuedOps, eventIdDeadlock);
+            ps.PopFromQueue(ps.issueState_[i], issuedOps, eventIdDeadlock, synced);
             issued += issuedOps.size();
             if (i == IS_NUM4) {
                 issuedTest = issuedOps.size();
