@@ -98,6 +98,10 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
             int attrOffset{0};
             for (size_t i = 0; i < op.GetIOperands().size(); ++i) {
                 auto& tensor = op.GetIOperands()[i];
+                // attroffset of shem follows natural incremental order
+                if (OpcodeManager::Inst().IsSharedMemory(op.GetOpcode())) {
+                    attrOffset = i;
+                }
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
                     SetTensorParamAddr(
                         *tensor, gmTensorParamIdx, SymbolicScalar(op.GetIOpAttrOffset(attrOffset++)), op.GetOpMagic());
@@ -106,6 +110,10 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
             attrOffset = 0;
             for (size_t i = 0; i < op.GetOOperands().size(); ++i) {
                 auto& tensor = op.GetOOperands()[i];
+                // attroffset of shem follows natural incremental order
+                if (OpcodeManager::Inst().IsSharedMemory(op.GetOpcode())) {
+                    attrOffset = i;
+                }
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
                     SetTensorParamAddr(
                         *tensor, gmTensorParamIdx, SymbolicScalar(op.GetOOpAttrOffset(attrOffset++)), op.GetOpMagic());
