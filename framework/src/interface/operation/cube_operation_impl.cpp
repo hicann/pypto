@@ -1457,6 +1457,13 @@ void CheckABatchMulB(const Tensor& operand1, const Tensor& operand2)
         operand1.GetShape().size() == SHAPE_DIM3 || operand1.GetShape().size() == SHAPE_DIM4)
         << "Batch matmul only support 3 dimensions or 4 dimensions.";
 
+    auto aMatrixValidShape = operand1.GetStorage()->GetDynValidShape();
+    auto bMatrixValidShape = operand2.GetStorage()->GetDynValidShape();
+    ASSERT(
+        MatmulErrorCode::ERR_PARAM_INVALID, aMatrixValidShape.size() == operand1.GetShape().size() &&
+                                                bMatrixValidShape.size() == operand2.GetShape().size())
+        << "The input valid shape dimensions of BatchMatmul must match their shape dimensions.";
+
     for (uint64_t bIdx = 0; bIdx < operand1.GetShape().size() - SHAPE_DIM2; bIdx++) {
         const int64_t batchSizeA = operand1.GetShape()[bIdx];
         const int64_t batchSizeB = operand2.GetShape()[bIdx];
