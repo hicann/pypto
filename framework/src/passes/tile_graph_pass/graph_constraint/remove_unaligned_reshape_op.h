@@ -76,6 +76,7 @@ private:
     std::vector<CopyInOpMemUnalign> copyIns;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs;
+    std::vector<Operation*> newOps;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_REMOVE_UNALIGNED_RESHAPE_OP_H_

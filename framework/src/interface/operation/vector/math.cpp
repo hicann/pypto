@@ -541,7 +541,7 @@ void InnerTiledCumOperation(
         auto inputTile =
             input->View(function, cumOperationTileInfo.inputTileInfo.shape, cumOperationTileInfo.inputTileInfo.offset);
 
-        LogicalTensorPtr srcTile = std::make_shared<LogicalTensor>(function, dstTile->Datatype(), dstTile->GetShape());
+        LogicalTensorPtr srcTile = std::make_shared<LogicalTensor>(function, dstTile->Datatype(), dstTile->GetShape(), dstTile->GetDynValidShape());
         if (is_sum) {
             auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputTile}, {srcTile});
             op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
@@ -558,7 +558,7 @@ void InnerTiledCumOperation(
             shape[axis] = 1;
             LogicalTensorPtr lastAxisTile = dstTensor->View(function, shape, offset);
             LogicalTensorPtr lastTile =
-                std::make_shared<LogicalTensor>(function, srcTile->Datatype(), srcTile->GetShape());
+                std::make_shared<LogicalTensor>(function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
             auto& eop = function.AddOperation("TILE_EXPAND", {lastAxisTile}, {lastTile});
             eop.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{axis});
             if (is_sum) {

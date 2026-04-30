@@ -17,6 +17,7 @@
 #include <queue>
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/infer_discontinuous_input_checker.h"
+#include "passes/pass_utils/infer_shape_utils.h"
 
 #define MODULE_NAME "InferDiscontinuousInput"
 
@@ -35,6 +36,13 @@ Status InferDiscontinuousInput::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Insert copy op failed.");
         return FAILED;
     }
+    if (!newOps.empty()) {
+        if (InferShapeUtils::InferShape(function, newOps) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InferShape failed; Please check the InferShape method.");
+            return FAILED;
+        }
+    }
+    
     APASS_LOG_INFO_F(
         Elements::Function, "===> End InferDiscontinuousInput for function [%s].", function.GetRawName().c_str());
     return SUCCESS;
@@ -278,6 +286,7 @@ Status InferDiscontinuousInput::InferFromIncast()
 void InferDiscontinuousInput::InsertViewOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
 {
     auto& insertViewOp = function.AddRawOperation(Opcode::OP_VIEW, {iOperand}, {oOperand});
+    newOps.push_back(&insertViewOp);
     insertViewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         iOperand->GetOffset(), oOperand->GetMemoryTypeOriginal(), iOperand->GetDynOffset(),
         iOperand->GetDynValidShape()));
@@ -286,6 +295,7 @@ void InferDiscontinuousInput::InsertViewOp(Function& function, LogicalTensorPtr 
 void InferDiscontinuousInput::InsertAssembleOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
 {
     auto& insertAssembleOp = function.AddRawOperation(Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
+    newOps.push_back(&insertAssembleOp);
     insertAssembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
         iOperand->GetMemoryTypeOriginal(), oOperand->GetOffset(), oOperand->GetDynOffset(),
         oOperand->GetDynValidShape()));

@@ -44,6 +44,7 @@ private:
     std::map<LogicalTensorPtr, std::vector<std::pair<LogicalTensorPtr, Operation*>>> insertCopys_;
     std::map<Operation*, size_t> opInputDegree_;
     std::map<LogicalTensorPtr, size_t> tensorProducers_;
+    std::vector<Operation*> newOps;
 };
 } // namespace tile_fwk
 } // namespace npu

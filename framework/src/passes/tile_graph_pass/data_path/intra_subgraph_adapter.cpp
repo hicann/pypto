@@ -18,6 +18,7 @@
 #include "intra_subgraph_adapter.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/intra_subgraph_adapter_checker.h"
+#include "passes/pass_utils/infer_shape_utils.h"
 
 #define MODULE_NAME "IntraSubgraphAdapter"
 
@@ -47,8 +48,7 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
     for (size_t i = 0; i < boundaryTensors.size(); i++) {
         LogicalTensorPtr tensor = boundaryTensors[i];
         if (CheckBoundaryTensor(tensor) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor, "Check boundary tensor failed; Please check the CheckBoundaryTensor method.");
+            APASS_LOG_ERROR_F(Elements::Tensor, "Check boundary tensor failed; Please check the CheckBoundaryTensor method.");
             return FAILED;
         }
 
@@ -62,22 +62,8 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
         CollectConsumerColors(tensor, consumerColors);
 
         std::set<int> commonColors = SetIntersection(producerColors, consumerColors);
-        if (commonColors.size() > 1) {
-            APASS_LOG_ERROR_F(
-                Elements::Tensor,
-                "Process boundary tensor failed, tensor magic : %d; The producers and consumers cannot simultaneously "
-                "appear in more than one subgraph.",
-                tensor->GetMagic());
+        if (CheckColorCount(function, tensor, commonColors.size()) != SUCCESS) {
             return FAILED;
-        }
-        if (commonColors.size() == 0) {
-            if (ProcessBoundaryTensor(function, tensor) == FAILED) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
-                    "Process boundary tensor failed, tensor magic : %d; Please check the ProcessBoundaryTensor method.",
-                    tensor->GetMagic());
-                return FAILED;
-            }
         }
         if (commonColors.size() == 1) {
             // For boundary tensor that have both producer and consumer in a single subgraph,
@@ -85,13 +71,9 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
             int mainSubgraphID = *(commonColors.begin()); // the only subgraph id that has both producers and consumers.
             LogicalTensors newBoundaryTensors;
 
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor, "********** %s requires SplitBoundaryTensor. **********",
-                function.GetMagicName().c_str());
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor, "Boundary tensor: %s, mainSubgraphID: %d, producerColors: %s, consumerColors: %s",
-                tensor->Dump().c_str(), mainSubgraphID, IntSetToStr(producerColors).c_str(),
-                IntSetToStr(consumerColors).c_str());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "********** %s requires SplitBoundaryTensor. **********", function.GetMagicName().c_str());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Boundary tensor: %s, mainSubgraphID: %d, producerColors: %s, consumerColors: %s",
+                tensor->Dump().c_str(), mainSubgraphID, IntSetToStr(producerColors).c_str(), IntSetToStr(consumerColors).c_str());
             for (const auto& producer : tensor->GetProducers()) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "producer: %s", producer->Dump().c_str());
             }
@@ -100,22 +82,38 @@ Status IntraSubgraphAdapter::RunOnFunction(Function& function)
             }
 
             if (SplitBoundaryTensor(function, tensor, mainSubgraphID, newBoundaryTensors) == FAILED) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
-                    "Split boundary tensor failed, tensor magic : %d; Please check SplitBoundaryTensor method.",
-                    tensor->GetMagic());
+                APASS_LOG_ERROR_F(Elements::Tensor, "Split boundary tensor failed, tensor magic : %d; Please check SplitBoundaryTensor method.", tensor->GetMagic());
                 return FAILED;
             }
             if (ProcessBoundaryTensors(function, newBoundaryTensors) == FAILED) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor, "Process boundary tensors failed; Please check ProcessBoundaryTensors method.");
+                APASS_LOG_ERROR_F(Elements::Tensor, "Process boundary tensors failed; Please check ProcessBoundaryTensors method.");
                 return FAILED;
             }
+        }
+    }
+    if (!newOps.empty()) {
+        if (InferShapeUtils::InferShape(function, newOps) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InferShape failed; Please check the InferShape method.");
+            return FAILED;
         }
     }
     return SUCCESS;
 }
 
+Status IntraSubgraphAdapter::CheckColorCount(Function& function, LogicalTensorPtr tensor, size_t commonColorCount) {
+    if (commonColorCount > 1) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Process boundary tensor failed, tensor magic : %d; The producers and consumers cannot simultaneously "
+            "appear in more than one subgraph.", tensor->GetMagic());
+        return FAILED;
+    }
+    if (commonColorCount == 0) {
+        if (ProcessBoundaryTensor(function, tensor) == FAILED) {
+            APASS_LOG_ERROR_F(Elements::Tensor,"Process boundary tensor failed, tensor magic : %d; Please check the ProcessBoundaryTensor method.", tensor->GetMagic());
+            return FAILED;
+        }
+    }
+    return SUCCESS;
+}
 Status IntraSubgraphAdapter::CheckBoundaryTensor(LogicalTensorPtr tensor)
 {
     const static std::unordered_set<MemoryType> validBoundaryTensorMemType = {MEM_UB, MEM_L1, MEM_L0C, MEM_DEVICE_DDR};
@@ -401,6 +399,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
 
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
     Operation* newOp = &function.AddRawOperation(opcode, {newTensor}, {tensor});
+    newOps.push_back(newOp);
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
             newTensor->GetMemoryTypeOriginal(), offset, tensor->GetDynOffset(), tensor->GetDynValidShape()));
@@ -428,19 +427,14 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
         before: tensor -> op
         after: tensor -> newOp -> newTensor ->op
     */
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "IntraSubgraphAdapter::InsertOpBetween %s 2.",
-        OpcodeManager::Inst().GetOpcodeStr(opcode).c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "IntraSubgraphAdapter::InsertOpBetween %s 2.", OpcodeManager::Inst().GetOpcodeStr(opcode).c_str());
     if (ops.size() == 0) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Insert op between tensor and ops failed; The ops to be inserted can't be empty.");
+        APASS_LOG_ERROR_F(Elements::Operation, "Insert op between tensor and ops failed; The ops to be inserted can't be empty.");
         return nullptr;
     }
     ASSERT(opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE)
-        << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for IntraSubgraphAdapter::InsertOpBetween must be OP_VIEW "
-           "or OP_ASSEMBLE.";
-    auto newRawTensor =
-        std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
+        << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for IntraSubgraphAdapter::InsertOpBetween must be OP_VIEW or OP_ASSEMBLE.";
+    auto newRawTensor = std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
     LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
         function, newRawTensor, tensor->GetOffset(), tensor->GetShape(), tensor->GetDynValidShape());
     newTensor->UpdateOffset(tensor->GetTensorOffset());
@@ -456,6 +450,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
 
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
     Operation* newOp = &function.AddRawOperation(opcode, {tensor}, {newTensor});
+    newOps.push_back(newOp);
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
             newTensor->GetMemoryTypeOriginal(), offset, tensor->GetDynOffset(), tensor->GetDynValidShape()));
@@ -464,9 +459,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
         newOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(
             offset, newTensor->GetMemoryTypeToBe(), tensor->GetDynOffset(), tensor->GetDynValidShape()));
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(), newOp->GetOpMagic(),
-        newOp->Dump().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert New Op %s[%d], info: %s", newOp->GetOpcodeStr().c_str(), newOp->GetOpMagic(), newOp->Dump().c_str());
     if (newOpSubgraphID == -1) {
         newOp->UpdateSubgraphID(ops[0]->GetSubgraphID());
     } else {

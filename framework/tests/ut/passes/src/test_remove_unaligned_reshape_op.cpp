@@ -995,3 +995,47 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1OverUB)
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
 }
+
+TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestValidShapeInfer", "TestValidShapeInfer", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{128, 64});
+    inCast->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    inCast->UpdateDynValidShape({SymbolicScalar(128), SymbolicScalar(64)});
+
+    auto reshapeInput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{128, 64});
+    reshapeInput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    reshapeInput->UpdateDynValidShape({SymbolicScalar(128), SymbolicScalar(64)});
+
+    auto reshapeOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 128});
+    reshapeOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    reshapeOutput->UpdateDynValidShape({SymbolicScalar(64), SymbolicScalar(128)});
+
+    auto outCast = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 128}, TileOpFormat::TILEOP_ND, "outCast",
+        NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    auto& reshapeOp = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    reshapeOp.UpdateSubgraphID(0);
+
+    auto& copyOutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {reshapeOutput}, {outCast});
+    copyOutOp.UpdateSubgraphID(0);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op.GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
+            auto oOperand = op.GetOOperands().front();
+            auto dynValidShape = oOperand->GetDynValidShape();
+            EXPECT_FALSE(dynValidShape.empty());
+        }
+    }
+}

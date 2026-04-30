@@ -34,6 +34,7 @@ public:
     Status PostCheck(Function& function) override;
 
 private:
+    Status CheckColorCount(Function& function, LogicalTensorPtr tensor, size_t commonColorCount);
     Status CheckBoundaryTensor(LogicalTensorPtr tensor);
     Status SplitBoundaryTensor(
         Function& function, LogicalTensorPtr tensor, int mainSubgraphID, LogicalTensors& newBoundaryTensors);
@@ -50,6 +51,7 @@ private:
     void CollectConsumerColors(LogicalTensorPtr tensor, std::set<int>& colors);
     std::set<int> SetIntersection(std::set<int>& a, std::set<int>& b);
     bool IsCrossCoreMoveOps(Operation* op);
+    std::vector<Operation*> newOps;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_INTRA_SUBGRAPH_ADAPTER_H_

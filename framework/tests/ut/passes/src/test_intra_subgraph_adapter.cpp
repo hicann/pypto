@@ -127,4 +127,45 @@ TEST_F(IntraSubgraphAdapterTest, TestInnerConvert)
     EXPECT_EQ(function->Operations().DuplicatedOpList()[convertIdx]->GetOpcode(), Opcode::OP_CONVERT);
 }
 
+TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{ MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    std::vector<Opcode> opCodes{Opcode::OP_ADDS, Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0A};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"adds", "convert", "L1ToL0A"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {32, 32}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+    auto t2 = subGraph.GetTensor("t2");
+    t2->UpdateDynValidShape({SymbolicScalar(32), SymbolicScalar(32)});
+
+    subGraph.GetOp("adds")->UpdateSubgraphID(0);
+    subGraph.GetOp("convert")->UpdateSubgraphID(0);
+    subGraph.GetOp("convert")->SetOpAttribute(
+        std::make_shared<ConvertOpAttribute>(MemoryType::MEM_UB, MemoryType::MEM_L1));
+    subGraph.GetOp("L1ToL0A")->UpdateSubgraphID(1);
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    function->SetTotalSubGraphCount(2);
+
+    IntraSubgraphAdapter adapter;
+    EXPECT_EQ(adapter.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(adapter.PostCheck(*function), SUCCESS);
+
+    bool foundAssembleOrView = false;
+    for (const auto& op : function->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_ASSEMBLE || op->GetOpcode() == Opcode::OP_VIEW) {
+            foundAssembleOrView = true;
+            auto oOperand = op->GetOOperands().front();
+            auto dynValidShape = oOperand->GetDynValidShape();
+            EXPECT_FALSE(dynValidShape.empty());
+            EXPECT_EQ(dynValidShape.size(), 2);
+        }
+    }
+    EXPECT_TRUE(foundAssembleOrView);
+}
+
 } // namespace npu::tile_fwk
