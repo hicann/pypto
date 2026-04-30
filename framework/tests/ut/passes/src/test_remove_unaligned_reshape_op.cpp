@@ -586,8 +586,7 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeConsumerAssembleOnUB)
 //                       - ASSEMBLE - out2
 TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestBranchBetweenCopyOutReshape1", "TestBranchBetweenCopyOutReshape1", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestBranchBetweenCopyOutReshape1", "TestBranchBetweenCopyOutReshape1", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -599,16 +598,18 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
     incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto copyInTensor_1 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     copyInTensor_1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    copyInTensor_1->UpdateDynValidShape(validShape_1);
     auto copyOutTensor_1 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto assembleTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
-    assembleTensor->UpdateDynValidShape(validShape_1);
+    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    assembleTensor->UpdateDynValidShape(validShape_2);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
-    reshapeTensor->UpdateDynValidShape(validShape_2);
+    std::vector<SymbolicScalar> validShape_3 = {SymbolicScalar("Input_2_Dim_0"), SymbolicScalar("Input_2_Dim_1")};
+    reshapeTensor->UpdateDynValidShape(validShape_3);
     auto copyInTensor_2 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto copyInTensor_3 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
@@ -619,7 +620,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
+        OpImmediate::Specified(inShape), OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
+    copyoutOp.SetOpAttribute(copyoutAttr);
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
@@ -805,7 +809,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape2)
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),OpImmediate::Specified(inShape),
+        OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
+    copyoutOp.SetOpAttribute(copyoutAttr);
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
@@ -823,6 +830,13 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape2)
     EXPECT_EQ(currFunctionPtr->Operations().size(), expSize);
 }
 
+inline void CheckTestMutiProducerBetweenCopyOutReshape(std::shared_ptr<Function> currFunctionPtr) {
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    int curSize = currFunctionPtr->Operations().size();
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    int expSize = curSize + 1;
+    EXPECT_EQ(currFunctionPtr->Operations().size(), expSize);
+}
 // in1                    - ASSEMBLE \*
 // in2 - COPYIN - COPYOUT - ASSEMBLE - RESHAPE - COPYIN - COPYOUT - out1
 //                        - ASSEMBLE - out2
@@ -864,7 +878,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast_1}, {copyInTensor_1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
+        OpImmediate::Specified(inShape), OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
+    copyoutOp.SetOpAttribute(copyoutAttr);
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {incast_2}, {assembleTensor});
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
@@ -876,21 +893,24 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     currFunctionPtr->inCasts_.push_back(incast_2);
     currFunctionPtr->outCasts_.push_back(outcast_1);
     currFunctionPtr->outCasts_.push_back(outcast_2);
+    CheckTestMutiProducerBetweenCopyOutReshape(currFunctionPtr);
 
+}
+inline void CheckTestMutiConsumersBetweenCopyOutReshape(std::shared_ptr<Function> currFunctionPtr) {
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
-    int expSize = curSize + 1;
+    int expSize = curSize + 2;
     EXPECT_EQ(currFunctionPtr->Operations().size(), expSize);
 }
+
 // in - COPYIN - COPYOUT - ASSEMBLE - RESHAPE - COPYIN - COPYOUT - out1
 //                                  - ASSEMBLE - out3
 //                       - ASSEMBLE - out2
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestMutiProducerBetweenCopyOutReshape", "TestMutiProducerBetweenCopyOutReshape", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestMutiProducerBetweenCopyOutReshape", "TestMutiProducerBetweenCopyOutReshape", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
@@ -924,7 +944,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
     outcast_3->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto& copyout_Op = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
+        OpImmediate::Specified(inShape), OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
+    copyout_Op.SetOpAttribute(copyoutAttr);
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
@@ -936,12 +959,7 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
     currFunctionPtr->outCasts_.push_back(outcast_1);
     currFunctionPtr->outCasts_.push_back(outcast_2);
     currFunctionPtr->outCasts_.push_back(outcast_3);
-
-    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
-    int curSize = currFunctionPtr->Operations().size();
-    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
-    int expSize = curSize + 2;
-    EXPECT_EQ(currFunctionPtr->Operations().size(), expSize);
+    CheckTestMutiConsumersBetweenCopyOutReshape(currFunctionPtr);
 }
 
 // in - COPYIN - COPYOUT - RESHAPE - COPYIN - COPYOUT - out
