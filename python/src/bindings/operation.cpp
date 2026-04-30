@@ -253,7 +253,11 @@ void bind_operation(py::module& m)
         },
         py::arg("self"), py::arg("other"), py::arg("precision_type") = DivAlgorithm::HIGH_PRECISION, "Tensor div scalar.");
     m.def(
-        "Fmod", [](const Tensor& self, const Element& other) { return npu::tile_fwk::Fmod(self, other); },
+        "Fmod",
+        [](const Tensor& self, const Element& other, FmodAlgorithm precisionType) {
+            return npu::tile_fwk::Fmod(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = FmodAlgorithm::HIGH_PRECISION,
         "Tensor mod scalar.");
     m.def(
         "Gcd", [](const Tensor& self, const Element& other) { return npu::tile_fwk::Gcd(self, other); },
