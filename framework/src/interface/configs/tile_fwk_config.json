@@ -5,7 +5,6 @@
         "pg_partition_algorithm": "Iso",
         "mg_copyin_upper_bound": 104857600,
         "mg_vec_parallel_lb": 48,
-        "pg_skip_partition": false,
         "copyout_resolve_coalescing": 0,
         "sg_set_scope": [-1, 0, 0],
         "cube_l1_reuse_setting": [],

@@ -114,7 +114,7 @@ void TestInnerView()
 
     FUNCTION("test", {a, b}, {dst})
     {
-        config::SetPassOption(PG_SKIP_PARTITION, true);
+        config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{1, 1, 0});
         LOOP("loop1", FunctionType::DYNAMIC_LOOP, idx, LoopRange(row))
         {
             TileShape::Current().SetVecTile(5, 2048);
@@ -124,7 +124,7 @@ void TestInnerView()
             auto f = Add(e, e);
             Assemble({{f, {5 * idx, 0}}}, dst, true);
         }
-        config::SetPassOption(PG_SKIP_PARTITION, false);
+        config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});
     }
 
     std::cout << "compile finished" << std::endl;

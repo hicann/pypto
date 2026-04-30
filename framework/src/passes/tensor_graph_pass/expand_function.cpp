@@ -126,12 +126,6 @@ Status ExpandFunction::VerifyScopeInfo(Function& function, std::ostringstream& o
                     << ", please check your setting: sg_set_scope=" << scopeId;
                 return FAILED;
             }
-            const auto& info = scopeInfoMap[scopeId];
-            if (info.allowParallelMerge) {
-                oss << "Op scopeId=" << scopeId << " on CV mix platform: allowParallelMerge must be false "
-                    << "when cube and vector ops are mixed in the same scope.";
-                return FAILED;
-            }
         }
     }
     return SUCCESS;

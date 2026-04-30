@@ -29,14 +29,6 @@ namespace npu::tile_fwk {
 
 Status IsoPartitioner::PartitionGraph(Function& function)
 {
-    if (skipPartition_) {
-        for (auto& op : function.Operations()) {
-            op.UpdateSubgraphID(0);
-        }
-        function.SetTotalSubGraphCount(1);
-        APASS_LOG_INFO_F(Elements::Operation, "Graph Partition is skipped.");
-        return SUCCESS;
-    }
     if (EstimateCycleUB(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Config, "Estimate and refresh cycleUB_ failed.");
         return FAILED;
@@ -714,13 +706,8 @@ Status IsoPartitioner::UpdatePartitionResult(Function& function)
     return SUCCESS;
 }
 
-Status IsoPartitioner::SetParameter(
-    int32_t parallelNum, int32_t pgLowerBound, bool useReduceBalanceHash, bool skipPartition)
+Status IsoPartitioner::SetParameter(int32_t parallelNum, int32_t pgLowerBound, bool useReduceBalanceHash)
 {
-    skipPartition_ = skipPartition;
-    if (skipPartition) {
-        return SUCCESS;
-    }
     if (parallelNum < 0) {
         APASS_LOG_ERROR_F(
             Elements::Config, "Illegal parallelNum: %d; Parameter parallelNum must be non-negative.", parallelNum);

@@ -1999,7 +1999,7 @@ void TestInnerAssembleMultiView()
 
     FUNCTION("test", {a, b, c, lens1, lens2}, {dst})
     {
-        config::SetPassOption(PG_SKIP_PARTITION, true);
+        config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{1, 1, 0});
         LOOP("loop1", FunctionType::DYNAMIC_LOOP, idx, LoopRange(row))
         {
             TileShape::Current().SetVecTile(5, 2048);
@@ -2013,7 +2013,7 @@ void TestInnerAssembleMultiView()
             tmp = Add(tmp, tmp);
             Assemble({{tmp, {idx * 5, 0}}}, dst, true);
         }
-        config::SetPassOption(PG_SKIP_PARTITION, false);
+        config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});
     }
 
     std::cout << "compile finished" << std::endl;

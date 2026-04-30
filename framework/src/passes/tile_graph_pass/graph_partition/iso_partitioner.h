@@ -95,9 +95,7 @@ public:
 class IsoPartitioner : public SuperNodeGraphBuilder {
 public:
     Status PartitionGraph(Function& function);
-    Status SetParameter(
-        int32_t parallelNum, int32_t pgLowerBound, bool useReduceBalanceHash = true,
-        bool skipPartition = false);
+    Status SetParameter(int32_t parallelNum, int32_t pgLowerBound, bool useReduceBalanceHash = true);
 
 private:
     Status BuildIsomorphismGroups();
@@ -118,7 +116,6 @@ private:
     bool CheckIsoMergeConditions(int32_t currColorSize, int32_t mergeColorSize) const;
     std::vector<std::shared_ptr<IsomorphismGraphGroup>> isoSubGroups_;
     int32_t tryMergeLoopNum_ = 100;
-    bool skipPartition_ = false;
     int32_t cycleUB_ = -1;
     int32_t parallelNum_ = -1;
     int32_t cycleLB_ = -1;

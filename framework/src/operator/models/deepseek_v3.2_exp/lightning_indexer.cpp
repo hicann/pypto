@@ -532,7 +532,7 @@ void LightningIndexerImpl(
             auto srcIdx = bIdx * MAX_LI_S1 + s1Idx;
             auto dstIdx = bIdx * s1 + s1Idx;
             TileShape::Current().SetVecTile(1, selectedCount);
-            config::SetPassOption("pg_skip_partition", true); // no tile unroll
+            config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{1, 1, 0}); // no tile unroll
             LOOP("TOPK_PAD_2K", FunctionType::DYNAMIC_LOOP, pad2KIdx, LoopRange(effSeq < selectedCount))
             {
                 (void)pad2KIdx;
@@ -543,7 +543,7 @@ void LightningIndexerImpl(
                 Assemble(Assign(topkIn), {srcIdx, 0}, pad2K);
                 Assemble(padTensor, {srcIdx, effSeq}, pad2K);
             }
-            config::SetPassOption("pg_skip_partition", false); // tile unroll
+            config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});// tile unroll
             LOOP("TOPK_2K_CALC", FunctionType::DYNAMIC_LOOP, calc2KIdx, LoopRange(effSeq < selectedCount))
             {
                 (void)calc2KIdx;
@@ -591,7 +591,7 @@ void LightningIndexerImpl(
             } else {
                 // Pad to 128k for avoid topk bug
                 TileShape::Current().SetVecTile(1, topkTile);
-                config::SetPassOption("pg_skip_partition", true); // no tile unroll
+                config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{1, 1, 0}); // no tile unroll
                 LOOP("TOPK_PAD_128K", FunctionType::DYNAMIC_LOOP, pad128KIdx, LoopRange(effSeq > selectedCount))
                 {
                     (void)pad128KIdx;
@@ -601,7 +601,7 @@ void LightningIndexerImpl(
                     Assemble(Assign(topkIn), {srcIdx, 0}, pad128K);
                     Assemble(padTensor, {srcIdx, effSeq}, pad128K);
                 }
-                config::SetPassOption("pg_skip_partition", false); // tile unroll
+                config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0}); // tile unroll
                 LOOP("TOPK_128K_CALC", FunctionType::DYNAMIC_LOOP, calc128KIdx, LoopRange(effSeq >= selectedCount))
                 {
                     (void)calc128KIdx;

@@ -138,13 +138,6 @@
                     "minimum": 1,
                     "maximum": 48
                 },
-                "pg_skip_partition": {
-                    "type": "boolean",
-                    "label": {
-                        "zh": "是否跳过子图切分过程。当值为True时，将完整的计算图作为单一子图，不进行切分。当值为False时，进行子图切分。",
-                        "en": "Whether to skip the subgraph partitioning process. When the value is True, the complete computation graph is treated as a single subgraph without partitioning; when the value is False, subgraph partitioning is performed."
-                    }
-                },
                 "copyout_resolve_coalescing": {
                     "type": "integer",
                     "label": {

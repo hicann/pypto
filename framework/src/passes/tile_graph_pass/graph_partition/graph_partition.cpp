@@ -27,11 +27,8 @@ Status RunIsoPartition(Function &function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start GraphPartition. Mode: IsoPartitioner.");
     IsoPartitioner partitioner;
-    if (partitioner.SetParameter(
-        function.paramConfigs_.sgParallelNum,
-        function.paramConfigs_.sgPgLowerBound,
-        true,
-        function.paramConfigs_.pgSkipPartition) != SUCCESS) {
+    if (partitioner.SetParameter(function.paramConfigs_.sgParallelNum, function.paramConfigs_.sgPgLowerBound, true) !=
+        SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Config, "Set parameters of GraphPartition failed.");
         return FAILED;
     }
@@ -68,14 +65,7 @@ Status GraphPartition::RunOnFunction(Function &function)
 {
     const std::string partitionMode = function.paramConfigs_.sgPartitionAlgorithm;
 
-    if (function.paramConfigs_.pgSkipPartition) {
-        for (auto &op : function.Operations()) {
-            op.UpdateSubgraphID(0);
-        }
-        function.SetTotalSubGraphCount(1);
-        APASS_LOG_INFO_F(Elements::Operation, "Graph Partition is skipped.");
-        return SUCCESS;
-    } else if (partitionMode == "Iso") {
+    if (partitionMode == "Iso") {
         return RunIsoPartition(function);
     } else if (partitionMode == "OspSarkar" || partitionMode == "OspBsp") {
         return RunOspPartition(function, partitionMode);

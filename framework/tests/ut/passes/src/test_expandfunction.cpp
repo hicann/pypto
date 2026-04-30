@@ -656,16 +656,6 @@ TEST_F(TestExpandFunctionPass, TestPassScopeInfoSettingsVerify)
         {{"out1"}, {"out2"}}, {"add1", "add2"}, SUCCESS, {{"add1", 1, true, false}, {"add2", 1, true, false}});
 }
 
-TEST_F(TestExpandFunctionPass, TestCVMixPlatformMergeFlagMustBeFalse)
-{
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    EXPECT_TRUE(GraphUtils::IsCVMixPlatform());
-    RunScopeInfoTest(
-        {"in1", "in2", "in3", "in4", "out1", "out2"}, 4, {Opcode::OP_ADD, Opcode::OP_A_MUL_B},
-        {{"in1", "in2"}, {"in3", "in4"}}, {{"out1"}, {"out2"}}, {"add1", "matmul1"}, FAILED,
-        {{"add1", 1, true, false}, {"matmul1", 1, true, false}});
-}
-
 TEST_F(TestExpandFunctionPass, PreCheckForDisorderIndexOutcast)
 {
     ComputationalGraphBuilder G;

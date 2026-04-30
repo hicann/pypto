@@ -679,22 +679,17 @@ inline void UpdateProducerScopeId(Operation* op, Operation::ScopeInfo targetScop
 inline void PropagateScopeInfo(std::vector<Operation*>& opList)
 {
     for (size_t i = 0; i < opList.size(); i++) {
-        if (opList[i]->GetOpcode() == Opcode::OP_VIEW || opList[i]->GetOpcode() == Opcode::OP_ASSEMBLE) {
-            opList[i]->SetScopeInfo(Operation::ScopeInfo());
-        }
-    }
-    for (size_t i = 0; i < opList.size(); i++) {
         auto targetScope = opList[i]->GetScopeInfo();
         if (targetScope.scopeId == DEFAULT_SCOPE_ID) {
             continue;
         }
         for (auto& consumer : opList[i]->ConsumerOps()) {
-            if (consumer->GetScopeId() == -1 && consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (consumer->GetScopeId() != targetScope.scopeId && consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
                 UpdateConsumerScopeId(consumer, targetScope);
             }
         }
         for (auto& producer : opList[i]->ProducerOps()) {
-            if (producer->GetScopeId() == -1 && producer->GetOpcode() == Opcode::OP_VIEW) {
+            if (producer->GetScopeId() != targetScope.scopeId && producer->GetOpcode() == Opcode::OP_VIEW) {
                 UpdateProducerScopeId(producer, targetScope);
             }
         }
@@ -749,12 +744,19 @@ void NodeGraphInfo::BuildNodeMapping(const std::shared_ptr<OperationGraphInfo> o
     nodeScope_.assign(numNodes, Operation::ScopeInfo());
     nodeCycles_.assign(numNodes, 0);
     for (int32_t nodeIdx = 0; nodeIdx < numNodes; nodeIdx++) {
+        bool allSkipCode = std::all_of(node2Op_[nodeIdx].begin(), node2Op_[nodeIdx].end(),
+            [&](int32_t opIdx) {
+                return nodeScopeSkipCode.count(operationGraphInfo->opList_[opIdx]->GetOpcode()) > 0;
+            });
         for (int32_t opIdx : node2Op_[nodeIdx]) {
             op2Node_[opIdx] = nodeIdx;
             const auto& op = operationGraphInfo->opList_[opIdx];
             const auto& scopeInfo = op->GetScopeInfo();
-            if (scopeInfo.scopeId != -1 && nodeScopeSkipCode.find(op->GetOpcode()) == nodeScopeSkipCode.end()) {
-                nodeScope_[nodeIdx] = scopeInfo;
+            if (scopeInfo.scopeId != -1) {
+                bool isSkipCode = nodeScopeSkipCode.count(op->GetOpcode()) > 0;
+                if (!isSkipCode || allSkipCode) {
+                    nodeScope_[nodeIdx] = scopeInfo;
+                }
             }
             nodeCycles_[nodeIdx] += op->GetLatency();
         }

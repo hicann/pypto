@@ -55,7 +55,6 @@ def set_print_options(*,
 
 
 def set_pass_options(*,
-                     pg_skip_partition: Optional[bool] = None,
                      vec_nbuffer_setting: Optional[Dict[int, int]] = None,
                      cube_l1_reuse_setting: Optional[Dict[int, int]] = None,
                      cube_nbuffer_setting: Optional[Dict[int, int]] = None,
@@ -66,12 +65,6 @@ def set_pass_options(*,
 
     Parameters
     ---------
-    pg_skip_partition : bool
-        .. deprecated::
-            This parameter is deprecated and will be removed in a future version.
-            Please remove this parameter from your configuration.
-        Whether to skip the subgraph partitioning process.
-
     vec_nbuffer_setting : Dict[int, int]
         Merged graph parameter, used to configure
         the merging quantity of AIV subgraphs with the same structure.

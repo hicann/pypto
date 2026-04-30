@@ -39,7 +39,6 @@ constexpr const char* OOO_PRESCHEDULE_METHOD = "ooo_preschedule_method";
 constexpr const char* VEC_NBUFFER_SETTING = "vec_nbuffer_setting";
 constexpr const char* SG_CUBE_PARALLEL_NUM = "sg_cube_parallel_num";
 constexpr const char* MG_VEC_PARALLEL_LB = "mg_vec_parallel_lb";
-constexpr const char* PG_SKIP_PARTITION = "pg_skip_partition";
 constexpr const char* DB_TYPE = "db_type";
 constexpr const char* COPYOUT_RESOLVE_COALESCING = "copyout_resolve_coalescing";
 
