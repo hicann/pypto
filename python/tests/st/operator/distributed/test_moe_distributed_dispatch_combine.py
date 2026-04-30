@@ -850,7 +850,6 @@ def moe_distributed_combine(
     assert_allclose_with_eps(out_golden.cpu(), out.cpu())
 
 
-@pytest.mark.skip(reason="功能未实现，暂不执行")
 @pytest.mark.world_size(4)
 def test_moe_distributed_combine() -> None:
     config = DistributedConfig(world_size=4)

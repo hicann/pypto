@@ -1421,7 +1421,7 @@ class BuildCtrl(CMakeParam):
             # 分组策略 一个worker对应一组卡
             n_workers = len(dev_lst) // cards_per_case
             ext_str = f'-n {n_workers} --device {dev_ext} --cards-per-case {cards_per_case} -m "world_size"'
-            self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "models/experimental/distributed"), ],
+            self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "python/tests/st"), ],
                                      ext=ext_str)
 
         # 执行用例, Examples
