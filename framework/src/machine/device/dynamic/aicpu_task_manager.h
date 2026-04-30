@@ -57,6 +57,7 @@ public:
         sharedBuffer_ = deviceArgs->sharedBuffer;
         aicNum_ = deviceArgs->nrAic;
         aivNum_ = deviceArgs->nrAiv;
+        archInfo_ = deviceArgs->archInfo;
     }
 
     // 仅AICPU_0会调用
@@ -100,18 +101,15 @@ public:
 
     inline int32_t SyncAicpuTaskFinish(AiCoreManager* aiCoreManager)
     {
-        int64_t start_cycles = GetCycles();
+        TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
         while (!Finished()) {
             auto ret = TaskPoll(aiCoreManager);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
-            if (GetCycles() - start_cycles > TIMEOUT_CYCLES) {
-                DEV_ERROR(
-                    DistributedErrorCode::AICPU_TASK_TIMEOUT,
-                    "#sche.task.end.sync.timeout: SyncAicpuTaskFinish timeout.");
-                return DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH;
-            }
+            __PYPTO_TIMEOUT_CHECK_EXIT_ONLY(DistributedErrorCode::AICPU_TASK_TIMEOUT,
+                return DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH,
+                "#sche.task.end.sync: SyncAicpuTaskFinish.");
         }
         return DEVICE_MACHINE_OK;
     }
@@ -184,6 +182,7 @@ private:
 
     ReadyCoreFunctionQueue* readyQueue_{nullptr};
 
+    ArchInfo archInfo_{ArchInfo::DAV_2201};
     npu::tile_fwk::Distributed::ShmemWaitUntilImpl shmemWaitUntil_;
     DynDeviceTask* curDevTask_;
     DynFuncData* funcDataList_;

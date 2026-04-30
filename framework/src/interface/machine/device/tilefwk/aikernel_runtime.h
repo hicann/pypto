@@ -19,7 +19,17 @@
 #include "tilefwk/aikernel_data.h"
 
 constexpr int MAIN_BLOCK_INDEX = 1;
-constexpr uint64_t SYNC_TIMEOUT = 48000000000;
+
+// Platform detection: use compile-time macros to determine timeout values
+// A5 (DAV_3510/__DAV_V310): 1000MHz aicpu frequency, 20x faster than A2/A3
+// A2/A3 (DAV_1001/DAV_2201/__DAV_V220): 50MHz aicpu frequency
+#if defined(__DAV_V310) || (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510))
+// A5: 960G cycles = 960,000,000,000 cycles (~16min @1000MHz)
+constexpr uint64_t SYNC_TIMEOUT_CYCLES = 960000000000ULL;
+#else
+// A2/A3: 48G cycles = 48,000,000,000 cycles (~16min @50MHz)
+constexpr uint64_t SYNC_TIMEOUT_CYCLES = 48000000000ULL;
+#endif
 
 __always_inline uint64_t GetCycles()
 {
@@ -37,7 +47,7 @@ __always_inline void WaitAicoreStart([[maybe_unused]] npu::tile_fwk::DevStartArg
 #if defined(__aarch64__) && defined(__DEVICE__)
     uint64_t start = GetCycles();
     while (startArgs->syncFlag != 1) {
-        if (GetCycles() - start > SYNC_TIMEOUT) {
+        if ((GetCycles() - start) > SYNC_TIMEOUT_CYCLES) {
             break;
         }
     }

@@ -19,6 +19,7 @@
 #include <algorithm>
 
 #include "machine/utils/device_log.h"
+#include "machine/device/dynamic/device_utils.h"
 #include "ws_allocator_basics.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -87,7 +88,7 @@ private:
 public:
     SlabWsAllocator() = default;
 
-    void Init(void* baseAddr, uint32_t totalSize, uint32_t alignSize)
+    void Init(void* baseAddr, uint32_t totalSize, uint32_t alignSize, ArchInfo arch = ArchInfo::DAV_2201)
     {
         memBaseaddr_ = static_cast<uint8_t*>(baseAddr);
         totalMemSize_ = totalSize;
@@ -95,6 +96,7 @@ public:
         nextFreeSlabAddr_ = memBaseaddr_;
         freeSlabList_ = nullptr;
         numCaches_ = 0;
+        archInfo_ = arch;
 
         totalSlabCount_ = totalMemSize_ / slabAlignSize_;
         allocatedSlabCount_ = 0;
@@ -214,6 +216,48 @@ public:
         return static_cast<uint8_t*>(obj) + sizeof(void*);
     }
 
+    void ProcessKeepTailCase(uint32_t cacheIdx, StageAllocInfo& info)
+    {
+        if (caches_[cacheIdx].stageAllocHead == caches_[cacheIdx].stageAllocTail) {
+            info.heads[cacheIdx] = nullptr;
+            info.tails[cacheIdx] = nullptr;
+            info.objCnt[cacheIdx] = 0;
+            return;
+        }
+
+        void* temp = caches_[cacheIdx].stageAllocHead;
+        if (temp == nullptr) {
+            DEV_ERROR(
+                WsErr::SLAB_STAGE_LIST_INCONSISTENT,
+                "workspace.slab.stage: stageAllocHead is null for cacheIndex=%u\n", cacheIdx);
+        }
+        DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
+
+        TIMEOUT_CHECK_INIT_WARN_ONLY(archInfo_);
+        while (*static_cast<void**>(temp) != caches_[cacheIdx].stageAllocTail) {
+            __PYPTO_TIMEOUT_CHECK_WARN_ONLY(
+                "#workspace.slab.stage: Stage alloc traversal for cacheIndex=%u.",
+                cacheIdx);
+            temp = *static_cast<void**>(temp);
+        }
+
+        if (temp == nullptr) {
+            DEV_ERROR(
+                WsErr::SLAB_STAGE_LIST_INCONSISTENT,
+                "workspace.slab.stage: stageAllocHead is null after loop for cacheIndex=%u, "
+                "stageAllocTail=%p\n",
+                cacheIdx, caches_[cacheIdx].stageAllocTail);
+        }
+        DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
+
+        *static_cast<void**>(temp) = nullptr;
+        info.tails[cacheIdx] = temp;
+        DEV_VERBOSE_DEBUG("Keep tail not pop %p \n", caches_[cacheIdx].stageAllocTail);
+        caches_[cacheIdx].stageAllocHead = caches_[cacheIdx].stageAllocTail;
+        info.objCnt[cacheIdx] = caches_[cacheIdx].allocatedObjCount - 1;
+        caches_[cacheIdx].unPopAllocatedObjCount = 1;
+    }
+
     StageAllocInfo PopStageAllocMem(bool keepTail, uint32_t memType)
     {
         StageAllocInfo info;
@@ -221,44 +265,13 @@ public:
             info.heads[i] = caches_[i].stageAllocHead;
             info.tails[i] = caches_[i].stageAllocTail;
             if (!keepTail || i != memType) {
-                // Reset cache tracking
                 caches_[i].stageAllocHead = nullptr;
                 caches_[i].stageAllocTail = nullptr;
                 info.objCnt[i] = caches_[i].allocatedObjCount;
                 caches_[i].unPopAllocatedObjCount = 0;
                 continue;
             }
-
-            if (caches_[i].stageAllocHead == caches_[i].stageAllocTail) {
-                info.heads[i] = nullptr;
-                info.tails[i] = nullptr;
-                info.objCnt[i] = 0;
-            } else {
-                void* temp = caches_[i].stageAllocHead;
-                if (temp == nullptr) {
-                    DEV_ERROR(
-                        WsErr::SLAB_STAGE_LIST_INCONSISTENT,
-                        "workspace.slab.stage: stageAllocHead is null for cacheIndex=%u\n", i);
-                }
-                DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
-                while (*static_cast<void**>(temp) != caches_[i].stageAllocTail) {
-                    temp = *static_cast<void**>(temp);
-                }
-                if (temp == nullptr) {
-                    DEV_ERROR(
-                        WsErr::SLAB_STAGE_LIST_INCONSISTENT,
-                        "workspace.slab.stage: stageAllocHead is null after loop for cacheIndex=%u, "
-                        "stageAllocTail=%p\n",
-                        i, caches_[i].stageAllocTail);
-                }
-                DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
-                *static_cast<void**>(temp) = nullptr;
-                info.tails[i] = temp;
-                DEV_VERBOSE_DEBUG("Keep tail not pop %p \n", caches_[i].stageAllocTail);
-                caches_[i].stageAllocHead = caches_[i].stageAllocTail;
-                info.objCnt[i] = caches_[i].allocatedObjCount - 1;
-                caches_[i].unPopAllocatedObjCount = 1;
-            }
+            ProcessKeepTailCase(i, info);
         }
 
         return info;
@@ -415,6 +428,7 @@ private:
     uint32_t totalMemSize_{0};
     uint32_t slabAlignSize_{0};
     void* freeSlabList_{nullptr};
+    ArchInfo archInfo_{ArchInfo::DAV_2201};
 
     SlabCache caches_[SLAB_ALLOCATOR_MAX_CACHES];
     int numCaches_{0};

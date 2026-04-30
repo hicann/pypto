@@ -48,6 +48,11 @@ public:
                 CtrlErr::ROOT_ALLOC_CTX_NULL, "#ctrl.push.init_dtask: Init Task control failed, which ctx is null.");
             return nullptr;
         }
+        if (idx < 0 || idx >= MAX_DEVICE_TASK_NUM) {
+            DEV_ERROR(
+                CtrlErr::CTRL_FLOW_EXEC_FAILED, "#ctrl.push.init_dtask: Init Task control failed, idx=%d out of bounds.", idx);
+            return nullptr;
+        }
         auto taskCtrl = &GetTaskCtrlInPool(idx);
         taskCtrl->BindTask(devTask);
         taskCtrl->SetSchNumCnt(GetScheAicpuNum());
@@ -61,7 +66,9 @@ public:
     int AllocNewTaskCtrl()
     {
         uint32_t& taskCtrlIndex = devStartArgs_->devCtrlState.taskCtrlIndex;
-        TIMEOUT_CHECK_START();
+        
+        TIMEOUT_CHECK_INIT(devStartArgs_->devProg->devArgs.archInfo, TIMEOUT_1MIN);
+        
         while (true) {
             if (taskCtrlIndex == MAX_DEVICE_TASK_NUM)
                 taskCtrlIndex = 0;
@@ -69,7 +76,11 @@ public:
                 return taskCtrlIndex++;
             }
             taskCtrlIndex++;
-            TIMEOUT_CHECK_AND_RESET(TIMEOUT_ONE_MINUTE, CtrlErr::CTRL_ALLOC_TIMEOUT, "Alloc new task ctrl over 1 min.");
+            
+            __PYPTO_TIMEOUT_CHECK(CtrlErr::CTRL_ALLOC_TIMEOUT,
+                return DEVICE_MACHINE_ERROR,
+                "#ctrl.alloc: AllocNewTaskCtrl, taskCtrlIndex=%u.",
+                taskCtrlIndex);
         }
     }
 
@@ -90,6 +101,10 @@ public:
     int PushTask(DynDeviceTask* dynTask, DeviceExecuteContext* ctx)
     {
         auto idx = AllocNewTaskCtrl();
+        if (idx < 0) {
+            DEV_ERROR(CtrlErr::CTRL_ALLOC_TIMEOUT, "#ctrl.push.alloc: AllocNewTaskCtrl failed, idx=%d.", idx);
+            return idx;
+        }
         bool appendLastTaskCtrl = false;
         DeviceTaskCtrl* newTaskCtrl = InitTaskCtrl(idx, &dynTask->devTask, ctx);
         if (lastTaskCtrl_ && lastTaskCtrl_->SupportParallel()) {
@@ -209,7 +224,7 @@ public:
 
             RuntimeDataRingBufferHead* ringBufferHead =
                 reinterpret_cast<RuntimeDataRingBufferHead*>(devProg->GetRuntimeDataList());
-            ringBufferHead->Initialize(devProg->GetDeviceRuntimeOffset().size, devProg->GetDeviceRuntimeOffset().count);
+            ringBufferHead->Initialize(devProg->GetDeviceRuntimeOffset().size, devProg->GetDeviceRuntimeOffset().count, devProg->devArgs.archInfo);
 
             devProg->runtimeDataRingBufferInited = true;
             firstInit = true;

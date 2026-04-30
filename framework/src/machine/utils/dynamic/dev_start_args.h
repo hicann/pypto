@@ -154,10 +154,11 @@ static inline void RuntimeYield(uint64_t microseconds = 0)
 #define DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT 4
 struct RuntimeDataRingBufferHead {
 public:
-    void Initialize(uint64_t runtimeDataSize, uint64_t runtimeDataCount)
+    void Initialize(uint64_t runtimeDataSize, uint64_t runtimeDataCount, ArchInfo arch = ArchInfo::DAV_2201)
     {
         runtimeDataSize_ = GetAlignedSize(runtimeDataSize);
         runtimeDataCount_ = runtimeDataCount;
+        archInfo_ = arch;
 
         /* finish starts from round 0 */
         indexFinished_ = 0;
@@ -170,8 +171,13 @@ public:
 
     void AllocateWait()
     {
+        TIMEOUT_CHECK_INIT_WARN_ONLY(archInfo_);
+
         while (Full()) {
             RuntimeYield();
+
+            __PYPTO_TIMEOUT_CHECK_WARN_ONLY(
+                "#ringbuffer.alloc: AllocateWait, ring buffer full.");
         }
     }
 
@@ -225,6 +231,7 @@ public:
 private:
     uint64_t runtimeDataSize_;
     uint64_t runtimeDataCount_;
+    ArchInfo archInfo_{ArchInfo::DAV_2201};
 
     /* ringbuffer's end and begin */
     std::atomic<uint64_t> indexFinished_;
