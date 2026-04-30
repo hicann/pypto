@@ -17,6 +17,7 @@ from .._op_wrapper import op_wrapper
 from .._utils import to_sym
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
+from ..error import VerifyError
 
 
 @op_wrapper
@@ -94,7 +95,7 @@ def _parse_format_string(
         placeholder_name = match.group(1)
 
         if placeholder_name not in kwargs:
-            raise KeyError(f"Placeholder '${placeholder_name}' not found in keyword arguments")
+            raise VerifyError(KeyError(f"Placeholder '${placeholder_name}' not found in keyword arguments"))
 
         value = kwargs[placeholder_name]
         scalars.append(_to_sym(value))

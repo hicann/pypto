@@ -101,3 +101,7 @@ class PyptoRtError(PyptoGeneralError):
 
 class PassError(PyptoGeneralError):
     """Error class for Pass management and configuration errors."""
+
+
+class VerifyError(PyptoGeneralError):
+    """Error class for errors when enabling pass verify."""

@@ -13,6 +13,8 @@
 from typing import List, Optional
 from functools import wraps
 
+from .error import VerifyError
+
 from ._utils import get_torch_npu
 from .enum import DataType, TileOpFormat
 from .tensor import Tensor
@@ -225,23 +227,23 @@ def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
     torch_dtype = _torch_dtype_dict.get(dtype)
     if torch_dtype is None:
         if dtype == DataType.DT_FP8E8M0:
-            raise ValueError(
+            raise VerifyError(ValueError(
                 f"DataType.DT_FP8E8M0 requires 'torch.float8_e8m0fnu', which is NOT available "
                 f"in your current PyTorch version ({torch.__version__}).\n"
                 "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
-            )
+            ))
         elif dtype == DataType.DT_FP8E4M3:
-            raise ValueError(
+            raise VerifyError(ValueError(
                 f"DataType.DT_FP8E4M3 requires 'torch.float8_e4m3fn', which is NOT available "
                 f"in your current PyTorch version ({torch.__version__}).\n"
                 "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
-            )
+            ))
         elif dtype == DataType.DT_FP8E5M2:
-            raise ValueError(
+            raise VerifyError(ValueError(
                 f"DataType.DT_FP8E5M2 requires 'torch.float8_e5m2', which is NOT available "
                 f"in your current PyTorch version ({torch.__version__}).\n"
                 "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
-            )
+            ))
         else:
             raise ValueError(f"Input pypto.DataType is not supported or mapped to None. Got {dtype}")
     return torch_dtype
