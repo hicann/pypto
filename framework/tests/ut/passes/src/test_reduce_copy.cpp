@@ -216,5 +216,31 @@ TEST_F(ReduceCopyTest, TestCase1)
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
 }
 
+TEST_F(ReduceCopyTest, TestCase2)
+{
+    ComputationalGraphBuilder G;
+    BuildConnect(G);
+    Function* function = G.GetFunction();
+    G.GetOp("adds12")->scopeInfo_.cvFuseId = 0;
+    G.GetOp("adds22")->scopeInfo_.cvFuseId = 0;
+    ReduceCopyMerge merger;
+    merger.RunOnFunction(*function);
+    const int Num2 = 2;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+}
+
+TEST_F(ReduceCopyTest, TestCase3)
+{
+    ComputationalGraphBuilder G;
+    BuildConnect(G);
+    Function* function = G.GetFunction();
+    const int largeNum = 10000000; // latency超过阈值的子图不会合并
+    G.GetOp("matmul0")->UpdateLatency(largeNum);
+    ReduceCopyMerge merger;
+    merger.RunOnFunction(*function);
+    const int Num4 = 4;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num4);
+}
+
 } // namespace tile_fwk
 } // namespace npu
