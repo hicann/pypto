@@ -151,6 +151,7 @@ export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch
 echo "env_setup.sh 加载完成：TILE_FWK_DEVICE_ID=${TILE_FWK_DEVICE_ID}, PTO_TILE_LIB_CODE_PATH=${PTO_TILE_LIB_CODE_PATH}"
 EOF
 ```
+> **必须用 `source` 执行**环境配置脚本：`source env_setup.sh`
 
 > - \$\{arch\}：CPU 架构，如 aarch64、x86_64.
 > - 如果运行 softmax 验证时出现 `no member named 'XXX' in namespace 'pto'` 错误，说明 CANN 内置 PTO-ISA 版本过旧，需要切换到源码方式（见步骤 4.6 失败排查）。
@@ -186,7 +187,7 @@ python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode npu
 
 ```
 
-⚠️ **注意**：NPU 环境必须使用 NPU 模式通过验证。
+⚠️ **注意**：NPU 环境必须使用 NPU 模式通过验证。若超过 120 秒未完成，可视为卡死，执行时可以加上timeout 120 说明环境配置有问题，参照[troubleshooting.md](references/troubleshooting.md) 排查。
 
 **通过标准**：退出码 `0`，输出 `Softmax test passed`。
 

@@ -32,12 +32,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 def _setup_environment_variables() -> None:
     """在诊断前自动配置必要的环境变量，避免错误诊断。"""
     ascend_install_path = os.environ.get("ASCEND_INSTALL_PATH", "/usr/local/Ascend")
-    # 获取 bash 的绝对路径
-    bash_path = shutil.which('bash')
-    if bash_path is None:
-        # 若找不到，回退到常见路径（可记录警告）
-        bash_path = '/bin/bash'
-    # 1. 尝试加载 CANN 环境变量（source set_env.sh）
+    bash_path = shutil.which('bash') or '/bin/bash'
     set_env_candidates = [
         os.path.join(ascend_install_path, "ascend-toolkit", "set_env.sh"),
         os.path.join(ascend_install_path, "ascend-toolkit", "latest", "set_env.sh"),
@@ -142,9 +137,10 @@ def _safe_import(name: str) -> dict[str, Any]:
 
 def _probe_torch_npu_runtime() -> dict[str, Any]:
     probe_code = (
-        "import json\n"
+        "import json, os\n"
         "try:\n"
         "    import torch\n"
+        "    import torch_npu\n"
         "except Exception:\n"
         "    print(json.dumps({'ok': False}))\n"
         "    raise SystemExit(0)\n"
@@ -163,7 +159,10 @@ def _probe_torch_npu_runtime() -> dict[str, Any]:
         "        pass\n"
         "print(json.dumps(out, ensure_ascii=False))\n"
     )
+    env = os.environ.copy()
+    env['PYTHONPATH'] = env.get('PYTHONPATH', '')
     r = _run([sys.executable, '-c', probe_code], timeout_s=20)
+    _ = env
     if r.get('returncode') != 0:
         return {}
     stdout = r.get('stdout') or ''
@@ -183,7 +182,8 @@ def _resolve_cann_path() -> tuple[str | None, str]:
       1. ASCEND_HOME_PATH      — set_env.sh 导出，PyPTO 全项目使用
       2. ASCEND_TOOLKIT_HOME    — set_env.sh 导出，与 ASCEND_HOME_PATH 等价
       3. ASCEND_OPP_PATH        — set_env.sh 导出，dirname 可反推 CANN 根
-      4. Fallback: 扫描 $ASCEND_INSTALL_PATH/cann-* 或 /usr/local/Ascend/cann-*
+      4. Fallback: ascend-toolkit/latest 软链（set_env.sh 默认指向）
+      5. Fallback: 扫描 cann-* 目录
 
     Returns:
         (cann_version_dir, ascend_root)  —  cann_version_dir 可能为 None（需 fallback 扫描）
@@ -216,6 +216,11 @@ def _detect_cann(ascend_root: str, cann_hint: str | None = None) -> dict[str, An
     Args:
         ascend_root: Ascend 安装根目录（如 /usr/local/Ascend）
         cann_hint: 从环境变量推导的精确 CANN 版本目录（可选）
+
+    查找优先级：
+        1. 环境变量（ASCEND_HOME_PATH/ASCEND_TOOLKIT_HOME）— set_env.sh 已 source
+        2. ascend-toolkit/latest 软链 — set_env.sh 默认指向的版本
+        3. cann-* 目录扫描 — 按名称排序
     """
     result: dict[str, Any] = {
         "install_path": None,
@@ -233,15 +238,15 @@ def _detect_cann(ascend_root: str, cann_hint: str | None = None) -> dict[str, An
         cann_dir = cann_hint
         result["resolved_by"] = "env"
     else:
-        # Fallback: 扫描 cann-* 目录
-        cann_dirs = sorted(glob.glob(os.path.join(ascend_root, "cann-*")), reverse=True)
-        # 也检查 ascend-toolkit/latest 软链
         toolkit_latest = os.path.join(ascend_root, "ascend-toolkit", "latest")
-        if os.path.isdir(toolkit_latest) and toolkit_latest not in cann_dirs:
-            cann_dirs.insert(0, toolkit_latest)
-        cann_dir = cann_dirs[0] if cann_dirs else None
-        if cann_dir:
-            result["resolved_by"] = "scan"
+        if os.path.isdir(toolkit_latest):
+            cann_dir = toolkit_latest
+            result["resolved_by"] = "set_env_symlink"
+        else:
+            cann_dirs = sorted(glob.glob(os.path.join(ascend_root, "cann-*")))
+            cann_dir = cann_dirs[0] if cann_dirs else None
+            if cann_dir:
+                result["resolved_by"] = "scan"
 
     if cann_dir:
         result["install_path"] = cann_dir
