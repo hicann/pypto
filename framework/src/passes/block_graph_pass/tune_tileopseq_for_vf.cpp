@@ -305,6 +305,173 @@ void TuneTileOpSeqForVF::ChangeOpSeq(PipeSync& ps, bool isAIV1)
     AdjustUbCopyNd2NzOrder(ps);
 }
 
+Status TuneTileOpSeqForVF::ProcessView(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair)
+{
+    auto it1 = std::find(opLogNew.begin(), opLogNew.end(), pair.second);
+    auto it2 = std::find(opLogNew.begin(), opLogNew.end(), pair.first);
+    if (it1 == opLogNew.end()) {
+        if (it2 == opLogNew.end()) {
+            opLogNew.emplace_back(pair.first);
+            opLogNew.emplace_back(pair.second);
+            return SUCCESS;
+        }
+        opLogNew.insert(it2 + 1, pair.second);
+        return SUCCESS;
+    }
+    if (it2 == opLogNew.end()) {
+        opLogNew.insert(it1, pair.first);
+    }
+    return SUCCESS;
+}
+
+Status TuneTileOpSeqForVF::ProcessAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair)
+{
+    auto it1 = std::find(opLogNew.begin(), opLogNew.end(), pair.first);
+    auto it2 = std::find(opLogNew.begin(), opLogNew.end(), pair.second);
+    if (it1 == opLogNew.end()) {
+        if (it2 == opLogNew.end()) {
+            opLogNew.emplace_back(pair.second);
+            opLogNew.emplace_back(pair.first);
+            return SUCCESS;
+        }
+        opLogNew.insert(it2 + 1, pair.first);
+        return SUCCESS;
+    }
+    if (it2 == opLogNew.end()) {
+        opLogNew.insert(it1, pair.second);
+    }
+    return SUCCESS;
+}
+
+Status TuneTileOpSeqForVF::ProcessViewAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair)
+{
+    if (pair.first->GetOpcode() == Opcode::OP_VIEW) {
+        if (ProcessView(opLogNew, pair) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "ProcessView failed.");
+            return FAILED;
+        }
+        return SUCCESS;
+    }
+    if (pair.first->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessViewAssemble failed, this op should be ASSEMBLE.");
+        return FAILED;
+    }
+    if (ProcessAssemble(opLogNew, pair) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessAssemble failed.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status TuneTileOpSeqForVF::ReorderViewAssemble(
+    std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew,
+    const std::unordered_map<Operation*, Operation*>& changeMap)
+{
+    std::unordered_set<Operation*> toBeInsert;
+    for (auto pair : changeMap) {
+        toBeInsert.insert(pair.first);
+        toBeInsert.insert(pair.second);
+    }
+    for (auto opPtr : opLog) {
+        auto it = toBeInsert.find(opPtr);
+        if (it == toBeInsert.end()) {
+            opListNew.emplace_back(opPtr);
+            continue;
+        }
+        for (auto pair : changeMap) {
+            if (pair.second == opPtr && (ProcessViewAssemble(opListNew, pair) != SUCCESS)) {
+                APASS_LOG_ERROR_F(Elements::Operation, "ReorderViewAssemble failed at function ProcessViewAssemble.");
+                return FAILED;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+Status TuneTileOpSeqForVF::ProcessViewOrder(
+    Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap)
+{
+    auto consumers = op.ConsumerOps();
+    if (consumers.empty()) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "%d VIEW op doesn't have consumer, ProcessViewAssembleOrder failed.%s",
+            op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        return FAILED;
+    }
+    auto minIt = opLog.end();
+    for (auto& consumer : consumers) {
+        auto it = std::find(opLog.begin(), opLog.end(), consumer);
+        if (it == opLog.end()) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation,
+                "Consumer of VIEW op: %d %s is not in the subgraph, ProcessViewAssembleOrder failed",
+                consumer->GetOpMagic(), consumer->GetOpcodeStr().c_str());
+            return FAILED;
+        }
+        if (it < minIt) {
+            minIt = it;
+        }
+    }
+    changeMap[&op] = *minIt;
+    APASS_LOG_DEBUG_F(Elements::Operation, "%d VIEW consumer: %d", op.GetOpMagic(), (*minIt)->GetOpMagic());
+    return SUCCESS;
+}
+
+Status TuneTileOpSeqForVF::ProcessAssembleOrder(
+    Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap)
+{
+    auto producers = op.ProducerOps();
+    if (producers.empty()) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "%d ASSEMBLE op doesn't have producer, ProcessViewAssembleOrder failed.%s",
+            op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        return FAILED;
+    }
+    auto maxIt = opLog.begin();
+    for (auto& producer : producers) {
+        auto it = std::find(opLog.begin(), opLog.end(), producer);
+        if (it == opLog.end()) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation,
+                "Producer of ASSEMBLE op: %d %s is not in the subgraph, ProcessViewAssembleOrder failed.%s",
+                producer->GetOpMagic(), producer->GetOpcodeStr().c_str(), GetFormatBacktrace(*producer).c_str());
+            return FAILED;
+        }
+        if (it != opLog.begin() && it > maxIt) {
+            maxIt = it;
+        }
+    }
+    changeMap[&op] = *maxIt;
+    APASS_LOG_DEBUG_F(Elements::Operation, "%d ASSEMBLE producer: %d", op.GetOpMagic(), (*maxIt)->GetOpMagic());
+    return SUCCESS;
+}
+
+Status TuneTileOpSeqForVF::ProcessViewAssembleOrder(std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew)
+{
+    std::unordered_map<Operation*, Operation*> changeMap;
+    for (auto& opPtr : opLog) {
+        if (opPtr->GetOpcode() == Opcode::OP_VIEW) {
+            if (ProcessViewOrder(*opPtr, opLog, changeMap)) {
+                APASS_LOG_ERROR_F(Elements::Operation, "ProcessViewOrder failed.");
+                return FAILED;
+            }
+            continue;
+        }
+        if (opPtr->GetOpcode() != Opcode::OP_ASSEMBLE) {
+            break;
+        }
+        if (ProcessAssembleOrder(*opPtr, opLog, changeMap)) {
+            APASS_LOG_ERROR_F(Elements::Operation, "ProcessAssembleOrder failed.");
+            return FAILED;
+        }
+    }
+    if (ReorderViewAssemble(opLog, opListNew, changeMap) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ProcessViewAssembleOrder failed at function ReorderViewAssemble.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
 Status TuneTileOpSeqForVF::RunOnFunction(Function& function)
 {
     if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
@@ -339,6 +506,13 @@ Status TuneTileOpSeqForVF::RunOnFunction(Function& function)
         // AIV0和AIV1各调整一次
         ChangeOpSeq(ps, false);
         ChangeOpSeq(ps, true);
+        // 将view放在其producer后， assemble放在其consumer前
+        std::vector<Operation*> opListNew;
+        if (ProcessViewAssembleOrder(opList_, opListNew) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "RunOnFunction failed at ProcessViewAssembleOrder");
+            return FAILED;
+        }
+        opList_ = opListNew;
         // 将调整后的oplist刷新到function中去
         program.second->ScheduleBy(opList_, true);
         APASS_LOG_DEBUG_F(Elements::Function, "---------------------------------------------------");
@@ -347,8 +521,6 @@ Status TuneTileOpSeqForVF::RunOnFunction(Function& function)
                 Elements::Operation, "Output Operation %d %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
         }
         funcId++;
-
-        // TODO 增加拓扑逻辑校验
     }
     return SUCCESS;
 }

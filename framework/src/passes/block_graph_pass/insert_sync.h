@@ -114,11 +114,6 @@ public:
     PipeSync() { InitIssueQueue(); }
     Status InsertSync(Function& function, std::vector<Operation*>& syncedOpLog);
     void PhaseKernelProcess(Function& function, std::vector<Operation*> srcLog, std::vector<Operation*>& dstLog);
-    Status ProcessViewOrder(
-        Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap);
-    Status ProcessAssembleOrder(
-        Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap);
-    Status ProcessViewAssembleOrder(std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew);
     std::vector<Operation*> GetOriOpList() { return oriOpList_; }
     std::unordered_map<Operation*, Operation*> setOpMap;
     std::unordered_map<Operation*, Operation*> waitOpMap;
@@ -393,12 +388,6 @@ private:
     std::deque<int>& GetFreeEventIdQueue(const PipePairEx& pp);
     int GetSyncSrcLogIdx(const std::vector<IndexOp>& syncedOpLog, int i);
     int GetMaxEventId(const PipePairEx& pp);
-    Status ProcessView(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
-    Status ProcessAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
-    Status ProcessViewAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
-    Status ReorderViewAssemble(
-        std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew,
-        const std::unordered_map<Operation*, Operation*>& changeMap);
     std::string DumpLatestPipeDepMap();
     void BuildTensorRangeMap(Operation* op);
 

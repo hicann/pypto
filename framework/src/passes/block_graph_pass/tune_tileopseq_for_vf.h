@@ -48,6 +48,17 @@ private:
     void MoveUbCopyOp(
         const std::vector<size_t>& needMoveFront, const std::vector<size_t>& needMoveBack,
         const std::vector<size_t>& nonUbCopyIndices);
+    Status ProcessViewOrder(
+        Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap);
+    Status ProcessAssembleOrder(
+        Operation& op, std::vector<Operation*>& opLog, std::unordered_map<Operation*, Operation*>& changeMap);
+    Status ProcessViewAssembleOrder(std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew);
+    Status ProcessView(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
+    Status ProcessAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
+    Status ProcessViewAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
+    Status ReorderViewAssemble(
+        std::vector<Operation*>& opLog, std::vector<Operation*>& opListNew,
+        const std::unordered_map<Operation*, Operation*>& changeMap);
     std::vector<std::vector<Operation*>> mergedOps;
     std::vector<Operation*> opList_;
 };
