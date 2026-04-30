@@ -108,6 +108,7 @@ ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
 
     > **说明**：
     >
+    > - 支持版本：Ascend HDK 25.5.0
     > - 驱动与固件是运行态依赖，若仅编译PyPTO或仅进行性能仿真，可不安装。
     > - `prepare_env.sh`的`--with-install-driver`参数仅用于下载驱动与固件安装包，不会自动执行安装，驱动与固件仍需您根据官方指导手动安装。
 
