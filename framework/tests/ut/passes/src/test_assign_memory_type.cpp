@@ -1826,5 +1826,69 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1SmallToLarge)
     // 恢复平台设置
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
+
+void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
+{
+    currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestConvertDynShape", "TestConvertDynShape", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestConvertDynShape", currFunctionPtr);
+
+    std::vector<int64_t> shape = {16, 32};
+    std::vector<int64_t> shape1 = {32, 16};
+    std::vector<SymbolicScalar> dynShape = {SymbolicScalar(6), SymbolicScalar(6)};
+    std::shared_ptr<LogicalTensor> input_tensor1 =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> input_tensor2 =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> view_output1 =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> view_output2 =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> add_output =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, dynShape);
+    std::shared_ptr<LogicalTensor> reshape_output =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1, dynShape);
+    std::shared_ptr<LogicalTensor> assem_output =
+        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1, dynShape);
+
+    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor1}, {view_output1});
+    view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor2}, {view_output2});
+    view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
+    currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {add_output}, {reshape_output});
+    auto& assemble_op = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {reshape_output}, {assem_output});
+    assemble_op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    currFunctionPtr->inCasts_.push_back(input_tensor1);
+    currFunctionPtr->inCasts_.push_back(input_tensor2);
+    currFunctionPtr->outCasts_.push_back(assem_output);
+}
+
+TEST_F(AssignMemoryTypeTest, TestConvertOpsHaveDynValidShape)
+{
+    std::shared_ptr<Function> currFunctionPtr;
+    BuildConvertDynShapeGraph(currFunctionPtr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    AssignMemoryType assignMemoryType;
+    assignMemoryType.PreCheck(*currFunctionPtr);
+    assignMemoryType.RunOnFunction(*currFunctionPtr);
+    assignMemoryType.PostCheck(*currFunctionPtr);
+
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            auto input = op.iOperand[0];
+            auto output = op.oOperand[0];
+            const auto& in_shape = input->GetDynValidShape();
+            const auto& out_shape = output->GetDynValidShape();
+            ASSERT_EQ(in_shape.size(), out_shape.size()) << "Size mismatch";
+            for (size_t i = 0; i < in_shape.size(); ++i) {
+                EXPECT_EQ(in_shape[i].Dump(), out_shape[i].Dump())
+                    << "Mismatch at dimension " << i;
+            }
+        }
+    }
+}
 }
 } // namespace npu::tile_fwk

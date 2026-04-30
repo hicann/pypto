@@ -13,6 +13,7 @@
  * \brief
  */
 
+#include <algorithm>
 #include "split_large_fanout_tensor.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
@@ -24,6 +25,7 @@ namespace npu::tile_fwk {
 Status SplitLargeFanoutTensor::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start SplitLargeFanoutTensor.");
+    Init();
     CollectLargeTensor(function);
     SplitLargeTensor(function);
     EraseRedundantAssembleOp(function);
@@ -33,8 +35,24 @@ Status SplitLargeFanoutTensor::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
         return status;
     }
+    if (!addedOps_.empty()) {
+        if (InferShapeUtils::InferShape(function, addedOps_) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InferShape for added ops failed.");
+            return FAILED;
+        }
+    }
     APASS_LOG_INFO_F(Elements::Function, "===> End SplitLargeFanoutTensor.");
     return SUCCESS;
+}
+
+void SplitLargeFanoutTensor::Init()
+{
+    addedOps_.clear();
+    toInfoMap_.clear();
+    fromInfoMap_.clear();
+    largeTensors_.clear();
+    toShapes_.clear();
+    fromShapes_.clear();
 }
 
 // 求最大公约数
@@ -197,6 +215,7 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
                 continue;
             }
             auto assembleOp = *newTensor->GetProducers().begin();
+            addedOps_.push_back(assembleOp);
             APASS_LOG_INFO_F(
                 Elements::Operation,
                 "In one-to-multiple situation, create an AssembleOp[%d], input is a "
@@ -298,6 +317,7 @@ void SplitLargeFanoutTensor::CreateOpForMtoM(
             continue;
         }
         auto assembleOp = *newTensor->GetProducers().begin();
+        addedOps_.push_back(assembleOp);
         APASS_LOG_INFO_F(
             Elements::Operation,
             "In multiple-to-multiple situation, create an AssembleOp[%d], "
@@ -370,6 +390,56 @@ void SplitLargeFanoutTensor::MoreSplit(
     }
 }
 
+void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(
+    Function& function, LogicalTensorPtr largeTensor, const LogicalTensors& overlaps,
+    LogicalTensorPtr newGcdTensor, const Shape& gcdTileOffsetForLarge, Shape& newViewOffset)
+{
+    for (const auto& overlap : overlaps) {
+        auto gcdTile =
+            std::make_shared<LogicalTensor>(function, largeTensor->tensor, gcdTileOffsetForLarge, newGcdTensor->shape);
+        auto oldAssembleOp = *overlap->GetConsumers().begin();
+        auto oldopmagic = oldAssembleOp->opmagic;
+        for (const auto& consumer : overlap->GetConsumers()) {
+            if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                oldAssembleOp = consumer;
+                oldopmagic = oldAssembleOp->opmagic;
+                break;
+            }
+        }
+        for (const auto& consumer : overlap->GetConsumers()) {
+            if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE && oldopmagic > consumer->opmagic) {
+                oldAssembleOp = consumer;
+                oldopmagic = consumer->opmagic;
+            }
+        }
+        auto oldAssembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(oldAssembleOp->GetOpAttribute());
+        if (!oldAssembleOpAttr) {
+            APASS_LOG_WARN_F(Elements::Tensor,
+                "%s[%d] has no valid assembleOpAttribute; Please check.", oldAssembleOp->GetOpcodeStr().c_str(),
+                oldAssembleOp->GetOpMagic());
+            continue;
+        }
+        auto oldAssembleOffset = oldAssembleOpAttr->GetToOffset();
+        auto toTile =
+            std::make_shared<LogicalTensor>(function, largeTensor->tensor, oldAssembleOffset, overlap->shape);
+        auto status = CalcOverlap(gcdTile, toTile, true);
+        if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH) {
+            for (size_t j = 0; j < newViewOffset.size(); j++) {
+                newViewOffset[j] -= oldAssembleOffset[j];
+            }
+            auto& newViewOp = function.AddOperation(Opcode::OP_VIEW, {overlap}, {newGcdTensor});
+            newViewOp.SetOpAttribute(
+                std::make_shared<ViewOpAttribute>(newViewOffset, overlap->GetMemoryTypeOriginal()));
+            addedOps_.push_back(&newViewOp);
+            APASS_LOG_INFO_F(
+                Elements::Operation,
+                "For more split situation, create an ViewOp[%d], input is a "
+                "overlapGcdTile[%d], output is a newGcdTensor[%d].",
+                newViewOp.GetOpMagic(), overlap->GetMagic(), newGcdTensor->GetMagic());
+        }
+    }
+}
+
 void SplitLargeFanoutTensor::CreateOpForMoreSplit(
     Function& function, LogicalTensorPtr largeTensor, LogicalTensors overlaps, Shape gcdShape,
     LogicalTensorPtr dualOverlap, std::vector<Shape> gcdTileOffsets, Offset viewOpOffset)
@@ -380,12 +450,12 @@ void SplitLargeFanoutTensor::CreateOpForMoreSplit(
         auto& newAssembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {newGcdTensor}, {dualOverlap});
         newAssembleOp.SetOpAttribute(
             std::make_shared<AssembleOpAttribute>(largeTensor->GetMemoryTypeOriginal(), gcdTileOffset));
+        addedOps_.push_back(&newAssembleOp);
         APASS_LOG_INFO_F(
             Elements::Operation,
             "For more split situation, create an AssembleOp[%d], input is a newGcdTensor[%d], "
             "output is a dualOverlap[%d].",
             newAssembleOp.GetOpMagic(), newGcdTensor->GetMagic(), dualOverlap->GetMagic());
-        LogicalTensorPtr overlapGcdTile;
         Shape newViewOffset = gcdTileOffset;
         for (size_t j = 0; j < newViewOffset.size(); j++) {
             newViewOffset[j] += viewOpOffset[j];
@@ -394,44 +464,7 @@ void SplitLargeFanoutTensor::CreateOpForMoreSplit(
         for (size_t j = 0; j < gcdTileOffsetForLarge.size(); j++) {
             gcdTileOffsetForLarge[j] += viewOpOffset[j];
         }
-        for (auto& overlap : overlaps) {
-            auto gcdTile =
-                std::make_shared<LogicalTensor>(function, largeTensor->tensor, gcdTileOffsetForLarge, gcdShape);
-            auto oldAssembleOp = *overlap->GetConsumers().begin();
-            auto oldopmagic = oldAssembleOp->opmagic;
-            for (const auto& consumer : overlap->GetConsumers()) {
-                if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
-                    oldAssembleOp = consumer;
-                    oldopmagic = oldAssembleOp->opmagic;
-                    break;
-                }
-            }
-            for (const auto& consumer : overlap->GetConsumers()) {
-                if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE && oldopmagic > consumer->opmagic) {
-                    oldAssembleOp = consumer;
-                    oldopmagic = consumer->opmagic;
-                }
-            }
-            auto oldAssembleOpAttr = dynamic_cast<AssembleOpAttribute*>(oldAssembleOp->GetOpAttribute().get());
-            auto oldAssembleOffset = oldAssembleOpAttr->GetToOffset();
-            auto toTile =
-                std::make_shared<LogicalTensor>(function, largeTensor->tensor, oldAssembleOffset, overlap->shape);
-            auto status = CalcOverlap(gcdTile, toTile, true);
-            if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH) {
-                overlapGcdTile = overlap;
-                for (size_t j = 0; j < newViewOffset.size(); j++) {
-                    newViewOffset[j] -= oldAssembleOffset[j];
-                }
-                auto& newViewOp = function.AddOperation(Opcode::OP_VIEW, {overlapGcdTile}, {newGcdTensor});
-                newViewOp.SetOpAttribute(
-                    std::make_shared<ViewOpAttribute>(newViewOffset, overlap->GetMemoryTypeOriginal()));
-                APASS_LOG_INFO_F(
-                    Elements::Operation,
-                    "For more split situation, create an ViewOp[%d], input is a "
-                    "overlapGcdTile[%d], output is a newGcdTensor[%d].",
-                    newViewOp.GetOpMagic(), overlapGcdTile->GetMagic(), newGcdTensor->GetMagic());
-            }
-        }
+        FindOverlapAndCreateViewOp(function, largeTensor, overlaps, newGcdTensor, gcdTileOffsetForLarge, newViewOffset);
     }
 }
 

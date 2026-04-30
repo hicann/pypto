@@ -17,12 +17,14 @@
 #define TILE_FWK_ASSIGN_MEMORY_TYPE_H
 
 #include <queue>
+#include <unordered_set>
 #include "passes/pass_interface/pass.h"
 #include "interface/operation/opcode.h"
 #include "passes/tile_graph_pass/data_path/convert_op_inserter.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/data_type.h"
 #include "passes/pass_check/assign_memory_type_checker.h"
+#include "passes/pass_utils/infer_shape_utils.h"
 
 namespace npu::tile_fwk {
 class AssignMemoryType : public Pass {
@@ -34,6 +36,7 @@ private:
     Status PreCheck(Function& function) override;
     Status PostCheck(Function& function) override;
     Status RunOnFunction(Function& function) override;
+    Status InsertConvertOpsAndInferShape(Function& function);
     void AssignMoveOp(Operation& operation);
     bool ShouldSkipAssembleMemorySetting(const LogicalTensorPtr &input, 
                                           const LogicalTensorPtr &output) const;
