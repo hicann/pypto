@@ -1590,11 +1590,17 @@ def gen_reduce_sum_op_golden(
     # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
     def golden_func(inputs: list, config: dict):
         params = config.get("params")
-        x = inputs[0]
+        x = safe_tensor_conversion(inputs[0])
+        input_dtype = x.dtype
+        tensor_dtype = get_dtype_by_name(input_dtype, True)
         dims = params["dims"]
         keepdim = params.get("keepDim", True)
-        return [x.sum(axis=dims[0], keepdims=keepdim, dtype=inputs[0].dtype)]
-
+        y = x.sum(axis=dims[0], keepdims=keepdim)
+        if input_dtype == bfloat16:
+            y = y.to(torch.float32).numpy().astype(bfloat16)
+        else:
+            y = y.to(tensor_dtype).numpy()
+        return [y]
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Sum", golden_func, output, case_index)
 
