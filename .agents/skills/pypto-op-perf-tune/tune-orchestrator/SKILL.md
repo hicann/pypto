@@ -91,7 +91,7 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 
 | 当前 PHASE | 进入动作 | 退出条件 | 转移到 |
 |-----------|---------|---------|--------|
-| PHASE_FRONTEND | 加载 tune-frontend 子技能 + ⛔ 生成调优点清单 | 达标 或 (调优点清单已全部尝试 且 连续5轮无提升) | PHASE_SUMMARY_F |
+| PHASE_FRONTEND | 加载 tune-frontend 子技能 + ⛔ 执行阶段A(全局分析:Loop+常量+Reshape+TileShape) + 阶段B(局部分析:数据操作) + ⛔ 编排器核查分析制品 + 生成优化点清单 | 达标 或 (优化点清单已全部尝试 且 连续5轮无提升) | PHASE_SUMMARY_F |
 | PHASE_SUMMARY_F | 生成 FRONTEND 阶段交接摘要 + Task 启动新会话压缩上下文 | 摘要已生成 且 新会话已启动 | PHASE_SWIMLANE |
 | PHASE_SWIMLANE | 加载 tune-swimlane 子技能 + ⛔ 生成调优点清单 | 达标 或 (调优点清单已全部尝试 且 连续8轮无提升) | PHASE_SUMMARY_S |
 | PHASE_SUMMARY_S | 生成 SWIMLANE 阶段交接摘要 + Task 启动新会话压缩上下文 | 摘要已生成 且 新会话已启动 | PHASE_INCORE |
@@ -104,7 +104,7 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 
 | 迭代子状态 | 执行内容 | 完成标志 | 转移到 | 失败处理 |
 |-----------|---------|---------|--------|---------|
-| ITER_START | 根据子技能指南和 [shared/optimization_catalog.md](../shared/optimization_catalog.md) 选择一个优化点 | 确定了要改什么参数（含编号） | ITER_MODIFY | 无优化点可选 → 退出迭代循环（进入对应 PHASE_SUMMARY） |
+| ITER_START | 根据子技能阶段A/B分析结论和 [shared/optimization_catalog.md](../shared/optimization_catalog.md) 选择一个优化点。⛔ FRONTEND阶段：优化点必须引用阶段A或B分析表格中的具体行号，禁止凭直觉选题 | 确定了要改什么参数（含编号+分析依据） | ITER_MODIFY | 无优化点可选 → 退出迭代循环（进入对应 PHASE_SUMMARY） |
 | ITER_MODIFY | 修改代码，只改一个参数 | 代码已修改 | ITER_VERIFY | - |
 | ITER_VERIFY | 运行测试用例验证精度 | 输出含 "passed" | ITER_MEASURE | → ITER_ROLLBACK |
 | ITER_MEASURE | 运行用例采集性能数据 | 新的性能数据已获取 | ITER_RECORD | → ITER_ROLLBACK |
@@ -117,31 +117,67 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 #### PHASE_FRONTEND 开箱调优流程
 
 ```
-┌────────────────────────────────────────────┐
-│              开箱性能调优流程               │
-├────────────────────────────────────────────┤
-│                                            │
-│  1. 建立性能基准                           │
-│     └─ 运行算子用例，记录基准执行时间      │
-│                                            │
-│  2. 按清单逐项执行（子技能调优检查清单）   │
-│     ├─ P0 任务粒度：切块                      │
-│     ├─ P1 Reshape 全局优化：外提+合轴          │
-│     ├─ P2 Loop 写法：静态for/合并/unroll       │
-│     ├─ P3 TileShape：Cube/Vector推荐配置       │
-│     ├─ P4 常量配置：BLOCK_SIZE等               │
-│     └─ P5 数据操作：NZ格式/transpose/         │
-│        assemble                               │
-│                                            │
-│  3. 每项优化后验证                         │
-│     ├─ 验证精度                            │
-│     ├─ 对比基准执行时间                    │
-│     └─ 提升则保留，回退则标记失败          │
-│                                            │
-│  4. 达标或清单全部尝试且连续5轮无提升      │
-│     → 退出，进入 PHASE_SUMMARY_F           │
-│                                            │
-└────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│              开箱性能调优流程（三阶段）                      │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ⛔ 阶段A: 全局分析（对应 F-1~F-10，必须先完成）            │
+│     ├─ A1: 扫描所有 pypto.loop / Python for 调用          │
+│     │      → 产出 Loop结构分析表                           │
+│     ├─ A2: 扫描所有常量定义和 jit 参数                      │
+│     │      → 产出 常量依赖关系图（对应F-11）                 │
+│     ├─ A3: 扫描所有 pypto.reshape 调用                    │
+│     │      → 产出 Reshape全局分析表（对应F-4）               │
+│     ├─ A4: 扫描所有 operation + TileShape                  │
+│     │      → 产出 基本块(TileShape)审查表（对应F-9,F-10）   │
+│     └─ A5: 汇总优化建议                                    │
+│            → 产出 基于分析的优化建议清单                     │
+│                                                          │
+│     ⛔ 编排器核查：A1+A2+A3+A4+A5 制品齐全 → 进入阶段B      │
+│                                                          │
+│  ⛔ 阶段B: 局部分析（对应 F-11~F-14，F-11已在A2分析，必须先完成） │
+│     ├─ B1: 数据操作分析(NZ/Transpose/冗余搬运)             │
+│     │      → 产出 数据操作分析表（对应F-12~F-14）           │
+│     └─ B2: 汇总最终优化点排序清单                           │
+│            → 产出 最终优化点清单（引用catalog编号）          │
+│                                                          │
+│     ⛔ 编排器核查：B1+B2 制品齐全 → 进入阶段C               │
+│                                                          │
+│  阶段C: 逐项优化（基于A+B的分析结论执行）                  │
+│     ├─ 按优化点排序清单逐项执行 ITER 循环                  │
+│     │   ├─ P0 任务粒度: F-1~F-3                             │
+│     │   ├─ P0 Reshape全局: F-4                              │
+│     │   ├─ P1 Loop写法: F-5~F-8                             │
+│     │   ├─ P2 TileShape: F-9, F-10                          │
+│     │   ├─ P3 常量配置: F-11                                 │
+│     │   └─ P3 其他: F-12~F-14                               │
+│     ├─ 每项优化必须引用阶段A/B的分析结论                     │
+│     └─ 每项优化后验证精度+性能                               │
+│                                                          │
+│  达标或清单全部尝试且连续5轮无提升                          │
+│     → 退出，进入 PHASE_SUMMARY_F                           │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+**⛔ 阶段A/B 分析核查规则**：
+
+编排器在阶段C开始前，必须确认以下制品已生成：
+
+```
+阶段A 核查清单：
+□ A1: Loop结构分析表已填写（每个 pypto.loop/for 一行）
+□ A2: 常量依赖关系图已填写（每个常量一行，含引用位置）
+□ A3: Reshape全局分析表已填写（每个 reshape 一行，含冗余判定）
+□ A4: 基本块(TileShape)审查表已填写（每个 operation 一行，含TileShape匹配检查）
+□ A5: 基于分析的优化建议清单已列出
+
+阶段B 核查清单：
+□ B1: 数据操作分析表已填写（覆盖 F-12~F-14）
+□ B2: 最终优化点排序清单已生成（引用 catalog 编号，按 P0→P3 排序）
+
+⛔ 以上 7 项全部 ✅ 后，才允许进入阶段C 开始 ITER 循环。
+⛔ 缺少任何一项 → 要求补充分析，禁止跳过进入优化。
 ```
 
 #### PHASE_SWIMLANE 深度调优流程
@@ -228,24 +264,34 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 □ Q1: 当前处于哪个状态？
       第一级: [INIT / S1 / S2 / S3 / S4 / S5 / DONE]
       第二级: [FRONTEND / SUMMARY_F / SWIMLANE / SUMMARY_S / INCORE / SUMMARY_I]（仅 S4 时）
-      第三级: [START / MODIFY / VERIFY / MEASURE / RECORD / JUDGE / ROLLBACK]
+      第三级: [ANALYZE_A / ANALYZE_B / START / MODIFY / VERIFY / MEASURE / RECORD / JUDGE / ROLLBACK]
               （仅 FRONTEND / SWIMLANE / INCORE 时）
 
 □ Q2: 当前子状态的完成条件是否满足？
-      → 不满足 → 继续执行当前子状态，禁止推进
+       → 不满足 → 继续执行当前子状态，禁止推进
+
+□ Q2a: （仅 FRONTEND 阶段）代码分析是否已完成？
+       → 阶段A(全局分析: Loop+常量+Reshape+TileShape) 分析表是否已填写？
+       → 阶段B(局部分析: 数据操作) 分析表是否已填写？
+       → 未完成 → 禁止进入 ITER 循环，必须先完成分析
 
 □ Q3: 本轮回复是否只推进了一个子状态？
-      → ITER_START → ITER_MODIFY  ✅（一个）
-      → ITER_START → ITER_MODIFY → ITER_VERIFY  ❌（三个，太多了）
+       → ITER_START → ITER_MODIFY  ✅（一个）
+       → ITER_START → ITER_MODIFY → ITER_VERIFY  ❌（三个，太多了）
 
 □ Q4: 强制动作是否已完成？
-       → S1→S2: Todo 已创建？
-       → PHASE→SUMMARY: 阶段交接摘要已生成？
-       → SUMMARY_F/S→下一PHASE: Task 已启动新会话完成上下文压缩？
-       → S5→DONE: debug_options 已还原？
+        → S1→S2: Todo 已创建？
+        → FRONTEND 阶段C 前置: 阶段A+B 分析制品已核查？
+        → PHASE→SUMMARY: 阶段交接摘要已生成？
+        → SUMMARY_F/S→下一PHASE: Task 已启动新会话完成上下文压缩？
+        → S5→DONE: debug_options 已还原？
 
 □ Q5: Todo 是否最新？
-      → 刚完成了一步 → 是否已更新？
+       → 刚完成了一步 → 是否已更新？
+
+□ Q6: （仅 ITER_START 时）本次选择的优化点是否来源于阶段A/B的分析结论？
+       → 无分析结论支撑 → 禁止执行，回到分析阶段补充
+       → 有分析结论支撑 → 确认引用了分析表格的具体行号
 ```
 
 ---
@@ -323,11 +369,31 @@ ITER_MODIFY 阶段，每次只允许修改一个优化参数：
 | 调优点清单已全部尝试 且 连续5轮无提升 | 调优点清单中所有项已标记为 ✅已尝试 或 ❌已失败，且最近5轮无提升 | → 退出迭代循环 → PHASE_SUMMARY_F |
 | 用户要求停止 | 用户明确说停止 | → 退出迭代循环 → PHASE_SUMMARY_F |
 
-**⛔ 调优点清单机制（PHASE 进入时强制生成）**：
+**⛔ 调优点清单生成机制（PHASE 进入时强制执行）**：
 
-进入每个 PHASE 后、开始第一轮迭代前，必须根据子技能指南生成调优点清单，并在 Todo 中记录。每尝试一个调优点后标记其状态。连续无提升计数器仅在清单全部尝试完后才生效。
+进入每个 PHASE 后、开始第一轮迭代前，必须完成代码分析并生成调优点清单。对于 PHASE_FRONTEND，清单生成必须遵循三阶段流程：
 
-**清单生成规则**：
+**PHASE_FRONTEND 清单生成流程（强制）**：
+
+```
+步骤1: 阶段A - 全局分析（对应 F-1~F-10）
+  ├─ A1: grep 所有 pypto.loop / Python for → 填写 Loop结构分析表
+  ├─ A2: grep 所有常量定义和 jit 参数 → 填写 常量依赖关系图（对应F-11）
+  ├─ A3: grep 所有 pypto.reshape → 填写 Reshape全局分析表（对应F-4）
+  ├─ A4: grep 所有 operation + TileShape → 填写 基本块(TileShape)审查表（对应F-9,F-10）
+  └─ A5: 基于 A1~A4 产出初步优化建议
+  ⛔ 编排器核查 A1+A2+A3+A4+A5 制品齐全
+
+步骤2: 阶段B - 局部分析（对应 F-11~F-14，F-11已在A2分析）
+  ├─ B1: 分析数据操作(NZ/Transpose/冗余搬运) → 填写 数据操作分析表
+  └─ B2: 基于 A+B 分析结果 + catalog 编号 → 产出 最终优化点排序清单
+  ⛔ 编排器核查 B1+B2 制品齐全
+
+步骤3: 阶段C - 逐项优化（ITER 循环）
+  └─ 按 B2 的优化点排序清单逐项执行
+```
+
+**通用清单生成规则（所有 PHASE）**：
 1. 读取 [shared/optimization_catalog.md](../shared/optimization_catalog.md) 中对应阶段的「按阶段分组」表，获取该阶段所有优化点编号和适用条件
 2. 结合子技能 SKILL.md 中的调优检查清单，针对当前算子代码逐项分析，标记哪些适用
 3. 如有性能数据（气泡率/利用率/负载差异），可先查 catalog 的「按症状索引」缩小范围
