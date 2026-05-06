@@ -427,8 +427,9 @@ public:
     [[nodiscard]] std::pair<MemoryType, std::vector<OpImmediate>> GetCopyOutAttr() const;
     [[nodiscard]] std::pair<std::vector<OpImmediate>, MemoryType> GetCopyInAttr() const;
     [[nodiscard]] bool IsCopyOut() const { return isCopyOut_; }
-    [[nodiscard]] std::vector<OpImmediate> GetShape() const { return tensorShape_; }
-    [[nodiscard]] std::vector<OpImmediate> GetRawShape() const { return rawShape_; }
+    [[nodiscard]] const std::vector<OpImmediate>& GetShape() const { return tensorShape_; }
+    [[nodiscard]] const std::vector<OpImmediate>& GetRawShape() const { return rawShape_; }
+    [[nodiscard]] std::vector<OpImmediate>& GetRawShape() { return rawShape_; }
     [[nodiscard]] const std::vector<OpImmediate>& GetToDynValidShape() const { return toDynValidShape_; }
     [[nodiscard]] std::vector<OpImmediate>& GetToDynValidShape() { return toDynValidShape_; }
     [[nodiscard]] const std::vector<OpImmediate>& GetFromDynValidShape() const { return fromDynValidShape_; }

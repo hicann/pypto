@@ -73,8 +73,7 @@ struct CoaInfo {
             if (SToIParamShapeAndOffset(match) != SUCCESS) {
                 APASS_LOG_ERROR_F(
                     Elements::Operation,
-                    "ParseCoaString failed to convert indices,"
-                    "CoaType::PARAM_OFFSET, input coaExpr %s.",
+                    "ParseCoaString failed to convert indices, CoaType::PARAM_OFFSET, input coaExpr %s.",
                     coaExpr.c_str());
                 return FAILED;
             }
@@ -83,8 +82,7 @@ struct CoaInfo {
             if (SToIParamShapeAndOffset(match) != SUCCESS) {
                 APASS_LOG_ERROR_F(
                     Elements::Operation,
-                    "ParseCoaString failed to convert indices,"
-                    "CoaType::PARAM_VALID_SHAPE, input coaExpr %s.",
+                    "ParseCoaString failed to convert indices, CoaType::PARAM_VALID_SHAPE, input coaExpr %s.",
                     coaExpr.c_str());
                 return FAILED;
             }
@@ -93,22 +91,23 @@ struct CoaInfo {
             if (SToIWrapper(match[INPUT_PARAM_POS_ONE].str(), idx) != SUCCESS) {
                 APASS_LOG_ERROR_F(
                     Elements::Operation,
-                    "ParseCoaString failed to convert indices,"
-                    "CoaType::PARAM, input coaExpr %s.",
+                    "ParseCoaString failed to convert indices, CoaType::PARAM, input coaExpr %s.",
                     coaExpr.c_str());
                 return FAILED;
             }
         } else if (coaExpr.find(MAYBE_CONST_POSTFIX) != std::string::npos) {
             APASS_LOG_ERROR_F(Elements::Operation, "This coaExpr %s has been processed", coaExpr.c_str());
             return FAILED;
-        }  else if (ParseParamRawShape(coaExpr, match)) {
- 	             macroType = CoaType::PARAM_RAW_SHAPE;
- 	             if (SToIParamShapeAndOffset(match) != SUCCESS) {
- 	                 APASS_LOG_ERROR_F(Elements::Operation,
- 	                    "ParseCoaString failed to convert indices, CoaType::PARAM_RAW_SHAPE, input coaExpr %s.", coaExpr.c_str());
- 	                 return FAILED;
- 	             }
- 	    } else {
+        } else if (ParseParamRawShape(coaExpr, match)) {
+            macroType = CoaType::PARAM_RAW_SHAPE;
+            if (SToIParamShapeAndOffset(match) != SUCCESS) {
+                APASS_LOG_ERROR_F(
+                    Elements::Operation,
+                    "ParseCoaString failed to convert indices, CoaType::PARAM_RAW_SHAPE, input coaExpr %s.",
+                    coaExpr.c_str());
+                return FAILED;
+            }
+        } else {
             APASS_LOG_ERROR_F(
                 Elements::Operation, "ParseCoaString input coaExpr %s is not recognized.", coaExpr.c_str());
             return FAILED;
@@ -133,23 +132,26 @@ struct CoaInfo {
 
     SymbolicScalar BuildMaybeConstCoa(int isConst, int attrValue)
     {
+        if (isConst == 1 && attrValue > -1) {
+            return attrValue;
+        }
         if (macroType == CoaType::PARAM_OFFSET) {
             return MAYBE_CONST_COA_GetOffset(isConst, attrValue, dim, base, idx);
         } else if (macroType == CoaType::PARAM_VALID_SHAPE) {
             return MAYBE_CONST_COA_GetValidShape(isConst, attrValue, dim, base, idx);
         } else if (macroType == CoaType::PARAM) {
             return MAYBE_CONST_COA_GetParam(isConst, attrValue, idx);
-        }  else if (macroType == CoaType::PARAM_RAW_SHAPE) {
+        } else if (macroType == CoaType::PARAM_RAW_SHAPE) {
             return MAYBE_CONST_COA_GetRawShape(isConst, attrValue, dim, base, idx);
-        } 
+        }
         APASS_LOG_ERROR_F(Elements::Operation, "BuildMaybeConstCoa Coa type is invalid.");
         return 0;
     }
 };
 
 struct IsConstMetric {
-    int isConst = 1;  // not const = 2; const = 1; const but not static = 3; 
-    int attrValue = -2;  // static >= 0; else -1.
+    int isConst = 1;    // not const = 2; const = 1; const but not static = 3;
+    int attrValue = -2; // static >= 0; else -1.
 
     void MarkNotConst() { isConst = 2; }
     int GetIsConst() { return isConst; }
@@ -243,6 +245,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynami
             FilterSpecifiedValue(copyAttr->GetFromOffset(), dynamicAttributeList);
             FilterSpecifiedValue(copyAttr->GetToDynValidShape(), dynamicAttributeList);
             FilterSpecifiedValue(copyAttr->GetFromDynValidShape(), dynamicAttributeList);
+            FilterSpecifiedValue(copyAttr->GetRawShape(), dynamicAttributeList);
         }
     }
     return dynamicAttributeList;
@@ -401,19 +404,6 @@ void ReplaceCommonSymbol(Function* leafFunc, std::vector<std::vector<SymbolicSca
     }
 }
 
-inline SymbolicScalar BuildMaybeConstCoa(int attrValue, const DynParamInfo& paramInfo)
-{
-    if (paramInfo.type == DynParamInfoType::OFFSET) {
-        return MAYBE_CONST_COA_GetOffset(
-            1, attrValue, paramInfo.dimSize, paramInfo.tensorBaseAddrCoaIndex, paramInfo.dimIndex);
-    }
-    if (paramInfo.type == DynParamInfoType::VALID_SHAPE) {
-        return MAYBE_CONST_COA_GetValidShape(
-            1, attrValue, paramInfo.dimSize, paramInfo.tensorBaseAddrCoaIndex, paramInfo.dimIndex);
-    }
-    return MAYBE_CONST_COA_GetParam(1, attrValue, paramInfo.dimIndex);
-}
-
 void ReBuildConcreteParam(Function* leafFunc, std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim)
 {
     std::map<std::string, int> concreteParamCoaIdx;
@@ -445,8 +435,7 @@ void ReBuildConcreteParam(Function* leafFunc, std::vector<std::vector<SymbolicSc
         if (!isConstParam(coaIdx) || scalarValue.attrValue < 0) {
             continue;
         }
-        auto constParam = BuildMaybeConstCoa(scalarValue.attrValue, dynParam.second);
-        leafFunc->GetMutableDynParam(dynParam.first).dim = constParam;
+        leafFunc->GetMutableDynParam(dynParam.first).dim = scalarValue.attrValue;
     }
 }
 
@@ -460,10 +449,10 @@ Status DynAttrToStatic::TryRemoveDynAttr(Function* leafFunc, std::vector<Operati
     }
     for (auto& callop : callList) {
         auto rootFunction = callop->BelongTo();
-        for (auto &inCast : rootFunction->GetIncast()) {
+        for (auto& inCast : rootFunction->GetIncast()) {
             rootInOutCast_.insert(inCast->GetRawMagic());
         }
-        for (auto &outCast : rootFunction->GetOutcast()) {
+        for (auto& outCast : rootFunction->GetOutcast()) {
             rootInOutCast_.insert(outCast->GetRawMagic());
         }
     }
@@ -489,7 +478,8 @@ Status DynAttrToStatic::TryRemoveDynAttr(Function* leafFunc, std::vector<Operati
     return SUCCESS;
 }
 
-std::pair<int, int> ParseRuntimeGetParamAddr(const std::string& input) {
+std::pair<int, int> ParseRuntimeGetParamAddr(const std::string& input)
+{
     // 默认返回 {-1, -1} 表示不匹配
     std::pair<int, int> paramArgs = {-1, -1};
     // 正则：严格匹配 RUNTIME_GET_PARAM_ADDR(xxx, 数字, 数字)
@@ -501,24 +491,23 @@ std::pair<int, int> ParseRuntimeGetParamAddr(const std::string& input) {
             paramArgs.second = std::stoi(matches[2].str());
         } catch (...) {
             // 解析失败也返回 {-1,-1}
-            return { -1, -1 };
+            return {-1, -1};
         }
     }
     return paramArgs;
 }
 
 // Helper function to set paramAddr attribute for a tensor
-void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor> &tensor, const std::set<int>& inOutCast)
+void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor>& tensor, const std::set<int>& inOutCast)
 {
     std::map<int, SymbolicScalar> paramAddrMap;
     tensor->GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
-    for (auto &paramAddr : paramAddrMap) {
+    for (auto& paramAddr : paramAddrMap) {
         auto paramArgs = ParseRuntimeGetParamAddr(paramAddr.second.Dump());
         int aiCpuFlag = inOutCast.count(tensor->GetRawMagic()) ? 3 : 2;
         if (paramAddr.second.IsExpression() && paramArgs.first != -1 && paramArgs.second != -1) {
             paramAddr.second = GET_PARAM_ADDR_MAYBE_CONST(
-                SymbolicScalar(static_cast<int64_t>(aiCpuFlag)),
-                SymbolicScalar(static_cast<int64_t>(0)),
+                SymbolicScalar(static_cast<int64_t>(aiCpuFlag)), SymbolicScalar(static_cast<int64_t>(0)),
                 SymbolicScalar(static_cast<int64_t>(paramArgs.first)),
                 SymbolicScalar(static_cast<int64_t>(paramArgs.second)));
         }
@@ -526,8 +515,9 @@ void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor> &tensor, const std::se
     tensor->SetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
 }
 
-void DynAttrToStatic::BuildParamAddr(Operation &op) {
-    for (auto &iOperand : op.GetIOperands()) {
+void DynAttrToStatic::BuildParamAddr(Operation& op)
+{
+    for (auto& iOperand : op.GetIOperands()) {
         if (visitedTensors_.count(iOperand)) {
             continue;
         }
@@ -536,7 +526,7 @@ void DynAttrToStatic::BuildParamAddr(Operation &op) {
             visitedTensors_.insert(iOperand);
         }
     }
-    for (auto &oOperand : op.GetOOperands()) {
+    for (auto& oOperand : op.GetOOperands()) {
         if (visitedTensors_.count(oOperand)) {
             continue;
         }
@@ -550,10 +540,10 @@ void DynAttrToStatic::BuildParamAddr(Operation &op) {
 Status DynAttrToStatic::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "==============> Start DynAttrToStatic.");
-    for (auto &inCast : function.GetIncast()) {
+    for (auto& inCast : function.GetIncast()) {
         rootInOutCast_.insert(inCast->GetRawMagic());
     }
-    for (auto &outCast : function.GetOutcast()) {
+    for (auto& outCast : function.GetOutcast()) {
         rootInOutCast_.insert(outCast->GetRawMagic());
     }
     // 1. 遍历所有rootFunc，找到每个leaf的所有caller，生成leaf2Caller map

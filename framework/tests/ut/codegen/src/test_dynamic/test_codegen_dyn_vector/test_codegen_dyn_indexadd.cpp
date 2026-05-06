@@ -139,7 +139,7 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddLayout)
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
     std::string expect =
-        R"!!!(TIndexAdd<3>(gmTensor_4, gmTensor_6, ubTensor_0, ubTensor_2, ubTensor_5, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST(1, 0, 2, 24, 0)), (RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST(1, 0, 2, 24, 1))), (float)1);)!!!";
+        R"!!!(TIndexAdd<3>(gmTensor_4, gmTensor_6, ubTensor_0, ubTensor_2, ubTensor_5, Coord2Dim(0, 0), (float)1);)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

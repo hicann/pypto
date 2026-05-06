@@ -364,6 +364,7 @@ INLINE uint32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 #define RUNTIME_COA_GET_PARAM_VALID_SHAPE(dim, base, idx) GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, base, dim, idx)
 #define RUNTIME_COA_GET_PARAM_ADDR(_, idx) GET_PARAM_ADDR(param, _, idx)
 #define RUNTIME_COA_GET_PARAM(idx) GetCoa<0, 0>(param, idx)
+#define RUNTIME_COA_GET_PARAM_RAW_SHAPE(dim, base, idx) GetCoa<0, 0>(param, ((base) + 1) + 2 * (dim) + idx)
 
 #define RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST(mode, value, dim, base, idx)        GetCoa<mode, value>(param, ((base) + 1) + idx)
 #define RUNTIME_COA_GET_PARAM_RAW_SHAPE_MAYBE_CONST(mode, value, dim, base, idx)     GetCoa<mode, value>(param, ((base) + 1) + 2 * (dim) + idx)
