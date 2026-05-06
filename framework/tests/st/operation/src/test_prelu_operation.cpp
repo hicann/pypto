@@ -35,6 +35,36 @@ struct PReLUOpMetaData {
     nlohmann::json test_data_;
 };
 
+static void PReLUOperationExeFunc1Dim(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+    {
+        auto args = static_cast<const PReLUOpFuncArgs*>(opArgs);
+
+        SymbolicScalar firstDim = inputs[0].GetShape()[0];
+
+        const int firstViewShape = args->viewShape_[0];
+
+        const int bloop = CeilDiv(firstDim, firstViewShape);
+
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            auto tileTensor0 = View(
+                inputs[0], {firstViewShape},
+                {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                {bIdx * firstViewShape});
+
+            // 1D 输入时，weight 恒为 [1]
+            auto tileTensor1 = View(inputs[1], {1}, {1}, {0});
+
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = PReLU(tileTensor0, tileTensor1);
+            Assemble(res, {bIdx * firstViewShape}, outputs[0]);
+        }
+    }
+}
+
 static void PReLUOperationExeFunc2Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -178,7 +208,8 @@ class PReLUOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aiha
 INSTANTIATE_TEST_SUITE_P(
     TestPReLU, PReLUOperationTest,
     ::testing::ValuesIn(GetOpMetaData<PReLUOpMetaData>(
-        {PReLUOperationExeFunc2Dims, PReLUOperationExeFunc3Dims, PReLUOperationExeFunc4Dims}, "PReLU")));
+        {PReLUOperationExeFunc1Dim, PReLUOperationExeFunc2Dims,
+         PReLUOperationExeFunc3Dims, PReLUOperationExeFunc4Dims}, "PReLU")));
 
 TEST_P(PReLUOperationTest, TestPReLU)
 {

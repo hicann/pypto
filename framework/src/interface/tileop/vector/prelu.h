@@ -61,7 +61,25 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp)
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
 
-    if constexpr (axis == 4) {
+    if constexpr (axis == 5) {
+        // For 1D input (N), weight is (1,)
+        using DstTileDefine =
+            pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+        using SrcTileDefine =
+            pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+        DstTileDefine dstTile(1, dstShape4);
+        SrcTileDefine srcTile(1, srcShape4);
+        auto weightAddr = (__ubuf__ typename T2::Type*)((uint64_t)(weight.GetAddr()));
+        set_flag(PIPE_V, PIPE_S, EVENT_ID4);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID4);
+
+        auto negative_slope = *weightAddr;
+
+        pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr()));
+        pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr()));
+
+        pto::TLRELU(dstTile, srcTile, negative_slope);
+    } else if constexpr (axis == 4) {
         // For 2D input (N, C), weight is (C,)
         constexpr size_t ALIGN_SIZE = 32;
         constexpr size_t SIZEOFBYTE = 8;

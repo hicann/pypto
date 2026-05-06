@@ -243,6 +243,12 @@ void TiledPReLUOperation(
     Function& function, const TileShape& tileShape, size_t cur, Input& input, Input& weight,
     const LogicalTensorPtr& result)
 {
+    if (cur == 0 && input.tensor.GetShape().size() == 1) {
+        // 1D 输入：weight shape [1]，不需要切分，直接初始化 weight tile info
+        weight.tileInfo.shape[0] = 1;
+        weight.tileInfo.offset[0] = 0;
+    }
+
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto weightTile = weight.tensor.GetStorage()->View(function, weight.tileInfo.shape, weight.tileInfo.offset);
@@ -272,7 +278,8 @@ void TiledPReLUOperation(
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
-        if (cur == 1) {
+        // 1D 输入时，weight 不需要切分
+        if (input.tensor.GetShape().size() > 1 && cur == 1) {
             weight.tileInfo.shape[0] = std::min(weight.tensor.GetShape()[0] - i, vecTile[cur]);
             weight.tileInfo.offset[0] = i;
         }
@@ -298,13 +305,20 @@ void TiledPReLUOperation(
 
 void PReLUOperationOperandCheck(const LogicalTensorPtr& selfTensor, const LogicalTensorPtr& weightTensor)
 {
-    CheckTensorDimRange(selfTensor, 2, 4, "PReLU");
+    CheckTensorDimRange(selfTensor, 1, 4, "PReLU");
     CheckTensorDimRange(weightTensor, 1, 1, "PReLU");
     CheckTensorShapeSize(selfTensor, "PReLU");
     CheckTensorShapeSize(weightTensor, "PReLU");
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
-        << "The weight size should equal to input's second dimension";
+    if (selfTensor->shape.size() == 1) {
+        // 1D 输入时，weight 必须为 [1]
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == 1)
+            << "The weight size should be [1] when input is 1D";
+    } else {
+        // 2D/3D/4D 输入时，weight 必须与 self 的第二维匹配
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
+            << "The weight size should equal to input's second dimension";
+    }
 }
 
 void PReLUOperationTileFunc(
