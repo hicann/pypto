@@ -57,6 +57,10 @@ json BuildSyncEventsJson(const TaskStat& taskStat)
             syncEventsArr.push_back(waitEvent);
         }
     }
+
+    std::sort(syncEventsArr.begin(), syncEventsArr.end(), [](const json& a, const json &b) {
+        return a.value("time", 0) < b.value("time", 0);
+    });
     return syncEventsArr;
 }
 
