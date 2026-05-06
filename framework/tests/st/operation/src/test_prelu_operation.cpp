@@ -207,7 +207,7 @@ class PReLUOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aiha
 
 INSTANTIATE_TEST_SUITE_P(
     TestPReLU, PReLUOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<PReLUOpMetaData>(
+    ::testing::ValuesIn(GetOpMetaData<PReLUOpMetaData, 1>(
         {PReLUOperationExeFunc1Dim, PReLUOperationExeFunc2Dims,
          PReLUOperationExeFunc3Dims, PReLUOperationExeFunc4Dims}, "PReLU")));
 

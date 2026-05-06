@@ -561,7 +561,7 @@ std::vector<T> GetOpMetaData(const std::vector<OpFunc>& opFuncs, const std::stri
         }
         auto func_id = GetFuncId(test_case);
         if (func_id < 0 || static_cast<size_t>(func_id) >= opFuncs.size()) {
-            if (GetViewShape(test_case).size() < 2) { // cut function start from 2 dim
+            if (GetViewShape(test_case).size() < func_offset) { // cut function start from 2 dim
                 func_id = 0;
             } else {
                 func_id = GetViewShape(test_case).size() - func_offset;

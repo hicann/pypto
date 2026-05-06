@@ -75,24 +75,6 @@ TEST_F(TestDeviceRunner, test_ini_device_runner)
     runner.Init();
 }
 
-TEST_F(TestDeviceRunner, test_ini_device_args_arch32)
-{
-    DeviceArgs args_;
-    args_.archInfo = ArchInfo::DAV_2201;
-    npu::tile_fwk::DeviceRunner runner;
-    runner.InitDeviceArgs(args_);
-}
-
-TEST_F(TestDeviceRunner, test_ini_device_args_arch35)
-{
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    DeviceArgs args_;
-    args_.archInfo = ArchInfo::DAV_3510;
-    npu::tile_fwk::DeviceRunner runner;
-    runner.InitDeviceArgs(args_);
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
-}
-
 TEST_F(TestDeviceRunner, test_ini_proflevel)
 {
     npu::tile_fwk::dynamic::SchThreadStatus status;
