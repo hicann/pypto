@@ -380,8 +380,8 @@ Status L1CopyInReuseRunner::L1MergeProcess(
         auto vec = GetGMInputFeature(opOriList[opIdx]);
         if (vec.size() == 0) {
             APASS_LOG_ERROR_F(
-                Elements::Operation, "L1MergeProcess: op %d %s GetGMInputFeature failed. %s", opOriList[i].GetOpMagic(),
-                opOriList[i].GetOpcodeStr().c_str(), GetFormatBacktrace(opOriList[i]).c_str());
+                Elements::Operation, "L1MergeProcess: op %d %s GetGMInputFeature failed. %s", opOriList[opIdx].GetOpMagic(),
+                opOriList[opIdx].GetOpcodeStr().c_str(), GetFormatBacktrace(opOriList[opIdx]).c_str());
             return FAILED;
         }
         l1InputList[vec] = tmpColor;
@@ -504,8 +504,8 @@ Status L1CopyInReuseRunner::Phase1(
             if (vec.size() == 0) {
                 APASS_LOG_ERROR_F(
                     Elements::Operation, "Phase1: op %s %d GetGMInputFeature failed. %s",
-                    opOriList[i].GetOpcodeStr().c_str(), opOriList[i].GetOpMagic(),
-                    GetFormatBacktrace(opOriList[i]).c_str());
+                    opOriList[opIdx].GetOpcodeStr().c_str(), opOriList[opIdx].GetOpMagic(),
+                    GetFormatBacktrace(opOriList[opIdx]).c_str());
                 return FAILED;
             }
             if (GetMergedL1(
@@ -521,8 +521,7 @@ Status L1CopyInReuseRunner::Phase1(
         if (L1MergeProcess(opOriList, colorNode, hashColor, colorCopyIn, l1InputList, tmpColor, mergedNum, i) ==
             FAILED) {
             APASS_LOG_ERROR_F(
-                Elements::Operation, "L1MergeProcess failed; Please check the L1MergeProcess method. %s",
-                GetFormatBacktrace(opOriList[i]).c_str());
+                Elements::Operation, "L1MergeProcess failed; Please check the L1MergeProcess method.");
             return FAILED;
         }
     }
@@ -727,7 +726,7 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
     L1ReuseMode_ = GetModeBySetting(numLRMap_);
     cubeNBufferMode_ = GetModeBySetting(numDBMap_);
     APASS_LOG_INFO_F(Elements::Operation, "Param Setting mgCopyInUpperBound %d.", mgCopyInUpperBound_);
-    if (L1ReuseMode_ == 1 && hashMap_.size() != 0) {
+    if ((L1ReuseMode_ == 1 || !numLRMapByLabel_.empty()) && hashMap_.size() != 0) {
         if (Phase1(func, color, colorNode, colorCopyIn, hashColor) == FAILED) {
             APASS_LOG_ERROR_F(Elements::Function, "Phase1 failed; Please check the Phase1 method.");
             return FAILED;
@@ -853,7 +852,9 @@ Status L1CopyInReuseMerge::L1CopyInReuse(Function& func) const
 {
     auto L1ReuseMode = L1CopyInReuseRunner::GetModeBySetting(func.paramConfigs_.cubeL1ReuseSetting);
     auto cubeNBufferMode = L1CopyInReuseRunner::GetModeBySetting(func.paramConfigs_.cubeNBufferSetting);
-    if (L1ReuseMode == 0 && cubeNBufferMode == 0) {
+    bool hasLabelSetting = !func.paramConfigs_.cubeL1ReuseSettingByLabel.empty() ||
+                           !func.paramConfigs_.cubeNBufferSettingByLabel.empty();
+    if (L1ReuseMode == 0 && cubeNBufferMode == 0 && !hasLabelSetting) {
         APASS_LOG_INFO_F(Elements::Config, "Init Param default.");
         return SUCCESS;
     }

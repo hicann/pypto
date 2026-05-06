@@ -510,7 +510,10 @@ Status NBufferMerge::ApplySemanticLabelSettings(
     // Build a map from semantic label to the subgraph colors that contain ops with that label
     auto labelToColors = BuildLabelToColorsMap(opOriList);
 
-    // First step: collect the override value per hashOrder from all labels.
+    // hashMergeNum is keyed by colorHashValue in auto modes, by hashOrder in manual modes.
+    bool useHashValueAsKey = (vecNBuffermode_ == autoMerge || vecNBuffermode_ == autoMulityInOutMerge);
+
+    // First step: collect the override value per target (hashOrder or hashValue) from all labels.
     // If multiple labels target the same isomorphic group, take max among them.
     std::map<uint64_t, size_t> labelOverrides;
     for (const auto& [label, mergeNum] : vecNBufferSettingByLabel_) {
@@ -526,28 +529,31 @@ Status NBufferMerge::ApplySemanticLabelSettings(
 
         for (int color : it->second) {
             uint64_t colorHash = hashColor[color];
-            auto hashOrderIt = hashOrder_.find(colorHash);
-            if (hashOrderIt == hashOrder_.end()) {
-                APASS_LOG_WARN_F(
-                    Elements::Config, "Could not find hash order for subgraph color %d with semantic label '%s'.",
-                    color, label.c_str());
-                continue;
+            uint64_t target = colorHash;
+            if (!useHashValueAsKey) {
+                auto hashOrderIt = hashOrder_.find(colorHash);
+                if (hashOrderIt == hashOrder_.end()) {
+                    APASS_LOG_WARN_F(
+                        Elements::Config, "Could not find hash order for subgraph color %d with semantic label '%s'.",
+                        color, label.c_str());
+                    continue;
+                }
+                target = static_cast<uint64_t>(hashOrderIt->second);
             }
-            uint64_t order = hashOrderIt->second;
-            auto overIt = labelOverrides.find(order);
+            auto overIt = labelOverrides.find(target);
             if (overIt != labelOverrides.end()) {
                 overIt->second = std::max(overIt->second, static_cast<size_t>(mergeNum));
             } else {
-                labelOverrides[order] = static_cast<size_t>(mergeNum);
+                labelOverrides[target] = static_cast<size_t>(mergeNum);
             }
         }
     }
 
     // Second step: replace the hashMergeNum with collected label overrides
-    for (const auto& [order, val] : labelOverrides) {
-        hashMergeNum[order] = val;
+    for (const auto& [target, val] : labelOverrides) {
+        hashMergeNum[target] = val;
         APASS_LOG_INFO_F(
-            Elements::Config, "Applied semantic label override: hash_order=%lu, merge_num=%zu", order, val);
+            Elements::Config, "Applied semantic label override: target=%lu, merge_num=%zu", target, val);
     }
 
     return SUCCESS;
@@ -670,7 +676,7 @@ Status NBufferMerge::InitVecNBufferModeBySetting()
         return SUCCESS;
     }
     std::map<int64_t, int64_t> skipSetting = {{-1, 1}}; // 仅配置{{-1, 1}} 跳过合并
-    if (vecNBufferSetting_ == skipSetting) {
+    if (vecNBufferSetting_ == skipSetting && vecNBufferSettingByLabel_.empty()) {
         vecNBuffermode_ = noMerge;
         return SUCCESS;
     }

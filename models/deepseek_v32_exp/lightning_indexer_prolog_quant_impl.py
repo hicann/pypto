@@ -317,7 +317,7 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor, configs: Inde
 
 
 @pypto.frontend.jit(
-    pass_options={"cube_l1_reuse_setting": {1: 4}, },
+    pass_options={"cube_l1_reuse_setting": {"Query-Linear": 4}},
     runtime_options={"stitch_function_max_num": 128,
                     "device_sched_mode": 1}
 )
