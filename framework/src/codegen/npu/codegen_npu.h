@@ -185,6 +185,7 @@ protected:
     mutable std::vector<CompileTaskInfo> compileTasks_;
     NPUArch platform_;
     std::string rootFuncName_;
+    int rootFuncOpSize_{0};
 };
 
 class FloatSpecValMgr {

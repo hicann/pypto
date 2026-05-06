@@ -127,7 +127,7 @@ TEST_F(CompilerMonitor, CompilerMonitorStageScopeRootFunc)
     }
 
     {
-        MonitorStageScope scope(STAGE_FUNC_TO_BIN, 1, "root_func_A");
+        MonitorStageScope scope(STAGE_FUNC_TO_BIN, 1, "root_func_A", 10);
         sleep(1);
     }
 }

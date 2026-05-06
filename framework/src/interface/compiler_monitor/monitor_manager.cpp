@@ -449,13 +449,24 @@ std::unordered_map<std::string, double> MonitorManager::GetStageElapsedTotals() 
     return stage_elapsed_totals_;
 }
 
-void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, const std::string& rootFuncName)
+void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+                                int rootFuncOpSize)
 {
     COMPILER_LOGI("Stage ==[%s]== begin.", name.c_str());
     std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_ || !impl_ || !enable_) {
         return;
     }
+
+    // 当启动 FuncToBin 时，移除 active_stages_ 中的 CodeGen
+    if (name == STAGE_FUNC_TO_BIN) {
+        auto it = std::find_if(active_stages_.begin(), active_stages_.end(),
+            [](const ActiveStageInfo& info) { return info.stageName == "CodeGen"; });
+        if (it != active_stages_.end()) {
+            active_stages_.erase(it);
+        }
+    }
+
     if (rootFuncIndex == -1) {
         impl_->StartMonitoring();
     }
@@ -471,10 +482,12 @@ void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, cons
     info.functionName = current_function_;
     info.rootFuncIndex = (rootFuncIndex < 0) ? current_root_func_index_ : rootFuncIndex;
     info.rootFuncName = (rootFuncIndex < 0) ? current_root_func_ : rootFuncName;
+    info.rootFuncOpSize = rootFuncOpSize;
     active_stages_.push_back(info);
 }
 
-void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const std::string& rootFuncName)
+void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+                              int rootFuncOpSize)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     int actualRootFuncIndex = rootFuncIndex;
@@ -506,12 +519,12 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
     if (it != active_stages_.rend()) {
         active_stages_.erase(std::prev(it.base()));
     }
-    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex);
+    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex, rootFuncOpSize);
 }
 
 void MonitorManager::EndStageInternal(
     const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
-    const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal)
+    const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal, int rootFuncOpSize)
 {
     if (!initialized_ || !impl_ || !enable_) {
         return;
@@ -540,7 +553,7 @@ void MonitorManager::EndStageInternal(
                            " | Stage: " + PadStageName("CodeGen[" + name + "]") +
                            "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
                            " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed)) + " | Func:[" +
-                           rootFuncName + "]";
+                           rootFuncName + "] Ops: " + std::to_string(rootFuncOpSize);
     } else if (name == "CodeGen") {
         stage_finish_msg = "[Compiler Monitor] Stage: " + name +
                            "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
@@ -551,7 +564,8 @@ void MonitorManager::EndStageInternal(
             "[Compiler Monitor] " + PadLabel("Function: ") +
             PadRight(std::to_string(current_function_index_) + "/" + std::to_string(total_function_count_), pw) +
             " | Stage: " + PadStageName(name) + "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-            " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed)) + " | Func:[" + current_function_ + "]";
+            " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed)) + " | Func:[" + current_function_ +
+            "] Ops: " + std::to_string(current_func_opsize_);
     }
 
     (void)fprintf(stdout, "%s\n", stage_finish_msg.c_str());

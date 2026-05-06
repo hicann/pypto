@@ -1043,8 +1043,6 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     for (auto& devRoot : attr->funcGroup.devRootList) {
         std::function task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
             Function* devTile = attr->rootTileDict[devRoot];
-            MonitorManager::Instance().SetCurrentFuncOpSize(devTile->GetOperationSize());
-            MonitorManager::Instance().SetFuncSumOpSize(devTile->GetOperationSize());
             bool isDynamicAligned = devTile->paramConfigs_.dynamicAlignedOps;
             npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"), false, isDynamicAligned);
             npu::tile_fwk::CodeGen codeGen(codeGenCtx);

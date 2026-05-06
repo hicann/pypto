@@ -610,7 +610,9 @@ int CodeGenNPU::DoCompileCmd(const std::string& compileCmd) const
 
     int rootFuncIdx = MonitorManager::Instance().PrepareNextRootFunc();
     {
-        MonitorStageScope compileCmdScope(STAGE_FUNC_TO_BIN, rootFuncIdx, rootFuncName_);
+        MonitorStageScope compileCmdScope(STAGE_FUNC_TO_BIN, rootFuncIdx, rootFuncName_, rootFuncOpSize_);
+        // rootFuncOpSize_ is leafFuncOpSize
+        MonitorManager::Instance().SetFuncSumOpSize(rootFuncOpSize_);
         ret = std::system(compileCmd.c_str());
     }
     if (ret != 0) {
@@ -625,6 +627,12 @@ void CodeGenNPU::Prepare(const Function& topFunc)
 {
     compileTasks_.clear();
     rootFuncName_ = topFunc.GetMagicName();
+    int leafFuncOpSize = 0;
+    for (auto& [psgId, leaf] : topFunc.rootFunc_->programs_) {
+        (void)psgId;
+        leafFuncOpSize += static_cast<int>(leaf->GetOperationSize());
+    }
+    rootFuncOpSize_ = leafFuncOpSize;
 }
 
 void EncodeWaitUntilInfo(const Operation& op, std::vector<int32_t>& code)

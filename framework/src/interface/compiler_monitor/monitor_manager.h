@@ -30,6 +30,7 @@ struct ActiveStageInfo {
     std::string rootFuncName;
     int functionIndex{0};
     std::string functionName;
+    int rootFuncOpSize{0};
 };
 
 class MonitorManager {
@@ -39,8 +40,10 @@ public:
     void Initialize(bool enable, int interval_sec, int timeout_sec, int total_timeout_sec);
     void Shutdown();
 
-    void StartStage(const std::string& name, int rootFuncIndex = -1, const std::string& rootFuncName = "");
-    void EndStage(const std::string& name, int rootFuncIndex = -1, const std::string& rootFuncName = "");
+    void StartStage(const std::string& name, int rootFuncIndex = -1, const std::string& rootFuncName = "",
+                    int rootFuncOpSize = 0);
+    void EndStage(const std::string& name, int rootFuncIndex = -1, const std::string& rootFuncName = "",
+                  int rootFuncOpSize = 0);
     double GetCurrentStageElapsed(const std::string& name);
 
     void SetTotalFunctionCount(int n);
@@ -99,7 +102,7 @@ private:
     void PrintCompilationFinished();
     void EndStageInternal(
         const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
-        const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal);
+        const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal, int rootFuncOpSize);
 
     mutable std::mutex mutex_;
     MonitorImpl* impl_{nullptr};
