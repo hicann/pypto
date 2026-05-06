@@ -16,7 +16,7 @@
 #include "utils/string_utils.h"
 #include "interface/interpreter/function.h"
 #include "interface/utils/common.h"
-#include "tilefwk/pypto_fwk_log.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "tilefwk/data_type.h"
 #include "interface/interpreter/calculator/dtype_utils.h"
 #include "interface/interpreter/operation.h"
@@ -335,7 +335,7 @@ void ExecutePrint(ExecuteOperationContext* ctx)
             csv << "element_count," << oop->GetData()->GetSize() << "\n";
             csv.close();
         } else {
-            VERIFY_LOGE_FULL(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open csv file %s failed!!!!", csvPath.c_str());
+            INTERPRETER_LOGE_FULL(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open csv file %s failed!!!!", csvPath.c_str());
         }
     }
 
@@ -357,7 +357,7 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
     if (oop->GetData()->GetSize() > iop->GetData()->GetSize()) {
         auto oopRawShapeStr = IntVecToStr(oop->GetData()->GetShape());
         auto iopRawShapeStr = IntVecToStr(iop->GetData()->GetShape());
-        VERIFY_LOGW(
+        INTERPRETER_LOGW(
             "Reshape: rawTensor shape/size mismatch in padding path: "
             "oop(raw) shape=%s size=%ld, iop(raw) shape=%s size=%ld",
             oopRawShapeStr.c_str(), oop->GetData()->GetSize(), iopRawShapeStr.c_str(), iop->GetData()->GetSize());
@@ -370,11 +370,11 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
     auto actualIop = std::make_shared<LogicalTensorData>(iopDataView->GetData());
     auto actualOop = std::make_shared<LogicalTensorData>(oopDataView->GetData());
     if (oopDataView->GetSize() > iopDataView->GetSize()) {
-        VERIFY_LOGW("%s", ctx->op->Dump().c_str());
-        VERIFY_LOGW(
+        INTERPRETER_LOGW("%s", ctx->op->Dump().c_str());
+        INTERPRETER_LOGW(
             "iop validShape: %s ---> oop validShape: %s", IntVecToStr(iop->GetShape()).c_str(),
             IntVecToStr(oop->GetShape()).c_str());
-        VERIFY_LOGW("Reshape: input tensor is not enough to reshape to output tensor");
+        INTERPRETER_LOGW("Reshape: input tensor is not enough to reshape to output tensor");
         calc::Reshape(oopDataView, actualIop);
     } else if (oopDataView->GetSize() < iopDataView->GetSize()) {
         calc::Reshape(actualOop, iopDataView);

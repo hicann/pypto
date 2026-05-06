@@ -508,14 +508,17 @@ class JitCallableWrapper:
         mgr = BuildOnlineManager()
         mgr.build_and_load_calculator()
 
-        # Prefer PyTorch D2H when we still have the original torch.Tensor objects (NPU launch path):
+        # Prefer PyTorch D2H when we still have the original torch.Tensor objects (NPU launch path),
+        # and all PTO tensors are TILEOP_ND:
         # DeviceTensorData::GetDataSize() uses product(shape)*BytesOf(dtype) and can disagree with
         # actual NPU storage Fractal-NZ / padding, so rtMemcpy in CopyToHost may overrun the host
         # staging buffer and corrupt the heap (free(): invalid pointer).
+        all_pto_nd = all(pt.format == pypto.TileOpFormat.TILEOP_ND for pt in pto_tensors)
         use_torch_host_snapshot = (
             source_torch_tensors is not None
             and len(source_torch_tensors) == len(pto_tensors)
             and all(isinstance(t, torch.Tensor) for t in source_torch_tensors)
+            and all_pto_nd
         )
 
         if use_torch_host_snapshot:
@@ -543,7 +546,8 @@ class JitCallableWrapper:
             )
             return
 
-        # Fallback (e.g. SIM compile with PTO tensors only): explicit staging + CopyToHost
+        # Fallback (e.g. SIM compile with PTO tensors only, source torch tensors unavailable/mismatched,
+        # or non-ND PTO formats): explicit staging + CopyToHost.
         host_pto_tensors, staging = _gen_pto_tensor(pto_tensors)
         host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
         for i, dev_tensor in enumerate(_pto_to_tensor_data(pto_tensors)):

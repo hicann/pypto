@@ -416,7 +416,7 @@ TEST_F(DynamicOpsTest, Assemble)
 
 TEST_F(DynamicOpsTest, IndexOutcastSeveralLoops)
 {
-    std::string logOutput = CaptureStdoutAndEcho([]() {
+    std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
         // 4D 场景下 TileShape：[tileB, tileS, 1, d]，尾轴 d 不切分

@@ -15,7 +15,7 @@
 
 #include "interface/interpreter/function.h"
 #include "interface/interpreter/flow_verifier.h"
-#include "tilefwk/pypto_fwk_log.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/file_utils.h"
 
@@ -67,12 +67,12 @@ void FunctionInterpreter::DumpFunctionHead(Function* func)
     auto outcast = func->DumpSSAOutcast(indent);
     auto attr = func->DumpSSAAttribute(indent);
     auto symbol = DumpSymbolDict();
-    VERIFY_LOGI("%s Function %s\n", execDumpFuncKey.c_str(), head.c_str());
-    VERIFY_LOGI("%s\n", raw.c_str());
-    VERIFY_LOGI("%s\n", incast.c_str());
-    VERIFY_LOGI("%s\n", outcast.c_str());
-    VERIFY_LOGI("%s\n", attr.c_str());
-    VERIFY_LOGI("%s\n", symbol.c_str());
+    INTERPRETER_LOGI("%s Function %s\n", execDumpFuncKey.c_str(), head.c_str());
+    INTERPRETER_LOGI("%s\n", raw.c_str());
+    INTERPRETER_LOGI("%s\n", incast.c_str());
+    INTERPRETER_LOGI("%s\n", outcast.c_str());
+    INTERPRETER_LOGI("%s\n", attr.c_str());
+    INTERPRETER_LOGI("%s\n", symbol.c_str());
     if (!execDumpFile) {
         return;
     }
@@ -92,7 +92,7 @@ void FunctionInterpreter::DumpOperation(Operation* op)
         return;
     int indent = GetFrameSize();
     auto dump = op->Dump();
-    VERIFY_LOGI("%s Operation: %s", execDumpFuncKey.c_str(), dump.c_str());
+    INTERPRETER_LOGI("%s Operation: %s", execDumpFuncKey.c_str(), dump.c_str());
     if (execDumpFile) {
         std::string tensorId = GetDumpTensorId(GetFrameCurr(), op);
         std::string operationId = GetDumpOperationId(GetFrameCurr(), op);
@@ -188,7 +188,7 @@ void FunctionInterpreter::DumpBinary(
     } else {
         size_t res = fwrite(data + offset[0] * dtypeSize, dtypeSize, shape[0], fdata);
         if (res != static_cast<size_t>(shape[0])) {
-            VERIFY_LOGW("Write size is not equal actual size.");
+            INTERPRETER_LOGW("Write size is not equal actual size.");
         }
     }
 }
@@ -210,7 +210,7 @@ void FunctionInterpreter::DumpTensorBinary(
     std::string dumpTensorFilePath = execDumpDir + "/" + dumpTensorFileName;
     auto rawShape = dataView->GetData()->GetShape();
     if (std::any_of(rawShape.begin(), rawShape.end(), [](const int64_t& val) { return val <= 0; })) {
-        VERIFY_LOGW("The tensor size is not greater than 0.");
+        INTERPRETER_LOGW("The tensor size is not greater than 0.");
         return;
     }
     auto validShape = dataView->GetValidShape();
@@ -485,7 +485,7 @@ void FunctionInterpreter::DumpPassTensorDiff(
         }
         for (size_t k = 0; k < tensorList.size(); k++) {
             auto tensor = tensorList[k];
-            VERIFY_LOGI(
+            INTERPRETER_LOGI(
                 "Dump tensor diff: %zu/%zu %s %s", k, tensorList.size(), tensor->Dump().c_str(),
                 tensor->GetRawTensor()->Dump().c_str());
             auto executionFileName = tensorDictExecution.find(tensor)->second;

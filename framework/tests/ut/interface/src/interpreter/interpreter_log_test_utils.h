@@ -27,105 +27,87 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <fstream>
-#include <map>
-#include <sys/syscall.h>
 #include <unistd.h>
 
-// 与 LogManager 落盘路径一致（仅本头文件内使用）
-static constexpr const char* kInterpLogTestEnvProcessLogPath = "ASCEND_PROCESS_LOG_PATH";
-static constexpr const char* kInterpLogTestHostLogFilePrefix = "pypto-log-";
-static constexpr const char* kInterpLogTestLogFileSuffix = ".log";
-static constexpr const char* kInterpLogTestHostLogSubDir = "/debug/plog";
-static constexpr const char* kInterpLogTestDefaultLogSubDir = "/ascend/log";
+#include "interface/interpreter/interpreter_log.h"
 
-static inline std::string InterpLogTestGetHostLogDir()
+static constexpr const char* kInterpLogTestOutputRoot = "build/output/bin/output";
+
+static inline std::string InterpLogTestFindLatestInterpreterLog()
 {
-    const char* envPath = std::getenv(kInterpLogTestEnvProcessLogPath);
-    if (envPath != nullptr && envPath[0] != '\0') {
-        return std::string(envPath) + kInterpLogTestHostLogSubDir;
-    }
-    const char* home = std::getenv("HOME");
-    std::string base = (home != nullptr && home[0] != '\0') ? std::string(home) : ".";
-    return base + kInterpLogTestDefaultLogSubDir + kInterpLogTestHostLogSubDir;
-}
+    std::string latestPath;
+    time_t latestMTime = 0;
 
-// 与 LogManager 一致：日志文件名形如 pypto-log-<tid>-<timestamp>.log，这里按当前线程 tid 过滤
-static inline std::string InterpLogTestGetThreadLogPrefix()
-{
-    return std::string(kInterpLogTestHostLogFilePrefix) + std::to_string(getpid()) + "_";
-}
-
-static inline std::map<std::string, size_t> InterpLogTestListHostLogFilesWithSize(
-    const std::string& dir, const std::string& threadPrefix)
-{
-    std::map<std::string, size_t> result;
-    DIR* d = opendir(dir.c_str());
-    if (d == nullptr) {
-        return result;
-    }
-    struct dirent* dp = nullptr;
-    while ((dp = readdir(d)) != nullptr) {
-        if (dp->d_name[0] == '.') {
-            continue;
-        }
-        std::string name = dp->d_name;
-        if (name.find(threadPrefix) != 0 ||
-            name.rfind(kInterpLogTestLogFileSuffix) != name.size() - std::strlen(kInterpLogTestLogFileSuffix)) {
-            continue;
-        }
-        std::string path = dir + "/" + name;
-        struct stat st;
-        if (stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
-            result[path] = static_cast<size_t>(st.st_size);
-        }
-    }
-    closedir(d);
-    return result;
-}
-
-// 从日志落盘目录捕获本次 func() 执行产生的新增日志内容（与 LogManager 落盘路径一致）
-static inline std::string CaptureLogFileAndEcho(std::function<void()> func)
-{
-    std::string logDir = InterpLogTestGetHostLogDir();
-    std::string threadPrefix = InterpLogTestGetThreadLogPrefix();
-    std::map<std::string, size_t> before = InterpLogTestListHostLogFilesWithSize(logDir, threadPrefix);
-
-    func();
-
-    std::map<std::string, size_t> after = InterpLogTestListHostLogFilesWithSize(logDir, threadPrefix);
-
-    // 一个用例的日志只会落在单个文件中：这里选择“本次增长字节数最大”的那个文件，仅读它的增量部分
-    std::string targetPath;
-    size_t targetOldSize = 0;
-    size_t targetDelta = 0;
-    for (const auto& p : after) {
-        const std::string& path = p.first;
-        size_t newSize = p.second;
-        size_t oldSize = 0;
-        auto it = before.find(path);
-        if (it != before.end()) {
-            oldSize = it->second;
-        }
-        if (newSize <= oldSize) {
-            continue;
-        }
-        size_t delta = newSize - oldSize;
-        if (delta > targetDelta) {
-            targetDelta = delta;
-            targetOldSize = oldSize;
-            targetPath = path;
-        }
-    }
-
-    if (targetPath.empty()) {
+    DIR* rootDir = opendir(kInterpLogTestOutputRoot);
+    if (rootDir == nullptr) {
         return "";
     }
 
-    std::ifstream ifs(targetPath, std::ios::binary);
+    struct dirent* outputEntry = nullptr;
+    while ((outputEntry = readdir(rootDir)) != nullptr) {
+        std::string outputName = outputEntry->d_name;
+        if (outputName == "." || outputName == ".." || outputName.find("output_") != 0) {
+            continue;
+        }
+
+        std::string outputPath = std::string(kInterpLogTestOutputRoot) + "/" + outputName;
+        struct stat outputSt;
+        if (stat(outputPath.c_str(), &outputSt) != 0 || !S_ISDIR(outputSt.st_mode)) {
+            continue;
+        }
+
+        DIR* verifyDir = opendir(outputPath.c_str());
+        if (verifyDir == nullptr) {
+            continue;
+        }
+
+        struct dirent* verifyEntry = nullptr;
+        while ((verifyEntry = readdir(verifyDir)) != nullptr) {
+            std::string verifyName = verifyEntry->d_name;
+            if (verifyName == "." || verifyName == ".." || verifyName.find("verify_") != 0) {
+                continue;
+            }
+            std::string logPath = outputPath + "/" + verifyName + "/interpreter.log";
+            struct stat logSt;
+            if (stat(logPath.c_str(), &logSt) != 0 || !S_ISREG(logSt.st_mode)) {
+                continue;
+            }
+            if (logSt.st_mtime >= latestMTime) {
+                latestMTime = logSt.st_mtime;
+                latestPath = logPath;
+            }
+        }
+        closedir(verifyDir);
+    }
+    closedir(rootDir);
+
+    return latestPath;
+}
+
+// 读取最新 verify 目录中的 interpreter.log（整文件内容）
+static inline std::string CaptureLogFileAndEcho(std::function<void()> func)
+{
+    func();
+
+    // 优先读取 interpreter_log 当前配置路径，避免依赖 UT 执行时 cwd
+    const std::string configuredPath = npu::tile_fwk::interpreter::LogFilePath();
+    {
+        std::ifstream ifs(configuredPath, std::ios::binary);
+        if (ifs) {
+            std::string captured;
+            captured.append(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+            return captured;
+        }
+    }
+
+    const std::string fallbackPath = InterpLogTestFindLatestInterpreterLog();
+    if (fallbackPath.empty()) {
+        return "";
+    }
+    std::ifstream ifs(fallbackPath, std::ios::binary);
     if (!ifs) {
         return "";
     }
-    ifs.seekg(static_cast<std::streamoff>(targetOldSize));
     std::string captured;
     captured.append(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
     return captured;
@@ -182,9 +164,12 @@ static inline std::string CaptureStdoutAndEcho(std::function<void()> func)
 // 仅检查 [VERIFY] 日志行中是否出现 FAILED，其他模块日志不参与判断
 inline bool VerifyLogContainsFailed(const std::string& logOutput)
 {
-    // 匹配形如："...[VERIFY]...FAILED..."，且 [VERIFY] 与 FAILED 必须在同一行（中间不允许换行）
-    static const std::regex kVerifyFailedPattern(R"(\[VERIFY][^\n]*FAILED)");
-    return std::regex_search(logOutput, kVerifyFailedPattern);
+    // 兼容两类格式：
+    // 1) "...[VERIFY]...FAILED..."
+    // 2) "... Verify for ... result FAILED"（可能由 [ERROR]/[EVENT] 前缀承载）
+    static const std::regex kVerifyFailedPattern1(R"(\[VERIFY][^\n]*FAILED)");
+    static const std::regex kVerifyFailedPattern2(R"(Verify for[^\n]*result FAILED)");
+    return std::regex_search(logOutput, kVerifyFailedPattern1) || std::regex_search(logOutput, kVerifyFailedPattern2);
 }
 
 // 仅检查 [VERIFY] 日志行中 index 0 是否出现 FAILED，用于 Topk 用例

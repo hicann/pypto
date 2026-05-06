@@ -52,10 +52,10 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
     }
 
     if (lhsFromBrcb || rhsFromBrcb) {
-        VERIFY_LOGW(
+        INTERPRETER_LOGW(
             "AxisCombine: detected by BRCB, opcode=%s lhsFromBrcb=%d rhsFromBrcb=%d", ctx->op->GetOpcodeStr().c_str(),
             static_cast<int>(lhsFromBrcb), static_cast<int>(rhsFromBrcb));
-        VERIFY_LOGW(
+        INTERPRETER_LOGW(
             "AxisCombine: lhs(shape=%s validShape=%s offset=%s) rhs(shape=%s validShape=%s offset=%s)",
             IntVecToStr(lhs->GetShape()).c_str(), IntVecToStr(lhs->GetValidShape()).c_str(),
             IntVecToStr(lhs->GetOffset()).c_str(), IntVecToStr(rhs->GetShape()).c_str(),
@@ -613,11 +613,11 @@ void ExecuteOpIndexOutcast(ExecuteOperationContext* ctx)
     std::string cacheMode = ctx->op->GetStringAttribute(OpAttributeKey::cacheMode);
     auto actualOop = std::make_shared<LogicalTensorData>(dst->GetData());
     if (dst->GetSize() != oop->GetSize()) {
-        VERIFY_EVENT("%s", ctx->op->Dump().c_str());
-        VERIFY_EVENT(
+        INTERPRETER_EVENT("%s", ctx->op->Dump().c_str());
+        INTERPRETER_EVENT(
             "dst validShape: %s ---> oop validShape: %s", IntVecToStr(dst->GetShape()).c_str(),
             IntVecToStr(oop->GetShape()).c_str());
-        VERIFY_EVENT("IndexOutcast: oop validShape is not equal to dst validShape");
+        INTERPRETER_EVENT("IndexOutcast: oop validShape is not equal to dst validShape");
         calc::ScatterUpdate(actualOop, src, index, dst, axis, cacheMode, blockSize);
     } else {
         calc::ScatterUpdate(oop, src, index, dst, axis, cacheMode, blockSize);

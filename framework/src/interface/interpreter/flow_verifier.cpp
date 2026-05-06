@@ -19,7 +19,7 @@
 
 #include "flow_verifier.h"
 #include "tilefwk/tilefwk.h"
-#include "tilefwk/pypto_fwk_log.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
@@ -232,12 +232,12 @@ bool FlowVerifier::VerifyResult(
 {
     bool result = true;
     if (goldenDataViewList.size() != tensorDataViewList.size()) {
-        VERIFY_EVENT("%s Verify NO_COMPARE", key.c_str());
+        INTERPRETER_EVENT("%s Verify NO_COMPARE", key.c_str());
         return result;
     }
     for (size_t k = 0; k < tensorDataViewList.size(); k++) {
         if (!goldenDataViewList[k]) {
-            VERIFY_EVENT(
+            INTERPRETER_EVENT(
                 "%s Verify for %zu data view list index %zu result NO_COMPARE", key.c_str(), goldenDataViewList.size(),
                 k);
             continue;
@@ -292,7 +292,7 @@ bool FlowVerifier::VerifyResult(
 
         auto tensorGraphResult = VerifyResult(goldenDataViewList[k], tensorDataViewList[k], rtol, atol);
         if (!tensorGraphResult.Check()) {
-            VERIFY_LOGE_FULL(
+            INTERPRETER_LOGE_FULL(
                 VerifyResultScene::VERIFY_RESULT_MISMATCH, "%s Verify for %zu data view list index %zu result FAILED",
                 key.c_str(), goldenDataViewList.size(), k);
             fprintf(
@@ -307,7 +307,7 @@ bool FlowVerifier::VerifyResult(
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "FAIL";
             result = false;
         } else {
-            VERIFY_EVENT(
+            INTERPRETER_EVENT(
                 "%s Verify for %zu data view list index %zu result PASS", key.c_str(), goldenDataViewList.size(), k);
         }
         CompareResultDetail res = tensorGraphResult.Dump();
@@ -553,7 +553,7 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
     }
     for (size_t captureIndex = 0; captureIndex < captureList.size(); captureIndex++) {
         const std::string key = functionInterpreter_->execDumpFunPath + "_" + functionInterpreter_->execDumpPassName;
-        VERIFY_LOGI("%s: Verify", key.c_str());
+        INTERPRETER_LOGI("%s: Verify", key.c_str());
         functionInterpreter_->captureIndex = captureIndex;
 
         std::shared_ptr<FunctionCaptureExecution> capture = nullptr;
@@ -575,7 +575,7 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
                 checkResult = false;
             }
         } catch (std::exception& e) {
-            VERIFY_LOGE_FULL(
+            INTERPRETER_LOGE_FULL(
                 VerifyResultScene::VERIFY_RESULT_MISMATCH,
                 "VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
                 func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex, e.what());

@@ -21,7 +21,7 @@
 #include <memory>
 #include <fstream>
 
-#include "tilefwk/pypto_fwk_log.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/tensor.h"
 #include "interface/inner/element.h"
@@ -337,7 +337,7 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
     {
         std::ofstream ofile(path, std::ios::out | std::ios::binary);
         if (!ofile) {
-            VERIFY_LOGE_FULL(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed!!!!", path.c_str());
+            INTERPRETER_LOGE_FULL(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed!!!!", path.c_str());
         }
         ofile.write(reinterpret_cast<const char*>(data()), size());
         ofile.close();

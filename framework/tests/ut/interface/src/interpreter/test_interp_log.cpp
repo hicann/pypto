@@ -18,8 +18,6 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include <cstdio>
-#include <unistd.h>
 
 #include "interpreter_log_test_utils.h"
 #include "interface/inner/tilefwk.h"
@@ -31,10 +29,6 @@
 #include "interface/operation/operation.h"
 #include "interface/interpreter/operation.h"
 #include "interface/interpreter/calc.h"
-
-#define private public
-#include "utils/host_log/log_manager.h"
-#undef private
 
 namespace npu::tile_fwk {
 class InterpreterLogTest : public testing::Test {
@@ -95,9 +89,7 @@ TEST_F(InterpreterLogTest, ReshapeMismatchElementCount)
 // 测试精度对比失败场景能否正确输出错误日志，并捕获日志进行校验
 TEST_F(InterpreterLogTest, PrecisionMismatchErrorLog)
 {
-    bool oriLogStdout = LogManager::Instance().enableStdOut_;
-    LogManager::Instance().enableStdOut_ = true;
-    std::string logOutput = CaptureStdoutAndEcho([]() {
+    std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
 
@@ -130,7 +122,6 @@ TEST_F(InterpreterLogTest, PrecisionMismatchErrorLog)
     // 仅校验 verify 日志：应出现 FAILED（精度校验失败）
     EXPECT_TRUE(VerifyLogContainsFailed(logOutput))
         << "Expected FAILED in verify log for precision mismatch, captured: " << logOutput;
-    LogManager::Instance().enableStdOut_ = oriLogStdout;
 }
 
 // 测试空 loop (start=0, end=0) 能否触发 interpreter 的 "skip execute due to idx range = 0" 日志

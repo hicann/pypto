@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "tilefwk/pypto_fwk_log.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "interface/tensor/tensor_slot.h"
 #include "interface/interpreter/operation.h"
 #include "interface/tensor/symbolic_scalar_evaluate.h"
@@ -571,7 +571,7 @@ struct FunctionInterpreter {
         }
         dumpPath = dumpPath + "/" + "verify_" + timestamp.str() + "/";
         CreateMultiLevelDir(dumpPath);
-
+        interpreter::SetLogFilePath(dumpPath + "interpreter.log");
         std::string dumpOpFilePath = dumpPath + "verify_graph_data_metainfo.csv";
         std::string dumpProgrameFilePath = dumpPath + "verify_graph_result_brief.csv";
         std::string dumpErrorPath = dumpPath + "verify_graph_result_brief.log";
@@ -1036,7 +1036,7 @@ struct FunctionInterpreter {
             if (iOpDataList[index] == nullptr) {
                 auto iop = op->GetIOperands()[index];
                 if (frame.callop != nullptr) {
-                    VERIFY_LOGI("ExecuteOperation: iop %zu is null, try to find in mixGlobalTensorDict.", index);
+                    INTERPRETER_LOGI("ExecuteOperation: iop %zu is null, try to find in mixGlobalTensorDict.", index);
                     iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop);
                     if (iOpDataList[index] != nullptr) {
                         continue;
@@ -1370,7 +1370,7 @@ struct FunctionInterpreter {
         ScalarImmediateType end = EvaluateSymbolicScalar(loop->End());
         ScalarImmediateType step = EvaluateSymbolicScalar(loop->Step());
         if (begin == end) {
-            VERIFY_EVENT("Function %s skip execute due to idx range = 0", func->GetMagicName().c_str());
+            INTERPRETER_EVENT("Function %s skip execute due to idx range = 0", func->GetMagicName().c_str());
         }
         for (ScalarImmediateType idx = begin; idx < end; idx += step) {
             UpdateSymbolDict(loop->IterSymbolName(), idx);

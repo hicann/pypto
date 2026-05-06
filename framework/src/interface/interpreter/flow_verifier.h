@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "tilefwk/pypto_fwk_log.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/tensor/tensor_slot.h"
 #include "interface/operation/attribute.h"
@@ -268,7 +268,7 @@ public:
                     << space << "maxRel-> " << maxRelElement.Dump() << "\n";
             }
             if (!Check()) {
-                VERIFY_EVENT("%s", oss.str().c_str());
+                INTERPRETER_EVENT("%s", oss.str().c_str());
             }
             compareResultDetail.totalCnt = size_;
             compareResultDetail.zeroCnt = zeroCount_;
