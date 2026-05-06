@@ -38,6 +38,9 @@ struct CodegenTestConfig {
     bool tileTensorValue = false;
     bool setIdGen = false;
     bool resetTileTensorOnTearDown = false;
+    bool setSocVersion = false;
+    std::string socVersionValue = "";
+    bool resetSocVersionOnTearDown = false;
 };
 
 class CodegenTestBase : public ::testing::Test {
@@ -65,6 +68,9 @@ public:
         if (config_.setIdGen) {
             IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
         }
+        if (config_.setSocVersion) {
+            config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, config_.socVersionValue);
+        }
     }
 
     void TearDown() override
@@ -72,10 +78,31 @@ public:
         if (config_.resetTileTensorOnTearDown) {
             config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
         }
+        if (config_.resetSocVersionOnTearDown) {
+            config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, "");
+        }
     }
 
 protected:
     CodegenTestConfig config_;
+};
+
+class CodegenTestLiteNPU : public ::testing::Test {
+public:
+    static void SetUpTestCase() {}
+
+    static void TearDownTestCase() {}
+
+    void SetUp() override
+    {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+        config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, "Kirin9030");
+    }
+
+    void TearDown() override { config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, ""); }
 };
 
 } // namespace npu::tile_fwk

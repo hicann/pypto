@@ -2690,11 +2690,11 @@ def uniform_golden_func(inputs: list, config: dict):
         rounds = int(rounds)
     shape = config["output_tensors"][0]["shape"]
     output_dtype = config["output_tensors"][0].get("dtype", "fp32").lower()
-    
+
     key = params.get("key", 0)
     if isinstance(key, str):
         key = int(key)
-    
+
     counter_0 = params.get("counter_0", 0)
     if isinstance(counter_0, str):
         counter_0 = int(counter_0)
@@ -2702,7 +2702,7 @@ def uniform_golden_func(inputs: list, config: dict):
     if isinstance(counter_1, str):
         counter_1 = int(counter_1)
     counter = [counter_0, counter_1]
-    
+
     def uint32(x):
         return x & 0xFFFFFFFF
 
@@ -2711,40 +2711,40 @@ def uniform_golden_func(inputs: list, config: dict):
         hi = uint32(product >> 32)
         lo = uint32(product)
         return lo, hi
-    
+
     def philox_single_round(counter, key0, key1):
         lo0, hi0 = multiply_high_low(0xD2511F53, counter[0])
         lo1, hi1 = multiply_high_low(0xCD9E8D57, counter[2])
-        
+
         return [
             uint32(hi1 ^ counter[1] ^ key0),
             uint32(lo1),
             uint32(hi0 ^ counter[3] ^ key1),
             uint32(lo0)
         ]
-    
+
     def raise_key(key0, key1):
         return (
             uint32(key0 + 0x9E3779B9),
             uint32(key1 + 0xBB67AE85)
         )
-    
+
     total_elements = 1
     for dim in shape:
         total_elements *= dim
-    
+
     result = np.zeros(total_elements, dtype=np.uint32)
 
     init_key0 = uint32(key)
     init_key1 = uint32(key >> 32)
-    
+
     original_counter = [
         uint32(counter[0]),
         uint32(counter[0] >> 32),
         uint32(counter[1]),
         uint32(counter[1] >> 32)
     ]
-    
+
     for i in range(0, total_elements, 4):
         key0, key1 = init_key0, init_key1
         current_counter = original_counter.copy()
@@ -2752,10 +2752,10 @@ def uniform_golden_func(inputs: list, config: dict):
         for _ in range(rounds):
             current_counter = philox_single_round(current_counter, key0, key1)
             key0, key1 = raise_key(key0, key1)
-        
+
         for j in range(min(4, total_elements - i)):
             result[i + j] = current_counter[j]
-        
+
         original_counter[0] = uint32(original_counter[0] + 1)
         if original_counter[0] == 0:
             original_counter[1] = uint32(original_counter[1] + 1)
@@ -2763,7 +2763,7 @@ def uniform_golden_func(inputs: list, config: dict):
                 original_counter[2] = uint32(original_counter[2] + 1)
                 if original_counter[2] == 0:
                     original_counter[3] = uint32(original_counter[3] + 1)
-    
+
     if output_dtype == "fp32":
         result_float = np.zeros(total_elements, dtype=np.float32)
         for i in range(total_elements):
@@ -3594,33 +3594,33 @@ def gen_quantize_op_golden(case_name: str, output: Path, case_index: int = None)
         """
         def ascend_tcvt_int8(x: torch.Tensor) -> torch.Tensor:
             """使用 torch.quantize 风格的实现"""
-            
+
             # Step 1: FP32 -> S32 (round to nearest even)
             s32 = torch.round(x).to(torch.int32)  # -0.528 -> 0
-            
+
             # Step 2 & 3: S32 -> FP16 -> INT8 (saturation)
             # 由于 S32 是整数，直接饱和到 INT8 范围即可
             return torch.clamp(s32, -128, 127).to(torch.int8)
-        
+
         def ascend_tcvt_uint8(src_fp32: torch.Tensor) -> torch.Tensor:
             """
             三段式转换，最终输出 uint8
             """
-            
+
             # Step 1: FP32 -> S32 (CAST_RINT)
             src_s32 = torch.round(src_fp32).to(torch.int32)
             # -0.528 -> 0
-            
+
             # Step 2: S32 -> FP16 (CAST_RINT)
             src_f16 = src_s32.to(torch.float16)
-            
+
             # Step 3: FP16 -> uint8 (CAST_RINT, Saturation ON)
             # uint8 范围: [0, 255]
             dst_float = torch.round(src_f16.to(torch.float32))
             dst_clamped = torch.clamp(dst_float, min=0, max=255)  # 关键：min=0
             dst = dst_clamped.to(torch.uint8)
             return dst
-        
+
         params = config.get("params")
         input_tensor = from_numpy(inputs[0])
         scale = from_numpy(inputs[1])

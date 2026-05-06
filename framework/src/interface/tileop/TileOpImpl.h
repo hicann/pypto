@@ -42,7 +42,6 @@
 #include "vector/sign.h"
 #include "vector/signbit.h"
 #include "vector/reduce.h"
-#include "vector/sort.h"
 #include "vector/mte.h"
 #include "vector/logicalnot.h"
 #include "vector/compare.h"
@@ -59,8 +58,11 @@
 #include "vector/where.h"
 #include "vector/pad.h"
 #include "vector/fillpad.h"
+#ifndef __LITE_NPU
+#include "vector/sort.h"
 #include "vector/quantize.h"
 #include "vector/dequantize.h"
+#endif
 #include "vector/logicaland.h"
 #include "vector/vector_dup.h"
 #include "vector/range.h"

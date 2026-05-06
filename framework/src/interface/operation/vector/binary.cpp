@@ -582,8 +582,9 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
     PowSCheck(self);
     LogicalTensorPtr castSelf = self.GetStorage();
     if (self.GetDataType() == DT_INT32 && other.GetDataType() != DT_INT32) {
-        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            castSelf, DataType::DT_FP32, CastMode::CAST_NONE);
+        castSelf = CALL(
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
+            CastMode::CAST_NONE);
     }
     if (castSelf->Datatype() == DT_INT32) {
         precisionType = PowAlgorithm::DEFAULT;
@@ -595,8 +596,9 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
     DataType dataType = castSelf->Datatype();
     bool shouldUpToFp32 = dataType == DT_FP16 || dataType == DT_BF16;
     if (shouldUpToFp32) {
-        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            castSelf, DataType::DT_FP32, CastMode::CAST_NONE);
+        castSelf = CALL(
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
+            CastMode::CAST_NONE);
     }
     auto result = castSelf;
     if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {
@@ -614,17 +616,19 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
         result = res;
     } else if (result->Datatype() == DT_FP32) {
-        auto otherTensor = CALL(FullOperation, *Program::GetInstance().GetCurrentFunction(),
-            Element(DataType::DT_FP32, other.Cast<double>()), SymbolicScalar(),
-            DataType::DT_FP32, self.GetShape(), self.GetStorage()->GetDynValidShape());
+        auto otherTensor = CALL(
+            FullOperation, *Program::GetInstance().GetCurrentFunction(),
+            Element(DataType::DT_FP32, other.Cast<double>()), SymbolicScalar(), DataType::DT_FP32, self.GetShape(),
+            self.GetStorage()->GetDynValidShape());
         auto [res, op] = TensorBinaryOperationWithOp<BinaryOpType::POW>(
             *Program::GetInstance().GetCurrentFunction(), result, otherTensor);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
         result = res;
     }
     if (shouldUpToFp32) {
-        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            result, dataType, CastMode::CAST_NONE);
+        RETURN_CALL(
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, dataType,
+            CastMode::CAST_NONE);
     }
     return result;
 }

@@ -50,9 +50,11 @@ INLINE void TLoadND2NZ(TileData& dst, GlobalData& src, const int64_t& offset0, c
     pto::TASSIGN(dstL1, static_cast<uint64_t>(dst.GetAddr()));
     pto::TLOAD(dstL1, src0Global);
     // L1数据为NZ时，外轴非16元素对齐需要pad到16对齐
+#ifndef __LITE_NPU
     if ((dstShape0 & 0xF) != 0) {
         pto::TFILLPAD(dstL1, dstL1);
     }
+#endif
 }
 
 // Copy data from DDR to L1 with NZ -> NZ format
@@ -90,9 +92,11 @@ INLINE void TLoadNZ2NZ(
     pto::TASSIGN(dstL1, (uint64_t)((typename TileData::Type*)dst.GetAddr() + l1Offset));
     pto::TLOAD(dstL1, src0Global);
     // L1数据为NZ时，外轴非16元素对齐需要pad到16对齐
+#ifndef __LITE_NPU
     if ((dstShape0 & 0xF) != 0) {
         pto::TFILLPAD(dstL1, dstL1);
     }
+#endif
 }
 
 // Copy data from DDR to L1 with ND -> ND format

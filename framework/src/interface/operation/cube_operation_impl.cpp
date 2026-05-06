@@ -811,8 +811,13 @@ LogicalTensorPtr LinkBias(
         function, tensorGraphNodes.biasTensorPtr, biasL1TensorInfo,
         {{A_MUL_B_COPY_IN_MODE, static_cast<int64_t>(CopyInMode::ND2ND)}});
 
-    DataType biasBtType =
-        (tensorGraphNodes.aTensorPtr->Datatype() == DataType::DT_INT8) ? DataType::DT_INT32 : DataType::DT_FP32;
+    DataType biasBtType;
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3113) { // kirin does not need to change bias dtype
+        biasBtType = tensorGraphNodes.biasTensorPtr->Datatype();
+    } else {
+        biasBtType =
+            (tensorGraphNodes.aTensorPtr->Datatype() == DataType::DT_INT8) ? DataType::DT_INT32 : DataType::DT_FP32;
+    }
     MatmulTensorInfo biasBtTensorInfo{"biasBtTensor",    biasBtType,      tileInfoBT.shape,
                                       tileInfoBT.offset, NodeType::LOCAL, biasL1TensorPtr->Format(),
                                       MemoryType::MEM_BT};
@@ -868,8 +873,7 @@ LogicalTensorPtr LinkTensorA(
                                              static_cast<int64_t>(PaddingMode::PADDING_INNER);
         }
         aL1TensorPtr = AddOpView<int64_t>(
-            function, tensorGraphNodes.aTensorPtr, aL1TensorInfo,
-            {{COPY_IN_L1_PADDING_MODE, paddingMode}});
+            function, tensorGraphNodes.aTensorPtr, aL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}});
     }
     std::vector<int64_t> aL0Shape = (attrParam.transA) ? std::vector<int64_t>{iterInfo.kL0Size, iterInfo.mL0Size} :
                                                          std::vector<int64_t>{iterInfo.mL0Size, iterInfo.kL0Size};
@@ -914,8 +918,7 @@ LogicalTensorPtr LinkTensorB(
                                              static_cast<int64_t>(PaddingMode::PADDING_OUTER);
         }
         bL1TensorPtr = AddOpView<int64_t>(
-            function, tensorGraphNodes.bTensorPtr, bL1TensorInfo,
-            {{COPY_IN_L1_PADDING_MODE, paddingMode}});
+            function, tensorGraphNodes.bTensorPtr, bL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}});
     }
     std::vector<int64_t> bL0Shape = (attrParam.transB) ? std::vector<int64_t>{iterInfo.nL0Size, iterInfo.kL0Size} :
                                                          std::vector<int64_t>{iterInfo.kL0Size, iterInfo.nL0Size};

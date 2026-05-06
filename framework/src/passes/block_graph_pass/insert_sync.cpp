@@ -362,9 +362,9 @@ std::string PipeSync::PipeDepInfo::DumpPipeDepInfo()
     ss << "    setPipeCoreEx:"
        << "\n";
     for (auto pair : setPipes) {
-        ss << "        pipetype: " << GetPipeTypeDict().Find(pair.first.pipe)
-           << " " << GetCoreTypeDict().Find(pair.first.core)
-           << "  aivCore: " << static_cast<int>(pair.first.aivCore) << "  opidx: " << pair.second << "\n";
+        ss << "        pipetype: " << GetPipeTypeDict().Find(pair.first.pipe) << " "
+           << GetCoreTypeDict().Find(pair.first.core) << "  aivCore: " << static_cast<int>(pair.first.aivCore)
+           << "  opidx: " << pair.second << "\n";
     }
     return ss.str();
 }
@@ -373,9 +373,8 @@ std::string PipeSync::DumpLatestPipeDepMap()
 {
     std::stringstream ss;
     for (auto pair : latestPipeDep_) {
-        ss << "current PipeCore: " << GetPipeTypeDict().Find(pair.first.pipe)
-           << " " << GetCoreTypeDict().Find(pair.first.core)
-           << " aivCore: " << static_cast<int>(pair.first.aivCore) << "\n";
+        ss << "current PipeCore: " << GetPipeTypeDict().Find(pair.first.pipe) << " "
+           << GetCoreTypeDict().Find(pair.first.core) << " aivCore: " << static_cast<int>(pair.first.aivCore) << "\n";
         ss << pair.second.DumpPipeDepInfo() << "\n";
     }
     return ss.str();
@@ -420,23 +419,37 @@ std::string PipeSync::PipeSeqName(PipeSeq seq) const
 }
 
 std::map<PipeSync::PipeCoreRealEx, PipeSeq, PipeSync::PipeCoreRealExCompare> PipeSync::pipe2Seq = {
-    {{PIPE_MTE2, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_MTE2}, {{PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_MTE1},
-    {{PIPE_M, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_M},       {{PIPE_FIX, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_FIX},
-    {{PIPE_MTE3, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_MTE3}, {{PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_S},
-    {{PIPE_MTE2, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_MTE2},       {{PIPE_MTE2, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_MTE2},
-    {{PIPE_V, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_V},             {{PIPE_V, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_V},
-    {{PIPE_MTE3, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_MTE3},       {{PIPE_MTE3, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_MTE3},
-    {{PIPE_S, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_S},             {{PIPE_S, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_S},
+    {{PIPE_MTE2, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_MTE2},
+    {{PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_MTE1},
+    {{PIPE_M, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_M},
+    {{PIPE_FIX, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_FIX},
+    {{PIPE_MTE3, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_MTE3},
+    {{PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED}, PipeSeq::AIC_S},
+    {{PIPE_MTE2, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_MTE2},
+    {{PIPE_MTE2, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_MTE2},
+    {{PIPE_V, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_V},
+    {{PIPE_V, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_V},
+    {{PIPE_MTE3, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_MTE3},
+    {{PIPE_MTE3, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_MTE3},
+    {{PIPE_S, CoreType::AIV, AIVCore::AIV0}, PipeSeq::AIV0_S},
+    {{PIPE_S, CoreType::AIV, AIVCore::AIV1}, PipeSeq::AIV1_S},
 };
 
 std::map<PipeSeq, PipeSync::PipeCoreRealEx> PipeSync::seq2pipe = {
-    {PipeSeq::AIC_MTE2, {PIPE_MTE2, CoreType::AIC, AIVCore::UNSPECIFIED}}, {PipeSeq::AIC_MTE1, {PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED}},
-    {PipeSeq::AIC_M, {PIPE_M, CoreType::AIC, AIVCore::UNSPECIFIED}},       {PipeSeq::AIC_FIX, {PIPE_FIX, CoreType::AIC, AIVCore::UNSPECIFIED}},
-    {PipeSeq::AIC_MTE3, {PIPE_MTE3, CoreType::AIC, AIVCore::UNSPECIFIED}}, {PipeSeq::AIC_S, {PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED}},
-    {PipeSeq::AIV0_MTE2, {PIPE_MTE2, CoreType::AIV, AIVCore::AIV0}},       {PipeSeq::AIV1_MTE2, {PIPE_MTE2, CoreType::AIV, AIVCore::AIV1}},
-    {PipeSeq::AIV0_V, {PIPE_V, CoreType::AIV, AIVCore::AIV0}},             {PipeSeq::AIV1_V, {PIPE_V, CoreType::AIV, AIVCore::AIV1}},
-    {PipeSeq::AIV0_MTE3, {PIPE_MTE3, CoreType::AIV, AIVCore::AIV0}},       {PipeSeq::AIV1_MTE3, {PIPE_MTE3, CoreType::AIV, AIVCore::AIV1}},
-    {PipeSeq::AIV0_S, {PIPE_S, CoreType::AIV, AIVCore::AIV0}},             {PipeSeq::AIV1_S, {PIPE_S, CoreType::AIV, AIVCore::AIV1}},
+    {PipeSeq::AIC_MTE2, {PIPE_MTE2, CoreType::AIC, AIVCore::UNSPECIFIED}},
+    {PipeSeq::AIC_MTE1, {PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED}},
+    {PipeSeq::AIC_M, {PIPE_M, CoreType::AIC, AIVCore::UNSPECIFIED}},
+    {PipeSeq::AIC_FIX, {PIPE_FIX, CoreType::AIC, AIVCore::UNSPECIFIED}},
+    {PipeSeq::AIC_MTE3, {PIPE_MTE3, CoreType::AIC, AIVCore::UNSPECIFIED}},
+    {PipeSeq::AIC_S, {PIPE_S, CoreType::AIC, AIVCore::UNSPECIFIED}},
+    {PipeSeq::AIV0_MTE2, {PIPE_MTE2, CoreType::AIV, AIVCore::AIV0}},
+    {PipeSeq::AIV1_MTE2, {PIPE_MTE2, CoreType::AIV, AIVCore::AIV1}},
+    {PipeSeq::AIV0_V, {PIPE_V, CoreType::AIV, AIVCore::AIV0}},
+    {PipeSeq::AIV1_V, {PIPE_V, CoreType::AIV, AIVCore::AIV1}},
+    {PipeSeq::AIV0_MTE3, {PIPE_MTE3, CoreType::AIV, AIVCore::AIV0}},
+    {PipeSeq::AIV1_MTE3, {PIPE_MTE3, CoreType::AIV, AIVCore::AIV1}},
+    {PipeSeq::AIV0_S, {PIPE_S, CoreType::AIV, AIVCore::AIV0}},
+    {PipeSeq::AIV1_S, {PIPE_S, CoreType::AIV, AIVCore::AIV1}},
 };
 
 PipeSeq PipeSync::GetPipeSeq(PipeSync::PipeCoreRealEx pipe) { return pipe2Seq.at(pipe); }
@@ -612,8 +625,11 @@ Status PipeSync::AddOpDep(DepOp& setOp, DepOp& waitOp)
             APASS_LOG_ERROR_F(Elements::Operation, "This dependency should not exist, AddOpDep failed.");
             return FAILED;
         }
-        PipeCoreRealEx elePipeCoreEx(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore);
-        PipeCoreRealEx waitOpPipeCoreEx(depOps_[waitOpIdx].selfPipeCore.pipeStart, depOps_[waitOpIdx].selfPipeCore.core, depOps_[waitOpIdx].selfPipeCore.aivCore);
+        PipeCoreRealEx elePipeCoreEx(
+            depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore);
+        PipeCoreRealEx waitOpPipeCoreEx(
+            depOps_[waitOpIdx].selfPipeCore.pipeStart, depOps_[waitOpIdx].selfPipeCore.core,
+            depOps_[waitOpIdx].selfPipeCore.aivCore);
         if (elePipeCoreEx == waitOpPipeCoreEx) {
             if (ele <= waitOpIdx) {
                 APASS_LOG_ERROR_F(Elements::Operation, "New waitidx should less than old, AddOpDep failed.");
@@ -660,7 +676,8 @@ Status PipeSync::AdjustOpDep(DepOp& op, size_t waitOpIdx, IssueQueue& issueQ, bo
     return SUCCESS;
 }
 
-Status PipeSync::RelaxMultipleEventIds(const CorePair& setwaitCoreType, size_t needEvIdNum, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::RelaxMultipleEventIds(
+    const CorePair& setwaitCoreType, size_t needEvIdNum, std::vector<IndexOp>& syncedOpLog)
 {
     for (size_t i = 0; i < needEvIdNum; i++) {
         if (RelaxCvEventIdMain(syncedOpLog, setwaitCoreType) != SUCCESS) {
@@ -671,8 +688,8 @@ Status PipeSync::RelaxMultipleEventIds(const CorePair& setwaitCoreType, size_t n
     return SUCCESS;
 }
 
-Status PipeSync::ProcessCrossCoreCase(const PipePairEx& pp, const CorePair& setwaitCoreType,
-                                      const CorePair& setwaitReverse, EventIdProcessContext& ctx)
+Status PipeSync::ProcessCrossCoreCase(
+    const PipePairEx& pp, const CorePair& setwaitCoreType, const CorePair& setwaitReverse, EventIdProcessContext& ctx)
 {
     auto& issuenum = ctx.issuenum;
     issuenum.maxCvIssueNum.emplace(setwaitCoreType, GetFreeEventIdQueue(pp).size());
@@ -693,8 +710,8 @@ Status PipeSync::ProcessCrossCoreCase(const PipePairEx& pp, const CorePair& setw
             return FAILED;
         }
         if (ctx.failedFlag) {
-            size_t needEvIdNum = issuenum.currCvIssueNum[setwaitCoreType] +
-                                 coreIssueNumMap[setwaitCoreType] - issuenum.maxCvIssueNum[setwaitCoreType];
+            size_t needEvIdNum = issuenum.currCvIssueNum[setwaitCoreType] + coreIssueNumMap[setwaitCoreType] -
+                                 issuenum.maxCvIssueNum[setwaitCoreType];
             if (RelaxMultipleEventIds(setwaitCoreType, needEvIdNum, ctx.syncedOpLog) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "ProcessCrossCoreCase failed at RelaxMultipleEventIds.");
                 return FAILED;
@@ -733,23 +750,25 @@ Status PipeSync::ProcessEventIdElement(EventIdProcessContext& ctx)
     }
 
     PipeCoreRealEx currEx(op.selfPipeCore.pipeEnd, op.selfPipeCore.core, op.selfPipeCore.aivCore);
-    PipeCoreRealEx eleEx(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core,
-                         depOps_[ele].selfPipeCore.aivCore);
+    PipeCoreRealEx eleEx(
+        depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore);
     PipePairEx pp{currEx, eleEx};
 
     if (currEx.core != eleEx.core) {
-        CorePair setwaitCoreType{{op.selfPipeCore.core, op.selfPipeCore.aivCore},
-                                  {depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore}};
-        CorePair setwaitReverse{{depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore},
-                                 {op.selfPipeCore.core, op.selfPipeCore.aivCore}};
+        CorePair setwaitCoreType{
+            {op.selfPipeCore.core, op.selfPipeCore.aivCore},
+            {depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore}};
+        CorePair setwaitReverse{
+            {depOps_[ele].selfPipeCore.core, depOps_[ele].selfPipeCore.aivCore},
+            {op.selfPipeCore.core, op.selfPipeCore.aivCore}};
         return ProcessCrossCoreCase(pp, setwaitCoreType, setwaitReverse, ctx);
     }
 
     return ProcessSameCoreCase(pp, ctx);
 }
 
-Status PipeSync::HandleEventID(DepOp& op, IssueQueue& issueQ, IssueNum& issuenum, bool& deadlock,
-                               bool& res, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::HandleEventID(
+    DepOp& op, IssueQueue& issueQ, IssueNum& issuenum, bool& deadlock, bool& res, std::vector<IndexOp>& syncedOpLog)
 {
     coreIssueNumMap.clear();
     bool eventIdOk = true;
@@ -789,7 +808,8 @@ bool PipeSync::CheckIssuedOp(const DepOp& op)
     return true;
 }
 
-Status PipeSync::PopFromQueue(IssueQueue& issueQ, std::vector<size_t>& poped, bool& deadlock, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::PopFromQueue(
+    IssueQueue& issueQ, std::vector<size_t>& poped, bool& deadlock, std::vector<IndexOp>& syncedOpLog)
 {
     IssueNum issuenum;
 
@@ -857,7 +877,8 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
         // insert wait_flag
         syncedOpLog.emplace_back(std::make_pair(++waitIdx, std::ref(syncOp)));
         APASS_LOG_DEBUG_F(
-            Elements::Operation, "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d, setAIVCore type: %d, waitAIVCore type: %d",
+            Elements::Operation,
+            "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d, setAIVCore type: %d, waitAIVCore type: %d",
             syncOp.GetOpMagic(), syncOp.GetOpcodeStr().c_str(),
             GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
             GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_,
@@ -893,7 +914,8 @@ Status PipeSync::InjectSetFlag(Function& function, size_t idx, std::vector<Index
             // insert set_flag
             syncedOpLog.emplace_back(std::make_pair(++setIdx, std::ref(syncOp)));
             APASS_LOG_DEBUG_F(
-                Elements::Operation, "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d, setAIVCore type: %d, waitAIVCore type: %d",
+                Elements::Operation,
+                "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d, setAIVCore type: %d, waitAIVCore type: %d",
                 syncOp.GetOpMagic(), syncOp.GetOpcodeStr().c_str(),
                 GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
                 GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_,
@@ -1279,12 +1301,9 @@ bool PipeSync::HasCvSyncDstAfter(const std::vector<IndexOp>& syncedOpLog, int sr
         if (dstOp.get().GetOpcodeStr() != "CV_SYNC_DST") {
             continue;
         }
-        if (dstOp.get().syncQueue_.trigPipeId_ == waitPipe &&
-            dstOp.get().syncQueue_.coreType_ == setCore &&
-            dstOp.get().syncQueue_.trigCoreType_ == waitCore &&
-            dstOp.get().syncQueue_.eventId_ == eventId &&
-            dstOp.get().syncQueue_.setAivCore_ == setAivCore &&
-            dstOp.get().syncQueue_.waitAivCore_ == waitAivCore) {
+        if (dstOp.get().syncQueue_.trigPipeId_ == waitPipe && dstOp.get().syncQueue_.coreType_ == setCore &&
+            dstOp.get().syncQueue_.trigCoreType_ == waitCore && dstOp.get().syncQueue_.eventId_ == eventId &&
+            dstOp.get().syncQueue_.setAivCore_ == setAivCore && dstOp.get().syncQueue_.waitAivCore_ == waitAivCore) {
             return true;
         }
     }
@@ -1292,8 +1311,9 @@ bool PipeSync::HasCvSyncDstAfter(const std::vector<IndexOp>& syncedOpLog, int sr
 }
 
 // 填充 cvDepInfoMap 中的依赖信息条目
-void PipeSync::FillCvDepInfoEntry(std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap,
-                                  const std::vector<IndexOp>& syncedOpLog, int idx, int eventId)
+void PipeSync::FillCvDepInfoEntry(
+    std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap, const std::vector<IndexOp>& syncedOpLog,
+    int idx, int eventId)
 {
     auto& op = syncedOpLog[idx].second.get();
     auto setPipe = op.syncQueue_.pipeId_;
@@ -1325,16 +1345,17 @@ void PipeSync::FillCvDepInfoEntry(std::unordered_map<PipePair, DataDepInfo, Pipe
     DepOp& depOpCvSrc = depOps_[cvSyncSrcLogIdx];
     for (auto cvSyncDstLogIdx : depOpCvSrc.setPipe) { // setPipe为该op之后的依赖于该op的id
         DepOp& depOpCvDst = depOps_[cvSyncDstLogIdx];
-        if (depOpCvDst.selfPipeCore.core == depInfo.waitc &&
-            depOpCvDst.selfPipeCore.pipeStart == depInfo.waitp &&
+        if (depOpCvDst.selfPipeCore.core == depInfo.waitc && depOpCvDst.selfPipeCore.pipeStart == depInfo.waitp &&
             depOpCvDst.selfPipeCore.aivCore == depInfo.waitaivc) {
             depInfo.opDepList.push_back(std::make_pair(cvSyncSrcLogIdx, cvSyncDstLogIdx));
         }
     }
 }
 
-void PipeSync::FindCvSyncSrcInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<int>& eventIdVec, const CorePair& corePair,
-                                 std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap) {
+void PipeSync::FindCvSyncSrcInfo(
+    const std::vector<IndexOp>& syncedOpLog, std::vector<int>& eventIdVec, const CorePair& corePair,
+    std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap)
+{
     for (int i = syncedOpLog.size() - 1; i >= 0; i--) {
         auto& op = syncedOpLog[i].second;
         if (op.get().GetOpcodeStr() != "CV_SYNC_SRC") {
@@ -1344,7 +1365,7 @@ void PipeSync::FindCvSyncSrcInfo(const std::vector<IndexOp>& syncedOpLog, std::v
         auto waitCore = op.get().syncQueue_.trigCoreType_;
         auto setAivCore = op.get().syncQueue_.setAivCore_;
         auto waitAivCore = op.get().syncQueue_.waitAivCore_;
-        if (!(setCore == corePair.first.first && setAivCore == corePair.first.second && 
+        if (!(setCore == corePair.first.first && setAivCore == corePair.first.second &&
               waitCore == corePair.second.first && waitAivCore == corePair.second.second)) {
             continue;
         }
@@ -1364,8 +1385,9 @@ void PipeSync::FindCvSyncSrcInfo(const std::vector<IndexOp>& syncedOpLog, std::v
     }
 }
 
-bool PipeSync::FindMaxOverlapForCV(PipePair& targetPp, int& maxOverlapIdx, 
-                                   std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap) {
+bool PipeSync::FindMaxOverlapForCV(
+    PipePair& targetPp, int& maxOverlapIdx, std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap)
+{
     int maxOverlap = -1;
     for (auto& [pp, depinfo] : cvDepInfoMap) {
         std::reverse(depinfo.opDepList.begin(), depinfo.opDepList.end());
@@ -1391,8 +1413,9 @@ bool PipeSync::FindMaxOverlapForCV(PipePair& targetPp, int& maxOverlapIdx,
     return true;
 }
 
-std::string PipeSync::DumpMergeCVInfo(PipePair targetPp, int maxOverlapIdx,
-                                      std::unordered_map<PipePair, DataDepInfo, PipePairHash> cvDepInfoMap) {
+std::string PipeSync::DumpMergeCVInfo(
+    PipePair targetPp, int maxOverlapIdx, std::unordered_map<PipePair, DataDepInfo, PipePairHash> cvDepInfoMap)
+{
     std::stringstream ss;
     ss << "\nMerge PipePair: " << GetPipeTypeDict().Find(targetPp.first.pipe) << " ";
     ss << GetPipeTypeDict().Find(targetPp.second.pipe) << "\n";
@@ -1403,7 +1426,9 @@ std::string PipeSync::DumpMergeCVInfo(PipePair targetPp, int maxOverlapIdx,
     return ss.str();
 }
 
-std::string PipeSync::DataDepInfo::DumpDataDepInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<Operation*>& oriOpList) {
+std::string PipeSync::DataDepInfo::DumpDataDepInfo(
+    const std::vector<IndexOp>& syncedOpLog, std::vector<Operation*>& oriOpList)
+{
     std::stringstream ss;
     ss << "    CV_SYNC_SRC magic: ";
     for (auto sync : setOpIdList) {
@@ -1415,14 +1440,17 @@ std::string PipeSync::DataDepInfo::DumpDataDepInfo(const std::vector<IndexOp>& s
     }
     ss << "\n    Set Wait Pair: \n";
     for (auto [setidx, waitidx] : opDepList) {
-        ss << "        " << setidx << " " << oriOpList[setidx]->GetOpMagic() << " " << oriOpList[setidx]->GetOpcodeStr();
-        ss << "  " << waitidx << " " << oriOpList[waitidx]->GetOpMagic() << " " << oriOpList[waitidx]->GetOpcodeStr() << "\n";
+        ss << "        " << setidx << " " << oriOpList[setidx]->GetOpMagic() << " "
+           << oriOpList[setidx]->GetOpcodeStr();
+        ss << "  " << waitidx << " " << oriOpList[waitidx]->GetOpMagic() << " " << oriOpList[waitidx]->GetOpcodeStr()
+           << "\n";
     }
     return ss.str();
 }
 
-std::string PipeSync::DumpDepInfoMap(const std::vector<IndexOp>& syncedOpLog,
-                                     std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap) {
+std::string PipeSync::DumpDepInfoMap(
+    const std::vector<IndexOp>& syncedOpLog, std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap)
+{
     std::stringstream ss;
     ss << "\nCV DepInfoMap info:\n";
     for (auto& [pp, depinfo] : cvDepInfoMap) {
@@ -1432,10 +1460,13 @@ std::string PipeSync::DumpDepInfoMap(const std::vector<IndexOp>& syncedOpLog,
     return ss.str();
 }
 
-Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair) {
-    APASS_LOG_DEBUG_F(Elements::Operation, "CoreType: %s AIVCore: %d -> CoreType: %s AIVCore: %d has no eventid to use, start relax cv eventid.",
-                      GetCoreTypeDict().Find(corePair.first.first).c_str(), static_cast<int>(corePair.first.second),
-                      GetCoreTypeDict().Find(corePair.second.first).c_str(), static_cast<int>(corePair.second.second));
+Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair)
+{
+    APASS_LOG_DEBUG_F(
+        Elements::Operation,
+        "CoreType: %s AIVCore: %d -> CoreType: %s AIVCore: %d has no eventid to use, start relax cv eventid.",
+        GetCoreTypeDict().Find(corePair.first.first).c_str(), static_cast<int>(corePair.first.second),
+        GetCoreTypeDict().Find(corePair.second.first).c_str(), static_cast<int>(corePair.second.second));
     // 收集所有的eventid, 避免已经被释放的eventid被重复统计(从后向前找可以保证被释放的eventid不被统计进去)
     std::vector<int> eventIdVec{};
     // core 和 aivcore已经保证相同，不需要再加入此信息
@@ -1465,7 +1496,8 @@ Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const Cor
     return SUCCESS;
 }
 
-Status PipeSync::RelaxCvEventId(std::vector<IndexOp>& syncedOpLog) {
+Status PipeSync::RelaxCvEventId(std::vector<IndexOp>& syncedOpLog)
+{
     for (const auto& corePair : cvCorePair) {
         // 该corepair类型已无可用eventid
         if (!(crossCoreFreeEventId_.count(corePair) != 0 && crossCoreFreeEventId_[corePair].size() == 0)) {
@@ -1535,7 +1567,9 @@ Status PipeSync::RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog)
 bool PipeSync::GenSyncOp(PipeCoreRealEx set, PipeCoreRealEx wait, int eventId, bool isSet, Operation& op)
 {
     if (set.core != wait.core) {
-        op.SetOpCode(isSet ? Opcode::OP_CV_SYNC_SRC : Opcode::OP_CV_SYNC_DST);
+        if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3113) {
+            op.SetOpCode(isSet ? Opcode::OP_CV_SYNC_SRC : Opcode::OP_CV_SYNC_DST);
+        }
         if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && !isSet && wait.core == CoreType::AIV) {
             set.pipe = PipeType::PIPE_V;
         }
@@ -1553,7 +1587,8 @@ bool PipeSync::GenSyncOp(PipeCoreRealEx set, PipeCoreRealEx wait, int eventId, b
     // 同步相关的信息放在operation属性里
     op.syncQueue_ = {set.pipe, wait.pipe, set.core, wait.core, eventId, set.aivCore, wait.aivCore};
     if (set.core == CoreType::AIV) {
-        if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        if ((Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) ||
+            (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3113)) {
             return false;
         }
         op.SetOpCode(Opcode::OP_BAR_V);
@@ -1579,13 +1614,15 @@ Status PipeSync::GetEventId(const PipePairEx& pp, int& eventId)
 
     eventId = eventQ.front();
     eventQ.pop_front();
-    if (pp.first.core != pp.second.core) {
-        PipePairEx ppReverse = {pp.second, pp.first};
-        auto& eventQReverse = GetFreeEventIdQueue(ppReverse);
-        eventQReverse.pop_front();
-        if (eventQ.size() != eventQReverse.size()) {
-            APASS_LOG_ERROR_F(Elements::Operation, "CV eventId queue size is not equal, GetEventId failed.");
-            return FAILED;
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3113) {
+        if (pp.first.core != pp.second.core) {
+            PipePairEx ppReverse = {pp.second, pp.first};
+            auto& eventQReverse = GetFreeEventIdQueue(ppReverse);
+            eventQReverse.pop_front();
+            if (eventQ.size() != eventQReverse.size()) {
+                APASS_LOG_ERROR_F(Elements::Operation, "CV eventId queue size is not equal, GetEventId failed.");
+                return FAILED;
+            }
         }
     }
     return SUCCESS;
@@ -1827,12 +1864,14 @@ void PipeSync::InitCVEventIdQ(CorePair corePair)
 std::deque<int>& PipeSync::GetFreeEventIdQueue(const PipePairEx& pp)
 {
     // 若coretype不同，所有CV同步共享16个eventid
-    if (pp.first.core != pp.second.core) {
-        CorePair corePair = {{pp.first.core, pp.first.aivCore}, {pp.second.core, pp.second.aivCore}};
-        if (crossCoreFreeEventId_.count(corePair) == 0) {
-            InitCVEventIdQ(corePair);
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3113) {
+        if (pp.first.core != pp.second.core) {
+            CorePair corePair = {{pp.first.core, pp.first.aivCore}, {pp.second.core, pp.second.aivCore}};
+            if (crossCoreFreeEventId_.count(corePair) == 0) {
+                InitCVEventIdQ(corePair);
+            }
+            return crossCoreFreeEventId_[corePair];
         }
-        return crossCoreFreeEventId_[corePair];
     }
     if (freeEventId_.count(pp) == 0) {
         for (int i = 0; i < GetMaxEventId(pp); i++) {
@@ -1908,7 +1947,7 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
         std::vector<std::shared_ptr<LogicalTensor>> input;
         std::vector<std::shared_ptr<LogicalTensor>> output;
         Operation& syncOp = subGraphFunc->AddRawOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {input}, {output});
-        syncOp.syncQueue_ = {PipeType::PIPE_ALL,  PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+        syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
                              AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
         newOpList.push_back(&syncOp);
     }

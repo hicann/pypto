@@ -25,7 +25,6 @@ CodeGenOpLiteNPU::CodeGenOpLiteNPU(const CodeGenOpNPUCtx& ctx) : CodeGenOpNPU(ct
     forBlkMgr_ = ctx.forBlockManager;
     CodeGenOp::Init(ctx.operation);
     UpdateTileTensorInfo();
-    UpdateLoopInfo();
 }
 
 TileTensor CodeGenOpLiteNPU::QueryTileTensorByIdx(int paramIdx) const
@@ -55,24 +54,23 @@ std::string CodeGenOpLiteNPU::GenGmParamVar(unsigned gmParamIdx) const
 TileTensor CodeGenOpLiteNPU::BuildTileTensor(
     int paramIdx, const std::string& usingType, const TileTensorShape& tileTensorShape)
 {
-    bool isSpillToGm = operand[paramIdx] == SYMBOL_STACK_BASE;
+    int64_t gmOffset{0};
+    bool isSpillToGm = GetTensorAttr(paramIdx, OpAttributeKey::workspaceBaseOffset, gmOffset);
 
     TileTensor tileTensor;
     tileTensor.isConstant = functionType == FunctionType::STATIC || isMainBlock;
     tileTensor.magic = operandWithMagic[paramIdx];
     tileTensor.isInLoop = tileTensorShape.isInLoop;
 
-    if (tileTensor.isConstant) {
-        tileTensor.dim = originShape[paramIdx].size();
-    } else {
-        tileTensor.dim = dynamicValidShape[paramIdx].size();
-    }
+    tileTensor.dim =
+        tileTensor.isConstant ? tileTensorShape.originShape.size() : tileTensorShape.dynamicValidShape.size();
 
     tileTensor.dtype = operandDtype[paramIdx];
     tileTensor.bufType = operandType[paramIdx];
 
     if (tileTensor.bufType == OperandType::BUF_DDR) {
-        tileTensor.bufVar = isSpillToGm ? GenGMAddrExprWithOffset(paramIdx, GM_STACK_BASE) : GenGmParamVar(paramIdx);
+        tileTensor.bufVar =
+            isSpillToGm ? GenGMAddrExprWithOffset(paramIdx, CODEGEN_LITENPU_WORKSPACE) : GenGmParamVar(paramIdx);
     } else {
         tileTensor.bufVar = sm->QueryVarNameByTensorMagic(tileTensor.magic, true);
     }
@@ -88,10 +86,10 @@ TileTensor CodeGenOpLiteNPU::BuildTileTensor(
 }
 
 void CodeGenOpLiteNPU::UpdateTileTensorShapeAndStride(
-    int paramIdx, TileTensor& tileTensor, [[maybe_unused]] bool isSpillToGm,
-    [[maybe_unused]] const TileTensorShape& tileTensorShape)
+    [[maybe_unused]] int paramIdx, TileTensor& tileTensor, [[maybe_unused]] bool isSpillToGm,
+    const TileTensorShape& tileTensorShape)
 {
-    auto newOriginShape = originShape[paramIdx];
+    auto newOriginShape = tileTensorShape.originShape;
     auto newRawShape = tileTensorShape.rawShape;
     auto newDynValidShape = tileTensorShape.dynamicValidShape;
     CODEGEN_LOGI(
@@ -100,7 +98,7 @@ void CodeGenOpLiteNPU::UpdateTileTensorShapeAndStride(
 
     tileTensor.rawShape = newRawShape;
 
-    // ---- static ----
+    // ---- static or "main block" ----
     if (functionType == FunctionType::STATIC) {
         for (auto s : newOriginShape) {
             tileTensor.shape.emplace_back(std::to_string(s));

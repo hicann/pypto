@@ -23,6 +23,12 @@ INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, FpTileData& fix
 {
     constexpr bool supportedQuantMode = std::is_same<typename tileData::DType, int32_t>::value &&
                                         std::is_same<typename globalData::DType, __gm__ half>::value;
+#ifdef __LITE_NPU
+    constexpr bool supportedBasicMode = (std::is_same<typename tileData::DType, int32_t>::value &&
+                                         std::is_same<typename globalData::DType, __gm__ int32_t>::value) ||
+                                        (std::is_same<typename tileData::DType, half>::value &&
+                                         std::is_same<typename globalData::DType, __gm__ half>::value);
+#else
     constexpr bool supportedBasicMode = (std::is_same<typename tileData::DType, int32_t>::value &&
                                          std::is_same<typename globalData::DType, __gm__ int32_t>::value) ||
                                         (std::is_same<typename tileData::DType, float>::value &&
@@ -31,6 +37,7 @@ INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, FpTileData& fix
                                          std::is_same<typename globalData::DType, __gm__ bfloat16_t>::value) ||
                                         (std::is_same<typename tileData::DType, float>::value &&
                                          std::is_same<typename globalData::DType, __gm__ float>::value);
+#endif
     if constexpr (supportedQuantMode) {
         // L0C->GM反量化场景
         if (scaleValue != 0) {

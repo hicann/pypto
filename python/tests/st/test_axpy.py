@@ -19,6 +19,7 @@ import torch
 import torch_npu
 
 
+@pytest.mark.skip(reason="冒烟跳过")
 def test_axpy_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

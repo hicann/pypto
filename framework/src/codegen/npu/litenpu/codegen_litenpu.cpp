@@ -219,8 +219,7 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
         CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
     floatSpecValMgr.PrintFloatSpecVal(oss);
-    oss << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList()
-        << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
+    oss << allocSourceRegion << symbolMgr->GenUsingList() << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
 }
 
 void CodeGenLiteNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const
@@ -278,7 +277,8 @@ void CodeGenLiteNPU::GenConfigJson(
     file << "{\n"
          << "   \"kernelFile\": \"" << cppName << "\",\n"
          << "   \"kernelBin\": \"" << binName << "\",\n"
-         << "   \"kernelName\": \"" << kernelName + "_main" << "\",\n"
+         << "   \"kernelName\": \"" << kernelName + "_main"
+         << "\",\n"
          << "   \"workspaceSize\": " << workspaceSize << ",\n"
          << "   \"blockDim\": " << blockDim << ",\n"
          << "   \"argNames\": [";
