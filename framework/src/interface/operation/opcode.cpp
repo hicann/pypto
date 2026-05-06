@@ -312,7 +312,7 @@ void OpcodeManager::RegisterVectorBinary()
         Opcode::OP_AXPY, OpCoreType::AIV, "AXPY", {MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TAXPY", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::BROADCAST,
         {OpAttributeKey::scalar, OpAttributeKey::inplaceInfo, OpAttributeKey::inputCombineAxis},
-        TileShapeVerifier::Verify);        
+        TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorUnary()
@@ -595,7 +595,7 @@ void OpcodeManager::RegisterVectorQuant() {
         {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
     // Dequantization: INT8/INT16 -> FP32
     // Always 4 params: dst, src, scale, offset (symmetric: offset=0)
-    RegisterInfo(Opcode::OP_DEQUANTIZE, OpCoreType::AIV, "DEQUANTIZE", 
+    RegisterInfo(Opcode::OP_DEQUANTIZE, OpCoreType::AIV, "DEQUANTIZE",
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis"}, TileShapeVerifier::Verify);
@@ -1258,7 +1258,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_SIN, "TSin"},
     {Opcode::OP_COS, "TCos"},
     {Opcode::OP_ADD, "TAdd"},
-    {Opcode::OP_AXPY, "TAxpy"},    
+    {Opcode::OP_AXPY, "TAxpy"},
     {Opcode::OP_CUM_SUM, "TCumOperation"},
     {Opcode::OP_CUM_PROD, "TCumOperation"},
     {Opcode::OP_SUB, "TSub"},
@@ -1399,6 +1399,12 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_LOAD3D_CONV, "TLoad3D"},
     {Opcode::OP_LOAD2D_CONV, "TLoad2D"},
     {Opcode::OP_L0C_COPY_OUT_CONV, "TStoreConv"},
+    {Opcode::OP_SHMEM_PUT, "TileOp::Distributed::ShmemPut"},
+    {Opcode::OP_SHMEM_GET, "TileOp::Distributed::ShmemGet"},
+    {Opcode::OP_SHMEM_SIGNAL, "TileOp::Distributed::ShmemSignal"},
+    {Opcode::OP_SHMEM_PUT_UB2GM, "TileOp::Distributed::ShmemPutUb2Gm"},
+    {Opcode::OP_SHMEM_GET_GM2UB, "TileOp::Distributed::ShmemGetGm2Ub"},
+    {Opcode::OP_SHMEM_SET, "TileOp::Distributed::ShmemSet"},
 };
 
 std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{

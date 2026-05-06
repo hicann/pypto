@@ -213,7 +213,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemDataSet)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TileOp::Distributed::ShmemSet<bfloat16_t, 64, 256, 8192>)!!!";
+    std::string expect = R"!!!(TileOp::Distributed::ShmemSet<bfloat16_t, 8192>)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -274,20 +274,19 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect =
-        R"!!!(TileOp::Distributed::ShmemSignal<1, 8, 16, 32, TileOp::Distributed::AtomicType::ADD, true, 4>)!!!";
+    std::string expect = R"!!!(TileOp::Distributed::ShmemSignal<1, 8, TileOp::Distributed::AtomicType::ADD)!!!";
     CheckStringExist(expect, res);
 }
 
 TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
 {
-    Tensor out(DT_BF16, {4, 64}, "out");
+    Tensor out(DT_BF16, {3, 4, 64}, "out");
     Tensor predToken(DT_INT32, {1, 1}, "predToken");
     std::string functionName = "ShmemLoad";
     FUNCTION(functionName + "Main", {predToken}, {out})
     {
-        TileShape::Current().SetVecTile({4, 64});
-        auto shmemTensor = CreateShmemTensor("hcom123", 4, DT_BF16, {4, 64});
+        TileShape::Current().SetVecTile({3, 4, 64});
+        auto shmemTensor = CreateShmemTensor("hcom123", 4, DT_BF16, {3, 4, 64});
         LOOP(functionName, FunctionType::DYNAMIC_LOOP, index, LoopRange(1))
         {
             (void)index;
@@ -300,23 +299,20 @@ TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect =
-        R"!!!(TileOp::Distributed::ShmemGetGm2Ub<bfloat16_t, bfloat16_t, 4, 64, 4, 64, 64, 64, TileOp::Distributed::AtomicType::SET>)!!!";
+    std::string expect = R"!!!(TileOp::Distributed::ShmemGetGm2Ub<bfloat16_t, bfloat16_t, 4, 64, 3, 16, 64, 64)!!!";
     CheckStringExist(expect, res);
 }
 
 TEST_F(TestDistributedShmemImpl, TestShmemPutUb2Gm)
 {
-    int64_t row = 16;
-    int64_t col = 32;
-    Tensor in(DT_FP32, {row, col}, "in");
+    Tensor in(DT_FP32, {4, 3, 16, 32}, "in");
     Tensor out(DT_INT32, {1, 1}, "out");
     Tensor predToken(DT_INT32, {1, 1}, "predToken");
     std::string functionName = "ShmemPutUb2Gm";
     FUNCTION(functionName + "Main", {in, predToken}, {out})
     {
-        TileShape::Current().SetVecTile({row, col});
-        auto shmemTensor = CreateShmemTensor("hcom123", 4, DT_FP32, {row, col});
+        TileShape::Current().SetVecTile({4, 3, 16, 32});
+        auto shmemTensor = CreateShmemTensor("hcom123", 4, DT_FP32, {4, 3, 16, 32});
         LOOP(functionName, FunctionType::DYNAMIC_LOOP, index, LoopRange(1))
         {
             (void)index;

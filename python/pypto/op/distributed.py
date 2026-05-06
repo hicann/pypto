@@ -351,8 +351,6 @@ def shmem_wait_until(
         pred=pred_token,
     )
     """
-    if pred is None:
-        pred = [src]
     dummy = __normalize_pred(pred)
     if shape is not None and offsets is not None:
         src = pypto_impl.ShmemView(src, shape, offsets)

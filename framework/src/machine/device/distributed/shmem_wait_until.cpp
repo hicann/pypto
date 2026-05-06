@@ -31,7 +31,7 @@
 #include "machine/device/dynamic/device_utils.h"
 
 namespace npu::tile_fwk::Distributed {
-constexpr int32_t AICPU_ATTR_DIM_INDEX = 2;
+// constexpr int32_t AICPU_ATTR_DIM_INDEX = 2;
 constexpr int32_t AICPU_ATTR_RAW_INDEX = 3;
 inline bool SignalTileOp::PollCompleted() const
 {

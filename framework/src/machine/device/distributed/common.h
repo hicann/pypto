@@ -29,11 +29,13 @@ namespace npu::tile_fwk::Distributed {
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE = 1024;
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE_MOD = AICPU_TASK_ARRAY_SIZE - 1;
 constexpr uint64_t OWNER_RANK_ID_INDEX = 0;
-constexpr uint64_t SHMEM_DIM_ROW = 1;
-constexpr uint64_t SHMEM_DIM_COL = 2;
+constexpr uint64_t SHMEM_DIM_ROW = 3;
+constexpr uint64_t SHMEM_DIM_COL = 4;
 constexpr uint64_t ATTR_STRIDE_OFFSET = 1;
-constexpr uint64_t ATTR_TILEROW_OFFSET = 3;
-constexpr uint64_t ATTR_TILECOL_OFFSET = 4;
+constexpr uint64_t ATTR_TILESHAPE_OFFSET = 3;
+constexpr uint32_t MAX_TENSOR_DIM = 5;
+constexpr uint32_t MAX_SHMEM_TILE_DIMS = 4;
+constexpr int32_t AICPU_ATTR_DIM_INDEX = 2;
 
 struct TensorInfo {
     uint64_t rawAddr{0};
@@ -53,13 +55,14 @@ struct AicpuParamInfo {
     int32_t attrIndex{0};
     int32_t rawShapeIndex{0};
     int32_t shapeIndex{0};
-    uint32_t rawShapeRow{0};
-    uint32_t rawShapeCol{0};
-    uint32_t shapeRow{0};
-    uint32_t shapeCol{0};
+
+    std::vector<uint32_t> rawShape;
+    std::vector<uint32_t> shape;
+    uint32_t dim{0};
+
     uint32_t bufferStride{0};
-    uint32_t tileShapeRow{0};
-    uint32_t tileShapeCol{0};
+    std::vector<uint32_t> tileShape;
+    uint32_t tileShapeDim{0};
     uint32_t rankNum{0};
     uint32_t maxTileNum{0};
 };
@@ -116,21 +119,26 @@ inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVect
 
     index = index + aicpuCode[index] + 1;
     paramInfo.rawShapeIndex = index + 1;
-    paramInfo.rawShapeRow =
-        aicpuCode[paramInfo.rawShapeIndex + 1];         // ShmemSignal RawShape[ranksize, row, col], 3表示row的值
-    paramInfo.rawShapeCol =
-        aicpuCode[paramInfo.rawShapeIndex + 2];         // ShmemSignal RawShape[ranksize, row, col], 4表示col的值
-    paramInfo.shapeIndex =
-        paramInfo.rawShapeIndex + aicpuCode[index] / 2; // 存储了signal_dim * 2个参数, tieShape往后偏移dim位
-    paramInfo.shapeRow = aicpuCode[paramInfo.shapeIndex + 1]; // ShmemSignal Shape[ranksize, row, col], 3表示row的值
-    paramInfo.shapeCol = aicpuCode[paramInfo.shapeIndex + 2]; // ShmemSignal Shape[ranksize, row, col], 4表示col的值
+
+    paramInfo.dim = aicpuCode[paramInfo.inIndex + AICPU_ATTR_DIM_INDEX];
+
+    paramInfo.rawShape.assign(
+        aicpuCode.begin() + paramInfo.rawShapeIndex, aicpuCode.begin() + paramInfo.rawShapeIndex + paramInfo.dim);
+
+    paramInfo.shapeIndex = paramInfo.rawShapeIndex + paramInfo.dim;
+
+    paramInfo.shape.assign(
+        aicpuCode.begin() + paramInfo.shapeIndex, aicpuCode.begin() + paramInfo.shapeIndex + paramInfo.dim);
+
     index = index + aicpuCode[index] + 1;
     if (index + 1 < static_cast<int32_t>(aicpuCode.size())) {
         paramInfo.attrIndex = index + 1;
     }
     paramInfo.bufferStride = aicpuCode[paramInfo.attrIndex + ATTR_STRIDE_OFFSET];
-    paramInfo.tileShapeRow = aicpuCode[paramInfo.attrIndex + ATTR_TILEROW_OFFSET];
-    paramInfo.tileShapeCol = aicpuCode[paramInfo.attrIndex + ATTR_TILECOL_OFFSET];
+    uint32_t tileShapeDim = aicpuCode[paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET];
+    paramInfo.tileShape.assign(
+        aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + 1,
+        aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + tileShapeDim + 1);
     return paramInfo;
 }
 } // namespace npu::tile_fwk::Distributed

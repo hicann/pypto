@@ -31,6 +31,15 @@ std::unordered_map<Opcode, std::set<int>> SKIP_PROC_PRARAM_IDX_IN_LOOP = {
     {Opcode::OP_ROWMIN_SINGLE, {ID1}},
 };
 
+// SHMEM ops skip creating TileTensor for shmem operand at index 1
+// Related Issue: https://gitcode.com/cann/pypto/issues/1582
+std::unordered_set<Opcode> SKIP_TILETENSOR_FOR_SHMEM_OPS = {
+    Opcode::OP_SHMEM_PUT,
+    Opcode::OP_SHMEM_GET,
+    Opcode::OP_SHMEM_SIGNAL,
+    Opcode::OP_SHMEM_GET_GM2UB,
+};
+
 CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
     : CodeGenOp(ctx),
       mteFixPipeOps_({
@@ -164,7 +173,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_PRELU, [this]() { return GenPreluOp(); }},
           {Opcode::OP_FLOORDIV, [this]() { return GenBinaryOpWithTmp(); }},
           {Opcode::OP_AXPY, [this]() { return GenAxpyOp(); }},
-          
+
           // binary op: broadcast associated vector
           {Opcode::OP_ADD_BRC, [this]() { return GenBinaryWithBrc(); }},
           {Opcode::OP_SUB_BRC, [this]() { return GenBinaryWithBrc(); }},
@@ -657,6 +666,9 @@ void CodeGenOpNPU::UpdateTileTensorInfo()
     tileOpName = iter->second; // update tileOpName from SUPPORT_TILETENSOR_OPS
 
     for (int i = 0; i < operandCnt; ++i) {
+        if (SKIP_TILETENSOR_FOR_SHMEM_OPS.count(opCode) && i == static_cast<int>(ToUnderlying(MIMOIdx::TMP_IDX))) {
+            continue;
+        }
         TileTensorUsing tileTensorUsing{
             functionType == FunctionType::STATIC || isMainBlock,
             operandDtype[i],

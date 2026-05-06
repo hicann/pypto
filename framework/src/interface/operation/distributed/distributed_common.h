@@ -51,6 +51,7 @@ constexpr int32_t AIV_NUM = 4;
 constexpr int32_t RECEIVE_CNT_OUT_ROW = 1024;
 constexpr int32_t RECEIVE_CNT_OUT_COL = 512;
 constexpr int32_t SHMEM_SIGNAL_STRIDE = 8;
+constexpr int32_t MAX_SHMEM_TILE_DIMS = 4;
 enum class TileIndex : size_t { HEAD_SHAPE, HEAD_NUM, TAIL_SHAPE };
 
 enum class AllReduceType {
@@ -154,8 +155,7 @@ struct ShmemGetAttr {
 struct ShmemSignalAttr {
     int64_t signalValue = 1;
     int32_t signalStride = SHMEM_SIGNAL_STRIDE;
-    int64_t tileRowShape = 0;
-    int64_t tileColShape = 0;
+    std::vector<int64_t> tileShape;
     AtomicType atomicType = AtomicType::SET;
     bool notifyAll{false};
     int64_t worldSize{0};
@@ -166,8 +166,7 @@ struct ShmemWaitUntilAttr {
     int32_t expectedSum = 0;
     int32_t signalStride = SHMEM_SIGNAL_STRIDE;
     bool resetSignal = false;
-    int64_t tileRowShape = 0;
-    int64_t tileColShape = 0;
+    std::vector<int64_t> tileShape;
     SymbolicScalar ownerRank;
 };
 
@@ -200,19 +199,28 @@ inline int GetTotalTileNum(const std::array<int, MAX_DIST_DIM_SIZE>& tile)
 
 inline int64_t GetTotalTileNum(const VecTile& tileShape, const Shape& dataShape)
 {
-    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() == 2)
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() >= 2)
         << "Invalid dimensional: "
-        << " tileShape dim must be 2, but got dimensional=" << tileShape.size();
-    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() >= 2)
+        << " tileShape dim must >= 2, but got dimensional=" << tileShape.size();
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() == tileShape.size() + 1)
         << "Invalid dimensional: "
-        << " dataShape dim must >= 2, but got dimensional=" << dataShape.size();
-    auto totalRowShape = dataShape[dataShape.size() - 2];
-    auto totalColShape = dataShape[dataShape.size() - 1];
-    auto tileRowShape = tileShape[0];
-    auto tileColShape = tileShape[1];
-    auto tileRowNum = totalRowShape / tileRowShape + (totalRowShape % tileRowShape == 0 ? 0 : 1);
-    auto tileColNum = totalColShape / tileColShape + (totalColShape % tileColShape == 0 ? 0 : 1);
-    return tileRowNum * tileColNum;
+        << " dataShape dim must = tileShape dim + 1, but got dataShape dim=" << dataShape.size()
+        << ", tileShape dim=" << tileShape.size();
+
+    size_t vecTileDim = tileShape.size();
+    size_t startDim = dataShape.size() - vecTileDim;
+
+    int64_t totalTileNum = 1;
+
+    for (size_t i = 0; i < vecTileDim; ++i) {
+        size_t curDim = startDim + i;
+        int64_t totalShape = dataShape[curDim];
+        int64_t tileShapeVal = tileShape[i];
+        int64_t tileNum = totalShape / tileShapeVal + (totalShape % tileShapeVal == 0 ? 0 : 1);
+        totalTileNum *= tileNum;
+    }
+
+    return totalTileNum;
 }
 } // namespace Distributed
 } // namespace npu::tile_fwk

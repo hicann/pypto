@@ -135,10 +135,18 @@ std::string CodeGenOpNPU::GenTemplateParamsForSignal() const
     std::ostringstream oss;
     Distributed::ShmemSignalAttr distOpAttr =
         AnyCast<Distributed::ShmemSignalAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
-    oss << "<" << std::to_string(distOpAttr.signalValue) << ", " << std::to_string(distOpAttr.signalStride) << ", "
-        << std::to_string(distOpAttr.tileRowShape) << ", " << std::to_string(distOpAttr.tileColShape) << ", "
+
+    oss << "<" << distOpAttr.signalValue << ", " << distOpAttr.signalStride << ", "
         << Distributed::ToString(distOpAttr.atomicType) << ", " << (distOpAttr.notifyAll ? "true" : "false") << ", "
-        << std::to_string(distOpAttr.worldSize) << ">";
+        << distOpAttr.worldSize;
+
+    auto paddedShape = distOpAttr.tileShape;
+    paddedShape.resize(4, 0);
+    for (const auto& val : paddedShape) {
+        oss << ", " << val;
+    }
+    oss << ", " << distOpAttr.tileShape.size() << ">";
+
     return oss.str();
 }
 
@@ -167,11 +175,12 @@ std::string CodeGenOpNPU::GenTemplateParamsForSet() const
     size_t shmemTensorDim = rawShape[shmemTensorIndex].size();
     ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 2)
         << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
-    Shape actualRawShape = distOpAttr.isSetData ?
-                               rawShape[shmemTensorIndex] :
-                               Shape{rawShape[shmemTensorIndex][0], Distributed::SHMEM_SIGNAL_STRIDE};
-    oss << "<" << GetTemplateDType() << ", " << actualRawShape[0] << ", " << actualRawShape[1] << ", " << bufferEleNum
-        << ">";
+    if (distOpAttr.isSetData) {
+        oss << "<" << GetTemplateDType() << ", " << bufferEleNum << ">";
+    } else {
+        oss << "<" << GetTemplateDType() << ", " << rawShape[shmemTensorIndex][0] << ", "
+            << Distributed::SHMEM_SIGNAL_STRIDE << ", " << bufferEleNum << ">";
+    }
     return oss.str();
 }
 
@@ -235,7 +244,7 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapes(int32_t operandIndex) const
     return GenOffsets(operandIndex) + ", " + GenRawShapes(operandIndex);
 }
 
-std::string CodeGenOpNPU::GenDynOffset(int32_t operandIndex) const
+std::string CodeGenOpNPU::GenDynOffCoord(int32_t operandIndex) const
 {
     std::ostringstream oss;
     size_t dim = originShape[operandIndex].size();
@@ -249,20 +258,28 @@ std::string CodeGenOpNPU::GenDynOffset(int32_t operandIndex) const
             oss << ", ";
         }
     }
-    return oss.str();
+    std::string wrappedCoord = WrapParamByParentheses({oss.str()});
+    return PrintCoord(dim, wrappedCoord);
+}
+
+std::string CodeGenOpNPU::GenOffCoord(int32_t operandIndex) const
+{
+    size_t dim = originShape[operandIndex].size();
+    auto OffsetSymbol = GenGetParamMacroPacked(operandIndex, dim, PREFIX_STR_OFFSET);
+    std::string wrappedCoord = WrapParamByParentheses(OffsetSymbol);
+    return PrintCoord(dim, wrappedCoord);
 }
 
 std::string CodeGenOpNPU::GenDynValidShape(int32_t operandIndex) const
 {
-    std::ostringstream oss;
-    size_t dim = originShape[operandIndex].size();
-    for (size_t index = 0; index < dim; ++index) {
-        oss << dynamicValidShape[operandIndex][index];
-        if (index != dim - 1) {
-            oss << ", ";
-        }
+    auto srcDynValidShape = dynamicValidShape[operandIndex];
+    FillVecWithDummyInHead<SymbolicScalar>(srcDynValidShape, SHAPE_DIM5 - dynamicValidShape[operandIndex].size(), 1);
+    std::vector<std::string> paramList;
+    for (auto dynShape : srcDynValidShape) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
     }
-    return oss.str();
+    std::string tileOpCallParam = JoinString(paramList, CONN_COMMA);
+    return tileOpCallParam;
 }
 
 std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemPut() const
@@ -271,8 +288,10 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemPut() const
     int32_t nonShmemDataIndex = 3;
     int32_t shmemDataIndex = 4;
     int32_t outPutDataIndex = 0;
-    oss << ", " << GenOffsetsAndRawShapes(nonShmemDataIndex) << ", " << GenDynValidShape(outPutDataIndex) << ", "
-        << GenDynOffset(shmemDataIndex) << ", " << GenRawShapes(shmemDataIndex);
+
+    oss << ", " << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex)
+        << ", " << GenOffCoord(nonShmemDataIndex) << ", " << GenDynOffCoord(shmemDataIndex) << ", "
+        << GenDynValidShape(outPutDataIndex);
     return oss.str();
 }
 
@@ -281,8 +300,10 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemGet() const
     std::ostringstream oss;
     int32_t nonShmemDataIndex = 0;
     int32_t shmemDataIndex = 3;
-    oss << ", " << GenDynOffset(nonShmemDataIndex) << ", " << GenRawShapes(nonShmemDataIndex) << ", "
-        << GenOffsetsAndRawShapes(shmemDataIndex) << ", " << GenDynValidShape(nonShmemDataIndex);
+
+    oss << ", " << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex)
+        << ", " << GenDynOffCoord(nonShmemDataIndex) << ", " << GenOffCoord(shmemDataIndex) << ", "
+        << GenDynValidShape(nonShmemDataIndex);
     return oss.str();
 }
 
@@ -292,8 +313,10 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemPutUB() const
     int32_t nonShmemDataIndex = 1;
     int32_t shmemDataIndex = 2;
     int32_t outPutDataIndex = 0;
-    oss << ", " << GenOffsetsAndRawShapes(nonShmemDataIndex) << ", " << GenDynValidShape(outPutDataIndex) << ", "
-        << GenDynOffset(shmemDataIndex) << ", " << GenRawShapes(shmemDataIndex);
+
+    oss << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex) << ", "
+        << GenOffCoord(nonShmemDataIndex) << ", " << GenDynOffCoord(shmemDataIndex) << ", "
+        << GenDynValidShape(outPutDataIndex);
     return oss.str();
 }
 
@@ -303,8 +326,9 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemGetUB() const
     int32_t nonShmemDataIndex = 0;
     int32_t shmemDataIndex = 3;
     int32_t outPutDataIndex = 0;
-    oss << ", " << GenOffsets(nonShmemDataIndex) << ", " << GenRawShapes(nonShmemDataIndex) << ", "
-        << GenDynOffset(shmemDataIndex) << ", " << GenRawShapes(shmemDataIndex) << ", "
+
+    oss << ", " << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex)
+        << ", " << GenOffCoord(nonShmemDataIndex) << ", " << GenDynOffCoord(shmemDataIndex) << ", "
         << GenDynValidShape(outPutDataIndex);
     return oss.str();
 }
@@ -313,7 +337,8 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemSignal() const
 {
     std::ostringstream oss;
     int32_t shmemSignalIndex = 3;
-    oss << ", " << GenOffsetsAndRawShapes(shmemSignalIndex) << ", " << GenShapes(shmemSignalIndex);
+
+    oss << ", " << QueryTileTensorNameByIdx(shmemSignalIndex) << ", " << GenOffCoord(shmemSignalIndex);
     return oss.str();
 }
 
@@ -390,10 +415,11 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemSet() const
     std::ostringstream oss;
     Distributed::ShmemSetAttr distOpAttr = AnyCast<Distributed::ShmemSetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int32_t shmemTensorIndex = 3;
+    std::string shmemTensor = QueryTileTensorNameByIdx(shmemTensorIndex);
     if (distOpAttr.isSetData) {
-        oss << ", " << GenOffsets(shmemTensorIndex);
+        oss << ", " << shmemTensor << ", " << GenOffCoord(shmemTensorIndex);
     } else {
-        oss << ", " << GenOffsetsAndRawShapes(shmemTensorIndex) << ", " << GenShapes(shmemTensorIndex);
+        oss << ", " << shmemTensor;
     }
     return oss.str();
 }
@@ -460,15 +486,11 @@ std::string CodeGenOpNPU::GenDistOp() const
     std::ostringstream oss;
     std::unordered_set<int32_t> skipOperands = {};
     static const std::unordered_map<Opcode, std::unordered_set<int32_t>> skipIndexMap = {
-        {Opcode::OP_SHMEM_PUT, {0, 2}},
-        {Opcode::OP_SHMEM_GET, {2}},
-        {Opcode::OP_SHMEM_PUT_UB2GM, {0, 3}},
-        {Opcode::OP_SHMEM_GET_GM2UB, {2}},
-        {Opcode::OP_SHMEM_SIGNAL, {0, 2}},
-        {Opcode::OP_SHMEM_SET, {0, 2}},
-        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, {0}},
-        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, {4}},
-    };
+        {Opcode::OP_SHMEM_PUT, {0, 2, 3, 4}},           {Opcode::OP_SHMEM_GET, {0, 2, 3}},
+        {Opcode::OP_SHMEM_PUT_UB2GM, {0, 1, 2, 3}},     {Opcode::OP_SHMEM_GET_GM2UB, {0, 2, 3}},
+        {Opcode::OP_SHMEM_SIGNAL, {0, 2, 3}},           {Opcode::OP_SHMEM_SET, {0, 2, 3}},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, {0}}, {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, {4}},
+    }; // 跳过部分操作数索引，对于 shmem api 只需要获得 ub 地址信息
     auto it = skipIndexMap.find(opCode);
     if (it != skipIndexMap.end()) {
         skipOperands = it->second;
