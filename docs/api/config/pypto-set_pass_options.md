@@ -27,9 +27,9 @@ set_pass_options(*,
 
 | 参数名                  | 输入/输出 | 说明                                                                 |
 |-------------------------|-----------|----------------------------------------------------------------------|
-| vec_nbuffer_setting     | 输入      | 含义：合图参数，用于配置相同结构AIV子图的合并数量。 <br> 说明：该参数适用于结构相同的AIV子图合并。 <br> 类型：dict[Union[int, str], int]，支持整数 key（hashorder）和字符串 key（semantic_label）混合使用。 <br> 取值：<br> {-1: 1}：跳过AIV子图合并 <br> {} （空字典）：自动合并，根据AIV核心数自动计算合并粒度<br> {-1: N, 0: N2, ...}：手动合并，默认粒度为N <br> {"label": N}：按语义标签设置合并粒度，字符串 key 的值会直接替换对应同构子图组的合并粒度（详见下方语义标签配置说明） <br> 默认值：{} 空字典 <br> 影响Pass范围： NBufferMerge |
-| cube_l1_reuse_setting | 输入 | 含义：合图参数，用于配置重复搬运同一GM数据的子图合并数量。<br> 说明：该参数适用于含有CUBE计算的子图合并。 <br> 类型：dict[Union[int, str], int]，支持整数 key（hashorder）和字符串 key（semantic_label）混合使用。 <br> 取值：<br>{-1: 1}：跳过L1Reuse合并 <br> {} （空字典）：自动合并，根据AIC核心数自动计算合并粒度<br> {-1: N, 0: N1, ...}：手动合并，默认合并粒度为N。 <br> {"label": N}：按语义标签设置合并粒度，字符串 key 的值会直接替换对应子图的合并粒度（详见下方语义标签配置说明） <br> 默认值：{} 空字典 <br> 影响Pass范围：L1ReuseMerge |
-| cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构AIC子图的合并数量。 <br> 说明：该参数适用于结构相同的AIC子图合并。 <br> 类型：dict[Union[int, str], int]，支持整数 key（hashorder）和字符串 key（semantic_label）混合使用。 <br> 取值：<br>{-1: 1}：跳过AIC子图合并 <br> {} （空字典）：自动合并，根据AIC核心数自动计算合并粒度<br> {-1: N, 0: N1, ...}：手动合并，默认合并粒度为N <br> {"label": N}：按语义标签设置合并粒度，字符串 key 的值会直接替换对应同构子图组的合并粒度（详见下方语义标签配置说明） <br>默认值：{-1: 1} <br> 影响Pass范围： L1ReuseMerge |
+| vec_nbuffer_setting     | 输入      | 含义：合图参数，用于配置相同结构AIV子图的合并数量。 <br> 说明：该参数适用于结构相同的AIV子图合并。<br><br>类型：dict[Union[int, str], int]。支持三种 key 格式：<br> ① **函数粒度 key**：字符串 `"func{magic}_{order}"` 或 `"DEFAULT"`，可实现不同 root function 间的精细化配置。`func{magic}_{order}` 匹配特定 function（funcMagic=magic）的特定同构子图组（hashorder=order）；`DEFAULT` 匹配所有未显式指定的子图组。配置后合图信息会直接展示在泳道图的 hashOrder-hint 字段中（含 subGraphCount，可根据子图数量和核心数匹配合并力度）。详情参见下方"函数粒度配置说明"。<br> ② **整数 key**：整数 `-1` 表示全局默认，`>=0` 表示特定 hashorder。对所有 function 生效。整数 key 和函数粒度 key 之间互斥，不可混用。整数 key 为兼容旧配置保留，后续可能废弃。<br> ③ **语义标签 key**：任意非 func 前缀字符串，按语义标签控制合图粒度（详见下方语义标签配置说明）。可与整数 key 或函数粒度 key 共存。<br> 取值：<br> {-1: 1} / {"DEFAULT": 1}：跳过AIV子图合并 <br> {} （空字典）：自动合并，根据AIV核心数自动计算合并粒度<br> {"DEFAULT": N, "func8_0": N2}：手动合并，默认粒度为 N，func8_0 对应子图组粒度为 N2<br> 默认值：{} 空字典 <br> 影响Pass范围： NBufferMerge |
+| cube_l1_reuse_setting | 输入 | 含义：合图参数，用于配置重复搬运同一GM数据的子图合并数量。<br> 说明：该参数适用于含有CUBE计算的子图合并。<br><br>类型：dict[Union[int, str], int]。支持三种 key 格式：<br> ① **函数粒度 key**：字符串 `"func{magic}_{order}"` 或 `"DEFAULT"`，可实现不同 root function 间的精细化配置。合图信息会直接展示在泳道图的 hashOrder-hint 字段中（含 subGraphCount）。详情参见下方"函数粒度配置说明"。<br> ② **整数 key**：全局配置，对所有 function 生效。整数 key 和函数粒度 key 之间互斥，不可混用。为兼容旧配置保留，后续可能废弃。<br> ③ **语义标签 key**：按语义标签控制（详见下方语义标签配置说明）。可与整数 key 或函数粒度 key 共存。<br> 取值：<br>{-1: 1} / {"DEFAULT": 1}：跳过L1Reuse合并 <br> {} （空字典）：自动合并<br> {"DEFAULT": N, "func8_0": N2}：手动合并，默认粒度为 N<br> 默认值：{} 空字典 <br> 影响Pass范围：L1ReuseMerge |
+| cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构AIC子图的合并数量。 <br> 说明：该参数适用于结构相同的AIC子图合并。<br><br>类型：dict[Union[int, str], int]。支持三种 key 格式：<br> ① **函数粒度 key**：字符串 `"func{magic}_{order}"` 或 `"DEFAULT"`，可实现不同 root function 间的精细化配置。合图信息会直接展示在泳道图的 hashOrder-hint 字段中（含 subGraphCount）。详情参见下方"函数粒度配置说明"。<br> ② **整数 key**：全局配置，对所有 function 生效。整数 key 和函数粒度 key 之间互斥，不可混用。为兼容旧配置保留，后续可能废弃。<br> ③ **语义标签 key**：按语义标签控制（详见下方语义标签配置说明）。可与整数 key 或函数粒度 key 共存。<br> 取值：<br>{-1: 1} / {"DEFAULT": 1}：跳过AIC子图合并 <br> {} （空字典）：自动合并<br> {"DEFAULT": N, "func8_0": N2}：手动合并，默认粒度为 N<br>默认值：{-1: 1} <br> 影响Pass范围： L1ReuseMerge |
 | sg_set_scope            | 输入      | 含义：手动控制子图切分参数。<br> 说明：通过为 Operation 分配 scope，使得相同 scope_id（非-1） 的相邻 Operation 强制合并归入同一子图，从而覆盖切分算法的自动划分结果。 <br> 类型：`Tuple[int, bool, bool]` 或 `int` <br> **tuple 格式**：`(scope_id, allow_parallel_merge, allow_cross_scope_merge)`，各字段含义如下： <br> - `scope_id`（int）：scope 标识，取值范围 -1~2147483647。相同 scope_id 的相邻 Operation 归入同一子图；-1 表示不参与 scope 合并，由切分算法决定子图划分。 <br> - `allow_parallel_merge`（bool）：控制同一 scope_id 下 Operation 的合并方式。取值 True/False。<br>&emsp;&emsp;False（默认）：仅允许存在上下游连接通路的 Operation 合并，即 Operation A 的输出作为 Operation B 的输入时才可合并到同一子图。<br>&emsp;&emsp;True：允许位于并行分支（无数据依赖）的相同 scope_id 的 Operation 也合并到同一子图。 <br> - `allow_cross_scope_merge`（bool）：控制带有 scope 的子图是否可与无 scope（scope_id=-1）的子图合并，扩大scope子图。取值 True/False。<br>&emsp;&emsp;False（默认）：带有 scope 的子图保持独立，不与其他子图合并。<br>&emsp;&emsp;True：允许带有 scope 的子图与 scope_id=-1 的子图合并。不同 scope_id 的子图之间不可合并。 <br> **int 格式**：传入单个 int 时等价于 `(scope_id, False, False)`，即仅设置 scope_id，不允许并行分支合并和跨 scope 合并。 <br> 默认值：(-1, False, False) <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的 scope_id。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
 | pg_partition_algorithm  | 输入      | 含义：指定切分算法。<br> 说明：配置GraphPartition环节进行子图切分所采用的算法。当同时配置了 `sg_set_scope` 时，无论选择哪种切分算法，都会优先尊重 `sg_set_scope` 的强制合图约束。<br> 类型：str <br> 取值范围："Iso", "OspSarkar", "OspBsp" <br> 影响Pass范围：GraphPartition <br> 算法选择指导：请参考下文。|
 
@@ -50,14 +50,77 @@ set_pass_options(*,
 ## 调用示例
 
 ```python
+   # 函数粒度配置（func{magic}_{order} 格式）
+   pypto.set_pass_options(
+       vec_nbuffer_setting={"DEFAULT": 4, "func8_0": 1, "func8_1": 1},
+       cube_l1_reuse_setting={"DEFAULT": 4, "func8_0": 1, "func8_1": 1},
+       cube_nbuffer_setting={"DEFAULT": 4, "func8_0": 1, "func8_1": 1})
+
+   # 纯 DEFAULT
+   pypto.set_pass_options(vec_nbuffer_setting={"DEFAULT": 2})
+
+   # 整数 key 配置（兼容保留）
    pypto.set_pass_options(
                        vec_nbuffer_setting={-1: 2},
                        cube_l1_reuse_setting={},
                        cube_nbuffer_setting={-1: 1, 1: 2})
+
+   # 语义标签 key 配置（可与函数粒度 key 或整数 key 共存）
+   pypto.set_semantic_label("V1")
+   sij_scale = pypto.mul(sij, softmax_scale)
+   pypto.set_semantic_label("")
+   ...
+   pypto.set_pass_options(vec_nbuffer_setting={"DEFAULT": 2, "V1": 1})
 ```
 
-## 配置说明
-### dict类型配置说明
+
+### dict类型配置说明（函数粒度 key / 整数 key / 语义标签 key）
+
+### 函数粒度 key 配置说明（func{magic}\_{order}）
+
+#### 功能概述
+
+通过 `"func{magic}_{order}"` 格式的 key，可以针对**特定 function** 的**特定同构子图组**（hashorder）设置合并粒度，实现不同 root function 间的精细化配置。配置的 hashOrder 和 subGraphCount 信息会直接展示在泳道图的 hashOrder-hint 字段中，格式为 `l1ReuseInfo hashOrder: func8_0, subGraphCount: 24`，可根据子图数量和核心数匹配合并力度。
+
+#### 键值对含义
+
+Key: 字符串格式 `"func{magic}_{order}"` 或 `"DEFAULT"`。<br>
+- `"func{magic}_{order}"`：匹配 functionMagic 为 magic 的 function 中，hashorder 为 order 的同构子图组。<br>
+- `"DEFAULT"`：匹配所有未显式指定的同构子图组。<br>
+
+Value (N): 表示合并粒度。即同构子图组内每 N 个子图合并为一个新子图执行。N=1 表示不合并。
+
+#### 格式约束
+
+- `func` 前缀必须小写。
+- magic 和 order 必须为整数。
+- magic 和 order 之间以下划线 `_` 分隔。
+- 示例合法 key：`"func0_0"`、`"func123_5"`、`"func8_1"`。
+- 示例非法 key：`"Func0_0"`（大写F）、`"func_0"`（缺少 magic）、`"func123"`（缺少 order）。
+
+#### 与整数 key 的关系
+
+- 函数粒度 key 和整数 key **不可混用**。同一个 setting 参数中要么全部使用 `func{magic}_{order}`/`DEFAULT` 格式，要么全部使用整数 key。否则会报错。
+- 整数 key 方式为兼容旧配置保留，后续可能废弃。
+- 语义标签 key 可与整数 key 或函数粒度 key 共存，不受此限制。
+
+#### 配置行为
+
+Pass 在处理当前 function 的子图合并时，遵循 "func{magic}\_{order} 精确匹配 > DEFAULT 默认配置 > 自动处理" 的逻辑：<br>
+- 精确匹配：若 funcMagic 和 hashorder 双双命中，则按其对应的 Value N 进行合并。<br>
+- DEFAULT 默认配置：若未精确命中，但字典中存在 `DEFAULT`，则按 `DEFAULT` 对应的 Value 执行合并。<br>
+- 自动处理：若既未精确命中也无 `DEFAULT`，则自动计算合并粒度。<br>
+
+#### 配置示例
+
+| 配置 | 说明 |
+|------|------|
+|`{"DEFAULT": 1}`|所有同构子图组跳过合并。|
+|`{"DEFAULT": 4, "func8_0": 1, "func8_1": 1}`|默认 4 个同构子图为一组进行合并，func8 中 hashorder 0 和 1 的子图组跳过合并（不合并）。|
+|`{"DEFAULT": 2, "func8_1": 4}`|默认 2 个同构子图为一组进行合并，func8 中 hashorder 1 的子图四个为一组进行合并。|
+|`{"func8_0": 2}`|func8 函数中，hashorder 为 0 的子图两个为一组进行合并；其他默认为 1（不合并）。|
+
+### 整数 key 配置说明
 
 #### 整数键值对含义
 

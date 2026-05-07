@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 #include <string>
+#include <cctype>
 
 using namespace npu::tile_fwk;
 using ref_tensors = std::vector<std::reference_wrapper<const Tensor>>;
@@ -235,38 +236,139 @@ npu::tile_fwk::Any ConvertPyList(const std::string& key, const py::list& lst)
     throw py::type_error("Unsupported list element type for key: " + key);
 }
 
+namespace {
+constexpr const char* FUNC_HASH_ORDER_DEFAULT_KEY = "DEFAULT";
+} // namespace
+
+// Check if key matches "func{magic}_{order}" pattern (e.g., "func123_0", "func456_1")
+static bool IsFuncHashOrderFormat(const std::string& key)
+{
+    // Pattern: func{magic}_{order} where magic is digits and order is digits
+    // Regex equivalent: ^func\d+_\d+$
+    if (key.size() < 6 || key.substr(0, 4) != "func") {
+        return false;
+    }
+    size_t underscore_pos = key.find('_');
+    if (underscore_pos == std::string::npos || underscore_pos == 4) {
+        return false;  // No underscore or underscore right after "func"
+    }
+    // Check that magic part (between "func" and "_") is all digits
+    for (size_t i = 4; i < underscore_pos; ++i) {
+        if (!std::isdigit(key[i])) {
+            return false;
+        }
+    }
+    // Check that order part (after "_") is all digits
+    for (size_t i = underscore_pos + 1; i < key.size(); ++i) {
+        if (!std::isdigit(key[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void SplitByFuncAndLabel(
+    const py::dict& dict_value,
+    std::map<std::string, int64_t>& func_map,
+    std::map<std::string, int64_t>& label_map)
+{
+    for (auto dict_item : dict_value) {
+        if (py::isinstance<py::str>(dict_item.first)) {
+            int64_t val = py::cast<int64_t>(dict_item.second);
+            std::string str_key = py::cast<std::string>(dict_item.first);
+            if (IsFuncHashOrderFormat(str_key) || str_key == FUNC_HASH_ORDER_DEFAULT_KEY) {
+                func_map[str_key] = val;
+            } else {
+                label_map[str_key] = val;
+            }
+        }
+    }
+}
+
+static void ClassifyKeys(const py::dict& dict_value, bool& has_int, bool& has_str, bool& has_func, bool& has_label)
+{
+    for (auto dict_item : dict_value) {
+        if (py::isinstance<py::int_>(dict_item.first)) {
+            has_int = true;
+        } else if (py::isinstance<py::str>(dict_item.first)) {
+            has_str = true;
+            std::string str_key = py::cast<std::string>(dict_item.first);
+            if (IsFuncHashOrderFormat(str_key) || str_key == FUNC_HASH_ORDER_DEFAULT_KEY) {
+                has_func = true;
+            } else {
+                has_label = true;
+            }
+        }
+    }
+}
+
+static void HandleStrOnlyKeys(
+    const std::string& key, const py::dict& dict_value,
+    bool has_func, bool has_label,
+    std::map<std::string, npu::tile_fwk::Any>& cpp_values)
+{
+    cpp_values[key] = std::map<int64_t, int64_t>();
+    if (has_func && has_label) {
+        std::map<std::string, int64_t> func_map, label_map;
+        SplitByFuncAndLabel(dict_value, func_map, label_map);
+        cpp_values[key + "_by_func"] = func_map;
+        cpp_values[key + "_by_label"] = label_map;
+    } else if (has_func) {
+        std::map<std::string, int64_t> func_map;
+        for (auto item : dict_value) {
+            func_map[py::cast<std::string>(item.first)] = py::cast<int64_t>(item.second);
+        }
+        cpp_values[key + "_by_func"] = func_map;
+    } else {
+        std::map<std::string, int64_t> label_map;
+        for (auto item : dict_value) {
+            label_map[py::cast<std::string>(item.first)] = py::cast<int64_t>(item.second);
+        }
+        cpp_values[key + "_by_label"] = label_map;
+    }
+}
+
+static void HandleMixedKeys(
+    const std::string& key, const py::dict& dict_value,
+    std::map<std::string, npu::tile_fwk::Any>& cpp_values)
+{
+    std::map<int64_t, int64_t> int_map;
+    std::map<std::string, int64_t> func_map, label_map;
+    for (auto item : dict_value) {
+        int64_t val = py::cast<int64_t>(item.second);
+        if (py::isinstance<py::int_>(item.first)) {
+            int_map[py::cast<int64_t>(item.first)] = val;
+        } else if (py::isinstance<py::str>(item.first)) {
+            std::string str_key = py::cast<std::string>(item.first);
+            if (IsFuncHashOrderFormat(str_key) || str_key == FUNC_HASH_ORDER_DEFAULT_KEY) {
+                func_map[str_key] = val;
+            } else {
+                label_map[str_key] = val;
+            }
+        }
+    }
+    cpp_values[key] = int_map;
+    if (!func_map.empty()) {
+        cpp_values[key + "_by_func"] = func_map;
+    }
+    if (!label_map.empty()) {
+        cpp_values[key + "_by_label"] = label_map;
+    }
+}
+
 void ConvertPyDict(
     const std::string& key, const py::object& value, std::map<std::string, npu::tile_fwk::Any>& cpp_values)
 {
     py::dict dict_value = py::cast<py::dict>(value);
-    bool has_int_keys = false;
-    bool has_str_keys = false;
-    for (auto dict_item : dict_value) {
-        if (py::isinstance<py::int_>(dict_item.first)) {
-            has_int_keys = true;
-        } else if (py::isinstance<py::str>(dict_item.first)) {
-            has_str_keys = true;
-        }
-    }
+    bool has_int = false, has_str = false, has_func = false, has_label = false;
+    ClassifyKeys(dict_value, has_int, has_str, has_func, has_label);
 
-    if (!has_str_keys) {
-        cpp_values[key] = has_int_keys ? value.cast<std::map<int64_t, int64_t>>() : std::map<int64_t, int64_t>();
-    } else if (!has_int_keys) {
-        cpp_values[key] = std::map<int64_t, int64_t>();
-        cpp_values[key + "_by_label"] = value.cast<std::map<std::string, int64_t>>();
+    if (!has_str) {
+        cpp_values[key] = has_int ? value.cast<std::map<int64_t, int64_t>>() : std::map<int64_t, int64_t>();
+    } else if (!has_int) {
+        HandleStrOnlyKeys(key, dict_value, has_func, has_label, cpp_values);
     } else {
-        std::map<int64_t, int64_t> int_map;
-        std::map<std::string, int64_t> str_map;
-        for (auto dict_item : dict_value) {
-            int64_t val = py::cast<int64_t>(dict_item.second);
-            if (py::isinstance<py::int_>(dict_item.first)) {
-                int_map[py::cast<int64_t>(dict_item.first)] = val;
-            } else if (py::isinstance<py::str>(dict_item.first)) {
-                str_map[py::cast<std::string>(dict_item.first)] = val;
-            }
-        }
-        cpp_values[key] = int_map;
-        cpp_values[key + "_by_label"] = str_map;
+        HandleMixedKeys(key, dict_value, cpp_values);
     }
 }
 
@@ -299,7 +401,21 @@ std::map<std::string, npu::tile_fwk::Any> ConvertPyDictToCppMap(const py::dict& 
         std::string key = py::str(item.first);
         py::object value = py::reinterpret_borrow<py::object>(item.second);
         if (py::isinstance<py::dict>(value)) {
-            ConvertPyDict(key, value, cpp_values);
+            // Check if key already has _by_func or _by_label suffix
+            // If so, directly cast to the appropriate type without splitting
+            bool has_by_func_suffix = (key.size() > 9 && key.substr(key.size() - 9) == "_by_func");
+            bool has_by_label_suffix = (key.size() > 10 && key.substr(key.size() - 10) == "_by_label");
+            if (has_by_func_suffix || has_by_label_suffix) {
+                // Key already has the suffix, manually convert to string map
+                std::map<std::string, int64_t> str_map;
+                py::dict dict_val = py::cast<py::dict>(value);
+                for (auto dict_item : dict_val) {
+                    str_map[py::cast<std::string>(dict_item.first)] = py::cast<int64_t>(dict_item.second);
+                }
+                cpp_values[key] = str_map;
+            } else {
+                ConvertPyDict(key, value, cpp_values);
+            }
         } else {
             cpp_values[key] = ConvertPyValue(key, value);
         }

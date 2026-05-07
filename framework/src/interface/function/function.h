@@ -460,10 +460,13 @@ struct ParamConfigs {
     std::string sgPartitionAlgorithm{"Iso"};
     uint8_t machineConfig_{0}; // machine config
     std::map<int64_t, int64_t> cubeL1ReuseSetting;
+    std::map<std::string, int64_t> cubeL1ReuseSettingByFunc;
     std::map<int64_t, int64_t> cubeNBufferSetting;
+    std::map<std::string, int64_t> cubeNBufferSettingByFunc;
     std::string OoOPreScheduleMethod{"PriorDFS"};
     int mgVecParallelLb{48};
     std::map<int64_t, int64_t> vecNBufferSetting;
+    std::map<std::string, int64_t> vecNBufferSettingByFunc;
     std::map<std::string, int64_t> cubeL1ReuseSettingByLabel;
     std::map<std::string, int64_t> cubeNBufferSettingByLabel;
     std::map<std::string, int64_t> vecNBufferSettingByLabel;

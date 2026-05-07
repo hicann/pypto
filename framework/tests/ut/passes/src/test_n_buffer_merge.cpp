@@ -31,19 +31,18 @@ namespace tile_fwk {
 
 class NBufferMergeTest : public testing::Test {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
     void SetUp() override
     {
         Program::GetInstance().Reset();
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPassOption(VEC_NBUFFER_SETTING, std::map<int64_t, int64_t>{{-1, 2}});
     }
 
     void TearDown() override {}
+
+    static void SetUpTestCase() {}
+
+    static void TearDownTestCase() {}
 
     Status TestNBufferMergeWithDifferentVecBufferSetting(std::map<int64_t, int64_t> vecNBufferSetting);
 };
@@ -312,6 +311,80 @@ TEST_F(NBufferMergeTest, TestSemanticLabelSetting)
     function->SetTotalSubGraphCount(subGraphNum + 1);
     NBufferMerge NBM;
     EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
+}
+
+// ===== ByFunc Integration Tests =====
+TEST_F(NBufferMergeTest, ByFuncMergeDefaultTwo)
+{
+    // Build 8 AIV subgraphs (same structure, same hash) + 1 COPY_IN subgraph = 9 total
+    // ByFunc DEFAULT=2 → all AIV merge in groups of 2 → ceil(8/2)=4 AIV groups + 1 COPY_IN = 5
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int mgVecParallelLb = 48;
+    const int subGraphNum = 8;
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"incast0", "incast1", "outcast"}), true);
+    EXPECT_EQ(G.AddOps({Opcode::OP_COPY_IN}, {{"incast0"}}, {{"incast1"}}, {"copy_in"}, true), true);
+    G.GetOp("copy_in")->UpdateSubgraphID(0);
+    for (int i = 1; i <= subGraphNum; i++) {
+        std::string strID = std::to_string(i);
+        EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"t1_" + strID, "t2_" + strID, "t3_" + strID}), true);
+        EXPECT_EQ(G.AddOps({Opcode::OP_ABS}, {{"incast1"}}, {{"t1_" + strID}}, {"ABS_" + strID}, true), true);
+        EXPECT_EQ(G.AddOps({Opcode::OP_EXP}, {{"t1_" + strID}}, {{"t2_" + strID}}, {"EXP_" + strID}, true), true);
+        EXPECT_EQ(G.AddOps({Opcode::OP_ADDS}, {{"t2_" + strID}}, {{"t3_" + strID}}, {"ADDS_" + strID}, true), true);
+        EXPECT_EQ(G.AddOps({Opcode::OP_ASSEMBLE}, {{"t3_" + strID}}, {{"outcast"}}, {"ASM_" + strID}, true), true);
+        G.GetOp("ABS_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("EXP_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("ADDS_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("ASM_" + strID)->UpdateSubgraphID(i);
+    }
+    EXPECT_EQ(G.SetInCast({"incast0"}), true);
+    EXPECT_EQ(G.SetOutCast({"outcast"}), true);
+    Function* function = G.GetFunction();
+
+    function->paramConfigs_.vecNBufferSettingByFunc = {{"DEFAULT", 2}};
+    function->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function->SetTotalSubGraphCount(subGraphNum + 1);
+    NBufferMerge NBM;
+    EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 5);
+}
+
+TEST_F(NBufferMergeTest, ByFuncMergeFuncSpecificOverride)
+{
+    // BuildFunctionWithSubgraphs: 1 COPY_IN (AIC, hashOrder=0) + 8 AIV subgraphs (hashOrder=1)
+    // DEFAULT=4 → AIV ceil(8/4)=2 groups, override func{magic}_1=2 → ceil(8/2)=4 groups
+    // Expected with override: 4 AIV groups + 1 COPY_IN = 5
+    const int mgVecParallelLb = 48;
+    const int subGraphNum = 8;
+    ComputationalGraphBuilder G;
+    Function* function = BuildFunctionWithSubgraphs(G, {16, 16}, subGraphNum);
+
+    int fm = function->GetFuncMagic();
+    function->paramConfigs_.vecNBufferSettingByFunc = {
+        {"DEFAULT", 4},
+        {"func" + std::to_string(fm) + "_1", 2}
+    };
+    function->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function->SetTotalSubGraphCount(subGraphNum + 1);
+    NBufferMerge NBM;
+    EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 5);
+}
+
+TEST_F(NBufferMergeTest, ByFuncMergeDefaultOneNoMerge)
+{
+    // ByFunc DEFAULT:1 with size==1 → noMerge mode, graph untouched.
+    const int mgVecParallelLb = 48;
+    const int subGraphNum = 8;
+    ComputationalGraphBuilder G;
+    Function* function = BuildFunctionWithSubgraphs(G, {16, 16}, subGraphNum);
+
+    function->paramConfigs_.vecNBufferSettingByFunc = {{"DEFAULT", 1}};
+    function->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function->SetTotalSubGraphCount(subGraphNum + 1);
+    NBufferMerge NBM;
+    EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum + 1);
 }
 
 } // namespace tile_fwk

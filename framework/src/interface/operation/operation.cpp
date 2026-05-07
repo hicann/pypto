@@ -96,6 +96,12 @@ const std::string OpAttributeKey::mxQuantMode = "op_attr_mx_quant_mode";
 const std::string OpAttributeKey::mxQuantAxis = "op_attr_mx_quant_axis";
 const std::string OpAttributeKey::mxQuantPerformanceMode = "op_attr_mx_quant_performance_mode";
 const std::string OpAttributeKey::gmTensorParamIdxInCall = "gm_tensor_param_idx_in_call";
+const std::string OpAttributeKey::l1ReuseHashOrder = "l1_reuse_hashOrder";
+const std::string OpAttributeKey::l1ReuseSubgraphCount = "l1_reuse_subgraphCount";
+const std::string OpAttributeKey::cubeMergeHashOrder = "cube_merge_hashOrder";
+const std::string OpAttributeKey::cubeMergeSubgraphCount = "cube_merge_subgraphCount";
+const std::string OpAttributeKey::vecMergeHashOrder = "vec_merge_hashOrder";
+const std::string OpAttributeKey::vecMergeSubgraphCount = "vec_merge_subgraphCount";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";
@@ -489,9 +495,6 @@ Json Operation::DumpJson(bool dumpTensor) const
     DumpLocationJson(opDump);
 
     opDump["subgraphid"] = subgraphID_;
-    opDump["l1ReuseHashOrder"] = l1ReuseHashOrder_;
-    opDump["cubeMergeHashOrder"] = cubeMergeHashOrder_;
-    opDump["vecMergeHashOrder"] = vecMergeHashOrder_;
 
     DumpParamLocationJson(opDump);
     DumpCallOpInfoJson(opDump);
@@ -545,9 +548,7 @@ void Operation::LoadLocationFromJson(const Json& opDump)
 void Operation::LoadBasicInfoFromJson(const Json& opDump)
 {
     subgraphID_ = opDump["subgraphid"].get<int>();
-    l1ReuseHashOrder_ = opDump["l1ReuseHashOrder"].get<int>();
-    cubeMergeHashOrder_ = opDump["cubeMergeHashOrder"].get<int>();
-    vecMergeHashOrder_ = opDump["vecMergeHashOrder"].get<int>();
+
     UpdateLatency(opDump["latency"].get<int>());
     if (opDump.count("in_param_loc")) {
         for (auto& inLoc : opDump["in_param_loc"]) {

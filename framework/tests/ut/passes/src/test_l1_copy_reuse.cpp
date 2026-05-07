@@ -40,9 +40,6 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-
-        config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}, {0, 2}});
-        config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 1}});
     }
 
     void TearDown() override {}
@@ -418,6 +415,51 @@ TEST_F(L1CopyInReuseTest, TestSemanticLabelSetting)
     L1CopyInReuseMerge LCRM;
     EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
 }
+
+// ===== ByFunc Integration Tests =====
+TEST_F(L1CopyInReuseTest, ByFuncL1ReuseFuncSpecificMerge)
+{
+    // InitGraphBuilder: 20 subgraphs.
+    // Subgraph 0 (VIEW DDR→DDR): CanReuse=false, not in L1Reuse → stays alone.
+    // Subgraphs 1..19 (VIEW DDR→L1 + EXP): CanReuse=true, same hash → L1Reuse hashOrder 0.
+    // L1Reuse: DEFAULT=2, func{magic}_0:4 → hashOrder 0 merges 4 per group: ceil(19/4)=5
+    // NBuffer: DEFAULT=1 → no merge.
+    // Total: 1 (subgraph 0) + 5 = 6
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int subGraphNum = 20;
+    InitGraphBuilder(G, tileShape, subGraphNum);
+    Function* function = G.GetFunction();
+
+    int fm = function->GetFuncMagic();
+    std::string key = "func" + std::to_string(fm) + "_0";
+    function->paramConfigs_.cubeL1ReuseSettingByFunc = {{"DEFAULT", 2}, {key, 4}};
+    function->paramConfigs_.cubeNBufferSettingByFunc = {{"DEFAULT", 1}};
+    function->SetTotalSubGraphCount(subGraphNum);
+    L1CopyInReuseMerge LCRM;
+    EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(function->GetTotalSubGraphCount(), 6);
+}
+
+TEST_F(L1CopyInReuseTest, ByFuncL1ReuseDefaultOneNoMerge)
+{
+    // cubeL1Reuse DEFAULT:1 → GetModeBySetting returns 0 → skip L1 reuse merge
+    // cubeNBuffer DEFAULT:1 → GetModeBySetting returns 0 → skip NBuffer merge
+    // 20 subgraphs unchanged.
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int subGraphNum = 20;
+    InitGraphBuilder(G, tileShape, subGraphNum);
+    Function* function = G.GetFunction();
+
+    function->paramConfigs_.cubeL1ReuseSettingByFunc = {{"DEFAULT", 1}};
+    function->paramConfigs_.cubeNBufferSettingByFunc = {{"DEFAULT", 1}};
+    function->SetTotalSubGraphCount(subGraphNum);
+    L1CopyInReuseMerge LCRM;
+    EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
+}
+
 
 } // namespace tile_fwk
 } // namespace npu

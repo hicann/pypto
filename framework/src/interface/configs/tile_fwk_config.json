@@ -8,8 +8,11 @@
         "copyout_resolve_coalescing": 0,
         "sg_set_scope": [-1, 0, 0],
         "cube_l1_reuse_setting": [],
+        "cube_l1_reuse_setting_by_func": {},
         "cube_nbuffer_setting": [[-1, 1]],
+        "cube_nbuffer_setting_by_func": {},
         "vec_nbuffer_setting": [],
+        "vec_nbuffer_setting_by_func": {},
         "cube_l1_reuse_setting_by_label": {},
         "cube_nbuffer_setting_by_label": {},
         "vec_nbuffer_setting_by_label": {}

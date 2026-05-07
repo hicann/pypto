@@ -26,33 +26,120 @@ def get_sematic(func_index, opmagic, func_data):
     return ""
 
 
-def get_hash_order(func_index, func_data):
-    """Get hashOrder info from program.json by func_index.
+def get_hash_order_info(func_index, func_data):
+    """Get HashOrderInfo from program.json by func_index.
 
-    Traverse all operations in the function to find valid hashOrder values.
-    Some ops (e.g., added by l1_reuse/nbuffer pass) have all hashOrder=-1,
-    so we search for any op with valid values in the same function.
+    Traverse all operations in the function to find valid hashOrder info from op_attr.
+    Format: op_attr contains "l1_reuse_hashOrder", "l1_reuse_subgraphCount", etc.
 
     Args:
         func_index: Index of the function in func_data (should be leaf function for hashOrder)
         func_data: List of functions from program.json
 
     Returns:
-        tuple: (l1ReuseHashOrder, cubeMergeHashOrder, vecMergeHashOrder)
+        tuple of dicts: (l1ReuseInfo, cubeMergeInfo, vecMergeInfo)
+        Each dict contains {"hashOrder": str, "subgraphCount": int} or None if not set
     """
     if func_index >= len(func_data):
-        return -1, -1, -1
+        return None, None, None
+
+    # Attribute key names for hashOrder info
+    _hash_order_keys = {
+        "l1_reuse": ("l1_reuse_hashOrder", "l1_reuse_subgraphCount"),
+        "cube_merge": ("cube_merge_hashOrder", "cube_merge_subgraphCount"),
+        "vec_merge": ("vec_merge_hashOrder", "vec_merge_subgraphCount"),
+    }
 
     func = func_data[func_index]
 
     for op in func["operations"]:
-        l1_reuse_hash_order = op.get("l1ReuseHashOrder", -1)
-        cube_merge_hash_order = op.get("cubeMergeHashOrder", -1)
-        vec_merge_hash_order = op.get("vecMergeHashOrder", -1)
-        if l1_reuse_hash_order != -1 or cube_merge_hash_order != -1 or vec_merge_hash_order != -1:
-            return l1_reuse_hash_order, cube_merge_hash_order, vec_merge_hash_order
+        op_attr = op.get("op_attr", {})
+        infos = []
 
-    return -1, -1, -1
+        for _, (hash_key, count_key) in _hash_order_keys.items():
+            hash_order = op_attr.get(hash_key)
+            count = op_attr.get(count_key)
+            if hash_order is not None and count is not None:
+                infos.append({"hashOrder": hash_order, "subgraphCount": count})
+            else:
+                infos.append(None)
+
+        # Return if any valid info found
+        if any(infos):
+            return tuple(infos)
+
+    return None, None, None
+
+
+# Keep old functions for backward compatibility
+def get_hash_order(func_index, func_data):
+    """Get hashOrder info from program.json by func_index (backward compatibility)."""
+    l1_info, cube_info, vec_info = get_hash_order_info(func_index, func_data)
+    l1_hash = l1_info.get("hashOrder") if l1_info else None
+    cube_hash = cube_info.get("hashOrder") if cube_info else None
+    vec_hash = vec_info.get("hashOrder") if vec_info else None
+    return l1_hash, cube_hash, vec_hash
+
+
+def get_subgraph_count(func_index, func_data):
+    """Get subgraphCount info from program.json by func_index (backward compatibility)."""
+    l1_info, cube_info, vec_info = get_hash_order_info(func_index, func_data)
+    l1_count = l1_info.get("subgraphCount") if l1_info else None
+    cube_count = cube_info.get("subgraphCount") if cube_info else None
+    vec_count = vec_info.get("subgraphCount") if vec_info else None
+    return l1_count, cube_count, vec_count
+
+
+def get_func_magic(func_index, func_data):
+    """Get function magic number from program.json by func_index.
+
+    Args:
+        func_index: Index of the function in func_data
+        func_data: List of functions from program.json
+
+    Returns:
+        int: function magic number, or -1 if not found
+    """
+    if func_index >= len(func_data):
+        return -1
+
+    func = func_data[func_index]
+    # Try to get magic from func_magicname field (format: "magic_name_{magic}")
+    func_magicname = func.get("func_magicname", "")
+    if func_magicname:
+        # Extract magic number from func_magicname (format varies)
+        # Common format: "func_magic_{magic}" or just the magic number at the end
+        parts = func_magicname.rsplit("_", 1)
+        if len(parts) == 2:
+            try:
+                return int(parts[1])
+            except ValueError:
+                pass
+
+    # Fallback: try to get from 'magic' field directly
+    return func.get("magic", -1)
+
+
+def format_hash_order(hash_order, func_magic):
+    """Format hashOrder as 'func{magic}_{order}' or return original value.
+
+    DEPRECATED: This function is no longer needed as hashOrder is now stored
+    directly as the full string format or null in the JSON.
+
+    Args:
+        hash_order: The hashOrder value (string, int, or None)
+        func_magic: The function magic number
+
+    Returns:
+        str or None: Formatted hashOrder string, or None if invalid
+    """
+    if hash_order is None:
+        return None
+    if isinstance(hash_order, str):
+        return hash_order if hash_order else None
+    if isinstance(hash_order, int) and hash_order >= 0 and func_magic >= 0:
+        return f"func{func_magic}_{hash_order}"
+    return None
 
 
 class DataType(Enum):

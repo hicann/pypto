@@ -28,6 +28,7 @@
 
 #include "passes/statistics/tensor_and_tile_graph_statistic.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/tile_graph_pass/graph_partition/hash_order_utils.h"
 
 #ifdef MODULE_NAME
 #undef MODULE_NAME
@@ -42,7 +43,9 @@ public:
     ~L1CopyInReuseRunner() {}
     Status Run(Function& func, int color, std::vector<std::vector<int>>& colorNode);
     static bool CanReuse(const Operation& op);
-    static int GetModeBySetting(const std::map<int64_t, int64_t>& setting);
+    static int GetModeBySetting(
+        const std::map<int64_t, int64_t>& setting,
+        const std::map<std::string, int64_t>& settingByFunc);
     static std::vector<int> GetCopyIn(
         const OperationsViewer& opOriList, int color, std::vector<std::vector<int>>& colorNode);
     static void GetOriList(Function& func, std::vector<Operation*>& oriList);
@@ -50,7 +53,7 @@ public:
 private:
     void GetOpHash(std::vector<uint64_t>& hashList, const std::string op, int idx);
     void GetColorHash(
-        const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
+        const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
         const std::vector<std::vector<int>>& colorNode);
     int GetMaxInColor(const std::vector<int>& nodes, const OperationsViewer& opOriList, int curColor);
     Status MergeDupL1CopyIn(Function& func, std::vector<std::vector<int>>& colorNode, int color);
@@ -79,7 +82,15 @@ private:
         std::vector<std::vector<int>>& colorNode, OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap,
         std::vector<int>& colorCopyIn);
     Status SetNumFromConfig(
-        const std::map<int64_t, int64_t>& configMap, std::map<int, int>& resultMap, const std::string& configName);
+        const Function& func, const std::map<int64_t, int64_t>& configMap,
+        const std::map<std::string, int64_t>& configMapByFunc, std::map<int, int>& resultMap,
+        const std::string& configName);
+    Status ApplyByFuncConfig(
+        int currentFuncMagic, const std::map<std::string, int64_t>& configMapByFunc,
+        std::map<int, int>& resultMap, const std::string& configName);
+    Status ApplyGlobalConfig(
+        const std::map<int64_t, int64_t>& configMap, std::map<int, int>& resultMap,
+        const std::string& configName);
     void HashUpdate(
         Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
         std::vector<std::vector<int>>& colorNode);
@@ -93,9 +104,11 @@ private:
     std::unordered_map<int, int> replacedCopyMap_;
     std::unordered_map<int, int> tensormagic2Op_;
     std::unordered_map<uint64_t, std::vector<int>> hashMap_;
-    std::unordered_map<uint64_t, int> hashOrder_;
+    std::map<uint64_t, int> hashOrder_;  // Deterministic ordered map for compilation repeatability
     std::map<int64_t, int64_t> numLRMap_;
     std::map<int64_t, int64_t> numDBMap_;
+    std::map<std::string, int64_t> numLRMapByFunc_;
+    std::map<std::string, int64_t> numDBMapByFunc_;
     std::map<std::string, int64_t> numLRMapByLabel_;
     std::map<std::string, int64_t> numDBMapByLabel_;
     int mgCopyInUpperBound_;

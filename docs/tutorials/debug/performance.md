@@ -383,27 +383,26 @@ PyPTO框架在深度方向上已经实现了自动合图的功能，在极致性
 
 Matmul运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_options.md)接口配置子图合并，主要可以选择`L1Reuse`和`CubeNBuffer`两种策略。两者都是用于在广度方向上合并Cube子图，前者用于合并具有冗余L1搬运的子图、后者用于合并同构的子图。L1Reuse可以减少L1搬运量，CubeNBuffer可以在不同分支的矩阵乘间隐藏搬运和计算耗时。它们都能减少子图调度开销，但考虑到大多数的矩阵乘场景的性能瓶颈都是数据搬运，因此优先使用L1Reuse策略减少数据搬运量。
 
-实际上L1Reuse策略是默认开启的，且自动计算并配置子图合并数量。极致性能优化场景下可以通过`cube_l1_reuse_setting`参数进行手动配置，通常考虑2、4、8等值，可以结合泳道图实测数据择优配置。可参考如下配置：
+实际上L1Reuse策略是默认开启的，且自动计算并配置子图合并数量。极致性能优化场景下可以通过`cube_l1_reuse_setting`参数进行手动配置，通常考虑2、4、8等值，可以结合泳道图实测数据择优配置。
+
+`cube_l1_reuse_setting` 支持函数粒度配置（`func{magic}_{order}` 格式），可实现不同 root function 间的精细化控制：仅影响指定的 function，不影响其他 function。配置信息会直接展示在泳道图的 hashOrder-hint 字段中（格式 `l1ReuseInfo hashOrder: func8_0, subGraphCount: 24`），可根据子图数量（subGraphCount）和核心数匹配合并力度。
+
+整数 key 方式为兼容旧配置保留，后续可能废弃。整数 key 和函数粒度 key 互斥，不可混用。此外还支持基于 semantic_label 的配置，示例如下：
 
 ```python
-# 全局统一配置为2
+# 函数粒度配置
 @pypto.frontend.jit(
-    pass_options={"cube_l1_reuse_setting": {-1: 2}}
+    pass_options={"cube_l1_reuse_setting": {"DEFAULT": 4, "func8_0": 1, "func8_1": 1}}
 )
 
-# 全局自动配置的基础上，同构子图id为0的子图配置为8
-@pypto.frontend.jit(
-    pass_options={"cube_l1_reuse_setting": {0: 8}}
-)
-
-# 全局自动配置的基础上，semantic_label为C1的op所在的子图配置为4
-@pypto.frontend.jit(
-    pass_options={"cube_l1_reuse_setting": {"C1": 4}}
-)
-
-# 全局配置为2的基础上，同构子图id为0的子图配置为8
+# 全局整数 key 配置（兼容保留）
 @pypto.frontend.jit(
     pass_options={"cube_l1_reuse_setting": {-1: 2, 0: 8}}
+)
+
+# semantic_label 配置（可与函数粒度 key 或整数 key 共存）
+@pypto.frontend.jit(
+    pass_options={"cube_l1_reuse_setting": {"C1": 4}}
 )
 ```
 

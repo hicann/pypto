@@ -12,6 +12,7 @@
 """
 import sys
 import enum
+import re
 from typing import List, Union, Dict, Optional
 from functools import wraps
 
@@ -55,9 +56,9 @@ def set_print_options(*,
 
 
 def set_pass_options(*,
-                     vec_nbuffer_setting: Optional[Dict[int, int]] = None,
-                     cube_l1_reuse_setting: Optional[Dict[int, int]] = None,
-                     cube_nbuffer_setting: Optional[Dict[int, int]] = None,
+                     vec_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
+                     cube_l1_reuse_setting: Optional[Dict[Union[int, str], int]] = None,
+                     cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
                      sg_set_scope: Optional[Union[int, tuple[int, bool, bool]]] = None,
                      ) -> None:
     """
@@ -65,19 +66,27 @@ def set_pass_options(*,
 
     Parameters
     ---------
-    vec_nbuffer_setting : Dict[int, int]
+    vec_nbuffer_setting : Dict[Union[int, str], int]
         Merged graph parameter, used to configure
         the merging quantity of AIV subgraphs with the same structure.
 
-    cube_l1_reuse_setting : Dict[int, int]
+        Key format:
+        - Integer key (e.g., 0, 1, -1): Global setting, applies to all functions
+        - String key in format "func{magic}_{order}" (e.g., "func123_0"):
+          Function-granularity setting, only applies to the specified function
+          with functionMagic=magic and local hashOrder=order
+
+    cube_l1_reuse_setting : Dict[Union[int, str], int]
         Merged graph parameter, used to configure
         the merging quantity of subgraphs with the same structure
         and repeated transfer of the same GM data.
+        Supports same key formats as vec_nbuffer_setting.
 
-    cube_nbuffer_setting : Dict[int, int]
+    cube_nbuffer_setting : Dict[Union[int, str], int]
         Merged graph parameter, used to configure
         the merging quantity of AIC subgraphs with the same structure.
-    
+        Supports same key formats as vec_nbuffer_setting.
+
     sg_set_scope : Union[int, tuple]
         Merged graph parameter, used to manually control graph merging.
         - If int: only set scopeid (backward compatible)
@@ -85,7 +94,56 @@ def set_pass_options(*,
           * scopeid: int, scope ID
           * allow_parallel_merge: bool, enable parallel branch merging
           * allow_cross_scope_merge: bool, allow supernode with scope to merge with others
+
+    Raises
+    ------
+    ValueError
+        If mixing function-granularity keys ("func{magic}_{order}") with integer keys
+        in the same setting parameter.
     """
+    # Function-granularity hashOrder pattern: func{magic}_{order}
+    _func_hash_order_pattern = re.compile(r'^func\d+_\d+$')
+    # Default key for function-granularity format
+    _default_key = 'DEFAULT'
+
+    def _validate_hash_order_setting(setting_dict: Optional[Dict[Union[int, str], int]], param_name: str):
+        """Validate hashOrder setting keys.
+
+        Valid key formats:
+        - Integer key: global setting (e.g., -1, 0, 1)
+        - String key 'func{magic}_{order}': function-granularity setting (e.g., 'func123_0')
+        - String key 'DEFAULT': default function-granularity setting
+        - Other string keys: semantic label settings
+
+        Invalid:
+        - Mixing integer keys (global) with func/DEFAULT keys (function-granularity)
+        """
+        if setting_dict is None:
+            return
+        if not isinstance(setting_dict, dict):
+            return
+
+        has_int_keys = False
+        has_func_keys = False
+
+        for key in setting_dict.keys():
+            if isinstance(key, int):
+                has_int_keys = True
+            elif isinstance(key, str):
+                if _func_hash_order_pattern.match(key) or key == _default_key:
+                    has_func_keys = True
+
+        if has_int_keys and has_func_keys:
+            raise FeError(ValueError(
+                f"{param_name} cannot mix integer keys with func/DEFAULT keys. "
+                f"Please use either all integer keys or all func/DEFAULT keys."
+            ))
+
+    # Validate hashOrder settings
+    _validate_hash_order_setting(vec_nbuffer_setting, 'vec_nbuffer_setting')
+    _validate_hash_order_setting(cube_l1_reuse_setting, 'cube_l1_reuse_setting')
+    _validate_hash_order_setting(cube_nbuffer_setting, 'cube_nbuffer_setting')
+
     # 处理 sg_set_scope 参数
     if sg_set_scope is not None:
         if isinstance(sg_set_scope, int):
@@ -120,26 +178,34 @@ def set_pass_options(*,
                 f"Expected int64 or tuple, but got {type(sg_set_scope).__name__}."
             ))
 
-        # 将处理后的值放入 options_dict
-        locals_dict = {k: v for k, v in locals().items()
-                       if v is not None and k not in ('sg_set_scope', 'processed_sg_set_scope')}
-        locals_dict['sg_set_scope'] = processed_sg_set_scope
-    else:
-        locals_dict = {k: v for k, v in locals().items() if v is not None}
+    # 构建 pass_options 字典
+    pass_options = {}
+    if sg_set_scope is not None:
+        pass_options['sg_set_scope'] = processed_sg_set_scope
+    if vec_nbuffer_setting is not None:
+        pass_options['vec_nbuffer_setting'] = vec_nbuffer_setting
+    if cube_l1_reuse_setting is not None:
+        pass_options['cube_l1_reuse_setting'] = cube_l1_reuse_setting
+    if cube_nbuffer_setting is not None:
+        pass_options['cube_nbuffer_setting'] = cube_nbuffer_setting
 
     # 调用 set_options
-    options_dict = {k: v for k, v in locals_dict.items() if v is not None}
-    set_options(pass_options=options_dict)
+    if pass_options:
+        set_options(pass_options=pass_options)
 
 
-def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
+def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], Dict[str, int]]]:
     """
     Get pass options.
 
     Returns
     -------
-    Dict[str, Union[str, int, List[int], Dict[int, int]]]
-        All pass options
+    Dict[str, Union[str, int, List[int], Dict[int, int], Dict[str, int]]]
+        All pass options from C++ scope, including:
+        - *_setting: integer key settings
+        - *_by_func: func{magic}_{order} format key settings
+        - *_by_label: semantic label key settings
+        - sg_set_scope: scope configuration
     """
     scope = get_current_scope()
     rst = scope.get_pass_options()
@@ -147,6 +213,12 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
         'vec_nbuffer_setting',
         'cube_l1_reuse_setting',
         'cube_nbuffer_setting',
+        'vec_nbuffer_setting_by_func',
+        'cube_l1_reuse_setting_by_func',
+        'cube_nbuffer_setting_by_func',
+        'vec_nbuffer_setting_by_label',
+        'cube_l1_reuse_setting_by_label',
+        'cube_nbuffer_setting_by_label',
         'sg_set_scope',
     }
     result = {k: v for k, v in rst.items() if k in allowed_keys}
@@ -321,7 +393,20 @@ def set_semantic_label(label: str) -> None:
         Semantic label.
         Note: label will be attached to subsequent operations
 
+    Raises
+    ------
+    ValueError
+        If label conflicts with function-granularity hashOrder format ('func{magic}_{order}').
+
     """
+    # Function-granularity hashOrder pattern: func{magic}_{order}
+    _func_hash_order_pattern = re.compile(r'^func\d+_\d+$')
+    if _func_hash_order_pattern.match(label):
+        raise FeError(ValueError(
+            f"Semantic label '{label}' conflicts with function-granularity hashOrder format. "
+            f"Please use a different label pattern."
+        ))
+
     frame = sys._getframe(1)
     pypto_impl.SetSemanticLabel(label, frame.f_code.co_filename, frame.f_lineno)
 

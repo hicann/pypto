@@ -58,9 +58,12 @@ class TaskInfo:
         self.tensors = {}
         self.rawtensors = {}
         self.wrap_id = -1
-        self.l1_reuse_hash_order = -1
-        self.cube_merge_hash_order = -1
-        self.vec_merge_hash_order = -1
+        self.l1_reuse_hash_order = None
+        self.cube_merge_hash_order = None
+        self.vec_merge_hash_order = None
+        self.l1_reuse_subgraph_count = None
+        self.cube_merge_subgraph_count = None
+        self.vec_merge_subgraph_count = None
         self.sync_events = []
 
     def formal_name(self):
@@ -69,14 +72,34 @@ class TaskInfo:
         oper_idx = self.task_id & ((1 << 16) - 1)
         return f"{seq_no}-{func_id}-{oper_idx}"
 
+    def get_hash_order_display(self):
+        parts = []
+        if self.l1_reuse_hash_order is not None:
+            parts.append(
+                f"l1ReuseInfo hashOrder: {self.l1_reuse_hash_order}, "
+                f"subGraphCount: {self.l1_reuse_subgraph_count}")
+        if self.cube_merge_hash_order is not None:
+            parts.append(
+                f"cubeMergeInfo hashOrder: {self.cube_merge_hash_order}, "
+                f"subGraphCount: {self.cube_merge_subgraph_count}")
+        if self.vec_merge_hash_order is not None:
+            parts.append(
+                f"vecMergeInfo hashOrder: {self.vec_merge_hash_order}, "
+                f"subGraphCount: {self.vec_merge_subgraph_count}")
+        return "\n".join(parts) if parts else ""
+
     def get_task_full_name(self):
-        return (
+        base = (
             f"Task:[{self.formal_name()}], "
             f"rootHash:{self.root_hash}, "
             f"callOpMagic:{self.opmagic}, "
             f"leafHash:{self.func_hash}, "
             f"TaskId:{self.origin_task_id}"
         )
+        ho = self.get_hash_order_display()
+        if ho:
+            return f"{base}\n{ho}"
+        return base
 
     def get_task_execution_time_analysis(self):
         assert self.psg_id_in_dyn in task_analysis
@@ -111,9 +134,7 @@ class TaskInfo:
         res["args"]["taskId"] = self.origin_task_id
         res["args"]["seqNo"] = self.origin_seq_no
         res["args"]["wrapId"] = self.wrap_id
-        res["args"]["l1ReuseHashOrder"] = self.l1_reuse_hash_order
-        res["args"]["cubeNBufferHashOrder"] = self.cube_merge_hash_order
-        res["args"]["vecNBufferHashOrder"] = self.vec_merge_hash_order
+        self._add_hash_order_args(res["args"])
         if self.sync_events:
             res["args"]["syncEvents"] = self.sync_events
         res["cat"] = "event"
@@ -137,9 +158,7 @@ class TaskInfo:
         res["args"]["ooperand-hint"] = self.outoperand_label
         res["args"]["taskId"] = self.origin_task_id
         res["args"]["seqNo"] = self.origin_seq_no
-        res["args"]["l1ReuseHashOrder"] = self.l1_reuse_hash_order
-        res["args"]["cubeNBufferHashOrder"] = self.cube_merge_hash_order
-        res["args"]["vecNBufferHashOrder"] = self.vec_merge_hash_order
+        self._add_hash_order_args(res["args"])
         if self.sync_events:
             res["args"]["syncEvents"] = self.sync_events
         if len(self.func_name) == 0:
@@ -151,6 +170,11 @@ class TaskInfo:
         res["successors"] = self.successors
         res["remainingPredecessors"] = self.predecessor
         return res
+
+    def _add_hash_order_args(self, args):
+        info = self.get_hash_order_display()
+        if info:
+            args["hashOrder-hint"] = info
 
 
 class TaskAnalysisInfo:
@@ -443,45 +467,56 @@ def parse_swim_data(swim_data, label_type):
     return fake_task_list
 
 
-def parse_topo_data(topo_data, label_type, fake_task_list):
-    # 解析topo.json 文件中的数据
-    if topo_data is not None:
-        for topo_task in topo_data:
-            task_id = topo_task["taskId"]
-            if task_id not in total_tasks:
-                build_fake_entry(task_id)
-                fake_task_list.append(task_id)
-            func_name = topo_task.get("funcName", "")
-            sematic_label = topo_task.get("semanticLabel", "")
-            entry = total_tasks[task_id]
-            entry.root_index = topo_task.get("rootIndex", -1)
-            entry.root_hash = topo_task.get("rootHash", -1)
-            entry.opmagic = topo_task.get("opMagic", -1)
-            entry.origin_task_id = topo_task.get("oriTaskId", 0)
-            entry.origin_seq_no = topo_task.get("oriSeqNo", 0)
+def _assign_color_label(entry, label_type, sematic_label):
+    if label_type == 1:
+        entry.color_label += sematic_label
+    elif label_type == 2:
+        entry.color_label = decimal_to_26(entry.psg_id_in_dyn)
+        entry.color_label += " " + sematic_label
+    else:
+        entry.color_label = decimal_to_26(entry.psg_id_in_dyn)
 
-            # should assert entry.psg_id_in_dyn == topo_task.get('leafIndex', -1) after dyn-static same code
-            if label_type == 1:
-                entry.color_label += sematic_label
-            elif label_type == 2:
-                entry.color_label = decimal_to_26(entry.psg_id_in_dyn)
-                entry.color_label += " " + sematic_label
-            else:
-                entry.color_label = decimal_to_26(entry.psg_id_in_dyn)
-            entry.func_name = func_name
-            entry.psg_id_within_static = topo_task.get("psgId", entry.psg_id_in_dyn)
-            entry.wrap_id = topo_task.get("wrapId", -1)
-            entry.l1_reuse_hash_order = topo_task.get("l1ReuseHashOrder", -1)
-            entry.cube_merge_hash_order = topo_task.get("cubeNBufferHashOrder", -1)
-            entry.vec_merge_hash_order = topo_task.get("vecNBufferHashOrder", -1)
-            entry.inoperand_label = f"{topo_task.get('inoperands', [])}"
-            entry.outoperand_label = f"{topo_task.get('outoperands', [])}"
-            entry.successors = topo_task["successors"]
-            entry.in_operands = topo_task.get('in_operands') if topo_task.get('in_operands') else []
-            entry.out_operands = topo_task.get('out_operands') if topo_task.get('out_operands') else []
-            entry.func_hash = topo_task.get('funcHash')
-            entry.tensors = topo_task.get('tensors')
-            entry.rawtensors = topo_task.get('rawtensors')
+
+def _assign_hash_order_info(entry, topo_task):
+    for prefix, attr_hash, attr_count in [
+        ("l1Reuse", "l1_reuse_hash_order", "l1_reuse_subgraph_count"),
+        ("cubeNBuffer", "cube_merge_hash_order", "cube_merge_subgraph_count"),
+        ("vecNBuffer", "vec_merge_hash_order", "vec_merge_subgraph_count"),
+    ]:
+        info = topo_task.get(f"{prefix}HashOrderInfo")
+        setattr(entry, attr_hash, info.get("hashOrder") if info else None)
+        setattr(entry, attr_count, info.get("subgraphCount") if info else None)
+
+
+def parse_topo_data(topo_data, label_type, fake_task_list):
+    if topo_data is None:
+        return
+    for topo_task in topo_data:
+        task_id = topo_task["taskId"]
+        if task_id not in total_tasks:
+            build_fake_entry(task_id)
+            fake_task_list.append(task_id)
+        func_name = topo_task.get("funcName", "")
+        sematic_label = topo_task.get("semanticLabel", "")
+        entry = total_tasks[task_id]
+        entry.root_index = topo_task.get("rootIndex", -1)
+        entry.root_hash = topo_task.get("rootHash", -1)
+        entry.opmagic = topo_task.get("opMagic", -1)
+        entry.origin_task_id = topo_task.get("oriTaskId", 0)
+        entry.origin_seq_no = topo_task.get("oriSeqNo", 0)
+        _assign_color_label(entry, label_type, sematic_label)
+        entry.func_name = func_name
+        entry.psg_id_within_static = topo_task.get("psgId", entry.psg_id_in_dyn)
+        entry.wrap_id = topo_task.get("wrapId", -1)
+        _assign_hash_order_info(entry, topo_task)
+        entry.inoperand_label = f"{topo_task.get('inoperands', [])}"
+        entry.outoperand_label = f"{topo_task.get('outoperands', [])}"
+        entry.successors = topo_task["successors"]
+        entry.in_operands = topo_task.get('in_operands') if topo_task.get('in_operands') else []
+        entry.out_operands = topo_task.get('out_operands') if topo_task.get('out_operands') else []
+        entry.func_hash = topo_task.get('funcHash')
+        entry.tensors = topo_task.get('tensors')
+        entry.rawtensors = topo_task.get('rawtensors')
 
 
 def build_swim_info(swim_data, topo_data, label_type: int = 0, dir_name: str = "", mix_event_path: str = ""):
@@ -814,9 +849,7 @@ def load_dyn_topo(file_path, func_data):
             root_index = get_func_index(root_hash, func_data)
             leaf_index = get_func_index(func_hash, func_data)
             succs = fields[10:]
-            l1_reuse_hash_order, cube_merge_hash_order, vec_merge_hash_order = fcvt.get_hash_order(
-                leaf_index, func_data
-            )
+            l1_info, cube_info, vec_info = fcvt.get_hash_order_info(leaf_index, func_data)
             topo.append(
                 {
                     "taskId": seq_no << 32 | task_id,
@@ -831,9 +864,9 @@ def load_dyn_topo(file_path, func_data):
                     "psgId": psg_id_within_root,
                     "wrapId": wrap_id,
                     "funcHash": func_hash,
-                    "l1ReuseHashOrder": l1_reuse_hash_order,
-                    "cubeNBufferHashOrder": cube_merge_hash_order,
-                    "vecNBufferHashOrder": vec_merge_hash_order,
+                    "l1ReuseHashOrderInfo": l1_info,
+                    "cubeNBufferHashOrderInfo": cube_info,
+                    "vecNBufferHashOrderInfo": vec_info,
                     "semanticLabel": fcvt.get_sematic(
                         root_index, opmagic, func_data
                     ),

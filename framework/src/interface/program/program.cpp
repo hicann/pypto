@@ -188,6 +188,20 @@ void SetParamConfig(Function* currentFuncPtr)
         currentScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_NBUFFER_SETTING);
     currentFuncPtr->paramConfigs_.vecNBufferSetting =
         currentScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);
+    // Function-granularity setting
+    if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_func")) {
+        currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByFunc =
+            currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_l1_reuse_setting_by_func");
+    }
+    if (currentScope->HasConfig("pass.cube_nbuffer_setting_by_func")) {
+        currentFuncPtr->paramConfigs_.cubeNBufferSettingByFunc =
+            currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_nbuffer_setting_by_func");
+    }
+    if (currentScope->HasConfig("pass.vec_nbuffer_setting_by_func")) {
+        currentFuncPtr->paramConfigs_.vecNBufferSettingByFunc =
+            currentScope->GetPassConfig<std::map<std::string, int64_t>>("vec_nbuffer_setting_by_func");
+    }
+    // Semantic label settings
     if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_label")) {
         currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByLabel =
             currentScope->GetPassConfig<std::map<std::string, int64_t>>("cube_l1_reuse_setting_by_label");

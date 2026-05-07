@@ -111,6 +111,13 @@ public:
     static const std::string mxQuantAxis;
     static const std::string mxQuantPerformanceMode;
     static const std::string gmTensorParamIdxInCall;
+    // HashOrder attribute keys
+    static const std::string l1ReuseHashOrder;
+    static const std::string l1ReuseSubgraphCount;
+    static const std::string cubeMergeHashOrder;
+    static const std::string cubeMergeSubgraphCount;
+    static const std::string vecMergeHashOrder;
+    static const std::string vecMergeSubgraphCount;
 };
 
 class ConvOpAttributeKey {
@@ -557,12 +564,20 @@ public:
         return mixSubgraphFields_ ? mixSubgraphFields_->internalSubgraphID : NOT_IN_SUBGRAPH;
     }
     void UpdateSubgraphID(int subgraphID) { subgraphID_ = subgraphID; }
-    int GetL1ReuseHashOrder() const { return l1ReuseHashOrder_; }
-    void UpdateL1ReuseHashOrder(int hashOrder) { l1ReuseHashOrder_ = hashOrder; }
-    int GetCubeMergeHashOrder() const { return cubeMergeHashOrder_; }
-    void UpdateCubeMergeHashOrder(int hashOrder) { cubeMergeHashOrder_ = hashOrder; }
-    int GetVecMergeHashOrder() const { return vecMergeHashOrder_; }
-    void UpdateVecMergeHashOrder(int hashOrder) { vecMergeHashOrder_ = hashOrder; }
+    // HashOrder attribute setters/getters using attribute mechanism
+    void SetHashOrderInfo(const std::string& hashOrderKey, const std::string& countKey,
+                          const std::string& hashOrder, size_t subgraphCount) {
+        SetAttr(hashOrderKey, hashOrder);
+        SetAttr(countKey, static_cast<int64_t>(subgraphCount));
+    }
+    std::pair<std::string, size_t> GetHashOrderInfo(const std::string& hashOrderKey,
+                                                     const std::string& countKey) const {
+        std::string hashOrder;
+        int64_t count = 0;
+        GetAttr(hashOrderKey, hashOrder);
+        GetAttr(countKey, count);
+        return {hashOrder, static_cast<size_t>(count)};
+    }
     void UpdateInternalSubgraphID(int internalSubgraphID)
     {
         ensureMixSubgraphFields();
@@ -640,9 +655,6 @@ public:
 private:
     Opcode opcode_{Opcode::OP_UNKNOWN};
     int subgraphID_{NOT_IN_SUBGRAPH};
-    int l1ReuseHashOrder_{-1};
-    int cubeMergeHashOrder_{-1};
-    int vecMergeHashOrder_{-1};
     bool isTileOp_{false};
     TileShape tileShape_;
     std::shared_ptr<OpAttribute> opAttribute_;

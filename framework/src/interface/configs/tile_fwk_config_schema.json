@@ -105,6 +105,30 @@
                     "value_minimum": 0,
                     "value_maximum": 2147483647
                 },
+                "cube_l1_reuse_setting_by_func": {
+                    "type": "object",
+                    "typeHints": "stringmap",
+                    "label": {
+                        "zh": "合图参数，按Function粒度配置L1数据复用子图的合并数量。Key格式为'func{magic}_{order}'或'DEFAULT'。Value为合并数量，Value=1表示不进行合图，Value>1表示将N个结构相同的子图合并为1个。",
+                        "en": "Graph merging parameter, used to configure the merging count of L1 data reuse subgraphs by function granularity. Key format is 'func{magic}_{order}' or 'DEFAULT'. Value is the merge count, Value=1 means no merging, Value>1 means merge N subgraphs with the same structure into 1."
+                    }
+                },
+                "cube_nbuffer_setting_by_func": {
+                    "type": "object",
+                    "typeHints": "stringmap",
+                    "label": {
+                        "zh": "合图参数，按Function粒度配置相同结构AIC子图的合并数量。Key格式为'func{magic}_{order}'或'DEFAULT'。Value为合并数量，Value=1表示不进行合图，Value>1表示将N个结构相同的子图合并为1个。",
+                        "en": "Graph merging parameter, used to configure the merging count of AIC subgraphs with identical structures by function granularity. Key format is 'func{magic}_{order}' or 'DEFAULT'. Value is the merge count, Value=1 means no merging, Value>1 means merge N subgraphs with the same structure into 1."
+                    }
+                },
+                "vec_nbuffer_setting_by_func": {
+                    "type": "object",
+                    "typeHints": "stringmap",
+                    "label": {
+                        "zh": "合图参数，按Function粒度配置相同结构AIV子图的合并数量。Key格式为'func{magic}_{order}'或'DEFAULT'。Value为合并数量，Value=1表示不进行合图，Value>1表示将N个结构相同的子图合并为1个。",
+                        "en": "Graph merging parameter, used to configure the merging count of AIV subgraphs with identical structures by function granularity. Key format is 'func{magic}_{order}' or 'DEFAULT'. Value is the merge count, Value=1 means no merging, Value>1 means merge N subgraphs with the same structure into 1."
+                    }
+                },
                 "cube_l1_reuse_setting_by_label": {
                     "type": "object",
                     "typeHints": "stringmap",

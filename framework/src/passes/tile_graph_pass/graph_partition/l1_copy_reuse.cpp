@@ -17,6 +17,7 @@
 #include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
+
 inline std::vector<uint64_t> GetGMInputFeature(const Operation& op)
 { // 提取GM tensor的特征
     auto ioperand = op.GetIOperands()[0];
@@ -64,8 +65,16 @@ bool L1CopyInReuseRunner::CanReuse(const Operation& op)
     return false;
 }
 
-int L1CopyInReuseRunner::GetModeBySetting(const std::map<int64_t, int64_t>& setting)
+int L1CopyInReuseRunner::GetModeBySetting(
+    const std::map<int64_t, int64_t>& setting,
+    const std::map<std::string, int64_t>& settingByFunc)
 {
+    if (settingByFunc.size() == 1) {
+        auto defaultIt = settingByFunc.find(FUNC_HASH_ORDER_DEFAULT_KEY);
+        if (defaultIt != settingByFunc.end() && defaultIt->second == 1) {
+            return 0;
+        }
+    }
     std::map<int64_t, int64_t> skipSetting = {{-1, 1}};
     if (setting == skipSetting) {
         return 0;
@@ -241,7 +250,8 @@ void L1CopyInReuseRunner::GetOpHash(std::vector<uint64_t>& hashList, const std::
 }
 
 void L1CopyInReuseRunner::GetColorHash(
-    const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor, const std::vector<std::vector<int>>& colorNode)
+    const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
+    const std::vector<std::vector<int>>& colorNode)
 {
     std::vector<uint64_t> hashTileOp(opOriList.size(), 0);
     for (size_t i = 0; i < opOriList.size(); i++) {
@@ -268,13 +278,19 @@ void L1CopyInReuseRunner::GetColorHash(
             order++;
         }
     }
+    int funcMagic = func.GetFuncMagic();
     for (auto& entry : hashMap_) {
-        int hashOrder = hashOrder_[entry.first];
+        int hashOrderVal = hashOrder_[entry.first];
+        std::string fullHashOrder = "func" + std::to_string(funcMagic) + "_" + std::to_string(hashOrderVal);
+        size_t subgraphCount = entry.second.size();
         for (auto subgraphId : entry.second) {
             if (!mulaccGraph_.count(subgraphId))
                 continue;
             for (auto opIdx : colorNode[subgraphId]) {
-                opOriList[opIdx].UpdateL1ReuseHashOrder(hashOrder);
+                opOriList[opIdx].SetHashOrderInfo(
+                    OpAttributeKey::l1ReuseHashOrder,
+                    OpAttributeKey::l1ReuseSubgraphCount,
+                    fullHashOrder, subgraphCount);
             }
         }
     }
@@ -294,12 +310,18 @@ void L1CopyInReuseRunner::HashUpdate(
 
     hashOrder_.clear();
     int order = 0;
+    int funcMagic = func.GetFuncMagic();
     for (int i = 0; i < color; i++) {
         if (hashMap_.find(hashColor[i]) != hashMap_.end() && hashOrder_.find(hashColor[i]) == hashOrder_.end()) {
             hashOrder_[hashColor[i]] = order;
+            std::string fullHashOrder = "func" + std::to_string(funcMagic) + "_" + std::to_string(order);
+            size_t subgraphCount = hashMap_[hashColor[i]].size();
             for (auto subgraphId : hashMap_[hashColor[i]]) {
                 for (auto opIdx : colorNode[subgraphId]) {
-                    opOriList[opIdx].UpdateCubeMergeHashOrder(order);
+                    opOriList[opIdx].SetHashOrderInfo(
+                        OpAttributeKey::cubeMergeHashOrder,
+                        OpAttributeKey::cubeMergeSubgraphCount,
+                        fullHashOrder, subgraphCount);
                 }
             }
             order++;
@@ -309,30 +331,73 @@ void L1CopyInReuseRunner::HashUpdate(
     APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
     for (auto& entry : hashOrder_) {
         auto& subgraphIds = hashMap_[entry.first];
+        std::string fullHashOrder = "func" + std::to_string(funcMagic) + "_" + std::to_string(entry.second);
         APASS_LOG_INFO_F(
             Elements::Function,
-            "Cube nbuffer hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.", entry.second,
-            entry.first, subgraphIds.size(), IntVecToStr(subgraphIds).c_str());
+            "Cube nbuffer hashOrder: %s, Subgraph count: %zu, Subgraph IDs: %s",
+            fullHashOrder.c_str(), subgraphIds.size(), IntVecToStr(subgraphIds).c_str());
     }
     APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
 }
 
-Status L1CopyInReuseRunner::SetNumFromConfig(
+Status L1CopyInReuseRunner::ApplyByFuncConfig(
+    int currentFuncMagic, const std::map<std::string, int64_t>& configMapByFunc,
+    std::map<int, int>& resultMap, const std::string& configName)
+{
+    auto defaultIt = configMapByFunc.find(FUNC_HASH_ORDER_DEFAULT_KEY);
+    if (defaultIt != configMapByFunc.end()) {
+        if (defaultIt->second < 1) {
+            APASS_LOG_ERROR_F(Elements::Config,
+                "Invalid merge count for DEFAULT: merge count=%ld, please check.",
+                static_cast<long>(defaultIt->second));
+            return FAILED;
+        }
+        int defaultVal = static_cast<int>(defaultIt->second);
+        for (const auto& [hashVal, order] : hashOrder_) {
+            (void) hashVal;
+            resultMap[order] = defaultVal;
+        }
+    }
+
+    for (const auto& entry : configMapByFunc) {
+        if (entry.first == FUNC_HASH_ORDER_DEFAULT_KEY) {
+            continue;
+        }
+        int funcMagic, localOrder;
+        if (!ParseFuncHashOrder(entry.first, funcMagic, localOrder)) {
+            APASS_LOG_WARN_F(Elements::Config,
+                "Invalid func hashOrder format: %s in %s, ignored.", entry.first.c_str(), configName.c_str());
+            continue;
+        }
+        if (funcMagic == currentFuncMagic) {
+            if (entry.second < 1) {
+                APASS_LOG_ERROR_F(Elements::Config,
+                    "Invalid merge count for func hashOrder %s: merge count=%ld, please check.",
+                    entry.first.c_str(), entry.second);
+                return FAILED;
+            }
+            resultMap[localOrder] = static_cast<int>(entry.second);
+        }
+    }
+    return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::ApplyGlobalConfig(
     const std::map<int64_t, int64_t>& configMap, std::map<int, int>& resultMap, const std::string& configName)
 {
     auto defaultEntry = configMap.find(-1);
     int defaultValue = -1;
     if (defaultEntry != configMap.end()) {
         if (defaultEntry->second < 1) {
-            APASS_LOG_ERROR_F(
-                Elements::Config, "Invalid default merge count for %s: Default merge count=%ld, please check.",
+            APASS_LOG_ERROR_F(Elements::Config,
+                "Invalid default merge count for %s: Default merge count=%ld, please check.",
                 configName.c_str(), static_cast<long>(defaultEntry->second));
             return FAILED;
         }
         defaultValue = defaultEntry->second;
     }
     for (auto& [hashcolor, order] : hashOrder_) {
-        (void)hashcolor;
+        (void) hashcolor;
         resultMap[order] = defaultValue;
     }
     for (auto& entry : configMap) {
@@ -342,7 +407,7 @@ Status L1CopyInReuseRunner::SetNumFromConfig(
         }
         bool found = false;
         for (auto& [hashcolor, order] : hashOrder_) {
-            (void)hashcolor;
+            (void) hashcolor;
             if (order == hashOrderKey) {
                 found = true;
                 break;
@@ -354,14 +419,25 @@ Status L1CopyInReuseRunner::SetNumFromConfig(
             continue;
         }
         if (entry.second < 1) {
-            APASS_LOG_ERROR_F(
-                Elements::Config, "Invalid merge count for hashOrder %d: merge count=%ld, please check.", hashOrderKey,
-                static_cast<long>(entry.second));
+            APASS_LOG_ERROR_F(Elements::Config,
+                "Invalid merge count for hashOrder %d: merge count=%ld, please check.",
+                hashOrderKey, static_cast<long>(entry.second));
             return FAILED;
         }
         resultMap[hashOrderKey] = static_cast<int>(entry.second);
     }
     return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::SetNumFromConfig(
+    const Function& func, const std::map<int64_t, int64_t>& configMap,
+    const std::map<std::string, int64_t>& configMapByFunc, std::map<int, int>& resultMap,
+    const std::string& configName)
+{
+    if (!configMapByFunc.empty()) {
+        return ApplyByFuncConfig(func.GetFuncMagic(), configMapByFunc, resultMap, configName);
+    }
+    return ApplyGlobalConfig(configMap, resultMap, configName);
 }
 
 Status L1CopyInReuseRunner::L1MergeProcess(
@@ -464,8 +540,8 @@ Status L1CopyInReuseRunner::Phase1(
     auto opOriList = func.Operations();
     std::map<std::vector<uint64_t>, int> l1InputList;
     std::map<int, int> numLRMap;
-    // CubeL1ReuseMode
-    if (SetNumFromConfig(numLRMap_, numLRMap, "cubeL1ReuseSetting") == FAILED) {
+    // CubeL1ReuseMode - apply global and function-granularity settings
+    if (SetNumFromConfig(func, numLRMap_, numLRMapByFunc_, numLRMap, "cubeL1ReuseSetting") == FAILED) {
         APASS_LOG_ERROR_F(Elements::Config, "Invalid configuration: %s.", "cubeL1ReuseSetting");
         return FAILED;
     }
@@ -708,23 +784,27 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
     auto opOriList = func.Operations();
     std::vector<uint64_t> hashColor(color, 0);
     hashOrder_.clear();
-    GetColorHash(opOriList, hashColor, colorNode);
-    // print hashorder
+    GetColorHash(func, opOriList, hashColor, colorNode);
+    // print hashorder with function-granularity format
+    int funcMagic = func.GetFuncMagic();
     APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
     for (auto& entry : hashMap_) {
+        std::string fullHashOrder = "func" + std::to_string(funcMagic) + "_" + std::to_string(hashOrder_[entry.first]);
         APASS_LOG_INFO_F(
-            Elements::Function, "L1 reuse hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
-            hashOrder_[entry.first], entry.first, entry.second.size(), IntVecToStr(entry.second).c_str());
+            Elements::Function, "L1 reuse hashOrder: %s, Subgraph count: %zu, Subgraph IDs: %s",
+            fullHashOrder.c_str(), entry.second.size(), IntVecToStr(entry.second).c_str());
     }
     APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
     auto colorCopyIn = GetCopyIn(opOriList, color, colorNode); // 记录各子图的大小
     mgCopyInUpperBound_ = func.paramConfigs_.sgMgCopyInUpperBound;
     numLRMap_ = func.paramConfigs_.cubeL1ReuseSetting;
     numDBMap_ = func.paramConfigs_.cubeNBufferSetting; // 合并阈值参数设置
+    numLRMapByFunc_ = func.paramConfigs_.cubeL1ReuseSettingByFunc;
+    numDBMapByFunc_ = func.paramConfigs_.cubeNBufferSettingByFunc;
     numLRMapByLabel_ = func.paramConfigs_.cubeL1ReuseSettingByLabel;
     numDBMapByLabel_ = func.paramConfigs_.cubeNBufferSettingByLabel;
-    L1ReuseMode_ = GetModeBySetting(numLRMap_);
-    cubeNBufferMode_ = GetModeBySetting(numDBMap_);
+    L1ReuseMode_ = GetModeBySetting(numLRMap_, numLRMapByFunc_);
+    cubeNBufferMode_ = GetModeBySetting(numDBMap_, numDBMapByFunc_);
     APASS_LOG_INFO_F(Elements::Operation, "Param Setting mgCopyInUpperBound %d.", mgCopyInUpperBound_);
     if ((L1ReuseMode_ == 1 || !numLRMapByLabel_.empty()) && hashMap_.size() != 0) {
         if (Phase1(func, color, colorNode, colorCopyIn, hashColor) == FAILED) {
@@ -738,8 +818,8 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
         HashUpdate(func, color, hashColor, opOriList, colorNode);
     }
     std::map<int, int> hashMergeNumMap;
-    // NBuffer参数设置
-    if (SetNumFromConfig(numDBMap_, hashMergeNumMap, "cubeNBufferSetting") == FAILED) {
+    // NBuffer参数设置 - apply global and function-granularity settings
+    if (SetNumFromConfig(func, numDBMap_, numDBMapByFunc_, hashMergeNumMap, "cubeNBufferSetting") == FAILED) {
         APASS_LOG_ERROR_F(Elements::Config, "Invalid configuration: %s.", "cubeNBufferSetting");
         return FAILED;
     }
@@ -850,8 +930,11 @@ Status L1CopyInReuseMerge::CheckOpListValid(Function& func) const
 
 Status L1CopyInReuseMerge::L1CopyInReuse(Function& func) const
 {
-    auto L1ReuseMode = L1CopyInReuseRunner::GetModeBySetting(func.paramConfigs_.cubeL1ReuseSetting);
-    auto cubeNBufferMode = L1CopyInReuseRunner::GetModeBySetting(func.paramConfigs_.cubeNBufferSetting);
+    // Check mode: support both legacy (-1: 1) and new format (FUNC_HASH_ORDER_DEFAULT_KEY: 1)
+    auto L1ReuseMode = L1CopyInReuseRunner::GetModeBySetting(
+        func.paramConfigs_.cubeL1ReuseSetting, func.paramConfigs_.cubeL1ReuseSettingByFunc);
+    auto cubeNBufferMode = L1CopyInReuseRunner::GetModeBySetting(
+        func.paramConfigs_.cubeNBufferSetting, func.paramConfigs_.cubeNBufferSettingByFunc);
     bool hasLabelSetting = !func.paramConfigs_.cubeL1ReuseSettingByLabel.empty() ||
                            !func.paramConfigs_.cubeNBufferSettingByLabel.empty();
     if (L1ReuseMode == 0 && cubeNBufferMode == 0 && !hasLabelSetting) {

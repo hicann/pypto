@@ -24,6 +24,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "passes/pass_utils/dfs_sort_utils.h"
+#include "passes/tile_graph_pass/graph_partition/hash_order_utils.h"
 namespace npu::tile_fwk {
 
 constexpr int64_t VEC_NBUFFER_SETTING_DEFAULT_MERGE_NUM_KEY =
@@ -44,8 +45,12 @@ private:
     void GetOpHash(std::vector<uint64_t>& hashList, const std::string op, size_t idx);
     void GetOpHashReverse(std::vector<uint64_t>& hashList, const std::string op, int idx);
     void GetColorHash(
-        const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
+        const Function& func, const OperationsViewer& opOriList, std::vector<uint64_t>& hashColor,
         std::map<uint64_t, std::vector<int>>& hashMap);
+    void SetHashOrderInfoOnOps(
+        int funcMagic, const OperationsViewer& opOriList,
+        const std::map<uint64_t, std::vector<int>>& hashMap,
+        const std::set<int32_t>& mulaccGraph);
     Status CheckAndFixColorOrder(
         OperationsViewer& opOriList, int& color1, std::vector<int>& colorCycles1,
         std::vector<std::vector<int>>& colorNode1);
@@ -63,7 +68,13 @@ private:
     void MergePingPong(
         std::vector<std::vector<int>>& sortedColors, const OperationsViewer& opOriList,
         std::vector<uint64_t>& hashColor, size_t& numDBmerge, int hashOrder);
-    std::map<uint64_t, size_t> SetNumDB(std::map<uint64_t, std::vector<int>>& hashMap);
+    std::map<uint64_t, size_t> SetNumDB(
+        const Function& func, std::map<uint64_t, std::vector<int>>& hashMap);
+    void ApplyByFuncNumDB(
+        int currentFuncMagic, std::map<uint64_t, size_t>& numDBMap,
+        std::map<uint64_t, std::vector<int>>& hashMap);
+    void ApplyGlobalNumDB(
+        std::map<uint64_t, size_t>& numDBMap, std::map<uint64_t, std::vector<int>>& hashMap);
     Status CheckVecNBufferSettingForManualMerge();
     Status MergeProcessForMulityInOut(
         const OperationsViewer& opOriList, const std::map<uint64_t, std::vector<int>>& hashMap,
@@ -85,9 +96,11 @@ private:
     int vecNBuffermode_;
     int mgVecParallelLb_;
     std::map<int64_t, int64_t> vecNBufferSetting_;
+    std::map<std::string, int64_t> vecNBufferSettingByFunc_;
     std::map<std::string, int64_t> vecNBufferSettingByLabel_;
-    std::unordered_map<uint64_t, int> hashOrder_;
+    std::map<uint64_t, int> hashOrder_;  // Deterministic ordered map for compilation repeatability
     enum ModeType { noMerge = 0, autoMerge = 1, manualMerge = 2, autoMulityInOutMerge = 3, manualMulityInOutMerge = 4 };
+
 };
 } // namespace npu::tile_fwk
 #endif // PASS_N_BUFFER_MERGE_H_
