@@ -1,68 +1,63 @@
-# PYPTO 框架错误码方案
+# PYPTO 框架 DFX
 
-本文档说明 PYPTO 各组件错误码的整体范围与约定。各组件具体错误码定义与排查说明见下方链接。
+本文档明确框架错误码及日志配置规范，并提供问题定位指南。
 
-## 总体范围
+## DFX 目标与要求
 
-所有 ASSERT ERROR 报错均需由错误码承载。各组件错误码范围如下：
+1. **问题归属可区分**：打屏报错必须携带错误码，支持快速区分“外部写法问题”与“框架内部问题”。
+2. **外部问题可修复**：外部写法问题须通过 `ErrorMsg` 明确“哪里错、为什么错、如何改”。
+3. **内部问题可定界**：框架内部问题须通过 `ErrorCode` 直接定界到对应组件。
+4. **根因定位可落地**：框架内部问题支持结合 `plog` 日志与 `docs/trouble_shooting/*.md` 组件文档定位并修复。
 
-| 范围             | 组件/用途     |
-|------------------|---------------|
-| F0-1XXXX         | 外部限制（用户写法问题、场景限制等） |
-| F2-F3XXXX        | FUNCTION      |
-| F4-F5XXXX        | PASS          |
-| F6XXXX           | CODEGEN       |
-| F7-F8XXXX        | MACHINE       |
-| F9XXXX           | SIMULATION    |
-| FAXXXX           | DISTRIBUTED   |
-| FBXXXX           | VERIFY        |
-| FCXXXX           | OPERATION     |
-| FC0-FC2XXX       | VECTOR        |
-| FC3-FC5XXX       | MATMUL        |
-| FC6-FC8XXX       | CONV          |
-| FC9XXX           | 视图类OP      |
+## ErrorCode
 
-## 各组件错误码文档
+### 范围映射与组件文档
 
-| 组件        | 范围       | 文档 |
-|-------------|------------|------|
-| FUNCTION    | F2-F3XXXX  | [function.md](function.md) |
-| PASS        | F4-F5XXXX  | [pass.md](pass.md) |
-| CODEGEN     | F6XXXX     | [codegen.md](codegen.md) |
-| MACHINE     | F7-F8XXXX  | [machine.md](machine.md) |
-| SIMULATION  | F9XXXX     | [simulation.md](simulation.md) |
-| DISTRIBUTED | FAXXXX     | [distributed.md](distributed.md) |
-| VERIFY      | FBXXXX     | [verify.md](verify.md) |
-| OPERATION   | FCXXXX     | [operation.md](operation.md) |
-| VECTOR      | FC0-FC2XXX | [vector.md](vector.md) |
-| MATMUL      | FC3-FC5XXX | [matmul.md](matmul.md) |
-| CONV        | FC6-FC8XXX | [conv.md](conv.md) |
-| 视图类OP     | FC9XXX     | [view_op.md](view_op.md) |
+所有中断流程中的 `PyptoError/CHECK/ASSERT/ERROR` 均需由错误码承载。范围映射如下：
 
-## 原则
+| 范围       | 归属与用途 | 文档 |
+|------------|------------|------|
+| F0XXXX     | 外部写法问题 | - |
+| F1XXXX     | 框架内部公共问题 | - |
+| F2-F3XXXX  | FUNCTION 组件内部问题 | [function.md](function.md) |
+| F4-F5XXXX  | PASS 组件内部问题 | [pass.md](pass.md) |
+| F6XXXX     | CODEGEN 组件内部问题 | [codegen.md](codegen.md) |
+| F7-F8XXXX  | MACHINE 组件内部问题 | [machine.md](machine.md) |
+| F9XXXX     | SIMULATION 组件内部问题 | [simulation.md](simulation.md) |
+| FAXXXX     | DISTRIBUTED 组件内部问题 | [distributed.md](distributed.md) |
+| FBXXXX     | VERIFY 组件内部问题 | [verify.md](verify.md) |
+| FCXXXX     | OPERATION 组件内部问题 | [operation.md](operation.md) |
+| FC0-FC2XXX | VECTOR 子类内部问题 | [vector.md](vector.md) |
+| FC3-FC5XXX | MATMUL 子类内部问题 | [matmul.md](matmul.md) |
+| FC6-FC8XXX | CONV 子类内部问题 | [conv.md](conv.md) |
+| FC9XXX     | 视图类 OP 子类内部问题 | [view_op.md](view_op.md) |
 
-- **报错与日志**：各组件 ASSERT/CHECK/ERROR 报错处须使用本组件 error 头文件中的错误码，并在日志或异常中携带该码。
-- **统一管理**：各组件错误码统一定义在 `framework/include/tilefwk/error_code.h`，组件侧头文件仅用于兼容包含。
-- **文档补充**：若单靠 ErrorMsg 无法说明原因或难以定位，须为该错误码补充 trouble_shooting 文档（原因、排查步骤与解决方案）。
-- **关联 Skill**：各组件错误码文档中可为每个错误码注明 **关联 Skill**，指向 [.agents/skills](../../.agents/skills) 下对应技能（如 `pypto-environment-setup`），便于排查时加载该技能进行环境诊断、算子开发或性能调优等。
-- **大流程到子流程**：错误码分类应先梳理大流程（Category），再细化子流程（Scene）；头文件内按此顺序组织枚举。
-- **单一职责**：一个错误码只对应一种场景（一类问题），语义单一、便于根据码值快速定位原因。
+### 规范原则
 
-## 用法举例（以 MACHINE 为例）
+- **统一定义**：错误码统一定义在 `framework/include/tilefwk/error_code.h`，组件侧头文件仅做兼容包含。
+- **归属一致**：`PyptoError/CHECK` 表示外部写法问题（`F0XXXX`）；`ASSERT/ERROR` 表示框架内部问题（`F1XXXX` 及之后组件范围）。
+- **文档可追溯**：若单靠 `ErrorMsg` 无法说明原因或难以定位，需在 `docs/trouble_shooting/*.md` 补充原因、排查步骤与解决方案。
+- **单码单义**：一个错误码仅对应一个场景，避免一码多义。
+- **Skill 可联动**：可在组件文档中标注关联 Skill（如 `pypto-environment-setup`），辅助自动化排查。
 
-报错或打 ERROR 日志时带上错误码，日志中显示为 **Fxxxxx**。枚举值即错误码，可直接转成数值使用。例如原日志：
+## 日志环境变量
 
-```cpp
-MACHINE_LOGE("xxx failed.");
+以下变量用于控制 CANN 日志输出行为（级别、打屏、落盘路径、文件数量等）。详情参考昇腾社区官方文档取值约束，本节仅给出常用作用与示例。
+
+| 环境变量 | 作用（简要） | 示例 |
+|---|---|---|
+| `ASCEND_GLOBAL_LOG_LEVEL` | 设置全局日志级别（控制整体日志详细程度）。 | `export ASCEND_GLOBAL_LOG_LEVEL=0` |
+| `ASCEND_SLOG_PRINT_TO_STDOUT` | 是否打屏输出日志；`1` 表示打屏，`0` 表示按默认方式落盘。 | `export ASCEND_SLOG_PRINT_TO_STDOUT=1` |
+| `ASCEND_MODULE_LOG_LEVEL` | 按模块设置日志级别（用于定向放大某些模块日志）。 | `export ASCEND_MODULE_LOG_LEVEL="PASS=0:PYPTO=1"` |
+| `ASCEND_GLOBAL_EVENT_ENABLE` | 控制全局事件日志开关（用于事件类问题排查）。 | `export ASCEND_GLOBAL_EVENT_ENABLE=1` |
+| `ASCEND_HOST_LOG_FILE_NUM` | 控制单进程日志文件保留数量（超出后滚动删除最早日志）。 | `export ASCEND_HOST_LOG_FILE_NUM=1000` |
+| `ASCEND_PROCESS_LOG_PATH` | 指定进程日志落盘目录（不存在时会自动创建）。 | `export ASCEND_PROCESS_LOG_PATH=/tmp/ascend_plog` |
+| `ASCEND_WORK_PATH` | 指定 CANN 运行工作目录（用于相关运行产物/中间文件）。 | `export ASCEND_WORK_PATH=/tmp/ascend_work` |
+
+组合示例（调试时常用）：
+
+```bash
+export ASCEND_MODULE_LOG_LEVEL=PASS=0:PYPTO=1 即设置PyPTO对应PASS组件日志级别为debug，其余日志级别为info
+export ASCEND_HOST_LOG_FILE_NUM=1000
+export ASCEND_PROCESS_LOG_PATH=/tmp/ascend_plog
 ```
-
-应改为带错误码的写法（使用 `MACHINE_LOGE`，枚举值经掩码打印为 **Fxxxxx**）：
-
-```cpp
-#include "tilefwk/pypto_fwk_log.h"
-
-MACHINE_LOGE(SchedErr::HANDSHAKE_TIMEOUT, "hand shake timeout.");
-```
-
-效果
-[ERROR] PYPTO(411657):2026-03-13 14:25:42.400 [host_machine.cpp:135][MACHINE]:ErrCode: F72002! hand shake timeout.

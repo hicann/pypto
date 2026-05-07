@@ -32,7 +32,6 @@
 #include "machine/compile/compile_control_bin.h"
 #include "tilefwk/comm_group_recorder.h"
 #include "passes/pass_mgr/pass_manager.h"
-#include "tilefwk/op_registry.h"
 #include "main_block.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"

@@ -28,10 +28,6 @@
 #include "error_code.h"
 #include "lazy.h"
 
-#ifndef ERROR_CODE_UNDEFINED
-#define ERROR_CODE_UNDEFINED 0xFFFFFU
-#endif
-
 namespace npu::tile_fwk {
 using Backtrace = std::shared_ptr<LazyValue<std::string>>;
 
@@ -129,31 +125,47 @@ public:
 #else
 #define ASSERT_WITH_CODE(errcode, cond)                                                                        \
     (cond) ? 0 :                                                                                               \
-             AssertInfo() = npu::tile_fwk::ErrorMessage()                                                      \
+             AssertInfo() = npu::tile_fwk::ErrorMessage() << "ASSERT FAILED: "                                 \
                             << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
                             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
 
 #define CHECK_WITH_CODE(errcode, cond)                                                                         \
     (cond) ? 0 :                                                                                               \
-             AssertInfo() = npu::tile_fwk::ErrorMessage()                                                      \
+             AssertInfo() = npu::tile_fwk::ErrorMessage() << "CHECK FAILED: "                                  \
                             << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
                             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
 #endif
 
-#define ASSERT_OVERLOAD_SELECT(_1, _2, NAME, ...) NAME
-#define ASSERT_WITHOUT_ERR_CODE(cond) ASSERT_WITH_CODE(ERROR_CODE_UNDEFINED, cond)
-#define ASSERT_WITH_ERR_CODE(errcode, cond) ASSERT_WITH_CODE(errcode, cond)
-#define ASSERT(...) ASSERT_OVERLOAD_SELECT(__VA_ARGS__, ASSERT_WITH_ERR_CODE, ASSERT_WITHOUT_ERR_CODE)(__VA_ARGS__)
+#define ASSERT_DEFAULT_SELECT(_1, _2, NAME, ...) NAME
+#define ASSERT_DEFAULT_WITHOUT_ERR_CODE(default_errcode, cond) ASSERT_WITH_CODE(default_errcode, cond)
+#define ASSERT_DEFAULT_WITH_ERR_CODE(default_errcode, errcode, cond) ASSERT_WITH_CODE(errcode, cond)
+#define ASSERT_DEFAULT(default_errcode, ...)                                                                     \
+    ASSERT_DEFAULT_SELECT(__VA_ARGS__, ASSERT_DEFAULT_WITH_ERR_CODE, ASSERT_DEFAULT_WITHOUT_ERR_CODE)(         \
+        default_errcode, __VA_ARGS__)
 
-#define CHECK_OVERLOAD_SELECT(_1, _2, NAME, ...) NAME
-#define CHECK_WITHOUT_ERR_CODE(cond) CHECK_WITH_CODE(ERROR_CODE_UNDEFINED, cond)
-#define CHECK_WITH_ERR_CODE(errcode, cond) CHECK_WITH_CODE(errcode, cond)
-#define CHECK(...) CHECK_OVERLOAD_SELECT(__VA_ARGS__, CHECK_WITH_ERR_CODE, CHECK_WITHOUT_ERR_CODE)(__VA_ARGS__)
+#define CHECK_DEFAULT_SELECT(_1, _2, NAME, ...) NAME
+#define CHECK_DEFAULT_WITHOUT_ERR_CODE(default_errcode, cond) CHECK_WITH_CODE(default_errcode, cond)
+#define CHECK_DEFAULT_WITH_ERR_CODE(default_errcode, errcode, cond) CHECK_WITH_CODE(errcode, cond)
+#define CHECK_DEFAULT(default_errcode, ...)                                                                       \
+    CHECK_DEFAULT_SELECT(__VA_ARGS__, CHECK_DEFAULT_WITH_ERR_CODE, CHECK_DEFAULT_WITHOUT_ERR_CODE)(             \
+        default_errcode, __VA_ARGS__)
+
+#define ASSERT(...) ASSERT_DEFAULT(npu::tile_fwk::InternalError::COMMON_INNER_ERROR, __VA_ARGS__)
+#define CHECK(...) CHECK_DEFAULT(npu::tile_fwk::ExternalError::COMMON_EXTERNAL_ERROR, __VA_ARGS__)
 
 #ifndef FE_ASSERT
-#define FE_ASSERT_SELECT(_1, _2, NAME, ...) NAME
-#define FE_ASSERT_WITHOUT_ERR_CODE(cond) ASSERT(FeError::EINTERNAL, cond)
-#define FE_ASSERT_WITH_ERR_CODE(errcode, cond) ASSERT(errcode, cond)
-#define FE_ASSERT(...) FE_ASSERT_SELECT(__VA_ARGS__, FE_ASSERT_WITH_ERR_CODE, FE_ASSERT_WITHOUT_ERR_CODE)(__VA_ARGS__)
+#define FE_ASSERT(...) ASSERT_DEFAULT(npu::tile_fwk::InternalError::FE_INNER_ERROR, __VA_ARGS__)
+#endif
+
+#ifndef PASS_ASSERT
+#define PASS_ASSERT(...) ASSERT_DEFAULT(npu::tile_fwk::InternalError::PASS_INNER_ERROR, __VA_ARGS__)
+#endif
+
+#ifndef MACHINE_ASSERT
+#define MACHINE_ASSERT(...) ASSERT_DEFAULT(npu::tile_fwk::InternalError::MACHINE_INNER_ERROR, __VA_ARGS__)
+#endif
+
+#ifndef SIM_ASSERT
+#define SIM_ASSERT(...) ASSERT_DEFAULT(npu::tile_fwk::InternalError::SIM_INNER_ERROR, __VA_ARGS__)
 #endif
 } // namespace npu::tile_fwk

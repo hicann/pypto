@@ -30,12 +30,6 @@
 #include "interface/cache/function_cache.h"
 
 namespace npu::tile_fwk {
-#if defined(MACHINE_DEBUG) && MACHINE_DEBUG == 1
-#define MACHINE_ASSERT(exp) ASSERT(exp)
-#else
-#define MACHINE_ASSERT(exp)
-#endif
-
 enum class HostMachineMode {
     SERVER = 0, // server扩展模式，host machine内部完成端到端调度上板执行，submit task & compile & run 不对外暴露
     API = 1, // api 模式，当前torch对接使用此模式，对外暴露submit task  & compile & run api供外部调用

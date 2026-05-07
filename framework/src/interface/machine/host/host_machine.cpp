@@ -184,7 +184,7 @@ void HostMachine::CompileFunction(Function* func) const
     auto& backend = Backend::GetBackend();
     if (!func->HasCallOperation() && backend.runPass) {
         MACHINE_LOGI("RunPass function %s", func->GetMagicName().c_str());
-        FE_ASSERT(backend.runPass(Program::GetInstance(), *func, config::GetPassStrategy())) << "Run pass failed.";
+        PASS_ASSERT(backend.runPass(Program::GetInstance(), *func, config::GetPassStrategy())) << "Run pass failed.";
     }
     if (func->IsFunctionType(FunctionType::DYNAMIC) ||
         func->IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
@@ -216,7 +216,6 @@ void HostMachine::SubTask(Function* function)
         if (curTask != nullptr) {
             MACHINE_LOGW("CurTask is already running.");
         }
-        MACHINE_ASSERT(curTask == nullptr);
         curTask = new MachineTask(curTaskId_++, function);
         int function_done_idx = MonitorManager::Instance().GetAndIncrementNextFunctionIndex();
         curTask->SetFunctionIndex(function_done_idx);

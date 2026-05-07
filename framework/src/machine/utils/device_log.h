@@ -33,10 +33,6 @@
 #include "tilefwk/error_code.h"
 #include "machine/device/dynamic/device_trace.h"
 
-#ifndef ERROR_CODE_UNDEFINED
-#define ERROR_CODE_UNDEFINED 0xFFFFFU
-#endif
-
 #ifdef __DEVICE__
 #include "dlog_pub.h"
 #include "machine/device/dynamic/aicpu_instrumentation.h"

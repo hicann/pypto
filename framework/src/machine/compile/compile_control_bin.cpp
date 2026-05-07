@@ -13,7 +13,6 @@
  * \brief
  */
 
-#include "tilefwk/op_registry.h"
 #include <iosfwd>
 #include <vector>
 #include <nlohmann/json.hpp>

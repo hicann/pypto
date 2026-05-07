@@ -516,7 +516,7 @@ public:
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
         int64_t* inputp = (int64_t*)(aicpuArgs + 1);
         auto tensorData = (DevTensorData*)(inputp + 2);
-        ASSERT((int64_t)tensors.size() == inputp[0]) << "mismatch tensor size";
+        MACHINE_ASSERT((int64_t)tensors.size() == inputp[0]) << "mismatch tensor size";
         for (size_t i = 0; i < (size_t)inputp[0]; ++i) {
             auto& t = tensors[i];
             auto addr = (uint64_t)t.GetAddr();
@@ -589,7 +589,7 @@ private:
         auto argNum =
             dynAttr->startArgsInputLogicalTensorList.size() + dynAttr->startArgsOutputLogicalTensorList.size();
         auto argSize = sizeof(AiCpuArgs) + 2 * sizeof(int64_t) + argNum * sizeof(DevTensorData);
-        ASSERT(argSize % 8 == 0);
+        MACHINE_ASSERT(argSize % 8 == 0);
         aicpuArgBuf.resize(argSize / 8);
 
         auto aicpuArgs = new (aicpuArgBuf.data()) AiCpuArgs();
@@ -762,16 +762,16 @@ public:
         COMPILER_LOGI("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
 #endif
         int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode);
-        ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
+        MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
 
         DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
         ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction());
-        ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
+        MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
 
         kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
         ret = DeviceLauncher::LaunchAicoreKernel(
             aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable);
-        ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
+        MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
     }
 
     DevControlFlowCache* GetHostCtrlFlowCache(KernelBinary* kernel, 
@@ -786,7 +786,7 @@ public:
             hostCacheVec.resize(ctrlCacheSize);
             AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
             if (RuntimeMemcpy(hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST) != RT_SUCCESS) {
-                ASSERT(false) << "RuntimeMemcpy cache failed!";
+                MACHINE_ASSERT(false) << "RuntimeMemcpy cache failed!";
                 return nullptr;
             }
             AddHostCtrlFlowCache(tensors, std::move(hostCacheVec));
@@ -805,7 +805,7 @@ public:
         std::vector<uint8_t> hostCache;
         DevControlFlowCache* ctrlCache = GetHostCtrlFlowCache(kernel, tensors, devCache, hostCache);
         int ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
-        ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
+        MACHINE_ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
     }
 
     void EslModelLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
@@ -818,13 +818,13 @@ public:
             auto input = ProgramData::GetInstance().GetInputData(i);
             StringUtils::DataCopy(tensors[i].GetAddr(), input->GetDataSize(), input->data(), input->GetDataSize());
         }
-        ASSERT(ret == RT_SUCCESS) << "EslModelLaunch run failed: " << ret;
+        SIM_ASSERT(ret == RT_SUCCESS) << "EslModelLaunch run failed: " << ret;
     }
 
     void EslModelLiteLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
     {
         int ret = EslModelLauncher::EslModelLiteRunOnce(kernel->GetFunction(), tensors);
-        ASSERT(ret == RT_SUCCESS) << "EslModelLiteLaunch run failed: " << ret;
+        SIM_ASSERT(ret == RT_SUCCESS) << "EslModelLiteLaunch run failed: " << ret;
     }
 
 private:

@@ -25,10 +25,22 @@ inline constexpr std::underlying_type_t<T> ToUnderlying(T value)
 }
 
 // =============================================================================
-// F0-1XXXX: external limitation
+// F0XXXX: external limitation
 // =============================================================================
-enum class ExternalErrorCode : uint32_t {
-    UNKNOWN = 0x1FFFFU
+enum class ExternalError : uint32_t {
+    COMMON_EXTERNAL_ERROR = 0x0FFFFU
+};
+
+// =============================================================================
+// F1XXXX-: internal limitation
+// =============================================================================
+enum class InternalError : uint32_t {
+    COMMON_INNER_ERROR = 0x1FFFFU,
+    FE_INNER_ERROR = 0x2FFFFU,
+    PASS_INNER_ERROR = 0x4FFFFU,
+    CODEGEN_INNER_ERROR = 0x6FFFFU,
+    MACHINE_INNER_ERROR = 0x7FFFFU,
+    SIM_INNER_ERROR = 0x9FFFFU,
 };
 
 // =============================================================================
