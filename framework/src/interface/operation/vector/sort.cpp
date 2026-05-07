@@ -468,7 +468,7 @@ void TiledTopK(
 
 void TiledTopKRadixSelect(
     Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& valueResult,
-    const LogicalTensorPtr& indexResult, int k, int isLargest, int64_t ubSize)
+    const LogicalTensorPtr& indexResult, int axis, int k, int isLargest, int64_t ubSize)
 {
     if (cur == input.tensor.GetShape().size() - 1) {
         auto lastDim = input.tensor.GetShape()[cur];
@@ -485,6 +485,7 @@ void TiledTopKRadixSelect(
         };
         auto tempTensor = std::make_shared<LogicalTensor>(function, DataType::DT_UINT8, tmpShape);
         auto& newOp = function.AddOperation(Opcode::OP_RADIX_SELECT, {inputTile}, {valueTile, indexTile, tempTensor});
+        newOp.SetAttribute(TOPK_AXIS, axis);
         newOp.SetAttribute(TOPK_KVALUE, k);
         newOp.SetAttribute(TOPK_ORDER, static_cast<int>(isLargest));
         return;
@@ -493,7 +494,7 @@ void TiledTopKRadixSelect(
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
-        TiledTopKRadixSelect(function, tileShape, cur + 1, input, valueResult, indexResult, k, isLargest, ubSize);
+        TiledTopKRadixSelect(function, tileShape, cur + 1, input, valueResult, indexResult, axis, k, isLargest, ubSize);
     }
 }
 
@@ -509,7 +510,7 @@ void TiledTopK(
         TiledTopK(function, tileShape, 0, input, valueResult, indexResult, resultTileInfo, axis, k, isLargest);
     } else if (algo == TopKAlgo::RADIX_SELECT) {
         int64_t ubSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
-        TiledTopKRadixSelect(function, tileShape, 0, input, valueResult, indexResult, k, isLargest, ubSize);
+        TiledTopKRadixSelect(function, tileShape, 0, input, valueResult, indexResult, axis, k, isLargest, ubSize);
     }
 }
 

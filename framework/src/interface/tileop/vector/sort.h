@@ -799,7 +799,9 @@ TILEOP void TRadixSelect(VAL value, IDX index, TMP tmp, SRC src)
                     } else if constexpr (srcTypeSize == 4) {
                         RadixSelectGatherIndex<srcTypeSize>(kthValue, kthValueTile, selectInt32GTTile, selectInt32EQTile, twiddleUIntTile, uselessTile);
                     }
-                    RadixSelectGetResult(srcShape4 - eqk - ltk, eqk, selectInt32GTTile, selectInt32EQTile, selectCountInt32GTTile, selectCountInt32EQTile, idxTile, twiddleIntTile, srcTempIntKTile, uselessTile);
+                    int64_t gtk = srcShape4 - eqk - ltk;
+                    int64_t extra = k - gtk;
+                    RadixSelectGetResult(gtk * idxTypeSize, extra * idxTypeSize, selectInt32GTTile, selectInt32EQTile, selectCountInt32GTTile, selectCountInt32EQTile, idxTile, twiddleIntTile, srcTempIntKTile, uselessTile);
                     RadixSelectTwiddle<isLargest, srcTypeSize, false>(valIntTile, srcTempIntKTile, twiddleIntKTile, cmpTile, uselessTile);
                     if constexpr (!isLargest) {
                         pto::TMULS(valTile, valTile, -1.0);

@@ -955,6 +955,7 @@ void ExecuteOpTopK(ExecuteOperationContext* ctx)
     calc::TopK(outValue, outIndex, src, kValue, topk_axis, descending);
 }
 REGISTER_CALC_OP(OP_TOPK, Opcode::OP_TOPK, ExecuteOpTopK);
+REGISTER_CALC_OP(OP_RADIX_SELECT, Opcode::OP_RADIX_SELECT, ExecuteOpTopK);
 
 void ExecuteOpQuantizeSym(ExecuteOperationContext* ctx)
 {
