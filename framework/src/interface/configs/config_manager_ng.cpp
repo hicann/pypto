@@ -295,7 +295,7 @@ void ValidateConfigValueType(const std::string& key, const Any& value)
     std::stringstream os;
     os << "Option '" << key << "' has invalid type. Expected " << GetReadableTypeName(expectedType) << ", but got "
        << GetReadableTypeName(value.Type());
-    FE_ASSERT(FeError::INVALID_TYPE, false) << os.str();
+    CHECK(FeError::INVALID_TYPE, false) << os.str();
 }
 
 std::string ConfigScope::ToString() const
@@ -340,7 +340,7 @@ void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
         DumpValues(os, node, "");
         os << "its value doesn't within the value range. ";
         DumpRange(os, value.Type(), key, rangeInfos);
-        FE_ASSERT(FeError::INVALID_VAL, false) << os.str();
+        CHECK(FeError::INVALID_VAL, false) << os.str();
     }
     std::stringstream oss;
     DumpValue(oss, key, value, "");
@@ -428,7 +428,7 @@ struct ConfigManagerImpl {
             scope = scopes.top();
         }
         for (auto& it : values) {
-            FE_ASSERT(FeError::INVALID_VAL, scope->HasConfig(it.first))
+            CHECK(FeError::INVALID_VAL, scope->HasConfig(it.first))
                 << "key: " << it.first.c_str() << " does not exist.";
             scope->UpdateValueWithAny(it.first, it.second);
         }
@@ -445,8 +445,7 @@ struct ConfigManagerImpl {
                 root->AddValue(it.first, it.second);
                 FE_LOGD("Set option successfully, Key: %s", it.first.c_str());
             } catch (const std::exception& e) {
-                FE_LOGE(
-                    FeError::INVALID_VAL, "Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
+                FE_LOGE(FeError::INVALID_VAL, "Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
             }
         }
     }
