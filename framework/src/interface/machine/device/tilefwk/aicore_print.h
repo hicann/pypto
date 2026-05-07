@@ -42,12 +42,8 @@
 // Platform Detection and Feature Macros
 // ============================================================================
 
-#if defined(__DAV_M300__) || defined(__DAV_310R6__) || defined(__DAV_L510__) || \
-    (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 5102)) || \
-    (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 9201)) || \
-    (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3801)) || \
-    (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3101)) || \
-    (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510))
+// A5: FP8/HF8 supported, L1 not supported; A2/A3: opposite
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
 #define SUPPORT_FP8_HF8_PRINT 1
 #define SUPPORT_L1_COPY 0
 #else
@@ -1289,7 +1285,7 @@ INLINE void AiCorePrintGmTensor(LogContext* ctx, __gm__ const T* data, int64_t e
 #if IS_AICORE
 template <typename T>
 INLINE void AiCorePrintUbTensor(LogContext* ctx, __ubuf__ const T* data, int64_t end,
-                                int64_t begin, __ubuf__ const char* name) {
+                                int64_t begin, __gm__ const char* name) {
     PrintTensorImpl<T>(ctx, data, end, begin, name);
 }
 #endif

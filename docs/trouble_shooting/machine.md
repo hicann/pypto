@@ -518,6 +518,237 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 5.**关联skill**：[pypto-host-stacktrace-analyzer](../../.agents/skills/pypto-host-stacktrace-analyzer/SKILL.md)
 
 ---
+
+### AiCore Print 使用方法
+
+**功能说明**：AiCore Print 用于在 AICore kernel 中打印 tensor 数据和调试信息，支持 GM、UB、L1 内存层次和多种数据类型。
+
+#### 对外接口
+
+| 接口名称 | 功能 | 适用场景 |
+|---------|------|---------|
+| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 |
+| **AiCorePrintShape** | 打印 Shape 信息 | 查看 tensor shape 维度 |
+| **AiCorePrintGmTensor** | 打印 GM Tensor | 查看 Global Memory 数据 |
+| **AiCorePrintUbTensor** | 打印 UB Tensor | 查看 Unified Buffer 数据（仅 AIV kernel） |
+| **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel，且仅支持A2/A3平台） |
+
+#### 支持的数据类型
+
+AiCore Print 支持以下数据类型：
+
+**浮点类型**（所有平台支持）：
+- **fp32**：`float`
+- **fp16**：`half`
+- **bf16**：`bfloat16_t`
+
+**整数类型**（所有平台支持）：
+- **int8**：`int8_t`
+- **uint8**：`uint8_t`
+- **int16**：`int16_t`
+- **uint16**：`uint16_t`
+- **int32**：`int32_t`
+- **uint32**：`uint32_t`
+- **int64**：`int64_t`
+- **uint64**：`uint64_t`
+
+**FP8 类型**（平台限制）：
+- **fp8_e4m3**：`float8_e4m3_t`
+- **fp8_e5m2**：`float8_e5m2_t`
+- **fp8_e8m0**：`float8_e8m0_t`
+- **hifloat8**：`hifloat8_t`
+
+**平台限制说明**：FP8 和 HiFloat8 类型仅在以下平台支持（`SUPPORT_FP8_HF8_PRINT=1`）：
+- `__NPU_ARCH__ == 3510`
+
+其他平台不支持 FP8/HiFloat8 打印功能。
+
+#### 使用步骤
+
+##### 1. 启用追踪日志
+
+修改配置文件：
+
+`framework/src/interface/configs/tile_fwk_config.json`
+```json
+"fixed_output_path": true,
+"force_overwrite": false,
+```
+
+修改头文件：
+
+`framework/src/interface/machine/device/tilefwk/aicore_print.h`
+```cpp
+#define ENABLE_AICORE_PRINT 1
+```
+
+##### 2. 重新编译安装
+
+```bash
+rm -rf build_out/ && python build_ci.py && pip install build_out/pypto*whl --force-reinstall --no-deps
+```
+
+##### 3. 在 kernel CCE 文件中添加打印代码
+
+**重要流程说明**：
+
+**何时删除 kernel_aic* 目录**：
+- 首次运行或切换用例：删除 kernel_aic* 目录
+- 同一用例重复运行：保留 kernel_aic* 目录（保留修改）
+
+**步骤 3.1：首次运行生成 kernel CCE 文件**
+
+首次运行或切换用例：
+```bash
+rm -rf kernel_aic* output/ wk/
+export ASCEND_WORK_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
+```
+
+同一用例重复运行（已添加打印代码）：
+```bash
+rm -rf output/ wk/
+export ASCEND_WORK_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
+```
+
+**步骤 3.2：在生成的 CCE 文件中添加打印代码**
+
+查看生成的 kernel 文件：
+```bash
+ls kernel_aicore/*.cpp
+```
+
+修改步骤：
+（1）在文件开头添加：`#include "tilefwk/aicore_print.h"`
+（2）在合适位置（数据加载或计算后的同步点）添加打印调用
+
+打印接口调用格式：
+```cpp
+AiCoreLogF(param->ctx, "format string", args...);
+AiCorePrintShape(param->ctx, Shape2Dim(dim0, dim1));
+AiCorePrintGmTensor(param->ctx, (__gm__ T*)addr, end, begin, "name");
+AiCorePrintUbTensor(param->ctx, (__ubuf__ T*)addr, end, begin, "name");
+AiCorePrintL1Tensor(param->ctx, (__cbuf__ T*)addr, end, begin, l1_staging, "name");
+```
+
+**步骤 3.3：配置 L1 staging buffer（仅 AiCorePrintL1Tensor 需要）**
+```cpp
+__gm__ T* l1_staging = (__gm__ T*)(param->funcData->workspaceAddr);
+```
+
+**关键注意事项**：首次运行或切换用例删除 kernel_aic*，同一用例重复运行保留修改。
+
+##### 4. 运行测试并查看打印结果
+
+**重要**：以下命令必须**一次性完整执行**（使用 `&&` 连接），不要拆分为多个命令：
+
+```bash
+export ASCEND_WORK_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && rm -rf output/ wk/ && python xxx.py && grep -rn "DumpAicoreLog" ./wk
+```
+
+**命令说明**：
+
+1. `export ASCEND_WORK_PATH=./wk`：设置日志输出目录为 `./wk`
+2. `export ASCEND_GLOBAL_LOG_LEVEL=0`：设置日志级别为 DEBUG（级别 0），开启最详细的日志输出
+3. `rm -rf output/ wk/`：清理旧日志和编译产物，避免干扰
+4. `python xxx.py`：运行测试用例，触发 kernel 编译和执行
+5. `grep -rn "DumpAicoreLog" ./wk`：搜索并打印所有 AiCore Print 输出（包含 tensor 数据和调试信息）
+
+#### 不同数据类型打印示例
+
+以下示例展示每种数据类型的打印用法。打印代码需在合适位置插入（如 TLoad/TAdd 后的同步点）。
+
+##### 浮点类型
+```cpp
+AiCorePrintGmTensor(param->ctx, (__gm__ float*)gmTensor_fp32.GetAddr(), 8, 0, "fp32_gm");
+
+AiCorePrintUbTensor(param->ctx, (__ubuf__ half*)ubTensor_fp16.GetAddr(), 16, 0, "fp16_ub");
+
+__gm__ bfloat16_t* l1_staging_bf16 = (__gm__ bfloat16_t*)(param->funcData->workspaceAddr);
+AiCorePrintL1Tensor(param->ctx, (__cbuf__ bfloat16_t*)l1Tensor_bf16.GetAddr(), 16, 0, l1_staging_bf16, "bf16_l1");
+```
+
+##### 整数类型
+
+```cpp
+AiCorePrintGmTensor(param->ctx, (__gm__ int8_t*)gmTensor_int8.GetAddr(), 16, 0, "int8_gm");
+
+AiCorePrintUbTensor(param->ctx, (__ubuf__ uint8_t*)ubTensor_uint8.GetAddr(), 16, 0, "uint8_ub");
+
+AiCorePrintUbTensor(param->ctx, (__ubuf__ int16_t*)ubTensor_int16.GetAddr(), 8, 0, "int16_ub");
+
+AiCorePrintGmTensor(param->ctx, (__gm__ uint16_t*)gmTensor_uint16.GetAddr(), 8, 0, "uint16_gm");
+
+AiCorePrintUbTensor(param->ctx, (__ubuf__ int32_t*)ubTensor_int32.GetAddr(), 16, 0, "int32_ub");
+
+AiCorePrintGmTensor(param->ctx, (__gm__ uint32_t*)gmTensor_uint32.GetAddr(), 8, 0, "uint32_gm");
+
+AiCorePrintGmTensor(param->ctx, (__gm__ int64_t*)gmTensor_int64.GetAddr(), 8, 0, "int64_gm");
+
+AiCorePrintUbTensor(param->ctx, (__ubuf__ uint64_t*)ubTensor_uint64.GetAddr(), 8, 0, "uint64_ub");
+```
+
+##### FP8 类型（平台限制）
+
+```cpp
+AiCorePrintGmTensor(param->ctx, (__gm__ float8_e4m3_t*)gmTensor_fp8e4m3.GetAddr(), 8, 0, "fp8e4m3_gm");
+
+AiCorePrintGmTensor(param->ctx, (__gm__ float8_e5m2_t*)gmTensor_fp8e5m2.GetAddr(), 8, 0, "fp8e5m2_gm");
+
+AiCorePrintGmTensor(param->ctx, (__gm__ float8_e8m0_t*)gmTensor_fp8e8m0.GetAddr(), 8, 0, "fp8e8m0_gm");
+
+AiCorePrintGmTensor(param->ctx, (__gm__ hifloat8_t*)gmTensor_hf8.GetAddr(), 8, 0, "hifloat8_gm");
+```
+
+##### 其他接口
+
+AiCorePrintShape：
+```cpp
+AiCorePrintShape(param->ctx, Shape2Dim(sym_161_dim_0, sym_161_dim_1));
+AiCorePrintShape(param->ctx, Shape3Dim(dim0, dim1, dim2));
+AiCorePrintShape(param->ctx, Shape4Dim(dim0, dim1, dim2, dim3));
+```
+
+AiCoreLogF：
+```cpp
+AiCoreLogF(param->ctx, "GM address=%p", ((__gm__ float*)gmTensor.GetAddr()));
+AiCoreLogF(param->ctx, "Shape=[%ld,%ld]", dim0, dim1);
+AiCoreLogF(param->ctx, "INT8 input loaded");
+```
+
+#### 注意事项
+
+1. **L1 staging buffer 对齐**：l1_staging 地址必须 32 字节对齐，workspaceAddr 默认满足要求。
+
+2. **打印数量控制**：PRINT_BUFFER_SIZE 当前为 128KB（定义于 `framework/src/interface/machine/device/tilefwk/aicpu_common.h`），若触发 overflow warning，需增大该值后重新编译。
+
+3. **FP8/HiFloat8 支持平台**：仅 `A5` 平台支持（见 `SUPPORT_FP8_HF8_PRINT` 宏定义）。
+
+4. **AiCorePrintL1Tensor 支持平台**：仅 `A2/A3` 平台支持（见`SUPPORT_L1_COPY` 宏定义）
+
+#### 常见问题
+
+##### 1. 未看到打印输出
+
+检查：ENABLE_AICORE_PRINT=1、已重新编译安装，已指定日志落盘路径，已设置日志级别为debug级别（0），grep搜索文件正确。
+
+##### 2. L1 Print 对齐 WARNING
+
+确保 l1_staging 地址 32B 对齐，workspaceAddr 本身已对齐。
+
+##### 3. Overflow Warning
+
+减少打印数量或增大 PRINT_BUFFER_SIZE 后重新编译。
+
+##### 4. FP8/HiFloat8 无法打印
+
+当前平台不支持（检查 SUPPORT_FP8_HF8_PRINT 宏）。
+
+##### 5. AiCorePrintL1Tensor 找不到接口定义
+
+当前平台不支持（检查 SUPPORT_L1_COPY 宏）。
+
+---
+
 ### 泳道图相关问题指导
 
 <a id="output-目录产物说明"></a>
@@ -586,3 +817,4 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 ##### 5. Profiling 泳道图数据与 msprof 采集的结果差距较大
 **现象**：`msprof` 采集到的 AICore 耗时远大于泳道图中的 AICore 端到端耗时，二者数据无法对齐。
 **原因与排查**：`msprof` 所采集到的 AICore 耗时不能真实代表 AICore 内部端到端的执行耗时，因为它实际上还包含了 **AICore 启动等待 AICPU 下发 devTask 的时间**，以及 **AICore 执行完任务后的退出时间**。为了获取更准确的时间，当前已实现对 AICore 端到端执行时间的打屏输出，可以在执行算子前设置环境变量 `export DUMP_DEVICE_PERF=true`，即可在终端中直接获取当前准确的性能统计数据。
+
