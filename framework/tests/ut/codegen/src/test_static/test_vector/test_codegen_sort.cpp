@@ -80,10 +80,10 @@ void TopKOnBoardFunc(TopKParams& params)
     expect = R"(TMrgSort<1, 32, 32>(ubTensor_2, ubTensor_2, ubTensor_6); // [opMagic:10006])";
     CheckStringExist(expect, res);
 
-    expect = R"(TExtract<32, 1, 1>(ubTensor_8, ubTensor_2); // [opMagic:10008])";
+    expect = R"(TExtract<32, 0, 1>(ubTensor_8, ubTensor_2); // [opMagic:10007])";
     CheckStringExist(expect, res);
 
-    expect = R"(TExtract<32, 0, 1>(ubTensor_10, ubTensor_2); // [opMagic:10007])";
+    expect = R"(TExtract<32, 1, 1>(ubTensor_10, ubTensor_2); // [opMagic:10008])";
     CheckStringExist(expect, res);
 }
 

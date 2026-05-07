@@ -80,6 +80,10 @@ private:
     Status CreateMoveOpForConvert(Function& function, Operation& op) const;
     void ProcessUB2L1(Function& function, Operation& op) const;
     static int64_t PadUB(int64_t dim, int64_t padValue);
+    Status ProcessL1CopyInConv(Operation& op) const;
+    Status ProcessL0CCopyOutConv(Operation& op) const;
+    Status ProcessDuplicateOp(Operation& op) const;
+    Status ProcessViewOp(Function& function, Operation& op) const;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_GENERATE_MOVE_OP_H_

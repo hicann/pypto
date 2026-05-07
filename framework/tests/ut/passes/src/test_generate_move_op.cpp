@@ -984,5 +984,191 @@ TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_UB2L1)
     // 验证：Opcode 应变为 OP_UB_COPY_L1
     EXPECT_EQ(assembleOp.GetOpcode(), Opcode::OP_UB_COPY_L1);
 }
+// ========== ProcessL1CopyInConv 测试 ==========
+
+TEST_F(GenerateMoveOpPassTest, l1CopyInConvOffsetAccumulation)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l1CopyInConvAcc", "l1CopyInConvAcc", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l1CopyInConvAcc", func);
+
+    std::vector<int64_t> shape{16, 16};
+    auto input = CreateTestLogicalTensor(*func, MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, shape);
+    auto mid = CreateTestLogicalTensor(*func, MEM_L1, TileOpFormat::TILEOP_ND, shape);
+    auto output = CreateTestLogicalTensor(*func, MEM_L1, TileOpFormat::TILEOP_ND, shape);
+
+    // VIEW: fromOffset=[1, 2]
+    auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {input}, {mid});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{1, 2}));
+
+    // L1_COPY_IN_CONV: fromOffset=[3, 4]
+    auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
+    std::vector<OpImmediate> shapeImm = {
+        OpImmediate::Specified(SymbolicScalar(shape[0])),
+        OpImmediate::Specified(SymbolicScalar(shape[1]))
+    };
+    std::vector<OpImmediate> fromOffset = {
+        OpImmediate::Specified(SymbolicScalar(3)),
+        OpImmediate::Specified(SymbolicScalar(4))
+    };
+    copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(fromOffset, MEM_L1, shapeImm, shapeImm));
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL1CopyInConv(copyOp), SUCCESS);
+
+    // 验证: VIEW 被删除，输入重连
+    EXPECT_TRUE(viewOp.IsDeleted());
+    EXPECT_EQ(copyOp.GetIOperands()[0], input);
+
+    // 验证: fromOffset 累加 [1+3, 2+4] = [4, 6]
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    auto scalars = OpImmediate::ToSpecified(mergedAttr->GetFromOffset());
+    ASSERT_EQ(scalars.size(), 2);
+    EXPECT_TRUE(scalars[0].ConcreteValid());
+    EXPECT_EQ(scalars[0].Concrete(), 4);
+    EXPECT_TRUE(scalars[1].ConcreteValid());
+    EXPECT_EQ(scalars[1].Concrete(), 6);
+}
+
+TEST_F(GenerateMoveOpPassTest, l1CopyInConvSymbolicScalarOffsetAccumulation)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l1CopyInConvSym", "l1CopyInConvSym", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l1CopyInConvSym", func);
+
+    std::vector<int64_t> shape{16, 16};
+    auto input = CreateTestLogicalTensor(*func, MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, shape);
+    auto mid = CreateTestLogicalTensor(*func, MEM_L1, TileOpFormat::TILEOP_ND, shape);
+    auto output = CreateTestLogicalTensor(*func, MEM_L1, TileOpFormat::TILEOP_ND, shape);
+
+    // VIEW: fromOffset=[1, 2] + fromDynOffset=[Sym("a"), Sym("b")]
+    auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {input}, {mid});
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{1, 2},
+        std::vector<SymbolicScalar>{SymbolicScalar("a"), SymbolicScalar("b")},
+        std::vector<SymbolicScalar>{});
+    viewOp.SetOpAttribute(viewAttr);
+
+    // L1_COPY_IN_CONV: fromOffset=[Sym("c"), Sym("d")]
+    auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
+    std::vector<OpImmediate> shapeImm = {
+        OpImmediate::Specified(SymbolicScalar(shape[0])),
+        OpImmediate::Specified(SymbolicScalar(shape[1]))
+    };
+    std::vector<OpImmediate> fromOffset = {
+        OpImmediate::Specified(SymbolicScalar("c")),
+        OpImmediate::Specified(SymbolicScalar("d"))
+    };
+    copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(fromOffset, MEM_L1, shapeImm, shapeImm));
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL1CopyInConv(copyOp), SUCCESS);
+
+    // 验证: VIEW 被删除，输入重连
+    EXPECT_TRUE(viewOp.IsDeleted());
+    EXPECT_EQ(copyOp.GetIOperands()[0], input);
+
+    // 验证: fromOffset 已累加 (包含符号表达式)
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    auto& mergedOffset = mergedAttr->GetFromOffset();
+    ASSERT_EQ(mergedOffset.size(), 2);
+    auto scalars = OpImmediate::ToSpecified(mergedOffset);
+    EXPECT_EQ(scalars[0].Dump(), "(a+c)");
+    EXPECT_EQ(scalars[1].Dump(), "(b+d)");
+}
+
+// ========== ProcessL0CCopyOutConv 测试 ==========
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvOffsetAccumulation)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "l0CCopyOutConvAcc", "l0CCopyOutConvAcc", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyOutConvAcc", func);
+
+    std::vector<int64_t> shape{16, 16};
+    auto input = CreateTestLogicalTensor(*func, MEM_L0C, TileOpFormat::TILEOP_ND, shape);
+    auto mid = CreateTestLogicalTensor(*func, MEM_L0C, TileOpFormat::TILEOP_ND, shape);
+    auto output = CreateTestLogicalTensor(*func, MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, shape);
+
+    // L0C_COPY_OUT_CONV: toOffset=[1, 2]
+    auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
+    std::vector<OpImmediate> shapeImm = {
+        OpImmediate::Specified(SymbolicScalar(shape[0])),
+        OpImmediate::Specified(SymbolicScalar(shape[1]))
+    };
+    std::vector<OpImmediate> toOffset = {
+        OpImmediate::Specified(SymbolicScalar(1)),
+        OpImmediate::Specified(SymbolicScalar(2))
+    };
+    copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, toOffset, shapeImm, shapeImm));
+
+    // ASSEMBLE: toOffset=[3, 4]
+    auto& assembleOp = func->AddRawOperation(Opcode::OP_ASSEMBLE, {mid}, {output});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{3, 4}));
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyOutConv(copyOp), SUCCESS);
+
+    // 验证: ASSEMBLE 被删除，输出重连
+    EXPECT_TRUE(assembleOp.IsDeleted());
+    EXPECT_EQ(copyOp.GetOOperands()[0], output);
+
+    // 验证: toOffset 累加 [1+3, 2+4] = [4, 6]
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    auto scalars = OpImmediate::ToSpecified(mergedAttr->GetToOffset());
+    ASSERT_EQ(scalars.size(), 2);
+    EXPECT_TRUE(scalars[0].ConcreteValid());
+    EXPECT_EQ(scalars[0].Concrete(), 4);
+    EXPECT_TRUE(scalars[1].ConcreteValid());
+    EXPECT_EQ(scalars[1].Concrete(), 6);
+}
+
+TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvSymbolicScalarOffsetAccumulation)
+{
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "l0CCopyOutConvSym", "l0CCopyOutConvSym", nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("l0CCopyOutConvSym", func);
+
+    std::vector<int64_t> shape{16, 16};
+    auto input = CreateTestLogicalTensor(*func, MEM_L0C, TileOpFormat::TILEOP_ND, shape);
+    auto mid = CreateTestLogicalTensor(*func, MEM_L0C, TileOpFormat::TILEOP_ND, shape);
+    auto output = CreateTestLogicalTensor(*func, MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, shape);
+
+    // L0C_COPY_OUT_CONV: toOffset=[Sym("a"), Sym("b")]
+    auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
+    std::vector<OpImmediate> shapeImm = {
+        OpImmediate::Specified(SymbolicScalar(shape[0])),
+        OpImmediate::Specified(SymbolicScalar(shape[1]))
+    };
+    std::vector<OpImmediate> toOffset = {
+        OpImmediate::Specified(SymbolicScalar("a")),
+        OpImmediate::Specified(SymbolicScalar("b"))
+    };
+    copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, toOffset, shapeImm, shapeImm));
+
+    // ASSEMBLE: toOffset=[1, 2] + toDynOffset=[Sym("c"), Sym("d")]
+    auto& assembleOp = func->AddRawOperation(Opcode::OP_ASSEMBLE, {mid}, {output});
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(
+        std::vector<int64_t>{1, 2},
+        std::vector<SymbolicScalar>{SymbolicScalar("c"), SymbolicScalar("d")});
+    assembleOp.SetOpAttribute(assembleAttr);
+
+    GenerateMoveOp pass;
+    EXPECT_EQ(pass.ProcessL0CCopyOutConv(copyOp), SUCCESS);
+
+    // 验证: ASSEMBLE 被删除，输出重连
+    EXPECT_TRUE(assembleOp.IsDeleted());
+    EXPECT_EQ(copyOp.GetOOperands()[0], output);
+
+    // 验证: toOffset 已累加 (包含符号表达式，用字符串验证)
+    auto mergedAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOp.GetOpAttribute());
+    ASSERT_NE(mergedAttr, nullptr);
+    auto& mergedOffset = mergedAttr->GetToOffset();
+    ASSERT_EQ(mergedOffset.size(), 2);
+    auto scalars = OpImmediate::ToSpecified(mergedOffset);
+    EXPECT_EQ(scalars[0].Dump(), "(c+a)");
+    EXPECT_EQ(scalars[1].Dump(), "(d+b)");
+}
+
 } // namespace tile_fwk
 } // namespace npu
