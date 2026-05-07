@@ -762,3 +762,129 @@ grep -R "<opcode>" docs/api/operation/
 - 源码位置
 - 官方文档约束
 - 可执行修复建议
+
+## 六、内存越界
+
+### 日志特征
+
+当日志中出现以下关键字时，按内存越界场景分析：
+
+- `Alloc tensor .* size .* exceeds .* size`
+- `OP .* in/output total size .* exceeds .* size`
+- `MEM_UB`、`MEM_L1`、`MEM_L0A`、`MEM_L0B`、`MEM_L0C`
+
+### 分析目标
+
+1. 确认越界内存层级（MEM_UB/L1/L0A/L0B/L0C）
+2. 定位超限 tensor 及 producer op
+3. 结合计算图回溯判断根因（前端配置/当前Pass/上游Pass）
+4. 给出 tile_shape 或内存分配修复建议
+
+### 分析流程
+
+#### 步骤 1：从日志提取信息并定位计算图
+
+从日志提取：
+- `tensor_magic`：超限 tensor 标识
+- `tensor size`：实际大小（bytes）
+- `内存层级`：MEM_UB/L1/L0A/L0B/L0C
+- `hardware_limit`：日志中的 `exceeds ... size [Y]`
+- `producer op`：生产者算子
+- `pass 名称`、报错文件和行号
+
+定位计算图：
+
+```bash
+ls -lt output/output_*/Pass_*/*.json
+ls -lt build/output/bin/output/output_*/Pass_*/*.json
+```
+
+同时收集上一个 pass 的输出图作为回溯起点。
+
+#### 步骤 2：在计算图中搜索 tensor 并判断来源
+
+使用计算图分析脚本：
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <json_path> \
+  --tensor-magic <tensor_magic>
+```
+
+兜底：`grep -n "magic.*<tensor_magic>" <json_path>`
+
+**tensor 来源判断**：
+
+| 图和日志证据 | 初步判断 | 后续验证 |
+|---|---|---|
+| 当前图找不到 `tensor_magic` | pass 新创建或图未落盘 | 检查补打图、上游 pass 输出图 |
+| `COPY_IN` 输出，输入可回溯到用户输入 | 前端输入衍生 | 确认是否有 pass 放大 buffer、改 shape |
+| `tensor_magic` 在上游 pass 图已存在 | 上游 pass 已生成 | 回溯首次出现边界 |
+| 当前 pass 前后图中 size/shape/mem_type 变化 | 当前 pass 改写导致 | 结合源码确认 |
+
+#### 步骤 3：前端配置问题判断
+
+**三种超限场景**：
+
+- 单 tensor 大小超限：日志特征 `Alloc tensor ... size [X] exceeds ... size [Y]`
+- op 输入输出总占用超限：日志特征 `OP ... total size [X] exceeds ... size [Y]`
+- Pass 使用有效阈值：日志阈值小于配置文件理论值
+
+**公式定义**：
+
+- **tile_shape**：前端设置切分形状
+  - Vector：`pypto.set_vec_tile_shapes(128, 512)` → [128, 512]
+  - Cube：`pypto.set_cube_tile_shapes([m, k, n])`
+- **dtype_size**：单元素字节大小（fp32=4, fp16=2, int8=1）
+- **hardware_limit**：硬件物理容量（配置文件 `[AICoreSpec]` section：ub_size、l1_size）
+- **effective_threshold**：Pass 实际阈值（从日志获取）
+
+**tensor_size 计算**：`(tile_shape各维度相乘) × dtype_size`
+
+例：tile_shape=[128,512]，dtype=fp32 → 128×512×4 = 262144 bytes = 256 KB
+
+#### 步骤 4：回溯上游 Pass
+
+对上游 pass 计算图执行 tensor_magic 搜索，找到"Before 不存在、After 存在"的边界 pass，即为首次生成该 tensor 的位置。
+
+#### 步骤 5：定位源码并确定根因
+
+根据日志文件名和行号定位源码：
+
+```bash
+sed -n '<line-15>,<line+15>p' <source_file>
+```
+
+常见 Pass 锚点：
+
+| Pass | 文件 | 搜索锚点 |
+|---|---|---|
+| OoOSchedule | `schedule_base.h` | `exceeds %s size` |
+| ReplaceTensor | `replace_tensor.cpp` | `GetMemoryLimit(MEM_UB)` |
+| AssignMemoryType | `assign_memory_type.cpp` | `GetMemoryLimit(MEM_UB)` |
+
+**根因判断**：
+
+| 根因类型 | 判断依据 | 修复建议 |
+|---|---|---|
+| 前端配置超限 | tensor 可回溯到前端输入，无 pass 改写证据 | 调整 tile_shape 或 dtype |
+| 当前 Pass 问题 | pass 前后图或源码指向该 pass 新增 alloc/spill/copy | 修复内存分配、shape 处理逻辑 |
+| 上游 Pass 问题 | 回溯发现上游 pass 首次生成或放大超限 tensor | 修复首次引入超限的 pass |
+
+**根因链格式**：
+
+```
+现象(日志) -> 触发位置(文件:行号) -> 状态异常(tensor size > limit) -> 根因(前端/当前Pass/上游Pass)
+```
+
+### 输出要求
+
+内存越界分析报告必须包含：
+
+- **日志证据**：完整 exceeds 日志
+- **tensor 信息**：magic、shape、dtype
+- **计算图回溯**：tensor 在各 pass 图中的搜索结果
+- **根因定位**：前端/当前Pass/上游Pass
+- **修复建议**：参数调整或代码修复方案
+
+---
