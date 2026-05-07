@@ -44,14 +44,14 @@ bool InferParamIndex::HandleCopyOpShape(Operation& op, Function &function, bool 
     auto &casts = isCopyIn ? function.inCasts_ : function.outCasts_;
     auto operand = operands.front();
     if (find(casts.begin(), casts.end(), operand) == casts.end()) {
-        std::vector<SymbolicScalar> validShape;
-        op.GetOOperands().front()->UpdateDynValidShape(validShape);
         bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
         int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
         tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(1) : tensorBaseAddrCoaIndex;
         if (tensorBaseAddrCoaIndex != -1) {
             return true;
         }
+        std::vector<SymbolicScalar> validShape;
+        op.GetOOperands().front()->UpdateDynValidShape(validShape);
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
         if (isCopyIn) {
             copyAttr->SetToDynValidShape(OpImmediate::Specified(validShape));
