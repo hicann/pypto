@@ -229,6 +229,8 @@ private:
     Status SpillBuffer(SpillInfo &spillInfo, Operation* allocOp, size_t &pcIdx,
         LocalBufferPtr allocBuffer, bool isGenSpill);
     Status SpillOutBuffer(SpillInfo &spillInfo, Operation* op, size_t &pcIdx, bool isGenSpill);
+    void HandleUBCopyNZ2ND(Operation* &actualSpillOp, LogicalTensorPtr &actualSpillTensor);
+    Status InsertCopyoutToOperations(Operation* actualSpillOp, Operation* spillCopyoutOp);
     Status CreateSpecialL1Copyout(SpillInfo &spillInfo, Operation* &spillCopyoutOp, int &bufLastUseOrder,
         bool &isFinish, bool isGenSpill, size_t &pcIdx);
     Status CreateSpillCopyout(Operation* spillOp, LogicalTensorPtr spillTensor, int spillMemId,
@@ -290,6 +292,7 @@ private:
     void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
     void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
+    void UpdateOpIsCube(Operation &op, Operation* srcOp);
     void GetActualSpillInfo(Operation* spillOp, std::pair<LogicalTensorPtr, Operation*>& actualInfo);
     void UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr spillTensor, std::vector<int64_t> offset,
         Operation* spillOp, bool isSpecialL1);
