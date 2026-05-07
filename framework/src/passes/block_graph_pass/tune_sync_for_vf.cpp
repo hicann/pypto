@@ -67,10 +67,13 @@ void TuneSyncForVF::GenPipeOpMap(Function* subGraphFunc)
         if (opcfg.coreType_ != CoreType::AIV) {
             continue;
         }
-        if (pipeOpMap.count(opcfg.pipeIdStart_)) {
-            pipeOpMap[opcfg.pipeIdStart_].emplace_back(op);
-        } else {
-            pipeOpMap[opcfg.pipeIdStart_] = {op};
+        auto& startVec = pipeOpMap[opcfg.pipeIdStart_];
+        if (std::find(startVec.begin(), startVec.end(), op) == startVec.end()) {
+            startVec.emplace_back(op);
+        }
+        auto& endVec = pipeOpMap[opcfg.pipeIdEnd_];
+        if (std::find(endVec.begin(), endVec.end(), op) == endVec.end()) {
+            endVec.emplace_back(op);
         }
     }
 }
