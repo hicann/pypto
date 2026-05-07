@@ -63,7 +63,7 @@ TEST_F(TestCodegenDynSinCos, SinLayout)
     codeGen.GenCode(*function, {});
 
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"(TSin(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
+    std::string expect = R"(TSin(ubTensor_2, ubTensor_3, ubTensor_0);)";
     CheckStringExist(expect, res);
 }
 
@@ -94,7 +94,7 @@ TEST_F(TestCodegenDynSinCos, CosLayout)
 
     std::string res = GetResultFromCpp(*function);
 
-    std::string expect = R"(TCos(ubTensor_2, ubTensor_3, ubTensor_4, ubTensor_0);)";
+    std::string expect = R"(TCos(ubTensor_2, ubTensor_3, ubTensor_0);)";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

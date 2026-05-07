@@ -881,4 +881,198 @@ TILEOP void TCosh(T0 dst, T1 src)
         }
     }
 }
+
+template <UnaryOp op, typename T0, typename T1, typename T2, typename T3, typename T4>
+TILEOP void reduceKCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src0)
+{
+    // define the number of x div pi
+    constexpr float PI_FOR_X_TODIV = 0.3183098733425140380859375;
+    // define the PI for compute
+    constexpr float PI_V2 = 3.140625;
+    constexpr float KPI_FIRS_PI_MULS = 0.0009670257568359375;
+    constexpr float KPI_TWI_PI_MULS = 6.2771141529083251953125e-7;
+    constexpr float KPI_THIR_PI_MULS = 1.21644916362129151821136474609375e-10;
+    constexpr float KPI_FOR_PI_MULS = -1.0290623200529979163359041220560e-13;
+    constexpr float POINT_FIVE = 0.5;
+    constexpr float K2_SCA = -2.0;
+    constexpr float M4_SCA = 4.0;
+    constexpr float TRIG_ZERO = 0.0;
+    constexpr float TRIG_ONE = 1.0;
+    // define the number of down of pi_div
+    constexpr float PI_DOWN = 1.57079637050628662109375;
+    // kpi_2
+    constexpr float PI_RESDOWN_ADDS_NEG = -0.00000004371139000189375;
+
+    pto::TMULS(tmp0, src0, TRIG_ZERO);
+    SyncV();
+    pto::TADD(tmp2, src0, tmp0);
+    SyncV();
+    //  k=round(x/π), x0=x-kπ, x0 belongs to [-π/2, π/2]
+    //  cos(x) = (-1)^k * sin(x0 + π/2)
+    pto::TMULS(tmp0, tmp2, PI_FOR_X_TODIV);
+    SyncV();
+    if constexpr (op == UnaryOp::SIN) {
+        pto::TCVT(tmp1, tmp0, pto::RoundMode::CAST_ROUND);
+        SyncV();
+    }
+    if constexpr (op == UnaryOp::COS) {
+        pto::TADDS(tmp0, tmp0, POINT_FIVE);
+        SyncV();
+        pto::TCVT(tmp1, tmp0, pto::RoundMode::CAST_RINT);
+        SyncV();
+    }
+    pto::TCVT(tmp0, tmp1, pto::RoundMode::CAST_NONE);
+    SyncV();
+
+    // x -= k * pi_0
+    pto::TMULS(dst, tmp0, PI_V2);
+    SyncV();
+    pto::TSUB(tmp2, tmp2, dst);
+    SyncV();
+    // x -= k * pi_1
+    pto::TMULS(dst, tmp0, KPI_FIRS_PI_MULS);
+    SyncV();
+    pto::TSUB(tmp2, tmp2, dst);
+    SyncV();
+    // x = x + PI_DOWN
+    if constexpr (op == UnaryOp::COS) {
+        pto::TADDS(tmp2, tmp2, PI_DOWN);
+        SyncV();
+    }
+    // x -= k * pi_2
+    pto::TMULS(dst, tmp0, KPI_TWI_PI_MULS);
+    SyncV();
+    pto::TSUB(tmp2, tmp2, dst);
+    SyncV();
+    // x -= k * pi_3
+    pto::TMULS(dst, tmp0, KPI_THIR_PI_MULS);
+    SyncV();
+    pto::TSUB(tmp2, tmp2, dst);
+    SyncV();
+    // x -= k * pi_4
+    pto::TMULS(dst, tmp0, KPI_FOR_PI_MULS);
+    SyncV();
+    pto::TSUB(tmp2, tmp2, dst);
+    SyncV();
+
+    if constexpr (op == UnaryOp::COS) {
+        // x = x + PI_RESDOWN_ADDS_NEG
+        pto::TADDS(tmp2, tmp2, PI_RESDOWN_ADDS_NEG);
+        SyncV();
+    }
+    // kover2
+    pto::TMULS(dst, tmp0, POINT_FIVE);
+    SyncV();
+    pto::TCVT(tmp1, dst, pto::RoundMode::CAST_FLOOR);
+    SyncV();
+    pto::TCVT(dst, tmp1, pto::RoundMode::CAST_NONE);
+    SyncV();
+    // kover2floorm4
+    pto::TMULS(dst, dst, M4_SCA);
+    SyncV();
+    //k2
+    pto::TMULS(tmp0, tmp0, K2_SCA);
+    SyncV();
+    //sign
+    pto::TADD(dst, dst, tmp0);
+    SyncV();
+    pto::TADDS(dst, dst, TRIG_ONE);
+    SyncV();
+}
+
+template <UnaryOp op, typename T0, typename T1, typename T2, typename T3, typename T4>
+TILEOP void SinCosCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src0)
+{
+    constexpr float RES_MULTI_SCA = 2.604926501e-6;
+    constexpr float RES_ADDICT_UP = -0.0001980894471;
+    constexpr float ADD2S = 0.008333049340;
+    constexpr float ADD3S = -0.1666665792;
+    constexpr float TRIG_ONE = 1.0;
+
+    // x^2
+    pto::TMUL(tmp0, tmp2, tmp2);
+    SyncV();
+    // sin(x) = x * P(x)
+    // P(x) = (((x^2 * R0 + R1) * x^2 + R2) * x^2 + R3) * x^2 + 1.0
+    // roundTensor = mul(x^2, 2.604926501e-6)
+    pto::TMULS(tmp1, tmp0, RES_MULTI_SCA);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, RES_ADDICT_UP);
+    SyncV();
+    // roundTensor = mul(roundTensor, x^2)
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, ADD2S);
+    SyncV();
+    // roundTensor = mul(roundTensor, x^2)
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, ADD3S);
+    SyncV();
+    // roundTensor = mul(roundTensor, x^2)
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, TRIG_ONE);
+    SyncV();
+    // sin(x) = x * P(x)
+    pto::TMUL(tmp1, tmp2, tmp1);
+    SyncV();
+    pto::TMUL(dst, dst, tmp1);
+    SyncV();
+    return;
+}
+
+template <UnaryOp op, typename T0, typename T1, typename T2>
+TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
+
+    using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T2::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using TmpINT32Tile = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+
+    TmpFP32Tile dstTile(shape3, shape4);
+    TmpFP32Tile tmp0Tile(shape3, shape4);
+    TmpINT32Tile tmp1Tile(shape3, shape4);
+    TmpFP32Tile tmp2Tile(shape3, shape4);
+    TmpFP32Tile src0Tile(shape3, shape4);
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(src0Tile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(int32_t)));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * sizeof(float)));
+
+                reduceKCompute<op>(dstTile, tmp0Tile, tmp1Tile, tmp2Tile, src0Tile);
+                SyncV();
+                TmpFP32Tile tmp3Tile(shape3, shape4);
+                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
+                SinCosCompute<op>(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, src0Tile);
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_SIN TSin
+template <typename T0, typename T1, typename T2>
+TILEOP void TSin(T0 dst, T1 tmp, T2 src)
+{
+    TrigCompute<UnaryOp::SIN>(dst, tmp, src);
+}
+
+#define OP_TILE_OP_COS TCos
+template <typename T0, typename T1, typename T2>
+TILEOP void TCos(T0 dst, T1 tmp, T2 src)
+{
+    TrigCompute<UnaryOp::COS>(dst, tmp, src);
+}
 #endif

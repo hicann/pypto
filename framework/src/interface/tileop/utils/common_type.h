@@ -42,7 +42,9 @@ enum class UnaryOp : uint8_t {
     ISFINITE,
     SIGNBIT,
     SINH,
-    COSH
+    COSH,
+    SIN,
+    COS
 };
 
 enum class BinaryOp : uint8_t {
@@ -91,6 +93,4 @@ enum class BinaryScalarOp : uint8_t {
 };
 
 enum class BitwiseShiftOp : uint8_t { BITWISERIGHTSHIFT = 0, BITWISELEFTSHIFT };
-
-enum class TrigtOp : uint8_t { SIN = 0, COS };
 #endif // TILEOP_UTILS_COMMON_TYPE_H

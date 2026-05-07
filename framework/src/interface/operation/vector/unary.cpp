@@ -296,6 +296,34 @@ Tensor Cosh(const Tensor& self)
     return castResult;
 }
 
+Tensor Sin(const Tensor& self)
+{
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Sin");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "Sin");
+    CheckTensorShapeSize(self.GetStorage(), "Sin");
+
+    auto castSelf = Cast(self, DataType::DT_FP32);
+    auto result = CALL(UnaryOperation<UnaryOpType::SIN>, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage());
+    auto castResult = Cast(result, self.GetDataType());
+    return castResult;
+}
+
+Tensor Cos(const Tensor& self)
+{
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Cos");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "Cos");
+    CheckTensorShapeSize(self.GetStorage(), "Cos");
+
+    auto castSelf = Cast(self, DataType::DT_FP32);
+    auto result = CALL(UnaryOperation<UnaryOpType::COS>, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage());
+    auto castResult = Cast(result, self.GetDataType());
+    return castResult;
+}
+
 void ExpOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
@@ -441,6 +469,40 @@ void CoshOperationTileFunc(
     return TiledUnaryOperation<UnaryOpType::COSH>(function, tileShape, iOperand[0], oOperand[0]);
 }
 
+void SinOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    std::vector<int64_t> tmpShape;
+    tmpShape.assign(shape.begin(), shape.end());
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
+    // 3个中间变量
+    uint64_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP32)) * 3 *
+                                std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>());
+
+    return TiledUnaryOperation<UnaryOpType::SIN>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
+}
+
+void CosOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    std::vector<int64_t> tmpShape;
+    tmpShape.assign(shape.begin(), shape.end());
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
+    // 3个中间变量
+    uint64_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP32)) * 3 *
+                                std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>());
+
+    return TiledUnaryOperation<UnaryOpType::COS>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
+}
+
 REGISTER_OPERATION_TILED_FUNC(OP_EXP, Opcode::OP_EXP, ExpOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RSQRT, Opcode::OP_RSQRT, RsqrtOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RELU, Opcode::OP_RELU, ReluOperationTileFunc);
@@ -456,5 +518,6 @@ REGISTER_OPERATION_TILED_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, IsFiniteOperatio
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SINH, Opcode::OP_SINH, SinhOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_COSH, Opcode::OP_COSH, CoshOperationTileFunc);
-
+REGISTER_OPERATION_TILED_FUNC(OP_SIN, Opcode::OP_SIN, SinOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_COS, Opcode::OP_COS, CosOperationTileFunc);
 } // namespace npu::tile_fwk
