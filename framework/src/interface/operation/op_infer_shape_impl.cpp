@@ -32,7 +32,7 @@ void BinaryBrcinlineInferFunc(Operation* op, std::vector<std::vector<SymbolicSca
 
     std::vector<SymbolicScalar> outputValidShape = validShape0;
     std::vector<int64_t> brcOperand;
-    if (op->GetAttr(OP_ATTR_PREFIX + "brcOperand", brcOperand)) {
+    if (op->GetAttr(OpAttributeKey::brcOperand, brcOperand)) {
         for (size_t i = 0; i < outputValidShape.size(); i++) {
             if (brcOperand[i] == 1) {
                 outputValidShape[i] = validShape1[i];

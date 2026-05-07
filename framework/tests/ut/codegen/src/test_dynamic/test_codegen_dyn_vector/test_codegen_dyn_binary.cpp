@@ -517,12 +517,9 @@ TEST_F(TestCodegenDynBinary, TestAxpyTileTensor)
 
     auto& op = function->AddOperation(Opcode::OP_AXPY, {localTensorA, localTensorB}, {localOutTensor});
     op.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 2.0));
-    op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(1));
-    op.SetAttribute(OpAttributeKey::brcpIdx, static_cast<int64_t>(1));
-
     std::string res = GenOpCodeFromOp(*function, op);
     std::string expect =
-        R"!!!(TAxpy<TileOp::BroadcastOperand::LEFT_OPERAND, TileOp::PenuBroadcastOperand::LEFT_OPERAND>(ubTensor_0, ubTensor_0, (float)2);
+        R"!!!(TAxpy(ubTensor_0, ubTensor_0, (float)2);
 )!!!";
     EXPECT_EQ(res, expect);
 }

@@ -275,7 +275,7 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpandinline)
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"in2"}, {"t2"}, "c2", true), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_SUB, {"t1", "t2"}, {"t3"}, "sub", true), true);
     auto sub = graph.GetOp("sub");
-    sub->SetAttribute(OpAttributeKey::brcpIdx, 1);
+    sub->SetAttribute(OpAttributeKey::brcOperand, std::vector<int64_t>{1, 0});
 
     auto funcPtr = graph.GetFunction();
     funcPtr->paramConfigs_.combineAxis = true;
@@ -308,7 +308,7 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpandinline)
     EXPECT_EQ(graph.GetTensor("t1")->GetRawTensor()->GetRawShape(), (Shape{8, 1}));
     EXPECT_EQ(graph.GetTensor("t2")->GetRawTensor()->GetRawShape(), (Shape{16, 1}));
     // Verify CodegenPreproc
-    EXPECT_EQ(sub->GetIntAttribute(OpAttributeKey::brcpIdx), 0);
+    EXPECT_EQ(sub->GetVectorIntAttribute(OpAttributeKey::brcOperand), (std::vector<int64_t>{0, 1}));
     EXPECT_EQ(sub->GetIntAttribute(OpAttributeKey::brcbIdx), 1);
 }
 

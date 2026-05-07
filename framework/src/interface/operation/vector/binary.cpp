@@ -84,16 +84,16 @@ void BinaryOperationOperandCheck(
 }
 
 // Identify which operand need brc at a specific axis counting from the first
+// Return value 0 = NONE, 1 = LEFT_OPERAND, 2 = RIGHT_OPERAND
 int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, int64_t axisNum)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
     int64_t shapeSize = operand1->shape.size();
-    int operandNum = -1;
+    int operandNum = 0;
 
     int64_t idx = (axisNum < 0) ? (shapeSize + axisNum) : axisNum;
-    if (idx >= shapeSize || idx < 0) {
-        return operandNum;
-    }
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, idx >= 0 && idx < shapeSize)
+        << "axisNum " << axisNum << " out of range for shapeSize " << shapeSize;
     if ((operand1->shape[idx] != 1) && (operand2->shape[idx] == 1)) {
         operandNum = 2;
     } else if ((operand1->shape[idx] == 1) && (operand2->shape[idx] != 1)) {
@@ -148,20 +148,19 @@ void TiledBinaryOperation(
         }
 
         if (op != nullptr) {
-            std::vector<int64_t> brcOperand(shapeSize, -1);
+            std::vector<int64_t> brcOperand(shapeSize, 0);
             size_t brcAxesCount = 0;
             for (size_t i = 0; i < shapeSize; i++) {
                 brcOperand[i] = BrcAxisBinaryOp(input1.tensor, input2.tensor, i);
-                if (brcOperand[i] != -1) {
+                if (brcOperand[i] != 0) {
                     brcAxesCount++;
                 }
             }
-            if (brcOperand[shapeSize - 1] != -1 && brcAxesCount >= 2) {
-                op->SetAttribute(OpAttributeKey::excludeBufferReuse, true);
-            }
-            op->SetAttribute(OP_ATTR_PREFIX + "brcOperand", brcOperand);
-            if (shapeSize >= NUM2 && brcOperand[shapeSize - NUM2] != -1) {
-                op->SetAttribute(OpAttributeKey::brcpIdx, brcOperand[shapeSize - NUM2]);
+            if (brcAxesCount > 0) {
+                if (brcOperand[shapeSize - 1] != 0 && brcAxesCount >= 2) {
+                    op->SetAttribute(OpAttributeKey::excludeBufferReuse, true);
+                }
+                op->SetAttribute(OpAttributeKey::brcOperand, brcOperand);
             }
         }
         if constexpr (T == BinaryOpType::DIV || T == BinaryOpType::MOD || T == BinaryOpType::POW) {
@@ -234,7 +233,7 @@ void TiledBinaryOperation(
     auto input1 = LogicalInput{operand1, tileInfo1};
     auto input2 = LogicalInput{operand2, tileInfo2};
     // 如果打开了forceCombineAxis要走进OP_XX_BRC，如果打开combineAxis要避免后续走OP_XX_BRC逻辑
-    bool withBrc = (BrcAxisBinaryOp(operand1, operand2, -1) != -1) && function.paramConfigs_.forceCombineAxis &&
+    bool withBrc = (BrcAxisBinaryOp(operand1, operand2, -1) != 0) && function.paramConfigs_.forceCombineAxis &&
                    !function.paramConfigs_.combineAxis;
     TiledBinaryOperation<T>(function, tileShape, 0, input1, input2, result, resultTileInfo, withBrc, precisionType);
 }
@@ -1285,17 +1284,20 @@ void TiledAxpyOperation(
         auto& op = function.AddOperation(Opcode::OP_AXPY, {selfTile, otherTile}, {resultTile});
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         std::vector<int64_t> brcOperand(shapeSize, 0);
+        size_t brcAxesCount = 0;
         for (size_t i = 0; i < shapeSize; i++) {
             int brcResult = BrcAxisBinaryOp(inputSelf.tensor, inputOther.tensor, i);
-            brcOperand[i] = (brcResult == 1) ? -1 : brcResult;
+            brcOperand[i] = (brcResult == 1) ? 0 : brcResult;
+            if (brcOperand[i] != 0) {
+                brcAxesCount++;
+            }
         }
-        if (brcOperand[shapeSize - 1] != -1) {
+        if (brcOperand[shapeSize - 1] != 0) {
             op.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
             op.SetAttribute(OpAttributeKey::brcbIdx, brcOperand[shapeSize - 1]);
         }
-        op.SetAttribute(OP_ATTR_PREFIX + "brcOperand", brcOperand);
-        if (shapeSize >= NUM2 && brcOperand[shapeSize - NUM2] != -1) {
-            op.SetAttribute(OpAttributeKey::brcpIdx, brcOperand[shapeSize - NUM2]);
+        if (brcAxesCount > 0) {
+            op.SetAttribute(OpAttributeKey::brcOperand, brcOperand);
         }
         return;
     }

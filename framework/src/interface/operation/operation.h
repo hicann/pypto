@@ -86,7 +86,7 @@ public:
     static const std::string accumulate;
     static const std::string indicesSize;
     static const std::string brcbIdx;
-    static const std::string brcpIdx;
+    static const std::string brcOperand;
     static const std::string topkAlgo;
     static const std::string quantFlag;
     static const std::string loopGroup;

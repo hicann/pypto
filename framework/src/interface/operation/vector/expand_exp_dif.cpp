@@ -29,7 +29,19 @@ void TiledExpandExpDifOperation(
         auto inputTile2 = input2.tensor->View(function, input2.tileInfo.shape, input2.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         auto opName = GetBinaryOpNameCode<BinaryOpType::EXPANDEXPDIF>();
-        function.AddOperation(opName, {inputTile1, inputTile2}, {resultTile});
+        auto& op = function.AddOperation(opName, {inputTile1, inputTile2}, {resultTile});
+        size_t shapeSize = input1.tensor->GetShape().size();
+        std::vector<int64_t> brcOperand(shapeSize, 0);
+        size_t brcAxesCount = 0;
+        for (size_t i = 0; i < shapeSize; i++) {
+            brcOperand[i] = BrcAxisBinaryOp(input1.tensor, input2.tensor, i);
+            if (brcOperand[i] != 0) {
+                brcAxesCount++;
+            }
+        }
+        if (brcAxesCount > 0) {
+            op.SetAttribute(OpAttributeKey::brcOperand, brcOperand);
+        }
     } else {
         auto& vecTile = tileShape.GetVecTile();
         for (int i = 0; i < result->shape[cur]; i += vecTile[cur]) {

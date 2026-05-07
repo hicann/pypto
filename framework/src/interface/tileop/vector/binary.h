@@ -96,14 +96,13 @@ TILEOP void BinaryBrcDispatch(T0 dst, T1 src0, T2 src1)
         pipe_barrier(PIPE_V);
 #endif
         BinaryRowExpandComputeImpl<op, PrecisionType, LastUse>(dst, dst, src1);
-    } else {
+    } else if constexpr (brcmode == BrcMode::NONE) {
         BinaryComputeImpl<op, PrecisionType, LastUse>(dst, src0, src1);
     }
 }
 
 template <
-    BinaryOp op, auto PrecisionType = 0, TileOp::BroadcastOperand WBrcSide, TileOp::PenuBroadcastOperand HBrcSide,
-    typename LastUse, typename T0, typename T1, typename T2>
+    BinaryOp op, auto PrecisionType = 0, typename LastUse, int ...BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -112,14 +111,17 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     using Src0TileInfo = TensorTileInfo<T1>;
     using Src1TileInfo = TensorTileInfo<T2>;
-    constexpr BrcMode brcmode = GetBrcMode<WBrcSide, HBrcSide>();
-    if constexpr (TileOp::IsConstContinous<T0, T1, T2>() == true) {
+    constexpr BrcMode brcmode = GetBrcMode<BrcOperands...>();
+    if constexpr (brcmode == BrcMode::BRC_HW) {
+        BinaryMixBrcCompute<op, PrecisionType, Src0TileInfo, Src1TileInfo, LastUse, BrcOperands...>(dst, src0, src1);
+        return;
+    } else if constexpr (TileOp::IsConstContinous<T0, T1, T2>() == true) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         using Src0PtoTile = typename std::conditional<
-            (Src0TileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::LEFT_OPERAND),
+            (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT),
             PtoTile<T1, pto::BLayout::ColMajor, true>, PtoTile<T1, pto::BLayout::RowMajor, true>>::type;
         using Src1PtoTile = typename std::conditional<
-            (Src1TileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND),
+            (Src1TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
             PtoTile<T2, pto::BLayout::ColMajor, true>, PtoTile<T2, pto::BLayout::RowMajor, true>>::type;
         auto src0Tile = Src0PtoTile().Data();
         auto src1Tile = Src1PtoTile().Data();
@@ -130,16 +132,11 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
         return;
     }
 
-    if constexpr (brcmode == BrcMode::BRC_HW) {
-        BinaryMixBrcCompute<op, PrecisionType, WBrcSide, HBrcSide, Src0TileInfo, Src1TileInfo, LastUse>(dst, src0, src1);
-        return;
-    }
-
     using Src0PtoTile = typename std::conditional<
-        (Src0TileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::LEFT_OPERAND),
+        (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT),
         PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
     using Src1PtoTile = typename std::conditional<
-        (Src1TileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND),
+        (Src1TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
         PtoTile<T2, pto::BLayout::ColMajor>, PtoTile<T2>>::type;
     auto dstTile = PtoTile<T0>(dst);
     auto src0Tile = Src0PtoTile(src0);
@@ -149,11 +146,13 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto dsttileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto src0tileOffsets = TileOffset(
-                    Src0TileInfo::tile0 == 1 ? 0 : n0Index, Src0TileInfo::tile1 == 1 ? 0 : n1Index,
-                    Src0TileInfo::tile2 == 1 ? 0 : n2Index);
+                    (Src0TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_LEFT) ? 0 : n0Index,
+                    (Src0TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_LEFT) ? 0 : n1Index,
+                    (Src0TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_LEFT) ? 0 : n2Index);
                 auto src1tileOffsets = TileOffset(
-                    Src1TileInfo::tile0 == 1 ? 0 : n0Index, Src1TileInfo::tile1 == 1 ? 0 : n1Index,
-                    Src1TileInfo::tile2 == 1 ? 0 : n2Index);
+                    (Src1TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ? 0 : n0Index,
+                    (Src1TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ? 0 : n1Index,
+                    (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 : n2Index);
                 dstTile.Assign(dst, dsttileOffsets);
                 src0Tile.Assign(src0, src0tileOffsets);
                 src1Tile.Assign(src1, src1tileOffsets);
@@ -166,75 +165,67 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
 
 #define OP_TILE_OP_ADD TAdd
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TAdd(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::ADD, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::ADD, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_SUB TSub
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TSub(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::SUB, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::SUB, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MUL TMul
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMul(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::MUL, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MUL, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_DIV TDiv
 template <
     auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse = LastUse3Dim<0, 0, 0>,
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    int ...BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TDiv(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::DIV, PrecisionType, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::DIV, PrecisionType, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MAX TMax
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMax(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::MAX, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MAX, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MIN TMin
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMin(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::MIN, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MIN, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEAND TBitwiseAnd
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TBitwiseAnd(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::BITWISEAND, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::BITWISEAND, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEOR TBitwiseOr
 template <
-    typename LastUse = LastUse3Dim<0, 0, 0>, TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    typename LastUse = LastUse3Dim<0, 0, 0>, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TBitwiseOr(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::BITWISEOR, 0, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::BITWISEOR, 0, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
 TILEOP int gcd(int a, int b)
@@ -255,8 +246,7 @@ TILEOP int gcd(int a, int b)
 
 #define OP_TILE_OP_GCD TGcd
 template <
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -296,16 +286,13 @@ TILEOP void TGcd(T0 dst, T1 src0, T2 src1)
 #define OP_TILE_OP_Mod TMod
 template <
     auto PrecisionType = pto::FmodAlgorithm::DEFAULT, typename LastUse = LastUse3Dim<0, 0, 0>,
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2>
+    int ...BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void TMod(T0 dst, T1 src0, T2 src1)
 {
-    BinaryCompute<BinaryOp::MOD, PrecisionType, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MOD, PrecisionType, LastUse, BrcOperands...>(dst, src0, src1);
 }
 
-template <
-    BinaryOp op, auto PrecisionType = 0, TileOp::BroadcastOperand WBrcSide,
-    typename T0, typename T1, typename T2, typename T3>
+template <BinaryOp op, auto PrecisionType = 0, typename T0, typename T1, typename T2, typename T3>
 TILEOP void BinaryTmpComputeImpl(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
     if constexpr (op == BinaryOp::BITWISEXOR) {
@@ -322,9 +309,7 @@ TILEOP void BinaryTmpComputeImpl(T0 dst, T1 src0, T2 src1, T3 tmp)
     }
 }
 
-template <
-    BinaryOp op, auto PrecisionType = 0, TileOp::BroadcastOperand WBrcSide, TileOp::PenuBroadcastOperand HBrcSide,
-    typename T0, typename T1, typename T2, typename T3>
+template <BinaryOp op, auto PrecisionType = 0, typename T0, typename T1, typename T2, typename T3>
 TILEOP void BinaryTmpCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
     if constexpr (TileOp::IsConstContinous<T0, T1, T2, T3>() == true) {
@@ -336,7 +321,7 @@ TILEOP void BinaryTmpCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
         pto::TASSIGN(src0Tile, (uint64_t)src0.GetAddr());
         pto::TASSIGN(src1Tile, (uint64_t)src1.GetAddr());
         pto::TASSIGN(tmpTile, (uint64_t)tmp.GetAddr());
-        BinaryTmpComputeImpl<op, PrecisionType, WBrcSide>(dstTile, src0Tile, src1Tile, tmpTile);
+        BinaryTmpComputeImpl<op, PrecisionType>(dstTile, src0Tile, src1Tile, tmpTile);
         return;
     }
     const auto dstLayout = dst.GetLayout();
@@ -356,7 +341,7 @@ TILEOP void BinaryTmpCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
                 src0Tile.Assign(src0, tileOffsets);
                 src1Tile.Assign(src1, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                BinaryTmpComputeImpl<op, PrecisionType, WBrcSide>(
+                BinaryTmpComputeImpl<op, PrecisionType>(
                     dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmpTile.Data());
             }
         }
@@ -364,42 +349,29 @@ TILEOP void BinaryTmpCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
 }
 
 #define OP_TILE_OP_BITWISEXOR TBitwiseXor
-template <
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2,
-    typename T3>
+template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TBitwiseXor(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
-    BinaryTmpCompute<BinaryOp::BITWISEXOR, 0, WBrcSide, HBrcSide>(dst, src0, src1, tmp);
+    BinaryTmpCompute<BinaryOp::BITWISEXOR>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_POW TPow
-template <
-    auto PrecisionType = 0,
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2,
-    typename T3>
+template <auto PrecisionType = 0, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
     static_assert(std::is_same_v<typename T1::Type, float> || std::is_same_v<typename T1::Type, int32_t>);
-    BinaryTmpCompute<BinaryOp::POW, PrecisionType, WBrcSide, HBrcSide>(dst, src0, src1, tmp);
+    BinaryTmpCompute<BinaryOp::POW, PrecisionType>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_REM TRem
-template <
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2,
-    typename T3>
+template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TRemainder(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
-    BinaryTmpCompute<BinaryOp::REM, 0, WBrcSide, HBrcSide>(dst, src0, src1, tmp);
+    BinaryTmpCompute<BinaryOp::REM>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_AXPY TAxpy
-template <
-    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1,
-    typename Scalar>
+template <int... BrcOperands, typename T0, typename T1, typename Scalar>
 TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
 {
     const auto dstLayout = dst.GetLayout();
@@ -410,7 +382,7 @@ TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
     using SrcTileInfo = TensorTileInfo<T1>;
 
     using SrcPtoTile = typename std::conditional<
-        (SrcTileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND),
+        (SrcTileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT),
         PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
 
     auto dstTile = PtoTile<T0>(dst);
@@ -421,8 +393,9 @@ TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto dsttileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto src0tileOffsets = TileOffset(
-                    SrcTileInfo::tile0 == 1 ? 0 : n0Index, SrcTileInfo::tile1 == 1 ? 0 : n1Index,
-                    SrcTileInfo::tile2 == 1 ? 0 : n2Index);
+                    (SrcTileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ? 0 : n0Index,
+                    (SrcTileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ? 0 : n1Index,
+                    (SrcTileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 : n2Index);
                 dstTile.Assign(dst, dsttileOffsets);
                 src0Tile.Assign(src0, src0tileOffsets);
                 pto::TAXPY(dstTile.Data(), src0Tile.Data(), static_cast<typename T1::Type>(alpha));

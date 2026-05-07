@@ -257,10 +257,15 @@ void CodegenPreproc::FixExpandDimForAxisCombine(Operation& op, int dimSize) cons
         }
     }
     // 隐式expand场景
-    if (op.HasAttr(OpAttributeKey::brcpIdx)) {
-        int operand = op.GetIntAttribute(OpAttributeKey::brcpIdx);
-        op.SetAttribute(OpAttributeKey::brcpIdx, static_cast<int64_t>(0));
-        op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(operand));
+    if (dimSize >= NUM2 && op.HasAttr(OpAttributeKey::brcOperand)) {
+        auto brcOperand = op.GetVectorIntAttribute(OpAttributeKey::brcOperand);
+        int operand = brcOperand[dimSize - NUM2];
+        if (operand != 0) {
+            brcOperand[dimSize - NUM2] = static_cast<int64_t>(0);
+            brcOperand[dimSize - 1] = static_cast<int64_t>(operand);
+            op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(operand));
+            op.SetAttribute(OpAttributeKey::brcOperand, brcOperand);
+        }
     }
 }
 

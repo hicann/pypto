@@ -28,24 +28,36 @@ enum class BrcMode : uint8_t {
     BRC_H0_W1  // [1, n] [m, 1]
 };
 
-template <TileOp::BroadcastOperand WBrcSide, TileOp::PenuBroadcastOperand HBrcSide>
+// brcOperand per-axis encoding emitted by codegen
+constexpr int BRC_NONE = 0;
+constexpr int BRC_LEFT = 1;
+constexpr int BRC_RIGHT = 2;
+
+template <size_t Idx, int... BrcOperands>
+TILEOP constexpr int GetBrcOperandAt()
+{
+    if constexpr (Idx >= sizeof...(BrcOperands) || sizeof...(BrcOperands) == 0) {
+        return BRC_NONE;
+    } else {
+        constexpr int arr[] = { BrcOperands... };
+        return arr[Idx];
+    }
+}
+
+template <int... BrcOperands>
 TILEOP constexpr BrcMode GetBrcMode()
 {
-    if constexpr (WBrcSide != TileOp::BroadcastOperand::NONE && HBrcSide == TileOp::PenuBroadcastOperand::NONE) {
+    constexpr int w = GetBrcOperandAt<DIM_5TH, BrcOperands...>();
+    constexpr int h = GetBrcOperandAt<DIM_4TH, BrcOperands...>();
+    if constexpr (w != BRC_NONE && h == BRC_NONE) {
         return BrcMode::BRC_W;
-    } else if constexpr (WBrcSide == TileOp::BroadcastOperand::NONE && HBrcSide != TileOp::PenuBroadcastOperand::NONE) {
+    } else if constexpr (w == BRC_NONE && h != BRC_NONE) {
         return BrcMode::BRC_H;
-    } else if constexpr (
-        (WBrcSide == TileOp::BroadcastOperand::LEFT_OPERAND &&
-         HBrcSide == TileOp::PenuBroadcastOperand::LEFT_OPERAND) ||
-        (WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND &&
-         HBrcSide == TileOp::PenuBroadcastOperand::RIGHT_OPERAND)) {
+    } else if constexpr ((w == BRC_LEFT && h == BRC_LEFT) || (w == BRC_RIGHT && h == BRC_RIGHT)) {
         return BrcMode::BRC_HW;
-    } else if constexpr (
-        WBrcSide == TileOp::BroadcastOperand::LEFT_OPERAND && HBrcSide == TileOp::PenuBroadcastOperand::RIGHT_OPERAND) {
+    } else if constexpr (w == BRC_LEFT && h == BRC_RIGHT) {
         return BrcMode::BRC_W0_H1;
-    } else if constexpr (
-        WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND && HBrcSide == TileOp::PenuBroadcastOperand::LEFT_OPERAND) {
+    } else if constexpr (w == BRC_RIGHT && h == BRC_LEFT) {
         return BrcMode::BRC_H0_W1;
     } else {
         return BrcMode::NONE;
@@ -118,8 +130,8 @@ TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 }
 
 template <
-    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, TileOp::BroadcastOperand WBrcSide,
-    TileOp::PenuBroadcastOperand HBrcSide, typename Src0TileInfo, typename Src1TileInfo, typename LastUse, typename T0, typename T1, typename T2>
+    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename Src0TileInfo, typename Src1TileInfo,
+    typename LastUse, int... BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -132,8 +144,8 @@ TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto src0Shape4 = src0Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    constexpr bool src0IsColMajor = (Src0TileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::LEFT_OPERAND);
-    constexpr bool src1IsColMajor = (Src1TileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND);
+    constexpr bool src0IsColMajor = (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT);
+    constexpr bool src1IsColMajor = (Src1TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT);
     using Src0PtoTile =
         typename std::conditional<src0IsColMajor, PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
     using Src1PtoTile =
@@ -146,12 +158,16 @@ TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
                     auto dsttileOffset = GenTileOffset(dst, TileOffset4Dim(n0Index, n1Index, n2Index, n3Index));
-                    auto src0tileOffset = GenTileOffset(src0, TileOffset4Dim(Src0TileInfo::tile0 == 1 ? 0 : n0Index, Src0TileInfo::tile1 == 1 ? 0 : n1Index,
-                                                                Src0TileInfo::tile2 == 1 ? 0 : n2Index,
-                                                                HBrcSide == TileOp::PenuBroadcastOperand::LEFT_OPERAND ? 0 : n3Index));
-                    auto src1tileOffset = GenTileOffset(src1, TileOffset4Dim(Src1TileInfo::tile0 == 1 ? 0 : n0Index, Src1TileInfo::tile1 == 1 ? 0 : n1Index,
-                                                                Src1TileInfo::tile2 == 1 ? 0 : n2Index,
-                                                                HBrcSide == TileOp::PenuBroadcastOperand::RIGHT_OPERAND ? 0 : n3Index));
+                    auto src0tileOffset = GenTileOffset(src0, TileOffset4Dim(
+                        (Src0TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_LEFT) ? 0 : n0Index,
+                        (Src0TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_LEFT) ? 0 : n1Index,
+                        (Src0TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_LEFT) ? 0 : n2Index,
+                        GetBrcOperandAt<DIM_4TH, BrcOperands...>() == BRC_LEFT ? 0 : n3Index));
+                    auto src1tileOffset = GenTileOffset(src1, TileOffset4Dim(
+                        (Src1TileInfo::tile0 == 1 || GetBrcOperandAt<DIM_1ST, BrcOperands...>() == BRC_RIGHT) ? 0 : n0Index,
+                        (Src1TileInfo::tile1 == 1 || GetBrcOperandAt<DIM_2ND, BrcOperands...>() == BRC_RIGHT) ? 0 : n1Index,
+                        (Src1TileInfo::tile2 == 1 || GetBrcOperandAt<DIM_3RD, BrcOperands...>() == BRC_RIGHT) ? 0 : n2Index,
+                        GetBrcOperandAt<DIM_4TH, BrcOperands...>() == BRC_RIGHT ? 0 : n3Index));
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dsttileOffset * sizeof(typename T0::Type)));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + src0tileOffset * sizeof(typename T1::Type)));
                     pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + src1tileOffset * sizeof(typename T2::Type)));

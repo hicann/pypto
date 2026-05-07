@@ -20,14 +20,11 @@
 #include <vector>
 
 namespace npu::tile_fwk {
-enum class TileOperand : int64_t {
+enum class BroadcastOperand : int64_t {
     NONE = 0,
     LEFT_OPERAND = 1,
     RIGHT_OPERAND = 2,
 };
-
-using BroadcastOperand = TileOperand;
-using PenuBroadcastOperand = TileOperand;
 
 struct PrintScatterElemParam {
     const int axis;
