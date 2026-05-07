@@ -24,7 +24,7 @@
 
 | 约束 | 说明 |
 |------|------|
-| 尾轴 32B 对齐 | FP32: 8 元素, BF16/FP16: 16 元素 |
+| 尾轴 32B 对齐 | FP32: 8 元素, BF16/FP16: 16 元素, 当尾轴实际长度小于32B时可以按32B配置 |
 | TileShape 维度数 = 输出 tensor 维度数 | 最多 4 维 |
 | TileSize × 驻留 tile 数 × dtype_bytes ≤ UB 容量 | 超出导致 spill |
 | (TensorShape / TileShape) × (1 + input_count) ≤ 18000 | 超出导致编译失败 |

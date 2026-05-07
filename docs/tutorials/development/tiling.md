@@ -207,7 +207,7 @@ def test_set_cube_different_tile_shapes_runtime():
 
 在该示例中，对于两个shape分别为\(4, 64, 512\)和的\(4, 512, 128\)的矩阵相乘，set\_cube\_tile\_shapes\(\[32, 32\], \[32, 32\], \[32, 32\]\)的运行时间明显比set\_cube\_tile\_shapes\(\[64, 64\], \[128, 128\], \[128, 128\]\)要长。
 
-完整样例请参考：examples/01\_beginner/tiling/tiling\_config.py
+完整样例请参考：[tiling_config.py](../../../examples/01_beginner/tiling/tiling_config.py)。
 
 ## 使用约束
 
