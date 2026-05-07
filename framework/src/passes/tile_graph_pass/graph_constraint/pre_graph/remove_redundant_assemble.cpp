@@ -639,9 +639,9 @@ Status RemoveRedundantAssemble::HanldeForSingleAssemble(
                 producer->GetOpMagic(), producer->GetOpcodeStr().c_str());
             UpdateCopyOutAttr(*producer, *cons);
         }
+        HandleForAssembleFromInOut(function, op, producersBackup);
+        HandleForAssembleToOutcast(function, op, producersBackup);
     }
-    HandleForAssembleFromInOut(function, op, producersBackup);
-    HandleForAssembleToOutcast(function, op, producersBackup);
     if (HandleDynOffsetForReshape(op, producersBackup) != SUCCESS) {
         APASS_LOG_ERROR_F(
             Elements::Operation, "HandleDynOffsetForReshape for op:[%d] failed. %s", op.GetOpMagic(),
