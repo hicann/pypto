@@ -205,6 +205,9 @@ Status OoOScheduler::FindCoreLocationMemoryType(CoreLocationType coreLocation, M
         spillMemType = MemoryType::MEM_UB;
     } else if (!allocIssueQueue[coreLocation][MemoryType::MEM_L1].Empty()) {
         spillMemType = MemoryType::MEM_L1;
+    } else if (coreLocation == CoreLocationType::AIC &&
+               !allocIssueQueue[coreLocation][MemoryType::MEM_L0C].Empty()) {
+        spillMemType = MemoryType::MEM_L0C;
     } else {
         for (auto& memType : allocIssueQueue[coreLocation]) {
             if (memType.second.Empty()) {
@@ -214,7 +217,8 @@ Status OoOScheduler::FindCoreLocationMemoryType(CoreLocationType coreLocation, M
         }
         APASS_LOG_ERROR_F(
             Elements::Operation,
-            "Buffer[L0A/B/C] is Full. Possible causes: incorrect memory reuse, memory fragmentation. "
+            "No spillable buffer found. Only UB/L1/L0C support OoO spill. "
+            "Possible causes: incorrect memory reuse, memory fragmentation. "
             "Please check tile shape and OOO spill failed info.");
         return FAILED;
     }

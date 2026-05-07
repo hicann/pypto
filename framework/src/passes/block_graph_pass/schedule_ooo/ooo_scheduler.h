@@ -278,6 +278,18 @@ private:
     Status SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> orderFirstPair);
     Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType &spillMemType);
     Status FindFirstOrder(std::pair<CoreLocationType, MemoryType> &orderFirstPair);
+
+    // L0C spill 路径
+    Status SpillL0CBuffer(SpillInfo &spillInfo, Operation* allocOp, size_t &pcIdx,
+        LocalBufferPtr allocBuffer, bool isGenSpill);
+    void CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<Operation*> &consumers);
+    void RecomputeBufRefCount(int memId);
+    Status CreateL0CSpillOut(SpillInfo &spillInfo, Operation* allocOp, size_t &pcIdx, bool isGenSpill);
+    Status ReplaceL0CConsumer(Operation* oldCons, const SpillInfo &spillInfo);
+    Status FreeL0CAfterSpill(SpillInfo &spillInfo, LocalBufferPtr allocBuffer);
+    std::vector<int> FilterOutMemId(const std::vector<int> &memIds, int dropId);
+    void MoveDependencies(Operation* from, Operation* to);
+    void EraseSchedulerSideMaps(Operation* op);
     Operation* SkipViewChain(Operation* start, bool followProducers);
 
     // 新增：插入Operation到orderedOps
