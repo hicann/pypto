@@ -192,7 +192,7 @@ Status InferParamIndex::UpdateValidShape(
     for (auto& op : subFunc.Operations(false)) {
         bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
         int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
-        tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(1) : tensorBaseAddrCoaIndex;
+        tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(0) : tensorBaseAddrCoaIndex;
         if (tensorBaseAddrCoaIndex == -1) {
             continue;
         }
