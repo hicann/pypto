@@ -506,7 +506,7 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         return PrintVnchwconv({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
-    if (opCode == Opcode::OP_SIGN || opCode == Opcode::OP_SIGNBIT || opCode == Opcode::OP_SINH) {
+    if (opCode == Opcode::OP_SIGN || opCode == Opcode::OP_SIGNBIT || opCode == Opcode::OP_SINH || opCode == Opcode::OP_COSH) {
         return PrintUnaryWithTmpTileTensor();
     }
 

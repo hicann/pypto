@@ -457,7 +457,8 @@ void SinhOperationTileFunc(
     UnaryOperationOperandCheck(iOperand, oOperand);
     Shape& shape = TileShape::Current().GetVecTile().tile;
     int dim = shape.size();
-    uint64_t intermediateBytes = static_cast<uint64_t>(((shape[dim - 1] + 7) / 8 * 8)) * BytesOf(DT_FP32) * 4;
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    uint64_t intermediateBytes = static_cast<uint64_t>(AlignUp(shape[dim - 1], alignSize)) * BytesOf(DT_FP32) * 4;
     return TiledUnaryOperation<UnaryOpType::SINH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 
@@ -466,7 +467,11 @@ void CoshOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    return TiledUnaryOperation<UnaryOpType::COSH>(function, tileShape, iOperand[0], oOperand[0]);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    int dim = shape.size();
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    uint64_t intermediateBytes = static_cast<uint64_t>(AlignUp(shape[dim - 1], alignSize)) * BytesOf(DT_FP32);
+    return TiledUnaryOperation<UnaryOpType::COSH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 
 void SinOperationTileFunc(

@@ -119,7 +119,6 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_LN, [this]() { return GenUnaryOp(); }},
           {Opcode::OP_BRCB, [this]() { return GenUnaryOp(); }},
           {Opcode::OP_QUANT_MX, [this]() { return GenQuantMXOp(); }},
-          {Opcode::OP_COSH, [this]() { return GenUnaryOp(); }},
 
           // unary with temp buffer
           {Opcode::OP_COMPACT, [this]() { return GenUnaryOpWithTmpBuff(); }},
@@ -144,6 +143,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_SIN, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_COS, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_SINH, [this]() { return GenUnaryOpWithTmpBuff(); }},
+          {Opcode::OP_COSH, [this]() { return GenUnaryOpWithTmpBuff(); }},
       }),
       binaryOps_({
           // binary op: vector operations

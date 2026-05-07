@@ -199,9 +199,9 @@ REGISTER_INFER_SHAPE_FUNC(OP_BITWISEOR, Opcode::OP_BITWISEOR, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_EXPANDEXPDIF, Opcode::OP_EXPANDEXPDIF, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, ElewiseInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_COSH, Opcode::OP_COSH, ElewiseInferFunc);
 
-void FloorDivInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+template <int64_t TailScale>
+void InferShapeWithTailScaleFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
     if (inputValidShape.empty()) {
@@ -209,22 +209,12 @@ void FloorDivInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScala
     }
     size_t ndim = inputValidShape.size();
     outValidShapes.emplace_back(inputValidShape);
-    outValidShapes.emplace_back(std::vector<SymbolicScalar>{inputValidShape[ndim - 1] * 2});
+    outValidShapes.emplace_back(std::vector<SymbolicScalar>{inputValidShape[ndim - 1] * TailScale});
 }
-REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIV, Opcode::OP_FLOORDIV, FloorDivInferShapeFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIVS, Opcode::OP_FLOORDIVS, FloorDivInferShapeFunc);
-
-void SinhInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    if (inputValidShape.empty()) {
-        return;
-    }
-    size_t ndim = inputValidShape.size();
-    outValidShapes.emplace_back(inputValidShape);
-    outValidShapes.emplace_back(std::vector<SymbolicScalar>{inputValidShape[ndim - 1] * 4});
-}
-REGISTER_INFER_SHAPE_FUNC(OP_SINH, Opcode::OP_SINH, SinhInferShapeFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIV, Opcode::OP_FLOORDIV, InferShapeWithTailScaleFunc<4>);
+REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIVS, Opcode::OP_FLOORDIVS, InferShapeWithTailScaleFunc<3>);
+REGISTER_INFER_SHAPE_FUNC(OP_SINH, Opcode::OP_SINH, InferShapeWithTailScaleFunc<4>);
+REGISTER_INFER_SHAPE_FUNC(OP_COSH, Opcode::OP_COSH, InferShapeWithTailScaleFunc<1>);
 
 void PadInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

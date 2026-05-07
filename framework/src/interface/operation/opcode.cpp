@@ -409,7 +409,7 @@ void OpcodeManager::RegisterVectorUnary()
         {"TileOp::TSinh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
     RegisterInfo(
-        Opcode::OP_COSH, OpCoreType::AIV, "COSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        Opcode::OP_COSH, OpCoreType::AIV, "COSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TCosh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
 }

@@ -393,12 +393,14 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                     DataTileDefine dstTile(1, dstShape4);
                     DataTileDefine tmp0DataTile(1, dstShape4);
                     DataTileDefine tmp1DataTile(1, dstShape4);
+                    DataTileDefine tmp2DataTile(1, dstShape4);
 
                     MaskTileDefine tmp0MaskTile(1, dstShape4);
                     MaskTileDefine tmp1MaskTile(1, dstShape4);
 
                     pto::TASSIGN(tmp0DataTile, (uint64_t)(tmp.GetAddr()));
                     pto::TASSIGN(tmp1DataTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
+                    pto::TASSIGN(tmp2DataTile, (uint64_t)(tmp.GetAddr() + 2 * tileW * dstTypeSize));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * dstTypeSize));
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
 
@@ -421,12 +423,12 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                         pto::TXORS(tmp1MaskTile, tmp0MaskTile, src1Mask, dstTile); // packed mask of sign_differ
                         pto::TDIVS(dstTile, src0Tile, src1);                       // quot
                         pto::TMULS(tmp0DataTile, dstTile, -src1);
-                        pto::TADD(src0Tile, tmp0DataTile, src0Tile); // rem
+                        pto::TADD(tmp2DataTile, tmp0DataTile, src0Tile); // rem
 
-                        pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::NE);
+                        pto::TCMPS(tmp0MaskTile, tmp2DataTile, 0, CmpMode::NE);
                         pto::TAND(tmp0MaskTile, tmp1MaskTile, tmp0MaskTile);
-                        pto::TADDS(src0Tile, dstTile, -1);
-                        pto::TSEL(dstTile, tmp0MaskTile, src0Tile, dstTile, tmp1DataTile);
+                        pto::TADDS(tmp2DataTile, dstTile, -1);
+                        pto::TSEL(dstTile, tmp0MaskTile, tmp2DataTile, dstTile, tmp1DataTile);
                     }
 #endif
                 }

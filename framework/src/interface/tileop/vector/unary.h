@@ -823,8 +823,8 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
 }
 
 #define OP_TILE_OP_COSH TCosh
-template <typename T0, typename T1>
-TILEOP void TCosh(T0 dst, T1 src)
+template <typename T0, typename T1, typename T2>
+TILEOP void TCosh(T0 dst, T1 src, T2 tmp)
 {
     const auto dstLayout = dst.GetLayout();
     auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
@@ -855,26 +855,28 @@ TILEOP void TCosh(T0 dst, T1 src)
                     
                     DataTileDefine dstTile(1, dstShape4);
                     DataTileDefine srcTile(1, dstShape4);
+                    DataTileDefine tmpTile(1, dstShape4);
                     
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + offset * dstTypeSize));
+                    pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
 
                     // cosh(x) = 1/2 * (e^{x/2} + e^{-3x/2}) * e^{x/2}
-                    pto::TABS(srcTile, srcTile);
+                    pto::TABS(tmpTile, srcTile);
                     SyncV();
-                    pto::TMULS(dstTile, srcTile, SCALAR_NEGATIVE_ONE_POINT_FIVE);
+                    pto::TMULS(dstTile, tmpTile, SCALAR_NEGATIVE_ONE_POINT_FIVE);
                     SyncV();
-                    pto::TMULS(srcTile, srcTile, SCALAR_ZERO_POINT_FIVE);
+                    pto::TMULS(tmpTile, tmpTile, SCALAR_ZERO_POINT_FIVE);
                     SyncV();
-                    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(srcTile, srcTile);
+                    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmpTile, tmpTile);
                     SyncV();
                     pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(dstTile, dstTile);
                     SyncV();
-                    pto::TADD(dstTile, dstTile, srcTile);
+                    pto::TADD(dstTile, dstTile, tmpTile);
                     SyncV();
                     pto::TMULS(dstTile, dstTile, SCALAR_ZERO_POINT_FIVE);
                     SyncV();
-                    pto::TMUL(dstTile, dstTile, srcTile);
+                    pto::TMUL(dstTile, dstTile, tmpTile);
                     SyncV();
                 }
             }

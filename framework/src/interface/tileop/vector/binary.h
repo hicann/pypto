@@ -499,6 +499,8 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                     DataTileDefine dstTile(1, dstShape4);
                     DataTileDefine tmp0DataTile(1, dstShape4);
                     DataTileDefine tmp1DataTile(1, dstShape4);
+                    DataTileDefine tmp2DataTile(1, dstShape4);
+                    DataTileDefine tmp3DataTile(1, dstShape4);
 
                     MaskTileDefine tmp0MaskTile(1, dstShape4);
                     MaskTileDefine tmp1MaskTile(1, dstShape4);
@@ -507,6 +509,8 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
 
                     pto::TASSIGN(tmp0DataTile, (uint64_t)(tmp.GetAddr()));
                     pto::TASSIGN(tmp1DataTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
+                    pto::TASSIGN(tmp2DataTile, (uint64_t)(tmp.GetAddr() + 2 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp3DataTile, (uint64_t)(tmp.GetAddr() + 3 * tileW * dstTypeSize));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * dstTypeSize));
                     pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + offset * dstTypeSize));
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
@@ -521,8 +525,8 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                     pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::GE);
                     pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, neg);
                     pto::TCMPS(tmp0MaskTile, src1Tile, 0, CmpMode::NE);
-                    pto::TSEL(src0Tile, tmp0MaskTile, src0Tile, tmp1DataTile, tmp1DataTile);
-                    pto::TSELS(src1Tile, tmp0MaskTile, src1Tile, tmp1DataTile, 1);
+                    pto::TSEL(tmp2DataTile, tmp0MaskTile, src0Tile, tmp1DataTile, tmp1DataTile);
+                    pto::TSELS(tmp3DataTile, tmp0MaskTile, src1Tile, tmp1DataTile, 1);
                     
                     /*
                      * After zero-divisor handling:
@@ -531,17 +535,17 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                      * rem = src0 - quot * src1
                      * dst = (sign_differ && rem != 0) ? quot - 1 : quot
                      */
-                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::LT);
-                    pto::TCMPS(tmp1MaskTile, src1Tile, 0, CmpMode::LT);
+                    pto::TCMPS(tmp0MaskTile, tmp2DataTile, 0, CmpMode::LT);
+                    pto::TCMPS(tmp1MaskTile, tmp3DataTile, 0, CmpMode::LT);
                     pto::TXOR(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile, dstTile); // packed mask of sign_differ
-                    pto::TDIV(dstTile, src0Tile, src1Tile);                       // quot
-                    pto::TMUL(tmp1DataTile, src1Tile, dstTile);
-                    pto::TSUB(src0Tile, src0Tile, tmp1DataTile); // rem
+                    pto::TDIV(dstTile, tmp2DataTile, tmp3DataTile);                       // quot
+                    pto::TMUL(tmp1DataTile, tmp3DataTile, dstTile);
+                    pto::TSUB(tmp2DataTile, tmp2DataTile, tmp1DataTile); // rem
 
-                    pto::TCMPS(tmp1MaskTile, src0Tile, 0, CmpMode::NE);
+                    pto::TCMPS(tmp1MaskTile, tmp2DataTile, 0, CmpMode::NE);
                     pto::TAND(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile);
-                    pto::TADDS(src0Tile, dstTile, -1);
-                    pto::TSEL(dstTile, tmp0MaskTile, src0Tile, dstTile, tmp1DataTile);
+                    pto::TADDS(tmp2DataTile, dstTile, -1);
+                    pto::TSEL(dstTile, tmp0MaskTile, tmp2DataTile, dstTile, tmp1DataTile);
 #endif
                 }
             }
