@@ -132,8 +132,9 @@ void MonitorImpl::MonitorLoop()
     int stage_timeout_sec = GetTimeoutSecImmediate(manager_);
     int total_timeout_sec = GetTotalTimeoutSecImmediate(manager_);
 
-    COMPILER_LOGI("[Compiler Monitor] interval_sec=%d, stage_timeout_sec=%d, total_timeout_sec=%d, check_enable=%d",
-                  print_interval_sec, stage_timeout_sec, total_timeout_sec, check_enable);
+    COMPILER_LOGI(
+        "[Compiler Monitor] interval_sec=%d, stage_timeout_sec=%d, total_timeout_sec=%d, check_enable=%d",
+        print_interval_sec, stage_timeout_sec, total_timeout_sec, check_enable);
 
     int pre_cost = manager_->GetProcessingThresholdSec();
     int check_interval_sec = 1;
@@ -206,15 +207,14 @@ void MonitorImpl::MonitorLoop()
             if (stage == STAGE_FUNC_TO_BIN) {
                 int total_root_n = manager_->GetRootFuncCount();
                 int pw = manager_->GetProgressWidth();
-                if (curr_stage_elapsed >= static_cast<double>(stage_timeout_sec) &&
-                    manager_->GetStageTimeoutFlag(stage) == false) {
-                    manager_->SetStageTimeoutFlag(stage);
+                if (curr_stage_elapsed >= static_cast<double>(stage_timeout_sec) && stageInfo.warningPrinted == false) {
+                    manager_->SetActiveStageWarningPrinted(stage, stageInfo.rootFuncIndex);
                     warm_msg =
                         "[Compiler Monitor] | [** WARNING **] " + PadLabel("Function(parallel): ") +
                         PadRight(std::to_string(stageInfo.rootFuncIndex) + "/" + std::to_string(total_root_n), pw) +
                         " | Stage CodeGen[" + stage + "], Func:[" + stageInfo.rootFuncName + "] elapsed [" +
                         FormatElapsed(curr_stage_elapsed) + "] exceeded the current stage total time threshold [" +
-                        FormatElapsed(static_cast<double>(stage_timeout_sec)) +
+                        FormatElapsed(static_cast<double>(stage_timeout_sec)) + "] | Func:[" + current_func_name +
                         "] | Number of op: " + std::to_string(stageInfo.rootFuncOpSize) +
                         " , you can enter 'Ctrl+C' to terminate!";
                     (void)fprintf(stdout, "%s\n", warm_msg.c_str());
@@ -252,17 +252,17 @@ void MonitorImpl::MonitorLoop()
                                    PadRight(std::to_string(current_k) + "/" + std::to_string(total_n), pw) +
                                    " | Stage [" + stage + "] elapsed [" + FormatElapsed(curr_stage_elapsed) +
                                    "] exceeded the current stage total time threshold [" +
-                                   FormatElapsed(static_cast<double>(stage_timeout_sec)) +
-                                   "] | Func:[" + current_func_name + "] | Number of op: " +
-                                   std::to_string(current_func_opsize) + " , you can enter 'Ctrl+C' to terminate!";
+                                   FormatElapsed(static_cast<double>(stage_timeout_sec)) + "] | Func:[" +
+                                   current_func_name + "] | Number of op: " + std::to_string(current_func_opsize) +
+                                   " , you can enter 'Ctrl+C' to terminate!";
                         if (stage == "CodeGen") {
                             // for codeGen
                             warm_msg = "[Compiler Monitor] | [** WARNING **] | Stage [" + stage + "] elapsed [" +
                                        FormatElapsed(curr_stage_elapsed) +
                                        "] exceeded the current stage total time threshold [" +
                                        FormatElapsed(static_cast<double>(stage_timeout_sec)) + "] | Func:[" +
-                                       current_func_name + "] | Number of op: " +
-                                       std::to_string(current_func_opsize) + " , you can enter 'Ctrl+C' to terminate!";
+                                       current_func_name + "] | Number of op: " + std::to_string(current_func_opsize) +
+                                       " , you can enter 'Ctrl+C' to terminate!";
                         }
                         (void)fprintf(stdout, "%s\n", warm_msg.c_str());
                         (void)fflush(stdout);
@@ -324,9 +324,9 @@ void MonitorImpl::MonitorLoop()
                         if (current_time >= last_print_time + print_interval_sec) {
                             last_print_time = current_time;
                             interval_msg = "  |__ [Compiler Monitor] " + PadLabel("Stage: ") + PadStageName(stage) +
-                                          "(processing) | Stashed function: " + std::to_string(total_n) +
-                                          " | Stage elapsed: " + PadElapsed(FormatElapsed(curr_stage_elapsed)) +
-                                          " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed));
+                                           "(processing) | Stashed function: " + std::to_string(total_n) +
+                                           " | Stage elapsed: " + PadElapsed(FormatElapsed(curr_stage_elapsed)) +
+                                           " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed));
                             (void)fprintf(stdout, "%s\n", interval_msg.c_str());
                             (void)fflush(stdout);
                             COMPILER_LOGI("%s", interval_msg.c_str());

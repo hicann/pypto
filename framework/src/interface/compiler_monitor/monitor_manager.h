@@ -31,6 +31,7 @@ struct ActiveStageInfo {
     int functionIndex{0};
     std::string functionName;
     int rootFuncOpSize{0};
+    bool warningPrinted{false};
 };
 
 class MonitorManager {
@@ -76,6 +77,7 @@ public:
 
     void SetStageTimeoutFlag(const std::string& name);
     bool GetStageTimeoutFlag(const std::string& name);
+    void SetActiveStageWarningPrinted(const std::string& name, int rootFuncIndex);
 
     std::string GetCurrentFunctionName() const;
     void SetCurrentFunctionName(const std::string& name);

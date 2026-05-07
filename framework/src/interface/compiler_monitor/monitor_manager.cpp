@@ -338,6 +338,17 @@ bool MonitorManager::GetStageTimeoutFlag(const std::string& name)
     return false;
 }
 
+void MonitorManager::SetActiveStageWarningPrinted(const std::string& name, int rootFuncIndex)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& info : active_stages_) {
+        if (info.stageName == name && info.rootFuncIndex == rootFuncIndex) {
+            info.warningPrinted = true;
+            break;
+        }
+    }
+}
+
 int MonitorManager::GetIntervalSec() const { return interval_sec_.load(); }
 
 int MonitorManager::GetTimeoutSec() const { return timeout_sec_.load(); }
@@ -395,8 +406,8 @@ void MonitorManager::PrintCurrentTotalElapsed(std::string str_temp)
     std::lock_guard<std::mutex> lock(mutex_);
     auto now = std::chrono::steady_clock::now();
     double total_elapsed = std::chrono::duration<double>(now - total_start_).count();
-    std::string stage_finish_msg = "[Compiler Monitor] " + str_temp + " | Total elapsed: " +
-    FormatElapsed(total_elapsed);
+    std::string stage_finish_msg =
+        "[Compiler Monitor] " + str_temp + " | Total elapsed: " + FormatElapsed(total_elapsed);
     (void)fprintf(stdout, "%s\n", stage_finish_msg.c_str());
     (void)fflush(stdout);
 }
