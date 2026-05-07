@@ -127,10 +127,10 @@ struct MatmulGraphNodes {
     MatmulGraphNodes() = default;
 
     MatmulGraphNodes(LogicalTensorPtr aTensorIn, LogicalTensorPtr bTensorIn)
-        : aTensorPtr(aTensorIn), bTensorPtr(bTensorIn){};
+        : aTensorPtr(aTensorIn), bTensorPtr(bTensorIn) {};
 
     MatmulGraphNodes(LogicalTensorPtr aTensorIn, LogicalTensorPtr bTensorIn, LogicalTensorPtr gmAccumulationTensorIn)
-        : aTensorPtr(aTensorIn), bTensorPtr(bTensorIn), gmAccumulationTensorPtr(gmAccumulationTensorIn){};
+        : aTensorPtr(aTensorIn), bTensorPtr(bTensorIn), gmAccumulationTensorPtr(gmAccumulationTensorIn) {};
 
     MatmulGraphNodes(
         LogicalTensorPtr aTensorIn, LogicalTensorPtr aScaleTensorIn, LogicalTensorPtr bTensorIn,
@@ -138,7 +138,7 @@ struct MatmulGraphNodes {
         : aTensorPtr(aTensorIn),
           aScaleTensorPtr(aScaleTensorIn),
           bTensorPtr(bTensorIn),
-          bScaleTensorPtr(bScaleTensorIn){};
+          bScaleTensorPtr(bScaleTensorIn) {};
 };
 
 struct MatmulAttrParam {
@@ -253,6 +253,9 @@ public:
     static const std::string paddingTop;
     static const std::string paddingBottom;
     static const std::string padValue;
+    static const std::string repeatStride;
+    static const std::string repeatTime;
+    static const std::string wStride;
 };
 
 class LoadStoreConvOpAttributeKey {
@@ -261,6 +264,7 @@ public:
     static const std::string copyOutMode;
     static const std::string isFmap;
     static const std::string isConv3D;
+    static const std::string cutW; // L0C M方向(hw合轴)的w大小
 };
 
 enum class CopyInMode : int {
@@ -378,6 +382,10 @@ struct ConvIterInfo {
     bool bL1UpadateFlag = false;
     bool isFirstK = false;
     bool isLastK = false;
+    // load3dv2 params
+    int64_t repeatStride = 0;
+    int64_t repeatTime = 1;
+    int64_t wStride = 0;
 };
 
 void ConstructTileGraph(

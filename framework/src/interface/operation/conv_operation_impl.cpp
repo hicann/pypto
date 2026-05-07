@@ -45,6 +45,10 @@ const std::string L12L0ConvOpAttributeKey::paddingRight = "PAD_RIGHT";
 const std::string L12L0ConvOpAttributeKey::paddingTop = "PAD_TOP";
 const std::string L12L0ConvOpAttributeKey::paddingBottom = "PAD_BOTTOM";
 const std::string L12L0ConvOpAttributeKey::padValue = "PAD_VALUE";
+const std::string L12L0ConvOpAttributeKey::repeatStride = "REPEAT_STRIDE";
+const std::string L12L0ConvOpAttributeKey::repeatTime = "REPEAT_TIME";
+const std::string L12L0ConvOpAttributeKey::wStride = "W_STRIDE";
+const std::string LoadStoreConvOpAttributeKey::cutW = "CUT_W";
 const std::string LoadStoreConvOpAttributeKey::copyInMode = "COPY_IN_MODE";
 const std::string LoadStoreConvOpAttributeKey::copyOutMode = "COPY_OUT_MODE";
 const std::string LoadStoreConvOpAttributeKey::isFmap = "IS_FMAP";
@@ -170,11 +174,6 @@ void CheckHowoTile(const Tensor& inputTensor, const Tensor& weightTensor, const 
             << "When wOut is not a multiple of 16, tileHout should be 1.";
     }
     CheckValueRange(tileHout, "tileHout", NUM1, hOut);
-    if (tileHout > 1) {
-        ASSERT(ConvOperationError::INPUT_INVALID, tileWout == wOut)
-            << "When tileHout > 1, tileWout must be equal to wOut.Now tileHout=" << tileHout
-            << ", tileWout=" << tileWout << ", wOut=" << wOut;
-    }
     CheckValueRange(tileWout, "tileWout", NUM1, ConvAlignB(wOut, NUM16));
     CheckAlignment(tileWout, NUM16, "tileWout");
 }
@@ -705,6 +704,10 @@ void SetImg2ColAttr(
     load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::postK, kStartPt);
     // set pad value
     load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::padValue, 0);
+    // set load3dv2 params
+    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::repeatStride, iterInfo.repeatStride);
+    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::repeatTime, iterInfo.repeatTime);
+    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::wStride, iterInfo.wStride);
     // set conv/conv3d flag
     load3dOpAl0.SetAttribute("isConv", true);
     load3dOpAl0.SetAttribute(Conv::LoadStoreConvOpAttributeKey::isConv3D, convAttrParam.isConv3D);
@@ -978,7 +981,13 @@ void ConstrucCopyOutTile(
     fixpipeOpRes.SetAttribute(
         LoadStoreConvOpAttributeKey::copyOutMode, static_cast<int64_t>(CopyOutMode::COPY_MOD_NZ2DN));
     fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::isConv3D, convAttrParam.isConv3D);
+
+    // 设置cutW参数：L0C M方向(hw合轴)的w大小
+    int64_t cutW = std::min(iterInfo.woutL1Size - iterInfo.wL0Offset, convTileInfo.wL0);
+    fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::cutW, cutW);
+
     fixpipeOpRes.SetAttribute("res_tile_shape", SymbolicScalar::FromConcrete(tensorGraphNodes.resTensorPtr->shape));
+
     int64_t dst_n_offset = iterInfo.batchOffset;
     int64_t dst_c_offset = iterInfo.groupOffset * convTileInfo.coutPerGroup + iterInfo.nL1Offset + iterInfo.nL0Offset;
     int64_t dst_d_offset = iterInfo.doL1Offset;
@@ -1092,12 +1101,16 @@ void IterL0ExpandFunc(
         for (iterInfo.hL0Offset = 0; iterInfo.hL0Offset < iterInfo.houtL1Size; iterInfo.hL0Offset += convTileInfo.hL0) {
             for (iterInfo.wL0Offset = 0; iterInfo.wL0Offset < iterInfo.woutL1Size;
                  iterInfo.wL0Offset += convTileInfo.wL0) {
-                if (convTileInfo.wL0 == convTileInfo.wAL1Out) {
-                    iterInfo.mL0Size = std::min(
-                        iterInfo.houtL1Size * iterInfo.woutL1Size - iterInfo.hL0Offset * iterInfo.woutL1Size,
-                        convTileInfo.hL0 * convTileInfo.wL0);
+                int64_t curH = std::min(convTileInfo.hL0, iterInfo.houtL1Size - iterInfo.hL0Offset);
+                int64_t curW = std::min(convTileInfo.wL0, iterInfo.woutL1Size - iterInfo.wL0Offset);
+                iterInfo.mL0Size = curH * curW;
+                if (curH > 1 && convTileInfo.wL0 != convTileInfo.wAL1Out) {
+                    iterInfo.repeatStride = iterInfo.woutL1Size;
+                    iterInfo.repeatTime = curH;
+                    iterInfo.wStride = curW;
                 } else {
-                    iterInfo.mL0Size = std::min(iterInfo.woutL1Size - iterInfo.wL0Offset, convTileInfo.wL0);
+                    iterInfo.repeatTime = 1;
+                    iterInfo.wStride = ConvAlignB(iterInfo.mL0Size, MKN_M_VALUE);
                 }
                 // bias 载入
                 if (convAttrParam.hasBias) {
@@ -1177,17 +1190,17 @@ void ConstructTileGraph(
 }
 Tensor Conv(
     DataType outType, const Tensor& inputTensor, const Tensor& weightTensor, const std::vector<int64_t>& strides,
-    const std::vector<int64_t>& paddings, const std::vector<int64_t>& dilations, const ConvExtendParam& extendParam,
-    const int64_t groups)
+    const std::vector<SymbolicScalar>& paddings, const std::vector<int64_t>& dilations,
+    const ConvExtendParam& extendParam, const int64_t groups)
 {
-    std::vector<int64_t> finalPaddings = paddings;
+    std::vector<int64_t> finalPaddings = SymbolicScalar::Concrete(paddings, 0);
     std::vector<int64_t> finalDilations = dilations;
     std::vector<int64_t> finalStrides = strides;
     if (dilations.size() == CONV3D_INPUT_DIM - 2 && strides.size() == CONV3D_INPUT_DIM - 2 &&
         paddings.size() == 2 * (CONV3D_INPUT_DIM - 2)) {
         finalDilations = rotateVector(dilations, 1);
         finalStrides = rotateVector(strides, 1);
-        finalPaddings = rotateVector(paddings, 2);
+        finalPaddings = rotateVector(SymbolicScalar::Concrete(paddings, 0), 2);
     }
     const Tensor& biasTensor = extendParam.biasTensor;
     // init and set attr

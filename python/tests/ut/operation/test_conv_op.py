@@ -9,9 +9,18 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
+Conv operation unit tests.
+Tests cover:
+- Different dtype: FP16, BF16, FP32 (交叉测试在动态轴用例中)
+- Dynamic axis tiling: batch, cout, hout, wout, dout
 """
 import pypto
+import pytest
 
+
+# ============================================================================
+# Original Conv Tests (保持原有 conv_tile_shapes 配置不变)
+# ============================================================================
 
 def test_conv1d_op():
     # conv1d op test

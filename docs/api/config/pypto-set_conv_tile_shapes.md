@@ -47,9 +47,7 @@ TileShape需要满足以下约束条件：
 
         - 1 <= tileWin <= Win（Win为输入特征图实际宽度）
 
-        - 1 <= tileWout <= CeilAlign(Wout, 16)（Wout为输出特征图实际宽度）
-
-        - tileHout > 1 时， tileWout == wout == tileW
+        - 1 <= tileWout <= CeilAlign(Wout, 16)（Wout为输出特征图实际宽度），tileWout需满足16元素对齐，即 `tileWout % 16 == 0`
 
         - 1 <= tileCinFmap <= Cin（Cin为输入特征图实际通道数）
 

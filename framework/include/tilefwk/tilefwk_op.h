@@ -601,8 +601,8 @@ struct ConvExtendParam {
 
 Tensor Conv(
     DataType outType, const Tensor& inputTensor, const Tensor& weightTensor, const std::vector<int64_t>& strides,
-    const std::vector<int64_t>& paddings, const std::vector<int64_t>& dilations, const ConvExtendParam& extendParam,
-    const int64_t groups = 1);
+    const std::vector<SymbolicScalar>& paddings, const std::vector<int64_t>& dilations,
+    const ConvExtendParam& extendParam, const int64_t groups = 1);
 
 } // namespace Conv
 

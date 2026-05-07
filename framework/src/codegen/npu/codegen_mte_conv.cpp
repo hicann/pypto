@@ -22,6 +22,87 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
+
+void CodeGenOpNPU::GetDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D,
+    std::vector<std::string>& gmOffsetExpr, std::vector<int64_t>& staticOffsets) const
+{
+    // 统一输出为 SHAPE_DIM5 维，conv2d 的第 5 维(d)初始化为 0
+    size_t inputDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
+
+    if (!(functionType == FunctionType::STATIC) && dynOffset[ID0].IsValid()) {
+        // 动态场景：返回动态偏移表达式，conv2d 补充第 5 维为 "0"
+        gmOffsetExpr = GenSymbolicArgument(dynOffset);
+        if (!isConv3D) {
+            gmOffsetExpr.emplace_back("0");
+        }
+    } else {
+        // 静态场景：返回静态偏移值，初始化为 SHAPE_DIM5 个 0，conv2d 第 5 维保持为 0
+        staticOffsets.resize(SHAPE_DIM5, 0);
+        for (size_t i = 0; i < inputDim; i++) {
+            staticOffsets[i] = dynOffset[i].Concrete();
+        }
+    }
+}
+
+std::vector<std::string> CodeGenOpNPU::BuildCopyInParamList(
+    const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
+    const std::vector<int64_t>& staticOffsets, const std::vector<int64_t>& srcShape, bool isConv3D) const
+{
+    std::vector<std::string> tileOpCopyInParamList;
+    tileOpCopyInParamList.emplace_back(dstTensor);
+    tileOpCopyInParamList.emplace_back(srcTensor);
+
+    // offset 参数顺序：conv2d 为 n,c,h,w,0 (d=0 放最后)；conv3d 为 n,c,d,h,w
+    // staticOffsets/gmOffsetExpr 已在 GetDynamicOffsetExpr 中初始化为 SHAPE_DIM5 维
+    if (functionType == FunctionType::STATIC) {
+        for (size_t i = 0; i < SHAPE_DIM5; i++) {
+            tileOpCopyInParamList.emplace_back(std::to_string(staticOffsets[i]));
+        }
+    } else {
+        for (size_t i = 0; i < SHAPE_DIM5; i++) {
+            tileOpCopyInParamList.emplace_back(gmOffsetExpr[i]);
+        }
+    }
+
+    // shape 参数顺序：conv2d 为 n,c,h,w,0 (d=0 放最后)；conv3d 为 n,c,d,h,w
+    size_t inputDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
+    for (size_t i = 0; i < inputDim; i++) {
+        tileOpCopyInParamList.emplace_back(std::to_string(srcShape[i]));
+    }
+    if (!isConv3D) {
+        tileOpCopyInParamList.emplace_back("0");
+    }
+
+    return tileOpCopyInParamList;
+}
+
+std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(
+    const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
+    const std::vector<int64_t>& staticOffsets, int64_t realM, int64_t realN, int64_t cutW) const
+{
+    std::vector<std::string> tileOpCopyOutParamList;
+    tileOpCopyOutParamList.emplace_back(dstTensor);
+    tileOpCopyOutParamList.emplace_back(srcTensor);
+
+    // offset 参数顺序：conv2d 为 n,c,h,w,0 (d=0 放最后)；conv3d 为 n,c,d,h,w
+    // staticOffsets/gmOffsetExpr 已在 GetDynamicOffsetExpr 中初始化为 SHAPE_DIM5 维
+    if (functionType == FunctionType::STATIC) {
+        for (size_t i = 0; i < SHAPE_DIM5; i++) {
+            tileOpCopyOutParamList.emplace_back(std::to_string(staticOffsets[i]));
+        }
+    } else {
+        for (size_t i = 0; i < SHAPE_DIM5; i++) {
+            tileOpCopyOutParamList.emplace_back(gmOffsetExpr[i]);
+        }
+    }
+
+    tileOpCopyOutParamList.emplace_back(std::to_string(realM));
+    tileOpCopyOutParamList.emplace_back(std::to_string(realN));
+    tileOpCopyOutParamList.emplace_back(std::to_string(cutW));
+
+    return tileOpCopyOutParamList;
+}
+
 std::string CodeGenOpNPU::GetConvCopyInMode() const
 {
     int64_t copyInMode = -1;
@@ -41,55 +122,29 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
     std::string copyInModeStr = GetConvCopyInMode();
 
     bool isFmap = true, isConv3D = false;
-    int64_t offsetN = 0, offsetC = 0, offsetD = 0, offsetH = 0, offsetW = 0;
-    int64_t srcShapeN = 0, srcShapeC = 0, srcShapeD = 0, srcShapeH = 0, srcShapeW = 0;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isFmap, isFmap);
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
+
     auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
-    auto srcShape = shapeFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
-    if (isConv3D) {
-        ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == SHAPE_DIM5)
-            << "GenMemL1CopyInConv offset should be 5-dim!";
-        ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, srcShape.size() == SHAPE_DIM5)
-            << "GenMemL1CopyInConv shape should be 5-dim!";
-        offsetN = dynOffset[ID0].Concrete();
-        offsetC = dynOffset[ID1].Concrete();
-        offsetD = dynOffset[ID2].Concrete();
-        offsetH = dynOffset[ID3].Concrete();
-        offsetW = dynOffset[ID4].Concrete();
-        srcShapeN = srcShape[ID0];
-        srcShapeC = srcShape[ID1];
-        srcShapeD = srcShape[ID2];
-        srcShapeH = srcShape[ID3];
-        srcShapeW = srcShape[ID4];
-    } else {
-        ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == SHAPE_DIM4)
-            << "GenMemL1CopyInConv offset should be 4-dim!";
-        ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, srcShape.size() == SHAPE_DIM4)
-            << "GenMemL1CopyInConv shape should be 4-dim!";
-        offsetN = dynOffset[ID0].Concrete();
-        offsetC = dynOffset[ID1].Concrete();
-        offsetH = dynOffset[ID2].Concrete();
-        offsetW = dynOffset[ID3].Concrete();
-        srcShapeN = srcShape[ID0];
-        srcShapeC = srcShape[ID1];
-        srcShapeH = srcShape[ID2];
-        srcShapeW = srcShape[ID3];
+    auto srcShapeVec = shapeFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
+
+    size_t expectedDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
+    ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == expectedDim)
+        << "GenMemL1CopyInConv offset should be " << expectedDim << "-dim!";
+    ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, srcShapeVec.size() == expectedDim)
+        << "GenMemL1CopyInConv shape should be " << expectedDim << "-dim!";
+
+    std::vector<int64_t> staticOffsets;
+    std::vector<std::string> gmOffsetExpr;
+    GetDynamicOffsetExpr(dynOffset, isConv3D, gmOffsetExpr, staticOffsets);
+
+    std::vector<int64_t> srcShape;
+    for (size_t i = 0; i < srcShapeVec.size(); i++) {
+        srcShape.emplace_back(srcShapeVec[i]);
     }
 
-    std::vector<std::string> tileOpParamList = {
-        dstTensor,
-        srcTensor,
-        std::to_string(offsetN),
-        std::to_string(offsetC),
-        std::to_string(offsetD),
-        std::to_string(offsetH),
-        std::to_string(offsetW),
-        std::to_string(srcShapeN),
-        std::to_string(srcShapeC),
-        std::to_string(srcShapeD),
-        std::to_string(srcShapeH),
-        std::to_string(srcShapeW)};
+    std::vector<std::string> tileOpParamList =
+        BuildCopyInParamList(dstTensor, srcTensor, gmOffsetExpr, staticOffsets, srcShape, isConv3D);
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyInModeStr, std::to_string(isConv3D), std::to_string(isFmap)});
@@ -117,41 +172,31 @@ std::string CodeGenOpNPU::GenMemL1CopyOutConv() const
     std::string copyOutModeStr = GetConvCopyOutMode();
 
     bool isConv3D = false;
-    int64_t realM = 0, realN = 0;
-    int64_t offsetN = 0, offsetC = 0, offsetD = 0, offsetH = 0, offsetW = 0;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
+
+    // 获取cutW参数，默认值为0
+    int64_t cutW = 0;
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::cutW, cutW);
+    ASSERT(ConvCodenGenError::CODEGEN_CHECK_ATTR_INVALID, cutW != 0)
+        << "GenMemL1CopyOutConv cutW should not be 0!";
+
     auto realShape = shapeFromAttr[ToUnderlying(MISOIdx::DST_IDX)];
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, realShape.size() == SHAPE_DIM2)
         << "GenMemL1CopyOutConv valid shape should be 2-dim!";
-    realM = realShape[ID0];
-    realN = realShape[ID1];
+    int64_t realM = realShape[ID0];
+    int64_t realN = realShape[ID1];
+
     auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::DST_IDX)];
-    if (isConv3D) {
-        ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == SHAPE_DIM5)
-            << "GenMemL1CopyOutConv offset should be 5-dim!";
-        offsetN = dynOffset[ID0].Concrete();
-        offsetC = dynOffset[ID1].Concrete();
-        offsetD = dynOffset[ID2].Concrete();
-        offsetH = dynOffset[ID3].Concrete();
-        offsetW = dynOffset[ID4].Concrete();
-    } else {
-        ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == SHAPE_DIM4)
-            << "GenMemL1CopyOutConv offset should be 4-dim!";
-        offsetN = dynOffset[ID0].Concrete();
-        offsetC = dynOffset[ID1].Concrete();
-        offsetH = dynOffset[ID2].Concrete();
-        offsetW = dynOffset[ID3].Concrete();
-    }
-    std::vector<std::string> tileOpParamList = {
-        dstTensor,
-        srcTensor,
-        std::to_string(offsetN),
-        std::to_string(offsetC),
-        std::to_string(offsetD),
-        std::to_string(offsetH),
-        std::to_string(offsetW),
-        std::to_string(realM),
-        std::to_string(realN)};
+    size_t expectedDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
+    ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, dynOffset.size() == expectedDim)
+        << "GenMemL1CopyOutConv offset should be " << expectedDim << "-dim!";
+
+    std::vector<int64_t> staticOffsets;
+    std::vector<std::string> gmOffsetExpr;
+    GetDynamicOffsetExpr(dynOffset, isConv3D, gmOffsetExpr, staticOffsets);
+
+    std::vector<std::string> tileOpParamList =
+        BuildCopyOutParamList(dstTensor, srcTensor, gmOffsetExpr, staticOffsets, realM, realN, cutW);
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyOutModeStr, std::to_string(isConv3D)});
@@ -168,45 +213,31 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load3D() const
     paramList.emplace_back(dstVar);
     paramList.emplace_back(srcVar);
 
-    int64_t mPos = 0, kPos = 0;
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::postM, mPos);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::postK, kPos);
-    paramList.emplace_back(mPos);
-    paramList.emplace_back(kPos);
+    auto loadParams = [this](auto& list, auto key, auto& value) {
+        GetOpAttr(key, value);
+        list.emplace_back(value);
+    };
+
+    int64_t val = 0;
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::postM, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::postK, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::paddingLeft, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::paddingRight, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::paddingTop, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::paddingBottom, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::padValue, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::filterH, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::filterW, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::dilationH, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::dilationW, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::strideH, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::strideW, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::repeatStride, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::repeatTime, val);
+    loadParams(paramList, Conv::L12L0ConvOpAttributeKey::wStride, val);
 
     std::vector<int64_t> fmapL1Shape = rawShape[ID1];
     CODEGEN_LOGI("GenMemL1ToL0Load3D %s, fmapL1Shape is %s", tileOpName.c_str(), IntVecToStr(fmapL1Shape).c_str());
-
-    int64_t padLeft = 0, padRight = 0, padTop = 0, padBottom = 0, padValue = 0;
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingLeft, padLeft);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingRight, padRight);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingTop, padTop);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingBottom, padBottom);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::padValue, padValue);
-    paramList.emplace_back(padLeft);
-    paramList.emplace_back(padRight);
-    paramList.emplace_back(padTop);
-    paramList.emplace_back(padBottom);
-    paramList.emplace_back(padValue);
-
-    int64_t filterH = 0, filterW = 0;
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::filterH, filterH);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::filterW, filterW);
-    paramList.emplace_back(filterH);
-    paramList.emplace_back(filterW);
-
-    int64_t dilationH = 0, dilationW = 0;
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::dilationH, dilationH);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::dilationW, dilationW);
-    paramList.emplace_back(dilationH);
-    paramList.emplace_back(dilationW);
-
-    int64_t strideH = 0, strideW = 0;
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::strideH, strideH);
-    GetOpAttr(Conv::L12L0ConvOpAttributeKey::strideW, strideW);
-    paramList.emplace_back(strideH);
-    paramList.emplace_back(strideW);
-
     std::vector<int64_t> fmapL0Shape = rawShape[ID0];
     CODEGEN_LOGI("GenMemL1ToL0Load3D %s, fmapL0Shape is %s", tileOpName.c_str(), IntVecToStr(fmapL0Shape).c_str());
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, fmapL0Shape.size() == SHAPE_DIM2)

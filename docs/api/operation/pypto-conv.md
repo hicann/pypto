@@ -81,10 +81,35 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 - input_conv/weight 仅支持 DT_FP16、DT_BF16、DT_FP32 数据类型，其他类型会抛出 ValueError；
 - input_conv 与 weight 的维度必须一致（如 input_conv 为 4D 则 weight 也需为 4D），否则抛出 RuntimeError。
 
+### 5. 动态轴切分支持
+
+卷积算子支持以下维度的动态轴切分：
+
+| 维度       | 是否支持 | 切分方式                           | 说明                                                                 |
+|:-----------|:--------:|:-----------------------------------|:---------------------------------------------------------------------|
+| Batch      |    √     | 前端循环切分                        | TileL1Info.tileBatch 必须为 1（硬件约束），通过前端循环实现动态切分   |
+| Cout       |    √     | TileShape 动态切分 + 前端循环       | 支持 TileShape 配置的动态切分，配合前端循环实现完整 Cout 维度覆盖      |
+| Dout       |    √     | TileShape 动态切分 + 前端循环       | 仅 3D 卷积支持，Dout 维度动态切分                                     |
+| Hout       |    √     | TileShape 动态切分 + 前端循环       | Hout 维度动态切分，配合前端循环实现完整覆盖                           |
+| Wout       |    √     | TileShape 动态切分 + 前端循环       | Wout 维度动态切分，配合前端循环实现完整覆盖                           |
+| Cin        |    √     | 前端循环切分 + pypto.add 累加       | Cin 维度动态切分需使用 pypto.add 累加多个 tile 结果                   |
+
+**Cin 维度动态切分精度说明**：
+
+Cin 维度的动态轴切分会影响计算精度，原因如下：
+- Cin 切分后需要对多个 tile 的卷积结果进行累加（通过 pypto.add 实现）
+- 累加过程中存在两次 cast 操作（FP16/BF16 → FP32 → FP16/BF16）
+- 这两次精度转换会引入精度损失，在 Cin 切分场景下需要评估精度需求
+
+**建议**：
+- 如果精度要求较高，建议避免 Cin 维度的动态切分
+- 如果必须进行 Cin 切分，建议使用 FP32 数据类型以减少精度损失
+- Cin 切分的 tile 大小需满足 32 字节对齐约束（FP16/BF16: %16==0, FP32: %8==0）
+
 ## 调用示例
 
 ```python
-# 2D 卷积基础示例（当前暂不支持动态轴切分调用）
+# 2D 卷积基础示例
 input_conv = pypto.tensor((1, 32, 8, 16), pypto.DT_FP16, "input_conv")
 weight = pypto.tensor((32, 32, 1, 1), pypto.DT_FP16, "weight")
 
@@ -117,7 +142,7 @@ out = pypto.conv(input_conv, weight, pypto.DT_FP16,
                    dilations=[1, 1],
                    extend_params=extend_params)
 
-# 3D 卷积示例（当前暂不支持动态轴切分调用）
+# 3D 卷积示例
 input_conv = pypto.tensor((1, 96, 2, 16, 16), pypto.DT_FP16, "input_conv")
 weight = pypto.tensor((32, 96, 1, 1, 1), pypto.DT_FP16, "weight")
 

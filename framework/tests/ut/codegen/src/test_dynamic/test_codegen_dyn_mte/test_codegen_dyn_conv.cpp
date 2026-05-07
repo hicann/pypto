@@ -111,7 +111,7 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorFmapConv2D)
 {
     std::string res = TestConvL1CopyInBody("L1CopyInTileTensorFmapConv2D", {1, 16, 1, 16});
     std::string expect =
-        R"!!!(TLoadConv<CopyInMode::DN2NZ, 0, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 16, 0, 1, 16);
+        R"!!!(TLoadConv<CopyInMode::DN2NZ, 0, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 16, 1, 16, 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -120,7 +120,7 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorWeightConv2D)
 {
     std::string res = TestConvL1CopyInBody("L1CopyInTileTensorWeightConv2D", {1, 16, 1, 1}, false);
     std::string expect =
-        R"!!!(TLoadConv<CopyInMode::DN2NZ, 0, 0>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 16, 0, 1, 1);
+        R"!!!(TLoadConv<CopyInMode::DN2NZ, 0, 0>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 16, 1, 1, 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -145,7 +145,7 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorWeightConv3D)
 
 std::string TestConvL0COutBody(
     const std::string& funcName, const std::vector<int64_t>& l0cShape, std::vector<int64_t>& gmShape,
-    int64_t copyOutMode = 3, DataType dtype = DataType::DT_FP32)
+    int64_t copyOutMode = 3, DataType dtype = DataType::DT_FP32, int64_t cutW = 0)
 {
     bool isConv3D = gmShape.size() == 5;
     std::vector<int64_t> offset = {0, 0, 0, 0};
@@ -160,6 +160,7 @@ std::string TestConvL0COutBody(
     auto shapeImme = OpImmediate::Specified(l0cShape);
     op.SetAttribute("COPY_OUT_MODE", copyOutMode);
     op.SetAttribute("IS_CONV3D", isConv3D);
+    op.SetAttribute("CUT_W", cutW);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     op.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified(offset), shapeImme, shapeImme, shapeImme));
@@ -172,19 +173,21 @@ std::string TestConvL0COutBody(
 
 TEST_F(TestCodegenDynConv, L0COutTileTensorConv2D)
 {
-    std::vector<int64_t> l0cShape = {16, 16};
-    std::vector<int64_t> gmShape = {1, 16, 1, 16};
-    std::string res = TestConvL0COutBody("L0COutTileTensorConv2D", l0cShape, gmShape);
-    std::string expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16);)!!!";
+    std::vector<int64_t> l0cShape = {32, 16};
+    int64_t cutW = 16;
+    std::vector<int64_t> gmShape = {1, 16, 2, 32};
+    std::string res = TestConvL0COutBody("L0COutTileTensorConv2D", l0cShape, gmShape, 3, DataType::DT_FP32, cutW);
+    std::string expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 0>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynConv, L0COutTileTensorConv3D)
 {
-    std::vector<int64_t> l0cShape = {16, 16};
-    std::vector<int64_t> gmShape = {1, 16, 1, 1, 16};
-    std::string res = TestConvL0COutBody("L0COutTileTensorConv3D", l0cShape, gmShape);
-    std::string expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 1>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 16, 16);)!!!";
+    std::vector<int64_t> l0cShape = {32, 16};
+    int64_t cutW = 16;
+    std::vector<int64_t> gmShape = {1, 16, 1, 2, 32};
+    std::string res = TestConvL0COutBody("L0COutTileTensorConv3D", l0cShape, gmShape, 3, DataType::DT_FP32, cutW);
+    std::string expect = R"!!!(TStoreConv<CopyOutMode::NZ2DN, 1>(gmTensor_9, l0cTensor_10, 0, 0, 0, 0, 0, 32, 16, 16);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -227,7 +230,7 @@ std::string TestConvLoad3DBody(const std::string& funcName, const bool& isConv3D
 TEST_F(TestCodegenDynConv, Load3DConv2D)
 {
     std::string res = TestConvLoad3DBody("Load3DConv2D", false);
-    std::string expect = R"!!!(TLoad3D<0>(l0aTensor_0, l1Tensor_1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1);
+    std::string expect = R"!!!(TLoad3D<0>(l0aTensor_0, l1Tensor_1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -235,7 +238,7 @@ TEST_F(TestCodegenDynConv, Load3DConv2D)
 TEST_F(TestCodegenDynConv, Load3DConv3D)
 {
     std::string res = TestConvLoad3DBody("Load3DConv3D", true);
-    std::string expect = R"!!!(TLoad3D<1>(l0aTensor_0, l1Tensor_1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1);
+    std::string expect = R"!!!(TLoad3D<1>(l0aTensor_0, l1Tensor_1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
 )!!!";
     EXPECT_EQ(res, expect);
 }

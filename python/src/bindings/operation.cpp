@@ -591,7 +591,7 @@ void bind_operation(py::module& m)
     m.def(
         "Conv",
         [](DataType out_type, const Tensor& tensor_input, const Tensor& tensor_weight,
-           const std::vector<int64_t>& strides, const std::vector<int64_t>& paddings,
+           const std::vector<int64_t>& strides, const std::vector<SymbolicScalar>& paddings,
            const std::vector<int64_t>& dilations, const Conv::ConvExtendParam& extendParam, const int64_t groups) {
             return Conv::Conv(out_type, tensor_input, tensor_weight, strides, paddings, dilations, extendParam, groups);
         },
