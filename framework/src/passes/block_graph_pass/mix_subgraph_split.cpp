@@ -75,9 +75,6 @@ Status MixSubgraphSplit::GatherSubGraphInfo(
     // 按哈希值分组callOp
     std::unordered_map<FunctionHash, std::vector<Operation*>> hashToCallOps;
     for (auto* callOp : callOps) {
-        if (callOp == nullptr || callOp->IsDeleted()) {
-            continue;
-        }
         auto callAttr = dynamic_cast<CallOpAttribute*>(callOp->GetOpAttribute().get());
         if (callAttr != nullptr) {
             FunctionHash calleeHash = callAttr->GetCalleeHash();
@@ -102,7 +99,8 @@ Status MixSubgraphSplit::GatherSubGraphInfo(
         std::vector<InternalComponentInfo> components;
         auto status = componentsAnalyzer_.AnalyzeInternalComponents(*cacheFunc, components);
         if (status != SUCCESS || components.size() <= 1) {
-            continue;
+            APASS_LOG_ERROR_F(Elements::Function, "AnalyzeInternalComponents failed for mix subgraph");
+            return FAILED;  
         }
         // 确定programID（仅在当前function中查找）
         uint64_t localProgramID = INVALID_PROGRAM_ID;
@@ -116,15 +114,13 @@ Status MixSubgraphSplit::GatherSubGraphInfo(
             }
         }
         // 添加到待处理列表
-        mixSubgraphs.push_back(
-            MixSubgraphInfo(localProgramID, cacheFunc, components, callOpList, calleeHash, isInCurrentFunc));
+        mixSubgraphs.push_back(MixSubgraphInfo(localProgramID, cacheFunc, components, callOpList, calleeHash, isInCurrentFunc));
         // 如果需要删除当前function中的原leaffunction
         if (isInCurrentFunc) {
             mixSubgraphIDsToDelete.insert(localProgramID);
         }
         callOpsToDelete.insert(callOpsToDelete.end(), callOpList.begin(), callOpList.end());
-        APASS_LOG_INFO_F(
-            Elements::Function, "Found mix subgraph: local=%d, programID=%lu, callOps=%zu, components=%zu",
+        APASS_LOG_INFO_F(Elements::Function, "Found mix subgraph: local=%d, programID=%lu, callOps=%zu, components=%zu",
             isInCurrentFunc, localProgramID, callOpList.size(), components.size());
     }
     return SUCCESS;

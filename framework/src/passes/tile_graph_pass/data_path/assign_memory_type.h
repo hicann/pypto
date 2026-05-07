@@ -70,8 +70,11 @@ private:
     void ProcessL0C2UBLargeToSmall(Function &function);
     void ProcessUB2L1SmallToLarge(Function &function);
     void ProcessUB2L1LargeToSmall(Function &function);
+    bool ShouldSkipUB2L1SmallToLarge(const LogicalTensorPtr &iOperand,
+                                      const LogicalTensorPtr &oOperand) const;
     bool IsDimMultiple(const Shape& shape1, const Shape& shape2);
     bool CheckInnerAxisC0Size(const LogicalTensorPtr &input, const LogicalTensorPtr &output) const;
+    size_t CalcNZTensorSize(const LogicalTensorPtr &tensor) const;
     int64_t CalcLineOffset(const Shape& shape, const Offset& offset);
     std::string PrintTensorMem(std::shared_ptr<LogicalTensor>& tensor) const;
     ConvertInserter inserter;
