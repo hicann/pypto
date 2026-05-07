@@ -81,7 +81,7 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 | 当前状态 | 完成条件 | 转移到 | 强制动作 |
 |---------|---------|--------|---------|
 | INIT | 用户确认目标性能值 | S1_SETUP | 记录目标到 Todo |
-| S1_SETUP | 环境OK + 精度通过 | S2_COLLECT | ⛔ 强制创建完整 Todo |
+| S1_SETUP | 环境检查全部通过（见下方「环境检查清单」）+ 精度通过 | S2_COLLECT | ⛔ S1a 环境检查：加载 pypto-environment-setup 技能，逐项检查环境；⛔ S1b 精度校验：环境通过后运行精度校验；⛔ 全部通过后强制创建完整 Todo |
 | S2_COLLECT | swimlane.json 存在 | S3_ANALYZE | 无 |
 | S3_ANALYZE | 性能报告文件存在 | S4_TUNE | 记录基准性能 |
 | S4_TUNE | 3个PHASE及其SUMMARY全部完成 | S5_REPORT | ⛔ 各PHASE间通过SUMMARY强制交接 |
@@ -112,6 +112,41 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 | ITER_JUDGE | 检查退出条件 | 判定结果 | ITER_START 或 退出迭代循环（进入对应 PHASE_SUMMARY） | - |
 | ITER_ROLLBACK | 回退代码修改 | 代码已恢复 | ITER_RECORD | - |
 
+### S1_SETUP 结构
+
+S1_SETUP 包含两个子阶段：
+1. **S1a：环境检查** — 加载 pypto-environment-setup 技能逐项检查环境
+2. **S1b：精度校验** — 环境通过后运行算子用例验证精度
+
+两个子阶段全部通过后，转移到 S2_COLLECT。
+
+#### S1a：环境检查（⛔ 进入调优前的强制门控）
+
+> ⚠️ **此状态不可跳过**。环境未通过检查前，禁止进入 S1b 精度校验。
+> ⚠️ **重要原则：PTO-ISA（PTO_TILE_LIB_CODE_PATH）必须设置为 ✅，⚠️ 或 ❌ 不可跳过，必须在用户目录下找到或克隆 pto-isa 源码。**
+
+**检查流程**：
+
+1. 加载 `pypto-environment-setup` 技能
+2. 根据技能步骤 4.2 ~ 4.3.2 逐项检查：
+
+```
+环境检查清单（⛔ 全部 ✅ 才能进入 S1b 精度校验）：
+□ NPU 环境可用：npu-smi info 正常，torch_npu.npu.device_count() > 0
+□ TILE_FWK_DEVICE_ID 已设置为空闲 chip id
+□ PTO-ISA 兼容性：PTO_TILE_LIB_CODE_PATH 指向的路径包含 DivAlgorithm 等枚举
+  - 检测命令：grep -rq "DivAlgorithm" "${PTO_TILE_LIB_CODE_PATH}/include/pto/"
+  - 不兼容时：在用户目录下查找已有 pto-isa 源码，未找到则 git clone
+  - ⛔ 必须 ✅，不可跳过
+□ PyPTO 已编译安装：import pypto 无报错
+□ PyTorch NPU 可用：torch.npu.is_available() == True
+```
+
+**不通过时的处理**：
+- NPU / PTO-ISA / PyPTO 问题 → 执行 pypto-environment-setup 技能中的修复步骤
+- 修复后重新检查清单，全部通过才放行
+- 向用户报告环境状态后进入下一状态
+
 ### 各 PHASE 调优流程
 
 #### PHASE_FRONTEND 开箱调优流程
@@ -135,9 +170,9 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 │                                                          │
 │     ⛔ 编排器核查：A1+A2+A3+A4+A5 制品齐全 → 进入阶段B      │
 │                                                          │
-│  ⛔ 阶段B: 局部分析（对应 F-11~F-14，F-11已在A2分析，必须先完成） │
+│  ⛔ 阶段B: 局部分析（对应 F-11~F-15，F-11已在A2分析，必须先完成） │
 │     ├─ B1: 数据操作分析(NZ/Transpose/冗余搬运)             │
-│     │      → 产出 数据操作分析表（对应F-12~F-14）           │
+│     │      → 产出 数据操作分析表（对应F-12~F-15）           │
 │     └─ B2: 汇总最终优化点排序清单                           │
 │            → 产出 最终优化点清单（引用catalog编号）          │
 │                                                          │
@@ -150,7 +185,7 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 │     │   ├─ P1 Loop写法: F-5~F-8                             │
 │     │   ├─ P2 TileShape: F-9, F-10                          │
 │     │   ├─ P3 常量配置: F-11                                 │
-│     │   └─ P3 其他: F-12~F-14                               │
+│     │   └─ P3 其他: F-12~F-15                               │
 │     ├─ 每项优化必须引用阶段A/B的分析结论                     │
 │     └─ 每项优化后验证精度+性能                               │
 │                                                          │
@@ -173,7 +208,7 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 □ A5: 基于分析的优化建议清单已列出
 
 阶段B 核查清单：
-□ B1: 数据操作分析表已填写（覆盖 F-12~F-14）
+□ B1: 数据操作分析表已填写（覆盖 F-12~F-15）
 □ B2: 最终优化点排序清单已生成（引用 catalog 编号，按 P0→P3 排序）
 
 ⛔ 以上 7 项全部 ✅ 后，才允许进入阶段C 开始 ITER 循环。
@@ -345,14 +380,14 @@ ITER_MODIFY 阶段，每次只允许修改一个优化参数：
 ### 迭代轮次编号规则
 
 ```
-轮次编号格式: {PHASE前缀}-{N}
+轮次编号格式: #{N}
 示例:
-  F-1: 开箱调优第1轮
-  F-2: 开箱调优第2轮
-  S-1: 深度调优第1轮
-  S-2: 深度调优第2轮
-  I-1: 核内调优第1轮
-  I-2: 核内调优第2轮
+  #1: 开箱调优第1轮
+  #2: 开箱调优第2轮
+  #3: 深度调优第1轮
+  #4: 深度调优第2轮
+  #5: 核内调优第1轮
+  #6: 核内调优第2轮
 ```
 
 ---
@@ -384,7 +419,7 @@ ITER_MODIFY 阶段，每次只允许修改一个优化参数：
   └─ A5: 基于 A1~A4 产出初步优化建议
   ⛔ 编排器核查 A1+A2+A3+A4+A5 制品齐全
 
-步骤2: 阶段B - 局部分析（对应 F-11~F-14，F-11已在A2分析）
+步骤2: 阶段B - 局部分析（对应 F-11~F-15，F-11已在A2分析）
   ├─ B1: 分析数据操作(NZ/Transpose/冗余搬运) → 填写 数据操作分析表
   └─ B2: 基于 A+B 分析结果 + catalog 编号 → 产出 最终优化点排序清单
   ⛔ 编排器核查 B1+B2 制品齐全
@@ -423,6 +458,7 @@ ITER_MODIFY 阶段，每次只允许修改一个优化参数：
 |------|---------|------|
 | 性能达标 | 当前执行时间 ≤ 目标值 | → 退出迭代循环 → PHASE_SUMMARY_I → S5_REPORT |
 | 调优点清单已全部尝试 且 达到理论性能上限 | 清单全部尝试，核心利用率 > 80% 且 气泡率 < 10% | → 退出迭代循环 → PHASE_SUMMARY_I → S5_REPORT |
+| 调优点清单已全部尝试 且 连续5轮无提升 | 清单全部尝试，最近5轮无提升 | → 退出迭代循环 → PHASE_SUMMARY_I → S5_REPORT |
 | 用户要求停止 | 用户明确说停止 | → 退出迭代循环 → PHASE_SUMMARY_I → S5_REPORT |
 
 ### ITER_JUDGE 判定流程
@@ -441,15 +477,24 @@ ITER_JUDGE 执行时，按以下顺序判断：
    → 否: 连续无提升计数器 +1
 
 3. 连续无提升次数是否达到阈值？
-   FRONTEND: 5次, SWIMLANE: 8次
+   FRONTEND: 5次, SWIMLANE: 8次, INCORE: 5次
    → 是: 输出"阶段内优化耗尽"，退出迭代循环，进入对应 PHASE_SUMMARY
+   → 否: 继续
+
+3a. （仅 INCORE 阶段）是否达到理论性能上限？
+   核心利用率 > 80% 且 气泡率 < 10%
+   → 是: 输出"达到理论性能上限"，退出迭代循环，进入 PHASE_SUMMARY_I
    → 否: 继续
 
 4. 是否达到状态看板输出时机？
    总轮次 % 5 == 0
    → 是: 输出状态看板
 
-5. 继续下一轮
+5. 是否超过调优时间限制？（默认 12 小时）
+   → 是: 输出"调优超时"，退出迭代循环，进入对应 PHASE_SUMMARY
+   → 否: 继续
+
+6. 继续下一轮
    → 转移至 ITER_START
 ```
 
@@ -461,10 +506,9 @@ ITER_JUDGE 执行时，按以下顺序判断：
 
 ### S1_SETUP
 
-```bash
-npu-smi info                          # 必须有 NPU 设备输出
-ls $PTO_TILE_LIB_CODE_PATH/include/pto/  # 路径必须存在
-```
+> S1_SETUP 包含两个子阶段：S1a 环境检查 + S1b 精度校验。环境检查通过后，继续精度校验。
+> **⛔ 门控要求**：`complete_stage(1)` 必须在 S1a（环境检查全部通过）和 S1b（精度校验通过）**两个子阶段均完成后**才能调用。任一子阶段未通过，禁止调用 `complete_stage(1)`。
+> 子阶段失败时使用 `fail_stage(1)` 标记，并在 Todo 中记录失败原因（区分环境问题或精度问题）。
 
 精度校验：
 
@@ -519,6 +563,12 @@ find . -name "performance_analysis_report.md" -type f
 debug_options 已还原（runtime_debug_mode 移除或置 0）
 ```
 
+**S5_REPORT TODO 管理**：
+1. 更新 Todo 状态机进度：将所有状态（S1-S5）标记为 ✅
+2. 输出最终状态看板（见主技能步骤 5.1 的「最终调优状态」模板）
+3. Todo 中记录最终性能结果（基准→最终执行时间、累计提升百分比）和迭代统计（总轮次、成功率、最佳优化）
+4. 确认 debug_options 已还原的记录写入 Todo
+
 ---
 
 ## Todo 管理规范
@@ -527,12 +577,12 @@ debug_options 已还原（runtime_debug_mode 移除或置 0）
 
 | 时机 | 动作 |
 |------|------|
-| S1_SETUP 精度通过后 | ⛔ 立即创建完整 Todo，不创建禁止进入 S2 |
+| S1_SETUP 全部通过后（S1a 环境检查 + S1b 精度校验） | ⛔ 立即创建完整 Todo，不创建禁止进入 S2 |
 | 每轮 ITER_RECORD 后 | ⛔ 更新性能记录表 |
 | 每个 PHASE 完成后 | ⛔ 更新阶段状态 |
 | PHASE_SUMMARY 后 | ⛔ 附加交接摘要 |
 
-### Todo 完整模板（S1_SETUP 精度通过后立即创建）
+### Todo 完整模板（S1_SETUP 全部通过后立即创建）
 
 ```markdown
 ## 📊 [算子名称] 性能调优进度
@@ -541,10 +591,11 @@ debug_options 已还原（runtime_debug_mode 移除或置 0）
 - 算子: [名称]
 - 基准性能: [值] us
 - 目标性能: [值] us (提升X倍)
+- 当前最佳性能: [值] us
 - 当前设备: NPU 卡 X
 
 ### 状态机进度
-- ✅ S1: 环境验证与精度校验
+- ✅ S1: 环境检查 + 精度校验
 - 🔄 S2: 性能数据采集
 - ⏸️ S3: 性能数据分析
 - ⏸️ S4.1: 开箱性能调优 (轮次: 0, 连续无提升: 0)
@@ -560,19 +611,19 @@ debug_options 已还原（runtime_debug_mode 移除或置 0）
 
 ### 迭代轮次记录更新示例
 
-**轮次编号使用优化点编号（来自 [shared/optimization_catalog.md](../shared/optimization_catalog.md)）**：
+**轮次编号使用递增序号（`#1`, `#2`, ...），优化点编号来自 [shared/optimization_catalog.md](../shared/optimization_catalog.md)**：
 
 ```markdown
 | 轮次 | 阶段 | 编号 | 优化内容 | 精度 | 执行时间(us) | 变化 | 状态 |
 |------|------|------|---------|------|-------------|------|------|
 | 基准 | - | - | - | ✅ | 79.34 | - | ✅ |
-| F-1 | 开箱 | F-1 | BLOCK_SIZE 128→64 | ✅ | 68.54 | -13.6% | ✅ |
-| F-2 | 开箱 | F-8 | unroll_list [8,4,2,1] | ✅ | 74.44 | +8.6% | ❌回退 |
-| F-3 | 开箱 | S-6 | cube_nbuffer {0:4} | ✅ | 66.14 | -3.5% | ✅ |
+| #1 | 开箱 | F-1 | BLOCK_SIZE 128→64 | ✅ | 68.54 | -13.6% | ✅ |
+| #2 | 开箱 | F-8 | unroll_list [8,4,2,1] | ✅ | 74.44 | +8.6% | ❌回退 |
+| #3 | 开箱 | S-6 | cube_nbuffer {0:4} | ✅ | 66.14 | -3.5% | ✅ |
 
 ### 当前迭代状态
 - 当前阶段: 开箱调优
-- 当前轮次: F-3
+- 当前轮次: #3
 - 连续无提升计数: 0 / 5
 - 累计提升: 16.6%
 - 下一步: ITER_START（选择第4轮优化点）
@@ -710,7 +761,15 @@ Task subagent 执行前后，遵循以下压缩规则：
 - [约束/发现描述]
 
 ### 5. 当前关键代码配置
-[当前代码关键参数]
+```python
+@pypto.frontend.jit(
+    runtime_options={...},
+    pass_options={...},
+    debug_options={"runtime_debug_mode": 1}
+)
+BLOCK_SIZE = [当前值]
+TileShape配置 = [当前值]
+```
 
 ### 6. 迭代统计
 - 总轮次: N 轮

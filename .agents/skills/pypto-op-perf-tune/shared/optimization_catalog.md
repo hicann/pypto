@@ -1,4 +1,4 @@
-# PyPTO 算子性能优化点索引
+# PyPTO 算子性能优化点索引库
 
 > 本文件是性能调优的**单一信息源**。编排器 ITER_START 阶段从这里选题，子技能 SKILL.md 只保留操作指南（怎么改），不重复优化点枚举。
 
@@ -26,10 +26,11 @@
 | F-8 | 内层 unroll | ⭐⭐ | 内层动态轴范围大 | tune-frontend §1.2.2 |
 | F-9 | Cube TileShape 设置 | ⭐⭐ | 含 Matmul | tune-frontend §3.2 |
 | F-10 | Vector TileShape 设置 | ⭐⭐ | 含 Vector 计算 | tune-frontend §3.3 |
-| F-11 | 常量配置调整 | ⭐ | 算子有 BLOCK_SIZE 等常量 | tune-frontend 建议 3 |
+| F-11 | 常量配置调整 | ⭐ | 算子有 BLOCK_SIZE 等常量 | tune-frontend §A2 |
 | F-12 | 输入矩阵 NZ 格式 | ⭐ | 权重矩阵较大 | tune-frontend 局部§1 |
 | F-13 | Transpose 优化 | ⭐ | 含 transpose+matmul | tune-frontend 局部§2 |
 | F-14 | 冗余搬运消除 | ⭐ | 有 concat/assemble 搬运 | tune-frontend 局部§3 |
+| F-15 | 尾轴 Broadcast 合轴（combine_axis） | ⭐ | 存在尾轴为1的 broadcast 二元运算 | tune-frontend §4 |
 
 ### 深度调优（tune-swimlane）
 
@@ -56,6 +57,10 @@
 | I-3 | 冗余计算消依赖 | ⭐⭐ | 一对多子图依赖 | tune-incore §3 |
 | I-4 | 尾轴长度优化 | ⭐⭐ | 尾轴 < 32B 对齐 | tune-incore §4 |
 | I-5 | TileOperation 实现检查 | ⭐ | 上述优化无效时 | tune-incore §5 |
+| I-6 | 操作数连续性检查 | ⭐⭐ | TileOperation 输入非连续 | tune-incore 检查流程§1 |
+| I-7 | Gather/Scatter 数据搬运方向优化 | ⭐⭐ | 有 HBM↔L1 搬运瓶颈 | tune-incore 检查流程§2 |
+| I-8 | submit_before_loop 计算与搬运重叠 | ⭐⭐ | 子 loop 未正确提交 | tune-incore 检查流程§3 |
+| I-9 | valid_shape 尾块零填充避免 | ⭐⭐ | 尾块存在无效零填充计算 | tune-incore §9 |
 
 ---
 
@@ -101,6 +106,10 @@
 | ⭐⭐ | I-2 L2 Cache（融合算子批量设置权重） | 核内 | 所有权重同时 `NONE_CACHEABLE` |
 | ⭐⭐ | I-3 冗余计算消依赖 | 核内 | 复制数据使分支独立 |
 | ⭐⭐ | I-4 尾轴长度优化 | 核内 | concat/transpose 增大尾轴 |
+| ⭐⭐ | I-9 valid_shape 尾块零填充避免 | 核内 | `valid_shape` 标记有效数据范围 |
+| ⭐⭐ | I-6 操作数连续性检查 | 核内 | reshape/transpose 修复非连续输入 |
+| ⭐⭐ | I-7 Gather/Scatter 搬运方向优化 | 核内 | HBM→L1 用 cube_tile，L1→HBM 用 assemble |
+| ⭐⭐ | I-8 submit_before_loop 重叠 | 核内 | `submit_before_loop=True` |
 | ⭐ | I-5 Operation 检查 | 核内 | 与 Ascend C 对比 |
 
 ---
@@ -153,6 +162,7 @@
 - **优化方式**:
   - **方式 1（原始输入 reshape 外提）**：对原始输入（函数参数）的 reshape，挪到算子入口（所有 loop 之前），使用 `inplace=True`，避免循环内重复数据拷贝
   - **方式 2（高维计算提前合轴）**：循环体内计算超过 2D 时，进入循环前对原始输入 `reshape inplace` 合轴为 2D，避免循环体内出现 reshape
+  - **方式 3（冗余 reshape 删除）**：检查源 shape 是否等于目标 shape 的冗余 reshape（常见于分析阶段误操作的残留），直接删除无效 reshape 调用，消除不必要的数据搬运
 - **约束**: 只有原始输入（函数参数）可用 `reshape(inplace=True)`，中间结果和输出 tensor 不能 inplace reshape；输出 tensor inplace reshape 会导致切片写入索引断裂（输出全零）
 - **关联优化**: F-9（Cube TileShape）、F-10（Vector TileShape）
 
@@ -208,6 +218,8 @@
 - **典型收益**: 5-20%
 - **推荐配置**: `[128, 128], [64, 256], [256, 256]` 或 `[256, 256], [64, 256], [128, 128]`
 - **约束**: L1 不超过实际轴长；`L0 <= L1` 且 `L1 % L0 == 0`；BF16 下 L0/L1 需 16 元素对齐；多 Matmul 时每个独立设置
+- **Decode M=1 特殊配置**: 使用 K 轴三维配置 `[kL0, kAL1, kBL1]`，让 A 矩阵完全驻留 L1（kAL1=K），B 矩阵分批加载（kBL1=256）
+- **Double Buffer**: 推荐配置可满足 L0 buffer 约束，自动开启 Double Buffer
 
 ### [F-10] Vector TileShape 设置
 
@@ -219,6 +231,8 @@
 - **典型收益**: 3-10%
 - **推荐配置**: `pypto.set_vec_tile_shapes(64, 512)`
 - **约束**: 优先用满尾轴；尾轴过大必须切分时按 512B 对齐切分；尾轴 32B 对齐（最低要求）；归约类计算不在归约轴上切分
+- **reshape 前后重设规则**: reshape 前按源 shape 设置 vec_tile，reshape 后必须按目标 shape 重设 vec_tile，尤其 assemble 操作前必须重设，否则会出错
+- **冗余设置检查**: 合并连续相同的 `set_vec_tile_shapes` 为一次调用（常见 copy-paste 残留），减少冗余配置指令；同时检查每个 vec_tile_shapes 是否与对应 tensor shape 匹配，不匹配的及时修正
 
 ### [F-11] 常量配置调整
 
@@ -259,6 +273,22 @@
 - **操作指南**: tune-frontend SKILL.md 局部§3
 - **典型收益**: 3-10%
 - **解决方案**: 更换 concat 为 assemble
+
+### [F-15] 尾轴 Broadcast 合轴（combine_axis）
+
+- **阶段**: 开箱调优
+- **优先级**: ⭐ P4
+- **适用条件**: 算子中存在尾轴为1的 tensor 参与 broadcast 二元运算（如 `[M,1] * [M,N]`）
+- **检查方法**: 扫描算子中所有 tensor shape，标记 shape 尾轴为 1 的 tensor，检查其参与的所有二元运算（mul/add/sub/div）另一侧尾轴是否 >1
+- **操作指南**: tune-frontend SKILL.md §4
+- **典型收益**: 0-5%（Cube 密集型算子无收益，Vector 密集型预期更高）
+- **配置方式**: 在 JIT 函数体首行添加 `pypto.experimental.set_operation_options(combine_axis=True)`
+- **约束**:
+  - 尾轴 broadcast 输入尾轴**必须连续**，否则功能失效
+  - `pypto.sum(keepdim=True)` / `pypto.amax(keepdim=True)` 输出保证连续，符合条件
+  - 若前序是 COPY_IN，需在前端保证 GM 连续
+  - 设置是**局部**的，只影响当前 jit/loop 作用域
+- **典型案例**: Pangu 7B Fused Layer online softmax 中 `[4,128] * [4,1]` 和 `[4,128] / [4,1]` → combine_axis 启用 brcb inline，但 Cube 占主导时无显著收益
 
 ---
 
@@ -304,6 +334,7 @@
 - **检查方法**: 运行 `analyze_aiv_dep_chains.py` 分析 AIV 依赖链，用 `leafhash_to_code.py` 映射到代码行
 - **操作指南**: tune-swimlane SKILL.md §4.1.2
 - **约束**: 仅对有直接上下游数据依赖的 Vector 操作生效；不包裹 Cube 操作；不跨 loop 边界
+- **代码连续性调整**: sg_set_scope 前需调整前端代码顺序，移除无关操作使待合并操作相邻；PyPTO 是声明式的，只要依赖关系不变可调整顺序
 - **⛔ 最易跳过的优化项**: 如果跳过此项，必须说明具体原因
 
 ### [S-5] Vector 自动合图（nbuffer）
@@ -316,6 +347,7 @@
 - **操作指南**: tune-swimlane SKILL.md §4.1.1
 - **配置示例**: `pass_options={"vec_nbuffer_setting": {-2: 1, -1: 2}}`
 - **调优方法**: 可先用 `{-1: N}` 全局配置，再按 psgId 精细调优
+- **⛔ 必须包含 `-2: 1`**: `vec_nbuffer_setting` 中必须包含 `-2: 1`，否则合图可能不生效
 
 ### [S-6] Cube L1Reuse（消除重复搬运）
 
@@ -435,6 +467,7 @@
 - **检查方法**: 检查参与计算的关键 tensor 的最后一个维度大小
 - **操作指南**: tune-incore SKILL.md §4
 - **解决方案**: 使用 concat 增大尾轴、transpose 调整轴顺序、reshape 调整 Shape
+- **关联优化**: I-9（valid_shape 尾块零填充避免）
 
 ### [I-5] TileOperation 实现检查
 
@@ -444,3 +477,46 @@
 - **检查方法**: 构造单独 Operation 的测试用例，与 Ascend C 小算子性能对比
 - **操作指南**: tune-incore SKILL.md §5
 - **解决方案**: 确认性能差距后检查是否使用了更优指令，或考虑使用其他 Operation 组合替代
+- **关联优化**: I-6（操作数连续性）、I-7（搬运方向）、I-8（计算搬运重叠）
+
+### [I-6] 操作数连续性检查
+
+- **阶段**: 核内调优
+- **优先级**: ⭐⭐ P2
+- **适用条件**: TileOperation 输入 Tensor 内存不连续（非 contiguous）
+- **检查方法**: 在 TileOperation 检查流程中，确认输入 tensor 是否内存连续；不连续会导致额外搬运或性能下降
+- **操作指南**: tune-incore SKILL.md TileOperation 检查流程 §1
+- **解决方案**: 使用 `pypto.reshape` 或 `pypto.transpose` 调整非连续输入为连续布局
+- **典型案例**: transpose 后的 tensor 作为下游输入前需确保连续性
+
+### [I-7] Gather/Scatter 数据搬运方向优化
+
+- **阶段**: 核内调优
+- **优先级**: ⭐⭐ P2
+- **适用条件**: 存在 HBM ↔ L1 数据搬运瓶颈
+- **检查方法**: 分析 TileOperation 的数据流向，区分 Gather（HBM→L1）和 Scatter（L1→HBM）
+- **操作指南**: tune-incore SKILL.md TileOperation 检查流程 §2
+- **解决方案**: Gather 方向使用 `set_cube_tile_shapes` 的 block size 控制搬运粒度；Scatter 方向使用 `pypto.assemble` 写回 HBM
+- **典型案例**: 大矩阵分块加载时选择合适的 cube_tile block size 以匹配 L1 容量
+
+### [I-8] submit_before_loop 计算与搬运重叠
+
+- **阶段**: 核内调优
+- **优先级**: ⭐⭐ P2
+- **适用条件**: 子 loop 未正确提交，导致计算与搬运无法重叠执行
+- **检查方法**: 检查子 loop 是否使用了 `submit_before_loop=True` 参数
+- **操作指南**: tune-incore SKILL.md TileOperation 检查流程 §3
+- **解决方案**: 设置 `submit_before_loop=True` 使子 loop 正确提交，实现计算与数据搬运的时间重叠
+- **典型案例**: 内层多个子 loop 串行执行 → 开启 submit_before_loop 后计算与搬运流水化
+
+### [I-9] valid_shape 尾块零填充避免
+
+- **阶段**: 核内调优
+- **优先级**: ⭐⭐ P1
+- **适用条件**: 切块后最后一块数据量不足一个完整 BLOCK_SIZE，存在无效零填充计算
+- **检查方法**: 检查 `pypto.view` 切块时尾块是否存在零填充，对比实际数据量与 BLOCK_SIZE
+- **操作指南**: tune-incore SKILL.md §9
+- **解决方案**: 使用 `pypto.view` 的 `valid_shape` 参数标记有效数据范围，避免对零填充部分执行无效计算
+- **代码示例**: `pypto.view(tensor, [BLOCK_SIZE, ...], valid_shape=[actual_last_size if i == last_tile else BLOCK_SIZE])`
+- **典型案例**: 尾块仅 3 个有效元素但按 BLOCK_SIZE=16 计算 → valid_shape 标记后跳过无效计算
+- **关联优化**: I-4（尾轴长度优化）

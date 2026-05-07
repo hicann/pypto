@@ -119,6 +119,121 @@ e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 2. 与 Ascend C 小算子的性能对比
 3. 确认性能较差后检查是否使用了更优的指令
 
+## 6. 操作数连续性检查（I-6）
+
+当 TileOperation 的输入 Tensor 内存不连续时，会产生额外数据搬运，降低计算效率。
+
+**适用条件**：TileOperation 输入 Tensor 非 contiguous（常见于 transpose、非连续 view 之后）
+
+**诊断方法**：
+1. 定位到耗时较长的 TileOperation
+2. 检查其输入 tensor 的来源：是否为 transpose / 非连续 view / reshape 的输出
+3. 确认该 tensor 在内存中是否连续
+
+**优化方法**：使用 `pypto.reshape` 或 `pypto.transpose` 将非连续输入调整为连续布局
+
+```python
+# ❌ 非连续输入：transpose 后的 tensor 直接参与计算
+b_t = pypto.transpose(b, [1, 0])
+y = pypto.matmul(a, b_t)  # b_t 可能非连续
+
+# ✅ 修复：先 reshape 保证连续性
+b_t = pypto.transpose(b, [1, 0])
+b_c = pypto.reshape(b_t, b_t.shape)  # reshape 到相同 shape，强制连续
+y = pypto.matmul(a, b_c)
+```
+
+**注意事项**：
+- transpose 后紧跟 matmul 时，优先用 matmul 的 `a_trans`/`b_trans` 参数融合，而非手动修复连续性（参考 F-13）
+- reshape 到相同 shape 是强制连续化的常用手段，不改变数据布局
+
+## 7. 数据搬运方向优化（I-7）
+
+正确选择 HBM 与 L1 之间的数据搬运方向，提升搬运效率。
+
+**适用条件**：存在 HBM ↔ L1 数据搬运瓶颈（泳道图中搬运 task 耗时占比高）
+
+**诊断方法**：
+1. 分析 TileOperation 的数据流向
+2. 区分 Gather（HBM → L1）和 Scatter（L1 → HBM）
+3. 检查当前使用的搬运方式是否匹配方向
+
+**优化方法**：
+
+Gather（HBM → L1）方向：使用 `set_cube_tile_shapes` 的 block size 控制搬运粒度
+
+```python
+# Gather：从 HBM 按块加载到 L1，通过 cube tile 的 K 轴 L1 大小控制粒度
+pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256])
+# kL1=256 控制每次从 HBM 搬运到 L1 的 K 轴数据量
+```
+
+Scatter（L1 → HBM）方向：使用 `pypto.assemble` 直接写回
+
+```python
+# Scatter：从 L1 写回 HBM 的指定位置
+pypto.assemble(result, [row_offset, col_offset], output)
+```
+
+## 8. 计算与搬运重叠优化（I-8）
+
+通过 `submit_before_loop` 使子循环的计算与数据搬运流水化，减少等待时间。
+
+**适用条件**：子 loop 串行执行，计算与搬运未重叠（泳道图中可见明显的等待间隙）
+
+**诊断方法**：
+1. 查找内核中嵌套的 `pypto.loop` 调用
+2. 检查子 loop 是否设置了 `submit_before_loop=True`
+3. 对比开启前后的泳道图，观察等待间隙是否减少
+
+**优化方法**：
+
+```python
+# ❌ 串行：子 loop 等待上一轮数据搬运完成
+for i in pypto.loop(n, name="LOOP_A"):
+    tile = pypto.view(x, [BLOCK, ...], [i * BLOCK, 0])
+    result = compute(tile)
+    pypto.assemble(result, [i * BLOCK, 0], out)
+
+# ✅ 流水化：开启 submit_before_loop，当前迭代的计算与下一迭代的搬运重叠
+for i in pypto.loop(n, name="LOOP_A", submit_before_loop=True):
+    tile = pypto.view(x, [BLOCK, ...], [i * BLOCK, 0])
+    result = compute(tile)
+    pypto.assemble(result, [i * BLOCK, 0], out)
+```
+
+**注意事项**：
+- `submit_before_loop` 只影响最内层循环的提交行为
+- 外层的简单循环（不含计算操作）不需要设置此参数
+- 必须先通过泳道图确认搬运是瓶颈，再启用此优化
+
+## 9. valid_shape 尾块零填充避免（I-9）
+
+切块时尾块数据量不足一个完整 BLOCK_SIZE，默认零填充会浪费算力。
+
+**适用条件**：切块后最后一块有效数据量 < BLOCK_SIZE
+
+**诊断方法**：
+1. 检查 `pypto.view` 切块时的 shape 和实际数据量
+2. 对比最后一块的实际数据量与 BLOCK_SIZE
+3. 确认是否存在无效的零填充计算
+
+**优化方法**：
+
+```python
+# 使用 valid_shape 标记尾块有效数据范围
+for i in pypto.loop(range(total_tiles)):
+    tile = pypto.view(input, shape=[BLOCK_SIZE], offsets=[i * BLOCK_SIZE],
+                      valid_shape=[actual_last_size if i == last_tile else BLOCK_SIZE])
+    result = compute(tile)
+    pypto.assemble(result, offsets=[i * BLOCK_SIZE], output=output)
+```
+
+**注意事项**：
+- valid_shape 仅在尾块（最后一个 tile）需要设置
+- 主块（完整 BLOCK_SIZE）不需要 valid_shape
+- 尾轴本身较小（< 32B 对齐）时，优先使用 I-4 尾轴长度优化增大尾轴
+
 ## 调优检查清单
 
 **⛔ 必须按以下清单逐项执行。每项标记为 ✅已尝试 或 ❌已失败（附原因），禁止跳过。完整优化点信息参考 [shared/optimization_catalog.md](../shared/optimization_catalog.md)。**
@@ -126,7 +241,7 @@ e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 **优化优先级**：
 1. ⭐⭐⭐ **P0 - 特殊 Shape 处理** → 详见 [I-1]
 2. ⭐⭐ **P1 - L2 Cache + 依赖与搬运优化** → 详见 [I-2][I-3][I-4]
-3. ⭐ **P2 - 实现检查** → 详见 [I-5]
+3. ⭐⭐ **P2 - TileOperation 效率检查** → 详见 [I-5][I-6][I-7][I-8][I-9]
 
 **🔥 P0 - 特殊 Shape [I-1]**：
 - [ ] [I-1] Matmul 的 Shape 是否特殊（如 M 很大 N 很小）
@@ -137,8 +252,12 @@ e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 - [ ] [I-3] 是否存在一对多的子图依赖（可通过冗余计算消除）
 - [ ] [I-4] 尾轴是否过小（< 32B 对齐）；尾轴 TileShape 是否已优先用满，必须切分时是否按 512B 对齐
 
-**P2 - 实现检查 [I-5]**：
+**P2 - TileOperation 效率检查 [I-5~I-9]**：
 - [ ] [I-5] 单个 Operation 是否与 Ascend C 对比过性能
+- [ ] [I-6] TileOperation 输入 Tensor 是否内存连续（非连续需先 reshape/transpose 调整）
+- [ ] [I-7] 数据搬运方向是否匹配（Gather 用 cube_tile block size，Scatter 用 assemble）
+- [ ] [I-8] 子 loop 是否设置了 `submit_before_loop=True` 以启用计算与搬运重叠
+- [ ] [I-9] 尾块切分是否存在零填充（需用 `valid_shape` 标记有效数据范围）
 
 
 ## 常见问题
@@ -157,30 +276,6 @@ A:
 ### Q3: 增加冗余计算会影响精度吗？
 
 A: 不会。冗余计算是指增加一些不影响最终结果的计算（如复制数据），目的是优化调度和合图，不会改变计算逻辑。
-
-## TileOperation 检查流程
-
-对核内每个 TileOperation，按以下流程检查效率：
-
-1. **检查操作数连续性**：输入 tensor 是否在内存中连续，不连续需先调用 `pypto.reshape` 或 `pypto.transpose` 调整
-2. **检查数据搬运方向**：Gather → 从 HBM 到 L1 应使用 `set_cube_tile_shapes` 配置的块大小；Scatter → 从 L1 到 HBM 应使用 `pypto.assemble`
-3. **检查计算与搬运重叠**：使用 `submit_before_loop=True` 确保子循环正确提交
-
-## 尾轴优化案例
-
-**场景**：尾轴为 1 或非整除时，最后一块数据量小于固定块大小
-
-**问题**：最后一块可能触发额外的零填充计算，浪费算力
-
-**优化方案**：
-
-```python
-# 使用 valid_shape 标记有效数据范围
-for i in pypto.loop(range(total_tiles)):
-    tile = pypto.view(input, shape=[BLOCK_SIZE], offsets=[i * BLOCK_SIZE], valid_shape=[actual_last_size if i == last_tile else BLOCK_SIZE])
-    result = compute(tile)
-    pypto.assemble(result, offsets=[i * BLOCK_SIZE], output=output)
-```
 
 ## 参考资料
 

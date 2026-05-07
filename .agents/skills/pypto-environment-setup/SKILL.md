@@ -112,7 +112,17 @@ source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
 
 #### 步骤 4.2：检查可用的 NPU 卡 (务必在加载 CANN 环境后检查)
 
-使用空闲卡检测脚本（来自 `pypto-op-develop` skill 的 `scripts/list_idle_chip_ids.sh`）。
+```bash
+# 获取可用卡总数（确保不遗漏）
+python3 -c "import torch_npu; print('NPU device count:', torch_npu.npu.device_count())"
+
+# 查看卡详情（注意：输出可能被截断，以上方 device_count 为准）
+npu-smi info
+```
+
+> ⚠️ `npu-smi info` 在单机多卡场景下输出可能被截断，导致低估可用卡数。以 `torch_npu.npu.device_count()` 结果为准。
+
+使用空闲卡检测脚本（来自 `pypto-op-develop` skill 的 `scripts/list_idle_chip_ids.sh`）确定空闲 chip id。
 
 #### 步骤 4.3：设置环境变量
 
@@ -122,15 +132,33 @@ source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
 export TILE_FWK_DEVICE_ID=<空闲 chip id>
 ```
 
-**步骤 4.3.2：设置 PTO-ISA 路径**
+**步骤 4.3.2：设置并验证 PTO-ISA 路径**
 
-> ⚠️ **重要**：PyPTO 有两层编译：Host 侧（pip install）和 Device 侧（运行时 kernel 编译）。Device 侧编译使用 `PTO_TILE_LIB_CODE_PATH` 下的 PTO-ISA 头文件。如果 CANN 内置的 PTO-ISA 版本与 pypto 源码不匹配（缺少 `pto::ExpAlgorithm` 等符号），运行时 kernel 编译会失败。此时需要从源码获取最新 PTO-ISA。
+> ⚠️ **高频断裂点**：CANN 内置 PTO-ISA 版本可能与 PyPTO 源码不兼容（缺少 `pto::ExpAlgorithm`/`DivAlgorithm` 等枚举），导致运行时 kernel 编译失败（`no member named 'XXX' in namespace 'pto'`）。**必须执行下方兼容性检查，不可跳过**。
 
 ```bash
-# 设置 PTO-ISA 路径
+# 1. 先使用 CANN 内置路径（默认）
 arch=$(uname -m)   # 常见值：x86_64 或 aarch64
 export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
+
+# 2. 验证 PTO-ISA 兼容性：检查是否包含所需算法枚举
+if ! grep -rq "DivAlgorithm" "${PTO_TILE_LIB_CODE_PATH}/include/pto/" 2>/dev/null; then
+    echo "⚠️ CANN 内置 PTO-ISA 缺少 DivAlgorithm 等枚举，版本不兼容，切换到源码方式"
+    PTO_ISA_SRC="${PTO_ISA_SRC:-${PYPTO_REPO}/pto-isa}"
+
+    # 本地已有 pto-isa 源码则复用，否则从 gitcode 克隆
+    if [ ! -d "${PTO_ISA_SRC}/include/pto" ]; then
+        git clone https://gitcode.com/cann/pto-isa.git "${PTO_ISA_SRC}"
+    fi
+
+    export PTO_TILE_LIB_CODE_PATH="${PTO_ISA_SRC}"
+    echo "✓ PTO_TILE_LIB_CODE_PATH 已切换到源码: ${PTO_TILE_LIB_CODE_PATH}"
+else
+    echo "✓ CANN 内置 PTO-ISA 兼容"
+fi
 ```
+
+> ⚠️ **注意**：`pip install pypto` 成功不代表运行时没问题。Host 侧编译和 Device 侧 kernel 编译使用不同的头文件来源，PTO-ISA 版本不匹配只会在 **运行时 kernel 编译** 阶段暴露。
 
 **步骤 4.3.3：生成 env_setup.sh**
 
@@ -222,7 +250,8 @@ Python:     3.10.x
 torch:      2.6.x
 torch_npu:  2.6.0.post3
 pypto:      ✅ 已安装
-PTO-ISA:    CANN 内置 / pto-isa 源码 (gitcode.com/cann/pto-isa)
+PTO-ISA:    CANN 内置 / pto-isa 源码 (gitcode.com/cann/pto-isa) [兼容性: ✅/⚠️]
+可用 NPU 卡: <device_count> 卡
 =====================================
 
 验证结果:   Softmax（NPU 模式）✅ 通过
@@ -230,7 +259,8 @@ PTO-ISA:    CANN 内置 / pto-isa 源码 (gitcode.com/cann/pto-isa)
 过程问题总结：
   - <问题> -> <解决方案>
 
-⚠️ `TILE_FWK_DEVICE_ID` 需根据 `npu-smi info` 输出修改。
+⚠️ `TILE_FWK_DEVICE_ID` 需根据 `npu-smi info` + `torch_npu.npu.device_count()` 输出修改。
+⚠️ `npu-smi info` 输出可能被截断，以 `torch_npu.npu.device_count()` 为准。
 ```
 
 ## 📚 参考文件

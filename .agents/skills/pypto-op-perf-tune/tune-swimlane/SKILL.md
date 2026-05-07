@@ -651,7 +651,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 2. ⭐⭐⭐ **P1 - 负载均衡** → 详见 [S-3]
 3. ⭐⭐⭐ **P2 - 手动合图（sg_set_scope）** → 详见 [S-4]
 4. ⭐⭐ **P3 - 自动合图** → 详见 [S-5][S-6][S-7][S-8]
-5. ⭐ **P4 - 调度策略** → 详见 [S-9][S-10]
+5. ⭐ **P4 - Stitch + 调度策略** → 详见 [S-9][S-10]
 
 **🔥 P0 - 核使用率分析 [S-1]**（合图前置条件）：
 - [ ] [S-1] 是否运行 analyze_core_usage.py 统计每个 leafHash 核使用率
@@ -675,7 +675,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 - [ ] [S-7] 是否对核满的 AIC 子图尝试了 cube_nbuffer_setting
 - [ ] [S-8] 如已配置 S-6/S-7，是否检查了协同使用是否过大
 
-**P4 - 调度策略 [S-9~S-10]**：
+**P4 - Stitch [S-9] + 调度策略 [S-10]**：
 - [ ] [S-9] 是否尝试了 stitch_function_max_num 调整
 - [ ] [S-10] 是否尝试了 device_sched_mode 调整（1/2/3）
 
