@@ -73,7 +73,7 @@ LogicalTensorPtr AddOpView(
     }
     LogicalTensorPtr dstTensorPtr = std::make_shared<LogicalTensor>(
         function, dstTensorInfo.dtype, dstShape, SymbolicScalar::FromConcrete(dstShape), dstTensorInfo.format,
-        dstTensorInfo.name, dstTensorInfo.nodeType);
+        dstTensorInfo.name);
     dstTensorPtr->UpdateDynValidShape(
         GetViewValidShape(srcTensorPtr->GetDynValidShape(), dstTensorInfo.offset, {}, dstTensorInfo.shape));
     if (dstTensorInfo.transFlag) {

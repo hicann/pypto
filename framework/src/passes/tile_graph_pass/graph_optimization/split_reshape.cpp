@@ -16,6 +16,7 @@
 #include "split_reshape.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "SplitReshape"
@@ -1408,7 +1409,8 @@ Status SplitReshape::EraseReshape(Function& function)
                 GetFormatBacktrace(op).c_str());
             return FAILED;
         }
-        if (output->nodetype == NodeType::LOCAL && output->GetConsumers().empty()) {
+        if (FunctionUtils::GetNodeType(*output, output->BelongFunction()) == NodeType::LOCAL &&
+            output->GetConsumers().empty()) {
             op.SetAsDeleted();
         }
     }
@@ -1425,7 +1427,7 @@ Status SplitReshape::EraseReshape(Function& function)
                 GetFormatBacktrace(op).c_str());
             return FAILED;
         }
-        if (output->nodetype == NodeType::LOCAL && output->GetConsumers().empty()) {
+        if (FunctionUtils::GetNodeType(*output, function) == NodeType::LOCAL && output->GetConsumers().empty()) {
             op.SetAsDeleted();
         }
     }

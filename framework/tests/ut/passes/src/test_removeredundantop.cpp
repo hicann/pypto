@@ -189,10 +189,10 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3)
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast1", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast1");
     outCast1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast2 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast2", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast2");
     outCast2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
 
@@ -354,7 +354,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest10)
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& view = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
@@ -408,7 +408,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest11)
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape2, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape2, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& view1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast1}, {ubTensor});
@@ -970,7 +970,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest17)
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& view = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1});
@@ -1022,7 +1022,7 @@ TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleSpecialCase)
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
@@ -1070,7 +1070,7 @@ TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleDynSpecialCase)
     std::vector<int64_t> shape1 = {kNumExpFour, kNumEight};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast");
     outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
@@ -1137,7 +1137,7 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewSpecialCase)
     auto inCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto inCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
@@ -1200,7 +1200,7 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase)
 
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
@@ -1254,9 +1254,9 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
 
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast");
     auto outCast2 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast");
     outCast1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     outCast2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ddrTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
@@ -1304,7 +1304,7 @@ TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape3, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape3, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -1348,7 +1348,6 @@ TEST_F(TestRemoveRedundantOpPass, AssembleDDR)
     auto inTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
     auto ddrOut = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
     ddrOut->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
-    ddrOut->nodetype = NodeType::LOCAL; // 不是 OUTCAST
     func->AddOperation(Opcode::OP_ASSEMBLE, { inTensor }, { ddrOut });
 
     func->inCasts_.push_back(inTensor);
@@ -1430,7 +1429,7 @@ TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
     reshapeOutput->UpdateDynValidShape({SymbolicScalar("reshape_output_dim0"), SymbolicScalar("reshape_output_dim1")});
 
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape16x8, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape16x8, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {expOutput});
@@ -1505,7 +1504,7 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     assembleOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape4x16, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, shape4x16, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {viewOutput});

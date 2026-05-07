@@ -45,6 +45,8 @@ public:
         Operation* op, const size_t inputIndex, const Operation* targetOp, const size_t outputIndex);
 
     static bool IsContinuous(const std::vector<std::shared_ptr<LogicalTensor>>& tensors);
+
+    static NodeType GetNodeType(const LogicalTensor& tensor, const Function& function);
 };
 
 class CommonUtils {

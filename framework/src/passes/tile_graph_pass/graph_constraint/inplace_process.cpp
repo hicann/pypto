@@ -587,7 +587,9 @@ LogicalTensorPtr FindInplaceSource(
         return visited.at(&op);
     }
     auto inplaceIdx = op.GetIntAttribute(OpAttributeKey::inplaceIdx);
-    ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()))
+    ASSERT(
+        OperationErr::OP_INVALID_OPERAND_COUNT,
+        inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()))
         << "Invalid inplaceIdx " << inplaceIdx << " for operation " << op.GetOpMagic();
     auto inplaceIOperand = op.GetInputOperand(inplaceIdx);
     LogicalTensorPtr res = nullptr;
@@ -599,8 +601,8 @@ LogicalTensorPtr FindInplaceSource(
         if (res == nullptr) {
             res = tmp;
         } else {
-            ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, res == tmp) << "Inconsistent inplace source for operation "
-                               << op.GetOpMagic(); // inplace路径应总是交汇于同一起点
+            ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, res == tmp)
+                << "Inconsistent inplace source for operation " << op.GetOpMagic(); // inplace路径应总是交汇于同一起点
         }
     }
     if (res == nullptr) {
@@ -610,23 +612,8 @@ LogicalTensorPtr FindInplaceSource(
     return res;
 }
 
-Status InplaceProcess::RefactorViewConnectForInplace(Function& function)
+static Status ProcessVisitedViewOps(Function& function, const std::unordered_map<Operation*, LogicalTensorPtr>& visited)
 {
-    APASS_LOG_INFO_F(Elements::Operation, "===> Start RefactorViewConnectForInplace.");
-    for (auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_VIEW)
-            continue;
-        if (op.GetInputOperand(0)->GetRawTensor() == op.GetOutputOperand(0)->GetRawTensor()) {
-            op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
-        }
-    }
-    std::unordered_map<Operation*, LogicalTensorPtr> visited;
-    for (Operation& op : function.Operations()) {
-        if (!op.HasAttribute(OpAttributeKey::inplaceIdx) || visited.count(&op) > 0)
-            continue;
-        FindInplaceSource(function, op, visited);
-    }
-
     for (auto& [op, srcTensor] : visited) {
         if (op->GetOpcode() != Opcode::OP_VIEW)
             continue; // 仅重构View连接
@@ -652,19 +639,44 @@ Status InplaceProcess::RefactorViewConnectForInplace(Function& function)
         op->ReplaceIOperand(0, srcTensor);
         // 含inplace语义，都为同一个RawTensor
         auto nopOutput = std::make_shared<LogicalTensor>(
-            function, srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape(),
-            NodeType::LOCAL);
+            function, srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape());
         nopOutput->SetMemoryTypeBoth(oOperand->GetMemoryTypeOriginal());
         auto& nop = function.AddRawOperation(Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
         nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); // 期望上设成任何一个都可以，因为来源一致
         nop.UpdateSubgraphID(op->GetSubgraphID());
-        auto consumers = oOperand->GetConsumers();       // deep copy
+        auto consumers = oOperand->GetConsumers(); // deep copy
         for (auto consumer : consumers) {
             if (consumer->GetOpcode() == Opcode::OP_NOP || !consumer->HasAttribute(OpAttributeKey::inplaceIdx))
                 continue;
             consumer->ReplaceIOperand(consumer->GetIntAttribute(OpAttributeKey::inplaceIdx), nopOutput);
         }
     }
+    return SUCCESS;
+}
+
+Status InplaceProcess::RefactorViewConnectForInplace(Function& function)
+{
+    APASS_LOG_INFO_F(Elements::Operation, "===> Start RefactorViewConnectForInplace.");
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_VIEW)
+            continue;
+        if (op.GetInputOperand(0)->GetRawTensor() == op.GetOutputOperand(0)->GetRawTensor()) {
+            op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
+        }
+    }
+
+    std::unordered_map<Operation*, LogicalTensorPtr> visited;
+    for (Operation& op : function.Operations()) {
+        if (!op.HasAttribute(OpAttributeKey::inplaceIdx) || visited.count(&op) > 0)
+            continue;
+        FindInplaceSource(function, op, visited);
+    }
+
+    Status status = ProcessVisitedViewOps(function, visited);
+    if (status != SUCCESS) {
+        return status; // 如果内部发生错误，直接向外透传 FAILED
+    }
+
     APASS_LOG_INFO_F(Elements::Operation, "===> End RefactorViewConnectForInplace.");
     return SUCCESS;
 }

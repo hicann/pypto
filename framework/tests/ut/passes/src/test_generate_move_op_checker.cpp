@@ -148,9 +148,7 @@ TEST_F(TestGenerateMoveOpChecker, PreCheck_ViewOp_OutputHasNullConsumer)
 
     std::vector<int64_t> shape = {16, 48};
     auto t01Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    t01Tensor->nodetype = NodeType::INCAST;
     auto t02Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    t02Tensor->nodetype = NodeType::OUTCAST;
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {t01Tensor}, {t02Tensor});
 
@@ -188,11 +186,9 @@ TEST_F(TestGenerateMoveOpChecker, PreCheck_ViewOp_ConsumerNotSupportDDR)
 
     std::vector<int64_t> shape = {16, 16};
     auto t1Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    t1Tensor->nodetype = NodeType::INCAST;
     auto t2Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     t2Tensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
     auto t3Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    t3Tensor->nodetype = NodeType::OUTCAST;
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {t1Tensor}, {t2Tensor});
     auto& mulOp = currFunctionPtr->AddOperation(Opcode::OP_MUL, {t2Tensor}, {t3Tensor});
     std::vector<int64_t> viewShape{16, 16};

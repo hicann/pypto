@@ -117,12 +117,10 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
     if (isCopyIn) {
         if (memType == MemoryType::MEM_DEVICE_DDR) {
             tensorPtr = std::make_shared<LogicalTensor>(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor",
-                NodeType::INCAST);
+                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor");
         } else {
             tensorPtr = std::make_shared<LogicalTensor>(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L1Tensor",
-                NodeType::LOCAL);
+                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L1Tensor");
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
             tensorPtr->memoryrange.start = 0;
@@ -131,12 +129,10 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
     } else {
         if (memType == MemoryType::MEM_DEVICE_DDR) {
             tensorPtr = std::make_shared<LogicalTensor>(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor",
-                NodeType::OUTCAST);
+                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor");
         } else {
             tensorPtr = std::make_shared<LogicalTensor>(
-                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L0CTensor",
-                NodeType::LOCAL);
+                function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L0CTensor");
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
             tensorPtr->memoryrange.start = 0;

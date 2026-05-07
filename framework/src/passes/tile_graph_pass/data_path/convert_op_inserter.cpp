@@ -15,6 +15,7 @@
 #include "convert_op_inserter.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "AssignMemoryType"
@@ -48,7 +49,7 @@ void ConvertInserter::UpdateTensorTobeMap(const LogicalTensorPtr& tensor, Operat
     int opMagic = operation.GetOpMagic();
     if (tensorTobeMap.count(tensor) == 0) {
         // 首次插入
-        std::map<int, std::pair<Operation *, MemoryType>> tobeMap;
+        std::map<int, std::pair<Operation*, MemoryType>> tobeMap;
         tobeMap.emplace(opMagic, std::make_pair(&operation, t));
         tensorTobeMap[tensor] = tobeMap;
         APASS_LOG_DEBUG_F(
@@ -130,8 +131,8 @@ std::map<Operation*, MemoryType> ConvertInserter::GetTobeDefault(LogicalTensorPt
             tensor->GetMagic());
         return {};
     }
-    std::map<Operation *, MemoryType> result;
-    for (const auto &item : tensorTobeMap.at(tensor)) {
+    std::map<Operation*, MemoryType> result;
+    for (const auto& item : tensorTobeMap.at(tensor)) {
         result[item.second.first] = item.second.second;
     }
     return result;
@@ -176,8 +177,8 @@ std::map<Operation*, MemoryType> ConvertInserter::GetMemoryTypeFromTensorTobeMap
 {
     auto it = tensorTobeMap.find(tensor);
     if (it != tensorTobeMap.end()) {
-        std::map<Operation *, MemoryType> result;
-        for (const auto &item : it->second) {
+        std::map<Operation*, MemoryType> result;
+        for (const auto& item : it->second) {
             result[item.second.first] = item.second.second;
         }
         return result;
@@ -189,7 +190,7 @@ std::map<MemoryType, std::set<Operation*, OpMagicComparator>> ConvertInserter::R
     const std::map<int, std::pair<Operation*, MemoryType>>& oriMap) const
 {
     std::map<MemoryType, std::set<Operation*, OpMagicComparator>> result;
-    for (const auto &item : oriMap) {
+    for (const auto& item : oriMap) {
         result[item.second.second].insert(item.second.first);
     }
     return result;
@@ -329,8 +330,8 @@ void ConvertInserter::InsertConvertOpForEachConsumer(
 
 // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
 void ConvertInserter::ProcessSpecialProducersOrConsumers(
-    const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, std::set<Operation*, OpMagicComparator>& consumers,
-    MemoryType& requiredMemoryType)
+    const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
+    std::set<Operation*, OpMagicComparator>& consumers, MemoryType& requiredMemoryType)
 {
     // case1:当tensor的生产者都是assemble，并且tensor的mem路径需要经过DDR，则将tensor的ori刷成DDR
     APASS_LOG_DEBUG_F(
@@ -402,9 +403,9 @@ bool ConvertInserter::FitL0C2L1(const Operation& op)
     if (isSmallToLarge() && op.iOperand.front()->GetShape()[0] != op.oOperand.front()->GetShape()[0]) {
         return false;
     }
-    for (const auto &input : op.GetIOperands()) {
-        const auto &dynValidShape = input->GetDynValidShape();
-        for (const auto &dim : dynValidShape) {
+    for (const auto& input : op.GetIOperands()) {
+        const auto& dynValidShape = input->GetDynValidShape();
+        for (const auto& dim : dynValidShape) {
             if (!dim.IsImmediate()) {
                 return false;
             }
@@ -490,7 +491,9 @@ bool ConvertInserter::isAllConsumersValid(const std::set<Operation*, OpMagicComp
             return false;
         }
         if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE &&
-            (consumer->GetOOperands().front()->nodetype != NodeType::OUTCAST)) {
+            (FunctionUtils::GetNodeType(
+                 *(consumer->GetOOperands().front()), consumer->GetOOperands().front()->BelongFunction()) !=
+             NodeType::OUTCAST)) {
             return false;
         }
     }

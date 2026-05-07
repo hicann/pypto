@@ -15,6 +15,7 @@
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "interface/tensor/logical_tensor.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define CCECPU 25
 
@@ -164,15 +165,16 @@ void HostProf::PackTensorInfo(MspfTensorInfo* profTensorData, const uint32_t gro
     if (inputsSize_ > iOIdx) {
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_INPUT;
         profTensorData->tensorData[modId].format = static_cast<uint32_t>(profFunction_->inCasts_[iOIdx]->Format());
-        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(profFunction_->inCasts_[iOIdx]->nodetype);
+        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(FunctionUtils::GetNodeType(
+            *(profFunction_->inCasts_[iOIdx]), profFunction_->inCasts_[iOIdx]->BelongFunction()));
         iOTensor = profFunction_->inCasts_[iOIdx];
         iOtensorInfo << "Input " << iOIdx << " shape: ";
     } else {
         auto outputIdx = iOIdx - inputsSize_;
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_OUTPUT;
         profTensorData->tensorData[modId].format = static_cast<uint32_t>(profFunction_->outCasts_[outputIdx]->Format());
-        profTensorData->tensorData[modId].dataType =
-            static_cast<uint32_t>(profFunction_->outCasts_[outputIdx]->nodetype);
+        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(FunctionUtils::GetNodeType(
+            *(profFunction_->outCasts_[outputIdx]), profFunction_->outCasts_[outputIdx]->BelongFunction()));
         iOTensor = profFunction_->outCasts_[outputIdx];
         iOtensorInfo << "output " << outputIdx << " shape: ";
     }
@@ -296,4 +298,3 @@ void HostProf::SetProfFunction(Function* function)
     inputsSize_ = profFunction_->inCasts_.size();
 }
 } // namespace npu::tile_fwk
-

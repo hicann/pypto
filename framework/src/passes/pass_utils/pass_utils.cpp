@@ -113,6 +113,28 @@ bool FunctionUtils::IsContinuous(const std::vector<std::shared_ptr<LogicalTensor
     return true;
 }
 
+NodeType FunctionUtils::GetNodeType(const LogicalTensor& tensor, const Function& function)
+{
+    // 检查是否为 INCAST
+    auto in_it = std::find_if(function.inCasts_.begin(), function.inCasts_.end(), [&tensor](const auto& t) {
+        return t != nullptr && t.get() == &tensor;
+    });
+    if (in_it != function.inCasts_.end()) {
+        return NodeType::INCAST;
+    }
+
+    // 检查是否为 OUTCAST
+    auto out_it = std::find_if(function.outCasts_.begin(), function.outCasts_.end(), [&tensor](const auto& t) {
+        return t != nullptr && t.get() == &tensor;
+    });
+    if (out_it != function.outCasts_.end()) {
+        return NodeType::OUTCAST;
+    }
+
+    // 既不是输入也不是输出，则为局部变量
+    return NodeType::LOCAL;
+}
+
 std::unordered_map<MemoryType, int64_t> CommonUtils::GetLocalMemorySize()
 {
     std::unordered_map<MemoryType, int64_t> localMemorySize;

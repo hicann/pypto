@@ -1033,8 +1033,7 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
     reshapeOutput->UpdateDynValidShape({SymbolicScalar(64), SymbolicScalar(128)});
 
     auto outCast = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 128}, TileOpFormat::TILEOP_ND, "outCast",
-        NodeType::OUTCAST);
+        *currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 128}, TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
     auto& reshapeOp = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});

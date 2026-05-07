@@ -62,7 +62,6 @@ public:
     std::shared_ptr<Storage> storage_ = nullptr;
     uint64_t storageOffset_ = 0;
     int magic;
-    NodeType nodetype;
 
     std::vector<std::weak_ptr<LogicalTensor>> conflicterTensors;
     std::vector<std::shared_ptr<LogicalTensor>> overlapper;
@@ -71,16 +70,15 @@ public:
 
     LogicalTensor(
         Function& function, DataType t, Shape tshape, TileOpFormat tformat = TileOpFormat::TILEOP_ND,
-        std::string tname = "", NodeType tnodetype = NodeType::LOCAL);
+        std::string tname = "");
     LogicalTensor(
         Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape,
-        TileOpFormat tformat = TileOpFormat::TILEOP_ND, std::string tname = "", NodeType tnodetype = NodeType::LOCAL);
+        TileOpFormat tformat = TileOpFormat::TILEOP_ND, std::string tname = "");
+    LogicalTensor(
+        Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape);
     LogicalTensor(
         Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
-        NodeType tnodetype = NodeType::LOCAL);
-    LogicalTensor(
-        Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
-        std::vector<SymbolicScalar> tValidShape, NodeType tnodetype = NodeType::LOCAL);
+        std::vector<SymbolicScalar> tValidShape);
     LogicalTensor(LogicalTensor&&) = default;
     LogicalTensor(const LogicalTensor&) = default;
     LogicalTensor& operator=(LogicalTensor&&) = delete;

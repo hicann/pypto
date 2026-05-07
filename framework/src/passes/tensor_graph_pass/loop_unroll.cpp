@@ -405,7 +405,6 @@ Status LoopUnroll::TopFunctionUnroll(Function* function, std::vector<Operation*>
         }
         int slotIdx = function->GetInCastSlot(incast)[0];
         auto newIncast = incast->Clone(*topFunction_, true);
-        newIncast->nodetype = NodeType::LOCAL;
         lastWriteMap_[slotIdx] = std::make_pair(newIncast, true);
     }
     for (auto callop : callopList) {
@@ -439,7 +438,6 @@ Status LoopUnroll::UpdateTopFuncInoutCast(Function* function)
         }
         if (lastWriteMap_.find(slotIdx) != lastWriteMap_.end()) {
             scope->ioslot.incastSlot.push_back({slotIdx});
-            lastWriteMap_[slotIdx].first->nodetype = NodeType::INCAST;
             topFunction_->inCasts_.push_back(lastWriteMap_[slotIdx].first);
             topFunction_->GetTensorMap().Insert(lastWriteMap_[slotIdx].first, false);
         }
@@ -461,7 +459,6 @@ Status LoopUnroll::UpdateTopFuncInoutCast(Function* function)
         if (lastWriteMap_.find(slotIdx) != lastWriteMap_.end()) {
             scope->ioslot.outcastSlot.push_back({slotIdx});
             scope->ioslot.partialUpdateOutcastList.push_back(idx++);
-            lastWriteMap_[slotIdx].first->nodetype = NodeType::OUTCAST;
             topFunction_->outCasts_.push_back(lastWriteMap_[slotIdx].first);
         }
     }
@@ -529,7 +526,6 @@ Status LoopUnroll::FindOutputGlobalTensor(
         (!IsNoOverlapWAW(slotIdx, tensor, opDynOffsetMap) &&
          lastWriteMap_[slotIdx].second)) { // 与上次写入slot的tensor存在重叠的WAW关系且跨LOOP
         lastWriteMap_[slotIdx] = {tensor->Clone(*topFunction_, true), false};
-        lastWriteMap_[slotIdx].first->nodetype = NodeType::LOCAL;
         tensor2Global[tensor->GetMagic()] = lastWriteMap_[slotIdx].first;
     } else if (IsNoOverlapWAW(slotIdx, tensor, opDynOffsetMap)) { // 与上次写入slot的tensor存在无重叠的WAW关系
         tensor2Global[tensor->GetMagic()] = lastWriteMap_[slotIdx].first;
@@ -566,7 +562,6 @@ Status LoopUnroll::CreateLocal2Global(std::unordered_map<int, LogicalTensorPtr>&
             APASS_LOG_ERROR_F(Elements::Tensor, "Clone tensor[%d] failed.", tensor->GetMagic());
             return FAILED;
         }
-        cloneTensor->nodetype = NodeType::LOCAL;
         tensor2Global[tensor->GetMagic()] = cloneTensor;
     }
     return SUCCESS;

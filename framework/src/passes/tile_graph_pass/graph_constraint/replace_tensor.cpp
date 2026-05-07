@@ -758,8 +758,7 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
         op->ReplaceIOperand(0, srcTensor);
         // 含inplace语义，都为同一个RawTensor
         auto nopOutput = std::make_shared<LogicalTensor>(
-            function, srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape(),
-            NodeType::LOCAL);
+            function, srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape());
         nopOutput->SetMemoryTypeBoth(oOperand->GetMemoryTypeOriginal());
         auto& nop = function.AddRawOperation(Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
         nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); // 期望上设成任何一个都可以，因为来源一致

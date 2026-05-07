@@ -384,7 +384,6 @@ TEST_F(TestRemoveRedundantReshapePass, ReshapeNoConsumer) {
     ASSERT_NE(currFunctionPtr, nullptr);
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    inCast->nodetype = NodeType::INCAST; 
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {outCast});
     currFunctionPtr->inCasts_.push_back(inCast);

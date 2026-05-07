@@ -33,19 +33,18 @@
 using namespace npu::tile_fwk;
 
 LogicalTensor::LogicalTensor(
-    Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname, NodeType tnodetype)
+    Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname)
     : tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
       oriShape(tshape),
       magic(IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId()),
-      nodetype(tnodetype),
       function_(&function)
 {}
 
 LogicalTensor::LogicalTensor(
     Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape, TileOpFormat format,
-    std::string tname, NodeType tnodetype)
+    std::string tname)
     : tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
@@ -53,18 +52,16 @@ LogicalTensor::LogicalTensor(
       dynValidShape_(tValidShape),
       storageShape(tshape),
       magic(IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId()),
-      nodetype(tnodetype),
       function_(&function)
 {}
 
 LogicalTensor::LogicalTensor(
-    Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape, NodeType tnodetype)
+    Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape)
     : tensor(rawTensor),
       offset(toffset),
       shape(tshape),
       oriShape(tshape),
       magic(IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId()),
-      nodetype(tnodetype),
       function_(&function)
 {
     // Initialize other members if necessary
@@ -74,14 +71,13 @@ LogicalTensor::LogicalTensor(
 
 LogicalTensor::LogicalTensor(
     Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
-    std::vector<SymbolicScalar> tValidShape, NodeType tnodetype)
+    std::vector<SymbolicScalar> tValidShape)
     : tensor(rawTensor),
       offset(toffset),
       shape(tshape),
       oriShape(tshape),
       dynValidShape_(tValidShape),
       magic(IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId()),
-      nodetype(tnodetype),
       function_(&function)
 {
     // Initialize other members if necessary
@@ -114,7 +110,7 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool crea
     }
 
     std::shared_ptr<LogicalTensor> newTensor =
-        std::make_shared<LogicalTensor>(dstFunc, rawTensor, offset, shape, dynValidShape_, nodetype);
+        std::make_shared<LogicalTensor>(dstFunc, rawTensor, offset, shape, dynValidShape_);
     if (!create) {
         newTensor->magic = magic;
     } else {
@@ -138,7 +134,11 @@ Json LogicalTensor::DumpJson(bool dumpRawTensor) const
     result["offset"] = offset;
     result["shape"] = shape;
     result["validshape"] = oriShape;
-    result["nodetype"] = static_cast<int>(nodetype);
+    if (this->function_ != nullptr) {
+        result["nodetype"] = static_cast<int>(FunctionUtils::GetNodeType(*this, this->BelongFunction()));
+    } else {
+        result["nodetype"] = static_cast<int>(NodeType::LOCAL);
+    }
     if (dumpRawTensor) {
         result[T_FIELD_RAWTENSOR] = tensor->DumpJson();
     } else {
@@ -200,7 +200,6 @@ std::shared_ptr<LogicalTensor> LogicalTensor::LoadJson(
 
     Offset toffset = tensorDump["offset"].get<std::vector<int64_t>>();
     Shape tshape = tensorDump["shape"].get<std::vector<int64_t>>();
-    NodeType tnodetype = static_cast<NodeType>(tensorDump["nodetype"].get<int>());
 
     std::shared_ptr<RawTensor> rawTensor;
     if (tensorDump[T_FIELD_RAWTENSOR].is_number()) {
@@ -214,7 +213,7 @@ std::shared_ptr<LogicalTensor> LogicalTensor::LoadJson(
     int tensorMagic = tensorDump["magic"].get<int>();
 
     std::shared_ptr<LogicalTensor> tensorJson =
-        std::make_shared<LogicalTensor>(function, rawTensor, toffset, tshape, tnodetype);
+        std::make_shared<LogicalTensor>(function, rawTensor, toffset, tshape);
     tensorJson->magic = tensorMagic;
 
     if (tensorDump.count("need_alloc") != 0) {
@@ -337,7 +336,7 @@ std::shared_ptr<LogicalTensor> LogicalTensor::View(
     FE_ASSERT(FeError::INVALID_VAL, offset.size() == newOffset.size())
         << "Tensor.view, offset must be the same dimension";
 
-    auto view = std::make_shared<LogicalTensor>(function, this->tensor, this->offset, this->shape, this->nodetype);
+    auto view = std::make_shared<LogicalTensor>(function, this->tensor, this->offset, this->shape);
     for (size_t i = 0; i < shape.size(); i++) {
         FE_ASSERT(FeError::OUT_OF_RANGE, shape[i] >= (newShape[i] + newOffset[i]))
             << "i: " << i << ", shape[i]: " << shape[i] << ", newShape[i]: " << newShape[i]

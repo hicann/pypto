@@ -18,6 +18,7 @@
 #include "passes/pass_check/auto_cast_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "AutoCast"
 
@@ -298,13 +299,13 @@ Status AutoCast::ShortenChain(Function& function, const std::vector<Operation*>&
 {
     std::shared_ptr<LogicalTensor> tgtTensor = *(tailOp->GetOOperands().begin());
     DataType tgtType = tgtTensor->Datatype();
-    bool isTgtOut = (tgtTensor->nodetype == NodeType::OUTCAST);
+    bool isTgtOut = (FunctionUtils::GetNodeType(*tgtTensor, tgtTensor->BelongFunction()) == NodeType::OUTCAST);
     bool isTgtOutConnected = (outCastConnectedTensors_.count(tgtTensor->GetMagic()) > 0);
     for (int i = static_cast<int>(castChain.size()) - 1; i >= 0; i--) {
         std::shared_ptr<LogicalTensor> srcTensor = *(castChain[i]->GetIOperands().begin());
         DataType srcType = srcTensor->Datatype();
-        bool isSrcIn = (srcTensor->nodetype == NodeType::INCAST);
-        bool isSrcOut = (srcTensor->nodetype == NodeType::OUTCAST);
+        bool isSrcIn = (FunctionUtils::GetNodeType(*srcTensor, srcTensor->BelongFunction()) == NodeType::INCAST);
+        bool isSrcOut = (FunctionUtils::GetNodeType(*srcTensor, srcTensor->BelongFunction()) == NodeType::OUTCAST);
         bool isSrcInConnected = (inCastConnectedTensors_.count(srcTensor->GetMagic()) > 0);
         if (srcType == tgtType && !(isTgtOutConnected && isSrcInConnected)) {
             if (!isTgtOut) {

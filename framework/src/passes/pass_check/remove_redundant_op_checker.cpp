@@ -15,6 +15,7 @@
 
 #include "remove_redundant_op_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/error_code.h"
 
 #define MODULE_NAME "RemoveRedundantOp"
@@ -51,7 +52,7 @@ Status RemoveRedundantOpChecker::PreCheckAssemble(Function& function, const Oper
     if (consumerOps.empty()) {
         auto assembleOut = op.oOperand.front();
         if (assembleOut->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-            if (assembleOut->nodetype != NodeType::OUTCAST || !function.IsFromOutCast(assembleOut)) {
+            if (!function.IsFromOutCast(assembleOut)) {
                 APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, 
                 "Op assembleDDR[%d] has no consumer but is not outcast, please check.", op.GetOpMagic());
                 return FAILED;

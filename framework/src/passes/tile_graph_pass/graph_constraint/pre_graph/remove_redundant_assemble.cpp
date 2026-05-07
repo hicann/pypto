@@ -15,6 +15,7 @@
 
 #include "remove_redundant_assemble.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "PreGraphProcess"
 
@@ -581,14 +582,15 @@ void RemoveRedundantAssemble::HandleForAssembleToOutcast(
     Function& function, Operation& assembleOp, std::set<Operation*, LogicalTensor::CompareOp>& producersBackup) const
 {
     int outCastMagic = -1;
-    if (function.IsFromOutCast(assembleOp.oOperand[0]) && assembleOp.oOperand[0]->nodetype == NodeType::OUTCAST) {
+    if (function.IsFromOutCast(assembleOp.oOperand[0]) &&
+        FunctionUtils::GetNodeType(*(assembleOp.oOperand[0]), assembleOp.oOperand[0]->BelongFunction()) ==
+            NodeType::OUTCAST) {
         outCastMagic = assembleOp.oOperand[0]->GetMagic();
     }
     if (outCastMagic != -1) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Find outCastMagic: %d.", outCastMagic);
         for (auto& producer : producersBackup) {
             producer->oOperand[0]->SetMagic(outCastMagic);
-            producer->oOperand[0]->nodetype = NodeType::OUTCAST;
         }
     }
 }
@@ -631,11 +633,13 @@ Status RemoveRedundantAssemble::HanldeForSingleAssemble(
     auto cons = *consumers.begin();
     if (consumers.size() == 1 && cons->GetOpcode() == Opcode::OP_ASSEMBLE) {
         cons->SetAsDeleted();
-        for (auto &producer : producersBackup) {
+        for (auto& producer : producersBackup) {
             oriOutputBackUp = producer->oOperand[0]; // producer --> oriOutputBackUp(input) --> op
             producer->ReplaceOutput(output, oriOutputBackUp);
-            if (!IsCopyOut(producer->GetOpcode())) continue;
-            APASS_LOG_DEBUG_F(Elements::Operation, "The producer op:[%d] is copyOut, update its CopyOpAttr. %s",
+            if (!IsCopyOut(producer->GetOpcode()))
+                continue;
+            APASS_LOG_DEBUG_F(
+                Elements::Operation, "The producer op:[%d] is copyOut, update its CopyOpAttr. %s",
                 producer->GetOpMagic(), producer->GetOpcodeStr().c_str());
             UpdateCopyOutAttr(*producer, *cons);
         }

@@ -37,6 +37,7 @@
 #include "interface/utils/serialization.h"
 #include "interface/interpreter/flow_verifier.h"
 #include "passes/pass_utils/subgraph_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 
 using namespace npu::tile_fwk;
 
@@ -1769,7 +1770,7 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
     }
     auto incastSymbol = std::make_shared<LogicalTensor>(
         *this, inArgument->tensor->datatype, inArgument->shape, inArgument->tensor->GetDynRawShape(),
-        inArgument->Format(), newSymbol, NodeType::INCAST);
+        inArgument->Format(), newSymbol);
     incastSymbol->tensor->UpdateDynRawShape(inArgument->tensor->GetDynRawShape());
     tensorMap_.Insert(incastSymbol);
     inCasts_.push_back(incastSymbol);
@@ -1855,7 +1856,7 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
 
         std::vector<int64_t> zeroOffset(rawIncast->rawshape.size(), 0);
         auto inArgument =
-            std::make_shared<LogicalTensor>(Parent(), rawIncast, zeroOffset, rawIncast->rawshape, NodeType::LOCAL);
+            std::make_shared<LogicalTensor>(Parent(), rawIncast, zeroOffset, rawIncast->rawshape);
         inArgumentList.push_back(inArgument);
 
         auto incastSymbol = CreateIncastTensor(inArgument);
@@ -1875,7 +1876,7 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
             } else {
                 newIncast = std::make_shared<LogicalTensor>(
                     *this, originIncast->tensor->datatype, originIncast->shape, originIncast->Format(),
-                    "INCAST_LOCAL_BUF" + std::to_string(idx++), NodeType::LOCAL);
+                    "INCAST_LOCAL_BUF" + std::to_string(idx++));
                 FE_ASSERT(originIncast->conflicterTensors.empty())
                     << "OriginIncast has conflicter tensors:" << originIncast->Dump();
                 newIncast->CopyMemoryType(originIncast);
@@ -1954,12 +1955,12 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         }
         auto rawSymbol = std::make_shared<LogicalTensor>(
             *this, rawOutcast->datatype, rawOutcast->rawshape, rawOutcast->GetDynRawShape(),
-            rawToOutcast[rawOutcast]->Format(), newSymbol, NodeType::OUTCAST);
+            rawToOutcast[rawOutcast]->Format(), newSymbol);
         auto rawBuf = std::make_shared<LogicalTensor>(
             *this, rawOutcast->datatype, rawOutcast->rawshape, rawOutcast->GetDynRawShape(),
-            rawToOutcast[rawOutcast]->Format(), "OUTCAST_LOCAL_BUF" + std::to_string(idx), NodeType::LOCAL);
+            rawToOutcast[rawOutcast]->Format(), "OUTCAST_LOCAL_BUF" + std::to_string(idx));
         auto outArgument =
-            std::make_shared<LogicalTensor>(Parent(), rawOutcast, nonOffsets, rawOutcast->rawshape, NodeType::LOCAL);
+            std::make_shared<LogicalTensor>(Parent(), rawOutcast, nonOffsets, rawOutcast->rawshape);
         rawSymbol->tensor->UpdateDynRawShape(rawOutcast->GetDynRawShape());
         rawBuf->tensor->UpdateDynRawShape(rawOutcast->GetDynRawShape());
         Parent().tensorMap_.Insert(outArgument);
@@ -3756,7 +3757,7 @@ std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<Logi
         case OverlapStatus::PERFECTLY_MATCH_WITH_ALL: {
             auto assembleResult = std::make_shared<LogicalTensor>(
                 *this, iOperand->Datatype(), iOperand->shape, iOperand->GetDynValidShape(), iOperand->Format(),
-                "Assemble_" + matches[0]->Symbol(), iOperand->nodetype);
+                "Assemble_" + matches[0]->Symbol());
             FE_ASSERT(FeError::NOT_EXIST, assembleResult->GetProducers().empty())
                 << "Assemble result should have no producers";
             for (size_t idx = 0; idx < matches.size(); idx++) {
@@ -3774,7 +3775,7 @@ std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<Logi
         case OverlapStatus::BE_COVERED: {
             auto viewResult = std::make_shared<LogicalTensor>(
                 *this, matches.front()->tensor->datatype, iOperand->shape, iOperand->Format(),
-                "View_" + matches.front()->tensor->symbol, matches.front()->nodetype);
+                "View_" + matches.front()->tensor->symbol);
             auto& viewOp = AddRawOperation(Opcode::OP_VIEW, {matches.front()}, {viewResult});
             viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
                 iOperand->GetOffset(), iOperand->GetDynOffset(), iOperand->GetDynValidShape()));
@@ -3789,8 +3790,7 @@ std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<Logi
             CalcShapeAndOffsetOfGroup(matches, minimumOffset, maximumShape);
 
             auto assembleResult = std::make_shared<LogicalTensor>(
-                *this, matches[0]->Datatype(), maximumShape, iOperand->Format(), "Assemble_" + matches[0]->Symbol(),
-                iOperand->nodetype);
+                *this, matches[0]->Datatype(), maximumShape, iOperand->Format(), "Assemble_" + matches[0]->Symbol());
             FE_ASSERT(FeError::NOT_EXIST, assembleResult->GetProducers().empty())
             "Assemble result should have no producers";
             for (size_t idx = 0; idx < matches.size(); idx++) {
@@ -3801,7 +3801,7 @@ std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<Logi
 
             auto viewResult = std::make_shared<LogicalTensor>(
                 *this, assembleResult->Datatype(), iOperand->shape, iOperand->Format(),
-                "View_" + assembleResult->Symbol(), assembleResult->nodetype);
+                "View_" + assembleResult->Symbol());
             auto& viewOp = AddRawOperation(Opcode::OP_VIEW, {assembleResult}, {viewResult});
             std::vector<int64_t> newOffset = TensorOffset::Sub(iOperand->GetOffset(), minimumOffset);
             std::vector<SymbolicScalar> newDynOffset = TensorOffset::Sub(iOperand->GetDynOffset(), minimumOffset);
@@ -3861,7 +3861,7 @@ void Function::DoMergeFunctionDupIncast()
         auto oriIncast = inCasts_[slotSetIndex[0]];
         auto newIncast = std::make_shared<LogicalTensor>(
             *this, oriIncast->tensor->datatype, oriIncast->shape, oriIncast->tensor->GetDynRawShape(),
-            oriIncast->Format(), oriIncast->tensor->GetSymbol(), NodeType::INCAST);
+            oriIncast->Format(), oriIncast->tensor->GetSymbol());
         newIncast->tensor->UpdateDynRawShape(oriIncast->tensor->GetDynRawShape());
         for (auto incastIdx : slotSetIndex) {
             FE_ASSERT(FeError::NOT_EXIST, inCasts_[incastIdx]->GetConsumers().size() > 0)
@@ -3889,7 +3889,7 @@ void Function::DoMergeFunctionDupOutcast()
         auto oriOutcast = outCasts_[slotSetIndex[0]];
         auto newOutcast = std::make_shared<LogicalTensor>(
             *this, oriOutcast->tensor->datatype, oriOutcast->shape, oriOutcast->tensor->GetDynRawShape(),
-            oriOutcast->Format(), oriOutcast->tensor->GetSymbol(), NodeType::OUTCAST);
+            oriOutcast->Format(), oriOutcast->tensor->GetSymbol());
         newOutcast->tensor->UpdateDynRawShape(oriOutcast->tensor->GetDynRawShape());
         for (auto incastIdx : slotSetIndex) {
             FE_ASSERT(FeError::NOT_EXIST, outCasts_[incastIdx]->GetProducers().size() > 0)

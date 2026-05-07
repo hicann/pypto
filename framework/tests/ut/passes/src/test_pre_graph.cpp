@@ -429,10 +429,8 @@ TEST_F(PreGraphTest, TestTransposeDatamove)
 
     auto input = G.GetTensor("input");
     input->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    input->nodetype = NodeType::INCAST;
     auto output = G.GetTensor("output");
     output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    output->nodetype = NodeType::OUTCAST;
 
     G.SetInCast({"input"});
     G.SetOutCast({"output"});
@@ -489,13 +487,10 @@ TEST_F(PreGraphTest, TestTransposeDatamoveExp)
 
     auto input = G.GetTensor("input");
     input->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    input->nodetype = NodeType::INCAST;
     auto output = G.GetTensor("output");
     output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    output->nodetype = NodeType::OUTCAST;
     auto output2 = G.GetTensor("output2");
     output2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    output2->nodetype = NodeType::OUTCAST;
 
     auto outInnerTemp = G.GetTensor("outInnerTemp");
     outInnerTemp->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);

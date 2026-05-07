@@ -18,6 +18,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/infer_discontinuous_input_checker.h"
 #include "passes/pass_utils/infer_shape_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "InferDiscontinuousInput"
 
@@ -174,7 +175,7 @@ inline bool NoViewConflict(const std::vector<std::pair<LogicalTensorPtr, Operati
         }
         // incast outcast Check
         for (auto& producerTensor : viewOps[i]->GetIOperands()) {
-            if (producerTensor->nodetype != NodeType::LOCAL) {
+            if (FunctionUtils::GetNodeType(*producerTensor, producerTensor->BelongFunction()) != NodeType::LOCAL) {
                 return false;
             }
         }

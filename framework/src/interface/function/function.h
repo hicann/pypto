@@ -777,7 +777,6 @@ public:
     void RemoveOutcast(int idx)
     {
         outcastPosition.erase(outcastPosition.begin() + idx);
-        outCasts_[idx]->nodetype = NodeType::LOCAL;
         outCasts_.erase(outCasts_.begin() + idx);
         auto& outcastSlot = slotScope_->ioslot.outcastSlot;
         outcastSlot.erase(outcastSlot.begin() + idx);

@@ -20,6 +20,7 @@
 #include "nlohmann/json.hpp"
 #include "cost_model/simulation/tools/visualizer.h"
 #include "cost_model/simulation/base/ModelTop.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
 
@@ -187,7 +188,7 @@ void ParseInput::BuildTile(std::shared_ptr<npu::tile_fwk::LogicalTensor> logical
 
     tile->dataTypeStr = npu::tile_fwk::DataType2String(logicalTensor->tensor->datatype);
     tile->dataType = CostModel::ToDataType(tile->dataTypeStr);
-    std::string type = npu::tile_fwk::NodeType2String(logicalTensor->nodetype);
+    std::string type = npu::tile_fwk::NodeType2String(FunctionUtils::GetNodeType(*logicalTensor, logicalTensor->BelongFunction()));
     tile->nodeType = CostModel::ToNodeType(type);
 
     tile->rawMagic = logicalTensor->tensor->rawmagic;

@@ -19,6 +19,7 @@
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_check/common_operation_eliminate_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "CommonOperationEliminate"
 
@@ -294,7 +295,7 @@ bool CommonOperationEliminate::TensorProducersMerge(
     }
     LogicalTensorPtr oldtensor = orderedTensor;
     LogicalTensorPtr newtensor = existOp.first;
-    if (oldtensor->nodetype == NodeType::OUTCAST) {
+    if (FunctionUtils::GetNodeType(*oldtensor, oldtensor->BelongFunction()) == NodeType::OUTCAST) {
         return false;
     }
     if (producers.size() == existOp.second.size()) {

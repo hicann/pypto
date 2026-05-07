@@ -15,6 +15,7 @@
 
 #include "remove_redundant_op_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/error_code.h"
 
 #define MODULE_NAME "Checker"
@@ -235,7 +236,7 @@ Status Checker::CheckLocalTensor(Function& function)
                 APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "The iOperand of op[%d][%s] is null", op->GetOpMagic(), op->GetOpcodeStr().c_str());
                 return FAILED;
             }
-            if (iOperand->GetProducers().empty() && iOperand->nodetype != NodeType::INCAST) {
+            if (iOperand->GetProducers().empty() && FunctionUtils::GetNodeType(*iOperand, function) != NodeType::INCAST) {
                 APASS_LOG_ERROR_C(TensorErr::TENSOR_NULL_POINTER, Elements::Operation, "A locally defined temporary tensor[%d] cannot be used as an input to an operation[%d].", iOperand->GetMagic(), op->GetOpMagic());
                 return FAILED;
             }
