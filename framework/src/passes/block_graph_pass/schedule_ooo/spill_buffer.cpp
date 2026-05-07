@@ -40,6 +40,22 @@ bool OoOScheduler::IsSupportedPartialWriteProducer(const Operation &op) const
         IsAllocOpCode(op.GetOpcode());
 }
 
+bool OoOScheduler::IsReusableCopyInOp(const Operation &op) const
+{
+    if (!OpcodeManager::Inst().IsBoundaryIn(op.GetOpcode())) {
+        return false;
+    }
+    auto input = op.GetInputOperand(0);
+    auto output = op.GetOutputOperand(0);
+    if (input == nullptr || output == nullptr) {
+        return false;
+    }
+    auto inputMem = input->GetMemoryTypeOriginal();
+    auto outputMem = output->GetMemoryTypeOriginal();
+    return inputMem == MemoryType::MEM_DEVICE_DDR &&
+        (outputMem == MemoryType::MEM_L1 || outputMem == MemoryType::MEM_UB);
+}
+
 Status OoOScheduler::GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t> &toOffset,
     std::vector<SymbolicScalar> &toDynOffset, std::vector<SymbolicScalar> &fromDynValidShape) const
 {
@@ -255,7 +271,7 @@ void OoOScheduler::UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr s
             OpImmediate::Specified(offset), OpImmediate::Specified(spillTensor->GetShape()),
             OpImmediate::Specified(spillTensor->GetRawTensor()->GetDynRawShape())));
     } else if (op.GetOpcodeStr().find("ALLOC") == std::string::npos) {
-        if (spillOp->GetOpcode() == Opcode::OP_COPY_IN) {
+        if (IsReusableCopyInOp(*spillOp)) {
             op.SetOpAttribute(spillOp->GetOpAttribute()->Clone());
             op.inParamLocation_ = spillOp->inParamLocation_;
         } else if (!isSpecialL1) {
@@ -485,18 +501,18 @@ Status OoOScheduler::CreateSpillReloadIssue(LogicalTensorPtr spillOutTensor,
     // 创建spill搬出数据搬回OP_COPY_IN/OP_ALLOC
     Opcode allocOp = memType == MemoryType::MEM_UB ? Opcode::OP_UB_ALLOC : Opcode::OP_L1_ALLOC;
     auto &spillAllocOp = function_.AddRawOperation(allocOp, {}, {localTensor});
-    auto &spillCopyInOp = (spillOp->GetOpcode() == Opcode::OP_COPY_IN) ?
+    auto &spillCopyInOp = IsReusableCopyInOp(*spillOp) ?
         spillOp->CloneOperation(function_, {spillOutTensor}, {localTensor}) :
         function_.AddRawOperation(Opcode::OP_COPY_IN, {spillOutTensor}, {localTensor});
 
-    if (spillOp->GetOpcode() == Opcode::OP_COPY_IN) {
+    if (IsReusableCopyInOp(*spillOp)) {
         spillCopyInOp.SetIOpAttrOffset(0, spillOp->GetIOpAttrOffset(0));
     }
     // 设置ODO copy_in op offset
     UpdateOpAttr(spillAllocOp, 1, localTensor, {}, spillOp, isSpecialL1);
     UpdateOpAttr(spillCopyInOp, DEFAULT_LATENCY, localTensor, spillOutTensor->GetOffset(), spillOp, isSpecialL1);
     // DDR->COPY_IN->spillTensor 场景不标记 copy_in_mode
-    if (spillOp->GetOpcode() != Opcode::OP_COPY_IN && UpdateCopyInMode(spillCopyInOp) != SUCCESS) {
+    if (!IsReusableCopyInOp(*spillOp) && UpdateCopyInMode(spillCopyInOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyInMode failed!");
         return FAILED;
     }
