@@ -160,10 +160,7 @@ class ExprEvaluator:
                 if isinstance(value, pypto.SymbolicScalar) and value.is_concrete():
                     dict_locals[key] = value.concrete()
             dict_locals.update(_EVAL_BUILTIN_OVERRIDES)
-            try:
-                return eval(exe, {}, dict_locals)  # pylint: disable=eval-used
-            except Exception as e:
-                raise ParserError(node, f"{type(e).__name__}: {e}") from e
+            return eval(exe, {}, dict_locals)  # pylint: disable=eval-used
         elif isinstance(node, ast.Expr):
             # Case 2: a expression in a statement
             mod = ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[]))

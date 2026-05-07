@@ -52,7 +52,7 @@ struct TerminateHandler {
     static void SigAction(int signo)
     {
         (void)signo;
-        auto backtrace = GetBacktrace(0x2, 0x10)->Get();
+        auto backtrace = GetBacktrace(0x2, 0x06)->Get();
         auto msg = "ops !!!";
         if (signo == SIGSEGV) {
             msg = "segment fault !!!";

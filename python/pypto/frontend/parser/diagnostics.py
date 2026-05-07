@@ -329,9 +329,7 @@ class Diagnostics:
             Always raises RenderedParserError after displaying the diagnostic.
         """
         OutputErrorMessage()
-        self.emit(node, message, DiagnosticLevel.BUG)
-        self._render()
-        raise RenderedParserError(node, message)
+        raise RenderedParserError(node, message) from None
 
     def error(self, node: ast.AST, message: str) -> NoReturn:
         """Generate an error-level diagnostic and raise an exception.

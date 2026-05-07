@@ -84,15 +84,9 @@ public:
 
     const char* what() const noexcept override;
 
-    int operator=(ErrorMessage& msg)
-    {
-        msg_ = msg.Message();
-        /* avoid nested throw */
-        if (std::uncaught_exceptions() == 0) {
-            throw *this;
-        }
-        return 0;
-    }
+    [[nodiscard]] std::string DiagnosticWithBacktrace() const;
+ 	  	 
+    int operator=(ErrorMessage& msg);
 
 private:
     const char* func_;

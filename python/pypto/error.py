@@ -51,8 +51,6 @@ class PyptoError(Exception):
     def __init__(self, err_code: int, msg: Union[str, Exception]):
         if isinstance(msg, Exception):
             msg = f"ErrCode: {err_code:X}, {type(msg).__name__}: {msg}"
-        elif "ErrCode" not in msg:
-            msg = f"ErrCode: {err_code:X}, {msg}"
         super().__init__(msg)
         self.node: Optional[ast.AST] = None
 
