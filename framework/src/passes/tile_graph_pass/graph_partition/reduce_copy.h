@@ -93,6 +93,7 @@ struct MergeInput {
     std::vector<std::set<int>> subGraphOutGraph;
     std::vector<std::vector<int>> mergeGroup;
     std::vector<bool> isEnforceMergeGroup;
+    std::vector<bool> isValidMergeGroup;
 };
 
 struct MergeOutput {
@@ -140,6 +141,7 @@ public:
 private:
     Status BuildGraph(Function &function, MergeInput& mergeInput);
     Status BuildMergeGroup(Function &function, MergeInput& mergeInput);
+    std::unordered_set<int> FindForkSubgraph(Function &function);
     Status MarkNoMergeSubgraph(Function &function);
     void UpdateConnectRecord(Function &function);
     bool IsEnforceMergeBoundary(LogicalTensorPtr &tensor);

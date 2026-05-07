@@ -63,6 +63,56 @@ Status ReduceCopyMerge::RunOnFunction(Function &function)
     return SUCCESS;
 }
 
+std::unordered_set<int> ReduceCopyMerge::FindForkSubgraph(Function &function)
+{
+    std::map<int, std::unordered_set<int>> subgraphIdToOutputTensor;
+    for (const auto &item : function.GetTensorMap().inverseMap_) {
+        LogicalTensorPtr tensor = item.second;
+        for (auto &op : tensor->GetProducers()) {
+            subgraphIdToOutputTensor[op->GetSubgraphID()].insert(tensor->GetMagic());
+        }
+    }
+
+    std::map<int, std::set<int>> innerTensorToSubgraph;
+    for (const auto &item : function.GetTensorMap().inverseMap_) {
+        LogicalTensorPtr tensor = item.second;
+        for (auto &op : tensor->GetConsumers()) {
+            if (subgraphIdToOutputTensor[op->GetSubgraphID()].count(tensor->GetMagic()) > 0) {
+                innerTensorToSubgraph[tensor->GetMagic()].insert(op->GetSubgraphID());
+            }
+        }
+    }
+    std::unordered_set<int> forkSubgraphId;
+    for (auto &pr : innerTensorToSubgraph) {
+        if (pr.second.size() == 0) {
+            continue;
+        }
+        if (pr.second.size() > 1) {
+            forkSubgraphId.insert(pr.second.begin(), pr.second.end());
+            continue;
+        }
+        int innerSubgraphId = *(pr.second.begin());
+        LogicalTensorPtr tensor = function.GetTensorMap().inverseMap_[pr.first];
+        bool isForkSubgraph = false;
+        for (auto &op : tensor->GetProducers()) {
+            if (op->GetSubgraphID() != innerSubgraphId) {
+                isForkSubgraph = true;
+                break;
+            }
+        }
+        for (auto &op : tensor->GetConsumers()) {
+            if (op->GetSubgraphID() != innerSubgraphId) {
+                isForkSubgraph = true;
+                break;
+            }
+        }
+        if (isForkSubgraph) {
+            forkSubgraphId.insert(innerSubgraphId);
+        }
+    }
+    return forkSubgraphId;
+}
+
 Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
 {
     int subgraphNum = function.GetTotalSubGraphCount();
@@ -88,10 +138,15 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
         }
     }
     noMergeSubgraph.clear();
+    std::unordered_set<int> forkSubgraphId = FindForkSubgraph(function);
     for (int i = 0; i < subgraphNum; i++) {
         if (subgraphOpNum[i] == 1 && subgraphHasReshape[i] == true) {
             noMergeSubgraph.insert(i);
-            APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d is not mergeable beacause it only has Reshape.", i);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d is not mergeable because it only has Reshape.", i);
+        } else if (forkSubgraphId.count(i) > 0) {
+            noMergeSubgraph.insert(i);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "Subgraph %d is not mergeable because it has inner tensor to other subgraphs.", i);
         } else if (subgraphHasInnerDDR[i]) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d has inner DDR tensor.", i);
         }
@@ -228,7 +283,9 @@ Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInp
     UpdateConnectRecord(function);
     std::multimap<int, std::vector<int>> sortedMergeGroup;
     for (auto &pair : mergeGroupToPriority) {
-        sortedMergeGroup.insert({pair.second, pair.first});
+        std::vector<int> boundaryGroup = pair.first;
+        std::sort(boundaryGroup.begin(), boundaryGroup.end());
+        sortedMergeGroup.insert({pair.second, boundaryGroup});
     }
     for (int subIdx = 0; subIdx < mergeInput.numSubgraph; subIdx++) {
         if (mergeInput.subGraphInGraph[subIdx].size() <= 1) {
@@ -237,6 +294,7 @@ Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInp
         std::vector<int> inputGroup{subIdx};
         inputGroup.insert(inputGroup.end(), mergeInput.subGraphInGraph[subIdx].begin(),
                           mergeInput.subGraphInGraph[subIdx].end());
+        std::sort(inputGroup.begin(), inputGroup.end());
         sortedMergeGroup.insert({subgraphInputSize[subIdx], inputGroup});
     }
     for (int subIdx = 0; subIdx < mergeInput.numSubgraph; subIdx++) {
@@ -246,18 +304,20 @@ Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInp
         std::vector<int> outputGroup{subIdx};
         outputGroup.insert(outputGroup.end(), mergeInput.subGraphOutGraph[subIdx].begin(),
                            mergeInput.subGraphOutGraph[subIdx].end());
+        std::sort(outputGroup.begin(), outputGroup.end());
         sortedMergeGroup.insert({subgraphOutputSize[subIdx], outputGroup});
     }
-    mergeInput.mergeGroup.clear();
-    mergeInput.isEnforceMergeGroup.clear();
     int groupIdx = 0;
+    std::set<std::vector<int>> visitedMergeGroup;
     for (auto it = sortedMergeGroup.rbegin(); it != sortedMergeGroup.rend(); it++) {
-        if (!IsValidMergeGroup(it->second, noMergeSubgraph)) {
+        if (visitedMergeGroup.count(it->second) > 0) {
             continue;
         }
+        visitedMergeGroup.insert(it->second);
         mergeInput.mergeGroup.push_back(it->second);
         bool isEnforce = enforceMergeGroup.count(it->second) > 0 ? true : false;
         mergeInput.isEnforceMergeGroup.push_back(isEnforce);
+        mergeInput.isValidMergeGroup.push_back(IsValidMergeGroup(it->second, noMergeSubgraph));
         APASS_LOG_DEBUG_F(Elements::Operation, "merge group %d: %s, isEnforce: %s.",
             groupIdx, IntVecToString(it->second).c_str(), isEnforce ? "True" : "False");
         groupIdx++;
@@ -594,11 +654,11 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
             const auto& group = input.mergeGroup[i];
             std::vector<int> actualGroup = GetActualGroup(group);
             if (actualGroup.size() <= 1) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "Skip enforce merge group %zu: already merged", i);
+                APASS_LOG_DEBUG_F(Elements::Operation, "Skip merge group %zu: already merged", i);
                 continue;
             }
             if ((input.isEnforceMergeGroup[i] && CanMergeWithoutCycle(actualGroup)) ||
-                (mergeLoopStep != 0 && CanMergeWithConstraints(actualGroup))) {
+                (mergeLoopStep != 0 && input.isValidMergeGroup[i] && CanMergeWithConstraints(actualGroup))) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded", i);
                 PerformMerge(actualGroup);
                 hasUpdated = true;
