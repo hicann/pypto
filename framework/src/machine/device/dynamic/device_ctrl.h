@@ -25,6 +25,7 @@
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/device_log.h"
 #include "machine/utils/barrier.h"
+#include "machine/device/dynamic/perf_event_sampler.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "device_trace.h"
 #ifdef __DEVICE__

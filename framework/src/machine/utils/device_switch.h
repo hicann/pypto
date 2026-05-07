@@ -54,6 +54,8 @@ namespace npu::tile_fwk {
 
 #define PERF_AICPU_TEST_SWITCH 0 // 性能AICPU数据测试
 
+#define __PYPTO_AICPU_PMU_EVENT_ENABLE 0 // AICPU perf_event_open PMU采集开关（ioctl/read 路径）
+
 // ready quene mode for aicore task : Last-in-first-out(LIFO stack mode) or first-in-first-out(FIFO quene mode)
 constexpr bool READY_QUE_LIFO_SWITCH = true;
 
