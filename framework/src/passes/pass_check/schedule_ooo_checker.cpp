@@ -343,9 +343,9 @@ bool OoOScheduleChecker::PostCheckNewTensor(std::pair<const int, Function*> prog
                 newtensor->GetMagic());
             return false;
         }
-        if ((newtensor->oriShape.size() == 0) && (SubgraphUtils::IsBoundary(newtensor))) {
+        if ((newtensor->shape.size() == 0) && (SubgraphUtils::IsBoundary(newtensor))) {
             APASS_LOG_ERROR_F(
-                Elements::Operation, "Program %d: %d new tensor orishape is null, OoOSchedule Postcheck failed!",
+                Elements::Operation, "Program %d: %d new tensor shape is null, OoOSchedule Postcheck failed!",
                 programIdx, newtensor->GetMagic());
             return false;
         }

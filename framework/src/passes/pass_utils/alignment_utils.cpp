@@ -79,7 +79,6 @@ void AlignmentUtils::ProcessLastDim32BAlignedOnUB(LogicalTensorPtr tensor)
         size_t paddingValue = GetLastDimAlignBase(tensor); // 根据数据类型，判断需要pad到几个元素
 
         // 保存原始值
-        tensor->oriShape = tensor->shape;
         int64_t oriRawshapeValue = tensor->tensor->rawshape[lastIdx];
 
         // pad 32B

@@ -225,7 +225,7 @@ void Allocator::ProcessOutputForGlobalMemoryReuse(
         return;
     }
     auto& producerIn = producer->GetIOperands()[0];
-    if (producerIn->oriShape != out->shape || producerIn->oriShape != out->tensor->rawshape) {
+    if (producerIn->shape != out->shape || producerIn->shape != out->tensor->rawshape) {
         return;
     }
 
@@ -246,7 +246,7 @@ bool GetCopyInSize(LogicalTensorPtr& in, Operation* copyIn, uint64_t& size)
     // 计算内存大小
     const size_t bytesPerElement = BytesOf(in->tensor->datatype);
     size = bytesPerElement;
-    for (const auto shape : copyIn->GetOOperands()[0]->oriShape) {
+    for (const auto shape : copyIn->GetOOperands()[0]->GetRawTensor()->GetRawShape()) {
         size *= shape;
     }
 

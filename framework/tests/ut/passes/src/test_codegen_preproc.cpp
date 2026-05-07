@@ -118,11 +118,9 @@ TEST_F(CodegenPreprocTest, TestForceCombineAxis)
     auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     tensor2->tensor->rawshape = shape;
     auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor3->oriShape = shape;
     tensor3->tensor->rawshape = shape;
     auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto tensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor5->oriShape = shape;
     tensor5->tensor->rawshape = shape;
     auto tensor6 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     tensor6->tensor->rawshape = shape;
@@ -151,10 +149,8 @@ TEST_F(CodegenPreprocTest, TestForceCombineAxis)
     EXPECT_EQ(outputRes, true);
     std::vector<int64_t> combinedShape = {CP_NUM16, CP_NUM1, CP_NUM256};
     EXPECT_EQ(tensor3->shape, combinedShape);
-    EXPECT_EQ(tensor3->oriShape, combinedShape);
     EXPECT_EQ(tensor3->tensor->rawshape, combinedShape);
     EXPECT_EQ(tensor5->shape, combinedShape);
-    EXPECT_EQ(tensor5->oriShape, combinedShape);
     EXPECT_EQ(tensor5->tensor->rawshape, combinedShape);
 
     bool copyoutRes{false};

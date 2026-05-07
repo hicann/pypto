@@ -449,13 +449,13 @@ TEST_F(TestPadLocalBuffer, no_reduce_last_dim_all_vec_last_dim_unpadded)
         if (op.GetOpcode() == Opcode::OP_ADD) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expOriShape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == shape) {
-                    EXPECT_EQ(out->shape, expOriShape);
+                    EXPECT_EQ(out->shape, shape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
                 }
             }
@@ -545,17 +545,17 @@ TEST_F(TestPadLocalBuffer, no_reduce_last_dim_mm)
         if (op.GetOpcode() == Opcode::OP_A_MULACC_B) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == AShape) {
-                    EXPECT_EQ(in->shape, expOriShape);
+                    EXPECT_EQ(in->shape, AShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
                 }
                 if (in->oriShape == BShape) {
-                    EXPECT_EQ(in->shape, expOriShape);
+                    EXPECT_EQ(in->shape, BShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == CShape) {
-                    EXPECT_EQ(out->shape, expOriShape);
+                    EXPECT_EQ(out->shape, CShape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
                 }
             }
@@ -603,7 +603,7 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_padding)
         if (op.GetOpcode() == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expOriShape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
                 }
             }
@@ -658,13 +658,13 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_no_padding)
         if (op.GetOpcode() == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expInShape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == reduce_shape) {
-                    EXPECT_EQ(out->shape, expOriShape);
+                    EXPECT_EQ(out->shape, reduce_shape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
                 }
             }
@@ -721,7 +721,7 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_brc)
         if (op.GetOpcode() == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expInShape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
                 }
             }
@@ -735,7 +735,7 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_brc)
         if (op.GetOpcode() == Opcode::OP_EXPAND) {
             for (auto& out : op.oOperand) {
                 if (out->oriShape == expandShape) {
-                    EXPECT_EQ(out->shape, expectExpandShape);
+                    EXPECT_EQ(out->shape, expandShape);
                     EXPECT_EQ(out->tensor->rawshape, expectExpandShape);
                 }
             }
@@ -803,7 +803,7 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_elementwise)
         if (op.GetOpcode() == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expInShape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
                 }
             }
@@ -887,7 +887,7 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_reshape)
         if (op.GetOpcode() == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expInShape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
                 }
             }
@@ -900,9 +900,9 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_reshape)
         }
         if (op.GetOpcode() == Opcode::OP_COPY_IN) {
             for (auto& out : op.oOperand) {
-                if (out->oriShape == reshape_shape) {
-                    EXPECT_EQ(out->shape, expect_shape);
-                    EXPECT_EQ(out->tensor->rawshape, reduce_shape);
+                if (out->oriShape == reduce_shape) {
+                    EXPECT_EQ(out->shape, reduce_shape);
+                    EXPECT_EQ(out->tensor->rawshape, expect_shape);
                 }
             }
         }
@@ -956,13 +956,13 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_transpose)
         if (op.GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV) {
             for (auto& in : op.iOperand) {
                 if (in->oriShape == shape) {
-                    EXPECT_EQ(in->shape, expect_shape);
+                    EXPECT_EQ(in->shape, shape);
                     EXPECT_EQ(in->tensor->rawshape, expect_shape);
                 }
             }
             auto& out = op.oOperand[0];
             if (out->oriShape == trans_shape) {
-                EXPECT_EQ(out->shape, expect_trans_shape);
+                EXPECT_EQ(out->shape, trans_shape);
                 EXPECT_EQ(out->tensor->rawshape, expect_trans_shape);
             }
         }
@@ -1331,10 +1331,8 @@ TEST_F(TestPadLocalBuffer, L1toBt1)
     padLocalBufferTest.RunOnFunction(*currFunctionPtr);
     std::vector<int64_t> expectShape{1, 32};
     auto t2 = graph.GetTensor("t2");
-    EXPECT_EQ(t2->GetShape(), expectShape);
     EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
     auto t3 = graph.GetTensor("t3");
-    EXPECT_EQ(t3->GetShape(), expectShape);
     EXPECT_EQ(t3->tensor->GetRawShape(), expectShape);
 }
 
@@ -1521,14 +1519,10 @@ TEST_F(TestPadLocalBuffer, padTwoCmpsInputTo256)
     EXPECT_EQ(graphBuilder.GetTensor("t2")->GetRawTensor()->GetRawShape()[0], 10);
     EXPECT_EQ(graphBuilder.GetTensor("t3")->GetRawTensor()->GetRawShape()[0], 3);
     EXPECT_EQ(graphBuilder.GetTensor("t1")->GetShape()[0], 3);
-    EXPECT_EQ(graphBuilder.GetTensor("t2")->GetShape()[0], 10);
     EXPECT_EQ(graphBuilder.GetTensor("t3")->GetShape()[0], 3);
     EXPECT_EQ(graphBuilder.GetTensor("t1")->GetRawTensor()->GetRawShape()[1], 8);
     EXPECT_EQ(graphBuilder.GetTensor("t2")->GetRawTensor()->GetRawShape()[1], 8);
     EXPECT_EQ(graphBuilder.GetTensor("t3")->GetRawTensor()->GetRawShape()[1], 8);
-    EXPECT_EQ(graphBuilder.GetTensor("t1")->GetShape()[1], 8);
-    EXPECT_EQ(graphBuilder.GetTensor("t2")->GetShape()[1], 8);
-    EXPECT_EQ(graphBuilder.GetTensor("t3")->GetShape()[1], 8);
 }
 
 TEST_F(TestPadLocalBuffer, UB2L1)
@@ -1559,7 +1553,6 @@ TEST_F(TestPadLocalBuffer, UB2L1)
     padLocalBufferTest.RunOnFunction(*currFunctionPtr);
     std::vector<int64_t> expectShape{33, 32};
     auto t3a = graph.GetTensor("t3a");
-    EXPECT_EQ(t3a->GetShape(), expectShape);
     EXPECT_EQ(t3a->tensor->GetRawShape(), expectShape);
 }
 
@@ -1595,6 +1588,5 @@ TEST_F(TestPadLocalBuffer, UB2L1_WithAxisCombine)
     padLocalBufferTest.RunOnFunction(*currFunctionPtr);
     std::vector<int64_t> expectShape{33, 32};
     auto t2 = graph.GetTensor("t3a");
-    EXPECT_EQ(t2->GetShape(), expectShape);
     EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
 }

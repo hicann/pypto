@@ -45,7 +45,7 @@ public:
 
 private:
     Status RunOnFunction(Function& function) override;
-    void PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex, bool padRawShape);
+    void PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex);
     void PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum);
     void PadMatmul(Operation& op, LogicalTensorPtr& in);
     void PadVector(

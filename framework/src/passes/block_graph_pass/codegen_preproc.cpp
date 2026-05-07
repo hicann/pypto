@@ -155,7 +155,6 @@ Status CodegenPreproc::ProcessAxis(Operation& op, std::vector<bool> attr, bool i
         if (attr[i]) {
             size_t shapeSize = operands[i]->shape.size();
             CombineTailAxis(operands[i]->shape, shapeSize);
-            CombineTailAxis(operands[i]->oriShape, shapeSize);
             CombineTailAxis(operands[i]->tensor->rawshape, shapeSize);
             if (forceCombineAxis) {
                 CombineLastAxis(operands[i]->dynValidShape_, shapeSize);

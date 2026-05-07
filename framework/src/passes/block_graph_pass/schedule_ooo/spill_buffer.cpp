@@ -197,7 +197,7 @@ Status OoOScheduler::UpdateTensorAttr(
 {
     tensor->SetMemoryTypeToBe(memType);
     tensor->SetMemoryTypeOriginal(memType);
-    tensor->oriShape = spillTensor->oriShape;
+    tensor->shape = spillTensor->shape;
     tensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
     tensor->tensor->rawshape = spillTensor->tensor->rawshape;
     if (memType == MEM_DEVICE_DDR) {
@@ -581,7 +581,7 @@ LogicalTensorPtr OoOScheduler::CreateReshapeL1Tensor(LogicalTensorPtr iOperand, 
         std::make_shared<LogicalTensor>(function_, iOperand->Datatype(), iOperand->shape, iOperand->Format());
     newTensor->SetMemoryTypeToBe(iOperand->GetMemoryTypeToBe());
     newTensor->SetMemoryTypeOriginal(iOperand->GetMemoryTypeOriginal());
-    newTensor->oriShape = iOperand->shape;
+    newTensor->shape = iOperand->shape;
     newTensor->tensor = reshapeTensor->tensor;
     newTensor->memoryrange.memId = reshapeTensor->memoryrange.memId;
     newTensor->UpdateDynValidShape(iOperand->GetDynValidShape());
@@ -1248,7 +1248,7 @@ LogicalTensorPtr OoOScheduler::CreateAssemblePartTensor(
         std::make_shared<LogicalTensor>(function_, iOperand->Datatype(), iOperand->shape, iOperand->Format());
     localTensor->SetMemoryTypeToBe(assembleTensor->GetMemoryTypeToBe());
     localTensor->SetMemoryTypeOriginal(assembleTensor->GetMemoryTypeOriginal());
-    localTensor->oriShape = iOperand->shape;
+    localTensor->shape = iOperand->shape;
     localTensor->tensor = assembleTensor->tensor;
     localTensor->memoryrange.memId = assembleTensor->memoryrange.memId;
     localTensor->UpdateDynValidShape(iOperand->GetDynValidShape());

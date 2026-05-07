@@ -42,7 +42,7 @@ Status RemoveUnalignedReshape::RunOnFunction(Function& function)
         newCopyOut.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(
                 a.from, OpImmediate::Specified(a.toOffset),
-                OpImmediate::Specified(newCopyOut.iOperand.front()->oriShape),
+                OpImmediate::Specified(newCopyOut.iOperand.front()->shape),
                 OpImmediate::Specified(newCopyOut.oOperand.front()->tensor->GetDynRawShape())));
         auto producerOp = *(a.input->GetProducers().begin());
         newCopyOut.UpdateSubgraphID(producerOp->GetSubgraphID());
@@ -57,7 +57,7 @@ Status RemoveUnalignedReshape::RunOnFunction(Function& function)
         newCopyIn.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(
                 OpImmediate::Specified(b.fromOffset), b.to,
-                OpImmediate::Specified(newCopyIn.oOperand.front()->oriShape),
+                OpImmediate::Specified(newCopyIn.oOperand.front()->shape),
                 OpImmediate::Specified(newCopyIn.iOperand.front()->tensor->GetDynRawShape()),
                 OpImmediate::Specified(newCopyIn.iOperand.front()->GetDynValidShape())));
         auto consumerOp = *(b.output->GetConsumers().begin());
@@ -84,11 +84,11 @@ LogicalTensorPtr RemoveUnalignedReshape::InsertIOTensor(
     (void)op;
     if (rawIO.count(ioTensor->tensor->rawmagic) == 0) {
         auto reshapeRawTensor =
-            std::make_shared<RawTensor>(ioTensor->Datatype(), ioTensor->oriShape, ioTensor->Format());
+            std::make_shared<RawTensor>(ioTensor->Datatype(), ioTensor->shape, ioTensor->Format());
         rawIO.insert({ioTensor->tensor->rawmagic, reshapeRawTensor});
     }
     auto newReshapeIO = std::make_shared<LogicalTensor>(
-        function, rawIO[ioTensor->tensor->rawmagic], ioTensor->offset, ioTensor->oriShape);
+        function, rawIO[ioTensor->tensor->rawmagic], ioTensor->offset, ioTensor->shape);
     newReshapeIO->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     function.GetTensorMap().Insert(newReshapeIO);
     return newReshapeIO;
@@ -100,8 +100,7 @@ bool RemoveUnalignedReshape::CheckUnaligned(Operation& op)
     for (const auto& input : op.GetIOperands()) {
         if (input != nullptr && input->tensor != nullptr) {
             lastIdx = input->shape.size() - 1;
-            if (input->oriShape.size() == input->tensor->rawshape.size() &&
-                input->oriShape[lastIdx] != input->tensor->rawshape[lastIdx]) {
+            if (input->shape[lastIdx] != input->tensor->rawshape[lastIdx]) {
                 return true;
             }
         }
@@ -109,8 +108,7 @@ bool RemoveUnalignedReshape::CheckUnaligned(Operation& op)
     for (const auto& output : op.GetOOperands()) {
         if (output != nullptr && output->tensor != nullptr) {
             lastIdx = output->shape.size() - 1;
-            if (output->oriShape.size() == output->tensor->rawshape.size() &&
-                output->oriShape[lastIdx] != output->tensor->rawshape[lastIdx]) {
+            if (output->shape[lastIdx] != output->tensor->rawshape[lastIdx]) {
                 return true;
             }
         }
@@ -185,8 +183,8 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForUB(Function& functi
                 output->GetMagic(), op.GetOpMagic(), static_cast<long>(dim));
             break;
         } else if (!outDynValidShape[dim].IsImmediate()) {
-            auto tmpWorkSpaceIn = std::make_shared<LogicalTensor>(function, input->Datatype(), input->oriShape, input->Format());
-            auto tmpWorkSpaceOut = std::make_shared<LogicalTensor>(function, input->Datatype(), output->oriShape, output->Format());
+            auto tmpWorkSpaceIn = std::make_shared<LogicalTensor>(function, input->Datatype(), input->shape, input->Format());
+            auto tmpWorkSpaceOut = std::make_shared<LogicalTensor>(function, input->Datatype(), output->shape, output->Format());
 
             tmpWorkSpaceIn->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
             tmpWorkSpaceIn->UpdateDynValidShape(inDynValidShape);

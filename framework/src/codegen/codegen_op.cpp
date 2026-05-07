@@ -88,13 +88,13 @@ void CodeGenOp::UpdateShape(
     const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx, bool isInput, size_t ioIdx)
 {
     CODEGEN_LOGI(
-        "op code %s, operandIdx: %d, shape is %s, raw shape is %s, originShape is %s, dynamicValidShape is %s",
+        "op code %s, operandIdx: %d, shape is %s, raw shape is %s, dynamicValidShape is %s",
         oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(logicalTensor.shape).c_str(),
-        IntVecToStr(logicalTensor.tensor->rawshape).c_str(), IntVecToStr(logicalTensor.oriShape).c_str(),
+        IntVecToStr(logicalTensor.tensor->rawshape).c_str(),
         IntVecToStr(logicalTensor.GetDynValidShape()).c_str());
 
     rawShape[operandIdx] = logicalTensor.tensor->rawshape;
-    originShape[operandIdx] = logicalTensor.oriShape;
+    originShape[operandIdx] = logicalTensor.shape;
     if (isDynamicFunction) {
         dynamicValidShape[operandIdx] =
             isMainBlock ? SymbolicScalar::FromConcrete(logicalTensor.shape) : logicalTensor.GetDynValidShape();
