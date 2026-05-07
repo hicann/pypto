@@ -370,8 +370,10 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size
 void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
     const LogicalTensorPtr &src, const LogicalTensorPtr &scale,
     const LogicalTensorPtr &dst, int64_t axis) {
-    ASSERT(src->shape.size() == src->offset.size()) << "Source shape size and offset size should be equal";
-    ASSERT(dst->shape.size() == dst->offset.size()) << "Destination shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
+        << "Source shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
+        << "Destination shape size and offset size should be equal";
 
     TileInfo srcTileInfo(src->shape.size(), src->offset.size());
     TileInfo scaleTileInfo(scale->shape.size(), scale->offset.size());
@@ -434,8 +436,10 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, siz
 void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape,
     const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset,
     const LogicalTensorPtr &dst, int64_t axis) {
-    ASSERT(src->shape.size() == src->offset.size()) << "Source shape size and offset size should be equal";
-    ASSERT(dst->shape.size() == dst->offset.size()) << "Destination shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
+        << "Source shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
+        << "Destination shape size and offset size should be equal";
 
     TileInfo srcTileInfo(src->shape.size(), src->offset.size());
     TileInfo scaleTileInfo(scale->shape.size(), scale->offset.size());
@@ -482,13 +486,13 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     DECLARE_TRACER();
 
     // Validate input shapes
-    ASSERT(input.GetShape().size() >= SHAPE_DIM2 && input.GetShape().size() <= SHAPE_DIM5)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM2 && input.GetShape().size() <= SHAPE_DIM5)
         << "The shape.size() only support 2~5";
 
     // Validate data types
     std::vector<DataType> SUPPORT_INPUT_DATATYPES = {DataType::DT_FP32};
-    ASSERT(std::find(SUPPORT_INPUT_DATATYPES.begin(), SUPPORT_INPUT_DATATYPES.end(), input.GetDataType()) !=
-           SUPPORT_INPUT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, std::find(
+        SUPPORT_INPUT_DATATYPES.begin(), SUPPORT_INPUT_DATATYPES.end(), input.GetDataType()) != SUPPORT_INPUT_DATATYPES.end())
         << "The input datatype is not supported";
 
     // Normalize axis to negative indexing
@@ -497,7 +501,8 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     if (axis >= 0) {
         normalizedAxis = axis - ndim;
     }
-    ASSERT(normalizedAxis == -1 || normalizedAxis == -2) << "Only axis=-1 (per-row) and axis=-2 (per-column) are supported";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
+        << "Only axis=-1 (per-row) and axis=-2 (per-column) are supported";
 
     // Determine quantization type based on zeroPoints presence
     bool isAsymmetric = (zeroPoints.GetStorage() != nullptr);
@@ -526,7 +531,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
 
         if (isAsymmetric) {
             // Asymmetric quantization with axis=-1
-            ASSERT(dtype == DataType::DT_UINT8)
+            ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
                 << "Asymmetric quantization output type should be UINT8";
             quantizedResult = CALL(QuantizeAsymmetricOperation,
                 *Program::GetInstance().GetCurrentFunction(),
@@ -534,7 +539,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
                 zeroPoints.GetStorage(), normalizedAxis);
         } else {
             // Symmetric quantization with axis=-1
-            ASSERT(dtype == DataType::DT_INT8)
+            ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
                 << "Symmetric quantization output type should be INT8";
             quantizedResult = CALL(QuantizeSymmetricOperation,
                 *Program::GetInstance().GetCurrentFunction(),
@@ -557,13 +562,13 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     // axis=-1 case: direct quantization without transpose
     if (isAsymmetric) {
         // Asymmetric quantization: FP32 -> UINT8
-        ASSERT(dtype == DataType::DT_UINT8)
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
             << "Asymmetric quantization output type should be UINT8";
         RETURN_CALL(QuantizeAsymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
             input.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
     } else {
         // Symmetric quantization: FP32 -> INT8
-        ASSERT(dtype == DataType::DT_INT8)
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
             << "Symmetric quantization output type should be INT8";
         RETURN_CALL(QuantizeSymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
             input.GetStorage(), scale.GetStorage(), normalizedAxis);
@@ -676,16 +681,18 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
 
     // Validate input shapes: 2D to 5D tensors supported
     size_t inputRank = input.GetShape().size();
-    ASSERT(inputRank >= SHAPE_DIM2 && inputRank <= SHAPE_DIM5)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
+        inputRank >= SHAPE_DIM2 && inputRank <= SHAPE_DIM5)
         << "Dequantize input rank must be 2~5, but got rank=" << inputRank;
 
     // Validate input data type: INT8 or INT16
-    ASSERT(input.GetDataType() == DataType::DT_INT8 || input.GetDataType() == DataType::DT_INT16)
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        input.GetDataType() == DataType::DT_INT8 || input.GetDataType() == DataType::DT_INT16)
         << "Dequantize input dtype must be INT8 or INT16, but got dtype="
         << static_cast<int>(input.GetDataType());
 
     // Validate output type
-    ASSERT(otype == DataType::DT_FP32)
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, otype == DataType::DT_FP32)
         << "Dequantize output type must be FP32, but got dtype=" << static_cast<int>(otype);
 
     // Normalize axis to negative indexing and validate
@@ -694,7 +701,7 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     if (axis >= 0) {
         normalizedAxis = axis - ndim;
     }
-    ASSERT(normalizedAxis == -1 || normalizedAxis == -2)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
         << "Dequantize axis must be -1 (per-row) or -2 (per-column), but got axis="
         << axis << " (normalized=" << normalizedAxis << ")";
 

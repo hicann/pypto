@@ -70,7 +70,8 @@ Tensor QuantMM(const Tensor& operand1, const Tensor& operand2, const Tensor& deq
     } else if (operand1.GetShape().size() == NUM_VALUE_3) {
         res = BatchMatmul(DataType::DT_INT32, quantizedA, operand2);
     } else {
-        assert(operand1.GetShape().size() <= NUM_VALUE_3);
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetShape().size() <= NUM_VALUE_3)
+            << "QuantMM only supports 2D or 3D tensors.";
     }
     res = Cast(res, DataType::DT_FP32);
     res = Mul(res, dequantScaleA);

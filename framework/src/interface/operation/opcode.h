@@ -572,7 +572,8 @@ inline Opcode FindOpcode(const std::string& op)
     }
 
     if (!OpcodeManager::Inst().HasOpcode(originOp)) {
-        ASSERT(0) << "Can't find op " << originOp << "\n" << OpcodeManager::Inst().PrintSupportOpcodes();
+        ASSERT(OperationErr::OP_INVALID_OPCODE, 0)
+            << "Can't find op " << originOp << "\n" << OpcodeManager::Inst().PrintSupportOpcodes();
     }
 
     return OpcodeManager::Inst().GetOpcode(originOp);
