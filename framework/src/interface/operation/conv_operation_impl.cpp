@@ -714,8 +714,8 @@ void SetImg2ColAttr(
 }
 
 void SetCopyInAL1Op(
-    Operation& copyInOpAl1, const ConvTileInfo& convTileInfo, ConvIterInfo& iterInfo,
-    const ConvAttrParam& convAttrParam, const std::vector<int64_t>& dstAL1Shape,
+    Operation& copyInOpAl1, const ConvGraphNodes& tensorGraphNodes, const ConvTileInfo& convTileInfo,
+    ConvIterInfo& iterInfo, const ConvAttrParam& convAttrParam, const std::vector<int64_t>& dstAL1Shape,
     const std::vector<int64_t>& srcGmValidShape, const int64_t& srcCinOffset)
 {
     copyInOpAl1.SetAttribute(LoadStoreConvOpAttributeKey::isFmap, true);
@@ -736,7 +736,8 @@ void SetCopyInAL1Op(
     }
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(srcFmapGmOffset), MemoryType::MEM_L1, OpImmediate::Specified(srcGmValidShape),
-        OpImmediate::Specified(dstAL1Shape), OpImmediate::Specified(dstAL1Shape));
+        OpImmediate::Specified(tensorGraphNodes.fmapTensorPtr->tensor->GetDynRawShape()),
+        OpImmediate::Specified(dstAL1Shape));
     copyInOpAl1.SetOpAttribute(copyAttr);
     copyInOpAl1.SetAttribute("l1_tile_shape", SymbolicScalar::FromConcrete(dstAL1Shape));
     iterInfo.aL1UpadateFlag = false;
@@ -777,7 +778,9 @@ static void ConstructFmapL1Tile(
     auto& copyInOpAl1 =
         function.AddOperation(Opcode::OP_L1_COPY_IN_CONV, {tensorGraphNodes.fmapTensorPtr}, {dstAL1TensorPtr});
     copyInOpAl1.SetAttribute("isConv", true);
-    SetCopyInAL1Op(copyInOpAl1, convTileInfo, iterInfo, convAttrParam, dstAL1Shape, srcGmValidShape, srcCinOffset);
+    SetCopyInAL1Op(
+        copyInOpAl1, tensorGraphNodes, convTileInfo, iterInfo, convAttrParam, dstAL1Shape, srcGmValidShape,
+        srcCinOffset);
 }
 
 LogicalTensorPtr ConstructFmapTile(
@@ -813,8 +816,8 @@ LogicalTensorPtr ConstructFmapTile(
 }
 
 void SetCopyInBL1Op(
-    Operation& copyInOpBl1, const ConvTileInfo& convTileInfo, ConvIterInfo& iterInfo,
-    const ConvAttrParam& convAttrParam, const std::vector<int64_t>& dstBL1Shape,
+    Operation& copyInOpBl1, const ConvGraphNodes& tensorGraphNodes, const ConvTileInfo& convTileInfo,
+    ConvIterInfo& iterInfo, const ConvAttrParam& convAttrParam, const std::vector<int64_t>& dstBL1Shape,
     const std::vector<int64_t>& srcGmValidShape, const int64_t& srcCinOffset)
 {
     copyInOpBl1.SetAttribute(LoadStoreConvOpAttributeKey::isFmap, false);
@@ -837,7 +840,8 @@ void SetCopyInBL1Op(
     }
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(srcWeightGmOffset), MemoryType::MEM_L1, OpImmediate::Specified(srcGmValidShape),
-        OpImmediate::Specified(dstBL1Shape), OpImmediate::Specified(dstBL1Shape));
+        OpImmediate::Specified(tensorGraphNodes.weightTensorPtr->tensor->GetDynRawShape()),
+        OpImmediate::Specified(dstBL1Shape));
     copyInOpBl1.SetOpAttribute(copyAttr);
     copyInOpBl1.SetAttribute("l1_tile_shape", SymbolicScalar::FromConcrete(dstBL1Shape));
     iterInfo.bL1UpadateFlag = false;
@@ -875,7 +879,9 @@ static void ConstructWeightL1Tile(
     auto& copyInOpBl1 =
         function.AddOperation(Opcode::OP_L1_COPY_IN_CONV, {tensorGraphNodes.weightTensorPtr}, {dstBL1TensorPtr});
     copyInOpBl1.SetAttribute("isConv", true);
-    SetCopyInBL1Op(copyInOpBl1, convTileInfo, iterInfo, convAttrParam, dstBL1Shape, srcGmValidShape, srcCinOffset);
+    SetCopyInBL1Op(
+        copyInOpBl1, tensorGraphNodes, convTileInfo, iterInfo, convAttrParam, dstBL1Shape, srcGmValidShape,
+        srcCinOffset);
 }
 
 LogicalTensorPtr ConstructWeightTile(
@@ -1000,7 +1006,7 @@ void ConstrucCopyOutTile(
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_L1, OpImmediate::Specified(dstResGmOffset),
         OpImmediate::Specified({iterInfo.mL0Size, iterInfo.nL0Size}),
-        OpImmediate::Specified({iterInfo.mL0Size, iterInfo.nL0Size}),
+        OpImmediate::Specified(tensorGraphNodes.resTensorPtr->tensor->GetDynRawShape()),
         OpImmediate::Specified({iterInfo.mL0Size, iterInfo.nL0Size}));
     fixpipeOpRes.SetOpAttribute(copyAttr);
 }

@@ -114,7 +114,9 @@ void CodeGenOp::UpdateShape(
         // 1. for spilling GM scene 2. for conv
         shapeFromAttr[operandIdx] = attr->GetSpecifiedShape(1);
         dynamicRawShape[operandIdx] = OpImmediate::ToSpecified(attr->GetRawShape());
-        CODEGEN_LOGI("attrShape(from op CopyOpAttribute) = %s", IntVecToStr(shapeFromAttr[operandIdx]).c_str());
+        CODEGEN_LOGI(
+            "(from op CopyOpAttribute) attrShape = %s, dynamicRawShape = %s",
+            IntVecToStr(shapeFromAttr[operandIdx]).c_str(), IntVecToStr(dynamicRawShape[operandIdx]).c_str());
     } else { // Tile Shape from LogicalTensor (Only used in extremely special cases)
         shape[operandIdx] = logicalTensor.shape;
     }
