@@ -300,7 +300,7 @@ int DeviceRunner::InitDeviceArgs(DeviceArgs& args)
         aicpuNum_ = npu::tile_fwk::dynamic::DEVICE_MAX_AICPU_NUM;
     }
     int cpuNum = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum());
-    args.maxAicpuNum = cpuNum;
+    args.maxAicpuNum = static_cast<uint32_t>(cpuNum);
     aicpuNum_ = aicpuNum_ < cpuNum ? aicpuNum_ : cpuNum;
     auto it = addressMappingTable_.find(args.archInfo);
     if (it != addressMappingTable_.end()) {
@@ -845,4 +845,3 @@ DeviceRunner::~DeviceRunner()
     perfData_.clear();
 }
 } // namespace npu::tile_fwk
-

@@ -34,6 +34,7 @@
 
 namespace npu::tile_fwk {
 constexpr int FUNCTION_MAX_INCASTS = 10000;
+constexpr int FUNCTION_MAX_CV_CORES = 10000;
 
 inline const BiMap<FunctionType>& GetFunctionTypeNameDict()
 {
@@ -872,9 +873,11 @@ public:
     void SetHiddenFunction(bool hiddenFunction) { hiddenFunction_ = hiddenFunction; }
     bool IsHiddenFunction() const { return hiddenFunction_; }
 
-    const std::unordered_set<std::string>& LoopIdxNameList() { return loopIdxNameList_; }
-    bool InsertLoopIdxNameList(const std::string& idxName);
+    const std::unordered_set<std::string> &LoopIdxNameList() { return loopIdxNameList_; }
+    bool InsertLoopIdxNameList(const std::string &idxName);
 
+    void SetMaxCVCoreUsage(std::pair<uint32_t, uint32_t> maxCVCores) { maxCVCoreUsage_ = maxCVCores; }
+    std::pair<uint32_t, uint32_t> GetMaxCVCoreUsage() { return maxCVCoreUsage_; }
 private:
     int functionMagic_{-1};
     std::string funcMagicName_; // Function name
@@ -884,6 +887,7 @@ private:
     size_t totalAivSubGraphCount_ = 0;
     size_t totalSubGraphCount_ = 0;
     int64_t stackWorkespaceSize_ = 0;
+    std::pair<uint32_t, uint32_t> maxCVCoreUsage_{FUNCTION_MAX_CV_CORES, FUNCTION_MAX_CV_CORES};
     FunctionHash functionHash_{0};
     std::vector<std::string> calleeMagicNameList_;
     std::unordered_set<std::string> loopIdxNameList_;

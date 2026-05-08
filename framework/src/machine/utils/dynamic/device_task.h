@@ -146,6 +146,8 @@ struct DeviceTaskCtrl {
     bool SupportParallel() { return (reinterpret_cast<DynDeviceTask*>(devTask))->ParallelForId() != 0; }
     uint32_t ParallelWsId() { return (reinterpret_cast<DynDeviceTask*>(devTask))->ParallelWsId(); }
     bool ExistNextSameIterTask() { return existNextSameIterTask.load(std::memory_order_acquire); }
+    uint32_t GetMaxC() { return (reinterpret_cast<DynDeviceTask *>(devTask))->GetMaxC(); }
+    uint32_t GetMaxV() { return (reinterpret_cast<DynDeviceTask *>(devTask))->GetMaxV(); }
     DeviceTaskCtrl* NextSameIterTaskCtrl()
     {
         return reinterpret_cast<DeviceTaskCtrl*>(nextSameIterTaskCtrl.load(std::memory_order_acquire));

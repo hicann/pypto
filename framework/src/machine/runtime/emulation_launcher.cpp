@@ -47,6 +47,7 @@ static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
         DeviceKernelArgs localArgs = kArgs;
         localArgs.parameter.runMode = runMode;
+        localArgs.parameter.ctrlBlockNum = devProg->ctrlBlockDim;
         aicpuResultList[threadIndex] = DynTileFwkBackendKernelServer(&localArgs);
     };
 
@@ -141,6 +142,43 @@ DevControlFlowCache* EmulationLauncher::CreateHostCtrlFlowCache(
     return hostCtrlFlowCache;
 }
 
+static void TryResetBlockDimForPreLaunch(DevControlFlowCache* ctrlFlowCache, DevAscendProgram *devProg, const DeviceLauncherConfig& config)
+{
+    devProg->ctrlBlockDim = static_cast<uint32_t>(config.blockdim);
+    if (ctrlFlowCache == nullptr || ctrlFlowCache->deviceTaskCount > 1) {
+        return; // close host control core when deviceTaskCount > 1
+    }
+
+    auto devStartArgs = (DevStartArgs*)devProg->GetRuntimeDataList()->GetRuntimeDataPending();
+    if (!ctrlFlowCache->IsActivatedFullCache(devStartArgs) || ctrlFlowCache->isRecordingStopped) {
+        return;
+    }
+    // 获取实际运行时的 maxC/maxV（从缓存的 DynDeviceTask 中）
+    uint32_t actualMaxC = 0;
+    uint32_t actualMaxV = 0;
+    for (size_t i = 0; i < ctrlFlowCache->deviceTaskCount; i++) {
+        DynDeviceTaskBase* dynTaskBase = ctrlFlowCache->deviceTaskCacheList[i].dynTaskBase;
+        if (dynTaskBase == nullptr) {
+            continue;
+        }
+        uint32_t taskMaxC = dynTaskBase->GetMaxC();
+        uint32_t taskMaxV = dynTaskBase->GetMaxV();
+        if (taskMaxC > actualMaxC) {
+            actualMaxC = taskMaxC;
+        }
+        if (taskMaxV > actualMaxV) {
+            actualMaxV = taskMaxV;
+        }
+    }
+
+    actualMaxV = (actualMaxV & 1) ? actualMaxV + 1 : actualMaxV;
+    uint32_t ctualMaxCore = std::max(actualMaxC, actualMaxV / dynamic::AIV_NUM_PER_AI_CORE);
+    if ((actualMaxC != 0 && actualMaxV !=0) && ctualMaxCore <= static_cast<uint32_t>(config.blockdim)) {
+        devProg->ctrlBlockDim = ctualMaxCore;
+        MACHINE_LOGI("control aicore before launch, nrValidAic changed to %u\n", devProg->devArgs.nrValidAic);
+    }
+}
+
 int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     Function* function, const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList,
     CachedOperator* cachedOperator, DevControlFlowCache** outCtrlFlowCache, EmulationMemoryUtils& memUtils,
@@ -163,6 +201,8 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     int rc = EmulationBuildControlFlowCache(kArgs);
 
     hostCtrlFlowCache->isRecording = false;
+    hostCtrlFlowCache->isActivated = true;
+    TryResetBlockDimForPreLaunch(hostCtrlFlowCache, devProg, config);
     hostCtrlFlowCache->CalcUsedCacheSize();
     uint64_t contextWorkspaceAddr = hostCtrlFlowCache->contextWorkspaceAddr;
     hostCtrlFlowCache->IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
@@ -172,7 +212,6 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     hostCtrlFlowCache->TaskAddrRelocProgramAndCtrlCache(
         reinterpret_cast<uint64_t>(devProg), reinterpret_cast<uint64_t>(hostCtrlFlowCache), 0, 0);
     hostCtrlFlowCache->RelocMetaCache(reinterpret_cast<uint64_t>(hostCtrlFlowCache), 0);
-    hostCtrlFlowCache->isActivated = true;
     devProg->ctrlFlowCacheAnchor = nullptr;
     devProg->ctrlFlowCacheSize = hostCtrlFlowCache->usedCacheSize;
     devProg->ResetFromLaunch();

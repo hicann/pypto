@@ -124,6 +124,8 @@ struct DeviceExecuteContext {
 
     static void DumpDeviceTask(uint64_t taskId, DynDeviceTask* deviceTask);
 
+    void CalcControlMaxAicore();
+
     int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false, bool isParallelIterLast = false);
 
     void ProcessControlFlowCacheRecord(DynDeviceTask* dynTask);
@@ -159,5 +161,8 @@ private:
 
     static void* DeviceExecuteRuntimeCallSetLoopDieId(void* ctx_, uint64_t rootKey);
     int errorState_{DEVICE_MACHINE_OK};
+
+    uint32_t currentMaxC_{0};
+    uint32_t currentMaxV_{0};
 };
 } // namespace npu::tile_fwk::dynamic

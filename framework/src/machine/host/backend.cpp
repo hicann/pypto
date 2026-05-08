@@ -1127,6 +1127,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
         funcBin->getInputDataCount = 0;
         funcBin->getTensorDataCount = 0;
         EncodeDevAscendFunction(function, encodeDevAscendFunctionParam, size, funcBin);
+        auto maxCVCoreUsage = devRoot->GetMaxCVCoreUsage();
+        funcBin->SetMaxCV(maxCVCoreUsage.first, maxCVCoreUsage.second);
         funcBin->Reloc(-reinterpret_cast<int64_t>(funcBin), true);
         uint32_t CallOpmaxSize = MAX_STITCH_LEAFFUNC_NUM;
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, CallOpmaxSize <= STITCH_FUNCTION_MAX_SIZE)

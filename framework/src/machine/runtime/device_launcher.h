@@ -165,6 +165,16 @@ public:
         }
     }
 
+    static void PrepareDevProgArgsCpuInfo(DevAscendProgram* devProg, DeviceLauncherConfig& config)
+    {
+        uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
+        devProg->devArgs.maxAicpuNum = aiCpuNum;
+        devProg->devArgs.nrValidAic = config.blockdim;
+        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
+        config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo);
+        devProg->devArgs.nrAicpu = config.aicpuNum;
+    }
+
     // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
     static void PrepareDevProgArgs(
         DevAscendProgram* devProg, DeviceLauncherConfig& config, [[maybe_unused]] bool isDevice)
@@ -172,17 +182,10 @@ public:
         devProg->devArgs.taskId = 0;
         devProg->devArgs.nrAic = kDefaultAicNum;
         devProg->devArgs.nrAiv = kDefaultAivNum;
-        devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
         bool enableVFFusion = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
         devProg->devArgs.enableVFFusion = (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1 || enableVFFusion);
-
-        uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
-        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
-        devProg->devArgs.maxAicpuNum = static_cast<int>(aiCpuNum);
-        config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo);
-        devProg->devArgs.nrAicpu = config.aicpuNum;
 
         if (IsPtoDataDumpEnabled()) { // dump tensor
             devProg->devArgs.hostPid = GetProcessId();
@@ -290,6 +293,7 @@ public:
     {
         auto& mutableConfig = const_cast<DeviceLauncherConfig&>(config);
         auto* devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
+        PrepareDevProgArgsCpuInfo(devProg, mutableConfig);
         PrepareDevProgArgs(devProg, mutableConfig, devMem.IsDevice());
         // Fill all metadata and kernel args
         bool isCtrlCacheRecording = false;
@@ -425,7 +429,7 @@ public:
     static int DeviceLaunchOnceWithDeviceTensorData(
         Function* function, const std::vector<DeviceTensorData>& inputList,
         const std::vector<DeviceTensorData>& outputList, RtStream aicpuStream, RtStream ctrlStream,
-        RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator, 
+        RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator,
         DevControlFlowCache* ctrlCache = nullptr, const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
     static int DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStream);
@@ -444,7 +448,8 @@ public:
         RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function);
     static int LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode);
     static int LaunchAicoreKernel(
-        AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg, bool debugEnable);
+        AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg,
+        bool debugEnable, [[maybe_unused]] Function* function);
     static int DeviceRunOnce(
         Function* function, DevControlFlowCache* hostCtrlCache = nullptr,
         const DeviceLauncherConfig& config = DeviceLauncherConfig());

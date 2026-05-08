@@ -219,11 +219,11 @@ std::string DeviceRunOnceDataFromHost(
     EmulationLauncher::BuildControlFlowCache(func, memUtils, inputs, outputs, &hostCache, config);
 
     if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE) == 1 &&
-        EmulationLauncher::EmulationRunOnce(func, hostCache) != 0) {
+        EmulationLauncher::EmulationRunOnce(func, hostCache, config) != 0) {
         return "emulation run failed";
     }
 
-    if (DeviceRunOnce(func, reinterpret_cast<uint8_t*>(hostCache)) != 0) {
+    if (DeviceRunOnce(func, reinterpret_cast<uint8_t*>(hostCache), config) != 0) {
         return "device run failed";
     }
 
@@ -770,11 +770,11 @@ public:
 
         kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
         ret = DeviceLauncher::LaunchAicoreKernel(
-            aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable);
+            aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable, kernel->GetFunction());
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
     }
 
-    DevControlFlowCache* GetHostCtrlFlowCache(KernelBinary* kernel, 
+    DevControlFlowCache* GetHostCtrlFlowCache(KernelBinary* kernel,
         std::vector<DeviceTensorData>& tensors, uint8_t* devCache, std::vector<uint8_t>& hostCache)
     {
         DevControlFlowCache* ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);

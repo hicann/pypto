@@ -118,8 +118,9 @@ struct DeviceKernelArgsParameter {
     uint32_t runMode{RUN_INVALID};
     uint32_t p1;
     uint64_t globalRound{0};
+    uint64_t ctrlBlockNum{0};
 };
-static_assert(sizeof(DeviceKernelArgsParameter) == sizeof(uint64_t) * 0x2, "Invalid parameter size");
+static_assert(sizeof(DeviceKernelArgsParameter) == sizeof(uint64_t) * 0x3, "Invalid parameter size");
 
 struct DeviceRuntimeOffset {
     uint64_t startArgsOffset{0};
@@ -159,7 +160,7 @@ struct DeviceArgs {
     uint64_t aicpuPerfAddr{0};             // aicpuPer Gm addr
     uint64_t devDfxArgAddr{0};             // devDfx
     uint64_t GetBlockNum() { return nrValidAic * (nrAiv / nrAic + 1); }
-    int maxAicpuNum{0};
+    uint32_t maxAicpuNum{0};
     bool enableVFFusion = false;
     bool enableEslModel = false;
     ArchInfo archInfo{ArchInfo::DAV_2201};

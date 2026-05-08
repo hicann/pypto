@@ -448,6 +448,15 @@ struct DynMachineManager {
         return ret;
     }
 
+    void ReCalcDevArgsAicoreNum(DeviceKernelArgs* kargs, DevAscendProgram* devProg)
+    {
+        if (kargs->parameter.ctrlBlockNum != 0 &&
+            static_cast<uint32_t>(kargs->parameter.ctrlBlockNum) < devProg->devArgs.nrValidAic) {
+            devProg->devArgs.nrValidAic = kargs->parameter.ctrlBlockNum;
+            DEV_INFO("control aicore before launch, nrValidAic changed to %lu", kargs->parameter.ctrlBlockNum);
+        }
+    }
+
     int EntrySplittedStreamSche(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
         DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
@@ -457,18 +466,16 @@ struct DynMachineManager {
             DeviceTrace::GetInstance().ReportTraceMsg();
             return scheWaitRet;
         }
-        // After wait, the devStartArgs should be ready.
-        auto beginTime = GetCycles();
+        auto beginTime = GetCycles();   // After wait, the devStartArgs should be ready.
         DevStartArgs* runtimeDataCurrent =
             reinterpret_cast<DevStartArgs*>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
+        ReCalcDevArgsAicoreNum(kargs, devProg);
         auto devArgs = devProg->devArgs;
         int threadIdx = -1;
         RunSchInit(&devArgs);
         DEV_ATRACE("Start to Alloc Schedule Thread");
-        if (AllocThreadIdx(&devArgs, threadIdx, runtimeDataCurrent->devScheState.threadIdx) !=
-            npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-                DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED,
-                    "#sche.thread.init: Current cpu[%d] alloc thread failed.", sched_getcpu());
+        if (AllocThreadIdx(&devArgs, threadIdx, runtimeDataCurrent->devScheState.threadIdx) != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
+                DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.", sched_getcpu());
             DEV_ATRACE("Schedule Current cpu[%d] alloc thread failed", sched_getcpu());
             DeviceTrace::GetInstance().ReportTraceMsg();
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;

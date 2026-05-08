@@ -24,6 +24,12 @@
 #include "codegen_preproc.h"
 #include "passes/pass_log/pass_log.h"
 
+#include <vector>
+#include <set>
+#include <queue>
+#include <algorithm>
+#include <unordered_map>
+
 #define MODULE_NAME "CodegenPreproc"
 
 namespace npu {
@@ -383,8 +389,140 @@ void CodegenPreproc::SetNeedAllocAttr(Function& function)
     APASS_LOG_DEBUG_F(Elements::Operation, "%s", DumpOpList(function).c_str());
 }
 
-Status CodegenPreproc::RunOnFunction(Function& function)
+static void GetEventsInfo(
+    int subgraphNum,
+    const std::vector<std::set<int>>& subgraphOutGraph,
+    const std::vector<int>& subgraphLatency,
+    std::vector<std::tuple<int, bool, int>> &events)
 {
+    std::vector<int> inDegree(subgraphNum, 0);
+    for (int i = 0; i < subgraphNum; ++i) {
+        for (int consumer : subgraphOutGraph[i]) {
+            if (consumer >= 0 && consumer < subgraphNum) {
+                inDegree[consumer]++;
+            }
+        }
+    }
+
+    std::vector<int> earliestStart(subgraphNum, 0);
+    std::queue<int> q;
+
+    for (int i = 0; i < subgraphNum; ++i) {
+        if (inDegree[i] == 0) {
+            q.push(i);
+            earliestStart[i] = 0;
+        }
+    }
+
+    while (!q.empty()) {
+        int node = q.front();
+        q.pop();
+
+        if (node < 0 || node >= subgraphNum) {
+            continue;
+        }
+
+        int endTime = earliestStart[node] + subgraphLatency[node];
+
+        for (int consumer : subgraphOutGraph[node]) {
+            if (consumer >= 0 && consumer < subgraphNum) {
+                earliestStart[consumer] = std::max(earliestStart[consumer], endTime);
+                inDegree[consumer]--;
+                if (inDegree[consumer] == 0) {
+                    q.push(consumer);
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < subgraphNum; ++i) {
+        int startTime = earliestStart[i];
+        int endTime = startTime + subgraphLatency[i];
+        events.push_back({startTime, true, i});
+        events.push_back({endTime, false, i});
+    }
+}
+
+inline std::pair<int, int> EstimateRequiredCores(
+    int subgraphNum,
+    const std::vector<bool>& isCubeGraph,
+    const std::vector<std::set<int>>& subgraphOutGraph,
+    const std::vector<int>& subgraphLatency)
+{
+    if (subgraphNum == 0) {
+        return {0, 0};
+    }
+
+    std::vector<std::tuple<int, bool, int>> events;
+    GetEventsInfo(subgraphNum, subgraphOutGraph, subgraphLatency, events);
+
+    auto cmp = [](const auto& a, const auto& b) {
+        if (std::get<0>(a) != std::get<0>(b)) return std::get<0>(a) < std::get<0>(b);
+        return std::get<1>(a) < std::get<1>(b);
+    };
+    std::sort(events.begin(), events.end(), cmp);
+
+    int maxCCores = 0;
+    int maxVCores = 0;
+    int currentCCores = 0;
+    int currentVCores = 0;
+
+    for (const auto& event : events) {
+        bool isStart = std::get<1>(event);
+        int nodeId = std::get<2>(event);
+
+        if (isStart) {
+            if (isCubeGraph[nodeId]) {
+                currentCCores++;
+                maxCCores = std::max(maxCCores, currentCCores);
+            } else {
+                currentVCores++;
+                maxVCores = std::max(maxVCores, currentVCores);
+            }
+        } else {
+            if (isCubeGraph[nodeId]) {
+                currentCCores--;
+            } else {
+                currentVCores--;
+            }
+        }
+    }
+
+    return {maxCCores, maxVCores};
+}
+
+inline void EstimateCVCores(Function &function)
+{
+    int subgraphNum = function.GetTotalSubGraphCount();
+    std::vector<bool> isCubeGraph(subgraphNum, false);
+    std::vector<std::set<int>> subgraphOutGraph(subgraphNum);
+    std::vector<int> subgraphLatency(subgraphNum, 0);
+    for (auto &op : function.Operations()) {
+        int subgraphID = op.GetSubgraphID();
+        if (op.HasAttribute(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube)) {
+            isCubeGraph[subgraphID] = true;
+        }
+        subgraphLatency[subgraphID] += op.GetLatency();
+        for (auto nextOp : op.ConsumerOps()) {
+            if (nextOp->GetSubgraphID() != subgraphID) {
+                subgraphOutGraph[subgraphID].insert(nextOp->GetSubgraphID());
+            }
+        }
+    }
+    auto maxCVCores = EstimateRequiredCores(subgraphNum, isCubeGraph, subgraphOutGraph, subgraphLatency);
+    function.SetMaxCVCoreUsage(maxCVCores);
+
+    if (function.GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH) {
+        Function *rootFuntion = function.GetRootFunction();
+        if (rootFuntion != nullptr) {
+            rootFuntion->SetMaxCVCoreUsage(maxCVCores);
+        }
+    }
+}
+
+Status CodegenPreproc::RunOnFunction(Function &function)
+{
+    EstimateCVCores(function);
     combineAxis = function.paramConfigs_.combineAxis;
     forceCombineAxis = function.paramConfigs_.forceCombineAxis;
     APASS_LOG_INFO_F(

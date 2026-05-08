@@ -285,6 +285,41 @@ void DeviceExecuteContext::ProcessControlFlowCacheRecord(DynDeviceTask* dynTask)
     }
 }
 
+void DeviceExecuteContext::CalcControlMaxAicore()
+{
+    // 在 Submit 时遍历 stitchContext 累加所有真正执行的 devRoot 的 maxCV
+    currentMaxC_ = 0;
+    currentMaxV_ = 0;
+    const auto& stitchedList = stitchContext.GetStitchedList();
+    for (size_t i = 0; i < stitchedList.size(); i++) {
+        const DevAscendFunction* sourceFunc = stitchedList[i].GetSource();
+        if (sourceFunc != nullptr) {
+            currentMaxC_ += sourceFunc->GetMaxC();
+            currentMaxV_ += sourceFunc->GetMaxV();
+        }
+    }
+
+    if (currentMaxC_ == 0 && currentMaxV_ == 0) {
+        currentMaxC_ = devProg->devArgs.nrValidAic;
+        currentMaxV_ = currentMaxC_ * AIV_NUM_PER_AI_CORE;
+        return;
+    }
+
+    uint32_t oriAivNum = devProg->devArgs.nrValidAic * AIV_NUM_PER_AI_CORE;
+    currentMaxC_ = currentMaxC_ >= devProg->devArgs.nrValidAic ? devProg->devArgs.nrValidAic : currentMaxC_;
+    currentMaxV_ = currentMaxV_ >= oriAivNum ? oriAivNum : currentMaxV_;
+    if (devProg->devArgs.archInfo == ArchInfo::DAV_3510) {
+        if (currentMaxC_ * AIV_NUM_PER_AI_CORE >= currentMaxV_) {
+            currentMaxV_ = currentMaxC_ * AIV_NUM_PER_AI_CORE;
+        } else {
+            currentMaxV_ = (currentMaxV_ & 1) ? currentMaxV_ + 1 : currentMaxV_;
+            currentMaxC_ = currentMaxV_ / AIV_NUM_PER_AI_CORE;
+        }
+    }
+    DEV_INFO("[CalcControlMaxAicore] stitchedSize=%u, maxC=%u, maxV=%u",
+ 	    static_cast<uint32_t>(stitchedList.size()), currentMaxC_, currentMaxV_);
+}
+
 int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask, bool isParallelIterLastTask)
 {
     int ret = DEVICE_MACHINE_OK;
@@ -322,12 +357,14 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
     workspace.MarkAsNewStitchWindow();
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_FULL
 
+    CalcControlMaxAicore();
     PROF_STAGE_BEGIN(PERF_EVT_STAGE_BUILD_TASK, "BuildDeviceTaskData.before\n");
     DynDeviceTask* dynTask = taskContext.BuildDeviceTaskData(stitchContext, taskId, devProg, withoutTail);
     if (dynTask == nullptr) {
         DEV_ERROR(DevCommonErr::NULLPTR, "#ctrl.buildtask.leave: Build device task data failed.");
         return DEVICE_MACHINE_ERROR;
     }
+    dynTask->SetMaxCV(currentMaxC_, currentMaxV_);
 
     if (parallelCtx.isInParallelForScope) {
         dynTask->SetParallelInfo(parallelCtx.info);
@@ -358,6 +395,9 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
     DEV_ATRACE("Ctrl Cpu push devTask: %lu to Sche Cpu", taskId);
     PushTask(dynTask);
     PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
+
+    currentMaxC_ = 0;
+    currentMaxV_ = 0;
     return ret;
 }
 
