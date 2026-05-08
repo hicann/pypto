@@ -29,6 +29,7 @@ TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tmpStride)
     pto::TASSIGN(tmpSrcTile, (uint64_t)(src.GetAddr() + tmpStride));
     pto::TMOV(tmpDstTile, tmpSrcTile);
 
+#pragma clang loop unroll(disable)
     for (LoopVar i = 1; i < tileH;) {
 #ifdef __DAV_V220
         pipe_barrier(PIPE_V);
