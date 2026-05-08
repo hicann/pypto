@@ -35,6 +35,18 @@ std::vector<int64_t> NormalizeShape(const std::vector<int64_t>& shapeVec, unsign
     return normalizedVec;
 }
 
+std::vector<int> NormalizeExpandAxes(
+    const std::vector<int64_t>& expandAxes, unsigned originalDimSize, unsigned targetDimSize)
+{
+    std::vector<int> normalizedAxesList;
+    for (auto axis : expandAxes) {
+        bool isValidAxis = ((axis >= 0) && (axis <= (originalDimSize - 1)));
+        ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported expand axis: " << axis;
+        normalizedAxesList.push_back(static_cast<int>(axis) + targetDimSize - originalDimSize);
+    }
+    return normalizedAxesList;
+}
+
 std::string FormatFloat(const std::variant<int64_t, uint64_t, double>& v, DataType dtype, int precision)
 {
     // 定义处理函数

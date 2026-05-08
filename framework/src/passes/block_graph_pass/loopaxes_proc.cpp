@@ -73,23 +73,6 @@ bool NeedClearStatus(const Operation& op)
         return true;
     }
 
-    //  Opcode::OP_EXPAND only support last axis or second last axis in for-loop
-    if (opCode == Opcode::OP_EXPAND) {
-        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, op.HasAttr(OpAttributeKey::expandDims)) << "expandDims attribute not found";
-        auto expandAxes = op.GetVectorIntAttribute(OpAttributeKey::expandDims);
-        int shapeSize = static_cast<int>(op.GetOOperands().front()->GetDynValidShape().size());
-
-        for (auto expandAxis : expandAxes) {
-            expandAxis += SHAPE_DIM4 - shapeSize;
-            if (expandAxis == 0 || expandAxis == 1) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "%d %s expand axis 0/1", op.GetOpMagic(), op.GetOpcodeStr().c_str());
-                return true;
-            }
-        }
-        return false;
-    }
-
     return false;
 }
 

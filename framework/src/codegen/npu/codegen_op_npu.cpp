@@ -766,7 +766,7 @@ void CodeGenOpNPU::UpdateLoopInfo()
             tileTensorShape.rawShape};
         std::string usingType = sm->AddTileTensorUsing(tileTensorUsing);
         TileTensor tileTensor = BuildTileTensor(i, usingType, tileTensorShape);
-        forBlkMgr_->AddTensorInLoopBody(tensorNames_[i], tileTensor, originalOp.GetOpMagic(), opCode);
+        forBlkMgr_->AddTensorInLoopBody(tensorNames_[i], tileTensor, originalOp, opCode);
     }
 }
 

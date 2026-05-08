@@ -15,6 +15,7 @@
 
 #include "codegen_for_block.h"
 
+#include "interface/operation/operation.h"
 #include "interface/tensor/symbolic_scalar.h"
 #include "codegen/utils/codegen_utils.h"
 
@@ -135,6 +136,23 @@ void ForBlockManager::PrintTileOps(std::ostringstream& os) const
     }
 }
 
+bool NeedUpdateOffsetInLoop(Opcode opCode, int tensorMagic, const Operation& oper)
+{
+    bool res = SUPPORT_BRC_INLINE.find(opCode) != SUPPORT_BRC_INLINE.end() || opCode == Opcode::OP_EXPAND;
+    if (!res) {
+        return false;
+    }
+
+    if (opCode == Opcode::OP_EXPAND) {
+        const auto& tensors = oper.GetIOperands();
+        bool isInput = std::any_of(
+            tensors.begin(), tensors.end(), [&](const auto& tensor) { return tensor->GetMagic() == tensorMagic; });
+        return res && isInput;
+    }
+
+    return res;
+}
+
 /*
 Different tensors use different offsets, generate code like:
 for idx0 in axis0 {
@@ -152,25 +170,14 @@ for idx0 in axis0 {
 }
  */
 void ForBlockManager::UpdateTensorOffsetInLoop(
-    Opcode opCode, int tensorMagic, int opMagic, const std::string& tensorNameInLoop)
+    Opcode opCode, int tensorMagic, const Operation& oper, const std::string& tensorNameInLoop)
 {
-    if (SUPPORT_BRC_INLINE.find(opCode) == SUPPORT_BRC_INLINE.end()) {
+    if (!NeedUpdateOffsetInLoop(opCode, tensorMagic, oper)) {
         tensorOffset_[tensorNameInLoop] = DEFAULT_TENSOR_OFFSET;
         return;
     }
 
-    auto tileTensor = sm_->QueryTileTensorByMagic(tensorMagic, opMagic);
-    ASSERT(GenCodeErr::TENSOR_NOT_FOUND, tileTensor != nullptr)
-        << "QueryTileTensorByMagic tensor magic is " << tensorMagic << ", op magic is " << opMagic;
-
-    auto rawShape = tileTensor->rawShape;
-    FillVecWithDummyInHead<int64_t>(rawShape, SHAPE_DIM5 - rawShape.size(), 1);
-    auto newOffset = defaultOffset_;
-    for (size_t i = 0; i < MAX_LOOP_DEPTH; ++i) {
-        if (rawShape[i] == 1) {
-            newOffset[i] = "0";
-        }
-    }
+    auto newOffset = BuildOffsetInLoop(tensorMagic, oper);
 
     std::string offsetName;
     auto iter = allOffsetsInLoop_.find(newOffset);
@@ -184,15 +191,59 @@ void ForBlockManager::UpdateTensorOffsetInLoop(
     tensorOffset_[tensorNameInLoop] = offsetName;
 }
 
-void ForBlockManager::AddTensorInLoopBody(
-    const std::string& tensorFullDim, const TileTensor& tileTensor, int opMagic, Opcode opCode)
+bool IsExpandOrBrcAxes(const std::vector<int64_t>& rawShape, const std::vector<int>& axes, int axis)
 {
+    return rawShape[axis] == 1 || std::find(axes.begin(), axes.end(), axis) != axes.end();
+}
+
+std::vector<int> GetNormalizedExpandAxes(unsigned originalDimSize, const Operation& oper)
+{
+    std::vector<int> normalizedExpandAxes;
+    if (oper.GetOpcode() == Opcode::OP_EXPAND) {
+        auto axes = oper.GetVectorIntAttribute(OpAttributeKey::expandDims);
+        CODEGEN_LOGI("expandDims is : %s", IntVecToStr(axes).c_str());
+        normalizedExpandAxes = NormalizeExpandAxes(axes, originalDimSize, SHAPE_DIM5);
+    }
+    return normalizedExpandAxes;
+}
+
+OffsetInLoop ForBlockManager::BuildOffsetInLoop(int tensorMagic, const Operation& oper)
+{
+    int opMagic = oper.GetOpMagic();
+    auto tileTensor = sm_->QueryTileTensorByMagic(tensorMagic, opMagic);
+    ASSERT(GenCodeErr::TENSOR_NOT_FOUND, tileTensor != nullptr)
+        << "QueryTileTensorByMagic tensor magic is " << tensorMagic << ", op magic is " << opMagic;
+
+    auto rawShape = tileTensor->rawShape;
+    FillVecWithDummyInHead<int64_t>(rawShape, SHAPE_DIM5 - rawShape.size(), 1);
+
+    // GetNormalizedExpandAxes need originalDimSize to normalize axes
+    std::vector<int> normalizedExpandAxes = GetNormalizedExpandAxes(tileTensor->rawShape.size(), oper);
+
+    CODEGEN_LOGI(
+        "rawShape is : %s, normalizedExpandAxes is : %s", IntVecToStr(rawShape).c_str(),
+        IntVecToStr(normalizedExpandAxes).c_str());
+
+    auto newOffset = defaultOffset_;
+    for (size_t i = 0; i < MAX_LOOP_DEPTH; ++i) {
+        if (IsExpandOrBrcAxes(rawShape, normalizedExpandAxes, i)) {
+            newOffset[i] = "0";
+        }
+    }
+
+    return newOffset;
+}
+
+void ForBlockManager::AddTensorInLoopBody(
+    const std::string& tensorFullDim, const TileTensor& tileTensor, const Operation& oper, Opcode opCode)
+{
+    int opMagic = oper.GetOpMagic();
     CODEGEN_LOGI(
         "AddTensorInLoopBody : tensorFullDim: %s, loop tensor: %s,op magic: %d, op code: %s", tensorFullDim.c_str(),
         tileTensor.tensorName.c_str(), opMagic, OpcodeManager::Inst().GetOpcodeStr(opCode).c_str());
     std::string tensorNameInLoop = sm_->AddTileTensor(opMagic, tileTensor);
     sm_->InsertTensorNameInLoopToFullDim(tensorNameInLoop, tensorFullDim);
-    UpdateTensorOffsetInLoop(opCode, tileTensor.magic, opMagic, tensorNameInLoop);
+    UpdateTensorOffsetInLoop(opCode, tileTensor.magic, oper, tensorNameInLoop);
 }
 
 } // namespace npu::tile_fwk

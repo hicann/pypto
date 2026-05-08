@@ -106,6 +106,10 @@ std::string WrapParamByAngleBrackets(const std::vector<T>& params)
 }
 
 std::vector<int64_t> NormalizeShape(const std::vector<int64_t>& shapeVec, unsigned dim);
+
+std::vector<int> NormalizeExpandAxes(
+    const std::vector<int64_t>& expandAxes, unsigned originalDimSize, unsigned targetDimSize);
+
 std::string FormatFloat(
     const std::variant<int64_t, uint64_t, double>& v, DataType dtype = DataType::DT_FP32, int precision = 9);
 

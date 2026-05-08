@@ -390,18 +390,13 @@ std::string CodeGenOpNPU::PrintExpand(
     ASSERT(OperErr::ATTRIBUTE_INVALID, !expandAxes.empty()) << "expandDims is empty";
 
     int originDimSize = static_cast<int>(rawShape[1].size());
-    std::vector<int> normalized4DAxes;
-    std::vector<int> normalized5DAxes;
-    for (auto axis : expandAxes) {
-        bool isValidAxis = ((axis >= 0) && (axis <= (originDimSize - 1)));
-        ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported expand axis: " << axis;
-        normalized4DAxes.push_back(static_cast<int>(axis) + SHAPE_DIM4 - originDimSize);
-        normalized5DAxes.push_back(static_cast<int>(axis) + SHAPE_DIM5 - originDimSize);
-    }
 
     if (isSupportLayout) {
+        std::vector<int> normalized5DAxes = NormalizeExpandAxes(expandAxes, originDimSize, SHAPE_DIM5);
         return PrintExpandLayout(normalized5DAxes);
     }
+
+    std::vector<int> normalized4DAxes = NormalizeExpandAxes(expandAxes, originDimSize, SHAPE_DIM4);
     if (isDynamicFunction) {
         return PrintExpandDynamicUnaligned({s0Var, dVar, srcDtypeStr, dstDtypeStr}, normalized4DAxes);
     }

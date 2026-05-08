@@ -37,6 +37,7 @@ struct ForNode {
     void PrintUpdate(std::ostringstream& os) const;
 };
 
+using OffsetInLoop = std::vector<std::string>;
 class ForBlockManager {
 public:
     explicit ForBlockManager(const std::shared_ptr<SymbolManager>& symbolManager) : sm_(symbolManager)
@@ -65,7 +66,7 @@ public:
     bool IsInLoop() { return isInLoop_; }
 
     void AddTensorInLoopBody(
-        const std::string& tensorFullDim, const TileTensor& tileTensor, int opMagic, Opcode opCode);
+        const std::string& tensorFullDim, const TileTensor& tileTensor, const Operation& oper, Opcode opCode);
 
     void AddOpInLoopBody(std::string& op)
     {
@@ -83,7 +84,9 @@ private:
     void PrintSetAddrs(std::ostringstream& os) const;
     void PrintSetAddrSingle(std::ostringstream& os, const std::string& tensor, const std::string& offset) const;
     void PrintTileOps(std::ostringstream& os) const;
-    void UpdateTensorOffsetInLoop(Opcode opCode, int tensorMagic, int opMagic, const std::string& tensorNameInLoop);
+    void UpdateTensorOffsetInLoop(
+        Opcode opCode, int tensorMagic, const Operation& oper, const std::string& tensorNameInLoop);
+    OffsetInLoop BuildOffsetInLoop(int tensorMagic, const Operation& oper);
 
     std::shared_ptr<SymbolManager> sm_;
     std::vector<SymbolicScalar> axesList_;
@@ -92,7 +95,6 @@ private:
     // tensorNameInLoop -> offset var, e.g. ubTensor_2 -> tileOffset_1
     std::unordered_map<std::string, std::string> tensorOffset_;
     // OffsetInLoop -> offset var, e.g. (0, idx1, 0) -> tileOffset_1
-    using OffsetInLoop = std::vector<std::string>;
     std::map<OffsetInLoop, std::string> allOffsetsInLoop_;
     // default offset, e.g. (idx0, idx1, idx2)
     OffsetInLoop defaultOffset_;
