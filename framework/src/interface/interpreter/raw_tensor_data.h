@@ -355,6 +355,14 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         return static_cast<size_t>((nelem + 1) / 2);
     }
 
+    void UpdateRawTensorData(DataType dType, Shape shape) {
+        dataType_ = dType;
+        shape_ = shape;
+        stride_ = ShapeToStride(shape);
+        nelem = Numel(shape);
+        elemSize_ = GetDataSize(dType);
+    }
+
 private:
     uint8_t* devPtr_{nullptr};
     DataType dataType_;

@@ -484,6 +484,52 @@ TEST_F(DynamicOpsTest, IndexOutcastSeveralLoops)
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
 
+TEST_F(DynamicOpsTest, IndexAdd_)
+{
+    std::string logOutput = CaptureLogFileAndEcho([]() {
+        config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+        config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+        std::vector<std::string> passFilter = {"InferDynShape", "InferParamIndex", "CodegenPreproc"};
+        config::SetVerifyOption(KEY_PASS_VERIFY_FILTER, passFilter);
+
+        int64_t b = 4;
+        int64_t s = 16;
+        Tensor self(DT_FP32, {b, s}, "self");
+        Tensor source(DT_FP32, {b, s}, "source");
+        Tensor index(DT_INT32, {b}, "index");
+        int axis = 0;
+        Element alpha(DT_FP32, 2.0);
+        Tensor out(DT_FP32, {b, s}, "out");
+
+        std::vector<float> goldenData(b * s, 1.0f);
+        for (int64_t j = 0; j < s; ++j) {
+            goldenData[j] = 9.0f;
+        }
+        TileShape::Current().SetVecTile(1, 16);
+        ProgramData::GetInstance().AppendInputs(
+            {RawTensorData::CreateConstantTensor<float>(self, 1.0),
+            RawTensorData::CreateConstantTensor<float>(source, 1.0),
+            RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
+        ProgramData::GetInstance().AppendOutputs({
+            RawTensorData::CreateConstantTensor<float>(out, 1.0),
+        });
+        ProgramData::GetInstance().AppendGoldens({
+            RawTensorData::CreateTensor(out, goldenData),
+        });
+
+        FUNCTION("main", {self, source, index}, {out})
+        {
+            LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(2))
+            {
+                auto t1 = View(source, {b / 2, s}, {i, 0});
+                auto t2 = View(index, {b / 2}, {i});
+                IndexAdd_(out, t1, t2, axis, alpha);
+            }
+        }
+    });
+    EXPECT_NO_VERIFY_FAILED(logOutput);
+}
+
 TEST_F(DynamicOpsTest, AssembleFp16)
 {
     std::string logOutput = CaptureLogFileAndEcho([]() {

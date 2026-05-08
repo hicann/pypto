@@ -76,6 +76,14 @@ void ExecuteOpViewType(ExecuteOperationContext* ctx)
 
     auto inData = iop->GetData();
     auto outData = oop->GetData();
+
+    if (inData == outData) {
+        auto rawShape = ctx->op->GetOOperands()[0]->GetRawTensor()->GetRawShape();
+        auto dType = ctx->op->GetOOperands()[0]->GetRawTensor()->GetDataType();
+        outData->UpdateRawTensorData(dType, rawShape);
+        return;
+    }
+
     // OP_VIEW_TYPE 专属：要求输入输出底层 RawTensorData 都存在
     ASSERT(ExecuteOperationScene::VIEWTYPE_BYTES_MISMATCH, inData != nullptr && outData != nullptr);
 
@@ -109,7 +117,9 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     auto& iop = ctx->ioperandDataViewList->at(0);
 
     // 若输入输出 dtype 不同，则按 ViewType 语义处理（保持底层字节不变，仅视图变换）
-    if (oop->GetDataType() != iop->GetDataType()) {
+    auto iopDataType = ctx->op->GetIOperands()[0]->GetRawTensor()->GetDataType();
+    auto oopDataType = ctx->op->GetOOperands()[0]->GetRawTensor()->GetDataType();
+    if (iopDataType != oopDataType) {
         ExecuteOpViewType(ctx);
         return;
     }

@@ -97,7 +97,7 @@ struct FunctionFrame {
     const Operation* callop;
     const std::shared_ptr<CallOpAttribute> callopAttr;
     std::shared_ptr<FunctionIODataPair> inoutDataPair;
-    std::unordered_map<std::shared_ptr<RawTensor>, std::shared_ptr<RawTensorData>> rawTensorDataDict;
+    std::unordered_map<int, std::shared_ptr<RawTensorData>> rawTensorDataDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<RawTensor>> spillRawTensorDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensorData>> tensorDataViewDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::string> tensorDataBinDict;
@@ -105,6 +105,7 @@ struct FunctionFrame {
         callopDataViewTensorDict; // Record the relationship between the callop data view and the tensor
     int frameIndex;
     std::set<int> indexOutcastOpIndices;
+    std::set<int> indexAddOpIndices;
     std::vector<std::set<LogicalTensorPtr>> inplaceTensorSetList;
     int funcIndex;
     size_t funcHash;
@@ -129,7 +130,7 @@ struct FunctionFrame {
     void InitInplaceDataViewList()
     {
         inplaceTensorSetList.clear();
-        if (func == nullptr || indexOutcastOpIndices.empty()) {
+        if (func == nullptr || (indexOutcastOpIndices.empty() && indexAddOpIndices.empty())) {
             return;
         }
 
@@ -141,26 +142,32 @@ struct FunctionFrame {
             opIndexMap[&ops[static_cast<size_t>(i)]] = i;
         }
 
-        // 使用拷贝，避免在遍历时直接修改 indexOutcastOpIndices
-        std::set<int> indices = indexOutcastOpIndices;
+        ProcessInplaceOpIndices(ops, opIndexMap, indexOutcastOpIndices, 2);
+        ProcessInplaceOpIndices(ops, opIndexMap, indexAddOpIndices, 0);
+    }
 
+    void ProcessInplaceOpIndices(
+        OperationsViewer& ops,
+        const std::unordered_map<Operation*, int>& opIndexMap,
+        std::set<int>& opIndices,
+        size_t startTensorIdx)
+    {
+        std::set<int> indices = opIndices;
         for (auto index : indices) {
-            // 该 index 可能在前一次遍历链路时被删除，这里跳过已删除的 INDEX_OUTCAST
-            if (indexOutcastOpIndices.count(index) == 0) {
+            if (opIndices.count(index) == 0) {
                 continue;
             }
             if (index < 0 || static_cast<size_t>(index) >= ops.size()) {
                 continue;
             }
 
-            Operation& idxOutcastOp = ops[static_cast<size_t>(index)];
-            auto iOps = idxOutcastOp.GetIOperands();
-            auto oOps = idxOutcastOp.GetOOperands();
-            // 需要至少 3 个输入，且至少 1 个输出
+            Operation& op = ops[static_cast<size_t>(index)];
+            auto iOps = op.GetIOperands();
+            auto oOps = op.GetOOperands();
             ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOps.size() > 2);
             ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, !oOps.empty());
 
-            LogicalTensorPtr startTensor = iOps[2];
+            LogicalTensorPtr startTensor = iOps[startTensorIdx];
             LogicalTensorPtr endTensor = oOps[0];
             ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, startTensor != nullptr);
             ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, endTensor != nullptr);
@@ -169,15 +176,12 @@ struct FunctionFrame {
             std::unordered_set<LogicalTensorPtr> visitedTensor;
             std::unordered_set<Operation*> visitedOp;
             bool chainValid = true;
-            Operation* rootIndexOutcastOp = &idxOutcastOp;
 
-            TraverseBackward(
-                startTensor, rootIndexOutcastOp, tensorGroup, visitedTensor, visitedOp, chainValid, opIndexMap);
+            TraverseBackward(startTensor, tensorGroup, visitedTensor, visitedOp, chainValid, opIndexMap);
             if (!chainValid) {
                 continue;
             }
-            TraverseForward(
-                endTensor, rootIndexOutcastOp, tensorGroup, visitedTensor, visitedOp, chainValid, opIndexMap);
+            TraverseForward(endTensor, tensorGroup, visitedTensor, visitedOp, chainValid, opIndexMap);
             if (!chainValid) {
                 continue;
             }
@@ -185,6 +189,7 @@ struct FunctionFrame {
             inplaceTensorSetList.emplace_back(std::move(tensorGroup));
         }
     }
+
     FunctionFrame(
         const Function* func_, const Operation* callop_, const std::shared_ptr<CallOpAttribute>& callopAttr_,
         std::shared_ptr<FunctionIODataPair> inoutDataPair_, int frameIndex_)
@@ -196,6 +201,9 @@ struct FunctionFrame {
             for (auto& op : ops) {
                 if (op.GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
                     indexOutcastOpIndices.insert(idx);
+                }
+                if (op.GetOpcode() == Opcode::OP_INDEX_ADD) {
+                    indexAddOpIndices.insert(idx);
                 }
                 ++idx;
             }
@@ -283,8 +291,8 @@ struct FunctionFrame {
             isSpilled = true;
         }
         std::shared_ptr<RawTensorData> rawData;
-        if (rawTensorDataDict.count(raw)) {
-            rawData = rawTensorDataDict[raw];
+        if (rawTensorDataDict.count(raw->GetRawMagic())) {
+            rawData = rawTensorDataDict[raw->GetRawMagic()];
         } else {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
             rawData = std::make_shared<RawTensorData>(dtype, rawShape);
@@ -302,11 +310,25 @@ private:
     bool IsAllowedInplaceChainOpcode(Opcode opcode) const
     {
         return opcode == Opcode::OP_INDEX_OUTCAST || opcode == Opcode::OP_VIEW || opcode == Opcode::OP_RESHAPE ||
-               opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_PRINT;
+               opcode == Opcode::OP_ASSEMBLE || opcode == Opcode::OP_PRINT || opcode == Opcode::OP_INDEX_ADD;
+    }
+
+    void TryEraseOpIndex(Operation* op, const std::unordered_map<Operation*, int>& opIndexMap)
+    {
+        auto it = opIndexMap.find(op);
+        if (it == opIndexMap.end()) {
+            return;
+        }
+        auto opcode = op->GetOpcode();
+        if (opcode == Opcode::OP_INDEX_ADD) {
+            indexAddOpIndices.erase(it->second);
+        } else if (opcode == Opcode::OP_INDEX_OUTCAST) {
+            indexOutcastOpIndices.erase(it->second);
+        }
     }
 
     void TraverseBackward(
-        LogicalTensorPtr t, Operation* rootIndexOutcastOp, std::set<LogicalTensorPtr>& tensorGroup,
+        LogicalTensorPtr t, std::set<LogicalTensorPtr>& tensorGroup,
         std::unordered_set<LogicalTensorPtr>& visitedTensor, std::unordered_set<Operation*>& visitedOp,
         bool& chainValid, const std::unordered_map<Operation*, int>& opIndexMap)
     {
@@ -325,34 +347,21 @@ private:
                 return;
             }
             if (visitedOp.insert(producer).second) {
-                // 如果向前遍历到其他 INDEX_OUTCAST，将其从 indexOutcastOpIndices 中移除，避免之后重复遍历
-                if (producer->GetOpcode() == Opcode::OP_INDEX_OUTCAST && producer != rootIndexOutcastOp) {
-                    auto it = opIndexMap.find(producer);
-                    if (it != opIndexMap.end()) {
-                        indexOutcastOpIndices.erase(it->second);
-                    }
-                }
-                // IndexOutcast 只从第三个输入继续向前，其余（view/reshape/assemble）只有一个输入
+                TryEraseOpIndex(producer, opIndexMap);
                 auto& producerInputs = producer->GetIOperands();
-                if (producer->GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
-                    if (producerInputs.size() > 2 && producerInputs[2] != nullptr) {
-                        TraverseBackward(
-                            producerInputs[2], rootIndexOutcastOp, tensorGroup, visitedTensor, visitedOp, chainValid,
-                            opIndexMap);
-                    }
-                } else {
-                    if (!producerInputs.empty() && producerInputs[0] != nullptr) {
-                        TraverseBackward(
-                            producerInputs[0], rootIndexOutcastOp, tensorGroup, visitedTensor, visitedOp, chainValid,
-                            opIndexMap);
-                    }
+                auto opcode = producer->GetOpcode();
+                int idx = (opcode == Opcode::OP_INDEX_OUTCAST) ? 2 : 0;
+                if (producerInputs.size() > static_cast<size_t>(idx) && producerInputs[idx] != nullptr) {
+                    TraverseBackward(
+                        producerInputs[idx], tensorGroup, visitedTensor, visitedOp, chainValid,
+                        opIndexMap);
                 }
             }
         }
     }
 
     void TraverseForward(
-        LogicalTensorPtr t, Operation* rootIndexOutcastOp, std::set<LogicalTensorPtr>& tensorGroup,
+        LogicalTensorPtr t, std::set<LogicalTensorPtr>& tensorGroup,
         std::unordered_set<LogicalTensorPtr>& visitedTensor, std::unordered_set<Operation*>& visitedOp,
         bool& chainValid, const std::unordered_map<Operation*, int>& opIndexMap)
     {
@@ -371,18 +380,11 @@ private:
                 return;
             }
             if (visitedOp.insert(consumerOp).second) {
-                // 如果向后遍历到其他 INDEX_OUTCAST，将其从 indexOutcastOpIndices 中移除，避免之后重复遍历
-                if (consumerOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST && consumerOp != rootIndexOutcastOp) {
-                    auto it = opIndexMap.find(consumerOp);
-                    if (it != opIndexMap.end()) {
-                        indexOutcastOpIndices.erase(it->second);
-                    }
-                }
-                // IndexOutcast / View / Reshape / Assemble 视为一个输入一个输出，只从其输出继续向后
+                TryEraseOpIndex(consumerOp, opIndexMap);
                 auto& consumerOutputs = consumerOp->GetOOperands();
                 if (!consumerOutputs.empty() && consumerOutputs[0] != nullptr) {
                     TraverseForward(
-                        consumerOutputs[0], rootIndexOutcastOp, tensorGroup, visitedTensor, visitedOp, chainValid,
+                        consumerOutputs[0], tensorGroup, visitedTensor, visitedOp, chainValid,
                         opIndexMap);
                 }
             }
@@ -397,7 +399,7 @@ private:
     }
     void DoAddRawTensorDataView(const std::shared_ptr<RawTensor>& rawTensor, const std::shared_ptr<RawTensorData>& data)
     {
-        rawTensorDataDict[rawTensor] = data;
+        rawTensorDataDict[rawTensor->GetRawMagic()] = data;
     }
     void DoAddSpillRawTensor(const std::shared_ptr<LogicalTensor>& tensor, const std::shared_ptr<RawTensor>& rawtensor)
     {
@@ -973,14 +975,6 @@ struct FunctionInterpreter {
         return -1;
     }
 
-    bool IsViewInplace(const std::shared_ptr<LogicalTensor>& iOp, const std::shared_ptr<LogicalTensor>& oOp)
-    {
-        if (iOp->GetRawTensor()->GetRawMagic() == oOp->GetRawTensor()->GetRawMagic()) {
-            return true;
-        }
-        return false;
-    }
-
     void ExecuteInplaceOperation(
         FunctionFrame& frame, Operation& op, int oOperandIdx,
         const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
@@ -992,27 +986,7 @@ struct FunctionInterpreter {
         auto iop = op.GetInputOperand(index);
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOpDataList[index] != nullptr);
         if (op.GetOpcode() == Opcode::OP_VIEW) {
-            auto opAttr = std::static_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
-            if (opAttr == nullptr) {
-                // viewType在Codegenpreproc后会走这个分支
-                oOpDataList.emplace_back(AllocateDataView(frame, oop));
-                return;
-            }
-            Offset iopOffsets = iOpDataList[index]->GetOffset();
-            Offset viewOffsets = EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
-            auto validShape = EvaluateValidShape(
-                oop->GetDynValidShape(),
-                (frame.callopAttr != nullptr) ? frame.callopAttr->GetLinearArgList() : std::vector<SymbolicScalar>{});
-            auto rawShape = EvaluateValidShape(
-                oop->GetRawTensor()->GetDynRawShape(),
-                (frame.callopAttr != nullptr) ? frame.callopAttr->GetLinearArgList() : std::vector<SymbolicScalar>{});
-            std::shared_ptr<LogicalTensorData> ret;
-            if (IsViewInplace(iop, oop)) {
-                ret = frame.AllocateDataView(
-                    oop, viewOffsets, validShape, rawShape, oop->GetRawTensor()->GetDataType(), iop);
-            } else {
-                ret = AllocateDataView(frame, oop);
-            }
+            auto ret = AllocateDataView(frame, oop);
             oOpDataList.emplace_back(ret);
         } else {
             oOpDataList.emplace_back(AllocateDataView(frame, oop, iop));
@@ -1049,6 +1023,9 @@ struct FunctionInterpreter {
         std::vector<std::shared_ptr<LogicalTensorData>> oOpDataList;
         for (size_t i = 0; i < op->GetOOperands().size(); i++) {
             auto oop = op->GetOOperands()[i];
+            if (op->GetOpcode() == Opcode::OP_INDEX_ADD && i > 0) {
+                continue;
+            }
             if (auto index = GetInplaceIndex(op, i); index != -1) {
                 ExecuteInplaceOperation(frame, *op, i, iOpDataList, oOpDataList);
             } else {
@@ -1253,10 +1230,6 @@ struct FunctionInterpreter {
                     break;
                 }
             }
-            if (incastTensor == nullptr) {
-                // Fallback: use first tensor in set if no explicit incast found.
-                incastTensor = *tensorGroup.begin();
-            }
 
             // Find outcast tensor in this group.
             LogicalTensorPtr outcastTensor = nullptr;
@@ -1268,14 +1241,12 @@ struct FunctionInterpreter {
                     break;
                 }
             }
-            // Fallback: use last tensor in set if no explicit outcast found.
-            if (outcastTensor == nullptr) {
-                outcastTensor = *tensorGroup.rbegin();
-            }
 
             // If this group has neither incast nor outcast belonging to current function IO,
             // it indicates that inplaceTensorSetList is inconsistent with function IO spec.
-            ASSERT(ControlFlowScene::FUNC_INPLACE_GROUP_NO_FUNC_IO, hasIncastFromFunc || hasOutcastFromFunc);
+            if (!hasIncastFromFunc || !hasOutcastFromFunc) {
+                continue;
+            }
 
             auto incastView = frame->GetDataView(incastTensor);
             auto outcastView = frame->GetDataView(outcastTensor);

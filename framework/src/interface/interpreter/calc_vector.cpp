@@ -853,9 +853,14 @@ void ExecuteOpIndexAdd(ExecuteOperationContext* ctx)
         alpha = ctx->op->GetElementAttribute(OpAttributeKey::scalar);
     }
     int axis = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "axis");
-    calc::IndexAdd(ret, self, src, indices, axis, alpha);
+    if (ctx->op->GetOpcode() == Opcode::OP_INDEX_ADD) {
+        calc::IndexAdd(self, self, src, indices, axis, alpha);
+    } else {
+        calc::IndexAdd(ret, self, src, indices, axis, alpha);
+    }
 }
 REGISTER_CALC_OP(OP_INDEX_ADD_UB, Opcode::OP_INDEX_ADD_UB, ExecuteOpIndexAdd);
+REGISTER_CALC_OP(OP_INDEX_ADD, Opcode::OP_INDEX_ADD, ExecuteOpIndexAdd);
 
 void ExecuteOpTri(ExecuteOperationContext* ctx)
 {
