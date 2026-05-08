@@ -450,13 +450,13 @@ def compressor_ratio_4_kernel(
         score_t = pypto.matmul(x_view, wgate, pypto.DT_FP32, b_trans=True)
 
         for _ in pypto.loop(1):
-            pypto.set_pass_options(pg_skip_partition=True)
+            pypto.set_pass_options(sg_set_scope=(1, True, False))
             kv_t = pypto.reshape(kv_t, [b, s1, coff*d], inplace=True)
             score_t = pypto.reshape(score_t, [b, s1, coff*d], inplace=True)
             cache_index = pypto.reshape(cache_index, [1, block_size], inplace=True)
 
         for c_idx in pypto.loop(b_valid, name="LOOP_COMP_2", idx_name="c_idx"):
-            pypto.set_pass_options(pg_skip_partition=True)
+            pypto.set_pass_options(sg_set_scope=(1, True, False))
             start_pos = start_pos_dy[b_idx * b + c_idx]
             # No compression
             if start_pos % ratio + s1 < ratio:
@@ -656,13 +656,13 @@ def compressor_ratio_4_rotate_kernel(
         score_t = pypto.matmul(x_view, wgate, pypto.DT_FP32, b_trans=True)
 
         for _ in pypto.loop(1):
-            pypto.set_pass_options(pg_skip_partition=True)
+            pypto.set_pass_options(sg_set_scope=(1, True, False))
             kv_t = pypto.reshape(kv_t, [b, s1, coff*d], inplace=True)
             score_t = pypto.reshape(score_t, [b, s1, coff*d], inplace=True)
             cache_index = pypto.reshape(cache_index, [1, block_size], inplace=True)
 
         for c_idx in pypto.loop(b_valid, name="LOOP_COMP_2", idx_name="c_idx"):
-            pypto.set_pass_options(pg_skip_partition=True)
+            pypto.set_pass_options(sg_set_scope=(1, True, False))
             start_pos = start_pos_dy[b_idx * b + c_idx]
             # No compression
             if start_pos % ratio + s1 < ratio:
@@ -871,13 +871,13 @@ def compressor_ratio_128_kernel(
         score_t = pypto.matmul(x_view, wgate, pypto.DT_FP32, b_trans=True)
 
         for _ in pypto.loop(1):
-            pypto.set_pass_options(pg_skip_partition=True)
+            pypto.set_pass_options(sg_set_scope=(1, True, False))
             kv_t = pypto.reshape(kv_t, [b, s1, d], inplace=True)
             score_t = pypto.reshape(score_t, [b, s1, d], inplace=True)
             cache_index = pypto.reshape(cache_index, [1, block_size], inplace=True)
 
         for c_idx in pypto.loop(b_valid, name="LOOP_COMP_2", idx_name="c_idx"):
-            pypto.set_pass_options(pg_skip_partition=True)
+            pypto.set_pass_options(sg_set_scope=(1, True, False))
             start_pos = start_pos_dy[b_idx * b + c_idx]
             # No compression
             if start_pos % ratio + s1 < ratio:
