@@ -29,12 +29,12 @@ shmem_store(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| src   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_INT32，DT_FP16，DT_FP32，DT_BF16。 <br> 不支持空 Tensor；Shape 仅支持 2 维；Shape Size 不大于 2147483647（即 INT32_MAX）。 <br> 支持的数据格式为 ND。 |
+| src   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_INT32，DT_FP16，DT_FP32，DT_BF16。 <br> 不支持空 Tensor；Shape 支持 2 - 4 维；Shape Size 不大于 2147483647（即 INT32_MAX）。 <br> 支持的数据格式为 ND。 |
 | offsets   | 输入      | dst 的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 dst 的维度一致，且每个维度的偏移量值应小于 dst 对应维度的大小。 |
 | dst   | 输入      | 目的操作数，一个 shared memory tensor，其形状为src.shape。 |
 | dst_pe   | 输入      | shared memory tensor 所属的 pe。<br> 支持的数据类型为 int 或 SymbolicScalar 类型。 <br> 0 <= pe < n_pes。 |
 | put_op   | 输入      | 数据传输时应用的原子操作类型。 <br> 支持的数据类型为: AtomicType.SET，AtomicType.ADD。 <br> 默认为 AtomicType.SET 类型。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor；Shape 仅支持 2 维。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
 
 ## 返回值说明
 

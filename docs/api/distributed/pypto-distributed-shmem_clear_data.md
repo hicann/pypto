@@ -30,7 +30,7 @@ shmem_clear_data(
 | src   | 输入      |  要清除的 shared memory tensor。|
 | shape   | 输入      | 需要清除的视图大小。 <br> 参数类型为 list[int] 类型。 |
 | offsets   | 输入      | 需要清除的视图的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor；Shape 仅支持 2 维。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
 
 ## 返回值说明
 

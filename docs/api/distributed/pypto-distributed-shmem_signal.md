@@ -34,11 +34,11 @@ shmem_signal(
 | src  | 输入      | 触发信号的 shared memory tensor。|
 | src_pe   | 输入      | shared memory tensor 所属的 pe，0 <= pe < n_pes。 <br> 支持的数据类型为 int 或 SymbolicScalar 类型。 |
 | signal   | 输入      | 发送到 src 中的信号值。 <br> 支持的数据类型为：int类型。 |
-| shape   | 输入      |  需要写入信号的 shared memory tensor 的视图大小。 <br> 参数类型为 list[int] 类型。 <br> 仅支持 3 维。 |
+| shape   | 输入      |  需要写入信号的 shared memory tensor 的视图大小。 <br> 参数类型为 list[int] 类型。 |
 | offsets   | 输入      | 需要写入信号的 shared memory tensor 的视图的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
 | target_pe   | 输入      | 接收信号的 pe。 <br> 如果 target_pe = -1，则广播信号给所有 pe。 <br> 支持 int 或 SymbolicScalar 类型的列表。 |
 | sig_op   | 输入      | 数据传输时应用的原子操作类型。 <br>支持的数据类型为: AtomicType.SET，AtomicType.ADD。 <br> 默认为 AtomicType.SET 类型。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor；Shape 仅支持 2 维。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
 
 ## 返回值说明
 
@@ -52,7 +52,7 @@ shmem_signal(
 
 ### TileShape 设置示例
 
-说明：调用 shmem_signal 前，应通过set_vec_tile_shapes设置TileShape， TileShape 维度应和参数 shape 的后两维一致。
+说明：调用 shmem_signal 前，应通过 set_vec_tile_shapes 设置 TileShape， TileShape 维度应和参数 shape 保持一致。
 
 - 示例1：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 

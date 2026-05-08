@@ -38,7 +38,7 @@ shmem_wait_until(
 | offsets   | 输入      | 需要等待信号的 shared memory tensor 的视图的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
 | cmp   | 输入      | 用于条件判断的比较操作类型。 <br> 目前仅支持 EQ（等于）类型。 |
 | clear_signal   | 输入      | 是否在等待完成后重置信号（true/false）。 <br>支持的数据类型为: bool类型。 <br> 默认为 false。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor；Shape 仅支持 2 维。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
 
 ## 返回值说明
 
@@ -53,7 +53,7 @@ shmem_wait_until(
 
 ### TileShape 设置示例
 
-说明：调用 shmem_wait_until 前，应通过set_vec_tile_shapes设置TileShape。TileShape 维度应和参数 shape 的后两维一致。
+说明：调用 shmem_wait_until 前，应通过set_vec_tile_shapes设置TileShape。TileShape 维度应和参数 shape 保持一致。
 
 - 示例 1：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 

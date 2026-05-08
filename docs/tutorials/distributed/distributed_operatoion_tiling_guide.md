@@ -46,116 +46,125 @@
 
 ### 3.1 数据类型的tensor切分策略
 
-假设 data tensor 的 shape 大小为 $[x, y]$，TileShape 大小为 $[t_1, t_2]$。data tensor 会被切分为 $d_1, d_2, \ldots, d_n$ 共 n 个数据块。n 的计算方式如下所示：
+当前支持 **N 维切块**（N 可以是 2 - 4）。
+假设 data tensor 的 shape 大小为 $[s_1, s_2, \ldots, s_N]$（维度 = N），TileShape 大小为 $[t_1, t_2, \ldots, t_N]$（维度 = N）。data tensor 会被切分为共 $n$ 个数据块。n 的计算方式如下：
 
 $$
-tile\_row\_num = \left\lceil \frac{x}{t_1} \right\rceil \\
-tile\_col\_num = \left\lceil \frac{y}{t_2} \right\rceil \\
-n = tile\_row\_num \times tile\_col\_num
+tile\_num\_dim_i = \left\lceil \frac{s_{i}}{t_i} \right\rceil \quad (i = 1, 2, \ldots, N) \\
+n = \prod_{i=1}^{N} tile\_num\_dim_i
 $$
 
 其中：
-- `tile_row_num`：表示第一维切分的数量
-- `tile_col_num`：表示第二维切分的数量
-- `n`：表示总的数据块数量
+- $tile\_num\_dim_i$：表示第 $i$ 维切分的数量
+- $n$：表示总的数据块数量
 
 切分之后的数据块 $d$ 相对于原数据的位置记为 `tile_index`（0 ≤ tile_index < n）。对于每个数据块 $d$，会更新其 shape 和 offset 信息，并将 $d$ 作为 tile_op 的输入或输出。shape 和 offset 信息更新如下：
 
-$$
-row\_index = \left\lfloor \frac{tile\_index}{tile\_col\_num} \right\rfloor \\
-col\_index = tile\_index \bmod tile\_col\_num \\
-tile\_offset_0 = row\_index \times t_1 \\
-tile\_offset_1 = col\_index \times t_2 \\
-tile\_shape_0 = \min(x - tile\_offset_0, t_1) \\
-tile\_shape_1 = \min(y - tile\_offset_1, t_2)
-$$
+**计算步骤**：
+
+1. **计算每个维度索引**：
+   
+   ```
+   dim_index[N-1] = tile_index % tile_num_dim_N
+   dim_index[N-2] = (tile_index / tile_num_dim_N) % tile_num_dim_N-1
+   ...
+   dim_index[0] = tile_index / (tile_num_dim_2 × tile_num_dim_3 × ... × tile_num_dim_N)
+   ```
+
+2. **计算每个块的 offset 和 shape**：
+   
+   $$tile\_offset_i = dim\_index_i \times t_i$$
+   $$tile\_shape_i = \min(s_i - tile\_offset_i, t_i)$$
+
+**示例**：假设 data tensor shape 为 $[128, 512]$（维度=2），TileShape 为 $[64, 256]$（维度=2）：
+- 第1维：$tile\_num\_dim_1 = \lceil 128/64 \rceil = 2$
+- 第2维：$tile\_num\_dim_2 = \lceil 512/256 \rceil = 2$
+- 总切块数：$n = 2 \times 2 = 4$
+
+切块结果：
+| tile_index | dim_indices | shape | offset |
+|------------|-------------|-------|--------|
+| 0 | [0, 0] | [64, 256] | [0, 0] |
+| 1 | [0, 1] | [64, 256] | [0, 256] |
+| 2 | [1, 0] | [64, 256] | [64, 0] |
+| 3 | [1, 1] | [64, 256] | [64, 256] |
+
 
 ### 3.2 控制边类型的tensor切分策略
 
 切块的主体对象是 data tensor。一个 op 会被切分为多少个 tile_op，由 data tensor 的 shape 和 TileShape 共同决定。
 
-对 dummy tensor 切分时，遵循以下核心原则：将 dummy tensor 尽可能均匀地切分为 $m_1, m_2, \ldots, m_n$ 共 n 个子块，与切分后的数据块 $d$ 形成一一对应关系，并作为 tile_op 的输入或输出。
+对 dummy tensor 切分时，遵循以下核心原则：**检查每个维度是否足够切分，满足条件就切分，不满足就不切分**。
 
-假设 dummy tensor 的 shape 为 $[p_1, p_2]$，根据 $p_1$ 与 $p_2$ 大小的不同，可分为以下三种切块方式：
+#### 3.2.1 切分条件判断
 
-- **$p_1 \geq tile\_row\_num$ 且 $p_2 \geq tile\_col\_num$**：将 dummy tensor 的行切为 tile_row_num 个，列切为 tile_col_num 个。切块采用"平均分配+尾块优先"策略：
+假设 dummy tensor 的 shape 为 $[p_1, p_2, \ldots, p_N]$（维度 = N），TileShape 维度为 N，需要切分为 $tile\_num\_dim_1, tile\_num\_dim_2, \ldots, tile\_num\_dim_N$（对应 data tensor 的切块数量）。
 
-**切分思路**：将 $p_1$ 行尽可能均匀地分配给 tile_row_num 个块，将 $p_2$ 列尽可能均匀地分配给 tile_col_num 个块。若不能整除，余数作为尾行/尾列分配给前面的块，使前几个块的 size 比后面的块多1。
+**切分条件**：dummy tensor 的 维度数与切块维度一致，且每个维度大小必须大于或等于对应维度的切块数量：
 
-**计算步骤**：
+$$
+p_i \geq tile\_num\_dim_i \quad (i = 1, 2, \ldots, N)
+$$
 
-1. 计算基准大小和尾行/尾列数：
-   - 行方向基准：$base\_row = p_1 / tile\_row\_num$（向下取整）
-   - 行方向尾行数：$base\_tail\_row = p_1 \bmod tile\_row\_num$
-   - 列方向基准：$base\_col = p_2 / tile\_col\_num$（向下取整）
-   - 列方向尾列数：$base\_tail\_col = p_2 \bmod tile\_col\_num$
+若 dummy tensor 维度不等于 N，或某个维度大小不足，则不满足切分条件。
 
-2. 计算每个块的坐标：
-   - $row\_index = tile\_index / tile\_col\_num$（向下取整）
-   - $col\_index = tile\_index \bmod tile\_col\_num$
+#### 3.2.2 满足条件时的切分策略
 
-3. 计算每个块的 shape：
-   - 若 $row\_index < base\_tail\_row$（属于前 $base\_tail\_row$ 个块），则 $tile\_dummy\_shape_0 = base\_row + 1$
-   - 若 $row\_index \geq base\_tail\_row$（属于后面的块），则 $tile\_dummy\_shape_0 = base\_row$
-   - 列方向同理
-
-4. 计算每个块的 offset（累加前面所有块的大小）：
-   - 若 $row\_index < base\_tail\_row$，前 $row\_index$ 个块的 size 都是 $base\_row + 1$，因此 $offset = row\_index \times (base\_row + 1)$
-   - 若 $row\_index \geq base\_tail\_row$，前 $base\_tail\_row$ 个块的 size 是 $base\_row + 1$，后面 $(row\_index - base\_tail\_row)$ 个块的 size 是 $base\_row$，因此 $offset = base\_tail\_row \times (base\_row + 1) + (row\_index - base\_tail\_row) \times base\_row$
-   - 列方向同理
-
-**示例**：假设 dummy tensor shape 为 $[p_1, p_2] = [10, 7]$，需要切分为 $tile\_row\_num = 3$ 行块、$tile\_col\_num = 2$ 列块。则：
-- 行方向：$base\_row = 10 / 3 = 3$, $base\_tail\_row = 10 \bmod 3 = 1$（有1个尾行）
-- 列方向：$base\_col = 7 / 2 = 3$, $base\_tail\_col = 7 \bmod 2 = 1$（有1个尾列）
-
-切块矩阵（行按 4+3+3 分配，列按 4+3 分配）：
-
-| tile_index | row_index | col_index | shape | offset |
-|------------|-----------|-----------|-------|--------|
-| 0 | 0 | 0 | [4, 4] | [0, 0] |
-| 1 | 0 | 1 | [4, 3] | [0, 4] |
-| 2 | 1 | 0 | [3, 4] | [4, 0] |
-| 3 | 1 | 1 | [3, 3] | [4, 4] |
-| 4 | 2 | 0 | [3, 4] | [7, 0] |
-| 5 | 2 | 1 | [3, 3] | [7, 4] |
-
-说明：前 base_tail_row=1 个行块多1行（shape_0=4），前 base_tail_col=1 个列块多1列（shape_1=4）。
-
-- **$p_1 \times p_2 \geq n$**：dummy tensor 的元素总数足够但无法进行 2D 切分（即 $p_1 < tile\_row\_num$ 或 $p_2 < tile\_col\_num$），此时采用"逐元素分配+尾块兜底"策略：
-
-**切分思路**：将 dummy tensor 按元素位置顺序切分，前 $n-1$ 块各取一个 [1, 1] 元素，最后一块（第 $n-1$ 块）取剩余所有元素，确保每个 tile_op 都有对应的 dummy tensor 块。
+当满足切分条件时，采用"平均分配+尾块优先"策略对 dummy tensor 进行 N 维切分：
 
 **计算步骤**：
 
-1. 计算每个块的起始位置：
-   - $tile\_row\_index = tile\_index / p_2$（向下取整）
-   - $tile\_col\_index = tile\_index \bmod p_2$
-   - offset 直接取该元素的位置：$tile\_dummy\_offset = [tile\_row\_index, tile\_col\_index]$
+1. **计算每个维度索引**：从 `tile_index` 反推各维度的索引位置
+   
+   ```
+   dim_indices[N-1] = tile_index % tile_num_dim_N
+   dim_indices[N-2] = (tile_index / tile_num_dim_N) % tile_num_dim_N-1
+   ...
+   dim_indices[0] = tile_index / (tile_num_dim_2 × tile_num_dim_3 × ... × tile_num_dim_N)
+   ```
 
-2. 计算每个块的 shape：
-   - 若 $tile\_index \neq n-1$（前 $n-1$ 块）：shape = [1, 1]，只取一个元素
-   - 若 $tile\_index = n-1$（最后一块）：取从当前位置到 dummy tensor 末尾的所有剩余元素，shape 分三种情况：
-     - 尾块在最后一行同一行内：shape = [1, $tile\_col\_end - tile\_col\_index + 1$]
-     - 尾块在列的开头（$tile\_col\_index = 0$）：shape = [$tile\_row\_end - tile\_row\_index + 1$, $p_2$]
-     - 其他情况：shape = [1, 1]
+2. **计算每个维度的基准大小和尾块数**：
+   
+   $$base_i = p_i / tile\_num\_dim_i \quad (向下取整)$$
+   $$rem_i = p_i \bmod tile\_num\_dim_i$$
 
-其中 $tile\_end = p_1 \times p_2 - 1$，$tile\_row\_end = tile\_end / p_2$，$tile\_col\_end = tile\_end \bmod p_2$。
+3. **计算每个块的 shape**：
+   - 若 $dim\_indices[i] < rem_i$（属于前 $rem_i$ 个块）：$tile\_shape_i = base_i + 1$
+   - 若 $dim\_indices[i] \geq rem_i$（属于后面的块）：$tile\_shape_i = base_i$
 
-**示例**：假设 dummy tensor shape 为 $[p_1, p_2] = [2, 4]$（共8个元素），需要切分 $n=5$ 块（对应 data tensor 的5个切块）。则：
+4. **计算每个块的 offset**（累加前面所有块的大小）：
+   - 若 $dim\_indices[i] < rem_i$：$tile\_offset_i = dim\_indices[i] \times (base_i + 1)$
+   - 若 $dim\_indices[i] \geq rem_i$：$tile\_offset_i = rem_i \times (base_i + 1) + (dim\_indices[i] - rem_i) \times base_i$
 
-切块结果（前4块各取1元素，第4块取剩余4个元素）：
+**示例**：假设 dummy tensor shape 为 $[10, 7]$，需要切分为 $tile\_num\_dim_1 = 3$（行）、$tile\_num\_dim_2 = 2$（列）。检查条件：
+- 行方向：$p_1 = 10 \geq tile\_num\_dim_1 = 3$ ✓
+- 列方向：$p_2 = 7 \geq tile\_num\_dim_2 = 2$ ✓
 
-| tile_index | tile_row_index | tile_col_index | shape | offset | 说明 |
-|------------|----------------|----------------|-------|--------|------|
-| 0 | 0 | 0 | [1, 1] | [0, 0] | 第1个元素 |
-| 1 | 0 | 1 | [1, 1] | [0, 1] | 第2个元素 |
-| 2 | 0 | 2 | [1, 1] | [0, 2] | 第3个元素 |
-| 3 | 0 | 3 | [1, 1] | [0, 3] | 第4个元素 |
-| 4 | 1 | 0 | [2, 4] | [1, 0] | 尾块从[1,0]到末尾[1,3]，覆盖剩余4元素 |
+满足条件，进行切分：
+- 行方向：$base\_row = 10 / 3 = 3$, $rem\_row = 10 \bmod 3 = 1$（前1个行块多1行）
+- 列方向：$base\_col = 7 / 2 = 3$, $rem\_col = 7 \bmod 2 = 1$（前1个列块多1列）
 
-说明：tile_end=7, tile_row_end=1, tile_col_end=3。尾块在 tile_col_index=0 处，按第三种情况取 [2, 4]。
+切块矩阵：
 
-- **$p_1 \times p_2 < n$**：因为 dummy tensor 中的元素个数小于 data tensor 的切块个数 $n$，因此不对 dummy tensor 进行切块，所有的 tile_op 共用 dummy tensor。在这种情况下，依赖该 op 的算子，需要等所有其展开的 tile_op 执行完成后方可执行。
+| tile_index | dim_indices | shape | offset |
+|------------|-------------|-------|--------|
+| 0 | [0, 0] | [4, 4] | [0, 0] |
+| 1 | [0, 1] | [4, 3] | [0, 4] |
+| 2 | [1, 0] | [3, 4] | [4, 0] |
+| 3 | [1, 1] | [3, 3] | [4, 4] |
+| 4 | [2, 0] | [3, 4] | [7, 0] |
+| 5 | [2, 1] | [3, 3] | [7, 4] |
+
+#### 3.2.3 不满足条件时的处理策略
+
+当 dummy tensor 的维度和切块维度不一致，或者某个维度大小小于对应的切块数量时（即 $p_i < tile\_num\_dim_i$），不满足切分条件，此时**不对 dummy tensor 进行切分**。
+
+所有 tile_op 共用同一个 dummy tensor，依赖该 op 的算子需要等所有展开的 tile_op 执行完成后方可执行。
+
+**示例**：假设 dummy tensor shape 为 $[2, 4]$，需要切分为 $tile\_num\_dim_1 = 3$（行）、$tile\_num\_dim_2 = 2$（列）。检查条件：
+- 行方向：$p_1 = 2 < tile\_num\_dim_1 = 3$ ✗
+
+不满足条件，不进行切分，所有 tile_op 共用原始 dummy tensor。
 
 ## 4. 具体样例
 
@@ -241,9 +250,9 @@ def allreduce_kernel(
 
 通信算子切块设置需遵循以下约束条件：
 
-1. **切块维度仅支持 2 维**
+1. **切块维度**
 
-当前仅支持 2 维数据的拷贝，因此仅支持对 2 维数据进行切块。
+TileShape 的维度数与 shmem tensor 的维度数一致。
 
 2. **shmem_signal 写信号量时需确保对应的数据已经发送完成**
 

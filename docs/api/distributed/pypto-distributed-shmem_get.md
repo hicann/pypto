@@ -29,12 +29,12 @@ shmem_get(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| src   | 输入      | 源操作数，一个 shared memory tensor。 <br> 目前 shared memory tensor 的 shape 只支持 2 维。 |
+| src   | 输入      | 源操作数，一个 shared memory tensor。 |
 | src_pe   | 输入      | shared memory tensor 所属的 pe。 <br> 支持的数据类型为 int 或 SymbolicScalar 类型。 <br> 0 <= src_pe < n_pes。|
 | shape   | 输入      | 需要获取的视图大小。 <br> 参数类型为 list[int] 类型。 |
 | offsets   | 输入      | 需要获取的视图偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
 | valid_shape   | 输入      | 用于指定需要获取的有效数据大小。 <br> 需要保证 valid_shape 小于 shape。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor；Shape 仅支持 2 维。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 |
 
 ## 返回值说明
 
@@ -48,7 +48,7 @@ shmem_get(
 
 ### TileShape 设置示例
 
-说明：调用该接口前，应通过 set_vec_tile_shapes 设置 TileShape。TileShape 维度应和输出一致。
+说明：调用该接口前，应通过 set_vec_tile_shapes 设置 TileShape。TileShape 维度应和 src 一致。
 
 - 示例 1：输入的 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 

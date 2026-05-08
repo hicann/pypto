@@ -25,7 +25,7 @@ create_shmem_tensor(group_name: str, n_pes: int, dtype: DataType, shape: list[in
 | group_name   | 输入      | 指定需要创建 shared memory tensor 的通信域的名字，字符串长度: 1~128。<br> 支持的类型为：str 类型。 |
 | n_pes   | 输入      | 通信域中的 pe 总数，n_pes > 0。 <br> 同一个 group_name 下的创建 shared memory tensor 必须保证 n_pes 一致。 <br> 支持的类型为 int 类型。 |
 | dtype   | 输入      |创建的 shared memory tensor 的数据类型。 <br> 支持的类型为 pypto 的数据类型，可选值：DT_INT32、DT_FP16、DT_FP32、DT_BF16。 |
-| shape   | 输入      |创建的 shared memory tensor 的形状。 <br> 参数类型为 list[int] 类型。 <br> 运行时判断当前创建的 shared memory tensor 是否超出共享区大小，进行报错提示。 |
+| shape   | 输入      |创建的 shared memory tensor 的形状。 <br> 参数类型为 list[int] 类型。 <br> 运行时判断当前创建的 shared memory tensor 是否超出共享区大小，进行报错提示。 <br> 支持的 shmem Tensor 维度：2 - 4 维。 |
 
 ## 返回值说明
 

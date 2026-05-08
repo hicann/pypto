@@ -57,9 +57,8 @@ void ValidateDataType(const Tensor& tensor, const std::string& desc, const std::
         << ", but got:" << ToString(dataType);
 }
 
-void ValidateDim(const Tensor& tensor, const std::string& desc, const std::unordered_set<size_t>& allowedDims)
+void ValidateDim(const Shape& shape, const std::string& desc, const std::unordered_set<size_t>& allowedDims)
 {
-    const auto& shape = tensor.GetShape();
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, allowedDims.empty() || allowedDims.count(shape.size()))
         << "Invalid dimensional: " << desc << " dimensional must be " << ToString(allowedDims)
         << ", but got dimensional=" << shape.size();
@@ -89,7 +88,7 @@ void ValidateTensor(
     const std::unordered_set<DataType>& allowedTypes = {}, const std::unordered_set<TileOpFormat>& allowedFormats = {},
     const Shape& expectShape = {})
 {
-    ValidateDim(tensor, desc, allowedDims);
+    ValidateDim(tensor.GetShape(), desc, allowedDims);
     ValidateDataType(tensor, desc, allowedTypes);
     ValidateFormat(tensor, desc, allowedFormats);
     ValidateShape(tensor, desc, expectShape);
@@ -165,7 +164,7 @@ ShmemTensor CreateShmemTensor(const char* group, int64_t worldSize, DataType dat
 void CreateShmemTensor(const char* group, int64_t worldSize, DataType dataType, const Shape& shape, ShmemTensor& t)
 {
     ValidateGroup(group);
-
+    ValidateDim(shape, "shmem Tensor", {2, 3, 4});
     t.group = std::string(group);
     t.worldSize = worldSize;
     auto& function = *Program::GetInstance().GetCurrentFunction();
