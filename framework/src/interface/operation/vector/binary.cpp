@@ -581,6 +581,57 @@ Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType)
     return result;
 }
 
+LogicalTensorPtr PowSCalc(const LogicalTensorPtr& self, const Element& other, PowAlgorithm precisionType) {
+    double exponent = other.Cast<double>();
+    if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {// sqrt(x)
+        RETURN_CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), self);
+    } else if (std::abs(exponent + NUM_VALUE_0_5) < NUM_VALUE_EPS) {// 1 / sqrt(x)
+        auto sqrt = CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), self);
+        auto ones = GenAllOneTensor(self->shape, self->GetDynValidShape(), DT_FP32);
+        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
+            *Program::GetInstance().GetCurrentFunction(), ones, sqrt
+        );
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION));
+        return result;
+    } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) {// x * x * x
+        auto mul =
+            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
+        RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), mul, self);
+    } else if (std::abs(exponent - NUM_VALUE_2) < NUM_VALUE_EPS) {// x * x
+        RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
+    } else if (std::abs(exponent + NUM_VALUE_2) < NUM_VALUE_EPS) {// 1 / (x * x)
+        auto mul = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
+        auto ones = GenAllOneTensor(self->shape, self->GetDynValidShape(), DT_FP32);
+        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
+            *Program::GetInstance().GetCurrentFunction(), ones, mul
+        );
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION));
+        return result;
+    } else if (std::abs(exponent + NUM_VALUE_1) < NUM_VALUE_EPS) {// 1 / x
+        auto ones = GenAllOneTensor(self->shape, self->GetDynValidShape(), DT_FP32);
+        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
+            *Program::GetInstance().GetCurrentFunction(), ones, self
+        );
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION));
+        return result;
+    } else if (self->Datatype() == DT_INT32) {
+        auto [res, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::POW>(
+            *Program::GetInstance().GetCurrentFunction(), self, Element(DT_INT32, other.Cast<int>()));
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+        return res;
+    } else if (self->Datatype() == DT_FP32) {
+        auto otherTensor = CALL(
+            FullOperation, *Program::GetInstance().GetCurrentFunction(),
+            Element(DataType::DT_FP32, exponent), SymbolicScalar(), DataType::DT_FP32, self->shape,
+            self->GetDynValidShape());
+        auto [res, op] = TensorBinaryOperationWithOp<BinaryOpType::POW>(
+            *Program::GetInstance().GetCurrentFunction(), self, otherTensor);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+        return res;
+    }
+    return self;
+}
+
 void PowSCheck(const Tensor& self)
 {
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT32, DT_FP32};
@@ -602,8 +653,7 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
     if (castSelf->Datatype() == DT_INT32) {
         precisionType = PowAlgorithm::DEFAULT;
     }
-    double exponent = other.Cast<double>();
-    if (std::abs(exponent) < NUM_VALUE_EPS) {
+    if (std::abs(other.Cast<double>()) < NUM_VALUE_EPS) {
         return GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
     }
     DataType dataType = castSelf->Datatype();
@@ -613,31 +663,7 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
             CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
             CastMode::CAST_NONE);
     }
-    auto result = castSelf;
-    if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {
-        result = CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), result);
-    } else if (std::abs(exponent - NUM_VALUE_2) < NUM_VALUE_EPS) {
-        result = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
-    } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) {
-        auto doubleSelf =
-            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
-        result =
-            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), doubleSelf, result);
-    } else if (result->Datatype() == DT_INT32) {
-        auto [res, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::POW>(
-            *Program::GetInstance().GetCurrentFunction(), result, Element(DT_INT32, other.Cast<int>()));
-        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
-        result = res;
-    } else if (result->Datatype() == DT_FP32) {
-        auto otherTensor = CALL(
-            FullOperation, *Program::GetInstance().GetCurrentFunction(),
-            Element(DataType::DT_FP32, other.Cast<double>()), SymbolicScalar(), DataType::DT_FP32, self.GetShape(),
-            self.GetStorage()->GetDynValidShape());
-        auto [res, op] = TensorBinaryOperationWithOp<BinaryOpType::POW>(
-            *Program::GetInstance().GetCurrentFunction(), result, otherTensor);
-        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
-        result = res;
-    }
+    auto result = PowSCalc(castSelf, other, precisionType);
     if (shouldUpToFp32) {
         RETURN_CALL(
             CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, dataType,
