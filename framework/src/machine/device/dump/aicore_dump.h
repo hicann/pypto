@@ -87,11 +87,21 @@ struct DumpTensorData {
 
     DumpTensorData(DumpTensorInfo info, uint64_t dataAddr)
     {
+        auto ret = memcpy_s(
+            reinterpret_cast<uint8_t*>(dataAddr), 
+            sizeof(DumpTensorInfo), 
+            reinterpret_cast<const uint8_t*>(&info), 
+            sizeof(DumpTensorInfo));
+        if (ret != 0) {
+            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.dump.prep: memcpy_s failed, ret=%d.", ret);
+        }
+        dataOffset = sizeof(DumpTensorInfo);
         dataByte = BytesOf(static_cast<DataType>(info.dataType));
         datasize = dataByte;
         for (int32_t i = 0; i < info.dims; i++) {
             datasize *= info.shape[i];
         }
+        datasize += sizeof(DumpTensorInfo);
         if (datasize > DEV_DUMP_DATA_SIZE) {
             return;
         }
@@ -103,8 +113,27 @@ struct DumpTensorData {
             stride[k] = stride[k + 1] * info.rawShape[k + 1];
         }
 
+        // Check if the tensor is contiguous
+        bool is_contiguous = true;
+        for (int32_t i = 0; i < info.dims; i++) {
+            if (info.shape[i] != info.rawShape[i] || info.offset[i] != 0) {
+                is_contiguous = false;
+                break;
+            }
+        }
         data = dataAddr;
-        TraverseAllAhapeIndexCombinations(info.shape, stride, info.offset, 0, info.dims, info.tensorAddr);
+        if (is_contiguous) {
+            // Copy the tensor data in one shot
+            uint64_t copy_size = datasize - sizeof(DumpTensorInfo);
+            ret = memcpy_s(reinterpret_cast<uint8_t*>(data) + dataOffset, copy_size,
+                    reinterpret_cast<const uint8_t*>(info.tensorAddr), copy_size);
+            if (ret != 0) {
+                DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.dump.prep: memcpy_s failed, ret=%d.", ret);
+            }
+            dataOffset += copy_size;
+        } else {
+            TraverseAllAhapeIndexCombinations(info.shape, stride, info.offset, 0, info.dims, info.tensorAddr);
+        }
     }
 
     int GetDumpSize() const
@@ -116,8 +145,15 @@ struct DumpTensorData {
 
 class AicoreDump {
 public:
-    AicoreDump(){};
-    ~AicoreDump(){};
+    AicoreDump() {};
+    ~AicoreDump() {
+        if (ideSession_ == nullptr) { return; }
+        DEV_DEBUG("Now close the tensor dump.");
+        int m = IdeDumpEnd(ideSession_);
+        if (m != 0) {
+            DEV_WARN("Close ideSession failed, state=%d.", m);
+        }
+    }
     uint64_t dataSize_{0};
     void Init(DevStartArgs* startArgs, int schedIdx)
     {
@@ -132,6 +168,10 @@ public:
 
             dataAddr = baseAddr + schedIdx * DEV_DUMP_DATA_SIZE;
             DEV_DEBUG("DataAddr=%#lx.", dataAddr);
+            // ip: port only matches parameter rules with code, without communication funciton
+            const std::string privateInfo = "127.0.0.1:22118;" + std::to_string(deviceId_) + ";" + std::to_string(hostPid_);
+            ideSession_ = IdeDumpStart(privateInfo.c_str()); // 建立通道过程 device
+            DEV_DEBUG("Pid=%d, deviceId=%u, privateInfo=%s.", (int)hostPid_, deviceId_, privateInfo.c_str());
         }
     }
 
@@ -160,8 +200,7 @@ public:
     }
     inline bool IsEnableDump() const { return enableDump_; }
 
-    inline bool DumpData(
-        const IDE_SESSION& ideSession, std::string& fileName, unsigned char* dataBuf, uint64_t dataSize,
+    inline bool DumpData(std::string& fileName, unsigned char* dataBuf, uint64_t dataSize,
         bool& isLast) const
     {
         IdeDumpChunk ideDumpChunk = {
@@ -174,12 +213,12 @@ public:
         };
 
         DEV_DEBUG("Start ideDump tensor data.");
-        const int ideState = IdeDumpData(ideSession, &ideDumpChunk);
+        const int ideState = IdeDumpData(ideSession_, &ideDumpChunk);
         DEV_DEBUG("Finish ideDump. IdeState=%d.", ideState);
         return ideState == 0;
     }
 
-    void Dump(const IDE_SESSION& ideSession, DumpTensorInfo dumpTensorInfo, std::string& fileName, bool isLast)
+    void Dump(DumpTensorInfo dumpTensorInfo, std::string& fileName, bool isLast)
     {
         DumpTensorData dumpTensorData(dumpTensorInfo, dataAddr);
         dataSize_ = dumpTensorData.GetDumpSize();
@@ -187,13 +226,7 @@ public:
             DEV_WARN("Tensor dataSize=%lu is larger than dumpSize=%lu.", dataSize_, DEV_DUMP_DATA_SIZE);
             return;
         }
-        bool ret = DumpData(
-            ideSession, fileName, reinterpret_cast<uint8_t*>(&dumpTensorInfo), dumpTensorInfo.headSize, isLast);
-        if (!ret) {
-            DEV_WARN("#sche.dump.info: Dump Tensor info not successful.");
-            return;
-        }
-        ret = DumpData(ideSession, fileName, reinterpret_cast<uint8_t*>(dumpTensorData.data), dataSize_, isLast);
+        bool ret = DumpData(fileName, reinterpret_cast<uint8_t*>(dumpTensorData.data), dataSize_, isLast);
         if (!ret) {
             DEV_WARN("#sche.dump.data: Dump Tensor data not successful.");
             return;
@@ -281,12 +314,7 @@ public:
 
         std::string dumpPath =
             "output/dump_tensor_" + std::to_string(hostPid_) + "/device_" + std::to_string(deviceId_) + "/";
-        // ip: port only matches parameter rules with code, without communication funciton
-        const std::string privateInfo = "127.0.0.1:22118;" + std::to_string(deviceId_) + ";" + std::to_string(hostPid_);
-        const IDE_SESSION ideSession = IdeDumpStart(privateInfo.c_str()); // 建立通道过程 device
-        DEV_DEBUG("Pid=%d, deviceId=%u, privateInfo=%s.", (int)hostPid_, deviceId_, privateInfo.c_str());
-
-        if (ideSession == nullptr) {
+        if (ideSession_ == nullptr) {
             DEV_WARN("Created ideSession failed.");
             return;
         }
@@ -300,12 +328,7 @@ public:
                 std::to_string(info.rawMagic) + "_" + std::to_string(timeStamp_) + "_" +
                 DataType2CCEStr(static_cast<DataType>(info.dataType)) + "_" + iOinfo + std::to_string(i) + ".tdump";
             std::string fileName = dumpPath + tensorInfos;
-            Dump(ideSession, info, fileName, isLast);
-        }
-        DEV_DEBUG("Now close the tensor dump.");
-        int m = IdeDumpEnd(ideSession);
-        if (m != 0) {
-            DEV_WARN("Close ideSession failed, state=%d.", m);
+            Dump(info, fileName, isLast);
         }
     }
 
@@ -319,6 +342,7 @@ private:
     uint64_t timeStamp_{0};
     uint64_t dataAddr;
     bool enableDump_{false};
+    IDE_SESSION ideSession_{nullptr};
 };
 } // namespace npu::tile_fwk::dynamic
 #endif

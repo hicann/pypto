@@ -1050,9 +1050,11 @@ private:
 #endif
 
 #if ENABLE_TENSOR_DUMP
-        // dump input tensor
-        if (unlikely(isEnableDump)) {
-            aicoreDump_.DoDump(devTaskCtx->GetDeviceTask(), "input", newTask, coreIdx);
+        DEV_IF_DEVICE {
+            // dump input tensor
+            if (unlikely(isEnableDump)) {
+                aicoreDump_.DoDump(devTaskCtx->GetDeviceTask(), "input", newTask, coreIdx);
+            }
         }
 #endif
         uint64_t encodeTaskId = EncodeTaskId(devTaskCtx, coreIdx, newTask);
@@ -1764,9 +1766,11 @@ private:
         context_->Init(deviceArgs, schedIdx);
 
 #if ENABLE_TENSOR_DUMP
-        isEnableDump = startArgs->devProg->devArgs.hostPid != 0;
-        if (unlikely(isEnableDump)) {
-            aicoreDump_.Init(startArgs, schedIdx);
+        DEV_IF_DEVICE {
+            isEnableDump = startArgs->devProg->devArgs.hostPid != 0;
+            if (unlikely(isEnableDump)) {
+                aicoreDump_.Init(startArgs, schedIdx);
+            }
         }
 #endif
         (void)startArgs;
@@ -2086,9 +2090,11 @@ private:
 #endif
 
 #if ENABLE_TENSOR_DUMP
-        // dump output tensor
-        if (unlikely(isEnableDump)) {
-            aicoreDump_.DoDump(deviceTaskCtx->GetDeviceTask(), "output", taskId, coreIdx);
+        DEV_IF_DEVICE {
+            // dump output tensor
+            if (unlikely(isEnableDump)) {
+                aicoreDump_.DoDump(deviceTaskCtx->GetDeviceTask(), "output", taskId, coreIdx);
+            }
         }
 #endif
 

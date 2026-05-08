@@ -205,13 +205,12 @@ void ExecuteOpCopyIn(ExecuteOperationContext* ctx)
     auto iopValid = iop;
     auto oopValid = oop;
     if (copyin != nullptr) {
-        std::vector<int64_t> shape = ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetShape());
         std::vector<int64_t> rawShape = ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetRawShape());
         std::vector<int64_t> fromOffset = ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetFromOffset());
         std::vector<int64_t> dynvalidshape =
             ctx->opInter->EvaluateOpImmediate(ctx->frame, copyin->GetToDynValidShape());
         if (dynvalidshape.empty()) {
-            dynvalidshape = shape;
+            dynvalidshape = iopValid->GetValidShape();
         }
 
         iopValid = std::make_shared<LogicalTensorData>(iopValid->GetData(), dynvalidshape, fromOffset);
