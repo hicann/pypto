@@ -16,16 +16,24 @@
 
 #pragma once
 
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "interface/interpreter/interpreter_log.h"
 #include "interface/tensor/tensor_slot.h"
 #include "interface/interpreter/operation.h"
 #include "interface/tensor/symbolic_scalar_evaluate.h"
 #include "calc.h"
 #include "tilefwk/error_code.h"
-#include <algorithm>
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
+#include "communication.h"
+#include "tilefwk/comm_group_recorder.h"
+#include "interface/operation/distributed/distributed_common.h"
+
 
 namespace npu::tile_fwk {
 
@@ -272,7 +280,9 @@ struct FunctionFrame {
         const std::shared_ptr<LogicalTensor>& inplaceTensor = nullptr)
     {
         if (tensorDataViewDict.count(tensor)) {
-            tensorDataViewDict[tensor]->UpdateValidShape(validShape);
+            if (!validShape.empty()) {
+                tensorDataViewDict[tensor]->UpdateValidShape(validShape);
+            }
             return tensorDataViewDict[tensor];
         }
 
@@ -297,6 +307,12 @@ struct FunctionFrame {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
             rawData = std::make_shared<RawTensorData>(dtype, rawShape);
             rawData->resize(rawData->GetDataSize());
+            for (auto& [lt, ltd]: tensorDataViewDict) {
+                if (lt->GetRawTensor() == tensor->GetRawTensor() && ltd->IsShmTensor()) {
+                    rawData->SetShmOffset(ltd->GetData()->GetShmOffset());
+                    rawData->SetAsShmTensor();
+                }
+            }
         }
         DoAddRawTensorDataView(tensor->GetRawTensor(), rawData);
         std::shared_ptr<LogicalTensorData> view =
@@ -715,6 +731,47 @@ struct FunctionInterpreter {
     static constexpr int64_t MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS = 60000; // 60s timeout to detect dead waits
     std::mutex dumpStateMutex_;
 
+    bool CheckWaitUntilReady(Operation *op, LogicalTensorDataPtr shmData)
+    {
+        Distributed::ShmemWaitUntilAttr attr;
+        op->GetAttr(OpAttributeKey::distOpAttr, attr);
+        std::shared_ptr<SimulationCommContext> context =
+            SimulationCommManager::Instance().GetCommContext(attr.group);
+        int srcRank = context->GetRank();
+        size_t slotSize = shmData->GetSize() * BytesOf(shmData->GetDataType());
+        uint64_t offset = shmData->GetShmStorageOffset();
+        return context->CheckWaitCondition(srcRank, attr.expectedSum, slotSize, offset);
+    }
+
+    std::unordered_map<Operation*, std::vector<Operation*>> ConstructOpConsumers(OperationsViewer operations, std::unordered_map<Operation*, int> &inDegree) {
+        std::unordered_map<Operation*, std::vector<Operation*>> consumers;
+        std::unordered_set<Operation*> opSet;
+        for (auto &op: operations) {
+            opSet.insert(&op);
+        }
+        for (auto &op: operations) {
+            for (auto &iTensor: op.GetIOperands()) {
+                for (auto *producer: iTensor->GetProducers()) {
+                    if (opSet.count(producer)) {
+                        inDegree[&op]++;
+                        consumers[producer].push_back(&op);
+                    }
+                }
+            }
+        }
+        for (auto &op: operations) {
+            for (auto &dTensor: op.GetDependOperands()) {
+                for (auto *producer: dTensor->GetProducers()) {
+                    if (opSet.count(producer)) {
+                        inDegree[&op]++;
+                        consumers[producer].push_back(&op);
+                    }
+                }
+            }
+        }
+        return consumers;
+    }
+
     std::vector<std::shared_ptr<LogicalTensorData>>& GetInputDataViewList()
     {
         return operationInterpreter->evaluateSymbol->GetInputDataViewList();
@@ -975,6 +1032,54 @@ struct FunctionInterpreter {
         return -1;
     }
 
+    std::vector<uint64_t> UnBind(SymbolicScalar attr) {
+        std::shared_ptr<RawSymbolicExpression> expr = std::static_pointer_cast<RawSymbolicExpression>(attr.Raw());
+        ASSERT(expr->Opcode() == SymbolicOpcode::T_MOP_CALL);
+        std::vector<uint64_t> parameters;
+        for (size_t i = 1; i < expr->OperandList().size(); i++) {
+            ScalarImmediateType value = EvaluateSymbolicScalar(SymbolicScalar(expr->OperandList()[i]));
+            parameters.emplace_back(value);
+        }
+        return parameters;
+    }
+
+    void ExecuteBindTensor(FunctionFrame& frame, Operation& op,
+        const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
+        std::vector<std::shared_ptr<LogicalTensorData>>& oOpDataList)
+    {
+        (void) iOpDataList;
+        (void) oOpDataList;
+        ASSERT(op.GetIOperands().size() == 0);
+        ASSERT(op.GetOOperands().size() == 1);
+        SymbolicScalar attr = op.GetSymbolicScalarAttribute(OpAttributeKey::bindTensor);
+        std::vector<uint64_t> parameters = UnBind(attr);
+        uint64_t groupIndex = parameters[0];
+        uint64_t memType = parameters[1];
+        const auto &groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
+        ASSERT(groupIndex < static_cast<uint64_t>(groupNames.size()));
+        const std::string &groupName = groupNames[groupIndex];
+        LogicalTensorDataPtr out;
+        RawTensorDataPtr tmp;
+        
+        auto outOp = op.GetOOperands()[0];
+        if (frame.GetDataView(outOp) != nullptr) {
+            out = frame.GetDataView(outOp);
+            oOpDataList.emplace_back(out);
+            return;
+        }
+        if (memType == 0) {
+            tmp = SimulationCommManager::Instance().Alloc(groupName, outOp->Datatype(), outOp->GetShape());
+            out = LogicalTensorData::Create(*tmp);
+        }
+        if (memType == 1) {
+            tmp = SimulationCommManager::Instance().AllocSignal(groupName, outOp->Datatype(), outOp->GetShape());
+            out = LogicalTensorData::Create(*tmp);
+        }
+        ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, out != nullptr);
+        frame.AddDataView(outOp, out);
+        oOpDataList.emplace_back(out);
+    }
+
     void ExecuteInplaceOperation(
         FunctionFrame& frame, Operation& op, int oOperandIdx,
         const std::vector<std::shared_ptr<LogicalTensorData>>& iOpDataList,
@@ -1028,6 +1133,8 @@ struct FunctionInterpreter {
             }
             if (auto index = GetInplaceIndex(op, i); index != -1) {
                 ExecuteInplaceOperation(frame, *op, i, iOpDataList, oOpDataList);
+            } else if (op->GetOpcode() == Opcode::OP_BIND_TENSOR){
+                ExecuteBindTensor(frame, *op, iOpDataList, oOpDataList);
             } else {
                 if (isConsumerAccMatmul(op)) {
                     auto dtype = oop->GetRawTensor()->GetDataType();
@@ -1148,6 +1255,47 @@ struct FunctionInterpreter {
         return true;
     }
 
+    void ExecuteHasWaitUntilFrame(Function* func, std::shared_ptr<FunctionFrame> frame) {
+        auto operations = func->Operations();
+        std::queue<Operation*> queue;
+        std::unordered_map<Operation*, int> inDegree;
+        for (auto &operation: operations) {
+            queue.push(&operation);
+            inDegree[&operation] = 0;
+        }
+        std::unordered_map<Operation*, std::vector<Operation*>> consumers = ConstructOpConsumers(operations, inDegree);
+        while (!queue.empty()) {
+            auto op = queue.front();
+            queue.pop();
+            if (inDegree[op] != 0) {
+                queue.push(op);
+                continue;
+            }
+            if (op->GetOpcode() == Opcode::OP_SHMEM_WAIT_UNTIL) {
+                auto iopList = frame->GetDataViewList(op->GetIOperands());
+                LogicalTensorDataPtr shmData = iopList[1];
+                if (CheckWaitUntilReady(op, shmData)) {
+                    ExecuteHandleOperationBegin(op);
+                    ExecuteOperation(*frame, op);
+                    ExecuteHandleOperationEnd();
+                    for (auto *consumer: consumers[op]) {
+                        inDegree[consumer]--;
+                    }
+                } else {
+                    std::this_thread::sleep_for(std::chrono::microseconds(10));
+                    queue.push(op);
+                }
+            } else {
+                ExecuteHandleOperationBegin(op);
+                ExecuteOperation(*frame, op);
+                ExecuteHandleOperationEnd();
+                for (auto *consumer: consumers[op]) {
+                    inDegree[consumer]--;
+                }
+            }
+        }
+    }
+
     std::shared_ptr<FunctionFrame> ExecuteFunctionFrame(
         Function* func, Operation* callop, std::shared_ptr<FunctionIODataPair>& inoutDataPair)
     {
@@ -1181,22 +1329,35 @@ struct FunctionInterpreter {
 
         ExecuteHandleFunctionBegin(func, frame);
         auto operations = func->Operations();
-        for (size_t opIdx = 0; opIdx < operations.size();) {
-            auto& op = operations.at(opIdx);
-            if (op.GetOpcode() == Opcode::OP_PRINT && verifyType != VerifyType::TENSOR_GRAPH) {
-                opIdx++;
-                continue;
-            }
 
-            if (TryExecuteMixSplitCallOps(*frame, operations, opIdx, op)) {
-                continue;
+        bool hasWaitUntil = false;
+        for (auto &op: operations) {
+            if (op.GetOpcode() == Opcode::OP_SHMEM_WAIT_UNTIL) {
+                hasWaitUntil = true;
+                break;
             }
-
-            ExecuteHandleOperationBegin(&op);
-            ExecuteOperation(*frame, &op);
-            ExecuteHandleOperationEnd();
-            opIdx++;
         }
+        if (hasWaitUntil) {
+            ExecuteHasWaitUntilFrame(func, frame);
+        } else {
+            for (size_t opIdx = 0; opIdx < operations.size();) {
+                auto& op = operations.at(opIdx);
+                if (op.GetOpcode() == Opcode::OP_PRINT && verifyType != VerifyType::TENSOR_GRAPH) {
+                    opIdx++;
+                    continue;
+                }
+
+                if (TryExecuteMixSplitCallOps(*frame, operations, opIdx, op)) {
+                    continue;
+                }
+
+                ExecuteHandleOperationBegin(&op);
+                ExecuteOperation(*frame, &op);
+                ExecuteHandleOperationEnd();
+                opIdx++;
+            }
+        }
+
         ExecuteHandleFunctionEnd();
 
         CopyInplaceOutcastToIncast(func, frame);

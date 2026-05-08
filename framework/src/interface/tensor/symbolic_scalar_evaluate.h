@@ -20,6 +20,8 @@
 #include "interface/tensor/symbolic_scalar.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/function/function.h"
+#include "interface/interpreter/communication.h"
+#include "tilefwk/comm_group_recorder.h"
 
 namespace npu::tile_fwk {
 
@@ -52,6 +54,13 @@ public:
 
             symbolDict_[symbolName] = EvaluateSymbolicScalar(linearArgList[argIndex]);
         }
+    }
+
+    int EvaluateRankId(int hcclIdx) {
+        const std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
+        const std::string &groupName = groupNames[hcclIdx];
+        auto ctx = SimulationCommManager::Instance().GetCommContext(groupName);
+        return ctx->GetRank();
     }
 
     std::vector<int64_t> EvaluateValidShape(

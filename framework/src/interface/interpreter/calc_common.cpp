@@ -40,6 +40,10 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
     } else {
         calc::Copy(ret, iop);
     }
+    if (iop->IsShmTensor()) {
+        oop->GetData()->SetAsShmTensor();
+        oop->GetData()->SetShmOffset(iop->GetData()->GetShmOffset());
+    }
 }
 REGISTER_CALC_OP(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, ExecuteOpAssemble);
 REGISTER_CALC_OP(OP_ASSEMBLE_SSA, Opcode::OP_ASSEMBLE_SSA, ExecuteOpAssemble);
@@ -138,6 +142,10 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     } else {
         auto ret = iop->View(oop->GetShape(), offset);
         calc::Copy(oop, ret);
+    }
+    if (iop->IsShmTensor()) {
+        oop->GetData()->SetAsShmTensor();
+        oop->GetData()->SetShmOffset(iop->GetData()->GetShmOffset());
     }
 }
 REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView);

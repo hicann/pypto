@@ -111,6 +111,12 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim3(
     return ret;
 }
 
+ScalarImmediateType EvaluateSymbolicCallGetHcclRankId(EvaluateSymbol *evaluateSymbol, const std::vector<ScalarImmediateType> &dataList)
+{
+    int hcclIdx = static_cast<int>(dataList[0]);
+    return evaluateSymbol->EvaluateRankId(hcclIdx);
+}
+
 ScalarImmediateType EvaluateSymbolicCallGetParaAddr(EvaluateSymbol*, const std::vector<ScalarImmediateType>&)
 {
     // not used by getTensorData
@@ -196,6 +202,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(
         {"RUNTIME_GetTensorDataInt32Dim2", EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim2},
         {"RUNTIME_GetTensorDataInt32Dim3", EvaluateSymbolicCallRuntimeGetTensorDataInt32Dim3},
         {"RUNTIME_COA_GET_PARAM_ADDR", EvaluateSymbolicCallGetParaAddr},
+        {"RUNTIME_GetHcclRankId", EvaluateSymbolicCallGetHcclRankId},
     };
     using CallWithLinerArgsEntry = ScalarImmediateType (*)(
         EvaluateSymbol*, const std::vector<ScalarImmediateType>& dataList,

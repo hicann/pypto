@@ -355,6 +355,22 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         return static_cast<size_t>((nelem + 1) / 2);
     }
 
+    size_t GetShmOffset() const {
+        return shmOffset_;
+    }
+
+    void SetShmOffset(size_t offset) {
+        shmOffset_ = offset;
+    }
+
+    bool IsShmTensor() {
+        return isShmTensor_;
+    }
+
+    void SetAsShmTensor() {
+        isShmTensor_ = true;
+    }
+
     void UpdateRawTensorData(DataType dType, Shape shape) {
         dataType_ = dType;
         shape_ = shape;
@@ -372,6 +388,8 @@ private:
     // Signed: GetDataSize(DataType) uses -1 for sub-byte dtypes; storing as size_t wrapped to huge
     // and broke vector allocation in SetVerifyData / RawTensorData::CreateTensor.
     int elemSize_;
+    bool isShmTensor_ = false;
+    size_t shmOffset_ = 0;
 };
 
 using RawTensorDataPtr = std::shared_ptr<RawTensorData>;
@@ -436,6 +454,14 @@ struct LogicalTensorData {
             offset += strides[i] * offset_[i];
         }
         return offset;
+    }
+
+    size_t GetShmStorageOffset() {
+        return GetStorageOffset() * data_->GetElementSize() + data_->GetShmOffset();
+    }
+
+    bool IsShmTensor() {
+        return data_->IsShmTensor();
     }
 
     int ViewIndexToDataIndex(int viewIndex) const

@@ -141,6 +141,7 @@ typename std::enable_if<is_iterable_v<Container>, std::string>::type ToString(co
 }
 
 struct ShmemPutAttr {
+    std::string group;
     Shape copyBufferShape;
     AtomicType atomicType = AtomicType::SET;
     SymbolicScalar ownerRank;
@@ -150,6 +151,7 @@ struct ShmemGetAttr {
     Shape copyBufferShape;
     AtomicType atomicType = AtomicType::SET;
     SymbolicScalar ownerRank;
+    std::string group;
 };
 
 struct ShmemSignalAttr {
@@ -160,6 +162,7 @@ struct ShmemSignalAttr {
     bool notifyAll{false};
     int64_t worldSize{0};
     SymbolicScalar ownerRank;
+    std::string group;
 };
 
 struct ShmemWaitUntilAttr {
@@ -168,9 +171,11 @@ struct ShmemWaitUntilAttr {
     bool resetSignal = false;
     std::vector<int64_t> tileShape;
     SymbolicScalar ownerRank;
+    std::string group;
 };
 
 struct ShmemSetAttr {
+    std::string group;
     bool isSetData{true};
     Shape setBufferShape;
     SymbolicScalar ownerRank;

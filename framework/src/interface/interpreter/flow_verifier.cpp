@@ -24,6 +24,9 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/comm_group_recorder.h"
+#include "communication.h"
+
 
 namespace npu::tile_fwk {
 
@@ -404,6 +407,13 @@ void FlowVerifier::VerifyTensorGraph(
     const std::vector<std::shared_ptr<LogicalTensorData>>& goldenDataViewList,
     const std::shared_ptr<TensorSlotManager>& slotManager)
 {
+    const std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
+    if (!groupNames.empty()) {
+        for (const std::string &groupName: groupNames) {
+            SimulationCommManager::Instance().CreateSimulationCommContext(groupName, 0);
+        }
+    }
+
     entry_ = entry;
     inputDataViewList_ = inputDataViewList;
     outputDataViewList_ = outputDataViewList;
@@ -542,6 +552,14 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
             return;
         }
     }
+
+    const std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
+    if (!groupNames.empty()) {
+        for (const std::string &groupName: groupNames) {
+            SimulationCommManager::Instance().CreateSimulationCommContext(groupName, passIndex + 1);
+        }
+    }
+
     std::vector<double> tolerance = config::GetVerifyOption<std::vector<double>>(KEY_PASS_VERIFY_ERROR_TOL);
     float rtol = static_cast<float>(tolerance[0]);
     float atol = static_cast<float>(tolerance[1]);
