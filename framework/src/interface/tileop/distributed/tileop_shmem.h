@@ -439,12 +439,14 @@ TILEOP void ShmemPutUb2Gm(
     GET_GM_LAYOUT_INFO(src, srcLayout, srcStride0, srcStride1, srcStride2, srcOffset, C1, srcCoordinate);
     GET_GM_LAYOUT_INFO(dst, dstLayout, dstStride0, dstStride1, dstStride2, dstOffset, C2, dstCoordinate);
 
+    constexpr auto srcTypeSize = sizeof(typename T1::Type);
+
     for (LoopVar index0 = 0; index0 < outValidShape0; ++index0) {
         for (LoopVar index1 = 0; index1 < outValidShape1; ++index1) {
             for (LoopVar index2 = 0; index2 < outValidShape2; ++index2) {
                 auto srcOffset3d = index0 * srcStride0 + index1 * srcStride1 + index2 * srcStride2;
                 auto dstOffset3d = index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2;
-                uint64_t srcAddr = src.GetAddr() + srcOffset + srcOffset3d;
+                uint64_t srcAddr = src.GetAddr() + srcOffset3d * srcTypeSize;
                 __gm__ Type* dstAddr =
                     MapVirtualAddr<Type>(hcclContext, dst.GetAddr(), ownerRank) + dstOffset + dstOffset3d;
 
@@ -580,7 +582,7 @@ TILEOP void ShmemGetGm2Ub(
     static_assert(T1::FORMAT == Hardware::UB && T2::FORMAT == Hardware::GM);
     GET_GM_LAYOUT_INFO(src, srcLayout, srcStride0, srcStride1, srcStride2, srcOffset, C2, srcCoordinate);
     GET_GM_LAYOUT_INFO(dst, dstLayout, dstStride0, dstStride1, dstStride2, dstOffset, C1, dstCoordinate);
-
+    constexpr auto dstTypeSize = sizeof(typename T1::Type);
     for (LoopVar index0 = 0; index0 < dstValidShape0; ++index0) {
         for (LoopVar index1 = 0; index1 < dstValidShape1; ++index1) {
             for (LoopVar index2 = 0; index2 < dstValidShape2; ++index2) {
@@ -589,9 +591,9 @@ TILEOP void ShmemGetGm2Ub(
 
                 __gm__ ShmemType* srcAddr =
                     MapVirtualAddr<ShmemType>(hcclContext, src.GetAddr(), ownerRank) + srcOffset + srcOffset3d;
-                uint64_t dstAddr = dst.GetAddr() + dstOffset + dstOffset3d;
+                uint64_t dstAddr = dst.GetAddr() + dstOffset3d * dstTypeSize;
 
-                CopyGmToUbBlock<UBType, ShmemType, bufferRowShape, bufferColShape, srcStride, dstStride>(
+                CopyGmToUbBlock<UBType, ShmemType, tileRowShape, tileColShape, srcStride, dstStride>(
                     dstAddr, buffer, srcAddr, dstValidShape3, dstValidShape4);
             }
         }
