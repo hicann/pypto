@@ -418,8 +418,7 @@ def function(name: str, *args) -> Iterator:
         set_source_location(level=2)
         func = pypto_impl.RecordFunc(name, [t.base() for t in in_out_tensors])
         clear_source_location()
-        for _ in loop(1, name="__main__"):
-            yield func
+        yield func
     except Exception as e:
         first_exc = e
     finally:

@@ -409,7 +409,7 @@ class Parser(ast.NodeVisitor):
             if function_node.returns is not None:
                 raise ParserError(
                     function_node.returns,
-                    ValueError(
+                    NotImplementedError(
                         "Return annotation is not allowed. Use an out parameter and "
                         "out.move(...) inside the kernel instead."
                     ),
@@ -535,8 +535,10 @@ class Parser(ast.NodeVisitor):
         if func is None:
             raise ParserError(
                 node,
-                f"{name} is not supported by the PTO parser yet. "
-                f"Please check the documentation for supported Python features.",
+                NotImplementedError(
+                    f"{name} is not supported by the PTO parser yet. "
+                    f"Please check the documentation for supported Python features."
+                )
             )
         return func(node)
 
@@ -869,7 +871,8 @@ class Parser(ast.NodeVisitor):
                 set_source_location(filename=self.source_name(), lineno=node.lineno)
                 with pypto.function(node.name, *tensor_input_args, *output_args):
                     clear_source_location()
-                    self._visit_body(node.body)
+                    for _ in pypto.loop(1, name="default_loop_1"):
+                        self._visit_body(node.body)
 
         return pypto.functions.get_last_function()
 
