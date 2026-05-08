@@ -303,6 +303,7 @@ protected:
     virtual std::string GenGmParamVar(unsigned gmParamIdx) const;
 
     std::vector<std::string> GenGetParamMacroPacked(unsigned gmParamIdx, int dim, const std::string& prefix) const;
+    std::vector<std::string> GenDynRawShapePacked(unsigned gmParamIdx) const;
 
     std::vector<std::string> GenParamIdxExprByIndex(unsigned gmParamIdx, int dim, const std::string& prefix) const;
 

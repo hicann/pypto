@@ -75,12 +75,13 @@ void CodeGenOp::CombineAxis(const Operation& oper, int operandIdx, bool isInput,
         CombineLastTwoAxis(rawShape[operandIdx], dim);
         CombineLastTwoAxis(originShape[operandIdx], dim);
         CombineLastTwoAxis(dynamicValidShape[operandIdx], dim);
+        CombineLastTwoAxis(dynamicRawShape[operandIdx], dim);
         CODEGEN_LOGI(
             "op code %s, operandIdx: %d, after CombineAxis shape is %s, raw shape is %s, originShape is %s, "
-            "dynamicValidShape is %s",
+            "dynamicValidShape is %s, dynamicRawShape is %s",
             oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]).c_str(),
             IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(originShape[operandIdx]).c_str(),
-            IntVecToStr(dynamicValidShape[operandIdx]).c_str());
+            IntVecToStr(dynamicValidShape[operandIdx]).c_str(), IntVecToStr(dynamicRawShape[operandIdx]).c_str());
     }
 }
 
@@ -88,12 +89,15 @@ void CodeGenOp::UpdateShape(
     const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx, bool isInput, size_t ioIdx)
 {
     CODEGEN_LOGI(
-        "op code %s, operandIdx: %d, shape is %s, raw shape is %s, dynamicValidShape is %s",
+        "op code %s, operandIdx: %d, shape is %s, raw shape is %s, dynamicValidShape is %s, "
+        "dynamicRawShape is %s",
         oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(logicalTensor.shape).c_str(),
-        IntVecToStr(logicalTensor.tensor->rawshape).c_str(),
-        IntVecToStr(logicalTensor.GetDynValidShape()).c_str());
+        IntVecToStr(logicalTensor.tensor->rawshape).c_str(), IntVecToStr(logicalTensor.GetDynValidShape()).c_str(),
+        IntVecToStr(logicalTensor.tensor->dynRawShape).c_str());
 
+    // raw shape
     rawShape[operandIdx] = logicalTensor.tensor->rawshape;
+    // origin shape equals to valid shape in static scene by pass, use 'LogicalTensor::shape' member variable
     originShape[operandIdx] = logicalTensor.shape;
     if (isDynamicFunction) {
         dynamicValidShape[operandIdx] =
@@ -109,10 +113,12 @@ void CodeGenOp::UpdateShape(
         ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
         // 1. for spilling GM scene 2. for conv
         shapeFromAttr[operandIdx] = attr->GetSpecifiedShape(1);
+        dynamicRawShape[operandIdx] = OpImmediate::ToSpecified(attr->GetRawShape());
         CODEGEN_LOGI("attrShape(from op CopyOpAttribute) = %s", IntVecToStr(shapeFromAttr[operandIdx]).c_str());
     } else { // Tile Shape from LogicalTensor (Only used in extremely special cases)
         shape[operandIdx] = logicalTensor.shape;
     }
+
     if ((opCode == Opcode::OP_L0C_TO_L1) && (operandIdx == 0)) {
         std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
         ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
@@ -152,7 +158,7 @@ void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor&
     static const std::set<Opcode> cubeMDLOpCode = {
         Opcode::OP_L1_TO_L0A,       Opcode::OP_L1_TO_L0B,           Opcode::OP_L1_TO_L0_AT, Opcode::OP_L1_TO_L0_BT,
         Opcode::OP_L1_TO_BT,        Opcode::OP_L1_TO_FIX_QUANT_PRE, Opcode::OP_L0C_TO_L1,   Opcode::OP_L1_TO_L0A_SCALE,
-        Opcode::OP_L1_TO_L0B_SCALE, Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1};
+        Opcode::OP_L1_TO_L0B_SCALE, Opcode::OP_L0C_COPY_UB,         Opcode::OP_UB_COPY_L1};
     static const std::set<Opcode> distOpcode = {Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT_UB2GM};
     bool cubeMDLCondition = cubeMDLOpCode.count(opCode);
     bool distCondition = distOpcode.count(opCode);
@@ -172,8 +178,8 @@ void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor&
 
 void CodeGenOp::UpdateOffsetForOutput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
 {
-    static const std::set<Opcode> cubeMDLOutOpCode =
-        {Opcode::OP_L0C_TO_L1, Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1};
+    static const std::set<Opcode> cubeMDLOutOpCode = {
+        Opcode::OP_L0C_TO_L1, Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1};
     bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode);
     bool useAttrShapeOffsetForOutputGM =
         OpcodeManager::Inst().IsCopyOut(opCode) && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR;

@@ -1911,7 +1911,8 @@ std::string CodeGenOpNPU::GenLogicalAndOp() const
     return os.str();
 }
 
-std::string CodeGenOpNPU::GenQuantizeOp() const {
+std::string CodeGenOpNPU::GenQuantizeOp() const
+{
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Quantize only support TileTensor mode";
     return PrintQuantizeTileTensor();
 }
@@ -1959,7 +1960,8 @@ std::string CodeGenOpNPU::PrintQuantizeTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenDequantizeOp() const {
+std::string CodeGenOpNPU::GenDequantizeOp() const
+{
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Dequantize only support TileTensor mode";
     return PrintDequantizeTileTensor();
 }
@@ -1986,7 +1988,7 @@ std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
         dequantType = "pto::DequantType::INT16";
     } else {
         ASSERT(GenCodeErr::DATA_TYPE_UNSUPPORTED, false) << "PrintDequantizeTileTensor: unsupported input dtype "
-                    << static_cast<int>(srcDtype) << ", expected INT8 or INT16";
+                                                         << static_cast<int>(srcDtype) << ", expected INT8 or INT16";
     }
 
     std::ostringstream oss;
@@ -1997,7 +1999,7 @@ std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
     paramList.emplace_back(dstTensor);
     paramList.emplace_back(srcTensor);
     paramList.emplace_back(scaleTensor);
-    paramList.emplace_back(offsetTensor);  // Always 4 params
+    paramList.emplace_back(offsetTensor); // Always 4 params
 
     oss << tileOpName;
     oss << WrapParamByAngleBrackets(templateParamList);

@@ -429,8 +429,7 @@ GetTensorDataIODescDict Function::GetTensorDataForTensorGraph()
             continue;
         }
         int getTensorDataIndex = GetTensorDataGetIndex(&op);
-        FE_ASSERT(FeError::INVALID_VAL, getTensorDataIndex != -1)
-            << "Failed to get tensor data index for operation";
+        FE_ASSERT(FeError::INVALID_VAL, getTensorDataIndex != -1) << "Failed to get tensor data index for operation";
         FE_ASSERT(FeError::NOT_EXIST, currDynAttr->getTensorDataUsageDict.count(this))
             << "Current function not found in getTensorDataUsageDict";
         std::unordered_map<int, Operation*>& importDict = currDynAttr->getTensorDataUsageDict[this].importDict;
@@ -459,8 +458,7 @@ GetTensorDataIODescDict Function::GetTensorDataForLeafGraph()
             continue;
         }
         int getTensorDataIndex = GetTensorDataGetIndex(&op);
-        FE_ASSERT(FeError::INVALID_VAL, getTensorDataIndex != -1)
-            << "Failed to get tensor data index for operation";
+        FE_ASSERT(FeError::INVALID_VAL, getTensorDataIndex != -1) << "Failed to get tensor data index for operation";
         auto tensor = op.GetIOperands()[0];
         auto incastIndex = GetIncastIndex(tensor);
         if (incastIndex != INVALID_IOINDEX) {
@@ -535,10 +533,8 @@ void Function::EraseCallOpOpnd(const FunctionHash& calleeHash, size_t index)
         }
         FE_ASSERT(FeError::INVALID_VAL, index < callop->oOperand.size())
             << "Index " << index << " out of bounds for oOperand size " << callop->oOperand.size();
-        FE_ASSERT(callop->oOpAttrOffset.empty())
-            << "oOpAttrOffset is not empty for CallOp:" << callop->Dump();
-        FE_ASSERT(callopAttr->GetArgList().empty())
-            << "ArgList is not empty for CallOp:" << callop->Dump();
+        FE_ASSERT(callop->oOpAttrOffset.empty()) << "oOpAttrOffset is not empty for CallOp:" << callop->Dump();
+        FE_ASSERT(callopAttr->GetArgList().empty()) << "ArgList is not empty for CallOp:" << callop->Dump();
         FE_ASSERT(callopAttr->GetOutCastIndexToExpr().empty())
             << "OutCastIndexToExpr is not empty for CallOp:" << callop->Dump();
         for (auto& consumer : callop->oOperand[index]->GetConsumers()) {
@@ -677,9 +673,8 @@ void Function::FillOriginInOutCast(std::vector<Operation*>& operationList)
             bool shouldAddOutcast = op->IsCall() || oOperand->tensor->GetRefCount() > 0;
             if (shouldAddOutcast && outcasts.Insert(oOperand)) {
                 AddOriginOutcast(oOperand);
-                FE_ASSERT(incasts.count(oOperand) == 0)
-                    << "Error: Output operand " << oOperand->tensor->rawmagic
-                    << " is found in incasts. Operation: " << op->Dump();
+                FE_ASSERT(incasts.count(oOperand) == 0) << "Error: Output operand " << oOperand->tensor->rawmagic
+                                                        << " is found in incasts. Operation: " << op->Dump();
             }
         }
     }
@@ -818,10 +813,8 @@ void Function::OperationLoopCheck(const std::string& errorMsg)
                 for (auto* consumer : consumers[oop.get()]) {
                     if (self(consumer, self)) {
                         if (dupOpMagic != -1) {
-                            FE_LOGE(
-                                FeError::EINTERNAL, "[OperationLoopCheck]     Tensor:    %s", oop->Dump().c_str());
-                            FE_LOGE(
-                                FeError::EINTERNAL, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
+                            FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Tensor:    %s", oop->Dump().c_str());
+                            FE_LOGE(FeError::EINTERNAL, "[OperationLoopCheck]     Operation: %s", curr->Dump().c_str());
                             if (magic == dupOpMagic) {
                                 dupOpMagic = -1; // stop dumpping
                             }
@@ -1019,8 +1012,7 @@ std::unordered_set<int> Function::LoopCheck()
                 for (int consumer : consumers[oop.get()]) {
                     if (self(consumer, self)) {
                         if (duplicatedSubgraphID != -2) {
-                            FE_LOGE(
-                                FeError::EINTERNAL, "[Cycle Detection]     tensor:      %s", oop->Dump().c_str());
+                            FE_LOGE(FeError::EINTERNAL, "[Cycle Detection]     tensor:      %s", oop->Dump().c_str());
                             FE_LOGE(FeError::EINTERNAL, "[producer]=");
                             for (const auto& producer : oop->GetProducers()) {
                                 FE_LOGE(FeError::EINTERNAL, "%d", producer->GetOpMagic());
@@ -1166,8 +1158,7 @@ void Function::ScheduleBy(const std::vector<Operation*>& newList, bool needRefre
         << "Size mismatch: newList size = " << newList.size() << ", operations_ size = " << operations_.size();
     std::vector<std::shared_ptr<Operation>> newOperations;
     for (auto op : newList) {
-        FE_ASSERT(FeError::NOT_EXIST, opPosition_.count(op) > 0)
-            << "Operation not found in opPosition_:" << op->Dump();
+        FE_ASSERT(FeError::NOT_EXIST, opPosition_.count(op) > 0) << "Operation not found in opPosition_:" << op->Dump();
         newOperations.emplace_back(operations_[opPosition_.at(op)]);
     }
     operations_ = newOperations;
@@ -1203,10 +1194,9 @@ void Function::CheckGroupValid() const
     std::unordered_set<const Operation*> inGroupOp;
     for (size_t i = 0; i < operationGroups_.size(); i++) {
         for (auto& operation : operationGroups_[i]) {
-            FE_ASSERT(operation->GroupID() == i)
-                << "Operation GroupID mismatch:\n"
-                << "Expected: " << i << ", Actual: " << operation->GroupID() << "\n"
-                << "Operation:" << operation->Dump();
+            FE_ASSERT(operation->GroupID() == i) << "Operation GroupID mismatch:\n"
+                                                 << "Expected: " << i << ", Actual: " << operation->GroupID() << "\n"
+                                                 << "Operation:" << operation->Dump();
             FE_ASSERT(FeError::IS_EXIST, inGroupOp.count(operation) == 0)
                 << "Duplicate operation in group:" << operation->Dump();
             inGroupOp.emplace(operation);
@@ -1535,7 +1525,8 @@ void Function::UpdateTensorDataUsage(Operation& op)
 }
 
 Operation& Function::AddRawOperation(
-    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, bool updateTensorMap, const SourceLocationPtr &sourceLocation)
+    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, bool updateTensorMap,
+    const SourceLocationPtr& sourceLocation)
 {
     if (IsFunctionTypeAndGraphType(FunctionType::STATIC, {GraphType::EXECUTE_GRAPH, GraphType::BLOCK_GRAPH})) {
         updateTensorMap = false;
@@ -1651,10 +1642,9 @@ void Function::SubstituteIn(std::shared_ptr<LogicalTensor> oldTensor, std::share
                 continue;
             }
             if (replaced.count(inputTensor) == 0) {
-                FE_ASSERT(inputTensor->HasConsumer(cur))
-                    << "Tensor is not a consumer of the operation:\n"
-                    << "Tensor: " << inputTensor->Dump() << "\n"
-                    << "Operation: " << cur.Dump();
+                FE_ASSERT(inputTensor->HasConsumer(cur)) << "Tensor is not a consumer of the operation:\n"
+                                                         << "Tensor: " << inputTensor->Dump() << "\n"
+                                                         << "Operation: " << cur.Dump();
                 replaced.emplace(inputTensor);
             }
             cur.ReplaceIOperand(i, newTensor);
@@ -1721,9 +1711,8 @@ void Function::RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& 
             }
             targetFunc = &targetFunc->Parent();
         }
-        FE_ASSERT(FeError::INVALID_PTR, targetFunc != nullptr)
-            << "Failed to find the target function for producer:\n"
-            << "Producer: " << producer->Dump();
+        FE_ASSERT(FeError::INVALID_PTR, targetFunc != nullptr) << "Failed to find the target function for producer:\n"
+                                                               << "Producer: " << producer->Dump();
 
         for (auto& oOperandForProducerOp : producer->oOperand) {
             auto& consumers = oOperandForProducerOp->GetConsumers();
@@ -1810,7 +1799,7 @@ void Function::ReplaceMaybeParams(
 {
     auto it = std::find(originInCasts_.begin(), originInCasts_.end(), originIncast);
     FE_ASSERT(FeError::NOT_EXIST, it != originInCasts_.end()) << "OriginIncast not found in originInCasts_:\n"
-                                                                   << "OriginIncast: " << originIncast->Dump();
+                                                              << "OriginIncast: " << originIncast->Dump();
     *it = newIncast;
 }
 
@@ -1990,10 +1979,9 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
             auto oldConsumers = originOutcast->GetConsumers(); // only for check
             tensorMap_.Insert(newOutcast);
             Substitute(originOutcast, newOutcast);
-            FE_ASSERT(newOutcast->GetConsumers() == oldConsumers)
-                << "Consumers mismatch after substitution:\n"
-                << "NewOutcast: " << newOutcast->Dump() << "\n"
-                << "OldConsumers: " << oldConsumers.size();
+            FE_ASSERT(newOutcast->GetConsumers() == oldConsumers) << "Consumers mismatch after substitution:\n"
+                                                                  << "NewOutcast: " << newOutcast->Dump() << "\n"
+                                                                  << "OldConsumers: " << oldConsumers.size();
             FE_ASSERT(FeError::NOT_EXIST, originOutcast->GetProducers().empty())
                 << "OriginOutcast has producers:" << originOutcast->Dump();
             auto it = std::find(originOutCasts_.begin(), originOutCasts_.end(), originOutcast);
@@ -2610,6 +2598,7 @@ std::shared_ptr<Function> Function::LoadJson(Program& belongTo, const Json& func
 
 static const SymbolicScalar RUNTIME_COA_GetOffset = AddRuntimeCoaPrefix("GET_PARAM_OFFSET");
 static const SymbolicScalar RUNTIME_COA_GetValidShape = AddRuntimeCoaPrefix("GET_PARAM_VALID_SHAPE");
+static const SymbolicScalar RUNTIME_COA_GetRawShape = AddRuntimeCoaPrefix("GET_PARAM_RAW_SHAPE");
 static const SymbolicScalar RUNTIME_COA_GetParam = AddRuntimeCoaPrefix("GET_PARAM");
 
 static int64_t MakeTensorIndex(int64_t magic) { return magic | (1UL << 62); }
@@ -2666,7 +2655,8 @@ static std::vector<SymbolicScalar> NormalizeCopyIn(Operation* op, int coaIndexBa
     coaIndex += dim;
 
     opImmList = copyAttr->GetRawShape();
-    OpImmediate::NormalizeValue(operandCoaList, operandCoaIndex, opImmList, coaIndex, valueToIndex);
+    MaybeNormalizeValue(
+        RUNTIME_COA_GetRawShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
     copyAttr->SetRawShape(opImmList);
     operandCoaIndex += dim;
     coaIndex += dim;
@@ -2703,7 +2693,8 @@ static std::vector<SymbolicScalar> NormalizeCopyOut(Operation* op, int coaIndexB
     coaIndex += dim;
 
     opImmList = copyAttr->GetRawShape();
-    OpImmediate::NormalizeValue(operandCoaList, operandCoaIndex, opImmList, coaIndex, valueToIndex);
+    MaybeNormalizeValue(
+        RUNTIME_COA_GetRawShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
     copyAttr->SetRawShape(opImmList);
     operandCoaIndex += dim;
     coaIndex += dim;
@@ -3554,12 +3545,10 @@ void Function::OpValidCheck(Operation& op) const
             auto opAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
             FE_ASSERT(FeError::INVALID_PTR, opAttr != nullptr)
                 << "OP_VIEW should have a ViewOpAttribute, but it is null";
-            ASSERT(
-                FeError::INVALID_VAL, op.GetIOperands()[0]->GetOffset().size() == opAttr->GetFromOffset().size())
+            ASSERT(FeError::INVALID_VAL, op.GetIOperands()[0]->GetOffset().size() == opAttr->GetFromOffset().size())
                 << "OP_VIEW input operand offset size does not match attribute from offset size";
             if (!op.GetOOperands().empty()) {
-                ASSERT(
-                    FeError::INVALID_VAL, op.GetOOperands()[0]->GetOffset().size() == opAttr->GetFromOffset().size())
+                ASSERT(FeError::INVALID_VAL, op.GetOOperands()[0]->GetOffset().size() == opAttr->GetFromOffset().size())
                     << "OP_VIEW output operand offset size does not match attribute from offset size";
             }
         }
@@ -3572,12 +3561,10 @@ void Function::OpValidCheck(Operation& op) const
             FE_ASSERT(FeError::INVALID_PTR, opAttr != nullptr)
                 << "OP_ASSEMBLE should have an AssembleOpAttribute, but it is null";
             if (!op.GetIOperands().empty()) {
-                ASSERT(
-                    FeError::INVALID_VAL, op.GetIOperands()[0]->GetOffset().size() == opAttr->GetToOffset().size())
+                ASSERT(FeError::INVALID_VAL, op.GetIOperands()[0]->GetOffset().size() == opAttr->GetToOffset().size())
                     << "OP_ASSEMBLE input operand offset size does not match attribute to offset size";
             }
-            ASSERT(
-                FeError::INVALID_VAL, op.GetOOperands()[0]->GetOffset().size() == opAttr->GetToOffset().size())
+            ASSERT(FeError::INVALID_VAL, op.GetOOperands()[0]->GetOffset().size() == opAttr->GetToOffset().size())
                 << "OP_ASSEMBLE output operand offset size does not match attribute to offset size";
         }
     } else {
@@ -3594,8 +3581,7 @@ void Function::OpValidCheck(Operation& op) const
     for (auto& oOperand : op.GetOOperands()) {
         FE_ASSERT(FeError::INVALID_VAL, oOperand->GetShape().size() == oOperand->GetOffset().size())
             << "Output operand shape size does not match offset size";
-        FE_ASSERT(&oOperand->BelongFunction() == this)
-            << "Output operand does not belong to current function";
+        FE_ASSERT(&oOperand->BelongFunction() == this) << "Output operand does not belong to current function";
         auto tmp = GetTensorMap().GetTensorByMagic(oOperand->magic);
         FE_ASSERT(FeError::NOT_EXIST, tmp == oOperand) << "Tensor map does not match output operand";
         FE_ASSERT(oOperand->HasProducer(op))
@@ -3605,18 +3591,15 @@ void Function::OpValidCheck(Operation& op) const
     for (auto& iOperand : op.GetIOperands()) {
         FE_ASSERT(FeError::INVALID_VAL, iOperand->GetShape().size() == iOperand->GetOffset().size())
             << "Input operand shape size does not match offset size";
-        FE_ASSERT(&iOperand->BelongFunction() == this)
-            << "Input operand does not belong to current function";
+        FE_ASSERT(&iOperand->BelongFunction() == this) << "Input operand does not belong to current function";
         if (!iOperand->GetProducers().empty() || incasts.count(iOperand) != 0) {
             auto tmp = GetTensorMap().GetTensorByMagic(iOperand->magic);
             FE_ASSERT(FeError::NOT_EXIST, tmp == iOperand) << "Tensor map does not match input operand";
         }
 
-        FE_ASSERT(iOperand->HasConsumer(op))
-            << "Input operand does not have current operation as a consumer";
+        FE_ASSERT(iOperand->HasConsumer(op)) << "Input operand does not have current operation as a consumer";
         for (const auto& producer : iOperand->GetProducers()) {
-            FE_ASSERT(producer->BelongTo() == this)
-                << "Producer does not belong to current function";
+            FE_ASSERT(producer->BelongTo() == this) << "Producer does not belong to current function";
             FE_ASSERT(FeError::OUT_OF_RANGE, producer->GetOpMagic() >= 0 && producer->GetOpMagic() < opSeed_)
                 << "Producer magic number is out of bounds: " << producer->GetOpMagic()
                 << ", function opSeed_ is: " << opSeed_ << ", producer in tensor(" << iOperand->magic << ","
@@ -3624,8 +3607,7 @@ void Function::OpValidCheck(Operation& op) const
             if (producer->IsDeleted()) {
                 continue;
             }
-            FE_ASSERT(FeError::NOT_EXIST, opMap.find(producer) != opMap.end())
-                << "Producer not found in operation map";
+            FE_ASSERT(FeError::NOT_EXIST, opMap.find(producer) != opMap.end()) << "Producer not found in operation map";
         }
     }
 
@@ -3855,8 +3837,7 @@ void Function::DoMergeFunctionDupIncast()
     std::vector<int> removeIdx;
     for (auto& pair : sameSlotSetIndex) {
         auto& slotSetIndex = pair.second;
-        FE_ASSERT(FeError::INVALID_VAL, slotSetIndex.size() > 1)
-            << "Slot set index should have more than one element";
+        FE_ASSERT(FeError::INVALID_VAL, slotSetIndex.size() > 1) << "Slot set index should have more than one element";
         removeIdx.insert(removeIdx.end(), slotSetIndex.begin() + 1, slotSetIndex.end());
         auto oriIncast = inCasts_[slotSetIndex[0]];
         auto newIncast = std::make_shared<LogicalTensor>(
@@ -3883,8 +3864,7 @@ void Function::DoMergeFunctionDupOutcast()
     std::vector<int> removeIdx;
     for (auto& pair : sameSlotSetIndex) {
         auto& slotSetIndex = pair.second;
-        FE_ASSERT(FeError::INVALID_VAL, slotSetIndex.size() > 1)
-            << "Slot set index should have more than one element";
+        FE_ASSERT(FeError::INVALID_VAL, slotSetIndex.size() > 1) << "Slot set index should have more than one element";
         removeIdx.insert(removeIdx.end(), slotSetIndex.begin() + 1, slotSetIndex.end());
         auto oriOutcast = outCasts_[slotSetIndex[0]];
         auto newOutcast = std::make_shared<LogicalTensor>(

@@ -238,6 +238,21 @@ TEST_F(TestSymbolicScalarEvaluate, EvaluateSymbolicCallRuntimeCoaGetOffset)
     EXPECT_EQ(ret, 400);
 }
 
+TEST_F(TestSymbolicScalarEvaluate, EvaluateSymbolicCallRuntimeCoaGetRawShape)
+{
+    EvaluateSymbol evaluator;
+    // RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 1, idx) -> coaIndex = 1 + 1 + 2*2 + idx = 6 + idx
+    std::vector<ScalarImmediateType> dataList = {2, 1, 0};
+    std::vector<SymbolicScalar> linearArgList(8, SymbolicScalar(0));
+    linearArgList[6] = SymbolicScalar(77);
+    linearArgList[7] = SymbolicScalar(88);
+    auto ret = evaluator.EvaluateSymbolicCall("RUNTIME_COA_GET_PARAM_RAW_SHAPE", dataList, linearArgList);
+    EXPECT_EQ(ret, 77);
+    dataList = {2, 1, 1};
+    ret = evaluator.EvaluateSymbolicCall("RUNTIME_COA_GET_PARAM_RAW_SHAPE", dataList, linearArgList);
+    EXPECT_EQ(ret, 88);
+}
+
 TEST_F(TestSymbolicScalarEvaluate, EvaluateSymbolicCallInvalid)
 {
     EvaluateSymbol evaluator;

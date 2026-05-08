@@ -522,6 +522,15 @@ std::vector<std::string> CodeGenOpNPU::GenGetParamMacroPacked(
     return paramExpr;
 };
 
+std::vector<std::string> CodeGenOpNPU::GenDynRawShapePacked(unsigned paramIdx) const
+{
+    std::vector<std::string> paramExpr;
+    for (const auto& s : dynamicRawShape[paramIdx]) {
+        paramExpr.emplace_back(SymbolicExpressionTable::BuildExpression(s));
+    }
+    return paramExpr;
+};
+
 std::vector<std::string> CodeGenOpNPU::GenParamIdxExprByIndex(
     unsigned gmParamIdx, int dim, const std::string& prefix) const
 {
@@ -592,7 +601,9 @@ void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
             }
             tileTensor.stride = BuildStride(newRawShape);
         } else {
-            tileTensor.shape = GenGetParamMacroPacked(paramIdx, tileTensor.dim, PREFIX_STR_RAW_SHAPE);
+            tileTensor.shape = dynamicRawShape[paramIdx].empty() ?
+                                   GenGetParamMacroPacked(paramIdx, tileTensor.dim, PREFIX_STR_RAW_SHAPE) :
+                                   GenDynRawShapePacked(paramIdx);
             tileTensor.stride = GenGetParamMacroPacked(paramIdx, tileTensor.dim, PREFIX_STR_STRIDE);
         }
         return;

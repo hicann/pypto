@@ -80,6 +80,12 @@ static int64_t GetAsParameterCoaIndex(const RawSymbolicScalarPtr& value)
         auto base = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_COA_INDEX]->GetImmediateValue();
         auto dimIdx = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_DIM_INDEX]->GetImmediateValue();
         return base + COA_INDEX_DIM_BASE + dim * 3 + dimIdx;
+    } else if (value->IsExpressionCall("RUNTIME_COA_GET_PARAM_RAW_SHAPE")) {
+        auto& operands = value->GetExpressionOperandList();
+        auto dim = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_DIM_SIZE_INDEX]->GetImmediateValue();
+        auto base = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_COA_INDEX]->GetImmediateValue();
+        auto dimIdx = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_DIM_INDEX]->GetImmediateValue();
+        return base + COA_INDEX_DIM_BASE + dim * 2 + dimIdx;
     }
     return -1;
 }
@@ -130,9 +136,12 @@ void OperationInterpreter::ExecuteOperation(ExecuteOperationContext* ctx)
         auto func = ctx->frame->func;
         func->DumpFile(config::LogTensorGraphFolder() + "/" + func->GetRawName() + ".tifwkgr");
         std::string errMsg = e.what();
-        auto pos = errMsg.find('\n');
-        if (pos != std::string::npos) {
-            errMsg = errMsg.substr(0, pos);
+        auto firstNl = errMsg.find('\n');
+        if (firstNl != std::string::npos) {
+            auto secondNl = errMsg.find('\n', firstNl + 1);
+            if (secondNl != std::string::npos) {
+                errMsg = errMsg.substr(0, secondNl);
+            }
         }
         throw std::runtime_error(
             std::to_string(ctx->frame->rootFuncHash) + ", " + std::to_string(ctx->frame->funcHash) + ", " +

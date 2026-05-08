@@ -641,7 +641,9 @@ std::pair<std::string, std::string> CodeGenOpNPU::GetOuterInnerValueStr(
     GetOpAttr("op_attr_inner_value", innerValue);
 
     bool useStaticShape = functionType == FunctionType::STATIC || isSpillingToGM;
-    auto gmShapeExprByIndex = GenParamIdxExprByIndex(gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
+    auto gmShapeExprByIndex = dynamicRawShape[gmIdx].empty() ?
+                                  GenParamIdxExprByIndex(gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE) :
+                                  GenDynRawShapePacked(gmIdx);
 
     auto getValueStr = [useStaticShape, &gmShapeExprByIndex](
                            int64_t value, size_t idx, int64_t shapeValue) -> std::string {
