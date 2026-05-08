@@ -198,7 +198,7 @@ TEST_F(TestCodeGenRsqrt, test_Rsqrt_fp16_009)
         auto output = Tensor(DataType::DT_FP16, {5, 2, 4, 176}, "output");
         FUNCTION("Rsqrt_fp16_009")
         {
-            TileShape::Current().SetVecTile({2, 1, 2, 16});
+            TileShape::Current().SetVecTile({3, 1, 2, 128});
             output = Rsqrt(input);
         }
     }

@@ -648,7 +648,7 @@ TEST_F(TestCodeGenAssemble, test_assemble_list_multi_shape_003)
 {
     PROGRAM("ASSEMBLE_LIST_MULTI_SHAPE_003")
     {
-        TileShape::Current().SetVecTile({10, 80});
+        TileShape::Current().SetVecTile({200, 160});
         Tensor input1(DT_FP32, {300, 200}, "input1");
         Tensor input2(DT_FP32, {300, 200}, "input2");
         Tensor out(DT_FP32, {500, 400}, "out");

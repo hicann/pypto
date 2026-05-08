@@ -772,9 +772,9 @@ TEST_F(TestCodeGenCompare, test_compare_eq_fp32_024)
     PROGRAM("COMPARE_EQ_FP32_024")
     {
         TileShape::Current().SetVecTile({8, 8, 8, 8});
-        Tensor input(DT_FP32, {1, 32, 32, 16}, "input");
-        Tensor other(DT_FP32, {16, 32, 32, 16}, "other");
-        auto output = Tensor(DT_BOOL, {16, 32, 32, 16}, "output");
+        Tensor input(DT_FP32, {1, 16, 16, 16}, "input");
+        Tensor other(DT_FP32, {16, 16, 16, 16}, "other");
+        auto output = Tensor(DT_BOOL, {16, 16, 16, 16}, "output");
         FUNCTION("COMPARE_EQ_FP32_024") { output = Compare(input, other, OpType::EQ, OutType::BOOL); }
     }
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_024");

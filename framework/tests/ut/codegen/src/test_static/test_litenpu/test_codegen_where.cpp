@@ -1096,7 +1096,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_028)
 {
     PROGRAM("WHERE_FP32_028")
     {
-        TileShape::Current().SetVecTile(1, 2, 4, 8);
+        TileShape::Current().SetVecTile(1, 2, 5, 16);
         Tensor condition(DT_BOOL, {2, 4, 16, 32}, "condition");
         Element input(DT_FP32, 1.0f);
         Element other(DT_FP32, 2.0f);

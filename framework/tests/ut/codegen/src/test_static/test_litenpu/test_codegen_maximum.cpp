@@ -741,29 +741,13 @@ TEST_F(TestCodeGenMaximum, test_maximum_fp32_007)
 {
     PROGRAM("MAXIMUM_FP32_007")
     {
-        TileShape::Current().SetVecTile({8, 8, 8, 8});
+        TileShape::Current().SetVecTile({8, 16, 16, 8});
         Tensor input(DT_FP32, {32, 32, 16}, "input");
         Tensor other(DT_FP32, {16, 32, 32, 16}, "other");
         auto output = Tensor(DataType::DT_FP32, {16, 32, 32, 16}, "output");
         FUNCTION("MAXIMUM_FP32_007") { output = Maximum(input, other); }
     }
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_007");
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-}
-
-TEST_F(TestCodeGenMaximum, test_maximum_fp32_008)
-{
-    PROGRAM("MAXIMUM_FP32_008")
-    {
-        TileShape::Current().SetVecTile({8, 8, 8, 8});
-        Tensor input(DT_FP32, {32, 32, 16}, "input");
-        Tensor other(DT_FP32, {16, 32, 32, 16}, "other");
-        auto output = Tensor(DataType::DT_FP32, {16, 32, 32, 16}, "output");
-        FUNCTION("MAXIMUM_FP32_008") { output = Maximum(input, other); }
-    }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

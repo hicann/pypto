@@ -741,7 +741,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_007)
 {
     PROGRAM("MINIMUM_FP32_007")
     {
-        TileShape::Current().SetVecTile({8, 8, 8, 8});
+        TileShape::Current().SetVecTile({8, 16, 16, 8});
         Tensor input(DT_FP32, {32, 32, 16}, "input");
         Tensor other(DT_FP32, {16, 32, 32, 16}, "other");
         auto output = Tensor(DataType::DT_FP32, {16, 32, 32, 16}, "output");

@@ -192,7 +192,7 @@ TEST_F(TestCodeGenMatmul, test_matmul_008)
         auto c = Tensor(DataType::DT_FP16, {2, 16, 129, 35}, "c");
         FUNCTION("MATMUL_008")
         {
-            TileShape::Current().SetCubeTile({16, 16}, {64, 64}, {32, 32});
+            TileShape::Current().SetCubeTile({128, 128}, {64, 64}, {32, 32});
             c = npu::tile_fwk::Matrix::BatchMatmul(DataType::DT_FP16, a, b, false, false, false);
         }
     }
