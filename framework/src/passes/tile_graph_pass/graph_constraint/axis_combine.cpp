@@ -93,6 +93,24 @@ static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx
     op.SetAttribute(OP_ATTR_PREFIX + "validShape", dynValidShape);
 }
 
+static void UpdateBrcOperandAfterExpand(Operation& op)
+{
+    if (!op.HasAttr(OpAttributeKey::brcOperand)) {
+        return;
+    }
+    auto brcOperand = op.GetVectorIntAttribute(OpAttributeKey::brcOperand);
+    if (!brcOperand.empty()) {
+        brcOperand.back() = 0;
+    }
+    bool anyBrc = std::any_of(brcOperand.begin(), brcOperand.end(),
+                              [](int64_t v) { return v != 0; });
+    if (anyBrc) {
+        op.SetAttribute(OpAttributeKey::brcOperand, brcOperand);
+    } else {
+        op.RemoveAttr(OpAttributeKey::brcOperand);
+    }
+}
+
 Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, Operation& op)
 {
     auto inputTensor = op.GetIOperands();
@@ -126,6 +144,7 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             SetAttrForExpand(expand, inputTensor, idx, alignedShape);
             expand.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
+            UpdateBrcOperandAfterExpand(op);
             continue;
         } else if (!isDAV3510) {
             if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
