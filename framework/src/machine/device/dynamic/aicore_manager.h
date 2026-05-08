@@ -368,14 +368,16 @@ public:
         uint64_t status = aicoreHal_.GetAicoreStatus(coreIdx);
         if (pendingIds_[coreIdx] != AICORE_TASK_INIT) {
             DEV_ERROR(
-                SchedErr::ABNOMAL_LAST_WORD, "coreid=%d status=%lu, pending taskid=%x, parallelIdx=%u, coreVer=%u",
-                coreIdx, status, pendingIds_[coreIdx],
+                SchedErr::ABNOMAL_LAST_WORD, "coreid=%d status=%lu, lastwordstatus=%lu,"
+                "pending taskid=%x, parallelIdx=%u, coreVer=%u",
+                coreIdx, status, aicoreHal_.GetAicoreStatusLastWord(coreIdx), pendingIds_[coreIdx],
                 npu::tile_fwk::ParallelIndex(pendingIds_[coreIdx]), aicoreHal_.ParallelDevTaskCtxVersion(coreIdx));
         }
         if (runningIds_[coreIdx] != AICORE_TASK_INIT) {
             DEV_ERROR(
-                SchedErr::ABNOMAL_LAST_WORD, "coreid=%d, status=%lu, running taskid=%x, parallelIdx=%u, coreVer=%u",
-                coreIdx, status, runningIds_[coreIdx],
+                SchedErr::ABNOMAL_LAST_WORD, "coreid=%d, status=%lu, lastwordstatus=%lu,"
+                "running taskid=%x, parallelIdx=%u, coreVer=%u",
+                coreIdx, status, aicoreHal_.GetAicoreStatusLastWord(coreIdx), runningIds_[coreIdx],
                 npu::tile_fwk::ParallelIndex(runningIds_[coreIdx]), aicoreHal_.ParallelDevTaskCtxVersion(coreIdx));
         }
     }
@@ -714,8 +716,9 @@ private:
             if (!devTaskCtx->coreTaskFinished[i]) {
                 DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT,
                     "#sche.task.end.sync.timeout: left aic core %d not stop, pending:%x, rungning:%x, regfinishid: %lx,"
-                    "core last status:%lu backup status:%lu", i, pendingIds_[i], runningIds_[i],
-                    aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i), aicoreHal_.GetAicoreStatusBackup(i));
+                    "core last status:%lu lastword status:%lu", i, pendingIds_[i], runningIds_[i],
+                    aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i),
+                    aicoreHal_.GetAicoreStatusLastWord(i));
             }
         }
 
@@ -724,8 +727,9 @@ private:
                 DEV_ERROR(
                     SchedErr::TASK_WAIT_TIMEOUT,
                     "#sche.task.end.sync.timeout: left aiv core %d not stop, pending:%x, rungning:%x, regfinishid: %lx,"
-                    "core last status:%lu backup status:%lu", i, pendingIds_[i], runningIds_[i],
-                    aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i), aicoreHal_.GetAicoreStatusBackup(i));
+                    "core last status:%lu lastword status:%lu", i, pendingIds_[i], runningIds_[i],
+                    aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i),
+                    aicoreHal_.GetAicoreStatusLastWord(i));
             }
         }
     }

@@ -412,7 +412,7 @@ public:
         return arg->shakeBuffer[aicoreStatusIndex];
     }
 
-    uint64_t GetAicoreStatusBackup(int coreIdx) const
+    uint64_t GetAicoreStatusLastWord(int coreIdx) const
     {
         int aicoreStatusIndex = 3;
         volatile KernelArgs *arg = reinterpret_cast<KernelArgs *>(sharedBuffer_ + coreIdx * SHARED_BUFFER_SIZE);

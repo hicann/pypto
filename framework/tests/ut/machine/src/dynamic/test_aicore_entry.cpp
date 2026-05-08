@@ -36,7 +36,7 @@ TEST_F(AicoreTest, InitGoodbye)
 
     KernelEntry(0, 0, 0, 0, 0, (uint64_t)(uintptr_t)&devArgs);
     // Use AICORE_SAY_GOODBYE to exit 
-    EXPECT_EQ(args->shakeBuffer[2], STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
+    EXPECT_EQ(args->shakeBuffer[3], STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
 }
 
 class MemoryEmulation {
@@ -150,7 +150,7 @@ struct MultipleCore : ThreadAicoreEmulation {
         }
 
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
-            while ((AicpuGetCond(i) & AICORE_FIN_MASK) == 0) {
+            while (AicpuGetCond(i) == AICORE_TASK_INIT ||  (AicpuGetCond(i) & AICORE_FIN_MASK) == 0) {
                 std::this_thread::sleep_for(std::chrono::seconds(0));
             }
         }

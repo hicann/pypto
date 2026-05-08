@@ -44,11 +44,32 @@ __gm__ static bool g_is_open_dump_perf_trace_data = false;
 #endif
 #endif
 
-#define AICORE_DEVICE_TASK_RUN_TIMEOUT 3000000000
+INLINE void SetLastWordStatus(__gm__ KernelArgs* args, int64_t val);
+INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args);
+
 #define AICORE_DEVICE_TASK_WAIT_TIME_OUT 250000000
 #define AICORE_LEAF_TASK_RUN_TIMEOUT 3000000000
-#define AICORE_LEAF_TASK_WAIT_TIMEOUT 250000000
+#define AICORE_LEAF_TASK_WAIT_TIMEOUT 300000000
 #define AICORE_GM_DCCI_TIMEOUT 50000000
+#define AICORE_WAVEFLAG_WAIT_TIMEOUT 350000000
+#define AICORE_GET_LEAF_HIGHREG_TIMEOUT 400000000
+
+#define AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count) \
+    uint64_t t0 = get_sys_cnt(); \
+    uint64_t loop_count = 0;
+
+#define AICORE_TIMEOUT_CHECK_IMPL(t0, loop_count, timelen, lastStatus, action) \
+    ++loop_count; \
+    if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > timelen)) { \
+        SetLastWordStatus(args, lastStatus); \
+        action; \
+    }
+
+#define AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, timelen, lastStatus, retval) \
+    AICORE_TIMEOUT_CHECK_IMPL(t0, loop_count, timelen, lastStatus, return retval)
+
+#define AICORE_TIMEOUT_CHECK_RETURN_VOID(t0, loop_count, timelen, lastStatus) \
+    AICORE_TIMEOUT_CHECK_IMPL(t0, loop_count, timelen, lastStatus, return)
 
 using npu::tile_fwk::CoreFunctionData;
 using npu::tile_fwk::DevRawTensorDesc;
@@ -69,7 +90,10 @@ enum DFX_STAGE_STATUS {
     STAGE_GET_NEXT_TASK_TIMEOUT = 10,
     STAGE_WAVE_TIMEOUT = 11,
     STAGE_GET_HIGH_REG_TIMEOUT = 12,
-    STAGE_UPDATE_PARALLEL_DEVTASK_TIMEOUT = 13
+    STAGE_UPDATE_PARALLEL_DEVTASK_TIMEOUT = 13,
+    STAGE_UPDATE_PARALLEL_DEVTASK_ID_TIMEOUT = 14,
+    STAGE_RUN_LEAFTASK_TIMEOUT = 15,
+    STAGE_GET_FUNCDATA_STOP = 16
 };
 
 struct ExecuteContext {
@@ -100,40 +124,35 @@ INLINE uint64_t GetDataMainBase()
 }
 #endif
 
+INLINE uint32_t GetLeafTaskId() {
+    return ((GetDataMainBase() & 0xFFFFFFFF) - 1);
+}
+
 INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx)
 {
     uint32_t nextLowIdx = 0;
-    uint64_t regValue = 0;
     uint64_t t0 = get_sys_cnt();
     uint64_t loop_count = 0;
     do {
-        regValue = GetDataMainBase();
-        nextLowIdx = regValue & 0xFFFFFFFF;
-        nextLowIdx -= 1;
-
+        nextLowIdx = GetLeafTaskId();
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_LEAF_TASK_WAIT_TIMEOUT)) {
-            return AICORE_TASK_STOP;
+            return AICORE_TASK_ABNORMAL_STOP;
         }
     } while (nextLowIdx == lastTaskIdx);
 
     return nextLowIdx;
 }
 
-INLINE uint32_t GetRegHighValue(uint32_t lastHighRegValue)
+INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegValue)
 {
-    uint64_t loop_count = 0;
     uint32_t highRegVal = 0;
-    uint64_t t0 = get_sys_cnt();
     uint64_t regValue = 0;
+    AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     do{
         regValue = GetDataMainBase();
         highRegVal = (uint32_t)(regValue >> REG_HIGH_DTASKID_SHIFT);
-
-        ++loop_count;
-        if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_LEAF_TASK_WAIT_TIMEOUT)) {
-            return AICORE_TASK_STOP;
-        }
+        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GET_LEAF_HIGHREG_TIMEOUT, STAGE_GET_HIGH_REG_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
     } while (highRegVal == 0 || lastHighRegValue == highRegVal);
     return highRegVal;
 }
@@ -177,12 +196,14 @@ INLINE void SetStatus(__gm__ KernelArgs* args, int64_t val)
     }
 }
 
-INLINE void SendRegFinish(uint32_t curTaskIdx) { set_cond(curTaskIdx | AICORE_FIN_MASK); }
-
-INLINE void SendRegDevTaskStop(uint32_t dTaskId)
+INLINE void SetLastWordStatus(__gm__ KernelArgs* args, int64_t val)
 {
-    set_cond(((uint64_t)dTaskId << REG_HIGH_DTASKID_SHIFT) | (AICORE_FUNC_STOP | AICORE_FIN_MASK));
+    Barrier();
+    args->shakeBuffer[3] = val;
+    dcci(args->shakeBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
 }
+
+INLINE void SendRegFinish(uint32_t curTaskIdx) { set_cond(curTaskIdx | AICORE_FIN_MASK); }
 
 INLINE void SendRegAck(uint32_t taskIdx) { set_cond(taskIdx); }
 
@@ -263,58 +284,48 @@ INLINE void UpdateCacheDevTask(ExecuteContext *ctx, uint32_t parallelIdx, int64_
         ctx->cachedDevTasks[parallelIdx].cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
 }
 
-INLINE volatile __gm__ ParallelDevTask* GetCoreFuncionData(ExecuteContext *ctx, __gm__ KernelArgs *args,
-    volatile __gm__ ParallelDevTask* lastParallelDevTask)
+INLINE volatile __gm__ ParallelDevTask* GetCoreFuncionData(ExecuteContext *ctx, __gm__ KernelArgs *args)
 {
-    uint64_t t0 = get_sys_cnt();
-    uint64_t loop_count = 0;
+    AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
+    // kernel start , init prallelDevtask
+    volatile __gm__ ParallelDevTask* parallelDevTask = &args->parallelDevTask;
     while (true) {
-        if (lastParallelDevTask == nullptr) {
-            // kernel start , init prallelDevtask
-            volatile __gm__ ParallelDevTask* parallelDevTask = &args->parallelDevTask;
-            if (parallelDevTask->rear - parallelDevTask->front == 0) {
-                dcci(parallelDevTask, SINGLE_CACHE_LINE, CACHELINE_OUT);
-                ++loop_count;
-                if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_DEVICE_TASK_WAIT_TIME_OUT)) {
-                    SetStatus(args, STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
+        if (parallelDevTask->rear - parallelDevTask->front == 0) {
+            dcci(parallelDevTask, SINGLE_CACHE_LINE, CACHELINE_OUT);
+            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT, STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
+
+// The aicore received the task stop notification before receiving the leaftask.
+            if (GetLeafTaskId() == AICORE_TASK_STOP) {
+                SetStatus(args, STAGE_GET_FUNCDATA_STOP);
+                WaitWaveSignal(args);
+                return nullptr;
+            }
+            continue;
+        }
+
+        // make sure all devtask dcci successfully
+        for (uint32_t i = parallelDevTask->front; i < parallelDevTask->rear; ++i) {
+            uint32_t idx = i % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
+            int64_t elemPtr = 0;
+            do {
+                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_DEVICE_TASK_WAIT_TIME_OUT, STAGE_GET_PARALLEL_DEVTASK_TIMEOUT, nullptr);
+
+                // The aicore received the task stop notification before receiving the leaftask.
+                if (GetLeafTaskId() == AICORE_TASK_STOP) {
+                    SetStatus(args, STAGE_GET_FUNCDATA_STOP);
+                    WaitWaveSignal(args);
                     return nullptr;
                 }
-                continue;
-            }
 
-            // make sure all devtask dcci successfully
-            for (uint32_t i = parallelDevTask->front; i < parallelDevTask->rear; ++i) {
-                uint32_t idx = i % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
-                int64_t elemPtr = 0;
-                do {
-                    dcci(&parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
-                    elemPtr = parallelDevTask->ptrElements[idx];
-
-                    ++loop_count;
-                    if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_DEVICE_TASK_WAIT_TIME_OUT)) {
-                        SetStatus(args, STAGE_GET_PARALLEL_DEVTASK_TIMEOUT);
-                        return nullptr;
-                    }
-                } while (elemPtr == 0);
-                dcci((__gm__ void *)elemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
-                UpdateCacheDevTask(ctx, idx, elemPtr);
-            }
-
-            return parallelDevTask;
-        } else {
-            volatile __gm__ int64_t *waveBuffer = args->waveBufferCpuToCore;
-            dcci(waveBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
-            if (*waveBuffer == AICORE_SAY_GOODBYE) {
-                return nullptr;
-            }
-
-            ++loop_count;
-            if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_DEVICE_TASK_WAIT_TIME_OUT)) {
-                SetStatus(args, STAGE_WAVE_TIMEOUT);
-                return nullptr;
-            }
+                dcci(&parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
+                elemPtr = parallelDevTask->ptrElements[idx];
+            } while (elemPtr == 0);
+            dcci((__gm__ void *)elemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
+            UpdateCacheDevTask(ctx, idx, elemPtr);
         }
+        return parallelDevTask;
     }
+
     return nullptr;
 }
 
@@ -420,22 +431,20 @@ INLINE void ExecCoreFunctionKernel(ExecuteContext* ctx, uint32_t curTaskIdx)
 #endif
 }
 
-INLINE void WaitWaveSignal(__gm__ KernelArgs* args)
+INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args)
 {
-    uint64_t t2 = get_sys_cnt();
+    AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     volatile __gm__ int64_t* waveBuffer = args->waveBufferCpuToCore;
     while (true) {
         dcci(waveBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
         if (*waveBuffer == AICORE_SAY_GOODBYE) {
-            return;
+            return 0;
         }
-        if ((get_sys_cnt() - t2 > AICORE_GM_DCCI_TIMEOUT)) {
-            return;
-        }
+        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_WAVEFLAG_WAIT_TIMEOUT, STAGE_WAVE_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
     }
 }
 
-INLINE uint32_t RefreshParallelDevTaskByModifyFlag(ExecuteContext *ctx, uint32_t highRegValue)
+INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs *args, ExecuteContext *ctx, uint32_t highRegValue)
 {
     uint32_t curLeafDevTaskId = npu::tile_fwk::DevTaskId(highRegValue);
     uint32_t mask = npu::tile_fwk::ParallelDevTaskModifyFlag(highRegValue);
@@ -449,27 +458,22 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(ExecuteContext *ctx, uint32_t
             newDevTaskId = curLeafDevTaskId;
         } else {
             uint32_t oldDevTaskId = ctx->cachedDevTasks[idx].seqNo;
-            uint64_t t0 = get_sys_cnt();
+            AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
             do {
+                AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GM_DCCI_TIMEOUT, STAGE_UPDATE_PARALLEL_DEVTASK_ID_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
                 dcci(&ctx->parallelDevTask->idElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
                 newDevTaskId = ctx->parallelDevTask->idElements[idx];
-                if ((get_sys_cnt() - t0 > AICORE_GM_DCCI_TIMEOUT)) {
-                    return AICORE_TASK_STOP;
-                }
             } while (newDevTaskId == oldDevTaskId);
         }
 
         // dcci read new devtask ptr
         int64_t newElemPtr;
         __gm__ DynFuncHeader *oldHeader = ctx->cachedDevTasks[idx].header;
-        uint64_t t0 = get_sys_cnt();
+        AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
         do {
+            AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GM_DCCI_TIMEOUT, STAGE_UPDATE_PARALLEL_DEVTASK_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
             dcci(&ctx->parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
             newElemPtr = ctx->parallelDevTask->ptrElements[idx];
-            if ((get_sys_cnt() - t0 > AICORE_GM_DCCI_TIMEOUT)) {
-                return AICORE_TASK_STOP;
-            }
-
             if (newElemPtr != (int64_t)oldHeader) {
                 dcci((__gm__ void *)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
                 break;
@@ -488,16 +492,14 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(ExecuteContext *ctx, uint32_t
 
 INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs *args, ExecuteContext *ctx, __gm__ Metrics* metric, uint32_t &lastRegHighVal)
 {
-    uint32_t newRegHighVal = GetRegHighValue(lastRegHighVal);
-    if (newRegHighVal == AICORE_TASK_STOP) {
-        SetStatus(args, STAGE_GET_HIGH_REG_TIMEOUT);
-        return AICORE_TASK_STOP;
+    uint32_t newRegHighVal = GetRegHighValue(args, lastRegHighVal);
+    if (newRegHighVal == AICORE_TASK_ABNORMAL_STOP) {
+        return AICORE_TASK_ABNORMAL_STOP;
     }
 
-    uint32_t ret = RefreshParallelDevTaskByModifyFlag(ctx, newRegHighVal);
-    if (ret == AICORE_TASK_STOP) {
-        SetStatus(args, STAGE_UPDATE_PARALLEL_DEVTASK_TIMEOUT);
-        return AICORE_TASK_STOP;
+    uint32_t ret = RefreshParallelDevTaskByModifyFlag(args, ctx, newRegHighVal);
+    if (ret == AICORE_TASK_ABNORMAL_STOP) {
+        return AICORE_TASK_ABNORMAL_STOP;
     }
 
     lastRegHighVal = newRegHighVal;
@@ -533,85 +535,65 @@ INLINE void KernelEntry(
     SetStatus(args, STAGE_HANDSHAKE_END);
     set_mask_norm();
     uint32_t curTaskIdx;
-    uint32_t lastTaskIdx;
+    uint32_t lastTaskIdx = AICORE_TASK_INIT;
     uint32_t lastRegHighVal = 0;
     ExecuteContext ctx = {};
     ctx.args = args;
     ctx.blockIdx = blockIdx;
-    //get core task data
-    uint64_t t0 = get_sys_cnt();
-    uint64_t loop_count = 0;
-    bool bIsExit = false;
-
     PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_INIT, args);
 
-    volatile __gm__ ParallelDevTask* parallelDevTask = nullptr;
+    volatile __gm__ ParallelDevTask* parallelDevTask = GetCoreFuncionData(&ctx, args);
+    if (parallelDevTask == nullptr) {
+        DfxProcWhenCoreExit(&ctx, args, metric);
+        return; // no data exit
+    }
+    InitCtx(&ctx, metric, parallelDevTask);
+    AICORE_TIMEOUT_CHECK_BEGIN(t0, loop_count);
     while (true) {
-        ++loop_count;
-        if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_DEVICE_TASK_RUN_TIMEOUT)) {
-            break;
-        }
-        lastTaskIdx = AICORE_TASK_INIT;
-        if (bIsExit) {
-            WaitWaveSignal(args); // no data exit
+        AICORE_TIMEOUT_CHECK_RETURN_VOID(t0, loop_count, AICORE_LEAF_TASK_RUN_TIMEOUT, STAGE_RUN_LEAFTASK_TIMEOUT);
+
+        curTaskIdx = GetNextLeafTask(lastTaskIdx);
+        if (curTaskIdx == AICORE_TASK_STOP) {
+            DfxProcWhenDevTaskStop(&ctx, args, metric);
+            SetStatus(args, STAGE_CORE_EXIT);
+            (void)WaitWaveSignal(args); // no data exit
             DfxProcWhenCoreExit(&ctx, args, metric);
             return;
         }
-        parallelDevTask = GetCoreFuncionData(&ctx, args, parallelDevTask);
-        if (parallelDevTask == nullptr) {
-            DfxProcWhenCoreExit(&ctx, args, metric);
-            return; // no data exit
+        if (curTaskIdx == AICORE_TASK_ABNORMAL_STOP) {
+            SetLastWordStatus(args, STAGE_GET_NEXT_TASK_TIMEOUT);
+            return;
         }
-        InitCtx(&ctx, metric, parallelDevTask);
-        uint64_t t1 = get_sys_cnt();
-        uint64_t inner_loop_count = 0;
-        isFirstTask = true;
-        while (true) {
-            ++inner_loop_count;
-            if ((inner_loop_count % 1000 == 0) && (get_sys_cnt() - t1 > AICORE_LEAF_TASK_RUN_TIMEOUT)) {
-                break;
-            }
 
-            curTaskIdx = GetNextLeafTask(lastTaskIdx);
-            if (curTaskIdx == AICORE_TASK_STOP) {
-                DfxProcWhenDevTaskStop(&ctx, args, metric);
-                SetStatus(args, STAGE_CORE_EXIT);
-                bIsExit = true;
-                break;
-            }
+        if (npu::tile_fwk::DevTaskDcciFlag(curTaskIdx) == 1) {
+            DfxProcWhenDevTaskStop(&ctx, args, metric); // perf trace stop last devtask
 
-            if (npu::tile_fwk::DevTaskDcciFlag(curTaskIdx) == 1) {
-                DfxProcWhenDevTaskStop(&ctx, args, metric); // perf trace stop last devtask
-
-                ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
-
-                // need dcci new prallel devtask
-                uint32_t ret = RefreshParallelDevTask(args, &ctx, metric, lastRegHighVal);
-                if (ret == AICORE_TASK_STOP) {
-                    bIsExit = true;
-                    break;
-                }
-                isFirstTask = true;
-                t1 = get_sys_cnt(); // reset time out
-				t0 = get_sys_cnt(); // reset time out
-            }
-
-            // update cur leaftask parallelindex
             ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
-  
-            if (isFirstTask) {
-                PerfTraceRecord(ctx.SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK, args);
-                isFirstTask = false;
-            }
 
-            SendRegAck(curTaskIdx);
-            PmuTestBegin(args);
-            ExecCoreFunctionKernel(&ctx, curTaskIdx);
-            PmuTestEnd(args);
-            SendRegFinish(curTaskIdx);
-            lastTaskIdx = curTaskIdx;
-            SetStatus(args, STAGE_FINISH_CUR_TASK);
+            // need dcci new prallel devtask
+            uint32_t ret = RefreshParallelDevTask(args, &ctx, metric, lastRegHighVal);
+            if (ret == AICORE_TASK_ABNORMAL_STOP) {
+                return;
+            }
+            isFirstTask = true;
+            t0 = get_sys_cnt(); // reset time out
         }
+
+        // update cur leaftask parallelindex
+        ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
+
+        if (isFirstTask) {
+            PerfTraceRecord(ctx.SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK, args);
+            isFirstTask = false;
+        }
+
+        SendRegAck(curTaskIdx);
+        PmuTestBegin(args);
+        ExecCoreFunctionKernel(&ctx, curTaskIdx);
+        PmuTestEnd(args);
+        SendRegFinish(curTaskIdx);
+        lastTaskIdx = curTaskIdx;
+        SetStatus(args, STAGE_FINISH_CUR_TASK);
     }
 }
 

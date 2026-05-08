@@ -125,6 +125,9 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
 
         // dynamic devtask building need inherit cached last dev task parallinfo
         parallelCtx.info = dynTask->parallelInfo;
+        if (parallelCtx.info.forId != 0) {
+            parallelCtx.isInParallelForScope = true;
+        }
 
         PROF_STAGE_BEGIN(PERF_EVT_STAGE_PUSH_TASK, "push.before\n");
         DumpDeviceTask(taskId, dynTask);
