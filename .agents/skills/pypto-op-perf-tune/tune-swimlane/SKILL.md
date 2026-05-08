@@ -630,7 +630,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 当上下游子图之间依赖较为简单，或下游子图输入 Tensor 的 L2 命中率较为重要时，推荐使用 L2 亲和调度。
 
 ```python
-@pypto.jit(runtime_options={"device_sched_mode": 1})
+@pypto.frontend.jit(runtime_options={"device_sched_mode": 1})
 ```
 
 **调优建议**：

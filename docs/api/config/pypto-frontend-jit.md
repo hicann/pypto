@@ -12,7 +12,7 @@
 
 ## 功能说明
 
-`pypto.frontend.jit` 是新前端架构中的核心装饰器，用于将 Python 函数即时编译（JIT）为高效的计算图并在 NPU 上执行。新前端不支持返回值，仅支持 in-place 修改；支持传入 torch 张量及其他类型的变量。
+`pypto.frontend.jit` 是前端架构中的核心装饰器，用于将 Python 函数即时编译（JIT）为高效的计算图并在 NPU 上执行。前端不支持返回值，仅支持 in-place 修改；支持传入 torch 张量及其他类型的变量。
 
 主要特性：
 - **In-place 修改**: 内核函数通过 in-place 修改输出张量传递计算结果，不支持返回值

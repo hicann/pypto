@@ -45,7 +45,7 @@ files": [
 ]
 ```
 
-4. In pypto.jit specify debug mode
+4. In pypto.frontend.jit specify debug mode
 
 ```
 @pypto.frontend.jit(runtime_options={

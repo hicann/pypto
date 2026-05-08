@@ -194,7 +194,7 @@ def quant_lightning_indexer_prolog_kernel(
         OUTPUT 2    q_scale        DT_FP16   (t, idx_nq)                         ND
         CONFIGS     tile_config    /          /                                  /
     Note:
-        This function is decorated with @pypto.jit for JIT compilation.
+        This function is decorated with @pypto.frontend.jit for JIT compilation.
         It configures pass options for memory optimization and calls the core
         computation function.
     """
