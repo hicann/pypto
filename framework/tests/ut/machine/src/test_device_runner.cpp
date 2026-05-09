@@ -121,8 +121,11 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     taskStat->taskId = 0;
     taskStat->execStart = 0;
     taskStat->execEnd = 1;
-    taskStat->waitEventIdx = 0;
-    taskStat->setEventIdx = 0;
+    taskStat->waitEventNum = 0;
+    taskStat->setEventNum = 0;
+    taskStat->perfDataBaseAddr = 0;
+    taskStat->setEventAddr = 0;
+    taskStat->waitEventAddr = 0;
     prof.ProfGetLog(aicoreId, taskStat);
     prof.profLevel_ = npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG_PMU;
     uint32_t ctrl0val = 0;

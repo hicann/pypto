@@ -176,7 +176,7 @@ void DeviceRunner::InitDynamicArgs(DeviceArgs& args)
         reinterpret_cast<void*>(devArgs_), sizeof(DeviceArgs), &args, sizeof(DeviceArgs), RtMemcpyKind::HOST_TO_DEVICE);
 
     for (uint64_t i = 0; i < args.nrAic + args.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS; i++) {
-        perfData_.push_back(MachinePerfTraceDevMalloc(MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics)));
+        perfData_.push_back(MachinePerfTraceDevMalloc(PERF_DATA_TOTAL_SIZE));
     }
 
     if (GetEnvVar("DUMP_DEVICE_PERF") == "true") {
@@ -192,7 +192,7 @@ void DeviceRunner::InitDynamicArgs(DeviceArgs& args)
 
 void DeviceRunner::ResetPerData()
 {
-    auto size = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+    auto size = PERF_DATA_TOTAL_SIZE;
     for (uint64_t i = 0; i < args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS; i++) {
         int rc = RuntimeMemset(perfData_[i], size, 0, size);
         if (rc != 0) {
@@ -332,7 +332,7 @@ void DeviceRunner::AllocDfxMetricMemory()
         KernelArgs kernelArgs;
         memset_s(&kernelArgs, sizeof(kernelArgs), 0, sizeof(kernelArgs));
         kernelArgs.shakeBuffer[SHAK_BUF_DFX_DATA_INDEX] =
-            reinterpret_cast<int64_t>(DevAlloc(MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics)));
+            reinterpret_cast<int64_t>(DevAlloc(PERF_DATA_TOTAL_SIZE));
         RuntimeMemcpy(
             (reinterpret_cast<uint8_t*>(args_.sharedBuffer)) + i * SHARED_BUFFER_SIZE, sizeof(kernelArgs),
             reinterpret_cast<uint8_t*>(&kernelArgs), sizeof(kernelArgs), RtMemcpyKind::HOST_TO_DEVICE);

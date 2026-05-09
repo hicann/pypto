@@ -349,6 +349,30 @@ INLINE void PmuTestEnd(__gm__ KernelArgs* args)
 #endif
 }
 
+INLINE __gm__ TaskStat* InitTaskStat(ExecuteContext* ctx)
+{
+    __gm__ TaskStat* taskStat = nullptr;
+    (void)ctx;
+#ifdef __DAV_V310
+    if (unlikely(ctx->args->taskEntry.reserved[0] >= PRO_LEVEL1)) {
+        auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+        taskStat = &m->tasks[m->taskCount];
+        taskStat->perfDataBaseAddr = reinterpret_cast<uint64_t>(m);
+        if (m->taskCount == 0) {
+            taskStat->setEventAddr = PERF_DATA_BASE_SIZE;
+            taskStat->waitEventAddr = PERF_DATA_BASE_SIZE + SET_WAIT_EVENT_DATA_SIZE;
+        } else {
+            __gm__ TaskStat* prevTask = &m->tasks[m->taskCount - 1];
+            taskStat->setEventAddr = prevTask->setEventAddr + prevTask->setEventNum * sizeof(uint64_t);
+            taskStat->waitEventAddr = prevTask->waitEventAddr + prevTask->waitEventNum * sizeof(uint64_t);
+        }
+        taskStat->setEventNum = 0;
+        taskStat->waitEventNum = 0;
+    }
+#endif
+    return taskStat;
+}
+
 #define FuncNum(id) TaskID(id)
 
 #ifdef __HAS_SUB_FUNC__
@@ -380,14 +404,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
 #endif
 
     __gm__ TaskStat* taskStat = nullptr;
-#ifdef __DAV_V310
-    if (ctx->args->taskEntry.reserved[0] == PRO_LEVEL2 || ctx->args->taskEntry.reserved[0] == PRO_LEVEL1) {
-        auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
-        taskStat = &m->tasks[m->taskCount];
-        taskStat->waitEventIdx = 0;
-        taskStat->setEventIdx = 0;
-    }
-#endif
+    taskStat = InitTaskStat(ctx);
 
     CallSubFuncTask(
         opAttrs[0] + funcData->exprTbl[0], &param,

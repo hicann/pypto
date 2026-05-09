@@ -36,24 +36,31 @@ extern "C" void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& 
     }
 }
 
-json BuildSyncEventsJson(const TaskStat& taskStat)
+json BuildSyncEventsJson(const TaskStat& taskStat, const uint8_t* perfDataPtr)
 {
     json syncEventsArr = json::array();
-    for (int k = 0; k < taskStat.setEventIdx; ++k) {
-        if (taskStat.setEventCycle[k] != 0) {
+
+    const uint8_t* perfDataBase = perfDataPtr;
+    const uint64_t* setEventBase = reinterpret_cast<const uint64_t*>(perfDataBase + taskStat.setEventAddr);
+    const uint64_t* waitEventBase = reinterpret_cast<const uint64_t*>(perfDataBase + taskStat.waitEventAddr);
+
+    for (int k = 0; k < taskStat.setEventNum; ++k) {
+        uint64_t timestamp = setEventBase[k];
+        if (timestamp != 0) {
             json setEvent;
             setEvent["idx"] = k;
             setEvent["type"] = "CV_SYNC_SET";
-            setEvent["time"] = taskStat.setEventCycle[k];
+            setEvent["time"] = timestamp;
             syncEventsArr.push_back(setEvent);
         }
     }
-    for (int k = 0; k < taskStat.waitEventIdx; ++k) {
-        if (taskStat.waitEventCycle[k] != 0) {
+    for (int k = 0; k < taskStat.waitEventNum; ++k) {
+        uint64_t timestamp = waitEventBase[k];
+        if (timestamp != 0) {
             json waitEvent;
             waitEvent["idx"] = k;
             waitEvent["type"] = "CV_SYNC_WAIT";
-            waitEvent["time"] = taskStat.waitEventCycle[k];
+            waitEvent["time"] = timestamp;
             syncEventsArr.push_back(waitEvent);
         }
     }
@@ -68,7 +75,7 @@ void ConstructTaskInfo(
     const uint32_t& index, json& rootTaskStats, const std::vector<void*>& perfData, const std::string& coreType)
 {
     void* devPtr = perfData[index];
-    size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+    size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
     RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     Metrics* aicpuMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
@@ -89,7 +96,7 @@ void ConstructTaskInfo(
             taskObj["taskId"] = taskStats[j].taskId;
             taskObj["execStart"] = taskStats[j].execStart;
             taskObj["execEnd"] = taskStats[j].execEnd;
-            json syncEventsArr = BuildSyncEventsJson(taskStats[j]);
+            json syncEventsArr = BuildSyncEventsJson(taskStats[j], hostBuffer.data());
             if (!syncEventsArr.empty()) {
                 taskObj["syncEvents"] = syncEventsArr;
             }
@@ -217,7 +224,7 @@ inline void DumpAicoreDevTask(
     }
     for (uint32_t i = 0; i < args.GetBlockNum(); i++) {
         void* devPtr = perfData[i];
-        size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+        size_t dataSize = PERF_DATA_TOTAL_SIZE;
         std::vector<uint8_t> hostBuffer(dataSize);
         RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
         Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
@@ -291,7 +298,7 @@ inline void DumpAicpuDevTask(
 void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uint32_t freq, bool isLast)
 {
     void* devPtr = perfData[0];
-    size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+    size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
     RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());

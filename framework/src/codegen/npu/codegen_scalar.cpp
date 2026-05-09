@@ -61,7 +61,10 @@ std::string CodeGenOpNPU::GenSyncWaitOp() const
 
 void InsertSetSysCnt(std::ostringstream& oss){
     oss << "#ifdef OPEN_MIX_PERF\n";
-    oss << "taskStat->setEventCycle[taskStat->setEventIdx++] = get_sys_cnt();\n";
+    oss << "{\n";
+    oss << "    __gm__ uint64_t* setEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + taskStat->setEventAddr);\n";
+    oss << "    setEventBase[taskStat->setEventNum++] = get_sys_cnt();\n";
+    oss << "}\n";
     oss << "#endif\n";
 }
 
@@ -76,7 +79,10 @@ std::string CodeGenOpNPU::GenCVSyncSetOp() const
 
 void InsertWaitSysCnt(std::ostringstream& oss){
     oss << "#ifdef OPEN_MIX_PERF\n";
-    oss << "taskStat->waitEventCycle[taskStat->waitEventIdx++] = get_sys_cnt();\n";
+    oss << "{\n";
+    oss << "    __gm__ uint64_t* waitEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + taskStat->waitEventAddr);\n";
+    oss << "    waitEventBase[taskStat->waitEventNum++] = get_sys_cnt();\n";
+    oss << "}\n";
     oss << "#endif\n";
 }
 

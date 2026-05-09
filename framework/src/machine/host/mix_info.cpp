@@ -22,7 +22,9 @@ using json = nlohmann::json;
 namespace npu {
 namespace tile_fwk {
 namespace mix_info {
-constexpr uint32_t MAX_SYNC_EVENT_NUM = 48; // the max set/wait insts in a mix subgraph leaffunction is 48, can set larger manually
+constexpr uint32_t AVG_EVENTS_PER_TASK = 16;
+constexpr int MAX_DFX_TASK_NUM_PER_CORE = 10000;
+constexpr uint32_t MAX_TOTAL_EVENT_NUMS = AVG_EVENTS_PER_TASK * MAX_DFX_TASK_NUM_PER_CORE;
 void GetExecuteFunc(Function* func, std::map<int, std::set<Function*>>& leafFunctions)
 {
     auto funcType = func->GetGraphType();
@@ -86,6 +88,8 @@ int DumpMixInfo(Function* topFunc)
     std::map<int, std::set<Function*>> leafFunctions;
     GetExecuteFunc(topFunc, leafFunctions);
     std::map<uint64_t, std::map<int, WrapInfo>> wrapInfos;
+    uint32_t totalSetEventCount = 0;
+    uint32_t totalWaitEventCount = 0;
     for (auto& [wrapID, leafFuncs] : leafFunctions) {
         for (auto& leafFunc : leafFuncs) {
             auto leafAttr = leafFunc->GetLeafFuncAttribute();
@@ -105,21 +109,26 @@ int DumpMixInfo(Function* topFunc)
                 SyncInfo syncInfo;
                 if (op->GetOpcode() == Opcode::OP_CV_SYNC_SRC) {
                     syncInfo.isSet = true;
+                    totalSetEventCount++;
                 } else if (op->GetOpcode() == Opcode::OP_CV_SYNC_DST) {
                     syncInfo.isSet = false;
+                    totalWaitEventCount++;
                 } else {
                     continue;
                 }
                 syncInfo.eventID = op->GetSyncQueue().eventId_;
                 leafFuncSyncInfo.syncMsg.push_back(syncInfo);
             }
-            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, leafFuncSyncInfo.syncMsg.size() <= MAX_SYNC_EVENT_NUM)
-                << "leaffunction's syncEvent's size(" << leafFuncSyncInfo.syncMsg.size() << "is lager than MAX_SYNC_EVENT_NUM"
-                << MAX_SYNC_EVENT_NUM << "need to set MAX_SYNC_EVENT_NUM larger manually";
             wrapInfos[mixId][wrapID].coreTask.push_back(leafFuncSyncInfo);
         }
     }
     DumpMixInfoToJson(wrapInfos);
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, totalSetEventCount <= MAX_TOTAL_EVENT_NUMS)
+        << "TotalSetEventCount (" << totalSetEventCount
+        << ") is larger than MAX_TOTAL_EVENT_NUMS(" << MAX_TOTAL_EVENT_NUMS << ")";
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, totalWaitEventCount <= MAX_TOTAL_EVENT_NUMS)
+        << "TotalWaitEventCount (" << totalWaitEventCount
+        << ") is larger than MAX_TOTAL_EVENT_NUMS(" << MAX_TOTAL_EVENT_NUMS << ")";
     return 0;
 }
 } // namespace mix_info

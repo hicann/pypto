@@ -192,10 +192,11 @@ struct TaskStat {
     int32_t taskId;
     int64_t execStart;
     int64_t execEnd;
-    int64_t setEventCycle[MAX_SYNC_EVENT_NUM];
-    int64_t waitEventCycle[MAX_SYNC_EVENT_NUM];
-    int8_t waitEventIdx;
-    int8_t setEventIdx;
+    uint64_t perfDataBaseAddr;
+    uint64_t setEventAddr;
+    uint64_t waitEventAddr;
+    int16_t setEventNum;
+    int16_t waitEventNum;
 };
 
 struct DevDfxArgs {
@@ -227,6 +228,12 @@ struct Metrics {
     uint32_t perfTraceCnt[MAX_ROUND_NUM][PERF_TRACE_CORE_MAX];
     TaskStat tasks[];
 };
+
+constexpr uint32_t AVG_EVENTS_PER_TASK = 16;
+constexpr uint32_t SET_WAIT_EVENT_DATA_SIZE = MAX_DFX_TASK_NUM_PER_CORE * AVG_EVENTS_PER_TASK * sizeof(uint64_t);
+constexpr uint32_t PERF_DATA_SYNC_EVENT_SIZE = SET_WAIT_EVENT_DATA_SIZE * 2;
+constexpr uint32_t PERF_DATA_BASE_SIZE = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+constexpr uint32_t PERF_DATA_TOTAL_SIZE = PERF_DATA_BASE_SIZE + PERF_DATA_SYNC_EVENT_SIZE;
 
 struct MetricPerf {
     uint64_t perfAicpuTrace[npu::tile_fwk::dynamic::MAX_USED_AICPU_NUM][npu::tile_fwk::dynamic::PERF_TRACE_MAX] = {{0}};
