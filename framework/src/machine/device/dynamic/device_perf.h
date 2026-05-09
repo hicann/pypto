@@ -238,8 +238,8 @@ struct PerfEvtMgr {
                         cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
                 }
             } else {
-                DEV_WARN("Dev task num larger than: %u, the excess part will not be recorded",
-                         PERF_TRACE_COUNT_DEVTASK_MAX_NUM);
+                DEV_EVENT("Dev task num larger than: %u, the excess part will not be recorded",
+                          PERF_TRACE_COUNT_DEVTASK_MAX_NUM);
             }
             return;
         }

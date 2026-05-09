@@ -14,6 +14,7 @@
 #include "adapter/api/runtime_api.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
@@ -138,8 +139,8 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
 int EslModelLauncher::EslModelRunOnce(void *kernel, const DeviceLauncherConfig &config) {
     auto &inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto &outputDataList = ProgramData::GetInstance().GetOutputDataList();
-    auto aicpuStream = machine::GetRA()->GetScheStream();
-    auto aicoreStream = machine::GetRA()->GetStream();
+    auto aicpuStream = GetStreamContext().GetScheStream();
+    auto aicoreStream = GetStreamContext().GetAiCoreStream();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     EslModelMemoryUtils devMemoryHugePage(true);

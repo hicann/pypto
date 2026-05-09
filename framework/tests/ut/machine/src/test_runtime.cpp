@@ -40,5 +40,7 @@ public:
 TEST(RuntimeTest, Runtime01)
 {
     std::cout << "start to test runtime" << std::endl;
-    machine::GetRA()->MapAiCoreReg();
+    std::vector<int64_t> aiv;
+    std::vector<int64_t> aic;
+    EXPECT_EQ(machine::GetRA()->GetAicoreRegInfo(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL), 0);
 }

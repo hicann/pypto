@@ -92,35 +92,30 @@ inline bool IsLogEnableInfo() { return g_isLogEnableInfo; }
 inline bool IsLogEnableWarn() { return g_isLogEnableWarn; }
 inline bool IsLogEnableError() { return g_isLogEnableError; }
 
+constexpr int MAX_LOG_CHUNK = 824;
 template <typename... Args>
 inline void DeviceLogSplitDebug(const char* func, const char* format, Args... args)
 {
-    constexpr size_t MAX_LOG_CHUNK = 824;
-    char* formatted_str = nullptr;
-    int len = asprintf(&formatted_str, format, args...);
-    if (len < 0 || formatted_str == nullptr) {
+    char* formatStr = nullptr;
+    int len = asprintf(&formatStr, format, args...);
+    if (len <= 0 || formatStr == nullptr) {
         return;
     }
-    std::string log_content(formatted_str);
-    free(formatted_str);
     // 分段输出
-    if (log_content.size() <= MAX_LOG_CHUNK) {
-        dlog_debug(LOG_MOD_ID, "%lu %s\n%s", GET_TID(), func, log_content.c_str());
+    if (len <= MAX_LOG_CHUNK) {
+        dlog_debug(LOG_MOD_ID, "%lu %s\n%s", GET_TID(), func, formatStr);
     } else {
-        size_t start = 0;
-        int segment_num = 0;
-        size_t total_len = log_content.size();
-        size_t total_segments = (total_len + MAX_LOG_CHUNK - 1) / MAX_LOG_CHUNK;
-        while (start < total_len) {
-            size_t chunk_size = (total_len - start > MAX_LOG_CHUNK) ? MAX_LOG_CHUNK : total_len - start;
-            std::string segment = log_content.substr(start, chunk_size);
-            dlog_debug(
-                LOG_MOD_ID, "%lu %s [Segment %d/%lu]\n%s", GET_TID(), func, segment_num + 1, total_segments,
-                segment.c_str());
-            start += chunk_size;
-            segment_num++;
+        char* msgBegin = formatStr;
+        char* msgEnd = formatStr + len;
+        int index = 1;
+        int total = (len + MAX_LOG_CHUNK - 1) / MAX_LOG_CHUNK;
+        while (msgBegin < msgEnd) {
+            dlog_debug(LOG_MOD_ID, "%lu %s [Segment %d/%d]\n%.824s", GET_TID(), func, index, total, msgBegin);
+            msgBegin += MAX_LOG_CHUNK;
+            index++;
         }
     }
+    free(formatStr);
 }
 
 #define DEV_DEBUG_SPLIT(fmt, ...)                                             \
@@ -158,6 +153,11 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
                        static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__);               \
             DEV_ATRACE(fmt, ##__VA_ARGS__);                                                    \
         }                                                                                      \
+    } while (false)
+
+#define DEV_EVENT(fmt, ...)                                                                             \
+    do {                                                                                                \
+        dlog_info(LOG_MOD_ID | RUN_LOG_MASK, "%lu %s\n" #fmt, GET_TID(), __FUNCTION__, ##__VA_ARGS__);  \
     } while (false)
 
 #define DEV_TRACE_LOG_ERROR(errCode, fmt, ...)                                                 \
@@ -203,13 +203,14 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
 #else // none device
 #define DEV_IF_DEBUG if (true)
 
-#define DEV_VERBOSE_DEBUG(fmt, args...) PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
-#define DEV_VERBOSE_INFO(fmt, args...)  PYPTO_SIM_LOG(DLOG_INFO, MACHINE, fmt, ##args)
-#define DEV_DEBUG_SPLIT(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
-#define DEV_DEBUG(fmt, args...)         PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
-#define DEV_INFO(fmt, args...)          PYPTO_SIM_LOG(DLOG_INFO, MACHINE, fmt, ##args)
-#define DEV_WARN(fmt, args...)          PYPTO_SIM_LOG(DLOG_WARN, MACHINE, fmt, ##args)
+#define DEV_VERBOSE_DEBUG(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
+#define DEV_VERBOSE_INFO(fmt, args...)    PYPTO_SIM_LOG(DLOG_INFO, MACHINE, fmt, ##args)
+#define DEV_DEBUG_SPLIT(fmt, args...)     PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
+#define DEV_DEBUG(fmt, args...)           PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
+#define DEV_INFO(fmt, args...)            PYPTO_SIM_LOG(DLOG_INFO, MACHINE, fmt, ##args)
+#define DEV_WARN(fmt, args...)            PYPTO_SIM_LOG(DLOG_WARN, MACHINE, fmt, ##args)
 #define DEV_ERROR(errCode, fmt, args...)  PYPTO_SIM_LOGE_WITH_ERRCODE(MACHINE, errCode, fmt, ##args)
+#define DEV_EVENT(fmt, args...)           PYPTO_SIM_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, MACHINE, fmt, ##args)
 
 #if DEBUG_MEM_DUMP_LEVEL != DEBUG_MEM_DUMP_DISABLE
 #define DEV_MEM_DUMP(fmt, args...) MACHINE_LOGD("[WsMem Statistics] " fmt, ##args)

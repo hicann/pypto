@@ -22,6 +22,7 @@
 #include <limits.h>
 #include "securec.h"
 #include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/load_aicpu_op.h"
 #include "machine/utils/machine_ws_intf.h"
@@ -119,7 +120,7 @@ void SyncStreams(RtStream aicpuStream, RtStream aicoreStream, bool useSyncFlag)
 DeviceRunner& DeviceRunner::Get()
 {
     static DeviceRunner runner;
-    std::call_once(runner.once_, [&]() { runner.Init(); });
+    std::call_once(runner.once_, [&]() { ASSERT(DevCommonErr::INIT_FAILED, runner.Init() == 0); });
     return runner;
 }
 
@@ -339,29 +340,6 @@ void DeviceRunner::AllocDfxMetricMemory()
     }
 }
 
-void DeviceRunner::Dump()
-{
-    MACHINE_LOGI("======== aicore status ========");
-
-    int coreNum = args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS;
-    uint64_t size = coreNum * SHARED_BUFFER_SIZE;
-    std::vector<uint64_t> buffer(size / sizeof(uint64_t));
-    int rc = RuntimeMemcpy(buffer.data(), size, reinterpret_cast<void*>(args_.sharedBuffer), size,
-                           RtMemcpyKind::DEVICE_TO_HOST);
-    if (rc != 0) {
-        MACHINE_LOGI("rtmemcpy failed");
-        return;
-    }
-
-    uint64_t buffAddr = reinterpret_cast<uint64_t>(buffer.data());
-    for (int i = 0; i < coreNum; i++) {
-        KernelArgs* arg = reinterpret_cast<KernelArgs*>(buffAddr + i * SHARED_BUFFER_SIZE);
-        MACHINE_LOGI("aicore %d hello status %ld", i, arg->shakeBuffer[0]);
-        MACHINE_LOGI("last_taskId %ld", arg->shakeBuffer[1]);
-        MACHINE_LOGI("task status %ld", arg->shakeBuffer[2]);
-    }
-}
-
 /**************************** DynamicFunction *****************************/
 void DeviceRunner::DumpAiCoreExecutionTimeData()
 {
@@ -371,7 +349,7 @@ void DeviceRunner::DumpAiCoreExecutionTimeData()
     npu::tile_fwk::dynamic::DumpAicoreTaskExectInfo(args_, perfData_);
 }
 
-void DeviceRunner::DumpAiCorePmuData() { MACHINE_LOGI("TODO: DumpAiCorePmuData"); }
+void DeviceRunner::DumpAiCorePmuData() const { MACHINE_LOGI("TODO: DumpAiCorePmuData"); }
 
 void DeviceRunner::SynchronizeDeviceToHostProfData()
 {
@@ -398,7 +376,7 @@ int DeviceRunner::DynamicLaunchSynchronize(RtStream aicpuStream, RtStream ctrlSt
     return rcAicore + rcAicpu + rcCtrl;
 }
 
-int DeviceRunner::launchDynamicAiCore(RtStream aicoreStream, DeviceKernelArgs* kernelArgs)
+int DeviceRunner::launchDynamicAiCore(RtStream aicoreStream, DeviceKernelArgs* kernelArgs) const
 {
     RtArgsEx rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
@@ -411,7 +389,7 @@ int DeviceRunner::launchDynamicAiCore(RtStream aicoreStream, DeviceKernelArgs* k
     return RuntimeKernelLaunchWithHandleV2(binHdl_, tilingKey, blockDim_, &rtArgs, nullptr, aicoreStream, &cfg);
 }
 
-int DeviceRunner::launchDynamicAiCpu(RtStream aicpuStream, DeviceKernelArgs* kArgs)
+int DeviceRunner::launchDynamicAiCpu(RtStream aicpuStream, DeviceKernelArgs* kArgs) const
 {
 #ifdef BUILD_WITH_NEW_CANN
     return LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kArgs, aicpuNum_, "PyptoRun");
@@ -461,7 +439,7 @@ void DeviceRunner::InitAiCpuSoBin(DeviceArgs& devArgs)
 
 int DeviceRunner::InitAicpuServer()
 {
-    auto aicpuStream = machine::GetRA()->GetScheStream();
+    auto aicpuStream = GetStreamContext().GetScheStream();
 #ifdef BUILD_WITH_NEW_CANN
     return LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kArgs, 1, "PyptoInit");
 #endif
@@ -521,7 +499,7 @@ void DeviceRunner::SetDebugEnable()
     MACHINE_LOGD("Set debug enable aicore 0 devPtr: %p", perfData_[0]);
 }
 
-int DeviceRunner::RunPrepare()
+int DeviceRunner::RunPrepare() const
 {
     int ret = 0;
     if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL || ENABLE_PERF_TRACE == 1 ||
@@ -531,8 +509,8 @@ int DeviceRunner::RunPrepare()
                 (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +
                 i * SHARED_BUFFER_SIZE;
             ret = RuntimeMemcpy(
-                preCoreShareadBufferAddr, sizeof(uint64_t), reinterpret_cast<uint8_t*>(&perfData_[i]), sizeof(uint64_t),
-                RtMemcpyKind::HOST_TO_DEVICE);
+                preCoreShareadBufferAddr, sizeof(uint64_t), reinterpret_cast<const uint8_t*>(&perfData_[i]),
+                sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
         }
     }
     return ret;

@@ -23,6 +23,7 @@
 #include "adapter/api/runtime_api.h"
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/runtime/runtime_utils.h"
+#include "machine/runtime/context/stream_context.h"
 
 namespace npu::tile_fwk {
 constexpr int ADDR_MAP_TYPE_REG_AIC_CTRL = 2;
@@ -48,10 +49,6 @@ public:
         memPool_.FreeDevAddr(devAddr);
     }
 
-    void DynamicRecycle() { memPool_.DynamicRecycle(); }
-
-    void PrintPoolStatus() { memPool_.PrintPoolStatus(); }
-
     bool CheckAllSentinels() { return memPool_.CheckAllSentinels(); }
 
     static void CopyToDev(uint8_t* devDstAddr, uint8_t* hostSrcAddr, uint64_t size)
@@ -68,10 +65,7 @@ public:
     }
 
     int GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_t>& aiv, const int& addrType);
-    int GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
-
-    // Only used in test case.
-    void* MapAiCoreReg();
+    int GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu) const;
 
     bool GetValidGetPgMask() const { return validGetPgMask; }
 
@@ -83,39 +77,7 @@ private:
     DevMemoryPool memPool_;
 };
 
-class RuntimeAgentStream {
-public:
-    RtStream& GetStream() { return raStreamInstance; }
-
-    AclRtStream& GetScheStream() { return raStreamInstanceSche; }
-
-    RtStream& GetCtrlStream() { return raStreamInstanceCtrl; }
-
-    RtStream& GetCurrentStream() { return currentStream; }
-
-    void SetCurrentStream(AclRtStream& stream) { currentStream = stream; }
-
-    void CreateStream()
-    {
-        RuntimeStreamCreate(&raStreamInstance, RT_STREAM_PRIORITY_DEFAULT);
-        RuntimeStreamCreate(&raStreamInstanceSche, RT_STREAM_PRIORITY_DEFAULT);
-        RuntimeStreamCreate(&raStreamInstanceCtrl, RT_STREAM_PRIORITY_DEFAULT);
-    }
-    void DestroyStream()
-    {
-        RuntimeStreamDestroy(raStreamInstance);
-        RuntimeStreamDestroy(raStreamInstanceSche);
-        RuntimeStreamDestroy(raStreamInstanceCtrl);
-    }
-
-private:
-    RtStream raStreamInstance{0};
-    RtStream raStreamInstanceCtrl{0};
-    AclRtStream raStreamInstanceSche{0};
-    AclRtStream currentStream{0};
-};
-
-class RuntimeAgent : public RuntimeAgentMemory, public RuntimeAgentStream {
+class RuntimeAgent : public RuntimeAgentMemory {
 public:
     RuntimeAgent(RuntimeAgent& other) = delete;
 
@@ -146,8 +108,9 @@ public:
 #ifdef RUN_WITH_ASCEND_CAMODEL
         RuntimeMemcpy(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST);
 #else
-        RuntimeMemcpyAsync(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST, GetStream());
-        RuntimeStreamSynchronize(GetStream());
+        RuntimeMemcpyAsync(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST,
+            GetStreamContext().GetAiCoreStream());
+        RuntimeStreamSynchronize(GetStreamContext().GetAiCoreStream());
 #endif
     }
 
@@ -161,7 +124,6 @@ public:
     {
         if (AclInited) {
             DestroyMemory();
-            DestroyStream();
 #ifndef RUN_WITH_ASCEND_CAMODEL
             AclFinalize();
 #endif
@@ -175,8 +137,6 @@ private:
     {
         MACHINE_LOGI("RuntimeAgent: Init acl runtime!");
         CheckDeviceId();
-        MACHINE_LOGD("RuntimeAgent: Create a default stream!");
-        CreateStream();
     }
 
 private:

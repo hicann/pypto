@@ -26,6 +26,7 @@
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/runtime_utils.h"
+#include "machine/runtime/context/stream_context.h"
 #include "cost_model/simulation/backend.h"
 
 using namespace npu::tile_fwk::dynamic;
@@ -307,9 +308,9 @@ private:
         DeviceLauncherConfigFillDeviceInfo(config_);
         DeviceInitDistributedContext(memoryHelper, dynAttr->commGroupNames, kArgs);
         DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
-        auto aicpuStream = machine::GetRA()->GetScheStream();
-        auto aicoreStream = machine::GetRA()->GetStream();
-        auto ctrlStream = machine::GetRA()->GetCtrlStream();
+        auto aicpuStream = GetStreamContext().GetScheStream();
+        auto aicoreStream = GetStreamContext().GetAiCoreStream();
+        auto ctrlStream = GetStreamContext().GetCtrlStream();
         for (int i = 0; i < config_.repeatNum; i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
             rc = DeviceRunner::Get().DynamicRun(

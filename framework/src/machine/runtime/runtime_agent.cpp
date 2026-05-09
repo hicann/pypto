@@ -104,7 +104,7 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<
     return 0;
 }
 
-int RuntimeAgentMemory::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu)
+int RuntimeAgentMemory::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu) const
 {
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         return 0;
@@ -150,37 +150,6 @@ int RuntimeAgentMemory::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, s
         regsPmu[aivSecondIndex] = mapAddr + AIV_SECOND_STRIDE;
     }
     return 0;
-}
-
-void* RuntimeAgentMemory::MapAiCoreReg()
-{
-    std::vector<int64_t> aiv;
-    std::vector<int64_t> aic;
-
-    if (GetAicoreRegInfo(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL) != 0) {
-        return nullptr;
-    }
-
-    std::vector<int64_t> regAddr;
-    regAddr.insert(regAddr.end(), aic.begin(), aic.end());
-    regAddr.insert(regAddr.end(), aiv.begin(), aiv.end());
-    uint8_t* devAddr = nullptr;
-    size_t regAddrSize = sizeof(void*) * regAddr.size();
-    AllocDevAddr(&devAddr, regAddrSize);
-    if (devAddr == nullptr) {
-        MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "RuntimeMalloc failed. size: %zu", regAddrSize);
-        return nullptr;
-    }
-
-    int rc = RuntimeMemcpy(devAddr, regAddrSize, regAddr.data(), regAddrSize, RtMemcpyKind::HOST_TO_DEVICE);
-    if (rc != 0) {
-        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED, "RuntimeMemcpy failed. size: %zu", regAddrSize);
-        FreeDevAddr((uint8_t*)devAddr);
-        return nullptr;
-    }
-
-    MACHINE_LOGI("All AiCore Reg mapped: %p. size: %zu", devAddr, regAddrSize);
-    return devAddr;
 }
 } // namespace npu::tile_fwk
 

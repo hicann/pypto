@@ -26,7 +26,6 @@
 namespace npu::tile_fwk {
 class LoadAicpuOp {
 private:
-    RtFuncHandle funcHandle_;
     void* customBinHandle_ = nullptr;
     std::string builtInOpJsonPath_;
     std::unordered_map<std::string, RtFuncHandle> builtInFuncMap_;
@@ -34,12 +33,13 @@ private:
 public:
     LoadAicpuOp() = default;
     ~LoadAicpuOp(){};
-    int AicpuKernelLaunch(
+    static int AicpuKernelLaunch(
         [[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
         [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
-    int LaunchBuiltInOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum, const std::string& funcName);
+    int LaunchBuiltInOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum,
+                        const std::string& funcName) const;
     int GetBuiltInOpBinHandle();
-    int LaunchCustomOp(RtStream stream, DeviceKernelArgs* kArgs, std::string& OpType);
+    int LaunchCustomOp(RtStream stream, DeviceKernelArgs* kArgs, std::string& OpType) const;
     void CustomAiCpuSoLoad();
     void GenBuiltInOpInfo(const std::string& jsonPath);
     static LoadAicpuOp& GetInstance()

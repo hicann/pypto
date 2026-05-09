@@ -16,8 +16,8 @@
 #include "test_suite_stest_ops.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "operator/models/deepseek/page_attention.h"
-#include "machine/utils/dynamic/dev_encode.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/runtime//context/stream_context.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -207,9 +207,9 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
         DeviceTensorData(output.GetDataType(), outputDevAddr, output.GetShape()),
     };
 
-    auto aicpuStream = reinterpret_cast<DeviceStream>(machine::GetRA()->GetScheStream());
-    auto ctrlStream = reinterpret_cast<DeviceStream>(machine::GetRA()->GetCtrlStream());
-    auto aicoreStream = reinterpret_cast<DeviceStream>(machine::GetRA()->GetStream());
+    auto aicpuStream = reinterpret_cast<DeviceStream>(GetStreamContext().GetScheStream());
+    auto ctrlStream = reinterpret_cast<DeviceStream>(GetStreamContext().GetCtrlStream());
+    auto aicoreStream = reinterpret_cast<DeviceStream>(GetStreamContext().GetAiCoreStream());
     EXPECT_EQ(
         0, ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
                op, inputList, outputList, aicpuStream, ctrlStream, aicoreStream, true));
@@ -218,5 +218,4 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
 
     EXPECT_TRUE(resultCmp(outputGolden, (int32_t*)outputData.data(), 0.001f));
 }
-
 } // namespace

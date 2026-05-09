@@ -30,7 +30,6 @@
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/runtime/pmu_common.h"
 
-constexpr int CORE_DEFAULT_NUM = 70;
 namespace npu::tile_fwk {
 struct FileLock {
     FileLock() : fd(-1){};
@@ -76,7 +75,7 @@ public:
     void ResetMetrics(const uint32_t& coreId);
     void ResetPerData();
     void DumpAiCoreExecutionTimeData();
-    void DumpAiCorePmuData();
+    void DumpAiCorePmuData() const;
     void SynchronizeDeviceToHostProfData();
     void InitMetaData(DeviceArgs& devArgs);
     void InitAiCpuSoBin(DeviceArgs& devArgs);
@@ -97,21 +96,18 @@ private:
     int InitDeviceArgs(DeviceArgs& args);
     int Init();
 
-    void Dump();
     void AllocDfxMetricMemory();
     /**************DynamicFunction**************/
-    int launchDynamicAiCore(RtStream aicoreStream, DeviceKernelArgs* kernelArgs);
-    int launchDynamicAiCpu(RtStream aicpuStream, DeviceKernelArgs* kArgs);
-    int RunPrepare();
+    int launchDynamicAiCore(RtStream aicoreStream, DeviceKernelArgs* kernelArgs) const;
+    int launchDynamicAiCpu(RtStream aicpuStream, DeviceKernelArgs* kArgs) const;
+    int RunPrepare() const;
     int RunPost(RtStream aicpuStream, RtStream aicoreStream);
-    int launchDynamicAiCpuInit(RtStream aicpuStream, DeviceKernelArgs* kArgs);
     int InitAicpuServer();
     int DynamicKernelLaunch(
         RtStream aicpuStream, RtStream aicoreStream, DeviceKernelArgs* kernelArgs, int blockdim);
     int DynamicTripleStreamLaunch(
         RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream, DeviceKernelArgs* kernelArgs,
         int blockdim);
-    int ConstrutDeviceArgs(DeviceArgs& args, const std::vector<int64_t>& regs, const std::vector<int64_t>& regsPmu);
     void MachinePerfTraceDumpThread();
 
 private:
@@ -130,7 +126,6 @@ private:
     AclRtEvent event_;
     std::unordered_map<ArchInfo, std::function<int(std::vector<int64_t>&, std::vector<int64_t>&)>> addressMappingTable_;
     bool isCapture_{false};
-    bool initFlag_{false};
     bool enableDumpMachinePerfTrace_{false};
 
     std::thread dumpThread_;

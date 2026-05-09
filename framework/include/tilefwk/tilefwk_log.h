@@ -136,4 +136,14 @@ private:
         }                                                                                                            \
     } while (0)
 
+#define PYPTO_SIM_LOG_WITHOUT_LEVEL_CHECK(level, module, fmt, ...)                                                   \
+    do {                                                                                                             \
+        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                             \
+            npu::tile_fwk::LogFuncInfo::Instance().setAttr(true);                                                    \
+        }                                                                                                            \
+        if (npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord != nullptr) {                                         \
+            npu::tile_fwk::LogFuncInfo::Instance().pyptoRecord(                                                      \
+                PYPTO, level, "[%s:%d][%s]:" fmt, __FILE_NAME__, __LINE__, #module, ##__VA_ARGS__);                  \
+        }                                                                                                            \
+    } while (0)
 #endif

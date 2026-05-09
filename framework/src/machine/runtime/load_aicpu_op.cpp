@@ -123,7 +123,7 @@ int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]] void* funcHandle, [[maybe_un
 }
 
 int LoadAicpuOp::LaunchCustomOp([[maybe_unused]] RtStream stream, [[maybe_unused]] DeviceKernelArgs* kArgs,
-    [[maybe_unused]] std::string& OpType)
+    [[maybe_unused]] std::string& OpType) const
 {
 #ifdef BUILD_WITH_NEW_CANN
     ASSERT(DevCommonErr::PARAM_INVALID, customBinHandle_ != nullptr) << "customBinHandle cannot be null";
@@ -176,7 +176,7 @@ int LoadAicpuOp::GetBuiltInOpBinHandle()
 }
 
 int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]] RtStream stream, [[maybe_unused]] DeviceKernelArgs* kArgs,
-    [[maybe_unused]] const int& aicpuNum, [[maybe_unused]] const std::string& funcName)
+    [[maybe_unused]] const int& aicpuNum, [[maybe_unused]] const std::string& funcName) const
 {
 #ifdef BUILD_WITH_NEW_CANN
     RtFuncHandle funcHandle;

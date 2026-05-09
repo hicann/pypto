@@ -22,6 +22,7 @@
 #include "interface/utils/common.h"
 #include "tilefwk/error_code.h"
 #include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/context/stream_context.h"
 #include "machine/device/dynamic/device_utils.h"
 
 constexpr uint32_t COMM_IS_NOT_SET_DEVICE = 0;
@@ -316,7 +317,7 @@ std::vector<uint64_t> DistributedContext::GetCommContext([[maybe_unused]] const 
             HcommGetCommHandleByGroup(groupName.c_str(), &commHandle) == 0) << "Get hcom handle failed";
         tilingStruct->MakeMc2TilingStruct(groupName);
         auto ret = HcommAllocComResourceByTiling(
-            commHandle, machine::GetRA()->GetStream(), tilingStruct->GetMc2CommConfig(),
+            commHandle, GetStreamContext().GetAiCoreStream(), tilingStruct->GetMc2CommConfig(),
             reinterpret_cast<void**>(&commContext[groupIndex]));
         ASSERT(DistributedErrorCode::HCCL_ALLOC_RESOURCE_FAILED, (ret == 0) && (commContext[groupIndex] != 0UL))
             << "Hccl alloc resource failed";

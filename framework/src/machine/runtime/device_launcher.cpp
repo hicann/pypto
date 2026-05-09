@@ -21,6 +21,7 @@
 
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/device_launcher_binding.h"
+#include "machine/runtime/context/stream_context.h"
 #include "machine/host/backend.h"
 #include "machine/host/perf_analysis.h"
 #include "tilefwk/error_code.h"
@@ -58,7 +59,7 @@ int GetMaxBlockdim()
     uint32_t cubeBlockDim = 0;
     uint32_t vectorBlockDim = 0;
     // 若未进行控核，AclRtGetStreamResLimit返回的是满核
-    auto aicoreStream = machine::GetRA()->GetCurrentStream();
+    auto aicoreStream = GetStreamContext().GetCurrentStream();
     AclRtGetStreamResLimit(aicoreStream, AclRtDevResLimitType::CUBE_CORE, &cubeBlockDim);
     AclRtGetStreamResLimit(aicoreStream, AclRtDevResLimitType::VECTOR_CORE, &vectorBlockDim);
     // 若不满足AIC和AIV的比例，手动处理成为符合AIC和AIV的比例最大值
@@ -276,9 +277,9 @@ int DeviceLauncher::DeviceRunOnce(
 {
     auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
-    auto aicpuStream = machine::GetRA()->GetScheStream();
-    auto aicoreStream = machine::GetRA()->GetStream();
-    auto ctrlStream = machine::GetRA()->GetCtrlStream();
+    auto aicpuStream = GetStreamContext().GetScheStream();
+    auto aicoreStream = GetStreamContext().GetAiCoreStream();
+    auto ctrlStream = GetStreamContext().GetCtrlStream();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     DeviceMemoryUtils devMemoryUtilis(true);
@@ -352,19 +353,19 @@ CachedOperator* DeviceLauncher::DeviceRunCacheOperatorGet(Function* func)
 
 DeviceStream DeviceGetAicpuStream()
 {
-    RtStream aicpuStreamValue = machine::GetRA()->GetScheStream();
+    RtStream aicpuStreamValue = GetStreamContext().GetScheStream();
     return reinterpret_cast<DeviceStream>(aicpuStreamValue);
 }
 
 DeviceStream DeviceGetCtrlStream()
 {
-    RtStream ctrlStreamValue = machine::GetRA()->GetCtrlStream();
+    RtStream ctrlStreamValue = GetStreamContext().GetCtrlStream();
     return reinterpret_cast<DeviceStream>(ctrlStreamValue);
 }
 
 DeviceStream DeviceGetAicoreStream()
 {
-    RtStream aicoreStreamValue = machine::GetRA()->GetStream();
+    RtStream aicoreStreamValue = GetStreamContext().GetAiCoreStream();
     return reinterpret_cast<DeviceStream>(aicoreStreamValue);
 }
 
@@ -583,8 +584,8 @@ void DeviceLauncher::FreeControlFlowCache(uint8_t* ctrlCache)
 
 void DeviceLauncher::AddAicpuStream(AclMdlRI& rtModel)
 {
-    auto ctrlStream = (AclRtStream)machine::GetRA()->GetCtrlStream();
-    auto schedtream = (AclRtStream)machine::GetRA()->GetScheStream();
+    auto ctrlStream = GetStreamContext().GetCtrlStream();
+    auto schedtream = GetStreamContext().GetScheStream();
 
     if (IsCaptureMode()) {
         RuntimeStreamAddToModel(ctrlStream, rtModel);
@@ -595,7 +596,7 @@ void DeviceLauncher::AddAicpuStream(AclMdlRI& rtModel)
 void DeviceLauncher::SaveStream(AclRtStream aicoreStream)
 {
     // 存储 current stream，后续控核接口需使用current stream
-    machine::GetRA()->SetCurrentStream(aicoreStream);
+    GetStreamContext().SetCurrentStream(aicoreStream);
 }
 
 void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
@@ -664,16 +665,16 @@ int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode)
     if (isCaptureMode) {
         return 0;
     }
-    auto schedStream = machine::GetRA()->GetScheStream();
-    auto ctrlStream = machine::GetRA()->GetCtrlStream();
+    auto schedStream = GetStreamContext().GetScheStream();
+    auto ctrlStream = GetStreamContext().GetCtrlStream();
     return DeviceRunner::Get().RunPreSync(schedStream, ctrlStream, (RtStream)aicoreStream);
 }
 
 int DeviceLauncher::LaunchAicpuKernel(
     RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function)
 {
-    auto ctrlStream = (AclRtStream)machine::GetRA()->GetCtrlStream();
-    auto schedStream = (AclRtStream)machine::GetRA()->GetScheStream();
+    auto ctrlStream = GetStreamContext().GetCtrlStream();
+    auto schedStream = GetStreamContext().GetScheStream();
     auto& devRunner = DeviceRunner::Get();
     devRunner.GetHostProfInstance().SetProfFunction(function);
     int ret = 0;
@@ -713,7 +714,7 @@ int DeviceLauncher::LaunchAicoreKernel(
     auto ret = RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
     devRunner.ReportHostProfInfo(aicoreStream, startTime, blockDim, MSPF_GE_TASK_TYPE_MIX_AIC, true);
     if (debugEnable) {
-        auto scheStream = (AclRtStream)machine::GetRA()->GetScheStream();
+        auto scheStream = GetStreamContext().GetScheStream();
         int rc = DeviceRunner::Get().DynamicLaunchSynchronize(scheStream, nullptr, aicoreStream);
         if (rc != 0) {
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
@@ -723,7 +724,7 @@ int DeviceLauncher::LaunchAicoreKernel(
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, machine::GetRA()->CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {
-        auto scheStream = (AclRtStream)machine::GetRA()->GetScheStream();
+        auto scheStream = GetStreamContext().GetScheStream();
         int rc = DeviceRunner::Get().DynamicLaunchSynchronize(scheStream, nullptr, aicoreStream);
         if (rc != 0) {
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
