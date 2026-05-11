@@ -28,11 +28,11 @@ import torch
 import torch_npu
 import pytest
 import numpy as np
-from numpy.testing import assert_allclose
 from torch._subclasses.fake_tensor import FakeTensor
 from torch._dynamo import allow_in_graph
 import pypto
 from utils.get_format import get_format
+from utils.np_compare import detailed_allclose_manual as compare
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -619,7 +619,7 @@ def ifa_func_kernel_for_950(
                             pypto.set_pass_options(sg_set_scope=-1)
 
 
-def ifa(atten_cfg, case_950=0):
+def ifa(atten_cfg, case_950=0, is_high_precision=True):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch_dtype = torch.bfloat16
     torch.npu.set_device(int(device_id))
@@ -653,32 +653,35 @@ def ifa(atten_cfg, case_950=0):
     # 3. 根据block table 将pa格式的数据转换成
     k_cache_bsnd, v_cache_bsnd = kv_cache_concat_bsnd(k, v, block_table, atten_cfg)
 
-    for i in range(b):
-        for j in range(s1):
-            for n2_idx in range(nkv):
-                # 从 torch tensor 获取值
-                kv_seq_len = kv_cache_actual_seq[i].item()  # 使用 .item() 获取标量值
-                seq_len = kv_seq_len - s1 + 1 + j
-                q_bs = q[i * s1 + j]
-                k_bs = k_cache_bsnd[i, :seq_len, n2_idx:n2_idx + 1].reshape(seq_len, d)
-                v_bs = v_cache_bsnd[i, :seq_len, n2_idx:n2_idx + 1].reshape(seq_len, d)
-                # MM1: 矩阵乘法
-                qk_bmm_res = torch.matmul(q_bs, k_bs.transpose(1, 0))  # 1,nq, d  -> n_q,d @ d, s2_actual_len
-                qk_ele_res = qk_bmm_res * atten_cfg.softmax_scale
-                # Softmax计算
-                softmax_res, _, _ = softmax(qk_ele_res, True)
-
-                # MM2: 矩阵乘法
-                bmm2_res = torch.matmul(softmax_res, v_bs)
-
-                # 存储结果
-                attention_output[i * s1 + j] = bmm2_res
-
     # 4. 准备测试数据 - 直接使用 torch 张量
     block_table_torch = block_table.to(dtype=torch.int32, device=device)
     act_seq_torch = kv_cache_actual_seq.to(dtype=torch.int32, device=device)  # 直接使用已有的 tensor
 
     out_torch = torch.zeros(q_shape, dtype=torch_dtype).to(device=device)
+
+    if is_high_precision:
+        for i in range(b):
+            for j in range(s1):
+                for n2_idx in range(nkv):
+                    # 从 torch tensor 获取值
+                    kv_seq_len = kv_cache_actual_seq[i].item()  # 使用 .item() 获取标量值
+                    seq_len = kv_seq_len - s1 + 1 + j
+                    q_bs = q[i * s1 + j]
+                    k_bs = k_cache_bsnd[i, :seq_len, n2_idx:n2_idx + 1].reshape(seq_len, d)
+                    v_bs = v_cache_bsnd[i, :seq_len, n2_idx:n2_idx + 1].reshape(seq_len, d)
+                    # MM1: 矩阵乘法
+                    qk_bmm_res = torch.matmul(q_bs, k_bs.transpose(1, 0))  # 1,nq, d  -> n_q,d @ d, s2_actual_len
+                    qk_ele_res = qk_bmm_res * atten_cfg.softmax_scale
+                    # Softmax计算
+                    softmax_res, _, _ = softmax(qk_ele_res, True)
+
+                    # MM2: 矩阵乘法
+                    bmm2_res = torch.matmul(softmax_res, v_bs)
+
+                    # 存储结果
+                    attention_output[i * s1 + j] = bmm2_res
+    else:
+        ifa_flash_torch(q=q, k=k, v=v, block_table=block_table_torch, kv_act_seqs=act_seq_torch, out=attention_output)
 
     inputs = [
         q,
@@ -695,9 +698,169 @@ def ifa(atten_cfg, case_950=0):
         attention(*inputs)
 
     # 6. 与PyTorch参考实现对比
-    assert_allclose(np.array(attention_output.cpu().flatten().tolist()),
-                    np.array(out_torch.cpu().flatten().tolist()),
-                    rtol=0.0078125, atol=0.0001)
+    compare(np.array(attention_output.cpu().flatten().tolist()), np.array(out_torch.cpu().flatten().tolist()),
+            "out_torch", rtol=0.0078125, atol=0.0001)
+
+
+def matmul_proxy(left, right):
+    torch_fp32 = torch.float32
+    return torch.matmul(left.to(torch_fp32), right.to(torch_fp32))
+
+
+def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
+    """
+    PyTorch版本的ifa_flash_torch（修正原NumPy代码的关键bug，适配张量操作）
+    参数说明：
+        q: torch.Tensor, shape [b*s1, n1, d]  # b: batch数, s1: query序列长度, n1: query头数, d: 头维度
+        k: torch.Tensor, shape [block_num, block_size, n2, d]
+        # block_num: block总数, block_size: 每个block的长度, n2: key/value头数
+        v: torch.Tensor, shape [block_num, block_size, n2, d]
+        block_table: torch.Tensor, shape [b, max_block]  # 每个样本的block索引表
+        kv_act_seqs: torch.Tensor, shape [b]  # 每个样本的kv有效序列长度
+        out: torch.Tensor, shape [b*s1, n1, d]  # 输出注意力结果（需预先分配空间）
+    """
+    torch_fp32 = torch.float32
+    if is_fp32:
+        q = q.to(torch_fp32)
+        k = k.to(torch_fp32)
+        v = v.to(torch_fp32)
+
+    # ========== 1. 提取维度信息（与原代码一致） ==========
+    q_shape = q.shape
+    bs1, n1, d = q_shape[0], q_shape[1], q_shape[2]
+    b = kv_act_seqs.shape[0]
+    s1 = bs1 // b  # 每个样本的query序列长度
+    k_shape = k.shape
+    block_num, block_size, n2, _ = k_shape  # 补充block_num维度（原代码遗漏）
+    g = n1 // n2  # 头数比例（n1必须是n2的整数倍）
+    g_tile = g  # 与g一致，保留原变量名
+
+    # ========== 2. 张量重塑（修正原代码的reshape维度错误，解决矩阵乘法维度不匹配问题） ==========
+    # 原代码错误：k.reshape(-1, n2*d) 导致后续matmul维度不匹配
+    # 修正：将k/v的[block_num, block_size, n2, d]重塑为[block_num*block_size*n2, d]
+    # 目的：让k/v的最后一维为d，与q的d维度匹配，支持矩阵乘法
+    k_2d = k.reshape(-1, d)  # shape: [block_num*block_size*n2, d]
+    v_2d = v.reshape(-1, d)  # shape: [block_num*block_size*n2, d]
+    # q的重塑：将[b*s1, n1, d]重塑为[b*s1*n1, d]（与原代码一致）
+    q_2d = q.reshape(-1, d)  # shape: [bs1*n1, d]
+
+    # ========== 3. 循环处理每个样本、每个位置（保留原代码的循环逻辑） ==========
+    # 遍历batch
+    for b_idx in range(b):
+        # 遍历每个query的位置
+        for s1_idx in range(s1):
+            # 计算当前kv的有效序列长度（原代码逻辑）
+            cur_seq = kv_act_seqs[b_idx] - (s1 - 1 - s1_idx)
+            cur_seq = max(cur_seq.item(), 0)  # 防止负数（PyTorch标量需用.item()取数值）
+            s2_loop = math.ceil(cur_seq / block_size)  # 需要遍历的block数
+
+            # 遍历每个key/value头
+            for n2_idx in range(n2):
+                # 遍历头数比例g
+                for g_idx in range(g // g_tile):
+                    # ========== 4. 初始化中间变量（修正原代码的初始化错误） ==========
+                    # 原代码错误：np.array([g_tile, d]) 生成的是[g_tile, d]的一维数组，形状错误
+                    # 修正：初始化对应形状的零张量，与q同设备、同数据类型
+                    device = q.device
+                    dtype = q.dtype
+                    oi_upd = torch.zeros((g_tile, d), device=device, dtype=torch_fp32)  # shape: [g_tile, d]
+                    li_upd = torch.zeros(g_tile, device=device, dtype=torch_fp32)  # shape: [g_tile]
+                    mi_upd = torch.zeros(g_tile, device=device, dtype=torch_fp32)  # shape: [g_tile]
+
+                    # 遍历每个kv block
+                    for s2_idx in range(s2_loop):
+                        # 获取当前block的索引（需确保block_idx是有效标量）
+                        block_idx = block_table[b_idx][s2_idx].item()
+                        # 防止block_idx超出范围
+
+                        # 计算偏移量（原代码逻辑）
+                        bs_ofs = b_idx * s1 + s1_idx  # batch+seq的偏移
+                        n2g_ofs = n2_idx * g + g_idx * g_tile  # 头数的偏移
+                        # 计算当前block的有效长度（防止超出cur_seq）
+                        actual_s2_tile = min(block_size, cur_seq - s2_idx * block_size)
+
+                        # ========== 5. 提取当前的q、k、v切片（修正索引范围，防止越界） ==========
+                        # 提取qi: shape [g_tile, d]
+                        qi_start = bs_ofs * n1 + n2g_ofs
+                        qi_end = qi_start + g_tile
+                        # 防止索引越界
+                        qi = q_2d[qi_start:qi_end, :]  # shape: [g_tile, d]
+
+                        # 提取kj: shape [actual_s2_tile*n2, d]（对应block内的所有key头）
+                        kj_start = block_idx * block_size
+                        kj_end = kj_start + actual_s2_tile
+                        # 防止索引越界
+                        kj = k_2d[kj_start:kj_end, :]  # shape: [actual_s2_tile*n2, d]
+
+                        # 提取vj: shape [actual_s2_tile*n2, d]（与kj对应）
+                        vj = v_2d[kj_start:kj_end, :]  # shape: [actual_s2_tile*n2, d]
+
+                        # ========== 6. 注意力计算（修正原代码的聚合维度，匹配PyTorch操作） ==========
+                        # 第一步：q @ k.T (g_tile, d) @ (d, actual_s2_tile*n2) → (g_tile, actual_s2_tile*n2)
+                        mm1 = matmul_proxy(qi, kj.t()).to(torch_fp32)
+                        # 缩放因子：d^-0.5
+                        muls_res = mm1 * (d ** -0.5)
+                        # 第二步：计算max(muls_res) → 按最后一维取max（原代码全局max是错误的），保留维度便于广播
+                        tilda_mij, _ = torch.max(muls_res, dim=-1, keepdim=True)  # shape: [g_tile, 1]
+                        # 第三步：exp(muls_res - max) 防止数值溢出
+                        tsub = muls_res - tilda_mij
+                        tilda_pij = torch.exp(tsub)  # shape: [g_tile, actual_s2_tile*n2]
+                        # 第四步：sum(tilda_pij) → 按最后一维求和
+                        tilda_lij = torch.sum(tilda_pij, dim=-1, keepdim=True)  # shape: [g_tile, 1]
+
+                        # ========== 7. 累积更新oi、li、mi（原代码逻辑，适配PyTorch） ==========
+                        if s2_idx == 0:
+                            # 首次迭代：初始化累积值
+                            oi_tmp = matmul_proxy(tilda_pij.to(dtype), vj).to(torch_fp32)
+                            if s2_idx == s2_loop - 1:
+                                # 最后一个block：归一化后赋值到输出
+                                oi_upd = oi_tmp / tilda_lij  # 原代码//是整数除法，PyTorch中用/（浮点数）
+                                # 赋值到attn_out：shape [1, g_tile, d]
+                                out[bs_ofs:bs_ofs + 1, n2g_ofs:n2g_ofs + g_tile, :] = oi_upd.unsqueeze(0).to(dtype)
+                            else:
+                                oi_upd = oi_tmp
+                            li_upd = tilda_lij.squeeze(-1)  # 去掉最后一维，shape [g_tile]
+                            mi_upd = tilda_mij.squeeze(-1)  # 去掉最后一维，shape [g_tile]
+                        else:
+                            # 后续迭代：累积更新
+                            oi = oi_upd
+                            li = li_upd.unsqueeze(-1)  # 恢复维度便于广播
+                            mi = mi_upd.unsqueeze(-1)  # 恢复维度便于广播
+
+                            # 计算新的max
+                            mi_new, _ = torch.max(torch.cat([mi, tilda_mij], dim=-1), dim=-1,
+                                                  keepdim=True)  # shape: [g_tile, 1]
+                            # 计算指数项
+                            t1 = mi - mi_new
+                            t2 = torch.exp(t1)
+                            t3 = tilda_mij - mi_new
+                            t4 = torch.exp(t3)
+                            # 累积li
+                            t5 = t4 * tilda_lij
+                            t6 = t2 * li
+                            li_new = t6 + t5  # shape: [g_tile, 1]
+                            # 累积oi
+                            q3 = oi * t2  # shape: [g_tile, d]
+                            q1 = matmul_proxy(tilda_pij.to(dtype), vj).to(torch_fp32)
+                            q2 = q1 * t4  # shape: [g_tile, d]
+                            oi_tmp = q3 + q2  # shape: [g_tile, d]
+
+                            if s2_idx == s2_loop - 1:
+                                # 最后一个block：归一化后赋值到输出
+                                oi_upd = oi_tmp / li_new  # 归一化
+                                oi_upd_3d = oi_upd.unsqueeze(0)  # shape: [1, g_tile, d]
+                                # 赋值到attn_out（防止索引越界）
+                                attn_out_start_col = n2g_ofs
+                                attn_out_end_col = n2g_ofs + g_tile
+                                if attn_out_end_col > out.shape[1]:
+                                    attn_out_end_col = out.shape[1]
+                                    attn_out_start_col = attn_out_end_col - g_tile
+                                out[bs_ofs:bs_ofs + 1, attn_out_start_col:attn_out_end_col, :] = oi_upd_3d.to(dtype)
+                            else:
+                                oi_upd = oi_tmp
+                            li_upd = li_new.squeeze(-1)  # 更新li
+                            mi_upd = mi_new.squeeze(-1)  # 更新mi
+    return out  # 返回输出张量（可选，因为attn_out是原地修改）
 
 
 @pytest.mark.soc("950")
@@ -725,7 +888,7 @@ def test_ifa_for_950():
             actual_seq_cpu = atten_cfg.actual_seq
 
         assert all(x <= atten_cfg.s2 for x in actual_seq_cpu), "所有值都必须小于s2"
-        ifa(atten_cfg, case_950=1)
+        ifa(atten_cfg, case_950=1, is_high_precision=False)
 
 
 @pytest.mark.soc("950", "910")
@@ -747,7 +910,7 @@ def test_ifa():
             actual_seq_cpu = atten_cfg.actual_seq
 
         assert all(x <= atten_cfg.s2 for x in actual_seq_cpu), "所有值都必须小于s2"
-        ifa(atten_cfg, case_950=0)
+        ifa(atten_cfg, case_950=0, is_high_precision=False)
 
 
 @allow_in_graph
