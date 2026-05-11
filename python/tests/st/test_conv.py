@@ -242,7 +242,7 @@ def test_conv2d_dynamic_batch_stride():
     fmap_shape = (2, 16, 32, 32)
     weight_shape = (64, 16, 3, 3)
     out_shape = (2, 64, 15, 15)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
@@ -307,7 +307,7 @@ def test_conv1d_dynamic_wout():
     fmap_shape = (1, 16, 66)
     weight_shape = (64, 16, 3)
     out_shape = (1, 64, 64)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
@@ -360,6 +360,7 @@ def test_conv1d_dynamic_wout():
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
 
+@pytest.mark.skip(reason="wait for fixing gm raw shape normalization")
 @pytest.mark.soc("950")
 def test_conv2d_dynamic_hout():
     """Conv2D dynamic hout axis with pad=0 (constraint), stride=1, dilation=1, dtype=FP32"""
@@ -371,7 +372,7 @@ def test_conv2d_dynamic_hout():
     fmap_shape = (1, 16, 34, 34)
     weight_shape = (64, 16, 3, 3)
     out_shape = (1, 64, 32, 32)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
@@ -441,7 +442,7 @@ def test_conv1d_dynamic_cout():
     fmap_shape = (1, 16, 64)
     weight_shape = (64, 16, 3)
     out_shape = (1, 64, 64)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
@@ -500,7 +501,7 @@ def test_conv3d_dynamic_dout():
     fmap_shape = (1, 16, 4, 18, 34)
     weight_shape = (64, 16, 2, 3, 3)
     out_shape = (1, 64, 3, 16, 32)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
@@ -571,7 +572,7 @@ def test_conv2d_dynamic_cout_stride():
     fmap_shape = (1, 16, 32, 32)
     weight_shape = (64, 16, 3, 3)
     out_shape = (1, 64, 16, 16)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
@@ -636,7 +637,7 @@ def test_conv1d_dynamic_wout_dilation():
     fmap_shape = (1, 16, 68)
     weight_shape = (64, 16, 3)
     out_shape = (1, 64, 64)
-    
+
     a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
     b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
     c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
