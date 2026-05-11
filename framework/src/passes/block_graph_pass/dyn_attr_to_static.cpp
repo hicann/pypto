@@ -17,6 +17,12 @@
 
 namespace npu {
 namespace tile_fwk {
+enum class BranchMode : int {
+    DEFAULT_BRANCH_MODE = 0,
+    STATIC_CONST_BRANCH_MODE = 1,
+    VARIABLE_BRANCH_MODE = 2,
+    CONST_BRANCH_MODE = 3
+};
 
 struct CoaInfo {
     CoaType macroType = CoaType::INVALID;
@@ -158,6 +164,8 @@ struct IsConstMetric {
     int GetAttrValue() { return attrValue; }
     bool TryInitAndCheckEqual(int newValue)
     {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "Update dynScalar value=%d.", newValue);
         if (newValue < 0) {
             isConst = 0;
             attrValue = -1;
@@ -323,26 +331,41 @@ Status DynAttrToStatic::BuildNewCoa(
         return FAILED;
     }
     int coaIndex = coaExpr.CalculateCoaIndex();
+    APASS_LOG_DEBUG_F(Elements::Operation, "Update dynScalar[%s] : ", dynParamExpr.c_str());
 
     // 2. 遍历不同caller下的取值，确认是否是常数
-    IsConstMetric scalarValue;
+    std::set<int> scalarValue;
     for (auto& argList : callopArglistOneDim) {
         auto& callopAttr = argList[coaIndex];
         if (!callopAttr.IsImmediate()) {
-            scalarValue.MarkNotConst();
-            break;
+            scalarValue.insert(-2);
         } else {
-            if (!scalarValue.TryInitAndCheckEqual(callopAttr.Concrete())) {
-                break;
-            }
+            scalarValue.insert(callopAttr.Concrete());
+        }
+        if (scalarValue.size() > 1 && scalarValue.count(-2) > 0) {
+            break;
+        }
+    }
+    int branchMode = static_cast<int>(BranchMode::DEFAULT_BRANCH_MODE);
+    int attrValue = -2;
+    if (scalarValue.size() == 1) {
+        if (scalarValue.count(-2) > 0) {
+            branchMode = static_cast<int>(BranchMode::VARIABLE_BRANCH_MODE);
+        } else {
+            branchMode = static_cast<int>(BranchMode::STATIC_CONST_BRANCH_MODE);
+            attrValue = *scalarValue.begin();
+        }
+    } else if (scalarValue.size() > 1) {
+        if (scalarValue.count(-2) == 0) {
+            branchMode = static_cast<int>(BranchMode::CONST_BRANCH_MODE);
         }
     }
 
     // 3. 刷新新的COA宏
     APASS_LOG_INFO_F(
         Elements::Operation, "BuildNewCoa update dynScalar[%s] with isConst=%d, value=%d.", dynParamExpr.c_str(),
-        scalarValue.isConst, scalarValue.attrValue);
-    dynScalar.get() = coaExpr.BuildMaybeConstCoa(scalarValue.isConst, scalarValue.attrValue);
+        branchMode, attrValue);
+    dynScalar.get() = coaExpr.BuildMaybeConstCoa(branchMode, attrValue);
     return SUCCESS;
 }
 
@@ -419,23 +442,25 @@ void ReBuildConcreteParam(Function* leafFunc, std::vector<std::vector<SymbolicSc
         }
         auto coaIdx = GetCoaIndex(dynParam.second);
         APASS_LOG_DEBUG_F(Elements::Operation, "Get concrete symbols %s idx %d", dynParam.first.c_str(), coaIdx);
-        IsConstMetric scalarValue;
+        std::set<int> scalarValue;
         auto isConstParam = [&callopArglistOneDim, &scalarValue](int argIdx) {
-            for (auto& calleeArgs : callopArglistOneDim) {
-                auto callopAttr = calleeArgs[argIdx];
+            for (auto& argList : callopArglistOneDim) {
+                auto& callopAttr = argList[argIdx];
                 if (!callopAttr.IsImmediate()) {
-                    return false;
+                    scalarValue.insert(-2);
+                } else {
+                    scalarValue.insert(callopAttr.Concrete());
                 }
-                if (!scalarValue.TryInitAndCheckEqual(callopAttr.Concrete())) {
+                if (scalarValue.size() > 1) {
                     return false;
                 }
             }
             return true;
         };
-        if (!isConstParam(coaIdx) || scalarValue.attrValue < 0) {
+        if (!isConstParam(coaIdx) || *scalarValue.begin() < 0) {
             continue;
         }
-        leafFunc->GetMutableDynParam(dynParam.first).dim = scalarValue.attrValue;
+        leafFunc->GetMutableDynParam(dynParam.first).dim = *scalarValue.begin();
     }
 }
 
