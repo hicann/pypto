@@ -11,6 +11,7 @@
 """PyPTO"""
 from typing import Optional, Union, List, Tuple, overload
 
+import pypto
 from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
@@ -739,7 +740,13 @@ def exp2(input: Tensor) -> Tensor:
     Input x: [0.0    1.0    2.0]
     Output y:[1.0000 2.0000 4.0000]
     """
-    return pypto_impl.Exp2(input)
+    valid_shape = input.GetValidShape()
+    if input.dtype == pypto.DT_INT16 or input.dtype == pypto.DT_INT32:
+        input = pypto.cast(input, pypto.DT_FP32)
+
+    two_element = pypto_impl.Element(input.dtype, 2)
+    x = pypto_impl.Full(two_element, input.dtype, input.shape, valid_shape)
+    return pow(x, input)
 
 
 @op_wrapper

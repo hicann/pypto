@@ -29,6 +29,10 @@ exp2(input: Tensor) -> Tensor
 
 返回输出Tensor，当输入是DT_FP32, DT_FP16, DT_BF16，Tensor的数据类型和input相同，Shape与input相同，当输入是DT_INT32, DT_INT16，Tensor的数据类型是DT_FP32，Shape与input相同。
 
+## 约束说明
+
+1. input 中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32。
+
 
 ## 调用示例
 
