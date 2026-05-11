@@ -37,7 +37,9 @@ void CheckTensorDynamicShape(const LogicalTensors iOperands, const Opcode opCode
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperands[i]->shape[dimIdx] > 0)
                 << (!opName.empty() ? "Operation: " + opName : "")
                 << " Input operand (name: " << iOperands[i]->tensor->GetSymbol() << ") "
-                << " at dimension[" << dimIdx << "] has invalid shape value: " << iOperands[i]->shape[dimIdx];
+                << " at dimension[" << dimIdx << "] has invalid shape value: " << iOperands[i]->shape[dimIdx]
+                << ". Dynamic shape tensors (shape with -1) are not allowed as operation operands. "
+                << "All input tensors must have static shapes with positive dimension values.";
         }
     }
 }

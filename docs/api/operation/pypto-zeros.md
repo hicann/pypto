@@ -15,6 +15,7 @@
 ## 注意事项
 
 - **必须先设置 TileShape**：调用此接口前，必须先通过 [set_vec_tile_shapes](pypto-set_vec_tile_shapes.md) 设置 TileShape
+- **dtype 参数必须显式传入**：当需要指定数据类型时，必须使用关键字参数 `dtype=` 显式传入，不能作为位置参数传入。例如，应使用 `pypto.zeros(2, 3, dtype=pypto.DT_INT32)` 而非 `pypto.zeros(2, 3, pypto.DT_INT32)`。如果作为位置参数传入，dtype 值会被误解析为 size 的一个维度，导致错误
 
 ## 函数原型
 

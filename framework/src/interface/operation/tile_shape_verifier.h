@@ -71,7 +71,9 @@ private:
         auto tile_size = op.GetTileShape().GetVecTile().size();
         auto shape_size = tensor->GetShape().size();
         if (tile_size < shape_size) {
-            oss << "Tile shape size " << tile_size << " is not matched the output shape size " << shape_size << ".";
+            auto opName = OpcodeManager::Inst().GetOpcodeStr(op.GetOpcode());
+            oss << "Operation: " << opName << ". Tile shape size " << tile_size
+                << " is not matched the output shape size " << shape_size << ".";
             return false;
         }
         return true;
@@ -85,7 +87,8 @@ private:
         auto tail_axis = op.GetTileShape().GetVecTile().tile.back();
         auto data_type = tensor->Datatype();
         if (tail_axis * BytesOf(data_type) % BLOCK_SIZE != 0) {
-            oss << "The last axis of Tile shape " << tail_axis << " is not align 32B.";
+            auto opName = OpcodeManager::Inst().GetOpcodeStr(op.GetOpcode());
+            oss << "Operation: " << opName << ". The last axis of Tile shape " << tail_axis << " is not align 32B.";
             return false;
         }
         return true;
@@ -97,8 +100,9 @@ private:
         int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + axis_name_map.at(op.GetOpcode()));
         axis = (axis == -1) ? (shape.size() - 1) : axis;
         if (op.GetTileShape().GetVecTile()[axis] != shape[axis]) {
-            oss << "Tile shape's " << std::to_string(axis) << " dim is not equal to output's " << std::to_string(axis)
-                << "  dim.";
+            auto opName = OpcodeManager::Inst().GetOpcodeStr(op.GetOpcode());
+            oss << "Operation: " << opName << ". Tile shape's " << std::to_string(axis)
+                << " dim is not equal to output's " << std::to_string(axis) << " dim.";
             return false;
         }
         return true;
