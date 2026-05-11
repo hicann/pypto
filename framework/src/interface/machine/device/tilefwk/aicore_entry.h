@@ -296,7 +296,7 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFuncionData(ExecuteContext *ctx, 
 
 // The aicore received the task stop notification before receiving the leaftask.
             if (GetLeafTaskId() == AICORE_TASK_STOP) {
-                SetStatus(args, STAGE_GET_FUNCDATA_STOP);
+                SetStatus(args, STAGE_CORE_EXIT);
                 WaitWaveSignal(args);
                 return nullptr;
             }
@@ -312,7 +312,7 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFuncionData(ExecuteContext *ctx, 
 
                 // The aicore received the task stop notification before receiving the leaftask.
                 if (GetLeafTaskId() == AICORE_TASK_STOP) {
-                    SetStatus(args, STAGE_GET_FUNCDATA_STOP);
+                    SetStatus(args, STAGE_CORE_EXIT);
                     WaitWaveSignal(args);
                     return nullptr;
                 }
