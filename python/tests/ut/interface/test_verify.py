@@ -62,7 +62,7 @@ def test_set_verify_data_dtype_mismatch_intercept():
     input_golden_data = _to_device_tensor_data(input_golden, dtype=pypto.DT_FP32)
     output_golden_data = _to_device_tensor_data(output_golden, dtype=pypto.DT_FP16)
 
-    with pytest.raises(Exception, match="Errcode:\\s*FB4003"):
+    with pytest.raises(Exception, match="ErrCode:\\s*FB4003"):
         pypto.pypto_impl.SetVerifyData([input_data], [output_data], [input_golden_data, output_golden_data])
 
 
@@ -76,5 +76,5 @@ def test_set_verify_data_shape_mismatch_intercept():
     input_golden_data = _to_device_tensor_data(input_golden)
     output_golden_exact = _to_device_tensor_data(output_golden, [2, 3])
     output_bad_shape = _to_device_tensor_data(output_tensor, [2, 4])
-    with pytest.raises(Exception, match="Errcode:\\s*FB4002"):
+    with pytest.raises(Exception, match="ErrCode:\\s*FB4002"):
         pypto.pypto_impl.SetVerifyData([input_data], [output_bad_shape], [input_golden_data, output_golden_exact])

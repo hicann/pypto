@@ -24,7 +24,7 @@ import ast
 from typing import Union, Optional
 
 
-_ERROR_CODE_UNKNOWN = 0xF1FFFF
+_ERROR_CODE_UNKNOWN = 0xF0FFFF
 
 _error_mapping = {
     TypeError: 0xF00001,
@@ -51,6 +51,8 @@ class PyptoError(Exception):
     def __init__(self, err_code: int, msg: Union[str, Exception]):
         if isinstance(msg, Exception):
             msg = f"ErrCode: {err_code:X}, {type(msg).__name__}: {msg}"
+        elif "ErrCode" not in msg: 
+            msg = f"ErrCode: {err_code:X}, {msg}"
         super().__init__(msg)
         self.node: Optional[ast.AST] = None
 

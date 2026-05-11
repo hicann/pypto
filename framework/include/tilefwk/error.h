@@ -108,7 +108,7 @@ public:
         0 :                                                                                                            \
         npu::tile_fwk::Error(__func__, __FILE__, __LINE__, npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = \
             npu::tile_fwk::ErrorMessage() << "ASSERT FAILED: "                                                         \
-            << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                         \
+            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                         \
             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
 
 #define CHECK_WITH_CODE(errcode, cond)                                                                                 \
@@ -116,7 +116,7 @@ public:
         0 :                                                                                                            \
         npu::tile_fwk::Error(__func__, __FILE__, __LINE__, npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = \
             npu::tile_fwk::ErrorMessage() << "CHECK FAILED: "                                                          \
-            << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                         \
+            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                         \
             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
 
 #define TILEFWK_ERROR()                                                                                            \
@@ -126,13 +126,13 @@ public:
 #define ASSERT_WITH_CODE(errcode, cond)                                                                        \
     (cond) ? 0 :                                                                                               \
              AssertInfo() = npu::tile_fwk::ErrorMessage() << "ASSERT FAILED: "                                 \
-                            << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
+                            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
                             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
 
 #define CHECK_WITH_CODE(errcode, cond)                                                                         \
     (cond) ? 0 :                                                                                               \
              AssertInfo() = npu::tile_fwk::ErrorMessage() << "CHECK FAILED: "                                  \
-                            << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
+                            << "ErrCode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0') \
                             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "! Enum: " << #errcode << "\n"
 #endif
 
