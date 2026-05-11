@@ -112,16 +112,6 @@ TEST_F(TestDeviceTrace, SubmitAndReport_TraceWorkflow)
     SUCCEED();
 }
 
-TEST_F(TestDeviceTrace, TraceInfo_MaxMessageLength)
-{
-    std::string longContent;
-    for (int i = 0; i < 200; i++) {
-        longContent += "x";
-    }
-    std::string result = TraceInfo("test.cpp", 1, "func", "%s", longContent.c_str());
-    EXPECT_TRUE(result.size() <= MAX_MSG_LEN || result.find("format error") != std::string::npos);
-}
-
 TEST_F(TestDeviceTrace, MAX_MSG_LEN_ValueCheck) { EXPECT_EQ(MAX_MSG_LEN, 112); }
 
 TEST_F(TestDeviceTrace, Filename_Macro_BasicPath)

@@ -1062,17 +1062,16 @@ private:
         }
 #endif
         uint64_t encodeTaskId = EncodeTaskId(devTaskCtx, coreIdx, newTask);
-        aicoreHal_.SetReadyQueue(coreIdx, (encodeTaskId + 1));
-        pendingIds_[coreIdx] = static_cast<uint32_t>(encodeTaskId & 0xFFFFFFFF);
-        pendingResolveIndexList_[coreIdx] = 0;
-        devTaskCtx->sendCnt[static_cast<int>(type)]++;
-
         if (!devTaskCtx->isFirstTaskSend) {
             PerfMtTrace(PERF_TRACE_DEV_TASK_SEND_FIRST_LEAF_TASK, aicpuIdx_);
             DEV_ATRACE("aicpuIdx: %d DevTask: %lu, Send first leafTask: %lu to aicore",
                         aicpuIdx_, devTaskCtx->TaskId(), newTask);
             devTaskCtx->isFirstTaskSend = 1;
         }
+        aicoreHal_.SetReadyQueue(coreIdx, (encodeTaskId + 1));
+        pendingIds_[coreIdx] = static_cast<uint32_t>(encodeTaskId & 0xFFFFFFFF);
+        pendingResolveIndexList_[coreIdx] = 0;
+        devTaskCtx->sendCnt[static_cast<int>(type)]++;
 
         DEV_IF_VERBOSE_DEBUG
         {

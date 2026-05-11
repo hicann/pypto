@@ -443,6 +443,9 @@ struct DynMachineManager {
         PerfMtTrace(PERF_TRACE_BEGIN, 0, kargs->taskWastTime);
         PerfMtTrace(PERF_TRACE_EXIT, 0);
         DEV_INFO("Ctrl leave ret=%d", ret);
+        if (ret != DEVICE_MACHINE_OK) {
+            DeviceTrace::GetInstance().ReportTraceMsg();
+        }
         initCtrl_.store(false);
         PerfEvtMgr::Instance().AddCtrlTurn();
         return ret;

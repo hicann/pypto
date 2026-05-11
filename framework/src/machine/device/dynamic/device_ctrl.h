@@ -336,7 +336,10 @@ public:
         DEV_INFO("end control flow.");
         DEV_ATRACE("end control flow.");
         PerfBegin(PERF_EVT_STAGE_STOP_AICORE);
-        StopAicoreManager();
+        if (!devProg->ctrlFlowCacheAnchor->IsRecording()) {
+            // host cache not need to enque
+            StopAicoreManager();
+        }
         PerfEnd(PERF_EVT_STAGE_STOP_AICORE);
         DEV_INFO("aicore manager stopped");
         PerfEnd(PERF_EVT_EXEC_DYN);

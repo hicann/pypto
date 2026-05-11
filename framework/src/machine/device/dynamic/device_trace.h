@@ -35,27 +35,12 @@
 #include <atomic>
 #define MAX_MSG_LEN 112
 
-inline std::string TraceInfo([[maybe_unused]]const char* fmt, ...) {
-    char tempBuf[MAX_MSG_LEN] = {0};
-#ifdef __DEVICE__
-    va_list args;
-    va_start(args, fmt);
-    int len = vsnprintf_s(tempBuf, sizeof(tempBuf), sizeof(tempBuf) - 1, fmt, args);
-    va_end(args);
-
-    if (len < 0) {
-        return "[TraceInfo: format error]";
-    }
-#endif
-    return std::string(tempBuf);
-}
-
 #define DEV_ATRACE(fmt, ...)                                                             \
     do {                                                                                 \
-        std::string info = TraceInfo(fmt, ##__VA_ARGS__);                                \
-        npu::tile_fwk::dynamic::DeviceTrace::GetInstance().SubmitTraceMsg(info.c_str()); \
+        char buf[MAX_MSG_LEN];                                                           \
+        sprintf_s(buf, MAX_MSG_LEN, fmt, ##__VA_ARGS__);               \
+        npu::tile_fwk::dynamic::DeviceTrace::GetInstance().SubmitTraceMsg(buf);          \
     } while (false)
-
 #ifdef __DEVICE__
 #include "trace/atrace_types.h"
 #include "trace/atrace_pub.h"
