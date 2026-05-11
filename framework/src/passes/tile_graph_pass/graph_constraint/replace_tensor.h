@@ -180,8 +180,9 @@ private:
     Status FindNeedToCopyAssemble(
         std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op);
     Status FindNeedToCopyReshape(std::unordered_set<Operation*>& needInsertCopyAssOps, 
-        std::unordered_set<int>& visitedReshapeOps, Operation& op);
+        std::unordered_set<int>& visitedReshapeOps, Operation& op, Function &function);
     Status InsertNeedCopy(Function& function);
+    bool isBoundTensor(LogicalTensorPtr &curTensor);
 
     std::unordered_map<DataType, int> viewTypeTable = {
         {DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4},

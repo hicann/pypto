@@ -299,14 +299,7 @@ Status ReplaceTensor::FindBaseTensor(
     }
     LogicalTensors boundTensors;
     for (auto& curTensor : group) {
-        std::set<int> boundTensorIDs;
-        for (auto &inOp : curTensor->GetProducers()) {
-            boundTensorIDs.insert(inOp->GetSubgraphID());
-        }
-        for (auto &outOp : curTensor->GetConsumers()) {
-            boundTensorIDs.insert(outOp->GetSubgraphID());
-        }
-        if (boundTensorIDs.size() > 1) {
+        if (isBoundTensor(curTensor)) {
             boundTensors.push_back(curTensor);
         }
     }
@@ -918,7 +911,12 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     auto copyRawShape = input->tensor->GetDynRawShape();
     auto copyDynShape = input->GetDynValidShape();
     Offset offset(copyShape.size(), 0);
-
+    Offset inOffset = input->GetOffset();
+    auto &inOp = *(input)->GetProducers().begin();
+    if (needInsertCopyAssOp->GetOpcode() == Opcode::OP_RESHAPE && inOp->GetOpcode() == Opcode::OP_VIEW) {
+        auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(inOp->GetOpAttribute());
+        inOffset = viewOpAttr->GetFrom();
+    }
     LogicalTensor copyInOutput(function, input->Datatype(), copyShape);
     copyInOutput.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
@@ -934,7 +932,7 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     AlignmentUtils::ProcessLastDim32BAlignedOnUB(copyInOutputPtr);
     auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {input}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(input->GetOffset()), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
+        OpImmediate::Specified(inOffset), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
@@ -989,8 +987,23 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     return SUCCESS;
 }
 
+bool ReplaceTensor::isBoundTensor(LogicalTensorPtr &curTensor) {
+    std::set<int> boundTensorIDs;
+    for (auto &inOp : curTensor->GetProducers()) {
+        boundTensorIDs.insert(inOp->GetSubgraphID());
+    }
+    for (auto &outOp : curTensor->GetConsumers()) {
+        boundTensorIDs.insert(outOp->GetSubgraphID());
+    }
+    if (boundTensorIDs.size() > 1) {
+        return true;
+    }
+    return false;
+}
+
 Status ReplaceTensor::FindNeedToCopyReshape(
-    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedReshapeOps, Operation& op)
+    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedReshapeOps,
+    Operation& op, Function &function)
 {
     visitedReshapeOps.insert(op.GetOpMagic());
     if (op.GetIOperands()[0]->tensor->GetRawShapeSize() > 0 &&
@@ -1001,15 +1014,11 @@ Status ReplaceTensor::FindNeedToCopyReshape(
     }
     auto producerOps = op.ProducerOps();
     auto consumerOps = op.ConsumerOps();
-    bool flag = true;
-    for (auto consumerOp : consumerOps) {
-        if (consumerOp->GetOpcode() == Opcode::OP_COPY_IN) {
-            flag = false;
-            break;
-        }
-    }
     for (auto producesOp : producerOps) {
-        if (producesOp->GetOpcode() == Opcode::OP_VIEW && flag) {
+        if (producesOp->GetOpcode() == Opcode::OP_VIEW &&
+            isBoundTensor(op.GetOOperands().front()) &&
+            !isBoundTensor(producesOp->GetIOperands().front()) &&
+            !function.IsFromInCast(producesOp->GetIOperands().front())) {
             needInsertCopyAssOps.insert(&op);
         }
     }
@@ -1041,7 +1050,7 @@ Status ReplaceTensor::InsertNeedCopy(Function& function)
             FindNeedToCopyAssemble(needInsertCopyAssOps, visitedAssOps, op);
         }
         if (op.GetOpcode() == Opcode::OP_RESHAPE && (!visitedReshapeOps.count(op.GetOpMagic()))) {
-            FindNeedToCopyReshape(needInsertCopyAssOps, visitedReshapeOps, op);
+            FindNeedToCopyReshape(needInsertCopyAssOps, visitedReshapeOps, op, function);
         }
     }
     std::vector<Operation*> sortedOps(needInsertCopyAssOps.begin(), needInsertCopyAssOps.end());
