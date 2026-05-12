@@ -34,7 +34,7 @@ struct EstimateInput {
     std::vector<bool> isCube;
     std::vector<std::set<int>> outGraph;
     std::vector<std::set<int>> inGraph;
-    int betweenSubgraphScheduleTime{1500};  // estimated task issuance time
+    int betweenSubgraphScheduleTime{1500}; // estimated task issuance time
 };
 
 struct EstimateCoreState {
@@ -68,17 +68,18 @@ struct SubgraphScheduleContext {
 class EstimateExecTime {
 public:
     int Estimate(const EstimateInput& input, const std::vector<std::set<int>>& estimateCandidate);
+
 private:
     void InitMixData(MixScheduleContext& ctx, const std::vector<std::set<int>>& estimateCandidate);
     void BuildMixDeps(MixScheduleContext& ctx, const EstimateInput& input);
     void InitMixTopology(MixScheduleContext& ctx);
     int CalcMixStartTime(int mixId, const MixScheduleContext& ctx, int scheduleTime);
-    void InitSubgraphContext(SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-        const EstimateInput& input);
-    void ScheduleOneSubgraph(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
-        const EstimateInput& input);
-    void ProcessSubgraphConsumers(int current, SubgraphScheduleContext& subCtx,
-        const MixScheduleContext& ctx, const EstimateInput& input);
+    void InitSubgraphContext(
+        SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input);
+    void ScheduleOneSubgraph(
+        int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input);
+    void ProcessSubgraphConsumers(
+        int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input);
     int GetMixFinishTime(const SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx);
     void ProcessMixConsumers(int mixId, MixScheduleContext& ctx);
 };
@@ -125,10 +126,8 @@ private:
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
     bool CheckMergeBenefit(const std::vector<int>& actualGroup);
     std::vector<int> GetActualGroup(const std::vector<int>& group);
-    void BuildMergedGraph(std::vector<std::set<int>>& outGraph,
-                          std::vector<std::set<int>>& inGraph);
-    bool HasCycle(const std::vector<std::set<int>>& outGraph,
-                  const std::vector<std::set<int>>& inGraph);
+    void BuildMergedGraph(std::vector<std::set<int>>& outGraph, std::vector<std::set<int>>& inGraph);
+    bool HasCycle(const std::vector<std::set<int>>& outGraph, const std::vector<std::set<int>>& inGraph);
 };
 
 class ReduceCopyMerge : public Pass {
@@ -139,14 +138,14 @@ public:
     }
     ~ReduceCopyMerge() override = default;
 private:
-    Status BuildGraph(Function &function, MergeInput& mergeInput);
-    Status BuildMergeGroup(Function &function, MergeInput& mergeInput);
-    std::unordered_set<int> FindForkSubgraph(Function &function);
-    Status MarkNoMergeSubgraph(Function &function);
-    void UpdateConnectRecord(Function &function);
-    bool IsEnforceMergeBoundary(LogicalTensorPtr &tensor);
-    Status RunOnFunction(Function &function) override;
-    Status PostCheck(Function &function) override;
+    Status BuildGraph(Function& function, MergeInput& mergeInput);
+    Status BuildMergeGroup(Function& function, MergeInput& mergeInput);
+    void CombineForkSubgraph(Function& function, MergeInput& mergeInput);
+    Status MarkNoMergeSubgraph(Function& function);
+    void UpdateConnectRecord(Function& function);
+    bool IsEnforceMergeBoundary(LogicalTensorPtr& tensor);
+    Status RunOnFunction(Function& function) override;
+    Status PostCheck(Function& function) override;
     std::unordered_set<int> noMergeSubgraph;
     std::map<std::vector<int>, int> mergeGroupToPriority;
     std::set<std::vector<int>> enforceMergeGroup;
@@ -154,5 +153,5 @@ private:
     std::vector<int> subgraphOutputSize;
 };
 
-}
+} // namespace npu::tile_fwk
 #endif

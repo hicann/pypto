@@ -33,7 +33,31 @@
 
 namespace npu::tile_fwk {
 
-Status ReduceCopyMerge::RunOnFunction(Function &function)
+static std::string IntVecToString(const std::vector<int>& vec)
+{
+    std::ostringstream ss;
+    ss << "[";
+    for (size_t idx = 0; idx < vec.size(); idx++) {
+        ss << vec[idx];
+        if (idx != vec.size() - 1) {
+            ss << ", ";
+        }
+    }
+    ss << "]";
+    return ss.str();
+}
+
+static bool IsValidMergeGroup(const std::vector<int>& mergeGroup, const std::unordered_set<int>& noMergeSubgraph)
+{
+    for (int subidx : mergeGroup) {
+        if (noMergeSubgraph.count(subidx) > 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+Status ReduceCopyMerge::RunOnFunction(Function& function)
 {
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         APASS_LOG_INFO_F(Elements::Operation, "Platform not support CV mix graph, skip ReduceCopy Pass.");
@@ -46,10 +70,11 @@ Status ReduceCopyMerge::RunOnFunction(Function &function)
     BuildGraph(function, mergeInput);
     MarkNoMergeSubgraph(function);
     BuildMergeGroup(function, mergeInput);
+    CombineForkSubgraph(function, mergeInput);
     MixGraphMerger merger;
     MergeOutput output = merger.Merge(mergeInput);
     function.SetTotalSubGraphCount(output.numSubgraphUpdated);
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int src = op.GetSubgraphID();
         if (src >= static_cast<int>(output.subgraphIdUpdated.size())) {
             APASS_LOG_ERROR_F(Elements::Operation, "Current op subgraphID not in ReduceCopy subgraph update record.");
@@ -63,54 +88,45 @@ Status ReduceCopyMerge::RunOnFunction(Function &function)
     return SUCCESS;
 }
 
-std::unordered_set<int> ReduceCopyMerge::FindForkSubgraph(Function &function)
+void ReduceCopyMerge::CombineForkSubgraph(Function& function, MergeInput& mergeInput)
 {
-    std::map<int, std::unordered_set<int>> subgraphIdToOutputTensor;
-    for (const auto &item : function.GetTensorMap().inverseMap_) {
-        LogicalTensorPtr tensor = item.second;
-        for (auto &op : tensor->GetProducers()) {
-            subgraphIdToOutputTensor[op->GetSubgraphID()].insert(tensor->GetMagic());
-        }
-    }
-
-    std::map<int, std::set<int>> innerTensorToSubgraph;
-    for (const auto &item : function.GetTensorMap().inverseMap_) {
-        LogicalTensorPtr tensor = item.second;
-        for (auto &op : tensor->GetConsumers()) {
-            if (subgraphIdToOutputTensor[op->GetSubgraphID()].count(tensor->GetMagic()) > 0) {
-                innerTensorToSubgraph[tensor->GetMagic()].insert(op->GetSubgraphID());
+    std::unordered_map<int, std::unordered_set<int>> forkSubgraphsMap;
+    for (auto& op : function.Operations()) {
+        std::unordered_set<int> forkSubgraphIds;
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            for (auto& prod : op.ProducerOps()) {
+                forkSubgraphIds.insert(prod->GetSubgraphID());
             }
         }
-    }
-    std::unordered_set<int> forkSubgraphId;
-    for (auto &pr : innerTensorToSubgraph) {
-        if (pr.second.size() == 0) {
+        if (forkSubgraphIds.size() <= 1) {
             continue;
         }
-        if (pr.second.size() > 1) {
-            forkSubgraphId.insert(pr.second.begin(), pr.second.end());
-            continue;
-        }
-        int innerSubgraphId = *(pr.second.begin());
-        LogicalTensorPtr tensor = function.GetTensorMap().inverseMap_[pr.first];
-        bool isForkSubgraph = false;
-        for (auto &op : tensor->GetProducers()) {
-            if (op->GetSubgraphID() != innerSubgraphId) {
-                isForkSubgraph = true;
-                break;
+        for (auto& idx : forkSubgraphIds) {
+            for (auto& idy : forkSubgraphIds) {
+                if (idx != idy) {
+                    forkSubgraphsMap[idx].insert(idy);
+                }
             }
-        }
-        for (auto &op : tensor->GetConsumers()) {
-            if (op->GetSubgraphID() != innerSubgraphId) {
-                isForkSubgraph = true;
-                break;
-            }
-        }
-        if (isForkSubgraph) {
-            forkSubgraphId.insert(innerSubgraphId);
         }
     }
-    return forkSubgraphId;
+    for (int i = 0; i < static_cast<int>(mergeInput.mergeGroup.size()); i++) {
+        size_t originalSize = mergeInput.mergeGroup[i].size();
+        std::set<int> combinedGroup(mergeInput.mergeGroup[i].begin(), mergeInput.mergeGroup[i].end());
+        for (auto& subgraphId : mergeInput.mergeGroup[i]) {
+            if (forkSubgraphsMap.count(subgraphId) > 0) {
+                combinedGroup.insert(forkSubgraphsMap[subgraphId].begin(), forkSubgraphsMap[subgraphId].end());
+            }
+        }
+        if (combinedGroup.size() != originalSize) {
+            mergeInput.mergeGroup[i].clear();
+            mergeInput.mergeGroup[i].insert(mergeInput.mergeGroup[i].end(), combinedGroup.begin(), combinedGroup.end());
+            mergeInput.isValidMergeGroup[i] = IsValidMergeGroup(mergeInput.mergeGroup[i], noMergeSubgraph);
+            APASS_LOG_DEBUG_F(Elements::Operation, "merge group %d after combine fork: %s, isEnforce: %s, isValid: %s.",
+                i, IntVecToString(mergeInput.mergeGroup[i]).c_str(),
+                mergeInput.isEnforceMergeGroup[i] ? "True" : "False",
+                mergeInput.isValidMergeGroup[i] ? "True" : "False");
+        }
+    }
 }
 
 Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
@@ -119,17 +135,17 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
     std::vector<int> subgraphOpNum(subgraphNum, 0);
     std::vector<bool> subgraphHasReshape(subgraphNum, false);
     std::vector<bool> subgraphHasInnerDDR(subgraphNum, false);
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int src = op.GetSubgraphID();
         subgraphOpNum[src] += 1;
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             subgraphHasReshape[src] = true;
         }
-        for (auto &operand : op.GetOOperands()) {
+        for (auto& operand : op.GetOOperands()) {
             if (operand->GetMemoryTypeToBe() != MemoryType::MEM_DEVICE_DDR) {
                 continue;
             }
-            for (auto &consumer : operand->GetConsumers()) {
+            for (auto& consumer : operand->GetConsumers()) {
                 if (consumer->GetSubgraphID() == src) {
                     subgraphHasInnerDDR[src] = true;
                     break;
@@ -138,15 +154,10 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
         }
     }
     noMergeSubgraph.clear();
-    std::unordered_set<int> forkSubgraphId = FindForkSubgraph(function);
     for (int i = 0; i < subgraphNum; i++) {
         if (subgraphOpNum[i] == 1 && subgraphHasReshape[i] == true) {
             noMergeSubgraph.insert(i);
             APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d is not mergeable because it only has Reshape.", i);
-        } else if (forkSubgraphId.count(i) > 0) {
-            noMergeSubgraph.insert(i);
-            APASS_LOG_DEBUG_F(Elements::Operation,
-                "Subgraph %d is not mergeable because it has inner tensor to other subgraphs.", i);
         } else if (subgraphHasInnerDDR[i]) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d has inner DDR tensor.", i);
         }
@@ -154,7 +165,7 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
     return SUCCESS;
 }
 
-Status ReduceCopyMerge::BuildGraph(Function &function, MergeInput& mergeInput)
+Status ReduceCopyMerge::BuildGraph(Function& function, MergeInput& mergeInput)
 {
     int subgraphNum = function.GetTotalSubGraphCount();
     mergeInput.numSubgraph = subgraphNum;
@@ -166,7 +177,7 @@ Status ReduceCopyMerge::BuildGraph(Function &function, MergeInput& mergeInput)
     mergeInput.subGraphOutGraph.resize(subgraphNum);
     mergeInput.subGraphInGraph.clear();
     mergeInput.subGraphInGraph.resize(subgraphNum);
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int src = op.GetSubgraphID();
         int opLatency = op.GetLatency();
         if (op.HasAttr(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube)) {
@@ -174,7 +185,7 @@ Status ReduceCopyMerge::BuildGraph(Function &function, MergeInput& mergeInput)
         } else {
             mergeInput.subgraphAIVLatency[src] += opLatency;
         }
-        for (auto &consumer : op.ConsumerOps()) {
+        for (auto& consumer : op.ConsumerOps()) {
             int dst = consumer->GetSubgraphID();
             if (src != dst) {
                 mergeInput.subGraphOutGraph[src].insert(dst);
@@ -189,10 +200,10 @@ Status ReduceCopyMerge::BuildGraph(Function &function, MergeInput& mergeInput)
     return SUCCESS;
 }
 
-bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr &tensor)
+bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr& tensor)
 {
     std::unordered_set<int> boundaryScopeIds;
-    for (auto &op : tensor->GetProducers()) {
+    for (auto& op : tensor->GetProducers()) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Boundary tensor %d has produce %d with scopeInfoCvFuseId %d.",
                           tensor->GetMagic(), op->GetOpMagic(), op->GetCvFuseId());
         if (op->GetCvFuseId() == -1) {
@@ -200,7 +211,7 @@ bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr &tensor)
         }
         boundaryScopeIds.insert(op->GetCvFuseId());
     }
-    for (auto &op : tensor->GetConsumers()) {
+    for (auto& op : tensor->GetConsumers()) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Boundary tensor %d has consumer %d with scopeInfoCvFuseId %d.",
                           tensor->GetMagic(), op->GetOpMagic(), op->GetCvFuseId());
         if (op->GetCvFuseId() == -1) {
@@ -214,52 +225,28 @@ bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr &tensor)
     return false;
 }
 
-static std::string IntVecToString(const std::vector<int> &vec)
+void ReduceCopyMerge::UpdateConnectRecord(Function& function)
 {
-    std::ostringstream ss;
-    ss << "[";
-    for (size_t idx = 0; idx < vec.size(); idx++) {
-        ss << vec[idx];
-        if (idx != vec.size() - 1) {
-            ss << ", ";
-        }
-    }
-    ss << "]";
-    return ss.str();
-}
-
-static bool IsValidMergeGroup(const std::vector<int> &mergeGroup, const std::unordered_set<int> &noMergeSubgraph)
-{
-    for (int subidx : mergeGroup) {
-        if (noMergeSubgraph.count(subidx) > 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
-void ReduceCopyMerge::UpdateConnectRecord(Function &function)
-{
-    for (const auto &item : function.GetTensorMap().inverseMap_) {
+    for (const auto& item : function.GetTensorMap().inverseMap_) {
         LogicalTensorPtr tensor = item.second;
         int tensorSize = tensor->MemorySize();
         if (tensor->GetProducers().size() == 0 || tensor->GetConsumers().size() == 0) {
             continue;
         }
         std::set<int> connectGraphs;
-        for (auto &op : tensor->GetProducers()) {
+        for (auto& op : tensor->GetProducers()) {
             connectGraphs.insert(op->GetSubgraphID());
         }
-        for (auto &op : tensor->GetConsumers()) {
+        for (auto& op : tensor->GetConsumers()) {
             connectGraphs.insert(op->GetSubgraphID());
         }
         if (connectGraphs.size() <= 1) {
             continue;
         }
-        for (auto &op : tensor->GetProducers()) {
+        for (auto& op : tensor->GetProducers()) {
             subgraphOutputSize[op->GetSubgraphID()] += tensorSize;
         }
-        for (auto &op : tensor->GetConsumers()) {
+        for (auto& op : tensor->GetConsumers()) {
             subgraphInputSize[op->GetSubgraphID()] += tensorSize;
         }
         std::vector<int> mergeGroup(connectGraphs.begin(), connectGraphs.end());
@@ -273,7 +260,7 @@ void ReduceCopyMerge::UpdateConnectRecord(Function &function)
     }
 }
 
-Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInput)
+Status ReduceCopyMerge::BuildMergeGroup(Function& function, MergeInput& mergeInput)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "Build merge group before mix subgraph merge start.");
     subgraphInputSize.clear();
@@ -282,7 +269,7 @@ Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInp
     subgraphOutputSize.resize(mergeInput.numSubgraph, 0);
     UpdateConnectRecord(function);
     std::multimap<int, std::vector<int>> sortedMergeGroup;
-    for (auto &pair : mergeGroupToPriority) {
+    for (auto& pair : mergeGroupToPriority) {
         std::vector<int> boundaryGroup = pair.first;
         std::sort(boundaryGroup.begin(), boundaryGroup.end());
         sortedMergeGroup.insert({pair.second, boundaryGroup});
@@ -292,8 +279,8 @@ Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInp
             continue;
         }
         std::vector<int> inputGroup{subIdx};
-        inputGroup.insert(inputGroup.end(), mergeInput.subGraphInGraph[subIdx].begin(),
-                          mergeInput.subGraphInGraph[subIdx].end());
+        inputGroup.insert(
+            inputGroup.end(), mergeInput.subGraphInGraph[subIdx].begin(), mergeInput.subGraphInGraph[subIdx].end());
         std::sort(inputGroup.begin(), inputGroup.end());
         sortedMergeGroup.insert({subgraphInputSize[subIdx], inputGroup});
     }
@@ -325,7 +312,7 @@ Status ReduceCopyMerge::BuildMergeGroup(Function &function, MergeInput& mergeInp
     return SUCCESS;
 }
 
-Status ReduceCopyMerge::PostCheck(Function &function)
+Status ReduceCopyMerge::PostCheck(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "PostCheck for ReduceCopy.");
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
@@ -333,7 +320,7 @@ Status ReduceCopyMerge::PostCheck(Function &function)
         return SUCCESS;
     }
     APASS_LOG_INFO_F(Elements::Operation, "===> Start PostCheck for ReduceCopy.");
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         if (op.GetInternalSubgraphID() < 0) {
             APASS_LOG_ERROR_F(Elements::Operation, "Op %d does not belong to any internalSubgraph.", op.GetOpMagic());
             return FAILED;
@@ -349,8 +336,7 @@ static bool ValidateInput(const MergeInput& input)
         return false;
     }
     int n = input.numSubgraph;
-    if ((int)input.subgraphAICLatency.size() != n ||
-        (int)input.subgraphAIVLatency.size() != n ||
+    if ((int)input.subgraphAICLatency.size() != n || (int)input.subgraphAIVLatency.size() != n ||
         (int)input.subGraphOutGraph.size() != n) {
         return false;
     }
@@ -400,7 +386,9 @@ void MixGraphMerger::UnionSets(int x, int y)
 {
     int px = FindParent(x);
     int py = FindParent(y);
-    if (px == py) return;
+    if (px == py) {
+        return;
+    }
     if (mRank[px] < mRank[py]) {
         mParent[px] = py;
     } else if (mRank[px] > mRank[py]) {
@@ -477,7 +465,9 @@ bool MixGraphMerger::HasCycle(const std::vector<std::set<int>>& outGraph, const 
 
 bool MixGraphMerger::CanMergeWithoutCycle(const std::vector<int>& actualGroup)
 {
-    if (actualGroup.size() <= 1) return false;
+    if (actualGroup.size() <= 1) {
+        return false;
+    }
     std::vector<std::set<int>> inGraph;
     std::vector<std::set<int>> outGraph;
     BuildMergedGraph(outGraph, inGraph);
@@ -594,7 +584,9 @@ bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup
 
 void MixGraphMerger::PerformMerge(const std::vector<int>& actualGroup)
 {
-    if (actualGroup.size() <= 1) return;
+    if (actualGroup.size() <= 1) {
+        return;
+    }
     int root = actualGroup[0];
     for (size_t i = 1; i < actualGroup.size(); ++i) {
         UnionSets(root, actualGroup[i]);
@@ -724,8 +716,8 @@ int EstimateExecTime::CalcMixStartTime(int mixId, const MixScheduleContext& ctx,
     return startTime;
 }
 
-void EstimateExecTime::InitSubgraphContext(SubgraphScheduleContext& subCtx,
-    const MixScheduleContext& ctx, const EstimateInput& input)
+void EstimateExecTime::InitSubgraphContext(
+    SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input)
 {
     subCtx.numSubgraph = ctx.numSubgraph;
     subCtx.finishTime.resize(ctx.numSubgraph, 0);
@@ -748,8 +740,8 @@ void EstimateExecTime::InitSubgraphContext(SubgraphScheduleContext& subCtx,
     }
 }
 
-void EstimateExecTime::ScheduleOneSubgraph(int current, SubgraphScheduleContext& subCtx,
-    const MixScheduleContext& ctx, const EstimateInput& input)
+void EstimateExecTime::ScheduleOneSubgraph(
+    int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input)
 {
     int earliestStart = subCtx.mixStartTime;
     for (int pred : input.inGraph[current]) {
@@ -759,7 +751,7 @@ void EstimateExecTime::ScheduleOneSubgraph(int current, SubgraphScheduleContext&
     }
     bool isAic = input.isCube[current];
     int startTime = isAic ? std::max(earliestStart, subCtx.coreState.aic) :
-        std::max(earliestStart, std::min(subCtx.coreState.aiv0, subCtx.coreState.aiv1));
+                            std::max(earliestStart, std::min(subCtx.coreState.aiv0, subCtx.coreState.aiv1));
     subCtx.finishTime[current] = startTime + input.execTime[current];
     if (isAic) {
         subCtx.coreState.aic = subCtx.finishTime[current];
@@ -770,8 +762,8 @@ void EstimateExecTime::ScheduleOneSubgraph(int current, SubgraphScheduleContext&
     }
 }
 
-void EstimateExecTime::ProcessSubgraphConsumers(int current, SubgraphScheduleContext& subCtx,
-    const MixScheduleContext& ctx, const EstimateInput& input)
+void EstimateExecTime::ProcessSubgraphConsumers(
+    int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx, const EstimateInput& input)
 {
     for (int consumer : input.outGraph[current]) {
         if (ctx.candidateSet.count(consumer) > 0 && ctx.subgraphToMix[consumer] == subCtx.mixId) {
