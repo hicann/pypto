@@ -406,14 +406,16 @@ struct DevAscendFunctionDupped {
         oss << "@(rawidx:" << rawIndex << " attridx:" << (attrOffset - 1) << ")"
             << ", ";
 
-        int dim = info.GetDim();
-        auto rawTensor = func->GetRawTensor(rawIndex);
-        if (rawIndex >= func->GetRawTensorSize()) {
+        uint64_t tensorIndex = info.tensorIndex;
+        if (tensorIndex >= func->GetRawTensorSize()) {
             DEV_ERROR(
                 TensorMetaErr::RAW_TENSOR_INDEX_OUT_OF_RANGE,
-                "#ctrl.encode.raw_tensor: Invalid rawIndex=%lu, exceeds raw tensor size=%lu", rawIndex,
+                "#ctrl.encode.raw_tensor: Invalid rawIndex=%lu, exceeds raw tensor size=%lu", tensorIndex,
                 func->GetRawTensorSize());
+            return;
         }
+        int dim = info.GetDim();
+        auto rawTensor = func->GetRawTensor(tensorIndex);
         if (dim != rawTensor->GetDim()) {
             DEV_ERROR(
                 TensorMetaErr::SHAPE_VALUE_MISMATCH,
@@ -433,13 +435,6 @@ struct DevAscendFunctionDupped {
             }
             DEV_ASSERT(TensorMetaErr::SHAPE_VALUE_MISMATCH, actualShape == shape);
         }
-        if (dim != rawTensor->GetDim()) {
-            DEV_ERROR(
-                TensorMetaErr::SHAPE_VALUE_MISMATCH,
-                "#ctrl.encode.shape: Final dimension mismatch after shape validation: info.dim=%d, rawTensor->dim=%d",
-                dim, rawTensor->GetDim());
-        }
-        DEV_ASSERT(TensorMetaErr::SHAPE_VALUE_MISMATCH, dim == rawTensor->GetDim());
         for (int i = 0; i < dim * ARG_ATTR_TYPE; i++) {
             oss << GetValue(attrs, attrOffset + i) << ", ";
         }
