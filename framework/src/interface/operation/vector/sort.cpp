@@ -655,10 +655,6 @@ void TiledSort(
         input.tileInfo.offset[axis] = 0;
         auto source = input.tensor.GetStorage()->View(
             function, input.tileInfo.shape, input.tileInfo.offset); // input.tensor是viewTensor, source是tileTensor
-        auto dynValidShape = source->GetDynValidShape();
-
-        constexpr int32_t factorSize = 2;
-
         bool isInGM = checkIsExceedUB(vecTile.tile, source->shape, axis, kBlockSize);
 
         // 行数据可以全部加载到UB上, 直接进行操作, 不进行tile切块
@@ -666,7 +662,7 @@ void TiledSort(
             // 每32个元素进行排序
             std::vector<int64_t> bitSortOutputShape = source->shape;
             bitSortOutputShape[axis] = (bitSortOutputShape[axis] + kBlockSize - 1) / kBlockSize * kBlockSize;
-            bitSortOutputShape[axis] = bitSortOutputShape[axis] * factorSize;
+            bitSortOutputShape[axis] = bitSortOutputShape[axis] * NUM_VALUE_2;
             auto bitSortOutputTensor =
                 std::make_shared<LogicalTensor>(function, source->Datatype(), bitSortOutputShape);
             std::vector<int64_t> tmpShape;
@@ -681,7 +677,7 @@ void TiledSort(
             bitSortOp.SetAttribute(SORT_ORDER, static_cast<int>(descending));
             bitSortOp.SetAttribute(SORT_OFFSET, static_cast<int>(0));
             std::vector<SymbolicScalar> bitSortDynValidShape(source->GetDynValidShape());
-            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM2;
+            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM_VALUE_2;
             bitSortOutputTensor->UpdateDynValidShape(bitSortDynValidShape);
             if (bitSortOutputShape.size() == 1) {
                 tempTensor->UpdateDynValidShape({bitSortDynValidShape[axis]});
@@ -691,7 +687,8 @@ void TiledSort(
 
             // 32个元素组成的block之间进行归并
             std::vector<int64_t> mrgSortOutputShape = source->shape;
-            mrgSortOutputShape[axis] = (mrgSortOutputShape[axis] + 7) / 8 * 8 * 2;
+            mrgSortOutputShape[axis] =
+                (mrgSortOutputShape[axis] + kBlockFpNum - 1) / kBlockFpNum * kBlockFpNum * NUM_VALUE_2;
             auto mrgSortOutputTensor =
                 std::make_shared<LogicalTensor>(function, source->Datatype(), mrgSortOutputShape);
             auto& mrgSortOp =
@@ -700,7 +697,7 @@ void TiledSort(
             mrgSortOp.SetAttribute(TOPK_KVALUE, source->shape[axis]);
             mrgSortOp.SetAttribute(TOPK_MERGE_SIZE, NUM_VALUE_32);
             std::vector<SymbolicScalar> mrgSortDynValidShape(source->GetDynValidShape());
-            mrgSortDynValidShape[axis] = source->GetDynValidShape()[axis] * NUM2;
+            mrgSortDynValidShape[axis] = source->GetDynValidShape()[axis] * NUM_VALUE_2;
             mrgSortOutputTensor->UpdateDynValidShape(mrgSortDynValidShape);
             if (bitSortOutputShape.size() == 1) {
                 tempTensor->UpdateDynValidShape({bitSortDynValidShape[axis]});
@@ -731,14 +728,13 @@ void TiledSort(
         std::vector<int64_t> tileSourceShape = source->shape;
         std::vector<int64_t> tileSourceOffset(tileSourceShape.size(), 0);
         std::vector<int64_t> tileBitSortShape = source->shape;
-        std::vector<int64_t> tileMrgSortShape = source->shape;
 
         // 创建一个2倍source的GM上的空间sortOutputTensor, 用于存储source排序后的结果
         std::vector<int64_t> sortOutputShape = source->shape;
         auto sortOutputValidShape = source->GetDynValidShape();
         // 元素个数k和8对齐，extract中二维的vreduce才能正常转换，因为UB中32B对齐，k*4B和32B对齐，则k与8对齐
-        sortOutputShape[axis] = (sortOutputShape[axis] + 7) / 8 * 8 * 2;
-        sortOutputValidShape[axis] = sortOutputValidShape[axis] * 2;
+        sortOutputShape[axis] = (sortOutputShape[axis] + kBlockFpNum - 1) / kBlockFpNum * kBlockFpNum * NUM_VALUE_2;
+        sortOutputValidShape[axis] = sortOutputValidShape[axis] * NUM_VALUE_2;
         auto sortOutputTensor =
             std::make_shared<LogicalTensor>(function, source->Datatype(), sortOutputShape, sortOutputValidShape);
         std::vector<int64_t> tileOutputShape = sortOutputShape;
@@ -748,8 +744,7 @@ void TiledSort(
             tileSourceShape[axis] = std::min(vecTileAlign[axis], source->shape[axis] - i);
             tileSourceOffset[axis] = i;
             auto inputTile = source->View(function, tileSourceShape, tileSourceOffset);
-            tileBitSortShape[axis] = (tileSourceShape[axis] + kBlockSize - 1) / kBlockSize * kBlockSize * factorSize;
-            dynValidShape[axis] = inputTile->GetDynValidShape()[axis] * factorSize;
+            tileBitSortShape[axis] = (tileSourceShape[axis] + kBlockSize - 1) / kBlockSize * kBlockSize * NUM_VALUE_2;
             auto bitSortTile = std::make_shared<LogicalTensor>(function, source->Datatype(), tileBitSortShape);
             std::vector<int64_t> tmpShape = {1, tileBitSortShape[axis]};
             if (tileBitSortShape.size() == 1) {
@@ -763,7 +758,7 @@ void TiledSort(
             bitSortOp.SetAttribute(SORT_ORDER, descending);
             bitSortOp.SetAttribute(SORT_OFFSET, i);
             std::vector<SymbolicScalar> bitSortDynValidShape(inputTile->GetDynValidShape());
-            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM2;
+            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM_VALUE_2;
             bitSortTile->UpdateDynValidShape(bitSortDynValidShape);
             if (tileBitSortShape.size() == 1) {
                 tempTensor->UpdateDynValidShape({bitSortDynValidShape[axis]});
@@ -771,15 +766,15 @@ void TiledSort(
                 tempTensor->UpdateDynValidShape({1, bitSortDynValidShape[axis]});
             }
 
-            tileOutputShape[axis] = (tileSourceShape[axis] + 7) / 8 * 8 * 2; // UB 32B对齐，兼顾了DynMrgSort中的k向8对齐
-            tileOutputOffset[axis] = i * 2;
+            tileOutputShape[axis] = (tileSourceShape[axis] + kBlockFpNum - 1) / kBlockFpNum * kBlockFpNum * NUM_VALUE_2; // UB 32B对齐，兼顾了DynMrgSort中的k向8对齐
+            tileOutputOffset[axis] = i * NUM_VALUE_2;
             auto tmp = std::make_shared<LogicalTensor>(function, source->Datatype(), tileOutputShape);
             auto& mrgSortOp = function.AddOperation(Opcode::OP_MRGSORT, {bitSortTile}, {tmp, tempTensor});
             mrgSortOp.SetAttribute(SORT_AXIS, axis);
             mrgSortOp.SetAttribute(SORT_KVALUE, static_cast<int>(tileSourceShape[axis]));
             mrgSortOp.SetAttribute(TOPK_MERGE_SIZE, NUM_VALUE_32);
             std::vector<SymbolicScalar> mrgSortDynValidShape(inputTile->GetDynValidShape());
-            mrgSortDynValidShape[axis] = mrgSortDynValidShape[axis] * NUM2;
+            mrgSortDynValidShape[axis] = mrgSortDynValidShape[axis] * NUM_VALUE_2;
             tmp->UpdateDynValidShape(mrgSortDynValidShape);
             if (tileBitSortShape.size() == 1) {
                 tempTensor->UpdateDynValidShape({mrgSortDynValidShape[axis]});
@@ -796,7 +791,7 @@ void TiledSort(
                 tmp->GetDynValidShape()));
         }
 
-        vecTileAlign[axis] = vecTileAlign[axis] * 2;
+        vecTileAlign[axis] = vecTileAlign[axis] * NUM_VALUE_2;
         int64_t tileNum = (sortOutputShape[axis] + vecTileAlign[axis] - 1) / vecTileAlign[axis]; // 计算有多少Tile块
 
         int64_t roundNum = tileNum;
@@ -817,7 +812,8 @@ void TiledSort(
                 } else if (!flag && i == 0) { // 奇数阶段的头块
                     tileOutputShape[axis] = vecTileAlign[axis];
                 } else { // 两块
-                    tileOutputShape[axis] = std::min(2 * vecTileAlign[axis], sortOutputShape[axis] - i);
+                    tileOutputShape[axis] =
+                        std::min(NUM_VALUE_2 * vecTileAlign[axis], sortOutputShape[axis] - i);
                 }
                 i += tileOutputShape[axis];
 
@@ -828,6 +824,7 @@ void TiledSort(
                 viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
                     tileOutputOffset, MemoryType::MEM_UB,
                     std::vector<SymbolicScalar>(tileOutputOffset.begin(), tileOutputOffset.end()), curValidShape));
+                src->UpdateDynValidShape(curValidShape);
 
                 auto outputInUB = std::make_shared<LogicalTensor>(function, src->Datatype(), tileOutputShape);
                 auto& twoTileMrgSortOp = function.AddOperation(Opcode::OP_TWOTILEMRGSORT, {src}, {outputInUB});
@@ -853,15 +850,16 @@ void TiledSort(
             tileOutputShape[axis] = std::min(vecTileAlign[axis], sortOutputShape[axis] - i);
             tileOutputOffset[axis] = i;
             auto src = extractInputTensor->View(function, tileOutputShape, tileOutputOffset);
-            resultTileInfo.shape[axis] = std::min(tileOutputShape[axis] / 2, source->shape[axis] - i / 2);
-            resultTileInfo.offset[axis] = i / 2;
+            resultTileInfo.shape[axis] =
+                std::min(tileOutputShape[axis] / NUM_VALUE_2, source->shape[axis] - i / NUM_VALUE_2);
+            resultTileInfo.offset[axis] = i / NUM_VALUE_2;
 
             auto valueTile = valueResult->View(function, resultTileInfo.shape, resultTileInfo.offset);
             auto& valueOp = function.AddOperation(Opcode::OP_EXTRACT_SINGLE, {src}, {valueTile});
             valueOp.SetAttribute(SORT_ORDER, descending);
             valueOp.SetAttribute(EXTRACT_MASKMODE, 0);
             std::vector<SymbolicScalar> extractDynValidShape(src->GetDynValidShape());
-            extractDynValidShape[axis] = extractDynValidShape[axis] / 2;
+            extractDynValidShape[axis] = extractDynValidShape[axis] / NUM_VALUE_2;
             valueTile->UpdateDynValidShape(extractDynValidShape);
 
             auto indexTile = indexResult->View(function, resultTileInfo.shape, resultTileInfo.offset);
@@ -938,19 +936,8 @@ std::tuple<Tensor, Tensor> sort(const Tensor& self, int axis = -1, bool descendi
     std::swap(vecTileShape[axis], vecTileShape[len - 1]);
     TileShape::Current().SetVecTile(vecTileShape);
 
-    bool useReshape = false; // 由于Cast不支持一维，需要扩展为二维
-    if (len == 1 && self.GetDataType() != DataType::DT_FP32) {
-        useReshape = true;
-    }
-    auto reshapeSelf = transposeSelf;
-    if (useReshape) {
-        reshapeSelf = Reshape(transposeSelf, {1, self.GetShape()[0]}, {1, self.GetStorage()->GetDynValidShape()[0]});
-        TileShape::Current().SetVecTile({1, vecTileShape[0]});
-        len = 2;
-    }
-
-    auto castSelf = Cast(reshapeSelf, DataType::DT_FP32, CastMode::CAST_NONE);
-    castSelf.GetStorage()->UpdateDynValidShape(reshapeSelf.GetStorage()->GetDynValidShape());
+    auto castSelf = Cast(transposeSelf, DataType::DT_FP32, CastMode::CAST_NONE);
+    castSelf.GetStorage()->UpdateDynValidShape(transposeSelf.GetStorage()->GetDynValidShape());
 
     auto outShape = castSelf.GetShape();
     auto valueResult = Tensor(DataType::DT_FP32, outShape);
@@ -962,22 +949,14 @@ std::tuple<Tensor, Tensor> sort(const Tensor& self, int axis = -1, bool descendi
     auto castValueResult = Cast(valueResult, self.GetDataType(), CastMode::CAST_NONE);
     castValueResult.GetStorage()->UpdateDynValidShape(valueResult.GetStorage()->GetDynValidShape());
 
-    auto reshapeValueResult = castValueResult;
-    auto reshapeIndexResult = indexResult;
-    if (useReshape) {
-        reshapeValueResult = Reshape(castValueResult, {self.GetShape()[0]}, {self.GetStorage()->GetDynValidShape()[0]});
-        TileShape::Current().SetVecTile({1, vecTileShape[0]});
-        reshapeIndexResult = Reshape(indexResult, {self.GetShape()[0]}, {self.GetStorage()->GetDynValidShape()[0]});
-        TileShape::Current().SetVecTile({vecTileShape[0]});
-        len = 1;
-    }
-
     TileShape::Current().SetVecTile(vecTileShape);
-    auto transposeValueResult = Transpose(reshapeValueResult, {axis, len - 1});
-    auto transposeIndexResult = Transpose(reshapeIndexResult, {axis, len - 1});
+    auto transposeValueResult = Transpose(castValueResult, {axis, len - 1});
+    auto transposeIndexResult = Transpose(indexResult, {axis, len - 1});
     std::swap(validShape[axis], validShape[len - 1]);
     transposeValueResult.GetStorage()->UpdateDynValidShape(validShape);
     transposeIndexResult.GetStorage()->UpdateDynValidShape(validShape);
+    std::swap(vecTileShape[axis], vecTileShape[len - 1]);
+    TileShape::Current().SetVecTile(vecTileShape);
     return std::tie(transposeValueResult, transposeIndexResult);
 }
 
