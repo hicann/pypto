@@ -18,6 +18,7 @@
 #include "interface/utils/string_utils.h"
 #include "tilefwk/element.h"
 #include <algorithm>
+#include <sstream>
 #include <unordered_set>
 
 namespace npu::tile_fwk {
@@ -205,6 +206,25 @@ void CheckTensorDataType(
 {
     auto dtype = tensor->Datatype();
     CheckTensorDataType(dtype, supportedTypes, opName);
+}
+
+void CheckSupportedNPUArch(const std::vector<NPUArch>& supportedArches, const std::string& opName)
+{
+    if (supportedArches.empty()) {
+        return;
+    }
+
+    auto arch = Platform::Instance().GetSoc().GetNPUArch();
+    bool isSupported = std::find(supportedArches.begin(), supportedArches.end(), arch) != supportedArches.end();
+    std::ostringstream oss;
+    for (size_t i = 0; i < supportedArches.size(); ++i) {
+        if (i != 0) {
+            oss << ", ";
+        }
+        oss << NPUArchToString(supportedArches[i]);
+    }
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, isSupported)
+        << opName << ": this interface only supports architecture: " << oss.str();
 }
 
 void CheckTensorsDataTypeConsistency(

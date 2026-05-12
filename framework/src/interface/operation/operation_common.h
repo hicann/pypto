@@ -23,6 +23,7 @@
 #include "interface/operation/opcode.h"
 #include "interface/utils/source_location.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
 #define CALL(n, ...) Tensor##n(__VA_ARGS__)
@@ -88,6 +89,7 @@ void CheckTensorsShapeConsistencyOrBroadcast(const std::vector<LogicalTensorPtr>
 void CheckTensorDataType(
     const LogicalTensorPtr& tensor, const std::unordered_set<DataType>& supportedTypes, const std::string& opName);
 void CheckTensorDataType(DataType dtype, const std::unordered_set<DataType>& supportedTypes, const std::string& opName);
+void CheckSupportedNPUArch(const std::vector<NPUArch>& supportedArches, const std::string& opName);
 void CheckTensorsDataTypeConsistency(
     const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName);
 void CheckTensorsDataTypeConsistency(const LogicalTensorPtr& tensor, const Element& element, const std::string& opName);

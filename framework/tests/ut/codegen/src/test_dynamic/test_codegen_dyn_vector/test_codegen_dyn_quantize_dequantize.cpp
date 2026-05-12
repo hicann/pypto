@@ -21,6 +21,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/data_type.h"
+#include "tilefwk/platform.h"
 #include "codegen/codegen.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
@@ -214,6 +215,7 @@ TEST_F(TestCodegenDynQuantize, QuantizeDequantizeSymmetricChain)
 
 TEST_F(TestCodegenDynQuantize, QuantMXDefaultRoundDownFp8Output)
 {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     TileShape::Current().SetVecTile(8, 64);
@@ -242,6 +244,7 @@ TEST_F(TestCodegenDynQuantize, QuantMXDefaultRoundDownFp8Output)
     codeGen.GenCode(*function, {});
 
     CheckStringExist(R"!!!(TQuantMX<)!!!", GetResultFromCpp(*function));
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
 } // namespace npu::tile_fwk
