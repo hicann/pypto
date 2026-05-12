@@ -18,9 +18,11 @@
 
 #include "../cube_utils.h"
 
-template <typename Coord, typename DstTileData, typename SrcTileData>
-INLINE void TExtractUB2L1Impl(DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord)
+template <CopyMode mode, typename Coord, typename DstTileData, typename SrcTileData>
+INLINE void TCopyUB2L1Impl(DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord)
 {
+    static_assert(mode != CopyMode::UNKNOWN,
+        "[TCopyUB2L1 Error]: Current CopyMode is UNKNOWN. CopyMode only support EXTRACT, INSERT and MOVE");
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
     constexpr bool isB4 = CheckIsB4<DstTileData>();
     constexpr int64_t c0Size = isB4 ? FP4_BLOCK_ALIGN_BYTE : BLOCK_ALIGN_BYTE / sizeof(typename SrcTileData::Type);
@@ -43,14 +45,14 @@ INLINE void TExtractUB2L1Impl(DstTileData& dst, SrcTileData& src, const Coord& d
         staticL1W, pto::SLayout::RowMajor>;
     tileL1Tensor l1Tile;
     pto::TASSIGN(l1Tile, (uint64_t)dst.GetAddr());
-    if (srcShape0 >= dstShape0 && srcShape1 >= dstShape1) {
+    if constexpr (mode == CopyMode::EXTRACT || mode == CopyMode::MOVE) {
         using tileUBTensor = pto::Tile<
             pto::TileType::Vec, typename SrcTileData::Type, staticUBH, staticUBW, pto::BLayout::ColMajor, staticUBH,
             staticUBW, pto::SLayout::RowMajor>;
         tileUBTensor UBTile;
         pto::TASSIGN(UBTile, (uint64_t)src.GetAddr());
         pto::TEXTRACT(l1Tile, UBTile, srcOffset0, srcOffset1);
-    } else {
+    } else if (mode == CopyMode::INSERT){
         using tileUBTensor = pto::Tile<
             pto::TileType::Vec, typename SrcTileData::Type, staticUBH, staticUBW, pto::BLayout::ColMajor, -1, -1,
             pto::SLayout::RowMajor>;

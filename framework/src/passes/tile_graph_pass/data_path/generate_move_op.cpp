@@ -174,15 +174,19 @@ Status GenerateMoveOp::ProcessDefault(Function& function, Operation& op, ViewOpA
     }
     if (op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
         ProcessUB2L1(function, op);
-        SetUB2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
+        SetUB2L1CopyAttr(
+            op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
+            OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::EXTRACT);
         return SUCCESS;
     }
     if (op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
         SetL0C2L1CopyAttr(
             op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
-            OpImmediate::Specified(ZERO_OFFSET));
+            OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::EXTRACT);
     } else if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB) {
-        SetL0C2UBCopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
+        SetL0C2UBCopyAttr(
+            op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
+            OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::EXTRACT);
         op.SetAttribute(OpAttributeKey::isCube, true);
     } else {
         SetCopyAttr(op, viewOpAttribute);
@@ -229,7 +233,7 @@ void GenerateMoveOp::SetCopyAttr(Operation& op, ViewOpAttribute* viewOpAttribute
 
 void GenerateMoveOp::SetL0C2L1CopyAttr(
     Operation& op, const Shape& realShape, const std::vector<OpImmediate>& fromOffset,
-    const std::vector<OpImmediate>& toOffset) const
+    const std::vector<OpImmediate>& toOffset, Matrix::CopyMode copyMode) const
 {
     std::vector<SymbolicScalar> validShape;
     for (auto dim : realShape) {
@@ -242,11 +246,12 @@ void GenerateMoveOp::SetL0C2L1CopyAttr(
     copyAttr->SetToOffset(toOffset);
     op.SetOpAttribute(copyAttr);
     op.SetAttr(OpAttributeKey::copyIsNZ, static_cast<int64_t>(1));
+    op.SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(copyMode));
 }
 
 void GenerateMoveOp::SetL0C2UBCopyAttr(Operation &op, const Shape &realShape,
-    const std::vector<OpImmediate> &fromOffset, 
-    const std::vector<OpImmediate> &toOffset) const {
+    const std::vector<OpImmediate> &fromOffset,
+    const std::vector<OpImmediate> &toOffset, Matrix::CopyMode copyMode) const {
     std::vector<SymbolicScalar> validShape;
     for (auto dim : realShape) {
         SymbolicScalar scal = SymbolicScalar(dim);
@@ -262,11 +267,12 @@ void GenerateMoveOp::SetL0C2UBCopyAttr(Operation &op, const Shape &realShape,
     copyAttr->SetToOffset(toOffset);
     op.SetOpAttribute(copyAttr);
     op.SetAttribute(OpAttributeKey::isCube, true);
+    op.SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(copyMode));
 }
 
 void GenerateMoveOp::SetUB2L1CopyAttr(Operation &op, const Shape &copyShape,
     const std::vector<OpImmediate> &fromOffset,
-    const std::vector<OpImmediate> &toOffset) const {
+    const std::vector<OpImmediate> &toOffset, Matrix::CopyMode copyMode) const {
     // 实际搬运的 shape 转换为 validShape
     std::vector<SymbolicScalar> validShape;
     for (auto dim : copyShape) {
@@ -283,6 +289,7 @@ void GenerateMoveOp::SetUB2L1CopyAttr(Operation &op, const Shape &copyShape,
     );
     copyAttr->SetToOffset(toOffset);
     op.SetOpAttribute(copyAttr);
+    op.SetAttribute(OpAttributeKey::localCopyLocalMode, static_cast<int64_t>(copyMode));
 }
 
 Status GenerateMoveOp::SetOpcodeByMemPath(Operation& op, MemoryType from, MemoryType to) const
@@ -301,7 +308,7 @@ Status GenerateMoveOp::SetOpcodeByMemPath(Operation& op, MemoryType from, Memory
     return SUCCESS;
 }
 
-void GenerateMoveOp::CreateMoveOpForAssemble(Function &function, Operation &op) const 
+void GenerateMoveOp::CreateMoveOpForAssemble(Function &function, Operation &op) const
 {
     auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute*>(op.GetOpAttribute().get());
     auto ASSEMBLE_in = op.iOperand.front();
@@ -312,14 +319,14 @@ void GenerateMoveOp::CreateMoveOpForAssemble(Function &function, Operation &op) 
         SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
         SetL0C2L1CopyAttr(
             op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
-            OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()));
+            OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()), Matrix::CopyMode::INSERT);
         return;
     }
     if (inputMemtype == MemoryType::MEM_L0C && outputMemtype == MemoryType::MEM_UB) {
         SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
-        SetL0C2UBCopyAttr(op, op.GetIOperands()[0]->GetShape(), 
-            OpImmediate::Specified(ZERO_OFFSET), 
-            OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()));
+        SetL0C2UBCopyAttr(op, op.GetIOperands()[0]->GetShape(),
+            OpImmediate::Specified(ZERO_OFFSET),
+            OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()), Matrix::CopyMode::INSERT);
         return;
     }
     if (inputMemtype == MemoryType::MEM_UB && outputMemtype == MemoryType::MEM_L1) {
@@ -327,7 +334,9 @@ void GenerateMoveOp::CreateMoveOpForAssemble(Function &function, Operation &op) 
         // 先进行 ND2NZ 转换
         ProcessUB2L1(function, op);
         // 再设置属性
-        SetUB2L1CopyAttr(op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET), OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()));
+        SetUB2L1CopyAttr(
+            op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
+            OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()), Matrix::CopyMode::INSERT);
         return;
     }
     if (inputMemtype == MemoryType::MEM_DEVICE_DDR || outputMemtype != MemoryType::MEM_DEVICE_DDR ||
@@ -354,17 +363,19 @@ Status GenerateMoveOp::CreateMoveOpForConvert(Function& function, Operation& op)
     Status status = SetOpcodeByMemPath(op, from, to);
     if (op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
         ProcessUB2L1(function, op);
-        SetUB2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET), OpImmediate::Specified(ZERO_OFFSET));
+        SetUB2L1CopyAttr(
+            op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
+            OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::MOVE);
     }
     if (op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
         SetL0C2L1CopyAttr(
             op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET),
-            OpImmediate::Specified(ZERO_OFFSET));
+            OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::MOVE);
     }
     if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB) {
-        SetL0C2UBCopyAttr(op, op.GetOOperands()[0]->GetShape(), 
-            OpImmediate::Specified(ZERO_OFFSET), 
-            OpImmediate::Specified(ZERO_OFFSET));
+        SetL0C2UBCopyAttr(op, op.GetOOperands()[0]->GetShape(),
+            OpImmediate::Specified(ZERO_OFFSET),
+            OpImmediate::Specified(ZERO_OFFSET), Matrix::CopyMode::MOVE);
         op.SetAttribute(OpAttributeKey::isCube, true);
     }
     if (status != SUCCESS) {

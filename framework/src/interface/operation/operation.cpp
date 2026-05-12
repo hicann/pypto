@@ -85,6 +85,7 @@ const std::string OpAttributeKey::transMode = "op_attr_trans_mode";
 const std::string OpAttributeKey::workspaceBaseOffset = "workspace_base_offset";
 const std::string OpAttributeKey::copyInMode = "op_attr_copy_in_mode";
 const std::string OpAttributeKey::copyOutMode = "op_attr_copy_out_mode";
+const std::string OpAttributeKey::localCopyLocalMode = "op_attr_local_copy_local_mode";
 const std::string OpAttributeKey::copyIsNZ = "op_attr_is_nz";
 const std::string OpAttributeKey::scaleValue = "op_attr_scale_value";
 const std::string OpAttributeKey::rowPad = "op_attr_row_pad";

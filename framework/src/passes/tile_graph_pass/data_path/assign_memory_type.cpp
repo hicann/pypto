@@ -955,7 +955,7 @@ void AssignMemoryType::ProcessUB2L1SmallToLarge(Function &function) {
         auto iOperand = op.GetIOperands().front();
         // 只处理 UB -> L1 的 Assemble
         if (iOperand->GetMemoryTypeOriginal() != MEM_UB || oOperand->GetMemoryTypeOriginal() != MEM_L1) {
-            continue;  
+            continue;
         }
         // 约束：仅支持2维
         if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
@@ -1026,10 +1026,11 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function &function) {
         if (attrToType == MEM_L1) {
             auto iOperand = op.GetIOperands().front();
             auto oOperand = op.GetOOperands().front();
+            if (iOperand->GetMemoryTypeOriginal() != MEM_UB) {
+                continue;
+            }
             // 约束：仅支持2维
             if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
-                APASS_LOG_DEBUG_F(Elements::Operation,
-                    "UB2L1 large to small skip: not 2D tensor, View Op[%d]", op.GetOpMagic());
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
@@ -1037,9 +1038,6 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function &function) {
             const size_t UB_LIMIT = static_cast<size_t>(
                 Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
             size_t totalSize = CalcNZTensorSize(iOperand);
-            APASS_LOG_INFO_F(Elements::Operation,
-                "UB2L1 large to small: View Op[%d], nd+nz totalSize=%zu, UB_LIMIT=%zu",
-                op.GetOpMagic(), totalSize, UB_LIMIT);
             if (totalSize > UB_LIMIT) {
                 APASS_LOG_INFO_F(Elements::Operation,
                     "UB2L1 large to small: totalSize %zu exceeds UB_LIMIT %zu, downgrade to DDR",
@@ -1062,7 +1060,7 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function &function) {
                 continue;
             }
             // UB -> L1 大搬小：检查输入是否为 UB，且 shape 不满足倍数关系
-            if (iOperand->GetMemoryTypeOriginal() == MEM_UB && !IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
+            if (!IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
@@ -1128,7 +1126,7 @@ size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr &tensor) const 
     int64_t bytes = BytesOf(dtype);
     size_t outer = tensor->GetShape()[0];
     size_t inner = tensor->GetShape()[1];
-    
+
     // 外轴对齐：INT8/FP8 对齐到 32，其他对齐到 16
     size_t outerAlign = (dtype == DT_INT8 || dtype == DT_UINT8 || dtype == DT_FP8) ? 32 : 16;
     // 内轴对齐：C0 size = 32 / 元素字节数
@@ -1142,15 +1140,15 @@ size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr &tensor) const 
         // 返回原始 ND 格式大小作为 fallback
         return outer * inner * static_cast<size_t>(bytes > 0 ? bytes : 4);
     }
-    
+
     size_t alignedOuter = (outer + outerAlign - 1) / outerAlign * outerAlign;
     size_t alignedInner = (inner + c0 - 1) / c0 * c0;
-    
+
     // NZ 格式大小
     size_t nzSize = alignedOuter * alignedInner * static_cast<size_t>(bytes);
     // ND 格式原始大小
     size_t ndSize = outer * inner * static_cast<size_t>(bytes);
-    
+
     // ND + NZ 同时存在，需要两者之和
     return ndSize + nzSize;
 }

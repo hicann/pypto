@@ -136,8 +136,14 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
     std::ostringstream oss;
     int64_t aivId = 0;
     GetOpAttr(OpAttributeKey::subBlockIdx, aivId);
+    int64_t copyMode = 0;
+    if (opAttrs.count(OpAttributeKey::localCopyLocalMode)) {
+        copyMode = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::localCopyLocalMode));
+    }
+    auto cpMode = static_cast<Matrix::CopyMode>(copyMode);
+    std::string cpModeStr = CopyModeToString(cpMode);
     oss << tileOpName;
-    oss << WrapParamByAngleBrackets({nzVar});
+    oss << WrapParamByAngleBrackets({nzVar, cpModeStr});
     oss << WrapParamByParentheses({dstTensor, src0Tensor, coordDst, coordSrc, std::to_string(aivId)});
     oss << STMT_END;
     return oss.str();
@@ -379,8 +385,17 @@ std::string CodeGenOpNPU::GenUBToL1TileTensor() const
     auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr();
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coordDst, coordSrc};
 
+    int64_t copyMode = 0;
+    if (opAttrs.count(OpAttributeKey::localCopyLocalMode)) {
+        copyMode = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::localCopyLocalMode));
+    }
+    auto cpMode = static_cast<Matrix::CopyMode>(copyMode);
+    std::string cpModeStr = CopyModeToString(cpMode);
+
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets({cpModeStr});
+    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 

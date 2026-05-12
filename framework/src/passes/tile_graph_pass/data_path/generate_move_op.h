@@ -58,13 +58,13 @@ private:
     void SetCopyAttr(Operation& op, ViewOpAttribute* viewOpAttribute) const;
     void SetL0C2L1CopyAttr(
         Operation& op, const Shape& realShape, const std::vector<OpImmediate>& fromOffset,
-        const std::vector<OpImmediate>& toOffset) const;
+        const std::vector<OpImmediate>& toOffset, Matrix::CopyMode mode = Matrix::CopyMode::UNKNOWN) const;
     void SetL0C2UBCopyAttr(
-        Operation &op, const Shape &realShape, const std::vector<OpImmediate> &fromOffset, 
-        const std::vector<OpImmediate> &toOffset) const;
+        Operation &op, const Shape &realShape, const std::vector<OpImmediate> &fromOffset,
+        const std::vector<OpImmediate> &toOffset, Matrix::CopyMode mode = Matrix::CopyMode::UNKNOWN) const;
     void SetUB2L1CopyAttr(
         Operation &op, const Shape &copyShape, const std::vector<OpImmediate> &fromOffset,
-        const std::vector<OpImmediate> &toOffset) const;
+        const std::vector<OpImmediate> &toOffset, Matrix::CopyMode mode = Matrix::CopyMode::UNKNOWN) const;
     Status SetOpcodeByMemPath(Operation& op, MemoryType from, MemoryType to) const;
     bool HasSpecificConsumer(const Operation& op) const;
     void ConvertViewToCopyInWhenInputGm(Operation& op, ViewOpAttribute* viewOpAttribute) const;

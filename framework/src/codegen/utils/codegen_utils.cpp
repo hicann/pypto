@@ -136,6 +136,20 @@ std::string PaddingModeToString(Matrix::PaddingMode paddingMode)
     }
 }
 
+std::string CopyModeToString(Matrix::CopyMode copyMode)
+{
+    switch (copyMode) {
+        case Matrix::CopyMode::EXTRACT:
+            return "CopyMode::EXTRACT";
+        case Matrix::CopyMode::INSERT:
+            return "CopyMode::INSERT";
+        case Matrix::CopyMode::MOVE:
+            return "CopyMode::MOVE";
+        default:
+            return "CopyMode::UNKNOWN";
+    }
+}
+
 int64_t CalcLinearOffset(const std::vector<int64_t>& shape, const std::vector<int64_t>& offset)
 {
     if (shape.empty() || offset.empty() || shape.size() != offset.size()) {

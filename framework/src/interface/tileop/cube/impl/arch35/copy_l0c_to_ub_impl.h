@@ -45,10 +45,12 @@ TILEOP void TInsertL0CToUB(
 }
 
 // Copy data from L0C to UB
-template <CopyOutMode mode, typename Coord, typename DstTileData, typename SrcTileData>
-INLINE void TExtractL0C2UBImpl(
+template <CopyOutMode layoutMode, CopyMode mode, typename Coord, typename DstTileData, typename SrcTileData>
+INLINE void TCopyL0C2UBImpl(
     DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord, int16_t subblockId)
 {
+    static_assert(mode != CopyMode::UNKNOWN,
+        "[TCopyL0C2UB Error]: Current CopyMode is UNKNOWN. CopyMode only support EXTRACT, INSERT and MOVE");
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
     constexpr int64_t c0Size = BLOCK_ALIGN_BYTE / sizeof(typename SrcTileData::Type);
     int64_t dstOffset0 = TileOp::GetTupleElement<Coord, 0, SHAPE_DIM2, 0>(dstCoord);
@@ -65,8 +67,8 @@ INLINE void TExtractL0C2UBImpl(
     int64_t dstShape0 = GetShape<0>(dst);
     int64_t dstShape1 = GetShape<1>(dst);
     using tileUBTensor = pto::Tile<pto::TileType::Vec, typename DstTileData::Type, staticUBH, staticUBW,
-        mode == CopyOutMode::NZ2ND ? pto::BLayout::RowMajor : pto::BLayout::ColMajor, -1, -1,
-        mode == CopyOutMode::NZ2ND ? pto::SLayout::NoneBox : pto::SLayout::RowMajor>;
+        layoutMode == CopyOutMode::NZ2ND ? pto::BLayout::RowMajor : pto::BLayout::ColMajor, -1, -1,
+        layoutMode == CopyOutMode::NZ2ND ? pto::SLayout::NoneBox : pto::SLayout::RowMajor>;
     using tileL0CTensor =
         pto::Tile<pto::TileType::Acc, typename SrcTileData::Type, staticL0CH, staticL0CW, pto::BLayout::ColMajor, -1,
         -1, pto::SLayout::RowMajor, pto::TileConfig::fractalCSize, pto::PadValue::Null, pto::CompactMode::Normal>;
@@ -74,9 +76,9 @@ INLINE void TExtractL0C2UBImpl(
     tileL0CTensor l0cTile(srcShape0, srcShape1);
     pto::TASSIGN(ubTile, (uint64_t)dst.GetAddr());
     pto::TASSIGN(l0cTile, (uint64_t)src.GetAddr());
-    if (dstShape0 < srcShape0 || dstShape1 < srcShape1) {
+    if constexpr (mode == CopyMode::EXTRACT || mode == CopyMode::MOVE) {
         TExtractL0CToUB<tileUBTensor, tileL0CTensor>(ubTile, l0cTile, srcOffset0, srcOffset1, subblockId);
-    } else {
+    } else if (mode == CopyMode::INSERT) {
         TInsertL0CToUB<tileUBTensor, tileL0CTensor>(ubTile, l0cTile, dstOffset0, dstOffset1, subblockId);
     }
 }

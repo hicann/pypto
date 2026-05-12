@@ -361,7 +361,7 @@ TEST_F(TestCodegenDynCopy, L0CCopyUBTensor)
     std::string res =
         TestMatmulMteBody("L0CCopyUBTensor", Opcode::OP_L0C_COPY_UB, MemoryType::MEM_L0C, MemoryType::MEM_UB);
     std::string expect =
-        R"!!!(TExtract<CopyOutMode::NZ2ND>(ubTensor_0, l0cTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), 0);
+        R"!!!(TCopyL0C2UB<CopyOutMode::NZ2ND, CopyMode::UNKNOWN>(ubTensor_0, l0cTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -414,7 +414,7 @@ std::string TestCopyL1Body(Opcode opcode, MemoryType inputType, MemoryType outpu
 TEST_F(TestCodegenDynCopy, UB2L1TileTensor)
 {
     std::string res = TestCopyL1Body(Opcode::OP_UB_COPY_L1, MemoryType::MEM_UB, MemoryType::MEM_L1);
-    std::string expect = R"!!!(TExtract(l1Tensor_0, ubTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0));
+    std::string expect = R"!!!(TCopyUB2L1<CopyMode::UNKNOWN>(l1Tensor_0, ubTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }
