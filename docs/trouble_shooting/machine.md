@@ -245,6 +245,123 @@ python3 tools/schema/schema_memory_check.py -d /path/to/my_log/debug/device-8/ -
 6. **复杂特性排除**：
 使用 `pypto-precision-debug` skill，关闭unroll_list、合轴特性、配置submit_before_loop=True使loop串行执行、确定valid_shape配置正确性、+0.0等，缩小定位范围。
 
+---
+
+### 怀疑精度问题与运行时依赖异常有关
+
+当算子出现精度异常，且怀疑根因是 Stitch 依赖边丢失（producer 尚未写完 consumer 就提前读取）时，可使用 **运行时依赖正确性校验工具** 进行系统化分析。
+
+1. **工具入口与位置**：
+
+```
+tools/verify_dep_correctness.py     # 工具入口
+tools/dep_verifier/                 # 规则引擎包
+```
+
+2. **开启 dump 并执行用例**：
+
+在用例的 `jit` 装饰器中启用 `runtime_debug_mode`，框架会在执行期间自动生成校验所需的 dump 数据：
+
+```python
+@pypto.frontend.jit(
+    debug_options={"runtime_debug_mode": 1}
+)
+def my_op(...):
+    ...
+```
+
+重新执行用例：
+
+```bash
+python your_op_script.py
+```
+
+3. **Dump 文件说明**：
+
+执行后，日志输出目录（通常在 `output/output_<timestamp>/`）下会生成以下文件：
+
+**根目录：**
+
+| 文件 | 生成时机 | 用途 |
+|------|---------|------|
+| `dyn_topo.txt` | DeviceTask 完成后 | 运行时完整依赖拓扑，包含每个 task 的 `seqNo`、`taskId`、静态后继数量、所有后继 task 列表 |
+
+**`dep_verify_dump/` 子目录（框架自动创建）：**
+
+| 文件 | 生成时机 | 用途 |
+|------|---------|------|
+| `static_topo.csv` | 编译期 encode 完成后 | 编译期静态拓扑，记录每个 function 每个 op 的 incast/outcast slot 列表及静态后继，是运行时校验的基准 |
+| `slot_mapping.csv` | 编译期 slot 简化完成后 | 前端 slot 索引 → 运行时 slot 索引映射，含 tensor 名称、function 名称、slot 角色（INPUT/OUTPUT/INOUT/INTERNAL） |
+| `slot_cell_table.csv` | 编译期 CellMatch 初始化后 | 每个 slot 的 stitch 策略（partial/fullcover）、cell 切分形状、cell 数量等元数据 |
+| `dyn_stitch_edges.csv` | 每次运行时 `HandleOneStitch` 建边成功后 | 逐条记录每条 stitch 边的类型（fullCover/partial/default/reuse）、所经 slot、producer/consumer 的 funcKey、funcIdx、opIdx、taskId |
+| `dyn_slot_access.csv` | 运行时 stitch 阶段 cell match 路径 | 以 cell 粒度记录每次写（W）或读（R）事件，含 seqNo、slotIdx、funcIdx、opIdx、taskId、命中 cell 索引列表 |
+
+注：`dyn_topo.txt` 在根目录不变；其余 5 个 dump 文件统一放在 `dep_verify_dump/` 子目录，与其他 dump 隔离。
+
+4. **运行校验工具**：
+
+```bash
+python tools/verify_dep_correctness.py <dump_dir>
+```
+
+其中 `<dump_dir>` 为包含上述文件的输出目录，例如：
+
+```bash
+python tools/verify_dep_correctness.py ./output/output_20260514_103201_123456_7890123/
+```
+
+工具会依次执行以下校验规则：
+
+| 规则 ID | 类别 | 校验内容 |
+|---------|------|---------|
+| `rule_static_integrity` | 缺失依赖 | 编译期 `static_topo.csv` 声明的函数内部静态后继，必须在 `dyn_topo.txt` 对应 task 中完整保留 |
+| `rule_stitch_legality` | 非法读写关联 | 每条 stitch 边引用的 producer/consumer op 必须在 `static_topo` 中存在；非 reuse 类型的边对应 slot 必须落在 producer.outcastSlots ∩ consumer.incastSlots |
+| `rule_cell_write_conflict` | 并发写冲突 | 同一 seqNo 内同一 slot 同一 cell 有多个 writer，若这些 writer 在 DAG 中不构成全序链且非合法并行写，则报错 |
+
+5. **输出结果**：
+
+无问题时控制台打印：
+```
+PASS
+```
+
+发现问题时按类别聚合打印摘要，例如：
+
+```
+FAIL: 3 issue(s) detected.
+
+[Missing producer/consumer dependency (data flow broken)]
+  - tensor 'tmp' (slot=3, cell=0): compile-time dependency for kernel funcKey=12, opIdx=2 is not preserved at runtime (missing successor(s) [327682])
+
+[Concurrent write overlap (producers may overwrite each other)]
+  - tensor 'tmp' (slot=3, cell=0): 128 producer instances write to the same region without a determined order, later writes may overwrite earlier ones
+
+[Illegal read/write linkage (kernel I/O does not match)]
+  - tensor 'out' (slot=7): read/write linkage references an undeclared kernel op (producer funcKey=5/opIdx=1, consumer funcKey=8/opIdx=0)
+```
+
+同时在 `<dump_dir>/dep_check_report.csv` 生成详细报告，列格式为：
+
+```
+category, rule, slot, tensor, func, cell, message
+```
+
+6. **报告字段解读**：
+
+| 字段 | 含义 |
+|------|------|
+| `category` | 问题类别：`ConcurrentWriteOverlap` / `MissingDependency` / `IllegalReadWriteLinkage` |
+| `rule` | 触发的规则 ID，例如 `rule_cell_write_conflict` |
+| `slot` | 运行时 slot 索引（与 `slot_mapping.csv::runtimeSlotIdx` 对应） |
+| `tensor` | 对应的前端 tensor 变量名（从 `slot_mapping.csv` 反查） |
+| `func` | 写入该 slot 的 function 名称 |
+| `cell` | 发生冲突的 cell 索引（仅 cell 级规则填写） |
+| `message` | 具体描述，含 funcKey、opIdx、taskId 等定位信息 |
+
+通过 `slot` 和 `tensor` 字段可以快速定位到用户代码中的具体 tensor；通过 `message` 中的 `funcKey`/`opIdx` 可以对照 `static_topo.csv` 和 `dyn_topo.txt` 进一步分析依赖丢失的根因。
+
+---
+
 
 ### encode 阶段 actualRawMagic 断言触发
 

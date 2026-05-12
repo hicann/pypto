@@ -310,6 +310,39 @@ i = 1
 
 N/A
 
+## local Tensor 无 producer 时被读取触发device侧断言
+
+### 问题现象描述
+
+在算子编写过程中，如果 local Tensor 仅创建但未写入，就在 loop 内被读取，编译/执行到设备路径时可能触发设备侧断言或异常。典型报错如下：
+
+```text
+ASSERTION FAILED: WORKSPACE_ITER_INVALID
+Root[...] incast ... slotIndex ... read from empty address.
+```
+
+该现象通常对应读取到的 slot 没有 producer，即 Tensor 对应 slot 未被任何 operation 写入。
+
+最小示例（语义示意）：
+
+```python
+def kernel(x):
+    t = pypto.tensor((1,), pypto.DT_FP32, "t")
+    for i in range(n):
+        _ = t[0]
+```
+
+### 可能原因
+
+local Tensor（如 `t`）仅被创建，但在被读取前没有任何写操作（如切片赋值、`move`、`assemble` 或其他能建立 producer 的写入），导致读取路径访问到空地址并触发断言。
+
+### 处理步骤
+
+可采用以下任一方式规避：
+
+1. 在读取前先对 local Tensor 执行有效写入（例如切片赋值、`move`、`assemble` 等），确保其存在 producer。
+2. 将该 local Tensor 写在 loop 内，作为 loop 内 Tensor 使用，使其在当前 loop 作用域内，pypto内存管理策略会为其申请内存地址
+
 ## Loop 原理及其描述
 
 在编译阶段会将loop编译为控制流，将loop body转换为计算流，分别对应kernel_aicpu/kernel_aicore.
