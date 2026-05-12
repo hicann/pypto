@@ -575,7 +575,7 @@ void CodeGenNPU::AppendVFOptions(NPUArch platform, std::ostringstream& oss)
         << "-mllvm --tile-fusion-skip-shape-inference=true "
         << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
         << "-mllvm --tile-fusion-skip-legality-check=false "
-        << "-mllvm -cce-vf-fusion-max-candidate-set-threshold=96 ";
+        << "-mllvm -cce-vf-fusion-max-candidate-set-threshold=32 ";
     if (config::GetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, false)) {
         oss << "-mllvm -enable-unroll-after-fused=true ";
     }
