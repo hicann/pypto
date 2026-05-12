@@ -94,7 +94,7 @@ def test_matmul_dynamic_shape_error():
     b_npu = torch.rand([k, n], dtype=torch.float16, device=device)
     out_npu = torch.zeros([m, n], dtype=torch.float16, device=device)
 
-    with pytest.raises(Exception, match="operand1 dim\\[0\\] = -1, must be > 0"):
+    with pytest.raises(Exception, match="Dynamic shape tensors are not allowed as operation operands."):
         matmul_kernel(a_npu, b_npu, out_npu)
 
 

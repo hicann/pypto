@@ -10,7 +10,7 @@
 
 其中定义了以下错误码（`FeError`）：
 
-### 通用错误码（0x21001U - 0x21008U）
+### 通用错误码（0x21001U - 0x21009U）
 
 - **EINTERNAL (0x21001U)**：内部错误
 
@@ -27,6 +27,8 @@
 - **IS_EXIST (0x21007U)**：参数/操作已存在
 
 - **NOT_EXIST (0x21008U)**：参数/操作不存在
+
+- **DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED (0x21009U)**：不支持 Shape 为动态的 Tensor 直接参与计算
 
 ### 文件错误码（0x29001U - 0x29002U）
 
@@ -217,7 +219,21 @@ y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0], [])
 # 正确示例
 y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0, 0], [])
 ```
-#### 使用动态Shape的Tensor进行计算表达
+
+### DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED (0x21009U)
+
+**错误描述：** 不支持 Shape 为动态的 Tensor 直接参与计算
+
+**出现原因：**
+- 直接使用包含 `pypto.DYNAMIC` 维度的 Tensor 作为 operation 操作数
+- 未在 `pypto.loop` 中通过 view 切分出静态 shape 后再进行计算
+
+**解决办法：**
+- 对动态维度按固定 view 大小切分
+- 在 `pypto.loop` 中对切分后的静态 shape Tensor 进行计算表达
+
+**错误用例：**
+
 ```python
 # 错误示例
 @pypto.frontend.jit

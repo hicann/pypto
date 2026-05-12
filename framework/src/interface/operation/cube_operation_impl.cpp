@@ -278,6 +278,20 @@ Status CheckOperandShape(const Tensor& operand1, const Tensor& operand2)
     ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, Op1DimValid) << "operand1 dimension(" << operand1Dim << ") must be >= 2";
     ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, Op2DimValid) << "operand2 dimension(" << operand2Dim << ") must be >= 2";
 
+    for (size_t i = 0; i < operand1Dim; ++i) {
+        ASSERT(FeError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, shape1[i] != -1)
+            << "operand1 dim[" << i << "] = " << shape1[i]
+            << ". Dynamic shape tensors are not allowed as operation operands. "
+            << "Use view in pypto.loop to get static shape tensors before computation.";
+    }
+
+    for (size_t i = 0; i < operand2Dim; ++i) {
+        ASSERT(FeError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, shape2[i] != -1)
+            << "operand2 dim[" << i << "] = " << shape2[i]
+            << ". Dynamic shape tensors are not allowed as operation operands. "
+            << "Use view in pypto.loop to get static shape tensors before computation.";
+    }
+
     // 检查每个维度的值
     for (size_t i = 0; i < operand1Dim; ++i) {
         ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, shape1[i] > 0)
