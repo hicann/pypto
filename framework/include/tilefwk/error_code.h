@@ -254,6 +254,7 @@ enum class SchedErr : uint32_t {
     SCH_DEVTASK_CTX_FULL,
     FSM_STATUS_ERROR,
     SCH_PARALLEL_DEVTASK_TIMEOUT,
+    CORE_INFO_INVALID,
 };
 
 enum class CtrlErr : uint32_t {

@@ -123,7 +123,7 @@ public:
             lastTaskCtrl_->existNextSameIterTask = false;
         }
 
-        if (!appendLastTaskCtrl) {
+        if (!appendLastTaskCtrl && !ctx->devProg->ctrlFlowCacheAnchor->IsRecording()) {
             for (uint32_t i = 0; i < GetScheAicpuNum(); ++i) {
                 GetTaskQueue(i).Enqueue(newTaskCtrl);
             }

@@ -937,11 +937,18 @@ private:
         int coreIdxStart, int coreIdxEnd, bool isLifo)
     {
         uint32_t sendCnt = 0;
+        uint32_t coreNum = coreIdxEnd - coreIdxStart;
         uint32_t coreRunReadyCnt = context_->coreRunReadyCnt_[static_cast<int>(type)];
         DEV_VERBOSE_DEBUG(
             "Begin Batch send %s task: corerunreadycnt:%u, pendreadyCnt:%u, taskCount:%u.",
             type == CoreType::AIC ? "AIC" : "AIV", coreRunReadyCnt, context_->corePendReadyCnt_[static_cast<int>(type)],
             taskCount);
+        if (unlikely(coreRunReadyCnt > coreNum || context_->corePendReadyCnt_[static_cast<int>(type)] > coreNum)) {
+            DEV_ERROR(SchedErr::CORE_INFO_INVALID, "Core info is invalid aicpu %d, %s coreNum: %u, coreRunReadCnt: %u,"
+                     "corePendReadyCnt: %u", aicpuIdx_, type == CoreType::AIC ? "AIC" : "AIV", coreNum, coreRunReadyCnt,
+                    context_->corePendReadyCnt_[static_cast<int>(type)]);
+            return DEVICE_MACHINE_ERROR;
+        }
         while (sendCnt < static_cast<uint64_t>(coreRunReadyCnt) && sendCnt < taskCount) {
             uint32_t coreIdx =
                 context_
@@ -953,7 +960,6 @@ private:
         context_->corePendReadyCnt_[static_cast<int>(type)] -= sendCnt;
 
         uint32_t idx = context_->lastPendReadyCoreIdx_[static_cast<int>(type)];
-        uint32_t coreNum = coreIdxEnd - coreIdxStart;
         uint32_t lastProcCore = idx;
         DEV_VERBOSE_DEBUG(
             "  ## send task left pend ready cnt %u , last core index:%u.",
