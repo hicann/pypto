@@ -111,18 +111,20 @@ pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
 #### 3.0 核使用率分析流程
 
 ```
-采集泳道图数据（debug_mode=1）
+采集泳道图数据（debug_options={"runtime_debug_mode": 1}）
     ↓
 统计每个 leafHash 分布在多少个 core 上
     ↓
 对每个 AIC/AIV leafHash，判断核是否用满
-    ├─ 核未满 → 优先通过 TileShape 调整用满核（跳到 3.1）
+     ├─ 核未满 → 优先通过 TileShape 调整用满核（跳到 3.2）
     └─ 核已满 → 进入合图阶段（跳到第 4 节）
 ```
 
 #### 3.1 统计核使用率
 
 从 `merged_swimlane.json` 的 `traceEvents` 中解析每个 leafHash 占用的 core 数量，并与芯片理论核数对比：
+
+> **路径说明**：以下脚本命令在技能目录 `.agents/skills/pypto-op-perf-tune/tune-swimlane/` 下执行
 
 ```bash
 python3 scripts/analyze_core_usage.py <output_dir> [--device-id N]
@@ -144,9 +146,9 @@ psgId | type | tasks |    used/total (usage%) |  avg(us) | total(us) |    status
     8 |  AIC |     8 |             8/24 (33%) |      8.1 |      64.9 |  NOT FULL | FILL CORES FIRST (reduce TileShape)
     6 |  AIV |     4 |              4/48 (8%) |      6.4 |      25.5 |  NOT FULL | FILL CORES FIRST (reduce TileShape)
 
-Summary:
-  NOT FULL (fill cores first): 4 leafHash(es)
-  FULL (can merge): 0 leafHash(es)
+Summary:	 
+    NOT FULL (fill cores first): 4 leafHash(es)	 
+    FULL (can merge): 0 leafHash(es)	 
 
 Next step: For NOT FULL leafHashes, use leafhash_to_code.py to map to frontend code,
            then adjust set_cube_tile_shapes() to increase task count.
@@ -217,7 +219,7 @@ Step 3: 针对瓶颈子图优化 TileShape
     → 每次只调整一个子图的 TileShape
 
 Step 4: 重新采集数据验证
-    → 调整后必须重新采集泳道图数据（debug_options=1 → 运行 → debug_options=0）
+    → 调整后必须重新采集泳道图数据（debug_options={"runtime_debug_mode": 1} → 运行 → debug_options={"runtime_debug_mode": 0}）
     → 对比瓶颈子图 total 是否下降
     → 如果瓶颈转移（新的子图变成最大 total），回到 Step 1
 
@@ -250,21 +252,6 @@ Step 5: 负载均衡达标后进入合图阶段
 
 核用满后，才能进入合图调优（第 4 节）。合图的目的是减少调度开销和数据重复搬运，而非增加并行度。
 
-**实测案例**（pangu_decode_attention，Ascend910 理论 24 AIC / 48 AIV）：
-
-| 阶段 | psgId | 操作 | 核状态（实际/理论） | 策略 | E2E | 结论 |
-|------|-------|------|---------------------|------|-----|------|
-| 1 | 11 | output proj | 4/24 (17%) **未满** | 减小 nL0/nL1: 256→128 | 170→143us | ✅ 先用满核 |
-| 2 | 11 | output proj | 8/24 (33%) 仍**未满** | 继续减小 TileShape L0/L1 或 L1reuse | 143→127us | ✅ TileShape 调整后合图有效 |
-| 3 | 3 | Q@K^T | 16/24 (67%) | cube_nbuffer {3:2} | 143→137us | ✅ 核未满但提升有限 |
-| 4 | 8 | attn@V | 8/24 (33%) **未满** | cube_nbuffer {8:2} | 137→150us | ❌ 核未满时合图反而退化 |
-| 5 | 11 | output proj | — | L1reuse 过大 {11:16} | 127→144us | ❌ 过度合图退化 |
-
-**结论**：
-- **核未满 + TileShape 已充分调整但仍未满**：可以尝试 L1reuse（减少重复搬运），但 cube_nbuffer（减少调度开销）通常退化
-- **核已满**：L1reuse 和 cube_nbuffer 都可能有效
-- **过度合图**：粒度过大会占用过多 L1/UB 内存，导致性能退化
-
 
 ### 4. 合图调优
 
@@ -272,10 +259,17 @@ Step 5: 负载均衡达标后进入合图阶段
 
 **⚠️⚠️⚠️ 关键原则：**
 1. **⛔ 合图前必须先完成核使用率分析（第 3 节）**：核未满时优先用满核，核满后再合图。盲目合图会导致核未满时性能退化。
-2. Key (hashorder) 等同于泳道图分析中得到的 **psgId**（`dyn_topo.txt` 中的 `psg_id_within_root`）。值 -1 是默认通配，非负整数匹配特定同构子图组。
+2. pass_options key 有两种格式（**同一 dict 内禁止混用**）：
+   - **整数键格式**：`{-1: N}`（全局通配所有子图），`vec_nbuffer_setting` 中必须加 `-2: 1` 作为 merge enable 标志
+   - **字符串键格式**：`{"DEFAULT": M, "func{magic}_{order}": N}`（精细控制特定 hashOrder）
+   - **场景选择**：需要所有子图均合图时用整数键 `-1`；仅需合图某几个 hashOrder 时用字符串键
+   - hashOrder 来源：`merged_swimlane.json` 中每个事件的 `args.hashOrder-hint` 字段，对应三种合图类型：
+     * `l1ReuseInfo hashOrder` → `cube_l1_reuse_setting` 的 key
+     * `cubeMergeInfo hashOrder` → `cube_nbuffer_setting` 的 key
+     * `vecMergeInfo hashOrder` → `vec_nbuffer_setting` 的 key
 3. Value (N) 是合并粒度，每 N 个同构子图合并为一个。设为 1 表示不合并。
-4. 合并粒度应由 **t/iter**（单层循环相同 leafHash 的 task 数量）和核心数决定，常用值为 1/2/4/8/16。
-5. **⚠️ 必须先用 analyze_swimlane.py 分析泳道图**：获取 psgId（hashorder）、core 类型（AIC/AIV）、t/iter（合图粒度参考），再据此配置。禁止盲猜配置。
+4. 合并粒度应由 **subGraphCount**（hashOrder-hint 中的同构子图数量）和核心数决定，常用值为 1/2/4/8/16。
+5. **⛔ outer-loops 必须手动计算**：先阅读 kernel 代码确定 loop 嵌套结构，手动计算 outer-loops，再传入 `--outer-loops` 参数。脚本默认 `outer-loops=1`（auto 值不可靠），必须使用正确的计算值。
 
 **合图调优标准流程**：
 
@@ -286,25 +280,40 @@ Step 5: 负载均衡达标后进入合图阶段
 #   - cores < total_cores 且可通过 TileShape 增加 → 先用满核，再回来
 #   - cores == total_cores 或 TileShape 已充分尝试仍无法增核 → 进入 Step 1
 
-# Step 1: 用 analyze_swimlane.py 分析泳道图数据
+# Step 1: 根据 loop 次数计算外层循环次数 outer-loops（必填），再用 analyze_swimlane.py 分析泳道图数据
 python3 scripts/analyze_swimlane.py \
-    output/output_<最新目录>
+    output/output_<最新目录> --outer-loops xxx
 
 # Step 2: 从输出确定：
-#   - psgId 列 → 即为 hashorder（set_pass_options 的 key）
+#   - hashOrder 列 → 即为合图的 key（set_pass_options 的 key）
 #   - core 列 → AIC 对应 cube 配置，AIV 对应 vec 配置
-#   - t/iter 列 → 合图粒度的参考值
+#   - t/iter 列 → 单个 root function 中子图数量，合图粒度参考值
 
 # Step 3: 根据分析结果设置配置
 ```
 
-#### 4.0 确定外层循环次数（outer_loops）
+#### 4.0 确定合图粒度
 
-`t/iter = cnt / outer_loops`，其中 `outer_loops` 是外层循环的总迭代次数。
+`subGraphCount` 是 `hashOrder-hint` 中提供的同构子图总数（跨所有外层循环迭代）。`t/iter = subGraphCount / outer_loops`，表示单个 root function 中该 hashOrder 的子图数量，直接指导合图粒度。
 
-**自动检测**：脚本默认取所有 leafHash 的 cnt 的 **GCD** 作为 `outer_loops`。
+**获取方式**：从 `merged_swimlane.json` 中每个事件的 `args.hashOrder-hint` 字段解析，格式为：
 
-**手动确认**：分析实现代码的 loop 嵌套和 tile 切块：
+```
+l1ReuseInfo hashOrder: func15_1, subGraphCount: 90
+cubeMergeInfo hashOrder: func15_1, subGraphCount: 90
+vecMergeInfo hashOrder: func5_4, subGraphCount: 40
+```
+
+**自动分析**：运行 `analyze_swimlane.py` 后，Merge Tuning Guide 部分会自动输出每个 hashOrder 的 subGraphCount、t/iter 和建议粒度。
+
+#### 确定 outer_loops（⛔ 必须手动计算，脚本默认 outer-loops=1）
+
+`outer_loops` 是外层循环的总迭代次数，`t/iter = subGraphCount / outer_loops`。
+
+**⛔ 禁止依赖默认值 1**：脚本默认 outer-loops=1 仅为保证脚本不中断运行。默认值会导致 t/iter 错误（偏大），合图粒度建议也全部错误。
+**必须人工阅读 kernel 代码计算 outer_loops 后传入 `--outer-loops`。**
+
+**手动计算方法**：分析实现代码的 loop 嵌套和 tile 切块：
 
 ```python
 # 示例：flash_attention_score_grad
@@ -325,66 +334,104 @@ for b_idx in pypto.loop(b, ...):
 
 可用 `--outer-loops` 参数手动指定精确值：
 ```bash
-python3 analyze_swimlane.py output/output_xxx --outer-loops 32
+python3 scripts/analyze_swimlane.py output/output_xxx --outer-loops 32
 ```
 
 #### t/iter 对合图粒度的指导
 
-| t/iter | 含义 | 合图粒度建议 |
-|--------|------|-------------|
-| 1 | 每外层迭代只执行 1 次 | 粒度 1（不合并），或跨实例尝试 2/4 |
-| 2 | 每外层迭代执行 2 次 | 优先试 2，再试 4 |
-| 4+ | 每外层迭代执行多次 | 可试 2/4/8，逐步增大 |
+| t/iter | 含义 | 核状态 | 合图粒度建议 |
+|--------|------|--------|-------------|
+| 1 | 单个 root function 中只有 1 个子图 | — | 粒度 1（不合并），或跨 root function 尝试 2/4 |
+| 2 | 单个 root function 中有 2 个子图 | 未满 | cube 类粒度 1（不合并）；vec_nbuffer 可尝试 `{-2: 1, -1: 2}` 或 `{"DEFAULT": 1, "func5_4": 4}` |
+| 2 | 同上 | 已满 | 优先试 2，再试 4 |
+| 4+ | 单个 root function 中有多个子图 | 未满 | 优先试 vec_nbuffer，cube 类通常退化 |
+| 4+ | 同上 | 已满 | 可试 2/4/8，逐步增大 |
 
-**注意**：合图粒度可以大于 t/iter（跨外层迭代合并），但不宜过大以免 L1/UB 内存溢出。
+**⚠️ 核未满时的合图策略**：
+- `vec_nbuffer_setting`：可尝试，用整数键 `{-2: 1, -1: N}` 或字符串键 `{"DEFAULT": 1, "func5_4": N}`，从 N=4 开始逐步试 8/16
+- `cube_l1_reuse_setting` / `cube_nbuffer_setting`：通常退化，不建议设置；核未满时合图会进一步减少并行度
 
-#### 输出解读示例
+**⚠️ 粒度过大的风险**：
+- avg<10us 的短耗时子图，合图粒度不宜超过 8（实测 N=16 时退化）
+- 合图粒度可以大于 t/iter（跨 root function 合并），但不宜过大以免 L1/UB 内存溢出
+- 每次调整后必须实测验证端到端耗时，禁止凭推测判定
+
+#### 4.0.1 输出解读示例
 
 ```
-#   leafHash              cnt t/iter  ...  core psgId  ...  compute_ops
-1   11267...              32   1.0    ...  AIV    1    ...  MULS+EXPAND+SUB+...
-2   73361...              32   1.0    ...  AIC    0    ...  L1_TO_L0A+A_MUL_B+...
-3   10262...              64   2.0    ...  AIC    2    ...  L1_TO_L0At+A_MULACC_B+...
+#   leafHash                 min(us)   max(us)   avg(us)  total(us) core hashOrder    subGCnt t/iter root_name                                  compute_ops
+1   17445...                   13.74     42.30     28.83    2537.46  AIC func15_1          90   11.2 ...        L1_TO_L0A+...
+2   14789...                   42.14     46.12     44.67     938.10  AIC func15_2          22    2.8 ...        L1_TO_L0A+...
+3   10766...                   28.76     31.54     29.91     598.16  AIC func5_0           20    2.5 ...        L1_TO_L0A+...
+4   10531...                   25.16     28.64     26.91     565.18  AIC func15_0          22    2.8 ...        L1_TO_L0A+...
+5   85886...                    1.12      3.72      1.69     108.20  AIV func11_0           1    0.1 ...        MULS+BAR.V+...
+6   16650...                    3.80      4.26      4.09      12.28  AIV func5_4           40    5.0 ...        (pure copy)
 
-outer_loops=32 (auto, GCD of counts)
+outer_loops=8 (user-specified)
 
-[AIC] cube_l1_reuse_setting / cube_nbuffer_setting:
-  psgId=0: cnt=32, t/iter=1, avg=8.77us
-  psgId=2: cnt=64, t/iter=2, avg=2.51us  → try {2: 2/4/8}
+================================================================================
+Merge Tuning Guide (hashOrder = merge key)
+================================================================================
+
+[AIC] cube_l1_reuse_setting:
+  hashOrder=func15_1: subGraphCount=90, t/iter=11, avg=28.49us
+    -> integer key: {-1: 2/4/8/16} (global)
+    -> func key:    {"DEFAULT": 2/4, "func15_1": 2/4/8/16} (specific)
+  hashOrder=func15_2: subGraphCount=22, t/iter=3, avg=44.08us
+    -> integer key: {-1: 2/4/8} (global)
+    -> func key:    {"DEFAULT": 2/4, "func15_2": 2/4/8} (specific)
+
+[AIC] cube_nbuffer_setting:
+  hashOrder=func15_1: subGraphCount=90, t/iter=11, avg=28.49us
+    -> integer key: {-1: 2/4/8/16} (global)
+    -> func key:    {"DEFAULT": 2/4, "func15_1": 2/4/8/16} (specific)
+  hashOrder=func5_0: subGraphCount=20, t/iter=2, avg=29.91us
+    -> integer key: {-1: 2/4/8} (global)
+    -> func key:    {"DEFAULT": 2/4, "func5_0": 2/4/8} (specific)
 
 [AIV] vec_nbuffer_setting:
-  psgId=1: cnt=32, t/iter=1, avg=30.89us
-```
+  hashOrder=func5_4: subGraphCount=40, t/iter=5, avg=3.78us
+    -> integer key: {-2: 1, -1: 2/4/8/16} (global)
+    -> func key:    {"DEFAULT": 1, "func5_4": 2/4/8/16} (specific)
 
 **解读**：
-- psgId=2 的 AIC 子图 t/iter=2（最内层循环执行 2 次），可设置 `cube_nbuffer_setting: {2: 2}` 将这两次合并
-- psgId=0 的 AIC 子图 t/iter=1，但 total 耗时高，可设置 `cube_l1_reuse_setting: {0: 4}` 消除重复搬运
-- AIV 子图 t/iter 均为 1，如需合图可尝试跨实例合并
+- hashOrder=func15_1 的 AIC 子图 subGCnt=90、t/iter=11（单个 root function 有 11 个子图），所有子图均合图时用整数键 `{-1: 4}`，仅合此 hashOrder 时用 `{"DEFAULT": 1, "func15_1": 4}`
+- hashOrder=func5_0 的 AIC 子图 subGCnt=20、t/iter=2、avg=29.91us，所有子图均合图时用 `{-1: 2}`，仅合此 hashOrder 时用 `{"DEFAULT": 1, "func5_0": 2}`
+- hashOrder=func5_4 的 AIV 子图 subGCnt=40、t/iter=5，所有子图均合图时用 `{-2: 1, -1: 4}`，仅合此 hashOrder 时用 `{"DEFAULT": 1, "func5_4": 4}`
 
 #### 4.1 Vector 合图
 
 **⛔ 重要原则**：`vec_nbuffer_setting` 中**必须**添加 `-2: 1` 配置，以规避部分合图不生效的问题。无论后续如何调优粒度，此配置不可省略。
 
-##### 4.1.1 自动合图方案
+##### 4.1.1 自动合图方案（vec_nbuffer_setting）
 
 ```python
+# 整数键格式（全局通配所有子图）：
 @pypto.frontend.jit(
     pass_options={
-        "vec_nbuffer_setting": {-2: 1, -1: 2}
-        }
+        "vec_nbuffer_setting": {-2: 1, -1: 8}
+    }
+)
+
+# 字符串键格式（精细控制特定 hashOrder）：
+@pypto.frontend.jit(
+    pass_options={
+        "vec_nbuffer_setting": {"DEFAULT": 1, "func5_4": 8}
+    }
 )
 ```
 **适用场景**：自动切图的vector task之间有直接依赖关系，且每一个task耗时很短（<10us）
 
 **参数说明**
-- vec_nbuffer_setting中必须添加-2:1配置，以规避部分合图不生效的场景。
-- vec_nbuffer_setting：表示同构的并行子图合图的任务数量，-2:1 必须添加，-1:2代表，所有的vector均按照2的粒度进行合图
+- 整数键格式：`-1:N` 代表所有 vector 子图按 N 的粒度合图；`-2:1` 必须添加作为 merge enable 标志
+- 字符串键格式：`"DEFAULT":1` 是必需的 merge enable 标志；`"func5_4":N` 仅对 hashOrder=func5_4 的子图生效
+- **禁止混用**：同一个 dict 内不能同时包含整数键和字符串键
 
 **调优方法**：
-1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIV]` 部分的输出
-2. 根据 `psgId` 确定 hashorder，根据 `t/iter` 确定粒度参考值
+1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIV] vec_nbuffer_setting` 部分的输出
+2. 根据 `hashOrder` 确定合图 key，根据 `t/iter` 确定粒度参考值
 3. t/iter=1 的组先设为 1，t/iter≥2 的组设为对应值或更小
-4. 可先用 `{-1: N}` 全局配置，再按 psgId 精细调优
+4. 需所有子图均合图时用整数键 `{-2: 1, -1: N}`，需精细控制特定 hashOrder 时用字符串键
 
 **参考资料**
 - [vec_nbuffer_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
@@ -470,7 +517,7 @@ sg_set_scope 优化建议
 - **opcode 序列**：过滤掉框架指令后的实际计算指令
 - **✂ cube边界**：该 AIV 节点的后继包含 cube 任务
 
-**⚠️ 重要：脚本建议是候选，必须经过 3.1.2.2 映射验证后才能实施。**
+**⚠️ 重要：脚本建议是候选，必须经过 4.1.2.2 映射验证后才能实施。**
 
 ###### 4.1.2.2 从建议到实施的验证流程
 
@@ -535,21 +582,21 @@ python3 scripts/leafhash_to_code.py <output_dir>
 **适用场景**：matmul 的 M 或 N 轴进行了切分，存在重复搬运
 
 ```python
-# 全局统一配置为 2
+# 整数键格式（全局通配所有子图）：
 @pypto.frontend.jit(
     pass_options={"cube_l1_reuse_setting": {-1: 2}}
 )
 
-# 全局配置为 2 的基础上，psgId=0 的子图配置为 8
+# 字符串键格式（精细控制特定 hashOrder）：
 @pypto.frontend.jit(
-    pass_options={"cube_l1_reuse_setting": {-1: 2, 0: 8}}
+    pass_options={"cube_l1_reuse_setting": {"DEFAULT": 2, "func15_1": 8}}
 )
 ```
 **调优方法**：
-1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIC]` 部分的输出
-2. 根据 `psgId` 确定 hashorder，优先对 total 耗时大且有重复搬运的子图调优
-3. `t/iter` 越大（内层循环次数越多），L1 复用收益越高，可设更大粒度
-4. 可先用 `{-1: N}` 全局配置，再按 psgId 精细调优
+1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIC] cube_l1_reuse_setting` 部分的输出
+2. 根据 `hashOrder` 确定合图 key，优先对 total 耗时大且有重复搬运的子图调优
+3. `t/iter` 越大（单个 root function 中子图越多），L1 复用收益越高，可设更大粒度
+4. ⚠️ **核未满时通常退化**：如果 `analyze_core_usage.py` 显示核未满，cube_l1_reuse 通常导致性能退化，不建议设置
 
 **参考资料**
 - [cube_l1_reuse_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
@@ -561,15 +608,22 @@ python3 scripts/leafhash_to_code.py <output_dir>
 - K 轴很长且没有切 K
 
 ```python
+# 整数键格式（全局通配所有子图）：
 @pypto.frontend.jit(
     pass_options={"cube_nbuffer_setting": {-1: 2}}
 )
+
+# 字符串键格式（精细控制特定 hashOrder）：
+@pypto.frontend.jit(
+    pass_options={"cube_nbuffer_setting": {"DEFAULT": 2, "func15_1": 4}}
+)
 ```
+
 **调优方法**：
-1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIC]` 部分的输出
-2. 根据 `psgId` 确定 hashorder，根据 `t/iter` 和 avg 耗时确定粒度
-3. avg<10us 且 t/iter≥2 的组优先设置 `cube_nbuffer_setting: {psgId: t/iter}`
-4. 可先用 `{-1: N}` 全局配置，再按 psgId 精细调优
+1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIC] cube_nbuffer_setting` 部分的输出
+2. 根据 `hashOrder` 确定合图 key，根据 `t/iter` 和 avg 耗时确定粒度
+3. avg<10us 且 t/iter≥2 的组优先设置，如 `cube_nbuffer_setting: {-1: 2}` 或 `cube_nbuffer_setting: {"DEFAULT": 1, "func5_0": 2}`
+4. ⚠️ **核未满时通常退化**：如果 `analyze_core_usage.py` 显示核未满，cube_nbuffer 通常导致性能退化，不建议设置
 
 **参考资料**
 - [cube_nbuffer_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
@@ -587,7 +641,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 1. **两者不宜同时设置过大**：cube_l1_reuse 通过消除重复搬运带来收益，合并力度越大 L1 复用越好；cube_nbuffer 通过合并同构子图减少调度开销。但两者同时过大会导致单个子图过大，占用过多 L1/UB 内存，反而引发性能退化。
 2. **优先调 cube_l1_reuse_setting**：先确定 L1 数据复用的合并力度（消除重复搬运是更直接的收益），再调整 cube_nbuffer_setting。
 3. **观察 Task Count 变化**：合图后 Total Task Count 应适度下降。如果 Task Count 不降反升（例如 1664→6400），说明合图配置过度，应回退。
-4. **用 analyze_swimlane.py 确定参数**：psgId 即 hashorder，t/iter 指导粒度。
+4. **用 analyze_swimlane.py 确定参数**：hashOrder 即合图 key，t/iter 指导粒度。
 
 **反面案例**（flash_attention_score_grad 实测）：
 ```python
@@ -600,10 +654,6 @@ python3 scripts/leafhash_to_code.py <output_dir>
 "cube_l1_reuse_setting": {-1: 8},
 "cube_nbuffer_setting": {-1: 16}
 ```
-
-**参考资料**
-- [cube_l1_reuse_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
-- [cube_nbuffer_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
 
 ##### 4.2.4 自动合图模式（空字典 `{}`）的风险
 
@@ -622,7 +672,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 # Task Count: 1664 → 6400, 利用率: 58.8% → 48.7%
 ```
 
-**建议**：始终使用 [analyze_swimlane.py](scripts/analyze_swimlane.py) 分析泳道图获取 psgId 和 t/iter 后手动精确配置，避免使用空字典 `{}` 自动模式。
+**建议**：始终使用 [analyze_swimlane.py](scripts/analyze_swimlane.py) 分析泳道图获取 hashOrder 和 t/iter 后手动精确配置，避免使用空字典 `{}` 自动模式。
 
 
 ### 5. 调度策略调优
