@@ -1499,9 +1499,7 @@ Tensor ConstructBatchMatmulTensorGraph3D(
 
     const int64_t mView = attrParam.transA ? operand1.GetShape()[SHAPE_DIM2] : operand1.GetShape()[1];
     const int64_t nView = attrParam.transB ? operand2.GetShape()[1] : operand2.GetShape()[SHAPE_DIM2];
-    Tensor result = attrParam.isCMatrixNZ ?
-                        Tensor(dataType, {batchSize, mView, nView}, "BatchMatmulOutputNz", TileOpFormat::TILEOP_NZ) :
-                        Tensor(dataType, {batchSize, mView, nView});
+    Tensor result = Tensor(dataType, {batchSize, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     for (int64_t bIdx = 0; bIdx < batchSize; bIdx++) {
@@ -1523,7 +1521,11 @@ Tensor ConstructBatchMatmulTensorGraph3D(
         Tensor bTensor = Reshape(
             bTensorSingleBatch, {operand2.GetShape()[1], operand2.GetShape()[SHAPE_DIM2]},
             std::vector<SymbolicScalar>({bValidShape3D[1], bValidShape3D[SHAPE_DIM2]}));
+
+        const auto mValid = attrParam.transA ? aValidShape3D[SHAPE_DIM2] : aValidShape3D[1];
+        const auto nValid = attrParam.transB ? bValidShape3D[1] : bValidShape3D[SHAPE_DIM2];
         Tensor cTensor(dataType, {mView, nView}, "cTensorSingleBatch");
+        cTensor.GetStorage()->UpdateDynValidShape({mValid, nValid});
 
         MatmulGraphNodes tensorGraphNodes(aTensor.GetStorage(), bTensor.GetStorage());
         tensorGraphNodes.outTensorPtr = cTensor.GetStorage();
@@ -1533,6 +1535,7 @@ Tensor ConstructBatchMatmulTensorGraph3D(
             cTensor, {1, cTensor.GetShape()[0], cTensor.GetShape()[1]},
             std::vector<SymbolicScalar>({1, cValidShape2D[0], cValidShape2D[1]}));
         Assemble(cTensor3D, {bIdx, 0, 0}, result);
+        result.GetStorage()->UpdateDynValidShape({batchSize, cValidShape2D[0], cValidShape2D[1]});
     }
     TileShape::Current().SetVecTile(oriVecTile);
     return result;
@@ -1549,10 +1552,7 @@ Tensor ConstructBatchMatmulTensorGraph4D(
     const int64_t batchSize2 = std::max(batchSizeA2, batchSizeB2);
     const int64_t mView = attrParam.transA ? operand1.GetShape()[SHAPE_DIM3] : operand1.GetShape()[SHAPE_DIM2];
     const int64_t nView = attrParam.transB ? operand2.GetShape()[SHAPE_DIM2] : operand2.GetShape()[SHAPE_DIM3];
-    Tensor result =
-        attrParam.isCMatrixNZ ?
-            Tensor(dataType, {batchSize1, batchSize2, mView, nView}, "BatchMatmulOutputNz", TileOpFormat::TILEOP_NZ) :
-            Tensor(dataType, {batchSize1, batchSize2, mView, nView});
+    Tensor result = Tensor(dataType, {batchSize1, batchSize2, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, 1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     for (int64_t bIdx1 = 0; bIdx1 < batchSize1; bIdx1++) {
@@ -1578,7 +1578,11 @@ Tensor ConstructBatchMatmulTensorGraph4D(
             Tensor bTensor = Reshape(
                 bTensorSingleBatch, {operand2.GetShape()[SHAPE_DIM2], operand2.GetShape()[SHAPE_DIM3]},
                 std::vector<SymbolicScalar>({bValidShape4D[SHAPE_DIM2], bValidShape4D[SHAPE_DIM3]}));
+            
+            const auto mValid = attrParam.transA ? aValidShape4D[SHAPE_DIM3] : aValidShape4D[SHAPE_DIM2];
+            const auto nValid = attrParam.transB ? bValidShape4D[SHAPE_DIM2] : bValidShape4D[SHAPE_DIM3];
             Tensor cTensor(dataType, {mView, nView}, "cTensorSingleBatch");
+            cTensor.GetStorage()->UpdateDynValidShape({mValid, nValid});
 
             MatmulGraphNodes tensorGraphNodes(aTensor.GetStorage(), bTensor.GetStorage());
             tensorGraphNodes.outTensorPtr = cTensor.GetStorage();
@@ -1588,6 +1592,8 @@ Tensor ConstructBatchMatmulTensorGraph4D(
                 cTensor, {1, 1, cTensor.GetShape()[0], cTensor.GetShape()[1]},
                 std::vector<SymbolicScalar>({1, 1, cValidShape2D[0], cValidShape2D[1]}));
             Assemble(cTensor4D, {bIdx1, bIdx2, 0, 0}, result);
+            result.GetStorage()->UpdateDynValidShape(
+                {batchSize1, batchSize2, cValidShape2D[0], cValidShape2D[1]});
         }
     }
     TileShape::Current().SetVecTile(oriVecTile);
