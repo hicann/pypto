@@ -128,7 +128,7 @@ private:
 #define APASS_LOG_WARN_F(opEnum, fmt, ...) \
     PYPTO_HOST_LOG(DLOG_WARN, PASS, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_ERROR_F(opEnum, fmt, ...) \
-    PYPTO_HOST_LOG(DLOG_ERROR, PASS, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
+    PYPTO_HOST_LOGE_WITH_ERRCODE(PASS, InternalError::PASS_INNER_ERROR, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_ERROR_C(errCode, opEnum, fmt, ...) \
     PYPTO_HOST_LOGE_WITH_ERRCODE(PASS, errCode, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_EVENT_F(opEnum, fmt, ...) \
