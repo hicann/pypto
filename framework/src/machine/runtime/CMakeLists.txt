@@ -11,7 +11,8 @@
 file(GLOB_RECURSE _Runtime_Srcs *.cpp)
 file(GLOB_RECURSE _Device_Srcs ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/*.cpp)
 add_library(tile_fwk_runtime SHARED)
-target_sources(tile_fwk_runtime PRIVATE ${_Runtime_Srcs} ${_Device_Srcs})
+file(GLOB_RECURSE _Simulation_Srcs ${PTO_FWK_SRC_ROOT}/framework/src/machine/simulation/*.cpp)
+target_sources(tile_fwk_runtime PRIVATE ${_Runtime_Srcs} ${_Device_Srcs} ${_Simulation_Srcs})
 target_include_directories(tile_fwk_runtime
         PRIVATE
             ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
@@ -40,4 +41,3 @@ endif ()
 
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_runtime)
 PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_runtime)
-

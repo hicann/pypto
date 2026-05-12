@@ -33,8 +33,10 @@
 #include "machine/runtime/device_launcher_binding.h"
 #include "machine/runtime/emulation_launcher.h"
 #include "machine/runtime/eslmodel_launcher.h"
+#include "machine/runtime/aicore_model_launcher.h"
 #include "machine/runtime/device_launcher.h"
 #include "machine/utils/dynamic/dev_start_args.h"
+#include "machine/runtime/launcher_router.h"
 #include "machine/host/perf_analysis.h"
 #include "tilefwk/platform.h"
 #include "bindings/torch_tensor_converter.h"
@@ -218,13 +220,19 @@ std::string DeviceRunOnceDataFromHost(
     DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
     EmulationLauncher::BuildControlFlowCache(func, memUtils, inputs, outputs, &hostCache, config);
 
-    if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE) == 1 &&
-        EmulationLauncher::EmulationRunOnce(func, hostCache, config) != 0) {
+    auto launchMode = LauncherRouter::ResolveCurrent();
+    if (launchMode == LaunchMode::EMULATION && EmulationLauncher::EmulationRunOnce(func, hostCache, config) != 0) {
         return "emulation run failed";
     }
 
-    if (DeviceRunOnce(func, reinterpret_cast<uint8_t*>(hostCache), config) != 0) {
-        return "device run failed";
+    if (launchMode == LaunchMode::AICORE_MODEL && AicoreModelLauncher::AicoreModelRunOnce(func, hostCache, config) != 0) {
+        return "aicore model run failed";
+    }
+
+    if (launchMode != LaunchMode::AICORE_MODEL) {
+        if (DeviceRunOnce(func, reinterpret_cast<uint8_t*>(hostCache), config) != 0) {
+            return "device run failed";
+        }
     }
 
     for (size_t i = 0; i < outputs.size(); i++) {
@@ -266,13 +274,22 @@ std::string OperatorDeviceRunOnceDataFromDevice(
     if (!errorMsg.empty()) {
         return errorMsg;
     }
-
-    if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE) == 1) {
+    auto launchMode = LauncherRouter::ResolveCurrent();
+    if (launchMode == LaunchMode::EMULATION) {
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
         if (EmulationLauncher::EmulationLaunchDeviceTensorData(func, inputs, outputs, config, nullptr) != 0) {
             return "emulation run failed";
         }
+    }
+    if (launchMode == LaunchMode::AICORE_MODEL) {
+        DeviceLauncherConfig config;
+        DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
+        if (AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(func, inputs, outputs) != 0) {
+            return "aicore model run failed";
+        }
+        HOST_PERF_EVT_END(EventPhase::RunDevice);
+        return "";
     }
 
     auto incomingStream = static_cast<uintptr_t>(incomingStreamPython);
@@ -285,11 +302,13 @@ std::string OperatorDeviceRunOnceDataFromDevice(
     auto ctrlStream = DeviceGetCtrlStream();
     auto workspaceDataAddr = static_cast<uintptr_t>(workspaceData);
     auto ctrlCache = static_cast<uintptr_t>(devCtrlCache);
-    int rc = ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
-        op, inputs, outputs, aicpuStream, ctrlStream, aicoreStream, false, reinterpret_cast<uint8_t*>(ctrlCache),
-        DeviceLauncherConfig::CreateConfigWithWorkspaceAddr(workspaceDataAddr));
-    if (rc < 0) {
-        return "device run failed";
+    if (launchMode != LaunchMode::AICORE_MODEL) {
+        int rc = ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
+            op, inputs, outputs, aicpuStream, ctrlStream, aicoreStream, false, reinterpret_cast<uint8_t*>(ctrlCache),
+            DeviceLauncherConfig::CreateConfigWithWorkspaceAddr(workspaceDataAddr));
+        if (rc < 0) {
+            return "device run failed";
+        }
     }
 #endif
 
@@ -797,16 +816,24 @@ public:
 
     void EmulationLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, uint8_t* devCache)
     {
-        if (!isDebugMode) {
+        if (launchMode_ == LaunchMode::DEVICE_RT) {
             return;
         }
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
         std::vector<uint8_t> hostCache;
         DevControlFlowCache* ctrlCache = GetHostCtrlFlowCache(kernel, tensors, devCache, hostCache);
-        int ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
-        MACHINE_ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
+        int ret = 0;
+        if (launchMode_ == LaunchMode::EMULATION) {
+            ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
+            MACHINE_ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
+        } else if (launchMode_ == LaunchMode::AICORE_MODEL) {
+            ret = AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
+            MACHINE_ASSERT(ret == RT_SUCCESS) << "aicore model run failed: " << ret;
+        }
     }
+
+    bool IsAicoreModelMode() const { return launchMode_ == LaunchMode::AICORE_MODEL; }
 
     void EslModelLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
     {
@@ -853,7 +880,9 @@ private:
         if (!module.attr("_debug_options").is_none()) {
             auto debugOptions = module.attr("_debug_options").cast<py::dict>();
             if (debugOptions.contains("runtime_debug_mode")) {
-                isDebugMode = debugOptions["runtime_debug_mode"].cast<int64_t>() == CFG_DEBUG_ALL;
+                auto debugMode = debugOptions["runtime_debug_mode"].cast<int64_t>();
+                launchMode_ = LauncherRouter::ResolveByDebugMode(debugMode);
+                isDebugMode = (launchMode_ == LaunchMode::EMULATION);
             }
         }
         if (!module.attr("_infer_controlflow_shape").is_none()) {
@@ -959,6 +988,7 @@ private:
     bool inferCacheShape{false};
     bool isDebugMode{false};
     bool compileStageAllComplete{true};
+    LaunchMode launchMode_{LaunchMode::DEVICE_RT};
     bool compileMonitorEnable{true};
     int intervalSec{60};
     int timeoutSec{-1};
@@ -1071,7 +1101,9 @@ private:
         HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
 
         kmodule->EmulationLaunch(kbinary, tensors, ctrlFlowCache);
-
+        if (kmodule->IsAicoreModelMode()) {
+            return;
+        }
         kmodule->Launch(kbinary, aicoreStream, tensors, ctrlFlowCache, wsAddr);
         HOST_PERF_TRACE(TracePhase::Launch);
         DumpIOTensorsWithCann(aicoreStream, tensors, kbinary->GetFunction()->GetRawName());
