@@ -52,10 +52,10 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
     }
 
     if (lhsFromBrcb || rhsFromBrcb) {
-        INTERPRETER_LOGW(
+        INTERPRETER_LOGI(
             "AxisCombine: detected by BRCB, opcode=%s lhsFromBrcb=%d rhsFromBrcb=%d", ctx->op->GetOpcodeStr().c_str(),
             static_cast<int>(lhsFromBrcb), static_cast<int>(rhsFromBrcb));
-        INTERPRETER_LOGW(
+        INTERPRETER_LOGI(
             "AxisCombine: lhs(shape=%s validShape=%s offset=%s) rhs(shape=%s validShape=%s offset=%s)",
             IntVecToStr(lhs->GetShape()).c_str(), IntVecToStr(lhs->GetValidShape()).c_str(),
             IntVecToStr(lhs->GetOffset()).c_str(), IntVecToStr(rhs->GetShape()).c_str(),

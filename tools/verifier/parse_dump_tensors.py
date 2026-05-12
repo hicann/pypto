@@ -658,11 +658,12 @@ def main():
         df.drop("datatype", axis=1, inplace=True)
     
     # 转成字符串，防止用excel打开后显示为科学计算法，导致数据截断
-    df["ROOT_FUNC:hash"] = df["ROOT_FUNC:hash"].apply(lambda x: f"{x:.0f}'")
-    df["FUNC:hash"] = df["FUNC:hash"].apply(lambda x: f"{x:.0f}'")
-    df["B>execStart"] = df["B>execStart"].apply(lambda x: f"{x:.0f}'")
-    df["B>execEnd"] = df["B>execEnd"].apply(lambda x: f"{x:.0f}'")
-    df["B>TIMESTAMP"] = df["B>TIMESTAMP"].apply(lambda x: f"{x:.0f}'")
+    df["ROOT_FUNC:hash"] = df["ROOT_FUNC:hash"].apply(lambda x: f"{x}'")
+    df["FUNC:hash"] = df["FUNC:hash"].apply(lambda x: f"{x}'")
+    df["B>execStart"] = df["B>execStart"].apply(lambda x: f"{x}'")
+    df["B>execEnd"] = df["B>execEnd"].apply(lambda x: f"{x}'")
+    df["B>TIMESTAMP"] = df["B>TIMESTAMP"].apply(lambda x: f"{x}'")
+    df["B>tensorAddr"] = df["B>tensorAddr"].apply(lambda x: f"{x}'")
 
     timestamp = int(time.time())
     save_dir = os.path.dirname(os.path.dirname(args.dump_tensor_path.rstrip(os.sep)))
