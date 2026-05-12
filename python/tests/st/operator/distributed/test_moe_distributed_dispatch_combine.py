@@ -558,9 +558,9 @@ def moe_distributed_dispatch_kernel(
                 pred=[shmem_data_wait_out, shmem_count_wait_out],
             )
             cum_sum_current = pypto.cumsum(cum_sum_input, 0)
-            cum_sum_result = pypto.cast(cum_sum_current, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
+            cum_sum_result_t = pypto.cast(cum_sum_current, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
 
-            recv_count_result = cum_sum_result[expert_num_per_rank * ep_world_size, 0]
+            recv_count_result = cum_sum_result_t[expert_num_per_rank * ep_world_size, 0]
             recv_counts[0] = recv_count_result
             for expert_id in range(expert_num_per_rank):
                 cum_sum_start_row = expert_id * ep_world_size + 1
@@ -570,6 +570,7 @@ def moe_distributed_dispatch_kernel(
                 expert_valid_cum_sum_int32 = pypto.cast(expert_valid_cum_sum, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
                 recv_valid_result = expert_valid_cum_sum_int32[ep_world_size - 1, 0]
                 expert_token_nums[expert_id] = recv_valid_result
+            cum_sum_result[:] = cum_sum_result_t
 
         # 根据偏移值，做 token 与 info 的数据接收
         for index in pypto.loop(moe_expert_num, name='MOE_DISTRIBUTED_DISPATCH_RECEIVE', idx_name='_'):

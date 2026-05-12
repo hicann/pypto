@@ -541,7 +541,8 @@ void InnerTiledCumOperation(
         auto inputTile =
             input->View(function, cumOperationTileInfo.inputTileInfo.shape, cumOperationTileInfo.inputTileInfo.offset);
 
-        LogicalTensorPtr srcTile = std::make_shared<LogicalTensor>(function, dstTile->Datatype(), dstTile->GetShape(), dstTile->GetDynValidShape());
+        LogicalTensorPtr srcTile = std::make_shared<LogicalTensor>(
+            function, dstTile->Datatype(), dstTile->GetShape(), inputTile->GetDynValidShape());
         if (is_sum) {
             auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputTile}, {srcTile});
             op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
@@ -557,8 +558,8 @@ void InnerTiledCumOperation(
             std::vector<int64_t> shape = cumOperationTileInfo.dstTileInfo.shape;
             shape[axis] = 1;
             LogicalTensorPtr lastAxisTile = dstTensor->View(function, shape, offset);
-            LogicalTensorPtr lastTile =
-                std::make_shared<LogicalTensor>(function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
+            LogicalTensorPtr lastTile = std::make_shared<LogicalTensor>(
+                function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
             auto& eop = function.AddOperation("TILE_EXPAND", {lastAxisTile}, {lastTile});
             eop.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{axis});
             if (is_sum) {
@@ -600,25 +601,26 @@ void TiledCumOperation(Function& function, const TileShape& tileShape, const Cum
 void TensorCumOperation(Function& function, const CumOperationPara& cumOperationPara)
 {
     if (cumOperationPara.input->Datatype() == DT_INT16) {
-        LogicalTensorPtr inputConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP32, cumOperationPara.input->GetShape());
+        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(
+            function, DT_FP32, cumOperationPara.input->GetShape(), cumOperationPara.input->GetDynValidShape());
         Operation& castInputOp = function.AddOperation(Opcode::OP_CAST, {cumOperationPara.input}, {inputConverted});
         castInputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP32, cumOperationPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(
+            function, DT_FP32, cumOperationPara.dstTensor->GetShape(), inputConverted->GetDynValidShape());
         auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConverted}, {dstConverted});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumOperationPara.axis);
         op.SetAttribute(OP_ATTR_PREFIX + "flag", cumOperationPara.is_sum);
+        cumOperationPara.dstTensor->UpdateDynValidShape(dstConverted->GetDynValidShape());
         Operation& castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConverted}, {cumOperationPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         return;
     } else if (cumOperationPara.input->Datatype() == DT_BF16 || cumOperationPara.input->Datatype() == DT_FP16) {
-        LogicalTensorPtr inputConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP32, cumOperationPara.input->GetShape());
+        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(
+            function, DT_FP32, cumOperationPara.input->GetShape(), cumOperationPara.input->GetDynValidShape());
         Operation& castInputOp = function.AddOperation(Opcode::OP_CAST, {cumOperationPara.input}, {inputConverted});
         castInputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP32, cumOperationPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(
+            function, DT_FP32, cumOperationPara.dstTensor->GetShape(), inputConverted->GetDynValidShape());
         if (cumOperationPara.is_sum) {
             auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConverted}, {dstConverted});
             op.SetAttribute(OP_ATTR_PREFIX + "axis", cumOperationPara.axis);
@@ -628,20 +630,23 @@ void TensorCumOperation(Function& function, const CumOperationPara& cumOperation
             op.SetAttribute(OP_ATTR_PREFIX + "axis", cumOperationPara.axis);
             op.SetAttribute(OP_ATTR_PREFIX + "flag", cumOperationPara.is_sum);
         }
+        cumOperationPara.dstTensor->UpdateDynValidShape(dstConverted->GetDynValidShape());
         Operation& castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConverted}, {cumOperationPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         return;
     }
     if (cumOperationPara.input->Datatype() == DT_INT32) {
-        LogicalTensorPtr dstConverted =
-            std::make_shared<LogicalTensor>(function, DT_INT32, cumOperationPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(
+            function, DT_INT32, cumOperationPara.dstTensor->GetShape(), cumOperationPara.input->GetDynValidShape());
         auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {cumOperationPara.input}, {dstConverted});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumOperationPara.axis);
         op.SetAttribute(OP_ATTR_PREFIX + "flag", cumOperationPara.is_sum);
+        cumOperationPara.dstTensor->UpdateDynValidShape(dstConverted->GetDynValidShape());
         Operation& castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConverted}, {cumOperationPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         return;
     } else {
+        cumOperationPara.dstTensor->UpdateDynValidShape(cumOperationPara.input->GetDynValidShape());
         if (cumOperationPara.is_sum) {
             auto& op =
                 function.AddOperation(Opcode::OP_CUM_SUM, {cumOperationPara.input}, {cumOperationPara.dstTensor});
@@ -715,9 +720,7 @@ Tensor CumOperation(const Tensor& input, const int& axis, const bool& is_sum)
         CALL(
             CumOperation, *Program::GetInstance().GetCurrentFunction(),
             {tmpInput.GetStorage(), result.GetStorage(), transposedAxis, is_sum});
-        result.GetStorage()->UpdateDynValidShape(tmpValidShape);
         Tensor tmpresult = Transpose(result, {n_2, n_1});
-        tmpresult.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);
         TileShape::Current().SetVecTile(oriVectile);
         return tmpresult;
     } else {
@@ -725,7 +728,6 @@ Tensor CumOperation(const Tensor& input, const int& axis, const bool& is_sum)
         CALL(
             CumOperation, *Program::GetInstance().GetCurrentFunction(),
             {input.GetStorage(), result.GetStorage(), tmpAxis0, is_sum});
-        result.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);
         return result;
     }
 }
@@ -817,18 +819,20 @@ void CheckTriULOperationParams(const Tensor& input, const std::string& opName)
 void TensorTriUL(Function& function, const TriULPara& triULPara)
 {
     if (triULPara.input->Datatype() == DT_INT8) {
-        LogicalTensorPtr inputConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.input->GetShape());
+        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(
+            function, DT_FP16, triULPara.input->GetShape(), triULPara.input->GetDynValidShape());
         auto& castinputOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {triULPara.input}, {inputConverted});
         castinputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(
+            function, DT_FP16, triULPara.dstTensor->GetShape(), inputConverted->GetDynValidShape());
         auto& op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {inputConverted}, {dstConverted});
         op.SetAttribute(OpAttributeKey::dynScalar, triULPara.diagonal);
         op.SetAttribute(OpAttributeKey::isUpper, triULPara.isUpper);
+        triULPara.dstTensor->UpdateDynValidShape(dstConverted->GetDynValidShape());
         auto& castDstOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {dstConverted}, {triULPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
     } else {
+        triULPara.dstTensor->UpdateDynValidShape(triULPara.input->GetDynValidShape());
         auto& op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {triULPara.input}, {triULPara.dstTensor});
         op.SetAttribute(OpAttributeKey::dynScalar, triULPara.diagonal);
         op.SetAttribute(OpAttributeKey::isUpper, triULPara.isUpper);
