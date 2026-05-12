@@ -157,5 +157,28 @@ public:
         ss << args;
         return ss.str();
     }
+
+    static void AppendUniqueToken(std::string& acc, const std::string& tok, char sep = ';')
+    {
+        if (tok.empty()) {
+            return;
+        }
+        size_t pos = 0;
+        while (pos <= acc.size()) {
+            size_t s = acc.find(sep, pos);
+            size_t end = (s == std::string::npos) ? acc.size() : s;
+            if (acc.compare(pos, end - pos, tok) == 0) {
+                return;
+            }
+            if (s == std::string::npos) {
+                break;
+            }
+            pos = s + 1;
+        }
+        if (!acc.empty()) {
+            acc.push_back(sep);
+        }
+        acc.append(tok);
+    }
 };
 } // namespace npu::tile_fwk

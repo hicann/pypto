@@ -139,11 +139,11 @@ public:
         DevAscendFunctionIncast& incast);
 
     uint64_t FullCoverDefaultUpdateStitch(
-        DevAscendFunctionDupped& nextDup, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
+        DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
         DevAscendFunctionIncast& incast);
 
     uint64_t FullCoverUpdateStitch(
-        DevAscendFunctionDupped& nextDup, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
+        DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
         DevAscendFunctionIncast& incast);
 
     void ReuseStitch(DevAscendFunctionDupped& nextDup, size_t devNextIdx);

@@ -16,6 +16,7 @@
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/utils/dynamic/dev_workspace.h"
 #include "machine/host/main_block.h"
+#include "machine/host/dump_host_topo.h"
 
 #include "interface/operation/attribute.h"
 #include "interface/tensor/logical_tensor.h"
@@ -2150,6 +2151,30 @@ static void InitPartialUpdateCellMatch(
     }
     partialUpdateCellMatchTableDesc->SetStrideShape(strideShape);
 }
+static void DumpFullCoverCellTableForNonPartialSlots(
+    const std::vector<std::vector<uint8_t>>& devEncodeListInput,
+    const std::unordered_map<Function*, int>& rootFuncKeyDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+    const std::unordered_set<int>& partialSlotSet,
+    ::npu::tile_fwk::topo_dump::SlotCellTableCsvWriter& slotCellTable)
+{
+    if (!slotCellTable.Enabled()) {
+        return;
+    }
+    for (const auto& [slotIndex, rootOutcastMap] : slotRootOutcastDict) {
+        if (partialSlotSet.count(slotIndex)) {
+            continue;
+        }
+        for (const auto& [root, outcastIndex] : rootOutcastMap) {
+            ASSERT(rootFuncKeyDict.count(root)) << "root: " << root << " not found in rootFuncKeyDict";
+            int funcKey = rootFuncKeyDict.find(root)->second;
+            DevAscendFunction* devFunc = reinterpret_cast<DevAscendFunction*>(
+                const_cast<uint8_t*>(devEncodeListInput[funcKey].data()));
+            const DevAscendFunctionOutcast& outcast = devFunc->GetOutcast(outcastIndex);
+            slotCellTable.WriteFullCover(slotIndex, devFunc->rootHash, funcKey, outcast.cellMatchTableDesc);
+        }
+    }
+}
 
 void DevAscendProgram::InitPartialUpdateSlot(
     uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
@@ -2164,14 +2189,18 @@ void DevAscendProgram::InitPartialUpdateSlot(
 
     this->cellMatchRuntimePartialUpdateTableList.HostInitDataSizeOffset(initOffset, 0);
     int totalCellMatchSize = 0;
+    topo_dump::SlotCellTableCsvWriter slotCellTable(fillContent);
+
+    std::unordered_set<int> partialSlotSet(
+        tPartialUpdateSlotIndexList.begin(), tPartialUpdateSlotIndexList.end());
+
     for (size_t index = 0; index < tPartialUpdateSlotIndexList.size(); index++) {
         std::vector<const DevAscendFunctionOutcast*> outcastList;
         auto slotIndex = tPartialUpdateSlotIndexList[index];
-        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotRootOutcastDict.count(slotIndex))
+        ASSERT(slotRootOutcastDict.count(slotIndex))
             << "slotIndex: " << slotIndex << " not found in slotRootOutcastDict";
         for (auto& [root, outcastIndex] : slotRootOutcastDict.find(slotIndex)->second) {
-            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, rootFuncKeyDict.count(root))
-                << "root: " << root << " not found in rootFuncKeyDict";
+            ASSERT(rootFuncKeyDict.count(root)) << "root: " << root << " not found in rootFuncKeyDict";
             int funcKey = rootFuncKeyDict.find(root)->second;
             DevAscendFunction* devFunc =
                 reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(devEncodeListInput[funcKey].data()));
@@ -2192,9 +2221,13 @@ void DevAscendProgram::InitPartialUpdateSlot(
             for (size_t j = 0; j < tableSize; j++) {
                 tableData[j] = AICORE_TASK_INIT;
             }
+
+            slotCellTable.WritePartial(slotIndex, partialUpdateCellMatchTableDesc, outcastList.size());
         }
         totalCellMatchSize += tableSize;
     }
+    DumpFullCoverCellTableForNonPartialSlots(
+        devEncodeListInput, rootFuncKeyDict, slotRootOutcastDict, partialSlotSet, slotCellTable);
     totalCellMatchSize =
         AlignUp(totalCellMatchSize, sizeof(uint64_t) * FRIENDLY_CACHE_ALIGN_U64_SIZE / sizeof(uint64_t));
     this->cellMatchRuntimePartialUpdateTableList.HostInitDataSizeOffset(initOffset, totalCellMatchSize);

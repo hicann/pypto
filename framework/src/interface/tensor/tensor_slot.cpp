@@ -17,9 +17,11 @@
 
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/configs/config_manager.h"
+#include "interface/configs/config_manager_ng.h"
 #include "interface/utils/error.h"
 #include "interface/program/program.h"
-
+#include "interface/utils/string_utils.h"
 namespace npu::tile_fwk {
 
 // 根据nameDict里记录的name出现次数，为多次同命名的名称添加递增后缀
@@ -219,6 +221,7 @@ void TensorSlotManager::TensorSlotRecycle(const TensorSlot& slot)
         symbolNameDict.erase(name->second);
         slotNameDict.erase(slot);
     }
+    slotFuncNameDict.erase(slot);
 }
 
 void TensorSlotManager::SetRecording(bool isRecording)
@@ -392,6 +395,13 @@ void TensorSlotManager::TensorSymbol(const Tensor& tensor, const std::string& sy
     TensorSlot slot = TensorSlot::CreateTensor(tensor);
     symbolNameDict[symbolName] = slot;
     slotNameDict[slot] = symbolName;
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_ALL) {
+        return;
+    }
+    Function* currFunc = Program::GetInstance().GetCurrentFunction();
+    if (currFunc != nullptr) {
+        StringUtils::AppendUniqueToken(slotFuncNameDict[slot], currFunc->GetRawName());
+    }
 }
 
 std::vector<int> TensorSlotManager::LookupSlotIndex(const std::vector<std::reference_wrapper<Tensor>>& tensorList)

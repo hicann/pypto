@@ -78,10 +78,10 @@ void DevAscendFunctionDupped::DumpTopo(
                 wrapId = static_cast<int32_t>(MakeMixWrapID(funcIdx, static_cast<uint32_t>(opWrapList[opIdx])));
             }
         }
+        auto& succList = func->GetOperationDepGraphSuccList(opIdx);
         os << seqNo << "," << MakeTaskID(funcIdx, opIdx) << "," << func->funcKey << "," << func->rootHash << ","
            << func->GetOperationDebugOpmagic(opIdx) << "," << cceIndex << "," << cceInfo.funcHash << ","
-           << cceInfo.coreType << "," << cceInfo.psgId << "," << wrapId << ",";
-        auto& succList = func->GetOperationDepGraphSuccList(opIdx);
+           << cceInfo.coreType << "," << cceInfo.psgId << "," << wrapId << "," << succList.size();
         for (size_t j = 0; j < succList.size(); j++) {
             os << "," << MakeTaskID(funcIdx, func->At(succList, j));
         }

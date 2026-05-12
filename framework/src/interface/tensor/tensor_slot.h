@@ -233,7 +233,7 @@ struct TensorSlotManager {
 
     std::unordered_map<std::string, TensorSlot> symbolNameDict;
     std::unordered_map<TensorSlot, std::string> slotNameDict;
-
+    std::unordered_map<TensorSlot, std::string> slotFuncNameDict;
     std::vector<TensorSlot> inputSlotList;
     std::unordered_map<TensorSlot, int> inputSlotDict;
     std::vector<std::string> inputNameList;

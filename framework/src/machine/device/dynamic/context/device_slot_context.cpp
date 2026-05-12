@@ -14,6 +14,7 @@
  */
 
 #include "machine/device/dynamic/context/device_slot_context.h"
+#include "machine/device/dynamic/context/dump_device_topo.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -36,6 +37,7 @@ static void UpdateSlotsForStitch(
     slot.stitchDupIdx = devNextIdx;
     slot.stitchOutcastIdx = outcastIndex;
     UNUSED(slotIdx);
+    topo_dump::DumpProducerCellAccess(devTaskId, slotIdx, devNextIdx, *devRootSrc, outcast, slot, expressionList);
 
     auto producerList = &devRootSrc->At(outcast.producerList, 0);
     if (slot.isPartialUpdateStitch) {
