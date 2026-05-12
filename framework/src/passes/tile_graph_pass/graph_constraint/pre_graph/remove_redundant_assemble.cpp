@@ -16,6 +16,7 @@
 #include "remove_redundant_assemble.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/subgraph_utils.h"
 
 #define MODULE_NAME "PreGraphProcess"
 
@@ -337,15 +338,7 @@ Status RemoveRedundantAssemble::SplitMultiConsumerReshape(
                 viewConsumerOp->GetOpcode() != Opcode::OP_RESHAPE) {
                 continue;
             }
-            if (consumer.size() != 1) {
-                if (ProcessReshape(function, firstReshape, multiReshapeVector) != SUCCESS) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "ProcessReshape failed. %s", GetFormatBacktrace(firstReshape).c_str());
-                    return FAILED;
-                }
-            } else {
-                multiReshapeVector.push_back(std::make_pair(firstReshape, consumerOp));
-            }
+            multiReshapeVector.push_back(std::make_pair(firstReshape, consumerOp));
         }
     }
     return SUCCESS;
@@ -429,6 +422,11 @@ Status RemoveRedundantAssemble::RemoveViewMultiReshape(
                 Elements::Operation, "VIEW operator [%d]: OutputOperand[0] has no consumers. %s", viewOp->GetOpMagic(),
                 GetFormatBacktrace(viewOp).c_str());
             return FAILED;
+        }
+        auto firstReshapeOutput = firstReshape->GetOOperands()[0];
+        auto viewOutput = viewOp->GetOOperands()[0];
+        if (SubgraphUtils::IsBoundary(firstReshapeOutput) || SubgraphUtils::IsBoundary(viewOutput)) {
+            continue;
         }
         auto secondReshape = *consumers.begin();
         if (secondReshape == nullptr) {

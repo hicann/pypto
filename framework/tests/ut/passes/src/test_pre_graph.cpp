@@ -797,8 +797,8 @@ TEST_F(PreGraphTest, TestRemoveRedundantViewMultiReshape)
     G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "VIEW");
     auto view = G.GetOp("VIEW");
     auto attrA = std::make_shared<ViewOpAttribute>(
-        std::vector<int64_t>{0, 0, 0}, MemoryType::MEM_UNKNOWN,
-        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{0, 0, 0})));
+        std::vector<int64_t>{0, 0, 0, 0}, MemoryType::MEM_UNKNOWN,
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{0, 0, 0, 0})));
     view->SetOpAttribute(attrA);
     G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "RESHAPE2");
     for (size_t i = 0; i < 32; ++i) {
@@ -831,6 +831,25 @@ TEST_F(PreGraphTest, TestRemoveRedundantViewMultiReshape)
     EXPECT_EQ(viewCnt, 0);
 }
 
+inline void CheckProcessReshape(Function* function) {
+    PreGraphProcess passLocal;
+    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
+    // check after pass
+    auto opList = function->Operations();
+    int64_t viewCnt = 0;
+    int64_t reshapeCnt = 0;
+
+    for (const auto& op : opList) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewCnt;
+        }
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCnt++;
+        }
+    }
+    EXPECT_EQ(viewCnt, 1);
+    EXPECT_EQ(reshapeCnt, 2); // tmp Reshape Remove
+}
 TEST_F(PreGraphTest, TestProcessReshape)
 {
     ComputationalGraphBuilder G;
@@ -848,6 +867,9 @@ TEST_F(PreGraphTest, TestProcessReshape)
     // add op
     G.AddOp(Opcode::OP_RESHAPE, {"t1"}, {"t2"}, "RESHAPE1");
     G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "VIEW");
+    auto viewAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0, 0, 0}, MemoryType::MEM_UNKNOWN,
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{0, 0, 0, 0})));
+    G.GetOp("VIEW")->SetOpAttribute(viewAttr);
     G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "RESHAPE2");
     G.AddOp(Opcode::OP_COPY_IN, {"t2"}, {"t5"}, "COPY_IN1");
     G.AddOp(Opcode::OP_COPY_IN, {"t2"}, {"t6"}, "COPY_IN2");
@@ -862,31 +884,13 @@ TEST_F(PreGraphTest, TestProcessReshape)
     // run pass
     Function* function = G.GetFunction();
     EXPECT_NE(function, nullptr);
-    PreGraphProcess passLocal;
-    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
-    // check after pass
-    auto opList = function->Operations();
-    int64_t viewCnt = 0;
-    int64_t reshapeCnt = 0;
-
-    for (const auto& op : opList) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            ++viewCnt;
-        }
-        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-            reshapeCnt++;
-        }
-    }
-    EXPECT_EQ(viewCnt, 0);
-    EXPECT_EQ(reshapeCnt, 2); // tmp Reshape Remove
+    CheckProcessReshape(function);
 
     // Verify RESHAPE2 exists and has correct shapes
     auto* reshape2Op = G.GetOp("RESHAPE2");
     EXPECT_NE(reshape2Op, nullptr) << "RESHAPE2 should exist";
     auto reshape2Input = reshape2Op->GetIOperands().front();
-    auto reshape2Output = reshape2Op->GetOOperands().front();
-    EXPECT_EQ(reshape2Input->GetShape(), (std::vector<int64_t>{16, 24576}))
-        << "RESHAPE2 input shape should be {16, 24576}";
+    EXPECT_EQ(reshape2Input->GetShape(), (std::vector<int64_t>{16, 1, 128, 128})) << "RESHAPE2 input shape should be {16, 1, 128, 128}";
 
     // Verify RESHAPE1 : connect to copyin
     auto* reshape1Op = G.GetOp("RESHAPE1");
