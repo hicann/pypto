@@ -2682,7 +2682,7 @@ static uint64_t CalcStitchWorkspace(DevAscendProgram& devProg)
 {
     DeviceWorkspaceAllocator workspace(&devProg);
     uint32_t slabCapacity[CALC_STITCH_NUM] = {0};
-    uint32_t objUsedNum[CALC_STITCH_NUM] = {READY_QUEUE_SIZE, DIE_READY_QUEUE_SIZE * DIE_NUM, 1, 1};
+    uint32_t objUsedNum[CALC_STITCH_NUM] = {READY_QUEUE_SIZE, DIE_READY_QUEUE_SIZE * DIE_NUM, 1, 1, 1};
     uint32_t slabSize = workspace.CalcStitchSlabMemObjmaxSize(slabCapacity);
     // DUPPED_STITCH, enture greater than 2mb
     uint64_t stitchPoolSize = slabSize << 1;

@@ -17,7 +17,7 @@
 
 namespace npu::tile_fwk::dynamic {
 
-inline int32_t GetTaskIdx(uint32_t coreType, int32_t wrapVecId)
+inline int32_t GetWrapAicoreIdx(uint32_t coreType, int32_t wrapVecId)
 {
     if (coreType == static_cast<uint32_t>(CoreType::AIC)) {
         return WRAP_IDX_AIC;
@@ -37,12 +37,12 @@ void DeviceTaskContext::ProcessWrapQueue(
 
     auto cceBinary = dyntask->cceBinary;
     auto callList = dyntask->dynFuncDataCacheList[funcIndex].calleeList;
+    auto wrapLeaf = &cceBinary[callList[opIndex]];
     for (uint32_t idx = wrapQueue->head; idx < wrapQueue->tail; idx++) {
         if (wrapQueue->elem[idx].wrapId == wrapId) {
             uint32_t* tasklist = wrapQueue->elem[idx].tasklist;
-            uint32_t taskIdx =
-                GetTaskIdx(cceBinary[callList[opIndex]].coreType, cceBinary[callList[opIndex]].wrapVecId);
-            tasklist[taskIdx] = MakeTaskID(funcIndex, opIndex);
+            uint32_t wrapAicoreIdx = GetWrapAicoreIdx(wrapLeaf->coreType, wrapLeaf->wrapVecId);
+            tasklist[wrapAicoreIdx] = MakeTaskID(funcIndex, opIndex);
             return;
         }
     }
@@ -50,17 +50,24 @@ void DeviceTaskContext::ProcessWrapQueue(
     // add new wrap id to wrapQueue
     WrapInfo* info = &wrapQueue->elem[wrapQueue->tail];
     info->wrapId = wrapId;
-    info->mixResourceType = cceBinary[callList[opIndex]].mixResourceType;
+    info->mixResourceType = wrapLeaf->mixResourceType;
 
-    uint32_t taskIdx = GetTaskIdx(cceBinary[callList[opIndex]].coreType, cceBinary[callList[opIndex]].wrapVecId);
-    for (uint32_t idx = 0; idx < MAX_WRAP_TASK_NUM; idx++) {
-        if (idx == taskIdx) {
-            info->tasklist[idx] = MakeTaskID(funcIndex, opIndex);
-        } else {
-            info->tasklist[idx] = AICORE_TASK_INIT;
-        }
-        info->aicoreIdxList[idx] = 0;
+    auto opWrapOffsetList = reinterpret_cast<uint16_t*>(dyntask->devTask.mixTaskData.opWrapOffsetList[funcIndex]);
+    if (unlikely(opWrapOffsetList == nullptr)) {
+        DEV_ERROR(
+            DevCommonErr::NULLPTR, "#ctrl.earlydep.resolve.wrap: the funcIndex:%d have wrapId but not found: %u!",
+            funcIndex, wrapId);
+        return;
     }
+    auto opWrapId = GetOpWrapID(wrapId);
+    opWrapOffsetList[opWrapId] = wrapQueue->tail;
+
+    uint32_t wrapAicoreIdx = GetWrapAicoreIdx(wrapLeaf->coreType, wrapLeaf->wrapVecId);
+    info->tasklist[WRAP_IDX_AIC] = AICORE_TASK_INIT;
+    info->tasklist[WRAP_IDX_AIV0] = AICORE_TASK_INIT;
+    info->tasklist[WRAP_IDX_AIV1] = AICORE_TASK_INIT;
+    info->tasklist[wrapAicoreIdx] = MakeTaskID(funcIndex, opIndex);
+    info->aicCoreIdx = INVALID_UINT16_IDX;
     wrapQueue->tail++;
 }
 
@@ -76,6 +83,37 @@ WrapInfoQueue* DeviceTaskContext::AllocWrapQueue(DynDeviceTask* dyntask)
     q->capacity = dyntask->devTask.mixTaskData.wrapIdNum;
     q->elem = reinterpret_cast<WrapInfo*>(q + 1);
     return q;
+}
+
+void DeviceTaskContext::InitWrapQueueForThread(DynDeviceTask* dyntask)
+{
+    uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + dyntask->devTask.mixTaskData.wrapIdNum * sizeof(uint64_t);
+    for (size_t i = 0; i < MAX_SCHEDULE_AICPU_NUM - 1; i++) {
+        WsAllocation qalloc = ControlFlowAllocateSlab(
+            devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_QUEUE_FOR_THREAD));
+        StaticReadyCoreFunctionQueue* q = qalloc.As<StaticReadyCoreFunctionQueue>();
+        q->head = 0;
+        q->tail = 0;
+        q->elem = reinterpret_cast<uint64_t*>(q + 1);
+        dyntask->devTask.mixTaskData.wrapQueueForThread[i] = PtrToValue(q);
+    }
+}
+
+void DeviceTaskContext::InitWrapOffsetList(DynDeviceTask* dyntask)
+{
+    for (size_t i = 0; i < dyntask->dynFuncDataCacheListSize; i++) {
+        uint32_t funcWrapIdNum = dyntask->dynFuncDataCacheList[i].devFunc->wrapIdNum_;
+        if (funcWrapIdNum == 0) {
+            dyntask->devTask.mixTaskData.opWrapOffsetList[i] = nullptr;
+            continue;
+        }
+        uint32_t size = dyntask->dynFuncDataCacheList[i].devFunc->wrapIdNum_ * sizeof(uint16_t);
+        WsAllocation qalloc =
+            ControlFlowAllocateSlab(devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_OFFSET_LIST));
+        uint16_t* q = qalloc.As<uint16_t>();
+        dyntask->devTask.mixTaskData.opWrapOffsetList[i] = q;
+        memset_s(q, size, INVALID_UINT16_IDX, size);
+    }
 }
 
 bool DeviceTaskContext::IsMixArch(DevAscendProgram* devProg) { return devProg->devArgs.archInfo == ArchInfo::DAV_3510; }

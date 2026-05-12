@@ -27,6 +27,7 @@ enum class MachineStatus { START = 0, FINISH = 1, STOP = 2 };
 #define WRAP_IDX_AIC 0
 #define WRAP_IDX_AIV0 1
 #define WRAP_IDX_AIV1 2
+static constexpr uint16_t INVALID_UINT16_IDX = 0xffff;
 
 // aic aiv 已经ready的core function id队列
 struct ReadyCoreFunctionQueue {
@@ -40,16 +41,15 @@ struct ReadyCoreFunctionQueue {
 };
 
 struct StaticReadyCoreFunctionQueue {
-    uint64_t head;
-    uint64_t tail;
+    uint32_t head;
+    uint32_t tail;
     uint64_t* elem;
-    size_t lock;
 };
 
 struct WrapInfo {
     uint32_t wrapId;
-    uint32_t aicoreIdxList[MAX_WRAP_TASK_NUM]; // 顺序C、V1、V2
     uint32_t tasklist[MAX_WRAP_TASK_NUM];      // 顺序C、V1、V2
+    uint16_t aicCoreIdx;                       // 只记录aic，aivCoreIdx通过计算得到
     uint8_t mixResourceType;
 };
 

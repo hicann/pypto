@@ -179,7 +179,12 @@ int DeviceTaskContext::BuildReadyQueue(DynDeviceTask* dyntask, DevAscendProgram*
     InitDieReadyQueues(dyntask, devProg);
 
     bool isNeedWrap = IsNeedWrapProcess(dyntask, devProg);
-    WrapInfoQueue* wrapQueue = isNeedWrap ? AllocWrapQueue(dyntask) : nullptr;
+    WrapInfoQueue* wrapQueue = nullptr;
+    if (isNeedWrap) {
+        wrapQueue = AllocWrapQueue(dyntask);
+        InitWrapQueueForThread(dyntask);
+        InitWrapOffsetList(dyntask);
+    }
 
     int wrapTaskNum = ProcessZeroPredTask(dyntask, wrapQueue, isNeedWrap);
     UpdateDeviceTaskQueueInfo(dyntask, aicpuQueue, aivQueue, aicQueue, wrapQueue);

@@ -958,21 +958,37 @@ private:
     uint32_t WrapQueSlabMemObjSize()
     {
         if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
-            return sizeof(ReadyCoreFunctionQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
+            return sizeof(WrapInfoQueue) + devProg_->stitchFunctionsize * sizeof(uint32_t);
         } else {
             return 0;
         }
     }
 
-    uint32_t WrapTasklistSlabMemObjSize()
+    uint32_t WrapQueForThreadSlabMemObjSize()
     {
         if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
-            return devProg_->stitchFunctionsize * sizeof(uint32_t);
+            uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + devProg_->stitchFunctionsize * sizeof(uint64_t);
+            return (MAX_SCHEDULE_AICPU_NUM - 1) * size;
         } else {
             return 0;
         }
     }
-    uint32_t (DeviceWorkspaceAllocator::*slabMemObjSizeFunc[ToUnderlying(WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT)])() = {
+
+    uint32_t WrapOffsetListSlabMemObjSize()
+    {
+        if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
+            uint32_t totalWrapIdNum = 0;
+            for (uint32_t i = 0; i < devProg_->GetFunctionSize(); i++) {
+                totalWrapIdNum += devProg_->GetFunction(i)->wrapIdNum_;
+            }
+            return totalWrapIdNum * sizeof(uint16_t);
+        } else {
+            return 0;
+        }
+    }
+
+    uint32_t (
+        DeviceWorkspaceAllocator::* slabMemObjSizeFunc[ToUnderlying(WsAicpuSlabMemType::SLAB_MEM_TYPE_BUTT)])() = {
         &DeviceWorkspaceAllocator::DevFunctionDuppedSlabMemObjSize,
         &DeviceWorkspaceAllocator::DynFuncDataSlabMemObjSize,
         &DeviceWorkspaceAllocator::VecStitchListSLabMemObjSize,
@@ -981,7 +997,8 @@ private:
         &DeviceWorkspaceAllocator::ReadyQueSlabMemObjSize,
         &DeviceWorkspaceAllocator::DieReadyQueSlabMemObjSize,
         &DeviceWorkspaceAllocator::WrapQueSlabMemObjSize,
-        &DeviceWorkspaceAllocator::WrapTasklistSlabMemObjSize,
+        &DeviceWorkspaceAllocator::WrapQueForThreadSlabMemObjSize,
+        &DeviceWorkspaceAllocator::WrapOffsetListSlabMemObjSize,
         &DeviceWorkspaceAllocator::DuppedStitchSlabMemObjSize,
     };
 

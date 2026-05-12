@@ -45,7 +45,10 @@ constexpr uint32_t IDENT2_SIZE = 4;
 constexpr uint32_t IDENT_SIZE_THREE = 3;
 
 /* please modify macros in aicore.cpp at the same time !!! */
-inline uint32_t MakeMixWrapID(uint32_t funcId, uint32_t wrapId) { return (funcId << TASKID_TASK_BITS) | wrapId; }
+inline uint32_t MakeMixWrapID(uint32_t funcId, uint32_t opWrapId) { return (funcId << TASKID_TASK_BITS) | opWrapId; }
+
+// 计算原始Pass op的wrapId
+inline uint32_t GetOpWrapID(uint32_t mixWrapId) { return mixWrapId & TASKID_TASK_MASK; }
 
 inline uint32_t MakeBatchTaskID(uint32_t batchNum) { return MakeTaskID(FUNC_ID_BATCH, batchNum); }
 

@@ -210,7 +210,7 @@ protected:
 
     WrapInfoQueue* SetupWrapQueueForTest(
         DynDeviceTask* dyntask, DeviceTaskContext& taskContext, CoreType coreType, uint32_t wrapVecId,
-        DevAscendFunction& devFunc, DevCceBinary* cceBinary, int* calleeList)
+        DevAscendFunction& devFunc, DevCceBinary* cceBinary, int* calleeList, uint16_t* opWrapOffsetList = nullptr)
     {
         devFunc.wrapIdNum_ = 1;
         dyntask->dynFuncDataCacheList[0].devFunc = &devFunc;
@@ -218,6 +218,7 @@ protected:
         dyntask->devTask.mixTaskData.wrapIdNum = 1;
 
         dyntask->dynFuncDataCacheList[0].calleeList = calleeList;
+        dyntask->devTask.mixTaskData.opWrapOffsetList[0] = opWrapOffsetList;
 
         cceBinary[0].coreType = static_cast<uint32_t>(coreType);
         cceBinary[0].wrapVecId = wrapVecId;
@@ -670,8 +671,9 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_update_existing_wrap)
     DevAscendFunction devFunc;
     DevCceBinary cceBinary[1] = {};
     int calleeList[1] = {0};
+    uint16_t opWrapOffsetList[2] = {0};
     WrapInfoQueue* wrapQueue =
-        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIC, 0, devFunc, cceBinary, calleeList);
+        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIC, 0, devFunc, cceBinary, calleeList, opWrapOffsetList);
     ASSERT_NE(wrapQueue, nullptr);
 
     taskContext.ProcessWrapQueue(dyntask.get(), 1, 0, 0, wrapQueue);
@@ -697,8 +699,9 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_aiv0)
     DevCceBinary cceBinary[1] = {};
     DevAscendFunction devFunc;
     int calleeList[1] = {0};
+    uint16_t opWrapOffsetList[2] = {0};
     WrapInfoQueue* wrapQueue =
-        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 0, devFunc, cceBinary, calleeList);
+        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 0, devFunc, cceBinary, calleeList, opWrapOffsetList);
     ASSERT_NE(wrapQueue, nullptr);
 
     taskContext.ProcessWrapQueue(dyntask.get(), 1, 0, 0, wrapQueue);
@@ -726,8 +729,9 @@ TEST_F(TestDeviceTaskContext, test_process_wrap_queue_aiv1)
     int calleeList[1] = {0};
     DevAscendFunction devFunc;
     DevCceBinary cceBinary[1] = {};
+    uint16_t opWrapOffsetList[2] = {0};
     WrapInfoQueue* wrapQueue =
-        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 1, devFunc, cceBinary, calleeList);
+        SetupWrapQueueForTest(dyntask.get(), taskContext, CoreType::AIV, 1, devFunc, cceBinary, calleeList, opWrapOffsetList);
     ASSERT_NE(wrapQueue, nullptr);
 
     taskContext.ProcessWrapQueue(dyntask.get(), 1, 0, 0, wrapQueue);
