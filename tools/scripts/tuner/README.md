@@ -225,11 +225,10 @@ combination_3|[1,1,256]|[32,32,128,128,256,256]|false|68.8|
 113 @pypto.frontend.jit(
 114     runtime_options={"device_sched_mode": 1,
 115                      "stitch_function_max_num": 128,
-116                      "stitch_cfgcache_size": 7700000},
-117     pass_options={
-118            "cube_l1_reuse_setting": {-1: 2},
-119     }
-120 )
+116     pass_options={
+117            "cube_l1_reuse_setting": {-1: 2},
+118     }
+119 )
 ```
 
 2. Change your config.json as example:

@@ -768,26 +768,22 @@ private:
         while (devTaskCtx->coreFinishedNum < mngCoreNum) {
             bool curIterAicAllStop = true;
             bool curIterAivAllStop = true;
-            for (int i = aicStart_; (!aicAllStop) && i < aicEnd_; i++) {
+            for (int i = aicStart_; (!aicAllStop) && i < aicEnd_; ++i) {
                 if (devTaskCtx->coreTaskFinished[i]) {
                     continue;
                 }
 
                 AicoreDevTaskFinishProc(devTaskCtx, i, isSendStop, resloveParallelIdx);
-                if (!devTaskCtx->coreTaskFinished[i]) {
-                    curIterAicAllStop = false;
-                }
+                curIterAicAllStop = false;
             }
             aicAllStop = curIterAicAllStop;
 
-            for (int i = aivStart_; (!aivAllStop) && i < aivEnd_; i++) {
+            for (int i = aivStart_; (!aivAllStop) && i < aivEnd_; ++i) {
                 if (devTaskCtx->coreTaskFinished[i]) {
                     continue;
                 }
                 AicoreDevTaskFinishProc(devTaskCtx, i, isSendStop, resloveParallelIdx);
-                if (!devTaskCtx->coreTaskFinished[i]) {
-                    curIterAivAllStop = false;
-                }
+                curIterAivAllStop = false;
             }
             aivAllStop = curIterAivAllStop;
 

@@ -425,6 +425,30 @@ def get_event_duration(
     return None
 
 
+def calc_event_duration_sum(
+    tasks: List[Dict[str, Any]],
+    event_name: str,
+    round_id: Optional[int] = None,
+) -> Optional[float]:
+    total = 0.0
+    found = False
+    prev_end: Optional[float] = None
+    for task in sort_tasks_by_end(tasks):
+        base, task_round, _ = parse_task_name(task.get("name", ""))
+        if round_id is not None and task_round != round_id:
+            continue
+
+        task_end = float(task.get("end", 0))
+        event_dur = None if prev_end is None else (task_end - prev_end)
+
+        if base == event_name and event_dur is not None:
+            found = True
+            total += max(event_dur, 0.0)
+
+        prev_end = task_end
+    return total if found else None
+
+
 def calc_sched_post_process_sum(
     tasks: List[Dict[str, Any]],
     round_id: Optional[int],
@@ -467,6 +491,53 @@ def calc_total_runtime_sum(
     return total if found else None
 
 
+def calc_runtime_in_window(
+    tasks: List[Dict[str, Any]],
+    round_id: Optional[int],
+    start_event: str,
+    end_events: List[str],
+) -> Optional[float]:
+    sorted_tasks = sort_tasks_by_end(tasks)
+    start_cycle = get_task_cycle(tasks, start_event, None, round_id, sorted_tasks)
+    if start_cycle is None:
+        return None
+
+    end_candidates: List[float] = []
+    for end_event in end_events:
+        for task in sorted_tasks:
+            base, task_round, _ = parse_task_name(task.get("name", ""))
+            if base != end_event:
+                continue
+            if round_id is not None and task_round != round_id:
+                continue
+            task_end = float(task.get("end", 0))
+            if task_end >= float(start_cycle):
+                end_candidates.append(task_end)
+                break
+    if not end_candidates:
+        return None
+    return max(max(end_candidates) - float(start_cycle), 0.0)
+
+
+def get_end_bounds(
+    tasks: List[Dict[str, Any]],
+    round_id: Optional[int] = None,
+    sorted_tasks: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[Optional[float], Optional[float]]:
+    tasks_by_end = sorted_tasks if sorted_tasks is not None else sort_tasks_by_end(tasks)
+    min_end: Optional[float] = None
+    max_end: Optional[float] = None
+    for task in tasks_by_end:
+        _, task_round, _ = parse_task_name(task.get("name", ""))
+        if round_id is not None and task_round != round_id:
+            continue
+        task_end = float(task.get("end", 0))
+        if min_end is None:
+            min_end = task_end
+        max_end = task_end
+    return min_end, max_end
+
+
 def format_us(v: Optional[float], freq: float) -> str:
     if v is None:
         return "-"
@@ -486,6 +557,30 @@ def calc_avg_aicore_exit_wait_us(aicpu_dev_pref: List[Dict[str, Any]], round_id:
     return sum(wait_us_values) / len(wait_us_values)
 
 
+def calc_aicore_init_preprocess_us(aicore_exec_rows: List[Dict[str, Any]]) -> Optional[float]:
+    min_end_values = [float(row["min_end"]) for row in aicore_exec_rows if row.get("min_end") is not None]
+    wait_first_values = [
+        float(row["wait_first_cycle"]) for row in aicore_exec_rows if row.get("wait_first_cycle") is not None
+    ]
+    if not min_end_values or not wait_first_values:
+        return None
+
+    freq = float(aicore_exec_rows[0].get("freq", 1.0)) or 1.0
+    return to_us(max(min(wait_first_values) - min(min_end_values), 0.0), freq)
+
+
+def calc_aicore_last_core_exit_wait_us(aicore_exec_rows: List[Dict[str, Any]]) -> Optional[float]:
+    all_exec_values = [
+        float(row["all_exec_cycle"]) for row in aicore_exec_rows if row.get("all_exec_cycle") is not None
+    ]
+    max_end_values = [float(row["max_end"]) for row in aicore_exec_rows if row.get("max_end") is not None]
+    if not all_exec_values or not max_end_values:
+        return None
+
+    freq = float(aicore_exec_rows[0].get("freq", 1.0)) or 1.0
+    return to_us(max(max(max_end_values) - max(all_exec_values), 0.0), freq)
+
+
 def format_sched_post_process(post_dur_cycles: Optional[float], sched_freq: float) -> str:
     if post_dur_cycles is None:
         return "-"
@@ -502,14 +597,20 @@ def collect_aicore_exec_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Opt
         sorted_tasks = sort_tasks_by_end(tasks)
         wait_first_map = get_task_cycle_map(tasks, "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", round_id, sorted_tasks)
         all_exec_map = get_task_cycle_map(tasks, "DEV_TASK_ALL_LEAF_TASK_EXEC", round_id, sorted_tasks)
-        wait_first = wait_first_map.get(0)
-        all_exec = all_exec_map.get(0)
         wait_exit_notify = get_task_cycle(tasks, "WAIT_EXIT_NOTIFY", None, round_id, sorted_tasks)
         if not all_exec_map:
             continue
 
-        exit_wait = calc_duration_from_ends(all_exec, wait_exit_notify)
-        total_runtime_sum = calc_total_runtime_sum(tasks, round_id)
+        wait_first_cycle = min(wait_first_map.values()) if wait_first_map else None
+        all_exec_cycle = max(all_exec_map.values()) if all_exec_map else None
+        init_dur = get_event_duration(tasks, "INIT", round_id)
+        rcv_model_dur = get_event_duration(tasks, "DEV_TASK_RCV_MODEL", round_id)
+        first_wait_first_idx = min(wait_first_map, key=wait_first_map.get) if wait_first_map else None
+        wait_first_dur = get_event_duration(
+            tasks, "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", round_id, first_wait_first_idx
+        )
+        exit_wait = calc_duration_from_ends(all_exec_cycle, wait_exit_notify)
+        min_end, max_end = get_end_bounds(tasks, round_id, sorted_tasks)
         rows.append(
             {
                 "core_type": core_type,
@@ -518,7 +619,13 @@ def collect_aicore_exec_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Opt
                 "wait_first_map": wait_first_map,
                 "all_exec_map": all_exec_map,
                 "exit_wait": exit_wait,
-                "total_runtime_sum": total_runtime_sum,
+                "wait_first_cycle": wait_first_cycle,
+                "all_exec_cycle": all_exec_cycle,
+                "init_dur": init_dur,
+                "rcv_model_dur": rcv_model_dur,
+                "wait_first_dur": wait_first_dur,
+                "min_end": min_end,
+                "max_end": max_end,
             }
         )
     rows.sort(key=lambda x: x["block_idx"])
@@ -529,42 +636,43 @@ def calc_aicore_timing_summary(aicore_exec_rows: List[Dict[str, Any]]) -> Tuple[
     if not aicore_exec_rows:
         return "-", "-"
 
-    stitch_ids = set()
+    total_runtime_freq = 1.0
+    total_runtime_min_end: Optional[float] = None
+    total_runtime_max_end: Optional[float] = None
+    first_wait_cycle: Optional[float] = None
+    last_all_exec_cycle: Optional[float] = None
     for row in aicore_exec_rows:
-        stitch_ids.update(int(x) for x in row.get("all_exec_map", {}).keys())
-        stitch_ids.update(int(x) for x in row.get("wait_first_map", {}).keys())
-    if not stitch_ids:
-        stitch_ids.add(0)
-
-    e2e_per_stitch_us: List[Tuple[int, float]] = []
-    for stitch_id in sorted(stitch_ids):
-        wait_first_us: List[float] = []
-        all_exec_us: List[float] = []
-        for row in aicore_exec_rows:
-            freq = float(row.get("freq", 1.0)) or 1.0
-            wait_first = row.get("wait_first_map", {}).get(stitch_id)
-            all_exec = row.get("all_exec_map", {}).get(stitch_id)
-            if wait_first is None or all_exec is None or all_exec <= wait_first:
-                continue
-            wait_first_us.append(to_us(wait_first, freq))
-            all_exec_us.append(to_us(all_exec, freq))
-        if wait_first_us and all_exec_us:
-            e2e_per_stitch_us.append((stitch_id, max(all_exec_us) - min(wait_first_us)))
-
-    total_runtime_sum_values: List[float] = []
-    for row in aicore_exec_rows:
-        total_runtime_sum = row.get("total_runtime_sum")
-        if total_runtime_sum is not None and total_runtime_sum > 0:
-            freq = float(row.get("freq", 1.0)) or 1.0
-            total_runtime_sum_values.append(to_us(total_runtime_sum, freq))
+        min_end = row.get("min_end")
+        max_end = row.get("max_end")
+        if min_end is None or max_end is None:
+            continue
+        total_runtime_freq = float(row.get("freq", 1.0)) or 1.0
+        total_runtime_min_end = min(min_end, total_runtime_min_end) if total_runtime_min_end is not None else min_end
+        total_runtime_max_end = max(max_end, total_runtime_max_end) if total_runtime_max_end is not None else max_end
+        wait_first_cycle = row.get("wait_first_cycle")
+        all_exec_cycle = row.get("all_exec_cycle")
+        if wait_first_cycle is not None:
+            first_wait_cycle = (
+                min(float(wait_first_cycle), first_wait_cycle)
+                if first_wait_cycle is not None
+                else float(wait_first_cycle)
+            )
+        if all_exec_cycle is not None:
+            last_all_exec_cycle = (
+                max(float(all_exec_cycle), last_all_exec_cycle)
+                if last_all_exec_cycle is not None
+                else float(all_exec_cycle)
+            )
 
     e2e_time = "-"
-    total_runtime_max = "-"
-    if e2e_per_stitch_us:
-        e2e_time = f"{sum(x[1] for x in e2e_per_stitch_us):.2f}"
-    if total_runtime_sum_values:
-        total_runtime_max = f"{max(total_runtime_sum_values):.2f}"
-    return e2e_time, total_runtime_max
+    total_runtime_e2e = "-"
+    if first_wait_cycle is not None and last_all_exec_cycle is not None:
+        e2e_cycles = max(last_all_exec_cycle - first_wait_cycle, 0.0)
+        e2e_time = f"{to_us(e2e_cycles, total_runtime_freq):.2f}"
+    if total_runtime_min_end is not None and total_runtime_max_end is not None:
+        total_runtime_e2e_cycles = max(total_runtime_max_end - total_runtime_min_end, 0.0)
+        total_runtime_e2e = f"{to_us(total_runtime_e2e_cycles, total_runtime_freq):.2f}"
+    return e2e_time, total_runtime_e2e
 
 
 def build_ctrl_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> Optional[List[str]]:
@@ -574,7 +682,7 @@ def build_ctrl_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]
     tasks = ctrl.get("tasks", [])
     freq = float(ctrl.get("freq", 0)) or 1.0
     block_idx = int(ctrl.get("blockIdx", 0))
-    build_dur = get_event_duration(tasks, "DEV_TASK_BUILD", round_id, 0)
+    build_dur = calc_event_duration_sum(tasks, "DEV_TASK_BUILD", round_id)
     ctrl_post_dur = get_event_duration(tasks, "EXIT", round_id)
     ctrl_total_dur = calc_total_runtime_sum(tasks, round_id)
     return [
@@ -602,7 +710,11 @@ def build_sched_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[in
         handshake_dur = get_event_duration(tasks, "CORE_HAND_SHAKE", round_id)
         dev_task_rcv = get_event_duration(tasks, "DEV_TASK_RCV", round_id, 0)
         post_dur = calc_sched_post_process_sum(tasks, round_id)
-        sched_total_dur = calc_total_runtime_sum(tasks, round_id)
+        sched_total_dur = calc_runtime_in_window(
+            tasks, round_id, "BEGIN", ["WAIT_CORE_EXIT", "EXIT"]
+        )
+        if sched_total_dur is None:
+            sched_total_dur = calc_total_runtime_sum(tasks, round_id)
         rows.append(
             [
                 f"AICPU-SCHED-{block_idx}",
@@ -621,20 +733,21 @@ def build_sched_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[in
 
 def build_aicore_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[str]:
     aicore_exec_rows = collect_aicore_exec_rows(aicpu_dev_pref, round_id)
-    aicore_post_process_us = calc_avg_aicore_exit_wait_us(aicpu_dev_pref, round_id)
+    aicore_post_process_us = calc_aicore_last_core_exit_wait_us(aicore_exec_rows)
+    aicore_init_us = calc_aicore_init_preprocess_us(aicore_exec_rows)
     if not aicore_exec_rows:
         return ["AICore", "-", "-", "-", "-", "-", "-", "-", "-"]
-    e2e_time, total_runtime_max = calc_aicore_timing_summary(aicore_exec_rows)
+    e2e_time, total_runtime_e2e = calc_aicore_timing_summary(aicore_exec_rows)
     return [
         "AICore",
         "-",
         "-",
-        "-",
+        "-" if aicore_init_us is None else f"{aicore_init_us:.2f}",
         "-",
         "-",
         "-" if aicore_post_process_us is None else f"{aicore_post_process_us:.2f}",
         e2e_time,
-        total_runtime_max,
+        total_runtime_e2e,
     ]
 
 
