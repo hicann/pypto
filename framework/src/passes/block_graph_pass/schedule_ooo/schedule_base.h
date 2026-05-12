@@ -26,6 +26,7 @@
 #include "interface/utils/common.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_interface/pass.h"
+#include "tilefwk/error_code.h"
 #include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
 #include "passes/block_graph_pass/schedule_ooo/dep_manager.h"
 #include "passes/pass_utils/reschedule_utils.h"
@@ -305,8 +306,9 @@ public:
                 continue;
             }
             if (op->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Alloc tensor [%d] size [%ld] exceeds %s size [%ld]! %s",
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
+                    "Alloc tensor [%d] size [%ld] exceeds %s size [%ld]! %s",
                     op->GetOutputOperand(0)->GetMagic(), bufferPair.second,
                     MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first],
                     GetFormatBacktrace(*op).c_str());
@@ -319,8 +321,9 @@ public:
                     APASS_LOG_ERROR_F(Elements::Operation, "      %s.", DumpOpInfo(*producer).c_str());
                 }
             } else {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "OP %s[%d] in/output total size [%ld] exceeds %s size [%ld]!",
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Operation,
+                    "OP %s[%d] in/output total size [%ld] exceeds %s size [%ld]!",
                     op->GetOpcodeStr().c_str(), op->GetOpMagic(), bufferPair.second,
                     MemoryTypeToString(bufferPair.first).c_str(), localMemSize[bufferPair.first]);
                 APASS_LOG_ERROR_F(Elements::Operation, " %s.", DumpOpInfo(*op).c_str());
