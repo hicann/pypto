@@ -47,6 +47,59 @@ public:
     Status TestNBufferMergeWithDifferentVecBufferSetting(std::map<int64_t, int64_t> vecNBufferSetting);
 };
 
+namespace {
+// Helper that builds a Function with 4 isomorphic subgraphs (subgraph ID 0..3),
+// 2 inputs (incast1/incast2), 4 outputs (outcast1..outcast4), tensor shape {8, 16}.
+// Each subgraph i contains: MUL(incast1, incast2) → EXP(tensor_i) → outcast(i+1).
+// Intended for tests that verify multi-input/output NBufferMerge behavior
+// (manualMulityInOutMerge and ByFuncHashOrder path).
+std::shared_ptr<Function> BuildMultiInputOutputFunction()
+{
+    auto function = std::make_shared<Function>(Program::GetInstance(), "TestNBufferMerge", "TestNBufferMerge", nullptr);
+    EXPECT_TRUE(function != nullptr);
+
+    std::vector<int64_t> shape = {8, 16};
+    auto incast1 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto incast2 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto tensor1 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto tensor2 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto tensor3 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto tensor4 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto outcast1 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto outcast2 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto outcast3 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto outcast4 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+
+    auto& mulOp1 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor1});
+    auto& expOp1 = function->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
+    mulOp1.UpdateSubgraphID(0);
+    expOp1.UpdateSubgraphID(0);
+
+    auto& mulOp2 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor2});
+    auto& expOp2 = function->AddOperation(Opcode::OP_EXP, {tensor2}, {outcast2});
+    mulOp2.UpdateSubgraphID(1);
+    expOp2.UpdateSubgraphID(1);
+
+    auto& mulOp3 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor3});
+    auto& expOp3 = function->AddOperation(Opcode::OP_EXP, {tensor3}, {outcast3});
+    mulOp3.UpdateSubgraphID(2);
+    expOp3.UpdateSubgraphID(2);
+
+    auto& mulOp4 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor4});
+    auto& expOp4 = function->AddOperation(Opcode::OP_EXP, {tensor4}, {outcast4});
+    mulOp4.UpdateSubgraphID(3);
+    expOp4.UpdateSubgraphID(3);
+
+    function->inCasts_.push_back(incast1);
+    function->inCasts_.push_back(incast2);
+    function->outCasts_.push_back(outcast1);
+    function->outCasts_.push_back(outcast2);
+    function->outCasts_.push_back(outcast3);
+    function->outCasts_.push_back(outcast4);
+    return function;
+}
+} // namespace
+
 TEST_F(NBufferMergeTest, TestNBufferMerge)
 {
     auto currFunctionPtr =
@@ -88,59 +141,36 @@ TEST_F(NBufferMergeTest, TestNBufferMerge)
 
 TEST_F(NBufferMergeTest, TestMulityInputOutputMode3)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestNBufferMerge", "TestNBufferMerge", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    const int vecParallelNum = 2;
-    std::vector<int64_t> shape = {8, 16};
-
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto& mul_op1 = currFunctionPtr->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor1});
-    auto& exp_op1 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
-    mul_op1.UpdateSubgraphID(0);
-    exp_op1.UpdateSubgraphID(0);
-    auto& mul_op2 = currFunctionPtr->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor2});
-    auto& exp_op2 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor2}, {outcast2});
-    mul_op2.UpdateSubgraphID(1);
-    exp_op2.UpdateSubgraphID(1);
-    auto& mul_op3 = currFunctionPtr->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor3});
-    auto& exp_op3 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor3}, {outcast3});
-    int subGraphId2 = 2;
-    mul_op3.UpdateSubgraphID(subGraphId2);
-    exp_op3.UpdateSubgraphID(subGraphId2);
-    auto& mul_op4 = currFunctionPtr->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor4});
-    auto& exp_op4 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor4}, {outcast4});
-    int subGraphId3 = 3;
-    mul_op4.UpdateSubgraphID(subGraphId3);
-    exp_op4.UpdateSubgraphID(subGraphId3);
-
-    currFunctionPtr->inCasts_.push_back(incast1);
-    currFunctionPtr->inCasts_.push_back(incast2);
-    currFunctionPtr->outCasts_.push_back(outcast1);
-    currFunctionPtr->outCasts_.push_back(outcast2);
-    currFunctionPtr->outCasts_.push_back(outcast3);
-    currFunctionPtr->outCasts_.push_back(outcast4);
+    auto currFunctionPtr = BuildMultiInputOutputFunction();
 
     // Call the pass
     NBufferMerge NBM;
+    const int vecParallelNum = 2;
     currFunctionPtr->paramConfigs_.mgVecParallelLb = vecParallelNum;
     currFunctionPtr->paramConfigs_.vecNBufferSetting = {{-2, 0}};
-    currFunctionPtr->DumpJsonFile("./config/pass/json/nBufferMerge_mulity_input_before.json");
-    size_t subGraphCount = 4;
-    currFunctionPtr->SetTotalSubGraphCount(subGraphCount);
+    currFunctionPtr->SetTotalSubGraphCount(4);
     EXPECT_EQ(NBM.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(currFunctionPtr->GetTotalSubGraphCount(), 2);
-    currFunctionPtr->DumpJsonFile("./config/pass/json/nBufferMerge_mulity_input_after.json");
+    EXPECT_EQ(currFunctionPtr->inCasts_.size(), 2);
+    EXPECT_EQ(currFunctionPtr->outCasts_.size(), 4);
+}
+
+TEST_F(NBufferMergeTest, TestMulityInputOutputByFuncHashOrder)
+{
+    auto currFunctionPtr = BuildMultiInputOutputFunction();
+
+    NBufferMerge NBM;
+    const int vecParallelNum = 2;
+    currFunctionPtr->paramConfigs_.mgVecParallelLb = vecParallelNum;
+    const auto funcMagic = currFunctionPtr->GetFuncMagic();
+    currFunctionPtr->paramConfigs_.vecNBufferSettingByFunc = {
+        {"func" + std::to_string(funcMagic) + "_0", vecParallelNum}
+    };
+    currFunctionPtr->SetTotalSubGraphCount(4);
+    EXPECT_EQ(NBM.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->inCasts_.size(), 2);
+    EXPECT_EQ(currFunctionPtr->outCasts_.size(), 4);
+    EXPECT_EQ(currFunctionPtr->GetTotalSubGraphCount(), 2);
 }
 
 TEST_F(NBufferMergeTest, TestMode4)

@@ -385,9 +385,7 @@ Matmul运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_op
 
 实际上L1Reuse策略是默认开启的，且自动计算并配置子图合并数量。极致性能优化场景下可以通过`cube_l1_reuse_setting`参数进行手动配置，通常考虑2、4、8等值，可以结合泳道图实测数据择优配置。
 
-`cube_l1_reuse_setting` 支持函数粒度配置（`func{magic}_{order}` 格式），可实现不同 root function 间的精细化控制：仅影响指定的 function，不影响其他 function。配置信息会直接展示在泳道图的 hashOrder-hint 字段中（格式 `l1ReuseInfo hashOrder: func8_0, subGraphCount: 24`），可根据子图数量（subGraphCount）和核心数匹配合并力度。
-
-整数 key 方式为兼容旧配置保留，后续可能废弃。整数 key 和函数粒度 key 互斥，不可混用。此外还支持基于 semantic_label 的配置，示例如下：
+`cube_l1_reuse_setting` 支持函数粒度配置（`func{magic}_{order}` 格式），可实现不同 root function 间的精细化控制：仅影响指定的 function，不影响其他 function。配置信息会直接展示在泳道图的 hashOrder-hint 字段中（格式 `l1ReuseInfo hashOrder: func8_0, subGraphCount: 24`），可根据子图数量（subGraphCount）和核心数匹配合并力度。此外还支持基于 semantic_label 的配置，示例如下：
 
 ```python
 # 函数粒度配置
@@ -395,12 +393,7 @@ Matmul运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_op
     pass_options={"cube_l1_reuse_setting": {"DEFAULT": 4, "func8_0": 1, "func8_1": 1}}
 )
 
-# 全局整数 key 配置（兼容保留）
-@pypto.frontend.jit(
-    pass_options={"cube_l1_reuse_setting": {-1: 2, 0: 8}}
-)
-
-# semantic_label 配置（可与函数粒度 key 或整数 key 共存）
+# semantic_label 配置（可与函数粒度 key 共存）
 @pypto.frontend.jit(
     pass_options={"cube_l1_reuse_setting": {"C1": 4}}
 )
@@ -445,7 +438,7 @@ def matmul_kernel(a, b, out):
     # a变形
     a = pypto.reshape(a, [221184, 64])
     # 矩阵乘
-    pypto.set_pass_options(Cube_l1_reuse_setting={-1:9})
+    pypto.set_pass_options(cube_l1_reuse_setting={"DEFAULT": 9})
     pypto.set_cube_tile_shapes([512, 512], [64, 64], [64, 64], True)
     e = pypto.matmul(a, c, pypto.DT_BF16)
     e = pypto.reshape(e, [884736, 16])

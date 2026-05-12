@@ -755,7 +755,7 @@ Status NBufferMerge::InitVecNBufferModeBySetting()
                 return SUCCESS;
             }
         }
-        vecNBuffermode_ = manualMerge;
+        vecNBuffermode_ = manualMulityInOutMerge;
         return SUCCESS;
     }
 
