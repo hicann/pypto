@@ -37,7 +37,7 @@ assemble(inputs: List[Tuple[Tensor, List[Union[int, SymbolicScalar]]]], out: Ten
 
 ## 约束说明
 
-无
+输出Tensor out的valid shape需由用户在调用assemble前确保正确，该接口不会自动推导。
 
 ## 调用示例
 
