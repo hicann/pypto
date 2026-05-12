@@ -34,10 +34,10 @@ void TiledCompareOperationImpl(
         LogicalTensorPtr convertedTile2 = inputTile2;
 
         if (inputTile1->Datatype() == DT_BF16) {
-            convertedTile1 = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile1->GetShape());
+            convertedTile1 = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile1->GetShape(), inputTile1->GetDynValidShape());
             Operation& castOp1 = function.AddOperation(Opcode::OP_CAST, {inputTile1}, {convertedTile1});
             castOp1.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-            convertedTile2 = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile2->GetShape());
+            convertedTile2 = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile2->GetShape(), inputTile2->GetDynValidShape());
             Operation& castOp2 = function.AddOperation(Opcode::OP_CAST, {inputTile2}, {convertedTile2});
             castOp2.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         }
@@ -251,7 +251,7 @@ void TiledCmpsOperationImpl(
 
         LogicalTensorPtr convertedTile = inputTile;
         if (inputTile->Datatype() == DT_BF16) {
-            convertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile->GetShape());
+            convertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile->GetShape(), inputTile->GetDynValidShape());
             Operation& castOp = function.AddOperation(Opcode::OP_CAST, {inputTile}, {convertedTile});
             castOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         }
