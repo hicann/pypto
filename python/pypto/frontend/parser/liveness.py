@@ -570,7 +570,12 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         return None
 
     def _record_var_def(self, var_name: str, stmt_id: Optional[int]) -> None:
-        """Record a variable definition."""
+        """Record a variable definition.
+
+        For redefinitions, keep the original def_scope_id (first definition)
+        and only update def_stmt_id to track the last definition statement.
+        This ensures deletion happens at the outermost definition scope level.
+        """
         if not self.current_scope:
             return
 
@@ -587,7 +592,6 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             )
         else:
             info = self.result.var_info[var_name]
-            info.def_scope_id = self.current_scope.scope_id
             info.def_stmt_id = stmt_id
 
     def _record_var_use(self, var_name: str, stmt_id: Optional[int]) -> None:
