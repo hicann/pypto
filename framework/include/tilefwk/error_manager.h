@@ -32,7 +32,7 @@ public:
     static ErrorManager& Instance();
     void ReportErrorMessage(const char *fmt, ...);
     void OutputErrorMessage(const bool outputAll = false);
-
+    bool GetFirstErrorMessage(std::string &errMsg);
     ErrorManager(const ErrorManager&) = delete;
     ErrorManager& operator=(const ErrorManager&) = delete;
     ErrorManager(ErrorManager&&) = delete;

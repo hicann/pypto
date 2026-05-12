@@ -38,7 +38,6 @@ import typing
 from typing import NoReturn, Callable
 
 from pypto.error import RenderedParserError
-from pypto.pypto_impl import OutputErrorMessage
 
 PRIOR_CONTEXT_LINES = 2
 SUBSEQUENT_CONTEXT_LINES = 4
@@ -328,7 +327,6 @@ class Diagnostics:
         RenderedParserError
             Always raises RenderedParserError after displaying the diagnostic.
         """
-        OutputErrorMessage()
         raise RenderedParserError(node, message) from None
 
     def error(self, node: ast.AST, message: str) -> NoReturn:

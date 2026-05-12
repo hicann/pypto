@@ -85,4 +85,14 @@ void ErrorManager::OutputErrorMessage(const bool outputAll)
         }
     }
 }
+
+bool ErrorManager::GetFirstErrorMessage(std::string &errMsg)
+{
+    const std::lock_guard<std::mutex> lockGuard(reportMutex_);
+    if (errorMsgQueue_.empty()) {
+        return false;
+    }
+    errMsg = errorMsgQueue_.front();
+    return true;
+}
 } // namespace npu::tile_fwk

@@ -109,6 +109,7 @@ int Error::operator=(ErrorMessage& msg)
     what_.Reset();
     if (std::uncaught_exceptions() == 0) {
         PYPTO_LOGE("%s", DiagnosticWithBacktrace().c_str());
+        (void)ErrorManager::Instance().GetFirstErrorMessage(msg_);
         throw *this;
     }
     return 0;

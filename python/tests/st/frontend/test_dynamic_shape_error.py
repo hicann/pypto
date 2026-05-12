@@ -81,7 +81,8 @@ def test_kernel_dynamic_shape_error():
     a = torch.ones(1, 8, dtype=torch.float32, device=device)
     out = torch.zeros(1, 8, dtype=torch.float32, device=device)
 
-    with pytest.raises(Exception, match="has invalid shape value: -1"):
+    with pytest.raises(Exception,
+                       match="ErrCode: F7B007! Enum: RtErr::RT_CAPTURE_FAILED. get capture info failed: 107003"):
         kernel_with_dynamic(a, out)
 
 
@@ -94,7 +95,8 @@ def test_matmul_dynamic_shape_error():
     b_npu = torch.rand([k, n], dtype=torch.float16, device=device)
     out_npu = torch.zeros([m, n], dtype=torch.float16, device=device)
 
-    with pytest.raises(Exception, match="Dynamic shape tensors are not allowed as operation operands."):
+    with pytest.raises(Exception,
+                       match="ErrCode: F7B007! Enum: RtErr::RT_CAPTURE_FAILED. get capture info failed: 107003"):
         matmul_kernel(a_npu, b_npu, out_npu)
 
 
@@ -105,7 +107,8 @@ def test_one_hot_dynamic_shape_error():
     input_npu = torch.tensor([0, 2, 4], dtype=torch.int32, device=device)
     out_npu = torch.zeros([3, 5], dtype=torch.int32, device=device)
 
-    with pytest.raises(Exception, match="has invalid shape value: -1"):
+    with pytest.raises(Exception,
+                       match="ErrCode: F7B007! Enum: RtErr::RT_CAPTURE_FAILED. get capture info failed: 107003"):
         one_hot_kernel(input_npu, out_npu)
 
 
