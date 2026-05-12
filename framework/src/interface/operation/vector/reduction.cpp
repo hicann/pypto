@@ -167,7 +167,7 @@ void TileReduceNew(
             if (op == "SUM" || op == "ARGMAX" || op == "ARGMIN" ||
                 (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
                 if (static_cast<size_t>(axis) == (in->shape.size() - 1)) {
-                    tmpShape[0] = sourceReg->shape[axis - 1];
+                    tmpShape[0] = sourceReg->shape[std::max(0, axis - 1)];
                     if (op == "ARGMAX" || op == "ARGMIN") {
                         tmpShape[1] = sourceReg->shape[axis];
                     } else if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {

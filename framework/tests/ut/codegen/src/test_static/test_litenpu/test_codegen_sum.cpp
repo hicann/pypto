@@ -30,6 +30,36 @@ using namespace npu::tile_fwk;
 class TestCodeGenSum : public CodegenTestLiteNPU {};
 
 // sum test cases
+TEST_F(TestCodeGenSum, test_sum_fp32_001)
+{
+    PROGRAM("SUM_FP32_001")
+    {
+        TileShape::Current().SetVecTile({48});
+        Tensor operand(DT_FP32, {112}, "operand");
+        Tensor result;
+        FUNCTION("SUM_FP32_001") { result = Sum(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SUM_FP32_001");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+TEST_F(TestCodeGenSum, test_sum_fp32_002)
+{
+    PROGRAM("SUM_FP32_002")
+    {
+        TileShape::Current().SetVecTile({96});
+        Tensor operand(DT_FP32, {100}, "operand");
+        Tensor result;
+        FUNCTION("SUM_FP32_002") { result = Sum(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SUM_FP32_002");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
 TEST_F(TestCodeGenSum, test_sum_fp32_003)
 {
     PROGRAM("SUM_FP32_003")
@@ -226,6 +256,36 @@ TEST_F(TestCodeGenSum, test_sum_fp32_015)
 }
 
 // int32 test cases
+TEST_F(TestCodeGenSum, test_sum_int32_001)
+{
+    PROGRAM("SUM_INT32_001")
+    {
+        TileShape::Current().SetVecTile({48});
+        Tensor operand(DT_INT32, {112}, "operand");
+        Tensor result;
+        FUNCTION("SUM_INT32_001") { result = Sum(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SUM_INT32_001");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+TEST_F(TestCodeGenSum, test_sum_int32_002)
+{
+    PROGRAM("SUM_INT32_002")
+    {
+        TileShape::Current().SetVecTile({96});
+        Tensor operand(DT_INT32, {100}, "operand");
+        Tensor result;
+        FUNCTION("SUM_INT32_002") { result = Sum(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SUM_INT32_002");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
 TEST_F(TestCodeGenSum, test_sum_int32_003)
 {
     PROGRAM("SUM_INT32_003")

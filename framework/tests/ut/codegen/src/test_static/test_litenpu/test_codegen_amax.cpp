@@ -30,6 +30,36 @@ using namespace npu::tile_fwk;
 class TestCodeGenAmax : public CodegenTestLiteNPU {};
 
 // fp16 test cases
+TEST_F(TestCodeGenAmax, test_amax_fp16_001)
+{
+    PROGRAM("AMAX_FP16_001")
+    {
+        TileShape::Current().SetVecTile({48});
+        Tensor operand(DT_FP16, {112}, "operand");
+        Tensor result;
+        FUNCTION("AMAX_FP16_001") { result = Amax(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMAX_FP16_001");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+TEST_F(TestCodeGenAmax, test_amax_fp16_002)
+{
+    PROGRAM("AMAX_FP16_002")
+    {
+        TileShape::Current().SetVecTile({96});
+        Tensor operand(DT_FP16, {100}, "operand");
+        Tensor result;
+        FUNCTION("AMAX_FP16_002") { result = Amax(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMAX_FP16_002");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
 TEST_F(TestCodeGenAmax, test_amax_fp16_003)
 {
     PROGRAM("AMAX_FP16_003")
@@ -226,6 +256,36 @@ TEST_F(TestCodeGenAmax, test_amax_fp16_015)
 }
 
 // fp32 test cases
+TEST_F(TestCodeGenAmax, test_amax_fp32_001)
+{
+    PROGRAM("AMAX_FP32_001")
+    {
+        TileShape::Current().SetVecTile({48});
+        Tensor operand(DT_FP32, {112}, "operand");
+        Tensor result;
+        FUNCTION("AMAX_FP32_001") { result = Amax(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMAX_FP32_001");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+TEST_F(TestCodeGenAmax, test_amax_fp32_002)
+{
+    PROGRAM("AMAX_FP32_002")
+    {
+        TileShape::Current().SetVecTile({96});
+        Tensor operand(DT_FP32, {100}, "operand");
+        Tensor result;
+        FUNCTION("AMAX_FP32_002") { result = Amax(operand, -1, false); }
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMAX_FP32_002");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
 TEST_F(TestCodeGenAmax, test_amax_fp32_003)
 {
     PROGRAM("AMAX_FP32_003")
