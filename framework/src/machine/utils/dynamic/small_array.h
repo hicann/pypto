@@ -43,7 +43,7 @@ public:
     {
         if (size > N) {
             DEV_ERROR(
-                DevDataErr::SMALL_ARRAY_RESIZE_OOB, "#array.resize: resize %zu exceeds maximum allowed value %zu\n",
+                DevDataErr::SMALL_ARRAY_RESIZE_OOB, "#array.resize: resize %zu exceeds maximum allowed value %d\n",
                 size, N);
         }
         DEV_ASSERT(DevDataErr::SMALL_ARRAY_RESIZE_OOB, size <= N);
