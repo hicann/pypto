@@ -1,23 +1,23 @@
 ---
-name: pypto-pass-precision-verify
-description: 验证PyPTO Pass侧精度问题，定位问题来源（前端/Pass/Codegen/Machine），并指导修复。当出现以下情况时使用：(1) PyPTO算子上板结果与torch不一致；(2) 验证日志显示精度报错（tensor_graph FAIL、Pass Verify FAIL）；(3) OP报错涉及动态shape/validshape需打印上板数据验证；(4) 所有验证PASS但精度异常；(5) 用户提到Pass精度调试、精度问题定位、验证报错分析。
+name: precision-pass
+description: Pass精度校验子技能。开启PreCheck/PostCheck进行全链路Pass校验，通过pass校验定位报错Pass，使用pass_compare逐Op对比定位具体问题Op，支持动态shape上板数据打印验证和IR图分析辅助定位。
 ---
 
 ## 快速诊断
 
 | 场景 | 错误码 | 处理方法 |
 |-----|-------|---------|
-| 前端问题 | `0xB4001U` | 调用 `pypto-precision-compare` 技能 |
+| 前端问题 | `0xB4001U` | 调用 `precision-verify` 子技能 |
 | OP 报错 | `0xB200FU` | 检查 IR 图，动态shape需打印验证 |
-| Pass精度问题 | `0xB4001U` | PreCheck/PostCheck → pass_compare → 上板比对 |
-| 无报错但精度异常 | 无 | 调用 pypto-precision-compare 二分前端 |
+| Pass精度问题 | `0xB4001U` | PreCheck/PostCheck → pass_compare |
+| 无报错但精度异常 | 无 | 调用 `precision-binary-search` 子技能 |
 
 ```
 精度问题 → 查看验证日志 → 按错误码选择处理流程：
-├─ 0xB4001U (tensor_graph) → 前端问题 → pypto-precision-compare
+├─ 0xB4001U (tensor_graph) → 前端问题 → precision-verify
 ├─ 0xB200FU (OP报错) → IR图分析 → 动态shape则打印验证
 ├─ 0xB4001U + Pass名 → Pass精度 → PreCheck/PostCheck
-└─ 无报错 → 二分前端 → pypto-precision-compare
+└─ 无报错 → 二分前端 → precision-binary-search
 ```
 
 ---
@@ -39,7 +39,7 @@ description: 验证PyPTO Pass侧精度问题，定位问题来源（前端/Pass/
 
 验证 PyPTO Pass 侧精度问题，定位问题来源（前端/Pass/Codegen/Machine）。
 
-> `tensor_graph Verify FAIL` → 前端问题，直接调用 `pypto-precision-compare` 技能。
+> `tensor_graph Verify FAIL` → 前端问题，直接调用 `precision-verify` 子技能。
 
 ---
 
@@ -85,7 +85,7 @@ echo "TILE_FWK_DEVICE_ID: $TILE_FWK_DEVICE_ID"
 ```python
 verify_options = {
     "enable_pass_verify": True,            # 启用Pass验证（必须）
-    "pass_verify_pass_filter": "all",      # 验证所有Pass
+    "pass_verify_pass_filter": ["all"],    # 验证所有Pass
     "pass_verify_save_tensor": True,       # 保存中间数据
 }
 
@@ -138,7 +138,7 @@ def your_kernel(
 ### 步骤二：编译运行
 
 ```bash
-python3 -m pip install . --verbose --no-build-isolation
+python3 -m pip install . --verbose
 python3 your_test_case.py
 ```
 
@@ -148,7 +148,7 @@ python3 your_test_case.py
 
 错误码定义：`framework/src/interface/interpreter/verify_error.h`
 
-> **判断标准**：只看 CodegenPreproc Pass 是否通过。中间 Pass 报错但 CodegenPreproc PASS → 可忽略。
+> **判断标准**：只看 CodegenPreproc Pass（最后一个 Pass）是否通过。中间 Pass 报错（如 ReplaceTensor、SplitK 等出现 `VERIFY_RESULT_MISMATCH`）忽略，只要 CodegenPreproc PASS 即表示精度正确。只有 CodegenPreproc FAIL 时才需要用 `pass_compare.py` 进一步定位。
 
 ---
 
@@ -165,7 +165,7 @@ python3 your_test_case.py
 
 ## 问题处理流程
 
-### 情况一：tensor_graph FAIL → 调用 `pypto-precision-compare`
+### 情况一：tensor_graph FAIL → 调用 `precision-verify`
 
 ### 情况二：Pass级别FAIL
 
@@ -173,64 +173,18 @@ python3 your_test_case.py
 
 **2.1 OP报错**：对比 Before/After IR，确认是否误报。
 
-动态shape场景：IR显示符号变量（如 `sym_15_dim_0`）→ 参考 [references/print_npu_data.md](./references/print_npu_data.md) 打印验证。
+动态shape场景：IR显示符号变量（如 `sym_15_dim_0`）→ 参考 [docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md) 进行排查。
 
 **2.2 精度问题**：
 
+> **重要判断标准**：只看最后一个 Pass（`Pass_36_CodegenPreproc`）是否通过。中间 Pass报错但 CodegenPreproc PASS → 属于误报，可忽略。
+
 **处理流程**：
 ```
-配置PreCheck/PostCheck → 编译运行 → 观察日志报错
-    ├─ 有报错 → 终止，告知用户
-    └─ 无报错 → 上板比对定位问题Pass → pass_compare定位问题Op
+配置PreCheck/PostCheck → 编译运行 → 检查interpreter.log
+    ├─ CodegenPreproc PASS → pass层精度正确，无需进一步调试
+    └─ CodegenPreproc FAIL → 根据日志确定失败pass，使用pass_compare定位问题Pass → pass_compare定位问题Op
 ```
-
----
-
-**上板比对定位问题Pass**：
-
-| 步骤 | 操作 | 说明 |
-|------|------|------|
-| 1 | 保存前端输出 | 修改前端代码，将pypto输出保存为.pt文件 |
-| 2 | 对比数据 | 使用 `compare_verify_data.py` 对比数据 |
-| 3 | 判断一致性 | 确认精度工具报错的Pass输出是否与上板数据一致 |
-| 4 | 二分定位Pass | 逐个Pass对比，找到与上板数据一致的Pass边界 |
-
-**前端代码保存示例**：
-
-```python
-import torch
-
-# 调用pypto算子
-output = your_pypto_kernel(input0, input1)
-
-# 保存pypto上板输出为.pt文件
-torch.save(output, "pypto_output.pt")
-```
-
-**对比脚本使用**：
-
-```bash
-# 对比单个Pass数据
-python3 scripts/compare_verify_data.py \
-    --pypto-output pypto_output.pt \
-    --verify-data ./output/output_xxx/verify_xxx/Pass_XX_PassName/tensor~TENSOR_xxx~PassName~xxx.data
-
-# 对比指定Pass的所有数据文件
-python3 scripts/compare_verify_data.py \
-    --pypto-output pypto_output.pt \
-    --verify-path ./output/output_xxx/verify_xxx/Pass_XX_PassName
-```
-
-> **脚本详情**：`scripts/compare_verify_data.py`
-
-**精度工具数据位置**：
-
-Pass 输出数据在 Pass 子目录中：
-```
-./output/output_*/verify_*/Pass_XX_PassName/tensor~TENSOR_xxx~PassName~0~0~xxxx.data
-```
-
-> **判断依据**：若Pass输出与上板数据一致 → 问题在该Pass**之后**的Pass。
 
 ---
 
@@ -241,30 +195,61 @@ Pass 输出数据在 Pass 子目录中：
 ```bash
 python3 tools/verifier/pass_compare.py \
     --p <FailedPass> <GoldenPass> \
-    --verify_path=/path/to/verify_data
+    --verify_path=/path/to/verify_data 
 ```
 
-| 参数 | 说明 |
-|-----|------|
-| `<FailedPass>` | 上板比对定位出的问题Pass名称 |
-| `<GoldenPass>` | 问题Pass的前一个Pass（输出与上板一致的Pass） |
-| `--verify_path` | 验证数据目录路径 |
+| 参数 | 必选 | 说明 |
+|------|------|------|
+| `--p` | 是 | 两个 Pass 名称，空格分隔。第一个是问题 Pass，第二个是 golden Pass（前一个通过的 Pass） |
+| `--verify_path` | 是 | verify 数据目录。可传1个（两个 Pass 在同一目录）或2个（分别对应两个 Pass） |
+| `--func` | 否 | 指定对比的函数名，可传多个，默认对比所有函数 |
+| `--atol` | 否 | 绝对容差，默认 1e-3 |
+| `--rtol` | 否 | 相对容差，默认 1e-3 |
+| `--topk` | 否 | 失败时打印前 k 个差异元素，默认 1000 |
 
-> **定位结果**：pass_compare.py会输出有差异的Op列表，即为问题Op。
+> **定位结果**：pass_compare.py 生成 `verify_graph_result_cmp~Pass_xx~PassA~Pass_yy_PassB~timestamp.csv`，逐 Op 记录对比结果（PASS/FAIL/Skip），失败 Op 即为问题 Op。
 
-### 情况三：无报错但精度异常 → 调用 `pypto-precision-compare`
+**自动分析脚本**：运行完 pass_compare.py 后，直接分析生成的 CSV 定位问题 Op：
 
-定位问题Op后，如需打印上板数据验证 → 参考 [references/print_npu_data.md](./references/print_npu_data.md)
+```bash
+python3 -c "
+import pandas as pd
+cmp = pd.read_csv('<生成的CSV文件路径>')
+total = len(cmp)
+passed = sum(str(r).strip() == 'True' for r in cmp['AB>RESULT'])
+failed = sum(str(r).strip() == 'False' for r in cmp['AB>RESULT'])
+skipped = sum(str(r).strip() == 'Skip' for r in cmp['AB>RESULT'])
+print(f'Total: {total}, Pass: {passed} ({passed/total*100:.1f}%), Fail: {failed}, Skip: {skipped}')
+print()
+if failed > 0:
+    fails = cmp[cmp['AB>RESULT'].astype(str).str.strip() == 'False']
+    print('=== Fail 按 opcode 分布 ===')
+    for opcode, cnt in fails['B>:opcode'].value_counts().items():
+        sub = fails[fails['B>:opcode'] == opcode]
+        max_mae = sub['AB>mae'].astype(float).max()
+        print(f'  {opcode:25s}  {cnt:4d}次  maxMAE={max_mae:.6f}')
+    print()
+    print('=== Fail 按 symbol 分布（最可能的问题 Op）===')
+    print(fails[':symbol'].value_counts().to_string())
+"
+```
+
+**分析结果判断**：
+
+| 结果 | 含义 | 后续动作 |
+|------|------|---------|
+| 存在 Fail Op | Fail 的 Op 即为精度问题来源 | 针对该 Op 检查实现逻辑、数据类型、shape 处理等 |
+| 全部 Pass 但精度仍有问题 | Pass 层未检出差异，问题在上板执行阶段 | 调用 [precision-binary-search](../precision-binary-search/SKILL.md) 进行上板二分定位 |
 
 ---
 
 ## 打印上板信息
 
-**前置条件**：已通过 `pypto-precision-compare` 定位到具体Op。
+**前置条件**：已通过 `precision-verify` 或 `precision-binary-search` 定位到具体Op。
 
-用于：打印上板tensor数据、验证动态shape/offset值。
+用于：打印上板tensor数据、验证动态shape/offset值、定位AICORE执行异常。
 
-详细方法请参考：**[references/print_npu_data.md](./references/print_npu_data.md)**
+详细排查方法请参考：**[docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md)**
 
 ### 打印环境配置
 
@@ -303,25 +288,6 @@ python3 tools/verifier/pass_compare.py \
 | UB tensor数据 | `AiCorePrintUbTensor` | UB上的tensor |
 | Shape变量值 | `AicoreLogF` | 动态shape实际值 |
 | Offset值 | `AicoreLogF` | 动态offset实际值 |
-
-### 脚本工具
-
-```bash
-# 初始化配置
-python3 scripts/print_npu_data.py --init --work-path /path/to/work
-
-# 列出CCE文件
-python3 scripts/print_npu_data.py --work-path /path/to/work --list-cce
-
-# 打印tensor数据
-python3 scripts/print_npu_data.py --work-path /path/to/work --print-idx 0 --tensor gmTensor_4
-
-# 打印shape值
-python3 scripts/print_npu_data.py --work-path /path/to/work --print-idx 0 --print-shape sym_15_dim_0
-```
-
-详见：[scripts/print_npu_data.py](./scripts/print_npu_data.py)
-
 ---
 
 ## IR图分析
@@ -343,9 +309,9 @@ python3 .agents/skills/pypto-pass-error-locator/scripts/get_op_info.py \
 ## 注意事项
 
 1. Pass精度判断：只看 CodegenPreproc 是否通过
-2. tensor_graph FAIL → 调用 pypto-precision-compare
-3. 无报错但精度异常 → 调用 pypto-precision-compare
-4. 动态shape验证：参考 references/print_npu_data.md
+2. tensor_graph FAIL → 调用 precision-verify
+3. 无报错但精度异常 → 调用 precision-binary-search
+4. 动态shape验证/AICORE异常排查：参考 [docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md)
 5. 打印配置：`fixed_output_path=true`, `force_overwrite=false`
 6. 打印限制：元素数量 ≤ 80
 7. 配置备份：修改配置前建议备份原文件
@@ -356,6 +322,5 @@ python3 .agents/skills/pypto-pass-error-locator/scripts/get_op_info.py \
 
 | 文档 | 内容 |
 |------|------|
-| [references/print_npu_data.md](./references/print_npu_data.md) | 打印上板信息指南 |
-| [scripts/print_npu_data.py](./scripts/print_npu_data.py) | 打印上板信息脚本 |
-| [scripts/compare_verify_data.py](./scripts/compare_verify_data.py) | 数据对比脚本 |
+| [docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md) | MACHINE组件错误码与排查指南 |
+| [pypto-aicore-error-locator](../../pypto-aicore-error-locator/SKILL.md) | AICORE错误定位Skill |

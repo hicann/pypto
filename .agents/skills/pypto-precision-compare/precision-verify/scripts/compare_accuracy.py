@@ -18,7 +18,6 @@ import glob
 import argparse
 import logging
 import re
-import numpy as np
 import torch
 
 # PyPTO 数据类型映射
@@ -152,8 +151,9 @@ def read_jit_data(filename):
 
     type_name, torch_dtype, bytes_per_element = DTYPE_MAP[dtype]
 
-    data_bytes = np.fromfile(filename, dtype=np.uint8)
-    data_tensor = torch.frombuffer(data_bytes.tobytes(), dtype=torch_dtype)
+    with open(filename, "rb") as f:
+        raw_bytes = f.read()
+    data_tensor = torch.frombuffer(raw_bytes, dtype=torch_dtype)
     
     if shape is not None:
         data_tensor = data_tensor.reshape(shape)
