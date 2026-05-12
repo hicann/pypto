@@ -30,7 +30,7 @@
 namespace npu::tile_fwk {
 
 void CheckNotNullPtr(uint8_t *ptr, const char *message) {
-    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, !ptr) << message;
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ptr) << message;
 }
 
 int GetRankId(const std::string &groupName) {
@@ -80,7 +80,7 @@ void SimulationCommContext::PreAlloc() {
     }
     std::string handler = SimulationCommManager::GetHandler(groupName_, rank_, round_);
     int fd = shm_open(handler.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, fd == -1) << "shm_open data failed!";
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, fd != -1) << "shm_open data failed!";
     size_t size = WIN_IN_SIZE;
     auto ret = ftruncate(fd, size);
     if (ret == -1) {
