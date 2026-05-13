@@ -33,6 +33,7 @@ uniform(shape: List[int], key: List[int], counter: List[int], alg: List[int], dt
 ## 约束说明
 - 只在A5上支持。
 - 不支持shape切分多个view shape，view shape必须和输入的shape一致。
+- tile shape尾轴必须是4的倍数。
 
 ## 返回值说明
 

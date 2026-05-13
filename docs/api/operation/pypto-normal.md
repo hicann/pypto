@@ -34,6 +34,7 @@ normal(shape: List[int], key: List[int], counter: List[int], alg: List[int], dty
 - 只在A5上支持。
 - 不支持shape切分多个view shape，view shape必须和输入的shape一致。
 - 不支持shape切分多个tile shape，tile shape必须和输入的shape一致。
+- tile shape尾轴必须是4的倍数。
 
 ## 返回值说明
 
