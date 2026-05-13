@@ -141,7 +141,7 @@ public:
             for (auto it = dataDependencySet.rbegin(); it != dataDependencySet.rend(); it++) {
                 size_t k = *it;
                 PipeSync::DepOp& prevOp = ps.depOps_[k];
-                if (ps.HasDataDependency(*opLogPtr[k], *opLogPtr[i], k, i)) {
+                if (ps.HasDataDependency(*opLogPtr[k], *opLogPtr[i])) {
                     ps.UpdateDep(currOp, prevOp);
                 }
             }
@@ -237,19 +237,19 @@ void CheckDependencyForTestFindDep(
         size_t k = *it;
         // start tests
         if (i == IS_NUM1 && k == 0) {
-            EXPECT_EQ(ps.CheckRawDependency(*opLogPtr[k], *opLogPtr[i], k, i), true);
-            EXPECT_EQ(ps.CheckWarDependency(*opLogPtr[k], *opLogPtr[i], k, i), false);
-            EXPECT_EQ(ps.CheckWawDependency(*opLogPtr[k], *opLogPtr[i], k, i), false);
+            EXPECT_EQ(ps.CheckRawDependency(*opLogPtr[k], *opLogPtr[i]), true);
+            EXPECT_EQ(ps.CheckWarDependency(*opLogPtr[k], *opLogPtr[i]), false);
+            EXPECT_EQ(ps.CheckWawDependency(*opLogPtr[k], *opLogPtr[i]), false);
         }
         if (i == IS_NUM4 && k == 0) {
-            EXPECT_EQ(ps.CheckRawDependency(*opLogPtr[k], *opLogPtr[i], k, i), false);
-            EXPECT_EQ(ps.CheckWarDependency(*opLogPtr[k], *opLogPtr[i], k, i), false);
-            EXPECT_EQ(ps.CheckWawDependency(*opLogPtr[k], *opLogPtr[i], k, i), true);
+            EXPECT_EQ(ps.CheckRawDependency(*opLogPtr[k], *opLogPtr[i]), false);
+            EXPECT_EQ(ps.CheckWarDependency(*opLogPtr[k], *opLogPtr[i]), false);
+            EXPECT_EQ(ps.CheckWawDependency(*opLogPtr[k], *opLogPtr[i]), true);
         }
         if (i == IS_NUM4 && k == IS_NUM1) {
-            EXPECT_EQ(ps.CheckRawDependency(*opLogPtr[k], *opLogPtr[i], k, i), true);
-            EXPECT_EQ(ps.CheckWarDependency(*opLogPtr[k], *opLogPtr[i], k, i), true);
-            EXPECT_EQ(ps.CheckWawDependency(*opLogPtr[k], *opLogPtr[i], k, i), false);
+            EXPECT_EQ(ps.CheckRawDependency(*opLogPtr[k], *opLogPtr[i]), true);
+            EXPECT_EQ(ps.CheckWarDependency(*opLogPtr[k], *opLogPtr[i]), true);
+            EXPECT_EQ(ps.CheckWawDependency(*opLogPtr[k], *opLogPtr[i]), false);
         }
         // end tests
     }
@@ -427,7 +427,7 @@ TEST_F(InsertSyncTest, TestUpdateDep)
         for (auto it = dataDependencySet.rbegin(); it != dataDependencySet.rend(); it++) {
             size_t k = *it;
             auto& prevOp = ps.depOps_[k];
-            if (ps.HasDataDependency(*opLogPtr[k], *opLogPtr[i], k, i)) {
+            if (ps.HasDataDependency(*opLogPtr[k], *opLogPtr[i])) {
                 // start tests
                 ps.UpdateDep(currOp, prevOp);
                 PipeSync::PipeCoreRealEx pcCurr(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);

@@ -113,8 +113,9 @@ class PipeSync {
 public:
     PipeSync() { InitIssueQueue(); }
     Status InsertSync(Function& function, std::vector<Operation*>& syncedOpLog);
-    void PhaseKernelProcess(Function& function, std::vector<Operation*> srcLog, std::vector<Operation*>& dstLog);
-    std::vector<Operation*> GetOriOpList() { return oriOpList_; }
+    void PhaseKernelProcess(
+        Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog);
+    const std::vector<Operation*>& GetOriOpList() const { return oriOpList_; }
     std::unordered_map<Operation*, Operation*> setOpMap;
     std::unordered_map<Operation*, Operation*> waitOpMap;
 
@@ -262,7 +263,7 @@ private:
 
         std::vector<size_t> setPipe;  // this op will set_flag for op in setPipe; 后
         std::vector<size_t> waitPipe; // this op will wait_flag for op in waitPipe; 前
-        std::string DumpDepOp(std::vector<Operation*> opLog = {});
+        std::string DumpDepOp(const std::vector<Operation*>& opLog = {});
     };
 
     struct IssueQueue {
@@ -270,7 +271,7 @@ private:
         PipeCoreRealEx selfPipeCore;
         size_t currOp{0};
         std::vector<size_t> ops;
-        std::string DumpIssueQueue(std::vector<Operation*> opLogPtr = {});
+        std::string DumpIssueQueue(const std::vector<Operation*>& opLogPtr = {});
     };
 
     struct PipeDepInfo {
@@ -290,7 +291,8 @@ private:
         std::vector<int> setOpEventIdList{}; // eventid
         // sync_src/cv_sync_src对应的setop和waitop的idx pair {setop idx, waitop idx}
         std::vector<std::pair<int, int>> opDepList{};
-        std::string DumpDataDepInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<Operation*>& oriOpList);
+        std::string DumpDataDepInfo(
+            const std::vector<IndexOp>& syncedOpLog, const std::vector<Operation*>& oriOpList);
     };
 
     struct IssueNum {
@@ -319,15 +321,16 @@ private:
     std::string PipeSeqName(PipeSeq seq) const;
     PipeSeq GetPipeSeq(PipeCoreRealEx pipe);
     PipeCoreRealEx GetPipeFromSeq(PipeSeq seq);
-    Status PipeDispatch(const std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog);
+    Status PipeDispatch(const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog);
     Status AdjustCopyInCfg(TileOpCfg& opcfg, const Operation& op);
     Status AdjustCopyOutCfg(TileOpCfg& opcfg, const Operation& op);
     Status AdjustOpCfg(TileOpCfg& opcfg, const Operation& op);
     void InitIssueQueue();
-    void EnqueueOp(DepOp& op, const std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog);
+    void EnqueueOp(DepOp& op, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog);
     void RemoveOpDep(DepOp& setOp, DepOp& waitOp) const;
     void AddPhaseOp1(
-        Function& function, std::vector<Operation*> srcLog, std::vector<Operation*>& dstLog, size_t& i, size_t& prerun);
+        Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog, size_t& i,
+        size_t& prerun);
     void AddPhaseOp2(Function& function, std::vector<Operation*>& dstLog, size_t& prerun);
     Status AddOpDep(DepOp& setOp, DepOp& waitOp);
     Status AdjustOpDep(DepOp& op, size_t waitOpIdx, IssueQueue& issueQ, bool& failedFlag);
@@ -341,14 +344,14 @@ private:
     Status InjectWaitFlag(Function& function, size_t idx, std::vector<IndexOp>& syncedOpLog);
     Status InjectSetFlag(Function& function, size_t idx, std::vector<IndexOp>& syncedOpLog);
     Status InjectSync(
-        Function& function, std::vector<Operation*> opLogPtr, size_t idx, std::vector<IndexOp>& syncedOpLog);
+        Function& function, const std::vector<Operation*>& opLogPtr, size_t idx, std::vector<IndexOp>& syncedOpLog);
     Status IssueOpPipeSeq(
-        Function& function, std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog, bool& eventIdDeadlock,
-        size_t& issued);
+        Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog,
+        bool& eventIdDeadlock, size_t& issued);
     Status IssueSyncOp(
-        Function& function, std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog, size_t& totalIssued,
-        size_t& allIssued);
-    Status IssueOp(Function& function, std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog);
+        Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog,
+        size_t& totalIssued, size_t& allIssued);
+    Status IssueOp(Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog);
     Status ProcessDeadLock(
         uint64_t& eventIdDeadlockEnterTimes, bool& eventIdDeadlock, std::vector<IndexOp>& syncedOpLog);
     Status SynDependency(
@@ -375,15 +378,16 @@ private:
     bool GenSyncOp(PipeCoreRealEx set, PipeCoreRealEx wait, int eventId, bool isSet, Operation& op);
     Status GetEventId(const PipePairEx& pp, int& eventId);
     bool HasFreeEventId(const PipePairEx& pp);
-    bool BufOverlap(const TileRange& range1, int magic1, const TileRange& range2, int magic2) const;
-    bool CheckWawDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx);
-    bool CheckRawDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx);
-    bool CheckWarDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx);
-    bool HasDataDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx);
+    bool BufOverlap(const TileRange& range1, const TileRange& range2) const;
+    bool CheckWawDependency(const Operation& opSet, const Operation& opWait);
+    bool CheckRawDependency(const Operation& opSet, const Operation& opWait);
+    bool CheckWarDependency(const Operation& opSet, const Operation& opWait);
+    bool HasDataDependency(const Operation& opSet, const Operation& opWait);
     void UpdateDep(DepOp& currOp, DepOp& prevOp);
-    bool IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector<Operation*> opLogPtr);
+    bool IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector<Operation*>& opLogPtr);
     void FindDep(
-        DepOp& op, const std::vector<Operation*> opLogPtr, size_t idx, DataDependencySearcher& dataDependencySearcher);
+        DepOp& op, const std::vector<Operation*>& opLogPtr, size_t idx,
+        DataDependencySearcher& dataDependencySearcher);
     void InitCVEventIdQ(CorePair corePair);
     std::deque<int>& GetFreeEventIdQueue(const PipePairEx& pp);
     int GetSyncSrcLogIdx(const std::vector<IndexOp>& syncedOpLog, int i);

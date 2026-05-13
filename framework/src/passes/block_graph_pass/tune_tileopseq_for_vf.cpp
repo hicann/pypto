@@ -21,11 +21,10 @@
 
 namespace npu {
 namespace tile_fwk {
-bool TuneTileOpSeqForVF::IsGroupMergeable(PipeSync& ps, size_t left, size_t k, int groupNum)
+bool TuneTileOpSeqForVF::IsGroupMergeable(PipeSync& ps, size_t k, int groupNum)
 {
-    size_t tempIdx = left;
     for (auto& groupOp : mergedOps[groupNum]) {
-        if (ps.HasDataDependency(*groupOp, *opList_[k], --tempIdx, k)) {
+        if (ps.HasDataDependency(*groupOp, *opList_[k])) {
             return false;
         }
     }
@@ -41,15 +40,15 @@ bool TuneTileOpSeqForVF::IsMergeable(
             continue;
         }
         // 如果该op和vecTileop0和vecTileop1都存在依赖关系，则不能融合
-        if (ps.HasDataDependency(*opList_[left], *opList_[k], left, k) &&
-            ps.HasDataDependency(*opList_[k], *opList_[right], k, right)) {
+        if (ps.HasDataDependency(*opList_[left], *opList_[k]) &&
+            ps.HasDataDependency(*opList_[k], *opList_[right])) {
             return false;
         }
         // vecTileop0 op(set) vecTileop1(wait) 这种情况下两个vecTileop中间的op需要前移
-        if (ps.HasDataDependency(*opList_[k], *opList_[right], k, right)) {
+        if (ps.HasDataDependency(*opList_[k], *opList_[right])) {
             // left后，k前的op需要判断与k是否有依赖关系
             for (size_t i = left + 1; i < k; i++) {
-                if (ps.HasDataDependency(*opList_[i], *opList_[k], i, k) &&
+                if (ps.HasDataDependency(*opList_[i], *opList_[k]) &&
                     std::find(moveFrontOp.begin(), moveFrontOp.end(), opList_[i]) == moveFrontOp.end()) {
                     return false;
                 }
@@ -58,7 +57,7 @@ bool TuneTileOpSeqForVF::IsMergeable(
             if (groupNum == -1) {
                 moveFrontOp.insert(opList_[k]);
             } else {
-                if (!IsGroupMergeable(ps, left, k, groupNum)) {
+                if (!IsGroupMergeable(ps, k, groupNum)) {
                     return false;
                 }
                 moveFrontOp.insert(opList_[k]);
@@ -129,7 +128,7 @@ void TuneTileOpSeqForVF::JudgeNeedMoveUbCopy(
     // 判断ubCopyOp是否能前移
     bool canMoveFront = true;
     for (size_t i = minIdx; i < ubCopyIdx; i++) {
-        if (ps.HasDataDependency(*opList_[i], *opList_[ubCopyIdx], i, ubCopyIdx)) {
+        if (ps.HasDataDependency(*opList_[i], *opList_[ubCopyIdx])) {
             auto it = std::find(needMoveFront.begin(), needMoveFront.end(), i);
             if (it == needMoveFront.end()) {
                 canMoveFront = false;
@@ -143,7 +142,7 @@ void TuneTileOpSeqForVF::JudgeNeedMoveUbCopy(
     }
     bool canMoveBack = true;
     for (size_t i = ubCopyIdx + 1; i <= maxIdx; i++) {
-        if (ps.HasDataDependency(*opList_[ubCopyIdx], *opList_[i], ubCopyIdx, i)) {
+        if (ps.HasDataDependency(*opList_[ubCopyIdx], *opList_[i])) {
             auto it = std::find(needMoveBack.begin(), needMoveBack.end(), i);
             if (it == needMoveBack.end()) {
                 canMoveBack = false;

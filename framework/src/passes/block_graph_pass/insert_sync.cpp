@@ -317,7 +317,7 @@ Status PipeSync::InsertSync(Function& function, std::vector<Operation*>& syncedO
     return SUCCESS;
 }
 
-std::string PipeSync::DepOp::DumpDepOp(std::vector<Operation*> opLog)
+std::string PipeSync::DepOp::DumpDepOp(const std::vector<Operation*>& opLog)
 {
     std::stringstream ss;
     ss << "idx: " << idx << " opmagic: " << opLog[idx]->GetOpMagic() << ", ";
@@ -344,7 +344,7 @@ std::string PipeSync::DepOp::DumpDepOp(std::vector<Operation*> opLog)
     return ss.str();
 }
 
-std::string PipeSync::IssueQueue::DumpIssueQueue(std::vector<Operation*> opLogPtr)
+std::string PipeSync::IssueQueue::DumpIssueQueue(const std::vector<Operation*>& opLogPtr)
 {
     std::stringstream ss;
     ss << " Op in this pipe: {";
@@ -537,7 +537,7 @@ Status PipeSync::AdjustOpCfg(TileOpCfg& opcfg, const Operation& op)
     return SUCCESS;
 }
 
-Status PipeSync::PipeDispatch(const std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::PipeDispatch(const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog)
 {
     DataDependencySearcher dataDependencySearcher;
     dataDependencySearcher.ubTensorRangeMap = ubTensorRangeMap;
@@ -568,7 +568,7 @@ void PipeSync::InitIssueQueue()
     }
 }
 
-void PipeSync::EnqueueOp(DepOp& op, const std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog)
+void PipeSync::EnqueueOp(DepOp& op, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog)
 {
     if (opLogPtr[op.idx]->GetOpcode() == Opcode::OP_ASSEMBLE || opLogPtr[op.idx]->GetOpcode() == Opcode::OP_VIEW ||
         opLogPtr[op.idx]->GetOpcode() == Opcode::OP_NOP || opLogPtr[op.idx]->GetOpcode() == Opcode::OP_HUB ||
@@ -932,7 +932,7 @@ Status PipeSync::InjectSetFlag(Function& function, size_t idx, std::vector<Index
 }
 
 Status PipeSync::InjectSync(
-    Function& function, std::vector<Operation*> opLogPtr, size_t idx, std::vector<IndexOp>& syncedOpLog)
+    Function& function, const std::vector<Operation*>& opLogPtr, size_t idx, std::vector<IndexOp>& syncedOpLog)
 {
     // check idx range
     if (idx > std::numeric_limits<uint64_t>::max() / SEQUENCE_IDX) {
@@ -988,8 +988,8 @@ Status PipeSync::ProcessDeadLock(
 }
 
 Status PipeSync::IssueOpPipeSeq(
-    Function& function, std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog, bool& eventIdDeadlock,
-    size_t& issued)
+    Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog,
+    bool& eventIdDeadlock, size_t& issued)
 {
     for (int i = 0; i < static_cast<int>(PipeSeq::PIPE_END); i++) {
         std::vector<size_t> issuedOps;
@@ -1009,8 +1009,8 @@ Status PipeSync::IssueOpPipeSeq(
 }
 
 Status PipeSync::IssueSyncOp(
-    Function& function, std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog, size_t& totalIssued,
-    size_t& allIssued)
+    Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog,
+    size_t& totalIssued, size_t& allIssued)
 {
     bool eventIdDeadlock = false;
     uint64_t eventIdDeadlockEnterTimes = 0;
@@ -1035,7 +1035,7 @@ Status PipeSync::IssueSyncOp(
     return SUCCESS;
 }
 
-Status PipeSync::IssueOp(Function& function, std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog)
+Status PipeSync::IssueOp(Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog)
 {
     size_t totalIssued = 0;
     size_t allIssued = 0;
@@ -1427,7 +1427,7 @@ std::string PipeSync::DumpMergeCVInfo(
 }
 
 std::string PipeSync::DataDepInfo::DumpDataDepInfo(
-    const std::vector<IndexOp>& syncedOpLog, std::vector<Operation*>& oriOpList)
+    const std::vector<IndexOp>& syncedOpLog, const std::vector<Operation*>& oriOpList)
 {
     std::stringstream ss;
     ss << "    CV_SYNC_SRC magic: ";
@@ -1634,20 +1634,12 @@ bool PipeSync::HasFreeEventId(const PipePairEx& pp)
     return !eventQ.empty();
 }
 
-bool PipeSync::BufOverlap(const TileRange& range1, int magic1, const TileRange& range2, int magic2) const
+bool PipeSync::BufOverlap(const TileRange& range1, const TileRange& range2) const
 {
-    APASS_LOG_DEBUG_F(
-        Elements::Tensor, "Range 1 [%zu ~ %zu], range 2 [%zu ~ %zu].", range1.start, range1.end, range2.start,
-        range2.end);
-    if (range1.end > range2.start && range2.end > range1.start) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor %d and tensor %d have overlap.", magic1, magic2);
-        return true;
-    }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor %d and tensor %d don't have overlap.", magic1, magic2);
-    return false;
+    return range1.end > range2.start && range2.end > range1.start;
 }
 
-bool PipeSync::CheckWawDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx)
+bool PipeSync::CheckWawDependency(const Operation& opSet, const Operation& opWait)
 {
     for (size_t setIdx = 0; setIdx < opSet.GetOOperands().size(); setIdx++) {
         for (size_t waitIdx = 0; waitIdx < opWait.GetOOperands().size(); waitIdx++) {
@@ -1662,10 +1654,7 @@ bool PipeSync::CheckWawDependency(const Operation& opSet, const Operation& opWai
                 memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] : opSet.GetOOperands()[setIdx]->memoryrange;
             TileRange range2 =
                 memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] : opWait.GetOOperands()[waitIdx]->memoryrange;
-            if (BufOverlap(range1, magic1, range2, magic2)) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "%d %zu %s and %d %zu %s has WAW data dependency", opSet.GetOpMagic(), k,
-                    opSet.GetOpcodeStr().c_str(), opWait.GetOpMagic(), idx, opWait.GetOpcodeStr().c_str());
+            if (BufOverlap(range1, range2)) {
                 return true;
             }
         }
@@ -1673,7 +1662,7 @@ bool PipeSync::CheckWawDependency(const Operation& opSet, const Operation& opWai
     return false;
 }
 
-bool PipeSync::CheckRawDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx)
+bool PipeSync::CheckRawDependency(const Operation& opSet, const Operation& opWait)
 {
     for (size_t outIdx = 0; outIdx < opSet.GetOOperands().size(); outIdx++) {
         for (size_t inIdx = 0; inIdx < opWait.GetIOperands().size(); inIdx++) {
@@ -1688,12 +1677,9 @@ bool PipeSync::CheckRawDependency(const Operation& opSet, const Operation& opWai
                 memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] : opWait.GetIOperands()[inIdx]->memoryrange;
             TileRange range2 =
                 memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] : opSet.GetOOperands()[outIdx]->memoryrange;
-            auto overlap = BufOverlap(range1, magic1, range2, magic2);
+            auto overlap = BufOverlap(range1, range2);
             auto ddrTensorSame = memType == MemoryType::MEM_DEVICE_DDR && range1.memId == range2.memId;
             if (overlap || ddrTensorSame) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "%d %zu %s and %d %zu %s has RAW data dependency", opSet.GetOpMagic(), k,
-                    opSet.GetOpcodeStr().c_str(), opWait.GetOpMagic(), idx, opWait.GetOpcodeStr().c_str());
                 return true;
             }
         }
@@ -1701,7 +1687,7 @@ bool PipeSync::CheckRawDependency(const Operation& opSet, const Operation& opWai
     return false;
 }
 
-bool PipeSync::CheckWarDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx)
+bool PipeSync::CheckWarDependency(const Operation& opSet, const Operation& opWait)
 {
     for (size_t outIdx = 0; outIdx < opWait.GetOOperands().size(); outIdx++) {
         for (size_t inIdx = 0; inIdx < opSet.GetIOperands().size(); inIdx++) {
@@ -1716,12 +1702,9 @@ bool PipeSync::CheckWarDependency(const Operation& opSet, const Operation& opWai
                 memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic1] : opSet.GetIOperands()[inIdx]->memoryrange;
             TileRange range2 =
                 memType == MemoryType::MEM_UB ? ubTensorRangeMap[magic2] : opWait.GetOOperands()[outIdx]->memoryrange;
-            auto overlap = BufOverlap(range1, magic1, range2, magic2);
+            auto overlap = BufOverlap(range1, range2);
             auto ddrTensorSame = memType == MemoryType::MEM_DEVICE_DDR && range1.memId == range2.memId;
             if (overlap || ddrTensorSame) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "%d %zu %s and %d %zu %s has WAR data dependency", opSet.GetOpMagic(), k,
-                    opSet.GetOpcodeStr().c_str(), opWait.GetOpMagic(), idx, opWait.GetOpcodeStr().c_str());
                 return true;
             }
         }
@@ -1729,7 +1712,7 @@ bool PipeSync::CheckWarDependency(const Operation& opSet, const Operation& opWai
     return false;
 }
 
-bool PipeSync::HasDataDependency(const Operation& opSet, const Operation& opWait, size_t k, size_t idx)
+bool PipeSync::HasDataDependency(const Operation& opSet, const Operation& opWait)
 {
     std::string opSetStr = opSet.GetOpcodeStr();
     std::string opWaitStr = opWait.GetOpcodeStr();
@@ -1745,18 +1728,18 @@ bool PipeSync::HasDataDependency(const Operation& opSet, const Operation& opWait
         checkWaw = false;
     }
     if (checkWaw) {
-        if (CheckWawDependency(opSet, opWait, k, idx)) {
+        if (CheckWawDependency(opSet, opWait)) {
             return true;
         }
     }
 
     // check RAW
-    if (CheckRawDependency(opSet, opWait, k, idx)) {
+    if (CheckRawDependency(opSet, opWait)) {
         return true;
     }
 
     // check WAR
-    if (CheckWarDependency(opSet, opWait, k, idx)) {
+    if (CheckWarDependency(opSet, opWait)) {
         return true;
     }
 
@@ -1795,7 +1778,7 @@ void PipeSync::UpdateDep(DepOp& currOp, DepOp& prevOp)
     }
 }
 
-bool PipeSync::IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector<Operation*> opLogPtr)
+bool PipeSync::IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector<Operation*>& opLogPtr)
 {
     // true表示依赖关系可忽略，false表示依赖关系不可忽略
     // VIEW or ASSEMBLE data dependency can be ignored
@@ -1805,11 +1788,6 @@ bool PipeSync::IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector
         opLogPtr[prev]->GetOpcode() == Opcode::OP_NOP || opLogPtr[curr]->GetOpcode() == Opcode::OP_NOP ||
         opLogPtr[prev]->GetOpcode() == Opcode::OP_HUB || opLogPtr[curr]->GetOpcode() == Opcode::OP_HUB ||
         opLogPtr[prev]->GetOpcode() == Opcode::OP_RESHAPE || opLogPtr[curr]->GetOpcode() == Opcode::OP_RESHAPE) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation,
-            "%d %s and %d %s dependency is ignorable because op is VIEW or ASSEMBLE or NOP or HUB or RESHAPE",
-            opLogPtr[prev]->GetOpMagic(), opLogPtr[prev]->GetOpcodeStr().c_str(), opLogPtr[curr]->GetOpMagic(),
-            opLogPtr[curr]->GetOpcodeStr().c_str());
         return true;
     }
     return false;
@@ -1817,7 +1795,7 @@ bool PipeSync::IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector
 
 // find depend op in opLog for 0 to idx
 void PipeSync::FindDep(
-    DepOp& op, const std::vector<Operation*> opLogPtr, size_t idx, DataDependencySearcher& dataDependencySearcher)
+    DepOp& op, const std::vector<Operation*>& opLogPtr, size_t idx, DataDependencySearcher& dataDependencySearcher)
 {
     const auto currOp = opLogPtr[idx];
     APASS_LOG_DEBUG_F(
@@ -1828,11 +1806,8 @@ void PipeSync::FindDep(
         size_t k = *it;
         const Operation* prevAOp = opLogPtr[k];
         DepOp& prevOp = depOps_[k];
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Current process ops: %d %zu %s and %d %zu %s", prevAOp->GetOpMagic(), k,
-            prevAOp->GetOpcodeStr().c_str(), currOp->GetOpMagic(), idx, currOp->GetOpcodeStr().c_str());
 
-        if (HasDataDependency(*prevAOp, *currOp, k, idx)) {
+        if (HasDataDependency(*prevAOp, *currOp)) {
             bool ignorable = false;
             if (IgnorableIntraPipeDep(k, idx, opLogPtr)) {
                 ignorable = true;
@@ -1882,7 +1857,8 @@ std::deque<int>& PipeSync::GetFreeEventIdQueue(const PipePairEx& pp)
 }
 
 void PipeSync::AddPhaseOp1(
-    Function& function, std::vector<Operation*> srcLog, std::vector<Operation*>& dstLog, size_t& i, size_t& prerun)
+    Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog, size_t& i,
+    size_t& prerun)
 {
     constexpr size_t prerunNum = 2;
     for (; i < srcLog.size(); i++) {
@@ -1923,7 +1899,8 @@ void PipeSync::AddPhaseOp2(Function& function, std::vector<Operation*>& dstLog, 
     }
 }
 
-void PipeSync::PhaseKernelProcess(Function& function, std::vector<Operation*> srcLog, std::vector<Operation*>& dstLog)
+void PipeSync::PhaseKernelProcess(
+    Function& function, const std::vector<Operation*>& srcLog, std::vector<Operation*>& dstLog)
 {
     size_t prerun = 0;
     size_t i = 0;

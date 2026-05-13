@@ -32,7 +32,7 @@ public:
 
 private:
     void ChangeOpSeq(PipeSync& ps, bool isAIV1);
-    bool IsGroupMergeable(PipeSync& ps, size_t left, size_t k, int groupNum);
+    bool IsGroupMergeable(PipeSync& ps, size_t k, int groupNum);
     bool IsMergeable(
         std::unordered_set<Operation*>& moveFrontOp, size_t left, size_t right, PipeSync& ps, int groupNum);
     void MoveOpsForMerge(const std::unordered_set<Operation*>& moveFrontOp, size_t left, size_t right, int groupNum);
