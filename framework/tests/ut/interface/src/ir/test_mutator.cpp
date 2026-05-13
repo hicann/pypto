@@ -143,6 +143,22 @@ TEST_F(IRMutatorTest, TestIdentityAllStmts)
 
     auto cont = std::make_shared<ContinueStmt>(Sp());
     EXPECT_EQ(m.VisitStmt(cont).get(), cont.get());
+
+    // ScalarOpStmt
+    auto scalarRes = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
+    auto scalarTok = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
+    auto scalarArg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto scalarOp = std::make_shared<ScalarOpStmt>(scalarRes, scalarTok, "add", std::vector<ExprPtr>{scalarArg}, Sp());
+    EXPECT_EQ(m.VisitStmt(scalarOp).get(), scalarOp.get());
+
+    // TensorOpStmt
+    auto tensorRes = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
+    auto tensorTok = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
+    auto tensorArg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto tensorOp = std::make_shared<TensorOpStmt>(
+        std::vector<VarPtr>{tensorRes}, tensorTok, "matmul", std::vector<ExprPtr>{tensorArg}, std::vector<ExprPtr>{},
+        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    EXPECT_EQ(m.VisitStmt(tensorOp).get(), tensorOp.get());
 }
 
 TEST_F(IRMutatorTest, TestIdentityFunctionAndProgram)
@@ -245,6 +261,38 @@ TEST_F(IRMutatorTest, TestRewriteAllUnaryExpr)
     }
     DEFINE_UNARY_EXPR_ALL()
 #undef DEFINE_UNARY_EXPR
+}
+
+TEST_F(IRMutatorTest, TestRewriteScalarOpStmt)
+{
+    ConstRewriter m;
+    auto res = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
+    auto tok = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
+    auto val42 = std::make_shared<ConstInt>(42, DataType::INT32, Sp());
+    auto stmt = std::make_shared<ScalarOpStmt>(res, tok, "add", std::vector<ExprPtr>{val42}, Sp());
+    auto result = m.VisitStmt(stmt);
+    EXPECT_NE(result.get(), stmt.get());
+    auto mutated = std::dynamic_pointer_cast<const ScalarOpStmt>(result);
+    EXPECT_NE(mutated, nullptr);
+    auto newArg = std::dynamic_pointer_cast<const ConstInt>(mutated->args_[0]);
+    EXPECT_EQ(newArg->value_, 99);
+}
+
+TEST_F(IRMutatorTest, TestRewriteTensorOpStmt)
+{
+    ConstRewriter m;
+    auto res = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
+    auto tok = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
+    auto val42 = std::make_shared<ConstInt>(42, DataType::INT32, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(
+        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{val42}, std::vector<ExprPtr>{},
+        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    auto result = m.VisitStmt(stmt);
+    EXPECT_NE(result.get(), stmt.get());
+    auto mutated = std::dynamic_pointer_cast<const TensorOpStmt>(result);
+    EXPECT_NE(mutated, nullptr);
+    auto newArg = std::dynamic_pointer_cast<const ConstInt>(mutated->args_[0]);
+    EXPECT_EQ(newArg->value_, 99);
 }
 
 } // namespace ir

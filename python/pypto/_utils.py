@@ -84,7 +84,7 @@ def set_source_location(level: int = 1, filename=None, lineno=None):
             frame = sys._getframe(level + 1)
             filename = frame.f_code.co_filename
             lineno = frame.f_lineno
-        pypto_impl.SetLocation(filename, lineno, "")
+        pypto_impl.SetSpan(filename, lineno)
     _source_location_depth += 1
 
 
@@ -92,7 +92,7 @@ def clear_source_location():
     global _source_location_depth
     _source_location_depth -= 1
     if _source_location_depth == 0:
-        pypto_impl.ClearLocation()
+        pypto_impl.ClearSpan()
 
 
 def source_location(func):

@@ -433,7 +433,7 @@ inline const std::string& LogFile() { return ConfigManager::Instance().LogFile()
 inline Status SetPassStrategy(const std::string s)
 {
     SetHostConfig(KEY_STRATEGY, s);
-    return true;
+    return SUCCESS;
 }
 
 inline std::string GetPassStrategy() { return GetHostConfig(KEY_STRATEGY, "OOO"); }

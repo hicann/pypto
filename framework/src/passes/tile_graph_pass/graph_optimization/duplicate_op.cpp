@@ -98,7 +98,8 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation, st
                 return FAILED;
             }
             consumer->ReplaceInput(dst, oOperand);
-            auto& newOp = function.AddRawOperation(Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst}, true, operation.GetLocation());
+            auto& newOp = function.AddRawOperation(
+                Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst}, true, operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             newOp.SetAttribute(OpAttributeKey::startOffset, operation.GetIntAttribute(OpAttributeKey::startOffset));
             newOps.push_back(&newOp);
@@ -118,7 +119,8 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
     for (const auto& oOperand : operation.oOperand) {
         if (oOperand == nullptr) {
             APASS_LOG_ERROR_F(
-                Elements::Operation, "Null output operand detected while iterating over the output operands of the operation [%d].%s",
+                Elements::Operation,
+                "Null output operand detected while iterating over the output operands of the operation [%d].%s",
                 operation.opmagic, GetFormatBacktrace(operation).c_str());
             return FAILED;
         }
@@ -129,7 +131,8 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
         for (auto& consumer : consumers) {
             if (consumer == nullptr) {
                 APASS_LOG_ERROR_F(
-                    Elements::Tensor, "Null consumer detected while iterating over the consumers of the output operand [%d].",
+                    Elements::Tensor,
+                    "Null consumer detected while iterating over the consumers of the output operand [%d].",
                     oOperand->magic);
                 return FAILED;
             }
@@ -142,7 +145,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
                 return FAILED;
             }
             consumer->ReplaceInput(dst, oOperand);
-            auto& newOp = function.AddRawOperation(Opcode::OP_VIEW, {iOperand}, {dst}, true, operation.GetLocation());
+            auto& newOp = function.AddRawOperation(Opcode::OP_VIEW, {iOperand}, {dst}, true, operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             auto oriViewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
             if (oriViewAttr != nullptr) {

@@ -23,11 +23,13 @@
 #include <optional>
 #include "tilefwk/tensor.h"
 #include "tilefwk/symbolic_scalar.h"
+#include "ir/span.h"
+
+using namespace pypto;
 
 namespace npu::tile_fwk {
 // Forward declaration for types used in this file
 class Function;
-struct SourceLocation;
 } // namespace npu::tile_fwk
 
 // Helper macros to count arguments
@@ -213,7 +215,7 @@ private:
     std::set<int, std::greater<>> unrollTimes_;
     std::unordered_set<int> visited_;
     std::unordered_set<int> customUnrollTimes_;
-    std::shared_ptr<SourceLocation> location_;
+    ir::Span span_;
 
     void GenDefaultUnrollTimes(const std::set<int>& unrollList);
 };

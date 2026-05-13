@@ -7,7 +7,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-from typing import Final, List, Optional, Sequence, overload
+from typing import Final, List, Any, Optional, Sequence, overload
 import enum
 
 
@@ -31,7 +31,9 @@ class DataType:
     FP8E5M2: DataType  # 8-bit floating point (IEEE 754 e5m2 format)
     FP16: DataType  # 16-bit floating point (IEEE 754 half precision)
     FP32: DataType  # 32-bit floating point (IEEE 754 single precision)
+    FP64: DataType  # 64-bit floating point (IEEE 754 double precision)
     BF16: DataType  # 16-bit brain floating point
+    FP64: DataType  # 64-bit floating point (IEEE 754 double precision)
     HF4: DataType  # 4-bit Hisilicon float
     HF8: DataType  # 8-bit Hisilicon float
     INDEX: DataType  # Machine-word integer for index computations (loop vars, dims, valid shapes)
@@ -142,8 +144,7 @@ class Span:
             end_column: Ending column (1-indexed, -1 means unknown)
         """
 
-    @staticmethod
-    def is_unknown(span: Span) -> bool:
+    def is_unknown(self) -> bool:
         """Check if the span is unknown.
 
         Returns:
@@ -834,6 +835,17 @@ class PtrType(Type):
         ...
 
 
+class TokenType(Type):
+    """Opaque token type for side-effect ordering."""
+
+    def __init__(self) -> None: ...
+
+    @staticmethod
+    def get() -> TokenType:
+        """Get the singleton TokenType instance."""
+        ...
+
+
 class Var(Expr):
     """Variable reference expression."""
 
@@ -1350,6 +1362,7 @@ class EvalStmt(Stmt):
 class BreakStmt(Stmt):
     """Break statement: break."""
 
+    @overload
     def __init__(self, span: Span) -> None:
         """Create a break statement.
 
@@ -1357,14 +1370,96 @@ class BreakStmt(Stmt):
             span: Source location
         """
 
+    @overload
+    def __init__(self, operands: list[Expr], span: Span) -> None:
+        """Create a break statement with operands.
+
+        Args:
+            operands: Operands to break
+            span: Source location
+        """
+
 
 class ContinueStmt(Stmt):
     """Continue statement: continue."""
 
+    @overload
     def __init__(self, span: Span) -> None:
         """Create a continue statement.
 
         Args:
+            span: Source location
+        """
+
+    @overload
+    def __init__(self, operands: list[Expr], span: Span) -> None:
+        """Create a continue statement.
+
+        Args:
+            operands: Operands to continue
+            span: Source location
+        """
+
+
+class ScalarOpStmt(Stmt):
+    """Scalar operation statement"""
+
+    result: Final[Var]
+    """Result expression."""
+
+    result_token: Final[Var]
+    """Second operand."""
+
+    opcode: Final[str]
+    """Scalar operation."""
+
+    args: Final[list[Expr]]
+    """Operands to the operation."""
+
+    def __init__(self, result: Var, result_token: Var, opcode: str, args: list[Expr], span: Span) -> None:
+        """Create a scalar operation statement.
+
+        Args:
+            result: Result expression
+            result_token: Second operand
+            opcode: Scalar operation
+            args: Operands to the operation
+            span: Source location
+        """
+
+
+class TensorOpStmt(Stmt):
+    """Tensor operation statement"""
+
+    result: Final[list[Var]]
+    """Result expression."""
+
+    result_token: Final[Var]
+    """Second operand."""
+
+    opcode: Final[str]
+    """Tensor operation."""
+
+    args: Final[list[Expr]]
+    """Operands to the operation."""
+
+    tokens: Final[list[Expr]]
+    """Tokens (can be empty)."""
+
+    attrs: Final[dict[str, Any]]
+    """Attributes (key-value metadata)."""
+
+    def __init__(self, result: list[Var], result_token: Var, opcode: str, args: list[Expr],
+                 tokens: list[Expr], attrs: dict[str, Any], span: Span) -> None:
+        """Create a tensor operation statement.
+
+        Args:
+            result: Result expression
+            result_token: Second operand
+            opcode: Tensor operation
+            args: Operands to the operation
+            tokens: Tokens (can be empty)
+            attrs: Attributes (key-value metadata)
             span: Source location
         """
 

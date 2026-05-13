@@ -218,7 +218,7 @@ Operation::Operation(
 
     if (function_->IsGraphType({GraphType::TENSOR_GRAPH, GraphType::TILE_GRAPH})) {
         SetSemanticLabel(config::GetSemanticLabel());
-        location_ = SourceLocation::GetLocation();
+        SetSpan(ir::Span::Current());
     }
 
     for (auto& input : GetIOperands()) {
@@ -413,10 +413,9 @@ void Operation::DumpLocationJson(Json& opDump) const
         jlabel["lineno"] = semanticLabel_->lineno;
         opDump["semantic_label"] = jlabel;
     }
-    if (location_ && config::GetPlatformConfig(KEY_DUMP_SOURCE_LOCATION, 0)) {
-        opDump["file"] = location_->GetFileName();
-        opDump["line"] = location_->GetLineno();
-        opDump["backtrace"] = location_->GetBacktrace();
+    if (!span_.IsUnknown() && config::GetPlatformConfig(KEY_DUMP_SOURCE_LOCATION, 0)) {
+        opDump["file"] = span_.Filename();
+        opDump["line"] = span_.BeginLine();
     }
 }
 
@@ -543,8 +542,7 @@ void Operation::LoadLocationFromJson(const Json& opDump)
             jlabel["label"].get<std::string>(), jlabel["filename"].get<std::string>(), jlabel["lineno"].get<int>());
     }
     if (opDump.count("file")) {
-        location_ = std::make_shared<SourceLocation>(
-            opDump["file"].get<std::string>(), opDump["line"].get<int>(), opDump["backtrace"].get<std::string>());
+        span_ = ir::Span(opDump["file"].get<std::string>(), opDump["line"].get<int>(), 0);
     }
 }
 
@@ -667,8 +665,8 @@ std::string Operation::DumpSSA(const std::string& prefix) const
 {
     std::ostringstream oss;
 
-    if (location_) {
-        oss << prefix << "/* " << location_->ToString() << " */\n";
+    if (!span_.IsUnknown()) {
+        oss << prefix << "/* " << span_.ToString() << " */\n";
     }
 
     if (GetCommentList().size() != 0) {

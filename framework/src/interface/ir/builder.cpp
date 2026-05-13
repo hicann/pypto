@@ -31,6 +31,13 @@
 namespace pypto {
 namespace ir {
 
+static Span combine_span(const Span& begin_span, const Span& end_span)
+{
+    return Span(
+        begin_span.Filename(), begin_span.BeginLine(), begin_span.BeginColumn(), end_span.EndLine(),
+        end_span.EndColumn());
+}
+
 // ========== IRBuilder Implementation ==========
 
 IRBuilder::IRBuilder() = default;
@@ -75,14 +82,11 @@ FunctionPtr IRBuilder::EndFunction(const Span& end_span)
     StmtPtr body = (stmts.size() == 1) ? stmts[0] : std::make_shared<SeqStmts>(stmts, end_span);
 
     // Combine begin and end spans
-    const Span& begin_span = func_ctx->GetBeginSpan();
-    Span combined_span(
-        begin_span.filename_, begin_span.beginLine_, begin_span.beginColumn_, end_span.beginLine_,
-        end_span.beginColumn_);
+    auto new_span = combine_span(func_ctx->GetBeginSpan(), end_span);
 
     // Create function
     auto func = std::make_shared<Function>(
-        func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body, combined_span,
+        func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body, new_span,
         func_ctx->GetFuncType());
 
     // Pop context
@@ -138,15 +142,12 @@ StmtPtr IRBuilder::EndForLoop(const Span& end_span)
     StmtPtr body = (stmts.size() == 1) ? stmts[0] : std::make_shared<SeqStmts>(stmts, end_span);
 
     // Combine begin and end spans
-    const Span& begin_span = loop_ctx->GetBeginSpan();
-    Span combined_span(
-        begin_span.filename_, begin_span.beginLine_, begin_span.beginColumn_, end_span.beginLine_,
-        end_span.beginColumn_);
+    auto new_span = combine_span(loop_ctx->GetBeginSpan(), end_span);
 
     // Create for statement
     auto for_stmt = std::make_shared<ForStmt>(
         loop_ctx->GetLoopVar(), loop_ctx->GetStart(), loop_ctx->GetStop(), loop_ctx->GetStep(), loop_ctx->GetIterArgs(),
-        body, loop_ctx->GetReturnVars(), combined_span);
+        body, loop_ctx->GetReturnVars(), new_span);
 
     // Pop context
     context_stack_.pop_back();
@@ -211,14 +212,11 @@ StmtPtr IRBuilder::EndWhileLoop(const Span& end_span)
     StmtPtr body = (stmts.size() == 1) ? stmts[0] : std::make_shared<SeqStmts>(stmts, end_span);
 
     // Combine begin and end spans
-    const Span& begin_span = loop_ctx->GetBeginSpan();
-    Span combined_span(
-        begin_span.filename_, begin_span.beginLine_, begin_span.beginColumn_, end_span.beginLine_,
-        end_span.beginColumn_);
+    auto new_span = combine_span(loop_ctx->GetBeginSpan(), end_span);
 
     // Create while statement
     auto while_stmt = std::make_shared<WhileStmt>(
-        loop_ctx->GetCondition(), loop_ctx->GetIterArgs(), body, loop_ctx->GetReturnVars(), combined_span);
+        loop_ctx->GetCondition(), loop_ctx->GetIterArgs(), body, loop_ctx->GetReturnVars(), new_span);
 
     // Pop context
     context_stack_.pop_back();
@@ -235,8 +233,8 @@ StmtPtr IRBuilder::EndWhileLoop(const Span& end_span)
 
 void IRBuilder::BeginIf(const ExprPtr& condition, const Span& span)
 {
-    CHECK(!context_stack_.empty()) << "Cannot begin if statement: not inside a function or another valid context at "
-                                   << span.ToString();
+    IRCHECK(!context_stack_.empty()) << "Cannot begin if statement: not inside a function or another valid context at "
+                                     << span.ToString();
     context_stack_.push_back(std::make_unique<IfStmtContext>(condition, span));
 }
 
@@ -245,7 +243,7 @@ void IRBuilder::BeginElse(const Span& span)
     ValidateInIf("BeginElse");
 
     auto* if_ctx = static_cast<IfStmtContext*>(CurrentContext());
-    CHECK(!if_ctx->InElseBranch()) << "Cannot begin else branch: already in else branch at " << span.ToString();
+    IRCHECK(!if_ctx->InElseBranch()) << "Cannot begin else branch: already in else branch at " << span.ToString();
 
     if_ctx->BeginElseBranch();
 }
@@ -276,14 +274,11 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
     }
 
     // Combine begin and end spans
-    const Span& begin_span = if_ctx->GetBeginSpan();
-    Span combined_span(
-        begin_span.filename_, begin_span.beginLine_, begin_span.beginColumn_, end_span.beginLine_,
-        end_span.beginColumn_);
+    auto new_span = combine_span(if_ctx->GetBeginSpan(), end_span);
 
     // Create if statement
     auto if_stmt =
-        std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), combined_span);
+        std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), new_span);
 
     // Pop context
     context_stack_.pop_back();
@@ -322,13 +317,10 @@ ProgramPtr IRBuilder::EndProgram(const Span& end_span)
     auto* prog_ctx = static_cast<ProgramContext*>(CurrentContext());
 
     // Combine begin and end spans
-    const Span& begin_span = prog_ctx->GetBeginSpan();
-    Span combined_span(
-        begin_span.filename_, begin_span.beginLine_, begin_span.beginColumn_, end_span.beginLine_,
-        end_span.beginColumn_);
+    auto new_span = combine_span(prog_ctx->GetBeginSpan(), end_span);
 
     // Create program from functions vector
-    auto program = std::make_shared<Program>(prog_ctx->GetFunctions(), prog_ctx->GetName(), combined_span);
+    auto program = std::make_shared<Program>(prog_ctx->GetFunctions(), prog_ctx->GetName(), new_span);
 
     // Pop context
     context_stack_.pop_back();
@@ -454,29 +446,29 @@ T* IRBuilder::GetCurrentContextAs()
 
 void IRBuilder::ValidateInFunction(const std::string& operation)
 {
-    CHECK(InFunction()) << operation << " can only be called inside a function context";
-    CHECK(CurrentContext()->GetType() == BuildContext::Type::FUNCTION)
+    IRCHECK(InFunction()) << operation << " can only be called inside a function context";
+    IRCHECK(CurrentContext()->GetType() == BuildContext::Type::FUNCTION)
         << operation << " must be called directly in function context, not nested";
 }
 
 void IRBuilder::ValidateInLoop(const std::string& operation)
 {
-    CHECK(InLoop()) << operation << " can only be called inside a for loop context";
+    IRCHECK(InLoop()) << operation << " can only be called inside a for loop context";
 }
 
 void IRBuilder::ValidateInIf(const std::string& operation)
 {
-    CHECK(InIf()) << operation << " can only be called inside an if statement context";
+    IRCHECK(InIf()) << operation << " can only be called inside an if statement context";
 }
 
 void IRBuilder::ValidateInWhileLoop(const std::string& operation)
 {
-    CHECK(InWhileLoop()) << operation << " can only be called inside a while loop context";
+    IRCHECK(InWhileLoop()) << operation << " can only be called inside a while loop context";
 }
 
 void IRBuilder::ValidateInProgram(const std::string& operation)
 {
-    CHECK(InProgram()) << operation << " can only be called inside a program context";
+    IRCHECK(InProgram()) << operation << " can only be called inside a program context";
 }
 
 void ProgramContext::AddFunction(const FunctionPtr& func)

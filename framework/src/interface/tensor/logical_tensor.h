@@ -50,7 +50,6 @@ public:
 
 class LogicalTensor : public AttrHolder {
 public:
-
     std::shared_ptr<RawTensor> tensor;
     Offset offset;
     Shape shape;
@@ -74,12 +73,12 @@ public:
     LogicalTensor(
         Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape,
         TileOpFormat tformat = TileOpFormat::TILEOP_ND, std::string tname = "");
-    LogicalTensor(
-        Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape);
+    LogicalTensor(Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape);
     LogicalTensor(
         Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
         std::vector<SymbolicScalar> tValidShape);
-    LogicalTensor(LogicalTensor&&) = default;
+
+    LogicalTensor(LogicalTensor&&) = delete;
     LogicalTensor(const LogicalTensor&) = default;
     LogicalTensor& operator=(LogicalTensor&&) = delete;
     LogicalTensor& operator=(const LogicalTensor&) = delete;

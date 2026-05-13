@@ -92,9 +92,8 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest1)
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
     auto& tensorOffset = inCast->GetTensorOffset();
-    viewOp.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor->GetDynValidShape()));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor->GetDynValidShape()));
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -144,14 +143,12 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest2)
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
     auto& tensorOffset = inCast->GetTensorOffset();
-    viewOp.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor->GetDynValidShape()));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor->GetDynValidShape()));
     auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor}, {outCast2});
     auto& tensorOffset1 = ubTensor->GetTensorOffset();
-    viewOp1.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), outCast2->GetDynValidShape()));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), outCast2->GetDynValidShape()));
     auto& sqrtOp = currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast3});
     auto& expOp = currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor}, {outCast1});
 
@@ -218,14 +215,12 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest3)
     auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1});
     auto& tensorOffset = inCast->GetTensorOffset();
-    viewOp.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor1->GetDynValidShape()));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), ubTensor1->GetDynValidShape()));
     auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor2});
     auto& tensorOffset1 = inCast->GetTensorOffset();
-    viewOp1.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor2->GetDynValidShape()));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor2->GetDynValidShape()));
     auto& div1 = currFunctionPtr->AddOperation(Opcode::OP_DIV, {ubTensor1, ubTensor1}, {outCast1});
     auto& div2 = currFunctionPtr->AddOperation(Opcode::OP_DIV, {ubTensor1, ubTensor2}, {outCast2});
     auto& div3 = currFunctionPtr->AddOperation(Opcode::OP_DIV, {ubTensor2, ubTensor2}, {outCast3});
@@ -380,9 +375,8 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest2)
     auto& expOp = currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor}, {outCast1});
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor}, {outCast2});
     auto& tensorOffset1 = ubTensor->GetTensorOffset();
-    viewOp.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), outCast2->GetDynValidShape()));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), outCast2->GetDynValidShape()));
     auto& sqrtOp = currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast3});
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -631,7 +625,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest2)
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor0}, {ubTensor1});
     auto& tensorOffset1 = ubTensor0->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-            tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor1->GetDynValidShape()));
+        tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor1->GetDynValidShape()));
     ubTensor1->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
     auto& gatherin1 =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {ubTensor1, offsets2, blockTable2}, {ubTensor2});
@@ -689,7 +683,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor0});
     auto& tensorOffset1 = inCast->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-            tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor0->GetDynValidShape()));
+        tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor0->GetDynValidShape()));
     ubTensor0->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
     auto& gatherin =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {ubTensor0, offsets, blockTable}, {ubTensor1});
@@ -697,7 +691,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
     auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor1}, {ubTensor2});
     auto& tensorOffset2 = ubTensor1->GetTensorOffset();
     viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-            tensorOffset1.GetOffset(), tensorOffset2.GetDynOffset(), ubTensor2->GetDynValidShape()));
+        tensorOffset1.GetOffset(), tensorOffset2.GetDynOffset(), ubTensor2->GetDynValidShape()));
 
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor2}, {outCast2});
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor2}, {outCast1});
@@ -761,7 +755,8 @@ TEST_F(TestDuplicateOpPass, TestCheck1)
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor3}, {outcast3});
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {tensor1}, {tensor2});
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {tensor1}, {outcast1});
-    auto& gatherinOp = currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {tensor2, offsets, blockTable}, {tensor3});
+    auto& gatherinOp =
+        currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {tensor2, offsets, blockTable}, {tensor3});
     gatherinOp.SetAttribute(OpAttributeKey::startOffset, i);
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast1);
@@ -884,9 +879,8 @@ TEST_F(TestDuplicateOpPass, TestCheck4)
     auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {tensor1});
     auto& tensorOffset = incast->GetTensorOffset();
-    viewOp.SetOpAttribute(
-        std::make_shared<ViewOpAttribute>(
-            tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), tensor1->GetDynValidShape()));
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        tensorOffset.GetOffset(), tensorOffset.GetDynOffset(), tensor1->GetDynValidShape()));
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast2});
     currFunctionPtr->inCasts_.push_back(incast);
@@ -937,13 +931,13 @@ TEST_F(TestDuplicateOpPass, GatherIn_OOperandNull)
 }
 
 /*
-TestSourceLocation
+TestSpan
 inCast{16,16}->gatherIn->ubTensor{16,16}->sqrt->outCast1{16,16}
                                         ->sqrt->outCast2{16,16}
 inCast{16,16}->gatherIn->ubTensor{16,16}->sqrt->outCast1{16,16}
             ->gatherIn->ubTensor'{16,16}->sqrt->outCast2{16,16}
 */
-TEST_F(TestDuplicateOpPass, TestSourceLocation)
+TEST_F(TestDuplicateOpPass, TestSpan)
 {
     auto currFunctionPtr =
         std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
@@ -951,7 +945,7 @@ TEST_F(TestDuplicateOpPass, TestSourceLocation)
     int64_t i = 0;
     // Prepare the graph
     std::vector<int64_t> shape = {kNumExpFour, kNumExpFour};
-    auto sourceLocation = std::make_shared<SourceLocation>("gatherIn", kNumOne);
+    auto span = ir::Span("gatherIn", kNumOne, 0);
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     inCast->UpdateDynValidShape({SymbolicScalar(kNumExpFour), SymbolicScalar(kNumExpFour)});
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
@@ -962,7 +956,7 @@ TEST_F(TestDuplicateOpPass, TestSourceLocation)
     auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
 
     auto& gatherIn = currFunctionPtr->AddRawOperation(
-        Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor}, true, sourceLocation);
+        Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor}, true, span);
     gatherIn.SetAttribute(OpAttributeKey::startOffset, i);
     gatherIn.SetScopeId(1);
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast1});
@@ -979,7 +973,7 @@ TEST_F(TestDuplicateOpPass, TestSourceLocation)
 
     for (auto& op : currFunctionPtr->Operations()) {
         if (op.GetOpcode() == Opcode::OP_GATHER_IN_L1) {
-            EXPECT_EQ(op.GetLocation()->lineno_, kNumOne);
+            EXPECT_EQ(op.GetSpan().BeginLine(), kNumOne);
             EXPECT_EQ(op.GetScopeId(), 1);
         }
     }

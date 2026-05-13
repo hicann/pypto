@@ -106,36 +106,6 @@ TEST(ProgramTest, ProgramKindAndTypeName)
 }
 
 // ============================================================================
-// Core / Span Tests (core.cpp)
-// ============================================================================
-
-TEST(SpanTest, Construction)
-{
-    Span span("file.py", 10, 5);
-    ASSERT_EQ(span.filename_, "file.py");
-    ASSERT_EQ(span.beginLine_, 10);
-    ASSERT_EQ(span.beginColumn_, 5);
-    ASSERT_EQ(span.endLine_, -1);
-    ASSERT_EQ(span.endColumn_, -1);
-}
-
-TEST(SpanTest, ConstructionWithEndPos)
-{
-    Span span("file.py", 10, 5, 20, 15);
-    ASSERT_EQ(span.endLine_, 20);
-    ASSERT_EQ(span.endColumn_, 15);
-}
-
-TEST(SpanTest, ToString)
-{
-    Span span("file.py", 10, 5);
-    auto str = span.ToString();
-    ASSERT_NE(str.find("file.py"), std::string::npos);
-    ASSERT_NE(str.find("10"), std::string::npos);
-    ASSERT_NE(str.find("5"), std::string::npos);
-}
-
-// ============================================================================
 // Expr Tests (expr.cpp)
 // ============================================================================
 

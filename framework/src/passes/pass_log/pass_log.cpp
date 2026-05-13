@@ -31,10 +31,7 @@ namespace {
 const char* kExtractPassLogScriptName = "extract_pass_log.py";
 const char* kExtractPassLogScriptInSource = "tools/scripts/extract_pass_log.py";
 
-bool IsFileAccessible(const std::string& path)
-{
-    return !path.empty() && access(path.c_str(), F_OK) == 0;
-}
+bool IsFileAccessible(const std::string& path) { return !path.empty() && access(path.c_str(), F_OK) == 0; }
 
 std::string ResolveExtractPassLogScriptPath()
 {
@@ -69,15 +66,14 @@ std::string EscapeShellArg(const std::string& arg)
 // 入参为Operation对象
 std::string GetFormatBacktrace(const Operation& op)
 {
-    auto location = op.GetLocation();
-    if (!location) {
+    auto span = op.GetSpan();
+    if (!span.IsUnknown()) {
         return "";
     }
 
     std::ostringstream oss;
     oss << "[FuncMagic:" << op.BelongTo()->GetFuncMagic() << "]"
-        << "[OpMagic:" << op.opmagic << "]"
-        << "[Backtrace]:" << location->SourceLocation::GetBacktrace() << ".";
+        << "[OpMagic:" << op.opmagic << "].";
     return oss.str();
 }
 
@@ -115,9 +111,8 @@ void ExtractPassLogByFunction(const Function& function)
     const std::string scriptPath = ResolveExtractPassLogScriptPath();
     if (scriptPath.empty()) {
         APASS_LOG_WARN_F(
-            Elements::Function,
-            "%s not found under install(%s/scripts), or source(%s).",
-            kExtractPassLogScriptName, GetCurrentSharedLibPath().c_str(), kExtractPassLogScriptInSource);
+            Elements::Function, "%s not found under install(%s/scripts), or source(%s).", kExtractPassLogScriptName,
+            GetCurrentSharedLibPath().c_str(), kExtractPassLogScriptInSource);
         return;
     }
 
@@ -129,9 +124,7 @@ void ExtractPassLogByFunction(const Function& function)
                                 EscapeShellArg(functionName) + " -o " + EscapeShellArg(outputDir) + " --silentmode";
     int ret = std::system(command.c_str());
     if (ret != 0) {
-        APASS_LOG_WARN_F(
-            Elements::Function, "extract_pass_log.py failed(ret=%d), command: %s.",
-            ret, command.c_str());
+        APASS_LOG_WARN_F(Elements::Function, "extract_pass_log.py failed(ret=%d), command: %s.", ret, command.c_str());
     }
 }
 

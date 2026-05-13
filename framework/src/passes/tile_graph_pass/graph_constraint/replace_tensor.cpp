@@ -695,7 +695,9 @@ LogicalTensorPtr ReplaceTensor::FindReplaceSource(
         return visited.at(&op);
     }
     auto inplaceIdx = op.GetIntAttribute(OpAttributeKey::inplaceIdx);
-    ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()));
+    ASSERT(
+        OperationErr::OP_INVALID_OPERAND_COUNT,
+        inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()));
     auto inplaceIOperand = op.GetInputOperand(inplaceIdx);
     LogicalTensorPtr res = nullptr;
     for (auto producer : inplaceIOperand->GetProducers()) {
@@ -756,7 +758,7 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
         auto& nop = function.AddRawOperation(Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
         nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); // 期望上设成任何一个都可以，因为来源一致
         nop.UpdateSubgraphID(op->GetSubgraphID());
-        auto consumers = oOperand->GetConsumers();       // deep copy
+        auto consumers = oOperand->GetConsumers(); // deep copy
         for (auto consumer : consumers) {
             if (consumer->GetOpcode() == Opcode::OP_NOP || !consumer->HasAttribute(OpAttributeKey::inplaceIdx)) {
                 continue;
@@ -879,9 +881,9 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
     auto copyDynShape = input->GetDynValidShape();
     Offset offset(copyShape.size(), 0);
 
-    LogicalTensor copyOutOutput(function, input->Datatype(), copyShape);
-    copyOutOutput.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(std::move(copyOutOutput));
+    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
     auto& copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
 
     copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
@@ -889,9 +891,8 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
     copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
-    LogicalTensor copyInOutput(function, input->Datatype(), copyShape);
-    copyInOutput.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyInOutputPtr = std::make_shared<LogicalTensor>(std::move(copyInOutput));
+    auto copyInOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset), input->GetMemoryTypeOriginal(), OpImmediate::Specified(copyShape),
@@ -912,23 +913,24 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     auto copyDynShape = input->GetDynValidShape();
     Offset offset(copyShape.size(), 0);
     Offset inOffset = input->GetOffset();
-    auto &inOp = *(input)->GetProducers().begin();
+    auto& inOp = *(input)->GetProducers().begin();
     if (needInsertCopyAssOp->GetOpcode() == Opcode::OP_RESHAPE && inOp->GetOpcode() == Opcode::OP_VIEW) {
         auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(inOp->GetOpAttribute());
         inOffset = viewOpAttr->GetFrom();
     }
-    LogicalTensor copyInOutput(function, input->Datatype(), copyShape);
-    copyInOutput.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    auto copyInOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
-    auto memType = copyInOutput.GetMemoryTypeOriginal();
-    if ((memType == MemoryType::MEM_UB) && (copyInOutput.GetDataSize() > UB_SIZE_THRESHOLD)) {
-        APASS_LOG_ERROR_F(Elements::Tensor, 
-                          "Tensor [%d] can not copy to UB, tensor size [%ld] exceeds the UB size [%d] limit.", input->magic, 
-                          input->GetDataSize(), UB_SIZE_THRESHOLD);
+    auto memType = copyInOutputPtr->GetMemoryTypeOriginal();
+    if ((memType == MemoryType::MEM_UB) && (copyInOutputPtr->GetDataSize() > UB_SIZE_THRESHOLD)) {
+        APASS_LOG_ERROR_F(
+            Elements::Tensor, "Tensor [%d] can not copy to UB, tensor size [%ld] exceeds the UB size [%d] limit.",
+            input->magic, input->GetDataSize(), UB_SIZE_THRESHOLD);
         return FAILED;
     }
-    auto copyInOutputPtr = std::make_shared<LogicalTensor>(std::move(copyInOutput));
-    //为copy到Ub的Tensor进行32B对齐
+
+    // 为copy到Ub的Tensor进行32B对齐
     AlignmentUtils::ProcessLastDim32BAlignedOnUB(copyInOutputPtr);
     auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {input}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
@@ -936,9 +938,8 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
-    LogicalTensor copyOutOutput(function, input->Datatype(), copyShape);
-    copyOutOutput.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(std::move(copyOutOutput));
+    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto& copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});
     copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_UB, OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
@@ -958,7 +959,7 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     visitedAssOps.insert(op.GetOpMagic());
     auto assembleIn = op.GetIOperands()[0];
     auto producers = assembleIn->GetProducers();
-    auto &inOp = *(assembleIn)->GetProducers().begin();
+    auto& inOp = *(assembleIn)->GetProducers().begin();
     if ((!producers.empty()) && (*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) {
         return FAILED;
     }
@@ -987,12 +988,13 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     return SUCCESS;
 }
 
-bool ReplaceTensor::isBoundTensor(LogicalTensorPtr &curTensor) {
+bool ReplaceTensor::isBoundTensor(LogicalTensorPtr& curTensor)
+{
     std::set<int> boundTensorIDs;
-    for (auto &inOp : curTensor->GetProducers()) {
+    for (auto& inOp : curTensor->GetProducers()) {
         boundTensorIDs.insert(inOp->GetSubgraphID());
     }
-    for (auto &outOp : curTensor->GetConsumers()) {
+    for (auto& outOp : curTensor->GetConsumers()) {
         boundTensorIDs.insert(outOp->GetSubgraphID());
     }
     if (boundTensorIDs.size() > 1) {
@@ -1002,12 +1004,11 @@ bool ReplaceTensor::isBoundTensor(LogicalTensorPtr &curTensor) {
 }
 
 Status ReplaceTensor::FindNeedToCopyReshape(
-    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedReshapeOps,
-    Operation& op, Function &function)
+    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedReshapeOps, Operation& op,
+    Function& function)
 {
     visitedReshapeOps.insert(op.GetOpMagic());
-    if (op.GetIOperands()[0]->tensor->GetRawShapeSize() > 0 &&
-        op.GetOOperands()[0]->tensor->GetRawShapeSize() > 0 &&
+    if (op.GetIOperands()[0]->tensor->GetRawShapeSize() > 0 && op.GetOOperands()[0]->tensor->GetRawShapeSize() > 0 &&
         op.GetIOperands()[0]->tensor->GetRawShapeSize() != op.GetOOperands()[0]->tensor->GetRawShapeSize()) {
         needInsertCopyAssOps.insert(&op);
         return SUCCESS;
@@ -1015,15 +1016,15 @@ Status ReplaceTensor::FindNeedToCopyReshape(
     auto producerOps = op.ProducerOps();
     auto consumerOps = op.ConsumerOps();
     for (auto producesOp : producerOps) {
-        if (producesOp->GetOpcode() == Opcode::OP_VIEW &&
-            isBoundTensor(op.GetOOperands().front()) &&
+        if (producesOp->GetOpcode() == Opcode::OP_VIEW && isBoundTensor(op.GetOOperands().front()) &&
             !isBoundTensor(producesOp->GetIOperands().front()) &&
             !function.IsFromInCast(producesOp->GetIOperands().front())) {
             needInsertCopyAssOps.insert(&op);
         }
     }
     for (auto consumerOp : consumerOps) {
-        if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE && consumerOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE &&
+            consumerOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
             needInsertCopyAssOps.insert(consumerOp);
         }
     }

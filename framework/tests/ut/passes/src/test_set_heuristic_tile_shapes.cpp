@@ -163,7 +163,7 @@ TEST_F(TestSetHeuristicTileShapes, TestPythonJsonGeneration)
 
     TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64});
     currFunctionPtr->SetGraphType(GraphType::TILE_GRAPH);
-    SourceLocation::SetLocation("noexist.cpp", 1);
+    ir::Span::SetCurrent(ir::Span("noexist.cpp", 1, 0));
     auto& add_op = currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
     add_op.tileShape_.SetCubeTile({64, 64}, {64, 64}, {64, 64});
 

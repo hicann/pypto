@@ -26,30 +26,6 @@ namespace ir {
 class IRCoreExtTest : public testing::Test {};
 
 // ============================================================================
-// Span Constructor Tests
-// ============================================================================
-
-TEST_F(IRCoreExtTest, TestSpanConstructor)
-{
-    Span sp("test.py", 1, 2, 3, 4);
-    ASSERT_EQ(sp.filename_, "test.py");
-    ASSERT_EQ(sp.beginLine_, 1);
-    ASSERT_EQ(sp.beginColumn_, 2);
-    ASSERT_EQ(sp.endLine_, 3);
-    ASSERT_EQ(sp.endColumn_, 4);
-}
-
-TEST_F(IRCoreExtTest, TestSpanUnknown)
-{
-    Span sp = Span::Unknown();
-    ASSERT_EQ(sp.filename_, "");
-    ASSERT_EQ(sp.beginLine_, -1);
-    ASSERT_EQ(sp.beginColumn_, -1);
-    ASSERT_EQ(sp.endLine_, -1);
-    ASSERT_EQ(sp.endColumn_, -1);
-}
-
-// ============================================================================
 // Span::to_string Tests
 // ============================================================================
 

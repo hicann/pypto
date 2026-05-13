@@ -247,6 +247,10 @@ void IRVisitor::VisitStmt_(const BreakStmtPtr&) {}
 
 void IRVisitor::VisitStmt_(const ContinueStmtPtr&) {}
 
+void IRVisitor::VisitStmt_(const ScalarOpStmtPtr&) {}
+
+void IRVisitor::VisitStmt_(const TensorOpStmtPtr&) {}
+
 void IRVisitor::VisitStmt_(const StmtPtr&) {}
 
 } // namespace ir

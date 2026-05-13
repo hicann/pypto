@@ -35,7 +35,7 @@ public:
         MemoryType toType = MemoryType::MEM_UNKNOWN;
         bool hasCopyInMode;                 // 是否有copy_in_mode属性
         npu::tile_fwk::Any copyInModeValue; // copy_in_mode属性值
-        SourceLocationPtr sourceLocation;       // 链路最早操作的sourceLocation
+        ir::Span span;                      // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
     };
     struct AssembleOp {
@@ -43,7 +43,7 @@ public:
         std::shared_ptr<LogicalTensor> output;
         std::vector<int64_t> offset;
         std::vector<SymbolicScalar> dynOffset;
-        SourceLocationPtr sourceLocation;       // 链路最早操作的sourceLocation
+        ir::Span span; // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
     };
 
@@ -60,8 +60,8 @@ public:
      * @param chain the list of operations in the view chain.
      * @return Status indicating success or failed.
      */
-    Status MergeViewChain(Function& function, Operation& operation, std::vector<Operation*>& chain,
-                          int effectiveScopeId = -1);
+    Status MergeViewChain(
+        Function& function, Operation& operation, std::vector<Operation*>& chain, int effectiveScopeId = -1);
 
     void InitOperationChain(Operation& operation, std::vector<Operation*>& chain);
 
@@ -107,7 +107,7 @@ public:
         Operation* lastViewOp, const std::shared_ptr<LogicalTensor>& startTensor,
         const std::shared_ptr<LogicalTensor>& endTensor, const std::vector<int64_t>& newOffset,
         const std::vector<SymbolicScalar>& newDynOffset, const std::vector<SymbolicScalar>& newDynValidShape,
-        const SourceLocationPtr &sourceLocation, const Operation::ScopeInfo &scopeInfo);
+        const ir::Span& span, const Operation::ScopeInfo& scopeInfo);
 
     // Assemble chain processing methods
     /**
@@ -118,8 +118,8 @@ public:
      * @param chain the list of operations in the assemble chain.
      * @return Status indicating success or failed.
      */
-    Status MergeAssembleChain(Function& function, Operation& operation, std::vector<Operation*>& chain,
-                              int effectiveScopeId = -1);
+    Status MergeAssembleChain(
+        Function& function, Operation& operation, std::vector<Operation*>& chain, int effectiveScopeId = -1);
 
     void InitAssembleChain(Operation& operation, std::vector<Operation*>& chain);
 
@@ -144,13 +144,13 @@ public:
 
     void RecordAssembleOperation(
         const std::shared_ptr<LogicalTensor>& input, const std::shared_ptr<LogicalTensor>& output,
-        const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
-        const SourceLocationPtr &sourceLocation, const Operation::ScopeInfo &scopeInfo);
+        const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
+        const Operation::ScopeInfo& scopeInfo);
 
     // Common methods
     Status Initialize();
-    static SourceLocationPtr GetFirstSourceLocation(const std::vector<Operation *> &chain);
-    static Operation::ScopeInfo GetChainScopeInfo(const std::vector<Operation*> &chain);
+    static ir::Span GetFirstSpan(const std::vector<Operation*>& chain);
+    static Operation::ScopeInfo GetChainScopeInfo(const std::vector<Operation*>& chain);
 
     // Processing methods
     Status ProcessOperations(Function& function);

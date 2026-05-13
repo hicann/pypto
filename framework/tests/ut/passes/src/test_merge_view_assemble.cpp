@@ -928,30 +928,29 @@ TEST_F(MergeViewAssembleTest, TestPreCheck)
 }
 
 /*
-TestSourceLocation
+TestSpan
 inCast{16,16}->view->ubTensor1{8,4}->assemble->ubTensor2{8,4}->assemble->outCast{8,4}
 inCast{16,16}->view->ubTensor1{8,4}->assemble->outCast{8,4}
 */
-TEST_F(MergeViewAssembleTest, TestSourceLocation)
+TEST_F(MergeViewAssembleTest, TestSpan)
 {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestSourceLocation", "TestSourceLocation", nullptr);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSpan", "TestSpan", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape1 = {16, 16};
     std::vector<int64_t> shape2 = {8, 4};
-    auto sourceLocation1 = std::make_shared<SourceLocation>("view", NUM1);
-    auto sourceLocation2 = std::make_shared<SourceLocation>("view", NUM2);
+    auto span1 = ir::Span("view", NUM1, 0);
+    auto span2 = ir::Span("view", NUM2, 0);
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
 
-    auto& viewOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1}, true, sourceLocation1);
+    auto& viewOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1}, true, span1);
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_UB);
     viewOp.SetOpAttribute(viewAttribute);
-    currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2}, true, sourceLocation2);
+    currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2}, true, span2);
     currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -961,10 +960,10 @@ TEST_F(MergeViewAssembleTest, TestSourceLocation)
     EXPECT_EQ(status, SUCCESS);
     for (auto& op : currFunctionPtr->Operations()) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            EXPECT_EQ(op.GetLocation()->lineno_, NUM2);
+            EXPECT_EQ(op.GetSpan().BeginLine(), NUM2);
         }
         if (op.GetOpcode() == Opcode::OP_VIEW) {
-            EXPECT_EQ(op.GetLocation()->lineno_, NUM1);
+            EXPECT_EQ(op.GetSpan().BeginLine(), NUM1);
         }
     }
 }
@@ -974,12 +973,11 @@ TEST_F(MergeViewAssembleTest, ViewChainSameScopeIdsShouldMerge)
     Program program;
     std::string funcMagicName = "test_view_same_scope";
     std::string funcRawName = "test_view_same_scope_raw";
-    std::unique_ptr<Function> function =
-        std::make_unique<Function>(program, funcMagicName, funcRawName, nullptr);
+    std::unique_ptr<Function> function = std::make_unique<Function>(program, funcMagicName, funcRawName, nullptr);
     auto rawTensor = std::make_shared<RawTensor>(
         DataType::DT_FP32, std::vector<int64_t>{10, 10}, TileOpFormat::TILEOP_ND, "input_tensor");
-    std::shared_ptr<LogicalTensor> inputTensor = std::make_shared<LogicalTensor>(
-        *function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
+    std::shared_ptr<LogicalTensor> inputTensor =
+        std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(inputTensor);
 
     // VIEW1(scopeId=1) -> VIEW2(scopeId=1), should merge
@@ -1019,12 +1017,11 @@ TEST_F(MergeViewAssembleTest, ViewChainMixedDefaultAndValidScopeIdShouldMerge)
     Program program;
     std::string funcMagicName = "test_view_mixed_scope";
     std::string funcRawName = "test_view_mixed_scope_raw";
-    std::unique_ptr<Function> function =
-        std::make_unique<Function>(program, funcMagicName, funcRawName, nullptr);
+    std::unique_ptr<Function> function = std::make_unique<Function>(program, funcMagicName, funcRawName, nullptr);
     auto rawTensor = std::make_shared<RawTensor>(
         DataType::DT_FP32, std::vector<int64_t>{10, 10}, TileOpFormat::TILEOP_ND, "input_tensor");
-    std::shared_ptr<LogicalTensor> inputTensor = std::make_shared<LogicalTensor>(
-        *function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
+    std::shared_ptr<LogicalTensor> inputTensor =
+        std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(inputTensor);
 
     // VIEW1(scopeId=-1, default) -> VIEW2(scopeId=1), should merge and inherit scopeId=1
@@ -1120,12 +1117,12 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeView)
 
     std::vector<int64_t> shape = {8, 16};
     std::vector<SymbolicScalar> inputDynValidShape = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
-    
+
     auto rawTensor = std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "inputTensor");
     auto input = std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, shape);
     input->UpdateDynValidShape(inputDynValidShape);
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(input);
-    
+
     auto tensor1 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
     auto tensor2 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
@@ -1159,9 +1156,9 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeView)
 
 /*
 TestInferShapeAfterMergeAssemble
-input{8,16} with DynValidShape -> view -> tensor0{8,16} -> assemble1 -> tensor1{8,16} -> assemble2 -> tensor2{8,16} -> exp -> output{8,16}
-After merge: input -> view -> tensor0 -> mergedAssemble -> tensor2 -> exp -> output
-Verify mergedAssemble output tensor has correct DynValidShape
+input{8,16} with DynValidShape -> view -> tensor0{8,16} -> assemble1 -> tensor1{8,16} -> assemble2 -> tensor2{8,16} ->
+exp -> output{8,16} After merge: input -> view -> tensor0 -> mergedAssemble -> tensor2 -> exp -> output Verify
+mergedAssemble output tensor has correct DynValidShape
 */
 TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeAssemble)
 {
@@ -1171,12 +1168,13 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeAssemble)
     std::unique_ptr<Function> function = std::make_unique<Function>(program, funcMagicName, funcRawName, nullptr);
 
     std::vector<int64_t> shape = {8, 16};
-    std::vector<SymbolicScalar> tensorDynValidShape = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
-    
+    std::vector<SymbolicScalar> tensorDynValidShape = {
+        SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+
     auto rawTensor = std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "inputTensor");
     auto input = std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, shape);
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(input);
-    
+
     auto tensor0 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
     tensor0->UpdateDynValidShape(tensorDynValidShape);
     auto tensor1 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);

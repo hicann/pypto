@@ -48,6 +48,7 @@ def test_dtypes():
         (ir.FP8E5M2, 8, False, False, True, "fp8e5m2", "unknown"),
         (ir.FP16, 16, False, False, True, "fp16", "half"),
         (ir.FP32, 32, False, False, True, "fp32", "float"),
+        (ir.FP64, 64, False, False, True, "fp64", "double"),
         (ir.BF16, 16, False, False, True, "bfloat16", "bfloat16"),
         (ir.HF4, 4, False, False, True, "hf4", "unknown"),
         (ir.HF8, 8, False, False, True, "hf8", "unknown"),
@@ -65,7 +66,7 @@ def test_span():
     assert span.begin_column == 2
     assert span.end_line == 3
     assert span.end_column == 4
-    assert not ir.Span.is_unknown(span)
+    assert not span.is_unknown()
 
     span = ir.Span("span", 1, 2)
     assert span.filename == "span"
@@ -73,7 +74,7 @@ def test_span():
     assert span.begin_column == 2
     assert span.end_line == -1
     assert span.end_column == -1
-    assert not ir.Span.is_unknown(span)
+    assert not span.is_unknown()
 
 
 def test_logging(capfd):
@@ -138,6 +139,10 @@ def test_basic_types():
 
     pt = ir.PtrType()
     assert str(pt) == "ir.Ptr"
+
+    # TokenType
+    tt3 = ir.TokenType()
+    assert str(tt3) == "ir.Token"
 
 
 def test_basic_expr():

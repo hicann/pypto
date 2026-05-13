@@ -1526,7 +1526,7 @@ void Function::UpdateTensorDataUsage(Operation& op)
 
 Operation& Function::AddRawOperation(
     const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, bool updateTensorMap,
-    const SourceLocationPtr& sourceLocation)
+    const ir::Span& span)
 {
     if (IsFunctionTypeAndGraphType(FunctionType::STATIC, {GraphType::EXECUTE_GRAPH, GraphType::BLOCK_GRAPH})) {
         updateTensorMap = false;
@@ -1545,8 +1545,9 @@ Operation& Function::AddRawOperation(
     } else {
         operations_.back()->SetScopeId(-1);
     }
-    if (sourceLocation != nullptr) {
-        operations_.back()->SetLocation(sourceLocation);
+
+    if (!span.IsUnknown()) {
+        operations_.back()->SetSpan(span);
     }
     return *operations_.back();
 }
@@ -1773,8 +1774,9 @@ void Function::CreateFromIncast(
     const std::shared_ptr<LogicalTensor>& symbol, const std::shared_ptr<LogicalTensor>& newIncast,
     const std::shared_ptr<LogicalTensor>& originIncast)
 {
-    DEFINE_SOURCE_LOCATION();
+    ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
     auto& incastOp = AddOperation(Opcode::OP_VIEW, {symbol}, {newIncast});
+    ir::Span::ClearCurrent();
     incastOp.SetAttr(OpAttributeKey::isGlobalInput, true);
 
     auto validShape = originIncast->GetDynValidShape();
@@ -1844,8 +1846,7 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
         const auto& sameRawIncasts = incastWithSameRaw[rawIncast->rawmagic];
 
         std::vector<int64_t> zeroOffset(rawIncast->rawshape.size(), 0);
-        auto inArgument =
-            std::make_shared<LogicalTensor>(Parent(), rawIncast, zeroOffset, rawIncast->rawshape);
+        auto inArgument = std::make_shared<LogicalTensor>(Parent(), rawIncast, zeroOffset, rawIncast->rawshape);
         inArgumentList.push_back(inArgument);
 
         auto incastSymbol = CreateIncastTensor(inArgument);
@@ -1948,8 +1949,7 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         auto rawBuf = std::make_shared<LogicalTensor>(
             *this, rawOutcast->datatype, rawOutcast->rawshape, rawOutcast->GetDynRawShape(),
             rawToOutcast[rawOutcast]->Format(), "OUTCAST_LOCAL_BUF" + std::to_string(idx));
-        auto outArgument =
-            std::make_shared<LogicalTensor>(Parent(), rawOutcast, nonOffsets, rawOutcast->rawshape);
+        auto outArgument = std::make_shared<LogicalTensor>(Parent(), rawOutcast, nonOffsets, rawOutcast->rawshape);
         rawSymbol->tensor->UpdateDynRawShape(rawOutcast->GetDynRawShape());
         rawBuf->tensor->UpdateDynRawShape(rawOutcast->GetDynRawShape());
         Parent().tensorMap_.Insert(outArgument);
@@ -2015,7 +2015,6 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
                 }
                 auto consumers = iOperand[i]->GetConsumers(); // deep copy
                 for (auto consumer : consumers) {
-                    DEFINE_SOURCE_LOCATION();
                     for (size_t j = 0; j < consumer->GetIOperands().size(); j++) {
                         if (consumer->GetInputOperand(j) == iOperand[i]) {
                             consumer->ReplaceIOperand(j, rawSymbol);
@@ -2026,8 +2025,9 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
                     scope->partialUpdateOutcastDict[rawSymbol] = partitalAssemble;
                 }
             } else {
-                DEFINE_SOURCE_LOCATION();
+                ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
                 auto& assembleOp = AddOperation(Opcode::OP_ASSEMBLE, {iOperand[i]}, oOperand);
+                ir::Span::ClearCurrent();
                 assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
                     newOutcastOffsets[i], SymbolicScalar::FromConcrete(newOutcastOffsets[i])));
             }
@@ -2159,9 +2159,9 @@ Json Function::DumpJson(bool useTable)
     funcJson["_mg_vec_parallel_lb"] = paramConfigs_.mgVecParallelLb;
     funcJson["_total_subgraph_count"] = totalSubGraphCount_;
     funcJson["_ooo_preschedule_method"] = paramConfigs_.OoOPreScheduleMethod;
-    if (sourceLocation_ != nullptr) {
-        funcJson["file"] = sourceLocation_->GetFileName();
-        funcJson["line"] = sourceLocation_->GetLineno();
+    if (!span_.IsUnknown()) {
+        funcJson["file"] = span_.Filename();
+        funcJson["line"] = span_.BeginLine();
     }
 
     if (useTable) {

@@ -16,7 +16,7 @@
 #ifndef CODEGEN_COMMON_H
 #define CODEGEN_COMMON_H
 
-#include <iostream>
+#include <map>
 
 #include "interface/utils/common.h"
 #include "tilefwk/data_type.h"

@@ -18,7 +18,6 @@
 #include "interface/function/function.h"
 #include "interface/tensor/raw_tensor.h"
 #include "interface/tensor/logical_tensor.h"
-#include "interface/utils/source_location.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
@@ -196,11 +195,12 @@ Status ExpandFunction::Expandfunction(Function& function) const
         if (op->GetOpcode() == Opcode::OP_PRINT) {
             continue;
         }
-        SourceLocation::SetLocation(op->GetLocation());
         if (kNotNeedExpandOps.count(op->GetOpcode())) {
             ProcessForNotExpandOp(function, *op);
             continue;
         }
+
+        ir::Span::SetCurrent(op->GetSpan());
         config::SetSemanticLabel(op->GetSemanticLabel());
         size_t opListPreSize = function.Operations(false).size();
         if (ExpandOperation(function, *op) != SUCCESS) {
@@ -214,19 +214,18 @@ Status ExpandFunction::Expandfunction(Function& function) const
                 newOp.CopyAttrFrom(*op, OP_EMUOP_PREFIX);
             }
         }
-        SourceLocation::ClearLocation();
+        ir::Span::ClearCurrent();
     }
     function.expandFunctionAccelerate = false;
     return SUCCESS;
 }
 
-Status ExpandFunction::ExpandOperation(Function &function, Operation &op) const{
-    const auto &info = op.GetScopeInfo();
+Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const
+{
+    const auto& info = op.GetScopeInfo();
     std::vector<int64_t> scopeVec = {
-        static_cast<int64_t>(info.scopeId),
-        static_cast<int64_t>(info.allowParallelMerge),
-        static_cast<int64_t>(info.allowCrossScopeMerge)
-    };
+        static_cast<int64_t>(info.scopeId), static_cast<int64_t>(info.allowParallelMerge),
+        static_cast<int64_t>(info.allowCrossScopeMerge)};
     config::SetPassOption(SG_SET_SCOPE, scopeVec);
     ExpandOperationInto(function, op.GetTileShape(), op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), op);
     config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});

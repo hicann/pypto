@@ -227,6 +227,8 @@ protected:
     void VisitStmt_(const EvalStmtPtr& op) override;
     void VisitStmt_(const BreakStmtPtr& op) override;
     void VisitStmt_(const ContinueStmtPtr& op) override;
+    void VisitStmt_(const TensorOpStmtPtr& op) override;
+    void VisitStmt_(const ScalarOpStmtPtr& op) override;
     void VisitStmt_(const StmtPtr& op) override;
 
     // Function and program visitors
@@ -352,6 +354,10 @@ std::string IRPrinter::Print(const TypePtr& type)
 
     if (auto ptr_type = As<PtrType>(type)) {
         return prefix_ + ".Ptr";
+    }
+
+    if (auto token_type = As<TokenType>(type)) {
+        return prefix_ + ".Token";
     }
 
     return prefix_ + ".Unknown";
@@ -725,14 +731,110 @@ void IRPrinter::VisitStmt_(const EvalStmtPtr& op)
 
 void IRPrinter::VisitStmt_(const BreakStmtPtr& op)
 {
-    (void)op;
     stream_ << "break";
+    for (size_t i = 0; i < op->value_.size(); ++i) {
+        stream_ << (i == 0 ? " " : ", ");
+        VisitExpr(op->value_[i]);
+    }
 }
 
 void IRPrinter::VisitStmt_(const ContinueStmtPtr& op)
 {
-    (void)op;
     stream_ << "continue";
+    for (size_t i = 0; i < op->value_.size(); ++i) {
+        stream_ << (i == 0 ? " " : ", ");
+        VisitExpr(op->value_[i]);
+    }
+}
+
+void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
+{
+    // res [, res_token] = opcode(args, tokens=[], attrs=[])
+    if (op->result_.size() == 1) {
+        VisitExpr(op->result_[0]);
+    } else {
+        stream_ << "[";
+        for (size_t i = 0; i < op->result_.size(); ++i) {
+            if (i > 0)
+                stream_ << ", ";
+            VisitExpr(op->result_[i]);
+        }
+        stream_ << "]";
+    }
+    if (op->result_token_) {
+        stream_ << ", ";
+        VisitExpr(op->result_token_);
+    }
+    stream_ << " = " << op->opcode_ << "(";
+    for (size_t i = 0; i < op->args_.size(); ++i) {
+        if (i > 0)
+            stream_ << ", ";
+        VisitExpr(op->args_[i]);
+    }
+    if (!op->tokens_.empty()) {
+        stream_ << ", tokens=[";
+        for (size_t i = 0; i < op->tokens_.size(); ++i) {
+            if (i > 0)
+                stream_ << ", ";
+            VisitExpr(op->tokens_[i]);
+        }
+        stream_ << "]";
+    }
+
+    auto printValue = [&](const std::string& key, const std::any& value) {
+        stream_ << key << "=";
+        if (value.type() == typeid(int)) {
+            stream_ << AnyCast<int>(value);
+        } else if (value.type() == typeid(double)) {
+            stream_ << FormatFloatLiteral(AnyCast<double>(value));
+        } else if (value.type() == typeid(float)) {
+            stream_ << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value)));
+        } else if (value.type() == typeid(bool)) {
+            stream_ << (AnyCast<bool>(value) ? "True" : "False");
+        } else if (value.type() == typeid(std::string)) {
+            stream_ << std::quoted(AnyCast<std::string>(value));
+        } else if (value.type() == typeid(ExprPtr)) {
+            VisitExpr(AnyCast<ExprPtr>(value));
+        } else if (value.type() == typeid(std::vector<ExprPtr>)) {
+            auto valueExpr = AnyCast<std::vector<ExprPtr>>(value);
+            stream_ << "[";
+            for (size_t i = 0; i < valueExpr.size(); ++i) {
+                if (i > 0)
+                    stream_ << ", ";
+                VisitExpr(valueExpr[i]);
+            }
+            stream_ << "]";
+        } else {
+            INTERNAL_CHECK(false) << "Unsupported function attrs value type: " << DemangleTypeName(value.type().name());
+        }
+    };
+    if (!op->attrs_.empty()) {
+        stream_ << ", attrs=[";
+        for (size_t i = 0; i < op->attrs_.size(); ++i) {
+            if (i > 0)
+                stream_ << ", ";
+            printValue(op->attrs_[i].first, op->attrs_[i].second);
+        }
+        stream_ << "]";
+    }
+    stream_ << ")";
+}
+
+void IRPrinter::VisitStmt_(const ScalarOpStmtPtr& op)
+{
+    // res [, res_token] = opcode(args)
+    VisitExpr(op->result_);
+    if (op->result_token_) {
+        stream_ << ", ";
+        VisitExpr(op->result_token_);
+    }
+    stream_ << " = " << op->opcode_ << "(";
+    for (size_t i = 0; i < op->args_.size(); ++i) {
+        if (i > 0)
+            stream_ << ", ";
+        VisitExpr(op->args_[i]);
+    }
+    stream_ << ")";
 }
 
 void IRPrinter::VisitStmt_(const StmtPtr& op) { stream_ << op->TypeName(); }

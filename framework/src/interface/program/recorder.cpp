@@ -82,7 +82,7 @@ void RecordFunc::RecordDynFuncInner(
 
     dynFunc_ = Program::GetInstance().GetCurrentFunction();
     dynFunc_->SetUnderDynamicFunction(true);
-    dynFunc_->SetSourceLocation(SourceLocation::GetLocation());
+    dynFunc_->SetSpan(ir::Span::Current());
 
     std::shared_ptr<DyndevFunctionAttribute> attr = std::make_shared<DyndevFunctionAttribute>();
     attr->startArgsInputTensorList = startArgsInputTensorList;
@@ -228,14 +228,15 @@ RecordLoopFunc::RecordLoopFunc(
     if (parallel_) {
         for (auto& rlf : Program::GetInstance().GetLoopStack()) {
             if (rlf.get().Getparallel()) {
-                FE_ASSERT(FeError::INVALID_OPERATION, !rlf.get().Getparallel()) << "The parallel attribute value does not allow nesting";
+                FE_ASSERT(FeError::INVALID_OPERATION, !rlf.get().Getparallel())
+                    << "The parallel attribute value does not allow nesting";
             }
         }
     }
     Program::GetInstance().GetLoopStack().emplace_back(*this);
 
     GenDefaultUnrollTimes(unrollList);
-    location_ = SourceLocation::GetLocation();
+    span_ = ir::Span::Current();
 }
 
 RecordLoopFunc::~RecordLoopFunc() { Program::GetInstance().GetLoopStack().pop_back(); }
@@ -283,7 +284,7 @@ void RecordLoopFunc::BeginLoopFunction()
     auto attr =
         std::make_shared<DynloopFunctionAttribute>(iterName_, *range, *loopRange_, submitBeforeLoop_, parallel_);
     currentLoopFunc_->SetDynloopAttribute(attr);
-    currentLoopFunc_->SetSourceLocation(location_);
+    currentLoopFunc_->SetSpan(span_);
 }
 
 void RecordLoopFunc::EndLoopFunction()
@@ -396,7 +397,7 @@ void RecordLoopFunc::IterationBegin()
     Program::GetInstance().GetTensorSlotManager()->Checkpoint();
     Program::GetInstance().BeginFunction(curPathFuncName_, FunctionType::DYNAMIC_LOOP_PATH);
     auto loopPathFunc = Program::GetInstance().GetCurrentFunction();
-    loopPathFunc->SetSourceLocation(location_);
+    loopPathFunc->SetSpan(span_);
     GetLoopAttr()->IterationBegin();
 }
 

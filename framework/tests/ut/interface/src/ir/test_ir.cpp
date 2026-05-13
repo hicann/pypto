@@ -10,7 +10,7 @@
 
 /*!
  * \file test_ir.cpp
- * \brief Unit tests ported from Python test_ir.py — string representations, CHECK macros, and structural comparison
+ * \brief Unit tests ported from Python test_ir.py — string representations, IRCHECK macros, and structural comparison
  */
 
 #include "gtest/gtest.h"
@@ -41,14 +41,14 @@ namespace ir {
 static TypePtr Scalar(DataType dt) { return std::make_shared<ScalarType>(dt); }
 
 // ============================================================================
-// CHECK / INTERNAL_CHECK Tests
+// IRCHECK / INTERNAL_CHECK Tests
 // ============================================================================
 
 class IRCheckTest : public testing::Test {};
 
-TEST_F(IRCheckTest, TestCheckPass) { CHECK(true) << "should not throw"; }
+TEST_F(IRCheckTest, TestCheckPass) { IRCHECK(true) << "should not throw"; }
 
-TEST_F(IRCheckTest, TestCheckFail) { ASSERT_THROW(CHECK(false) << "test check message", ValueError); }
+TEST_F(IRCheckTest, TestCheckFail) { ASSERT_THROW(IRCHECK(false) << "test check message", ValueError); }
 
 TEST_F(IRCheckTest, TestInternalCheckPass) { INTERNAL_CHECK(true) << "should not throw"; }
 

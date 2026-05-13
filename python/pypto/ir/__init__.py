@@ -28,6 +28,7 @@ __all__ = [
     "TensorType",
     "TupleType",
     "PtrType",
+    "TokenType",
     "DataType",
 
     "FunctionType",
@@ -97,6 +98,7 @@ from ..pypto_impl.ir import (
     TensorType,
     TupleType,
     PtrType,
+    TokenType,
 )
 
 # --- Data types ---
@@ -199,7 +201,9 @@ FP8E4M3FN = DataType.FP8E4M3FN
 FP8E5M2 = DataType.FP8E5M2
 FP16 = DataType.FP16
 FP32 = DataType.FP32
+FP64 = DataType.FP64
 BF16 = DataType.BF16
+FP64 = DataType.FP64
 HF4 = DataType.HF4
 HF8 = DataType.HF8
 INDEX = DataType.INDEX

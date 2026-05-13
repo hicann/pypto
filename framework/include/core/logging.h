@@ -545,7 +545,7 @@ inline std::string FormatLogMessage(const char* fmt, ...)
 #define LOG_EVENT_F(fmt, args...) LOG_F(EVENT, fmt, ##args)
 
 /**
- * \brief Helper class for CHECK, INTERNAL_CHECK, UNREACHABLE, and INTERNAL_UNREACHABLE macros
+ * \brief Helper class for IRCHECK, INTERNAL_CHECK, UNREACHABLE, and INTERNAL_UNREACHABLE macros
  *
  * This class collects error messages via operator<< and throws
  * an exception on destruction if the check condition failed.
@@ -555,7 +555,7 @@ inline std::string FormatLogMessage(const char* fmt, ...)
 template <typename ExceptionType>
 class FatalLogger;
 
-// Specialization for conditional checks (CHECK, INTERNAL_CHECK)
+// Specialization for conditional checks (IRCHECK, INTERNAL_CHECK)
 template <typename ExceptionType>
 class FatalLogger {
 private:
@@ -592,10 +592,10 @@ public:
 /**
  * \brief Check a condition and throw ValueError if it fails
  *
- * Usage: CHECK(condition) << "error message";
+ * Usage: IRCHECK(condition) << "error message";
  */
-#define CHECK(expr) \
-    if (!(expr))    \
+#define IRCHECK(expr) \
+    if (!(expr))      \
     pypto::FatalLogger<pypto::ir::ValueError>(#expr, __FILE__, __LINE__)
 
 /**
@@ -630,5 +630,5 @@ public:
     if (!!(expr))                       \
         ;                               \
     else                                \
-        pypto::FatalLogger<pypto::ir::InternalError>(#expr, span.filename_.c_str(), span.beginLine_)
+        pypto::FatalLogger<pypto::ir::InternalError>(#expr, span.Filename().c_str(), span.BeginLine())
 } // namespace pypto

@@ -86,6 +86,8 @@ DEFINE_KIND_TRAIT(EvalStmt, ObjectKind::EvalStmt)
 DEFINE_KIND_TRAIT(WhileStmt, ObjectKind::WhileStmt)
 DEFINE_KIND_TRAIT(BreakStmt, ObjectKind::BreakStmt)
 DEFINE_KIND_TRAIT(ContinueStmt, ObjectKind::ContinueStmt)
+DEFINE_KIND_TRAIT(ScalarOpStmt, ObjectKind::ScalarOpStmt)
+DEFINE_KIND_TRAIT(TensorOpStmt, ObjectKind::TensorOpStmt)
 
 // Type types
 DEFINE_KIND_TRAIT(UnknownType, ObjectKind::UnknownType)
@@ -96,6 +98,7 @@ DEFINE_KIND_TRAIT(TileType, ObjectKind::TileType)
 DEFINE_KIND_TRAIT(TupleType, ObjectKind::TupleType)
 DEFINE_KIND_TRAIT(MemRefType, ObjectKind::MemRefType)
 DEFINE_KIND_TRAIT(PtrType, ObjectKind::PtrType)
+DEFINE_KIND_TRAIT(TokenType, ObjectKind::TokenType)
 
 // Other IR node types
 DEFINE_KIND_TRAIT(Function, ObjectKind::Function)
@@ -113,11 +116,11 @@ DEFINE_KIND_TRAIT(GlobalVar, ObjectKind::GlobalVar)
 // Stmt base class - matches any statement kind
 template <>
 struct KindTrait<Stmt> {
-    static constexpr ObjectKind kinds[] = {ObjectKind::AssignStmt,  ObjectKind::IfStmt,   ObjectKind::YieldStmt,
-                                           ObjectKind::ReturnStmt,  ObjectKind::ForStmt,  ObjectKind::WhileStmt,
-                                           ObjectKind::SeqStmts,    ObjectKind::EvalStmt, ObjectKind::BreakStmt,
-                                           ObjectKind::ContinueStmt};
-    static constexpr size_t count = 10;
+    static constexpr ObjectKind kinds[] = {
+        ObjectKind::AssignStmt, ObjectKind::IfStmt,       ObjectKind::YieldStmt,    ObjectKind::ReturnStmt,
+        ObjectKind::ForStmt,    ObjectKind::WhileStmt,    ObjectKind::SeqStmts,     ObjectKind::EvalStmt,
+        ObjectKind::BreakStmt,  ObjectKind::ContinueStmt, ObjectKind::ScalarOpStmt, ObjectKind::TensorOpStmt};
+    static constexpr size_t count = 12;
 };
 
 // Expr base class - matches any expression kind
@@ -163,7 +166,8 @@ struct KindTrait<UnaryExpr> {
 template <>
 struct KindTrait<Type> {
     static constexpr ObjectKind kinds[] = {ObjectKind::UnknownType, ObjectKind::ScalarType, ObjectKind::ShapedType,
-                                           ObjectKind::TensorType,  ObjectKind::TileType,   ObjectKind::TupleType};
+                                           ObjectKind::TensorType,  ObjectKind::TileType,   ObjectKind::TupleType,
+                                           ObjectKind::TokenType};
     static constexpr size_t count = sizeof(kinds) / sizeof(ObjectKind);
 };
 

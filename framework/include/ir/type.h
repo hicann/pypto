@@ -240,6 +240,9 @@ using ShapedTypePtr = std::shared_ptr<const ShapedType>;
  */
 class TensorType : public ShapedType {
 public:
+    std::vector<ExprPtr> validShape; ///< Valid shape dimensions (symbolic or constant)
+    TensorLayout layout;             ///< Tensor layout
+
     /**
      * \brief Create a tensor type without memory reference
      *
@@ -272,7 +275,13 @@ public:
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TensorType; }
     [[nodiscard]] std::string TypeName() const override { return "TensorType"; }
 
-    static constexpr auto GetFieldDescriptors() { return ShapedType::GetFieldDescriptors(); }
+    static constexpr auto GetFieldDescriptors()
+    {
+        auto newFields = std::make_tuple(
+            reflection::UsualField(&TensorType::validShape, "valid_shape"),
+            reflection::UsualField(&TensorType::layout, "layout"));
+        return std::tuple_cat(ShapedType::GetFieldDescriptors(), newFields);
+    }
 };
 
 using TensorTypePtr = std::shared_ptr<const TensorType>;
@@ -439,6 +448,36 @@ inline PtrTypePtr GetPtrType()
 {
     static const auto ptr_type = std::make_shared<PtrType>();
     return ptr_type;
+}
+
+/**
+ * \brief Token type representation
+ *
+ * Represents an opaque token value used for side-effect ordering.
+ * Tokens carry no data and are only used to establish dependencies
+ * between operations.
+ */
+class TokenType : public Type {
+public:
+    TokenType() = default;
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TokenType; }
+    [[nodiscard]] std::string TypeName() const override { return "Token"; }
+
+    static constexpr auto GetFieldDescriptors() { return Type::GetFieldDescriptors(); }
+};
+
+using TokenTypePtr = std::shared_ptr<const TokenType>;
+
+/**
+ * @brief Get a shared pointer to the singleton TokenType instance
+ *
+ * @return Shared pointer to TokenType
+ */
+inline TokenTypePtr GetTokenType()
+{
+    static const auto token_type = std::make_shared<TokenType>();
+    return token_type;
 }
 
 } // namespace ir

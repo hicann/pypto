@@ -564,7 +564,7 @@ public:
         const bool updateTensorMap = true);
     Operation& AddRawOperation(
         const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
-        bool updateTensorMap = true, const SourceLocationPtr& sourceLocation = nullptr);
+        bool updateTensorMap = true, const ir::Span& span = ir::Span::Unknown());
 
     std::map<std::shared_ptr<RawTensor>, std::shared_ptr<RawTensor>> outIncastLinkMap; // 记录outcast 共享地址的 incast
     void SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst);
@@ -865,19 +865,20 @@ public:
     void GetTensorDataRefreshIO(const GetTensorDataIODescDict& descDict);
     void UpdateTensorDataUsage(Operation& op);
 
-    void SetSourceLocation(std::shared_ptr<SourceLocation> sourceLocation) { sourceLocation_ = sourceLocation; }
+    void SetSpan(ir::Span& span) { span_ = span; }
 
-    std::shared_ptr<SourceLocation> GetSourceLocation() const { return sourceLocation_; }
+    ir::Span& GetSpan() { return span_; }
     void CleanRedundantOutCast();
 
     void SetHiddenFunction(bool hiddenFunction) { hiddenFunction_ = hiddenFunction; }
     bool IsHiddenFunction() const { return hiddenFunction_; }
 
-    const std::unordered_set<std::string> &LoopIdxNameList() { return loopIdxNameList_; }
-    bool InsertLoopIdxNameList(const std::string &idxName);
+    const std::unordered_set<std::string>& LoopIdxNameList() { return loopIdxNameList_; }
+    bool InsertLoopIdxNameList(const std::string& idxName);
 
     void SetMaxCVCoreUsage(std::pair<uint32_t, uint32_t> maxCVCores) { maxCVCoreUsage_ = maxCVCores; }
     std::pair<uint32_t, uint32_t> GetMaxCVCoreUsage() { return maxCVCoreUsage_; }
+
 private:
     int functionMagic_{-1};
     std::string funcMagicName_; // Function name
@@ -936,7 +937,7 @@ private:
     static bool enableMagicLookupRecord_;
     static std::map<std::pair<int, int>, std::set<Operation*, LogicalTensor::CompareOp>> tensorAndSubgraphToProducer_;
     std::shared_ptr<Tensor> getTensorDataOutcast_;
-    std::shared_ptr<SourceLocation> sourceLocation_;
+    ir::Span span_;
     bool hiddenFunction_{false};
 
 private:

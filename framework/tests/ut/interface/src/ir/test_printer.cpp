@@ -575,5 +575,57 @@ TEST_F(IRPrinterTest, TestPrintIfWithEmptySeqStmtsBody)
         std::string::npos);
 }
 
+// ============================================================================
+// ScalarOpStmt and TensorOpStmt printing
+// ============================================================================
+
+TEST_F(IRPrinterTest, TestPrintScalarOpStmt)
+{
+    auto res = Var_("res");
+    auto tok = Var_("tok");
+    auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto stmt = std::make_shared<ScalarOpStmt>(res, tok, "add", std::vector<ExprPtr>{arg}, Sp());
+    auto str = Print(stmt);
+    EXPECT_EQ(str, "res, tok = add(1)");
+}
+
+TEST_F(IRPrinterTest, TestPrintTensorOpStmt)
+{
+    auto res = Var_("res");
+    auto tok = Var_("tok");
+    auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(
+        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{},
+        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    auto str = Print(stmt);
+    EXPECT_EQ(str, "res, tok = matmul(1)");
+}
+
+TEST_F(IRPrinterTest, TestPrintTensorOpStmtMultiResult)
+{
+    auto r1 = Var_("r1");
+    auto r2 = Var_("r2");
+    auto tok = Var_("tok");
+    auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(
+        std::vector<VarPtr>{r1, r2}, tok, "split", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{},
+        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    auto str = Print(stmt);
+    EXPECT_EQ(str, "[r1, r2], tok = split(1)");
+}
+
+TEST_F(IRPrinterTest, TestPrintTensorOpStmtWithTokensAndAttrs)
+{
+    auto res = Var_("res");
+    auto tok = Var_("tok");
+    auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto t1 = Var_("t1");
+    auto stmt = std::make_shared<TensorOpStmt>(
+        std::vector<VarPtr>{res}, tok, "op", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{t1},
+        std::vector<std::pair<std::string, std::any>>{{"axis", 0}}, Sp());
+    auto str = Print(stmt);
+    EXPECT_EQ(str, "res, tok = op(1, tokens=[t1], attrs=[axis=0])");
+}
+
 } // namespace ir
 } // namespace pypto

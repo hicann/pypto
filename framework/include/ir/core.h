@@ -88,6 +88,9 @@ enum class ObjectKind {
     BreakStmt,
     ContinueStmt,
 
+    ScalarOpStmt,
+    TensorOpStmt,
+
     // Type kinds
     UnknownType,
     MemRefType,
@@ -96,6 +99,7 @@ enum class ObjectKind {
     ShapedType,
     TensorType,
     TileType,
+    TokenType,
     TupleType,
 
     // Other IR node kinds

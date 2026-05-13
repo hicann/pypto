@@ -605,6 +605,92 @@ StmtPtr IRMutator::VisitStmt_(const BreakStmtPtr& op) { return op; }
 
 StmtPtr IRMutator::VisitStmt_(const ContinueStmtPtr& op) { return op; }
 
+StmtPtr IRMutator::VisitStmt_(const ScalarOpStmtPtr& op)
+{
+    bool changed = false;
+
+    INTERNAL_CHECK_SPAN(op->result_, op->span_) << "ScalarOpStmt has null result";
+    auto new_result = As<Var>(ExprFunctor<ExprPtr>::VisitExpr(op->result_));
+    if (new_result.get() != op->result_.get()) {
+        changed = true;
+    }
+    INTERNAL_CHECK_SPAN(new_result, op->span_) << "ScalarOpStmt result mutated to null";
+
+    INTERNAL_CHECK_SPAN(op->result_token_, op->span_) << "ScalarOpStmt has null result_token";
+    auto new_token = As<Var>(ExprFunctor<ExprPtr>::VisitExpr(op->result_token_));
+    if (new_token.get() != op->result_token_.get()) {
+        changed = true;
+    }
+    INTERNAL_CHECK_SPAN(new_token, op->span_) << "ScalarOpStmt result_token mutated to null";
+    std::vector<ExprPtr> new_args;
+    for (size_t i = 0; i < op->args_.size(); ++i) {
+        INTERNAL_CHECK_SPAN(op->args_[i], op->span_) << "ScalarOpStmt has null arg at index " << i;
+        auto new_arg = ExprFunctor<ExprPtr>::VisitExpr(op->args_[i]);
+        if (new_arg.get() != op->args_[i].get()) {
+            changed = true;
+        }
+        INTERNAL_CHECK_SPAN(new_arg, op->span_) << "ScalarOpStmt arg at index " << i << " mutated to null";
+        new_args.push_back(new_arg);
+    }
+    if (changed) {
+        return std::make_shared<const ScalarOpStmt>(
+            std::move(new_result), std::move(new_token), std::move(op->opcode_), std::move(new_args), op->span_);
+    }
+    return op;
+}
+
+StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
+{
+    bool changed = false;
+
+    std::vector<VarPtr> new_results;
+    for (size_t i = 0; i < op->result_.size(); ++i) {
+        INTERNAL_CHECK_SPAN(op->result_[i], op->span_) << "TensorOpStmt has null result at index " << i;
+        auto new_result = ExprFunctor<ExprPtr>::VisitExpr(op->result_[i]);
+        if (new_result.get() != op->result_[i].get()) {
+            changed = true;
+        }
+        INTERNAL_CHECK_SPAN(new_result, op->span_) << "TensorOpStmt result at index " << i << " mutated to null";
+        new_results.push_back(As<Var>(new_result));
+    }
+
+    INTERNAL_CHECK_SPAN(op->result_token_, op->span_) << "TensorOpStmt has null result_token";
+    auto new_token = As<Var>(ExprFunctor<ExprPtr>::VisitExpr(op->result_token_));
+    if (new_token.get() != op->result_token_.get()) {
+        changed = true;
+    }
+    INTERNAL_CHECK_SPAN(new_token, op->span_) << "TensorOpStmt result_token mutated to null";
+
+    std::vector<ExprPtr> new_args;
+    for (size_t i = 0; i < op->args_.size(); ++i) {
+        INTERNAL_CHECK_SPAN(op->args_[i], op->span_) << "TensorOpStmt has null arg at index " << i;
+        auto new_arg = ExprFunctor<ExprPtr>::VisitExpr(op->args_[i]);
+        if (new_arg.get() != op->args_[i].get()) {
+            changed = true;
+        }
+        INTERNAL_CHECK_SPAN(new_arg, op->span_) << "TensorOpStmt arg at index " << i << " mutated to null";
+        new_args.push_back(new_arg);
+    }
+
+    std::vector<ExprPtr> new_tokens;
+    for (size_t i = 0; i < op->tokens_.size(); ++i) {
+        INTERNAL_CHECK_SPAN(op->tokens_[i], op->span_) << "TensorOpStmt has null token at index " << i;
+        auto new_tok = ExprFunctor<ExprPtr>::VisitExpr(op->tokens_[i]);
+        if (new_tok.get() != op->tokens_[i].get()) {
+            changed = true;
+        }
+        INTERNAL_CHECK_SPAN(new_tok, op->span_) << "TensorOpStmt token at index " << i << " mutated to null";
+        new_tokens.push_back(new_tok);
+    }
+
+    if (changed) {
+        return std::make_shared<const TensorOpStmt>(
+            std::move(new_results), std::move(new_token), std::move(op->opcode_), std::move(new_args),
+            std::move(new_tokens), std::move(op->attrs_), op->span_);
+    }
+    return op;
+}
+
 StmtPtr IRMutator::VisitStmt_(const StmtPtr& op) { return op; }
 
 } // namespace ir

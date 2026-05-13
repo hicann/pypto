@@ -17,7 +17,6 @@
 
 #include <sys/cdefs.h>
 #include <cstdint>
-#include "source_location.h"
 
 namespace npu::tile_fwk {
 class OperatorChecker {
@@ -34,7 +33,7 @@ private:
 };
 
 struct OperatorTracer {
-    OperatorTracer(const void* lr) : loc(lr)
+    OperatorTracer(const void*)
     {
         if (IsCheckerEnabled()) {
             checker.PreCheck();
@@ -46,7 +45,6 @@ struct OperatorTracer {
             checker.PostCheck();
     }
     OperatorChecker checker;
-    SourceLocationHelper loc;
 
     bool IsCheckerEnabled() const;
 };

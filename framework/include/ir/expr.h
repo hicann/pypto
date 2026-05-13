@@ -123,8 +123,8 @@ public:
     [[nodiscard]] std::type_index GetAttrType(const std::string& key, const Span& span = Span::Unknown()) const
     {
         auto it = attrs_.find(key);
-        CHECK(it != attrs_.end()) << "Attribute '" << key << "' not found in operator '" << name_ << "'"
-                                  << " at " << span.ToString();
+        IRCHECK(it != attrs_.end()) << "Attribute '" << key << "' not found in operator '" << name_ << "'"
+                                    << " at " << span.ToString();
         return it->second;
     }
 

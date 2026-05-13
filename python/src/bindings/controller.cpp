@@ -206,15 +206,9 @@ void bind_controller_utils(py::module& m)
     m.def("BytesOf", [](DataType t) { return BytesOf(t); });
     m.def("Reset", []() { Program::GetInstance().Reset(); });
     m.def(
-        "SetLocation", [](const std::string& fname, int lineno) { SourceLocation::SetLocation(fname, lineno); },
+        "SetSpan", [](const std::string& fname, int lineno) { ir::Span::SetCurrent(ir::Span(fname, lineno, 0)); },
         py::arg("fname"), py::arg("lineno"));
-    m.def(
-        "SetLocation",
-        [](const std::string& fname, int lineno, std::string& backtrace) {
-            SourceLocation::SetLocation(fname, lineno, backtrace);
-        },
-        py::arg("fname"), py::arg("lineno"), py::arg("backtrace"));
-    m.def("ClearLocation", &SourceLocation::ClearLocation);
+    m.def("ClearSpan", &ir::Span::ClearCurrent);
 }
 
 npu::tile_fwk::Any ConvertPyList(const std::string& key, const py::list& lst)
@@ -250,7 +244,7 @@ static bool IsFuncHashOrderFormat(const std::string& key)
     }
     size_t underscore_pos = key.find('_');
     if (underscore_pos == std::string::npos || underscore_pos == 4) {
-        return false;  // No underscore or underscore right after "func"
+        return false; // No underscore or underscore right after "func"
     }
     // Check that magic part (between "func" and "_") is all digits
     for (size_t i = 4; i < underscore_pos; ++i) {
@@ -268,9 +262,7 @@ static bool IsFuncHashOrderFormat(const std::string& key)
 }
 
 static void SplitByFuncAndLabel(
-    const py::dict& dict_value,
-    std::map<std::string, int64_t>& func_map,
-    std::map<std::string, int64_t>& label_map)
+    const py::dict& dict_value, std::map<std::string, int64_t>& func_map, std::map<std::string, int64_t>& label_map)
 {
     for (auto dict_item : dict_value) {
         if (py::isinstance<py::str>(dict_item.first)) {
@@ -303,8 +295,7 @@ static void ClassifyKeys(const py::dict& dict_value, bool& has_int, bool& has_st
 }
 
 static void HandleStrOnlyKeys(
-    const std::string& key, const py::dict& dict_value,
-    bool has_func, bool has_label,
+    const std::string& key, const py::dict& dict_value, bool has_func, bool has_label,
     std::map<std::string, npu::tile_fwk::Any>& cpp_values)
 {
     cpp_values[key] = std::map<int64_t, int64_t>();
@@ -329,8 +320,7 @@ static void HandleStrOnlyKeys(
 }
 
 static void HandleMixedKeys(
-    const std::string& key, const py::dict& dict_value,
-    std::map<std::string, npu::tile_fwk::Any>& cpp_values)
+    const std::string& key, const py::dict& dict_value, std::map<std::string, npu::tile_fwk::Any>& cpp_values)
 {
     std::map<int64_t, int64_t> int_map;
     std::map<std::string, int64_t> func_map, label_map;
@@ -561,8 +551,5 @@ void bind_controller(py::module& m)
     bind_controller_utils(m);
     bind_controller_scope(m);
     bind_controller_scope_classes(m);
-
-    // disable cpp mode
-    SourceLocation::SetCppMode(false);
 }
 } // namespace pypto

@@ -190,6 +190,8 @@ protected:
     virtual R VisitStmt_(const EvalStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const BreakStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const ContinueStmtPtr& op, Args... args) = 0;
+    virtual R VisitStmt_(const TensorOpStmtPtr& op, Args... args) = 0;
+    virtual R VisitStmt_(const ScalarOpStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const StmtPtr& op, Args... args) = 0;
 };
 
@@ -213,6 +215,8 @@ R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
     STMT_FUNCTOR_DISPATCH(EvalStmt);
     STMT_FUNCTOR_DISPATCH(BreakStmt);
     STMT_FUNCTOR_DISPATCH(ContinueStmt);
+    STMT_FUNCTOR_DISPATCH(ScalarOpStmt);
+    STMT_FUNCTOR_DISPATCH(TensorOpStmt);
 
     // Should never reach here if all types are handled
     throw TypeError("Unknown statement type in StmtFunctor::VisitStmt");

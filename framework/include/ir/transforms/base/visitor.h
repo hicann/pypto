@@ -103,6 +103,8 @@ protected:
     void VisitStmt_(const EvalStmtPtr& op) override;
     void VisitStmt_(const BreakStmtPtr& op) override;
     void VisitStmt_(const ContinueStmtPtr& op) override;
+    void VisitStmt_(const TensorOpStmtPtr& op) override;
+    void VisitStmt_(const ScalarOpStmtPtr& op) override;
     void VisitStmt_(const StmtPtr& op) override;
 
     /// Override to handle ALL binary expressions (Add, Sub, Mul, ...) in one method.

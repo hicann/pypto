@@ -18,11 +18,8 @@
 #include <sys/time.h>
 #include <cstring>
 #include <algorithm>
-#include <memory>
-#include <map>
 #include <vector>
 #include <string>
-#include <iostream>
 #include <sstream>
 #include <unordered_map>
 #include <functional>
@@ -30,11 +27,9 @@
 #include <set>
 
 #include "tilefwk/error.h"
-#include "securec.h"
 #include "tilefwk/symbolic_scalar.h"
 
 namespace npu::tile_fwk {
-using Status = uint32_t;
 
 #ifdef __clang__
 #define __NO_UBSAN __attribute__((no_sanitize("unsigned-integer-overflow")))
@@ -42,9 +37,12 @@ using Status = uint32_t;
 #define __NO_UBSAN
 #endif
 
-#define SUCCESS 0
-#define FAILED 1
-#define WARNING 2
+enum Status : uint32_t {
+    SUCCESS = 0,
+    FAILED = 1,
+    WARNING = 2,
+};
+
 #define CACHELINE_SIZE_FOR_B64 64
 
 constexpr uint32_t DIST_COMM_GROUP_NUM = 2;

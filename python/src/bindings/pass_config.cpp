@@ -168,7 +168,5 @@ void bind_pass(py::module& m)
     bind_pass_default_config(m);
     bind_pass_config(m);
     bind_pass_configs(m);
-    // disable cpp mode
-    SourceLocation::SetCppMode(false);
 }
 } // namespace pypto

@@ -365,9 +365,9 @@ static void BuildRootFuncKeyDict(DyndevFunctionAttribute* attr)
 static std::string BuildControlFlowCallee(Function* func, int ident)
 {
     std::ostringstream oss;
-    auto loc = func->GetSourceLocation();
-    if (loc) {
-        oss << std::string(ident, ' ') << "// " << loc->ToString() << "\n";
+    auto span = func->GetSpan();
+    if (!span.IsUnknown()) {
+        oss << std::string(ident, ' ') << "// " << span.ToString() << "\n";
     }
     oss << std::string(ident, ' ') << "// "
         << "#name: " << func->GetRawName() << " #hash: " << func->GetFunctionHash()
@@ -1081,9 +1081,9 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::string kernelPath;
 #ifdef BUILD_WITH_CANN
     bool enableCompile = (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_NPU ||
-        ((config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) &&
-        config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM)) &&
-        config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION;
+                          ((config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) &&
+                           config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM)) &&
+                         config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION;
     if (enableCompile) {
         if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
             FindLiteNPUKernel(leafDict, kernelPath);

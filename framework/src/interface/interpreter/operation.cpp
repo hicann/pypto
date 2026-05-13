@@ -154,9 +154,10 @@ std::string ExecuteOperationContext::Dump() const
     std::stringstream ss;
     ss << "func: " << frame->func->GetRawName() << "\n";
 
-    if (auto loc = op->GetLocation(); loc) {
-        ss << "filename: " << loc->GetFileName() << "\n";
-        ss << "lineno: " << loc->GetLineno() << "\n";
+    auto span = op->GetSpan();
+    if (!span.IsUnknown()) {
+        ss << "filename: " << span.Filename() << "\n";
+        ss << "lineno: " << span.BeginLine() << "\n";
     }
 
     auto printType = [&](auto& viewList) {

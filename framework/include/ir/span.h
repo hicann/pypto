@@ -23,6 +23,8 @@
 namespace pypto {
 namespace ir {
 
+class SpanImpl;
+
 /**
  * \brief Represents a source code location span
  *
@@ -36,11 +38,15 @@ namespace ir {
  */
 class Span {
 public:
-    const std::string filename_; ///< Source filename
-    const int beginLine_;        ///< Beginning line number (1-indexed)
-    const int beginColumn_;      ///< Beginning column number (1-indexed)
-    const int endLine_;          ///< Ending line number (1-indexed), -1 means unknown
-    const int endColumn_;        ///< Ending column number (1-indexed), -1 means unknown
+    Span();
+
+    Span(const Span& other);
+
+    Span& operator=(const Span& other);
+
+    Span(Span&& other);
+
+    Span& operator=(Span&& other);
 
     /**
      * \brief Construct a source span
@@ -51,21 +57,62 @@ public:
      * \param endLine End line (1-indexed), -1 means unknown
      * \param endColumn End column (1-indexed), -1 means unknown
      */
-    Span(std::string file, int beginLine, int beginColumn, int endLine = -1, int endColumn = -1);
+    Span(const std::string& file, int beginLine, int beginColumn, int endLine = -1, int endColumn = -1);
+
+    ~Span();
+
+    /**
+     * \brief Get the source filename
+     *
+     * \return Source filename
+     */
+    const std::string& Filename() const;
+
+    /**
+     * \brief Get the beginning line number (1-indexed)
+     *
+     * \return Beginning line number
+     */
+    int BeginLine() const;
+
+    /**
+     * \brief Get the beginning column number (1-indexed)
+     *
+     * \return Beginning column number
+     */
+    int BeginColumn() const;
+
+    /**
+     * \brief Get the ending line number (1-indexed)
+     *
+     * \return Ending line number
+     */
+    int EndLine() const;
+
+    /**
+     * \brief Get the ending column number (1-indexed)
+     *
+     * \return Ending column number
+     */
+    int EndColumn() const;
 
     /**
      * \brief Convert span to string representation
      *
      * \return String in format "filename:begin_line:begin_column"
      */
-    [[nodiscard]] std::string ToString() const;
+    std::string ToString() const;
 
     /**
      * \brief Check if the span is valid (has valid line/column numbers)
      *
      * \return true if all line/column numbers are positive
      */
-    static bool IsUnknown(const Span& span);
+    bool IsUnknown() const
+    {
+        static Span unknown = Unknown();
+        return impl_ == unknown.impl_;
+    }
 
     /**
      * \brief Create an unknown/invalid span
@@ -73,6 +120,15 @@ public:
      * \return Span with empty filename and invalid coordinates
      */
     static Span& Unknown();
+
+    static void SetCurrent(const Span& span);
+
+    static Span& Current();
+
+    static void ClearCurrent() { SetCurrent(Unknown()); }
+
+private:
+    SpanImpl* impl_;
 };
 
 } // namespace ir

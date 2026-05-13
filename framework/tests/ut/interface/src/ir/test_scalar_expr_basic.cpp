@@ -83,8 +83,8 @@ TEST(ScalarExprBasicTest, TestConstIntWithSpan)
     Span span("test.py", 10, 5);
     auto constInt = std::make_shared<ConstInt>(42, DataType::INT32, span);
     ASSERT_NE(constInt, nullptr);
-    ASSERT_EQ(constInt->span_.filename_, "test.py");
-    ASSERT_EQ(constInt->span_.beginLine_, 10);
+    ASSERT_EQ(constInt->span_.Filename(), "test.py");
+    ASSERT_EQ(constInt->span_.BeginLine(), 10);
 }
 
 // ============================================================================
@@ -178,8 +178,8 @@ TEST(ScalarExprBasicTest, TestConstBoolWithSpan)
     Span span("test.py", 20, 10);
     auto constBool = std::make_shared<ConstBool>(true, span);
     ASSERT_NE(constBool, nullptr);
-    ASSERT_EQ(constBool->span_.filename_, "test.py");
-    ASSERT_EQ(constBool->span_.beginLine_, 20);
+    ASSERT_EQ(constBool->span_.Filename(), "test.py");
+    ASSERT_EQ(constBool->span_.BeginLine(), 20);
 }
 
 // ============================================================================

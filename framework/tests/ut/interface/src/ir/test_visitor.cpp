@@ -50,6 +50,8 @@ public:
     void VisitExpr_(const MemRefPtr&) override { visited.push_back("MemRef"); }
     void VisitStmt_(const BreakStmtPtr&) override { visited.push_back("BreakStmt"); }
     void VisitStmt_(const ContinueStmtPtr&) override { visited.push_back("ContinueStmt"); }
+    void VisitStmt_(const TensorOpStmtPtr&) override { visited.push_back("TensorOpStmt"); }
+    void VisitStmt_(const ScalarOpStmtPtr&) override { visited.push_back("ScalarOpStmt"); }
 };
 
 // ============================================================================
@@ -261,6 +263,30 @@ TEST_F(IRVisitorTest, TestVisitContinueStmt)
     TestVisitor v;
     v.VisitStmt(std::make_shared<ContinueStmt>(Sp()));
     ASSERT_EQ(v.visited.back(), "ContinueStmt");
+}
+
+TEST_F(IRVisitorTest, TestVisitScalarOpStmt)
+{
+    TestVisitor v;
+    auto result = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
+    auto token = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
+    auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto stmt = std::make_shared<ScalarOpStmt>(result, token, "add", std::vector<ExprPtr>{arg}, Sp());
+    v.VisitStmt(stmt);
+    ASSERT_EQ(v.visited.back(), "ScalarOpStmt");
+}
+
+TEST_F(IRVisitorTest, TestVisitTensorOpStmt)
+{
+    TestVisitor v;
+    auto result = std::make_shared<Var>("res", Scalar(DataType::INT32), Sp());
+    auto token = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
+    auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto stmt = std::make_shared<TensorOpStmt>(
+        std::vector<VarPtr>{result}, token, "matmul", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{},
+        std::vector<std::pair<std::string, std::any>>{}, Sp());
+    v.VisitStmt(stmt);
+    ASSERT_EQ(v.visited.back(), "TensorOpStmt");
 }
 
 // ============================================================================

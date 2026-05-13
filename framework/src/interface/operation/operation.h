@@ -32,11 +32,12 @@
 #include "opcode.h"
 #include "attribute.h"
 #include "attr_holder.h"
-#include "interface/utils/source_location.h"
 #include "interface/tensor/logical_tensor.h"
 #include "operation_common.h"
+#include "ir/core.h"
 
 using Json = nlohmann::json;
+using namespace pypto;
 
 namespace npu::tile_fwk {
 constexpr size_t NON_GROUP = -1;
@@ -669,8 +670,8 @@ public:
     const std::vector<int>& GetOOpAttrOffsets() const { return oOpAttrOffset; }
 
     std::vector<std::reference_wrapper<SymbolicScalar>> GetDynamicAttributeList();
-    SourceLocationPtr GetLocation() const { return location_; }
-    void SetLocation(SourceLocationPtr location) { location_ = location; }
+    const ir::Span& GetSpan() const { return span_; }
+    void SetSpan(ir::Span span) { span_ = span; }
     const std::vector<std::string>& GetCommentList() const { return commentList_; }
     std::vector<std::string>& GetCommentList() { return commentList_; }
 
@@ -692,7 +693,7 @@ private:
     mutable size_t groupID_{NON_GROUP};
     bool isDeleted_{false};
 
-    SourceLocationPtr location_{nullptr};
+    ir::Span span_;
     std::shared_ptr<SemanticLabel> semanticLabel_;
     Function* function_;
 

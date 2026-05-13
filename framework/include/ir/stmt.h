@@ -493,12 +493,19 @@ using EvalStmtPtr = std::shared_ptr<const EvalStmt>;
  */
 class BreakStmt : public Stmt {
 public:
+    std::vector<ExprPtr> value_;
+
+    BreakStmt(std::vector<ExprPtr> value, Span span) : Stmt(std::move(span)), value_(std::move(value)) {}
     explicit BreakStmt(Span span) : Stmt(std::move(span)) {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::BreakStmt; }
     [[nodiscard]] std::string TypeName() const override { return "BreakStmt"; }
 
-    static constexpr auto GetFieldDescriptors() { return Stmt::GetFieldDescriptors(); }
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&BreakStmt::value_, "value")));
+    }
 };
 
 using BreakStmtPtr = std::shared_ptr<const BreakStmt>;
@@ -510,15 +517,101 @@ using BreakStmtPtr = std::shared_ptr<const BreakStmt>;
  */
 class ContinueStmt : public Stmt {
 public:
+    std::vector<ExprPtr> value_;
+
+    ContinueStmt(std::vector<ExprPtr> value, Span span) : Stmt(std::move(span)), value_(std::move(value)) {}
     explicit ContinueStmt(Span span) : Stmt(std::move(span)) {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::ContinueStmt; }
     [[nodiscard]] std::string TypeName() const override { return "ContinueStmt"; }
 
-    static constexpr auto GetFieldDescriptors() { return Stmt::GetFieldDescriptors(); }
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&ContinueStmt::value_, "value")));
+    }
 };
 
 using ContinueStmtPtr = std::shared_ptr<const ContinueStmt>;
 
+class ScalarOpStmt : public Stmt {
+public:
+    VarPtr result_;
+    VarPtr result_token_;
+    std::string opcode_;
+    std::vector<ExprPtr> args_;
+
+    ScalarOpStmt(VarPtr result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args, Span span)
+        : Stmt(std::move(span)),
+          result_(std::move(result)),
+          result_token_(std::move(result_token)),
+          opcode_(std::move(opcode)),
+          args_(std::move(args))
+    {}
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::ScalarOpStmt; }
+    [[nodiscard]] std::string TypeName() const override { return "ScalarOpStmt"; }
+
+    /**
+     * \brief Get field descriptors for reflection-based visitation
+     *
+     * \return Tuple of field descriptors (var and value as DEF and USUAL fields)
+     */
+    static constexpr auto GetFieldDescriptors()
+    {
+        auto newFields = std::make_tuple(
+            reflection::DefField(&ScalarOpStmt::result_, "result"),
+            reflection::UsualField(&ScalarOpStmt::result_token_, "result_token"),
+            reflection::UsualField(&ScalarOpStmt::opcode_, "opcode"),
+            reflection::UsualField(&ScalarOpStmt::args_, "args"));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(), newFields);
+    }
+};
+
+using ScalarOpStmtPtr = std::shared_ptr<const ScalarOpStmt>;
+
+class TensorOpStmt : public Stmt {
+public:
+    std::vector<VarPtr> result_;
+    VarPtr result_token_;
+    std::string opcode_;
+    std::vector<ExprPtr> args_;
+    std::vector<ExprPtr> tokens_;
+    std::vector<std::pair<std::string, std::any>> attrs_;
+
+    TensorOpStmt(
+        std::vector<VarPtr> result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
+        std::vector<ExprPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
+        : Stmt(std::move(span)),
+          result_(std::move(result)),
+          result_token_(std::move(result_token)),
+          opcode_(std::move(opcode)),
+          args_(std::move(args)),
+          tokens_(std::move(tokens)),
+          attrs_(std::move(attrs))
+    {}
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TensorOpStmt; }
+    [[nodiscard]] std::string TypeName() const override { return "TensorOpStmt"; }
+
+    /**
+     * \brief Get field descriptors for reflection-based visitation
+     *
+     * \return Tuple of field descriptors (var and value as DEF and USUAL fields)
+     */
+    static constexpr auto GetFieldDescriptors()
+    {
+        auto newFields = std::make_tuple(
+            reflection::DefField(&TensorOpStmt::result_, "result"),
+            reflection::UsualField(&TensorOpStmt::result_token_, "result_token"),
+            reflection::UsualField(&TensorOpStmt::opcode_, "opcode"),
+            reflection::UsualField(&TensorOpStmt::args_, "args"),
+            reflection::UsualField(&TensorOpStmt::tokens_, "tokens"),
+            reflection::UsualField(&TensorOpStmt::attrs_, "attrs"));
+        return std::tuple_cat(Stmt::GetFieldDescriptors(), newFields);
+    }
+};
+
+using TensorOpStmtPtr = std::shared_ptr<const TensorOpStmt>;
 } // namespace ir
 } // namespace pypto

@@ -48,6 +48,7 @@ void BindDType(py::module& m)
         .def_readonly_static("FP8E5M2", &ir::DataType::FP8E5M2)
         .def_readonly_static("FP16", &ir::DataType::FP16)
         .def_readonly_static("FP32", &ir::DataType::FP32)
+        .def_readonly_static("FP64", &ir::DataType::FP64)
         .def_readonly_static("BF16", &ir::DataType::BF16)
         .def_readonly_static("HF4", &ir::DataType::HF4)
         .def_readonly_static("HF8", &ir::DataType::HF8)
@@ -71,15 +72,15 @@ void BindSpan(py::module& m)
         .def(
             py::init<std::string, int, int, int, int>(), py::arg("filename"), py::arg("begin_line"),
             py::arg("begin_column"), py::arg("end_line") = -1, py::arg("end_column") = -1, "Create a source span")
-        .def_static("is_unknown", &ir::Span::IsUnknown, "Check if the span is unknown")
+        .def("is_unknown", &ir::Span::IsUnknown, "Check if the span is unknown")
         .def_static("unknown", &ir::Span::Unknown, "Create an unknown span", py::return_value_policy::reference)
         .def("__repr__", &ir::Span::ToString)
         .def("__str__", &ir::Span::ToString)
-        .def_readonly("filename", &ir::Span::filename_, "Source filename")
-        .def_readonly("begin_line", &ir::Span::beginLine_, "Beginning line (1-indexed)")
-        .def_readonly("begin_column", &ir::Span::beginColumn_, "Beginning column (1-indexed)")
-        .def_readonly("end_line", &ir::Span::endLine_, "Ending line (1-indexed)")
-        .def_readonly("end_column", &ir::Span::endColumn_, "Ending column (1-indexed)");
+        .def_property_readonly("filename", &ir::Span::Filename, "Source filename")
+        .def_property_readonly("begin_line", &ir::Span::BeginLine, "Beginning line (1-indexed)")
+        .def_property_readonly("begin_column", &ir::Span::BeginColumn, "Beginning column (1-indexed)")
+        .def_property_readonly("end_line", &ir::Span::EndLine, "Ending line (1-indexed)")
+        .def_property_readonly("end_column", &ir::Span::EndColumn, "Ending column (1-indexed)");
 }
 
 // Helper to bind a single field using reflection
@@ -243,6 +244,76 @@ void BindExpr(py::module& m)
     // clang-format on
 }
 
+std::any ConvertAttr(const py::object& attr)
+{
+    if (py::isinstance<DataType>(attr)) {
+        return py::cast<DataType>(attr);
+    } else if (py::isinstance<MemorySpace>(attr)) {
+        return py::cast<MemorySpace>(attr);
+    } else if (py::isinstance<TensorLayout>(attr)) {
+        return py::cast<TensorLayout>(attr);
+    } else if (py::isinstance<bool>(attr)) {
+        return py::cast<bool>(attr);
+    } else if (py::isinstance<py::int_>(attr)) {
+        return py::cast<int>(attr);
+    } else if (py::isinstance<py::str>(attr)) {
+        return py::cast<std::string>(attr);
+    } else if (py::isinstance<py::float_>(attr)) {
+        return py::cast<double>(attr);
+    } else if (py::isinstance<ExprPtr>(attr)) {
+        return py::cast<ExprPtr>(attr);
+    } else {
+        throw TypeError("Unsupported attr type");
+    }
+}
+
+std::any ConvertListAttr(const py::list& list)
+{
+    if (list.empty()) {
+        return std::any();
+    }
+    auto item0 = list[0];
+    if (py::isinstance<ExprPtr>(item0)) {
+        std::vector<ExprPtr> ret;
+        for (auto item : list) {
+            ret.push_back(py::cast<ExprPtr>(item));
+        }
+        return ret;
+    } else if (py::isinstance<std::string>(item0)) {
+        std::vector<std::string> ret;
+        for (auto item : list) {
+            ret.push_back(py::cast<std::string>(item));
+        }
+        return ret;
+    } else if (py::isinstance<py::int_>(item0)) {
+        std::vector<int> ret;
+        for (auto item : list) {
+            ret.push_back(py::cast<int>(item));
+        }
+        return ret;
+    } else {
+        throw TypeError("Unsupported list attr");
+    }
+}
+
+std::vector<std::pair<std::string, std::any>> ConvertAttrDict(const py::dict& attrs)
+{
+    std::vector<std::pair<std::string, std::any>> kwargs;
+    for (auto item : attrs) {
+        std::string key = py::cast<std::string>(item.first);
+        std::any value;
+        if (py::isinstance<py::list>(item.second)) {
+            value = ConvertListAttr(py::cast<py::list>(item.second));
+        } else {
+            value = ConvertAttr(py::cast<py::object>(item.second));
+        }
+        if (value.has_value()) {
+            kwargs.emplace_back(key, value);
+        }
+    }
+    return kwargs;
+}
+
 void BindStmt(py::module& m)
 {
     // clang-format off
@@ -327,13 +398,38 @@ void BindStmt(py::module& m)
 
     auto break_stmt = py::class_<BreakStmt, Stmt, std::shared_ptr<BreakStmt>>(m, "BreakStmt",
             "Break statement: break")
-        .def(py::init<const Span&>(), py::arg("span"), "Create a break statement");
+        .def(py::init<const Span&>(), py::arg("span"), "Create a break statement")
+        .def(py::init<const std::vector<ExprPtr>&, const Span&>(),
+             py::arg("operands"), py::arg("span"),
+             "Create a break statement with operands");
     BindFields<BreakStmt>(break_stmt);
 
     auto continue_stmt = py::class_<ContinueStmt, Stmt, std::shared_ptr<ContinueStmt>>(m, "ContinueStmt",
             "Continue statement: continue")
-        .def(py::init<const Span&>(), py::arg("span"), "Create a continue statement");
+        .def(py::init<const Span&>(), py::arg("span"), "Create a continue statement")
+        .def(py::init<const std::vector<ExprPtr>&, const Span&>(),
+             py::arg("operands"), py::arg("span"),
+             "Create a continue statement with operands");
     BindFields<ContinueStmt>(continue_stmt);
+
+    auto scalarop_stmt = py::class_<ScalarOpStmt, Stmt, std::shared_ptr<ScalarOpStmt>>(m, "ScalarOpStmt",
+            "Scalar operation statement: result, result_token = opcode(args, tokens)")
+        .def(py::init<VarPtr, VarPtr, std::string, const std::vector<ExprPtr>&, const Span&>(),
+             py::arg("result"), py::arg("result_token"), py::arg("opcode"), py::arg("args"), py::arg("span"),
+             "Create a scalar operation statement");
+    BindFields<ScalarOpStmt>(scalarop_stmt);
+
+    auto tensorop_stmt = py::class_<TensorOpStmt, Stmt, std::shared_ptr<TensorOpStmt>>(m, "TensorOpStmt",
+            "Tensor operation statement: results, result_token = opcode(args, attrs, tokens)")
+        .def(py::init([](std::vector<VarPtr> results, VarPtr result_token, std::string opcode,
+             std::vector<ExprPtr> args, const std::vector<ExprPtr>& tokens, py::dict attrs, Span span){
+                auto attr_list = ConvertAttrDict(attrs);
+                return std::make_shared<TensorOpStmt>(results, result_token, opcode, args, tokens, attr_list, span);
+            }),
+            py::arg("results"), py::arg("result_token"), py::arg("opcode"), py::arg("args"),
+            py::arg("tokens"), py::arg("attrs"), py::arg("span"),
+            "Create a tensor operation statement");
+    BindFields<TensorOpStmt>(tensorop_stmt);
 
     auto function = py::class_<Function, IRNode, std::shared_ptr<Function>>(m, "Function",
         "Function definition with name, parameters, return types, and body")
@@ -434,6 +530,8 @@ void BindTypeClass(py::module& m)
         .def_readonly("types", &TupleType::types_);
 
     py::class_<PtrType, Type, std::shared_ptr<PtrType>>(m, "PtrType", "Pointer type").def(py::init<>());
+
+    py::class_<TokenType, Type, std::shared_ptr<TokenType>>(m, "TokenType", "Opaque token type").def(py::init<>());
 }
 } // namespace ir
 

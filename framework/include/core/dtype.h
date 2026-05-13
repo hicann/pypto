@@ -103,6 +103,7 @@ public:
     static const DataType FP8;       // 8-bit floating point (backward compatibility alias)
     static const DataType FP16;      // 16-bit floating point (IEEE 754 half precision)
     static const DataType FP32;      // 32-bit floating point (IEEE 754 single precision)
+    static const DataType FP64;      // 64-bit floating point (IEEE 754 double precision)
     static const DataType BF16;      // 16-bit brain floating point
     static const DataType HF4;       // 4-bit Hisilicon float
     static const DataType HF8;       // 8-bit Hisilicon float
@@ -154,6 +155,7 @@ public:
                 return 32;
             case kUInt64Code:
             case kInt64Code:
+            case kFp64Code:
             case kIndexCode:
                 return 64;
             default:
@@ -201,6 +203,8 @@ public:
                 return "fp16";
             case kFp32Code:
                 return "fp32";
+            case kFp64Code:
+                return "fp64";
             case kBf16Code:
                 return "bfloat16";
             case kHf4Code:
@@ -339,6 +343,7 @@ inline constexpr DataType DataType::FP8E5M2 = DataType(kFp8e5m2Code);
 inline constexpr DataType DataType::FP8 = DataType(kFp8Code);
 inline constexpr DataType DataType::FP16 = DataType(kFp16Code);
 inline constexpr DataType DataType::FP32 = DataType(kFp32Code);
+inline constexpr DataType DataType::FP64 = DataType(kFp64Code);
 inline constexpr DataType DataType::BF16 = DataType(kBf16Code);
 inline constexpr DataType DataType::HF4 = DataType(kHf4Code);
 inline constexpr DataType DataType::HF8 = DataType(kHf8Code);
@@ -393,6 +398,8 @@ inline std::string DTypeToString(const DataType& dtype)
         return "FP16";
     if (dtype == DataType::FP32)
         return "FP32";
+    if (dtype == DataType::FP64)
+        return "FP64";
     if (dtype == DataType::BF16)
         return "BF16";
     if (dtype == DataType::HF4)
