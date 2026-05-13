@@ -46,11 +46,16 @@ private:
     std::vector<std::set<size_t>> opInGraph_;
     std::vector<std::set<size_t>> opOutGraph_;
     void UpdateOpACEnableForward(size_t opIdx);
-    void UpdateOpACEnableBackward(size_t opIdx);
     void ForwardVisit();
-    void BackwardVisit();
     void DisableNoneWhiteListTensor(Operation* op);
+    // 并查集相关方法
+    LogicalTensorPtr Find(LogicalTensorPtr x);
+    void Union(LogicalTensorPtr x, LogicalTensorPtr y);
+    void BuildUnionFind();
+    void ResolveGroupStatus();
     std::unordered_map<LogicalTensorPtr, AxisReorderStatus> tensorStatus_;
+    std::unordered_map<LogicalTensorPtr, LogicalTensorPtr> parent_;
+    std::unordered_map<LogicalTensorPtr, int> rank_;
 };
 } // namespace npu::tile_fwk
 #endif

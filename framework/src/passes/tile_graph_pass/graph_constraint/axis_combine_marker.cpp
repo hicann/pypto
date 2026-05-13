@@ -23,7 +23,8 @@ void AxisCombineMarker::Run(Function& function)
 {
     Init(function);
     ForwardVisit();
-    BackwardVisit();
+    BuildUnionFind();
+    ResolveGroupStatus();
 }
 
 bool AxisCombineMarker::IsTensorEnableAxisCombine(LogicalTensorPtr tensor)
@@ -257,34 +258,92 @@ void AxisCombineMarker::UpdateOpACEnableForward(size_t opIdx)
     tensorStatus_[outputTensor] = AxisReorderStatus::UNKNOWN;
 }
 
-void AxisCombineMarker::UpdateOpACEnableBackward(size_t opIdx)
+LogicalTensorPtr AxisCombineMarker::Find(LogicalTensorPtr x)
 {
-    auto op = opList_[opIdx];
-    auto outputTensor = op->GetOOperands()[0];
-    if (propagationCalcType.find(OpcodeManager::Inst().GetOpCalcType(op->GetOpcode())) != propagationCalcType.end() ||
-        ((op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
-         outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back())) {
-        if (tensorStatus_[outputTensor] == AxisReorderStatus::DISABLE) {
-            for (auto inputTensor : op->GetIOperands()) {
-                tensorStatus_[inputTensor] = AxisReorderStatus::DISABLE;
-            }
-            return;
+    if (parent_.find(x) == parent_.end()) {
+        parent_[x] = x;
+    }
+    if (parent_[x] != x) {
+        parent_[x] = Find(parent_[x]); // 路径压缩
+    }
+    return parent_[x];
+}
+
+void AxisCombineMarker::Union(LogicalTensorPtr x, LogicalTensorPtr y)
+{
+    auto px = Find(x);
+    auto py = Find(y);
+    if (px == py) {
+        return;
+    }
+    // 按秩合并
+    if (rank_[px] < rank_[py]) {
+        std::swap(px, py);
+    }
+    parent_[py] = px;
+    if (rank_[px] == rank_[py]) {
+        rank_[px]++;
+    }
+}
+
+void AxisCombineMarker::BuildUnionFind()
+{
+    for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
+        auto op = opList_[opIdx];
+        auto outputTensor = op->GetOOperands()[0];
+        auto calcType = OpcodeManager::Inst().GetOpCalcType(op->GetOpcode());
+        // 仅对可传播的算子类型建立并查集：逐元素/广播/类型转换，以及尾轴一致的view/assemble
+        bool eligible = propagationCalcType.find(calcType) != propagationCalcType.end() ||
+            ((op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
+             outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back());
+        if (!eligible) {
+            continue;
         }
-        bool disable{false};
+        // 将该算子的所有输入tensor和输出tensor合并到同一个集合
+        if (outputTensor->GetShape().back() != 1) {
+            continue;
+        }
         for (auto inputTensor : op->GetIOperands()) {
-            if (tensorStatus_[inputTensor] == AxisReorderStatus::DISABLE) {
-                disable = true;
+            if (inputTensor->GetShape().back() != 1) {
+                continue;
+            }
+            Union(inputTensor, outputTensor);
+        }
+    }
+}
+
+void AxisCombineMarker::ResolveGroupStatus()
+{
+    // 按并查集根节点对tensor分组
+    std::unordered_map<LogicalTensorPtr, std::vector<LogicalTensorPtr>> groups;
+    for (auto& tensorStatus : tensorStatus_) {
+        if (tensorStatus.first->GetShape().back() != 1) {
+            continue;
+        }
+        groups[Find(tensorStatus.first)].push_back(tensorStatus.first);
+    }
+    // 对每个分组统一状态：DISABLE优先，其次ENABLE传播给UNKNOWN
+    for (auto& group : groups) {
+        auto members = group.second;
+        bool hasDisable = false;
+        bool hasEnable = false;
+        for (auto tensor : members) {
+            if (tensorStatus_[tensor] == AxisReorderStatus::DISABLE) {
+                hasDisable = true;
+            }
+            if (tensorStatus_[tensor] == AxisReorderStatus::ENABLE) {
+                hasEnable = true;
             }
         }
-        if (disable) {
-            for (auto inputTensor : op->GetIOperands()) {
-                tensorStatus_[inputTensor] = AxisReorderStatus::DISABLE;
+        if (hasDisable) {
+            for (auto tensor : members) {
+                tensorStatus_[tensor] = AxisReorderStatus::DISABLE;
             }
-            return;
-        }
-        for (auto inputTensor : op->GetIOperands()) {
-            if (tensorStatus_[inputTensor] == AxisReorderStatus::UNKNOWN) {
-                tensorStatus_[inputTensor] = tensorStatus_[outputTensor];
+        } else if (hasEnable) {
+            for (auto tensor : members) {
+                if (tensorStatus_[tensor] == AxisReorderStatus::UNKNOWN) {
+                    tensorStatus_[tensor] = AxisReorderStatus::ENABLE;
+                }
             }
         }
     }
@@ -314,28 +373,5 @@ void AxisCombineMarker::ForwardVisit()
     }
 }
 
-void AxisCombineMarker::BackwardVisit()
-{
-    std::queue<size_t> procOpQueue;
-    std::vector<size_t> outDegree(opList_.size(), 0);
-    for (size_t j = 0; j < opOutGraph_.size(); ++j) {
-        if (opOutGraph_[j].empty()) {
-            procOpQueue.push(j);
-            UpdateOpACEnableBackward(j);
-        }
-        outDegree[j] = opOutGraph_[j].size();
-    }
-    while (!procOpQueue.empty()) {
-        auto opIdx = procOpQueue.front();
-        procOpQueue.pop();
-        for (auto outIdx : opInGraph_[opIdx]) {
-            outDegree[outIdx]--;
-            if (outDegree[outIdx] == 0) {
-                procOpQueue.push(outIdx);
-                UpdateOpACEnableBackward(outIdx);
-            }
-        }
-    }
-}
 } // namespace tile_fwk
 } // namespace npu
