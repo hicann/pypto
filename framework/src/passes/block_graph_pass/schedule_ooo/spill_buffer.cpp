@@ -34,10 +34,291 @@ static bool IsAnyDimSmaller(const std::vector<int64_t>& a, const std::vector<int
     return false;
 }
 
+bool OoOScheduler::IsSmallShapeSpill(Operation* op)
+{
+    if (op == nullptr) {
+        return false;
+    }
+    auto inOpd = op->GetInputOperand(0);
+    auto outOpd = op->GetOutputOperand(0);
+    if (inOpd == nullptr || outOpd == nullptr) {
+        return false;
+    }
+    if (!IsAnyDimSmaller(inOpd->GetShape(), outOpd->GetShape())) {
+        return false;
+    }
+    return true;
+}
+
+bool OoOScheduler::HasUnexecutedProducer(LogicalTensorPtr spillTensor)
+{
+    if (spillTensor == nullptr) {
+        return false;
+    }
+    for (auto& producerOp : spillTensor->GetProducers()) {
+        if (!opIsRetiredMap[producerOp]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 辅助函数：更新 successor 的依赖关系
+void OoOScheduler::UpdateSuccessorDependencies(
+    Operation* succOp, Operation* spillOp, Operation* reloadCopyin, int spillMemId, int reloadMemId)
+{
+    auto& reqMemIds = GetOpMemIds(succOp);
+    if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
+        depManager_.InsertSuccessor(reloadCopyin, succOp);
+        // 更新memId
+        std::replace(reqMemIds.begin(), reqMemIds.end(), spillMemId, reloadMemId);
+        for (auto& outTensor : succOp->GetOOperands()) {
+            if (outTensor->memoryrange.memId == spillMemId) {
+                outTensor->memoryrange.memId =  reloadMemId;
+                ReplaceViewOpChainMemId(outTensor, spillMemId, reloadMemId);
+            }
+        }
+        depManager_.RemovePredecessor(succOp, spillOp);
+        depManager_.InsertPredecessor(succOp, reloadCopyin);
+        UpdateTensorInputFor(succOp, spillOp, reloadCopyin->GetOutputOperand(0));
+    }
+}
+
+// 辅助函数：更新 alloc 的依赖关系
+void OoOScheduler::UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId)
+{
+    // spillTensor->reshape->tensor 情况 reshape 后 tensor 的 alloc 更新
+    auto predecessors = depManager_.GetPredecessors(succOp);
+    for (auto predOp : predecessors) {
+        if (opIsAllocMap[predOp]) {
+            auto& predReqMemIds = GetOpMemIds(predOp);
+            if (std::find(predReqMemIds.begin(), predReqMemIds.end(), spillMemId) != predReqMemIds.end()) {
+                depManager_.RemovePredecessor(succOp, predOp);
+                depManager_.InsertPredecessor(succOp, reloadAlloc);
+            }
+        }
+    }
+}
+
+Status OoOScheduler::UpdateSmallShapeDependAndBuf(Operation* reloadAlloc, Operation* reloadCopyin,
+    SpillInfo &spillInfo, bool &isL1SmallShape)
+{
+    if (!spillInfo.isSpecialL1_) {
+        return SUCCESS;
+    }
+    auto spillOp = spillInfo.spillOp_;
+    if (!IsSmallShapeSpill(spillOp) || !HasUnexecutedProducer(spillInfo.spillTensor_)) {
+        return SUCCESS;
+    }
+    auto spillMemId = spillInfo.spillMemId_;
+    isL1SmallShape = true;
+    // 更新依赖
+    if (bufRefCount_.find(spillMemId) == bufRefCount_.end()) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d]. ", spillMemId);
+        return FAILED;
+    }
+    int reloadMemId = GetOpMemIds(reloadAlloc)[0];
+    bufRefCount_[reloadMemId] = TWO_ISSUE;
+
+    auto& successors = depManager_.GetSuccessors(spillOp);
+    for (auto succOp : successors) {
+        if (opIsRetiredMap[succOp]) {
+            continue;
+        }
+        bufRefCount_[reloadMemId]++;
+        UpdateSuccessorDependencies(succOp, spillOp, reloadCopyin, spillMemId, reloadMemId);
+        UpdatePredecessorAllocDependencies(succOp, reloadAlloc, spillMemId);
+    }
+    // 更新总 issue 数
+    numTotalIssues += TWO_ISSUE;
+    return SUCCESS;
+}
+
+// 辅助函数：收集 UB 场景的 ops 和 tensors
+void OoOScheduler::CollectUBSceneOpsAndTensors(
+    Operation* producerOp, std::vector<Operation*>& opsToDelete, std::vector<LogicalTensorPtr>& tensorsToDelete)
+{
+    opsToDelete.push_back(producerOp);
+    auto ubTensor2 = producerOp->GetInputOperand(0);
+    if (ubTensor2 != nullptr) {
+        tensorsToDelete.push_back(ubTensor2);
+
+        // 找 UB_COPY_ND2NZ
+        for (auto* op : ubTensor2->GetProducers()) {
+            if (op != nullptr && (opIsAllocMap[op] ||
+                op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos)) {
+                opsToDelete.push_back(op);
+                APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect %s[%d]",
+                    op->GetOpcodeStr().c_str(), op->GetOpMagic());
+            }
+        }
+    }
+}
+
+// 收集需要删除的 ops 和 tensors（两种固定场景）
+void OoOScheduler::CollectProducerChainForDeletion(
+    LogicalTensorPtr spillTensor, std::vector<Operation*>& opsToDelete, std::vector<LogicalTensorPtr>& tensorsToDelete)
+{
+    tensorsToDelete.push_back(spillTensor); // spill_tensor 总是要删除
+
+    // 获取 spill_tensor 的直接 producer
+    for (auto* producerOp : spillTensor->GetProducers()) {
+        if (producerOp == nullptr) {
+            continue;
+        }
+        bool isUBCopyL1 = producerOp->GetOpcode() == Opcode::OP_UB_COPY_L1;
+        if (isUBCopyL1) {
+            // UB场景：删除 UB_COPY_L1 + UB_ALLOC + UB tensor2 + UB_COPY_ND2NZ
+            CollectUBSceneOpsAndTensors(producerOp, opsToDelete, tensorsToDelete);
+            APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect UB tensor and op");
+        } else {
+            // 删除Alloc 以及 L0C场景：只删除 L0C_L1
+            opsToDelete.push_back(producerOp);
+            APASS_LOG_DEBUG_F(Elements::Operation, "collect L0C_COPY_L1/L1_ALLOC only");
+        }
+    }
+}
+
+// 清理收集到的所有 op
+size_t OoOScheduler::CleanupCollectedOperations(const std::vector<Operation*>& opsToDelete)
+{
+    size_t deleteNum = 0;
+    for (auto* op : opsToDelete) {
+        if (op == nullptr) {
+            continue;
+        }
+        // 查找 op 在 orderedOps 中的位置
+        auto it = std::find(orderedOps.begin(), orderedOps.end(), op);
+        if (it != orderedOps.end()) {
+            size_t opIndex = std::distance(orderedOps.begin(), it);
+            if (opIsRetiredMap[op]) {
+                deleteNum++;
+            }
+            // 获取删除 op 的 order
+            int deletedOrder = opExecOrderMap[op];
+
+            // 从 orderedOps 删除
+            auto nextIt = orderedOps.erase(it);
+
+            // 调整后续 ops 的 opExecOrderMap（--），补空缺
+            for (auto adjustIt = nextIt; adjustIt != orderedOps.end(); adjustIt++) {
+                if (opExecOrderMap.count(*adjustIt) > 0 && opExecOrderMap[*adjustIt] > deletedOrder) {
+                    opExecOrderMap[*adjustIt]--;
+                }
+            }
+
+            APASS_LOG_DEBUG_F(
+                Elements::Operation, "Deleted op %s at index %zu (order %d).", GetOpInfo(op).c_str(), opIndex,
+                deletedOrder);
+        }
+        EraseSchedulerSideMaps(op);
+
+        auto predecessors = depManager_.GetPredecessors(op);
+        auto successors = depManager_.GetSuccessors(op);
+        for (auto* pred : predecessors) {
+            depManager_.RemoveSuccessor(pred, op);
+        }
+        for (auto* succ : successors) {
+            depManager_.RemovePredecessor(succ, op);
+        }
+        auto newOpsIt = std::find(newOperations_.begin(), newOperations_.end(), op);
+        if (newOpsIt != newOperations_.end()) {
+            newOperations_.erase(newOpsIt);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Removed op %s from newOperations_.", GetOpInfo(op).c_str());
+        }
+        op->SetAsDeleted();
+        APASS_LOG_DEBUG_F(Elements::Operation, "Marked op %s as deleted.", GetOpInfo(op).c_str());
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "Delete pcidx num: %zu", deleteNum);
+    return deleteNum;
+}
+
+// 清理收集到的所有 tensor 的相关信息
+void OoOScheduler::CleanupCollectedTensors(
+    const std::vector<LogicalTensorPtr>& tensorsToDelete)
+{
+    for (size_t i = 0; i < tensorsToDelete.size(); i++) {
+        auto& tensor = tensorsToDelete[i];
+        int memId = tensor->memoryrange.memId;
+
+        tensorAllocCoreMap.erase(memId);
+        bufRefCount_.erase(memId);
+
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor, "Cleaned tensor[%d] scheduler.", memId);
+    }
+}
+
+// 手动清理孤立的 tensor
+void OoOScheduler::EraseOrphanedTensors(
+    const std::vector<LogicalTensorPtr>& tensorsToDelete, const std::vector<Operation*>& opsToDelete)
+{
+    for (auto& tensor : tensorsToDelete) {
+        // 清理 tensor 的 producers 关系（使用 RemoveProducer 接口）
+        for (auto* op : opsToDelete) {
+            tensor->RemoveProducer(op);
+        }
+
+        // 清理 tensor 的 consumers 关系（使用 RemoveConsumer 接口）
+        for (auto* op : opsToDelete) {
+            tensor->RemoveConsumer(op);
+        }
+
+        // 如果 tensor 已孤立（无生产者和消费者），删除它
+        if (tensor->GetProducers().empty() && tensor->GetConsumers().empty()) {
+            function_.GetTensorMap().Erase(tensor);
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Erased tensor[%d].", tensor->memoryrange.memId);
+        }
+    }
+}
+
+// 主函数：删除 spill_tensor 及其 producer chain
+Status OoOScheduler::RemoveSmallShapeSpillResources(SpillInfo& spillInfo, size_t &pcIdx)
+{
+    int spillMemId = spillInfo.spillMemId_;
+    auto spillTensor = spillInfo.spillTensor_;
+    if (spillTensor == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "spillTensor is null.");
+        return FAILED;
+    }
+
+    // 1. 收集需要删除的 ops 和 tensors（根据场景类型）
+    std::vector<Operation*> opsToDelete;
+    std::vector<LogicalTensorPtr> tensorsToDelete;
+    CollectProducerChainForDeletion(spillTensor, opsToDelete, tensorsToDelete);
+    APASS_LOG_DEBUG_F(
+        Elements::Operation, "Collected %zu ops and %zu tensors.", opsToDelete.size(), tensorsToDelete.size());
+
+    // 2. 清理 ops, 并记录其中已执行 op 的数量
+    auto deleteNum = CleanupCollectedOperations(opsToDelete);
+    if (deleteNum > pcIdx) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Delete number greater than pcIdx");
+        return FAILED;
+    }
+    pcIdx -= deleteNum;
+
+    // 3. 清理 tensors
+    CleanupCollectedTensors(tensorsToDelete);
+
+    // 4. 调用 Function 统一清理机制
+    function_.EraseOperations(false, true);
+
+    // 5. 手动清理孤立 tensor
+    EraseOrphanedTensors(tensorsToDelete, opsToDelete);
+
+    // 6. 更新统计信息
+    numTotalIssues -= static_cast<int>(opsToDelete.size() - deleteNum);
+    APASS_LOG_DEBUG_F(
+        Elements::Operation, "Deleted spill tensor[%d] and %zu ops (%zu tensors).", spillMemId, opsToDelete.size(),
+        tensorsToDelete.size());
+
+    return SUCCESS;
+}
+
 bool OoOScheduler::IsSupportedPartialWriteProducer(const Operation &op) const
 {
     return op.GetOpcode() == Opcode::OP_ASSEMBLE || op.GetOpcode() == Opcode::OP_L0C_TO_L1 ||
-        IsAllocOpCode(op.GetOpcode());
+        IsAllocOpCode(op.GetOpcode()) || op.GetOpcode() == Opcode::OP_L0C_COPY_UB;
 }
 
 bool OoOScheduler::IsReusableCopyInOp(const Operation &op) const
@@ -69,7 +350,8 @@ Status OoOScheduler::GetPartialWriteReplayAttr(Operation* producerOp, std::vecto
         toDynOffset = attr->GetToDynOffset();
         fromDynValidShape = attr->GetFromDynValidShape();
         return SUCCESS;
-    } else if (producerOp->GetOpcode() == Opcode::OP_L0C_TO_L1) {
+    } else if (producerOp->GetOpcode() == Opcode::OP_L0C_TO_L1 ||
+        producerOp->GetOpcode() == Opcode::OP_L0C_COPY_UB) {
         auto attr = std::static_pointer_cast<CopyOpAttribute>(producerOp->GetOpAttribute());
         if (attr == nullptr) {
             APASS_LOG_ERROR_F(Elements::Operation, "Invalid CopyOpAttribute.");
@@ -111,7 +393,7 @@ Operation* OoOScheduler::FindAllocForAssembleProducers(const std::vector<Operati
 bool OoOScheduler::HasNZHorizontalSlice(const std::vector<Operation*> &assembleOps) const
 {
     for (auto *op : assembleOps) {
-        if (op->GetOpcode() != Opcode::OP_L0C_TO_L1) {
+        if (op->GetOpcode() != Opcode::OP_L0C_TO_L1 && op->GetOpcode() != Opcode::OP_L0C_COPY_UB) {
             continue;
         }
         int64_t isNZ = 0;
@@ -162,6 +444,7 @@ int OoOScheduler::GetBufLastUseOrder(Operation* op, int curMemId) {
     int execOrder = opExecOrderMap[op];
     for (auto it = std::make_reverse_iterator(targetIt); it != orderedOps.rend(); it++) {
         Operation* curOp = *it;
+        // copyout 插入位置
         if (curOp && opExecOrderMap[curOp] < execOrder) {
             auto& reqMemIds = GetOpMemIds(curOp);
             if (std::find(reqMemIds.begin(), reqMemIds.end(), curMemId) != reqMemIds.end()) {
@@ -229,10 +512,20 @@ void OoOScheduler::UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp) {
     }
 }
 
-void OoOScheduler::UpdateOpIsCube(Operation &op, Operation* srcOp)
+bool OoOScheduler::IsCubeTensor(LogicalTensorPtr tensor)
 {
-    if (srcOp->HasAttribute(OpAttributeKey::isCube)) {
-        op.SetAttribute(OpAttributeKey::isCube, srcOp->GetBoolAttribute(OpAttributeKey::isCube));
+    if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        return false;
+    }
+    return true;
+}
+
+void OoOScheduler::UpdateOpIsCube(Operation &op)
+{
+    if (op.GetOpcodeStr().find("COPY_OUT") != std::string::npos) {
+        op.SetAttribute(OpAttributeKey::isCube, IsCubeTensor(op.GetInputOperand(0)));
+    } else {
+        op.SetAttribute(OpAttributeKey::isCube, IsCubeTensor(op.GetOutputOperand(0)));
     }
 }
 
@@ -274,10 +567,12 @@ void OoOScheduler::UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr s
         if (IsReusableCopyInOp(*spillOp)) {
             op.SetOpAttribute(spillOp->GetOpAttribute()->Clone());
             op.inParamLocation_ = spillOp->inParamLocation_;
-        } else if (!isSpecialL1) {
-            int64_t isNZ = 0;
-            spillOp->GetAttr(OpAttributeKey::copyIsNZ, isNZ);
-            op.SetAttr(OpAttributeKey::copyIsNZ, isNZ);
+        } else if (!isSpecialL1 || IsSmallShapeSpill(spillOp)) {
+            if (!isSpecialL1) {
+                int64_t isNZ = 0;
+                spillOp->GetAttr(OpAttributeKey::copyIsNZ, isNZ);
+                op.SetAttr(OpAttributeKey::copyIsNZ, isNZ);
+            }
             op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
                 OpImmediate::Specified(offset), spillTensor->GetMemoryTypeOriginal(),
                 OpImmediate::Specified(spillTensor->GetShape()),
@@ -434,7 +729,31 @@ void OoOScheduler::InsertOrdered(Operation* insertOp) {
     }
 }
 
-Status OoOScheduler::UpdateReloadIssueInfo(Operation* reloadAlloc, Operation* reloadCopyin, Operation* spillOp, int spillMemId, Operation* allocOp) {
+// 辅助函数：更新 orderedOps 中的 alloc 依赖关系
+void OoOScheduler::UpdateOrderedOpsAllocDepend(int spillMemId, Operation* reloadAlloc)
+{
+    for (auto& op : orderedOps) {
+        if (opIsRetiredMap[op] || opIsAllocMap[op]) {
+            continue;
+        }
+        auto predecessors = depManager_.GetPredecessors(op);
+        for (auto predOp : predecessors) {
+            if (opIsAllocMap[predOp]) {
+                auto& predReqMemIds = GetOpMemIds(predOp);
+                if (std::find(predReqMemIds.begin(), predReqMemIds.end(), spillMemId) != predReqMemIds.end()) {
+                    depManager_.RemovePredecessor(op, predOp);
+                    depManager_.InsertPredecessor(op, reloadAlloc);
+                }
+            }
+        }
+    }
+}
+
+Status OoOScheduler::UpdateReloadIssueInfo(Operation* reloadAlloc, Operation* reloadCopyin, SpillInfo &spillInfo,
+    Operation* allocOp, size_t &pcIdx)
+{
+    Operation* spillOp = spillInfo.spillOp_;
+    int spillMemId = spillInfo.spillMemId_;
     SetOpMemIds(reloadAlloc, {reloadAlloc->GetOutputOperand(0)->memoryrange.memId});
     depManager_.AddAllocDependency(reloadAlloc, reloadCopyin);
     SetOpMemIds(reloadCopyin, {reloadAlloc->GetOutputOperand(0)->memoryrange.memId});
@@ -459,28 +778,26 @@ Status OoOScheduler::UpdateReloadIssueInfo(Operation* reloadAlloc, Operation* re
     opCoreLocationMap[reloadCopyin] = opCoreLocationMap[allocOp];
     UpdateOpInternalSubgraphID(*reloadAlloc, allocOp);
     UpdateOpInternalSubgraphID(*reloadCopyin, allocOp);
-    UpdateOpIsCube(*reloadCopyin, *(depManager_.GetSuccessors(spillOp).begin()));
+    UpdateOpIsCube(*reloadCopyin);
+    bool isL1SmallShape = false;
+    if (UpdateSmallShapeDependAndBuf(reloadAlloc, reloadCopyin, spillInfo, isL1SmallShape) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "UpdateSmallShapeDependAndBuf failed");
+        return FAILED;
+    }
+    if (isL1SmallShape) {
+        if (RemoveSmallShapeSpillResources(spillInfo, pcIdx) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "RemoveSmallShapeSpillResources failed");
+            return FAILED;
+        }
+        return SUCCESS;
+    }
     if (UpdateReloadIssueDepend(reloadCopyin, spillOp, spillMemId) != SUCCESS) {
         return FAILED;
     }
     if (UpdateRemainOpBufId(spillMemId, GetOpMemIds(reloadAlloc)[0])) {
         return FAILED;
     }
-    for (auto& op : orderedOps) {
-        if (opIsRetiredMap[op] || opIsAllocMap[op]) {
-            continue;
-        }
-        auto predecessors = depManager_.GetPredecessors(op);
-        for (auto predOp : predecessors) {
-            if (opIsAllocMap[predOp]) {
-                auto& predReqMemIds = GetOpMemIds(predOp);
-                if (std::find(predReqMemIds.begin(), predReqMemIds.end(), spillMemId) != predReqMemIds.end()) {
-                    depManager_.RemovePredecessor(op, predOp);
-                    depManager_.InsertPredecessor(op, reloadAlloc);
-                }
-            }
-        }
-    }
+    UpdateOrderedOpsAllocDepend(spillMemId, reloadAlloc);
 
     numTotalIssues += TWO_ISSUE;
     return SUCCESS;
@@ -628,7 +945,7 @@ Status OoOScheduler::SpillReshapeParticalBuffer(SpillInfo &spillInfo, Operation*
     UpdateOpAttr(spillCopyInOp, DEFAULT_LATENCY, newTensor, spillInfo.ddrTensor_->GetOffset(), preOp,
         spillInfo.isSpecialL1_);
     auto spillCopyInOpPtr = UpdateIssueAttr(spillCopyInOp, {reshapeTensor->memoryrange.memId}, allocOp, bufNextUseOrder, isGenSpill);
-    UpdateOpIsCube(spillCopyInOp, spillInfo.spillOp_);
+    UpdateOpIsCube(spillCopyInOp);
     // A5 下 DDR->COPY_IN->L1->RESHAPE->L1 场景不标记 copy_in_mode
     if (preOp->GetOpcode() != Opcode::OP_COPY_IN && UpdateCopyInMode(spillCopyInOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyInMode failed");
@@ -636,7 +953,7 @@ Status OoOScheduler::SpillReshapeParticalBuffer(SpillInfo &spillInfo, Operation*
     }
     // 创建 reshape
     auto& reshapeOp = function_.AddRawOperation(Opcode::OP_RESHAPE, {newTensor}, {reshapeTensor});
-    UpdateOpIsCube(reshapeOp, spillInfo.spillOp_);
+    UpdateOpIsCube(reshapeOp);
     reshapeOp.UpdateLatency(1);
     auto reshapeOpPtr = UpdateIssueAttr(reshapeOp, {reshapeTensor->memoryrange.memId, reshapeTensor->memoryrange.memId}, allocOp, bufNextUseOrder, isGenSpill);
     APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_ALLOC: %s. ", GetOpInfo(spillAllocOpPtr).c_str());
@@ -680,7 +997,8 @@ Status OoOScheduler::SpillInReshapeBuffer(SpillInfo &spillInfo, Operation* alloc
 }
 
 Status OoOScheduler::SpillInBuffer(SpillInfo &spillInfo, Operation* allocOp, MemoryType bufferType,
-    bool isGenSpill) {
+    bool isGenSpill, size_t &pcIdx)
+{
     if (spillInfo.isSpecialL1_ && spillInfo.spillOp_->GetOpcodeStr().find("RESHAPE") != std::string::npos) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Start to spill-reshape special L1 in A5.");
         if (SpillInReshapeBuffer(spillInfo, allocOp, isGenSpill) != SUCCESS) {
@@ -699,8 +1017,7 @@ Status OoOScheduler::SpillInBuffer(SpillInfo &spillInfo, Operation* allocOp, Mem
     }
     reloadAlloc = reloadOps.first;
     reloadCopyin = reloadOps.second;
-    if (UpdateReloadIssueInfo(reloadAlloc, reloadCopyin, spillInfo.spillOp_, spillInfo.spillMemId_,
-        allocOp) != SUCCESS) {
+    if (UpdateReloadIssueInfo(reloadAlloc, reloadCopyin, spillInfo, allocOp, pcIdx) != SUCCESS) {
         reloadOps.first->SetAsDeleted();
         reloadOps.second->SetAsDeleted();
         function_.EraseOperations();
@@ -771,7 +1088,7 @@ Status OoOScheduler::CreateSpillCopyout(Operation* spillOp, LogicalTensorPtr spi
     opIsAllocMap[spillCopyoutOp] = false;
     opPipeTypeMap[spillCopyoutOp] = RescheduleUtils::GetOpPipeType(spillCopyoutOp);
     opViewOpsMap[spillCopyoutOp] = std::vector<Operation*>();
-    UpdateOpIsCube(*spillCopyoutOp, *(depManager_.GetSuccessors(spillOp).begin()));
+    UpdateOpIsCube(*spillCopyoutOp);
     for (auto preOp : depManager_.GetPredecessors(spillOp)) {
         if (opIsAllocMap[preOp]) {
             opCoreLocationMap[spillCopyoutOp] = opCoreLocationMap[preOp];
@@ -973,7 +1290,7 @@ Status OoOScheduler::CreateSpillCopyoutForSmallShape(SpillInfo &spillInfo, Logic
         if (producerOp == nullptr || IsAllocOpCode(producerOp->GetOpcode())) {
             continue;
         }
-        if (CreateSmallShapeCopyout(spillInfo, producerOp, ddrTensor, isGenSpill, pcIdx) !=
+        if (CreateSmallShapeCopyout(producerOp, ddrTensor, isGenSpill, pcIdx) !=
             SUCCESS) {
             return FAILED;
         }
@@ -1088,7 +1405,7 @@ Status OoOScheduler::ConfigSmallShapeCopyoutAttrs(Operation &copyOutOp, Operatio
 
 // 场景1 actualTensor(UB)->actualOp(UB_COPY_ND2NZ)->UB->producerOp UB_COPY_L1->L1
 // 场景2 actualTensor(L0C)->actualOp L0C_COPY_L1->L1
-Status OoOScheduler::CreateSmallShapeCopyout(SpillInfo &spillInfo, Operation* producerOp,
+Status OoOScheduler::CreateSmallShapeCopyout(Operation* producerOp,
     LogicalTensorPtr ddrTensor, bool isGenSpill, size_t &pcIdx)
 {
     Operation* actualOp = nullptr;
@@ -1100,6 +1417,7 @@ Status OoOScheduler::CreateSmallShapeCopyout(SpillInfo &spillInfo, Operation* pr
     if (ConfigSmallShapeCopyoutAttrs(copyOutOp, producerOp, actualTensor) != SUCCESS) {
         return FAILED;
     }
+    APASS_LOG_DEBUG_F(Elements::Operation, "SmallShape spill insert op: %s.", GetOpInfo(&copyOutOp).c_str());
     for (auto preOp : depManager_.GetPredecessors(actualOp)) {
         if (!opIsAllocMap[preOp]) {
             depManager_.AddDependency(preOp, &copyOutOp);
@@ -1111,8 +1429,8 @@ Status OoOScheduler::CreateSmallShapeCopyout(SpillInfo &spillInfo, Operation* pr
             }
         }
     }
-    SetOpMemIds(&copyOutOp, {spillInfo.spillMemId_});
-    opIsRetiredMap[&copyOutOp] = true;
+    SetOpMemIds(&copyOutOp, {actualTensor->memoryrange.memId});
+    opIsRetiredMap[&copyOutOp] = opIsRetiredMap[producerOp];
     opIsAllocMap[&copyOutOp] = false;
     opPipeTypeMap[&copyOutOp] = RescheduleUtils::GetOpPipeType(&copyOutOp);
     opViewOpsMap[&copyOutOp] = std::vector<Operation*>();
@@ -1123,16 +1441,19 @@ Status OoOScheduler::CreateSmallShapeCopyout(SpillInfo &spillInfo, Operation* pr
     int order = opExecOrderMap[actualOp];
     SetExecOrder(&copyOutOp, order + 1);
     InsertOrdered(&copyOutOp);
-    if (isGenSpill) {
+    UpdateOpIsCube(copyOutOp);
+    if (isGenSpill && opIsRetiredMap[producerOp]) {
+        // 部分未执行
         pcIdx++;
-        numTotalIssues++;
     } else {
         auto spillOpIt = std::find(newOperations_.begin(), newOperations_.end(), actualOp);
         if (spillOpIt != newOperations_.end()) {
             size_t pos = std::distance(newOperations_.begin(), spillOpIt);
             newOperations_.insert(newOperations_.begin() + pos + 1, &copyOutOp);
-            APASS_LOG_DEBUG_F(Elements::Operation, "SmallShape spill insert op: %s.", GetOpInfo(&copyOutOp).c_str());
         }
+    }
+    if (!opIsRetiredMap[producerOp]) {
+        numTotalIssues++;
     }
     return SUCCESS;
 }
@@ -1205,7 +1526,7 @@ Status OoOScheduler::SpillBuffer(SpillInfo &spillInfo, Operation* allocOp, size_
         return FAILED;
     }
     NotifySpill(spillInfo, allocBuffer);
-    if (SpillInBuffer(spillInfo, allocOp, allocBuffer->memType, isGenSpill) != SUCCESS) {
+    if (SpillInBuffer(spillInfo, allocOp, allocBuffer->memType, isGenSpill, pcIdx) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "SpillInBuffer failed. %s", GetFormatBacktrace(*spillInfo.spillOp_).c_str());
         return FAILED;
     }
@@ -1321,7 +1642,7 @@ Status OoOScheduler::SpillParticalBuffer(SpillInfo &spillInfo, Operation* allocO
         return FAILED;
     }
     UpdateIssueAttr(spillCopyInOp, {assembleTensor->memoryrange.memId}, allocOp, bufNextUseOrder, isGenSpill);
-    UpdateOpIsCube(spillCopyInOp, spillInfo.spillOp_);
+    UpdateOpIsCube(spillCopyInOp);
     // assemble
     auto &assembleOp = function_.AddRawOperation(Opcode::OP_ASSEMBLE, {localTensor}, {assembleTensor});
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
@@ -1330,7 +1651,7 @@ Status OoOScheduler::SpillParticalBuffer(SpillInfo &spillInfo, Operation* allocO
     assembleOp.UpdateLatency(1);
     UpdateIssueAttr(assembleOp, {assembleTensor->memoryrange.memId, assembleTensor->memoryrange.memId},
         allocOp, bufNextUseOrder, isGenSpill);
-    UpdateOpIsCube(assembleOp, spillInfo.spillOp_);
+    UpdateOpIsCube(assembleOp);
     numTotalIssues += TWO_ISSUE;
     return SUCCESS;
 }
@@ -1464,7 +1785,7 @@ Status OoOScheduler::GetSpillInfo(Operation* allocOp, int spillMemId, bool isGen
 bool OoOScheduler::IsPartialWrite(const Operation &op) const
 {
     const auto opcode = op.GetOpcode();
-    if (opcode != Opcode::OP_ASSEMBLE && opcode != Opcode::OP_L0C_TO_L1) {
+    if (opcode != Opcode::OP_ASSEMBLE && opcode != Opcode::OP_L0C_TO_L1 && opcode != Opcode::OP_L0C_COPY_UB) {
         return false;
     }
     if (opcode == Opcode::OP_L0C_TO_L1 &&

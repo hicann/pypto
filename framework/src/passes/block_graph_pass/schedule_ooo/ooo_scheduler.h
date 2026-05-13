@@ -245,11 +245,33 @@ private:
         LogicalTensorPtr &ddrTensor);
     Status ResolveSmallShapeActualSpill(Operation* producerOp,
         Operation* &actualOp, LogicalTensorPtr &actualTensor);
-    Status CreateSmallShapeCopyout(SpillInfo &spillInfo, Operation* producerOp,
+    Status CreateSmallShapeCopyout(Operation* producerOp,
         LogicalTensorPtr ddrTensor, bool isGenSpill, size_t &pcIdx);
     Status ConfigSmallShapeCopyoutAttrs(Operation &copyOutOp, Operation* producerOp,
         LogicalTensorPtr actualTensor);
-    Status SpillInBuffer(SpillInfo &spillInfo, Operation* allocOp, MemoryType bufferType, bool isGenSpill);
+    bool IsSmallShapeSpill(Operation* op);
+    bool HasUnexecutedProducer(LogicalTensorPtr spillTensor);
+    void UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp,
+        Operation* reloadCopyin, int spillMemId, int reloadMemId);
+    void UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId);
+    Status UpdateSmallShapeDependAndBuf(Operation* reloadAlloc, Operation* reloadCopyin,
+        SpillInfo &spillInfo, bool &isL1SmallShape);
+
+    // RemoveSmallShapeSpillResources 辅助函数
+    void CollectUBSceneOpsAndTensors(Operation* producerOp, std::vector<Operation*>& opsToDelete,
+        std::vector<LogicalTensorPtr>& tensorsToDelete);
+    void CollectProducerChainForDeletion(
+        LogicalTensorPtr spillTensor, std::vector<Operation*>& opsToDelete,
+        std::vector<LogicalTensorPtr>& tensorsToDelete);
+    size_t CleanupCollectedOperations(const std::vector<Operation*>& opsToDelete);
+    void CleanupCollectedTensors(
+        const std::vector<LogicalTensorPtr>& tensorsToDelete);
+    void EraseOrphanedTensors(
+        const std::vector<LogicalTensorPtr>& tensorsToDelete, const std::vector<Operation*>& opsToDelete);
+    Status RemoveSmallShapeSpillResources(SpillInfo& spillInfo, size_t &pcIdx);
+
+    Status SpillInBuffer(SpillInfo &spillInfo, Operation* allocOp, MemoryType bufferType,
+        bool isGenSpill, size_t &pcIdx);
     Status SpillInReshapeBuffer(SpillInfo &spillInfo, Operation* allocOp, bool isGenSpill);
     Status SpillReshapeParticalBuffer(SpillInfo &spillInfo, Operation* allocOp, LogicalTensorPtr reshapeTensor,
         bool isGenSpill);
@@ -257,8 +279,9 @@ private:
     Status UpdateReshapeDependAndBuf(Operation* allocOp, SpillInfo &spillInfo, LogicalTensorPtr reshapeTensor);
     Status CreateSpillReloadIssue(LogicalTensorPtr spillOutTensor, LogicalTensorPtr spillTensor,
         Operation* spillOp, std::pair<Operation*, Operation*> &reloadOps, bool isSpecialL1);
+    void UpdateOrderedOpsAllocDepend(int spillMemId, Operation* reloadAlloc);
     Status UpdateReloadIssueInfo(Operation* reloadAlloc, Operation* reloadCopyin,
-        Operation* spillOp, int spillMemId, Operation* allocOp);
+        SpillInfo &spillInfo, Operation* allocOp, size_t &pcIdx);
     bool HasEnoughBuffer(Operation* allocOp, MemoryType memType);
     // spill assemble
     Status SpillAssembleBuffer(SpillInfo &spillInfo, Operation* allocOp, size_t &pcIdx,
@@ -304,7 +327,8 @@ private:
     void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
     void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
-    void UpdateOpIsCube(Operation &op, Operation* srcOp);
+    void UpdateOpIsCube(Operation &op);
+    bool IsCubeTensor(LogicalTensorPtr tensor);
     void GetActualSpillInfo(Operation* spillOp, std::pair<LogicalTensorPtr, Operation*>& actualInfo);
     void UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr spillTensor, std::vector<int64_t> offset,
         Operation* spillOp, bool isSpecialL1);

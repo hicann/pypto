@@ -2059,7 +2059,7 @@ TEST_F(ScheduleOoOTest, TestL1SpillBuffer)
     EXPECT_EQ(oooSchedule.orderedOps[14]->GetOpcodeStr(), "L1_ALLOC");
 
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(oooSchedule.orderedOps[15]->GetOpAttribute());
-    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 1);
+    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 0);
     EXPECT_TRUE(
         CheckOpInSet(oooSchedule.depManager_.GetPredecessors(subGraph.GetOp("COPY_IN1")), oooSchedule.orderedOps[15]));
 }
@@ -2187,7 +2187,7 @@ TEST_F(ScheduleOoOTest, TestL1ReshapeSpillBuffer1)
     EXPECT_EQ(ooOSchedule.orderedOps[17]->GetOpcodeStr(), "RESHAPE");
 
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(ooOSchedule.orderedOps[16]->GetOpAttribute());
-    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 1);
+    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 0);
 }
 
 void SetAttributeReshape2(ComputationalGraphBuilder &subGraph, OoOScheduler &oooSchedule, Operation* &reshape, Operation* &alloc3) {
@@ -2585,5 +2585,289 @@ TEST_F(ScheduleOoOTest, TestSmallShapeSpillUBCopyL1)
 
     res = oooSchedule.TryCreateSpillCopyoutForSmallShape(spillInfo, ubCopyL1, isFinish, true, pcIdx);
     EXPECT_EQ(res, SUCCESS);
+}
+
+// 辅助函数：构建小搬大场景的测试图
+void BuildSmallShapeSpillGraphWithUnexecutedProducer(ComputationalGraphBuilder& subGraph)
+{
+    std::vector<std::string> tensorL1Names{"L1_tensor"};
+    std::vector<MemoryType> tensorL1MemTypes{MemoryType::MEM_L1};
+
+    std::vector<std::string> tensorUBNames{"UB_src1", "UB_src2", "UB_dst1", "UB_dst2"};
+    std::vector<MemoryType> tensorUBMemTypes{
+        MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB};
+
+    std::vector<std::string> tensorDDRNames{"DDR_src1", "DDR_src2", "DDR_out"};
+    std::vector<MemoryType> tensorDDRMemTypes{
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR};
+
+    std::vector<std::string> tensorL0ANames{"L0A_dst"};
+    std::vector<MemoryType> tensorL0AMemTypes{MemoryType::MEM_L0A};
+
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorL1MemTypes, tensorL1Names, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {64, 128}, tensorUBMemTypes, tensorUBNames, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {64, 128}, tensorDDRMemTypes, tensorDDRNames, 0), true);
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorL0AMemTypes, tensorL0ANames, 0), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_COPY_IN,    Opcode::OP_COPY_IN,       Opcode::OP_L1_ALLOC,
+                                Opcode::OP_UB_ALLOC,   Opcode::OP_UB_ALLOC,      Opcode::OP_UB_ALLOC,
+                                Opcode::OP_UB_ALLOC,   Opcode::OP_UB_COPY_ND2NZ, Opcode::OP_UB_COPY_ND2NZ,
+                                Opcode::OP_UB_COPY_L1, Opcode::OP_UB_COPY_L1,    Opcode::OP_L0A_ALLOC,
+                                Opcode::OP_COPY_IN,    Opcode::OP_COPY_OUT};
+
+    std::vector<std::vector<std::string>> ioperands{
+        {"DDR_src1"}, {"DDR_src2"},  {},         {}, {}, {}, {}, {"UB_src1"}, {"UB_src2"}, {"UB_dst1"}, {"UB_dst2"},
+        {},           {"L1_tensor"}, {"L0A_dst"}};
+
+    std::vector<std::vector<std::string>> ooperands{
+        {"UB_src1"}, {"UB_src2"}, {"L1_tensor"}, {"UB_src1"},   {"UB_src2"}, {"UB_dst1"}, {"UB_dst2"},
+        {"UB_dst1"}, {"UB_dst2"}, {"L1_tensor"}, {"L1_tensor"}, {"L0A_dst"}, {"L0A_dst"}, {"DDR_out"}};
+
+    std::vector<std::string> opNames{"COPY_IN_DDR1", "COPY_IN_DDR2", "L1_Alloc",       "UB_Alloc1",      "UB_Alloc2",
+                                     "UB_Alloc3",    "UB_Alloc4",    "UB_COPY_ND2NZ1", "UB_COPY_ND2NZ2", "UB_COPY_L1_1",
+                                     "UB_COPY_L1_2", "L0A_Alloc",    "COPY_IN",        "COPY_OUT"};
+
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+}
+
+// 辅助函数：设置小搬大场景的op属性
+void SetupSmallShapeSpillOps(ComputationalGraphBuilder& subGraph)
+{
+    auto ubCopyL1_1 = subGraph.GetOp("UB_COPY_L1_1");
+    auto ubCopyL1_2 = subGraph.GetOp("UB_COPY_L1_2");
+
+    std::vector<int64_t> offset1 = {0, 0};
+    std::vector<int64_t> offset2 = {64, 0};
+    std::vector<int64_t> ubShape = {64, 128};
+    std::vector<int64_t> l1RawShape = {128, 128};
+
+    ubCopyL1_1->SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified(offset1), MemoryType::MEM_L1, OpImmediate::Specified(ubShape),
+            OpImmediate::Specified(l1RawShape)));
+
+    ubCopyL1_2->SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified(offset2), MemoryType::MEM_L1, OpImmediate::Specified(ubShape),
+            OpImmediate::Specified(l1RawShape)));
+}
+
+// 辅助函数：初始化OoOScheduler和buffer状态
+void InitSmallShapeSpillScheduler(
+    OoOScheduler& oooSchedule, ComputationalGraphBuilder& subGraph, Operation* ubCopyL1_1, Operation* ubCopyL1_2,
+    LogicalTensorPtr l1Tensor)
+{
+    // 设置关键op的retired状态（影响删除逻辑和pcIdx）
+    // 删除的ops：L1_Alloc + UB_COPY_L1_1链(3个) + UB_COPY_L1_2链(3个)
+    // 其中已retired：L1_Alloc, UB_COPY_L1_1, UB_COPY_ND2NZ1, UB_Alloc3 = 4个
+    oooSchedule.SetIsRetired(ubCopyL1_1, true);
+    oooSchedule.SetIsRetired(subGraph.GetOp("UB_COPY_ND2NZ1"), true);
+    oooSchedule.SetIsRetired(subGraph.GetOp("UB_Alloc3"), true);
+    oooSchedule.SetIsRetired(subGraph.GetOp("L1_Alloc"), true);
+
+    // 未retired的producer链
+    oooSchedule.SetIsRetired(ubCopyL1_2, false);
+
+    int l1MemId = l1Tensor->memoryrange.memId;
+    oooSchedule.bufRefCount_[l1MemId] = 3;
+    oooSchedule.localBufferMap_[l1MemId] = std::make_shared<LocalBuffer>(l1MemId, 128 * 128 * 4, MemoryType::MEM_L1);
+    oooSchedule.tensorAllocCoreMap[l1MemId] = CoreLocationType::AIC;
+
+    auto ubDst1 = subGraph.GetTensor("UB_dst1");
+    auto ubDst2 = subGraph.GetTensor("UB_dst2");
+    int ubDst1MemId = ubDst1->memoryrange.memId;
+    int ubDst2MemId = ubDst2->memoryrange.memId;
+
+    oooSchedule.localBufferMap_[ubDst1MemId] =
+        std::make_shared<LocalBuffer>(ubDst1MemId, 64 * 128 * 4, MemoryType::MEM_UB);
+    oooSchedule.localBufferMap_[ubDst2MemId] =
+        std::make_shared<LocalBuffer>(ubDst2MemId, 64 * 128 * 4, MemoryType::MEM_UB);
+    oooSchedule.tensorAllocCoreMap[ubDst1MemId] = CoreLocationType::AIV0;
+    oooSchedule.tensorAllocCoreMap[ubDst2MemId] = CoreLocationType::AIV0;
+
+    auto coreAIC = CoreLocationType::AIC;
+    auto coreAIV = CoreLocationType::AIV0;
+    oooSchedule.bufferManagerMap[coreAIC][MemoryType::MEM_L1].Allocate(oooSchedule.localBufferMap_[l1MemId]);
+    oooSchedule.bufferManagerMap[coreAIV][MemoryType::MEM_UB].Allocate(oooSchedule.localBufferMap_[ubDst1MemId]);
+    oooSchedule.bufferManagerMap[coreAIV][MemoryType::MEM_UB].Allocate(oooSchedule.localBufferMap_[ubDst2MemId]);
+}
+
+// 辅助函数：验证SpillBuffer的基本结果
+void VerifySmallShapeSpillBasicResult(OoOScheduler& oooSchedule, size_t pcIdx, int initialNumTotalIssues)
+{
+    EXPECT_EQ(oooSchedule.numTotalIssues, initialNumTotalIssues);
+    EXPECT_EQ(pcIdx, 4);
+    EXPECT_EQ(oooSchedule.orderedOps.size(), 11);
+
+    size_t copyOutCount = 0;
+    for (auto* op : oooSchedule.orderedOps) {
+        if (op->GetOpcode() == Opcode::OP_COPY_OUT) {
+            copyOutCount++;
+        }
+    }
+    EXPECT_EQ(copyOutCount, 3);
+
+    size_t copyInCount = 0;
+    for (auto* op : oooSchedule.orderedOps) {
+        if (op->GetOpcode() == Opcode::OP_COPY_IN) {
+            copyInCount++;
+        }
+    }
+    EXPECT_EQ(copyInCount, 4);
+}
+
+// 辅助函数：查找reload操作
+void FindReloadOps(
+    OoOScheduler& oooSchedule, Operation* copyInDDR1, Operation* copyInDDR2, Operation* copyIn, Operation* copyOut,
+    Operation*& reloadCopyIn, Operation*& reloadL1Alloc, std::vector<Operation*>& newCopyOuts)
+{
+    reloadCopyIn = nullptr;
+    for (auto* op : oooSchedule.orderedOps) {
+        if (op->GetOpcode() == Opcode::OP_COPY_IN && op != copyInDDR1 && op != copyInDDR2 && op != copyIn) {
+            reloadCopyIn = op;
+            break;
+        }
+    }
+    EXPECT_NE(reloadCopyIn, nullptr);
+
+    reloadL1Alloc = nullptr;
+    for (auto* op : oooSchedule.orderedOps) {
+        if (op->GetOpcode() == Opcode::OP_L1_ALLOC) {
+            reloadL1Alloc = op;
+            break;
+        }
+    }
+    EXPECT_NE(reloadL1Alloc, nullptr);
+
+    newCopyOuts.clear();
+    for (auto* op : oooSchedule.orderedOps) {
+        if (op->GetOpcode() == Opcode::OP_COPY_OUT && op != copyOut) {
+            newCopyOuts.push_back(op);
+        }
+    }
+    EXPECT_EQ(newCopyOuts.size(), 2);
+}
+
+// 辅助函数：验证COPY_OUT属性
+void VerifyCopyOutAttrs(std::vector<Operation*>& newCopyOuts)
+{
+    for (auto* copyOutOp : newCopyOuts) {
+        auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOutOp->GetOpAttribute());
+        EXPECT_NE(attr, nullptr);
+
+        auto shape = attr->GetShape();
+        EXPECT_EQ(shape.size(), 2);
+        EXPECT_EQ(static_cast<int>(shape[0].GetSpecifiedValue()), 64);
+        EXPECT_EQ(static_cast<int>(shape[1].GetSpecifiedValue()), 128);
+
+        auto rawShape = attr->GetRawShape();
+        EXPECT_EQ(rawShape.size(), 2);
+        EXPECT_EQ(static_cast<int>(rawShape[0].GetSpecifiedValue()), 128);
+        EXPECT_EQ(static_cast<int>(rawShape[1].GetSpecifiedValue()), 128);
+
+        auto inTensor = copyOutOp->GetInputOperand(0);
+        EXPECT_NE(inTensor, nullptr);
+        EXPECT_EQ(inTensor->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+
+        auto outTensor = copyOutOp->GetOutputOperand(0);
+        EXPECT_NE(outTensor, nullptr);
+        EXPECT_EQ(outTensor->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    }
+}
+
+// 辅助函数：验证reload COPY_IN属性
+void VerifyReloadCopyInAttrs(Operation* reloadCopyIn)
+{
+    auto reloadAttr = std::dynamic_pointer_cast<CopyOpAttribute>(reloadCopyIn->GetOpAttribute());
+    EXPECT_NE(reloadAttr, nullptr);
+
+    auto reloadShape = reloadAttr->GetShape();
+    EXPECT_EQ(reloadShape.size(), 2);
+    EXPECT_EQ(static_cast<int>(reloadShape[0].GetSpecifiedValue()), 128);
+    EXPECT_EQ(static_cast<int>(reloadShape[1].GetSpecifiedValue()), 128);
+
+    auto reloadRawShape = reloadAttr->GetRawShape();
+    EXPECT_EQ(reloadRawShape.size(), 2);
+    EXPECT_EQ(static_cast<int>(reloadRawShape[0].GetSpecifiedValue()), 128);
+    EXPECT_EQ(static_cast<int>(reloadRawShape[1].GetSpecifiedValue()), 128);
+
+    auto reloadInTensor = reloadCopyIn->GetInputOperand(0);
+    EXPECT_NE(reloadInTensor, nullptr);
+    EXPECT_EQ(reloadInTensor->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+
+    auto reloadOutTensor = reloadCopyIn->GetOutputOperand(0);
+    EXPECT_NE(reloadOutTensor, nullptr);
+    EXPECT_EQ(reloadOutTensor->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+}
+
+// 辅助函数：验证reload L1_tensor的属性
+void VerifyReloadL1Tensor(Operation* reloadL1Alloc, LogicalTensorPtr l1Tensor, OoOScheduler& oooSchedule)
+{
+    auto reloadL1Tensor = reloadL1Alloc->GetOutputOperand(0);
+    EXPECT_NE(reloadL1Tensor, nullptr);
+    EXPECT_EQ(reloadL1Tensor->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(reloadL1Tensor->GetShape()[0], 128);
+    EXPECT_EQ(reloadL1Tensor->GetShape()[1], 128);
+    EXPECT_NE(reloadL1Tensor, l1Tensor);
+
+    int reloadMemId = reloadL1Tensor->memoryrange.memId;
+    EXPECT_NE(oooSchedule.bufRefCount_.find(reloadMemId), oooSchedule.bufRefCount_.end());
+    EXPECT_EQ(oooSchedule.bufRefCount_[reloadMemId], 3);
+}
+
+TEST_F(ScheduleOoOTest, TestL1SmallShapeSpillWithUnexecutedProducer)
+{
+    ComputationalGraphBuilder subGraph;
+    BuildSmallShapeSpillGraphWithUnexecutedProducer(subGraph);
+    SetupSmallShapeSpillOps(subGraph);
+
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    Operation* ubCopyL1_1 = subGraph.GetOp("UB_COPY_L1_1");
+    Operation* ubCopyL1_2 = subGraph.GetOp("UB_COPY_L1_2");
+    Operation* l1Alloc = subGraph.GetOp("L1_Alloc");
+    Operation* copyInDDR1 = subGraph.GetOp("COPY_IN_DDR1");
+    Operation* copyInDDR2 = subGraph.GetOp("COPY_IN_DDR2");
+    Operation* copyIn = subGraph.GetOp("COPY_IN");
+    Operation* copyOut = subGraph.GetOp("COPY_OUT");
+
+    EXPECT_NE(ubCopyL1_1, nullptr);
+    EXPECT_NE(ubCopyL1_2, nullptr);
+    EXPECT_NE(l1Alloc, nullptr);
+
+    auto l1Tensor = subGraph.GetTensor("L1_tensor");
+    EXPECT_NE(l1Tensor, nullptr);
+
+    OptimizeSort sort(function->Operations().DuplicatedOpList(), *function);
+    EXPECT_EQ(sort.SortOps(), SUCCESS);
+
+    OoOScheduler oooSchedule(*function);
+    OoOScheduleStatistic testCheck;
+    oooSchedule.AddObserver(&testCheck);
+    EXPECT_EQ(oooSchedule.Init(sort.operations), SUCCESS);
+
+    InitSmallShapeSpillScheduler(oooSchedule, subGraph, ubCopyL1_1, ubCopyL1_2, l1Tensor);
+
+    EXPECT_TRUE(oooSchedule.IsSmallShapeSpill(ubCopyL1_1));
+    SpillInfo spillInfo;
+    int l1MemId = l1Tensor->memoryrange.memId;
+    InitSpillInfo(spillInfo, l1MemId, ubCopyL1_1);
+
+    size_t pcIdx = 7;
+    int initialNumTotalIssues = oooSchedule.numTotalIssues;
+    EXPECT_EQ(initialNumTotalIssues, 14);
+
+    EXPECT_EQ(oooSchedule.SpillBuffer(spillInfo, l1Alloc, pcIdx, oooSchedule.localBufferMap_[l1MemId], true), SUCCESS);
+
+    VerifySmallShapeSpillBasicResult(oooSchedule, pcIdx, initialNumTotalIssues);
+    Operation* reloadCopyIn = nullptr;
+    Operation* reloadL1Alloc = nullptr;
+    std::vector<Operation*> newCopyOuts;
+    FindReloadOps(oooSchedule, copyInDDR1, copyInDDR2, copyIn, copyOut, reloadCopyIn, reloadL1Alloc, newCopyOuts);
+
+    VerifyCopyOutAttrs(newCopyOuts);
+    VerifyReloadCopyInAttrs(reloadCopyIn);
+    VerifyReloadL1Tensor(reloadL1Alloc, l1Tensor, oooSchedule);
 }
 } // namespace npu::tile_fwk
