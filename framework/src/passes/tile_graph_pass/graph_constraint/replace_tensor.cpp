@@ -1018,7 +1018,9 @@ Status ReplaceTensor::FindNeedToCopyReshape(
     for (auto producesOp : producerOps) {
         if (producesOp->GetOpcode() == Opcode::OP_VIEW && isBoundTensor(op.GetOOperands().front()) &&
             !isBoundTensor(producesOp->GetIOperands().front()) &&
-            !function.IsFromInCast(producesOp->GetIOperands().front())) {
+            !function.IsFromInCast(producesOp->GetIOperands().front()) &&
+            producesOp->GetIOperands().front()->tensor->GetRawShapeSize() !=
+            op.GetOOperands().front()->tensor->GetRawShapeSize()) {
             needInsertCopyAssOps.insert(&op);
         }
     }
