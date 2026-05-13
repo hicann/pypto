@@ -1816,6 +1816,7 @@ private:
         aicpuIdx_ = threadIdx;
         schedIdx_ = schedIdx;
         aicValidNum_ = deviceArgs->nrValidAic;
+        hasAicpuTask_ = deviceArgs->hasAicpuTask;
         enableEslModel_ = deviceArgs->enableEslModel;
         disableControlCore_ = true;
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
@@ -2194,7 +2195,7 @@ private:
         DEV_IF_VERBOSE_DEBUG { recvFinTask_[coreIdx].push_back(TaskInfo(coreIdx, taskId, deviceTaskCtx->TaskId())); }
     }
 
-    inline bool IsNeedProcAicpuTask() { return aicpuIdx_ == 2; }
+    inline bool IsNeedProcAicpuTask() { return hasAicpuTask_ && aicpuIdx_ == 2; }
 
 private:
     void ReuseUpdateDeviceCtx(SchDeviceTaskContext* devTaskCtx, DeviceTaskCtrl* newDevTask) {
@@ -2437,5 +2438,6 @@ private:
 
     bool enableEslModel_;
     bool disableControlCore_{false};
+    bool hasAicpuTask_{false};
 };
 } // namespace npu::tile_fwk::dynamic
