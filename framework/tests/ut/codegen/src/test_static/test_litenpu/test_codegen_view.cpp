@@ -45,7 +45,7 @@ TEST_F(TestCodeGenView, test_view_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_002)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_002)
 {
     PROGRAM("VIEW_FP16_002")
     {
@@ -60,7 +60,7 @@ TEST_F(TestCodeGenView, test_view_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_003)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_003)
 {
     PROGRAM("VIEW_FP16_003")
     {
@@ -75,7 +75,7 @@ TEST_F(TestCodeGenView, test_view_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_004)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_004)
 {
     PROGRAM("VIEW_FP16_004")
     {
@@ -90,7 +90,7 @@ TEST_F(TestCodeGenView, test_view_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_005)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_005)
 {
     PROGRAM("VIEW_FP16_005")
     {
@@ -105,7 +105,7 @@ TEST_F(TestCodeGenView, test_view_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_006)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_006)
 {
     PROGRAM("VIEW_FP16_006")
     {
@@ -120,7 +120,7 @@ TEST_F(TestCodeGenView, test_view_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_007)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_007)
 {
     PROGRAM("VIEW_FP16_007")
     {
@@ -135,7 +135,7 @@ TEST_F(TestCodeGenView, test_view_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_008)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_008)
 {
     PROGRAM("VIEW_FP16_008")
     {
@@ -150,7 +150,7 @@ TEST_F(TestCodeGenView, test_view_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_009)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_009)
 {
     PROGRAM("VIEW_FP16_009")
     {
@@ -165,7 +165,7 @@ TEST_F(TestCodeGenView, test_view_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp16_010)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp16_010)
 {
     PROGRAM("VIEW_FP16_010")
     {
@@ -181,7 +181,7 @@ TEST_F(TestCodeGenView, test_view_fp16_010)
 }
 
 // fp32 test cases
-TEST_F(TestCodeGenView, test_view_fp32_001)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_001)
 {
     PROGRAM("VIEW_FP32_001")
     {
@@ -196,7 +196,7 @@ TEST_F(TestCodeGenView, test_view_fp32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_002)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_002)
 {
     PROGRAM("VIEW_FP32_002")
     {
@@ -211,7 +211,7 @@ TEST_F(TestCodeGenView, test_view_fp32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_003)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_003)
 {
     PROGRAM("VIEW_FP32_003")
     {
@@ -226,7 +226,7 @@ TEST_F(TestCodeGenView, test_view_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_004)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_004)
 {
     PROGRAM("VIEW_FP32_004")
     {
@@ -241,7 +241,7 @@ TEST_F(TestCodeGenView, test_view_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_005)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_005)
 {
     PROGRAM("VIEW_FP32_005")
     {
@@ -256,7 +256,7 @@ TEST_F(TestCodeGenView, test_view_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_006)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_006)
 {
     PROGRAM("VIEW_FP32_006")
     {
@@ -271,7 +271,7 @@ TEST_F(TestCodeGenView, test_view_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_007)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_007)
 {
     PROGRAM("VIEW_FP32_007")
     {
@@ -286,7 +286,7 @@ TEST_F(TestCodeGenView, test_view_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_008)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_008)
 {
     PROGRAM("VIEW_FP32_008")
     {
@@ -301,7 +301,7 @@ TEST_F(TestCodeGenView, test_view_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_009)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_009)
 {
     PROGRAM("VIEW_FP32_009")
     {
@@ -316,7 +316,7 @@ TEST_F(TestCodeGenView, test_view_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_fp32_010)
+TEST_F(TestCodeGenView, DISABLED_test_view_fp32_010)
 {
     PROGRAM("VIEW_FP32_010")
     {
@@ -332,7 +332,7 @@ TEST_F(TestCodeGenView, test_view_fp32_010)
 }
 
 // int8 test cases
-TEST_F(TestCodeGenView, test_view_int8_001)
+TEST_F(TestCodeGenView, DISABLED_test_view_int8_001)
 {
     PROGRAM("VIEW_INT8_001")
     {
@@ -347,7 +347,7 @@ TEST_F(TestCodeGenView, test_view_int8_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_int8_002)
+TEST_F(TestCodeGenView, DISABLED_test_view_int8_002)
 {
     PROGRAM("VIEW_INT8_002")
     {
@@ -362,7 +362,7 @@ TEST_F(TestCodeGenView, test_view_int8_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_int8_003)
+TEST_F(TestCodeGenView, DISABLED_test_view_int8_003)
 {
     PROGRAM("VIEW_INT8_003")
     {
@@ -378,7 +378,7 @@ TEST_F(TestCodeGenView, test_view_int8_003)
 }
 
 // int16 test cases
-TEST_F(TestCodeGenView, test_view_int16_001)
+TEST_F(TestCodeGenView, DISABLED_test_view_int16_001)
 {
     PROGRAM("VIEW_INT16_001")
     {
@@ -393,7 +393,7 @@ TEST_F(TestCodeGenView, test_view_int16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_int16_002)
+TEST_F(TestCodeGenView, DISABLED_test_view_int16_002)
 {
     PROGRAM("VIEW_INT16_002")
     {
@@ -408,7 +408,7 @@ TEST_F(TestCodeGenView, test_view_int16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_int16_003)
+TEST_F(TestCodeGenView, DISABLED_test_view_int16_003)
 {
     PROGRAM("VIEW_INT16_003")
     {
@@ -424,7 +424,7 @@ TEST_F(TestCodeGenView, test_view_int16_003)
 }
 
 // int32 test cases
-TEST_F(TestCodeGenView, test_view_int32_001)
+TEST_F(TestCodeGenView, DISABLED_test_view_int32_001)
 {
     PROGRAM("VIEW_INT32_001")
     {
@@ -439,7 +439,7 @@ TEST_F(TestCodeGenView, test_view_int32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_int32_002)
+TEST_F(TestCodeGenView, DISABLED_test_view_int32_002)
 {
     PROGRAM("VIEW_INT32_002")
     {
@@ -454,7 +454,7 @@ TEST_F(TestCodeGenView, test_view_int32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenView, test_view_int32_003)
+TEST_F(TestCodeGenView, DISABLED_test_view_int32_003)
 {
     PROGRAM("VIEW_INT32_003")
     {

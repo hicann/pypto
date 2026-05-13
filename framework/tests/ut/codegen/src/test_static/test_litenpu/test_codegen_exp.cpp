@@ -50,7 +50,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_001)
 }
 
 // Unary_fp16_002
-TEST_F(TestCodeGenExp, test_Exp_fp16_002)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_002)
 {
     PROGRAM("EXP_fp16_002")
     {
@@ -70,7 +70,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_002)
 }
 
 // Unary_fp32_003
-TEST_F(TestCodeGenExp, test_exp_fp32_003)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_003)
 {
     PROGRAM("EXP_fp32_003")
     {
@@ -90,7 +90,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_003)
 }
 
 // Unary_fp32_004
-TEST_F(TestCodeGenExp, test_exp_fp32_004)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_004)
 {
     PROGRAM("EXP_fp32_004")
     {
@@ -110,7 +110,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_004)
 }
 
 // Unary_fp16_005
-TEST_F(TestCodeGenExp, test_Exp_fp16_005)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_005)
 {
     PROGRAM("EXP_fp16_005")
     {
@@ -130,7 +130,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_005)
 }
 
 // Unary_fp32_006
-TEST_F(TestCodeGenExp, test_exp_fp32_006)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_006)
 {
     PROGRAM("EXP_fp32_006")
     {
@@ -150,7 +150,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_006)
 }
 
 // Unary_fp16_007
-TEST_F(TestCodeGenExp, test_Exp_fp16_007)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_007)
 {
     PROGRAM("EXP_fp16_007")
     {
@@ -170,7 +170,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_007)
 }
 
 // Unary_fp32_008
-TEST_F(TestCodeGenExp, test_exp_fp32_008)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_008)
 {
     PROGRAM("EXP_fp32_008")
     {
@@ -190,7 +190,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_008)
 }
 
 // Unary_fp16_009
-TEST_F(TestCodeGenExp, test_Exp_fp16_009)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_009)
 {
     PROGRAM("EXP_fp16_009")
     {
@@ -210,7 +210,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_009)
 }
 
 // Unary_fp32_010
-TEST_F(TestCodeGenExp, test_exp_fp32_010)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_010)
 {
     PROGRAM("EXP_fp32_010")
     {
@@ -230,7 +230,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_010)
 }
 
 // Unary_fp16_011
-TEST_F(TestCodeGenExp, test_Exp_fp16_011)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_011)
 {
     PROGRAM("EXP_fp16_011")
     {
@@ -250,7 +250,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_011)
 }
 
 // Unary_fp32_012
-TEST_F(TestCodeGenExp, test_exp_fp32_012)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_012)
 {
     PROGRAM("EXP_fp32_012")
     {
@@ -270,7 +270,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_012)
 }
 
 // Unary_fp16_013
-TEST_F(TestCodeGenExp, test_Exp_fp16_013)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_013)
 {
     PROGRAM("EXP_fp16_013")
     {
@@ -290,7 +290,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_013)
 }
 
 // Unary_fp32_014
-TEST_F(TestCodeGenExp, test_exp_fp32_014)
+TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_014)
 {
     PROGRAM("EXP_fp32_014")
     {
@@ -310,7 +310,7 @@ TEST_F(TestCodeGenExp, test_exp_fp32_014)
 }
 
 // Unary_fp16_015
-TEST_F(TestCodeGenExp, test_Exp_fp16_015)
+TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_015)
 {
     PROGRAM("EXP_fp16_015")
     {

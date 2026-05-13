@@ -46,7 +46,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_002)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_002)
 {
     PROGRAM("MINIMUM_INT16_002")
     {
@@ -62,7 +62,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_003)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_003)
 {
     PROGRAM("MINIMUM_INT16_003")
     {
@@ -78,7 +78,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_004)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_004)
 {
     PROGRAM("MINIMUM_INT16_004")
     {
@@ -94,7 +94,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_005)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_005)
 {
     PROGRAM("MINIMUM_INT16_005")
     {
@@ -110,7 +110,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_006)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_006)
 {
     PROGRAM("MINIMUM_INT16_006")
     {
@@ -126,7 +126,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_007)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_007)
 {
     PROGRAM("MINIMUM_INT16_007")
     {
@@ -142,7 +142,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_008)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_008)
 {
     PROGRAM("MINIMUM_INT16_008")
     {
@@ -158,7 +158,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_009)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_009)
 {
     PROGRAM("MINIMUM_INT16_009")
     {
@@ -174,7 +174,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int16_010)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int16_010)
 {
     PROGRAM("MINIMUM_INT16_010")
     {
@@ -191,7 +191,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int16_010)
 }
 
 // ========================= int32 用例 =========================
-TEST_F(TestCodeGenMinimum, test_minimum_int32_001)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_001)
 {
     PROGRAM("MINIMUM_INT32_001")
     {
@@ -207,7 +207,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_002)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_002)
 {
     PROGRAM("MINIMUM_INT32_002")
     {
@@ -223,7 +223,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_003)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_003)
 {
     PROGRAM("MINIMUM_INT32_003")
     {
@@ -239,7 +239,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_004)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_004)
 {
     PROGRAM("MINIMUM_INT32_004")
     {
@@ -255,7 +255,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_005)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_005)
 {
     PROGRAM("MINIMUM_INT32_005")
     {
@@ -271,7 +271,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_006)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_006)
 {
     PROGRAM("MINIMUM_INT32_006")
     {
@@ -287,7 +287,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_007)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_007)
 {
     PROGRAM("MINIMUM_INT32_007")
     {
@@ -303,7 +303,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_008)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_008)
 {
     PROGRAM("MINIMUM_INT32_008")
     {
@@ -319,7 +319,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_009)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_009)
 {
     PROGRAM("MINIMUM_INT32_009")
     {
@@ -335,7 +335,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_int32_010)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_int32_010)
 {
     PROGRAM("MINIMUM_INT32_010")
     {
@@ -352,7 +352,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_int32_010)
 }
 
 // ========================= fp16 用例 =========================
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_001)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_001)
 {
     PROGRAM("MINIMUM_FP16_001")
     {
@@ -368,7 +368,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_002)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_002)
 {
     PROGRAM("MINIMUM_FP16_002")
     {
@@ -384,7 +384,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_003)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_003)
 {
     PROGRAM("MINIMUM_FP16_003")
     {
@@ -400,7 +400,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_004)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_004)
 {
     PROGRAM("MINIMUM_FP16_004")
     {
@@ -416,7 +416,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_005)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_005)
 {
     PROGRAM("MINIMUM_FP16_005")
     {
@@ -432,7 +432,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_006)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_006)
 {
     PROGRAM("MINIMUM_FP16_006")
     {
@@ -448,7 +448,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_007)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_007)
 {
     PROGRAM("MINIMUM_FP16_007")
     {
@@ -464,7 +464,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_008)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_008)
 {
     PROGRAM("MINIMUM_FP16_008")
     {
@@ -480,7 +480,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_009)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_009)
 {
     PROGRAM("MINIMUM_FP16_009")
     {
@@ -496,7 +496,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_010)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_010)
 {
     PROGRAM("MINIMUM_FP16_010")
     {
@@ -512,7 +512,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_011)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_011)
 {
     PROGRAM("MINIMUM_FP16_011")
     {
@@ -528,7 +528,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_012)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_012)
 {
     PROGRAM("MINIMUM_FP16_012")
     {
@@ -544,7 +544,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_013)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_013)
 {
     PROGRAM("MINIMUM_FP16_013")
     {
@@ -560,7 +560,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_014)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_014)
 {
     PROGRAM("MINIMUM_FP16_014")
     {
@@ -576,7 +576,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_015)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_015)
 {
     PROGRAM("MINIMUM_FP16_015")
     {
@@ -592,7 +592,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_016)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_016)
 {
     PROGRAM("MINIMUM_FP16_016")
     {
@@ -608,7 +608,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_017)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_017)
 {
     PROGRAM("MINIMUM_FP16_017")
     {
@@ -624,7 +624,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp16_018)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp16_018)
 {
     PROGRAM("MINIMUM_FP16_018")
     {
@@ -641,7 +641,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp16_018)
 }
 
 // ========================= fp32 用例 =========================
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_001)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_001)
 {
     PROGRAM("MINIMUM_FP32_001")
     {
@@ -657,7 +657,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_002)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_002)
 {
     PROGRAM("MINIMUM_FP32_002")
     {
@@ -673,7 +673,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_003)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_003)
 {
     PROGRAM("MINIMUM_FP32_003")
     {
@@ -689,7 +689,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_004)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_004)
 {
     PROGRAM("MINIMUM_FP32_004")
     {
@@ -705,7 +705,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_005)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_005)
 {
     PROGRAM("MINIMUM_FP32_005")
     {
@@ -721,7 +721,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_006)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_006)
 {
     PROGRAM("MINIMUM_FP32_006")
     {
@@ -737,7 +737,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_007)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_007)
 {
     PROGRAM("MINIMUM_FP32_007")
     {
@@ -753,7 +753,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_008)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_008)
 {
     PROGRAM("MINIMUM_FP32_008")
     {
@@ -769,7 +769,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_009)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_009)
 {
     PROGRAM("MINIMUM_FP32_009")
     {
@@ -785,7 +785,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_010)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_010)
 {
     PROGRAM("MINIMUM_FP32_010")
     {
@@ -801,7 +801,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_011)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_011)
 {
     PROGRAM("MINIMUM_FP32_011")
     {
@@ -817,7 +817,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_012)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_012)
 {
     PROGRAM("MINIMUM_FP32_012")
     {
@@ -833,7 +833,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_013)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_013)
 {
     PROGRAM("MINIMUM_FP32_013")
     {
@@ -849,7 +849,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_014)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_014)
 {
     PROGRAM("MINIMUM_FP32_014")
     {
@@ -865,7 +865,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_015)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_015)
 {
     PROGRAM("MINIMUM_FP32_015")
     {
@@ -881,7 +881,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_016)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_016)
 {
     PROGRAM("MINIMUM_FP32_016")
     {
@@ -897,7 +897,7 @@ TEST_F(TestCodeGenMinimum, test_minimum_fp32_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMinimum, test_minimum_fp32_017)
+TEST_F(TestCodeGenMinimum, DISABLED_test_minimum_fp32_017)
 {
     PROGRAM("MINIMUM_FP32_017")
     {

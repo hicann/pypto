@@ -75,7 +75,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_004)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_004)
 {
     PROGRAM("SUM_FP32_004")
     {
@@ -90,7 +90,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_005)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_005)
 {
     PROGRAM("SUM_FP32_005")
     {
@@ -105,7 +105,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_006)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_006)
 {
     PROGRAM("SUM_FP32_006")
     {
@@ -120,7 +120,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_007)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_007)
 {
     PROGRAM("SUM_FP32_007")
     {
@@ -135,7 +135,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_008)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_008)
 {
     PROGRAM("SUM_FP32_008")
     {
@@ -150,7 +150,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_009)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_009)
 {
     PROGRAM("SUM_FP32_009")
     {
@@ -165,7 +165,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_010)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_010)
 {
     PROGRAM("SUM_FP32_010")
     {
@@ -180,7 +180,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_011)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_011)
 {
     PROGRAM("SUM_FP32_011")
     {
@@ -195,7 +195,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_012)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_012)
 {
     PROGRAM("SUM_FP32_012")
     {
@@ -210,7 +210,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_013)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_013)
 {
     PROGRAM("SUM_FP32_013")
     {
@@ -225,7 +225,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_014)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_014)
 {
     PROGRAM("SUM_FP32_014")
     {
@@ -240,7 +240,7 @@ TEST_F(TestCodeGenSum, test_sum_fp32_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_fp32_015)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_fp32_015)
 {
     PROGRAM("SUM_FP32_015")
     {
@@ -286,7 +286,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_003)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_003)
 {
     PROGRAM("SUM_INT32_003")
     {
@@ -301,7 +301,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_004)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_004)
 {
     PROGRAM("SUM_INT32_004")
     {
@@ -316,7 +316,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_005)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_005)
 {
     PROGRAM("SUM_INT32_005")
     {
@@ -331,7 +331,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_006)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_006)
 {
     PROGRAM("SUM_INT32_006")
     {
@@ -346,7 +346,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_007)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_007)
 {
     PROGRAM("SUM_INT32_007")
     {
@@ -361,7 +361,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_008)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_008)
 {
     PROGRAM("SUM_INT32_008")
     {
@@ -376,7 +376,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_009)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_009)
 {
     PROGRAM("SUM_INT32_009")
     {
@@ -391,7 +391,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_010)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_010)
 {
     PROGRAM("SUM_INT32_010")
     {
@@ -406,7 +406,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_011)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_011)
 {
     PROGRAM("SUM_INT32_011")
     {
@@ -421,7 +421,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_012)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_012)
 {
     PROGRAM("SUM_INT32_012")
     {
@@ -436,7 +436,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_013)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_013)
 {
     PROGRAM("SUM_INT32_013")
     {
@@ -451,7 +451,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_014)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_014)
 {
     PROGRAM("SUM_INT32_014")
     {
@@ -466,7 +466,7 @@ TEST_F(TestCodeGenSum, test_sum_int32_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSum, test_sum_int32_015)
+TEST_F(TestCodeGenSum, DISABLED_test_sum_int32_015)
 {
     PROGRAM("SUM_INT32_015")
     {

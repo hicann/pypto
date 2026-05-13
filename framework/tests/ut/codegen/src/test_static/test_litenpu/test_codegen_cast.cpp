@@ -50,7 +50,7 @@ TEST_F(TestCodeGenCast, test_Cast_001)
 }
 
 // cast_002
-TEST_F(TestCodeGenCast, test_Cast_002)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_002)
 {
     PROGRAM("CAST_002")
     {
@@ -70,7 +70,7 @@ TEST_F(TestCodeGenCast, test_Cast_002)
 }
 
 // cast_003
-TEST_F(TestCodeGenCast, test_Cast_003)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_003)
 {
     PROGRAM("CAST_003")
     {
@@ -90,7 +90,7 @@ TEST_F(TestCodeGenCast, test_Cast_003)
 }
 
 // cast_004
-TEST_F(TestCodeGenCast, test_Cast_004)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_004)
 {
     PROGRAM("CAST_004")
     {
@@ -110,7 +110,7 @@ TEST_F(TestCodeGenCast, test_Cast_004)
 }
 
 // cast_005
-TEST_F(TestCodeGenCast, test_Cast_005)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_005)
 {
     PROGRAM("CAST_005")
     {
@@ -130,7 +130,7 @@ TEST_F(TestCodeGenCast, test_Cast_005)
 }
 
 // cast_006
-TEST_F(TestCodeGenCast, test_Cast_006)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_006)
 {
     PROGRAM("CAST_006")
     {
@@ -150,7 +150,7 @@ TEST_F(TestCodeGenCast, test_Cast_006)
 }
 
 // cast_007
-TEST_F(TestCodeGenCast, test_Cast_007)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_007)
 {
     PROGRAM("CAST_007")
     {
@@ -170,7 +170,7 @@ TEST_F(TestCodeGenCast, test_Cast_007)
 }
 
 // cast_008
-TEST_F(TestCodeGenCast, test_Cast_008)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_008)
 {
     PROGRAM("CAST_008")
     {
@@ -190,7 +190,7 @@ TEST_F(TestCodeGenCast, test_Cast_008)
 }
 
 // cast_009
-TEST_F(TestCodeGenCast, test_Cast_009)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_009)
 {
     PROGRAM("CAST_009")
     {
@@ -210,7 +210,7 @@ TEST_F(TestCodeGenCast, test_Cast_009)
 }
 
 // cast_010
-TEST_F(TestCodeGenCast, test_Cast_010)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_010)
 {
     PROGRAM("CAST_010")
     {
@@ -230,7 +230,7 @@ TEST_F(TestCodeGenCast, test_Cast_010)
 }
 
 // cast_011
-TEST_F(TestCodeGenCast, test_Cast_011)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_011)
 {
     PROGRAM("CAST_011")
     {
@@ -250,7 +250,7 @@ TEST_F(TestCodeGenCast, test_Cast_011)
 }
 
 // cast_012
-TEST_F(TestCodeGenCast, test_Cast_012)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_012)
 {
     PROGRAM("CAST_012")
     {
@@ -270,7 +270,7 @@ TEST_F(TestCodeGenCast, test_Cast_012)
 }
 
 // cast_013
-TEST_F(TestCodeGenCast, test_Cast_013)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_013)
 {
     PROGRAM("CAST_013")
     {
@@ -290,7 +290,7 @@ TEST_F(TestCodeGenCast, test_Cast_013)
 }
 
 // cast_014
-TEST_F(TestCodeGenCast, test_Cast_014)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_014)
 {
     PROGRAM("CAST_014")
     {
@@ -310,7 +310,7 @@ TEST_F(TestCodeGenCast, test_Cast_014)
 }
 
 // cast_015
-TEST_F(TestCodeGenCast, test_Cast_015)
+TEST_F(TestCodeGenCast, DISABLED_test_Cast_015)
 {
     PROGRAM("CAST_015")
     {

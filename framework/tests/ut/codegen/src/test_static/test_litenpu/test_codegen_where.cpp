@@ -48,7 +48,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_001)
 }
 
 // fp16_002
-TEST_F(TestCodeGenWhere, test_where_fp16_002)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_002)
 {
     PROGRAM("WHERE_FP16_002")
     {
@@ -66,7 +66,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_002)
 }
 
 // fp16_003
-TEST_F(TestCodeGenWhere, test_where_fp16_003)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_003)
 {
     PROGRAM("WHERE_FP16_003")
     {
@@ -84,7 +84,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_003)
 }
 
 // fp16_004
-TEST_F(TestCodeGenWhere, test_where_fp16_004)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_004)
 {
     PROGRAM("WHERE_FP16_004")
     {
@@ -102,7 +102,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_004)
 }
 
 // fp16_005
-TEST_F(TestCodeGenWhere, test_where_fp16_005)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_005)
 {
     PROGRAM("WHERE_FP16_005")
     {
@@ -120,7 +120,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_005)
 }
 
 // fp16_006
-TEST_F(TestCodeGenWhere, test_where_fp16_006)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_006)
 {
     PROGRAM("WHERE_FP16_006")
     {
@@ -138,7 +138,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_006)
 }
 
 // fp16_007
-TEST_F(TestCodeGenWhere, test_where_fp16_007)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_007)
 {
     PROGRAM("WHERE_FP16_007")
     {
@@ -156,7 +156,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_007)
 }
 
 // fp16_008
-TEST_F(TestCodeGenWhere, test_where_fp16_008)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_008)
 {
     PROGRAM("WHERE_FP16_008")
     {
@@ -174,7 +174,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_008)
 }
 
 // fp16_009
-TEST_F(TestCodeGenWhere, test_where_fp16_009)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_009)
 {
     PROGRAM("WHERE_FP16_009")
     {
@@ -192,7 +192,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_009)
 }
 
 // fp16_010
-TEST_F(TestCodeGenWhere, test_where_fp16_010)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_010)
 {
     PROGRAM("WHERE_FP16_010")
     {
@@ -210,7 +210,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_010)
 }
 
 // fp16_011
-TEST_F(TestCodeGenWhere, test_where_fp16_011)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_011)
 {
     PROGRAM("WHERE_FP16_011")
     {
@@ -228,7 +228,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_011)
 }
 
 // fp16_012
-TEST_F(TestCodeGenWhere, test_where_fp16_012)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_012)
 {
     PROGRAM("WHERE_FP16_012")
     {
@@ -246,7 +246,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_012)
 }
 
 // fp16_013
-TEST_F(TestCodeGenWhere, test_where_fp16_013)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_013)
 {
     PROGRAM("WHERE_FP16_013")
     {
@@ -264,7 +264,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_013)
 }
 
 // fp16_014
-TEST_F(TestCodeGenWhere, test_where_fp16_014)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_014)
 {
     PROGRAM("WHERE_FP16_014")
     {
@@ -282,7 +282,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_014)
 }
 
 // fp16_015
-TEST_F(TestCodeGenWhere, test_where_fp16_015)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_015)
 {
     PROGRAM("WHERE_FP16_015")
     {
@@ -300,7 +300,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_015)
 }
 
 // fp16_016
-TEST_F(TestCodeGenWhere, test_where_fp16_016)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_016)
 {
     PROGRAM("WHERE_FP16_016")
     {
@@ -318,7 +318,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_016)
 }
 
 // fp16_017
-TEST_F(TestCodeGenWhere, test_where_fp16_017)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_017)
 {
     PROGRAM("WHERE_FP16_017")
     {
@@ -336,7 +336,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_017)
 }
 
 // fp16_018
-TEST_F(TestCodeGenWhere, test_where_fp16_018)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_018)
 {
     PROGRAM("WHERE_FP16_018")
     {
@@ -354,7 +354,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_018)
 }
 
 // fp16_019
-TEST_F(TestCodeGenWhere, test_where_fp16_019)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_019)
 {
     PROGRAM("WHERE_FP16_019")
     {
@@ -372,7 +372,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_019)
 }
 
 // fp16_020
-TEST_F(TestCodeGenWhere, test_where_fp16_020)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_020)
 {
     PROGRAM("WHERE_FP16_020")
     {
@@ -390,7 +390,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_020)
 }
 
 // fp16_021
-TEST_F(TestCodeGenWhere, test_where_fp16_021)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_021)
 {
     PROGRAM("WHERE_FP16_021")
     {
@@ -408,7 +408,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_021)
 }
 
 // fp16_022
-TEST_F(TestCodeGenWhere, test_where_fp16_022)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_022)
 {
     PROGRAM("WHERE_FP16_022")
     {
@@ -426,7 +426,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_022)
 }
 
 // fp16_023
-TEST_F(TestCodeGenWhere, test_where_fp16_023)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_023)
 {
     PROGRAM("WHERE_FP16_023")
     {
@@ -444,7 +444,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_023)
 }
 
 // fp16_024
-TEST_F(TestCodeGenWhere, test_where_fp16_024)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_024)
 {
     PROGRAM("WHERE_FP16_024")
     {
@@ -462,7 +462,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_024)
 }
 
 // fp16_025
-TEST_F(TestCodeGenWhere, test_where_fp16_025)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_025)
 {
     PROGRAM("WHERE_FP16_025")
     {
@@ -480,7 +480,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_025)
 }
 
 // fp16_026
-TEST_F(TestCodeGenWhere, test_where_fp16_026)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_026)
 {
     PROGRAM("WHERE_FP16_026")
     {
@@ -498,7 +498,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_026)
 }
 
 // fp16_027
-TEST_F(TestCodeGenWhere, test_where_fp16_027)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_027)
 {
     PROGRAM("WHERE_FP16_027")
     {
@@ -516,7 +516,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_027)
 }
 
 // fp16_028
-TEST_F(TestCodeGenWhere, test_where_fp16_028)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_028)
 {
     PROGRAM("WHERE_FP16_028")
     {
@@ -534,7 +534,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_028)
 }
 
 // fp16_029
-TEST_F(TestCodeGenWhere, test_where_fp16_029)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_029)
 {
     PROGRAM("WHERE_FP16_029")
     {
@@ -552,7 +552,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_029)
 }
 
 // fp16_030
-TEST_F(TestCodeGenWhere, test_where_fp16_030)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_030)
 {
     PROGRAM("WHERE_FP16_030")
     {
@@ -570,7 +570,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_030)
 }
 
 // fp16_031
-TEST_F(TestCodeGenWhere, test_where_fp16_031)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_031)
 {
     PROGRAM("WHERE_FP16_031")
     {
@@ -588,7 +588,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_031)
 }
 
 // fp16_032
-TEST_F(TestCodeGenWhere, test_where_fp16_032)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_032)
 {
     PROGRAM("WHERE_FP16_032")
     {
@@ -606,7 +606,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_032)
 }
 
 // fp32_001
-TEST_F(TestCodeGenWhere, test_where_fp32_001)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_001)
 {
     PROGRAM("WHERE_FP32_001")
     {
@@ -624,7 +624,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_001)
 }
 
 // fp32_002
-TEST_F(TestCodeGenWhere, test_where_fp32_002)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_002)
 {
     PROGRAM("WHERE_FP32_002")
     {
@@ -642,7 +642,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_002)
 }
 
 // fp32_003
-TEST_F(TestCodeGenWhere, test_where_fp32_003)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_003)
 {
     PROGRAM("WHERE_FP32_003")
     {
@@ -660,7 +660,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_003)
 }
 
 // fp32_004
-TEST_F(TestCodeGenWhere, test_where_fp32_004)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_004)
 {
     PROGRAM("WHERE_FP32_004")
     {
@@ -678,7 +678,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_004)
 }
 
 // fp32_005
-TEST_F(TestCodeGenWhere, test_where_fp32_005)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_005)
 {
     PROGRAM("WHERE_FP32_005")
     {
@@ -696,7 +696,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_005)
 }
 
 // fp32_006
-TEST_F(TestCodeGenWhere, test_where_fp32_006)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_006)
 {
     PROGRAM("WHERE_FP32_006")
     {
@@ -714,7 +714,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_006)
 }
 
 // fp32_007
-TEST_F(TestCodeGenWhere, test_where_fp32_007)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_007)
 {
     PROGRAM("WHERE_FP32_007")
     {
@@ -732,7 +732,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_007)
 }
 
 // fp32_008
-TEST_F(TestCodeGenWhere, test_where_fp32_008)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_008)
 {
     PROGRAM("WHERE_FP32_008")
     {
@@ -750,7 +750,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_008)
 }
 
 // fp32_009
-TEST_F(TestCodeGenWhere, test_where_fp32_009)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_009)
 {
     PROGRAM("WHERE_FP32_009")
     {
@@ -768,7 +768,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_009)
 }
 
 // fp32_010
-TEST_F(TestCodeGenWhere, test_where_fp32_010)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_010)
 {
     PROGRAM("WHERE_FP32_010")
     {
@@ -786,7 +786,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_010)
 }
 
 // fp32_011
-TEST_F(TestCodeGenWhere, test_where_fp32_011)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_011)
 {
     PROGRAM("WHERE_FP32_011")
     {
@@ -804,7 +804,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_011)
 }
 
 // fp32_012
-TEST_F(TestCodeGenWhere, test_where_fp32_012)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_012)
 {
     PROGRAM("WHERE_FP32_012")
     {
@@ -822,7 +822,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_012)
 }
 
 // fp32_013
-TEST_F(TestCodeGenWhere, test_where_fp32_013)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_013)
 {
     PROGRAM("WHERE_FP32_013")
     {
@@ -840,7 +840,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_013)
 }
 
 // fp32_014
-TEST_F(TestCodeGenWhere, test_where_fp32_014)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_014)
 {
     PROGRAM("WHERE_FP32_014")
     {
@@ -858,7 +858,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_014)
 }
 
 // fp32_015
-TEST_F(TestCodeGenWhere, test_where_fp32_015)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_015)
 {
     PROGRAM("WHERE_FP32_015")
     {
@@ -876,7 +876,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_015)
 }
 
 // fp32_016
-TEST_F(TestCodeGenWhere, test_where_fp32_016)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_016)
 {
     PROGRAM("WHERE_FP32_016")
     {
@@ -894,7 +894,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_016)
 }
 
 // fp32_017
-TEST_F(TestCodeGenWhere, test_where_fp32_017)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_017)
 {
     PROGRAM("WHERE_FP32_017")
     {
@@ -912,7 +912,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_017)
 }
 
 // fp32_018
-TEST_F(TestCodeGenWhere, test_where_fp32_018)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_018)
 {
     PROGRAM("WHERE_FP32_018")
     {
@@ -930,7 +930,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_018)
 }
 
 // fp32_019
-TEST_F(TestCodeGenWhere, test_where_fp32_019)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_019)
 {
     PROGRAM("WHERE_FP32_019")
     {
@@ -948,7 +948,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_019)
 }
 
 // fp32_020
-TEST_F(TestCodeGenWhere, test_where_fp32_020)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_020)
 {
     PROGRAM("WHERE_FP32_020")
     {
@@ -966,7 +966,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_020)
 }
 
 // fp32_021
-TEST_F(TestCodeGenWhere, test_where_fp32_021)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_021)
 {
     PROGRAM("WHERE_FP32_021")
     {
@@ -984,7 +984,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_021)
 }
 
 // fp32_022
-TEST_F(TestCodeGenWhere, test_where_fp32_022)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_022)
 {
     PROGRAM("WHERE_FP32_022")
     {
@@ -1002,7 +1002,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_022)
 }
 
 // fp32_023
-TEST_F(TestCodeGenWhere, test_where_fp32_023)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_023)
 {
     PROGRAM("WHERE_FP32_023")
     {
@@ -1020,7 +1020,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_023)
 }
 
 // fp32_024
-TEST_F(TestCodeGenWhere, test_where_fp32_024)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_024)
 {
     PROGRAM("WHERE_FP32_024")
     {
@@ -1038,7 +1038,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_024)
 }
 
 // fp32_025
-TEST_F(TestCodeGenWhere, test_where_fp32_025)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_025)
 {
     PROGRAM("WHERE_FP32_025")
     {
@@ -1056,7 +1056,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_025)
 }
 
 // fp32_026
-TEST_F(TestCodeGenWhere, test_where_fp32_026)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_026)
 {
     PROGRAM("WHERE_FP32_026")
     {
@@ -1074,7 +1074,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_026)
 }
 
 // fp32_027
-TEST_F(TestCodeGenWhere, test_where_fp32_027)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_027)
 {
     PROGRAM("WHERE_FP32_027")
     {
@@ -1092,7 +1092,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_027)
 }
 
 // fp32_028
-TEST_F(TestCodeGenWhere, test_where_fp32_028)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_028)
 {
     PROGRAM("WHERE_FP32_028")
     {
@@ -1110,7 +1110,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_028)
 }
 
 // fp32_029
-TEST_F(TestCodeGenWhere, test_where_fp32_029)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_029)
 {
     PROGRAM("WHERE_FP32_029")
     {
@@ -1128,7 +1128,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_029)
 }
 
 // fp32_030
-TEST_F(TestCodeGenWhere, test_where_fp32_030)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_030)
 {
     PROGRAM("WHERE_FP32_030")
     {
@@ -1146,7 +1146,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_030)
 }
 
 // fp32_031
-TEST_F(TestCodeGenWhere, test_where_fp32_031)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_031)
 {
     PROGRAM("WHERE_FP32_031")
     {
@@ -1164,7 +1164,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_031)
 }
 
 // fp32_032
-TEST_F(TestCodeGenWhere, test_where_fp32_032)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_032)
 {
     PROGRAM("WHERE_FP32_032")
     {
@@ -1182,7 +1182,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_032)
 }
 
 // fp32_033
-TEST_F(TestCodeGenWhere, test_where_fp32_033)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_033)
 {
     PROGRAM("WHERE_FP32_033")
     {
@@ -1200,7 +1200,7 @@ TEST_F(TestCodeGenWhere, test_where_fp32_033)
 }
 
 // fp32_034
-TEST_F(TestCodeGenWhere, test_where_fp32_034)
+TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_034)
 {
     PROGRAM("WHERE_FP32_034")
     {

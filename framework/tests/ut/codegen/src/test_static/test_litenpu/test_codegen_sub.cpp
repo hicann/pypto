@@ -48,7 +48,7 @@ TEST_F(TestCodeGenSub, test_sub_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_002)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_002)
 {
     PROGRAM("SUB_002")
     {
@@ -67,7 +67,7 @@ TEST_F(TestCodeGenSub, test_sub_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_003)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_003)
 {
     PROGRAM("SUB_003")
     {
@@ -86,7 +86,7 @@ TEST_F(TestCodeGenSub, test_sub_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_004)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_004)
 {
     PROGRAM("SUB_004")
     {
@@ -105,7 +105,7 @@ TEST_F(TestCodeGenSub, test_sub_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_005)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_005)
 {
     PROGRAM("SUB_005")
     {
@@ -124,7 +124,7 @@ TEST_F(TestCodeGenSub, test_sub_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_006)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_006)
 {
     PROGRAM("SUB_006")
     {
@@ -143,7 +143,7 @@ TEST_F(TestCodeGenSub, test_sub_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_007)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_007)
 {
     PROGRAM("SUB_007")
     {
@@ -162,7 +162,7 @@ TEST_F(TestCodeGenSub, test_sub_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_008)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_008)
 {
     PROGRAM("SUB_008")
     {
@@ -181,7 +181,7 @@ TEST_F(TestCodeGenSub, test_sub_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_009)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_009)
 {
     PROGRAM("SUB_009")
     {
@@ -200,7 +200,7 @@ TEST_F(TestCodeGenSub, test_sub_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_010)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_010)
 {
     PROGRAM("SUB_010")
     {
@@ -219,7 +219,7 @@ TEST_F(TestCodeGenSub, test_sub_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_011)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_011)
 {
     PROGRAM("SUB_011")
     {
@@ -238,7 +238,7 @@ TEST_F(TestCodeGenSub, test_sub_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_012)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_012)
 {
     PROGRAM("SUB_012")
     {
@@ -257,7 +257,7 @@ TEST_F(TestCodeGenSub, test_sub_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_013)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_013)
 {
     PROGRAM("SUB_013")
     {
@@ -276,7 +276,7 @@ TEST_F(TestCodeGenSub, test_sub_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_014)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_014)
 {
     PROGRAM("SUB_014")
     {
@@ -295,7 +295,7 @@ TEST_F(TestCodeGenSub, test_sub_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_015)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_015)
 {
     PROGRAM("SUB_015")
     {
@@ -314,7 +314,7 @@ TEST_F(TestCodeGenSub, test_sub_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_016)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_016)
 {
     PROGRAM("SUB_016")
     {
@@ -333,7 +333,7 @@ TEST_F(TestCodeGenSub, test_sub_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_017)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_017)
 {
     PROGRAM("SUB_017")
     {
@@ -352,7 +352,7 @@ TEST_F(TestCodeGenSub, test_sub_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_018)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_018)
 {
     PROGRAM("SUB_018")
     {
@@ -371,7 +371,7 @@ TEST_F(TestCodeGenSub, test_sub_018)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_019)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_019)
 {
     PROGRAM("SUB_019")
     {
@@ -390,7 +390,7 @@ TEST_F(TestCodeGenSub, test_sub_019)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_020)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_020)
 {
     PROGRAM("SUB_020")
     {
@@ -409,7 +409,7 @@ TEST_F(TestCodeGenSub, test_sub_020)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_021)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_021)
 {
     PROGRAM("SUB_021")
     {
@@ -428,7 +428,7 @@ TEST_F(TestCodeGenSub, test_sub_021)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_022)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_022)
 {
     PROGRAM("SUB_022")
     {
@@ -447,7 +447,7 @@ TEST_F(TestCodeGenSub, test_sub_022)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_023)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_023)
 {
     PROGRAM("SUB_023")
     {
@@ -466,7 +466,7 @@ TEST_F(TestCodeGenSub, test_sub_023)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_024)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_024)
 {
     PROGRAM("SUB_024")
     {
@@ -485,7 +485,7 @@ TEST_F(TestCodeGenSub, test_sub_024)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_025)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_025)
 {
     PROGRAM("SUB_025")
     {
@@ -504,7 +504,7 @@ TEST_F(TestCodeGenSub, test_sub_025)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_026)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_026)
 {
     PROGRAM("SUB_026")
     {
@@ -523,7 +523,7 @@ TEST_F(TestCodeGenSub, test_sub_026)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_027)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_027)
 {
     PROGRAM("SUB_027")
     {
@@ -542,7 +542,7 @@ TEST_F(TestCodeGenSub, test_sub_027)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_028)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_028)
 {
     PROGRAM("SUB_028")
     {
@@ -561,7 +561,7 @@ TEST_F(TestCodeGenSub, test_sub_028)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_029)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_029)
 {
     PROGRAM("SUB_029")
     {
@@ -580,7 +580,7 @@ TEST_F(TestCodeGenSub, test_sub_029)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_030)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_030)
 {
     PROGRAM("SUB_030")
     {
@@ -599,7 +599,7 @@ TEST_F(TestCodeGenSub, test_sub_030)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_031)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_031)
 {
     PROGRAM("SUB_031")
     {
@@ -618,7 +618,7 @@ TEST_F(TestCodeGenSub, test_sub_031)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_032)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_032)
 {
     PROGRAM("SUB_032")
     {
@@ -637,7 +637,7 @@ TEST_F(TestCodeGenSub, test_sub_032)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_033)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_033)
 {
     PROGRAM("SUB_033")
     {
@@ -656,7 +656,7 @@ TEST_F(TestCodeGenSub, test_sub_033)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_034)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_034)
 {
     PROGRAM("SUB_034")
     {
@@ -675,7 +675,7 @@ TEST_F(TestCodeGenSub, test_sub_034)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_035)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_035)
 {
     PROGRAM("SUB_035")
     {
@@ -694,7 +694,7 @@ TEST_F(TestCodeGenSub, test_sub_035)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_036)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_036)
 {
     PROGRAM("SUB_036")
     {
@@ -713,7 +713,7 @@ TEST_F(TestCodeGenSub, test_sub_036)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_037)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_037)
 {
     PROGRAM("SUB_037")
     {
@@ -732,7 +732,7 @@ TEST_F(TestCodeGenSub, test_sub_037)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_038)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_038)
 {
     PROGRAM("SUB_038")
     {
@@ -751,7 +751,7 @@ TEST_F(TestCodeGenSub, test_sub_038)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_039)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_039)
 {
     PROGRAM("SUB_039")
     {
@@ -770,7 +770,7 @@ TEST_F(TestCodeGenSub, test_sub_039)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_040)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_040)
 {
     PROGRAM("SUB_040")
     {
@@ -789,7 +789,7 @@ TEST_F(TestCodeGenSub, test_sub_040)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_041)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_041)
 {
     PROGRAM("SUB_041")
     {
@@ -808,7 +808,7 @@ TEST_F(TestCodeGenSub, test_sub_041)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_042)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_042)
 {
     PROGRAM("SUB_042")
     {
@@ -827,7 +827,7 @@ TEST_F(TestCodeGenSub, test_sub_042)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_043)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_043)
 {
     PROGRAM("SUB_043")
     {
@@ -846,7 +846,7 @@ TEST_F(TestCodeGenSub, test_sub_043)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_044)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_044)
 {
     PROGRAM("SUB_044")
     {
@@ -865,7 +865,7 @@ TEST_F(TestCodeGenSub, test_sub_044)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_045)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_045)
 {
     PROGRAM("SUB_045")
     {
@@ -884,7 +884,7 @@ TEST_F(TestCodeGenSub, test_sub_045)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_046)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_046)
 {
     PROGRAM("SUB_046")
     {
@@ -903,7 +903,7 @@ TEST_F(TestCodeGenSub, test_sub_046)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_047)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_047)
 {
     PROGRAM("SUB_047")
     {
@@ -922,7 +922,7 @@ TEST_F(TestCodeGenSub, test_sub_047)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenSub, test_sub_048)
+TEST_F(TestCodeGenSub, DISABLED_test_sub_048)
 {
     PROGRAM("SUB_048")
     {

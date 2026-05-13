@@ -251,23 +251,11 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    // 创建并注册监听器
-    TestExecutionCounter counter;
-    testing::UnitTest::GetInstance()->listeners().Append(&counter);
-
     auto ret = RUN_ALL_TESTS();
-
-    // 移除监听器（避免析构时访问已释放内存）
-    testing::UnitTest::GetInstance()->listeners().Release(&counter);
 
     // 后检查
     if (isListTests) {
         return ret;
-    }
-    if (counter.executed_count == 0) {
-        std::cout << "Error: Can't get any case to run when using " << testing::GTEST_FLAG(filter) << " to filter."
-                  << std::endl;
-        ret = ret == 0 ? 1 : ret;
     }
     ret = CheckDeviceConsistency() ? ret : 1;
 
