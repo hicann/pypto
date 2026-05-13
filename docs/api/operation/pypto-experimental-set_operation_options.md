@@ -15,8 +15,7 @@
 ## 函数原型
 
 ```python
-set_operation_options(*, force_combine_axis: Optional[bool] = None,
-                      combine_axis: Optional[bool] = None)
+set_operation_options(*, combine_axis: Optional[bool] = None)
 ```
 
 ## 参数说明
@@ -25,7 +24,6 @@ set_operation_options(*, force_combine_axis: Optional[bool] = None,
 | 参数名               | 输入/输出 | 说明                                                                 |
 |----------------------|-----------|----------------------------------------------------------------------|
 | combine_axis         | 输入      | **含义**：在代码生成阶段实现尾轴broadcast inline。 <br> **说明**：双目运算(32,1) + (32,128), 不需要将(32,1)先broadcast到(32,128)，而是将(32,1)通过brcb指令扩展到(32,8)，再进行(32,8) + (32,128)。前提是(32,1)必须是连续的。 <br> **类型**：bool <br> **取值范围**：{True, False} <br> **默认值**：False |
-| force_combine_axis   | 输入      | **含义**：同combine_axis。 <br> **说明**：早期版本，有很多功能约束，后续会逐步下线，请保持默认值。 <br> **类型**：bool <br> **取值范围**：{True, False} <br> **默认值**：False |
 
 ## 返回值说明
 
@@ -41,5 +39,4 @@ void：Set方法无返回值。设置操作成功即生效。
 
 ```python
 pypto.experimental.set_operation_options(combine_axis=True)
-pypto.experimental.set_operation_options(force_combine_axis=False)
 ```

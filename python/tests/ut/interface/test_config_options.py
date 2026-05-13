@@ -61,9 +61,6 @@ def test_reset_option():
 
 
 def test_operation_option():
-    set_operation_options(force_combine_axis=True)
-    option = get_operation_options()
-    assert option["force_combine_axis"] == True
     set_operation_options(combine_axis=True)
     option = get_operation_options()
     assert option["combine_axis"] == True

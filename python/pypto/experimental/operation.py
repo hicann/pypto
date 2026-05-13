@@ -55,16 +55,13 @@ def transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype) -> Ten
     return pypto_impl.TransposedBatchMatmul(out_dtype, tensor_a, tensor_b)
 
 
-def set_operation_options(*, force_combine_axis: Optional[bool] = None,
-                         combine_axis: Optional[bool] = None):
+def set_operation_options(*, combine_axis: Optional[bool] = None):
 
     """
     Set operation options.
 
     Parameters
     ---------
-    force_combine_axis : bool
-        Codegen forced axis fusion optimization, Not recommended.
     combine_axis : bool
         Codegen forced axis fusion optimization.
     """

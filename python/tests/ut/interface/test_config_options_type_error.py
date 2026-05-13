@@ -58,12 +58,7 @@ def assert_option_type_error(setter, pattern):
             lambda: pypto.set_debug_options(runtime_debug_mode="1"),
             "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'debug.runtime_debug_mode' has invalid type. Expected int64, but got string",
-        ),
-        (
-            lambda: set_operation_options(force_combine_axis="true"),
-            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
-            "Option 'operation.force_combine_axis' has invalid type. Expected bool, but got string",
-        ),
+        )
     ],
 )
 def test_wrapper_option_type_mismatch_error(setter, pattern):
