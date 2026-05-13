@@ -288,7 +288,7 @@ def softmax(x, is_fp16=False):
         "compile_timeout": 22,
         "compile_timeout_stage": 5,
         "compile_monitor_print_interval": 60},
-    debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
+    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
 )
 def ifa_func_kernel(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -456,7 +456,7 @@ def ifa_func_kernel(
         "compile_timeout": 75,
         "compile_timeout_stage": 30,
         "compile_monitor_print_interval": 60},
-    debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
+    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
 )
 def ifa_func_kernel_for_950(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
