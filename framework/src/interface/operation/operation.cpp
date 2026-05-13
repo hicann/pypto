@@ -497,6 +497,7 @@ Json Operation::DumpJson(bool dumpTensor) const
     DumpLocationJson(opDump);
 
     opDump["subgraphid"] = subgraphID_;
+    opDump["mixSubgraphCore"] = GetAIVCoreStr();
 
     DumpParamLocationJson(opDump);
     DumpCallOpInfoJson(opDump);
@@ -630,6 +631,13 @@ void Operation::LoadExtraInfoFromJson(const Json& opDump)
     }
     if (opDump.count("sync_queue")) {
         syncQueue_.FromJson(opDump["sync_queue"]);
+    }
+    if (opDump.count("mixSubgraphCore")) {
+        std::string aivCoreStr = opDump["mixSubgraphCore"].get<std::string>();
+        if (aivCoreStr != "UNKNOWN") {
+            AIVCore core = GetAIVCoreDict().Find(aivCoreStr, AIVCore::UNSPECIFIED);
+            SetAIVCore(core);
+        }
     }
 }
 

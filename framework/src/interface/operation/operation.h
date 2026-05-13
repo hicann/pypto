@@ -182,6 +182,16 @@ enum class AIVCore {
     AIV1 = 1          // 在AIVE1核上执行
 };
 
+inline const BiMap<AIVCore>& GetAIVCoreDict()
+{
+    static BiMap<AIVCore> dict{{
+        {AIVCore::UNSPECIFIED, "AIC"},
+        {AIVCore::AIV0, "AIV0"},
+        {AIVCore::AIV1, "AIV1"},
+    }};
+    return dict;
+}
+
 class Function;
 // Class to represent an operation (opcode) and its operands
 class Operation : public std::enable_shared_from_this<Operation>, public AttrHolder {
@@ -607,6 +617,13 @@ public:
     [[nodiscard]] AIVCore GetAIVCore() const
     {
         return mixSubgraphFields_ ? mixSubgraphFields_->aivCore : AIVCore::UNSPECIFIED;
+    }
+    [[nodiscard]] std::string GetAIVCoreStr() const
+    {
+        if (!mixSubgraphFields_) {
+            return "UNKNOWN";
+        }
+        return GetAIVCoreDict().Find(mixSubgraphFields_->aivCore);
     }
     void SetAIVCore(AIVCore aivCore)
     {
