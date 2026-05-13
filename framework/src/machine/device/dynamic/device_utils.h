@@ -359,5 +359,10 @@ static constexpr uint64_t TIMEOUT_MAP_A5[5] = {
             DEV_WARN(fmt " still waiting.", ##__VA_ARGS__); \
         } \
     } while (0)
+
+// Reset timeout start time - used when a new batch of parallel tasks arrives,
+// giving each batch its own full timeout window.
+#define __PYPTO_TIMEOUT_CHECK_RESET \
+    start = GetCycles();
 } // namespace npu::tile_fwk::dynamic
 #endif

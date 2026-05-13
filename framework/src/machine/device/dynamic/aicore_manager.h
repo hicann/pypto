@@ -488,6 +488,7 @@ public:
         uint64_t lastDevTaskFinCycle = 0;
         PROF_STAGE_BEGIN_MTSAFE(PERF_EVT_STAGE_SCHEDULE, threadIdx, "dispatch.before\n");
         TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
+        uint32_t lastParallelVer = context_->PrallelVersion();
         while (ret == 0) {
             FillParallelDevtaskCtx();
 
@@ -503,6 +504,11 @@ public:
                     SendAllCoreStop();
                 }
                 break;
+            }
+
+            if (lastParallelVer != context_->PrallelVersion()) {
+                __PYPTO_TIMEOUT_CHECK_RESET;
+                lastParallelVer = context_->PrallelVersion();
             }
 
             DEV_IF_DEVICE {
