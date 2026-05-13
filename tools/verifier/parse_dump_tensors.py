@@ -123,7 +123,7 @@ class VerifyRes:
                 
                 # 不支持的类型，跳过对比
                 if dtype is None:
-                    tensor_infos[i]["AB>RESULT"] = "NO_CMP"
+                    tensor_infos[i]["AB>RESULT"] = "SKIP"
                     tensor_infos[i]["result_reason"] = f"unsupported dtype: {dtype_result[0]}"
                     continue
                 
@@ -149,7 +149,7 @@ class VerifyRes:
                     tensor_infos[i][key] = value
                 
             else:
-                tensor_infos[i]["AB>RESULT"] = "NO_CMP"
+                tensor_infos[i]["AB>RESULT"] = "SKIP"
                 tensor_infos[i]["result_reason"] = "verify file not exist or shape mismatch"
 
     def read_verify_result(self, verify_path):
@@ -245,7 +245,7 @@ class VerifyRes:
         if not all_match:
             for _, tensor_info in enumerate(tensor_infos):
                 tensor_info["verify_tensor_file"] = ""
-                tensor_info["cmp_res"] = "NO_CMP"
+                tensor_info["cmp_res"] = "SKIP"
             return update_op_info
 
         self._compare_codegen_tensors(tensor_infos, tensor_infos_new)
@@ -393,7 +393,7 @@ class CompactDumpTensorInfoParser:
             
             # 不支持的类型，跳过对比
             if dtype is None:
-                merge_tensor_info["AB>RESULT"] = "NO_CMP"
+                merge_tensor_info["AB>RESULT"] = "SKIP"
                 merge_tensor_info["result_reason"] = f"unsupported dtype: {dtype_result[0]}"
                 return merge_tensor_info
             
@@ -408,7 +408,7 @@ class CompactDumpTensorInfoParser:
                 merge_tensor_info[key] = value
             
         else:
-            merge_tensor_info["AB>RESULT"] = "NO_CMP"
+            merge_tensor_info["AB>RESULT"] = "SKIP"
             merge_tensor_info["result_reason"] = "verify file not exist or shape mismatch"
 
         return merge_tensor_info

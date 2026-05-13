@@ -39,6 +39,7 @@ class ProcessLoopBatchArgs:
     topk: int
     key: str
     is_codegen: bool
+    is_leaf: bool
     csv_data_dict: Dict[str, Any]
     result_file: str
 
@@ -118,10 +119,10 @@ class PassComparator:
             "SrcDstBufferMerge": 29,
             "AddAlloc": 30,
             "OoOSchedule": 31,
-            "GlobalMemoryReuse": 32,
-            "RemoveAlloc": 33,
-            "CopyOutResolve": 34,
-            "InsertSync": 35,
+            "RemoveAlloc": 32,
+            "CopyOutResolve": 33,
+            "InsertSync": 34,
+            "GlobalMemoryReuse": 35,
             "CodegenPreproc": 36
         }
 
@@ -131,7 +132,7 @@ class PassComparator:
         }
 
     @staticmethod
-    def is_contain(a: Dict[str, Any], b: Dict[str, Any], key: str) -> bool:
+    def is_contain(a: Dict[str, Any], b: Dict[str, Any], key: str, is_leaf: bool) -> bool:
         """
         Checks whether tensor a is completely included in tensor b.
         Returns:
@@ -142,8 +143,14 @@ class PassComparator:
         a_shape = json.loads(a[":validshape"])
         b_shape = json.loads(b[":validshape"])
         if a[":opcode"] in {"ASSEMBLE", "COPY_OUT", "COPY_IN"}:
-            return a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"] and a[":opcode"] == b[":opcode"]
-        if key == ":magic" and a_shape == b_shape:
+            if is_leaf and a["ROOT_CALL:opmagic"] is not None:
+                return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
+                        and a[":opcode"] == b[":opcode"]
+                        and a["ROOT_CALL:opmagic"] == b["ROOT_CALL:opmagic"])
+            else:
+                return (a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"]
+                        and a[":opcode"] == b[":opcode"])
+        if key == ":magic" and a_shape == b_shape and not is_leaf:
             return True
         else:
             for a_off, b_off, a_sh, b_sh in zip(a_offset, b_offset, a_shape, b_shape):
@@ -151,6 +158,8 @@ class PassComparator:
                     return False
         if key == "ROOT_CALL:rawmagic":
             return a[":opcode"] == b[":opcode"]
+        if is_leaf and a["ROOT_CALL:opmagic"] is not None:
+            return a["ROOT_CALL:opmagic"] == b["ROOT_CALL:opmagic"]
         return True
 
     @staticmethod
@@ -211,7 +220,7 @@ class PassComparator:
             record["A>EVAL:dynvalidshape"] = b["EVAL:dynvalidshape"]
         
         if compare_result is None:
-            record["AB>RESULT"] = "Skip"
+            record["AB>RESULT"] = "SKIP"
             record["result_reason"] = a.get("skip_reason", "")
             record["AB>rtol/atol"] = ""
         else:
@@ -226,93 +235,98 @@ class PassComparator:
         Returns:
             List of comparison records
         """
-        loop_tasks = args.loop_tasks
-        pass_a = args.pass_a
-        pass_b = args.pass_b
-        verify_path_pass1 = args.verify_path_pass1
-        verify_path_pass2 = args.verify_path_pass2
-        atol = args.atol
-        rtol = args.rtol
-        topk = args.topk
-        key = args.key
-        is_codegen = args.is_codegen
-        csv_data_dict = args.csv_data_dict
-        result_file = args.result_file
-
-        dtype_dict = {
-            "BF16": ml_dtypes.bfloat16,
-            "FP32": np.float32,
-            "FP16": np.float16,
-            "INT32": np.int32,
-            "INT8": np.int8,
-            "INT64": np.int64,
-            "INT16": np.int16
-        }
-
-        opcode_dict = {
-            "VIEW": ["L1_TO_L0A", "L1_TO_L0B"],
-            "A_MUL_B": ["A_MULACC_B"]
-        }
-
         comparison_records = []
+        try:
+            loop_tasks = args.loop_tasks
+            pass_a = args.pass_a
+            pass_b = args.pass_b
+            verify_path_pass1 = args.verify_path_pass1
+            verify_path_pass2 = args.verify_path_pass2
+            atol = args.atol
+            rtol = args.rtol
+            topk = args.topk
+            key = args.key
+            is_codegen = args.is_codegen
+            is_leaf = args.is_leaf
+            csv_data_dict = args.csv_data_dict
+            result_file = args.result_file
 
-        for task in loop_tasks:
-            df_loop = task['df_loop']
-            df_a = df_loop[df_loop["PHASE_NAME"].str.contains(pass_a)]
-            df_b = df_loop[df_loop["PHASE_NAME"].str.contains(pass_b)]
+            dtype_dict = {
+                "BF16": ml_dtypes.bfloat16,
+                "FP32": np.float32,
+                "FP16": np.float16,
+                "INT32": np.int32,
+                "INT8": np.int8,
+                "INT64": np.int64,
+                "INT16": np.int16
+            }
 
-            if is_codegen:
-                a_copy = df_a[df_a[":opcode"].isin(['COPY_IN', 'COPY_OUT'])]
-                a_dict = a_copy[a_copy["ROOT_CALL:rawmagic"].notna()].to_dict(orient='records')
-            else:
-                a_dict = df_a.to_dict(orient='records')
+            opcode_dict = {
+                "VIEW": ["L1_TO_L0A", "L1_TO_L0B"],
+                "A_MUL_B": ["A_MULACC_B"]
+            }
 
-            for ai in a_dict:
-                raw_magic = ai[key]
+            for task in loop_tasks:
+                df_loop = task['df_loop']
+                df_a = df_loop[df_loop["PHASE_NAME"].str.contains(pass_a)]
+                df_b = df_loop[df_loop["PHASE_NAME"].str.contains(pass_b)]
+
                 if is_codegen:
-                    b_records = df_b[df_b[":rawmagic"] == raw_magic].to_dict(orient='records')
-                    if ai[":opcode"] == "COPY_IN":
-                        b_records = df_b[
-                            (df_b[":inputRawMagic"] == str(int(ai[key]))) &
-                            (df_b[":opcode"] == "COPY_IN")
-                        ].to_dict(orient='records')
+                    a_copy = df_a[df_a[":opcode"].isin(['COPY_IN', 'COPY_OUT'])]
+                    a_dict = a_copy[a_copy["ROOT_CALL:rawmagic"].notna()].to_dict(orient='records')
                 else:
-                    b_records = df_b[df_b[key] == raw_magic].to_dict(orient='records')
+                    a_dict = df_a.to_dict(orient='records')
 
-                if len(b_records) == 0:
-                    ai["skip_reason"] = f"{key} : {raw_magic}, not exit in golden pass"
-                    record = PassComparator.add_comparison_record(a=ai, compare_result=None)
-                    comparison_records.append(record)
-                    continue
+                for ai in a_dict:
+                    raw_magic = ai[key]
+                    if is_codegen:
+                        b_records = df_b[df_b[":rawmagic"] == raw_magic].to_dict(orient='records')
+                        if ai[":opcode"] == "COPY_IN":
+                            b_records = df_b[
+                                (df_b[":inputRawMagic"] == str(int(ai[key]))) &
+                                (df_b[":opcode"] == "COPY_IN")
+                            ].to_dict(orient='records')
+                    else:
+                        b_records = df_b[df_b[key] == raw_magic].to_dict(orient='records')
 
-                is_match = False
-                for bi in b_records:
-                    if not PassComparator._compare_not_support_static(ai, bi, key,
-                                        verify_path_pass1, verify_path_pass2, dtype_dict, opcode_dict):
+                    if len(b_records) == 0:
+                        ai["skip_reason"] = f"{key} : {raw_magic}, not exit in golden pass"
+                        record = PassComparator.add_comparison_record(a=ai, compare_result=None)
+                        comparison_records.append(record)
                         continue
 
-                    compare_result = PassComparator._compare_data_static(
-                        ai, bi, verify_path_pass1, verify_path_pass2, atol, rtol, topk,
-                        csv_data_dict, dtype_dict, key, result_file
-                    )
-                    record = PassComparator.add_comparison_record(a=ai, b=bi, compare_result=compare_result)
-                    comparison_records.append(record)
-                    is_match = True
-                    break
+                    is_match = False
+                    for bi in b_records:
+                        if not PassComparator._compare_not_support_static(ai, bi, key,
+                                            verify_path_pass1, verify_path_pass2, dtype_dict, opcode_dict, is_leaf):
+                            continue
 
-                if not is_match:
-                    ai["skip_reason"] = "not match"
-                    record = PassComparator.add_comparison_record(a=ai, compare_result=None)
-                    comparison_records.append(record)
+                        compare_result = PassComparator._compare_data_static(
+                            ai, bi, verify_path_pass1, verify_path_pass2, atol, rtol, topk,
+                            csv_data_dict, dtype_dict, key, result_file
+                        )
+                        record = PassComparator.add_comparison_record(a=ai, b=bi, compare_result=compare_result)
+                        comparison_records.append(record)
+                        is_match = True
+                        break
 
+                    if not is_match:
+                        ai["skip_reason"] = "not match"
+                        record = PassComparator.add_comparison_record(a=ai, compare_result=None)
+                        comparison_records.append(record)
+        except Exception as e:
+            stack_trace = traceback.format_exc()
+            logging.error(f"Exception in multiprocessing: error={str(e)}\n"
+                            f"Stack trace:\n{stack_trace}")
+            return comparison_records
         return comparison_records
 
     @staticmethod
     def _compare_not_support_static(a: Dict[str, Any], b: Dict[str, Any], key: str,
                                     verify_path_pass1: str, verify_path_pass2: str,
-                                    dtype_dict: Dict, opcode_dict: Dict) -> bool:
+                                    dtype_dict: Dict, opcode_dict: Dict, is_leaf: bool) -> bool:
         """Static version of compare_not_support for multiprocessing"""
-        if not PassComparator.is_contain(a, b, key):
+        if not PassComparator.is_contain(a, b, key, is_leaf):
             return False
 
         f_a = os.path.join(verify_path_pass1, a["PHASE_NAME"], a["FILENAME"])
@@ -362,7 +376,7 @@ class PassComparator:
         )
         result_dict = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
         
-        if not result_dict["AB>RESULT"]:
+        if result_dict["AB>RESULT"] == "FAIL":
             comparator = TensorComparator()
             config = IsCloseConfig(
                 rtol=rtol,
@@ -477,6 +491,9 @@ class PassComparator:
         if self.pass_dict[pass_a] >= 28 and self.pass_dict[pass_b] >= 4 and self.pass_dict[pass_b] < 28:
             self.key = "ROOT_CALL:rawmagic"
             is_codegen = True
+        is_leaf = False
+        if self.pass_dict[pass_a] >= 28 and self.pass_dict[pass_b] >= 28:
+            is_leaf = True
         logging.info(f"key  : {self.key}")
 
         df_pass = df[df["PHASE_NAME"].str.contains(f'{pass_a}|{pass_b}',
@@ -515,11 +532,11 @@ class PassComparator:
             ProcessLoopBatchArgs(
                 loop_tasks=batch, pass_a=pass_a, pass_b=pass_b, verify_path_pass1=self.verify_path_pass1,
                 verify_path_pass2=self.verify_path_pass2, atol=self.atol, rtol=self.rtol, topk=self.topk,
-                key=self.key, is_codegen=is_codegen, csv_data_dict=csv_data_dict, result_file=self.result_file
+                key=self.key, is_codegen=is_codegen, is_leaf=is_leaf, csv_data_dict=csv_data_dict,
+                result_file=self.result_file
             )
             for batch in batches
         ]
-
         try:
             with Pool(processes=num_workers) as pool:
                 all_results = pool.map(self._process_loop_batch, args_list)
@@ -533,13 +550,11 @@ class PassComparator:
                 record["NO."] = self.row_num
                 self.comparison_records.append(record)
                 self.row_num += 1
-
         except Exception as e:
             stack_trace = traceback.format_exc()
-            logging.error(f"Exception in multiprocessing: pass={pass_a}/{pass_b}, error={str(e)}\n"
+            logging.error(f"Exception in multiprocessing: error={str(e)}\n"
                             f"Stack trace:\n{stack_trace}")
             self.save_comparison_results()
-            return
         self.save_comparison_results()
 
     def save_comparison_results(self, csv_path: str = None):

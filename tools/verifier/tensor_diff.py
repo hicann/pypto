@@ -67,8 +67,8 @@ class TensorComparator:
                 i + 1,
                 info_off,
                 info_off_raw,
-                f"{d_detail[2][i].item():.6g}",
                 f"{d_detail[3][i].item():.6g}",
+                f"{d_detail[2][i].item():.6g}",
                 f"{d_detail[4][i].item():.6g}",
                 f"{d_detail[5][i].item():.6g}",
                 f"{d_detail[6][i].item():.6g}"
@@ -250,7 +250,7 @@ def compare_tensors_result_dict(
     
     Returns:
         dict 包含对比结果和统计信息:
-        - AB>RESULT: 对比结果 (True/False)
+        - AB>RESULT: 对比结果 ("PASS"/"FAIL")
         - result_reason: 失败原因描述
         - AB>rtol/atol: 容差参数
         - AB>fail_cnt/warn_cnt/tol_cnt: 失败/警告/容忍计数
@@ -269,7 +269,10 @@ def compare_tensors_result_dict(
     )
     
     record = {}
-    record["AB>RESULT"] = result_is_close
+    if result_is_close:
+        record["AB>RESULT"] = "PASS"
+    else:
+        record["AB>RESULT"] = "FAIL"
     record["result_reason"] = result_reason
     record["AB>rtol/atol"] = f"{config.rtol:.{max_precision}g}/{config.atol:.{max_precision}g}"
     
