@@ -114,7 +114,7 @@ public:
         if (rear_ == front_) {
             DEV_ERROR(
                 DistributedErrorCode::AICPU_TASK_NUM_EXCEED_LIMIT,
-                "ctrl.task.pre.task.enqueue#: SignalTileOp queue_ is full, front=%u, rear=%u", front_, rear_);
+                "ctrl.task.pre.task.enqueue#: SignalTileOp queue is full, capacity = %lu", AICPU_TASK_ARRAY_SIZE - 1);
             return dynamic::DEVICE_MACHINE_ERROR;
         }
         return dynamic::DEVICE_MACHINE_OK;

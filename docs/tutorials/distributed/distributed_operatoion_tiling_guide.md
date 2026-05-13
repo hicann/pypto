@@ -63,7 +63,7 @@ $$
 **计算步骤**：
 
 1. **计算每个维度索引**：
-   
+
    ```
    dim_index[N-1] = tile_index % tile_num_dim_N
    dim_index[N-2] = (tile_index / tile_num_dim_N) % tile_num_dim_N-1
@@ -72,7 +72,7 @@ $$
    ```
 
 2. **计算每个块的 offset 和 shape**：
-   
+
    $$tile\_offset_i = dim\_index_i \times t_i$$
    $$tile\_shape_i = \min(s_i - tile\_offset_i, t_i)$$
 
@@ -115,7 +115,7 @@ $$
 **计算步骤**：
 
 1. **计算每个维度索引**：从 `tile_index` 反推各维度的索引位置
-   
+
    ```
    dim_indices[N-1] = tile_index % tile_num_dim_N
    dim_indices[N-2] = (tile_index / tile_num_dim_N) % tile_num_dim_N-1
@@ -124,7 +124,7 @@ $$
    ```
 
 2. **计算每个维度的基准大小和尾块数**：
-   
+
    $$base_i = p_i / tile\_num\_dim_i \quad (向下取整)$$
    $$rem_i = p_i \bmod tile\_num\_dim_i$$
 
@@ -183,7 +183,7 @@ def allreduce_kernel(
     shmem_shape = [128, 256]
     shmem_tensor = pypto.distributed.create_shmem_tensor(
         group_name, world_size, pypto.DT_INT32, shmem_shape)
-    
+
     # 数据发送和信号量写入
     pypto.set_vec_tile_shapes(64, 256)
     for dyn_idx in range(world_size):
@@ -191,12 +191,12 @@ def allreduce_kernel(
             put_op=pypto.AtomicType.ADD, pred=[input_tensor])
         pypto.distributed.shmem_signal(shmem_tensor, dyn_idx, 1, shmem_shape,
             [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
-        
+
     # 信号量等待
     my_pe = pypto.distributed.my_symbolic_pe(group_name)
     wait_until_dummy = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
         shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor])
-    
+
     # 数据读取
     pypto.set_vec_tile_shapes(32, 256)
     all_reduce_out = pypto.distributed.shmem_get(
@@ -250,11 +250,17 @@ def allreduce_kernel(
 
 通信算子切块设置需遵循以下约束条件：
 
-1. **切块维度**
+1. **切块数量不超过 1023 块**
+
+由于底层哈希表和任务数组的性能限制，单个算子切分后的 tile_op 数量不得超过 1023 块。该限制来源于 `shmem_wait_until` 等通信算子底层实现中的固定大小数组 `SignalTileOp* hashTable[AICPU_TASK_ARRAY_SIZE]`，其中 `AICPU_TASK_ARRAY_SIZE` 定义为 1024（预留1个位置用于边界检查）。超出此限制会导致运行时错误：`taskCount >= AICPU_TASK_ARRAY_SIZE`。
+
+在设计切块策略时，应确保根据 data tensor 的 shape 和 TileShape 计算得到的总切块数量 `n = tile_row_num × tile_col_num` 不超过 1023。
+
+2. **切块维度**
 
 TileShape 的维度数与 shmem tensor 的维度数一致。
 
-2. **shmem_signal 写信号量时需确保对应的数据已经发送完成**
+3. **shmem_signal 写信号量时需确保对应的数据已经发送完成**
 
 `shmem_signal` 通常在 `shmem_put` 之后写入信号量，用于通知 PE 对应的数据块已写入完成。二者的执行依赖关系，通过 `shmem_put` 输出的 `dummy` 进行控制。由于 dummy tensor 和 data tensor 切分策略不同，当 `shmem_signal` 与 `shmem_put` 这两个接口设置不同的切块时，需分析切块后的 `shmem_signal` 写入的信号量是否符合语义，即其对应的数据块是否已通过 `shmem_put` 写入完成，否则可能引起精度错误。
 
@@ -292,11 +298,11 @@ pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
 - **执行逻辑**：`tile_shmem_signal0` 在 `tile_shmem_put0` 和 `tile_shmem_put1` 执行完成后触发，标识已写入 [33, 64] 大小的数据；
 - **问题说明**：实际 `tile_shmem_put0` 和 `tile_shmem_put1` 共写入 [32, 64] 大小的数据，信号量标识的数据量与实际写入数据量不匹配，数据写入与信号量对应关系不正确，不符合语义，可能引起精度问题。
 
-3. **shmem_wait_until 和 shmem_signal 需要设置相同的切块大小**
+4. **shmem_wait_until 和 shmem_signal 需要设置相同的切块大小**
 
 两者操作同一个 shared memory tensor，需要精确匹配。如果切块大小不同，signal 写入的 tile 块和 wait_until 等待的 tile 块不对应，会引起等信号量超时错误。
 
-4. **shmem_get 读取数据前需确保数据已经写入完成**
+5. **shmem_get 读取数据前需确保数据已经写入完成**
 
 `shmem_get` 通常在 `shmem_wait_until` 之后执行，以确保目标数据完成写入后读取。二者之间的执行依赖关系由 `shmem_wait_until` 输出的 dummy 张量进行控制。
 

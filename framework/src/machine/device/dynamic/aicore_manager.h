@@ -1822,6 +1822,7 @@ private:
         isSendStop = false;
         taskCtrlDequeFinish = false;
         if (IsNeedProcAicpuTask()) {
+            DEV_VERBOSE_DEBUG("Init aicpu task manager");
             aicpuTaskManager_.InitDeviceArgs(deviceArgs);
         }
         context_->Init(deviceArgs, schedIdx);
