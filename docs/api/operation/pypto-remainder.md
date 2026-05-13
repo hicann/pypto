@@ -19,7 +19,11 @@ $$
 ## 函数原型
 
 ```python
-remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]) -> Tensor
+remainder(
+    input: Union[Tensor, int, float], 
+    other: Union[Tensor, int, float], 
+    precision_type: RemAlgorithm = RemAlgorithm.HIGH_PRECISION
+) -> Tensor:
 ```
 
 ## 参数说明
@@ -29,6 +33,7 @@ remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]) ->
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| precision_type | 输入      | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[RemAlgorithm](../datatype/RemAlgorithm.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
@@ -38,7 +43,8 @@ remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]) ->
 
 1. input 和 other 均为Tensor时数据类型相同；
 2. other 不支持0等特殊值；
-3. 若输入Tensor的数据类型为DT_INT32，数据范围必须在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32。
+3. 若输入Tensor的数据类型为DT_INT32，数据范围必须在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32；
+4. 高精度模式仅在Ascend 950PR/Ascend 950DT上有效，其他产品暂时默认使用指令模式 `INTRINSIC`。
 
 ## 调用示例
 

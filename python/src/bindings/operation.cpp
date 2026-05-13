@@ -50,14 +50,23 @@ void bind_operation(py::module& m)
     m.def(
         "Gcd", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Gcd(self, other); }, "Tensor gcd.");
     m.def(
-        "Remainder", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Remainder(self, other); },
-        "Tensor remainder.");
+        "Remainder", 
+        [](const Tensor& self, const Tensor& other, RemAlgorithm precisionType) {
+            return npu::tile_fwk::Remainder(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = RemAlgorithm::HIGH_PRECISION, "Tensor remainder.");
     m.def(
-        "Remainder", [](const Tensor& self, const Element& other) { return npu::tile_fwk::Remainder(self, other); },
-        "Tensor remainder scalar.");
+        "Remainder", 
+        [](const Tensor& self, const Element& other, RemAlgorithm precisionType) {
+            return npu::tile_fwk::Remainder(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = RemAlgorithm::HIGH_PRECISION, "Tensor remainder scalar.");
     m.def(
-        "Remainder", [](const Element& self, const Tensor& other) { return npu::tile_fwk::Remainder(self, other); },
-        "Scalar remainder tensor.");
+        "Remainder", 
+        [](const Element& self, const Tensor& other, RemAlgorithm precisionType) {
+            return npu::tile_fwk::Remainder(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = RemAlgorithm::HIGH_PRECISION, "Scalar remainder tensor.");
     m.def(
         "BitwiseAnd", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::BitwiseAnd(self, other); },
         "Tensor bitwise and.");

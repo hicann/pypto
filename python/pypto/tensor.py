@@ -647,6 +647,11 @@ class Tensor:
         return pypto.fmod(self, other)
 
     @source_location
+    def remainder(self, other: 'Tensor | int | float',
+                  precision_type: RemAlgorithm = RemAlgorithm.HIGH_PRECISION) -> 'Tensor':
+        return pypto.remainder(self, other, precision_type)
+
+    @source_location
     def greater(self, other: 'Tensor'):
         return pypto.greater(self, other)
 

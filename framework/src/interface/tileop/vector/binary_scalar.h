@@ -280,10 +280,10 @@ TILEOP void TBitwiseXorS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 }
 
 #define OP_TILE_OP_REMS TRemainderS
-template <typename Scalar, typename T0, typename T1, typename T2>
+template <typename Scalar, auto PrecisionType = 0, typename T0, typename T1, typename T2>
 TILEOP void TRemainderS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
-    BinaryScalarTmpCompute<BinaryScalarOp::REM, 0>(dst, src0, src1, tmp);
+    BinaryScalarTmpCompute<BinaryScalarOp::REM, PrecisionType>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_POWS TPowS
@@ -294,7 +294,7 @@ TILEOP void TPowS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 }
 
 #define OP_TILE_OP_REMRS TRemainderRS
-template <typename Scalar, typename T0, typename T1, typename T2>
+template <typename Scalar, auto PrecisionType, typename T0, typename T1, typename T2>
 TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
     const auto dstLayout = dst.GetLayout();
@@ -324,7 +324,7 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
 #endif
-                pto::TREM(dstTile.Data(), tmp0Tile, src0Tile.Data(), tmp1Tile);
+                pto::TREM<PrecisionType>(dstTile.Data(), tmp0Tile, src0Tile.Data(), tmp1Tile);
             }
         }
     }

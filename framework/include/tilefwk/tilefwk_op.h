@@ -102,6 +102,12 @@ enum class FmodAlgorithm : uint8_t
     HIGH_PRECISION
 };
 
+enum class RemAlgorithm : uint8_t
+{
+    DEFAULT,
+    HIGH_PRECISION
+};
+
 namespace experimental {
 struct PrintHelper {
     SymbolicScalar cond;
@@ -301,9 +307,9 @@ Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode
 Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode);
 Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType = PowAlgorithm::DEFAULT);
 Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType = PowAlgorithm::DEFAULT);
-Tensor Remainder(const Tensor& self, const Tensor& other);
-Tensor Remainder(const Tensor& self, const Element& other);
-Tensor Remainder(const Element& self, const Tensor& other);
+Tensor Remainder(const Tensor& self, const Tensor& other, RemAlgorithm precisionType = RemAlgorithm::DEFAULT);
+Tensor Remainder(const Tensor& self, const Element& other, RemAlgorithm precisionType = RemAlgorithm::DEFAULT);
+Tensor Remainder(const Element& self, const Tensor& other, RemAlgorithm precisionType = RemAlgorithm::DEFAULT);
 Tensor CopySign(const Tensor& self, const Tensor& other);
 Tensor PReLU(const Tensor& self, const Tensor& weight);
 Tensor Axpy(const Tensor& self, const Tensor& other, float alpha);

@@ -10,6 +10,7 @@ DivAlgorithm
 PowAlgorithm
 ExpAlgorithm
 RsqrtAlgorithm
+RemAlgorithm
 LogAlgorithm
 RecipAlgorithm
 LogBaseType

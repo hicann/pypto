@@ -157,9 +157,9 @@ std::string CodeGenOpNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& pa
 
 void CodeGenOpNPU::AddBinaryPrecisionTypeParm(std::vector<std::string>& templateParamList) const
 {
-    if (opCode == Opcode::OP_DIV || opCode == Opcode::OP_DIVS ||
-        opCode == Opcode::OP_POW || opCode == Opcode::OP_POWS ||
-        opCode == Opcode::OP_MOD || opCode == Opcode::OP_MODS) {
+    if (opCode == Opcode::OP_DIV || opCode == Opcode::OP_DIVS || opCode == Opcode::OP_POW ||
+        opCode == Opcode::OP_POWS || opCode == Opcode::OP_MOD || opCode == Opcode::OP_MODS ||
+        opCode == Opcode::OP_REM || opCode == Opcode::OP_REMS || opCode == Opcode::OP_REMRS) {
         int64_t precisionType = 0;
         (void)GetOpAttr(OpAttributeKey::precisionType, precisionType);
         std::string enumName = "";
@@ -169,6 +169,8 @@ void CodeGenOpNPU::AddBinaryPrecisionTypeParm(std::vector<std::string>& template
             enumName = "PowAlgorithm";
         } else if (opCode == Opcode::OP_MOD || opCode == Opcode::OP_MODS) {
             enumName = "FmodAlgorithm";
+        } else if (opCode == Opcode::OP_REM || opCode == Opcode::OP_REMS || opCode == Opcode::OP_REMRS) {
+            enumName = "RemAlgorithm";
         }
         std::string enumValue = "DEFAULT";
         if (precisionType == 1) {
@@ -311,6 +313,7 @@ std::string CodeGenOpNPU::GenRemainderSOp() const
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, srcScalar, tmpTensor};
     std::string scalarDtypeStr = DataType2CCEStr(extOperandVal.GetDataType());
     std::vector<std::string> templateParamList = {scalarDtypeStr};
+    AddBinaryPrecisionTypeParm(templateParamList);
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(templateParamList) << WrapParamByParentheses(tileOpParamList)
         << STMT_END;

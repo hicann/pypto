@@ -304,7 +304,7 @@ TILEOP void BinaryTmpComputeImpl(T0 dst, T1 src0, T2 src1, T3 tmp)
         return;
     }
     if constexpr (op == BinaryOp::REM) {
-        pto::TREM(dst, src0, src1, tmp);
+        pto::TREM<PrecisionType>(dst, src0, src1, tmp);
         return;
     }
 }
@@ -364,10 +364,10 @@ TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
 }
 
 #define OP_TILE_OP_REM TRem
-template <typename T0, typename T1, typename T2, typename T3>
+template <auto PrecisionType = 0, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TRemainder(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
-    BinaryTmpCompute<BinaryOp::REM>(dst, src0, src1, tmp);
+    BinaryTmpCompute<BinaryOp::REM, PrecisionType>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_AXPY TAxpy

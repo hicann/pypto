@@ -19,7 +19,7 @@ from ..error import PyptoError
 from ..tensor import Tensor
 from ..enum import (
     DataType, DivAlgorithm, PowAlgorithm, ExpAlgorithm, SqrtAlgorithm,
-    RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm, FmodAlgorithm
+    RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm, FmodAlgorithm, RemAlgorithm
 )
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
@@ -439,7 +439,11 @@ def lrelu(other: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 
 
 @op_wrapper
-def remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]) -> Tensor:
+def remainder(
+    input: Union[Tensor, int, float], 
+    other: Union[Tensor, int, float], 
+    precision_type: RemAlgorithm = RemAlgorithm.HIGH_PRECISION
+) -> Tensor:
     """Computes the element-wise remainder of `input` divided by `other`.
 
     This function calculates the formula: `out = input - floor(input.div(other)) * other`.
@@ -451,6 +455,10 @@ def remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]
         The first input tensor or a scalar.
     other : Tensor or Number
         The second input tensor or a scalar to remainder operation.
+    precision_type : RemAlgorithm, optional
+        The precision algorithm for remainder. Default is RemAlgorithm.HIGH_PRECISION.
+        HIGH_PRECISION uses higher precision calculation to reduce precision loss.
+        Use RemAlgorithm.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -476,15 +484,24 @@ def remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]
     Input a:    [[7.0 8.0 9.0]]
     Input b:    [[-3.0 -3.0 -3.0]]
     Output out: [[-2.0 -1.0 0.0]]
+
+    # Using high precision mode for FP16
+    a = pypto.tensor([1, 3], pypto.DT_FP16)
+    b = pypto.tensor([1, 3], pypto.DT_FP16)
+    out = pypto.remainder(a, b, pypto.RemAlgorithm.HIGH_PRECISION)
+
+    Input a:    [[7.0 8.0 9.0]]
+    Input b:    [[-3.0 -3.0 -3.0]]
+    Output out: [[-2.0 -1.0 0.0]]
     """
     if isinstance(input, pypto_impl.Tensor):
         if isinstance(other, pypto_impl.Tensor):
-            return pypto_impl.Remainder(input, other)
+            return pypto_impl.Remainder(input, other, precision_type)
         if isinstance(other, float) or isinstance(other, int):
-            return pypto_impl.Remainder(input, pypto_impl.Element(input.dtype, other))
+            return pypto_impl.Remainder(input, pypto_impl.Element(input.dtype, other), precision_type)
     if isinstance(other, pypto_impl.Tensor):
         if isinstance(input, float) or isinstance(input, int):
-            return pypto_impl.Remainder(pypto_impl.Element(other.dtype, input), other)
+            return pypto_impl.Remainder(pypto_impl.Element(other.dtype, input), other, precision_type)
     raise PyptoError(0xF00001, TypeError(
         f"Unsupported operand types for remainder: {type(input)} and {type(other)}"
         ))

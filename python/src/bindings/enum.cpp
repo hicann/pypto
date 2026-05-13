@@ -125,6 +125,11 @@ void bind_enum(py::module& m)
         .value("HIGH_PRECISION", FmodAlgorithm::HIGH_PRECISION)
         .finalize();
 
+    py::native_enum<RemAlgorithm>(m, "RemAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", RemAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", RemAlgorithm::HIGH_PRECISION)
+        .finalize();
+
     py::native_enum<TileType>(m, "TileType", "enum.IntEnum")
         .value("VEC", TileType::VEC)
         .value("CUBE", TileType::CUBE)
