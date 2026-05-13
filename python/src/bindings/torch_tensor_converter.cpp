@@ -90,7 +90,10 @@ py::object ConvertSingleTensor(
     auto& t = base.cast<Tensor&>();
 
     TileOpFormat format = ResolveFormat(tensorDef, t, torchTensor, torch_npu);
-
+    if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
+        shape.back() *= 2;
+    }
+        
     out = npu::tile_fwk::dynamic::DeviceTensorData(dtype, dataPtr, shape, format);
 
     return torchTensor.attr("device");

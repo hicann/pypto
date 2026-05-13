@@ -510,9 +510,9 @@ static uint8_t EncodeFp4E1M2Nibble(float v) { return EncodeFp4NibbleNearest(v, D
 static float DecodeNibble(uint8_t nib, DataType actualType)
 {
     switch (actualType) {
-        case DT_FP4_E2M1X2:
+        case DT_FP4_E2M1:
             return DecodeFp4E2M1Nibble(nib);
-        case DT_FP4_E1M2X2:
+        case DT_FP4_E1M2:
             return DecodeFp4E1M2Nibble(nib);
         default:
             return static_cast<float>(nib);
@@ -522,9 +522,9 @@ static float DecodeNibble(uint8_t nib, DataType actualType)
 static uint8_t EncodeNibble(float v, DataType actualType)
 {
     switch (actualType) {
-        case DT_FP4_E2M1X2:
+        case DT_FP4_E2M1:
             return EncodeFp4E2M1Nibble(v);
-        case DT_FP4_E1M2X2:
+        case DT_FP4_E1M2:
             return EncodeFp4E1M2Nibble(v);
         default:
             return 0;

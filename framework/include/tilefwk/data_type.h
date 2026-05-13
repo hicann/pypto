@@ -51,8 +51,11 @@ const std::unordered_map<size_t, size_t> BLOCK_PADDING_DIM = {{1, 32}, {2, 16}, 
     DTYPE_DESC(DT_FP8E4M3, 1, 8, true, float8_e4m3_t, 36)      \
     DTYPE_DESC(DT_FP8E5M2, 1, 8, true, float8_e5m2_t, 35)      \
     DTYPE_DESC(DT_FP8E8M0, 1, 8, true, float8_e8m0_t, 37)      \
-    DTYPE_DESC(DT_FP4_E2M1X2, 1, 4, true, float4_e2m1x2_t, 40) \
-    DTYPE_DESC(DT_FP4_E1M2X2, 1, 4, true, float4_e1m2x2_t, 41)
+    /* cann中没有E2M1X2l类型，使用E2M1的cann_type:40 */           \
+    DTYPE_DESC(DT_FP4_E2M1X2, 1, 8, true, float4_e2m1x2_t, 40) \
+    DTYPE_DESC(DT_FP4_E1M2X2, 1, 8, true, float4_e1m2x2_t, 41) \
+    DTYPE_DESC(DT_FP4_E2M1, 1, 4, true, float4_e2m1x2_t, 40)   \
+    DTYPE_DESC(DT_FP4_E1M2, 1, 4, true, float4_e1m2x2_t, 41)
 
 enum DataType {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) name,
@@ -241,7 +244,9 @@ const std::unordered_map<std::string, DataType> STR_DATA_TYPE_MAP = {
     {"fp8e4m3", DT_FP8E4M3},
     {"fp8e5m2", DT_FP8E5M2},
     {"fp8e8m0", DT_FP8E8M0},
+    {"fp4_e2m1", DT_FP4_E2M1},
     {"fp4_e2m1x2", DT_FP4_E2M1X2},
+    {"fp4_e1m2", DT_FP4_E1M2},
     {"fp4_e1m2x2", DT_FP4_E1M2X2}};
 
 inline size_t DataType2CannType(DataType t) {

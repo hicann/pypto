@@ -103,7 +103,9 @@ inline DataType ToDataType(std::string& name)
         {"DT_FP8E5M2", DataType::DT_FP8E5M2},
         {"DT_FP8E4M3", DataType::DT_FP8E4M3},
         {"DT_FP8E8M0", DataType::DT_FP8E8M0},
+        {"DT_FP4_E2M1", DataType::DT_FP4_E2M1},
         {"DT_FP4_E2M1X2", DataType::DT_FP4_E2M1X2},
+        {"DT_FP4_E1M2", DataType::DT_FP4_E1M2},
         {"DT_FP4_E1M2X2", DataType::DT_FP4_E1M2X2}};
     auto it = type_map.find(name);
     if (it == type_map.end()) {

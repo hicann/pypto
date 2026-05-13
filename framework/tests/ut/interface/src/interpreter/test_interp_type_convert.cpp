@@ -309,14 +309,14 @@ TEST_F(InterpTypeConvertTest, Fp8E5M2SpecialValues)
     }
 }
 
-// FP4 E2M1 packed (DT_FP4_E2M1X2): 1 byte = 2 nibbles (high 4 bits first, low 4 bits second).
+// FP4 E2M1 packed (DT_FP4_E2M1): 1 byte = 2 nibbles (high 4 bits first, low 4 bits second).
 // Tensor shape uses logical FP4 elements.
 TEST_F(InterpTypeConvertTest, Fp4E2M1PackedDecodeToFp32)
 {
     // 0x10: high=1 -> E2M1 subnormal mant=1 -> 0.5; low=0 -> 0
     // 0x23: high=2 -> exp=1,m=0 -> 1.0; low=3 -> exp=1,m=1 -> 1.5
     const std::vector<uint8_t> packed = {0x10, 0x23};
-    auto src = makeTensorData(DT_FP4_E2M1X2, {4}, packed);
+    auto src = makeTensorData(DT_FP4_E2M1, {4}, packed);
     auto out = makeTensorData(DT_FP32, {4}, 0.0f);
     calc::Cast(out, src);
     const std::vector<float> goldenVals = {0.5f, 0.0f, 1.0f, 1.5f};
@@ -324,7 +324,7 @@ TEST_F(InterpTypeConvertTest, Fp4E2M1PackedDecodeToFp32)
     ASSERT_ALLCLOSE_ATOL(out, golden, 1e-6f);
 }
 
-// FP4 E1M2 packed (DT_FP4_E1M2X2): verify nibble decode order and value mapping.
+// FP4 E1M2 packed (DT_FP4_E1M2): verify nibble decode order and value mapping.
 TEST_F(InterpTypeConvertTest, Fp4E1M2PackedDecodeToFp32)
 {
     // 0x14: high=1 -> E1M2 e=0,m=1 -> 0.125
@@ -332,7 +332,7 @@ TEST_F(InterpTypeConvertTest, Fp4E1M2PackedDecodeToFp32)
     // 0xFC: high=15-> sign=1,e=1,m=3 -> -1.75
     //       low=12 -> sign=1,e=1,m=0 -> -1.0
     const std::vector<uint8_t> packed = {0x14, 0xFC};
-    auto src = makeTensorData(DT_FP4_E1M2X2, {4}, packed);
+    auto src = makeTensorData(DT_FP4_E1M2, {4}, packed);
     auto out = makeTensorData(DT_FP32, {4}, 0.0f);
     calc::Cast(out, src);
     const std::vector<float> goldenVals = {0.125f, 1.0f, -1.75f, -1.0f};
@@ -351,9 +351,9 @@ TEST_F(InterpTypeConvertTest, Fp4E2M1AddRoundTripViaFp32)
     const std::vector<uint8_t> aPacked = {0x12, 0x9A};
     const std::vector<uint8_t> bPacked = {0x21, 0x92};
 
-    auto a = makeTensorData(DT_FP4_E2M1X2, {4}, aPacked);
-    auto b = makeTensorData(DT_FP4_E2M1X2, {4}, bPacked);
-    auto out = makeTensorData(DT_FP4_E2M1X2, {4}, std::vector<uint8_t>(2, 0));
+    auto a = makeTensorData(DT_FP4_E2M1, {4}, aPacked);
+    auto b = makeTensorData(DT_FP4_E2M1, {4}, bPacked);
+    auto out = makeTensorData(DT_FP4_E2M1, {4}, std::vector<uint8_t>(2, 0));
     calc::Add(out, a, b);
 
     auto outF32 = makeTensorData(DT_FP32, {4}, 0.0f);

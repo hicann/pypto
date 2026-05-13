@@ -36,7 +36,7 @@ TEST(RawTensorDataFp4RWTest, Fp4E2M1WriteThenReadBackViaCast)
     auto srcFp32 = std::make_shared<LogicalTensorData>(
         RawTensorData::CreateTensor<float>(fp32Tensor, std::vector<float>{0.5f, 1.0f, -0.5f, -1.0f}));
 
-    Tensor fp4Tensor(DT_FP4_E2M1X2, {1, 4});
+    Tensor fp4Tensor(DT_FP4_E2M1, {1, 4});
     auto dstFp4 = std::make_shared<LogicalTensorData>(
         std::make_shared<RawTensorData>(fp4Tensor.GetDataType(), fp4Tensor.GetShape()));
     calc::Cast(dstFp4, srcFp32);
@@ -68,7 +68,7 @@ TEST(RawTensorDataFp4RWTest, Fp4E2M1ReadWithLogicalOffset)
 
     // Full logical data [0.5, 1.0, 1.5, 2.0, -0.5, -1.0, -1.5, -2.0]
     // Packed bytes (high nibble first): [0x12, 0x34, 0x9A, 0xBC]
-    Tensor fp4Tensor(DT_FP4_E2M1X2, {1, 8});
+    Tensor fp4Tensor(DT_FP4_E2M1, {1, 8});
     auto fullFp4 = std::make_shared<LogicalTensorData>(
         RawTensorData::CreateTensor<uint8_t>(fp4Tensor, std::vector<uint8_t>{0x12, 0x34, 0x9A, 0xBC}));
 

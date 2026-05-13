@@ -130,6 +130,8 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
             device=tensor.device,
         )
     dyn_shape = list(tensor.shape)
+    if dtype == DataType.DT_FP4_E1M2 or dtype == DataType.DT_FP4_E2M1:
+        dyn_shape[-1] *= 2
     if dynamic_axis is not None:
         for axis in dynamic_axis:
             dyn_shape[axis] = -1

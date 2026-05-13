@@ -22,7 +22,9 @@
         "DT_FP8E4M3": 18,
         "DT_FP8E8M0": 19,
         "DT_FP4_E2M1X2": 20,
-        "DT_FP4_E1M2X2": 21
+        "DT_FP4_E1M2X2": 21,
+        "DT_FP4_E2M1": 22,
+        "DT_FP4_E1M2": 23
     },
     "FunctionType": {
         "EAGER": 0,

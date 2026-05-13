@@ -750,8 +750,9 @@ Status CheckMXMatmulOperands(
         << DataType2String(aScaleTensor.GetDataType())
         << ", bScaleTensor dataType: " << DataType2String(bScaleTensor.GetDataType());
     DataType inDType = aTensor.GetDataType();
-    static const std::unordered_set<DataType> supportedTypes = {
-        DataType::DT_FP8E4M3, DataType::DT_FP8E5M2, DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2};
+    static const std::unordered_set<DataType> supportedTypes = {DataType::DT_FP8E4M3,    DataType::DT_FP8E5M2,
+                                                                DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2,
+                                                                DataType::DT_FP4_E2M1,   DataType::DT_FP4_E1M2};
     ASSERT(MatmulErrorCode::ERR_PARAM_UNSUPPORTED, supportedTypes.find(inDType) != supportedTypes.end())
         << "Unsupported input data type. Only support DT_FP8E4M3, DT_FP8E5M2, DT_FP4_E2M1X2, DT_FP4_E1M2X2.";
     auto cubeTile = TileShape::Current().GetCubeTile();

@@ -343,7 +343,9 @@ static DataType GetDataType(const std::string& name)
         {"uint16", DataType::DT_UINT16},   {"uint32", DataType::DT_UINT32}, {"uint64", DataType::DT_UINT64},
         {"bool", DataType::DT_BOOL},       {"double", DataType::DT_DOUBLE}, {"fp8e4m3", DataType::DT_FP8E4M3},
         {"fp8e5m2", DataType::DT_FP8E5M2}, {"fp8e8m0", DataType::DT_FP8E8M0},
+        {"fp4_e2m1", DataType::DT_FP4_E2M1},
         {"fp4_e2m1x2", DataType::DT_FP4_E2M1X2},
+        {"fp4_e1m2", DataType::DT_FP4_E1M2},
         {"fp4_e1m2x2", DataType::DT_FP4_E1M2X2},
     };
     if (name_to_dtype.find(name) == name_to_dtype.end()) {

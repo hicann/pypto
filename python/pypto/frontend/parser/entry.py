@@ -210,7 +210,11 @@ class JitCallableWrapper:
     }
 
     _special_dtype_dict = {
-        "torch.uint8": pypto.DataType.DT_HF8,
+        "torch.uint8": [
+            pypto.DataType.DT_HF8,
+            pypto.DataType.DT_FP4_E2M1X2,
+            pypto.DataType.DT_FP4_E2M1,
+        ]
     }
 
     _format_dict = {
@@ -740,8 +744,16 @@ class JitCallableWrapper:
                     raise FeError(
                         ValueError(f"The number of dimensions of {ordinal(idx)} input tensor {in_tensor.shape} \
                         does not match the number of dimensions of input tensor definition {input_tensor_def.shape}."))
+
+                in_tensor_shape = list(in_tensor.shape)
+
+                # 检查是否是FP4格式
+                is_fp4 = input_tensor_def.dtype in (pypto.DT_FP4_E2M1, pypto.DT_FP4_E1M2)
+                if is_fp4:
+                    in_tensor_shape[-1] *= 2
+
                 for i, dim in enumerate(input_tensor_def.shape):
-                    if isinstance(dim, int) and in_tensor.shape[i] != dim:
+                    if isinstance(dim, int) and in_tensor_shape[i] != dim:
                         raise FeError(ValueError(f"The shape of {ordinal(idx)} input tensor {in_tensor.shape} \
                             does not match the shape of input tensor definition {input_tensor_def.shape}."))
 
@@ -749,16 +761,18 @@ class JitCallableWrapper:
             if input_tensor_def.explicit_dtype is not None:
                 in_tensor_dtype = str(in_tensor.dtype)
                 normal_mapped_dtype = self._dtype_dict.get(in_tensor_dtype)
-                special_mapped_dtype = self._special_dtype_dict.get(in_tensor_dtype)
+                special_mapped_dtype = self._special_dtype_dict.get(in_tensor_dtype, [])
                 if (
                     normal_mapped_dtype != input_tensor_def.dtype
-                    and special_mapped_dtype != input_tensor_def.dtype
+                    and input_tensor_def.dtype not in special_mapped_dtype
                 ):
                     raise FeError(ValueError(f"The dtype of {ordinal(idx)} input tensor {in_tensor.dtype} \
                         does not match the dtype of input tensor definition {input_tensor_def.dtype}."))
 
+            # uint8类型的tensor无法通过torch_npu.npu_format_cast转化为NZ，框架无法校验format
+            not_check_format = ["torch.uint8"]
             if in_tensor.device.type == "npu":
-                if input_tensor_def.explicit_format is not None:
+                if input_tensor_def.explicit_format is not None and str(in_tensor.dtype) not in not_check_format:
                     if self._format_dict[get_format(in_tensor)] != input_tensor_def.format:
                         raise FeError(
                             ValueError(f"The format of {ordinal(idx)} input tensor {get_format(in_tensor)} \

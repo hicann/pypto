@@ -74,7 +74,7 @@ void CheckShapeValid(DataType& dataType, const Shape& shape, TileOpFormat& forma
     if (shape.empty() || shape.back() == -1) {
         return;
     }
-    bool isB4 = dataType == DataType::DT_FP4_E2M1X2 || dataType == DataType::DT_FP4_E1M2X2;
+    bool isB4 = dataType == DataType::DT_FP4_E2M1 || dataType == DataType::DT_FP4_E1M2;
     if (format == TileOpFormat::TILEOP_NZ) {
         size_t alignSize = isB4 ? ALIGN_SIZE_64 : ALIGN_SIZE_32;
         const bool dataBytesAlign = ((shape.back() * BytesOf(dataType)) % alignSize == 0);
