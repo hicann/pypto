@@ -209,17 +209,6 @@ Status OoOScheduler::FindCoreLocationMemoryType(CoreLocationType coreLocation, M
                !allocIssueQueue[coreLocation][MemoryType::MEM_L0C].Empty()) {
         spillMemType = MemoryType::MEM_L0C;
     } else {
-        for (auto& memType : allocIssueQueue[coreLocation]) {
-            if (memType.second.Empty()) {
-                continue;
-            }
-            PrintSpillFailedInfo(memType.second.Front(), false);
-        }
-        APASS_LOG_ERROR_F(
-            Elements::Operation,
-            "No spillable buffer found. Only UB/L1/L0C support OoO spill. "
-            "Possible causes: incorrect memory reuse, memory fragmentation. "
-            "Please check tile shape and OOO spill failed info.");
         return FAILED;
     }
     return SUCCESS;

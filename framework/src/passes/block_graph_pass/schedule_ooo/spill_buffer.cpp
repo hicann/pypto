@@ -859,8 +859,8 @@ Status OoOScheduler::CreateSpillReloadIssue(LogicalTensorPtr spillOutTensor,
 
     reloadOps.first = allocOpPtr;
     reloadOps.second = copyInOpPtr;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_ALLOC: %s. ", GetOpInfo(allocOpPtr).c_str());
-    APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_IN: %s. ", GetOpInfo(copyInOpPtr).c_str());
+    APASS_LOG_INFO_F(Elements::Operation, "Add SPILL_ALLOC: %s. ", GetOpInfo(allocOpPtr).c_str());
+    APASS_LOG_INFO_F(Elements::Operation, "Add SPILL_IN: %s. ", GetOpInfo(copyInOpPtr).c_str());
     return SUCCESS;
 }
 
@@ -956,9 +956,9 @@ Status OoOScheduler::SpillReshapeParticalBuffer(SpillInfo &spillInfo, Operation*
     UpdateOpIsCube(reshapeOp);
     reshapeOp.UpdateLatency(1);
     auto reshapeOpPtr = UpdateIssueAttr(reshapeOp, {reshapeTensor->memoryrange.memId, reshapeTensor->memoryrange.memId}, allocOp, bufNextUseOrder, isGenSpill);
-    APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_ALLOC: %s. ", GetOpInfo(spillAllocOpPtr).c_str());
-    APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_IN: %s. ", GetOpInfo(spillCopyInOpPtr).c_str());
-    APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_RESHAPE: %s. ", GetOpInfo(reshapeOpPtr).c_str());
+    APASS_LOG_INFO_F(Elements::Operation, "Add SPILL_ALLOC: %s. ", GetOpInfo(spillAllocOpPtr).c_str());
+    APASS_LOG_INFO_F(Elements::Operation, "Add SPILL_IN: %s. ", GetOpInfo(spillCopyInOpPtr).c_str());
+    APASS_LOG_INFO_F(Elements::Operation, "Add SPILL_RESHAPE: %s. ", GetOpInfo(reshapeOpPtr).c_str());
     return SUCCESS;
 }
 
@@ -1095,7 +1095,7 @@ Status OoOScheduler::CreateSpillCopyout(Operation* spillOp, LogicalTensorPtr spi
             UpdateOpInternalSubgraphID(*spillCopyoutOp, preOp);
         }
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "Add SPILL_OUT: %s. ", GetOpInfo(spillCopyoutOp).c_str());
+    APASS_LOG_INFO_F(Elements::Operation, "Add SPILL_OUT: %s. ", GetOpInfo(spillCopyoutOp).c_str());
     return SUCCESS;
 }
 
@@ -1769,7 +1769,7 @@ Status OoOScheduler::GetSpillInfo(Operation* allocOp, int spillMemId, bool isGen
         APASS_LOG_ERROR_F(Elements::Operation, "%s GetSpillTensor failed! %s", GetOpInfo(spillOp).c_str(), GetFormatBacktrace(*spillOp).c_str());
         return FAILED;
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "Begin spill op %s tensor[%d]!", GetOpInfo(spillOp).c_str(), spillMemId);
+    APASS_LOG_INFO_F(Elements::Operation, "Begin spill op %s tensor[%d]!", GetOpInfo(spillOp).c_str(), spillMemId);
     LogicalTensorPtr ddrTensor = nullptr;
     spillInfo.ddrTensor_ = ddrTensor;
     spillInfo.spillTensor_ = spillTensor;
