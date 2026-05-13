@@ -1036,8 +1036,8 @@ void TaskSpliter::UnionSameCoreOps(DSUWithOrder& dsu)
                 opList_[idx]->GetOpcodeStr().c_str(), opList_[idx]->GetOpMagic());
         }
         for (int nextOpIdx : opOutGraph_[idx]) {
-            if (opCoreTypes_[idx] == opCoreTypes_[nextOpIdx] && !skip &&
-                opList_[nextOpIdx]->GetOpcodeStr().find("L1_TO_L0") == std::string::npos) {
+            if (opCoreTypes_[idx] == opCoreTypes_[nextOpIdx] && (!skip ||
+                opList_[nextOpIdx]->GetOpcodeStr().find("L1_TO_L0") == std::string::npos)) {
                 dsu.Union(idx, nextOpIdx);
             }
         }
