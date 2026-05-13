@@ -1415,7 +1415,7 @@ class BuildCtrl(CMakeParam):
                                                     (self.tests.stest, "python/tests/st")],
                                  ext=ext_str)
         # 执行多卡用例 通过world_size区分 当前通信用例都是4卡
-        for cards_per_case in [4]:
+        for cards_per_case in [4, 8]:
             if cards_per_case <= 1 or cards_per_case > len(dev_lst):
                 continue
             # 分组策略 一个worker对应一组卡

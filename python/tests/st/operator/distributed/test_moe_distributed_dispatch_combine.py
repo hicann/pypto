@@ -836,13 +836,12 @@ def moe_distributed_combine(
     assert_allclose_with_eps(golden_out_filtered, actual_out_filtered)
 
 
-@pytest.mark.skip(reason="CI 上仅看护 test_moe_distributed_dispatch_combine")
-@pytest.mark.world_size(16)
+@pytest.mark.world_size(8)
 def test_moe_distributed_combine() -> None:
-    config = DistributedConfig(world_size=16)
+    config = DistributedConfig(world_size=8)
     mp.set_start_method('spawn', force=True)
     processes = []
-    moe_case = MoeCase(1, 5120, 160, 8, pypto.DT_BF16, config.world_size)
+    moe_case = MoeCase(256, 5120, 160, 8, pypto.DT_BF16, config.world_size)
 
     input_operands_list, golden_output_operands_list = generate_combine_golden(moe_case, torch.bfloat16)
     for input_operands, golden_output_operands, logical_rank_id in zip(
