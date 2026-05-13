@@ -399,19 +399,23 @@ void OpcodeManager::RegisterVectorUnary()
     RegisterInfo(
         Opcode::OP_SIN, OpCoreType::AIV, "SIN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tsin", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_COS, OpCoreType::AIV, "COS", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tcos", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_SINH, OpCoreType::AIV, "SINH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TSinh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_COSH, OpCoreType::AIV, "COSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TCosh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorSort()
@@ -419,7 +423,8 @@ void OpcodeManager::RegisterVectorSort()
     RegisterInfo(
         Opcode::OP_TOPK, OpCoreType::ANY, "TOPK", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::MrgSort", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "order", OP_ATTR_PREFIX + "kvalue", OpAttributeKey::topkAlgo}, TileShapeVerifier::Verify);
+        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "order", OP_ATTR_PREFIX + "kvalue", OpAttributeKey::topkAlgo},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_BITSORT, OpCoreType::ANY, "BITSORT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::BitSort", PIPE_S, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
@@ -586,19 +591,24 @@ void OpcodeManager::RegisterVectorReduction()
         {OpAttributeKey::excludeBufferReuse});
 }
 
-void OpcodeManager::RegisterVectorQuant() {
-    RegisterInfo(Opcode::OP_QUANTIZE_SYM, OpCoreType::AIV, "QUANTIZE_SYM", {MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
-        {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+void OpcodeManager::RegisterVectorQuant()
+{
+    RegisterInfo(
+        Opcode::OP_QUANTIZE_SYM, OpCoreType::AIV, "QUANTIZE_SYM", {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {MemoryType::MEM_UB}, {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_QUANTIZE_ASYM, OpCoreType::AIV, "QUANTIZE_ASYM", {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
-        {"TileOp::TQuant",PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+    RegisterInfo(
+        Opcode::OP_QUANTIZE_ASYM, OpCoreType::AIV, "QUANTIZE_ASYM",
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
     // Dequantization: INT8/INT16 -> FP32
     // Always 4 params: dst, src, scale, offset (symmetric: offset=0)
-    RegisterInfo(Opcode::OP_DEQUANTIZE, OpCoreType::AIV, "DEQUANTIZE",
+    RegisterInfo(
+        Opcode::OP_DEQUANTIZE, OpCoreType::AIV, "DEQUANTIZE",
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
-        {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OP_ATTR_PREFIX + "axis"}, TileShapeVerifier::Verify);
+        {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER, {OP_ATTR_PREFIX + "axis"},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_QUANT_MX, OpCoreType::AIV, "QUANT_MX", {MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
@@ -607,7 +617,8 @@ void OpcodeManager::RegisterVectorQuant() {
          OpAttributeKey::mxQuantPerformanceMode});
 }
 
-void OpcodeManager::RegisterVector() {
+void OpcodeManager::RegisterVector()
+{
     RegisterVectorBinary();
     RegisterVectorUnary();
     RegisterVectorSort();
@@ -638,12 +649,14 @@ void OpcodeManager::RegisterVector() {
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Ttranspose_vnchwconv", PIPE_V, PIPE_V, CoreType::AIV},
         OpCalcType::MOVE_LOCAL, {OP_ATTR_PREFIX + "shape", OpAttributeKey::excludeBufferReuse},
         TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_PERMUTE, OpCoreType::AIV, "PERMUTE", {MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_UB}, {"TileOp::TPermute", PIPE_S, PIPE_MTE2, CoreType::AIV},
-        OpCalcType::OTHER, {OpAttributeKey::perm, OP_ATTR_PREFIX + "validShape"}, TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_PERMUTE_ELEMENT, OpCoreType::AIV, "PERMUTE_ELEMENT", {MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_UB}, {"TileOp::TPermuteElewise", PIPE_S, PIPE_MTE2, CoreType::AIV},
-        OpCalcType::OTHER, {OpAttributeKey::perm, OP_ATTR_PREFIX + "validShape"}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_PERMUTE, OpCoreType::AIV, "PERMUTE", {MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_UB},
+        {"TileOp::TPermute", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER,
+        {OpAttributeKey::perm, OP_ATTR_PREFIX + "validShape"}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_PERMUTE_ELEMENT, OpCoreType::AIV, "PERMUTE_ELEMENT", {MemoryType::MEM_DEVICE_DDR},
+        {MemoryType::MEM_UB}, {"TileOp::TPermuteElewise", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER,
+        {OpAttributeKey::perm, OP_ATTR_PREFIX + "validShape"}, TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_EXPAND, OpCoreType::AIV, "EXPAND", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Texpand", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE, {OpAttributeKey::expandDims},
@@ -754,7 +767,8 @@ void OpcodeManager::RegisterVector() {
         Opcode::OP_RANGE, OpCoreType::AIV, "RANGE", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Range", PIPE_S, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "START", OP_ATTR_PREFIX + "STEP", OpAttributeKey::dynScalar}, TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_UNIFORM, OpCoreType::AIV, "UNIFORM", {}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+    RegisterInfo(
+        Opcode::OP_UNIFORM, OpCoreType::AIV, "UNIFORM", {}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TUniform", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OpAttributeKey::vectorScalar, OpAttributeKey::dynScalar, OP_ATTR_PREFIX + "SHAPE"}, TileShapeVerifier::Verify);
     RegisterInfo(
@@ -1247,7 +1261,7 @@ OpcodeManager::OpcodeManager()
 // NEXTNEXT: delete after tile op register has supported tile tensor
 std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_UB_COPY_IN, "TLoad"},
-    {Opcode::OP_UB_COPY_OUT, "TStore"},
+    {Opcode::OP_UB_COPY_OUT, "TStoreVec"},
     {Opcode::OP_RESHAPE_COPY_IN, "TReshapeLoad"},
     {Opcode::OP_RESHAPE_COPY_OUT, "TReshapeStore"},
     {Opcode::OP_TRANSPOSE_VNCHWCONV, "TTrans"},

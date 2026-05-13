@@ -132,7 +132,7 @@ TMul<LastUse3Dim<0, 1, 1>>(ubTensor_2, ubTensor_0, ubTensor_2);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 GMTileTensorFP32Dim4_1 gmTensor_10((__gm__ float*)((__gm__ GMTensorInfo*)(param) + 2)->Addr, DynLayout4Dim(Shape4Dim(1, 1, 16, 16), Stride4Dim(256, 256, 16, 1)));
-TStore(gmTensor_10, ubTensor_2, Coord4Dim(0, 0, 0, 0));
+TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_10, ubTensor_2, Coord4Dim(0, 0, 0, 0));
 }
 )!!!";
     CheckStringExist(expect, res);

@@ -22,6 +22,7 @@
 
 namespace npu::tile_fwk {
 const std::string TSTORE_CONF = "TStoreConfig";
+const std::string TSTORE_CONF_VEC = "TStoreConfigVec";
 
 DynamicParamPackMTE CodeGenOpNPU::PrepareDynamicShapeInfoForMTE(int dynShapeIdx, int shapeDim, bool isGmSpill) const
 {
@@ -1055,6 +1056,13 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBP
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx);
     std::ostringstream oss;
     oss << tileOpName;
+    if (opCode == Opcode::OP_UB_COPY_OUT) {
+        bool isAcc{false};
+        GetOpAttr(OpAttributeKey::atomicAdd, isAcc);
+        std::string att = isAcc ? "pto::AtomicType::AtomicAdd" : "pto::AtomicType::AtomicNone";
+        std::string storeConfig = WrapParamByAngleBrackets({att});
+        oss << "<" << TSTORE_CONF_VEC << storeConfig << ">";
+    }
     oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();

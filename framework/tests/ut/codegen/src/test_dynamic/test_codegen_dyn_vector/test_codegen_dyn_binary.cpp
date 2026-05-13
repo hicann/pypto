@@ -290,7 +290,7 @@ TAdd<LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 GMTileTensorFP32Dim2_1 gmTensor_7((__gm__ float*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 19)), DynLayout2Dim(Shape2Dim((RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 19, 0)), (RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 19, 1))), Stride2Dim(GET_PARAM_STRIDE_2(param, 2, 19))));
-TStore(gmTensor_7, ubTensor_0, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));
+TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_7, ubTensor_0, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));
 }
 )!!!";
 #else
@@ -326,7 +326,7 @@ TAdd<LastUse3Dim<0, 0, 0>>(ubTensor_1, ubTensor_1, ubTensor_3);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 GMTileTensorFP32Dim2_2 gmTensor_8((__gm__ float*)GET_PARAM_ADDR(param, 2, 19), DynLayout2Dim(Shape2Dim((RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 19, 0)), (RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 19, 1))), Stride2Dim(GET_PARAM_STRIDE_2(param, 2, 19))));
-TStore(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));
+TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));
 }
 )!!!";
 #endif

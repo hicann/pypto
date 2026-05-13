@@ -100,7 +100,7 @@ UBTileTensorFP32Dim2_1 ubTensor_1((uint64_t)UB_S0_E0_T);
     EXPECT_EQ(res, expect);
 
     res = cop.GenOpCode();
-    expect = R"!!!(TStore(gmTensor_0, ubTensor_1, Coord2Dim(0, 0));
+    expect = R"!!!(TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_0, ubTensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }

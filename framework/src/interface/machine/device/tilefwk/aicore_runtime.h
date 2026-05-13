@@ -247,13 +247,13 @@ INLINE uint64_t GetTensorAddr(CoreFuncParam* ctx, int idx)
 template <int mode, int64_t constval>
 INLINE uint64_t GetCoa(CoreFuncParam* ctx, int idx)
 {
-    if constexpr (mode == 1) {          // 常量值
+    if constexpr (mode == 1) { // 常量值
         return constval;
     }
     uint64_t val = ctx->opAttrs[idx];
-    if constexpr (mode == 2) {          // 全变量
+    if constexpr (mode == 2) {        // 全变量
         return ctx->exprTbl[SYM_VALUE(val)];
-    } else if constexpr (mode == 3) {   //  全常量，但是每次取值不一样
+    } else if constexpr (mode == 3) { //  全常量，但是每次取值不一样
         return SYM_VALUE(val);
     } else {
         return SYM_IS_EXPR(val) ? ctx->exprTbl[SYM_VALUE(val)] : SYM_VALUE(val);
@@ -366,11 +366,14 @@ INLINE uint32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 #define RUNTIME_COA_GET_PARAM(idx) GetCoa<0, 0>(param, idx)
 #define RUNTIME_COA_GET_PARAM_RAW_SHAPE(dim, base, idx) GetCoa<0, 0>(param, ((base) + 1) + 2 * (dim) + idx)
 
-#define RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST(mode, value, dim, base, idx)        GetCoa<mode, value>(param, ((base) + 1) + idx)
-#define RUNTIME_COA_GET_PARAM_RAW_SHAPE_MAYBE_CONST(mode, value, dim, base, idx)     GetCoa<mode, value>(param, ((base) + 1) + 2 * (dim) + idx)
-#define RUNTIME_COA_GET_PARAM_VALID_SHAPE_MAYBE_CONST(mode, value, dim, base, idx)   GetCoa<mode, value>(param, ((base) + 1) + 3 * (dim) + idx)
-#define RUNTIME_COA_GET_PARAM_MAYBE_CONST(mode, value, idx)                          GetCoa<mode, value>(param, idx)
-#define RUNTIME_COA_GET_PARAM_ADDR_MAYBE_CONST(mode, value, tensorIdx, idx)          GetTensorAddr<mode, value>(param, idx)
+#define RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST(mode, value, dim, base, idx) \
+    GetCoa<mode, value>(param, ((base) + 1) + idx)
+#define RUNTIME_COA_GET_PARAM_RAW_SHAPE_MAYBE_CONST(mode, value, dim, base, idx) \
+    GetCoa<mode, value>(param, ((base) + 1) + 2 * (dim) + idx)
+#define RUNTIME_COA_GET_PARAM_VALID_SHAPE_MAYBE_CONST(mode, value, dim, base, idx) \
+    GetCoa<mode, value>(param, ((base) + 1) + 3 * (dim) + idx)
+#define RUNTIME_COA_GET_PARAM_MAYBE_CONST(mode, value, idx) GetCoa<mode, value>(param, idx)
+#define RUNTIME_COA_GET_PARAM_ADDR_MAYBE_CONST(mode, value, tensorIdx, idx) GetTensorAddr<mode, value>(param, idx)
 
 #define RUNTIME_TensorExtract(type, mem, dst, src) \
     do {                                           \
@@ -451,7 +454,7 @@ INLINE uint32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 
 #define RT_OPERATION_OP_UB_COPY_IN(dst, src, off0, off1) TLoad((dst), (src), Coord2Dim((off0), (off1)));
 #define RT_OPERATION_OP_ADD(dst, src0, src1, combineAxis, reverse) TAdd((dst), (src0), (src1));
-#define RT_OPERATION_OP_UB_COPY_OUT(dst, src, off0, off1) TStore((dst), (src), Coord2Dim((off0), (off1)));
+#define RT_OPERATION_OP_UB_COPY_OUT(dst, src, off0, off1) TStoreVec((dst), (src), Coord2Dim((off0), (off1)));
 
 #define RUNTIME_GetHcclRankId(groupIndex) \
     ((TileOp::CommContext*)(RuntimeGetStartArgs()->commContexts[groupIndex]))->rankId

@@ -119,6 +119,7 @@ public:
     static const std::string cubeMergeSubgraphCount;
     static const std::string vecMergeHashOrder;
     static const std::string vecMergeSubgraphCount;
+    static const std::string atomicAdd;
 };
 
 class ConvOpAttributeKey {
@@ -567,13 +568,15 @@ public:
     }
     void UpdateSubgraphID(int subgraphID) { subgraphID_ = subgraphID; }
     // HashOrder attribute setters/getters using attribute mechanism
-    void SetHashOrderInfo(const std::string& hashOrderKey, const std::string& countKey,
-                          const std::string& hashOrder, size_t subgraphCount) {
+    void SetHashOrderInfo(
+        const std::string& hashOrderKey, const std::string& countKey, const std::string& hashOrder,
+        size_t subgraphCount)
+    {
         SetAttr(hashOrderKey, hashOrder);
         SetAttr(countKey, static_cast<int64_t>(subgraphCount));
     }
-    std::pair<std::string, size_t> GetHashOrderInfo(const std::string& hashOrderKey,
-                                                     const std::string& countKey) const {
+    std::pair<std::string, size_t> GetHashOrderInfo(const std::string& hashOrderKey, const std::string& countKey) const
+    {
         std::string hashOrder;
         int64_t count = 0;
         GetAttr(hashOrderKey, hashOrder);

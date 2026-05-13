@@ -103,6 +103,7 @@ const std::string OpAttributeKey::cubeMergeHashOrder = "cube_merge_hashOrder";
 const std::string OpAttributeKey::cubeMergeSubgraphCount = "cube_merge_subgraphCount";
 const std::string OpAttributeKey::vecMergeHashOrder = "vec_merge_hashOrder";
 const std::string OpAttributeKey::vecMergeSubgraphCount = "vec_merge_subgraphCount";
+const std::string OpAttributeKey::atomicAdd = "op_attr_atomic_add";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";
