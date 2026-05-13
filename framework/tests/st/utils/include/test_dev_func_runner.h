@@ -25,6 +25,7 @@
 #include "interface/function/function.h"
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/runtime/device_launcher_binding.h"
 #include "machine/runtime/runtime_utils.h"
 #include "machine/runtime/context/stream_context.h"
 #include "cost_model/simulation/backend.h"
@@ -150,6 +151,51 @@ public:
     }
 
 private:
+    static void PatchRuntimeDynamicCellMatchMeta(
+        MemoryHelper& memoryHelper, DevAscendProgram* hostProg, DevAscendProgram* cfgProg)
+    {
+        if (hostProg == nullptr || cfgProg == nullptr) {
+            return;
+        }
+        const uint64_t devAddrOffset =
+            offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchAddr);
+        const uint64_t devCapacityOffset =
+            offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchCapacity);
+        uint64_t dynamicCellMatchBytes = hostProg->memBudget.metadata.dynamicCellMatch;
+        if (dynamicCellMatchBytes == 0) {
+            hostProg->devArgs.dynamicCellMatchAddr = 0;
+            hostProg->devArgs.dynamicCellMatchCapacity = 0;
+            if (memoryHelper.IsDevice()) {
+                uint64_t zero = 0;
+                RuntimeMemcpy(
+                    reinterpret_cast<uint8_t*>(cfgProg) + devAddrOffset, sizeof(uint64_t), &zero, sizeof(uint64_t),
+                    RtMemcpyKind::HOST_TO_DEVICE);
+                RuntimeMemcpy(
+                    reinterpret_cast<uint8_t*>(cfgProg) + devCapacityOffset, sizeof(uint64_t), &zero, sizeof(uint64_t),
+                    RtMemcpyKind::HOST_TO_DEVICE);
+            } else {
+                cfgProg->devArgs.dynamicCellMatchAddr = 0;
+                cfgProg->devArgs.dynamicCellMatchCapacity = 0;
+            }
+            return;
+        }
+        uint8_t* dynamicCellMatchAddr = memoryHelper.AllocZero(dynamicCellMatchBytes, nullptr);
+        uint64_t dynamicCellMatchAddrU64 = reinterpret_cast<uint64_t>(dynamicCellMatchAddr);
+        hostProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
+        hostProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
+        if (memoryHelper.IsDevice()) {
+            RuntimeMemcpy(
+                reinterpret_cast<uint8_t*>(cfgProg) + devAddrOffset, sizeof(uint64_t), &dynamicCellMatchAddrU64,
+                sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
+            RuntimeMemcpy(
+                reinterpret_cast<uint8_t*>(cfgProg) + devCapacityOffset, sizeof(uint64_t), &dynamicCellMatchBytes,
+                sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
+        } else {
+            cfgProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
+            cfgProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
+        }
+    }
+
     DevFuncRunner(Function* function, const DeviceLauncherConfig& config) : function_(function), config_(config)
     {
         if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
@@ -158,9 +204,7 @@ private:
     }
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
-        if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr) {
-            return;
-        }
+        if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr) { return; }
         KernelLaunchPrecheck(inputs, outputs);
         DevAscendProgram* functionDevProg =
             reinterpret_cast<DevAscendProgram*>(function_->GetDyndevAttribute()->devProgBinary.data());
@@ -170,9 +214,7 @@ private:
         RunModel(inputs, outputs);
         if (functionDevProg->controlFlowCache.isRecording) {
             functionDevProg->controlFlowCache.isRecording = false;
-
             uint64_t contextWorkspaceAddr = functionDevProg->controlFlowCache.contextWorkspaceAddr;
-
             functionDevProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
             functionDevProg->controlFlowCache.RuntimeAddrRelocWorkspace(
                 contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, functionDevProg->GetParallelism());
@@ -191,15 +233,11 @@ private:
 
     void RunModel(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
-        if (!config_.runModel) {
-            return;
-        }
+        if (!config_.runModel) { return; }
         DeviceKernelArgs kArgs;
-        auto dynAttr = function_->GetDyndevAttribute();
-        DeviceLauncherConfigFillDeviceInfo(config_);
         MemoryHelper memoryHelper(true);
-        DeviceInitDistributedContext(memoryHelper, dynAttr->commGroupNames, kArgs);
-        DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
+        (void)InitKernelRuntime(memoryHelper, kArgs);
+        RefillDynamicBudgetsAndSyncSimCfg(memoryHelper, kArgs, inputs, outputs);
         for (int i = 0; i < (config_.controlFlowCache ? 1 : config_.repeatNum); i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, true, {});
             std::cout << "!!! Run CostModel " << i << "\n";
@@ -208,11 +246,90 @@ private:
             RunTestMode(&kArgs);
         }
 
-        CopyFromDev(memoryHelper, outputs);
-        if (outputs.size() == 0 || HasInplaceArgs(function_)) {
-            CopyFromDev(memoryHelper, inputs);
-        }
+        CopyBackInOut(memoryHelper, inputs, outputs);
         RunDynCostModel();
+    }
+
+    static bool TryPatchDynamicCellMatchDesc(
+        DevAscendProgram* functionDevProg, const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& meta,
+        Evaluator& eval)
+    {
+        DevCellMatchTableDesc patchedDesc;
+        patchedDesc.SetCellShape(meta.cellShape);
+        const int dim = patchedDesc.GetDimensionSize();
+        if (meta.candidateRawDims.empty() || dim > DEV_SHAPE_DIM_MAX) {
+            return false;
+        }
+        int64_t refStride[DEV_SHAPE_DIM_MAX]{0};
+        for (size_t c = 0; c < meta.candidateRawDims.size(); ++c) {
+            int64_t currentStride[DEV_SHAPE_DIM_MAX]{0};
+            for (int d = dim - 1; d >= 0; --d) {
+                SymbolicScalar tensorDimExpr = meta.candidateRawDims[c][d];
+                int64_t tensorDim = eval.Evaluate(tensorDimExpr);
+                int64_t cellDim = std::max<int64_t>(patchedDesc.GetCellShape(d), 1);
+                int64_t tile = (tensorDim + cellDim - 1) / cellDim;
+                if (tile <= 0) {
+                    return false;
+                }
+                currentStride[d] = tile;
+            }
+            if (c == 0) {
+                std::copy_n(currentStride, dim, refStride);
+            } else if (!std::equal(refStride, refStride + dim, currentStride)) {
+                return false;
+            }
+        }
+        std::vector<int> strideShape(dim);
+        for (int d = 0; d < dim; ++d) {
+            strideShape[d] = static_cast<int>(refStride[d]);
+        }
+        patchedDesc.SetStrideShape(strideShape);
+        auto* dst = reinterpret_cast<uint8_t*>(functionDevProg) + meta.descOffset;
+        (void)memcpy_s(dst, sizeof(DevCellMatchTableDesc), &patchedDesc, sizeof(DevCellMatchTableDesc));
+        return true;
+    }
+
+    static void RefillDynamicMemBudgets(DevAscendProgram* functionDevProg, DyndevFunctionAttribute* dynAttr, Evaluator& eval)
+    {
+        if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
+            functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
+                eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
+        }
+        if (!dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
+            return;
+        }
+        functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem =
+            eval.Evaluate(dynAttr->maxDynamicCellMatchTableMem);
+        uint64_t totalDynamicCellMatchSlotNum =
+            static_cast<uint64_t>(functionDevProg->memBudget.tensor.parallelism) *
+            functionDevProg->memBudget.metadata.dynamicCellMatchSlotNum;
+        functionDevProg->memBudget.metadata.dynamicCellMatch =
+            totalDynamicCellMatchSlotNum * functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+    }
+
+    // Sim: cfgdata is a host-side copy made in DeviceInitTilingData; it lags host devProgBinary after symbol
+    // evaluation. Patch cell-match table on both, refill host memBudget, copy budget to cfg, then pool addrs.
+    void RefillDynamicBudgetsAndSyncSimCfg(
+        MemoryHelper& memoryHelper, DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
+        const std::vector<RawTensorDataPtr>& outputs)
+    {
+        auto dynAttr = function_->GetDyndevAttribute();
+        auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
+        std::vector<DeviceTensorData> evalInputList;
+        std::vector<DeviceTensorData> evalOutputList;
+        std::tie(evalInputList, evalOutputList) = BuildInputOutputFromHost(memoryHelper, inputs, outputs);
+        Evaluator eval{dynAttr->inputSymbolDict, evalInputList, evalOutputList};
+        auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
+        for (const auto& meta : dynAttr->dynamicCellMatchLaunchMetaList) {
+            (void)TryPatchDynamicCellMatchDesc(functionDevProg, meta, eval);
+            (void)TryPatchDynamicCellMatchDesc(cfgProg, meta, eval);
+        }
+        RefillDynamicMemBudgets(functionDevProg, dynAttr.get(), eval);
+        cfgProg->memBudget = functionDevProg->memBudget;
+        kArgs.maxDynamicAssembleOutcastMem = functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem;
+        kArgs.maxDynamicCellMatchTableMem = functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+        PatchRuntimeDynamicCellMatchMeta(
+            memoryHelper, functionDevProg, reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata));
     }
 
     bool IsDumpTensorEnable() const { return GetDevProg(function_)->memBudget.debug.dumpTensor != 0; }
@@ -294,8 +411,7 @@ private:
 
     void RunOnBoard(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
-        std::cout << "!!! Kernel Launch "
-                  << "\n";
+        std::cout << "!!! Kernel Launch " << "\n";
         int rc = AclInit(nullptr);
         if (rc != 0 && rc != ACLRT_ERROR_REPEAT_INITIALIZE) {
             MACHINE_LOGE(RtErr::RT_INIT_FAILED, "Acl init failed!!!");
@@ -304,10 +420,9 @@ private:
         CheckDeviceId();
         MemoryHelper memoryHelper(false);
         DeviceKernelArgs kArgs;
-        auto dynAttr = function_->GetDyndevAttribute();
-        DeviceLauncherConfigFillDeviceInfo(config_);
-        DeviceInitDistributedContext(memoryHelper, dynAttr->commGroupNames, kArgs);
-        DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
+        auto dynAttr = InitKernelRuntime(memoryHelper, kArgs);
+        PatchRuntimeDynamicCellMatchMeta(memoryHelper, reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data()),
+            reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata));
         auto aicpuStream = GetStreamContext().GetScheStream();
         auto aicoreStream = GetStreamContext().GetAiCoreStream();
         auto ctrlStream = GetStreamContext().GetCtrlStream();
@@ -318,49 +433,55 @@ private:
             EXPECT_EQ(rc, 0);
             DeviceRunner::Get().SynchronizeDeviceToHostProfData();
         }
-        CopyFromDev(memoryHelper, outputs);
-        if (outputs.size() == 0 || HasInplaceArgs(function_)) {
-            CopyFromDev(memoryHelper, inputs);
-        }
+        CopyBackInOut(memoryHelper, inputs, outputs);
         if (IsDumpTensorEnable()) {
             DumpTensorContents(kArgs, inputs, outputs);
         }
     }
 
+    std::shared_ptr<DyndevFunctionAttribute> InitKernelRuntime(MemoryHelper& memoryHelper, DeviceKernelArgs& kArgs)
+    {
+        auto dynAttr = function_->GetDyndevAttribute();
+        DeviceLauncherConfigFillDeviceInfo(config_);
+        DeviceInitDistributedContext(memoryHelper, dynAttr->commGroupNames, kArgs);
+        DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
+        return dynAttr;
+    }
+
+    void CopyBackInOut(MemoryHelper& memoryHelper, const std::vector<RawTensorDataPtr>& inputs,
+        const std::vector<RawTensorDataPtr>& outputs)
+    {
+        CopyFromDev(memoryHelper, outputs);
+        if (outputs.size() == 0 || HasInplaceArgs(function_)) { CopyFromDev(memoryHelper, inputs); }
+    }
+
     void RunCostModel(DeviceKernelArgs* kArgs)
     {
-        if (!config::GetPlatformConfig(KEY_ENABLE_DYN_COST_MODEL, true)) {
-            return;
-        }
+        if (!config::GetPlatformConfig(KEY_ENABLE_DYN_COST_MODEL, true)) { return; }
         Function* function = Program::GetInstance().GetLastFunction();
-        if (function == nullptr) {
-            return;
-        }
+        if (function == nullptr) { return; }
         config::SetSimConfig(KEY_SIM_MODE, CostModel::SimMode::LEAF_FUNCTION);
+        auto attr = function->GetDyndevAttribute();
+        auto* modelData = new CostModel::ModelData();
+        modelData->functionTime.assign(attr->devLeafIndex2Hash.size(), 0);
         CostModelAgent costModelAgent;
         costModelAgent.SubmitLeafFunctionsToCostModel();
         costModelAgent.RunCostModel();
-        costModelAgent.TerminateCostModel();
-        CostModel::ModelData* modelData = new CostModel::ModelData();
-        auto attr = function->GetDyndevAttribute();
-        modelData->functionTime.resize(attr->devLeafIndex2Hash.size(), 0);
         for (const auto& [index, hash] : attr->devLeafIndex2Hash) {
             auto time = costModelAgent.GetLeafFunctionTimeCost(hash);
-            DEV_INFO("devLeafIndex2Hash, %d -> %lu: %lu\n", index, hash, time);
             modelData->functionTime[index] = time;
+            DEV_INFO("devLeafIndex2Hash, %d -> %lu: %lu\n", index, hash, time);
         }
+        costModelAgent.TerminateCostModel();
         kArgs->costmodeldata = modelData;
     }
 
     void RunDynCostModel()
     {
-        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
-            return;
-        }
+        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) { return; }
+        std::string path = config::LogTopFolder() + "/dyn_topo.txt";
         config::SetSimConfig(KEY_SIM_MODE, CostModel::SimMode::NORMAL);
         CostModelAgent costModelAgent;
-
-        std::string path = config::LogTopFolder() + "/dyn_topo.txt";
         costModelAgent.SubmitTopo(path);
         costModelAgent.SubmitLeafFunctionsToCostModel();
         costModelAgent.RunCostModel();
@@ -370,7 +491,6 @@ private:
 
     void RunTestMode(DeviceKernelArgs* kArgs)
     {
-        (void)kArgs;
         std::thread aicpus[DEVICE_MAX_AICPU_NUM];
         std::atomic<int> idx{0};
         auto* devProg = (DevAscendProgram*)(kArgs->cfgdata);
@@ -390,8 +510,7 @@ private:
             pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
             DeviceKernelArgs localArgs = *kArgs;
             localArgs.parameter.runMode = runMode;
-            auto rc = 0;
-            rc = DynTileFwkBackendKernelServer(&localArgs);
+            auto rc = DynTileFwkBackendKernelServer(&localArgs);
             EXPECT_EQ(rc, 0);
         };
         aicpus[0] = std::thread(threadFun, RUN_SPLITTED_STREAM_CTRL);
@@ -400,9 +519,7 @@ private:
         }
 
         for (int i = 0; i < threadNum; i++) {
-            if (aicpus[i].joinable()) {
-                aicpus[i].join();
-            }
+            if (aicpus[i].joinable()) { aicpus[i].join(); }
         }
     }
 
@@ -418,7 +535,6 @@ private:
         MACHINE_LOGI(
             "Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata);
-        return;
     }
 
     void KernelLaunchPrecheck(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
@@ -434,9 +550,7 @@ private:
                     auto rawShape = t.GetStorage()->GetRawTensor()->GetDynRawShape();
                     auto shape = d->GetShape();
                     for (size_t k = 0; k < rawShape.size(); k++) {
-                        if (rawShape[k].IsImmediate()) {
-                            EXPECT_EQ(rawShape[k].Concrete(), shape[k]);
-                        }
+                        if (rawShape[k].IsImmediate()) { EXPECT_EQ(rawShape[k].Concrete(), shape[k]); }
                     }
                 }
             }

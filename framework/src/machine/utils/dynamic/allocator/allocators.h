@@ -28,6 +28,7 @@ struct MetadataAllocator {
     WsMetadataAllocator general; // aicpu coherent for small suballocation, not support recycle
     SlabWsAllocator generalSlab; // aicpu meta memory, support reclamation
     SlabWsAllocator stitchSlab;  // aicpu stitched data support reclamation
+    WsSlotAllocator dynamicCellMatch; // runtime dynamic cell match table slots
 };
 
 struct TensorAllocator {

@@ -432,6 +432,14 @@ struct DyndevFunctionAttribute {
     std::vector<std::string> commGroupNames;
 
     SymbolicScalar maxDynamicAssembleOutcastMem;
+    SymbolicScalar maxDynamicCellMatchTableMem;
+    struct DynamicCellMatchLaunchMeta {
+        int slotIndex{-1};
+        uint64_t descOffset{0};
+        std::vector<int> cellShape;
+        std::vector<std::vector<SymbolicScalar>> candidateRawDims;
+    };
+    std::vector<DynamicCellMatchLaunchMeta> dynamicCellMatchLaunchMetaList;
 
     std::vector<uint8_t> devProgBinary;
 

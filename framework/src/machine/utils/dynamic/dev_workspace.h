@@ -279,6 +279,51 @@ private:
     }
 
     // Helper: assign outcast address descriptors for a duplicated root function
+    void ResolveOutcastAddress(
+        DevAscendFunctionDupped devRootDup, DevAscendFunction* devRootSrc, DeviceExecuteSlot* slotList, size_t outcastIdx,
+        int outputSlotIndex, int assembleSlotIndex, uintdevptr_t outcastBaseAddr, AddressDescriptor& outcastDesc)
+    {
+        auto rawTensor = devRootSrc->GetOutcastRawTensor(outcastIdx);
+        if (outputSlotIndex != -1) {
+            /* Output tensor */
+            outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[outputSlotIndex].rtOutcastIter);
+            RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
+        } else if (assembleSlotIndex != -1) {
+            /* assemble outcast tensor */
+            if (slotList[assembleSlotIndex].isAssembleSlotNeedAlloc) {
+                RuntimeOutcastTensorDerefSafe(slotList[assembleSlotIndex].rtOutcastIter);
+                slotList[assembleSlotIndex].rtOutcastIter = MakeRuntimeOutcastTensor(
+                    AllocateSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
+                slotList[assembleSlotIndex].isAssembleSlotNeedAlloc = false;
+                TryAllocateDynamicCellMatchForAssembleSlot(slotList[assembleSlotIndex]);
+            } else {
+                DEV_ASSERT_MSG(
+                    WsErr::WORKSPACE_ITER_INVALID,
+                    slotList[assembleSlotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
+                    "Missing RUNTIME_SlotMarkNeedAlloc for assemble slot %d.", assembleSlotIndex);
+            }
+            outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[assembleSlotIndex].rtOutcastIter);
+            RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
+        } else if (devRootSrc->GetOutcast(outcastIdx).exprListIndex != -1) {
+            /* something like an expression address, probably shmem */
+            uint64_t* exprTbl = devRootDup.GetExpressionAddr();
+            uint64_t addr = exprTbl[devRootSrc->GetOutcast(outcastIdx).exprListIndex];
+            outcastDesc = AddressDescriptor::MakeFromRtOutcast(
+                MakeRuntimeOutcastTensor(WsAllocation(addr, curParallelWsId), RuntimeTensorMemProperty::EXTERNAL));
+        } else if (rawTensor->linkedIncastId != -1) {
+            /* reshape inplace or something */
+            auto& incastDesc = devRootDup.GetIncastAddress(rawTensor->linkedIncastId);
+            DEV_ASSERT(WsErr::WORKSPACE_CATEGORY_INVALID, incastDesc.IsRtOutcast());
+            DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, incastDesc.GetRtOutcastIter() != ITEM_POOL_INVALID_INDEX);
+            outcastDesc = incastDesc;
+            RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
+        } else {
+            outcastDesc = AddressDescriptor::MakeFromRtOutcast(MakeRuntimeOutcastTensor(
+                WsAllocation(outcastBaseAddr + devRootSrc->GetOutcastRawTensor(outcastIdx)->addrOffset, curParallelWsId),
+                RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST));
+        }
+    }
+
     void AssignOutcastAddresses(DevAscendFunctionDupped devRootDup, DeviceExecuteSlot* slotList)
     {
         DevAscendFunction* devRootSrc = devRootDup.GetSource();
@@ -297,45 +342,8 @@ private:
             }
 
             AddressDescriptor& outcastDesc = devRootDup.GetOutcastAddress(i);
-            auto rawTensor = devRootSrc->GetOutcastRawTensor(i);
-
-            if (outputSlotIndex != -1) {
-                /* Output tensor */
-                outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[outputSlotIndex].rtOutcastIter);
-                RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
-            } else if (assembleSlotIndex != -1) {
-                /* assemble outcast tensor */
-                if (slotList[assembleSlotIndex].isAssembleSlotNeedAlloc) {
-                    RuntimeOutcastTensorDerefSafe(slotList[assembleSlotIndex].rtOutcastIter);
-                    slotList[assembleSlotIndex].rtOutcastIter = MakeRuntimeOutcastTensor(
-                        AllocateSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
-                    slotList[assembleSlotIndex].isAssembleSlotNeedAlloc = false;
-                } else {
-                    DEV_ASSERT_MSG(
-                        WsErr::WORKSPACE_ITER_INVALID,
-                        slotList[assembleSlotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
-                        "Missing RUNTIME_SlotMarkNeedAlloc for assemble slot %d.", assembleSlotIndex);
-                }
-                outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[assembleSlotIndex].rtOutcastIter);
-                RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
-            } else if (devRootSrc->GetOutcast(i).exprListIndex != -1) {
-                /* something like an expression address, probably shmem */
-                uint64_t* exprTbl = devRootDup.GetExpressionAddr();
-                uint64_t addr = exprTbl[devRootSrc->GetOutcast(i).exprListIndex];
-                outcastDesc = AddressDescriptor::MakeFromRtOutcast(
-                    MakeRuntimeOutcastTensor(WsAllocation(addr, curParallelWsId), RuntimeTensorMemProperty::EXTERNAL));
-            } else if (rawTensor->linkedIncastId != -1) {
-                /* reshape inplace or something */
-                auto& incastDesc = devRootDup.GetIncastAddress(rawTensor->linkedIncastId);
-                DEV_ASSERT(WsErr::WORKSPACE_CATEGORY_INVALID, incastDesc.IsRtOutcast());
-                DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, incastDesc.GetRtOutcastIter() != ITEM_POOL_INVALID_INDEX);
-                outcastDesc = incastDesc;
-                RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
-            } else {
-                outcastDesc = AddressDescriptor::MakeFromRtOutcast(MakeRuntimeOutcastTensor(
-                    WsAllocation(outcastBaseAddr + devRootSrc->GetOutcastRawTensor(i)->addrOffset, curParallelWsId),
-                    RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST));
-            }
+            ResolveOutcastAddress(
+                devRootDup, devRootSrc, slotList, i, outputSlotIndex, assembleSlotIndex, outcastBaseAddr, outcastDesc);
 
             DEV_VERBOSE_DEBUG(
                 "get outcast %zu slot %d/%d address %s.", i, outputSlotIndex, assembleSlotIndex,
@@ -366,6 +374,38 @@ private:
         }
 
         return true;
+    }
+
+    void TryAllocateDynamicCellMatchForAssembleSlot(DeviceExecuteSlot& slot)
+    {
+        if (!slot.isPartialUpdateStitch || slot.partialUpdate == nullptr) {
+            return;
+        }
+        auto* partialUpdate = slot.partialUpdate;
+        if (partialUpdate->cellMatchRuntimePartialUpdateTable.Data() != nullptr) {
+            return;
+        }
+        auto& desc = partialUpdate->cellMatchTableDesc;
+        int dim = desc.GetDimensionSize();
+        if (dim <= 0) {
+            return;
+        }
+        auto dynamicCellMatchSlotBytes = DynamicCellMatchSlotByteSize();
+        DEV_ASSERT_MSG(
+            WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchSlotBytes > 0,
+            "Dynamic cell match slot bytes invalid, slotBytes=%" PRIu64, dynamicCellMatchSlotBytes);
+        DEV_ASSERT_MSG(
+            WsErr::WORKSPACE_INIT_RESOURCE_ERROR, metadataAllocators_.dynamicCellMatch.AvailableSlots() > 0,
+            "Dynamic cell match allocator exhausted, available=%zu", metadataAllocators_.dynamicCellMatch.AvailableSlots());
+        WsAllocation dynamicCellMatchAlloc = metadataAllocators_.dynamicCellMatch.Allocate();
+        DEV_ASSERT_MSG(
+            WsErr::WORKSPACE_INIT_RESOURCE_ERROR, dynamicCellMatchAlloc.ptr != 0,
+            "Dynamic cell match metadata alloc failed, size=%" PRIu64, dynamicCellMatchSlotBytes);
+        dynamicCellMatchAlloc.parallelWsId = curParallelWsId;
+        partialUpdate->cellMatchRuntimePartialUpdateTable =
+            DevRelocVector<uint64_t>(0, reinterpret_cast<uint64_t*>(dynamicCellMatchAlloc.ptr));
+        auto& runtimeOutcastTensor = GetRuntimeOutcastTensor(slot.rtOutcastIter);
+        runtimeOutcastTensor.dynamicCellMatchAllocation = dynamicCellMatchAlloc;
     }
 
 public:
@@ -412,6 +452,10 @@ public:
     {
         return tensorAllocators_[curParallelWsId].devTaskBoundaryOutcasts.IsValidSlotMemRequirement(memReq);
     }
+
+    bool HasDynamicCellMatchSlots() const { return devProg_->memBudget.metadata.dynamicCellMatchSlotNum != 0; }
+    uint64_t DynamicCellMatchSlotByteSize() const { return devProg_->memBudget.metadata.maxDynamicCellMatchTableMem; }
+    uint64_t DynamicCellMatchSlotCellCapacity() const { return DynamicCellMatchSlotByteSize() / sizeof(uint64_t); }
 
     WsAllocation AllocateSlot([[maybe_unused]] const char* rootFuncName = nullptr)
     {
@@ -520,6 +564,9 @@ public:
     {
         for (auto&& outcast : rtBoundaryOutcastToBeFree_) {
             tensorAllocators_[outcast.allocation.parallelWsId].devTaskBoundaryOutcasts.Deallocate(outcast.allocation.ptr);
+            if (outcast.dynamicCellMatchAllocation.ptr != 0) {
+                metadataAllocators_.dynamicCellMatch.Deallocate(outcast.dynamicCellMatchAllocation.ptr);
+            }
         }
         rtBoundaryOutcastToBeFree_.clear();
     }
@@ -665,9 +712,13 @@ public:
     static uint64_t CalcMetadataSlotAllocatorMemSize(const DevAscendProgram* devProg)
     {
         size_t blockHeaderSize = sizeof(WsSlotAllocator::BlockHeader);
-        uint64_t slotNum = devProg->memBudget.tensor.devTaskBoundaryOutcastNum;
-        DEV_DEBUG("boundaryOutcastSlotNum=%lu", slotNum);
-        return slotNum * blockHeaderSize;
+        uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.devTaskBoundaryOutcastNum;
+        uint64_t dynamicCellMatchSlotNum =
+            static_cast<uint64_t>(devProg->memBudget.tensor.parallelism) * devProg->memBudget.metadata.dynamicCellMatchSlotNum;
+        DEV_DEBUG(
+            "boundaryOutcastSlotNum=%lu, dynamicCellMatchSlotNum=%lu", boundaryOutcastSlotNum, dynamicCellMatchSlotNum);
+        uint64_t blockHeadersBytes = (boundaryOutcastSlotNum + dynamicCellMatchSlotNum) * blockHeaderSize;
+        return blockHeadersBytes;
     }
 
     uint32_t CalcSlabMemObjmaxSize()
@@ -832,6 +883,25 @@ private:
         DEV_TRACE_DEBUG(CtrlEvent(
             none(),
             WorkspaceMetadataStitch(Range(stitchPoolAddr, stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));
+
+        uint64_t dynamicCellMatchSlotNum = static_cast<uint64_t>(devProg->GetParallelism()) *
+                                           devProg->memBudget.metadata.dynamicCellMatchSlotNum;
+        uint64_t dynamicCellMatchSlotBytes = devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+        uint64_t dynamicCellMatchAddr = devStartArgs->deviceRuntimeDataDesc.dynamicCellMatchAddr;
+        uint64_t dynamicCellMatchBytes = devProg->memBudget.metadata.dynamicCellMatch;
+        if (dynamicCellMatchSlotNum == 0 || dynamicCellMatchSlotBytes == 0 || dynamicCellMatchBytes == 0) {
+            return;
+        }
+        DEV_ASSERT_MSG(
+            WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchAddr != 0,
+            "Dynamic cell match addr is null while bytes=%lu", dynamicCellMatchBytes);
+        DEV_ASSERT_MSG(
+            WsErr::WORKSPACE_INIT_PARAM_INVALID, dynamicCellMatchBytes == dynamicCellMatchSlotNum * dynamicCellMatchSlotBytes,
+            "Dynamic cell match pool bytes mismatch, budget=%lu, calc=%lu", dynamicCellMatchBytes,
+            dynamicCellMatchSlotNum * dynamicCellMatchSlotBytes);
+        WsAllocation dynamicCellMatchBase(dynamicCellMatchAddr, dynamicCellMatchBytes);
+        metadataAllocators_.dynamicCellMatch.InitTensorAllocator(
+            dynamicCellMatchBase.ptr, dynamicCellMatchSlotNum, dynamicCellMatchSlotBytes, metadataAllocators_.general);
     }
 
     void InitTensorAllocators(uintdevptr_t workspaceAddr, uint64_t tensorWorkspaceSize, DevAscendProgram* devProg)

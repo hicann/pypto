@@ -154,6 +154,8 @@ struct DeviceArgs {
     uint64_t aicpuSoLen{0};                // server so len
     uint64_t deviceId{0};                  // for device copy fileName
     uint64_t runtimeDataRingBufferAddr{0}; // DevStartArgs addr
+    uint64_t dynamicCellMatchAddr{0};      // standalone metadata pool for dynamic cell match
+    uint64_t dynamicCellMatchCapacity{0};  // allocated bytes for dynamicCellMatchAddr
     uint32_t hostPid{0};                   // for dump tensor
     uint32_t scheCpuNum{0};                // sche cpu num calc by host
     uint32_t enableCtrl : 2;               // if enable builtin ctrl

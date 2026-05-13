@@ -73,7 +73,6 @@ stest:
       #===========================================================================
       # reshapeinplace非对齐场景功能用例
       #===========================================================================
-      - DynamicReshapeUnalignImplaceTest.test_op_reshape_op
       - DynamicReshapeUnalignImplaceTest.merge_two_dynamic_dim
       - DynamicReshapeUnalignImplaceTest.test_exchange_dim
       - DynamicReshapeUnalignImplaceTest.test_reshape_special

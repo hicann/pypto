@@ -336,12 +336,30 @@ static bool GetTensorRawShape(
     return paramConcrete;
 }
 
+[[maybe_unused]] inline bool IsCellMatchDescFillReady(const DevCellMatchTableDesc& cellMatchTableDesc)
+{
+    int dim = cellMatchTableDesc.GetDimensionSize();
+    if (dim <= 0) {
+        return false;
+    }
+    for (int d = 0; d < dim; ++d) {
+        if (cellMatchTableDesc.GetCellShape(d) <= 0 || cellMatchTableDesc.GetStrideShape(d) <= 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 template <bool skipExpression, typename... TyArgs>
 static bool CellMatchFillIncastOutcast(
     DevAscendFunction* devFunc, DevAscendFunctionCallOperandUse* operandUseList, size_t useSize,
     const uint64_t* runtimeExpressionList, bool isIOperand, const DevCellMatchTableDesc& cellMatchTableDesc,
     TyArgs... args)
 {
+    if (!IsCellMatchDescFillReady(cellMatchTableDesc)) {
+        return false;
+    }
+
     bool allConcrete = true;
     auto validateAndRefreshOffsetShape = [&devFunc, &runtimeExpressionList, &cellMatchTableDesc, &isIOperand](
                                              const uint64_t offset[DEV_SHAPE_DIM_MAX],

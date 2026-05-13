@@ -183,6 +183,28 @@ public:
     }
 
 private:
+    static void PatchRuntimeDynamicCellMatchMeta(
+        MemoryHelper& memoryHelper, DevAscendProgram* hostProg, DevAscendProgram* cfgProg)
+    {
+        if (hostProg == nullptr || cfgProg == nullptr) {
+            return;
+        }
+        uint64_t dynamicCellMatchBytes = hostProg->memBudget.metadata.dynamicCellMatch;
+        if (dynamicCellMatchBytes == 0) {
+            hostProg->devArgs.dynamicCellMatchAddr = 0;
+            hostProg->devArgs.dynamicCellMatchCapacity = 0;
+            cfgProg->devArgs.dynamicCellMatchAddr = 0;
+            cfgProg->devArgs.dynamicCellMatchCapacity = 0;
+            return;
+        }
+        uint8_t* dynamicCellMatchAddr = memoryHelper.AllocZero(dynamicCellMatchBytes, nullptr);
+        uint64_t dynamicCellMatchAddrU64 = reinterpret_cast<uint64_t>(dynamicCellMatchAddr);
+        hostProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
+        hostProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
+        cfgProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
+        cfgProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
+    }
+
     CostModelLauncher(Function* function, const DeviceLauncherConfig& config) : function_(function), config_(config) {}
 
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
@@ -214,6 +236,11 @@ private:
         DeviceInitDistributedContext(memoryHelper, dynAttr->commGroupNames, kArgs);
         DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
         InitKernelInOuts(kArgs, inputs, outputs, true);
+        auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
+        auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
+        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, cfgProg);
+        kArgs.maxDynamicAssembleOutcastMem = functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem;
+        kArgs.maxDynamicCellMatchTableMem = functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
         RunCostModel(&kArgs);
         SIMULATION_LOGI("Run TestModel");
         RunTestMode(&kArgs);
@@ -307,6 +334,7 @@ private:
         devProg->devArgs.nrValidAic = 1;
         devProg->devArgs.scheCpuNum = 1;
         AssignMetaAddr(devMem, kArgs, devProg, nullptr);
+        PatchRuntimeDynamicCellMatchMeta(devMem, devProg, devProg);
         size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t);
         std::vector<uint8_t> tensorInfo(tensorSize);
         auto data = reinterpret_cast<uint64_t*>(tensorInfo.data());

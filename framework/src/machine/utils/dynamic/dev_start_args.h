@@ -32,6 +32,7 @@ struct DeviceRuntimeDataDesc {
     DeviceTaskCtrl* taskCtrlPool{nullptr};
     DeviceTaskCtrlQueue* taskQueueList{nullptr};
     uint64_t generalAddr;
+    uint64_t dynamicCellMatchAddr;
     uint64_t stitchPoolAddr;
 };
 
@@ -70,6 +71,7 @@ struct DevStartArgs : DevStartArgsBase {
         deviceRuntimeDataDesc.taskQueueList =
             reinterpret_cast<DeviceTaskCtrlQueue*>(base + devProg->GetDeviceRuntimeOffset().taskQueueOffset);
         deviceRuntimeDataDesc.generalAddr = base + devProg->GetDeviceRuntimeOffset().generalOffset;
+        deviceRuntimeDataDesc.dynamicCellMatchAddr = devProg->devArgs.dynamicCellMatchAddr;
         deviceRuntimeDataDesc.stitchPoolAddr = base + devProg->GetDeviceRuntimeOffset().stitchPoolOffset;
     }
 

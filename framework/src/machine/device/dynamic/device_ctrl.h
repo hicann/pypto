@@ -248,8 +248,32 @@ public:
         DEV_INFO("AscendCppDyInitTask begin");
 
         DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
+        auto &tensorBudget = devProg->memBudget.tensor;
+        auto &metadataBudget = devProg->memBudget.metadata;
+        if (kargs->maxDynamicAssembleOutcastMem != 0) {
+            tensorBudget.maxDynamicAssembleOutcastMem = kargs->maxDynamicAssembleOutcastMem;
+        }
+        if (kargs->maxDynamicCellMatchTableMem != 0) {
+            metadataBudget.maxDynamicCellMatchTableMem = kargs->maxDynamicCellMatchTableMem;
+            uint64_t totalDynamicCellMatchSlotNum =
+                static_cast<uint64_t>(tensorBudget.parallelism) * metadataBudget.dynamicCellMatchSlotNum;
+            metadataBudget.dynamicCellMatch = totalDynamicCellMatchSlotNum * metadataBudget.maxDynamicCellMatchTableMem;
+        }
         PerfBegin(PERF_EVT_INIT);
         bool firstInit = InitDevProgram(devProg);
+        // dynamicCellMatchAddr: device-visible pool VA (host/runtime uses AllocDev / workspace; dev_workspace treats it as
+        // device base). InitDyn runs on AICPU and fills that device memory in place, not a host malloc staging buffer.
+        const uint64_t dynCmCap = devProg->devArgs.dynamicCellMatchCapacity;
+        const uint64_t dynCmAddrU64 = devProg->devArgs.dynamicCellMatchAddr;
+        if (dynCmAddrU64 != 0 && dynCmCap != 0) {
+            DEV_ASSERT_MSG(DevCommonErr::PARAM_INVALID, (dynCmCap % sizeof(uint64_t)) == 0,
+                "#ctrl.initdyn: dynamicCellMatch cap not uint64 aligned, cap=%lu", dynCmCap);
+            const size_t numWords = static_cast<size_t>(dynCmCap / sizeof(uint64_t));
+            auto* table = reinterpret_cast<uint64_t*>(dynCmAddrU64);
+            for (size_t i = 0; i < numWords; ++i) {
+                table[i] = AICORE_TASK_INIT;
+            }
+        }
         PerfEnd(PERF_EVT_INIT);
 
         RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();

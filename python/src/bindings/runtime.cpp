@@ -19,7 +19,10 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <cstddef>
+#include <cstdlib>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include "tilefwk/pypto_fwk_log.h"
@@ -35,6 +38,7 @@
 #include "machine/runtime/eslmodel_launcher.h"
 #include "machine/runtime/aicore_model_launcher.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/runtime/runtime_agent.h"
 #include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/runtime/launcher_router.h"
 #include "machine/host/perf_analysis.h"
@@ -45,6 +49,77 @@ using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
+
+std::string ValidateDynamicFunctionAndIO(
+    Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
+{
+    if (!func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH)) {
+        return "Invalid function format";
+    }
+
+    auto attr = func->GetDyndevAttribute();
+    if (attr == nullptr) {
+        return "Invalid function format";
+    }
+
+    auto inputSize = attr->startArgsInputLogicalTensorList.size();
+    auto outputSize = attr->startArgsOutputLogicalTensorList.size();
+    if (inputSize != inputs.size() || outputSize != outputs.size()) {
+        return "mismatch input/output";
+    }
+    return "";
+}
+
+bool TryBuildDynamicCellMatchDesc(
+    const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& launchMeta, Evaluator& eval,
+    DevCellMatchTableDesc& patchedDesc)
+{
+    patchedDesc.SetCellShape(launchMeta.cellShape);
+    const int dim = patchedDesc.GetDimensionSize();
+    if (launchMeta.candidateRawDims.empty() || dim > DEV_SHAPE_DIM_MAX) {
+        return false;
+    }
+
+    bool consistent = true;
+    int64_t refStride[DEV_SHAPE_DIM_MAX]{0};
+    for (size_t c = 0; c < launchMeta.candidateRawDims.size(); ++c) {
+        int64_t currentStride[DEV_SHAPE_DIM_MAX]{0};
+        for (int d = dim - 1; d >= 0; --d) {
+            auto expr = launchMeta.candidateRawDims[c][d];
+            int64_t tensorDim = eval.Evaluate(expr);
+            int64_t cellDim = std::max<int64_t>(patchedDesc.GetCellShape(d), 1);
+            int64_t tile = (tensorDim + cellDim - 1) / cellDim;
+            ASSERT(tile > 0) << "Invalid tile for dynamic cell match slot=" << launchMeta.slotIndex << ", dim=" << d;
+            currentStride[d] = tile;
+        }
+        if (c == 0) {
+            for (int d = 0; d < dim; ++d) {
+                refStride[d] = currentStride[d];
+            }
+            continue;
+        }
+        for (int d = 0; d < dim; ++d) {
+            if (refStride[d] != currentStride[d]) {
+                consistent = false;
+                break;
+            }
+        }
+        if (!consistent) {
+            break;
+        }
+    }
+
+    if (!consistent) {
+        return false;
+    }
+
+    std::vector<int> strideShape(dim);
+    for (int d = 0; d < dim; ++d) {
+        strideShape[d] = static_cast<int>(refStride[d]);
+    }
+    patchedDesc.SetStrideShape(strideShape);
+    return true;
+}
 
 static bool IsUint8GoldenAndHf8InOut(const DeviceTensorData& inOutTensor, const DeviceTensorData& goldenTensor)
 {
@@ -155,21 +230,7 @@ void SetVerifyData(
 static std::string ValidateFunctionAndIO(
     Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
 {
-    if (!func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH)) {
-        return "Invalid function format";
-    }
-
-    auto attr = func->GetDyndevAttribute();
-    if (attr == nullptr) {
-        return "Invalid function format";
-    }
-
-    auto inputSize = attr->startArgsInputLogicalTensorList.size();
-    auto outputSize = attr->startArgsOutputLogicalTensorList.size();
-    if (inputSize != inputs.size() || outputSize != outputs.size()) {
-        return "mismatch input/output";
-    }
-    return "";
+    return ValidateDynamicFunctionAndIO(func, inputs, outputs);
 }
 
 static ExportedOperator* GetValidatedOperator(uintptr_t opAddr)
@@ -450,6 +511,12 @@ struct ControlFlowCache {
 
 class KernelBinary {
 public:
+    struct DynamicCellMatchDescPatch {
+        int slotIndex{-1};
+        uint64_t descOffset{0};
+        DevCellMatchTableDesc desc{};
+    };
+
     KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
     {
         dynAttr = dynFunc->GetDyndevAttribute().get();
@@ -459,6 +526,9 @@ public:
         InitCachedArgs();
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
         DeviceLauncher::FillDeviceKernelArgs(dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        runtimeDynamicCellMatchAddr_ = devProg->devArgs.dynamicCellMatchAddr;
+        runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
+        lastPreparedDynamicCellMatchBytes_ = runtimeDynamicCellMatchCapacity_;
     }
 
     uint8_t* FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape)
@@ -519,10 +589,29 @@ public:
 
     int64_t GetWorkspaceSize(const std::vector<DeviceTensorData>& tensors)
     {
-        if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
+        auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
+        PrepareDynamicCellMatchDescPatches(tensors);
+        // Patch host/dev cfg together before Launch, so Launch stays read-only.
+        PatchDynamicCellMatchTableDescToCfgData(reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
+        if (dynAttr->maxDynamicAssembleOutcastMem.IsValid() || dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
             Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
-            devProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
-                eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
+            if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
+                devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
+            }
+            if (dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
+                devProg->memBudget.metadata.maxDynamicCellMatchTableMem =
+                    eval.Evaluate(dynAttr->maxDynamicCellMatchTableMem);
+                uint64_t totalDynamicCellMatchSlotNum =
+                    static_cast<uint64_t>(devProg->memBudget.tensor.parallelism) * devProg->memBudget.metadata.dynamicCellMatchSlotNum;
+                devProg->memBudget.metadata.dynamicCellMatch =
+                    totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+            }
+            if (devProg->memBudget.metadata.dynamicCellMatch != lastPreparedDynamicCellMatchBytes_) {
+                RefreshRuntimeDynamicCellMatchMeta(devProg->memBudget.metadata.dynamicCellMatch);
+                lastPreparedDynamicCellMatchBytes_ = devProg->memBudget.metadata.dynamicCellMatch;
+            }
+            PatchRuntimeDynamicCellMatchAddrToCfgData(
+                reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
             workspaceSize = devProg->memBudget.Total();
             return workspaceSize;
         }
@@ -590,9 +679,134 @@ public:
     {
         return devProg != nullptr && devProg->disableCtrlFlowCache != 0;
     }
+    uint64_t GetMaxDynamicAssembleOutcastMem() const { return devProg->memBudget.tensor.maxDynamicAssembleOutcastMem; }
+    uint64_t GetMaxDynamicCellMatchTableMem() const { return devProg->memBudget.metadata.maxDynamicCellMatchTableMem; }
+    void PrepareDynamicCellMatchDescPatches(const std::vector<DeviceTensorData>& tensors)
+    {
+        dynamicCellMatchDescPatches_.clear();
+        if (dynAttr->dynamicCellMatchLaunchMetaList.empty()) {
+            return;
+        }
+        Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
+        size_t unpreparedCount = 0;
+        int firstUnpreparedSlot = -1;
+        for (const auto& launchMeta : dynAttr->dynamicCellMatchLaunchMetaList) {
+            DevCellMatchTableDesc patchedDesc;
+            bool ready = TryBuildDynamicCellMatchDesc(launchMeta, eval, patchedDesc);
+
+            if (!ready) {
+                unpreparedCount++;
+                if (firstUnpreparedSlot < 0) {
+                    firstUnpreparedSlot = launchMeta.slotIndex;
+                }
+                continue;
+            }
+            DynamicCellMatchDescPatch patch;
+            patch.slotIndex = launchMeta.slotIndex;
+            patch.desc = patchedDesc;
+            patch.descOffset = launchMeta.descOffset;
+            dynamicCellMatchDescPatches_.push_back(patch);
+        }
+        if (unpreparedCount != 0) {
+            ASSERT(false)
+                << "dynamic cell match launch prepare failed, unpreparedCount="
+                << unpreparedCount << ", firstSlot=" << firstUnpreparedSlot;
+        }
+    }
+
+    void PatchDynamicCellMatchTableDescToCfgData(int64_t* hostCfgdata, int64_t* devCfgdata)
+    {
+        if (dynamicCellMatchDescPatches_.empty()) {
+            return;
+        }
+        auto patchOneCfg = [&](int64_t* cfgdata) {
+            if (cfgdata == nullptr) {
+                return;
+            }
+            auto* cfgBytes = reinterpret_cast<uint8_t*>(cfgdata);
+            bool isHostCfg = IsHostCfgData(cfgBytes);
+            std::optional<AclModeGuard> captureRelaxGuard;
+            if (!isHostCfg && DeviceLauncher::IsCaptureMode()) {
+                captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
+            }
+            for (const auto& patch : dynamicCellMatchDescPatches_) {
+                auto* dst = cfgBytes + patch.descOffset;
+                if (isHostCfg) {
+                    (void)memcpy_s(
+                        dst, sizeof(DevCellMatchTableDesc), &patch.desc, sizeof(DevCellMatchTableDesc));
+                } else {
+                    int ret = RuntimeMemcpy(
+                        dst, sizeof(DevCellMatchTableDesc), &patch.desc, sizeof(DevCellMatchTableDesc),
+                        RtMemcpyKind::HOST_TO_DEVICE);
+                    ASSERT(ret == RT_SUCCESS) << "patch dynamic cell match desc failed, ret=" << ret;
+                }
+            }
+        };
+        patchOneCfg(hostCfgdata);
+        if (devCfgdata != hostCfgdata) {
+            patchOneCfg(devCfgdata);
+        }
+    }
+
+    void PatchRuntimeDynamicCellMatchAddrToCfgData(int64_t* hostCfgdata, int64_t* devCfgdata)
+    {
+        auto patchOneCfg = [&](int64_t* cfgdata) {
+            if (cfgdata == nullptr) {
+                return;
+            }
+            auto* cfgBytes = reinterpret_cast<uint8_t*>(cfgdata);
+            bool isHostCfg = IsHostCfgData(cfgBytes);
+            const uint64_t devAddrOffset =
+                offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchAddr);
+            const uint64_t devCapacityOffset =
+                offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchCapacity);
+
+            std::optional<AclModeGuard> captureRelaxGuard;
+            if (!isHostCfg && DeviceLauncher::IsCaptureMode()) {
+                captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
+            }
+
+            if (isHostCfg) {
+                auto* addrSlot = reinterpret_cast<uint64_t*>(cfgBytes + devAddrOffset);
+                auto* capSlot = reinterpret_cast<uint64_t*>(cfgBytes + devCapacityOffset);
+                *addrSlot = runtimeDynamicCellMatchHostAddr_;
+                *capSlot = runtimeDynamicCellMatchCapacity_;
+            } else {
+                int ret = RuntimeMemcpy(
+                    cfgBytes + devAddrOffset, sizeof(uint64_t), &runtimeDynamicCellMatchAddr_, sizeof(uint64_t),
+                    RtMemcpyKind::HOST_TO_DEVICE);
+                ASSERT(ret == RT_SUCCESS) << "patch dynamicCellMatch addr to cfg failed, ret=" << ret;
+                ret = RuntimeMemcpy(
+                    cfgBytes + devCapacityOffset, sizeof(uint64_t), &runtimeDynamicCellMatchCapacity_, sizeof(uint64_t),
+                    RtMemcpyKind::HOST_TO_DEVICE);
+                ASSERT(ret == RT_SUCCESS) << "patch dynamicCellMatch capacity to cfg failed, ret=" << ret;
+            }
+        };
+        patchOneCfg(hostCfgdata);
+        if (devCfgdata != hostCfgdata) {
+            patchOneCfg(devCfgdata);
+        }
+    }
+
+    bool IsHostCfgData(const uint8_t* cfgBytes) const
+    {
+        auto* hostBytes = reinterpret_cast<const uint8_t*>(devProg);
+        auto* hostProgBinaryBegin = dynAttr->devProgBinary.empty() ? nullptr : dynAttr->devProgBinary.data();
+        auto* hostProgBinaryEnd =
+            hostProgBinaryBegin == nullptr ? nullptr : (hostProgBinaryBegin + dynAttr->devProgBinary.size());
+        bool cfgInHostProgBinary =
+            hostProgBinaryBegin != nullptr && cfgBytes >= hostProgBinaryBegin && cfgBytes < hostProgBinaryEnd;
+        return (cfgBytes == hostBytes) || cfgInHostProgBinary;
+    }
 
     ~KernelBinary()
     {
+        if (runtimeDynamicCellMatchOwned_ && runtimeDynamicCellMatchAddr_ != 0) {
+            machine::GetRA()->FreeDevAddr(reinterpret_cast<uint8_t*>(runtimeDynamicCellMatchAddr_));
+        }
+        if (runtimeDynamicCellMatchHostOwned_ && runtimeDynamicCellMatchHostAddr_ != 0) {
+            std::free(reinterpret_cast<void*>(runtimeDynamicCellMatchHostAddr_));
+        }
         DeviceLauncher::UnregisterKernelBin(kernelBin);
         for (auto& cache : originShapeCaches) {
             DeviceLauncher::FreeControlFlowCache(cache.devCache);
@@ -641,6 +855,56 @@ private:
     std::vector<int64_t> aicpuArgBuf;
     uint64_t l2Offset{0};
     std::vector<DeviceTensorData> argTypes;
+    std::vector<DynamicCellMatchDescPatch> dynamicCellMatchDescPatches_;
+    uint64_t lastPreparedDynamicCellMatchBytes_{0};
+    uint64_t runtimeDynamicCellMatchAddr_{0};
+    uint64_t runtimeDynamicCellMatchHostAddr_{0};
+    uint64_t runtimeDynamicCellMatchCapacity_{0};
+    bool runtimeDynamicCellMatchOwned_{false};
+    bool runtimeDynamicCellMatchHostOwned_{false};
+
+    void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
+    {
+        if (needBytes == 0) {
+            if (runtimeDynamicCellMatchOwned_ && runtimeDynamicCellMatchAddr_ != 0) {
+                machine::GetRA()->FreeDevAddr(reinterpret_cast<uint8_t*>(runtimeDynamicCellMatchAddr_));
+            }
+            if (runtimeDynamicCellMatchHostOwned_ && runtimeDynamicCellMatchHostAddr_ != 0) {
+                std::free(reinterpret_cast<void*>(runtimeDynamicCellMatchHostAddr_));
+            }
+            runtimeDynamicCellMatchAddr_ = 0;
+            runtimeDynamicCellMatchHostAddr_ = 0;
+            runtimeDynamicCellMatchCapacity_ = 0;
+            runtimeDynamicCellMatchOwned_ = false;
+            runtimeDynamicCellMatchHostOwned_ = false;
+            return;
+        }
+        if (runtimeDynamicCellMatchAddr_ != 0 && runtimeDynamicCellMatchHostAddr_ != 0 &&
+            runtimeDynamicCellMatchCapacity_ >= needBytes) {
+            return;
+        }
+        uint64_t oldAddr = runtimeDynamicCellMatchAddr_;
+        uint64_t oldHostAddr = runtimeDynamicCellMatchHostAddr_;
+        bool oldOwned = runtimeDynamicCellMatchOwned_;
+        bool oldHostOwned = runtimeDynamicCellMatchHostOwned_;
+        DeviceMemoryUtils deviceMemoryUtils;
+        auto* newPtr = deviceMemoryUtils.AllocDev(needBytes, nullptr);
+        ASSERT(newPtr != nullptr) << "alloc dynamic cell match meta failed, needBytes=" << needBytes;
+        auto* newHostPtr = static_cast<uint8_t*>(std::malloc(static_cast<size_t>(needBytes)));
+        ASSERT(newHostPtr != nullptr) << "alloc host dynamic cell match meta failed, needBytes=" << needBytes;
+        runtimeDynamicCellMatchAddr_ = reinterpret_cast<uint64_t>(newPtr);
+        runtimeDynamicCellMatchHostAddr_ = reinterpret_cast<uint64_t>(newHostPtr);
+        runtimeDynamicCellMatchCapacity_ = needBytes;
+        runtimeDynamicCellMatchOwned_ = true;
+        runtimeDynamicCellMatchHostOwned_ = true;
+        if (oldOwned && oldAddr != 0) {
+            machine::GetRA()->FreeDevAddr(reinterpret_cast<uint8_t*>(oldAddr));
+        }
+        if (oldHostOwned && oldHostAddr != 0) {
+            std::free(reinterpret_cast<void*>(oldHostAddr));
+        }
+    }
+
 };
 
 class KernelModule {
@@ -774,6 +1038,8 @@ public:
         args->kArgs.ctrlFlowCache = (int64_t*)ctrlFlowCache;
         args->kArgs.workspace = workspace;
         args->kArgs.parameter.globalRound = ++sequence;
+        args->kArgs.maxDynamicAssembleOutcastMem = kernel->GetMaxDynamicAssembleOutcastMem();
+        args->kArgs.maxDynamicCellMatchTableMem = kernel->GetMaxDynamicCellMatchTableMem();
         auto isCaptureMode = DeviceLauncher::IsCaptureMode();
         bool debugEnable = !isCaptureMode && isDebugMode;
 

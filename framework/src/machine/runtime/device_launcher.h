@@ -141,7 +141,7 @@ public:
         uint64_t generalSize = devProg->memBudget.metadata.general;
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;
         MACHINE_LOGD(
-            "eneralSize=%lu, stitchPoolSize=%lu, generalOffset=%#lx, stitchPoolOffset=%#lx.", generalSize,
+            "generalSize=%lu, stitchPoolSize=%lu, generalOffset=%#lx, stitchPoolOffset=%#lx.", generalSize,
             stitchPoolSize, devProg->deviceRuntimeOffset.generalOffset, devProg->deviceRuntimeOffset.stitchPoolOffset);
         return;
     }

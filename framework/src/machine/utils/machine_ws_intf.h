@@ -113,6 +113,8 @@ struct DeviceKernelArgs {
     void* costmodeldata{nullptr};
     void* aicoreModel{nullptr};
     uint64_t taskWastTime{0};
+    uint64_t maxDynamicAssembleOutcastMem{0};
+    uint64_t maxDynamicCellMatchTableMem{0};
     uint8_t machineConfig;
     ToSubMachineConfig toSubMachineConfig;
     DeviceKernelArgsParameter parameter;

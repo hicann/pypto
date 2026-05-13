@@ -51,8 +51,8 @@ struct DevAscendProgram {
             // root func outcasts & non-dassemble-dst & DeviceTask boundary outcasts: MaxOutcastMem() *
             // devTaskBoundaryOutcastNum
             uint64_t maxStaticOutcastMem;
-            uint64_t maxDynamicAssembleOutcastMem;
-            uint64_t devTaskBoundaryOutcastNum;
+            uint64_t maxDynamicAssembleOutcastMem{0};
+            uint64_t devTaskBoundaryOutcastNum{0};
             uint32_t parallelism{1};
 
             uint64_t MaxOutcastMem() const { return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem); }
@@ -71,11 +71,14 @@ struct DevAscendProgram {
         uint64_t aicoreSpilled;
         struct {
             uint64_t general;
+            uint64_t dynamicCellMatch{0};
             uint64_t stitchPool;
+            uint64_t maxDynamicCellMatchTableMem{0};
+            uint64_t dynamicCellMatchSlotNum{0};
             uint32_t generalSlabSize;
             uint32_t stitchSlabSize;
 
-            uint64_t Total() const { return general + stitchPool; }
+            uint64_t Total() const { return general + dynamicCellMatch + stitchPool; }
         } metadata;
         struct {
             uint64_t dumpTensor;
@@ -337,6 +340,8 @@ struct DevAscendProgram {
         uint32_t scheCpuNum;
         uint32_t maxAicpuNum;
         ArchInfo archInfo;
+        uint64_t dynamicCellMatchAddr;
+        uint64_t dynamicCellMatchCapacity;
     };
 
     DevArgsPreservedParams BackupDevArgsParams(const DeviceArgs& src)
@@ -349,6 +354,8 @@ struct DevAscendProgram {
         params.scheCpuNum = src.scheCpuNum;
         params.maxAicpuNum = src.maxAicpuNum;
         params.archInfo = src.archInfo;
+        params.dynamicCellMatchAddr = src.dynamicCellMatchAddr;
+        params.dynamicCellMatchCapacity = src.dynamicCellMatchCapacity;
         return params;
     }
 
@@ -361,6 +368,8 @@ struct DevAscendProgram {
         dst.scheCpuNum = params.scheCpuNum;
         dst.maxAicpuNum = params.maxAicpuNum;
         dst.archInfo = params.archInfo;
+        dst.dynamicCellMatchAddr = params.dynamicCellMatchAddr;
+        dst.dynamicCellMatchCapacity = params.dynamicCellMatchCapacity;
     }
 
     void ResetFromLaunch()
