@@ -118,9 +118,9 @@ def axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
     - This is an in-place operation. The y tensor is modified directly.
     - Supported dtype combinations:
       - fp32 + fp32
-      - fp16 + fp16  
+      - fp16 + fp16
       - bf16 + bf16 (converted to fp32 internally)
-      - fp32 + fp16 (mixed precision)
+      - fp32 + fp16 (mixed precision, x casted to fp32 internally)
 
     Examples
     --------
@@ -133,10 +133,11 @@ def axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
     alpha:      2.0
     Output:     [[5.0 8.0 11.0]]  (y = 2.0 * x + y)
     """
+    if y.dtype == DataType.DT_FP32 and x.dtype == DataType.DT_FP16:
+        x = pypto_impl.Cast(x, DataType.DT_FP32, CastMode.CAST_NONE)
+
     y.Move(pypto_impl.Axpy(y, x, float(alpha)))
     return y
-
-
 
 
 @op_wrapper
