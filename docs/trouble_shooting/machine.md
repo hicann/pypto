@@ -264,7 +264,7 @@ tools/dep_verifier/                 # 规则引擎包
 
 ```python
 @pypto.frontend.jit(
-    debug_options={"runtime_debug_mode": 1}
+    debug_options={"runtime_debug_mode": 3}
 )
 def my_op(...):
     ...

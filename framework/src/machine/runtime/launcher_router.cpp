@@ -19,13 +19,15 @@ namespace npu::tile_fwk::dynamic {
 
 LaunchMode LauncherRouter::ResolveByDebugMode(int64_t debugMode)
 {
-    if (debugMode == CFG_DEBUG_ALL) {
- 	    return LaunchMode::EMULATION;
- 	}
- 	if (debugMode == CFG_DEBUG_AICORE_MODEL) {
- 	    return LaunchMode::AICORE_MODEL;
- 	}
- 	return LaunchMode::DEVICE_RT;
+    switch (debugMode) {
+        case CFG_DEBUG_ALL:
+        case CFG_DEBUG_VERIFY:
+            return LaunchMode::EMULATION;
+        case CFG_DEBUG_AICORE_MODEL:
+            return LaunchMode::AICORE_MODEL;
+        default:
+            return LaunchMode::DEVICE_RT;
+    }
 }
 
 LaunchMode LauncherRouter::ResolveCurrent()

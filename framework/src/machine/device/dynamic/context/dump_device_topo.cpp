@@ -60,7 +60,7 @@ void OpenIfPathChanged(std::ofstream& ofs, std::string& lastPath,
 inline bool DumpEnabled()
 {
     static const bool cached =
-        (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL);
+        (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_VERIFY);
     return cached;
 }
 

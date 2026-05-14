@@ -1148,7 +1148,7 @@ private:
             if (debugOptions.contains("runtime_debug_mode")) {
                 auto debugMode = debugOptions["runtime_debug_mode"].cast<int64_t>();
                 launchMode_ = LauncherRouter::ResolveByDebugMode(debugMode);
-                isDebugMode = (launchMode_ == LaunchMode::EMULATION);
+                isDebugMode = (debugMode == CFG_DEBUG_ALL);
             }
         }
         if (!module.attr("_infer_controlflow_shape").is_none()) {
