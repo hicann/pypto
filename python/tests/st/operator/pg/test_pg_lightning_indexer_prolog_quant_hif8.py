@@ -553,7 +553,6 @@ def test_b111_s1_1_s2_8k():
 
 
 @pytest.mark.soc("950")
-@pytest.mark.skip(reason="env error case")
 def test_acl():
     do_test_lightning_indexer_prolog_quant("QuantLightningIndexerPrologSTest.b1_s1_8k_s2_8k_acl", is_acl=True)
 

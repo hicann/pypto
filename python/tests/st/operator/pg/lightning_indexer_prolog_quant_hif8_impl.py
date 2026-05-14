@@ -72,7 +72,7 @@ def quant_rms_norm(x: pypto.Tensor, gamma: pypto.Tensor, dim: int, epsilon: floa
     mean_square = pypto.sum(x2_scaled, actual_dim, keepdim=True)
 
     rms = pypto.sqrt(mean_square + epsilon)
-    res32 = x_fp32 / rms
+    res32 = pypto.div(x_fp32, rms, pypto.DivAlgorithm.INTRINSIC)
     gamma32 = pypto.cast(gamma, pypto.DT_FP32)
     return pypto.cast((res32 * gamma32), x_dtype)
 
@@ -146,7 +146,7 @@ def prolog_quant(x: pypto.Tensor):
     max_value = pypto.amax(abs_res, dim=-1, keepdim=True)
 
     scale_dequant = max_value * (hif8_one_value / hif8_max_value)
-    out_fp32 = pypto.div(input_fp32, scale_dequant)
+    out_fp32 = pypto.div(input_fp32, scale_dequant, pypto.DivAlgorithm.INTRINSIC)
     out_hif8 = pypto.cast(out_fp32, pypto.DT_HF8)
     return (out_hif8, scale_dequant)
 
@@ -228,8 +228,8 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tens
 
 @pypto.frontend.jit(
     pass_options={
-        # 1 cast_cos/sin, 2 q_dequant, 6 q_quant
-        "vec_nbuffer_setting": {1: 2, 2: 2, 6: 8, -2: 1},
+        # 0 cast_cos/sin, 1 q_dequant, 6 q_quant
+        "vec_nbuffer_setting": {0: 2, 1: 2, 6: 8, -2: 1},
         "cube_l1_reuse_setting": {-1: 8},
     },
     runtime_options={
