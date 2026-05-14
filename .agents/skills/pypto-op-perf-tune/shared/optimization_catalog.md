@@ -30,7 +30,7 @@
 | F-12 | 输入矩阵 NZ 格式 | ⭐ | 权重矩阵较大 | tune-frontend 局部§1 |
 | F-13 | Transpose 优化 | ⭐ | 含 transpose+matmul | tune-frontend 局部§2 |
 | F-14 | 冗余搬运消除 | ⭐ | 有 concat/assemble 搬运 | tune-frontend 局部§3 |
-| F-15 | 尾轴 Broadcast 合轴（combine_axis） | ⭐ | 存在尾轴为1的 broadcast 二元运算 | tune-frontend §4 |
+| F-15 | 尾轴 Broadcast 合轴（combine_axis） | ⭐ | 存在尾轴为1的 broadcast 二元运算 | tune-frontend 局部§4 |
 
 ### 深度调优（tune-swimlane）
 
@@ -57,9 +57,9 @@
 | I-3 | 冗余计算消依赖 | ⭐⭐ | 一对多子图依赖 | tune-incore §3 |
 | I-4 | 尾轴长度优化 | ⭐⭐ | 尾轴 < 32B 对齐 | tune-incore §4 |
 | I-5 | TileOperation 实现检查 | ⭐ | 上述优化无效时 | tune-incore §5 |
-| I-6 | 操作数连续性检查 | ⭐⭐ | TileOperation 输入非连续 | tune-incore 检查流程§1 |
-| I-7 | Gather/Scatter 数据搬运方向优化 | ⭐⭐ | 有 HBM↔L1 搬运瓶颈 | tune-incore 检查流程§2 |
-| I-8 | submit_before_loop 计算与搬运重叠 | ⭐⭐ | 子 loop 未正确提交 | tune-incore 检查流程§3 |
+| I-6 | 操作数连续性检查 | ⭐⭐ | TileOperation 输入非连续 | tune-incore §6 |
+| I-7 | Gather/Scatter 数据搬运方向优化 | ⭐⭐ | 有 HBM↔L1 搬运瓶颈 | tune-incore §7 |
+| I-8 | submit_before_loop 计算与搬运重叠 | ⭐⭐ | 子 loop 未正确提交 | tune-incore §8 |
 | I-9 | valid_shape 尾块零填充避免 | ⭐⭐ | 尾块存在无效零填充计算 | tune-incore §9 |
 
 ---
@@ -280,7 +280,7 @@
 - **优先级**: ⭐ P4
 - **适用条件**: 算子中存在尾轴为1的 tensor 参与 broadcast 二元运算（如 `[M,1] * [M,N]`）
 - **检查方法**: 扫描算子中所有 tensor shape，标记 shape 尾轴为 1 的 tensor，检查其参与的所有二元运算（mul/add/sub/div）另一侧尾轴是否 >1
-- **操作指南**: tune-frontend SKILL.md §4
+- **操作指南**: tune-frontend SKILL.md 局部§4
 - **典型收益**: 0-5%（Cube 密集型算子无收益，Vector 密集型预期更高）
 - **配置方式**: 在 JIT 函数体首行添加 `pypto.experimental.set_operation_options(combine_axis=True)`
 - **约束**:
@@ -485,7 +485,7 @@
 - **优先级**: ⭐⭐ P2
 - **适用条件**: TileOperation 输入 Tensor 内存不连续（非 contiguous）
 - **检查方法**: 在 TileOperation 检查流程中，确认输入 tensor 是否内存连续；不连续会导致额外搬运或性能下降
-- **操作指南**: tune-incore SKILL.md TileOperation 检查流程 §1
+- **操作指南**: tune-incore SKILL.md §6
 - **解决方案**: 使用 `pypto.reshape` 或 `pypto.transpose` 调整非连续输入为连续布局
 - **典型案例**: transpose 后的 tensor 作为下游输入前需确保连续性
 
@@ -495,7 +495,7 @@
 - **优先级**: ⭐⭐ P2
 - **适用条件**: 存在 HBM ↔ L1 数据搬运瓶颈
 - **检查方法**: 分析 TileOperation 的数据流向，区分 Gather（HBM→L1）和 Scatter（L1→HBM）
-- **操作指南**: tune-incore SKILL.md TileOperation 检查流程 §2
+- **操作指南**: tune-incore SKILL.md §7
 - **解决方案**: Gather 方向使用 `set_cube_tile_shapes` 的 block size 控制搬运粒度；Scatter 方向使用 `pypto.assemble` 写回 HBM
 - **典型案例**: 大矩阵分块加载时选择合适的 cube_tile block size 以匹配 L1 容量
 
@@ -505,7 +505,7 @@
 - **优先级**: ⭐⭐ P2
 - **适用条件**: 子 loop 未正确提交，导致计算与搬运无法重叠执行
 - **检查方法**: 检查子 loop 是否使用了 `submit_before_loop=True` 参数
-- **操作指南**: tune-incore SKILL.md TileOperation 检查流程 §3
+- **操作指南**: tune-incore SKILL.md §8
 - **解决方案**: 设置 `submit_before_loop=True` 使子 loop 正确提交，实现计算与数据搬运的时间重叠
 - **典型案例**: 内层多个子 loop 串行执行 → 开启 submit_before_loop 后计算与搬运流水化
 
