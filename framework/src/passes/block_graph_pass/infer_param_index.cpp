@@ -84,7 +84,7 @@ Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function &functi
                 validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));
             }
         }
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_L0C_COPY_UB) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_L0C_COPY_UB && op.GetOpcode() != Opcode::OP_VIEW) {
             outOperand->UpdateDynValidShape(validShape);
         }
     }
@@ -108,7 +108,7 @@ Status InferParamIndex::ResetViewDynValidShape(const Operation& op)
         op.GetOOperands()[0]->UpdateDynValidShape(newDynValidShape);
         return SUCCESS;
     }
-    viewOpAttribute->SetToDynValidShape(std::vector<SymbolicScalar>());
+    viewOpAttribute->SetToDynValidShape(op.GetOOperands()[0]->GetDynValidShape());
     return SUCCESS;
 }
 
