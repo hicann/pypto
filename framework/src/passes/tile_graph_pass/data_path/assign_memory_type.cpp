@@ -1054,11 +1054,6 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function &function) {
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
-            // 内轴 C0 size 检查
-            if (!CheckInnerAxisC0Size(iOperand, oOperand)) {
-                inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
-                continue;
-            }
             // UB -> L1 大搬小：检查输入是否为 UB，且 shape 不满足倍数关系
             if (!IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
@@ -1073,6 +1068,11 @@ bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr &input,
     // 获取内轴（最后一维）的 size
     size_t inputInnerAxis = input->GetShape().back();
     size_t outputInnerAxis = output->GetShape().back();
+    // 如果输入内轴大小等于输出内轴大小，说明内轴未被切分
+    // 这种情况不需要检查对齐，直接返回 true
+    if (inputInnerAxis == outputInnerAxis) {
+        return true;
+    }
     // 获取数据类型大小（字节数）
     int64_t inputDtypeBytes = BytesOf(input->Datatype());
     int64_t outputDtypeBytes = BytesOf(output->Datatype());
