@@ -167,8 +167,14 @@ public:
 
     static void PrepareDevProgArgsCpuInfo(DevAscendProgram* devProg, DeviceLauncherConfig& config)
     {
+        const uint32_t needChangeAicpuNum = 6; // 6 : need change
         uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
-        devProg->devArgs.maxAicpuNum = aiCpuNum;
+        if (devProg->devArgs.archInfo != ArchInfo::DAV_3510) {
+            devProg->devArgs.maxAicpuNum = aiCpuNum;
+        } else {
+            // 8 : when aiCpuNum is 6, max cpu id is 8 at new driver
+            devProg->devArgs.maxAicpuNum = aiCpuNum == needChangeAicpuNum ? 8 : aiCpuNum;
+        }
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
         config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo);

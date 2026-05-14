@@ -28,6 +28,7 @@
 #include "device_trace.h"
 
 constexpr uint32_t LAUNCH_AICPU_NUM = 5;
+constexpr int MAX_RETRIES = 100;
 
 namespace npu::tile_fwk::dynamic {
 struct AicoreLogManager {
@@ -183,6 +184,18 @@ struct DynMachineManager {
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
     }
 
+    int WaitForThreadIdxReady(DeviceArgs* devArgs, int &expected, int &curThreadIdx, std::atomic<int>& dieMaxThreadIdx)
+    {
+        TIMEOUT_CHECK_INIT(devArgs->archInfo, TIMEOUT_20MIN);
+        while (curThreadIdx > expected &&
+            !dieMaxThreadIdx.compare_exchange_strong(expected, curThreadIdx,
+            std::memory_order_release, std::memory_order_relaxed)) {
+            __PYPTO_TIMEOUT_CHECK(ThreadErr::THREAD_CPU_ALLOC_FAILED, return DEVICE_MACHINE_ERROR,
+            "#thread idx update timeout: expected=%d, desired=%d.", expected, curThreadIdx);
+        }
+        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+    }
+
     int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
         int die0MaxCpuid = static_cast<int>(devArgs->maxAicpuNum >> 1);
@@ -191,9 +204,13 @@ struct DynMachineManager {
 
         if (cpu <= die0MaxCpuid) {
             SetCurThreadIdxForDav3510(die0MaxCpuNum, SCHE_THREAD_START_IDX, curThreadIdx, die0ThreadIdx_);
+            int expected = die0MaxThreadIdx_.load(std::memory_order_relaxed);
+            WaitForThreadIdxReady(devArgs, expected, curThreadIdx, die0MaxThreadIdx_);
         } else {
             SetCurThreadIdxForDav3510(
                 die1MaxCpuNum, die0MaxCpuNum + SCHE_THREAD_START_IDX, curThreadIdx, die1ThreadIdx_);
+            int expected = die1MaxThreadIdx_.load(std::memory_order_relaxed);
+            WaitForThreadIdxReady(devArgs, expected, curThreadIdx, die1MaxThreadIdx_);
         }
 
         cpumask_.fetch_or(1 << cpu, std::memory_order_release);
@@ -203,8 +220,29 @@ struct DynMachineManager {
             return ret;
         }
 
+        int expected = threadIdx.load(std::memory_order_relaxed);
+        int desired;
+        int maxRetries = MAX_RETRIES;
+        while (maxRetries-- > 0) {  // 下次循环会重新读取 die0/die1，基于新 expected 计算 desired
+            int die0MaxThreadIdx = die0MaxThreadIdx_.load(std::memory_order_acquire);
+            int die1MaxThreadIdx = die1MaxThreadIdx_.load(std::memory_order_acquire);
+
+            if (die0MaxThreadIdx != die0MaxCpuNum ||
+                die1MaxThreadIdx != static_cast<int>(devArgs->scheCpuNum)) {
+                desired = expected + 1;
+            } else {
+                desired = curThreadIdx;
+            }
+
+            if (desired == expected ||  // CAS 失败后，expected 已更新为最新值
+                threadIdx.compare_exchange_strong(expected, desired,
+                    std::memory_order_release, std::memory_order_relaxed)) {
+                curThreadIdx = desired;
+                break;
+            }
+        }
+
         DEV_INFO("Thread alloc success: physicalCpu=%d, threadIdx=%d.", cpu, curThreadIdx);
-        threadIdx = curThreadIdx;
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
     }
 
@@ -539,6 +577,8 @@ struct DynMachineManager {
     std::atomic<int> ctrlcpuIdx_{0};
     std::atomic<int> die0ThreadIdx_{0};
     std::atomic<int> die1ThreadIdx_{0};
+    std::atomic<int> die0MaxThreadIdx_{-1};
+    std::atomic<int> die1MaxThreadIdx_{-1};
     DeviceSchedMachine schMachine_;
     struct sigaction oriFPEAct_;
     struct sigaction oriBUSAct_;
