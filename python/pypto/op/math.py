@@ -18,7 +18,7 @@ from .._op_wrapper import op_wrapper
 from ..error import PyptoError
 from ..tensor import Tensor
 from ..enum import (
-    DataType, DivAlgorithm, PowAlgorithm, ExpAlgorithm, SqrtAlgorithm,
+    DataType, CastMode, DivAlgorithm, PowAlgorithm, ExpAlgorithm, SqrtAlgorithm,
     RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm, FmodAlgorithm, RemAlgorithm
 )
 from ..symbolic_scalar import SymbolicScalar, SymInt
