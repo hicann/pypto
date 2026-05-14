@@ -18,41 +18,10 @@
 #include <fstream>
 
 #include "codegen_op_litenpu.h"
+#include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
 
 namespace npu::tile_fwk {
-
-using SubstMap = std::map<std::string, std::string>;
-
-static std::string StringSubstitute(std::string const& in, SubstMap const& subst)
-{
-    const char* tokenHead = "${";
-    const char* tokenTail = "}$";
-    constexpr size_t tokenSepLen = 2;
-
-    std::ostringstream out;
-    size_t pos = 0;
-    for (;;) {
-        size_t substPos = in.find(tokenHead, pos);
-        size_t endPos = in.find(tokenTail, substPos);
-        if (endPos == std::string::npos) {
-            break;
-        }
-
-        out.write(&*in.begin() + pos, substPos - pos);
-
-        substPos += tokenSepLen;
-        auto substIter = subst.find(in.substr(substPos, endPos - substPos));
-        if (substIter == subst.end()) {
-            throw std::runtime_error("undefined substitution");
-        }
-
-        out << substIter->second;
-        pos = endPos + tokenSepLen;
-    }
-    out << in.substr(pos, std::string::npos);
-    return out.str();
-}
 
 static std::string GetDtype(DataType dtype)
 {
@@ -170,7 +139,7 @@ void CodeGenLiteNPU::GenCode(
 #endif
 }
 
-void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const
+void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss)
 {
     OperationsViewer operationList = subFunc.Operations(false);
     if (operationList.IsEmpty()) {

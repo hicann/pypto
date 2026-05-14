@@ -20,6 +20,7 @@
 #include <vector>
 #include <cmath>
 #include <variant>
+#include <map>
 
 #include "codegen/codegen_common.h"
 #include "tilefwk/error_code.h"
@@ -208,6 +209,10 @@ std::string PaddingModeToString(Matrix::PaddingMode paddingMode);
 std::string CopyModeToString(Matrix::CopyMode copyMode);
 
 unsigned GetCGThreadNum();
+
+using SubstMap = std::map<std::string, std::string>;
+
+std::string StringSubstitute(std::string const& in, SubstMap const& subst);
 
 } // namespace npu::tile_fwk
 #endif

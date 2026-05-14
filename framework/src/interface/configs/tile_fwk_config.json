@@ -93,7 +93,8 @@
             "soc_version": "",
             "fixed_output_path": false,
             "force_overwrite": true,
-            "codegen_support_tile_tensor": true
+            "codegen_support_tile_tensor": true,
+            "enable_pmu_trace" : false
         },
         "tensor_print": {
             "edgeitems": 3,

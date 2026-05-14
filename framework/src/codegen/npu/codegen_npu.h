@@ -145,7 +145,7 @@ protected:
     void GenInclude(const Function& topFunc, std::ostringstream& oss) const;
     void GenCommentBeforeFuncHeader(Function& subFunc, std::ostringstream& oss) const;
     std::string GenFuncHeader(uint64_t programId, Function& topFunc, CompileInfo& compileInfo) const;
-    virtual void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const = 0;
+    virtual void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) = 0;
     void GenFuncEnd(std::ostringstream& oss) const;
     static std::string GenKernelName(Function& topFunc, uint64_t programId);
 

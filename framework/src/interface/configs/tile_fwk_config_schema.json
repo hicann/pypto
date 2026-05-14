@@ -843,6 +843,13 @@
                                 "zh": "生成的设备侧代码是否支持PTO-ISA指令",
                                 "en": "Whether the generated device-side code supports PTO-ISA instruction"
                             }
+                        },
+                        "enable_pmu_trace": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "是否开启PMU数据采集",
+                                "en": "Whether to enable PMU tracing"
+                            }
                         }
                     }
                 },

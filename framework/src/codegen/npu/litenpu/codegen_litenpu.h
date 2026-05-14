@@ -42,13 +42,13 @@ private:
 
 class CodeGenLiteNPU : public CodeGenNPU {
 public:
-    explicit CodeGenLiteNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx) {};
+    explicit CodeGenLiteNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx){};
     ~CodeGenLiteNPU() override = default;
 
     void GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset) override;
 
 private:
-    void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const override;
+    void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) override;
 
     void BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const override;
 

@@ -15,12 +15,72 @@
 #include "codegen_cloudnpu.h"
 
 #include "codegen_op_cloudnpu.h"
+#include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
 
 namespace npu::tile_fwk {
+const int PMU_ID_FROM_FUNC_HASH_LEN = 3;
 
-void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const
+bool CodeGenCloudNPU::IsEnablePMUTrace() const
 {
+    return platform_ == NPUArch::DAV_3510 && ConfigManager::Instance().GetCodeGenConfig(KEY_ENABLE_PMU_TRACE, false);
+}
+
+std::string CodeGenCloudNPU::GenPMUId(const Function& subFunc) const
+{
+    std::string id;
+    if (ctx.isMainBlock) {
+        id += "1";
+    }
+    std::string funcHash = subFunc.GetFunctionHash();
+    ASSERT(FwkErr::INVALID_FUNCTION, funcHash.size() >= PMU_ID_FROM_FUNC_HASH_LEN)
+        << "funcHash size is less than PMU_ID_FROM_FUNC_HASH_LEN";
+    funcHash = funcHash.substr(funcHash.size() - PMU_ID_FROM_FUNC_HASH_LEN);
+    id += funcHash; // the max value supported by bisheng is 4096
+
+    return id;
+}
+
+void CodeGenCloudNPU::PrintPMUTraceAhead(const Function& subFunc, std::ostringstream& oss)
+{
+    if (!IsEnablePMUTrace()) {
+        return;
+    }
+
+    pmuId_ = GenPMUId(subFunc);
+
+    static const std::string pmuTraceAhead = R"!!!(
+// ------------------- For PMU Trace Start -------------------
+__asm__ volatile("bar.all");
+bisheng::cce::mark_stamp<PIPE_MTE2, ${id_value}$>();
+__asm__ volatile(".rept 100\n\tNOP \n\t.endr");
+bisheng::cce::mark_stamp<PIPE_MTE2, ${id_value}$>();
+// ------------------- For PMU Trace End -------------------
+)!!!";
+    oss << StringSubstitute(pmuTraceAhead, {{"id_value", pmuId_}}) << "\n";
+}
+
+void CodeGenCloudNPU::PrintPMUTraceAfter(std::ostringstream& oss) const
+{
+    if (!IsEnablePMUTrace()) {
+        return;
+    }
+
+    static const std::string pmuTraceAhead = R"!!!(
+// ------------------- For PMU Trace Start -------------------
+__asm__ volatile("bar.all");
+bisheng::cce::mark_stamp<PIPE_MTE3, ${id_value}$>();
+__asm__ volatile(".rept 1000\n\tNOP \n\t.endr");
+bisheng::cce::mark_stamp<PIPE_MTE3, ${id_value}$>();
+// ------------------- For PMU Trace End -------------------
+)!!!";
+    oss << StringSubstitute(pmuTraceAhead, {{"id_value", pmuId_}});
+}
+
+void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss)
+{
+    PrintPMUTraceAhead(subFunc, oss);
+
     OperationsViewer operationList = subFunc.Operations(false);
     if (operationList.IsEmpty()) {
         CODEGEN_LOGW(
@@ -68,6 +128,8 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     }
     floatSpecValMgr.PrintFloatSpecVal(oss);
     oss << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList() << tileOpSourceRegion;
+
+    PrintPMUTraceAfter(oss);
 }
 
 } // namespace npu::tile_fwk

@@ -484,8 +484,6 @@ void CodeGenOp::GetGmParamIdx(const Operation& oper)
             paramLocation[i + iOffset] = oper.GetIOpAttrOffset(i);
         }
     }
-
-    return;
 }
 
 } // namespace npu::tile_fwk

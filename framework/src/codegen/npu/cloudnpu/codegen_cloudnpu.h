@@ -26,7 +26,14 @@ public:
     ~CodeGenCloudNPU() override = default;
 
 private:
-    void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const override;
+    void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) override;
+
+    bool IsEnablePMUTrace() const;
+    void PrintPMUTraceAhead(const Function& subFunc, std::ostringstream& oss);
+    void PrintPMUTraceAfter(std::ostringstream& oss) const;
+    std::string GenPMUId(const Function& subFunc) const;
+
+    std::string pmuId_;
 };
 
 } // namespace npu::tile_fwk
