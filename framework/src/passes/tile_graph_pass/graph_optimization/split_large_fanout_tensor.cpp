@@ -615,12 +615,13 @@ void SplitLargeFanoutTensor::SplitLargeTensor(Function& function)
                 for (size_t i = 0; i < lcmShape.size(); i++) {
                     lcmShape[i] = std::min(lcmShape[i], largeTensor->GetShape()[i]);
                 }
-                // 当lcmTile的每个维度都等于largeTensor时, 仍会聚合到同样大小的Tensor, 因此不做处理
-                if (lcmShape == largeTensor->GetShape()) {
+                // 当lcmTile的每个维度都等于largeTensor时, 仍会聚合到同样大小的Tensor
+                // 因此只要有多于一个生产者就不做处理，当只有一个生产者时该生产者可能冗余，仍需处理
+                if (lcmShape == largeTensor->GetShape() && largeTensor->GetProducers().size() > 1) {
                     APASS_LOG_INFO_F(
                         Elements::Tensor,
                         "Skip SplitLargeTensor for magic[%d] since shape to assemble (lcmShape) equals "
-                        "the largeTensor's shape.",
+                        "the largeTensor's shape and largeTensor has more than one producer assemble.",
                         largeTensor->GetMagic());
                     continue;
                 }
