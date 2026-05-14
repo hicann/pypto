@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from .helpers import build_stateless_op_dir, write_file
 
 SCRIPT = str(Path(__file__).resolve().parents[1] / "pypto_op_lint.py")
@@ -78,20 +80,41 @@ def test_post_bash_non_test_command_silent():
 
 # ── post-bash: 测试命令 → 返回判定结果 ──
 
-def test_post_bash_test_command_returns_verdict():
-    payload = {
-        "tool_input": {"command": "python3 test_demo.py"},
-        "tool_result": {
-            "stdout": "some output [PRECISION_PASS] done",
-            "stderr": "",
-            "exit_code": 0,
+_POST_BASH_PAYLOADS = [
+    pytest.param(
+        {
+            "tool_input": {"command": "python3 test_demo.py"},
+            "tool_response": {"stdout": "[PRECISION_PASS]", "stderr": "", "exitCode": 0},
         },
-    }
+        id="claude_code",
+    ),
+    pytest.param(
+        {
+            "tool_input": {"command": "python3 test_demo.py"},
+            "tool_result": {"stdout": "[PRECISION_PASS]", "stderr": "", "exit_code": 0},
+        },
+        id="opencode",
+    ),
+]
+
+
+@pytest.mark.parametrize("payload", _POST_BASH_PAYLOADS)
+def test_post_bash_test_command_returns_verdict(payload):
     rc, out = _run_hook("post-bash", payload)
     assert rc == 0
     data = json.loads(out)
     ctx = data["hookSpecificOutput"].get("additionalContext", "")
     assert "precision_pass" in ctx
+
+
+# ── post-bash: 缺失工具返回结果 → 报错但不阻断 ──
+
+def test_post_bash_missing_tool_result_reports_error():
+    rc, out = _run_hook("post-bash", {"tool_input": {"command": "python3 test_demo.py"}})
+    assert rc == 0
+    data = json.loads(out)
+    ctx = data["hookSpecificOutput"].get("additionalContext", "")
+    assert "无法解析工具返回结果" in ctx
 
 
 # ── pre-edit-backup: 非 impl 文件 → 无输出 ──

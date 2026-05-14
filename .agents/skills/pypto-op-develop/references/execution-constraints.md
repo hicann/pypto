@@ -20,6 +20,7 @@
 
 - 构造顺序固定为 `pypto.Element(dtype, value)`。
 - 需要固定标量 dtype 时，显式使用 `Element`。
+- `pypto.div`、`pypto.mul`、`pypto.add`、`pypto.sub` 等算术 API 不支持 `pypto.Element` 作为标量参数，传入会双重包装报错。这些 API 已内置 `float`/`int`→`Tensor` 类型转换，直接使用 Python 常量即可。
 
 ### `pypto.SymbolicScalar`
 
@@ -130,6 +131,7 @@
 - `transpose`：4D 只支持部分轴交换组合，5D 只支持 `(3,4)`。
 - `view`：`offsets` 和 `valid_shape` 必须落在原 Tensor 的 shape 范围内。
 - `view`：当有效 shape 依赖别的 Tensor 标识、框架无法自动推导时，必须显式传 `valid_shape`。
+- `reshape`：含动态维度时框架无法自动推导有效形状，必须显式传 `valid_shape`。
 - `unsqueeze`：返回共享数据的 view；`dim` 必须满足 `[-input.dim-1, input.dim]`。
 - `concat`：输入 tensor 数量要求 `2 <= len(tensors) <= 128`；除拼接轴外其余维度必须完全一致。
 - `clone`：复制出的 Tensor 与输入保持同 shape、同 dtype。
@@ -285,7 +287,7 @@ q_2d = q   # 已经是 2D，不需要 reshape
 4. 把依赖 Python 标量隐式 dtype 映射的写法改成显式 `Element` 或显式 dtype 转换。
 5. 把多轴广播改写成文档支持的单轴广播或等价拆分写法。
 6. 检查 TileShape 维度数、最后一维对齐和相关算子的 Tile 约束，再执行编译。
-7. 无法自动推导动态 `view` 的 `valid_shape` 时，显式传入 `valid_shape`。
+7. 涉及动态轴的 `pypto.view` / `pypto.reshape` 必须显式传入 `valid_shape`。
 8. 避免同一 Tensor 在同一图里既被读取又被 `assemble` 回写。
 9. 多动态轴算子必须采用 "2D reshape + 嵌套 loop + concrete tile" 模式（见第 5 节），不要尝试在 4D DYN tensor 上直接 matmul。
 10. `pypto.view` 的 `shape` 参数只接受 Python int；用 SymbolicScalar 做 offset 和 valid_shape，不要混入 shape。

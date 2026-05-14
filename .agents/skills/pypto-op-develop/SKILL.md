@@ -56,7 +56,8 @@ description: 当需要编写 PyPTO 算子实现时使用此 skill。基于需求
 | [templates/test-template.py](templates/test-template.py) | test 文件固定模板 | 生成 test_{op}.py 时读取 |
 | [templates/test_cases-template.json](templates/test_cases-template.json) | test_cases.json 固定模板 | 生成 test_cases.json 时读取 |
 | [templates/impl-template.py](templates/impl-template.py) | impl 文件固定模板 | 生成 {op}_impl.py 时读取 |
-| [references/execution-constraints.md](references/execution-constraints.md) | PyPTO 开发执行约束清单 | 进入实现阶段前必读；编码与自检时反复对照 |
+| [templates/README-template.md](templates/README-template.md) | README.md 固定模板 | 生成 README.md 时读取 |
+| [references/execution-constraints.md](references/execution-constraints.md) | PyPTO 开发执行约束清单（含内置 API 优先级标注） | 进入实现阶段前必读；编码与自检时反复对照 |
 | [references/error-code-troubleshooting.md](references/error-code-troubleshooting.md) | 错误码排查流程与常见错误码速查 | 验证失败时按流程排查 |
 | [scripts/environment_prepare.sh](scripts/environment_prepare.sh) | 环境初始化脚本 | 环境准备阶段按需执行 |
 | [scripts/list_idle_chip_ids.sh](scripts/list_idle_chip_ids.sh) | 输出当前可用 chip id 列表（兼容 910B / 910C） | 设置 `TILE_FWK_DEVICE_ID` 前执行 |
@@ -111,6 +112,7 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 - `templates/impl-template.py` — impl 文件模板
 - `templates/test-template.py` — test 文件模板
 - `templates/test_cases-template.json` — test_cases.json 模板
+- `templates/README-template.md` — README 文件模板
 
 **生成顺序**：
 1. 根据输入信息，先梳理 API 映射、tiling 策略、loop 结构，确认可行后再进入实现
@@ -195,25 +197,25 @@ python test_{op}.py --list       # 列出所有用例
 
 #### 生成 README.md
 
-必须包含：
-- 中文说明
+基于固定模板 `templates/README-template.md` 生成，面向算子调用方。必须包含：
 - 算子概述与公式
+- 接口与参数说明（含各参数的 dtype、shape 规格）
+- 使用示例（针对 wrapper 接口，可直接运行）
+- 约束条件（仅写调用方需知的限制，**禁止**贴入 Tiling/Loop/API 映射等实现细节）
 - 目录结构
 - 运行方式
-- 验证入口
-- 已知限制
 
 #### Design 到代码文件的映射
 
 | design 章节 | `test_cases.json` | `test_{op}.py` | `{op}_impl.py` | `README.md` |
 |------------|-------------------|----------------|----------------|-------------|
 | 概述 | 间接引用 | 间接引用 | 否 | 是 |
-| API 映射设计 | 否 | 否 | 是 | 可摘要 |
-| 数据规格设计 | 是 | 是 | 是 | 可摘要 |
-| Tiling 策略 | 否 | 否 | 是 | 可摘要 |
-| Loop 结构设计 | 否 | 否 | 是 | 可摘要 |
+| API 映射设计 | 否 | 否 | 是 | 否 |
+| 数据规格设计 | 是 | 是 | 是 | 是 |
+| Tiling 策略 | 否 | 否 | 是 | 否 |
+| Loop 结构设计 | 否 | 否 | 是 | 否 |
 | 验证方案 | 是 | 是 | 否 | 是 |
-| 性能指标 | 部分 | 部分 | 部分 | 是 |
+| 性能指标 | 部分 | 部分 | 部分 | 可摘要 |
 | 交付件清单 | 是 | 是 | 是 | 是 |
 
 ---
@@ -263,13 +265,13 @@ python3 test_{op}.py
 2. **禁止无中生有 op**：实现时只能使用 PyPTO 已支持的 API，遇到缺失能力应回退到 API 探索或设计阶段重新确认。
 3. **优先使用 `@pypto.frontend.jit` 写法**：选择最新的非 wrapper 包装写法，参考 `docs/api/config/pypto-frontend-jit.md`，与现有示例和文档保持一致。
 4. **golden / impl / test 必须职责分离**：不要把 golden 逻辑、实现逻辑和测试逻辑混写到同一个文件中。
-5. **动态数据范围使用 valid_shape**：当最后一块数据量可能小于固定块大小时，`pypto.view` / `pypto.reshape` 中必须指定 `valid_shape`。
+5. **动态轴涉及 `pypto.view` / `pypto.reshape` 时必须指定 `valid_shape`**：含动态维度的 tensor 经 view/reshape 后框架无法推导有效形状，**必须**显式传入 `valid_shape`；尾块场景同理。**禁止**将动态轴改为静态轴来规避此约束。
 6. **动态循环边界使用 unroll_list**：当循环次数为动态值时，需要使用 `unroll_list`；多层循环嵌套时，最内层使用 `unroll_list`。
 7. **matmul / cube 场景**：必须确认 `set_cube_tile_shapes(...)` 已正确配置。
 8. **输出写回必须显式完成**：使用 `output[:] = ...`、`output.move(...)` 或 `pypto.assemble(..., output)`；不要写 `output = ...`。
 9. **动态轴必须显式标注**：所有动态 shape 输入和输出都必须在 Tensor 注解中标成 `pypto.DYNAMIC` / `pypto.DYN`。**禁止** `pypto.Tensor()` / `pypto.Tensor([], dtype)` 这类空注解写法（门禁 OL31 会直接判 FAIL）；静态轴写常量整数，动态轴写 `pypto.DYNAMIC`，不可混淆。
 10. **声明动态轴时 kernel 必须含真实 `pypto.loop`**：DESIGN.md `dynamic_axes` 非空时，JIT 函数内必须存在遍历动态轴的 `pypto.loop(...)` 调用，trip count 必须来自动态轴（`tensor.shape[i]`、函数参数或其符号表达式）；**禁止**用 `pypto.loop(1)`、`pypto.loop(常量)` 等空循环或注释里写 `pypto.loop` 来糊弄门禁 OL43，门禁正向校验为 FAIL。
-11. **Element 用于固定标量 dtype**：当标量参与计算且 dtype 不能依赖隐式映射时，显式使用 `pypto.Element(dtype, value)`。
+11. **Element 用于固定标量 dtype**：当标量参与计算且 dtype 不能依赖隐式映射时，显式使用 `pypto.Element(dtype, value)`。注意：`pypto.div`、`pypto.mul`、`pypto.add`、`pypto.sub` 等内置算术 API 已内置 `float`/`int`→`Tensor` 转换，标量参数直接传 Python 常量，**禁止**传入 `pypto.Element`（会双重包装报错）。
 12. **避免同图内回环读写**：同一 Tensor 不要在同一图里既 `view` 读取又 `assemble` 回写。
 13. 如果设计方案中已有 tiling / loop 约束，编码时优先遵循设计方案，不要临时拍脑袋改写。
 
@@ -348,3 +350,5 @@ if __name__ == "__main__":
 4. 测试包含 `[PRECISION_PASS]` / `[PRECISION_FAIL]` 标记逻辑，无其他功能问题
 5. 验证失败时已确认是否有错误码：有则走错误码流程，无则跳过
 6. `{op}_impl.py` 已按 `references/execution-constraints.md` 自检：输出写回、动态轴、TileShape、valid_shape、Element、loop/cond、assemble 回环均已检查
+7. 已对照 `execution-constraints.md` 第 4 节检查每个计算模块：标注"优先使用内置 API"的条目已命中并优先使用；未命中或 dtype 不兼容的已在代码注释中说明
+8. README 面向调用方，包含接口说明、参数 dtype/shape 规格、可直接运行的使用示例；未混入 Tiling/Loop/API 映射等实现细节

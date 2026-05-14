@@ -127,9 +127,20 @@ def hook_post_bash() -> int:
     if not TEST_COMMAND_PATTERN.search(command):
         return 0
 
-    stdout = data.get("tool_result", {}).get("stdout", "")
-    stderr = data.get("tool_result", {}).get("stderr", "")
-    exit_code = data.get("tool_result", {}).get("exit_code", 0)
+    tr = data.get("tool_response") or data.get("tool_result")
+    if tr is None:
+        _output_hook_json(
+            "PostToolUse",
+            additionalContext=(
+                "[pypto-op-lint] 无法解析工具返回结果：payload 中未找到 "
+                "tool_response 或 tool_result 字段。"
+                "请检查 Claude Code / OpenCode 版本是否兼容。"
+            ),
+        )
+        return 0
+    stdout = tr.get("stdout", "")
+    stderr = tr.get("stderr", "")
+    exit_code = tr.get("exit_code") if "exit_code" in tr else tr.get("exitCode", 0)
 
     verdict = _parse_verdict(stdout, stderr, exit_code)
     detail = _verdict_detail(verdict)
