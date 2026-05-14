@@ -184,8 +184,10 @@ void UpdateReduceStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
 void UpdateElewiseStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
 {
     auto outputTensor = op->GetOOperands()[0];
+    bool multiOutput = op->GetOOperands().size() > 1;
     for (auto inputTensor : op->GetIOperands()) {
-        if (tensorStatus[inputTensor] == AxisReorderStatus::UNKNOWN && inputTensor->GetShape().back() == 1) {
+        if (tensorStatus[inputTensor] == AxisReorderStatus::UNKNOWN && inputTensor->GetShape().back() == 1 &&
+            !multiOutput) {
             tensorStatus[inputTensor] = AxisReorderStatus::ENABLE;
         }
     }
@@ -199,6 +201,10 @@ void UpdateElewiseStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axi
             tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
             return;
         }
+    }
+    if (multiOutput) {
+        tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
+        return;
     }
     tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
 }

@@ -276,10 +276,7 @@ void CodegenPreproc::FixExpandDimForAxisCombine(Operation& op, int dimSize) cons
 
 inline bool SkipInputCombineOps3510(Operation& op)
 {
-    const std::unordered_set<Opcode> skipInputCombineOps3510 = {
-        Opcode::OP_ADD,     Opcode::OP_SUB,     Opcode::OP_MUL,         Opcode::OP_DIV,
-        Opcode::OP_MAXIMUM, Opcode::OP_MINIMUM, Opcode::OP_EXPANDEXPDIF};
-    if (skipInputCombineOps3510.count(op.GetOpcode()) == 0) {
+    if (SUPPORT_BRC_INLINE.count(op.GetOpcode()) == 0) {
         return false;
     }
     auto lhs = op.GetIOperands()[0];

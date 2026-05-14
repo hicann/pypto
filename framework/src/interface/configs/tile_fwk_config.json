@@ -49,7 +49,7 @@
     },
     "operation": {
         "force_combine_axis" : false,
-        "combine_axis" : false
+        "combine_axis" : true
     },
     "global": {
         "platform": {

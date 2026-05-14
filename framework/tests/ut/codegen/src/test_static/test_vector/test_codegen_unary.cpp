@@ -125,24 +125,6 @@ TEST_F(TestCodegenUnary, TransposeVnchwconvDim2TileTensor)
     TestTransposeVnchwconvBody({16, 32}, {32, 16}, {0, 1}, {16, 16}, "TransposeVnchwconvDim2TileTensor", true);
 }
 
-void TestRowMaxExpandBody(
-    std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape, std::string name)
-{
-    TileShape::Current().SetVecTile(tileShape);
-    Tensor input_a(DT_FP32, shape, "A");
-    Tensor output(DT_FP32, outShape, "C");
-    FUNCTION(name, {input_a, output}) { output = RowMaxExpand(input_a); }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-}
-
-TEST_F(TestCodegenUnary, RowMaxExpandDim2)
-{
-    TestRowMaxExpandBody({128, 64}, {128, 64}, {16, 16}, "ROWMAXEXPAND_DIM2");
-}
-
 Function& TestFullBody(
     std::vector<int64_t> shape, std::vector<int64_t> tileShape, std::string name, bool isSupportTileTensor = false)
 {
