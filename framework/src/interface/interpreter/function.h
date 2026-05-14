@@ -105,7 +105,7 @@ struct FunctionFrame {
     const Operation* callop;
     const std::shared_ptr<CallOpAttribute> callopAttr;
     std::shared_ptr<FunctionIODataPair> inoutDataPair;
-    std::unordered_map<int, std::shared_ptr<RawTensorData>> rawTensorDataDict;
+    std::unordered_map<int, std::shared_ptr<StorageData>> rawTensorDataDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<RawTensor>> spillRawTensorDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensorData>> tensorDataViewDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::string> tensorDataBinDict;
@@ -261,7 +261,7 @@ struct FunctionFrame {
             ASSERT(ControlFlowScene::FUNC_TENSOR_DATAVIEW_MISMATCH, tensorDataViewDict[tensor] == dataView);
         } else {
             DoAddTensorDataView(tensor, dataView);
-            DoAddRawTensorDataView(tensor->GetRawTensor(), dataView->GetData());
+            DoAddRawTensorDataView(tensor->GetRawTensor(), dataView->GetData()->GetRawData());
         }
     }
     void AddDataViewList(
@@ -302,7 +302,8 @@ struct FunctionFrame {
         }
         std::shared_ptr<RawTensorData> rawData;
         if (rawTensorDataDict.count(raw->GetRawMagic())) {
-            rawData = rawTensorDataDict[raw->GetRawMagic()];
+            auto existingRawData = rawTensorDataDict[raw->GetRawMagic()];
+            rawData = std::make_shared<RawTensorData>(existingRawData, dtype, rawShape);
         } else {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
             rawData = std::make_shared<RawTensorData>(dtype, rawShape);
@@ -314,7 +315,7 @@ struct FunctionFrame {
                 }
             }
         }
-        DoAddRawTensorDataView(tensor->GetRawTensor(), rawData);
+        DoAddRawTensorDataView(tensor->GetRawTensor(), rawData->GetRawData());
         std::shared_ptr<LogicalTensorData> view =
             std::make_shared<LogicalTensorData>(rawData, tensor->GetShape(), validShape, offset);
         view->SetIsSpilled(isSpilled);
@@ -413,7 +414,7 @@ private:
         ASSERT(ControlFlowScene::FUNC_TENSOR_DATAVIEW_DUP, !tensorDataViewDict.count(tensor));
         tensorDataViewDict[tensor] = dataView;
     }
-    void DoAddRawTensorDataView(const std::shared_ptr<RawTensor>& rawTensor, const std::shared_ptr<RawTensorData>& data)
+    void DoAddRawTensorDataView(const std::shared_ptr<RawTensor>& rawTensor, const std::shared_ptr<StorageData>& data)
     {
         rawTensorDataDict[rawTensor->GetRawMagic()] = data;
     }

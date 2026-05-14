@@ -2657,3 +2657,40 @@ TEST_F(DynamicOpsTest, Range)
     });
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
+
+TEST_F(DynamicOpsTest, ReshapeRankChangeFp32)
+{
+    std::string logOutput = CaptureLogFileAndEcho([]() {
+        config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+        config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+        Tensor inp(DT_FP32, {2, 2, 4}, "inp");
+        Tensor out(DT_FP32, {16}, "out");
+
+        std::vector<float> vals(16);
+        for (int k = 0; k < 16; ++k) {
+            vals[k] = static_cast<float>(k);
+        }
+
+        ProgramData::GetInstance().AppendInputs({
+            RawTensorData::CreateTensor<float>(inp, vals),
+        });
+        ProgramData::GetInstance().AppendOutputs({
+            RawTensorData::CreateConstantTensor<float>(out, 0.0f),
+        });
+        ProgramData::GetInstance().AppendGoldens({
+            RawTensorData::CreateTensor<float>(out, vals),
+        });
+
+        FUNCTION("main", {inp}, {out})
+        {
+            LOOP("L0", FunctionType::DYNAMIC_LOOP, j, LoopRange(1))
+            {
+                (void)j;
+                auto vin = View(inp, {2, 2, 4}, {0, 0, 0});
+                out = Reshape(vin, {16});
+            }
+        }
+    });
+    EXPECT_NO_VERIFY_FAILED(logOutput);
+}

@@ -59,7 +59,9 @@ public:
     void deallocate(T* p, std::size_t) noexcept { std::free(p); }
 };
 
-struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>> {
+using StorageData = std::vector<uint8_t, AlignedAllocator<uint8_t, 64>>;
+
+struct RawTensorData {
     static int64_t Numel(const std::vector<int64_t>& shape)
     {
         if (shape.empty()) {
@@ -127,24 +129,45 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
             auto packedShape = PackedShapeFromLogical(shape_, dataType_);
             bytes = static_cast<size_t>(Numel(packedShape));
         } else {
-            // Other sub-byte (e.g. INT4): logical element count, two per byte, odd rounds up.
             bytes = static_cast<size_t>((nelem + 1) / 2);
         }
-        this->resize(bytes);
+        data_ = std::make_shared<StorageData>();
+        data_->resize(bytes);
     }
+
+    RawTensorData(std::shared_ptr<StorageData> data,
+                  DataType dataType,
+                  const std::vector<int64_t>& shape)
+        : data_(data),
+          dataType_(dataType),
+          shape_(shape),
+          stride_(ShapeToStride(shape)),
+          nelem(Numel(shape)),
+          elemSize_(GetDataSize(dataType))
+    {}
 
     const Shape& GetShape() const { return shape_; }
     const Stride& GetStride() const { return stride_; }
     DataType GetDataType() const { return dataType_; }
     int64_t GetSize() const { return nelem; }
     int64_t GetElementSize() const { return elemSize_; }
+    std::shared_ptr<StorageData> GetRawData() const { return data_; }
+    uint8_t* data() { return data_->data(); }
+    const uint8_t* data() const { return data_->data(); }
+    size_t size() const { return data_->size(); }
+    void resize(size_t n) { data_->resize(n); }
+    uint8_t& at(size_t pos) { return data_->at(pos); }
+    const uint8_t& at(size_t pos) const { return data_->at(pos); }
+    void reserve(size_t n) { data_->reserve(n); }
+    size_t capacity() const { return data_->capacity(); }
+    bool empty() const { return data_->empty(); }
 
     template <typename T>
     const T& Get(int index) const
     {
         ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, elemSize_ > 0)
             << "Get() is not supported for packed sub-byte dtypes (use raw bytes).";
-        const void* addr = &this->data()[static_cast<size_t>(index) * static_cast<size_t>(elemSize_)];
+        const void* addr = &data_->data()[static_cast<size_t>(index) * static_cast<size_t>(elemSize_)];
         return *static_cast<const T*>(addr);
     }
 
@@ -153,7 +176,7 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
     {
         ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, elemSize_ > 0)
             << "Get() is not supported for packed sub-byte dtypes (use raw bytes).";
-        void* addr = &this->data()[static_cast<size_t>(index) * static_cast<size_t>(elemSize_)];
+        void* addr = &data_->data()[static_cast<size_t>(index) * static_cast<size_t>(elemSize_)];
         return *static_cast<T*>(addr);
     }
 
@@ -263,7 +286,7 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         }
     }
 
-    template <typename T>
+template <typename T>
     static std::shared_ptr<RawTensorData> CreateConstantTensor(const Tensor& t, T value)
     {
         auto tensorData = std::make_shared<RawTensorData>(t.GetDataType(), t.GetShape());
@@ -339,7 +362,7 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         if (!ofile) {
             INTERPRETER_LOGE_FULL(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed!!!!", path.c_str());
         }
-        ofile.write(reinterpret_cast<const char*>(data()), size());
+        ofile.write(reinterpret_cast<const char*>(data_->data()), data_->size());
         ofile.close();
     }
 
@@ -371,16 +394,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         isShmTensor_ = true;
     }
 
-    void UpdateRawTensorData(DataType dType, Shape shape) {
-        dataType_ = dType;
-        shape_ = shape;
-        stride_ = ShapeToStride(shape);
-        nelem = Numel(shape);
-        elemSize_ = GetDataSize(dType);
-    }
-
 private:
     uint8_t* devPtr_{nullptr};
+    std::shared_ptr<StorageData> data_;
     DataType dataType_;
     Shape shape_;
     Stride stride_;

@@ -81,10 +81,7 @@ void ExecuteOpViewType(ExecuteOperationContext* ctx)
     auto inData = iop->GetData();
     auto outData = oop->GetData();
 
-    if (inData == outData) {
-        auto rawShape = ctx->op->GetOOperands()[0]->GetRawTensor()->GetRawShape();
-        auto dType = ctx->op->GetOOperands()[0]->GetRawTensor()->GetDataType();
-        outData->UpdateRawTensorData(dType, rawShape);
+    if (inData->GetRawData() == outData->GetRawData()) {
         return;
     }
 
