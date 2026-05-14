@@ -1259,5 +1259,182 @@ TEST_F(GraphPartitionTest, TestViewAssembleScopeId)
     EXPECT_EQ(G.GetOp("v2")->GetScopeId(), 1);
 }
 
+/**
+ * Test UB-to-UB VIEW with dynamic offset should not be mergeable
+ *
+ * Graph structure:
+ *   input_ub[MEM_UB, (32, 16)] --> VIEW[fromOffset=(0,0), dynOffset=(dynamic_offset_dim0, 0)] --> output_ub[MEM_UB,
+ * (32, 16)]
+ *
+ * Expected behavior:
+ *   Node containing UB-to-UB VIEW with dynamic offset should be marked as not mergeable
+ */
+TEST_F(GraphPartitionTest, TestUbToUbViewWithDynOffsetNotMergeable)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape = {32, 16};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB};
+    std::vector<std::string> tensorNames{"inputUb", "outputUb"};
+
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, shape, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<std::vector<std::string>> iOperands{{"inputUb"}};
+    std::vector<std::vector<std::string>> oOperands{{"outputUb"}};
+    std::vector<Opcode> opCodes{Opcode::OP_VIEW};
+    std::vector<std::string> opNames{"viewOp"};
+    EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
+
+    auto viewOp = G.GetOp("viewOp");
+    ASSERT_NE(viewOp, nullptr);
+
+    std::vector<SymbolicScalar> dynOffset = {SymbolicScalar("dynamicOffsetDim0"), SymbolicScalar(0)};
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, dynOffset, std::vector<SymbolicScalar>{SymbolicScalar(32), SymbolicScalar(16)});
+    viewOp->SetOpAttribute(viewAttr);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(10, 10, false), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    int opMagic = viewOp->GetOpMagic();
+    int opIdx = partitioner.operationInfo_->magic2Idx_[opMagic];
+    int nodeIdx = partitioner.superNodeInfo_->op2Node_[opIdx];
+    bool mergeable = partitioner.superNodeInfo_->GetNodeMergeable(partitioner.operationInfo_, nodeIdx);
+
+    EXPECT_EQ(mergeable, false);
+}
+
+/**
+ * Test UB-to-UB VIEW without dynamic offset should be mergeable
+ *
+ * Graph structure:
+ *   inputUb[MEM_UB, (32, 16)] --> VIEW[fromOffset=(0,0), dynOffset=empty] --> outputUb[MEM_UB, (32, 16)]
+ *
+ * Expected behavior:
+ *   Node containing UB-to-UB VIEW without dynamic offset should be marked as mergeable
+ */
+TEST_F(GraphPartitionTest, TestUbToUbViewWithoutDynOffsetMergeable)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape = {32, 16};
+    std::vector<std::string> tensorNames{"inputUb", "outputUb"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB};
+
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, shape, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_VIEW};
+    std::vector<std::vector<std::string>> iOperands{{"inputUb"}};
+    std::vector<std::vector<std::string>> oOperands{{"outputUb"}};
+    std::vector<std::string> opNames{"viewOp"};
+    EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
+
+    auto viewOp = G.GetOp("viewOp");
+    ASSERT_NE(viewOp, nullptr);
+
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{},
+        std::vector<SymbolicScalar>{SymbolicScalar(32), SymbolicScalar(16)});
+    viewOp->SetOpAttribute(viewAttr);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(10, 10, false), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    int opMagic = viewOp->GetOpMagic();
+    int opIdx = partitioner.operationInfo_->magic2Idx_[opMagic];
+    int nodeIdx = partitioner.superNodeInfo_->op2Node_[opIdx];
+    bool mergeable = partitioner.superNodeInfo_->GetNodeMergeable(partitioner.operationInfo_, nodeIdx);
+
+    EXPECT_EQ(mergeable, true);
+}
+
+/**
+ * Test UB-to-UB ASSEMBLE with dynamic offset should not be mergeable
+ *
+ * Graph structure:
+ *   inputUb[MEM_UB, (32, 16)] --> ASSEMBLE[toOffset=(0,0), toDynOffset=(dynamicOffsetDim0,0)] --> outputUb[MEM_UB, (32, 16)]
+ *
+ * Expected behavior:
+ *   Node containing UB-to-UB ASSEMBLE with dynamic offset should be marked as not mergeable
+ */
+TEST_F(GraphPartitionTest, TestUbToUbAssembleWithDynOffsetNotMergeable)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape = {32, 16};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB};
+    std::vector<std::string> tensorNames{"inputUb", "outputUb"};
+
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, shape, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<std::vector<std::string>> iOperands{{"inputUb"}};
+    std::vector<std::vector<std::string>> oOperands{{"outputUb"}};
+    std::vector<Opcode> opCodes{Opcode::OP_ASSEMBLE};
+    std::vector<std::string> opNames{"assembleOp"};
+    EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
+
+    auto assembleOp = G.GetOp("assembleOp");
+    ASSERT_NE(assembleOp, nullptr);
+
+    std::vector<SymbolicScalar> toDynOffset = {SymbolicScalar("dynamicOffsetDim0"), SymbolicScalar(0)};
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}, toDynOffset);
+    assembleOp->SetOpAttribute(assembleAttr);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(10, 10, false), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    int opMagic = assembleOp->GetOpMagic();
+    int opIdx = partitioner.operationInfo_->magic2Idx_[opMagic];
+    int nodeIdx = partitioner.superNodeInfo_->op2Node_[opIdx];
+    bool mergeable = partitioner.superNodeInfo_->GetNodeMergeable(partitioner.operationInfo_, nodeIdx);
+
+    EXPECT_EQ(mergeable, false);
+}
+
+/**
+ * Test UB-to-UB ASSEMBLE without dynamic offset should be mergeable
+ *
+ * Graph structure:
+ *   inputUb[MEM_UB, (32, 16)] --> ASSEMBLE[toOffset=(0,0), toDynOffset=empty] --> outputUb[MEM_UB, (32, 16)]
+ *
+ * Expected behavior:
+ *   Node containing UB-to-UB ASSEMBLE without dynamic offset should be marked as mergeable
+ */
+TEST_F(GraphPartitionTest, TestUbToUbAssembleWithoutDynOffsetMergeable)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape = {32, 16};
+    std::vector<std::string> tensorNames{"inputUb", "outputUb"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB};
+
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, shape, tensorMemTypes, tensorNames, 0), true);
+
+    std::vector<Opcode> opCodes{Opcode::OP_ASSEMBLE};
+    std::vector<std::vector<std::string>> iOperands{{"inputUb"}};
+    std::vector<std::vector<std::string>> oOperands{{"outputUb"}};
+    std::vector<std::string> opNames{"assembleOp"};
+    EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
+
+    auto assembleOp = G.GetOp("assembleOp");
+    ASSERT_NE(assembleOp, nullptr);
+
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{});
+    assembleOp->SetOpAttribute(assembleAttr);
+
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(10, 10, false), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    int opMagic = assembleOp->GetOpMagic();
+    int opIdx = partitioner.operationInfo_->magic2Idx_[opMagic];
+    int nodeIdx = partitioner.superNodeInfo_->op2Node_[opIdx];
+    bool mergeable = partitioner.superNodeInfo_->GetNodeMergeable(partitioner.operationInfo_, nodeIdx);
+
+    EXPECT_EQ(mergeable, true);
+}
 } // namespace tile_fwk
 } // namespace npu

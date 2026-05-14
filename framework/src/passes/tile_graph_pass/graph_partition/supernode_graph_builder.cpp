@@ -324,6 +324,55 @@ Status NodeGraphInfo::Build(
     return SUCCESS;
 }
 
+bool NodeGraphInfo::CheckScopeNotMergeable(Operation& op)
+{
+    return op.GetScopeId() != -1 && !op.GetAllowCrossScopeMerge();
+}
+
+bool NodeGraphInfo::CheckUbToUbWithDynOffsetNotMergeable(Operation& op)
+{
+    if (op.GetOpcode() != Opcode::OP_VIEW && 
+        op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+        return false;
+    }
+
+    auto input = op.GetIOperands().empty() ? nullptr : op.GetIOperands()[0];
+    auto output = op.GetOOperands().empty() ? nullptr : op.GetOOperands()[0];
+
+    if (!input || !output) {
+        return false;
+    }
+
+    bool isUbToUb = input->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+                    output->GetMemoryTypeOriginal() == MemoryType::MEM_UB;
+
+    if (!isUbToUb) {
+        return false;
+    }
+
+    bool hasDynOffset = false;
+    if (op.GetOpcode() == Opcode::OP_VIEW) {
+        auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+        if (viewAttr && !viewAttr->GetFromDynOffset().empty()) {
+            hasDynOffset = true;
+        }
+    } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
+        if (assembleAttr && !assembleAttr->GetToDynOffset().empty()) {
+            hasDynOffset = true;
+        }
+    }
+
+    if (!hasDynOffset) {
+        return false;
+    }
+
+    APASS_LOG_INFO_F(Elements::Operation,
+        "Node contains UB-to-UB %s[%d] with dynamic offset, marking as not mergeable.",
+        op.GetOpcodeStr().c_str(), op.GetOpMagic());
+    return true;
+}
+
 bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> operationGraphInfo, int32_t nodeIdx)
 {
     bool isMergeable =
@@ -332,11 +381,19 @@ bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> o
           ((nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].size() > 1) ||
            (nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].empty()) ||
            (nodeInGraph_[nodeIdx].empty() && nodeOutGraph_[nodeIdx].size() > 1)));
+
     for (auto opIdx : node2Op_[nodeIdx]) {
-        if (operationGraphInfo->opList_[opIdx]->GetScopeId() != -1 && !operationGraphInfo->opList_[opIdx]->GetAllowCrossScopeMerge()) {
+        auto& op = operationGraphInfo->opList_[opIdx];
+        
+        if (CheckScopeNotMergeable(*op)) {
+            isMergeable = false;
+        }
+
+        if (CheckUbToUbWithDynOffsetNotMergeable(*op)) {
             isMergeable = false;
         }
     }
+
     return isMergeable;
 }
 

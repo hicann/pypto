@@ -47,6 +47,8 @@ public:
     Status BuildInOutGraph(const std::shared_ptr<OperationGraphInfo> operationGraphInfo);
     void SetNodeCoreTypeAndMergeable(const std::shared_ptr<OperationGraphInfo> operationGraphInfo, bool markIsCube);
     void BuildNodeMapping(const std::shared_ptr<OperationGraphInfo> operationGraphInfo);
+    bool CheckScopeNotMergeable(Operation& op);
+    bool CheckUbToUbWithDynOffsetNotMergeable(Operation& op);
     Status MergeSrcToDstIsland(
         const std::shared_ptr<OperationGraphInfo> operationGraphInfo, std::vector<int32_t>& parent, int32_t src,
         int32_t dst);
