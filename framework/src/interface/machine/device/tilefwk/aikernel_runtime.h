@@ -68,7 +68,7 @@ __always_inline void WaitAicoreStart([[maybe_unused]] npu::tile_fwk::DevStartArg
 #endif
 
 #define RuntimeGetInputShapeDimSize(input) ((input)->shape.dimSize)
-#define RuntimeGetInputShapeDim(input, n) ((input)->shape.dim[(n)])
+#define RuntimeGetInputShapeDim(input, n) (uint64_t)((input)->shape.dim[(n)])
 #define RUNTIME_GetInputShapeDimSize(inputIndex) \
     RuntimeGetInputShapeDimSize(&(RuntimeGetStartArgs())->devTensorList[(inputIndex)])
 #define RUNTIME_GetInputShapeDim(inputIndex, n) \
