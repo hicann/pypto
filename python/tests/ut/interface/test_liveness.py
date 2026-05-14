@@ -99,8 +99,8 @@ def kernel(a, result):
 
     assert 'b' in result.var_info
     b_info = result.var_info['b']
-    assert b_info.needs_scope_lift == True
-    assert len(result.scope_lift_suggestions) > 0
+    delete_scope = result.scope_map.get(b_info.delete_scope_id)
+    assert delete_scope.scope_type == 'root'
 
 
 def test_all_vars_recorded():

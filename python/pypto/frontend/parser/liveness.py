@@ -58,6 +58,27 @@ class Scope:
     entry_stmt_id: Optional[int] = None
     stmt_ids: List[int] = field(default_factory=list)
 
+    @staticmethod
+    def find_common_ancestor_of_multiple(scopes: List['Scope']) -> Optional['Scope']:
+        """Find the common ancestor of multiple scopes.
+
+        This represents the outermost definition scope level across all
+        branches (if/else) or nested redefinitions.
+        """
+        if not scopes:
+            return None
+
+        if len(scopes) == 1:
+            return scopes[0]
+
+        ancestor = scopes[0]
+        for scope in scopes[1:]:
+            ancestor = ancestor.find_common_ancestor(scope)
+            if not ancestor:
+                return None
+
+        return ancestor
+
     def is_nested_in(self, other: 'Scope') -> bool:
         """Check if this scope is nested within another scope."""
         current = self.parent
@@ -98,6 +119,7 @@ class VarInfo:
     var_name: str
     def_scope_id: int
     def_stmt_id: int
+    def_scope_ids: Set[int] = field(default_factory=set)
     use_points: List[Tuple[int, int]] = field(default_factory=list)
     needs_scope_lift: bool = False
     lift_target_scope_id: Optional[int] = None
@@ -414,61 +436,177 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         self._build_delete_points_from_var_info()
 
+    def _compute_effective_def_scope_from_all_scopes(self, var_info: VarInfo) -> Optional[Scope]:
+        """Compute effective def_scope as common ancestor of all def and use scopes.
+
+        This approach naturally finds the outermost boundary where the variable
+        is active (defined or used), ensuring deletion happens at the correct level.
+        """
+        # Collect all scope IDs (definition + use)
+        all_scope_ids = set(var_info.def_scope_ids)
+        for scope_id, _ in var_info.use_points:
+            all_scope_ids.add(scope_id)
+
+        # Get scope objects
+        scopes = [self.result.scope_map.get(sid) for sid in all_scope_ids]
+        scopes = [s for s in scopes if s]
+
+        # Find common ancestor of all scopes
+        return Scope.find_common_ancestor_of_multiple(scopes)
+
+    def _check_independent_definitions(self, var_info: VarInfo) -> bool:
+        """Check if all definitions are in independent (mutually exclusive) scopes.
+
+        Independent means:
+        1. Multiple definition scopes (defined in different scopes)
+        2. Each def scope has corresponding use in the same scope
+        3. All def scopes are in different execution paths (no nesting, potentially brother or cousin scopes)
+
+        Example: o_final defined in scope 6 and scope 10, which are in different
+        if/else branches (mutually exclusive execution paths).
+        """
+        if len(var_info.def_scope_ids) <= 1:
+            return False
+
+        for def_scope_id in var_info.def_scope_ids:
+            uses_in_this_scope = [
+                stmt_id for sid, stmt_id in var_info.use_points
+                if sid == def_scope_id
+            ]
+
+            if not uses_in_this_scope:
+                return False
+
+        def_scopes = [
+            self.result.scope_map.get(sid) for sid in var_info.def_scope_ids
+        ]
+        def_scopes = [s for s in def_scopes if s]
+
+        for i, scope_i in enumerate(def_scopes):
+            for _, scope_j in enumerate(def_scopes[i + 1:], start=i + 1):
+                if scope_i.is_nested_in(scope_j) or \
+                   scope_j.is_nested_in(scope_i):
+                    return False
+
+        return True
+
+    def _find_last_use_in_scope(self, def_scope: Scope, uses_in_scope: list) -> Optional[int]:
+        """Find last use statement ID within a scope."""
+        if not def_scope.stmt_ids:
+            return max(uses_in_scope) if uses_in_scope else None
+
+        last_use_stmt_id = None
+        for stmt_id in def_scope.stmt_ids:
+            if stmt_id in uses_in_scope:
+                last_use_stmt_id = stmt_id
+
+        return last_use_stmt_id if last_use_stmt_id else max(uses_in_scope)
+
+    def _select_deepest_delete_point(self, delete_points_list: list) -> Optional[tuple]:
+        """Select delete point from deepest scope."""
+        max_depth = -1
+        selected_point = None
+
+        for stmt_id, scope_id, scope_exit in delete_points_list:
+            scope = self.result.scope_map.get(scope_id)
+            if scope and scope.depth() > max_depth:
+                max_depth = scope.depth()
+                selected_point = (stmt_id, scope_id, scope_exit)
+
+        return selected_point
+
+    def _set_delete_point_for_independent_defs(self, var_info: VarInfo) -> None:
+        """Set deletion point for independent definitions.
+
+        For each def_scope_id, find last use within that scope.
+        Add ALL delete points to delete_points dict for correct execution.
+        """
+        delete_points_list = []
+
+        for def_scope_id in var_info.def_scope_ids:
+            def_scope = self.result.scope_map.get(def_scope_id)
+            if not def_scope:
+                continue
+
+            uses_in_scope = [
+                stmt_id for sid, stmt_id in var_info.use_points
+                if sid == def_scope_id
+            ]
+
+            if uses_in_scope:
+                last_use = self._find_last_use_in_scope(def_scope, uses_in_scope)
+                if last_use:
+                    delete_points_list.append((last_use, def_scope_id, False))
+            else:
+                delete_points_list.append(
+                    (var_info.def_stmt_id, def_scope_id, False)
+                )
+
+        if not delete_points_list:
+            return
+
+        selected_point = self._select_deepest_delete_point(delete_points_list)
+        if selected_point:
+            var_info.delete_after_stmt_id = selected_point[0]
+            var_info.delete_scope_id = selected_point[1]
+            var_info.delete_after_scope_exit = selected_point[2]
+
+        for stmt_id, _, _ in delete_points_list:
+            self.result.delete_points.setdefault(
+                stmt_id, set()
+            ).add(var_info.var_name)
+
     def _compute_delete_point_unified(self, var_info: VarInfo) -> None:
         """Compute deletion point using unified rules."""
-        def_scope = self.result.scope_map.get(var_info.def_scope_id)
-        if not def_scope:
+        if self._check_independent_definitions(var_info):
+            self._set_delete_point_for_independent_defs(var_info)
             return
 
-        use_scope_ids = [scope_id for scope_id, _ in var_info.use_points]
-        use_scopes = [self.result.scope_map.get(sid) for sid in use_scope_ids]
-        use_scopes = [s for s in use_scopes if s]
+        effective_def_scope = self._compute_effective_def_scope_from_all_scopes(var_info)
 
-        if not use_scopes:
+        if not effective_def_scope:
+            effective_def_scope = self.result.scope_map.get(var_info.def_scope_id)
+
+        if not effective_def_scope:
             return
-
-        effective_def_scope = self._check_scope_lift(var_info, def_scope, use_scopes)
 
         self._set_delete_point(var_info, effective_def_scope)
 
-    def _check_scope_lift(
+    def _set_delete_point_in_parent_scope(
         self,
         var_info: VarInfo,
-        def_scope: Scope,
-        use_scopes: List[Scope]
-    ) -> Scope:
-        """Check Rule B: Non-nested usage requires scope lifting.
+        def_scope: Scope
+    ) -> None:
+        """Set deletion point in parent scope when def_scope has empty stmt_ids.
 
-        Returns effective definition scope (may be lifted).
+        This handles cases where def_scope is an 'if' scope (which only contains
+        control flow, not actual statements). We use the parent scope to find
+        the correct deletion point after the if statement.
         """
-        non_nested_uses = []
-        for use_scope in use_scopes:
-            is_nested = use_scope.is_nested_in(def_scope)
-            is_same = use_scope.scope_id == def_scope.scope_id
-            if not is_nested and not is_same:
-                non_nested_uses.append(use_scope)
+        if not def_scope.parent:
+            var_info.delete_after_stmt_id = var_info.def_stmt_id
+            var_info.delete_scope_id = def_scope.scope_id
+            var_info.delete_after_scope_exit = False
+            return
 
-        if not non_nested_uses:
-            return def_scope
+        parent_scope = def_scope.parent
 
-        common_ancestor = None
-        for use_scope in use_scopes:
-            ancestor = def_scope.find_common_ancestor(use_scope)
-            if ancestor:
-                if common_ancestor is None or ancestor.depth() > common_ancestor.depth():
-                    common_ancestor = ancestor
+        if def_scope.entry_stmt_id and def_scope.entry_stmt_id in parent_scope.stmt_ids:
+            if_stmt_pos = parent_scope.stmt_ids.index(def_scope.entry_stmt_id)
 
-        if common_ancestor:
-            var_info.needs_scope_lift = True
-            var_info.lift_target_scope_id = common_ancestor.scope_id
-
-            self.result.scope_lift_suggestions.append(
-                (var_info.var_name, var_info.def_scope_id, common_ancestor.scope_id)
-            )
-
-            return common_ancestor
-
-        return def_scope
+            if if_stmt_pos < len(parent_scope.stmt_ids) - 1:
+                last_stmt_id = parent_scope.stmt_ids[if_stmt_pos + 1]
+                var_info.delete_after_stmt_id = last_stmt_id
+                var_info.delete_scope_id = parent_scope.scope_id
+                var_info.delete_after_scope_exit = False
+            else:
+                var_info.delete_after_stmt_id = def_scope.entry_stmt_id
+                var_info.delete_scope_id = parent_scope.scope_id
+                var_info.delete_after_scope_exit = True
+        else:
+            var_info.delete_after_stmt_id = var_info.def_stmt_id
+            var_info.delete_scope_id = parent_scope.scope_id
+            var_info.delete_after_scope_exit = False
 
     def _set_delete_point(
         self,
@@ -476,11 +614,15 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         def_scope: Scope
     ) -> None:
         """Set deletion point based on representative scope.
-        
+
         Unified logic for both same-scope and cross-scope usage.
         Maps all use points to def_scope's stmt_ids and finds the last one
         in execution order to ensure deletion happens after all uses complete.
         """
+        if not def_scope.stmt_ids:
+            self._set_delete_point_in_parent_scope(var_info, def_scope)
+            return
+
         stmt_ids_info = {}
 
         for scope_id, stmt_id in var_info.use_points:
@@ -497,6 +639,11 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
                 if current.entry_stmt_id:
                     stmt_ids_info[current.entry_stmt_id] = True
+            elif def_scope.find_common_ancestor(use_scope):
+                # Brother scope: use container stmt from def_scope's parent
+                # (e.g., if_body's parent is if scope, which has entry_stmt_id)
+                if def_scope.parent and def_scope.parent.entry_stmt_id:
+                    stmt_ids_info[def_scope.parent.entry_stmt_id] = True
 
         last_stmt_id = None
         last_from_nested = False
@@ -572,9 +719,9 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
     def _record_var_def(self, var_name: str, stmt_id: Optional[int]) -> None:
         """Record a variable definition.
 
-        For redefinitions, keep the original def_scope_id (first definition)
-        and only update def_stmt_id to track the last definition statement.
-        This ensures deletion happens at the outermost definition scope level.
+        Collects all definition scopes in def_scope_ids set.
+        The effective definition scope will be computed as the common ancestor
+        of all definition scopes during deletion point calculation.
         """
         if not self.current_scope:
             return
@@ -588,11 +735,13 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             self.result.var_info[var_name] = VarInfo(
                 var_name=var_name,
                 def_scope_id=self.current_scope.scope_id,
-                def_stmt_id=stmt_id
+                def_stmt_id=stmt_id,
+                def_scope_ids={self.current_scope.scope_id}
             )
         else:
             info = self.result.var_info[var_name]
             info.def_stmt_id = stmt_id
+            info.def_scope_ids.add(self.current_scope.scope_id)
 
     def _record_var_use(self, var_name: str, stmt_id: Optional[int]) -> None:
         """Record a variable use."""
