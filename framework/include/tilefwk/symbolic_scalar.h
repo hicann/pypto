@@ -42,7 +42,7 @@ public:
     bool ConcreteValid() const { return concreteValid_; }
     int64_t Concrete() const
     {
-        ASSERT(concreteValid_) << "concrete value is not valid !";
+        FE_ASSERT(concreteValid_) << "concrete value is not valid !";
         return concrete_;
     }
 
@@ -58,7 +58,7 @@ public:
 
     operator int() const
     {
-        ASSERT(concreteValid_) << "concrete value is not valid for int() !";
+        FE_ASSERT(concreteValid_) << "concrete value is not valid for int() !";
         return concrete_;
     }
 

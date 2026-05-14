@@ -16,6 +16,7 @@ from ._element import Element
 from ._utils import clear_source_location, set_source_location
 from .symbolic_scalar import SymbolicScalar
 from .tensor import Tensor, ShmemTensor
+from .error import FeError
 
 
 def _to_base(arg):
@@ -50,7 +51,7 @@ def op_wrapper(func):
         args = _to_base(args)
         kwargs = _to_base(kwargs)
         if not isinstance(args, (list, tuple)):
-            raise TypeError(f"args must be list or tuple, but got {type(args)}.")
+            raise FeError(TypeError(f"args must be list or tuple, but got {type(args)}."))
         set_source_location()
         out = func(*args, **kwargs)
         clear_source_location()

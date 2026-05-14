@@ -984,7 +984,7 @@ class Tensor:
             other_len = len(key) - 1
             colon_count = self.dim - other_len
             if colon_count < 0:
-                raise IndexError(f"Too many indices for tensor with dimension {self.dim}")
+                raise FeError(IndexError(f"Too many indices for tensor with dimension {self.dim}"))
             colons = (slice(None),) * colon_count
             key = key[:ellipsis_pos] + colons + key[ellipsis_pos + 1:]
 
@@ -993,7 +993,7 @@ class Tensor:
             key += (slice(None),) * missing_dims
 
         if self.dim != len(key):
-            raise IndexError(f"rank not match, expect {self.dim}, but got {len(key)}")
+            raise FeError(IndexError(f"rank not match, expect {self.dim}, but got {len(key)}"))
         key = self._negative_index_to_positive(key, self.shape)
         return key
 

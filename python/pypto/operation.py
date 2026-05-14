@@ -17,6 +17,7 @@ from ._op_wrapper import op_wrapper
 from ._utils import to_syms
 from .symbolic_scalar import SymbolicScalar
 from .tensor import Tensor
+from .error import FeError
 
 
 @overload
@@ -191,11 +192,11 @@ def reshape(
         out = pypto_impl.Reshape(input, to_syms(shape), inplace)
     else:
         if not all(isinstance(s, int) for s in shape):
-            raise TypeError(
+            raise FeError(TypeError(
                 f"reshape() requires integer shape when 'inplace=False', "
                 f"but got [{', '.join(type(s).__name__ for s in shape)}]. "
                 f"Use 'inplace=True' for dynamic shapes."
-            )
+            ))
         if valid_shape is None:
             out = pypto_impl.Reshape(input, shape)
         else:

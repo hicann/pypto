@@ -114,20 +114,11 @@
 #define VECTOR_LOGW(...) PYPTO_HOST_LOG(DLOG_WARN, VECTOR, __VA_ARGS__)
 #define VECTOR_LOGE(errCode, fmt, ...) PYPTO_HOST_LOGE_WITH_ERRCODE(VECTOR, errCode, fmt, ##__VA_ARGS__)
 
-#define PYPTO_LOG(level, fmt, ...)                                                                                    \
-    do {                                                                                                               \
-        if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                              \
-            npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                    \
-        }                                                                                                              \
-        if (npu::tile_fwk::LogFuncInfo::Instance().record != nullptr) {                                               \
-            npu::tile_fwk::LogFuncInfo::Instance().record(                                                            \
-                PYPTO, level, "[%s:%d]:" fmt, __FILE_NAME__, __LINE__, ##__VA_ARGS__);                                \
-        }                                                                                                              \
-    } while (0)
-
-#define PYPTO_LOGD(...) PYPTO_LOG(DLOG_DEBUG, __VA_ARGS__)
-#define PYPTO_LOGI(...) PYPTO_LOG(DLOG_INFO, __VA_ARGS__)
-#define PYPTO_LOGW(...) PYPTO_LOG(DLOG_WARN, __VA_ARGS__)
-#define PYPTO_LOGE(...) PYPTO_LOG(DLOG_ERROR, __VA_ARGS__)
+#define PYPTO_LOGD(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_DEBUG, __VA_ARGS__)
+#define PYPTO_LOGI(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_INFO, __VA_ARGS__)
+#define PYPTO_LOGW(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_WARN, __VA_ARGS__)
+#define PYPTO_LOGE(...) PYPTO_HOST_LOG_WITHOUT_MODULE(DLOG_ERROR, __VA_ARGS__)
+#define PYPTO_LOGE_FULL(fmt, ...) \
+    PYPTO_HOST_SPLIT_LOG_WITHOUT_MODULE(DLOG_ERROR, fmt, ##__VA_ARGS__)
 
 #endif

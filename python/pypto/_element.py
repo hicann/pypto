@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 from . import pypto_impl
+from .error import FeError
 
 
 class Element:
@@ -18,7 +19,7 @@ class Element:
         elif isinstance(data, float):
             self._base = pypto_impl.Element(dtype, data)
         else:
-            raise ValueError(f"Invalid data type {type(data)} for Element")
+            raise FeError(ValueError(f"Invalid data type {type(data)} for Element"))
 
     @property
     def dtype(self):

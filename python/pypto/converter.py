@@ -13,7 +13,7 @@
 from typing import List, Optional
 from functools import wraps
 
-from .error import VerifyError
+from .error import VerifyError, FeError
 
 from ._utils import get_torch_npu
 from .enum import DataType, TileOpFormat
@@ -103,10 +103,10 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
     import torch
 
     if not isinstance(tensor, torch.Tensor):
-        raise TypeError("input type is not currently supported.")
+        raise FeError(TypeError("input type is not currently supported."))
 
     if not tensor.is_contiguous():
-        raise RuntimeError("not all tensors are contiguous")
+        raise FeError(RuntimeError("not all tensors are contiguous"))
 
     dtype = _dtype_from(tensor.dtype) if dtype is None else dtype
     if tensor_format is None:
@@ -170,7 +170,7 @@ _dtype_dict = {
 def _dtype_from(dtype: 'torch.dtype') -> DataType:
     pto_dtype = _dtype_dict.get(dtype.__str__())
     if pto_dtype is None:
-        raise ValueError(f"Input torch.dtype is not supported. Got {dtype}")
+        raise FeError(ValueError(f"Input torch.dtype is not supported. Got {dtype}"))
     return pto_dtype
 
 

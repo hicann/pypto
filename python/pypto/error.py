@@ -32,6 +32,8 @@ _error_mapping = {
     RuntimeError: 0xF00003,
     NameError: 0xF00004,
     NotImplementedError: 0xF00005,
+    KeyError: 0xF00006,
+    IndexError: 0xF00007,
 }
 
 

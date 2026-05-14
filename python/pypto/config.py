@@ -733,7 +733,7 @@ class ConfigScope:
 
     def get_options_prefix(self, key):
         if key not in self._options:
-            raise KeyError(f"Option not found: {key}")
+            raise FeError(KeyError(f"Option not found: {key}"))
         return self._options[key]
 
     def get_options(self, prefix):

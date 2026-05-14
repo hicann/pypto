@@ -136,7 +136,7 @@ void FunctionCache::UpdateBinCache(const Function& func, CacheValue& value)
         auto binPath = leafFuncAttr->binPath;
         if (!RealPath(binPath).empty()) {
             auto binData = LoadBinData(binPath);
-            assert(binData.size() != 0);
+            FE_ASSERT(binData.size() != 0) << "binData is empty.";
             totalSize += binData.size() + sizeof(uint64_t);
             binMap[ele.first] = std::move(binData);
         } else if (leafFuncAttr->coreType == CoreType::AICPU) {

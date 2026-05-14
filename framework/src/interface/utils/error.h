@@ -40,7 +40,7 @@ struct TerminateHandler {
                     std::rethrow_exception(eptr);
                 }
             } catch (const std::exception& e) {
-                PYPTO_LOGE("Caught exception: %s", e.what());
+                PYPTO_LOGE_FULL("Caught exception: %s", e.what());
                 ErrorManager::Instance().OutputErrorMessage();
                 std::cerr << "Caught exception: '" << e.what() << "'\n";
             }
@@ -59,7 +59,7 @@ struct TerminateHandler {
         } else if (signo == SIGFPE) {
             msg = "floating point exception !!!";
         }
-        PYPTO_LOGE("%s\n%s", msg, backtrace.c_str());
+        PYPTO_LOGE_FULL("%s\n%s", msg, backtrace.c_str());
         ErrorManager::Instance().OutputErrorMessage();
         std::cerr << msg << "\n" << backtrace << std::endl;
         fflush(nullptr);

@@ -431,7 +431,7 @@ def function(name: str, *args) -> Iterator:
                 first_exc = e
         Controller.end_function()
         if first_exc is not None:
-            raise first_exc
+            raise FeError(first_exc)
 
 
 def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = None):
@@ -525,7 +525,7 @@ def _loop_function(
         yield rlf
     except Exception as e:
         logging.error("Record loop function %s failed: %s", name, e)
-        raise
+        raise FeError(f"Record loop function {name} failed") from e
     finally:
         del rlf
         pypto_impl.EndScope()
