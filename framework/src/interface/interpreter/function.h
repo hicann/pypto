@@ -21,10 +21,13 @@
 #include <condition_variable>
 #include <mutex>
 #include <queue>
+#include <functional>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "interface/interpreter/interpreter_log.h"
+#include "interface/interpreter/thread_pool.h"
 #include "interface/tensor/tensor_slot.h"
 #include "interface/interpreter/operation.h"
 #include "interface/tensor/symbolic_scalar_evaluate.h"
@@ -33,7 +36,6 @@
 #include "communication.h"
 #include "tilefwk/comm_group_recorder.h"
 #include "interface/operation/distributed/distributed_common.h"
-
 
 namespace npu::tile_fwk {
 
@@ -126,6 +128,9 @@ struct FunctionFrame {
     int passIndex{-1};
 
     Operation* currentOperation;
+
+    /// Mix-split calls executed in a forward-collected same-wrapId parallel batch; skipped on linear re-walk.
+    std::unordered_set<Operation*> executedParallelMixSplitCallOps;
 
     const std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensorData>>&
     GetTensorDataViewDict() const
@@ -576,110 +581,7 @@ constexpr int32_t toIndex(OpInfoCsvHeader e) noexcept { return static_cast<int32
 constexpr int32_t toIndex(ProgrameInfoCsvHeader e) noexcept { return static_cast<int32_t>(e); }
 
 struct FunctionInterpreter {
-    FunctionInterpreter() : operationInterpreter(std::make_shared<OperationInterpreter>())
-    {
-        auto now = std::chrono::high_resolution_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
-        std::stringstream timestamp;
-        timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
-        timestamp << "_" << std::setw(6) << std::setfill('0') << us; // 6 is the width
-        dumpPath = config::GetVerifyOption<std::string>(KEY_PASS_VERIFY_SAVE_TENSOR_DIR);
-        if (dumpPath.empty()) {
-            dumpPath = config::LogTopFolder();
-        }
-        dumpPath = dumpPath + "/" + "verify_" + timestamp.str() + "/";
-        CreateMultiLevelDir(dumpPath);
-        interpreter::SetLogFilePath(dumpPath + "interpreter.log");
-        std::string dumpOpFilePath = dumpPath + "verify_graph_data_metainfo.csv";
-        std::string dumpProgrameFilePath = dumpPath + "verify_graph_result_brief.csv";
-        std::string dumpErrorPath = dumpPath + "verify_graph_result_brief.log";
-        execOpResultFile = fopen(dumpOpFilePath.c_str(), "w");
-        execProgrameResultFile = fopen(dumpProgrameFilePath.c_str(), "w");
-        execDumpErrorFile = fopen(dumpErrorPath.c_str(), "w");
-        std::vector<std::string> OpcsvHeader = {
-            "NO.",
-            "PHASE_NAME",
-            "PATH_FUNC:func_magicname",
-            "PATH_FUNC:funcmagic",
-            "PATH_FUNC:hash",
-            "LOOP_INFO",
-            "ROOT_FUNC:functype",
-            "ROOT_FUNC:graphtype",
-            "ROOT_FUNC:funcmagic",
-            "ROOT_FUNC:hash",
-            "FUNC:functype",
-            "FUNC:graphtype",
-            "FUNC:funcmagic",
-            "FUNC:hash",
-            ":rawmagic",
-            ":rawshape",
-            ":datatype",
-            ":format",
-            ":symbol",
-            ":magic",
-            ":offset",
-            ":shape",
-            ":validshape",
-            "EVAL:dynvalidshape",
-            "ROOT_CALL:opmagic",
-            "ROOT_CALL:rawmagic",
-            ":opmagic",
-            ":opcode",
-            "OP_ATTR_SYM_OFFSET",
-            "OP_ATTR_ATOMIC",
-            "OP_IO_FLAG",
-            "TIMESTAMP",
-            "FILENAME",
-            "INPUT_FILENAMES",
-            ":inputValidShape",
-            ":inputRawMagic"};
-        std::vector<std::string> ProgrameInfoCsvHeader = {
-            "NO.",
-            "A>PHASE_NAME",
-            "B>PHASE_NAME",
-            "PATH_FUNC:func_magicname",
-            "PATH_FUNC:funcmagic",
-            "PATH_FUNC:hash",
-            "LOOP_INFO",
-            "IO_FLAG",
-            "A>:rawmagic",
-            "B>:rawmagic",
-            ":rawshape",
-            ":datatype",
-            ":format",
-            ":symbol",
-            ":shape",
-            ":validshape",
-            "A>TIMESTAMP",
-            "A>FILENAME",
-            "B>TIMESTAMP",
-            "B>FILENAME",
-            "AB>RESULT",
-            "AB>rtol/atol",
-            "AB>fail_cnt/warn_cnt/tol_cnt",
-            "AB>total_cnt/zero_cnt/infnan_cnt",
-            "AB>mre",
-            "AB>mre_top8",
-            "AB>mre_top1permil",
-            "AB>mae",
-            "AB>mae_top8",
-            "AB>mae_top1permil",
-            "A>max",
-            "A>min",
-            "A>avg",
-            "A>aavg",
-            "A>zero",
-            "A>infnan",
-            "B>max",
-            "B>min",
-            "B>avg",
-            "B>aavg",
-            "B>zero",
-            "B>infnan"};
-        WriteCsvRow(OpcsvHeader, opInfoRowNum, execOpResultFile);
-        WriteCsvRow(ProgrameInfoCsvHeader, ProgrameRowNum, execProgrameResultFile);
-    }
+    FunctionInterpreter();
 
     ~FunctionInterpreter()
     {
@@ -691,7 +593,12 @@ struct FunctionInterpreter {
     Function* entry_;
     std::unordered_map<FunctionHash, Function*> calleeHashDict;
     std::unordered_set<int> outputSlotSet_;
-    std::shared_ptr<OperationInterpreter> operationInterpreter;
+    std::shared_ptr<InterpreterSyncSimulationState> interpreterSyncSimulation_;
+    util::ThreadPool interpreterThreadPool_;
+    mutable std::mutex threadOpInterpMutex_;
+    mutable std::unordered_map<std::thread::id, std::shared_ptr<OperationInterpreter>> perThreadOperationInterpreter_;
+    std::vector<std::shared_ptr<LogicalTensorData>> interpreterEntryInputViews_;
+    std::unordered_map<std::string, ScalarImmediateType> interpreterBootstrapSymbolDict_;
     std::unordered_map<int, std::shared_ptr<LogicalTensorData>> slotDataViewDict_;
     std::vector<std::shared_ptr<FunctionFrame>>* captureFrameList{nullptr};
     std::unordered_map<std::string, ScalarImmediateType> loopSymbolDict;
@@ -773,54 +680,85 @@ struct FunctionInterpreter {
         return consumers;
     }
 
-    std::vector<std::shared_ptr<LogicalTensorData>>& GetInputDataViewList()
+    OperationInterpreter& GetOperationInterpreterForThisThread() const
     {
-        return operationInterpreter->evaluateSymbol->GetInputDataViewList();
+        const auto tid = std::this_thread::get_id();
+        std::lock_guard<std::mutex> lk(threadOpInterpMutex_);
+        auto it = perThreadOperationInterpreter_.find(tid);
+        if (it != perThreadOperationInterpreter_.end()) {
+            return *it->second;
+        }
+        auto op = std::make_shared<OperationInterpreter>(interpreterSyncSimulation_);
+        op->evaluateSymbol->InitInputDataViewList(interpreterEntryInputViews_);
+        if (!interpreterBootstrapSymbolDict_.empty()) {
+            op->evaluateSymbol->SetSymbolDict(interpreterBootstrapSymbolDict_);
+        }
+        auto ins = perThreadOperationInterpreter_.emplace(tid, std::move(op));
+        return *ins.first->second;
+    }
+
+    std::vector<std::shared_ptr<LogicalTensorData>> GetInputDataViewList()
+    {
+        return GetOperationInterpreterForThisThread().evaluateSymbol->GetInputDataViewList();
     }
     void UpdateInputDataViewList(size_t index, const std::shared_ptr<LogicalTensorData>& inputDataView)
     {
-        operationInterpreter->evaluateSymbol->UpdateInputDataViewList(index, inputDataView);
+        interpreterEntryInputViews_[index] = inputDataView;
+        std::lock_guard<std::mutex> lk(threadOpInterpMutex_);
+        for (auto& entry : perThreadOperationInterpreter_) {
+            entry.second->evaluateSymbol->UpdateInputDataViewList(index, inputDataView);
+        }
     }
     void InitInputDataViewList(const std::vector<std::shared_ptr<LogicalTensorData>>& inputDataViewList)
     {
-        operationInterpreter->evaluateSymbol->InitInputDataViewList(inputDataViewList);
+        interpreterEntryInputViews_ = inputDataViewList;
+        interpreterBootstrapSymbolDict_.clear();
+        std::lock_guard<std::mutex> lk(threadOpInterpMutex_);
+        perThreadOperationInterpreter_.clear();
+        auto op = std::make_shared<OperationInterpreter>(interpreterSyncSimulation_);
+        op->evaluateSymbol->InitInputDataViewList(inputDataViewList);
+        perThreadOperationInterpreter_[std::this_thread::get_id()] = op;
     }
     void UpdateIODataPair(std::shared_ptr<FunctionIODataPair>& inoutDataPair)
     {
-        operationInterpreter->evaluateSymbol->UpdateIODataPair(inoutDataPair);
+        GetOperationInterpreterForThisThread().evaluateSymbol->UpdateIODataPair(inoutDataPair);
     }
-    const std::unordered_map<std::string, ScalarImmediateType>& GetSymbolDict() const
+    std::unordered_map<std::string, ScalarImmediateType> GetSymbolDict() const
     {
-        return operationInterpreter->evaluateSymbol->GetSymbolDict();
+        return GetOperationInterpreterForThisThread().evaluateSymbol->GetSymbolDict();
     }
     void UpdateSymbolDict(const std::string key, const ScalarImmediateType value)
     {
-        operationInterpreter->evaluateSymbol->UpdateSymbolDict(key, value);
+        GetOperationInterpreterForThisThread().evaluateSymbol->UpdateSymbolDict(key, value);
     }
     void SetSymbolDict(const std::unordered_map<std::string, ScalarImmediateType>& symbolDict)
     {
-        operationInterpreter->evaluateSymbol->SetSymbolDict(symbolDict);
+        interpreterBootstrapSymbolDict_ = symbolDict;
+        std::lock_guard<std::mutex> lk(threadOpInterpMutex_);
+        for (auto& entry : perThreadOperationInterpreter_) {
+            entry.second->evaluateSymbol->SetSymbolDict(symbolDict);
+        }
     }
 
     ScalarImmediateType EvaluateSymbolicScalar(const SymbolicScalar& ss)
     {
-        return operationInterpreter->EvaluateSymbolicScalar(ss);
+        return GetOperationInterpreterForThisThread().EvaluateSymbolicScalar(ss);
     }
     std::vector<int64_t> EvaluateOffset(
         const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset,
         const std::vector<SymbolicScalar>& linearArgList = {})
     {
-        return operationInterpreter->EvaluateOffset(offset, dynOffset, linearArgList);
+        return GetOperationInterpreterForThisThread().EvaluateOffset(offset, dynOffset, linearArgList);
     }
     std::vector<int64_t> EvaluateValidShape(
         const std::vector<SymbolicScalar>& dynValidShape, const std::vector<SymbolicScalar>& linearArgList = {})
     {
-        return operationInterpreter->EvaluateValidShape(dynValidShape, linearArgList);
+        return GetOperationInterpreterForThisThread().EvaluateValidShape(dynValidShape, linearArgList);
     }
     void EvaluateDynParam(
         const std::map<std::string, DynParamInfo>& dynParamTable, const std::vector<SymbolicScalar>& linearArgList)
     {
-        operationInterpreter->evaluateSymbol->EvaluateDynParam(dynParamTable, linearArgList);
+        GetOperationInterpreterForThisThread().evaluateSymbol->EvaluateDynParam(dynParamTable, linearArgList);
     }
 
     size_t GetFrameSize() const { return execDumpStack.size(); }
@@ -1006,7 +944,7 @@ struct FunctionInterpreter {
             taskList.push_back(task);
         }
 
-        auto& pool = operationInterpreter->GetPool();
+        auto& pool = interpreterThreadPool_;
         for (size_t i = 0; i < taskList.size(); i++) {
             pool.SubmitTask(taskList[i].get(), MixSplitCallTask::Entry);
         }
@@ -1109,6 +1047,33 @@ struct FunctionInterpreter {
         return false;
     }
 
+    /// Mix-split leaf output: reuse mixGlobalTensorDict entry for (oop, wrapId) if present; else allocate under
+    /// mixGlobalTensorMutex_ and publish. Caller must only use this after input views are ready (AllocateDataView
+    /// must not recurse into WaitAndGetMixGlobalTensorDataView while the mutex is held).
+    std::shared_ptr<LogicalTensorData> AllocateOrReuseMixGlobalOutputDataView(
+        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& oop, int32_t wrapId)
+    {
+        const std::pair<std::shared_ptr<LogicalTensor>, int32_t> mixKey{oop, wrapId};
+        bool reusedFromMixDict = false;
+        std::shared_ptr<LogicalTensorData> ret;
+        {
+            std::lock_guard<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
+            auto mixIt = mixGlobalTensorDict.find(mixKey);
+            if (mixIt != mixGlobalTensorDict.end() && mixIt->second != nullptr) {
+                ret = mixIt->second;
+                reusedFromMixDict = true;
+            } else {
+                ret = AllocateDataView(frame, oop);
+                mixGlobalTensorDict[mixKey] = ret;
+                mixGlobalTensorCv_.notify_all();
+            }
+        }
+        if (reusedFromMixDict) {
+            frame.AddDataView(oop, ret);
+        }
+        return ret;
+    }
+
     void ExecuteOperation(FunctionFrame& frame, Operation* op)
     {
         auto iOpDataList = frame.GetDataViewList(op->GetIOperands());
@@ -1144,16 +1109,12 @@ struct FunctionInterpreter {
                         dtype = DataType::DT_FP32;
                     }
                     oOpDataList.push_back(AllocateDataView(frame, oop, dtype));
+                } else if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0) {
+                    auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+                    oOpDataList.push_back(
+                        AllocateOrReuseMixGlobalOutputDataView(frame, oop, callopAttr->wrapId));
                 } else {
-                    auto ret = AllocateDataView(frame, oop);
-                    if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0) {
-                        auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
-                        std::lock_guard<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
-                        mixGlobalTensorDict[{oop, callopAttr->wrapId}] = ret;
-                        mixGlobalTensorCv_.notify_all();
-                    }
-
-                    oOpDataList.push_back(ret);
+                    oOpDataList.push_back(AllocateDataView(frame, oop));
                 }
             }
         }
@@ -1163,7 +1124,7 @@ struct FunctionInterpreter {
             ExecuteOpCallLeaf(&ctx);
         } else {
             TimeStamp ts;
-            operationInterpreter->ExecuteOperation(&ctx);
+            GetOperationInterpreterForThisThread().ExecuteOperation(&ctx);
             {
                 std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
                 opUsage[op->GetOpcodeStr()] += ts.Duration();
@@ -1180,17 +1141,26 @@ struct FunctionInterpreter {
     {
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, frame.callop != nullptr);
         auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+        const std::pair<std::shared_ptr<LogicalTensor>, int32_t> mixKey{iop, callopAttr->wrapId};
         std::unique_lock<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
         const auto waitDeadline =
             std::chrono::steady_clock::now() + std::chrono::milliseconds(MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS);
-        const bool waitOk = mixGlobalTensorCv_.wait_until(mixTensorGuard, waitDeadline, [this, &iop, callopAttr] {
-            auto it = mixGlobalTensorDict.find({iop, callopAttr->wrapId});
+        const bool waitOk = mixGlobalTensorCv_.wait_until(mixTensorGuard, waitDeadline, [this, mixKey] {
+            auto it = mixGlobalTensorDict.find(mixKey);
             return it != mixGlobalTensorDict.end() && it->second != nullptr;
         });
         ASSERT(ControlFlowScene::MIX_GLOBAL_TENSOR_WAIT_TIMEOUT, waitOk)
             << "Timeout while waiting mixGlobalTensorDict in multithread execution, wrapId="
             << callopAttr->wrapId << ", timeoutMs=" << MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS;
-        return waitOk ? mixGlobalTensorDict[{iop, callopAttr->wrapId}] : nullptr;
+        std::shared_ptr<LogicalTensorData> result = nullptr;
+        if (waitOk) {
+            auto it = mixGlobalTensorDict.find(mixKey);
+            if (it != mixGlobalTensorDict.end() && it->second != nullptr) {
+                result = it->second;
+                frame.AddDataView(iop, result);
+            }
+        }
+        return result;
     }
 
     void ExecuteHandleFunctionBegin(Function* func, std::shared_ptr<FunctionFrame> frame)
@@ -1232,27 +1202,32 @@ struct FunctionInterpreter {
         }
         const int32_t wrapId = GetCallOpWrapId(&op);
         std::vector<Operation*> groupedCallOps;
-        groupedCallOps.push_back(&op);
-        size_t nextIdx = opIdx + 1;
-        while (nextIdx < operations.size()) {
-            auto& nextOp = operations.at(nextIdx);
-            if (nextOp.GetOpcode() != Opcode::OP_CALL) {
-                break;
+        for (size_t i = opIdx; i < operations.size(); ++i) {
+            auto& cand = operations.at(i);
+            if (IsMixSplitCallOp(&cand) && GetCallOpWrapId(&cand) == wrapId) {
+                groupedCallOps.push_back(&cand);
             }
-            if (GetCallOpWrapId(&nextOp) != wrapId || !IsMixSplitCallOp(&nextOp)) {
-                break;
-            }
-            groupedCallOps.push_back(&nextOp);
-            nextIdx++;
         }
         if (groupedCallOps.size() > 1) {
-            ExecuteMixSplitCallOpGroupParallel(frame, groupedCallOps);
+            constexpr size_t kMixSplitParallelLimit = 3;
+            for (size_t batchStart = 0; batchStart < groupedCallOps.size(); batchStart += kMixSplitParallelLimit) {
+                const size_t batchEnd = std::min(batchStart + kMixSplitParallelLimit, groupedCallOps.size());
+                std::vector<Operation*> batch;
+                batch.reserve(batchEnd - batchStart);
+                for (size_t j = batchStart; j < batchEnd; ++j) {
+                    batch.push_back(groupedCallOps[j]);
+                }
+                ExecuteMixSplitCallOpGroupParallel(frame, batch);
+            }
+            for (auto* executedOp : groupedCallOps) {
+                frame.executedParallelMixSplitCallOps.insert(executedOp);
+            }
         } else {
             ExecuteHandleOperationBegin(&op);
             ExecuteOperation(frame, &op);
             ExecuteHandleOperationEnd();
         }
-        opIdx = nextIdx;
+        opIdx = opIdx + 1;
         return true;
     }
 
@@ -1308,6 +1283,9 @@ struct FunctionInterpreter {
         }
         std::shared_ptr<FunctionFrame> frame =
             std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair, frameCount.fetch_add(1));
+        if (callop == nullptr) {
+            interpreterSyncSimulation_->Reset();
+        }
         if (captureFrameList != nullptr) {
             std::lock_guard<std::mutex> captureGuard(captureFrameListMutex_);
             captureFrameList->push_back(frame);
@@ -1344,6 +1322,11 @@ struct FunctionInterpreter {
             for (size_t opIdx = 0; opIdx < operations.size();) {
                 auto& op = operations.at(opIdx);
                 if (op.GetOpcode() == Opcode::OP_PRINT && verifyType != VerifyType::TENSOR_GRAPH) {
+                    opIdx++;
+                    continue;
+                }
+
+                if (frame->executedParallelMixSplitCallOps.count(&op) != 0U) {
                     opIdx++;
                     continue;
                 }
@@ -1835,9 +1818,10 @@ public:
 
         SetSymbolDict(controlFlowSymbolDict);
         auto findInputIndex = [this](std::shared_ptr<LogicalTensorData>& inputDataView) -> int {
-            for (size_t k = 0; k < this->GetInputDataViewList().size(); k++) {
-                if (this->GetInputDataViewList()[k] == inputDataView) {
-                    return k;
+            auto inputList = this->GetInputDataViewList();
+            for (size_t k = 0; k < inputList.size(); k++) {
+                if (inputList[k] == inputDataView) {
+                    return static_cast<int>(k);
                 }
             }
             return -1;

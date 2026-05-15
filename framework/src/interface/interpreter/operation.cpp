@@ -13,9 +13,15 @@
  * \brief
  */
 
+#include <chrono>
+#include <sstream>
+#include <thread>
+
 #include "interface/interpreter/function.h"
 #include "interface/interpreter/interpreter_log.h"
 #include "interface/interpreter/operation.h"
+#include "interface/operation/operation_common.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 
@@ -117,6 +123,11 @@ std::vector<int64_t> OperationInterpreter::EvaluateOpImmediate(
 
 void OperationInterpreter::ExecuteOperation(ExecuteOperationContext* ctx)
 {
+    ASSERT(ExecuteOperationScene::CTX_NULL, ctx != nullptr);
+    ASSERT(ExecuteOperationScene::CTX_OP_NULL, ctx->op != nullptr);
+    const std::string opcodeStr = ctx->op->GetOpcodeStr();
+    INTERPRETER_LOGI("[ExecuteOperation] opcode=%s opMagic=%d", opcodeStr.c_str(), ctx->op->GetOpMagic());
+
     auto iOperands = OperationInterpreter::GetValidDataView(*ctx->ioperandDataViewList);
     auto oOperands = OperationInterpreter::GetValidDataView(*ctx->ooperandInplaceDataViewList);
     if (ctx->op->GetOpcode() == Opcode::OP_RESHAPE) {
@@ -175,4 +186,106 @@ std::string ExecuteOperationContext::Dump() const
     ss << "\n";
     return ss.str();
 }
+
+namespace {
+int InterpreterSyncSimEventKey(const OpSyncQueue& q)
+{
+    return q.eventId_;
+}
+
+std::string FormatInterpreterCvSyncSimLogCtx(const OpSyncQueue& q)
+{
+    std::ostringstream oss;
+    oss << "eventId=" << q.eventId_ << " (pipePair=" << q.Dump() << " setCore=" << static_cast<int>(q.coreType_)
+        << " waitCore=" << static_cast<int>(q.trigCoreType_) << " setAiv=" << static_cast<int>(q.setAivCore_)
+        << " waitAiv=" << static_cast<int>(q.waitAivCore_) << ")";
+    return oss.str();
+}
+
+std::string CurrentInterpreterThreadTag()
+{
+    std::ostringstream oss;
+    oss << std::this_thread::get_id();
+    return oss.str();
+}
+} // namespace
+
+void InterpreterSyncSimulationState::Reset()
+{
+    std::lock_guard<std::mutex> lock(interpreterSyncSimMutex_);
+    interpreterSyncSimPending_.clear();
+    interpreterSyncSimCv_.notify_all();
+    INTERPRETER_LOGI(
+        "[InterpreterCvSyncSim] RESET cleared_all_pending thread=%s", CurrentInterpreterThreadTag().c_str());
+}
+
+void InterpreterSyncSimulationState::Set(const OpSyncQueue& sq, int opMagic)
+{
+    const int evKey = InterpreterSyncSimEventKey(sq);
+    std::lock_guard<std::mutex> lock(interpreterSyncSimMutex_);
+    uint32_t& cnt = interpreterSyncSimPending_[evKey];
+    ++cnt;
+    interpreterSyncSimCv_.notify_all();
+    const std::string desc = FormatInterpreterCvSyncSimLogCtx(sq);
+    INTERPRETER_LOGI(
+        "[InterpreterCvSyncSim] SET opMagic=%d eventId=%d key=eventId pending_after=%u detail={%s} thread=%s",
+        opMagic, evKey, static_cast<unsigned>(cnt), desc.c_str(), CurrentInterpreterThreadTag().c_str());
+}
+
+void InterpreterSyncSimulationState::Wait(const OpSyncQueue& sq, int opMagic)
+{
+    const int evKey = InterpreterSyncSimEventKey(sq);
+    std::unique_lock<std::mutex> lock(interpreterSyncSimMutex_);
+    const auto prefIt = interpreterSyncSimPending_.find(evKey);
+    const bool preflightReady = prefIt != interpreterSyncSimPending_.end() && prefIt->second > 0;
+
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(INTERPRETER_SYNC_SIM_WAIT_TIMEOUT_MS);
+    const auto tWaitStart = std::chrono::steady_clock::now();
+    const bool ready = interpreterSyncSimCv_.wait_until(lock, deadline, [this, evKey] {
+        auto it = interpreterSyncSimPending_.find(evKey);
+        return it != interpreterSyncSimPending_.end() && it->second > 0;
+    });
+    const auto waitUs = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - tWaitStart).count();
+
+    ASSERT(ControlFlowScene::INTERPRETER_SYNC_SIM_WAIT_TIMEOUT, ready)
+        << "Timeout waiting for interpreter CV sync set (mix parallel / ordering), timeoutMs="
+        << INTERPRETER_SYNC_SIM_WAIT_TIMEOUT_MS << ", opMagic=" << opMagic << ", eventId=" << evKey
+        << ", sync_queue=" << sq.Dump();
+    auto it = interpreterSyncSimPending_.find(evKey);
+    ASSERT(
+        ExecuteOperationScene::RUNTIME_EXCEPTION, it != interpreterSyncSimPending_.end() && it->second > 0)
+        << "Interpreter CV sync wait race after wake, opMagic=" << opMagic << ", eventId=" << evKey
+        << ", sync_queue=" << sq.Dump();
+    const uint32_t pendingBefore = it->second;
+    it->second--;
+    const uint32_t pendingAfter = it->second;
+    if (it->second == 0) {
+        interpreterSyncSimPending_.erase(it);
+    }
+    const std::string desc = FormatInterpreterCvSyncSimLogCtx(sq);
+    INTERPRETER_LOGI(
+        "[InterpreterCvSyncSim] WAIT consumed opMagic=%d eventId=%d key=eventId wait_us=%lld preflight_ready=%s "
+        "pending_before=%u pending_after=%u detail={%s} thread=%s",
+        opMagic, evKey, static_cast<long long>(waitUs), preflightReady ? "true" : "false",
+        static_cast<unsigned>(pendingBefore), static_cast<unsigned>(pendingAfter), desc.c_str(),
+        CurrentInterpreterThreadTag().c_str());
+}
+
+void OperationInterpreter::ResetInterpreterSyncSimulation()
+{
+    syncSim_->Reset();
+}
+
+void OperationInterpreter::InterpreterSyncSimSet(const OpSyncQueue& sq, int opMagic)
+{
+    syncSim_->Set(sq, opMagic);
+}
+
+void OperationInterpreter::InterpreterSyncSimWait(const OpSyncQueue& sq, int opMagic)
+{
+    syncSim_->Wait(sq, opMagic);
+}
+
 } // namespace npu::tile_fwk

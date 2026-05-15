@@ -42,7 +42,8 @@ public:
         for (auto& paramInfo : dynParamTable) {
             std::string symbolName = paramInfo.first;
             if (paramInfo.second.dim.IsValid()) {
-                symbolDict_[symbolName] = EvaluateSymbolicScalar(paramInfo.second.dim, linearArgList);
+                ScalarImmediateType val = EvaluateSymbolicScalar(paramInfo.second.dim, linearArgList);
+                UpdateSymbolDict(symbolName, val);
                 continue;
             }
             int n = paramInfo.second.tensorIndex;
@@ -52,7 +53,8 @@ public:
             int idx = paramInfo.second.dimIndex;
             int argIndex = ((base) + 1) + 3 * (dim) + idx;
 
-            symbolDict_[symbolName] = EvaluateSymbolicScalar(linearArgList[argIndex]);
+            ScalarImmediateType val = EvaluateSymbolicScalar(linearArgList[argIndex]);
+            UpdateSymbolDict(symbolName, val);
         }
     }
 
@@ -105,14 +107,23 @@ public:
         return EvaluateSymbolicScalar(ss.Raw(), linearArgList);
     }
 
-    const std::unordered_map<std::string, ScalarImmediateType>& GetSymbolDict() const { return symbolDict_; }
-    void UpdateSymbolDict(const std::string key, const ScalarImmediateType value) { symbolDict_[key] = value; }
+    std::unordered_map<std::string, ScalarImmediateType> GetSymbolDict() const
+    {
+        return symbolDict_;
+    }
+    void UpdateSymbolDict(const std::string key, const ScalarImmediateType value)
+    {
+        symbolDict_[key] = value;
+    }
     void SetSymbolDict(const std::unordered_map<std::string, ScalarImmediateType>& symbolDict)
     {
         symbolDict_ = symbolDict;
     }
 
-    std::vector<std::shared_ptr<LogicalTensorData>>& GetInputDataViewList() { return inputDataViewList_; }
+    std::vector<std::shared_ptr<LogicalTensorData>> GetInputDataViewList() const
+    {
+        return inputDataViewList_;
+    }
     void UpdateInputDataViewList(size_t index, const std::shared_ptr<LogicalTensorData>& inputDataView)
     {
         inputDataViewList_[index] = inputDataView;
@@ -122,8 +133,14 @@ public:
         inputDataViewList_ = inputDataViewList;
     }
 
-    std::shared_ptr<FunctionIODataPair>& GetInoutDataPair() { return inoutDataPair_; }
-    void UpdateIODataPair(std::shared_ptr<FunctionIODataPair>& inoutDataPair) { inoutDataPair_ = inoutDataPair; }
+    std::shared_ptr<FunctionIODataPair> GetInoutDataPair() const
+    {
+        return inoutDataPair_;
+    }
+    void UpdateIODataPair(std::shared_ptr<FunctionIODataPair>& inoutDataPair)
+    {
+        inoutDataPair_ = inoutDataPair;
+    }
 
 private:
     std::unordered_map<std::string, ScalarImmediateType> symbolDict_;

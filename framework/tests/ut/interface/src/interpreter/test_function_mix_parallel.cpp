@@ -123,7 +123,7 @@ TEST_F(FunctionMixParallelTest, GroupedMixSplitCallOpsExecuteTwoCalleeFrames)
     interpreter.DumpEnd();
 
     EXPECT_TRUE(handled);
-    EXPECT_EQ(opIdx, 2U);
+    EXPECT_EQ(opIdx, 1U);
     ASSERT_EQ(capturedFrames.size(), 2U);
 
     std::set<const Operation*> executedCallops;
@@ -146,7 +146,8 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
 
     constexpr int kRepeatNum = 50;
     constexpr int32_t kWrapId = 77;
-    std::vector<int64_t> shape = {1};
+    // L0C_COPY_UB shares ExecuteL0CToL1, which requires 2-D logical tensor shapes.
+    std::vector<int64_t> shape = {1, 1};
     Tensor tensorDesc(DT_FP32, shape);
     auto makeDynShape = [](const std::vector<int64_t>& s) {
         std::vector<SymbolicScalar> dynShape;
@@ -180,29 +181,59 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
 
     auto calleeIn1 = std::make_shared<LogicalTensor>(*calleeFunc1, DT_FP32, shape);
     auto calleeOut1 = std::make_shared<LogicalTensor>(*calleeFunc1, DT_FP32, shape);
+    calleeIn1->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    calleeOut1->SetMemoryTypeBoth(MemoryType::MEM_UB);
     calleeIn1->UpdateDynValidShape(dynShape);
     calleeOut1->UpdateDynValidShape(dynShape);
     calleeFunc1->inCasts_ = {calleeIn1};
     calleeFunc1->outCasts_ = {calleeOut1};
-    calleeFunc1->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn1}, {calleeOut1}, false);
+    auto& l0cCopyUbOp1 = calleeFunc1->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn1}, {calleeOut1}, false);
+    {
+        // Match GenerateMoveOp::SetL0C2UBCopyAttr: CopyIn ctor (DDR->to), memoryPath {MEM_DEVICE_DDR, MEM_UB},
+        // isCopyOut=false; valid shape is toDynValidShape (UB side), not CopyOut's fromDynValidShape.
+        auto shapeImme = OpImmediate::Specified(shape);
+        l0cCopyUbOp1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme,
+            OpImmediate::Specified(shape)));
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(l0cCopyUbOp1.GetOpAttribute());
+        ASSERT_NE(copyAttr, nullptr);
+        copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
+    }
 
     auto calleeIn2 = std::make_shared<LogicalTensor>(*calleeFunc2, DT_FP32, shape);
     auto calleeOut2 = std::make_shared<LogicalTensor>(*calleeFunc2, DT_FP32, shape);
+    calleeIn2->SetMemoryTypeBoth(MemoryType::MEM_L0C);
+    calleeOut2->SetMemoryTypeBoth(MemoryType::MEM_UB);
     calleeIn2->UpdateDynValidShape(dynShape);
     calleeOut2->UpdateDynValidShape(dynShape);
     calleeFunc2->inCasts_ = {calleeIn2};
     calleeFunc2->outCasts_ = {calleeOut2};
-    calleeFunc2->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn2}, {calleeOut2}, false);
+    auto& l0cCopyUbOp2 = calleeFunc2->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn2}, {calleeOut2}, false);
+    {
+        auto shapeImme = OpImmediate::Specified(shape);
+        l0cCopyUbOp2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme,
+            OpImmediate::Specified(shape)));
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(l0cCopyUbOp2.GetOpAttribute());
+        ASSERT_NE(copyAttr, nullptr);
+        copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
+    }
 
     auto leafAttr1 = std::make_shared<LeafFuncAttribute>();
     auto leafAttr2 = std::make_shared<LeafFuncAttribute>();
+    // Parallel grouping is by wrapId; mixId must differ so ComputeHashOrderless() does not collide for two
+    // isomorphic BLOCK_GRAPH callees. Same hash would overwrite calleeHashDict and route both CALLs to one callee,
+    // sharing one outcast LogicalTensor while binding different root out views — FUNC_TENSOR_DATAVIEW_MISMATCH on
+    // MIX_PATH_OPS via mixGlobalTensorDict reuse.
     leafAttr1->mixId = 2;
-    leafAttr2->mixId = 2;
+    leafAttr2->mixId = 3;
     calleeFunc1->SetLeafFuncAttribute(leafAttr1);
     calleeFunc2->SetLeafFuncAttribute(leafAttr2);
 
     auto calleeHash1 = calleeFunc1->ComputeHash();
     auto calleeHash2 = calleeFunc2->ComputeHash();
+    ASSERT_NE(calleeHash1.GetHash(), calleeHash2.GetHash())
+        << "callee hashes must differ so calleeHashDict keeps both callees; adjust mixId or graph if this fails";
     auto& callOp1 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn1}, {rootOut1}, false);
     auto& callOp2 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn2}, {rootOut2}, false);
 
@@ -248,7 +279,7 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
         bool handled = interpreter.TryExecuteMixSplitCallOps(rootFrame, operations, opIdx, operations.at(0));
         interpreter.DumpEnd();
         ASSERT_TRUE(handled);
-        ASSERT_EQ(opIdx, 2U);
+        ASSERT_EQ(opIdx, 1U);
         ASSERT_EQ(capturedFrames.size(), 2U);
         std::set<const Operation*> executedCallops;
         for (const auto& capturedFrame : capturedFrames) {

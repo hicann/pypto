@@ -19,7 +19,137 @@
 #include "interface/configs/config_manager.h"
 #include "interface/utils/file_utils.h"
 
+#include <chrono>
+#include <cstdio>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+#include <vector>
+
 namespace npu::tile_fwk {
+namespace {
+std::string MakeVerifyRunTimestampTag()
+{
+    const auto now = std::chrono::high_resolution_clock::now();
+    const std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    const auto us =
+        std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    std::stringstream timestamp;
+    timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
+    timestamp << "_" << std::setw(6) << std::setfill('0') << us;
+    return timestamp.str();
+}
+
+std::vector<std::string> MakeOpInfoCsvHeader()
+{
+    return {
+        "NO.",
+        "PHASE_NAME",
+        "PATH_FUNC:func_magicname",
+        "PATH_FUNC:funcmagic",
+        "PATH_FUNC:hash",
+        "LOOP_INFO",
+        "ROOT_FUNC:functype",
+        "ROOT_FUNC:graphtype",
+        "ROOT_FUNC:funcmagic",
+        "ROOT_FUNC:hash",
+        "FUNC:functype",
+        "FUNC:graphtype",
+        "FUNC:funcmagic",
+        "FUNC:hash",
+        ":rawmagic",
+        ":rawshape",
+        ":datatype",
+        ":format",
+        ":symbol",
+        ":magic",
+        ":offset",
+        ":shape",
+        ":validshape",
+        "EVAL:dynvalidshape",
+        "ROOT_CALL:opmagic",
+        "ROOT_CALL:rawmagic",
+        ":opmagic",
+        ":opcode",
+        "OP_ATTR_SYM_OFFSET",
+        "OP_ATTR_ATOMIC",
+        "OP_IO_FLAG",
+        "TIMESTAMP",
+        "FILENAME",
+        "INPUT_FILENAMES",
+        ":inputValidShape",
+        ":inputRawMagic",
+    };
+}
+
+std::vector<std::string> MakeProgrameInfoCsvHeader()
+{
+    return {
+        "NO.",
+        "A>PHASE_NAME",
+        "B>PHASE_NAME",
+        "PATH_FUNC:func_magicname",
+        "PATH_FUNC:funcmagic",
+        "PATH_FUNC:hash",
+        "LOOP_INFO",
+        "IO_FLAG",
+        "A>:rawmagic",
+        "B>:rawmagic",
+        ":rawshape",
+        ":datatype",
+        ":format",
+        ":symbol",
+        ":shape",
+        ":validshape",
+        "A>TIMESTAMP",
+        "A>FILENAME",
+        "B>TIMESTAMP",
+        "B>FILENAME",
+        "AB>RESULT",
+        "AB>rtol/atol",
+        "AB>fail_cnt/warn_cnt/tol_cnt",
+        "AB>total_cnt/zero_cnt/infnan_cnt",
+        "AB>mre",
+        "AB>mre_top8",
+        "AB>mre_top1permil",
+        "AB>mae",
+        "AB>mae_top8",
+        "AB>mae_top1permil",
+        "A>max",
+        "A>min",
+        "A>avg",
+        "A>aavg",
+        "A>zero",
+        "A>infnan",
+        "B>max",
+        "B>min",
+        "B>avg",
+        "B>aavg",
+        "B>zero",
+        "B>infnan",
+    };
+}
+} // anonymous namespace
+
+FunctionInterpreter::FunctionInterpreter()
+    : interpreterSyncSimulation_(std::make_shared<InterpreterSyncSimulationState>()), interpreterThreadPool_(0x3)
+{
+    dumpPath = config::GetVerifyOption<std::string>(KEY_PASS_VERIFY_SAVE_TENSOR_DIR);
+    if (dumpPath.empty()) {
+        dumpPath = config::LogTopFolder();
+    }
+    dumpPath = dumpPath + "/" + "verify_" + MakeVerifyRunTimestampTag() + "/";
+    CreateMultiLevelDir(dumpPath);
+    interpreter::SetLogFilePath(dumpPath + "interpreter.log");
+    execOpResultFile = fopen((dumpPath + "verify_graph_data_metainfo.csv").c_str(), "w");
+    execProgrameResultFile = fopen((dumpPath + "verify_graph_result_brief.csv").c_str(), "w");
+    execDumpErrorFile = fopen((dumpPath + "verify_graph_result_brief.log").c_str(), "w");
+    auto opCsvHeader = MakeOpInfoCsvHeader();
+    auto programeCsvHeader = MakeProgrameInfoCsvHeader();
+    WriteCsvRow(opCsvHeader, opInfoRowNum, execOpResultFile);
+    WriteCsvRow(programeCsvHeader, ProgrameRowNum, execProgrameResultFile);
+}
+
 constexpr int MAX_IDENT_LEVEL = 20;
 const std::unordered_set<std::string> copyOpCode = {
     "COPY_IN",         "COPY_OUT",        "L1_TO_L0A", "L1_TO_L0B",        "L1_TO_L0At",        "FIX_COPY_IN_QUANT_PRE",
@@ -67,12 +197,6 @@ void FunctionInterpreter::DumpFunctionHead(Function* func)
     auto outcast = func->DumpSSAOutcast(indent);
     auto attr = func->DumpSSAAttribute(indent);
     auto symbol = DumpSymbolDict();
-    INTERPRETER_LOGI("%s Function %s\n", execDumpFuncKey.c_str(), head.c_str());
-    INTERPRETER_LOGI("%s\n", raw.c_str());
-    INTERPRETER_LOGI("%s\n", incast.c_str());
-    INTERPRETER_LOGI("%s\n", outcast.c_str());
-    INTERPRETER_LOGI("%s\n", attr.c_str());
-    INTERPRETER_LOGI("%s\n", symbol.c_str());
     if (!execDumpFile) {
         return;
     }
@@ -92,7 +216,6 @@ void FunctionInterpreter::DumpOperation(Operation* op)
         return;
     int indent = GetFrameSize();
     auto dump = op->Dump();
-    INTERPRETER_LOGI("%s Operation: %s", execDumpFuncKey.c_str(), dump.c_str());
     if (execDumpFile) {
         std::string tensorId = GetDumpTensorId(GetFrameCurr(), op);
         std::string operationId = GetDumpOperationId(GetFrameCurr(), op);
@@ -159,7 +282,7 @@ static void DumpDataViewParallel(
 
 std::string FunctionInterpreter::DumpDataView(const std::shared_ptr<LogicalTensorData>& dataView)
 {
-    DumpDataViewParallel(dataView, execDumpElementList, &operationInterpreter->GetPool());
+    DumpDataViewParallel(dataView, execDumpElementList, &interpreterThreadPool_);
     return dataView->Dump(&execDumpElementList);
 }
 
@@ -344,7 +467,7 @@ void FunctionInterpreter::FillOperationOffsetInfo(
         if (copyOpCode.count(op->GetOpcodeStr())) {
             auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
             auto offset = copyAttr->IsCopyOut() ? copyAttr->GetToOffset() : copyAttr->GetFromOffset();
-            auto offsetView = operationInterpreter->EvaluateOpImmediate(frame, offset);
+            auto offsetView = GetOperationInterpreterForThisThread().EvaluateOpImmediate(frame, offset);
             opInfo[toIndex(OpInfoCsvHeader::attrOffset)] = ShapeToString(offsetView);
         } else {
             Offset offsetView = EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset(), linearArgList);
@@ -485,9 +608,6 @@ void FunctionInterpreter::DumpPassTensorDiff(
         }
         for (size_t k = 0; k < tensorList.size(); k++) {
             auto tensor = tensorList[k];
-            INTERPRETER_LOGI(
-                "Dump tensor diff: %zu/%zu %s %s", k, tensorList.size(), tensor->Dump().c_str(),
-                tensor->GetRawTensor()->Dump().c_str());
             auto executionFileName = tensorDictExecution.find(tensor)->second;
             auto dataViewExecution = LoadTensorBinary(tensor, execDumpDir + "/" + executionFileName);
             auto filename = tensorDictGolden.find(tensor)->second;

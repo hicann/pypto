@@ -49,6 +49,23 @@ REGISTER_CALC_OP(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, ExecuteOpAssemble);
 REGISTER_CALC_OP(OP_ASSEMBLE_SSA, Opcode::OP_ASSEMBLE_SSA, ExecuteOpAssemble);
 
 void ExecuteOpNone(ExecuteOperationContext* ctx) { (void)ctx; }
+
+void ExecuteOpInterpreterCvSyncSet(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_NULL, ctx != nullptr);
+    ASSERT(ExecuteOperationScene::CTX_OP_NULL, ctx->op != nullptr);
+    ASSERT(ExecuteOperationScene::CTX_NULL, ctx->opInter != nullptr);
+    ctx->opInter->InterpreterSyncSimSet(ctx->op->GetSyncQueue(), ctx->op->GetOpMagic());
+}
+
+void ExecuteOpInterpreterCvSyncWait(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_NULL, ctx != nullptr);
+    ASSERT(ExecuteOperationScene::CTX_OP_NULL, ctx->op != nullptr);
+    ASSERT(ExecuteOperationScene::CTX_NULL, ctx->opInter != nullptr);
+    ctx->opInter->InterpreterSyncSimWait(ctx->op->GetSyncQueue(), ctx->op->GetOpMagic());
+}
+
 REGISTER_CALC_OP(OP_PHASE1, Opcode::OP_PHASE1, ExecuteOpNone);
 REGISTER_CALC_OP(OP_PHASE2, Opcode::OP_PHASE2, ExecuteOpNone);
 REGISTER_CALC_OP(OP_SYNC_SRC, Opcode::OP_SYNC_SRC, ExecuteOpNone);
@@ -56,8 +73,8 @@ REGISTER_CALC_OP(OP_SYNC_DST, Opcode::OP_SYNC_DST, ExecuteOpNone);
 REGISTER_CALC_OP(OP_BAR_V, Opcode::OP_BAR_V, ExecuteOpNone);
 REGISTER_CALC_OP(OP_BAR_M, Opcode::OP_BAR_M, ExecuteOpNone);
 REGISTER_CALC_OP(OP_NOP, Opcode::OP_NOP, ExecuteOpNone);
-REGISTER_CALC_OP(OP_CV_SYNC_SRC, Opcode::OP_CV_SYNC_SRC, ExecuteOpNone);
-REGISTER_CALC_OP(OP_CV_SYNC_DST, Opcode::OP_CV_SYNC_DST, ExecuteOpNone);
+REGISTER_CALC_OP(OP_CV_SYNC_SRC, Opcode::OP_CV_SYNC_SRC, ExecuteOpInterpreterCvSyncSet);
+REGISTER_CALC_OP(OP_CV_SYNC_DST, Opcode::OP_CV_SYNC_DST, ExecuteOpInterpreterCvSyncWait);
 
 void ExecuteOpViewType(ExecuteOperationContext* ctx)
 {

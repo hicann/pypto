@@ -16,7 +16,11 @@
 
 #pragma once
 
-#include "interface/interpreter/thread_pool.h"
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <unordered_map>
+
 #include "interface/operation/attribute.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/file_utils.h"
@@ -28,8 +32,26 @@ namespace npu::tile_fwk {
 
 constexpr int DATATYPE_EIGHT = 8;
 
+class OpSyncQueue;
+
 struct FunctionFrame;
 class OperationInterpreter;
+
+/// Shared by all per-thread OperationInterpreter instances under one FunctionInterpreter (mix-split CV sync sim).
+class InterpreterSyncSimulationState {
+public:
+    void Reset();
+    void Set(const OpSyncQueue& sq, int opMagic);
+    void Wait(const OpSyncQueue& sq, int opMagic);
+
+    static constexpr int64_t INTERPRETER_SYNC_SIM_WAIT_TIMEOUT_MS = 60000;
+
+private:
+    std::mutex interpreterSyncSimMutex_;
+    std::condition_variable interpreterSyncSimCv_;
+    std::unordered_map<int, uint32_t> interpreterSyncSimPending_;
+};
+
 struct ExecuteOperationContext {
     FunctionFrame* frame;
     OperationInterpreter* opInter;
@@ -45,7 +67,11 @@ using Funcs = std::function<void(ExecuteOperationContext*)>;
 
 class OperationInterpreter {
 public:
-    OperationInterpreter() : evaluateSymbol(std::make_shared<EvaluateSymbol>()) {}
+    /// If \p sharedSyncSim is null, owns a private sync state (standalone / unit tests).
+    explicit OperationInterpreter(std::shared_ptr<InterpreterSyncSimulationState> sharedSyncSim = {})
+        : evaluateSymbol(std::make_shared<EvaluateSymbol>()),
+          syncSim_(sharedSyncSim ? sharedSyncSim : std::make_shared<InterpreterSyncSimulationState>())
+    {}
 
     std::shared_ptr<EvaluateSymbol> evaluateSymbol;
 
@@ -69,7 +95,13 @@ public:
 
     void ExecuteOperation(ExecuteOperationContext* ctx);
 
-    util::ThreadPool& GetPool() { return pool; }
+    /// Host simulation for CV_SYNC_* only; pending map keyed by syncQueue.eventId_. OP_SYNC_* is not simulated here.
+    /// Mix-split parallel shares one InterpreterSyncSimulationState across per-thread OperationInterpreter instances.
+    void ResetInterpreterSyncSimulation();
+    void InterpreterSyncSimSet(const OpSyncQueue& sq, int opMagic);
+    void InterpreterSyncSimWait(const OpSyncQueue& sq, int opMagic);
+
+    std::shared_ptr<InterpreterSyncSimulationState> GetSyncSimulationState() const { return syncSim_; }
 
     // 注册默认函数
     static void RegisterFunc(const Opcode opcode, Funcs func)
@@ -112,7 +144,7 @@ private:
         return instance;
     }
 
-    util::ThreadPool pool{0x3};
+    std::shared_ptr<InterpreterSyncSimulationState> syncSim_;
 };
 
 // LogTensorList 用於在執行 Operation 出錯時打印張量資訊

@@ -20,7 +20,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <algorithm>
 #include <mutex>
+#include <string>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -95,34 +97,72 @@ const char* LevelToString(LogLevel level)
     }
 }
 
-void WriteLine(LogLevel level, const char* fmt, va_list args) __attribute__((format(printf, 2, 0)));
-void WriteLine(LogLevel level, const char* fmt, va_list args)
-{
-    constexpr int kInitialBufSize = 1024;
-    char stackBuf[kInitialBufSize];
-    const char* msgPtr = stackBuf;
-    std::string dynamicBuf;
+// 单行日志上限，避免格式串异常时无限扩容；需要更大时可改环境或调大该常量。
+constexpr size_t kLogLineMaxBytes = 16U * 1024U * 1024U;
 
+/// 栈缓冲 + 堆扩容缓冲 + 成功时最终 C 字符串指针（指向 stack 或 heap 内部）。
+struct LogFormatScratch {
+    char* stackBuf = nullptr;
+    size_t stackBufSize = 0;
+    std::string* heapBuf = nullptr;
+    const char* msg = nullptr;
+};
+
+/// 将 fmt/args 格式化为以 '\\0' 结尾的连续 C 字符串；成功时 scratch.msg 指向其内部缓冲。
+bool FormatLogMessage(const char* fmt, va_list args, LogFormatScratch& scratch)
+{
+    char* const stackBuf = scratch.stackBuf;
+    const size_t stackBufSize = scratch.stackBufSize;
+    std::string& heapBuf = *scratch.heapBuf;
+    const size_t kInitialBufSize = stackBufSize;
     va_list argsCopy;
     va_copy(argsCopy, args);
-    int msgLength = vsnprintf_s(stackBuf, sizeof(stackBuf), sizeof(stackBuf) - 1, fmt, argsCopy);
+    int msgLength = vsnprintf_s(stackBuf, stackBufSize, stackBufSize - 1, fmt, argsCopy);
     va_end(argsCopy);
-    if (msgLength < 0) {
-        return;
-    }
-    // count 为 sizeof(stackBuf)-1，栈上最多容纳 kInitialBufSize-1 个字符加 '\0'。
-    // 若返回值 >= kInitialBufSize（含等于），表示未完整写入或仍需更大缓冲，须走动态路径。
-    if (msgLength >= kInitialBufSize) {
-        dynamicBuf.resize(static_cast<size_t>(msgLength) + 1);
-        va_copy(argsCopy, args);
-        const int ret = vsnprintf_s(dynamicBuf.data(), dynamicBuf.size(), dynamicBuf.size() - 1, fmt, argsCopy);
-        va_end(argsCopy);
-        if (ret < 0) {
-            return;
-        }
-        msgPtr = dynamicBuf.c_str();
-    }
 
+    if (msgLength >= 0 && static_cast<size_t>(msgLength) < kInitialBufSize) {
+        scratch.msg = stackBuf;
+        return true;
+    }
+    if (msgLength >= static_cast<int>(kInitialBufSize)) {
+        heapBuf.resize(static_cast<size_t>(msgLength) + 1U);
+        va_copy(argsCopy, args);
+        msgLength = vsnprintf_s(heapBuf.data(), heapBuf.size(), heapBuf.size() - 1, fmt, argsCopy);
+        va_end(argsCopy);
+        if (msgLength < 0) {
+            return false;
+        }
+        scratch.msg = heapBuf.c_str();
+        return true;
+    }
+    // libboundscheck 的 vsnprintf_s 在截断时返回 -1，需扩大缓冲后重试直至完整写入。
+    size_t cap = std::min(kLogLineMaxBytes, kInitialBufSize * 2U);
+    constexpr size_t kMaxHeapFormatAttempts = 64U;
+    bool formattedOk = false;
+    for (size_t attempt = 0; attempt < kMaxHeapFormatAttempts; ++attempt) {
+        heapBuf.resize(cap);
+        va_copy(argsCopy, args);
+        msgLength = vsnprintf_s(heapBuf.data(), heapBuf.size(), heapBuf.size() - 1, fmt, argsCopy);
+        va_end(argsCopy);
+        if (msgLength >= 0) {
+            scratch.msg = heapBuf.c_str();
+            formattedOk = true;
+            break;
+        }
+        if (cap >= kLogLineMaxBytes) {
+            return false;
+        }
+        size_t nextCap = std::min(kLogLineMaxBytes, cap * 2U);
+        if (nextCap == cap) {
+            return false;
+        }
+        cap = nextCap;
+    }
+    return formattedOk;
+}
+
+void EmitLogLineToOutputs(LogLevel level, const char* msgPtr)
+{
     std::time_t now = std::time(nullptr);
     std::tm localTm {};
     (void)localtime_r(&now, &localTm);
@@ -147,6 +187,19 @@ void WriteLine(LogLevel level, const char* fmt, va_list args)
     if (context.printToStdout) {
         fprintf(stdout, "[%s][%s][tid:%" PRIu64 "] %s\n", timeBuf, levelStr, threadId, msgPtr);
     }
+}
+
+void WriteLine(LogLevel level, const char* fmt, va_list args) __attribute__((format(printf, 2, 0)));
+void WriteLine(LogLevel level, const char* fmt, va_list args)
+{
+    constexpr size_t kStackBufSize = 1024U;
+    char stackBuf[kStackBufSize];
+    std::string heapBuf;
+    LogFormatScratch scratch{stackBuf, kStackBufSize, &heapBuf};
+    if (!FormatLogMessage(fmt, args, scratch)) {
+        return;
+    }
+    EmitLogLineToOutputs(level, scratch.msg);
 }
 } // namespace
 

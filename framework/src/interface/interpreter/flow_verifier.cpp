@@ -571,7 +571,6 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
     }
     for (size_t captureIndex = 0; captureIndex < captureList.size(); captureIndex++) {
         const std::string key = functionInterpreter_->execDumpFunPath + "_" + functionInterpreter_->execDumpPassName;
-        INTERPRETER_LOGI("%s: Verify", key.c_str());
         functionInterpreter_->captureIndex = captureIndex;
 
         std::shared_ptr<FunctionCaptureExecution> capture = nullptr;

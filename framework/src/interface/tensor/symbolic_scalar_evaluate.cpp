@@ -248,7 +248,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicScalar(
                 result = constSymbolDict_[sym->Name()];
             } else {
                 FE_ASSERT(symbolDict_.count(sym->Name()));
-                result = symbolDict_[sym->Name()];
+                result = symbolDict_.at(sym->Name());
             }
         } break;
         case SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION: {
