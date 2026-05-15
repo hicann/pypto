@@ -21,7 +21,7 @@
 namespace npu::tile_fwk {
 
 constexpr int64_t LATENCY_THRESHOLD_LEVEL1 = 10000000;
-constexpr int64_t LATENCY_THRESHOLD_LEVEL2 = 300000;
+constexpr int64_t LATENCY_THRESHOLD_LEVEL2 = 290000;
 constexpr int64_t LATENCY_THRESHOLD_LEVEL3 = 50000;
 
 constexpr int32_t CYCLE_UB_LEVEL1 = 5000000; // 超大型计算场景
