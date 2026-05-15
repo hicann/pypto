@@ -359,7 +359,7 @@ private:
     Status GetDepInfo(std::vector<IndexOp>& syncedOpLog, const PipePairEx& pipePairEx, DataDepInfo& depInfo);
     Status RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog);
     Status RelaxCvEventId(std::vector<IndexOp>& syncedOpLog);
-    Status RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair);
+    Status RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair, bool& failedFlag);
     bool HasCvSyncDstAfter(const std::vector<IndexOp>& syncedOpLog, int srcIdx, const Operation& srcOp) const;
     void FillCvDepInfoEntry(std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap,
                             const std::vector<IndexOp>& syncedOpLog, int idx, int eventId);

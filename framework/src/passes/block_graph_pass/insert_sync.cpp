@@ -679,10 +679,22 @@ Status PipeSync::AdjustOpDep(DepOp& op, size_t waitOpIdx, IssueQueue& issueQ, bo
 Status PipeSync::RelaxMultipleEventIds(
     const CorePair& setwaitCoreType, size_t needEvIdNum, std::vector<IndexOp>& syncedOpLog)
 {
-    for (size_t i = 0; i < needEvIdNum; i++) {
-        if (RelaxCvEventIdMain(syncedOpLog, setwaitCoreType) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "RelaxMultipleEventIds failed at RelaxCvEventIdMain.");
-            return FAILED;
+    size_t successNum = 0;
+    std::vector<CorePair> coreTypes = {setwaitCoreType, {setwaitCoreType.second, setwaitCoreType.first}};
+    
+    for (const auto& coreType : coreTypes) {
+        for (size_t i = successNum; i < needEvIdNum; i++) {
+            bool failedFlag = false;
+            if (RelaxCvEventIdMain(syncedOpLog, coreType, failedFlag) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "RelaxMultipleEventIds failed at RelaxCvEventIdMain.");
+                return FAILED;
+            }
+            if (!failedFlag) {
+                successNum++;
+                if (successNum == needEvIdNum) {
+                    return SUCCESS;
+                }
+            }
         }
     }
     return SUCCESS;
@@ -774,7 +786,8 @@ Status PipeSync::HandleEventID(
     bool eventIdOk = true;
     bool failedFlag = false;
 
-    for (auto ele : op.setPipe) {
+    std::vector<size_t> oriSetPipe = op.setPipe;
+    for (auto ele : oriSetPipe) {
         EventIdProcessContext ctx{op, ele, issueQ, issuenum, syncedOpLog, deadlock, eventIdOk, failedFlag};
         if (ProcessEventIdElement(ctx) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "HandleEventID failed at ProcessEventIdElement.");
@@ -1460,7 +1473,7 @@ std::string PipeSync::DumpDepInfoMap(
     return ss.str();
 }
 
-Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair)
+Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair, bool& failedFlag)
 {
     APASS_LOG_DEBUG_F(
         Elements::Operation,
@@ -1482,6 +1495,7 @@ Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const Cor
     int maxOverlapIdx = -1;
     if (!(FindMaxOverlapForCV(targetPp, maxOverlapIdx, cvDepInfoMap))) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Cannot find mergeable setwait pair");
+        failedFlag = true;
         return SUCCESS;
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "%s", DumpMergeCVInfo(targetPp, maxOverlapIdx, cvDepInfoMap).c_str());
@@ -1493,6 +1507,7 @@ Status PipeSync::RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const Cor
         APASS_LOG_ERROR_F(Elements::Operation, "SynDependency failed.");
         return FAILED;
     }
+    APASS_LOG_DEBUG_F(Elements::Operation, "Successfully merged cv dep.");
     return SUCCESS;
 }
 
@@ -1503,7 +1518,8 @@ Status PipeSync::RelaxCvEventId(std::vector<IndexOp>& syncedOpLog)
         if (!(crossCoreFreeEventId_.count(corePair) != 0 && crossCoreFreeEventId_[corePair].size() == 0)) {
             continue;
         }
-        if (RelaxCvEventIdMain(syncedOpLog, corePair) != SUCCESS) {
+        bool failedFlag = false;
+        if (RelaxCvEventIdMain(syncedOpLog, corePair, failedFlag) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "RelaxCvEventId failed at RelaxCvEventIdMain.");
             return FAILED;
         }
