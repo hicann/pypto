@@ -46,3 +46,6 @@ run_log
 log_ca
 cannsim*
 trace_*
+
+# gcov
+build_dir.json

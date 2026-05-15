@@ -36,13 +36,13 @@ class GenCoverage:
         def __call__(self, parser, namespace, values, option_string=None):
             # 获取当前已收集的列表(初始为 None)
             cur_values = getattr(namespace, self.dest, None) or []
-            path = Path(values)
-            # 仅保留存在的路径, 并格式化(目录加 /*)
-            if path.exists():
-                if path.is_dir():
-                    cur_values.append(f" {path}/*")
-                else:
-                    cur_values.append(f" {path}")
+            # 处理分号分隔的多个路径（VERBATIM 模式下，生成器表达式展开为分号分隔字符串）
+            for path_str in values.split(';'):
+                path_str = path_str.strip()
+                if not path_str:
+                    continue
+                path = Path(path_str)
+                cur_values.append(f" {path}")
             # 更新命名空间的值
             setattr(namespace, self.dest, cur_values)
 
@@ -62,9 +62,11 @@ class GenCoverage:
             self.init_lcov_version()
             self.lcov_supported_exclude = self._check_param_support(exe="lcov", param="--exclude")
             self.lcov_supported_parallel = self._check_param_support(exe="lcov", param="--parallel")
+            self.lcov_supported_ignore_mismatch = self._version_ge(version=self.lcov_version, target="2.0.0")
             self.init_genhtml_version()
             self.genhtml_supported_hierarchical = self._check_param_support(exe="genhtml", param="--hierarchical")
             self.genhtml_supported_parallel = self._check_param_support(exe="genhtml", param="--parallel")
+            self.genhtml_supported_ignore_mismatch = self._version_ge(version=self.genhtml_version, target="2.0.0")
 
         def __str__(self) -> str:
             desc = f"\nlcov"
@@ -95,6 +97,12 @@ class GenCoverage:
                 return f"{base_version}.0"
             else:
                 return version_match.group(1)
+
+        @classmethod
+        def _version_ge(cls, version: str, target: str) -> bool:
+            def parse(v):
+                return tuple(map(int, v.split(".")))
+            return parse(version) >= parse(target)
 
         @classmethod
         def _check_param_support(cls, exe: str, param: str) -> bool:
@@ -328,6 +336,13 @@ class GenCoverage:
                 parts.append(f"{start}~{end}")
         return ", ".join(parts)
 
+    @classmethod
+    def _check_ret(cls, ret, cmd: str):
+        if ret.returncode != 0:
+            logging.error(f"cmd: {cmd}, ret: {ret.returncode}")
+            logging.error(f"stdout:\n{ret.stdout}")
+            logging.error(f"stderr:\n{ret.stderr}")
+
     def chk_env(self):
         """检查环境依赖
         """
@@ -384,11 +399,14 @@ class GenCoverage:
                 cmd += f" --exclude {filter_path}"
         if self.lcov_ability.lcov_supported_parallel:
             cmd += f" --rc geninfo_unexecuted_blocks=1"  # 接受未执行块
-            cmd += f" --ignore-errors unused"  # 兼容高版本 LCov
+            cmd += f" --ignore-errors unused,unused"  # 兼容高版本 LCov
             cmd += f" --ignore-errors negative"
             cmd += f" -j {self.job_num}"
-        ret = subprocess.run(cmd.split(), capture_output=False, check=True, encoding='utf-8')
-        ret.check_returncode()
+        if self.lcov_ability.lcov_supported_ignore_mismatch:
+            cmd += f" --ignore-errors mismatch,mismatch"  # 兼容宏展开等导致的行号不匹配
+        cmd += f" --ignore-errors source"  # 兼容 pip isolation 模式下临时环境被清理
+        ret = subprocess.run(cmd.split(), capture_output=False, check=False, encoding='utf-8')
+        self._check_ret(ret=ret, cmd=cmd)
         logging.info("Generated%s coverage file %s, cmd: %s",
                      "" if self.lcov_ability.lcov_supported_exclude else " origin", self.full_cov_info_file, cmd)
         # 滤掉某些文件/路径的覆盖率信息
@@ -401,7 +419,7 @@ class GenCoverage:
             filter_str = " ".join(self.filter_lst)
             cmd = f"lcov --remove {self.full_cov_info_file} {filter_str} -o {filtered_file}"
             ret = subprocess.run(cmd.split(), capture_output=False, check=True, encoding='utf-8')
-            ret.check_returncode()
+            self._check_ret(ret=ret, cmd=cmd)
             logging.info("Generated filtered coverage file %s, cmd: %s", filtered_file, cmd)
             self.full_cov_info_file = filtered_file
 
@@ -415,8 +433,13 @@ class GenCoverage:
         if self.lcov_ability.genhtml_supported_parallel:
             cmd += f" --rc check_data_consistency=0"  # 关闭数据一致性校验
             cmd += f" -j {self.job_num}"
+        if self.lcov_ability.genhtml_supported_ignore_mismatch:
+            cmd += f" --ignore-errors mismatch,mismatch"
+        cmd += f" --ignore-errors source"
+        cmd += f" --no-branch-coverage"
+
         ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
-        ret.check_returncode()
+        self._check_ret(ret=ret, cmd=cmd)
         logging.info("Generated %s coverage html report in %s, cmd: %s", scene, dest, cmd)
 
     def gen_full_cov_data(self):

@@ -292,3 +292,67 @@ function(PTO_Fwk_CleanEmptyDir)
         endif()
     endif ()
 endfunction()
+
+# 生成 gcov 配置文件 (JSON 格式)
+# 用于 Python 前端覆盖率生成场景，将 CMake Configure 阶段的参数持久化供外部使用
+#[[
+Parameters:
+  one_value_keywords:
+      TARGET             : [Required] 指定所依赖的目标(POST_BUILD)
+  multi_value_keywords:
+      FILTER_DIRECTORIES : [Optional] 覆盖率结果过滤目录
+]]
+function(PTO_Fwk_GenerateGCovConfigJson)
+    cmake_parse_arguments(
+            ARG
+            ""
+            "TARGET"
+            "FILTER_DIRECTORIES"
+            ""
+            ${ARGN}
+    )
+    if (ENABLE_FEATURE_PYTHON_FRONT_END AND ENABLE_GCOV)
+        # 获取 gcc 默认头文件搜索路径
+        execute_process(
+                COMMAND ${CMAKE_C_COMPILER} --print-sysroot
+                RESULT_VARIABLE _SYSROOT_RST
+                OUTPUT_VARIABLE _SYSROOT_SUFFIX
+                ERROR_QUIET
+        )
+        if (_SYSROOT_RST)
+            get_filename_component(SYS_ROOT "/usr/include" REALPATH)
+        else ()
+            get_filename_component(SYS_ROOT "${_SYSROOT_SUFFIX}/usr/include" REALPATH)
+        endif ()
+
+        set(Filter_Dirs
+                ${PTO_FWK_SRC_ROOT}/framework/tests
+                $<TARGET_PROPERTY:json,INTERFACE_INCLUDE_DIRECTORIES>
+                ${SYS_ROOT}
+                ${ARG_FILTER_DIRECTORIES}
+                ${pybind11_INCLUDE_DIR}
+        )
+        if (ENABLE_TORCH_VERIFIER)
+            list(APPEND Filter_Dirs ${PY3_MOD_TORCH_ROOT_PATH}/include)
+        endif ()
+        if (BUILD_WITH_CANN)
+            list(APPEND Filter_Dirs ${ASCEND_CANN_PACKAGE_PATH}/include)
+        endif ()
+
+        # 参数组织
+        set(_Args "-d=${PTO_FWK_BIN_ROOT}")
+        foreach (_dir ${Filter_Dirs})
+            list(APPEND _Args "-f=${_dir}")
+        endforeach ()
+        list(REMOVE_DUPLICATES _Args)
+
+        # 脚本调用
+        get_filename_component(GenCoverageCfgPy ${PTO_FWK_SRC_ROOT}/cmake/scripts/gen_coverage_config.py REALPATH)
+        add_custom_command(
+                TARGET ${ARG_TARGET} POST_BUILD
+                COMMAND ${Python3_EXECUTABLE} ${GenCoverageCfgPy} ARGS ${_Args}
+                VERBATIM
+                COMMENT "Generate coverage config for ${ARG_TARGET}"
+        )
+    endif()
+endfunction()

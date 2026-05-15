@@ -49,3 +49,5 @@ target_link_libraries(pypto_impl
 if (TARGET c_sec_shared)
     add_dependencies(pypto_impl c_sec_shared)
 endif ()
+
+PTO_Fwk_GenerateGCovConfigJson(TARGET pypto_impl)

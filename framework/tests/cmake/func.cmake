@@ -45,14 +45,10 @@ function(PTO_Fwk_GTest_GenerateCoverage)
         get_filename_component(GenCoverageDataDir "${PTO_FWK_BIN_ROOT}" REALPATH)
         set(_Args "-s=${PTO_FWK_SRC_ROOT}" "-d=${GenCoverageDataDir}")
 
-        get_target_property(GTest_GTest_Inc     GTest::gtest           INTERFACE_INCLUDE_DIRECTORIES)
-        get_target_property(GTest_GTestMain_Inc GTest::gtest_main      INTERFACE_INCLUDE_DIRECTORIES)
-        get_target_property(Json_Inc            json                   INTERFACE_INCLUDE_DIRECTORIES)
         set(Filter_Dirs
                 ${PTO_FWK_SRC_ROOT}/framework/tests
-                ${GTest_GTest_Inc}
-                ${GTest_GTestMain_Inc}
-                ${Json_Inc}
+                $<TARGET_PROPERTY:GTest::gtest,INTERFACE_INCLUDE_DIRECTORIES>
+                $<TARGET_PROPERTY:json,INTERFACE_INCLUDE_DIRECTORIES>
                 ${SYS_ROOT}
                 ${ARG_FILTER_DIRECTORIES}
         )
@@ -70,6 +66,7 @@ function(PTO_Fwk_GTest_GenerateCoverage)
         add_custom_command(
                 TARGET ${ARG_TARGET} POST_BUILD
                 COMMAND ${Python3_EXECUTABLE} ${GenCoveragePy} ARGS ${_Args}
+                VERBATIM
                 COMMENT "Generate coverage for ${ARG_TARGET}"
         )
     endif ()

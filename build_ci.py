@@ -48,11 +48,11 @@
 import abc
 import argparse
 import dataclasses
+import json
 import logging
 import math
 import multiprocessing
 import os
-import re
 import platform
 import shlex
 import shutil
@@ -903,6 +903,7 @@ class BuildCtrl(CMakeParam):
         self.origin_timeout: Optional[int] = args.timeout if args.timeout and args.timeout > 0 else None  # 超时时长
         self.remain_timeout: Optional[int] = self.origin_timeout
         self.src_root: Path = Path(__file__).parent.resolve()
+        self.build_dir_file: Path = self.src_root / "build_dir.json"
         self.build_root: Path = Path(Path.cwd(), "build")
         self.install_root: Path = Path(self.build_root.parent, "build_out")
         self.feature: FeatureParam = FeatureParam(args=args)
@@ -1288,6 +1289,7 @@ class BuildCtrl(CMakeParam):
             Path(pkg_src, "__pycache__"),
             Path(pkg_src, "op/__pycache__"),
             Path(pkg_src, "lib"),  # edit 模式
+            self.build_dir_file,  # Python GCov 场景
         ]
         so_glob = pkg_src.glob(pattern=f"*.so")
         so_path = [Path(p) for p in so_glob]
@@ -1430,6 +1432,10 @@ class BuildCtrl(CMakeParam):
                              def_filter=str(Path(self.src_root, "examples")),
                              dev_ext_comma=dev_ext_comma, n_workers=n_workers)
 
+        # 生成覆盖率报告（如果启用 gcov）
+        if self.build.gcov:
+            self._py_generate_coverage()
+
     def py_tests_run_pytest(self, dist: Optional[Path], params: List[Tuple[TestsFilterParam, str]], ext: str = ""):
         """调用 pytest 执行测试用例
 
@@ -1552,6 +1558,53 @@ class BuildCtrl(CMakeParam):
         for k, v in update_env.items():
             logging.info("%s=%s", k, v)
         return update_env
+
+    def _py_generate_coverage(self):
+        """生成 Python 场景覆盖率报告
+
+        该函数读取 setup.py 生成的 build_dir 标记文件和 CMake 生成的 gcov_config.json，
+        然后调用 gen_coverage.py 生成覆盖率报告。
+
+        流程:
+            1. 读取 .pypto_build_dir.json → 获取 CMake 构建目录
+            2. 读取 gcov_config.json → 获取覆盖率参数（sys_root, filter_dirs 等）
+            3. 调用 gen_coverage.py → 生成覆盖率报告
+
+        注意:
+            - 需要在 pytest 执行完成后调用（此时 .gcda 文件已生成）
+            - 仅在 ENABLE_GCOV=ON 时生效（通过 build.gcov 参数判断）
+        """
+        # 1. 读取 build_dir 标记文件
+        if not self.build_dir_file.exists():
+            logging.warning("Build dir marker file not found: %s, skip coverage generation", self.build_dir_file)
+            return
+
+        with open(self.build_dir_file, 'r', encoding='utf-8') as f:
+            marker = json.load(f)
+        build_dir = Path(marker["cmake_binary_dir"]).resolve()
+
+        # 2. 读取 gcov 配置文件
+        config_file = build_dir / "gcov_config.json"
+        if not config_file.exists():
+            logging.warning("GCov config file not found: %s, skip coverage generation", config_file)
+            return
+
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # 3. 构造 gen_coverage.py 参数
+        gen_cov_py = self.src_root / "cmake/scripts/gen_coverage.py"
+
+        cmd = f"{sys.executable} {gen_cov_py} -s={self.src_root} -d={build_dir} "
+        for filter_dir in config.get("filter_dirs", []):
+            cmd += f" -f={filter_dir}"
+        cmd += (" -i" if self.build.gcov_incr else "") # 增量覆盖率
+
+        # 4. 执行覆盖率生成
+        logging.info("Generate coverage, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        ret, duration = self.run_build_cmd(cmd=cmd, check=True, pg_desc="gen_coverage")
+        ret.check_returncode()
+        logging.info("Generate coverage success, %s", duration)
 
     def _tests_enable(self) -> bool:
         return self.tests.utest.enable or self.tests.stest.enable

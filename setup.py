@@ -18,6 +18,7 @@
 """
 import argparse
 import importlib
+import json
 import logging
 import hashlib
 import math
@@ -493,6 +494,10 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         logging.info("CMake Install, Cmd: %s", cmd)
         ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
         ret.check_returncode()
+
+        # 写入 build_dir 标记文件 (供覆盖率生成使用)
+        self._write_build_dir_marker(src_root=src, build_dir=build_dir)
+
         if self._edit_mode():
             installed_files = self._get_cmake_install_manifest(build_dir=build_dir)
             if installed_files:
@@ -541,6 +546,23 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
             src_root = Path(__file__).parent.resolve()
             build_dir = src_root / "build"
         return build_dir.resolve()
+
+    def _write_build_dir_marker(self, src_root: Path, build_dir: Path):
+        """写入 build_dir 标记文件
+
+        在 src_root/build_dir.json 中记录当前 CMake 构建目录路径,
+        供生成覆盖率报告时使用。
+        """
+        gcov_config_file = build_dir / "gcov_config.json"
+        if not gcov_config_file.exists():
+            # 当未使能 GCov 时, 不会产生 gcov_config.json, 此时也不要产生 build_dir.json
+            return
+
+        marker_file = src_root / "build_dir.json"
+        marker_content = {"cmake_binary_dir": str(build_dir)}
+        with open(marker_file, "w", encoding="utf-8") as f:
+            json.dump(marker_content, f, ensure_ascii=False, indent=4)
+        logging.info("Written build dir marker: %s -> %s", marker_file, build_dir)
 
 
 class SetupCtrl:

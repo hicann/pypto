@@ -204,13 +204,6 @@ if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
         message(FATAL_ERROR "Python frontend only supported GNU Compiler yet.")
     endif ()
 endif ()
-if (ENABLE_FEATURE_PYTHON_FRONT_END)
-    if (ENABLE_GCOV)
-        set(ENABLE_GCOV OFF)
-        message(WARNING "GCov only supported in C++ front-end scene, Current front-end type python3, Auto turn off it.")
-    endif ()
-endif ()
-
 
 # ASAN / UBSAN 场景随编译执行用例场景下, 将相关检查在编译前执行, 避免出现编译完成后又无法执行的情况, 影响使用体验.
 if ((ENABLE_ASAN OR ENABLE_UBSAN) AND (ENABLE_TESTS_EXECUTE OR ENABLE_FEATURE_PYTHON_FRONT_END))
