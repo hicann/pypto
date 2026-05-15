@@ -376,23 +376,29 @@ TEST_F(Fp8DecodeTest, DecodeFp8E4M3_NormalNegative)
     EXPECT_NEAR(-4.0f, DecodeFp8E4M3(0xC8), 0.02f);
 }
 
-// 测试 DecodeFp8E4M3 对最大值(exp=15)的解码，验证 E4M3 特殊定义
-// E4M3 special: exp=15 → 240.0 (fixed value, no Inf/NaN)
-// This is NVIDIA/ARM E4M3 standard definition
-TEST_F(Fp8DecodeTest, DecodeFp8E4M3_MaxValue)
+// float8_e4m3fn (OCP MX / PyTorch): NaN = only S.1111.111 (0x7F / 0xFF)
+TEST_F(Fp8DecodeTest, DecodeFp8E4M3_NaN)
 {
-    // exp=15, mant=6 (0x7E)
-    EXPECT_NEAR(240.0f, DecodeFp8E4M3(0x7E), 1.0f);
-    EXPECT_FALSE(std::isinf(DecodeFp8E4M3(0x7E)));
-    
-    // exp=15, mant=0 (0x78)
-    EXPECT_NEAR(240.0f, DecodeFp8E4M3(0x78), 1.0f);
-    
-    // exp=15, mant=7 (0x7F)
-    EXPECT_NEAR(240.0f, DecodeFp8E4M3(0x7F), 1.0f);
-    
-    // Negative max (0xFE)
-    EXPECT_NEAR(-240.0f, DecodeFp8E4M3(0xFE), 1.0f);
+    // Only mant=7 with exp=15 is NaN (0x7F)
+    EXPECT_TRUE(std::isnan(DecodeFp8E4M3(0x7F)));
+    EXPECT_FALSE(std::isinf(DecodeFp8E4M3(0x7F)));
+    // Negative NaN (0xFF)
+    EXPECT_TRUE(std::isnan(DecodeFp8E4M3(0xFF)));
+}
+
+// float8_e4m3fn max finite: exp=15 (0b1111), mant=6 (0b110) → 448.0
+TEST_F(Fp8DecodeTest, DecodeFp8E4M3_MaxFinite)
+{
+    // Max positive finite (0x7E = 0_1111_110 → 1.110 × 2^8 = 448.0)
+    EXPECT_NEAR(448.0f, DecodeFp8E4M3(0x7E), 1.0f);
+    // Max negative finite (0xFE = 1_1111_110)
+    EXPECT_NEAR(-448.0f, DecodeFp8E4M3(0xFE), 1.0f);
+    // Also verify exp=15, mant=5 (0x7D) is normal, not NaN
+    EXPECT_FALSE(std::isnan(DecodeFp8E4M3(0x7D)));
+    EXPECT_NEAR(416.0f, DecodeFp8E4M3(0x7D), 1.0f);
+    // exp=15, mant=0 (0x78) is normal, not NaN (1.0 × 2^8 = 256.0)
+    EXPECT_FALSE(std::isnan(DecodeFp8E4M3(0x78)));
+    EXPECT_NEAR(256.0f, DecodeFp8E4M3(0x78), 1.0f);
 }
 
 // 测试 DecodeFp8E4M3 对次正规值(指数为0且尾数非0)的解码
@@ -523,31 +529,32 @@ TEST_F(Fp8DecodeTest, DecodeFp8E5M2_NormalPositive)
     EXPECT_NEAR(0.5f, DecodeFp8E5M2(0x38), 0.01f);
 }
 
-// 测试 DecodeFp8E8M0 对 2 的幂次的解码，验证纯指数格式
-// FP8 E8M0 格式: 8-bit exponent (no sign bit, no mantissa), bias=127
-// value = exp == 0 ? 0.0 : 2^(exp-127), range [2^-127, 2^127]
-// 0x00: exp=0 → 0.0 (special case)
-// 0x7F: exp=127 → 2^(127-127) = 1.0
-// 0x7E: exp=126 → 2^(126-127) = 0.5
-// 0x80: exp=128 → 2^(128-127) = 2.0
+// E8M0: 8-bit unsigned exponent, bias=127. value = 2^(bits - 127).
+// exp=0 → 2^-127 (subnormal), exp=255 → NaN, no infinity.
 TEST_F(Fp8DecodeTest, DecodeFp8E8M0_PowersOfTwo)
 {
-    EXPECT_FLOAT_EQ(0.0f, DecodeFp8E8M0(0x00));
+    // exp=0 → 2^-127
+    EXPECT_NEAR(std::pow(2.0f, -127.0f), DecodeFp8E8M0(0x00), 1e-10f);
+    // exp=127 (0x7F) → 2^0 = 1.0
     EXPECT_NEAR(1.0f, DecodeFp8E8M0(0x7F), 0.01f);
-    EXPECT_NEAR(0.5f, DecodeFp8E8M0(0x7E), 0.01f);
-    EXPECT_NEAR(0.25f, DecodeFp8E8M0(0x7D), 0.01f);
-    EXPECT_NEAR(0.125f, DecodeFp8E8M0(0x7C), 0.01f);
-    EXPECT_NEAR(2.0f, DecodeFp8E8M0(0x80), 0.01f);
+    EXPECT_NEAR(0.5f, DecodeFp8E8M0(0x7E), 0.01f);   // 2^-1
+    EXPECT_NEAR(0.25f, DecodeFp8E8M0(0x7D), 0.01f);   // 2^-2
+    EXPECT_NEAR(0.125f, DecodeFp8E8M0(0x7C), 0.01f);  // 2^-3
+    EXPECT_NEAR(2.0f, DecodeFp8E8M0(0x80), 0.01f);    // 2^1
 }
 
-// 测试 DecodeFp8E8M0 对边界值的解码，验证 exponent 范围
-// E8M0 支持 2^-127 ~ 2^127 的幂次（正数）
-// 0x01: exp=1 → 2^(1-127) ≈ 1.175e-38 (min non-zero)
-// 0xFE: exp=254 → 2^(254-127) ≈ 1.701e+38 (max)
+// E8M0 boundary values: 0x01→2^-126 (min normal), 0xFE→2^127 (max), 0xFF→NaN
 TEST_F(Fp8DecodeTest, DecodeFp8E8M0_BoundaryValues)
 {
-    EXPECT_NEAR(std::pow(2.0f, -127.0f), DecodeFp8E8M0(0x01), 1e-10f);
+    EXPECT_NEAR(std::pow(2.0f, -126.0f), DecodeFp8E8M0(0x01), 1e-10f);
     EXPECT_NEAR(std::pow(2.0f, 127.0f), DecodeFp8E8M0(0xFE), 1e-10f);
+}
+
+TEST_F(Fp8DecodeTest, DecodeFp8E8M0_NaN)
+{
+    // exp=255 (0xFF) → NaN
+    EXPECT_TRUE(std::isnan(DecodeFp8E8M0(0xFF)));
+    EXPECT_FALSE(std::isinf(DecodeFp8E8M0(0xFF)));
 }
 
 // 测试 DecodeHf8 对零值和小值(0.5~1.0)的解码，验证华为自定义格式
@@ -560,22 +567,50 @@ TEST_F(Fp8DecodeTest, DecodeFp8E8M0_BoundaryValues)
 TEST_F(Fp8DecodeTest, DecodeHf8_ZeroAndSmallValues)
 {
     EXPECT_FLOAT_EQ(0.0f, DecodeHf8(0x00));
-    EXPECT_FLOAT_EQ(-0.0f, DecodeHf8(0x80));
+    // 0x80 (1_0000_000) → NaN (HiF8 has no negative zero)
+    EXPECT_TRUE(std::isnan(DecodeHf8(0x80)));
     EXPECT_NEAR(0.5f, DecodeHf8(0x18), 0.01f);
     EXPECT_NEAR(1.0f, DecodeHf8(0x08), 0.01f);
 }
 
 // 测试 DecodeHf8 对所有位模式的符号保持，验证正值和负值对称性
+// Skip NaN/infinity special cases (0x6F/0xEF = inf, 0x80 = NaN)
 TEST_F(Fp8DecodeTest, DecodeHf8_SignPreservation)
 {
     for (int i = 1; i < 128; i++) {
-        float posVal = DecodeHf8(static_cast<uint8_t>(i));
-        float negVal = DecodeHf8(static_cast<uint8_t>(i | 0x80));
+        uint8_t posBits = static_cast<uint8_t>(i);
+        if (posBits == 0x6F) continue; // positive infinity
+        uint8_t negBits = static_cast<uint8_t>(i | 0x80);
+        if (negBits == 0x80) continue;  // NaN
+        if (negBits == 0xEF) continue;  // negative infinity
+
+        float posVal = DecodeHf8(posBits);
+        float negVal = DecodeHf8(negBits);
 
         EXPECT_GT(posVal, 0.0f);
         EXPECT_LT(negVal, 0.0f);
         EXPECT_NEAR(std::abs(posVal), std::abs(negVal), std::abs(posVal) * 0.01f);
     }
+}
+
+// HiFloat8 NaN: only 0x80 (1_0000_000)
+TEST_F(Fp8DecodeTest, DecodeHf8_NaN)
+{
+    EXPECT_TRUE(std::isnan(DecodeHf8(0x80)));
+    // NaN should not be treated as infinity
+    EXPECT_FALSE(std::isinf(DecodeHf8(0x80)));
+}
+
+// HiFloat8 Infinities: 0x6F (0_11_0111_1), 0xEF (1_11_0111_1)
+TEST_F(Fp8DecodeTest, DecodeHf8_Infinity)
+{
+    EXPECT_TRUE(std::isinf(DecodeHf8(0x6F)));
+    EXPECT_GT(DecodeHf8(0x6F), 0.0f);
+    EXPECT_TRUE(std::isinf(DecodeHf8(0xEF)));
+    EXPECT_LT(DecodeHf8(0xEF), 0.0f);
+    // S_11_0111_0 (0x6E) is max normal, not infinity
+    EXPECT_FALSE(std::isinf(DecodeHf8(0x6E)));
+    EXPECT_NEAR(32768.0f, DecodeHf8(0x6E), 1.0f);
 }
 
 // 测试 DecodeHf8 对各分支覆盖(Tiny/Small/Medium/Large/Huge/Max)
@@ -717,7 +752,6 @@ TEST_F(AiCorePrintUTest, Fp8E4M3Const_CorrectValues)
     EXPECT_EQ(Fp8E4M3Const::EXP_BIAS, 7u);
     EXPECT_EQ(Fp8E4M3Const::EXP_MASK, 0xFu);
     EXPECT_EQ(Fp8E4M3Const::EXP_MAX, 15u);
-    EXPECT_EQ(Fp8E4M3Const::MAX_VALUE, 240.0f);
 }
 
 // 测试 Fp8E5M2Const 各常量(指数/尾数位数、bias)的正确值
@@ -726,13 +760,6 @@ TEST_F(AiCorePrintUTest, Fp8E5M2Const_CorrectValues)
     EXPECT_EQ(Fp8E5M2Const::EXP_BITS, 5u);
     EXPECT_EQ(Fp8E5M2Const::MANT_BITS, 2u);
     EXPECT_EQ(Fp8E5M2Const::EXP_BIAS, 15u);
-}
-
-// 测试 Fp8E8M0Const 各常量(bias、sign shift)的正确值
-TEST_F(AiCorePrintUTest, Fp8E8M0Const_CorrectValues)
-{
-    EXPECT_EQ(Fp8E8M0Const::EXP_BIAS, 127u);
-    EXPECT_EQ(Fp8E8M0Const::SIGN_SHIFT, 7u);
 }
 
 // ============================================================================

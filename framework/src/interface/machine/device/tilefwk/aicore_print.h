@@ -136,18 +136,12 @@ namespace Fp8E4M3Const {
     constexpr uint8_t EXP_BIAS  = 7;
     constexpr uint8_t EXP_MASK  = 0xF;
     constexpr uint8_t EXP_MAX   = 15;
-    constexpr float   MAX_VALUE = 240.0f;
 }
 
 namespace Fp8E5M2Const {
     constexpr uint8_t EXP_BITS  = 5;
     constexpr uint8_t MANT_BITS = 2;
     constexpr uint8_t EXP_BIAS  = 15;
-}
-
-namespace Fp8E8M0Const {
-    constexpr uint8_t EXP_BIAS   = 127;
-    constexpr uint8_t SIGN_SHIFT = Fp8Const::SIGN_SHIFT;
 }
 
 // ============================================================================
@@ -348,11 +342,19 @@ INLINE float DecodeFp8Common(uint8_t bits) {
 // FP8 E4M3/E5M2/E8M0 Decode Functions
 // ============================================================================
 
+// float8_e4m3fn (OCP MX / PyTorch): no infinity.
+// Only exp=0b1111 with mant=0b111 (0x7F / 0xFF) is NaN.
+// Max finite: exp=0b1111, mant=0b110 (0x7E) → 448.0
 INLINE float DecodeFp8E4M3(uint8_t bits) {
+    constexpr uint8_t MANT_MASK = (1u << Fp8E4M3Const::MANT_BITS) - 1;
+    constexpr uint8_t NAN_MANT = MANT_MASK;  // mant=0b111
     const uint8_t exp = (bits >> Fp8E4M3Const::MANT_BITS) & Fp8E4M3Const::EXP_MASK;
-    if (exp == Fp8E4M3Const::EXP_MAX) {
+    const uint8_t mant = bits & MANT_MASK;
+    if (exp == Fp8E4M3Const::EXP_MAX && mant == NAN_MANT) {
         const uint8_t sign = (bits >> Fp8Const::SIGN_SHIFT) & Fp8Const::BIT_MASK_1;
-        return sign ? -Fp8E4M3Const::MAX_VALUE : Fp8E4M3Const::MAX_VALUE;
+        constexpr uint32_t f32QNaN = (Fp32Const::EXP_INF_NAN << Fp32Const::EXP_SHIFT) | 0x400000u;
+        uint32_t result = (static_cast<uint32_t>(sign) << Fp32Const::SIGN_SHIFT) | f32QNaN;
+        return SafeBitCast<float>(result);
     }
     return DecodeFp8Common<Fp8E4M3Const::EXP_BITS, Fp8E4M3Const::MANT_BITS, Fp8E4M3Const::EXP_BIAS, false>(bits);
 }
@@ -361,20 +363,19 @@ INLINE float DecodeFp8E5M2(uint8_t bits) {
     return DecodeFp8Common<Fp8E5M2Const::EXP_BITS, Fp8E5M2Const::MANT_BITS, Fp8E5M2Const::EXP_BIAS, true>(bits);
 }
 
+// E8M0: 8-bit unsigned exponent, no sign, no mantissa, bias=127.
+// value = 2^(bits - 127); exp=0 → 2^-127; exp=255 → NaN.
 INLINE float DecodeFp8E8M0(uint8_t bits) {
-    // E8M0 format: 8-bit exponent (no sign bit, no mantissa), bias=127
-    // Used for MX scaling (scale factor), only positive values
     if (bits == 0) {
-        return 0.0f;
+        // exp=0 → 2^-127 (float32 subnormal)
+        return SafeBitCast<float>(UINT32_C(0x00400000));
     }
-    
-    // E8M0 uses unsigned exponent semantics (no sign bit)
-    // value = 2^(exp - 127)
-    const uint32_t exp = static_cast<uint32_t>(bits);
-    const uint32_t exp32 = exp - Fp8E8M0Const::EXP_BIAS + Fp32Const::EXP_BIAS;
-    const uint32_t mant32 = 0;
-    
-    uint32_t result = (exp32 << Fp32Const::EXP_SHIFT) | mant32;
+    if (bits == UINT8_C(0xFF)) {
+        // exp=255 → NaN (E8M0 has infinity=false)
+        constexpr uint32_t f32QNaN = (Fp32Const::EXP_INF_NAN << Fp32Const::EXP_SHIFT) | 0x400000u;
+        return SafeBitCast<float>(f32QNaN);
+    }
+    uint32_t result = static_cast<uint32_t>(bits) << Fp32Const::EXP_SHIFT;
     return SafeBitCast<float>(result);
 }
 
@@ -382,10 +383,15 @@ INLINE float DecodeFp8E8M0(uint8_t bits) {
 // HF8 Decode Functions
 // ============================================================================
 
+// HiFloat8 Tiny (DML prefix 0000): mv=0 with sign=0 → ±0; sign=1 → NaN
 INLINE float DecodeHf8Tiny(int signBit, int mv) {
     if (mv == Hf8Const::MV_ZERO) {
-        uint32_t result = static_cast<uint32_t>(signBit << Fp32Const::SIGN_SHIFT);
-        return SafeBitCast<float>(result);
+        if (signBit) {
+            // NaN: 1_0000_000 (HiF8 has no negative zero)
+            constexpr uint32_t f32QNaN = (Fp32Const::EXP_INF_NAN << Fp32Const::EXP_SHIFT) | 0x400000u;
+            return SafeBitCast<float>(f32QNaN);
+        }
+        return SafeBitCast<float>(0u);
     }
 
     const uint32_t sign32 = static_cast<uint32_t>(signBit << Fp32Const::SIGN_SHIFT);
@@ -437,9 +443,26 @@ INLINE float DecodeHf8Huge(int signBit, int lower7) {
                                  Hf8Const::MV_MASK_2BIT, Hf8Const::MANT_BITS_2>(signBit, lower7);
 }
 
+// HiFloat8 Max (D=4, prefix 11): ev=±[8,15], 1-bit mantissa.
+// Infinity encoding: S_11_0111_1 (ev=15, mant=1).
 INLINE float DecodeHf8Max(int signBit, int lower7) {
-    return DecodeHf8EvMvPattern<Hf8Const::EB_SHIFT_MAX, Hf8Const::EB_MASK_WIDTH_MAX, Hf8Const::EV_BASE_MAX,
-                                 Hf8Const::MV_MASK_1BIT, Hf8Const::MANT_BITS_1>(signBit, lower7);
+    constexpr int EbMaskWidth = Hf8Const::EB_MASK_WIDTH_MAX;
+    const int ebMask = (1 << EbMaskWidth) - 1;
+    const int eb = (lower7 >> Hf8Const::EB_SHIFT_MAX) & ebMask;
+    const int evSign = (eb >> (EbMaskWidth - 1)) & Hf8Const::EB_MASK_WIDTH_1BIT;
+    const int addMask = (1 << (EbMaskWidth - 1)) - 1;
+    const int evAbs = Hf8Const::EV_BASE_MAX + (eb & addMask);
+    const int ev = evSign ? -evAbs : evAbs;
+    const int mv = lower7 & Hf8Const::MV_MASK_1BIT;
+
+    // Infinity: S_11_0111_1
+    if (ev == 15 && mv == Hf8Const::MV_MASK_1BIT) {
+        constexpr uint32_t f32InfBits = Fp32Const::EXP_INF_NAN << Fp32Const::EXP_SHIFT;
+        uint32_t result = (static_cast<uint32_t>(signBit) << Fp32Const::SIGN_SHIFT) | f32InfBits;
+        return SafeBitCast<float>(result);
+    }
+
+    return DecodeHf8WithEvMv(signBit, ev, mv, Hf8Const::MANT_BITS_1);
 }
 
 INLINE float DecodeHf8(uint8_t bits) {

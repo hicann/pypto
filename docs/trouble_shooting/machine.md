@@ -718,13 +718,13 @@ rm -rf build_out/ && python build_ci.py && pip install build_out/pypto*whl --for
 首次运行或切换用例：
 ```bash
 rm -rf kernel_aic* output/ wk/
-export ASCEND_WORK_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
 ```
 
 同一用例重复运行（已添加打印代码）：
 ```bash
 rm -rf output/ wk/
-export ASCEND_WORK_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
 ```
 
 **步骤 3.2：在生成的 CCE 文件中添加打印代码**
@@ -759,12 +759,12 @@ __gm__ T* l1_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 **重要**：以下命令必须**一次性完整执行**（使用 `&&` 连接），不要拆分为多个命令：
 
 ```bash
-export ASCEND_WORK_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && rm -rf output/ wk/ && python xxx.py && grep -rn "DumpAicoreLog" ./wk
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && rm -rf output/ wk/ && python xxx.py && grep -rn "DumpAicoreLog" ./wk
 ```
 
 **命令说明**：
 
-1. `export ASCEND_WORK_PATH=./wk`：设置日志输出目录为 `./wk`
+1. `export ASCEND_PROCESS_LOG_PATH=./wk`：设置日志输出目录为 `./wk`
 2. `export ASCEND_GLOBAL_LOG_LEVEL=0`：设置日志级别为 DEBUG（级别 0），开启最详细的日志输出
 3. `rm -rf output/ wk/`：清理旧日志和编译产物，避免干扰
 4. `python xxx.py`：运行测试用例，触发 kernel 编译和执行
@@ -863,6 +863,18 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 ##### 5. AiCorePrintL1Tensor 找不到接口定义
 
 当前平台不支持（检查 SUPPORT_L1_COPY 宏）。
+
+##### 6. ld.lld: error: undefined symbol
+
+编译时出现 `ld.lld: error: undefined symbol` 链接错误，导致编译失败。
+
+**原因**：并行编译（`parallel_compile`）模式下，编译单元之间的符号依赖未正确处理。
+
+**解决方案**：修改 `framework/src/interface/configs/tile_fwk_config.json`，将 `parallel_compile` 改为 `1`（单线程编译），重新运行即可解决。
+
+```json
+"parallel_compile": 1
+```
 
 ---
 
