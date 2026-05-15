@@ -1141,7 +1141,7 @@ size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr &tensor) const 
         return outer * inner * static_cast<size_t>(bytes > 0 ? bytes : 4);
     }
 
-    size_t alignedOuter = (outer + outerAlign - 1) / outerAlign * outerAlign;
+    size_t alignedOuter = (outer + outerAlign - 1) / outerAlign * outerAlign + 1;
     size_t alignedInner = (inner + c0 - 1) / c0 * c0;
 
     // NZ 格式大小
