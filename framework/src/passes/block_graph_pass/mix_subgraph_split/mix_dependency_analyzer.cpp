@@ -54,6 +54,7 @@ void MixDependencyAnalyzer::InOutCastRecord(Function* originalMixFunc)
     for (size_t i = 0; i < subgraphToFunction.subFuncInvokeInfos.size(); i++) {
         subgraphToFunction.subFuncInvokeInfos[i].ConstructActualInvokeParam(i);
     }
+    FilterNonBoundaryTensors(originalMixFunc);
 }
 
 std::unordered_map<int, std::set<int>> MixDependencyAnalyzer::AnalyzeComponentDependencies(
@@ -525,6 +526,61 @@ void MixDependencyAnalyzer::LogIllegalBidirectionalDependency(int comp1, int com
         input.components[comp2].componentType == ComponentType::C_SCOPE ? "CUBE" :
         input.components[comp2].componentType == ComponentType::V_SCOPE ? "VECTOR" :
                                                                           "UNKNOWN");
+}
+
+void MixDependencyAnalyzer::FilterNonBoundaryTensors(Function* originalMixFunc)
+{
+    // 获取原始 Mix 函数的边界信息
+    std::set<LogicalTensorPtr> originalBoundaryOutcasts;
+    std::set<LogicalTensorPtr> originalBoundaryIncasts;
+    
+    for (const auto& outcast : originalMixFunc->GetOutcast()) {
+        originalBoundaryOutcasts.insert(outcast);
+    }
+    for (const auto& incast : originalMixFunc->GetIncast()) {
+        originalBoundaryIncasts.insert(incast);
+    }
+    
+    for (auto& invokeInfo : subgraphToFunction.subFuncInvokeInfos) {
+        // 过滤 outcastTensorParamList_
+        auto& outcasts = invokeInfo.outcastTensorParamList_;
+        auto newOutcastEnd = std::remove_if(outcasts.begin(), outcasts.end(),
+            [&](const SubfuncInvokeInfoTy::OutcastParamPackTy& param) {
+                if (originalBoundaryOutcasts.find(param.tensor) == originalBoundaryOutcasts.end()) {
+                    return true;
+                }
+                return false;
+            });
+        outcasts.erase(newOutcastEnd, outcasts.end());
+        
+        // 过滤 incastTensorParamList_
+        auto& incasts = invokeInfo.incastTensorParamList_;
+        auto newIncastEnd = std::remove_if(incasts.begin(), incasts.end(),
+            [&](const SubfuncInvokeInfoTy::IncastParamPackTy& param) {
+                if (originalBoundaryIncasts.find(param.tensor) == originalBoundaryIncasts.end()) {
+                    return true;
+                }
+                return false;
+            });
+        incasts.erase(newIncastEnd, incasts.end());
+        
+        // 过滤 tensorParamList_ 中的输入输出
+        auto& tensors = invokeInfo.tensorParamList_;
+        auto newTensorEnd = std::remove_if(tensors.begin(), tensors.end(),
+            [&](const SubfuncInvokeInfoTy::TensorParamPackTy& param) {
+                if (param.isOutputToGM) {
+                    if (originalBoundaryOutcasts.find(param.tensor) == originalBoundaryOutcasts.end()) {
+                        return true;
+                    }
+                } else {
+                    if (originalBoundaryIncasts.find(param.tensor) == originalBoundaryIncasts.end()) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+        tensors.erase(newTensorEnd, tensors.end());
+    }
 }
 } // namespace tile_fwk
 } // namespace npu

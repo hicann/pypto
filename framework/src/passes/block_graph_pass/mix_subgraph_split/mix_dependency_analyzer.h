@@ -113,6 +113,7 @@ private:
     bool CheckDirectionAndCollectValid(
         const std::vector<LogicalTensorPtr>& tensors, int src, int dst, bool& hasValid) const;
     void LogIllegalBidirectionalDependency(int comp1, int comp2, const AnalyzerInput& input) const;
+    void FilterNonBoundaryTensors(Function* originalMixFunc);
     int maxComponent;
     SubgraphToFunction subgraphToFunction;
     std::vector<InternalDependencyInfo> internalDeps;

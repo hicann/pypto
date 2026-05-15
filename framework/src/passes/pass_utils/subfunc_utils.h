@@ -252,6 +252,7 @@ public:
     bool operator==(const SubfuncInvokeInfoTy& other) const;
     bool operator!=(const SubfuncInvokeInfoTy& other) const;
     friend class Allocator;
+    friend class MixDependencyAnalyzer;
 
     inline void RecordTensorArg(
         const int operandIdx, const int realDDRId, const std::vector<int64_t>& offset,
