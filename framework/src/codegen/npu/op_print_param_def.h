@@ -256,10 +256,10 @@ struct TiledSortParam {
 };
 
 struct PrintQuantizeParam {
-    const std::string &dstVar;
-    const std::string &srcVar;
-    const std::string &scaleVar;
-    const std::string &offsetVar;
+    const std::string& dstVar;
+    const std::string& srcVar;
+    const std::string& scaleVar;
+    const std::string& offsetVar;
     const bool isAsymmetric;
 };
 

@@ -1016,6 +1016,10 @@ void OpcodeManager::RegisterCube()
         Opcode::OP_L0C_COPY_UB, OpCoreType::AIC, "L0C_COPY_UB", {MemoryType::MEM_L0C}, {MemoryType::MEM_UB},
         {"TileOp::L0CCopyUB", PIPE_FIX, PIPE_FIX, CoreType::AIC}, OpCalcType::MOVE_OUT);
     RegisterInfo(
+        Opcode::OP_L0C_COPY_UB_DUAL_DST, OpCoreType::AIC, "L0C_COPY_UB_DUAL_DST", {MemoryType::MEM_L0C},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TCopyL0C2UBDualDst", PIPE_FIX, PIPE_FIX, CoreType::AIC},
+        OpCalcType::MOVE_OUT);
+    RegisterInfo(
         Opcode::OP_UB_COPY_L1, OpCoreType::AIV, "UB_COPY_L1", {MemoryType::MEM_UB}, {MemoryType::MEM_L1},
         {"TileOp::UBCopyL1", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_IN);
     RegisterInfo(
@@ -1398,6 +1402,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_L1_TO_BT, "TExtract"},
     {Opcode::OP_UB_COPY_L1, "TCopyUB2L1"},
     {Opcode::OP_L0C_COPY_UB, "TCopyL0C2UB"},
+    {Opcode::OP_L0C_COPY_UB_DUAL_DST, "TCopyL0C2UBDualDst"},
     {Opcode::OP_L0C_TO_L1, "TExtract"},
     {Opcode::OP_UB_COPY_ND2NZ, "TMoveND2NZ"},
     {Opcode::OP_L1_COPY_IN, "TLoad"},

@@ -150,6 +150,24 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
     return oss.str();
 }
 
+std::string CodeGenOpNPU::GenL0CToUBTileTensorDualDst() const
+{
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    // TMP_IDX is do not use in this case
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    auto [coordDst, coordSrc] =
+        PrintDstSrcCoordFromAttr(ToUnderlying(MIMOIdx::DST_IDX), ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::string nzVar = "CopyOutMode::NZ2ND"; // current only support NZ2ND in L0C -> UB
+    int64_t splitMN = 0;
+    GetOpAttr(OpAttributeKey::splitMN, splitMN);
+    std::ostringstream oss;
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets({nzVar, std::to_string(splitMN)});
+    oss << WrapParamByParentheses({dstTensor, src0Tensor, coordDst, coordSrc});
+    oss << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
 {
     bool isTrans = false;

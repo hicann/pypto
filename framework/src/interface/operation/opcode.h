@@ -256,6 +256,7 @@ enum class Opcode {
     OP_L1_TO_FIX_MTE2_ANTIQ,
     OP_L1_COPY_UB,
     OP_L0C_COPY_UB,
+    OP_L0C_COPY_UB_DUAL_DST,
     OP_UB_COPY_L1,
     OP_UB_COPY_L1_ND,
     OP_L1_TO_L1,

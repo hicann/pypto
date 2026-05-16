@@ -87,6 +87,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_INDEX_OUTCAST, [this]() { return GenIndexOutCastOp(); }},
           // lOC -> UB
           {Opcode::OP_L0C_COPY_UB, [this]() { return GenL0CToUBTileTensor(); }},
+          {Opcode::OP_L0C_COPY_UB_DUAL_DST, [this]() { return GenL0CToUBTileTensorDualDst(); }},
 
           {Opcode::OP_UB_COPY_L1, [this]() { return GenUBToL1TileTensor(); }},
           {Opcode::OP_UB_COPY_ND2NZ, [this]() { return GenUBToUBND2NZTileTensor(); }},
@@ -786,20 +787,20 @@ std::string CodeGenOpNPU::PrintCoord(size_t dim, const std::string& coord) const
     return ret;
 }
 
-std::pair<std::string, std::string> CodeGenOpNPU::PrintDstSrcCoordFromAttr() const
+std::pair<std::string, std::string> CodeGenOpNPU::PrintDstSrcCoordFromAttr(int dstIdx, int srcIdx) const
 {
     std::vector<std::string> dstOffset;
-    for (const auto& tmpOffset : offsetFromAttr[ToUnderlying(MISOIdx::DST_IDX)]) {
+    for (const auto& tmpOffset : offsetFromAttr[dstIdx]) {
         dstOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
     }
     std::vector<std::string> srcOffset;
-    for (const auto& tmpOffset : offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)]) {
+    for (const auto& tmpOffset : offsetFromAttr[srcIdx]) {
         srcOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
     }
     std::string coordCpDst = WrapParamByParentheses(dstOffset);
-    std::string coordDst = PrintCoord(rawShape[ToUnderlying(MISOIdx::DST_IDX)].size(), coordCpDst);
+    std::string coordDst = PrintCoord(rawShape[dstIdx].size(), coordCpDst);
     std::string coordCpSrc = WrapParamByParentheses(srcOffset);
-    std::string coordSrc = PrintCoord(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), coordCpSrc);
+    std::string coordSrc = PrintCoord(rawShape[srcIdx].size(), coordCpSrc);
     return {coordDst, coordSrc};
 }
 

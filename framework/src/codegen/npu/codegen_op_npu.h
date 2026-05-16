@@ -114,6 +114,7 @@ public:
     std::string PrintRangeTileTensor(
         const std::string& startVal, const std::string& stepVal, const std::string& tileIdxExpr) const;
     std::string GenL0CToUBTileTensor() const;
+    std::string GenL0CToUBTileTensorDualDst() const;
 
     std::string GenScatterElementSOp() const;
     std::string GenScatterOp() const;
@@ -188,8 +189,9 @@ protected:
     virtual TileTensor QueryTileTensorByIdx(int paramIdx) const;
     std::string InsertOpComment(std::string& tileOpSourceCode) const;
 
-    void GetDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D,
-        std::vector<std::string>& gmOffsetExpr, std::vector<int64_t>& staticOffsets) const;
+    void GetDynamicOffsetExpr(
+        const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, std::vector<std::string>& gmOffsetExpr,
+        std::vector<int64_t>& staticOffsets) const;
     std::vector<std::string> BuildCopyInParamList(
         const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
         const std::vector<int64_t>& staticOffsets, const std::vector<int64_t>& srcShape, bool isConv3D) const;
@@ -508,7 +510,8 @@ protected:
     void InitAICPUOpsMap();
 
     std::string PrintCoord(size_t dim, const std::string& coord) const;
-    std::pair<std::string, std::string> PrintDstSrcCoordFromAttr() const;
+    std::pair<std::string, std::string> PrintDstSrcCoordFromAttr(
+        int dstIdx = ToUnderlying(MISOIdx::DST_IDX), int srcIdx = ToUnderlying(MISOIdx::SRC0_IDX)) const;
     template <typename T>
     void FillParamWithFullInput(std::vector<std::string>& paramList, const std::vector<T>& input) const
     {

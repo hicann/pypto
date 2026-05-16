@@ -121,6 +121,7 @@ public:
     static const std::string vecMergeHashOrder;
     static const std::string vecMergeSubgraphCount;
     static const std::string atomicAdd;
+    static const std::string splitMN; // for L0C->UB Dual Dst
 };
 
 class ConvOpAttributeKey {
@@ -460,6 +461,7 @@ public:
             Opcode::OP_COPY_IN,
             Opcode::OP_L0C_TO_L1,
             Opcode::OP_L0C_COPY_UB,
+            Opcode::OP_L0C_COPY_UB_DUAL_DST,
             Opcode::OP_L1_TO_BT,
             Opcode::OP_L1_TO_FIX_QUANT_PRE,
             Opcode::OP_L1_TO_L0A,
