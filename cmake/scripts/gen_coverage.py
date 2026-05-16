@@ -42,7 +42,7 @@ class GenCoverage:
                 if not path_str:
                     continue
                 path = Path(path_str)
-                cur_values.append(f" {path}")
+                cur_values.append(f" {path}/*")
             # 更新命名空间的值
             setattr(namespace, self.dest, cur_values)
 
@@ -62,11 +62,11 @@ class GenCoverage:
             self.init_lcov_version()
             self.lcov_supported_exclude = self._check_param_support(exe="lcov", param="--exclude")
             self.lcov_supported_parallel = self._check_param_support(exe="lcov", param="--parallel")
-            self.lcov_supported_ignore_mismatch = self._version_ge(version=self.lcov_version, target="2.0.0")
+            self.lcov_supported_ignore_mismatch = self.version_ge(version=self.lcov_version, target="2.0.0")
             self.init_genhtml_version()
             self.genhtml_supported_hierarchical = self._check_param_support(exe="genhtml", param="--hierarchical")
             self.genhtml_supported_parallel = self._check_param_support(exe="genhtml", param="--parallel")
-            self.genhtml_supported_ignore_mismatch = self._version_ge(version=self.genhtml_version, target="2.0.0")
+            self.genhtml_supported_ignore_mismatch = self.version_ge(version=self.genhtml_version, target="2.0.0")
 
         def __str__(self) -> str:
             desc = f"\nlcov"
@@ -99,7 +99,7 @@ class GenCoverage:
                 return version_match.group(1)
 
         @classmethod
-        def _version_ge(cls, version: str, target: str) -> bool:
+        def version_ge(cls, version: str, target: str) -> bool:
             def parse(v):
                 return tuple(map(int, v.split(".")))
             return parse(version) >= parse(target)
@@ -720,10 +720,19 @@ class GenCoverage:
             classify_rule = yaml.safe_load(f)
 
         # 提取 release 和 unrelease 路径
-        pypto_config = classify_rule.get("pypto", {})
-        src_config = pypto_config.get("src", {})
-        release_paths = src_config.get("release", [])
-        unrelease_paths = src_config.get("unrelease", [])
+        # 当前是按照模块划分, 需要遍历所有模块
+        release_paths = []
+        unrelease_paths = []
+        for _, module_cfg in classify_rule.items():
+            src_cfg = module_cfg.get("src", {})
+            if not src_cfg:
+                continue
+            cur_release_paths = src_cfg.get("release", [])
+            if cur_release_paths:
+                release_paths.extend(cur_release_paths)
+            cur_unrelease_paths = src_cfg.get("unrelease", [])
+            if cur_unrelease_paths:
+                unrelease_paths.extend(cur_unrelease_paths)
 
         filtered_changes = {}
 

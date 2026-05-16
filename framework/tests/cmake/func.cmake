@@ -50,6 +50,8 @@ function(PTO_Fwk_GTest_GenerateCoverage)
                 $<TARGET_PROPERTY:GTest::gtest,INTERFACE_INCLUDE_DIRECTORIES>
                 $<TARGET_PROPERTY:json,INTERFACE_INCLUDE_DIRECTORIES>
                 ${SYS_ROOT}
+                ${Python3_INCLUDE_DIRS}
+                ${pybind11_INCLUDE_DIR}
                 ${ARG_FILTER_DIRECTORIES}
         )
         if (ENABLE_TORCH_VERIFIER)
@@ -57,6 +59,7 @@ function(PTO_Fwk_GTest_GenerateCoverage)
         endif ()
         if (BUILD_WITH_CANN)
             list(APPEND Filter_Dirs ${ASCEND_CANN_PACKAGE_PATH}/include)
+            list(APPEND Filter_Dirs ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc)
         endif ()
         foreach (_dir ${Filter_Dirs})
             list(APPEND _Args "-f=${_dir}")

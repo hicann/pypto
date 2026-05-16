@@ -329,14 +329,16 @@ function(PTO_Fwk_GenerateGCovConfigJson)
                 ${PTO_FWK_SRC_ROOT}/framework/tests
                 $<TARGET_PROPERTY:json,INTERFACE_INCLUDE_DIRECTORIES>
                 ${SYS_ROOT}
-                ${ARG_FILTER_DIRECTORIES}
+                ${Python3_INCLUDE_DIRS}
                 ${pybind11_INCLUDE_DIR}
+                ${ARG_FILTER_DIRECTORIES}
         )
         if (ENABLE_TORCH_VERIFIER)
             list(APPEND Filter_Dirs ${PY3_MOD_TORCH_ROOT_PATH}/include)
         endif ()
         if (BUILD_WITH_CANN)
             list(APPEND Filter_Dirs ${ASCEND_CANN_PACKAGE_PATH}/include)
+            list(APPEND Filter_Dirs ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc)
         endif ()
 
         # 参数组织
