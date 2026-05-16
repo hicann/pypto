@@ -169,9 +169,9 @@ class PILBuilder(ast.NodeVisitor):
         return result
 
     def create_pil_expr(self,
-         value: PILExpr,
-         ctx: ast.expr_context = ast.Load(),
-         node_attr: PILAttr = NOATTR) -> Union[ast.Name, ast.Constant]:
+        value: PILExpr,
+        ctx: ast.expr_context = ast.Load(),
+        node_attr: PILAttr = NOATTR) -> Union[ast.Name, ast.Constant]:
         if isinstance(value, ast.Constant):
             return value
         if isinstance(value, str):
@@ -179,10 +179,10 @@ class PILBuilder(ast.NodeVisitor):
         raise FeError(TypeError(f"Expected ast.Constant or str, but got {type(value).__name__}"))
 
     def create_pil_maybe_starred(self,
-         expr: PILExpr,
-         starred: bool,
-         ctx=ast.Load(),
-         node_attr: PILAttr = NOATTR) -> ast.expr:
+        expr: PILExpr,
+        starred: bool,
+        ctx=ast.Load(),
+        node_attr: PILAttr = NOATTR) -> ast.expr:
         if starred:
             if not isinstance(expr, str):
                 raise FeError(TypeError(f"Expected str for starred expr, but got {type(expr).__name__}"))
@@ -241,9 +241,9 @@ class PILBuilder(ast.NodeVisitor):
             return ast.Assign(targets=[result_targets], value=value, **node_attr)
 
     def create_pil_assign_identifier(self,
-         target_name: str,
-         source_expr: PILExpr,
-         node_attr: PILAttr = NOATTR) -> ast.Assign:
+        target_name: str,
+        source_expr: PILExpr,
+        node_attr: PILAttr = NOATTR) -> ast.Assign:
         """
         Parameter:
             target_name: identifier
@@ -259,10 +259,10 @@ class PILBuilder(ast.NodeVisitor):
             **node_attr)
 
     def create_pil_assign_attribute(self,
-         target_expr: PILExpr,
-         attr_name: str,
-         source_expr: PILExpr,
-         node_attr: PILAttr = NOATTR) -> ast.Assign:
+        target_expr: PILExpr,
+        attr_name: str,
+        source_expr: PILExpr,
+        node_attr: PILAttr = NOATTR) -> ast.Assign:
         """
         Parameter:
             target_name: identifier of the object
@@ -272,16 +272,17 @@ class PILBuilder(ast.NodeVisitor):
             target_name.attr_name = source_expr
         """
         return ast.Assign(
-            targets=[ast.Attribute(value=self.create_pil_expr(target_expr),
-                                   attr=attr_name, ctx=ast.Store())],
+            targets=[ast.Attribute(
+                value=self.create_pil_expr(target_expr),
+                attr=attr_name, ctx=ast.Store())],
             value=self.create_pil_expr(source_expr),
             **node_attr)
 
     def create_pil_assign_subscript(self,
-         target_expr: PILExpr,
-         slices: list[PILSlice],
-         source_expr: PILExpr,
-         node_attr: PILAttr = NOATTR) -> ast.Assign:
+        target_expr: PILExpr,
+        slices: list[PILSlice],
+        source_expr: PILExpr,
+        node_attr: PILAttr = NOATTR) -> ast.Assign:
         """
         Parameter:
             target_name: identifier of the object
@@ -294,19 +295,20 @@ class PILBuilder(ast.NodeVisitor):
         """
         result_slice = self.create_pil_slice(slices)
         return ast.Assign(
-            targets=[ast.Subscript(value=self.create_pil_expr(target_expr),
-                                   slice=result_slice, ctx=ast.Store())],
+            targets=[ast.Subscript(
+                value=self.create_pil_expr(target_expr),
+                slice=result_slice, ctx=ast.Store())],
             value=self.create_pil_expr(source_expr),
             **node_attr)
 
     def create_pil_function_def(self,
-         name: str,
-         args: ast.arguments,
-         body: list[ast.stmt],
-         decorator_list: list[PILExpr],
-         returns: Optional[ast.expr],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> ast.FunctionDef:
+        name: str,
+        args: ast.arguments,
+        body: list[ast.stmt],
+        decorator_list: list[PILExpr],
+        returns: Optional[ast.expr],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> ast.FunctionDef:
         """
         Parameter:
             name: identifier (function name)
@@ -323,12 +325,12 @@ class PILBuilder(ast.NodeVisitor):
                 body
         """
         return ast.FunctionDef(name=name,
-             args=args,
-             body=body,
-             decorator_list=[self.create_pil_expr(d) for d in decorator_list],
-             returns=returns,
-             type_comment=type_comment,
-             **node_attr)
+            args=args,
+            body=body,
+            decorator_list=[self.create_pil_expr(d) for d in decorator_list],
+            returns=returns,
+            type_comment=type_comment,
+            **node_attr)
 
     def create_pil_return(self, expr: PILExprOrNone, node_attr: PILAttr = NOATTR) -> ast.Return:
         """
@@ -358,15 +360,17 @@ class PILBuilder(ast.NodeVisitor):
         Emit code format:
             del target_expr.attr
         """
-        return ast.Delete(targets=[ast.Attribute(value=self.create_pil_expr(target_expr),
-                     attr=attr,
-                     ctx=ast.Del())],
-             **node_attr)
+        return ast.Delete(
+            targets=[ast.Attribute(
+                value=self.create_pil_expr(target_expr),
+                attr=attr,
+                ctx=ast.Del())],
+            **node_attr)
 
     def create_pil_delete_subscript(self,
-         target_expr: PILExpr,
-         slice_expr: PILExpr,
-         node_attr: PILAttr = NOATTR) -> ast.Delete:
+        target_expr: PILExpr,
+        slice_expr: PILExpr,
+        node_attr: PILAttr = NOATTR) -> ast.Delete:
         """
         Parameter:
             target_expr: identifier or constant (object whose item is deleted)
@@ -374,18 +378,20 @@ class PILBuilder(ast.NodeVisitor):
         Emit code format:
             del target_expr[slice_expr]
         """
-        return ast.Delete(targets=[ast.Subscript(value=self.create_pil_expr(target_expr),
-                     slice=self.create_pil_expr(slice_expr),
-                     ctx=ast.Del())],
-             **node_attr)
+        return ast.Delete(
+            targets=[ast.Subscript(
+                value=self.create_pil_expr(target_expr),
+                slice=self.create_pil_expr(slice_expr),
+                ctx=ast.Del())],
+            **node_attr)
 
     def create_pil_for(self,
-         target_name: str,
-         iter_expr: PILExpr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> ast.For:
+        target_name: str,
+        iter_expr: PILExpr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> ast.For:
         """
         Parameter:
             target_name: identifier (loop variable)
@@ -402,18 +408,18 @@ class PILBuilder(ast.NodeVisitor):
         if not isinstance(target_name, str):
             raise FeError(TypeError(f"Expected str for target_name, but got {type(target_name).__name__}"))
         return ast.For(target=ast.Name(id=target_name,
-                 ctx=ast.Store()),
-             iter=self.create_pil_expr(iter_expr),
-             body=body,
-             orelse=orelse,
-             type_comment=type_comment,
-             **node_attr)
+                ctx=ast.Store()),
+            iter=self.create_pil_expr(iter_expr),
+            body=body,
+            orelse=orelse,
+            type_comment=type_comment,
+            **node_attr)
 
     def create_pil_while(self,
-         test_expr: PILExpr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> ast.While:
+        test_expr: PILExpr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> ast.While:
         """
         Parameter:
             test_expr: identifier or constant (loop condition)
@@ -428,10 +434,10 @@ class PILBuilder(ast.NodeVisitor):
         return ast.While(test=self.create_pil_expr(test_expr), body=body, orelse=orelse, **node_attr)
 
     def create_pil_if(self,
-         test_expr: PILExpr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> ast.If:
+        test_expr: PILExpr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> ast.If:
         """
         Parameter:
             test_expr: identifier or constant (condition)
@@ -446,9 +452,9 @@ class PILBuilder(ast.NodeVisitor):
         return ast.If(test=self.create_pil_expr(test_expr), body=body, orelse=orelse, **node_attr)
 
     def create_pil_assert(self,
-         test_expr: PILExpr,
-         msg_value: PILExprOrNone,
-         node_attr: PILAttr = NOATTR) -> ast.Assert:
+        test_expr: PILExpr,
+        msg_value: PILExprOrNone,
+        node_attr: PILAttr = NOATTR) -> ast.Assert:
         """
         Parameter:
             test_expr: identifier or constant (assertion condition)
@@ -459,8 +465,8 @@ class PILBuilder(ast.NodeVisitor):
             assert test_expr               # msg_value is None
         """
         return ast.Assert(test=self.create_pil_expr(test_expr),
-             msg=self.create_pil_expr(msg_value) if msg_value is not None else None,
-             **node_attr)
+            msg=self.create_pil_expr(msg_value) if msg_value is not None else None,
+            **node_attr)
 
     def create_pil_yield(self, expr: PILExprOrNone, node_attr: PILAttr = NOATTR) -> ast.Yield:
         """
@@ -486,10 +492,10 @@ class PILBuilder(ast.NodeVisitor):
         return ast.YieldFrom(value=self.create_pil_expr(expr), **node_attr)
 
     def create_pil_with(self,
-         items: list[PILExpr],
-         body: list[ast.stmt],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> ast.With:
+        items: list[PILExpr],
+        body: list[ast.stmt],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> ast.With:
         """
         Parameter:
             items: list of identifier or constant (context managers, no as-binding)
@@ -520,12 +526,12 @@ class PILBuilder(ast.NodeVisitor):
             **node_attr)
 
     def create_pil_try(self,
-         body: list[ast.stmt],
-         handlers: tuple[str,
-             list[ast.stmt]],
-         orelse: list[ast.stmt],
-         finalbody: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> ast.Try:
+        body: list[ast.stmt],
+        handlers: tuple[str,
+            list[ast.stmt]],
+        orelse: list[ast.stmt],
+        finalbody: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> ast.Try:
         """
         Parameter:
             body: list of statements (try body)
@@ -556,10 +562,10 @@ class PILBuilder(ast.NodeVisitor):
         return ast.Import(names=names, **node_attr)
 
     def create_pil_import_from(self,
-         module: Optional[str],
-         names: list[ast.alias],
-         level: Optional[int],
-         node_attr: PILAttr = NOATTR) -> ast.ImportFrom:
+        module: Optional[str],
+        names: list[ast.alias],
+        level: Optional[int],
+        node_attr: PILAttr = NOATTR) -> ast.ImportFrom:
         """
         Parameter:
             module: identifier (module name) or None
@@ -610,10 +616,10 @@ class PILBuilder(ast.NodeVisitor):
         return ast.Continue(**node_attr)
 
     def create_pil_bin_op(self,
-         left_expr: PILExpr,
-         op: ast.operator,
-         right_expr: PILExpr,
-         node_attr: PILAttr = NOATTR) -> ast.BinOp:
+        left_expr: PILExpr,
+        op: ast.operator,
+        right_expr: PILExpr,
+        node_attr: PILAttr = NOATTR) -> ast.BinOp:
         """
         Parameter:
             left_expr: identifier or constant
@@ -623,9 +629,9 @@ class PILBuilder(ast.NodeVisitor):
             left_expr op right_expr
         """
         return ast.BinOp(left=self.create_pil_expr(left_expr),
-             op=op,
-             right=self.create_pil_expr(right_expr),
-             **node_attr)
+            op=op,
+            right=self.create_pil_expr(right_expr),
+            **node_attr)
 
     def create_pil_unary_op(self, op: ast.unaryop, operand_expr: PILExpr, node_attr: PILAttr = NOATTR) -> ast.UnaryOp:
         """
@@ -638,9 +644,9 @@ class PILBuilder(ast.NodeVisitor):
         return ast.UnaryOp(op=op, operand=self.create_pil_expr(operand_expr), **node_attr)
 
     def create_pil_dict(self,
-         keys: list[PILExprOrNone],
-         values: list[PILExpr],
-         node_attr: PILAttr = NOATTR) -> ast.Dict:
+        keys: list[PILExprOrNone],
+        values: list[PILExpr],
+        node_attr: PILAttr = NOATTR) -> ast.Dict:
         """
         Parameter:
             keys: list of identifier, constant, or None (None means dict unpacking **value)
@@ -665,10 +671,10 @@ class PILBuilder(ast.NodeVisitor):
             **node_attr)
 
     def create_pil_compare(self,
-         left_expr: PILExpr,
-         op: ast.cmpop,
-         comparator_expr: PILExpr,
-         node_attr: PILAttr = NOATTR) -> ast.Compare:
+        left_expr: PILExpr,
+        op: ast.cmpop,
+        comparator_expr: PILExpr,
+        node_attr: PILAttr = NOATTR) -> ast.Compare:
         """
         Parameter:
             left_expr: identifier or constant
@@ -678,22 +684,22 @@ class PILBuilder(ast.NodeVisitor):
             left_expr op comparator_expr
         """
         return ast.Compare(left=self.create_pil_expr(left_expr),
-             ops=[op],
-             comparators=[self.create_pil_expr(comparator_expr)],
-             **node_attr)
+            ops=[op],
+            comparators=[self.create_pil_expr(comparator_expr)],
+            **node_attr)
 
     def create_pil_call(self,
-         func_expr: PILExpr,
-         args: list[PILExpr],
-         keywords: list[tuple[Optional[str],
-                 PILExpr]],
-         node_attr: PILAttr = NOATTR) -> ast.Call:
+        func_expr: PILExpr,
+        args: list[PILExpr],
+        keywords: list[tuple[Optional[str],
+                PILExpr]],
+        node_attr: PILAttr = NOATTR) -> ast.Call:
         """
         Parameter:
             func_expr: identifier or constant (callable)
             args: list of identifier or constant (positional arguments)
             keywords: list of (arg_name_or_None, identifier_or_constant) pairs;
-                      arg_name is None for **dict expansion
+                    arg_name is None for **dict expansion
         Emit code example:
             func_expr(args[0], args[1], key=keywords[0][1])
         """
@@ -729,10 +735,10 @@ class PILBuilder(ast.NodeVisitor):
         return ast.Name(id=identifier, ctx=ctx, **node_attr)
 
     def create_pil_attribute(self,
-         value_expr: PILExpr,
-         attr_name: str,
-         ctx: ast.expr_context = ast.Load(),
-         node_attr: PILAttr = NOATTR) -> ast.Attribute:
+        value_expr: PILExpr,
+        attr_name: str,
+        ctx: ast.expr_context = ast.Load(),
+        node_attr: PILAttr = NOATTR) -> ast.Attribute:
         """
         Parameter:
             value_expr: identifier or constant (object)
@@ -746,8 +752,8 @@ class PILBuilder(ast.NodeVisitor):
     def create_pil_subscript(self,
         value_expr: PILExpr,
         slices: list[PILSlice],
-         ctx: ast.expr_context = ast.Load(),
-         node_attr: PILAttr = NOATTR) -> ast.Subscript:
+        ctx: ast.expr_context = ast.Load(),
+        node_attr: PILAttr = NOATTR) -> ast.Subscript:
         """
         Parameter:
             value_expr: identifier or constant (object)
@@ -773,9 +779,9 @@ class PILBuilder(ast.NodeVisitor):
         return ast.Subscript(value=self.create_pil_expr(value_expr), slice=result_slice, ctx=ast.Load(), **node_attr)
 
     def create_pil_starred(self,
-         value_expr: PILExpr,
-         ctx: ast.expr_context = ast.Load(),
-         node_attr: PILAttr = NOATTR) -> ast.Starred:
+        value_expr: PILExpr,
+        ctx: ast.expr_context = ast.Load(),
+        node_attr: PILAttr = NOATTR) -> ast.Starred:
         """
         Parameter:
             value_expr: identifier or constant
@@ -786,10 +792,10 @@ class PILBuilder(ast.NodeVisitor):
         return ast.Starred(self.create_pil_expr(value_expr), ctx=ctx, **node_attr)
 
     def create_pil_list(self,
-         elts: list[tuple[PILExpr,
-                 bool]],
-         ctx: ast.expr_context = ast.Load(),
-         node_attr: PILAttr = NOATTR) -> ast.List:
+        elts: list[tuple[PILExpr,
+                bool]],
+        ctx: ast.expr_context = ast.Load(),
+        node_attr: PILAttr = NOATTR) -> ast.List:
         """
         Parameter:
             elts: list of (identifier or constant, is_starred)
@@ -803,10 +809,10 @@ class PILBuilder(ast.NodeVisitor):
             **node_attr)
 
     def create_pil_tuple(self,
-         elts: list[tuple[PILExpr,
-                 bool]],
-         ctx: ast.expr_context = ast.Load(),
-         node_attr: PILAttr = NOATTR) -> ast.Tuple:
+        elts: list[tuple[PILExpr,
+                bool]],
+        ctx: ast.expr_context = ast.Load(),
+        node_attr: PILAttr = NOATTR) -> ast.Tuple:
         """
         Parameter:
             elts: list of (identifier or constant, is_starred)
@@ -859,22 +865,22 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
     def visit_lhs(self, target: ast.expr, source_expr: PILExprOrNone) -> list[ast.stmt]:
         if isinstance(target, ast.Name):
             assign_stmts = [self.create_pil_assign_identifier(target.id,
-                     source_expr)] if source_expr is not None else []
+                    source_expr)] if source_expr is not None else []
             return assign_stmts
 
         elif isinstance(target, ast.Attribute):
             obj_stmts, obj_expr = self.visit(target.value)
             assign_stmts = [self.create_pil_assign_attribute(obj_expr,
-                     target.attr,
-                     source_expr)] if source_expr is not None else []
+                    target.attr,
+                    source_expr)] if source_expr is not None else []
             return obj_stmts + assign_stmts
 
         elif isinstance(target, ast.Subscript):
             obj_stmts, obj_expr = self.visit(target.value)
             slice_stmt_list, pil_slice_list = self.visit_slice_values(target.slice)
             assign_stmts = [self.create_pil_assign_subscript(obj_expr,
-                     pil_slice_list,
-                     source_expr)] if source_expr is not None else []
+                    pil_slice_list,
+                    source_expr)] if source_expr is not None else []
             return obj_stmts + slice_stmt_list + assign_stmts
 
         elif isinstance(target, (ast.Tuple, ast.List)):
@@ -887,7 +893,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
 
             # Step 2: emit the first unpack into per-element temporaries.
             unpack_stmts = [self.create_pil_assign_name(elt_temps,
-                     self.create_pil_expr(source_expr))] if source_expr is not None else []
+                    self.create_pil_expr(source_expr))] if source_expr is not None else []
             # Step 3: recursively handle each element with its temp
             result_stmts = unpack_stmts
             for (temp_name, starred), elt in zip(elt_temps, target.elts):
@@ -944,39 +950,39 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             decorator_names.append(dec_name)
         body_stmt_list, _ = self.visit_stmts(body)
         func_def = self.create_pil_function_def(name,
-             args,
-             body_stmt_list,
-             decorator_names,
-             returns,
-             type_comment,
-             node_attr=node_attr)
+            args,
+            body_stmt_list,
+            decorator_names,
+            returns,
+            type_comment,
+            node_attr=node_attr)
         return decorator_stmts + [func_def], None
 
     def visit_async_function_def(self,
-         name: str,
-         args: ast.arguments,
-         body: list[ast.stmt],
-         decorator_list: list[ast.expr],
-         returns: Optional[ast.expr],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        name: str,
+        args: ast.arguments,
+        body: list[ast.stmt],
+        decorator_list: list[ast.expr],
+        returns: Optional[ast.expr],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("AsyncFunctionDef is not supported"))
 
     def visit_class_def(self,
-         name: str,
-         bases: list[ast.expr],
-         keywords: list[ast.keyword],
-         body: list[ast.stmt],
-         decorator_list: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        name: str,
+        bases: list[ast.expr],
+        keywords: list[ast.keyword],
+        body: list[ast.stmt],
+        decorator_list: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("ClassDef is not supported"))
 
     def visit_return(self,
-         value: Optional[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: Optional[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1:
             Python:
@@ -1003,9 +1009,9 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, None
 
     def visit_delete(self,
-         targets: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        targets: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (delete name):
             Python:
@@ -1068,11 +1074,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmts, None
 
     def visit_assign(self,
-         targets: list[ast.expr],
-         value: ast.expr,
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        targets: list[ast.expr],
+        value: ast.expr,
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1:
             Python:
@@ -1096,11 +1102,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, None
 
     def visit_aug_assign(self,
-         target: ast.expr,
-         op: ast.operator,
-         value: ast.expr,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        target: ast.expr,
+        op: ast.operator,
+        value: ast.expr,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (name target):
             Python:
@@ -1164,12 +1170,12 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         raise FeError(NotImplementedError(f"AugAssign target type {type(target).__name__} is not supported"))
 
     def visit_ann_assign(self,
-         target: ast.expr,
-         annotation: ast.expr,
-         value: Optional[ast.expr],
-         simple: int,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        target: ast.expr,
+        annotation: ast.expr,
+        value: Optional[ast.expr],
+        simple: int,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (annotation only):
             Python:
@@ -1193,13 +1199,13 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return value_stmts + self.visit_lhs(target, value_expr) + ann_stmts, None
 
     def visit_for(self,
-         target: ast.expr,
-         iter_expr: ast.expr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        target: ast.expr,
+        iter_expr: ast.expr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             for target in iter_expr:
@@ -1224,29 +1230,29 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         result_body_stmt_list = target_stmt_list + body_stmt_list
         orelse_stmt_list, _ = self.visit_stmts(orelse)
         result_stmt_list = iter_stmt_list + [self.create_pil_for(target_name,
-                 iter_name,
-                 result_body_stmt_list,
-                 orelse_stmt_list,
-                 type_comment)]
+                iter_name,
+                result_body_stmt_list,
+                orelse_stmt_list,
+                type_comment)]
         self.continue_stack.pop()
         return result_stmt_list, None
 
     def visit_async_for(self,
-         target: ast.expr,
-         iter_expr: ast.expr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        target: ast.expr,
+        iter_expr: ast.expr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("AsyncFor is not supported"))
 
     def visit_while(self,
-         test: ast.expr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        test: ast.expr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             while test_expr:
@@ -1279,11 +1285,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, None
 
     def visit_if(self,
-         test: ast.expr,
-         body: list[ast.stmt],
-         orelse: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        test: ast.expr,
+        body: list[ast.stmt],
+        orelse: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             if test_expr:
@@ -1304,11 +1310,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, None
 
     def visit_with(self,
-         items: list[ast.withitem],
-         body: list[ast.stmt],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        items: list[ast.withitem],
+        body: list[ast.stmt],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             with ctx_expr0 as var0, ctx_expr1 as var1:
@@ -1334,31 +1340,31 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
                 body_preamble.extend(self.visit_lhs(item.optional_vars, ctx_name))
         body_stmts, _ = self.visit_stmts(body)
         result_stmts.append(self.create_pil_with(ctx_names,
-                 body_preamble + body_stmts,
-                 type_comment,
-                 node_attr=node_attr))
+                body_preamble + body_stmts,
+                type_comment,
+                node_attr=node_attr))
         return result_stmts, None
 
     def visit_async_with(self,
-         items: list[ast.withitem],
-         body: list[ast.stmt],
-         type_comment: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        items: list[ast.withitem],
+        body: list[ast.stmt],
+        type_comment: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("AsyncWith is not supported"))
 
     def visit_match(self,
-         subject: ast.expr,
-         cases: list,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        subject: ast.expr,
+        cases: list,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("Match is not supported"))
 
     def visit_raise(self,
-         exc: Optional[ast.expr],
-         cause: Optional[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        exc: Optional[ast.expr],
+        cause: Optional[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (bare re-raise):
             Python:
@@ -1392,12 +1398,12 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmts, None
 
     def visit_try(self,
-         body: list[ast.stmt],
-         handlers: list[ast.excepthandler],
-         orelse: list[ast.stmt],
-         finalbody: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        body: list[ast.stmt],
+        handlers: list[ast.excepthandler],
+        orelse: list[ast.stmt],
+        finalbody: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             try:
@@ -1447,10 +1453,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
                 handler_type_stmts, handler_type_name = self.visit(handler.type)
                 isinstance_temp = self.create_temp_identifier()
                 isinstance_stmts = [self.create_pil_assign_name(isinstance_temp,
-                         self.create_pil_call('isinstance',
-                             [exc_var,
-                                 handler_type_name],
-                             []))]
+                        self.create_pil_call('isinstance',
+                            [exc_var,
+                                handler_type_name],
+                            []))]
 
                 if handler.name is not None:
                     pre_handler_set = [self.create_pil_assign_identifier(handler.name, exc_var)]
@@ -1465,31 +1471,31 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
                 result_then_stmts = handler_body_stmts
 
             dispatch_body = handler_type_stmts + isinstance_stmts + [self.create_pil_if(isinstance_temp,
-                     result_then_stmts,
-                     dispatch_body)]
+                    result_then_stmts,
+                    dispatch_body)]
         orelse_stmts, _ = self.visit_stmts(orelse)
         finalbody_stmts, _ = self.visit_stmts(finalbody)
         return [self.create_pil_try(body_stmts,
-                 (exc_var,
-                     dispatch_body),
-                 orelse_stmts,
-                 finalbody_stmts,
-                 node_attr=node_attr)], None
+                (exc_var,
+                    dispatch_body),
+                orelse_stmts,
+                finalbody_stmts,
+                node_attr=node_attr)], None
 
     def visit_try_star(self,
-         body: list[ast.stmt],
-         handlers: list[ast.excepthandler],
-         orelse: list[ast.stmt],
-         finalbody: list[ast.stmt],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        body: list[ast.stmt],
+        handlers: list[ast.excepthandler],
+        orelse: list[ast.stmt],
+        finalbody: list[ast.stmt],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("TryStar is not supported"))
 
     def visit_assert(self,
-         test: ast.expr,
-         msg: Optional[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        test: ast.expr,
+        msg: Optional[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             assert test_expr, msg_expr
@@ -1515,17 +1521,17 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return [self.create_pil_if("__debug__", debug_body, [])], None
 
     def visit_import(self,
-         names: list[ast.alias],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        names: list[ast.alias],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         return [self.create_pil_import(names)], None
 
     def visit_import_from(self,
-         module: Optional[str],
-         names: list[ast.alias],
-         level: Optional[int],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        module: Optional[str],
+        names: list[ast.alias],
+        level: Optional[int],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         return [self.create_pil_import_from(module, names, level)], None
 
     def visit_global(self, names: list[str], node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt], PILExprOrNone]:
@@ -1554,8 +1560,8 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             if isinstance(test_expr, str):
                 reeval_stmt_list, reeval_expr = self.visit(test)
                 result_stmt_list = reeval_stmt_list + [self.create_pil_assign_identifier(test_expr,
-                         reeval_expr),
-                     self.create_pil_continue()]
+                        reeval_expr),
+                    self.create_pil_continue()]
             else:
                 result_stmt_list = [self.create_pil_continue()]
         return result_stmt_list, None
@@ -1563,10 +1569,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
     # expr nodes
 
     def visit_bool_op(self,
-         op: ast.boolop,
-         values: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        op: ast.boolop,
+        values: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (and):
             Python:
@@ -1620,10 +1626,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         raise FeError(NotImplementedError(f"BoolOp {type(op).__name__} is not supported"))
 
     def visit_named_expr(self,
-         target: ast.expr,
-         value: ast.expr,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        target: ast.expr,
+        value: ast.expr,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             target := expr
@@ -1640,11 +1646,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, target.id
 
     def visit_bin_op(self,
-         left: ast.expr,
-         op: ast.operator,
-         right: ast.expr,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        left: ast.expr,
+        op: ast.operator,
+        right: ast.expr,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             left_expr op right_expr
@@ -1663,10 +1669,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, temp_name
 
     def visit_unary_op(self,
-         op: ast.unaryop,
-         operand: ast.expr,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        op: ast.unaryop,
+        operand: ast.expr,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             op operand_expr
@@ -1683,10 +1689,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, temp_name
 
     def visit_lambda(self,
-         args: ast.arguments,
-         body: ast.expr,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        args: ast.arguments,
+        body: ast.expr,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             lambda args: body_expr
@@ -1710,11 +1716,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return [func_def], func_name
 
     def visit_if_exp(self,
-         test: ast.expr,
-         body: ast.expr,
-         orelse: ast.expr,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        test: ast.expr,
+        body: ast.expr,
+        orelse: ast.expr,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             body_expr if test_expr else orelse_expr
@@ -1739,10 +1745,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, temp_name
 
     def visit_dict(self,
-         keys: list[Optional[ast.expr]],
-         values: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        keys: list[Optional[ast.expr]],
+        values: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             {key0: val0, **val1, key2: val2}
@@ -1824,10 +1830,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return self.create_pil_function_def(func_name, func_args, comp_body, [], None, None), func_name
 
     def visit_list_comp(self,
-         elt: ast.expr,
-         generators: list[ast.comprehension],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        elt: ast.expr,
+        generators: list[ast.comprehension],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             [elt for x in iter if cond]
@@ -1851,10 +1857,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return [func_def, gen_stmt, result_stmt], result_name
 
     def visit_set_comp(self,
-         elt: ast.expr,
-         generators: list[ast.comprehension],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        elt: ast.expr,
+        generators: list[ast.comprehension],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             {elt for x in iter if cond}
@@ -1878,11 +1884,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return [func_def, gen_stmt, result_stmt], result_name
 
     def visit_dict_comp(self,
-         key: ast.expr,
-         value: ast.expr,
-         generators: list[ast.comprehension],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        key: ast.expr,
+        value: ast.expr,
+        generators: list[ast.comprehension],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             {key: val for x in iter if cond}
@@ -1907,10 +1913,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return [func_def, gen_stmt, result_stmt], result_name
 
     def visit_generator_exp(self,
-         elt: ast.expr,
-         generators: list[ast.comprehension],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        elt: ast.expr,
+        generators: list[ast.comprehension],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             (elt for x in iter if cond)
@@ -1979,11 +1985,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return value_stmts + [yield_from_stmt], temp_name
 
     def visit_compare(self,
-         left: ast.expr,
-         ops: list[ast.cmpop],
-         comparators: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        left: ast.expr,
+        ops: list[ast.cmpop],
+        comparators: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (single comparison):
             Python:
@@ -2026,11 +2032,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return left_stmts + comp_stmts + [first_stmt, rest_stmt], temp_name
 
     def visit_call(self,
-         func: ast.expr,
-         args: list[ast.expr],
-         keywords: list[ast.keyword],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        func: ast.expr,
+        args: list[ast.expr],
+        keywords: list[ast.keyword],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             func_expr(arg0, arg1, key=kw_expr)
@@ -2067,11 +2073,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, temp_name
 
     def visit_formatted_value(self,
-         value: ast.expr,
-         conversion: int,
-         format_spec: Optional[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: ast.expr,
+        conversion: int,
+        format_spec: Optional[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (no conversion, no format_spec):
             Python:
@@ -2121,27 +2127,27 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             result_stmts += spec_stmts
             temp_name = self.create_temp_identifier()
             result_stmts += [self.create_pil_assign_name(temp_name,
-                     self.create_pil_call('format',
-                         [value_name,
-                             spec_name],
-                         []))]
+                    self.create_pil_call('format',
+                        [value_name,
+                            spec_name],
+                        []))]
             return result_stmts, temp_name
 
         return result_stmts, value_name
 
     def visit_interpolation(self,
-         value: ast.expr,
-         literal_text: str,
-         conversion: int,
-         format_spec: Optional[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: ast.expr,
+        literal_text: str,
+        conversion: int,
+        format_spec: Optional[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("Interpolation is not supported"))
 
     def visit_joined_str(self,
-         values: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        values: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Case 1 (single part):
             Python:
@@ -2170,38 +2176,38 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             return result_stmts, part_names[0]
         parts_list_name = self.create_temp_identifier()
         result_stmts.append(self.create_pil_assign_name(parts_list_name,
-                 self.create_pil_list([(n,
-                             False) for n in part_names])))
+                self.create_pil_list([(n,
+                            False) for n in part_names])))
         join_func = self.create_temp_identifier()
         result_stmts.append(self.create_pil_assign_name(join_func,
-                 self.create_pil_attribute(ast.Constant(value=''),
-                     'join')))
+                self.create_pil_attribute(ast.Constant(value=''),
+                    'join')))
         temp_name = self.create_temp_identifier()
         result_stmts.append(self.create_pil_assign_name(temp_name,
-                 self.create_pil_call(join_func,
-                     [parts_list_name],
-                     [])))
+                self.create_pil_call(join_func,
+                    [parts_list_name],
+                    [])))
         return result_stmts, temp_name
 
     def visit_template_str(self,
-         values: list[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        values: list[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("TemplateStr is not supported"))
 
     def visit_constant(self,
-         value: object,
-         kind: Optional[str],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: object,
+        kind: Optional[str],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         return [], self.create_pil_constant(value, kind)
 
     def visit_attribute(self,
-         value: ast.expr,
-         attr: str,
-         ctx: ast.expr_context,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: ast.expr,
+        attr: str,
+        ctx: ast.expr_context,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             value_expr.attr
@@ -2218,11 +2224,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, temp_name
 
     def visit_subscript(self,
-         value: ast.expr,
-         slice_expr: ast.expr,
-         ctx: ast.expr_context,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: ast.expr,
+        slice_expr: ast.expr,
+        ctx: ast.expr_context,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             value_expr[slice]
@@ -2244,26 +2250,26 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, temp_name
 
     def visit_starred(self,
-         value: ast.expr,
-         ctx: ast.expr_context,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        value: ast.expr,
+        ctx: ast.expr_context,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(RuntimeError("Starred should not be directly accessed"))
 
     def visit_name(self,
-         identifier: str,
-         ctx: ast.expr_context,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        identifier: str,
+        ctx: ast.expr_context,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         if not isinstance(ctx, ast.Load):
             raise FeError(TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}"))
         return [], identifier
 
     def visit_list(self,
-         elts: list[ast.expr],
-         ctx: ast.expr_context,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        elts: list[ast.expr],
+        ctx: ast.expr_context,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             [elt0, *elt1, elt2]
@@ -2279,10 +2285,10 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return self._visit_sequence_literal(elts, self.create_pil_list)
 
     def visit_tuple(self,
-         elts: list[ast.expr],
-         ctx: ast.expr_context,
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        elts: list[ast.expr],
+        ctx: ast.expr_context,
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         """
         Python:
             (elt0, *elt1, elt2)
@@ -2298,11 +2304,11 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return self._visit_sequence_literal(elts, self.create_pil_tuple)
 
     def visit_slice(self,
-         lower: Optional[ast.expr],
-         upper: Optional[ast.expr],
-         step: Optional[ast.expr],
-         node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
-         PILExprOrNone]:
+        lower: Optional[ast.expr],
+        upper: Optional[ast.expr],
+        step: Optional[ast.expr],
+        node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
+        PILExprOrNone]:
         raise FeError(NotImplementedError("Slice is not supported"))
 
     def visit_stmts(self, stmts: list[ast.stmt]) -> tuple[list[ast.stmt], PILExprOrNone]:
@@ -2341,8 +2347,8 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
 
 
     def _collect_sequence_elements(self,
-         elts: list[ast.expr]) -> tuple[list[ast.stmt],
-         list[tuple[PILExpr, bool]]]:
+        elts: list[ast.expr]) -> tuple[list[ast.stmt],
+        list[tuple[PILExpr, bool]]]:
         result_stmt_list = []
         elt_list = []
         for elt in elts:
@@ -2356,9 +2362,9 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         return result_stmt_list, elt_list
 
     def _visit_sequence_literal(self,
-         elts: list[ast.expr],
-         create_expr: Callable[[list[tuple[PILExpr, bool]]], PILExpr]) -> tuple[list[ast.stmt],
-         str]:
+        elts: list[ast.expr],
+        create_expr: Callable[[list[tuple[PILExpr, bool]]], PILExpr]) -> tuple[list[ast.stmt],
+        str]:
         temp_name = self.create_temp_identifier()
         result_stmt_list, elt_list = self._collect_sequence_elements(elts)
         result_expr = create_expr(elt_list)
