@@ -48,7 +48,6 @@
         "runtime_debug_mode": 0
     },
     "operation": {
-        "force_combine_axis" : false,
         "combine_axis" : true
     },
     "global": {

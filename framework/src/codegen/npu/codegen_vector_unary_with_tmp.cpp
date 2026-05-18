@@ -217,50 +217,6 @@ std::string CodeGenOpNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpB
     return oss.str();
 }
 
-std::string CodeGenOpNPU::PrintReduceCombine(const PrintUnaryTmpBuffParam& param) const
-{
-    const std::string& dstDtypeStr = param.dstDtypeStr;
-    const std::string& srcDtypeStr = param.srcDtypeStr;
-    const std::string& tmpDtypeStr = param.tmpDtypeStr;
-    const std::string& dVar = param.dVar;
-    const std::string& s0Var = param.s0Var;
-    const std::string& tmpVar = param.tmpVar;
-
-    std::vector<int64_t> srcOriginShape = NormalizeShape(originShape[ID2], SHAPE_DIM4);
-    std::vector<int64_t> srcRawShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
-    std::vector<int64_t> dstRawShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
-    std::vector<int64_t> tmpRawShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
-
-    std::ostringstream os;
-    std::vector<std::string> parmList;
-    parmList.emplace_back(dstDtypeStr);
-    // src origin shape
-    for (int i = ID0; i < SHAPE_DIM4; ++i) {
-        parmList.emplace_back(std::to_string(srcOriginShape[i]));
-    }
-    // dst raw shape
-    for (int i = ID1; i < SHAPE_DIM4; ++i) {
-        parmList.emplace_back(std::to_string(dstRawShape[i]));
-    }
-    // src raw shape
-    for (int i = ID1; i < SHAPE_DIM4; ++i) {
-        parmList.emplace_back(std::to_string(srcRawShape[i]));
-    }
-    parmList.emplace_back(std::to_string(tmpRawShape[ID3]));
-    std::string templateParam = JoinString(parmList, ", ");
-    parmList.clear();
-
-    std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
-    std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
-    std::string tmp = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
-    parmList.insert(parmList.end(), {dst, src, tmp});
-
-    std::string tiloOpCallParam = JoinString(parmList, ", ");
-    os << tileOpName << "<" << templateParam << ">"
-       << "(" << tiloOpCallParam << ");\n";
-    return os.str();
-}
-
 std::string CodeGenOpNPU::PrintCompactStatic(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& s0Var = param.s0Var;
@@ -529,10 +485,6 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         opCode == Opcode::OP_ROWMIN_SINGLE || opCode == Opcode::OP_ROWPROD_SINGLE ||
         opCode == Opcode::OP_ROWARGMAX_SINGLE || opCode == Opcode::OP_ROWARGMIN_SINGLE) {
         return PrintReduceLastAxis({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
-    }
-
-    if (opCode == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE || opCode == Opcode::OP_ROWSUM_COMBINE_AXIS_SINGLE) {
-        return PrintReduceCombine({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
     if (opCode == Opcode::OP_COMPACT) {

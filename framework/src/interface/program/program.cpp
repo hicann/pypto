@@ -219,7 +219,6 @@ void SetParamConfig(Function* currentFuncPtr)
     currentFuncPtr->paramConfigs_.copyOutResolveCoalescing =
         currentScope->GetPassConfig<int>(COPYOUT_RESOLVE_COALESCING);
     currentFuncPtr->paramConfigs_.combineAxis = currentScope->GetOperationConfig<bool>(KEY_COMBINE_AXIS);
-    currentFuncPtr->paramConfigs_.forceCombineAxis = currentScope->GetOperationConfig<bool>(KEY_FORCE_COMBINE_AXIS);
 }
 
 #if ENABLE_HIDDENLOOP

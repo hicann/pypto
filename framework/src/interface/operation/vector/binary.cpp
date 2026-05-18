@@ -105,7 +105,7 @@ int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, int64_
 template <BinaryOpType T>
 void TiledBinaryOperation(
     Function& function, const TileShape& tileShape, size_t cur, LogicalInput& input1, LogicalInput& input2,
-    const LogicalTensorPtr& result, TileInfo& resultTileInfo, bool withBrc, int64_t precisionType)
+    const LogicalTensorPtr& result, TileInfo& resultTileInfo, int64_t precisionType)
 {
     size_t shapeSize = input1.tensor->GetShape().size();
     if (cur == shapeSize) {
@@ -114,37 +114,24 @@ void TiledBinaryOperation(
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         auto opName = GetBinaryOpName<T>();
         Operation* op = nullptr;
-        if (withBrc) {
-            std::vector<int64_t> tmpShape(input1.tileInfo.shape);
-            auto alignSize = BLOCK_SIZE / BytesOf(input2.tensor->Datatype());
-            tmpShape[input1.tileInfo.shape.size() - 1] = alignSize;
-            if (input1.tileInfo.shape.size() == NUM2) {
-                tmpShape[input1.tileInfo.shape.size() - NUM2] =
-                    (tmpShape[input1.tileInfo.shape.size() - NUM2] + alignSize - 1) / alignSize * alignSize;
-            }
-            auto tempTensor = std::make_shared<LogicalTensor>(function, input2.tensor->Datatype(), tmpShape);
+        if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW" || opName == "REM") {
+            std::vector<int64_t> tmpShape(resultTileInfo.shape);
+            auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
+            tmpShape[resultTileInfo.shape.size() - 1] =
+                AlignUp(tmpShape[resultTileInfo.shape.size() - 1], alignSize);
+            auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
             op = &function.AddOperation(
-                GetBinaryOpNameCode<T, false, true>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
+                GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
+        } else if (opName == "FLOORDIV") {
+            std::vector<int64_t> tmpShape;
+            auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
+            tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 4);
+            auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
+            function.AddOperation(
+                GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
         } else {
-            if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW" || opName == "REM") {
-                std::vector<int64_t> tmpShape(resultTileInfo.shape);
-                auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-                tmpShape[resultTileInfo.shape.size() - 1] =
-                    AlignUp(tmpShape[resultTileInfo.shape.size() - 1], alignSize);
-                auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
-                op = &function.AddOperation(
-                    GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
-            } else if (opName == "FLOORDIV") {
-                std::vector<int64_t> tmpShape;
-                auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
-                tmpShape.push_back(AlignUp(resultTileInfo.shape.back(), alignSize) * 4);
-                auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
-                function.AddOperation(
-                    GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
-            } else {
-                op = &function.AddOperation(
-                    GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile});
-            }
+            op = &function.AddOperation(
+                GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile});
         }
 
         if (op != nullptr) {
@@ -180,7 +167,7 @@ void TiledBinaryOperation(
         input2.tileInfo.shape[cur] =
             std::min(input2.tensor->GetShape()[cur] - input2.tileInfo.offset[cur], vecTile[cur]);
         TiledBinaryOperation<T>(
-            function, tileShape, cur + 1, input1, input2, result, resultTileInfo, withBrc, precisionType);
+            function, tileShape, cur + 1, input1, input2, result, resultTileInfo, precisionType);
     }
 }
 
@@ -194,8 +181,7 @@ std::pair<std::vector<int64_t>, std::vector<int64_t>> GetBrcExpandShape(
     size_t shapeSize = result->shape.size();
 
     bool isInWhiteList = SUPPORT_BRC_INLINE.count(GetBinaryOpNameCode<T>());
-    bool isCombineAxisEnabled =
-        function.paramConfigs_.forceCombineAxis || (function.paramConfigs_.combineAxis && isInWhiteList);
+    bool isCombineAxisEnabled = function.paramConfigs_.combineAxis && isInWhiteList;
     if (isInWhiteList) {
         // Outer axis: handled by tileop loop with stride control, keep operand shape.
         if (shapeSize > 2) {
@@ -233,10 +219,7 @@ void TiledBinaryOperation(
     TileInfo resultTileInfo(result->shape.size(), result->offset.size());
     auto input1 = LogicalInput{operand1, tileInfo1};
     auto input2 = LogicalInput{operand2, tileInfo2};
-    // 如果打开了forceCombineAxis要走进OP_XX_BRC，如果打开combineAxis要避免后续走OP_XX_BRC逻辑
-    bool withBrc = (BrcAxisBinaryOp(operand1, operand2, -1) != 0) && function.paramConfigs_.forceCombineAxis &&
-                   !function.paramConfigs_.combineAxis;
-    TiledBinaryOperation<T>(function, tileShape, 0, input1, input2, result, resultTileInfo, withBrc, precisionType);
+    TiledBinaryOperation<T>(function, tileShape, 0, input1, input2, result, resultTileInfo, precisionType);
 }
 
 void TiledPReLUOperation(

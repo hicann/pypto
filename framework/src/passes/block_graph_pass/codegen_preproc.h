@@ -50,7 +50,6 @@ private:
     void FixExpandDimForAxisCombine(Operation& op, int dimSize) const;
     std::string DumpOpList(Function& function);
     bool combineAxis{false};
-    bool forceCombineAxis{false};
 };
 
 } // namespace tile_fwk

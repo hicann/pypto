@@ -480,7 +480,6 @@ struct ParamConfigs {
     std::map<std::string, int64_t> cubeNBufferSettingByLabel;
     std::map<std::string, int64_t> vecNBufferSettingByLabel;
     int copyOutResolveCoalescing{0};
-    bool forceCombineAxis{false};
     bool combineAxis{false};
     bool enableMemoryAwareSort{false};
 };

@@ -86,7 +86,7 @@ TEST_F(TestAxisCombine, Test2)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 128}, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1}, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 128}, "t3"), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_COMBINE_AXIS_SINGLE, {"t1"}, {"t2"}, "rowmax", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_SINGLE, {"t1"}, {"t2"}, "rowmax", true), true);
     graph.GetOp("rowmax")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
     EXPECT_EQ(graph.AddOp(Opcode::OP_SUB, {"t1", "t2"}, {"t3"}, "add", true), true);
     auto* rootFuncPtr = graph.GetFunction();

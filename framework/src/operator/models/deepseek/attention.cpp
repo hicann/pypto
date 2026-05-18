@@ -235,7 +235,7 @@ void Attention(
         config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 1}});
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_2);
-        config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, true);
+        config::SetOperationOption(KEY_COMBINE_AXIS, true);
 
         LOOP("LOOP_L0_bIdx_pa", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, batchSizeScalar, 1), {}, true)
         {
@@ -357,7 +357,7 @@ void Attention(
         /******** post ********/
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_20);
-        config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, false);
+        config::SetOperationOption(KEY_COMBINE_AXIS, false);
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 4}});
         TileShape::Current().SetMatrixSize({});
         LOOP("PaPost", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(bLoop), {}, true)

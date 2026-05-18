@@ -85,7 +85,6 @@ constexpr int64_t CFG_DEBUG_ALL = 1;
 constexpr int64_t CFG_DEBUG_AICORE_MODEL = 2;
 constexpr int64_t CFG_DEBUG_VERIFY = 3;
 // operation
-const std::string KEY_FORCE_COMBINE_AXIS = "force_combine_axis";
 const std::string KEY_COMBINE_AXIS = "combine_axis";
 
 class ConfigScope;

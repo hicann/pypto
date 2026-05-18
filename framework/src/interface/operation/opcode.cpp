@@ -541,14 +541,7 @@ void OpcodeManager::RegisterVectorReduction()
         Opcode::OP_ROWARGMIN_SINGLE, OpCoreType::AIV, "ROWARGMIN_SINGLE", {MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowargminsingle", PIPE_V, PIPE_V, CoreType::AIV},
         OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
-    RegisterInfo(
-        Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE, OpCoreType::AIV, "ROWMAX_COMBINE_AXIS_SINGLE", {MemoryType::MEM_UB},
-        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowmaxsinglecombine", PIPE_V, PIPE_V, CoreType::AIV},
-        OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::outputCombineAxis});
-    RegisterInfo(
-        Opcode::OP_ROWSUM_COMBINE_AXIS_SINGLE, OpCoreType::AIV, "ROWSUM_COMBINE_AXIS_SINGLE", {MemoryType::MEM_UB},
-        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowsumsinglecombine", PIPE_V, PIPE_V, CoreType::AIV},
-        OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::outputCombineAxis});
+
     RegisterInfo(
         Opcode::OP_ROWSUMLINE, OpCoreType::AIV, "ROWSUMLINE", {MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowsumline", PIPE_V, PIPE_V, CoreType::AIV},

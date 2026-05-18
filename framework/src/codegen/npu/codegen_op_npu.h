@@ -460,7 +460,6 @@ protected:
 
     std::string PrintCastDynamicUnaligned(const PrintUnaryParam& param) const;
     std::string PrintCastTileTensor() const;
-    std::string PrintReduceCombine(const PrintUnaryTmpBuffParam& param) const;
     std::string PrintVectorScalarTileTensor(const PrintUnaryParam& param) const;
     std::string PrintVectorScalarOpDynamicUnalign(const PrintUnaryParam& param) const;
     std::string PrintMemL1ToL0TileTensor() const;

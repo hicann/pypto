@@ -319,12 +319,6 @@ void PadLocalBuffer::PadVector(
         // noPadding 分支中，oriRawshapeMap_ 应保存 shape（与原始代码行为一致）
         int rawmagic = in->tensor->rawmagic;
         oriRawshapeMap_[rawmagic] = in->tensor->rawshape; // 此时 rawshape = shape
-        // 开启了强制合轴，倒数第2轴不是对齐的
-        if (forceCombineAxis && paddingValue > 0 && lastIdx > 0 &&
-            in->tensor->rawshape[lastIdx - 1] % paddingValue != 0) {
-            int64_t shapeAfterPad = Pad(in->tensor->rawshape[lastIdx - 1], paddingValue);
-            in->tensor->rawshape[lastIdx - 1] = shapeAfterPad;
-        }
         APASS_LOG_DEBUG_F(
             Elements::Tensor, "Vector Op %d %s input %d, not handle unalign.", op.opmagic, op.GetOpcodeStr().c_str(),
             in->magic);
@@ -463,61 +457,6 @@ void PadLocalBuffer::TraverseAndSetAttr(
     }
 }
 
-bool PadLocalBuffer::IsReduceLastDim(const Operation& op)
-{
-    // 目前仅支持四类reduce，另外两个无reduceaxis属性，待确认
-    if ((op.GetOpcode() == Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE) ||
-        (op.GetOpcode() == Opcode::OP_ROWSUM_COMBINE_AXIS_SINGLE)) {
-        int axis = op.GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
-        if (axis == static_cast<int>(op.GetOOperands()[0]->shape.size() - 1)) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "op %d %s is reduce last dim\n", op.opmagic, op.GetOpcodeStr().c_str());
-            return true;
-        }
-    }
-    return false;
-}
-
-/*
-z0必须32B对齐,尾轴reduce
-      reduce
-      [z0, 1]<-------->[z0, 1]  [z0, z1]
-     /        \            \      /
-  elementwise  copy_out    add_brc(break)
-  [z0, 1]       [z0, 1]    [z0, pad(z1)]
-    |              |
-  expand(break)  copy_in
-  [z0, pad(z1)]  [z0, 1]
-                   |
-                elementwise
-                 [z0, 1]
-*/
-void PadLocalBuffer::ProcessReduce(Function& function, Operation& op)
-{
-    // 轴的数量必须大于等于2， 并且倒数第二根轴为32B对齐， 否则无法命中优化pattern
-    if ((op.GetOOperands()[0]->shape.size() >= AXIS_COMBINE_MIN_SHAPE_SIZE)) {
-        auto out_bytes = BytesOf(op.oOperand[0]->Datatype());
-        int paddingDim = 1;
-        auto paddingIter = BLOCK_PADDING_DIM.find(out_bytes);
-        if (paddingIter != BLOCK_PADDING_DIM.end()) {
-            paddingDim = paddingIter->second;
-        }
-        if (!forceCombineAxis && paddingDim > 0 &&
-            op.oOperand[0]->shape[op.GetOOperands()[0]->shape.size() - AXIS_COMBINE_MIN_SHAPE_SIZE] % paddingDim != 0) {
-            return;
-        }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "op %d %s is reduce, next to last dim is aligned\n", op.opmagic,
-            op.GetOpcodeStr().c_str());
-        std::vector<bool> reduceAxisCombined(op.GetOOperands().size(), false);
-        reduceAxisCombined[0] = true;
-        op.SetAttr(OpAttributeKey::outputCombineAxis, reduceAxisCombined);
-        std::unordered_set<LogicalTensorPtr> visitedTensors;
-        // dfs遍历打上input/output不做padding的相关属性
-        TraverseAndSetAttr(op.GetOOperands()[0], function, visitedTensors);
-    }
-}
-
 void PadLocalBuffer::ProcessBroadcast(Operation& op, size_t blockPadding)
 {
     int64_t maxLastAxis = 0;
@@ -531,17 +470,6 @@ void PadLocalBuffer::ProcessBroadcast(Operation& op, size_t blockPadding)
     if (!existLessBlock) {
         broadcastLastAxis_[op.opmagic] = maxLastAxis;
     }
-}
-
-void PadLocalBuffer::ProcessCopyIn(Function& function, Operation& op)
-{
-    // 轴的数量必须大于等于2，并且倒数第二根轴为32B对齐，否则无法命中pattern
-    std::vector<bool> axisCombined(op.GetOOperands().size(), false);
-    axisCombined[0] = true;
-    op.SetAttr(OpAttributeKey::outputCombineAxis, axisCombined);
-    std::unordered_set<LogicalTensorPtr> visitedTensors;
-    // dfs遍历打上input/output不做padding的相关属性
-    TraverseAndSetAttr(op.GetOOperands()[0], function, visitedTensors);
 }
 
 bool PadLocalBuffer::IsMatmul(const LogicalTensorPtr& tensor) const
@@ -883,7 +811,6 @@ void PadLocalBuffer::PadVectorForAxisCombine(
 Status PadLocalBuffer::RunOnFunction(Function& function)
 {
     combineAxis = function.paramConfigs_.combineAxis;
-    forceCombineAxis = function.paramConfigs_.forceCombineAxis;
     oriRawshapeMap_.clear(); // 清空原始 rawshape 存储映射
     if (combineAxis) {
         axisCombineMarker.Run(function);
@@ -895,14 +822,6 @@ Status PadLocalBuffer::RunOnFunction(Function& function)
     }
     for (auto& op : function.Operations()) {
         auto calcType = OpcodeManager::Inst().GetOpCalcType(op.GetOpcode());
-        // 尾轴Reduce且倒数第二根轴32B对齐的op起始的链路上的op不做padding，以节省UB空间
-        if (IsReduceLastDim(op)) {
-            ProcessReduce(function, op);
-        }
-
-        if (forceCombineAxis && IsCopyIn(op)) {
-            ProcessCopyIn(function, op);
-        }
 
         // Broadcast op设置最后一根轴的padding值
         if (calcType == OpCalcType::BROADCAST) {

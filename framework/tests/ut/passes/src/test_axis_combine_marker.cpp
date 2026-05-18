@@ -331,7 +331,7 @@ TEST_F(TestAxisCombineMarker, reduce_last_axis)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 16}, MemoryType::MEM_UB, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 1}, MemoryType::MEM_UB, "t3"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "copy_in", true), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE, {"t2"}, {"t3"}, "reduce", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_SINGLE, {"t2"}, {"t3"}, "reduce", true), true);
     auto reduce_op = graph.GetOp("reduce");
     reduce_op->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2); // Reduce last axis
 
@@ -365,7 +365,7 @@ TEST_F(TestAxisCombineMarker, reduce_second_last_axis)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 8, 16}, MemoryType::MEM_UB, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 16}, MemoryType::MEM_UB, "t3"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "copy_in", true), true);
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE, {"t2"}, {"t3"}, "reduce", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_SINGLE, {"t2"}, {"t3"}, "reduce", true), true);
     auto reduce_op = graph.GetOp("reduce");
     reduce_op->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1); // Reduce second last axis
 
@@ -568,7 +568,7 @@ TEST_F(TestAxisCombineMarker, expand_reduce_chain)
     EXPECT_EQ(graph.AddOp(Opcode::OP_EXPAND, {"t2"}, {"t3"}, "expand", true), true);
     auto expand_op = graph.GetOp("expand");
     expand_op->SetAttribute(OpAttributeKey::expandDims, std::vector<int>{0}); // Expand non-last axis
-    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE, {"t3"}, {"t4"}, "reduce", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_SINGLE, {"t3"}, {"t4"}, "reduce", true), true);
     auto reduce_op = graph.GetOp("reduce");
     reduce_op->SetAttribute(OP_ATTR_PREFIX + "AXIS", 0); // Reduce last axis
 

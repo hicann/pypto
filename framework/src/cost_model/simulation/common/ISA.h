@@ -121,8 +121,7 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{
     {"ROWMAX_SINGLE", CorePipeType::PIPE_VECTOR_ALU},
     {"ROWMIN_SINGLE", CorePipeType::PIPE_VECTOR_ALU},
     {"ROWSUM_SINGLE", CorePipeType::PIPE_VECTOR_ALU},
-    {"ROWMAX_COMBINE_AXIS_SINGLE", CorePipeType::PIPE_VECTOR_ALU},
-    {"ROWSUM_COMBINE_AXIS_SINGLE", CorePipeType::PIPE_VECTOR_ALU},
+
     {"CMP", CorePipeType::PIPE_VECTOR_ALU},
     {"CMPS", CorePipeType::PIPE_VECTOR_ALU},
     {"WHERE_TT", CorePipeType::PIPE_VECTOR_ALU},

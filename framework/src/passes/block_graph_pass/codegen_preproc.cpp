@@ -162,9 +162,6 @@ Status CodegenPreproc::ProcessAxis(Operation& op, std::vector<bool> attr, bool i
             size_t shapeSize = operands[i]->shape.size();
             CombineTailAxis(operands[i]->shape, shapeSize);
             CombineTailAxis(operands[i]->tensor->rawshape, shapeSize);
-            if (forceCombineAxis) {
-                CombineLastAxis(operands[i]->dynValidShape_, shapeSize);
-            }
         }
     }
     return SUCCESS;
@@ -521,7 +518,6 @@ Status CodegenPreproc::RunOnFunction(Function &function)
 {
     EstimateCVCores(function);
     combineAxis = function.paramConfigs_.combineAxis;
-    forceCombineAxis = function.paramConfigs_.forceCombineAxis;
     APASS_LOG_INFO_F(
         Elements::Operation, "===============================================================> Start CodegenPreproc.");
     for (auto& op : function.Operations()) {
