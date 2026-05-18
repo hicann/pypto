@@ -60,7 +60,7 @@ public:
             DEV_ERROR(
                 DistributedErrorCode::AICPU_TASK_NUM_EXCEED_LIMIT,
                 "ctrl.task.pre.task.create#: taskCount=%u >= AICPU_TASK_ARRAY_SIZE=%lu", taskCount,
-                AICPU_TASK_ARRAY_SIZE);
+                AICPU_TASK_ARRAY_SIZE - 1);
             return nullptr;
         }
         SignalTileOp* newTask = &taskArray[taskCount];
