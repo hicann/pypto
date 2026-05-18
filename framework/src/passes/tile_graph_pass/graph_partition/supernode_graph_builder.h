@@ -48,7 +48,8 @@ public:
     void SetNodeCoreTypeAndMergeable(const std::shared_ptr<OperationGraphInfo> operationGraphInfo, bool markIsCube);
     void BuildNodeMapping(const std::shared_ptr<OperationGraphInfo> operationGraphInfo);
     bool CheckScopeNotMergeable(Operation& op);
-    bool CheckUbToUbWithDynOffsetNotMergeable(Operation& op);
+    bool CheckUbToUbWithDynOffset(Operation& op);
+    bool CheckViewAssembleOffset(Operation& op);
     Status MergeSrcToDstIsland(
         const std::shared_ptr<OperationGraphInfo> operationGraphInfo, std::vector<int32_t>& parent, int32_t src,
         int32_t dst);

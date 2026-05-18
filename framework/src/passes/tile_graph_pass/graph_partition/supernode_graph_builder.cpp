@@ -329,10 +329,9 @@ bool NodeGraphInfo::CheckScopeNotMergeable(Operation& op)
     return op.GetScopeId() != -1 && !op.GetAllowCrossScopeMerge();
 }
 
-bool NodeGraphInfo::CheckUbToUbWithDynOffsetNotMergeable(Operation& op)
+bool NodeGraphInfo::CheckUbToUbWithDynOffset(Operation& op)
 {
-    if (op.GetOpcode() != Opcode::OP_VIEW && 
-        op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+    if (op.GetOpcode() != Opcode::OP_VIEW && op.GetOpcode() != Opcode::OP_ASSEMBLE) {
         return false;
     }
 
@@ -343,8 +342,8 @@ bool NodeGraphInfo::CheckUbToUbWithDynOffsetNotMergeable(Operation& op)
         return false;
     }
 
-    bool isUbToUb = input->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
-                    output->GetMemoryTypeOriginal() == MemoryType::MEM_UB;
+    bool isUbToUb =
+        input->GetMemoryTypeOriginal() == MemoryType::MEM_UB && output->GetMemoryTypeOriginal() == MemoryType::MEM_UB;
 
     if (!isUbToUb) {
         return false;
@@ -367,10 +366,61 @@ bool NodeGraphInfo::CheckUbToUbWithDynOffsetNotMergeable(Operation& op)
         return false;
     }
 
-    APASS_LOG_INFO_F(Elements::Operation,
-        "Node contains UB-to-UB %s[%d] with dynamic offset, marking as not mergeable.",
+    APASS_LOG_INFO_F(
+        Elements::Operation, "Node contains UB-to-UB %s[%d] with dynamic offset, marking as not mergeable.",
         op.GetOpcodeStr().c_str(), op.GetOpMagic());
     return true;
+}
+
+bool NodeGraphInfo::CheckViewAssembleOffset(Operation& op)
+{
+    if (op.GetOpcode() != Opcode::OP_VIEW && op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+        return false;
+    }
+
+    std::string offsetStr;
+    std::string dynOffsetStr;
+
+    if (op.GetOpcode() == Opcode::OP_VIEW) {
+        auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+        if (!viewAttr) {
+            return false;
+        }
+        auto& fromOffset = viewAttr->GetFromOffset();
+        for (auto val : fromOffset) {
+            offsetStr += std::to_string(val) + ",";
+        }
+        auto& fromDynOffset = viewAttr->GetFromDynOffset();
+        for (auto& val : fromDynOffset) {
+            dynOffsetStr += val.Dump() + ",";
+        }
+    } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
+        if (!assembleAttr) {
+            return false;
+        }
+        auto& toOffset = assembleAttr->GetToOffset();
+        for (auto val : toOffset) {
+            offsetStr += std::to_string(val) + ",";
+        }
+        auto& toDynOffset = assembleAttr->GetToDynOffset();
+        for (auto& val : toDynOffset) {
+            dynOffsetStr += val.Dump() + ",";
+        }
+    }
+
+    if (offsetStr.empty() && dynOffsetStr.empty()) {
+        return false;
+    }
+
+    if (offsetStr != dynOffsetStr) {
+        APASS_LOG_INFO_F(
+            Elements::Operation, "%s[%d] offset[%s] != dynOffset[%s], marking as not mergeable.",
+            op.GetOpcodeStr().c_str(), op.GetOpMagic(), offsetStr.c_str(), dynOffsetStr.c_str());
+        return true;
+    }
+
+    return false;
 }
 
 bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> operationGraphInfo, int32_t nodeIdx)
@@ -389,7 +439,7 @@ bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> o
             isMergeable = false;
         }
 
-        if (CheckUbToUbWithDynOffsetNotMergeable(*op)) {
+        if (CheckUbToUbWithDynOffset(*op) && CheckViewAssembleOffset(*op)) {
             isMergeable = false;
         }
     }
