@@ -631,7 +631,7 @@ def loop(
     # implementation
     loop_idx = Controller.next_loop_idx()
     name = kwargs.get("name", f"loop_{loop_idx}")
-    idx_name = kwargs.get("idx_name", f"loop_idx_{loop_idx}")
+    idx_name = f"loop_idx_{kwargs.get('idx_name', loop_idx)}"
     unroll_list = kwargs.get("unroll_list", None)
     submit_before_loop = kwargs.get("submit_before_loop", False)
     parallel = kwargs.get("parallel", False)

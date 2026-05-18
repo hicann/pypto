@@ -106,6 +106,49 @@ class VerifyRes:
         self.verify_path = ""
 
     @staticmethod
+    def parse_loop_info(loop_info_str):
+        """
+        解析 LOOP_INFO 字符串为 dict
+        
+        Args:
+            loop_info_str: 's_idx=0@b_idx=0@loop_idx_0=0'
+        
+        Returns:
+            {'s_idx': 0, 'b_idx': 0, 'loop_idx_0': 0}
+        """
+        if not loop_info_str:
+            return {}
+        
+        result = {}
+        pairs = loop_info_str.split('@')
+        for pair in pairs:
+            if '=' in pair:
+                name, value = pair.split('=', 1)
+                try:
+                    result[name] = int(value)
+                except ValueError:
+                    result[name] = value
+        
+        return result
+
+    @staticmethod
+    def match_loop_info(tensor_loop_dict, verify_loop_dict):
+        """
+        match loop info dict
+        """
+        if not tensor_loop_dict or not verify_loop_dict:
+            return False
+        
+        if set(tensor_loop_dict.keys()) != set(verify_loop_dict.keys()):
+            return False
+        
+        for name, value in tensor_loop_dict.items():
+            if verify_loop_dict.get(name) != value:
+                return False
+        
+        return True
+
+    @staticmethod
     def _compare_codegen_tensors(tensor_infos, tensor_infos_new):
 
         for i, tensor_info in enumerate(tensor_infos_new):
@@ -190,6 +233,12 @@ class VerifyRes:
                 continue
             if raw_magic != op_info.get("ROOT_CALL:rawmagic"):
                 continue
+            # 新增：检查 LOOP_INFO 匹配
+            tensor_loop_dict = tensor_info.get("B>loopVarInfos")
+            verify_loop_dict = self.parse_loop_info(op_info.get("LOOP_INFO"))
+            if tensor_loop_dict and verify_loop_dict:
+                if not self.match_loop_info(tensor_loop_dict, verify_loop_dict):
+                    continue
 
             if "input" in ioflag and op_info.get(":opcode") in ["COPY_IN", "VIEW"]:
                 verify_op_offset = json.loads(op_info.get("OP_ATTR_SYM_OFFSET"))
@@ -286,6 +335,20 @@ class VerifyRes:
         if filtered_df.empty:
             return verify_dup_tensor, valid_shape, phase_name, dtype
 
+        # 如果 tensor_info 中存在 loop 信息，进行二次匹配
+        tensor_loop_dict = tensor_info.get("B>loopVarInfos")
+        if tensor_loop_dict:
+            matched_indices = []
+            for idx, row in filtered_df.iterrows():
+                verify_loop_dict = self.parse_loop_info(row.get("LOOP_INFO"))
+                if verify_loop_dict and self.match_loop_info(tensor_loop_dict, verify_loop_dict):
+                    matched_indices.append(idx)
+            
+            if not matched_indices:
+                return verify_dup_tensor, valid_shape, phase_name, dtype
+            
+            filtered_df = filtered_df.loc[matched_indices]
+
         sorted_df = filtered_df.sort_values(by="NO.", ascending=True)
         last_op_info = sorted_df.iloc[-1]
         verify_dup_tensor = last_op_info.get("FILENAME")
@@ -320,10 +383,11 @@ class CompactDumpTensorInfoParser:
             ("ROOT_FUNC:hash", "uint64_t"),
             ("FUNC:hash", "uint64_t"),
             ("B>TIMESTAMP", "uint64_t"),
-            ("B>validshape", "uint64_t", DEV_SHAPE_DIM_MAX),  # 数组：类型 + 长度
+            ("B>validshape", "uint64_t", DEV_SHAPE_DIM_MAX),
             ("B>offset", "uint64_t", DEV_SHAPE_DIM_MAX),
             ("B>rawShape", "uint64_t", DEV_SHAPE_DIM_MAX),
-            ("B>tensorAddr", "uint64_t")
+            ("B>tensorAddr", "uint64_t"),
+            ("B>loopVarCount", "uint64_t")
         ]
         self.raw_tensor_info = {}
         self.task_tensor_info = {}
@@ -340,8 +404,10 @@ class CompactDumpTensorInfoParser:
         # 数组字段
         array_size = FIELD_SIZES["uint64_t"] * DEV_SHAPE_DIM_MAX
         total += array_size * 3  # shape + offset + rawShape
-        # 最后一个字段
-        total += FIELD_SIZES["uint64_t"]      # tensorAddr
+        # tensorAddr + loopVarCount
+        total += FIELD_SIZES["uint64_t"] * 2
+        # LoopVarInfo[8]: name[64] + exprIdx(int32) + value(int32) = 80字节
+        total += (64 + 4 + 4) * 8
         return total
 
     @staticmethod
@@ -373,6 +439,32 @@ class CompactDumpTensorInfoParser:
             return values[0], total_bytes
         else:
             return values, total_bytes
+
+    @staticmethod
+    def _parse_loop_var_info(bin_data: bytes, offset: int) -> tuple:
+        """
+        解析单个 LoopVarInfo 结构
+        
+        结构定义：
+        - char name[64]: 循环变量名称
+        - int32_t exprIdx: exprList 索引
+        - int32_t value: 当前值
+        
+        Returns:
+            (dict, 字节数)
+        """
+        name_bytes = bin_data[offset:offset + 64]
+        name = name_bytes.rstrip(b'\x00').decode('utf-8', errors='replace')
+        offset += 64
+        offset += 4     # 跳过exprIdx的值
+        
+        value = struct.unpack_from(BYTE_ORDER + "i", bin_data, offset)[0]
+        offset += 4
+        
+        result = {
+            name: value,
+        }
+        return result, 72
 
     @staticmethod
     def _verify_merged_tensor(merge_tensor_info, raw_data):
@@ -432,6 +524,17 @@ class CompactDumpTensorInfoParser:
             result[name] = value
             current_offset += bytes_used
 
+        # 解析循环变量信息
+        loop_var_count = result.get("B>loopVarCount", 0)
+        result["B>loopVarInfos"] = {}
+        
+        if loop_var_count > 0:
+            actual_count = min(loop_var_count, 16)
+            for _ in range(actual_count):
+                var_info, bytes_used = self._parse_loop_var_info(bin_data, current_offset)
+                result["B>loopVarInfos"].update(var_info)
+                current_offset += bytes_used
+
         dims = result.get("dims")
         del result["dims"]
         if dims > 0 and dims < DEV_SHAPE_DIM_MAX:
@@ -464,9 +567,10 @@ class CompactDumpTensorInfoParser:
         tensor_info["B>FILENAME"] = bin_file
 
         if "output" in tensor_info["IO_FLAG"]:
-            if tensor_info["ROOT_CALL:rawmagic"] not in self.raw_tensor_info:
-                self.raw_tensor_info[tensor_info["ROOT_CALL:rawmagic"]] = []
-            self.raw_tensor_info[tensor_info["ROOT_CALL:rawmagic"]].append(tensor_info)
+            key = (tensor_info["ROOT_CALL:rawmagic"], tensor_info["B>tensorAddr"])
+            if key not in self.raw_tensor_info:
+                self.raw_tensor_info[key] = []
+            self.raw_tensor_info[key].append(tensor_info)
 
         key = (tensor_info["B>taskId"], tensor_info["ROOT_CALL:opmagic"], tensor_info["B>seqNo"])
         if key not in self.task_tensor_info:
@@ -559,9 +663,19 @@ class CompactDumpTensorInfoParser:
         merge_tensor_info["B>execStart"] = 0
         merge_tensor_info["B>execEnd"] = 0
 
+        # 检查所有 tensor 的 loop 信息是否相同
+        loop_var_infos_list = [t.get("B>loopVarInfos", {}) for t in tensor_infos]
+        if loop_var_infos_list and all(lvi == loop_var_infos_list[0] for lvi in loop_var_infos_list):
+            merge_tensor_info["B>loopVarInfos"] = loop_var_infos_list[0]
+
         # 生成保存路径
+        loop_suffix = ""
+        loop_var_infos = merge_tensor_info.get("B>loopVarInfos", {})
+        if loop_var_infos:
+            loop_values = [str(v) for v in loop_var_infos.values()]
+            loop_suffix = "_" + "_".join(loop_values)
         file_path = os.path.join(self.dump_tensor_path,
-                                f"raw_{raw_magic}_{tensor_infos[0]['B>datatype']}_{tensor_infos[0]['IO_FLAG']}.data")
+            f"raw_{raw_magic}_{tensor_infos[0]['B>datatype']}_{tensor_infos[0]['IO_FLAG']}{loop_suffix}.data")
         merge_tensor_info["B>FILENAME"] = file_path
 
         # 按offset排序张量
@@ -605,9 +719,9 @@ class CompactDumpTensorInfoParser:
 
     def merge_raw_tensor(self):
         merge_tensor_infos = []
-        for raw_magic, tensor_infos in self.raw_tensor_info.items():
+        for key, tensor_infos in self.raw_tensor_info.items():
             # 合并张量数据
-            merge_tensor_info, raw_data = self.merge_raw_tensor_data(raw_magic, tensor_infos)
+            merge_tensor_info, raw_data = self.merge_raw_tensor_data(key[0], tensor_infos)
 
             # 如果有合并后的数据，进行验证
             if raw_data is not None:

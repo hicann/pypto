@@ -39,13 +39,19 @@ struct IdeDumpChunk {
     bool flag;                /**< flag */
 };
 
+struct LoopVarInfo {
+    char name[64];
+    int32_t exprIdx;
+    int32_t value;
+};
+
 struct DumpTensorInfo {
     uint32_t headSize;
     uint32_t funcId;
     uint32_t taskId;
     uint32_t callopMagic;
     int32_t coreId;
-    int32_t dataType; // INT8...
+    int32_t dataType;
     int32_t rawMagic;
     int32_t dims;
     int64_t execStart;
@@ -57,6 +63,8 @@ struct DumpTensorInfo {
     uint64_t offset[DEV_SHAPE_DIM_MAX];
     uint64_t rawShape[DEV_SHAPE_DIM_MAX];
     uint64_t tensorAddr{0};
+    uint64_t loopVarCount{0};
+    LoopVarInfo loopVarInfos[8];
 };
 
 struct DumpTensorData {
@@ -158,6 +166,7 @@ public:
     void Init(DevStartArgs* startArgs, int schedIdx)
     {
         auto devProg = startArgs->devProg;
+        devProg_ = devProg;
         auto deviceArgs = &devProg->devArgs;
         SetHostPid(deviceArgs->hostPid);
         if (enableDump_) {
@@ -168,9 +177,8 @@ public:
 
             dataAddr = baseAddr + schedIdx * DEV_DUMP_DATA_SIZE;
             DEV_DEBUG("DataAddr=%#lx.", dataAddr);
-            // ip: port only matches parameter rules with code, without communication funciton
             const std::string privateInfo = "127.0.0.1:22118;" + std::to_string(deviceId_) + ";" + std::to_string(hostPid_);
-            ideSession_ = IdeDumpStart(privateInfo.c_str()); // 建立通道过程 device
+            ideSession_ = IdeDumpStart(privateInfo.c_str());
             DEV_DEBUG("Pid=%d, deviceId=%u, privateInfo=%s.", (int)hostPid_, deviceId_, privateInfo.c_str());
         }
     }
@@ -297,6 +305,9 @@ public:
             auto* rawTensor = func->GetRawTensor(rawIdx);
             setDumpTensorInfo(rawTensor, tensorIdx, false);
         }
+
+        FillLoopVarInfo(dumpTensorInfo, dupData);
+
         return dumpTensorInfo;
     }
 
@@ -333,6 +344,35 @@ public:
     }
 
 private:
+    void FillLoopVarInfo(DumpTensorInfo& dumpTensorInfo, DevAscendFunctionDuppedData* dupData)
+    {
+        dumpTensorInfo.loopVarCount = 0;
+        if (devProg_ == nullptr) {
+            return;
+        }
+        auto exprList = dupData->GetExpressionAddr();
+        const auto& symbolTable = devProg_->symbolTable;
+        
+        for (const auto& symbol : symbolTable) {
+            if (dumpTensorInfo.loopVarCount >= 8) {
+                break;
+            }
+            
+            std::string name(symbol.name.begin(), symbol.name.end());
+            // 检测循环变量：包含loop_idx前缀
+            if (name.find("loop_idx_") != std::string::npos) {
+                uint64_t exprListIdx = symbol.index + 1;
+                auto& loopVarInfo = dumpTensorInfo.loopVarInfos[dumpTensorInfo.loopVarCount];
+                memset_s(loopVarInfo.name, sizeof(loopVarInfo.name), 0, sizeof(loopVarInfo.name));
+                strncpy_s(loopVarInfo.name, sizeof(loopVarInfo.name), name.c_str(), sizeof(loopVarInfo.name) - 1);
+                loopVarInfo.exprIdx = static_cast<int32_t>(exprListIdx);
+                loopVarInfo.value = static_cast<int32_t>(exprList[exprListIdx]);
+                
+                dumpTensorInfo.loopVarCount++;
+            }
+        }
+    }
+
     int32_t taskId_{0};
     int32_t coreId_{0};
     int64_t execStart_{0};
@@ -343,6 +383,7 @@ private:
     uint64_t dataAddr;
     bool enableDump_{false};
     IDE_SESSION ideSession_{nullptr};
+    DevAscendProgram* devProg_{nullptr};
 };
 } // namespace npu::tile_fwk::dynamic
 #endif
