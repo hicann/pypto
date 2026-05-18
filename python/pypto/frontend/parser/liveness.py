@@ -460,7 +460,8 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         Independent means:
         1. Multiple definition scopes (defined in different scopes)
         2. Each def scope has corresponding use in the same scope
-        3. All def scopes are in different execution paths (no nesting, potentially brother or cousin scopes)
+        3. No uses outside the def scopes (uses must be contained within def scopes or their nested scopes)
+        4. All def scopes are in different execution paths (no nesting, potentially brother or cousin scopes)
 
         Example: o_final defined in scope 6 and scope 10, which are in different
         if/else branches (mutually exclusive execution paths).
@@ -468,27 +469,71 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
         if len(var_info.def_scope_ids) <= 1:
             return False
 
+        # Condition 2: Each def scope has use in the same scope
         for def_scope_id in var_info.def_scope_ids:
             uses_in_this_scope = [
                 stmt_id for sid, stmt_id in var_info.use_points
                 if sid == def_scope_id
             ]
-
             if not uses_in_this_scope:
                 return False
 
+        # Condition 3: Check for uses outside def scopes
+        if self._has_uses_outside_def_scopes(var_info):
+            return False
+
+        # Condition 4: Check if def scopes have nesting relationship
+        if self._has_def_scopes_nesting(var_info):
+            return False
+
+        return True
+
+    def _has_uses_outside_def_scopes(self, var_info: VarInfo) -> bool:
+        """Check if there are uses outside def scopes (not nested in any def scope).
+        
+        Returns True if has outside uses, False otherwise.
+        """
+        for scope_id, _ in var_info.use_points:
+            if scope_id in var_info.def_scope_ids:
+                continue
+
+            use_scope = self.result.scope_map.get(scope_id)
+            if not use_scope:
+                continue
+
+            # Check if this use_scope is nested in ANY def_scope
+            if not self._is_use_nested_in_any_def_scope(use_scope, var_info.def_scope_ids):
+                # Found outside use
+                return True
+
+        return False
+
+    def _is_use_nested_in_any_def_scope(self, use_scope: Scope, def_scope_ids: Set[int]) -> bool:
+        """Check if use_scope is nested in any def scope.
+        
+        Returns True if nested, False otherwise.
+        """
+        for def_id in def_scope_ids:
+            def_scope = self.result.scope_map.get(def_id)
+            if def_scope and use_scope.is_nested_in(def_scope):
+                return True
+        return False
+
+    def _has_def_scopes_nesting(self, var_info: VarInfo) -> bool:
+        """Check if def scopes have nesting relationship.
+        
+        Returns True if has nesting, False otherwise.
+        """
         def_scopes = [
             self.result.scope_map.get(sid) for sid in var_info.def_scope_ids
         ]
         def_scopes = [s for s in def_scopes if s]
 
         for i, scope_i in enumerate(def_scopes):
-            for _, scope_j in enumerate(def_scopes[i + 1:], start=i + 1):
-                if scope_i.is_nested_in(scope_j) or \
-                   scope_j.is_nested_in(scope_i):
-                    return False
-
-        return True
+            for scope_j in def_scopes[i + 1:]:
+                if scope_i.is_nested_in(scope_j) or scope_j.is_nested_in(scope_i):
+                    return True
+        return False
 
     def _find_last_use_in_scope(self, def_scope: Scope, uses_in_scope: list) -> Optional[int]:
         """Find last use statement ID within a scope."""
@@ -520,7 +565,25 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
 
         For each def_scope_id, find last use within that scope.
         Add ALL delete points to delete_points dict for correct execution.
+        
+        For for loop scopes, use conservative deletion strategy:
+        NO explicit deletion, rely on Python garbage collection.
+        This ensures safety for nested loop scenarios.
         """
+
+        # Conservative strategy: do not delete for loop independent definitions
+        # Check if all def scopes are for loops
+        all_def_scopes_are_for = all(
+            (scope := self.result.scope_map.get(sid)) and scope.scope_type == 'for'
+            for sid in var_info.def_scope_ids
+        )
+
+        if all_def_scopes_are_for:
+            # No delete points for for loop independent definitions
+            # Python GC will release tensors when scopes exit
+            return
+
+        # Original logic for other scope types (if_body, else_body, etc.)
         delete_points_list = []
 
         for def_scope_id in var_info.def_scope_ids:
@@ -528,6 +591,17 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             if not def_scope:
                 continue
 
+            # Conservative deletion for for loop scopes
+            if def_scope.scope_type == 'for':
+                # For loop: delete at scope exit (after all nested loops complete)
+                if def_scope.exit_stmt_id:
+                    delete_points_list.append((def_scope.exit_stmt_id, def_scope_id, True))
+                elif def_scope.entry_stmt_id:
+                    # Fallback to entry_stmt_id if exit_stmt_id not available
+                    delete_points_list.append((def_scope.entry_stmt_id, def_scope_id, True))
+                continue
+
+            # For other scope types, calculate last use normally
             uses_in_scope = [
                 stmt_id for sid, stmt_id in var_info.use_points
                 if sid == def_scope_id
