@@ -241,7 +241,39 @@ if failed > 0:
 | 存在 Fail Op | Fail 的 Op 即为精度问题来源 | 针对该 Op 检查实现逻辑、数据类型、shape 处理等 |
 | 全部 Pass 但精度仍有问题 | Pass 层未检出差异，问题在上板执行阶段 | 调用 [precision-binary-search](../precision-binary-search/SKILL.md) 进行上板二分定位 |
 
----
+**移除 Pass 校验配置**
+
+Pass 校验完成后，**移除校验配置**，避免影响后续调试：
+
+**移除 verify_options 配置**：
+
+```python
+# 移除 Pass 校验配置
+@pypto.frontend.jit()  # 移除 verify_options 参数
+def your_kernel(...)
+```
+恢复`tile_fwk_config.json`文件中pre_check，post_check配置
+
+### 情况三：Pass级别都Pass，精度仍有问题 → 检查同步问题
+
+如果所有 Pass 校验都通过但算子精度仍有问题，可能是 pipeline 同步不及时导致的数据竞争。
+
+**快速验证同步问题**：
+
+1. 修改 `framework/src/passes/block_graph_pass/insert_sync.h`，将 `bool enableDebug_{false}` 改为 `bool enableDebug_{true}`
+2. 重新编译安装 pypto：`python3 -m pip install . --verbose`
+3. 重新执行算子。若精度通过 → 说明数据同步不足导致精度失败，需定位具体缺少同步的位置
+
+若确认数据同步导致精度失败，执行以下定位流程：
+
+详细步骤请参考：**[references/pipe_all.md](references/pipe_all.md)**
+
+**定位流程概览**：
+
+1. 二分定位问题 CCE 文件（使用 `binary_pipeall_sync.py`）
+2. 在问题 CCE 文件内手动二分插入 `pipe_barrier(PIPE_ALL)`，定位具体问题行
+3. 使用 `locate_source_line.py` 映射问题行到前端源代码
+4. 分析并修复同步问题
 
 ## 打印上板信息
 
@@ -315,6 +347,7 @@ python3 .agents/skills/pypto-pass-error-locator/scripts/get_op_info.py \
 5. 打印配置：`fixed_output_path=true`, `force_overwrite=false`
 6. 打印限制：元素数量 ≤ 80
 7. 配置备份：修改配置前建议备份原文件
+8. 校验完成后移除配置：移除 `verify_options` 参数和 `tile_fwk_config.json` 中的校验开关，重新编译安装
 
 ---
 

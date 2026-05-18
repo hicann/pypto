@@ -90,6 +90,19 @@ cat output/output_*/verify_*/interpreter.log
 | **aicore error / MPU 地址访问无效** | NPU 卡资源冲突或状态异常 | 1. 更换 `TILE_FWK_DEVICE_ID` 到空闲卡<br>2. 重新执行 |
 | **verify 日志无内容** | Golden 数据未设置或顺序错误 | 确保"计算 golden → 设置 golden → 执行算子"顺序，检查set_verify_golden_data输入输出是否匹配 |
 
+**移除 tensor_graph 校验配置**
+
+确认 tensor_graph 有校验结果后，**移除校验配置**：
+
+```python
+# 移除 verify_options 配置
+@pypto.frontend.jit()  # 移除 verify_options 参数
+def your_kernel(...)
+
+# 移除 golden 数据设置代码
+# 删除: pypto.set_verify_golden_data(...)
+```
+
 **步骤 3：根据校验结果选择调试路线**
 
 ```
