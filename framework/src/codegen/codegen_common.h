@@ -167,6 +167,12 @@ const std::map<MemoryType, OperandType> OPERAND_TYPE_TO_MEMORY_TYPE{
     {MemoryType::MEM_L0BMX, BUF_L0BMX},
 };
 
+enum class BroadcastOperand : int64_t {
+    NONE = 0,
+    LEFT_OPERAND = 1,
+    RIGHT_OPERAND = 2,
+};
+
 } // namespace npu::tile_fwk
 
 #endif // CODEGEN_COMMON_H

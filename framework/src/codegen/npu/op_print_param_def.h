@@ -20,12 +20,6 @@
 #include <vector>
 
 namespace npu::tile_fwk {
-enum class BroadcastOperand : int64_t {
-    NONE = 0,
-    LEFT_OPERAND = 1,
-    RIGHT_OPERAND = 2,
-};
-
 struct PrintScatterElemParam {
     const int axis;
     const int scatterMode;

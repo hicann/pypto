@@ -21,6 +21,7 @@
 
 namespace npu::tile_fwk {
 const std::string DEFAULT_TENSOR_OFFSET = "tileOffsets";
+constexpr const int BINARY_OP_INPUT_CNT = 2;
 
 std::string ForNode::Print() const
 {
@@ -195,14 +196,40 @@ bool IsExpandOrBrcAxes(const std::vector<int64_t>& rawShape, const std::vector<i
     return rawShape[axis] == 1 || std::find(axes.begin(), axes.end(), axis) != axes.end();
 }
 
-std::vector<int> GetNormalizedExpandAxes(unsigned originalDimSize, const Operation& oper)
+std::vector<int> GetNormalizedExpandAxes(unsigned originalDimSize, int tensorMagic, const Operation& oper)
 {
     std::vector<int> normalizedExpandAxes;
     if (oper.GetOpcode() == Opcode::OP_EXPAND) {
         auto axes = oper.GetVectorIntAttribute(OpAttributeKey::expandDims);
         CODEGEN_LOGI("expandDims is : %s", IntVecToStr(axes).c_str());
         normalizedExpandAxes = NormalizeExpandAxes(axes, originalDimSize, SHAPE_DIM5);
+        return normalizedExpandAxes;
     }
+
+    auto brcOperand = oper.GetVectorIntAttribute(OpAttributeKey::brcOperand);
+    CODEGEN_LOGI("brcOperand is : %s", IntVecToStr(brcOperand).c_str());
+    if (brcOperand.empty()) {
+        return normalizedExpandAxes;
+    }
+
+    // brcOperand [0, 1, 1, 2, 2] means:
+    // axis 0: brcOperand value is 0, means BroadcastOperand::NONE, do not need broadcast,
+    // axis 1, 2: brcOperand value is 1, means BroadcastOperand::LEFT_OPERAND, left operand need broadcast,
+    // axis 3, 4: brcOperand value is 2, means BroadcastOperand::RIGHT_OPERAND, right operand need broadcast
+    FillVecWithDummyInHead<int64_t>(brcOperand, MAX_DIM - brcOperand.size(), 0);
+
+    const auto& inputs = oper.GetIOperands();
+    ASSERT(OperErr::OPERAND_COUNT_NOT_MATCHED, inputs.size() >= BINARY_OP_INPUT_CNT)
+        << "GetIOperands size is " << inputs.size() << ", op is " << oper.Dump();
+
+    for (size_t i = 0; i < brcOperand.size(); ++i) {
+        if ((tensorMagic == inputs[0]->GetMagic() && brcOperand[i] == ToUnderlying(BroadcastOperand::LEFT_OPERAND)) ||
+            (tensorMagic == inputs[1]->GetMagic() && brcOperand[i] == ToUnderlying(BroadcastOperand::RIGHT_OPERAND))) {
+            // if current axis need broadcast, record axis in normalizedExpandAxes
+            normalizedExpandAxes.push_back(i);
+        }
+    }
+
     return normalizedExpandAxes;
 }
 
@@ -216,8 +243,10 @@ OffsetInLoop ForBlockManager::BuildOffsetInLoop(int tensorMagic, const Operation
     auto rawShape = tileTensor->rawShape;
     FillVecWithDummyInHead<int64_t>(rawShape, SHAPE_DIM5 - rawShape.size(), 1);
 
-    // GetNormalizedExpandAxes need originalDimSize to normalize axes
-    std::vector<int> normalizedExpandAxes = GetNormalizedExpandAxes(tileTensor->rawShape.size(), oper);
+    // normalize axes up to MAX_DIM(e.g. SHAPE_DIM5)
+    // e.g. expand [2, 1, 1, 6] to [2, 8, 4, 6] axes is [1, 2], after normalizedExpandAxes is [2, 3].
+    // Hoisted loop axes is [0, 1, 2], so axis ‘2’ is in normalizedExpandAxes and newOffset[2] should be set to zero.
+    std::vector<int> normalizedExpandAxes = GetNormalizedExpandAxes(tileTensor->rawShape.size(), tensorMagic, oper);
 
     CODEGEN_LOGI(
         "rawShape is : %s, normalizedExpandAxes is : %s", IntVecToStr(rawShape).c_str(),

@@ -209,12 +209,8 @@ std::string CodeGenOpNPU::PrintBinaryTileTensor() const
         templateParamList.emplace_back(lastUse);
     }
     if (needBrcinline) {
-        if (brcOperand.size() < SHAPE_DIM5) {
-            brcOperand.insert(brcOperand.begin(), SHAPE_DIM5 - brcOperand.size(), 0);
-        }
-        for (auto operandIdx : brcOperand) {
-            templateParamList.emplace_back(std::to_string(operandIdx));
-        }
+        FillVecWithDummyInHead<int64_t>(brcOperand, MAX_DIM - brcOperand.size(), 0);
+        FillParamWithFullInput(templateParamList, brcOperand);
     }
 
     std::ostringstream oss;
@@ -343,12 +339,8 @@ std::string CodeGenOpNPU::GenAxpyOp() const
             << ") diverged — upstream pass must keep them synchronized";
     }
     if (needBrcinline) {
-        if (brcOperand.size() < SHAPE_DIM5) {
-            brcOperand.insert(brcOperand.begin(), SHAPE_DIM5 - brcOperand.size(), 0);
-        }
-        for (auto operandIdx : brcOperand) {
-            templateParamList.emplace_back(std::to_string(operandIdx));
-        }
+        FillVecWithDummyInHead<int64_t>(brcOperand, MAX_DIM - brcOperand.size(), 0);
+        FillParamWithFullInput(templateParamList, brcOperand);
     }
 
     std::string dtypeStr = DataType2CCEStr(extOperandVal.GetDataType());
