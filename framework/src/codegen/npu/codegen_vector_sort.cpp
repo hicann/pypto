@@ -416,9 +416,7 @@ std::string CodeGenOpNPU::GenRadixSelectOp() const
     bool hasK = GetOpAttr(OP_ATTR_PREFIX + "kvalue", k);
     ASSERT(OperErr::ATTRIBUTE_INVALID, hasK) << "Radix Select has no k attribute.";
     std::ostringstream oss;
-    oss << tileOpName
-        << WrapParamByAngleBrackets<int64_t>({k, isLargest})
-        << WrapParamByParentheses(paramList)
+    oss << tileOpName << WrapParamByAngleBrackets<int64_t>({k, isLargest}) << WrapParamByParentheses(paramList)
         << STMT_END;
     return oss.str();
 }

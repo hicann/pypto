@@ -122,8 +122,7 @@ void ForBlockManager::PrintSetAddrs(std::ostringstream& os) const
 void ForBlockManager::PrintSetAddrSingle(
     std::ostringstream& os, const std::string& tensor, const std::string& offset) const
 {
-    std::string fullDimTensor;
-    fullDimTensor = sm_->QueryTileTensorFullDimByTensorInLoop(tensor);
+    std::string fullDimTensor = sm_->QueryTileTensorFullDimByTensorInLoop(tensor);
     os << tensor << ".SetAddr(" << fullDimTensor << ".GetLinearAddr(" << offset << "));\n";
 }
 

@@ -204,7 +204,7 @@ std::string CodeGenOpNPU::PrintPermuteLayout() const
     auto permAttr = opAttrs.at(OpAttributeKey::perm);
     const auto& permVec = AnyCast<std::vector<int64_t>>(permAttr);
     std::vector<int> axes(MAX_DIM + 1, -1);
-    for (size_t i = 0; i < permVec.size() && i < 5; ++i) {
+    for (size_t i = 0; i < permVec.size() && i < MAX_DIM; ++i) {
         axes[i] = static_cast<int>(permVec[i]);
     }
     axes[MAX_DIM] = permVec.size();
@@ -601,7 +601,7 @@ std::string CodeGenOpNPU::GenRangeOp() const
     }
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, scalarAny.HasValue() && (scalarAny.Type() == typeid(SymbolicScalar)))
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
             << AnyCast<SymbolicScalar>(scalarAny).IsValid() << "SCALAR attribute has to have symbolic value.";
         auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
         tileIdxExpr = "((int64_t)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + "))";
@@ -850,7 +850,7 @@ std::string CodeGenOpNPU::GenTriULOp() const
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::dynScalar)) << "cannot get diagonal attr";
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::isUpper)) << "cannot get isUpper attr";
     auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, scalarAny.HasValue() && (scalarAny.Type() == typeid(SymbolicScalar)))
+    ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
         << AnyCast<SymbolicScalar>(scalarAny).IsValid() << "diagonal must have symbolic value.";
     auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
 

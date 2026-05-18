@@ -118,8 +118,8 @@ void CodeGenLiteNPU::GenCode(
 
                 // kirin json codegen
                 std::vector<std::string> inOutParams = GetInOutParams(subFuncPair);
-                int blockDim = 1;          // TODO: currently only support one block dim
-                int jsonWorkspaceSize = 0; // TODO...
+                int blockDim = 1;          // NEXTNEXT: currently only support one block dim
+                int jsonWorkspaceSize = 0; // NEXTNEXT: currently do not support workspace size in json
                 GenConfigJson(
                     compileInfo.GetJsonAbsPath(), compileInfo.GetCCEAbsPath(), compileInfo.GetBinAbsPath(),
                     topFunc.GetMagicName(), jsonWorkspaceSize, inOutParams, blockDim);

@@ -25,8 +25,7 @@ namespace npu::tile_fwk {
 using AtomicType = Distributed::AtomicType;
 
 static bool HasGetTensorDataInOffsetAttr(
-    const std::vector<int64_t>& shape,
-    const std::vector<SymbolicScalar>& offsetAttr)
+    const std::vector<int64_t>& shape, const std::vector<SymbolicScalar>& offsetAttr)
 {
     for (size_t index = 0; index < shape.size(); ++index) {
         if (!offsetAttr[index].IsValid()) {
@@ -160,7 +159,7 @@ std::string CodeGenOpNPU::GenTemplateParamsForSignal() const
         << distOpAttr.worldSize;
 
     auto paddedShape = distOpAttr.tileShape;
-    paddedShape.resize(4, 0);
+    paddedShape.resize(SHAPE_DIM4, 0);
     for (const auto& val : paddedShape) {
         oss << ", " << val;
     }
@@ -192,7 +191,7 @@ std::string CodeGenOpNPU::GenTemplateParamsForSet() const
     Distributed::ShmemSetAttr distOpAttr = AnyCast<Distributed::ShmemSetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int64_t bufferEleNum = distOpAttr.setBufferShape[0];
     size_t shmemTensorDim = rawShape[shmemTensorIndex].size();
-    ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 2)
+    ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= SHAPE_DIM2)
         << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
     if (distOpAttr.isSetData) {
         oss << "<" << GetTemplateDType() << ", " << bufferEleNum << ">";
@@ -266,12 +265,12 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapes(int32_t operandIndex) const
 std::string CodeGenOpNPU::GenDynOffCoord(int32_t operandIndex) const
 {
     size_t dim = originShape[operandIndex].size();
-    
+
     // 如果 offset 没有任何 GetTensorData 类型，则从Coa中获取
     if (!HasGetTensorDataInOffsetAttr(originShape[operandIndex], offsetFromAttr[operandIndex])) {
         return GenOffCoord(operandIndex);
     }
-    
+
     // 如果 offset 有 GetTensorData 类型，则从 copyOpAttribute 获取
     std::ostringstream oss;
     for (size_t index = 0; index < dim; ++index) {

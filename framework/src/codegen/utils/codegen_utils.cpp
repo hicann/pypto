@@ -24,6 +24,8 @@
 #include "codegen/codegen_common.h"
 
 namespace npu::tile_fwk {
+constexpr const int8_t CORE_NUM_MULTIPLE = 2;
+
 std::vector<int64_t> NormalizeShape(const std::vector<int64_t>& shapeVec, unsigned dim)
 {
     std::vector<int64_t> normalizedVec(dim, 1);
@@ -180,8 +182,8 @@ unsigned GetCGThreadNum()
 {
     unsigned threadNum = ConfigManager::Instance().GetCodeGenConfig(KEY_PARALLEL_COMPILE, 1u);
     unsigned cpuCores = std::thread::hardware_concurrency();
-    if (cpuCores != 0 && threadNum > cpuCores * 2) {
-        return cpuCores * 2;
+    if (cpuCores != 0 && threadNum > cpuCores * CORE_NUM_MULTIPLE) {
+        return cpuCores * CORE_NUM_MULTIPLE;
     }
     return threadNum;
 }

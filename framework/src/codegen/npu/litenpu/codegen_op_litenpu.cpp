@@ -32,9 +32,7 @@ TileTensor CodeGenOpLiteNPU::QueryTileTensorByIdx(int paramIdx) const
     const int tensorMagic = operandWithMagic[paramIdx];
     const int opMagic = originalOp.GetOpMagic();
     const TileTensor* tileTensor = nullptr;
-
     tileTensor = sm->QueryTileTensorByMagic(tensorMagic, opMagic);
-
     if (tileTensor != nullptr) {
         CODEGEN_LOGI("QueryTileTensorByIdx found: %s", tileTensor->ToString().c_str());
         return *tileTensor;

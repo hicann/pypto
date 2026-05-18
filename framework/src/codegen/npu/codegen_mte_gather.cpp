@@ -248,8 +248,6 @@ std::string CodeGenOpNPU::PrintGatherDynamicUnaligned() const
 }
 std::string CodeGenOpNPU::PrintGatherLayout() const
 {
-    // constexpr int paramIndex = 0;
-    // constexpr int indicesIndex = 1;
     auto outputRawShapes = rawShape[ID0];
     auto paramRawShapes = rawShape[ID1];
     auto indicesRawShapes = rawShape[ID2];
