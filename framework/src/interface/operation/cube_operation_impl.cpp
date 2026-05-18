@@ -1536,7 +1536,8 @@ Tensor ConstructBatchMatmulTensorGraph3D(
             cTensor, {1, cTensor.GetShape()[0], cTensor.GetShape()[1]},
             std::vector<SymbolicScalar>({1, cValidShape2D[0], cValidShape2D[1]}));
         Assemble(cTensor3D, {bIdx, 0, 0}, result);
-        result.GetStorage()->UpdateDynValidShape({batchSize, cValidShape2D[0], cValidShape2D[1]});
+        result.GetStorage()->UpdateDynValidShape(
+            {std::max(aValidShape3D[0], bValidShape3D[0]), cValidShape2D[0], cValidShape2D[1]});
     }
     TileShape::Current().SetVecTile(oriVecTile);
     return result;
@@ -1594,7 +1595,8 @@ Tensor ConstructBatchMatmulTensorGraph4D(
                 std::vector<SymbolicScalar>({1, 1, cValidShape2D[0], cValidShape2D[1]}));
             Assemble(cTensor4D, {bIdx1, bIdx2, 0, 0}, result);
             result.GetStorage()->UpdateDynValidShape(
-                {batchSize1, batchSize2, cValidShape2D[0], cValidShape2D[1]});
+                {std::max(aValidShape4D[0], bValidShape4D[0]), std::max(aValidShape4D[1], bValidShape4D[1]),
+                 cValidShape2D[0], cValidShape2D[1]});
         }
     }
     TileShape::Current().SetVecTile(oriVecTile);
