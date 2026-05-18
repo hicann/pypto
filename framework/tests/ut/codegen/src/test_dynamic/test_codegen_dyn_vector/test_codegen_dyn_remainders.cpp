@@ -60,7 +60,7 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderS)
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
     std::string expect =
-        R"!!!(TRemainderS<int16_t, pto::RemAlgorithm::DEFAULT>(ubTensor_4, ubTensor_2, 2, ubTensor_5);)!!!";
+        R"!!!(TRemainderS<int16_t, pto::RemSAlgorithm::DEFAULT>(ubTensor_4, ubTensor_2, 2, ubTensor_5);)!!!";
     CheckStringExist(expect, res);
 }
 

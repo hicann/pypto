@@ -381,7 +381,7 @@ TEST_F(TestCodegenDynBinary, TestDivHighPrecisionFP16)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = Div(input_a, input_b, DivAlgorithm::HIGH_PRECISION);
+            output = Div(input_a, input_b, PrecisionType::HIGH_PRECISION);
         }
     }
 
@@ -410,13 +410,13 @@ TEST_F(TestCodegenDynBinary, TestDivIntrinsicPrecision)
     Tensor input_b(DataType::DT_FP16, shape, "B");
     Tensor output(DataType::DT_FP16, shape, "C");
 
-    std::string funcName = "TestDivDefaultPrecision";
+    std::string funcName = "TestDivIntrinsicPrecision";
     FUNCTION(funcName, {input_a, input_b, output})
     {
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = Div(input_a, input_b, DivAlgorithm::DEFAULT);
+            output = Div(input_a, input_b, PrecisionType::INTRINSIC);
         }
     }
 
@@ -450,7 +450,7 @@ TEST_F(TestCodegenDynBinary, TestPowHighPrecision)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = Pow(input_a, input_b, PowAlgorithm::HIGH_PRECISION);
+            output = Pow(input_a, input_b, PrecisionType::HIGH_PRECISION);
         }
     }
 
@@ -484,7 +484,7 @@ TEST_F(TestCodegenDynBinary, TestPowIntrinsicPrecision)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = Pow(input_a, input_b, PowAlgorithm::DEFAULT);
+            output = Pow(input_a, input_b, PrecisionType::INTRINSIC);
         }
     }
 

@@ -34,39 +34,42 @@ void bind_operation(py::module& m)
         "Mul", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Mul(self, other); }, "Tensor mul.");
     m.def(
         "Div",
-        [](const Tensor& self, const Tensor& other, DivAlgorithm precisionType) {
+        [](const Tensor& self, const Tensor& other, PrecisionType precisionType) {
             return npu::tile_fwk::Div(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = DivAlgorithm::HIGH_PRECISION, "Tensor div.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION, "Tensor div.");
     m.def(
         "Hypot", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Hypot(self, other); },
         "Tensor hypot.");
     m.def(
         "Fmod",
-        [](const Tensor& self, const Tensor& other, FmodAlgorithm precisionType) {
+        [](const Tensor& self, const Tensor& other, PrecisionType precisionType) {
             return npu::tile_fwk::Fmod(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = FmodAlgorithm::HIGH_PRECISION, "Tensor fmod.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION, "Tensor fmod.");
     m.def(
         "Gcd", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Gcd(self, other); }, "Tensor gcd.");
     m.def(
-        "Remainder", 
-        [](const Tensor& self, const Tensor& other, RemAlgorithm precisionType) {
+        "Remainder",
+        [](const Tensor& self, const Tensor& other, PrecisionType precisionType) {
             return npu::tile_fwk::Remainder(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = RemAlgorithm::HIGH_PRECISION, "Tensor remainder.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
+        "Tensor remainder.");
     m.def(
-        "Remainder", 
-        [](const Tensor& self, const Element& other, RemAlgorithm precisionType) {
+        "Remainder",
+        [](const Tensor& self, const Element& other, PrecisionType precisionType) {
             return npu::tile_fwk::Remainder(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = RemAlgorithm::HIGH_PRECISION, "Tensor remainder scalar.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
+        "Tensor remainder scalar.");
     m.def(
-        "Remainder", 
-        [](const Element& self, const Tensor& other, RemAlgorithm precisionType) {
+        "Remainder",
+        [](const Element& self, const Tensor& other, PrecisionType precisionType) {
             return npu::tile_fwk::Remainder(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = RemAlgorithm::HIGH_PRECISION, "Scalar remainder tensor.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
+        "Scalar remainder tensor.");
     m.def(
         "BitwiseAnd", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::BitwiseAnd(self, other); },
         "Tensor bitwise and.");
@@ -123,10 +126,10 @@ void bind_operation(py::module& m)
 
     m.def(
         "Exp",
-        [](const Tensor& self, ExpAlgorithm precisionType) {
+        [](const Tensor& self, PrecisionType precisionType) {
             return npu::tile_fwk::Exp(self, precisionType);
         },
-        py::arg("self"), py::arg("precision_type") = ExpAlgorithm::HIGH_PRECISION, "Tensor exp.");
+        py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor exp.");
     m.def(
         "Expm1", [](const Tensor& self) { return npu::tile_fwk::Expm1(self); }, "Tensor expm1.");
     m.def(
@@ -169,14 +172,14 @@ void bind_operation(py::module& m)
         py::arg("decimals") = 0, "Tensor round.");
     m.def(
         "Rsqrt",
-        [](const Tensor& self, RsqrtAlgorithm precisionType) { return npu::tile_fwk::Rsqrt(self, precisionType); },
-        py::arg("self"), py::arg("precision_type") = RsqrtAlgorithm::HIGH_PRECISION, "Tensor rsqrt.");
+        [](const Tensor& self, PrecisionType precisionType) { return npu::tile_fwk::Rsqrt(self, precisionType); },
+        py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor rsqrt.");
     m.def(
         "Sqrt",
-        [](const Tensor& self, SqrtAlgorithm precisionType) {
+        [](const Tensor& self, PrecisionType precisionType) {
             return npu::tile_fwk::Sqrt(self, precisionType);
         },
-        py::arg("self"), py::arg("precision_type") = SqrtAlgorithm::HIGH_PRECISION, "Tensor sqrt.");
+        py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor sqrt.");
     m.def(
         "Sign", [](const Tensor& self) { return npu::tile_fwk::Sign(self); }, "Tensor sign.");
     m.def(
@@ -199,31 +202,31 @@ void bind_operation(py::module& m)
         "Neg", [](const Tensor& self) { return npu::tile_fwk::Neg(self); }, "Tensor neg.");
     m.def(
         "Reciprocal",
-        [](const Tensor& self, RecipAlgorithm precisionType) {
+        [](const Tensor& self, PrecisionType precisionType) {
             return npu::tile_fwk::Reciprocal(self, precisionType);
         },
-        py::arg("self"), py::arg("precision_type") = RecipAlgorithm::DEFAULT, "Tensor reciprocal.");
+        py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor reciprocal.");
     m.def(
         "Log",
-        [](const Tensor& self, const LogBaseType base, LogAlgorithm precisionType) {
+        [](const Tensor& self, const LogBaseType base, PrecisionType precisionType) {
             return npu::tile_fwk::Log(self, base, precisionType);
         },
-        py::arg("self"), py::arg("base"), py::arg("precision_type") = LogAlgorithm::HIGH_PRECISION, "Tensor log.");
+        py::arg("self"), py::arg("base"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor log.");
     m.def(
         "Log1p", [](const Tensor& self) { return npu::tile_fwk::Log1p(self); }, "Tensor log1p.");
     m.def(
         "Pow",
-        [](const Tensor& self, const Tensor& other, PowAlgorithm precisionType) {
+        [](const Tensor& self, const Tensor& other, PrecisionType precisionType) {
             return npu::tile_fwk::Pow(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = PowAlgorithm::HIGH_PRECISION,
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
         "Tensor pow.");
     m.def(
         "Pow",
-        [](const Tensor& self, const Element& other, PowAlgorithm precisionType) {
+        [](const Tensor& self, const Element& other, PrecisionType precisionType) {
             return npu::tile_fwk::Pow(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = PowAlgorithm::HIGH_PRECISION,
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
         "Tensor pow scalar.");
     m.def(
         "Cast",
@@ -257,23 +260,24 @@ void bind_operation(py::module& m)
         "Tensor mul scalar.");
     m.def(
         "Div",
-        [](const Tensor& self, const Element& other, DivAlgorithm precisionType) {
+        [](const Tensor& self, const Element& other, PrecisionType precisionType) {
             return npu::tile_fwk::Div(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = DivAlgorithm::HIGH_PRECISION, "Tensor div scalar.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
+        "Tensor div scalar.");
     m.def(
         "Fmod",
-        [](const Tensor& self, const Element& other, FmodAlgorithm precisionType) {
+        [](const Tensor& self, const Element& other, PrecisionType precisionType) {
             return npu::tile_fwk::Fmod(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = FmodAlgorithm::HIGH_PRECISION,
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
         "Tensor mod scalar.");
     m.def(
         "Gcd", [](const Tensor& self, const Element& other) { return npu::tile_fwk::Gcd(self, other); },
         "Tensor gcd scalar.");
     m.def(
         "LReLU", [](const Tensor& self, const Element& alpha) { return npu::tile_fwk::LReLU(self, alpha); },
-        "Tensor mod scalar.");
+        "Tensor LReLU scalar.");
     m.def(
         "BitwiseRightShift",
         [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::BitwiseRightShift(self, other); },
@@ -289,7 +293,7 @@ void bind_operation(py::module& m)
     m.def(
         "BitwiseLeftShift",
         [](const Tensor& self, const Element& other) { return npu::tile_fwk::BitwiseLeftShift(self, other); },
-        "Tensor bitwise right shift scalar.");
+        "Tensor bitwise left shift scalar.");
     m.def(
         "BitwiseRightShift",
         [](const Element& self, const Tensor& other) { return npu::tile_fwk::BitwiseRightShift(self, other); },
@@ -297,7 +301,7 @@ void bind_operation(py::module& m)
     m.def(
         "BitwiseLeftShift",
         [](const Element& self, const Tensor& other) { return npu::tile_fwk::BitwiseLeftShift(self, other); },
-        "Scalar bitwise right shift tensor.");
+        "Scalar bitwise left shift tensor.");
     m.def(
         "BitwiseAnd", [](const Tensor& self, const Element& other) { return npu::tile_fwk::BitwiseAnd(self, other); },
         "Tensor bitwiseand scalar.");
@@ -342,7 +346,7 @@ void bind_operation(py::module& m)
         "Tensor row sum expand.");
     m.def(
         "RowMaxExpand", [](const Tensor& operand) { return npu::tile_fwk::RowMaxExpand(operand); },
-        "Tensor row sum expand.");
+        "Tensor row max expand.");
     m.def(
         "Compact", [](const Tensor& operand) { return npu::tile_fwk::Compact(operand); }, "Tensor compact.");
     m.def(

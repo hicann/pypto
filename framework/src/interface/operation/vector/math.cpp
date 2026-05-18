@@ -222,7 +222,7 @@ Tensor Neg(const Tensor& self)
     }
 }
 
-Tensor Log(const Tensor& self, LogBaseType base, LogAlgorithm precisionType)
+Tensor Log(const Tensor& self, LogBaseType base, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     ASSERT(

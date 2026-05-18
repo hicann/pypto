@@ -18,8 +18,7 @@ from .._op_wrapper import op_wrapper
 from ..error import PyptoError
 from ..tensor import Tensor
 from ..enum import (
-    DataType, CastMode, DivAlgorithm, PowAlgorithm, ExpAlgorithm, SqrtAlgorithm,
-    RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm, FmodAlgorithm, RemAlgorithm
+    DataType, CastMode, PrecisionType
 )
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
@@ -250,7 +249,7 @@ def mul(input: Tensor, other: Union[Tensor, float]) -> Tensor:
 
 @op_wrapper
 def div(
-    input: Tensor, other: Union[Tensor, float], precision_type: DivAlgorithm = DivAlgorithm.HIGH_PRECISION) -> Tensor:
+    input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor:
     """Computes the element-wise division of `input` and `other`.
 
     This function calculates the formula: `out = input / other`.
@@ -262,10 +261,10 @@ def div(
         The first input tensor.
     other : Tensor or Number
         The second input tensor or a scalar to divide.
-    precision_type : DivAlgorithm, optional
-        The precision algorithm for division. Default is DivAlgorithm.HIGH_PRECISION.
+    precision_type : PrecisionType, optional
+        The precision type for division. Default is PrecisionType.HIGH_PRECISION.
         HIGH_PRECISION uses higher precision calculation to reduce precision loss.
-        Use DivAlgorithm.INTRINSIC to directly use chip instructions.
+        Use PrecisionType.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -295,7 +294,7 @@ def div(
     # Using high precision mode for FP16
     a = pypto.tensor([1, 3], pypto.DT_FP16)
     b = pypto.tensor([1, 3], pypto.DT_FP16)
-    out = pypto.div(a, b, pypto.DivAlgorithm.HIGH_PRECISION)
+    out = pypto.div(a, b, pypto.PrecisionType.HIGH_PRECISION)
     """
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Div(input, other, precision_type)
@@ -349,7 +348,7 @@ def hypot(self: Tensor, other: Tensor) -> Tensor:
 def fmod(
     input: Tensor,
     other: Union[Tensor, float],
-    precision_type: FmodAlgorithm = FmodAlgorithm.HIGH_PRECISION,
+    precision_type: PrecisionType = PrecisionType.HIGH_PRECISION,
 ) -> Tensor:
     """Computes the element-wise modulus of `input` and `other`.
 
@@ -362,10 +361,10 @@ def fmod(
         The first input tensor.
     other : Tensor or Number
         The second input tensor or a scalar to modulo operation.
-    precision_type : FmodAlgorithm, optional
-        The precision algorithm for modulo. Default is FmodAlgorithm.HIGH_PRECISION.
+    precision_type : PrecisionType, optional
+        The precision type for modulo. Default is PrecisionType.HIGH_PRECISION.
         HIGH_PRECISION uses higher precision calculation to reduce precision loss.
-        Use FmodAlgorithm.INTRINSIC to directly use chip instructions.
+        Use PrecisionType.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -443,7 +442,7 @@ def lrelu(other: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 def remainder(
     input: Union[Tensor, int, float], 
     other: Union[Tensor, int, float], 
-    precision_type: RemAlgorithm = RemAlgorithm.HIGH_PRECISION
+    precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
 ) -> Tensor:
     """Computes the element-wise remainder of `input` divided by `other`.
 
@@ -456,10 +455,10 @@ def remainder(
         The first input tensor or a scalar.
     other : Tensor or Number
         The second input tensor or a scalar to remainder operation.
-    precision_type : RemAlgorithm, optional
-        The precision algorithm for remainder. Default is RemAlgorithm.HIGH_PRECISION.
+    precision_type : PrecisionType, optional
+        The precision type for remainder. Default is PrecisionType.HIGH_PRECISION.
         HIGH_PRECISION uses higher precision calculation to reduce precision loss.
-        Use RemAlgorithm.INTRINSIC to directly use chip instructions.
+        Use PrecisionType.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -489,7 +488,7 @@ def remainder(
     # Using high precision mode for FP16
     a = pypto.tensor([1, 3], pypto.DT_FP16)
     b = pypto.tensor([1, 3], pypto.DT_FP16)
-    out = pypto.remainder(a, b, pypto.RemAlgorithm.HIGH_PRECISION)
+    out = pypto.remainder(a, b, pypto.PrecisionType.HIGH_PRECISION)
 
     Input a:    [[7.0 8.0 9.0]]
     Input b:    [[-3.0 -3.0 -3.0]]
@@ -642,7 +641,7 @@ def bitwise_xor(first: Tensor, second: Union[Tensor, int]) -> Tensor:
 
 @op_wrapper
 def pow(base: Tensor, other: Union[Tensor, int, float],
-    precision_type: PowAlgorithm = PowAlgorithm.HIGH_PRECISION) -> Tensor:
+    precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor:
     """Computes the element-wise power of `base` raised to `other`.
 
     This function calculates the formula: `out = base ** other`.
@@ -653,10 +652,10 @@ def pow(base: Tensor, other: Union[Tensor, int, float],
         The base input tensor.
     other : Tensor or Number
         The exponent to which each element in `base` will be raised.
-    precision_type : PowAlgorithm, optional
-        The precision algorithm for pow. Default is PowAlgorithm.HIGH_PRECISION.
+    precision_type : PrecisionType, optional
+        The precision type for pow. Default is PrecisionType.HIGH_PRECISION.
         HIGH_PRECISION uses higher precision calculation to reduce precision loss.
-        Use PowAlgorithm.INTRINSIC to directly use chip instructions.
+        Use PrecisionType.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -668,8 +667,8 @@ def pow(base: Tensor, other: Union[Tensor, int, float],
     x = pypto.tensor([2, 2], pypto.DT_FP32)
     a = 2
     b = pypto.tensor([2, 2], pypto.DT_FP32)
-    y = pypto.pow(x, a, PowAlgorithm.HIGH_PRECISION)
-    z = pypto.pow(x, b, PowAlgorithm.HIGH_PRECISION)
+    y = pypto.pow(x, a, PrecisionType.HIGH_PRECISION)
+    z = pypto.pow(x, b, PrecisionType.HIGH_PRECISION)
 
     Input x:[[ 1.0 2.0],
              [-3.0 4.0]]
@@ -692,7 +691,7 @@ def pow(base: Tensor, other: Union[Tensor, int, float],
 
 
 @op_wrapper
-def exp(input: Tensor, precision_type: ExpAlgorithm = ExpAlgorithm.INTRINSIC) -> Tensor:
+def exp(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """Computes the element-wise exponential of `input`.
 
     This function calculates the formula: `out = e ** input`.
@@ -701,10 +700,10 @@ def exp(input: Tensor, precision_type: ExpAlgorithm = ExpAlgorithm.INTRINSIC) ->
     ----------
     input : Tensor
         The input tensor.
-    precision_type : ExpAlgorithm, optional
-        The precision algorithm for exponential. Default is ExpAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for exponential. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use ExpAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------
@@ -725,7 +724,7 @@ def exp(input: Tensor, precision_type: ExpAlgorithm = ExpAlgorithm.INTRINSIC) ->
     
     # Using high precision mode for FP16
     x = pypto.tensor([3], pypto.DT_FP16)
-    y = pypto.exp(x, pypto.ExpAlgorithm.HIGH_PRECISION)
+    y = pypto.exp(x, pypto.PrecisionType.HIGH_PRECISION)
     """
     return pypto_impl.Exp(input, precision_type)
 
@@ -1008,7 +1007,7 @@ def abs(a: Tensor) -> Tensor:
 
 
 @op_wrapper
-def reciprocal(a: Tensor, precision_type: RecipAlgorithm = RecipAlgorithm.INTRINSIC) -> Tensor:
+def reciprocal(a: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """
     Returns a new tensor with the reciprocal of the elements of input
 
@@ -1016,10 +1015,10 @@ def reciprocal(a: Tensor, precision_type: RecipAlgorithm = RecipAlgorithm.INTRIN
     ----------
     input : Tensor
         The input tensor.
-    precision_type : RecipAlgorithm, optional
-        The precision algorithm for reciprocal. Default is RecipAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for reciprocal. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use RecipAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------
@@ -1036,7 +1035,7 @@ def reciprocal(a: Tensor, precision_type: RecipAlgorithm = RecipAlgorithm.INTRIN
     
     # Using high precision mode
     x = pypto.tensor([4], pypto.DT_FP16)
-    y = pypto.reciprocal(x, pypto.RecipAlgorithm.HIGH_PRECISION)
+    y = pypto.reciprocal(x, pypto.PrecisionType.HIGH_PRECISION)
     """
     return pypto_impl.Reciprocal(a, precision_type)
 
@@ -1168,7 +1167,7 @@ def round(input: Tensor, decimals: int = 0) -> Tensor:
 
 
 @op_wrapper
-def rsqrt(input: Tensor, precision_type: RsqrtAlgorithm = RsqrtAlgorithm.INTRINSIC) -> Tensor:
+def rsqrt(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """Computes the element-wise reciprocal of the square-root of `input`
 
     This function calculates the formula: `out = 1 / sqrt(input)`.
@@ -1177,10 +1176,10 @@ def rsqrt(input: Tensor, precision_type: RsqrtAlgorithm = RsqrtAlgorithm.INTRINS
     ----------
     input : Tensor
         The input tensor.
-    precision_type : RsqrtAlgorithm, optional
-        The precision algorithm for reciprocal square-root. Default is RsqrtAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for reciprocal square-root. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use RsqrtAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------
@@ -1207,7 +1206,7 @@ def rsqrt(input: Tensor, precision_type: RsqrtAlgorithm = RsqrtAlgorithm.INTRINS
 
     # Using high precision mode
     x = pypto.tensor([2, 2], pypto.DT_FP16)
-    y = pypto.rsqrt(x, pypto.RsqrtAlgorithm.HIGH_PRECISION)
+    y = pypto.rsqrt(x, pypto.PrecisionType.HIGH_PRECISION)
     """
     return pypto_impl.Rsqrt(input, precision_type)
 
@@ -1313,7 +1312,7 @@ def trunc(input: Tensor) -> Tensor:
 
 
 @op_wrapper
-def sqrt(input: Tensor, precision_type: SqrtAlgorithm = SqrtAlgorithm.INTRINSIC) -> Tensor:
+def sqrt(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """Computes the element-wise squareroot of `input`.
 
     This function calculates the formula: `out = √input`.
@@ -1322,10 +1321,10 @@ def sqrt(input: Tensor, precision_type: SqrtAlgorithm = SqrtAlgorithm.INTRINSIC)
     ----------
     input : Tensor
         The input tensor.
-    precision_type : SqrtAlgorithm, optional
-        The precision algorithm for square root. Default is SqrtAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for square root. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use SqrtAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------
@@ -1346,7 +1345,7 @@ def sqrt(input: Tensor, precision_type: SqrtAlgorithm = SqrtAlgorithm.INTRINSIC)
     
     # Using high precision mode for FP16
     x = pypto.tensor([5], pypto.DT_FP16)
-    y = pypto.sqrt(x, pypto.SqrtAlgorithm.HIGH_PRECISION)
+    y = pypto.sqrt(x, pypto.PrecisionType.HIGH_PRECISION)
     """
     return pypto_impl.Sqrt(input, precision_type)
 
@@ -1378,7 +1377,7 @@ def neg(a: Tensor) -> Tensor:
 
 
 @op_wrapper
-def log(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> Tensor:
+def log(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """Computes the element-wise log of `input`.
 
     This function calculates the formula: `out = log(input)`.
@@ -1387,10 +1386,10 @@ def log(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) ->
     ----------
     input : Tensor
         The input tensor.
-    precision_type : LogAlgorithm, optional
-        The precision algorithm for logarithm. Default is LogAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for logarithm. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use LogAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------
@@ -1411,14 +1410,14 @@ def log(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) ->
     
     # Using high precision mode for FP16
     x = pypto.tensor([3], pypto.DT_FP16)
-    y = pypto.log(x, pypto.LogAlgorithm.HIGH_PRECISION)
+    y = pypto.log(x, pypto.PrecisionType.HIGH_PRECISION)
     """
 
     return pypto_impl.Log(input, pypto_impl.LogBaseType.LOG_E, precision_type)
 
 
 @op_wrapper
-def log2(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> Tensor:
+def log2(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """Computes the element-wise base-2 logarithm of `input`.
 
     This function calculates the formula: `out = log_2(input)`.
@@ -1427,10 +1426,10 @@ def log2(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -
     ----------
     input : Tensor
         The input tensor. Must be positive (input > 0).
-    precision_type : LogAlgorithm, optional
-        The precision algorithm for logarithm. Default is LogAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for logarithm. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use LogAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------
@@ -1452,7 +1451,7 @@ def log2(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -
 
 
 @op_wrapper
-def log10(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> Tensor:
+def log10(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
     """Computes the element-wise base-10 logarithm of `input`.
 
     This function calculates the formula: `out = log_10(input)`.
@@ -1461,10 +1460,10 @@ def log10(input: Tensor, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) 
     ----------
     input : Tensor
         The input tensor. Must be positive (input > 0).
-    precision_type : LogAlgorithm, optional
-        The precision algorithm for logarithm. Default is LogAlgorithm.INTRINSIC.
+    precision_type : PrecisionType, optional
+        The precision type for logarithm. Default is PrecisionType.INTRINSIC.
         INTRINSIC directly uses chip instructions for faster computation.
-        Use LogAlgorithm.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
 
     Returns
     -------

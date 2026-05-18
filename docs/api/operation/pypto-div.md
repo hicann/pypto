@@ -1,4 +1,4 @@
-﻿# pypto.div
+# pypto.div
 
 ## 产品支持情况
 
@@ -19,7 +19,7 @@ $$
 ## 函数原型
 
 ```python
-div(input: Tensor, other: Union[Tensor, float], precision_type: DivAlgorithm = DivAlgorithm.HIGH_PRECISION) -> Tensor
+div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
@@ -29,7 +29,7 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: DivAlgorithm = D
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other  | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | 输入 | 精度模式枚举类型，用以控制除法计算的精度模式，具体定义为：[DivAlgorithm](../datatype/DivAlgorithm.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
+| precision_type | 输入 | 精度模式枚举类型，用以控制除法计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
@@ -41,7 +41,7 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: DivAlgorithm = D
 2.  other 为数字的时候，不支持隐式转化。
 3.  other 不支持nan、inf等特殊值
 4.  **精度模式说明**：
-    - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式。
+    - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，当前仅在Ascend 950PR/Ascend 950DT上有效。
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 
 ## 调用示例
@@ -83,7 +83,7 @@ out = pypto.div(a, b)  # 默认使用 HIGH_PRECISION 模式
 ```python
 a = pypto.tensor([1, 3], pypto.DT_FP16)
 b = pypto.tensor([1, 3], pypto.DT_FP16)
-out = pypto.div(a, b, pypto.DivAlgorithm.HIGH_PRECISION)
+out = pypto.div(a, b, pypto.PrecisionType.HIGH_PRECISION)
 ```
 
 #### 使用指令模式
@@ -91,7 +91,7 @@ out = pypto.div(a, b, pypto.DivAlgorithm.HIGH_PRECISION)
 ```python
 a = pypto.tensor([1, 3], pypto.DT_FP32)
 b = pypto.tensor([1, 3], pypto.DT_FP32)
-out = pypto.div(a, b, pypto.DivAlgorithm.INTRINSIC)
+out = pypto.div(a, b, pypto.PrecisionType.INTRINSIC)
 ```
 
 #### 使用运算符（自动使用高精度模式）

@@ -21,6 +21,7 @@ pypto-Tensor-exp
 pypto-Tensor-exp2
 pypto-Tensor-expand_clone
 pypto-Tensor-expm1
+pypto-Tensor-fmod
 pypto-Tensor-id
 pypto-Tensor-index_add
 pypto-Tensor-index_add_
@@ -29,6 +30,8 @@ pypto-Tensor-gather
 pypto-Tensor-gcd
 pypto-Tensor-get_cache_policy
 pypto-Tensor-log
+pypto-Tensor-log10
+pypto-Tensor-log2
 pypto-Tensor-logical_not
 pypto-Tensor-matmul
 pypto-Tensor-maximum
@@ -36,6 +39,8 @@ pypto-Tensor-move
 pypto-Tensor-mul
 pypto-Tensor-name
 pypto-Tensor-permute
+pypto-Tensor-reciprocal
+pypto-Tensor-remainder
 pypto-Tensor-reshape
 pypto-Tensor-round
 pypto-Tensor-set_cache_policy

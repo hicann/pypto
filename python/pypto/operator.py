@@ -49,7 +49,7 @@ def sigmoid(input: Tensor) -> Tensor:
     exp_res = pypto.exp(pypto.mul(input, f_nega_1))
     res = pypto.add(exp_res, f_1)
     ones = pypto.full(res.shape, 1.0, pypto.DT_FP32, valid_shape=res.shape)
-    res = pypto.div(ones, res, pypto.DivAlgorithm.INTRINSIC)
+    res = pypto.div(ones, res, pypto.PrecisionType.INTRINSIC)
 
     if dtype != pypto.DT_FP32:
         res = pypto.cast(res, dtype)
@@ -94,7 +94,7 @@ def softmax(input: Tensor, dim: int) -> Tensor:
     sub_res = pypto.sub(input, rowmax)
     exp_res = pypto.exp(sub_res)
     esum = pypto.sum(exp_res, dim, True)
-    output = pypto.div(exp_res, esum, pypto.DivAlgorithm.INTRINSIC)
+    output = pypto.div(exp_res, esum, pypto.PrecisionType.INTRINSIC)
 
     if dtype != pypto.DT_FP32:
         output = pypto.cast(output, dtype)
@@ -140,7 +140,7 @@ def rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tens
     y = pypto.sqrt(pypto.sum(x * x * (1.0 / n), -1, keepdim=True) + epsilon)
 
     ones = pypto.full(y.shape, 1.0, pypto.DT_FP32)
-    y = pypto.div(x * ones, y, pypto.DivAlgorithm.INTRINSIC)
+    y = pypto.div(x * ones, y, pypto.PrecisionType.INTRINSIC)
 
     if gamma is not None:
         rank = input.dim

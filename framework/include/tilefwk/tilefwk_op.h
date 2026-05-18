@@ -54,58 +54,10 @@ enum class SaturationMode : uint8_t {
     OFF = 1,
 };
 
-enum class DivAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class PowAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class SqrtAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class RsqrtAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class ExpAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class LogAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class RecipAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class FmodAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
-};
-
-enum class RemAlgorithm : uint8_t
-{
-    DEFAULT,
-    HIGH_PRECISION
+// 统一的精度类型枚举
+enum class PrecisionType : uint8_t {
+    INTRINSIC = 0,     // 指令模式，直接使用芯片指令
+    HIGH_PRECISION = 1 // 高精度模式
 };
 
 namespace experimental {
@@ -205,21 +157,21 @@ Tensor Full(
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
 Tensor Cast(
     const Tensor& self, DataType dstDataType, CastMode mode = CAST_NONE, SaturationMode satmode = SaturationMode::OFF);
-Tensor Permute(const Tensor &self, std::vector<int> perm);
+Tensor Permute(const Tensor& self, std::vector<int> perm);
 
-Tensor Exp(const Tensor& self, ExpAlgorithm precisionType = ExpAlgorithm::DEFAULT);
+Tensor Exp(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Exp2(const Tensor& self);
 Tensor Expm1(const Tensor& self);
 Tensor Sin(const Tensor& self);
 Tensor Cos(const Tensor& self);
 Tensor Neg(const Tensor& self);
 Tensor Round(const Tensor& self, const int& decimals = 0);
-Tensor Rsqrt(const Tensor& self, RsqrtAlgorithm precisionType = RsqrtAlgorithm::DEFAULT);
+Tensor Rsqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Relu(const Tensor& self);
 Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode = "constant", float value = 0.0);
 Tensor FillPad(const Tensor& self, std::string mode = "constant", float value = 0.0);
 Tensor BitwiseNot(const Tensor& self);
-Tensor Sqrt(const Tensor& self, SqrtAlgorithm precisionType = SqrtAlgorithm::DEFAULT);
+Tensor Sqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Ceil(const Tensor& self);
 Tensor CeilDiv(const Tensor& self, const Tensor& other);
 Tensor CeilDiv(const Tensor& self, const Element& other);
@@ -227,9 +179,9 @@ Tensor Floor(const Tensor& self);
 Tensor FloorDiv(const Tensor& self, const Tensor& other);
 Tensor FloorDiv(const Tensor& self, const Element& other);
 Tensor Trunc(const Tensor& self);
-Tensor Reciprocal(const Tensor& operand, RecipAlgorithm precisionType = RecipAlgorithm::DEFAULT);
+Tensor Reciprocal(const Tensor& operand, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Abs(const Tensor& self);
-Tensor Ln(const Tensor& operand, LogAlgorithm precisionType = LogAlgorithm::DEFAULT);
+Tensor Ln(const Tensor& operand, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Hub(const Tensor& operand);
 Tensor Sign(const Tensor& operand);
 Tensor Signbit(const Tensor& operand);
@@ -282,10 +234,10 @@ Tensor Compact(const Tensor& operand);
 
 Tensor Add(const Tensor& self, const Tensor& other);
 Tensor Sub(const Tensor& self, const Tensor& other);
-Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType = DivAlgorithm::DEFAULT);
+Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Mul(const Tensor& self, const Tensor& other);
 Tensor Hypot(const Tensor& self, const Tensor& other);
-Tensor Fmod(const Tensor& self, const Tensor& other, FmodAlgorithm precisionType = FmodAlgorithm::DEFAULT);
+Tensor Fmod(const Tensor& self, const Tensor& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Maximum(const Tensor& operand1, const Tensor& operand2);
 Tensor Minimum(const Tensor& operand1, const Tensor& operand2);
 Tensor BitwiseAnd(const Tensor& self, const Tensor& other);
@@ -294,9 +246,9 @@ Tensor BitwiseXor(const Tensor& self, const Tensor& other);
 Tensor ExpandExpDif(const Tensor& input, const Tensor& other);
 Tensor Add(const Tensor& self, const Element& other);
 Tensor Sub(const Tensor& self, const Element& other);
-Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType = DivAlgorithm::DEFAULT);
+Tensor Div(const Tensor& self, const Element& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Mul(const Tensor& self, const Element& other);
-Tensor Fmod(const Tensor& self, const Element& other, FmodAlgorithm precisionType = FmodAlgorithm::DEFAULT);
+Tensor Fmod(const Tensor& self, const Element& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor BitwiseAnd(const Tensor& self, const Element& other);
 Tensor BitwiseOr(const Tensor& self, const Element& other);
 Tensor BitwiseXor(const Tensor& self, const Element& other);
@@ -305,11 +257,11 @@ Tensor Maximum(const Tensor& operand1, const Element& operand2);
 Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode);
 Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode);
 Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode);
-Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType = PowAlgorithm::DEFAULT);
-Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType = PowAlgorithm::DEFAULT);
-Tensor Remainder(const Tensor& self, const Tensor& other, RemAlgorithm precisionType = RemAlgorithm::DEFAULT);
-Tensor Remainder(const Tensor& self, const Element& other, RemAlgorithm precisionType = RemAlgorithm::DEFAULT);
-Tensor Remainder(const Element& self, const Tensor& other, RemAlgorithm precisionType = RemAlgorithm::DEFAULT);
+Tensor Pow(const Tensor& self, const Tensor& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
+Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
+Tensor Remainder(const Tensor& self, const Tensor& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
+Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
+Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor CopySign(const Tensor& self, const Tensor& other);
 Tensor PReLU(const Tensor& self, const Tensor& weight);
 Tensor Axpy(const Tensor& self, const Tensor& other, float alpha);
@@ -350,22 +302,24 @@ Tensor LogicalAnd(const Tensor& self, const Tensor& other);
 Tensor IsFinite(const Tensor& self);
 Tensor Assign(const Tensor& operand);
 
-Tensor Uniform(const Element &key, const SymbolicScalar& counter0, const Element &counter1,
-               const std::vector<int64_t> &shape, const Element &rounds, DataType dtype = DT_FP32);
+Tensor Uniform(
+    const Element& key, const SymbolicScalar& counter0, const Element& counter1, const std::vector<int64_t>& shape,
+    const Element& rounds, DataType dtype = DT_FP32);
 
 // Implementation of `Tensor` type should be placed at first, so that it can be routed when only single input.
 Tensor Clip(const Tensor& self, const Tensor& min = {}, const Tensor& max = {});
 Tensor Clip(const Tensor& self, const Element& min = {}, const Element& max = {});
 
-std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis = -1, bool isLargest = true, TopKAlgo algo = TopKAlgo::MERGE_SORT);
+std::tuple<Tensor, Tensor> TopK(
+    const Tensor& self, int k, int axis = -1, bool isLargest = true, TopKAlgo algo = TopKAlgo::MERGE_SORT);
 Tensor ArgSort(const Tensor& self, int axis = -1, bool descending = false);
 Tensor Sort32(const Tensor& self, int idxStart = 0);
 Tensor MrgSort(const Tensor& self, int mergeSize);
 
 // support float32 -> int8/uint8
-Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int axis, const Tensor &zeroPoints);
+Tensor Quantize(const Tensor& input, const Tensor& scale, DataType dtype, int axis, const Tensor& zeroPoints);
 // support int8/int16 -> float32
-Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int axis, const Tensor &zeroPoints);
+Tensor Dequantize(const Tensor& input, const Tensor& scale, DataType otype, int axis, const Tensor& zeroPoints);
 
 /**
  * @brief Sort a tensor with shape (1, n) along the last dimension, n must be orders of 2.
@@ -443,7 +397,8 @@ enum class LogBaseType {
     LOG_2,
     LOG_10,
 };
-Tensor Log(const Tensor& self, LogBaseType base = LogBaseType::LOG_E, LogAlgorithm precisionType = LogAlgorithm::DEFAULT);
+Tensor Log(
+    const Tensor& self, LogBaseType base = LogBaseType::LOG_E, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Log1p(const Tensor& self);
 
 Tensor OneHot(const Tensor& self, int numClasses);

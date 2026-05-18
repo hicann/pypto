@@ -15,7 +15,7 @@
 ## 接口原型
 
 ```python
-pypto.exp(input, precision_type=pypto.ExpAlgorithm.INTRINSIC) -> Tensor
+pypto.exp(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 ```
 
 ## 参数说明
@@ -23,7 +23,7 @@ pypto.exp(input, precision_type=pypto.ExpAlgorithm.INTRINSIC) -> Tensor
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | input | Tensor | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；支持的维度：1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | ExpAlgorithm, 可选 | 指数操作的精度模式。默认值为 `ExpAlgorithm.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
+| precision_type | PrecisionType, 可选 | 指数操作的精度模式。默认值为 `PrecisionType.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
 
 ## 返回值说明
 
@@ -61,12 +61,12 @@ y = pypto.exp(x)
 
 ```python
 x = pypto.tensor([3], pypto.DT_FP16)
-y = pypto.exp(x, pypto.ExpAlgorithm.HIGH_PRECISION)
+y = pypto.exp(x, pypto.PrecisionType.HIGH_PRECISION)
 ```
 
-### 低精度模式示例
+### 指令模式示例
 
 ```python
 x = pypto.tensor([3], pypto.DT_FP16)
-y = pypto.exp(x, pypto.ExpAlgorithm.INTRINSIC)
+y = pypto.exp(x, pypto.PrecisionType.INTRINSIC)
 ```

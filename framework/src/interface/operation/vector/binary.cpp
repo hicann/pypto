@@ -378,7 +378,7 @@ Tensor Mul(const Tensor& self, const Tensor& other)
     RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
-Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType)
+Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "DIV");
@@ -390,7 +390,7 @@ Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType)
     return Tensor(result);
 }
 
-Tensor Fmod(const Tensor& self, const Tensor& other, FmodAlgorithm precisionType)
+Tensor Fmod(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MOD");
@@ -411,7 +411,7 @@ Tensor Fmod(const Tensor& self, const Tensor& other, FmodAlgorithm precisionType
     return Tensor(result);
 }
 
-Tensor Remainder(const Tensor& self, const Tensor& other, RemAlgorithm precisionType)
+Tensor Remainder(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "REM");
@@ -562,14 +562,14 @@ void PowCheck(const Tensor& self, const Tensor& other)
     CheckTensorsFormatConsistency(self.GetStorage(), other.GetStorage(), "POW");
 }
 
-Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType)
+Tensor Pow(const Tensor& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     PowCheck(self, other);
     DataType selfType = self.GetDataType();
     DataType otherType = other.GetDataType();
     if (selfType == DT_INT32 && otherType == DT_INT32) {
-        precisionType = PowAlgorithm::DEFAULT;
+        precisionType = PrecisionType::INTRINSIC;
     }
     DataType realResultType = GetPowRealResultDataType(selfType, otherType);
     DataType calcResultType = GetPowCalcResultDataType(selfType, otherType);
@@ -586,38 +586,35 @@ Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType)
     return result;
 }
 
-LogicalTensorPtr PowSCalc(const LogicalTensorPtr& self, const Element& other, PowAlgorithm precisionType) {
+LogicalTensorPtr PowSCalc(const LogicalTensorPtr& self, const Element& other, PrecisionType precisionType)
+{
     double exponent = other.Cast<double>();
-    if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {// sqrt(x)
+    if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) { // sqrt(x)
         RETURN_CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), self);
-    } else if (std::abs(exponent + NUM_VALUE_0_5) < NUM_VALUE_EPS) {// 1 / sqrt(x)
+    } else if (std::abs(exponent + NUM_VALUE_0_5) < NUM_VALUE_EPS) { // 1 / sqrt(x)
         auto sqrt = CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), self);
         auto ones = GenAllOneTensor(self->shape, self->GetDynValidShape(), DT_FP32);
-        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
-            *Program::GetInstance().GetCurrentFunction(), ones, sqrt
-        );
-        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION));
+        auto [result, op] =
+            TensorBinaryOperationWithOp<BinaryOpType::DIV>(*Program::GetInstance().GetCurrentFunction(), ones, sqrt);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(PrecisionType::HIGH_PRECISION));
         return result;
-    } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) {// x * x * x
-        auto mul =
-            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
+    } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) { // x * x * x
+        auto mul = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
         RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), mul, self);
-    } else if (std::abs(exponent - NUM_VALUE_2) < NUM_VALUE_EPS) {// x * x
+    } else if (std::abs(exponent - NUM_VALUE_2) < NUM_VALUE_EPS) { // x * x
         RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
-    } else if (std::abs(exponent + NUM_VALUE_2) < NUM_VALUE_EPS) {// 1 / (x * x)
+    } else if (std::abs(exponent + NUM_VALUE_2) < NUM_VALUE_EPS) { // 1 / (x * x)
         auto mul = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, self);
         auto ones = GenAllOneTensor(self->shape, self->GetDynValidShape(), DT_FP32);
-        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
-            *Program::GetInstance().GetCurrentFunction(), ones, mul
-        );
-        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION));
+        auto [result, op] =
+            TensorBinaryOperationWithOp<BinaryOpType::DIV>(*Program::GetInstance().GetCurrentFunction(), ones, mul);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(PrecisionType::HIGH_PRECISION));
         return result;
-    } else if (std::abs(exponent + NUM_VALUE_1) < NUM_VALUE_EPS) {// 1 / x
+    } else if (std::abs(exponent + NUM_VALUE_1) < NUM_VALUE_EPS) { // 1 / x
         auto ones = GenAllOneTensor(self->shape, self->GetDynValidShape(), DT_FP32);
-        auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::DIV>(
-            *Program::GetInstance().GetCurrentFunction(), ones, self
-        );
-        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION));
+        auto [result, op] =
+            TensorBinaryOperationWithOp<BinaryOpType::DIV>(*Program::GetInstance().GetCurrentFunction(), ones, self);
+        op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(PrecisionType::HIGH_PRECISION));
         return result;
     } else if (self->Datatype() == DT_INT32) {
         auto [res, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::POW>(
@@ -626,9 +623,8 @@ LogicalTensorPtr PowSCalc(const LogicalTensorPtr& self, const Element& other, Po
         return res;
     } else if (self->Datatype() == DT_FP32) {
         auto otherTensor = CALL(
-            FullOperation, *Program::GetInstance().GetCurrentFunction(),
-            Element(DataType::DT_FP32, exponent), SymbolicScalar(), DataType::DT_FP32, self->shape,
-            self->GetDynValidShape());
+            FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, exponent),
+            SymbolicScalar(), DataType::DT_FP32, self->shape, self->GetDynValidShape());
         auto [res, op] = TensorBinaryOperationWithOp<BinaryOpType::POW>(
             *Program::GetInstance().GetCurrentFunction(), self, otherTensor);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
@@ -645,7 +641,7 @@ void PowSCheck(const Tensor& self)
     CheckTensorShapeSize(self.GetStorage(), "POW");
 }
 
-Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
+Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     PowSCheck(self);
@@ -656,7 +652,7 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
             CastMode::CAST_NONE);
     }
     if (castSelf->Datatype() == DT_INT32) {
-        precisionType = PowAlgorithm::DEFAULT;
+        precisionType = PrecisionType::INTRINSIC;
     }
     if (std::abs(other.Cast<double>()) < NUM_VALUE_EPS) {
         return GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
@@ -790,7 +786,7 @@ template <BinaryOpType T>
 void TiledRemainderSOperation(
     Function& function, const TileShape& tileShape, LogicalTensorPtr operand1, Element value,
     const LogicalTensorPtr& result, bool reverseOperand = false,
-    int64_t precisionType = static_cast<int64_t>(RemAlgorithm::DEFAULT))
+    int64_t precisionType = static_cast<int64_t>(PrecisionType::INTRINSIC))
 {
     TileInfo tileInfo1(result->shape.size(), result->offset.size());
     TileInfo resultTileInfo(result->shape.size(), result->offset.size());
@@ -829,7 +825,7 @@ Tensor Mul(const Tensor& self, const Element& other)
         other);
 }
 
-Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType)
+Tensor Div(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
@@ -840,7 +836,7 @@ Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType)
     return Tensor(result);
 }
 
-Tensor Fmod(const Tensor& self, const Element& other, FmodAlgorithm precisionType)
+Tensor Fmod(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
@@ -851,7 +847,7 @@ Tensor Fmod(const Tensor& self, const Element& other, FmodAlgorithm precisionTyp
     return Tensor(result);
 }
 
-Tensor Remainder(const Tensor& self, const Element& other, RemAlgorithm precisionType)
+Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
@@ -873,7 +869,7 @@ Tensor Remainder(const Tensor& self, const Element& other, RemAlgorithm precisio
     return Tensor(result);
 }
 
-Tensor Remainder(const Element& self, const Tensor& other, RemAlgorithm precisionType)
+Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisionType)
 {
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
@@ -1235,7 +1231,7 @@ void BinaryOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     BinaryOperationOperandCheck(iOperand, oOperand);
-    int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
+    int64_t precisionType = static_cast<int64_t>(PrecisionType::INTRINSIC);
     if constexpr (
         T == BinaryOpType::DIV || T == BinaryOpType::MOD || T == BinaryOpType::POW || T == BinaryOpType::REM) {
         if (op.HasAttr(OpAttributeKey::precisionType)) {
@@ -1251,7 +1247,7 @@ void BinaryOperationScalarTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
+    int64_t precisionType = static_cast<int64_t>(PrecisionType::INTRINSIC);
     if constexpr (T == BinaryOpType::DIV || T == BinaryOpType::MOD || T == BinaryOpType::POW) {
         if (op.HasAttr(OpAttributeKey::precisionType)) {
             precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
@@ -1267,7 +1263,7 @@ void BinaryOperationScalarResTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
+    int64_t precisionType = static_cast<int64_t>(PrecisionType::INTRINSIC);
     if constexpr (T == BinaryOpType::DIV || T == BinaryOpType::MOD) {
         if (op.HasAttr(OpAttributeKey::precisionType)) {
             precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
@@ -1283,7 +1279,7 @@ void RemainderSTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    int64_t precisionType = static_cast<int64_t>(RemAlgorithm::DEFAULT);
+    int64_t precisionType = static_cast<int64_t>(PrecisionType::INTRINSIC);
     if (op.HasAttr(OpAttributeKey::precisionType)) {
         precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
     }

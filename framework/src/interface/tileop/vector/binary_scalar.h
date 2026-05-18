@@ -70,7 +70,7 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1)
     }
 
     if constexpr (op == BinaryScalarOp::MOD) {
-        pto::TFMODS(dst, src0, src1);
+        pto::TFMODS<PrecisionType>(dst, src0, src1);
         return;
     }
 
@@ -224,7 +224,7 @@ TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1)
 
 #define OP_TILE_OP_MODS TModS
 template <
-    auto PrecisionType = pto::FmodAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename Scalar,
+    auto PrecisionType = pto::FmodSAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename Scalar,
     typename T0, typename T1>
 TILEOP void TModS(T0 dst, T1 src0, Scalar src1)
 {
@@ -239,7 +239,7 @@ TILEOP void BinaryScalarTmpComputeImpl(T0 dst, T1 src0, Scalar src1, T2 tmp)
         return;
     }
     if constexpr (op == BinaryScalarOp::REM) {
-        pto::TREMS(dst, src0, src1, tmp);
+        pto::TREMS<PrecisionType>(dst, src0, src1, tmp);
         return;
     }
     if constexpr (op == BinaryScalarOp::POW) {
@@ -280,21 +280,21 @@ TILEOP void TBitwiseXorS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 }
 
 #define OP_TILE_OP_REMS TRemainderS
-template <typename Scalar, auto PrecisionType = 0, typename T0, typename T1, typename T2>
+template <typename Scalar, auto PrecisionType = pto::RemSAlgorithm::DEFAULT, typename T0, typename T1, typename T2>
 TILEOP void TRemainderS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
     BinaryScalarTmpCompute<BinaryScalarOp::REM, PrecisionType>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_POWS TPowS
-template <auto PrecisionType = 0, typename Scalar, typename T0, typename T1, typename T2>
+template <auto PrecisionType = pto::PowAlgorithm::DEFAULT, typename Scalar, typename T0, typename T1, typename T2>
 TILEOP void TPowS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
     BinaryScalarTmpCompute<BinaryScalarOp::POW, PrecisionType>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_REMRS TRemainderRS
-template <typename Scalar, auto PrecisionType, typename T0, typename T1, typename T2>
+template <typename Scalar, auto PrecisionType = pto::RemAlgorithm::DEFAULT, typename T0, typename T1, typename T2>
 TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
     const auto dstLayout = dst.GetLayout();

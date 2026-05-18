@@ -639,16 +639,17 @@ class Tensor:
 
     @source_location
     def div(self, other: 'Tensor | int | float',
-            precision_type: DivAlgorithm = DivAlgorithm.HIGH_PRECISION) -> 'Tensor':
+            precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
         return pypto.div(self, other, precision_type)
 
     @source_location
-    def fmod(self, other: 'Tensor | int | float') -> 'Tensor':
-        return pypto.fmod(self, other)
+    def fmod(self, other: 'Tensor | int | float',
+             precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
+        return pypto.fmod(self, other, precision_type)
 
     @source_location
     def remainder(self, other: 'Tensor | int | float',
-                  precision_type: RemAlgorithm = RemAlgorithm.HIGH_PRECISION) -> 'Tensor':
+                  precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
         return pypto.remainder(self, other, precision_type)
 
     @source_location
@@ -774,7 +775,7 @@ class Tensor:
         return pypto.mrgsort(self, mergesize)
 
     @source_location
-    def exp(self, precision_type: ExpAlgorithm = ExpAlgorithm.INTRINSIC) -> 'Tensor':
+    def exp(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.exp(self, precision_type)
 
     @source_location
@@ -794,7 +795,7 @@ class Tensor:
         return pypto.expm1(self)
 
     @source_location
-    def log(self, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> 'Tensor':
+    def log(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.log(self, precision_type)
 
     @source_location
@@ -802,11 +803,11 @@ class Tensor:
         return pypto.log1p(self)
 
     @source_location
-    def log10(self, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> 'Tensor':
+    def log10(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.log10(self, precision_type)
 
     @source_location
-    def log2(self, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> 'Tensor':
+    def log2(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.log2(self, precision_type)
 
     @source_location
@@ -838,11 +839,11 @@ class Tensor:
         return pypto.round(self, decimals)
 
     @source_location
-    def rsqrt(self, precision_type: RsqrtAlgorithm = RsqrtAlgorithm.INTRINSIC) -> 'Tensor':
+    def rsqrt(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.rsqrt(self, precision_type)
 
     @source_location
-    def sqrt(self, precision_type: SqrtAlgorithm = SqrtAlgorithm.INTRINSIC) -> 'Tensor':
+    def sqrt(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.sqrt(self, precision_type)
 
     @source_location
@@ -858,7 +859,7 @@ class Tensor:
         return pypto.trunc(self)
 
     @source_location
-    def reciprocal(self, precision_type: RecipAlgorithm = RecipAlgorithm.INTRINSIC) -> 'Tensor':
+    def reciprocal(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.reciprocal(self, precision_type)
 
     @source_location

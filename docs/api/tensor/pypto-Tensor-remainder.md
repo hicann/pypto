@@ -1,4 +1,4 @@
-# pypto.Tensor.div
+# pypto.Tensor.remainder
 
 ## 产品支持情况
 
@@ -10,7 +10,7 @@
 ## 函数原型
 
 ```python
-div(self, other: 'Tensor | int | float', precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor'
+remainder(self, other: 'Tensor | int | float', precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor'
 ```
 
 ## 参数说明
@@ -18,8 +18,8 @@ div(self, other: 'Tensor | int | float', precision_type: PrecisionType = Precisi
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | other   | 输入      | 除数。 <br> 支持的类型为：Tensor、int、float。 |
-| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：PrecisionType。 <br> 默认值为 PrecisionType.HIGH_PRECISION。 <br> HIGH_PRECISION 使用更高精度的计算以减少精度损失；INTRINSIC 直接使用芯片指令。 |
+| precision_type | 输入 | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 详细说明
 
-请参见[pypto.div](../operation/pypto-div.md)。
+请参见[pypto.remainder](../operation/pypto-remainder.md)。

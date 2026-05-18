@@ -167,10 +167,14 @@ void CodeGenOpNPU::AddBinaryPrecisionTypeParm(std::vector<std::string>& template
             enumName = "DivAlgorithm";
         } else if (opCode == Opcode::OP_POW || opCode == Opcode::OP_POWS) {
             enumName = "PowAlgorithm";
-        } else if (opCode == Opcode::OP_MOD || opCode == Opcode::OP_MODS) {
+        } else if (opCode == Opcode::OP_MOD) {
             enumName = "FmodAlgorithm";
-        } else if (opCode == Opcode::OP_REM || opCode == Opcode::OP_REMS || opCode == Opcode::OP_REMRS) {
+        } else if (opCode == Opcode::OP_MODS) {
+            enumName = "FmodSAlgorithm";
+        } else if (opCode == Opcode::OP_REM || opCode == Opcode::OP_REMRS) {
             enumName = "RemAlgorithm";
+        } else if (opCode == Opcode::OP_REMS) {
+            enumName = "RemSAlgorithm";
         }
         std::string enumValue = "DEFAULT";
         if (precisionType == 1) {

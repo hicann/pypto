@@ -7,7 +7,7 @@
 ## 接口原型
 
 ```python
-pypto.reciprocal(input, precision_type=pypto.RecipAlgorithm.INTRINSIC) -> Tensor
+pypto.reciprocal(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 ```
 
 ## 参数说明
@@ -15,7 +15,7 @@ pypto.reciprocal(input, precision_type=pypto.RecipAlgorithm.INTRINSIC) -> Tensor
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | input | Tensor | 输入张量。<br>支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>不支持空Tensor；支持的维度：1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | RecipAlgorithm, 可选 | 倒数操作的精度模式。默认值为 `RecipAlgorithm.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
+| precision_type | PrecisionType, 可选 | 倒数操作的精度模式。默认值为 `PrecisionType.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
 
 ## 返回值
 
@@ -44,7 +44,7 @@ import pypto
 
 # 使用高精度模式进行 FP16 计算
 x = pypto.tensor([4], pypto.DT_FP16)
-y = pypto.reciprocal(x, pypto.RecipAlgorithm.HIGH_PRECISION)
+y = pypto.reciprocal(x, pypto.PrecisionType.HIGH_PRECISION)
 
 # Input x:  [4]
 # Output y: [0.25]
@@ -57,7 +57,7 @@ import pypto
 
 # 使用指令模式
 x = pypto.tensor([4], pypto.DT_FP32)
-y = pypto.reciprocal(x, pypto.RecipAlgorithm.INTRINSIC)
+y = pypto.reciprocal(x, pypto.PrecisionType.INTRINSIC)
 
 # Input x:  [4]
 # Output y: [0.25]

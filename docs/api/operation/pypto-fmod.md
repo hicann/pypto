@@ -1,4 +1,4 @@
-﻿# pypto.fmod
+# pypto.fmod
 
 ## 产品支持情况
 
@@ -19,7 +19,7 @@ $$
 ## 函数原型
 
 ```python
-fmod(input: Tensor, other: Union[Tensor, float]) -> Tensor
+fmod(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
@@ -29,6 +29,7 @@ fmod(input: Tensor, other: Union[Tensor, float]) -> Tensor
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other  | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| precision_type | 输入 | 精度模式枚举类型，用以控制取模计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
@@ -39,6 +40,7 @@ fmod(input: Tensor, other: Union[Tensor, float]) -> Tensor
 1.  input 和 other 类型应该相同。
 2.  other 为数字的时候，不支持隐式转化。
 3.  other 不支持nan、inf等特殊值
+4.  高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
 
 ## 调用示例
 
@@ -70,4 +72,20 @@ out = pypto.fmod(a, b)
 输入数据a:    [[7.0 8.0 9.0]]
 输入数据b:    [[3.0 3.0 3.0]]
 输出数据out:  [[1.0 2.0 0.0]]
+```
+
+### 高精度模式示例
+
+```python
+a = pypto.tensor([1, 3], pypto.DT_FP32)
+b = pypto.tensor([1, 3], pypto.DT_FP32)
+out = pypto.fmod(a, b, pypto.PrecisionType.HIGH_PRECISION)
+```
+
+### 指令模式示例
+
+```python
+a = pypto.tensor([1, 3], pypto.DT_FP32)
+b = pypto.tensor([1, 3], pypto.DT_FP32)
+out = pypto.fmod(a, b, pypto.PrecisionType.INTRINSIC)
 ```

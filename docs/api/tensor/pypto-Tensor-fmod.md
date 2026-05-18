@@ -1,4 +1,4 @@
-# pypto.Tensor.reciprocal
+# pypto.Tensor.fmod
 
 ## 产品支持情况
 
@@ -10,15 +10,16 @@
 ## 函数原型
 
 ```python
-reciprocal(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor'
+fmod(self, other: 'Tensor | int | float', precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor'
 ```
 
 ## 参数说明
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：PrecisionType。 <br> 默认值为 PrecisionType.INTRINSIC。 <br> INTRINSIC 直接使用芯片指令进行计算，速度更快；HIGH_PRECISION 使用更高精度的计算以减少精度损失。 |
+| other   | 输入      | 除数。 <br> 支持的类型为：Tensor、int、float。 |
+| precision_type | 输入 | 精度模式枚举类型，用以控制取模计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 详细说明
 
-请参见[pypto.reciprocal](../operation/pypto-reciprocal.md)。
+请参见[pypto.fmod](../operation/pypto-fmod.md)。

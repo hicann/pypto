@@ -1,4 +1,4 @@
-﻿# pypto.pow
+# pypto.pow
 
 ## 产品支持情况
 
@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PowAlgorithm = PowAlgorithm.HIGH_PRECISION) -> Tensor
+pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
@@ -25,7 +25,7 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PowAlgorith
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other   | 输入      | 指数。 <br> 支持的类型为Tensor、int或float。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | 输入      | 精度模式枚举类型，用以控制指数计算的精度模式，具体定义为：[PowAlgorithm](../datatype/PowAlgorithm.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
+| precision_type | 输入      | 精度模式枚举类型，用以控制指数计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
@@ -36,6 +36,10 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PowAlgorith
 当other为float时，若输入Tensor类型为DT_INT32则返回DT_FP32，否则返回的Tensor的数据类型与输入相同。
 
 当other为Tensor时，返回的Tensor的数据类型见数据类型提升说明章节。
+
+## 约束说明
+
+1. 高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
 
 ## 数据类型提升说明
 
@@ -82,4 +86,20 @@ z = pypto.pow(x, b)
 输入数据b: [[2.0  2.0], [1.0   1.0]]
 输出数据y: [[1.0  4.0], [9.0  16.0]]
 输出数据z: [[1.0  4.0], [-3.0  4.0]]
+```
+
+### 高精度模式示例
+
+```python
+x = pypto.tensor([2, 2], pypto.DT_FP16)
+y = pypto.tensor([2, 2], pypto.DT_FP16)
+out = pypto.pow(x, y, pypto.PrecisionType.HIGH_PRECISION)
+```
+
+### 指令模式示例
+
+```python
+x = pypto.tensor([2, 2], pypto.DT_FP32)
+y = pypto.tensor([2, 2], pypto.DT_FP32)
+out = pypto.pow(x, y, pypto.PrecisionType.INTRINSIC)
 ```

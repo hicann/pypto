@@ -1,4 +1,4 @@
-﻿# pypto.log2
+# pypto.log2
 
 ## 产品支持情况
 
@@ -15,7 +15,7 @@
 ## 接口原型
 
 ```python
-pypto.log2(input, precision_type=pypto.LogAlgorithm.INTRINSIC) -> Tensor
+pypto.log2(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 ```
 
 ## 参数说明
@@ -23,7 +23,7 @@ pypto.log2(input, precision_type=pypto.LogAlgorithm.INTRINSIC) -> Tensor
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | input | Tensor | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 支持的维度：1-4维 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | LogAlgorithm, 可选 | 对数操作的精度模式。默认值为 `LogAlgorithm.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
+| precision_type | PrecisionType, 可选 | 对数操作的精度模式。默认值为 `PrecisionType.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
 
 ## 返回值说明
 
@@ -59,12 +59,12 @@ y = pypto.log2(x)
 
 ```python
 x = pypto.tensor([3], pypto.DT_FP16)
-y = pypto.log2(x, pypto.LogAlgorithm.HIGH_PRECISION)
+y = pypto.log2(x, pypto.PrecisionType.HIGH_PRECISION)
 ```
 
 ### 指令模式示例
 
 ```python
 x = pypto.tensor([3], pypto.DT_FP16)
-y = pypto.log2(x, pypto.LogAlgorithm.INTRINSIC)
+y = pypto.log2(x, pypto.PrecisionType.INTRINSIC)
 ```

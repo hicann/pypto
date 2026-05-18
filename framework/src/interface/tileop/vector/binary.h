@@ -356,7 +356,7 @@ TILEOP void TBitwiseXor(T0 dst, T1 src0, T2 src1, T3 tmp)
 }
 
 #define OP_TILE_OP_POW TPow
-template <auto PrecisionType = 0, typename T0, typename T1, typename T2, typename T3>
+template <auto PrecisionType = pto::PowAlgorithm::DEFAULT, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
     static_assert(std::is_same_v<typename T1::Type, float> || std::is_same_v<typename T1::Type, int32_t>);
@@ -364,7 +364,7 @@ TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
 }
 
 #define OP_TILE_OP_REM TRem
-template <auto PrecisionType = 0, typename T0, typename T1, typename T2, typename T3>
+template <auto PrecisionType = pto::RemAlgorithm::DEFAULT, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TRemainder(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
     BinaryTmpCompute<BinaryOp::REM, PrecisionType>(dst, src0, src1, tmp);
