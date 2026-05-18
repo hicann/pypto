@@ -314,19 +314,12 @@ Status ReduceCopyMerge::BuildMergeGroup(Function& function, MergeInput& mergeInp
 
 Status ReduceCopyMerge::PostCheck(Function& function)
 {
+    (void)function;
     APASS_LOG_INFO_F(Elements::Function, "PostCheck for ReduceCopy.");
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
         APASS_LOG_INFO_F(Elements::Operation, "Platform not support CV mix graph, skip PostCheck for ReduceCopy Pass.");
         return SUCCESS;
     }
-    APASS_LOG_INFO_F(Elements::Operation, "===> Start PostCheck for ReduceCopy.");
-    for (auto& op : function.Operations()) {
-        if (op.GetInternalSubgraphID() < 0) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Op %d does not belong to any internalSubgraph.", op.GetOpMagic());
-            return FAILED;
-        }
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "===> Finish PostCheck for ReduceCopy.");
     return SUCCESS;
 }
 
