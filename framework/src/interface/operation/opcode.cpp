@@ -596,19 +596,19 @@ void OpcodeManager::RegisterVectorQuant()
     RegisterInfo(
         Opcode::OP_QUANTIZE_SYM, OpCoreType::AIV, "QUANTIZE_SYM", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB}, {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
+        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_QUANTIZE_ASYM, OpCoreType::AIV, "QUANTIZE_ASYM",
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
+        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
     // Dequantization: INT8/INT16 -> FP32
     // Always 4 params: dst, src, scale, offset (symmetric: offset=0)
     RegisterInfo(
         Opcode::OP_DEQUANTIZE, OpCoreType::AIV, "DEQUANTIZE",
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
-        {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER, {OP_ATTR_PREFIX + "axis"},
-        TileShapeVerifier::Verify);
+        {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis"}, TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_QUANT_MX, OpCoreType::AIV, "QUANT_MX", {MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
