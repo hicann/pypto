@@ -72,7 +72,7 @@ def quant_rms_norm(x: pypto.Tensor, gamma: pypto.Tensor, dim: int, epsilon: floa
     mean_square = pypto.sum(x2_scaled, actual_dim, keepdim=True)
 
     rms = pypto.sqrt(mean_square + epsilon)
-    res32 = pypto.div(x_fp32, rms, pypto.DivAlgorithm.INTRINSIC)
+    res32 = pypto.div(x_fp32, rms, pypto.PrecisionType.INTRINSIC)
     gamma32 = pypto.cast(gamma, pypto.DT_FP32)
     return pypto.cast((res32 * gamma32), x_dtype)
 
@@ -146,7 +146,7 @@ def prolog_quant(x: pypto.Tensor):
     max_value = pypto.amax(abs_res, dim=-1, keepdim=True)
 
     scale_dequant = max_value * (hif8_one_value / hif8_max_value)
-    out_fp32 = pypto.div(input_fp32, scale_dequant, pypto.DivAlgorithm.INTRINSIC)
+    out_fp32 = pypto.div(input_fp32, scale_dequant, pypto.PrecisionType.INTRINSIC)
     out_hif8 = pypto.cast(out_fp32, pypto.DT_HF8)
     return (out_hif8, scale_dequant)
 
