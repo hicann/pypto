@@ -721,3 +721,76 @@ TEST_F(TestAxisCombineMarker, pad_conflict)
     marker.Run(*rootFuncPtr);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t1")), false);
 }
+
+/*
+before:
+     copyin         copyin        copyin
+   [1,2,32]       [1,2,32]      [1,2,1]
+       |              |             |
+      v1             v2            v3
+   [1,2,32]       [1,2,32]      [1,2,1]
+       \            /              |
+        \          /               |
+         pairsum                  /
+         [1,2,32]                /
+            |                   /
+            |                  /
+             \                /
+               pairsum
+               [1,2,32]
+                  |
+            rowsum_single
+               [1,2,1]
+               axis=2
+                  |
+               copyout
+               [1,6,1]
+
+after: var尾块场景 - v3[1,2,1]为ENABLE，PAIRSUM输出tail dim=32不触发pair ops检查，
+       rowsum_single尾轴reduce(axis=2)为ENABLE，copyout结果为[1,6,1]
+*/
+TEST_F(TestAxisCombineMarker, var_tail_block)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 32}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 32}, MemoryType::MEM_UB, "v1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"v1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 32}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 32}, MemoryType::MEM_UB, "v2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"v2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 1}, MemoryType::MEM_DEVICE_DDR, "gm3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 1}, MemoryType::MEM_UB, "v3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm3"}, {"v3"}, "copy_in3", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 32}, MemoryType::MEM_UB, "b1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRSUM, {"v1", "v2"}, {"b1"}, "pairsum1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 32}, MemoryType::MEM_UB, "b2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRSUM, {"b1", "v3"}, {"b2"}, "pairsum2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 1}, MemoryType::MEM_UB, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_SINGLE, {"b2"}, {"out"}, "reduce", true), true);
+    auto reduce_op = graph.GetOp("reduce");
+    reduce_op->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 6, 1}, MemoryType::MEM_DEVICE_DDR, "output"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"out"}, {"output"}, "copy_out", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    // v1, v2: COPY_IN from DDR [1,2,32] → output tail dim 32 → UNKNOWN
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("v1")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("v2")), false);
+    // v3: COPY_IN from DDR [1,2,1] → output tail dim 1 → DISABLE
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("v3")), false);
+    // b1: PAIRSUM output [1,2,32] tail dim 32 → UNKNOWN
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("b1")), false);
+    // b2: PAIRSUM output [1,2,32] tail dim 32 → UNKNOWN (pair ops check not reached)
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("b2")), false);
+    // out: ROWSUM_SINGLE axis=2 reduce last axis → ENABLE
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("out")), true);
+}

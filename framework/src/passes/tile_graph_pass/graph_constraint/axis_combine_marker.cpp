@@ -185,28 +185,41 @@ void UpdateElewiseStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axi
 {
     auto outputTensor = op->GetOOperands()[0];
     bool multiOutput = op->GetOOperands().size() > 1;
-    for (auto inputTensor : op->GetIOperands()) {
-        if (tensorStatus[inputTensor] == AxisReorderStatus::UNKNOWN && inputTensor->GetShape().back() == 1 &&
-            !multiOutput) {
-            tensorStatus[inputTensor] = AxisReorderStatus::ENABLE;
+    if (!multiOutput) {
+        for (auto inputTensor : op->GetIOperands()) {
+            if (tensorStatus[inputTensor] == AxisReorderStatus::UNKNOWN && inputTensor->GetShape().back() == 1) {
+                tensorStatus[inputTensor] = AxisReorderStatus::ENABLE;
+            }
         }
     }
-    if (outputTensor->GetShape().back() != 1) {
-        tensorStatus[outputTensor] = AxisReorderStatus::UNKNOWN;
-        return;
-    }
+    bool allEnable = true;
+    bool hasDisable = false;
+    AxisReorderStatus lastStatus;
     for (auto inputTensor : op->GetIOperands()) {
-        if (tensorStatus.find(inputTensor) != tensorStatus.end() &&
-            tensorStatus[inputTensor] == AxisReorderStatus::DISABLE) {
-            tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
-            return;
+        auto status = tensorStatus[inputTensor];
+        if (status != AxisReorderStatus::ENABLE) {
+            allEnable = false;
+            lastStatus = status;
+        }
+        if (status == AxisReorderStatus::DISABLE) {
+            hasDisable = true;
         }
     }
-    if (multiOutput) {
+    if (!allEnable && SUPPORT_BRC_INLINE.count(op->GetOpcode()) == 0) {
+        for (auto inputTensor : op->GetIOperands()) {
+            if (tensorStatus.find(inputTensor) != tensorStatus.end() &&
+                tensorStatus[inputTensor] == AxisReorderStatus::ENABLE) {
+                tensorStatus[inputTensor] = lastStatus;
+            }
+        }
+    }
+    if (hasDisable || multiOutput) {
         tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
-        return;
+    } else if (outputTensor->GetShape().back() == 1) {
+        tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
+    } else {
+        tensorStatus[outputTensor] = AxisReorderStatus::UNKNOWN;
     }
-    tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
 }
 
 void AxisCombineMarker::DisableNoneWhiteListTensor(Operation* op)
