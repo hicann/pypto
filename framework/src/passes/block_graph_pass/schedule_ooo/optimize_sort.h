@@ -19,6 +19,7 @@
 #include "schedule_base.h"
 #include <functional>
 #include <vector>
+#include <set>
 
 namespace npu::tile_fwk {
 class OptimizeSort : public ScheduleBase {
@@ -81,7 +82,7 @@ public:
     Status UpdateOOperandPreDependence(
         size_t startIndex, std::shared_ptr<std::vector<Operation*>>& curOpList, std::vector<Operation*> consumersGroup);
     void RecoverSymbol(size_t startIndex, std::shared_ptr<std::vector<Operation*>> curOpList);
-    void GetConsumerGroup(std::unordered_set<Operation*>& consumers, std::vector<Operation*>& consumersGroup);
+    void GetConsumerGroup(std::set<Operation*>& consumers, std::vector<Operation*>& consumersGroup);
     void GetStackTop(
         size_t& startIndex, std::shared_ptr<std::vector<Operation*>>& curOpList,
         std::map<MemoryType, int64_t>& curMemoryMap);
@@ -103,6 +104,10 @@ public:
         size_t& startIndex);
     Status ExecuteOp();
     void AllocAhead();
+
+private:
+    Status SortOpsMemoryAware();
+    Status SortOpsPriorDFS();
 
     std::shared_ptr<std::vector<Operation*>> ReplaceIndex(
         std::shared_ptr<std::vector<Operation*>> curOpList, std::set<size_t>& advanceIndexList, size_t rollBackIndex);

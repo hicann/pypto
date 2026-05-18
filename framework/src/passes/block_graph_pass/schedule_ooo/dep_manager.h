@@ -17,7 +17,7 @@
 #define PASS_DEP_MANAGER_H_
 
 #include <unordered_map>
-#include <unordered_set>
+#include <set>
 #include <vector>
 #include <functional>
 #include <string>
@@ -52,8 +52,8 @@ public:
     int InsertPredecessor(Operation *op, Operation *pred);
     int RemovePredecessor(Operation *op, Operation *pred);
 
-    std::unordered_set<Operation *> &GetSuccessors(Operation *op);
-    std::unordered_set<Operation *> &GetPredecessors(Operation *op);
+    std::set<Operation *> &GetSuccessors(Operation *op);
+    std::set<Operation *> &GetPredecessors(Operation *op);
     bool HasOp(Operation *op) const;
 
     std::string PrintOp(Operation *op);
@@ -74,10 +74,10 @@ private:
     void AddProducerDependencies(Operation *op);
     void AddConsumerDependencies(Operation *op);
 
-    std::unordered_map<Operation *, std::unordered_set<Operation *>> opConsumers;
-    std::unordered_map<Operation *, std::unordered_set<Operation *>> opProducers;
-    std::unordered_map<Operation *, std::unordered_set<Operation *>> inGraph_;
-    std::unordered_map<Operation *, std::unordered_set<Operation *>> outGraph_;
+    std::unordered_map<Operation *, std::set<Operation *>> opConsumers;
+    std::unordered_map<Operation *, std::set<Operation *>> opProducers;
+    std::unordered_map<Operation *, std::set<Operation *>> inGraph_;
+    std::unordered_map<Operation *, std::set<Operation *>> outGraph_;
 };
 
 } // namespace npu::tile_fwk

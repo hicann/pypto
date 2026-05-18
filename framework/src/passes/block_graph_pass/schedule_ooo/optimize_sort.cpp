@@ -14,6 +14,7 @@
  */
 
 #include "optimize_sort.h"
+#include "memory_aware_topo_sort.h"
 #include <queue>
 #include "passes/pass_log/pass_log.h"
 
@@ -573,7 +574,7 @@ void OptimizeSort::RecoverSymbol(size_t startIndex, std::shared_ptr<std::vector<
 }
 
 // 找未被执行的 consumer
-void OptimizeSort::GetConsumerGroup(std::unordered_set<Operation*>& consumers, std::vector<Operation*>& consumersGroup)
+void OptimizeSort::GetConsumerGroup(std::set<Operation*>& consumers, std::vector<Operation*>& consumersGroup)
 {
     for (auto op : consumers) {
         APASS_LOG_DEBUG_F(Elements::Operation, "consumer: %s", GetOpInfo(op).c_str());
@@ -843,6 +844,64 @@ void OptimizeSort::AllocAhead()
     operations = newOperations;
 }
 
+Status OptimizeSort::SortOpsMemoryAware()
+{
+    APASS_LOG_INFO_F(Elements::Operation, "Using MemoryAwareTopoSort for scheduling.");
+    MemoryAwareTopoSort sorter(operations, function_);
+    if (sorter.SortOps() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "MemoryAwareTopoSort failed.");
+        return FAILED;
+    }
+    operations = sorter.operations;
+    return SUCCESS;
+}
+
+Status OptimizeSort::SortOpsPriorDFS()
+{
+    AllocAhead();
+    std::unordered_map<Opcode, int> preNodePriority = {
+        // ALLOC 节点优先级最高，因为一个节点的前序ALLOC节点要在最靠近该节点的地方访问。
+        {Opcode::OP_UB_ALLOC, 0},
+        {Opcode::OP_L1_ALLOC, 0},
+        {Opcode::OP_L0A_ALLOC, 0},
+        {Opcode::OP_L0B_ALLOC, 0},
+        {Opcode::OP_L0C_ALLOC, 0},
+        {Opcode::OP_BT_ALLOC, 0},
+        {Opcode::OP_FIX_ALLOC, 0},
+        // 其次是L0级数据搬运Op。
+        {Opcode::OP_L1_TO_L0A, 1},
+        {Opcode::OP_L1_TO_L0B, 1},
+        {Opcode::OP_L1_TO_L0_AT, 1},
+        {Opcode::OP_L1_TO_L0_BT, 1},
+        {Opcode::OP_L1_TO_FIX, 1},
+        {Opcode::OP_L1_TO_FIX_QUANT_PRE, 1},
+        {Opcode::OP_L1_TO_FIX_RELU_PRE, 1},
+        {Opcode::OP_L1_TO_FIX_RELU_POST, 1},
+        {Opcode::OP_L1_TO_FIX_QUANT_POST, 1},
+        {Opcode::OP_L1_TO_FIX_ELT_ANTIQ, 1},
+        {Opcode::OP_L1_TO_FIX_MTE2_ANTIQ, 1},
+        {Opcode::OP_L1_TO_BT, 1},
+        // 再其次是L1级数据搬运Op。
+        {Opcode::OP_COPY_IN, 2},
+        {Opcode::OP_UB_COPY_IN, 2},
+        {Opcode::OP_L1_COPY_IN, 2},
+        {Opcode::OP_L1_COPY_IN_FRACTAL_Z, 2},
+        {Opcode::OP_L1_COPY_UB, 2},
+        {Opcode::OP_L0C_COPY_UB, 2},
+        {Opcode::OP_UB_COPY_L1, 2},
+        // 最后访问其它计算节点（其它节点默认的优先级为10）。
+    };
+    if (PriorDFS(preNodePriority) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "PriorDFS failed.");
+        return FAILED;
+    }
+    if (ExecuteOp() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ExecuteOp failed.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
 Status OptimizeSort::SortOps()
 {
     LOG_SCOPE_BEGIN(tSortOps, Elements::Function, "SortOps");
@@ -854,58 +913,23 @@ Status OptimizeSort::SortOps()
     if (operations.empty()) {
         return SUCCESS;
     }
-    AllocAhead();
-    std::string sortMethodStr;
-    std::string funcName = function_.GetMagicName();
 
-    sortMethodStr = function_.paramConfigs_.OoOPreScheduleMethod;
+    bool enableMemoryAwareSort = function_.paramConfigs_.enableMemoryAwareSort;
+    if (enableMemoryAwareSort) {
+        Status result = SortOpsMemoryAware();
+        LOG_SCOPE_END(tSortOps);
+        return result;
+    }
+
+    std::string sortMethodStr = function_.paramConfigs_.OoOPreScheduleMethod;
     if (sortMethodStr == "PriorDFS") {
-        std::unordered_map<Opcode, int> preNodePriority = {
-            // ALLOC 节点优先级最高，因为一个节点的前序ALLOC节点要在最靠近该节点的地方访问。
-            {Opcode::OP_UB_ALLOC, 0},
-            {Opcode::OP_L1_ALLOC, 0},
-            {Opcode::OP_L0A_ALLOC, 0},
-            {Opcode::OP_L0B_ALLOC, 0},
-            {Opcode::OP_L0C_ALLOC, 0},
-            {Opcode::OP_BT_ALLOC, 0},
-            {Opcode::OP_FIX_ALLOC, 0},
-            // 其次是L0级数据搬运Op。
-            {Opcode::OP_L1_TO_L0A, 1},
-            {Opcode::OP_L1_TO_L0B, 1},
-            {Opcode::OP_L1_TO_L0_AT, 1},
-            {Opcode::OP_L1_TO_L0_BT, 1},
-            {Opcode::OP_L1_TO_FIX, 1},
-            {Opcode::OP_L1_TO_FIX_QUANT_PRE, 1},
-            {Opcode::OP_L1_TO_FIX_RELU_PRE, 1},
-            {Opcode::OP_L1_TO_FIX_RELU_POST, 1},
-            {Opcode::OP_L1_TO_FIX_QUANT_POST, 1},
-            {Opcode::OP_L1_TO_FIX_ELT_ANTIQ, 1},
-            {Opcode::OP_L1_TO_FIX_MTE2_ANTIQ, 1},
-            {Opcode::OP_L1_TO_BT, 1},
-            // 再其次是L1级数据搬运Op。
-            {Opcode::OP_COPY_IN, 2},
-            {Opcode::OP_UB_COPY_IN, 2},
-            {Opcode::OP_L1_COPY_IN, 2},
-            {Opcode::OP_L1_COPY_IN_FRACTAL_Z, 2},
-            {Opcode::OP_L1_COPY_UB, 2},
-            {Opcode::OP_L0C_COPY_UB, 2},
-            {Opcode::OP_UB_COPY_L1, 2},
-            // 最后访问其它计算节点（其它节点默认的优先级为10）。
-        };
-        if (PriorDFS(preNodePriority) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "PriorDFS failed.");
-            return FAILED;
-        }
-        if (ExecuteOp() != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "ExecuteOp failed.");
-            return FAILED;
-        }
+        Status result = SortOpsPriorDFS();
+        LOG_SCOPE_END(tSortOps);
+        return result;
     } else {
         APASS_LOG_ERROR_F(Elements::Operation, "PreSchedule method not recognized.");
         return FAILED;
     }
-    LOG_SCOPE_END(tSortOps);
-    return SUCCESS;
 }
 
 } // namespace npu::tile_fwk

@@ -27,10 +27,10 @@ void DependencyManager::RegisterOp(Operation *op) {
         return;
     }
     if (inGraph_.find(op) == inGraph_.end()) {
-        inGraph_[op] = std::unordered_set<Operation *>();
+        inGraph_[op] = std::set<Operation *>();
     }
     if (outGraph_.find(op) == outGraph_.end()) {
-        outGraph_[op] = std::unordered_set<Operation *>();
+        outGraph_[op] = std::set<Operation *>();
     }
 }
 
@@ -122,11 +122,13 @@ int DependencyManager::RemovePredecessor(Operation *op, Operation *pred) {
     return inGraph_[op].erase(pred);
 }
 
-std::unordered_set<Operation *> &DependencyManager::GetSuccessors(Operation *op) {
+std::set<Operation *> &DependencyManager::GetSuccessors(Operation *op)
+{
     return outGraph_[op];
 }
 
-std::unordered_set<Operation *> &DependencyManager::GetPredecessors(Operation *op) {
+std::set<Operation *> &DependencyManager::GetPredecessors(Operation *op)
+{
     return inGraph_[op];
 }
 

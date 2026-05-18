@@ -1,0 +1,129 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+#ifndef NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
+#define NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
+
+#include "schedule_base.h"
+#include "dep_manager.h"
+#include <unordered_map>
+#include <vector>
+#include <cstdint>
+
+namespace npu::tile_fwk {
+
+enum class MemoryState {
+    Critical,
+    Tight,
+    Normal,
+    Abundant
+};
+
+enum class ConstraintType {
+    HardConstraint,
+    SoftConstraint,
+    Optional
+};
+
+struct MemoryPoolContext {
+    uint64_t usage;
+    uint64_t limit;
+    ConstraintType type;
+    bool can_spill;
+    uint64_t max_slot_count;
+    uint64_t current_slot_count;
+
+    MemoryPoolContext()
+        : usage(0),
+          limit(0),
+          type(ConstraintType::Optional),
+          can_spill(false),
+          max_slot_count(UINT64_MAX),
+          current_slot_count(0) {}
+};
+
+struct SchedulingContext {
+    std::unordered_map<MemoryType, MemoryPoolContext> memory_pools;
+    std::unordered_map<int, int> executed_consumers;
+    int max_consumer_count;
+
+    SchedulingContext()
+        : max_consumer_count(0) {}
+};
+
+struct ScoringParams {
+    double alpha;
+    double beta;
+    double critical_threshold;
+    double tight_threshold;
+    double abundant_threshold;
+    double critical_factor;
+    double tight_factor;
+    double normal_factor;
+    double abundant_factor;
+    double spill_factor;
+
+    ScoringParams()
+        : alpha(0.7),
+          beta(0.4),
+          critical_threshold(0.9),
+          tight_threshold(0.7),
+          abundant_threshold(0.3),
+          critical_factor(1.5),
+          tight_factor(1.2),
+          normal_factor(1.0),
+          abundant_factor(0.5),
+          spill_factor(1.3) {}
+};
+
+MemoryState GetMemoryState(double usage_ratio);
+
+double CalcStateAdjustFactor(MemoryType mem_type, const SchedulingContext& context);
+
+double CalcDynamicTypeWeight(MemoryType mem_type, const SchedulingContext& context);
+
+double CalcReleaseContribution(int memId, Operation* node,
+    const SchedulingContext& context, const ScoringParams& params);
+
+double CalcAllocationPressure(LogicalTensorPtr output, const SchedulingContext& context, const ScoringParams& params);
+
+double CalcNodeScore(Operation* node, const SchedulingContext& context, const ScoringParams& params, int node_id);
+
+std::vector<Operation*> MemoryAwareTopologicalSort(
+    const std::vector<Operation*>& operations,
+    DependencyManager& depManager,
+    SchedulingContext& context,
+    const ScoringParams& params);
+
+class MemoryAwareTopoSort : public ScheduleBase {
+public:
+    MemoryAwareTopoSort(std::vector<Operation*> opList, Function& function)
+        : ScheduleBase(), function_(&function)
+    {
+        operations = opList;
+    }
+
+    ~MemoryAwareTopoSort() = default;
+
+    Status SortOps();
+    Status InitContext();
+    void UpdateMemoryState(Operation* op);
+    bool HasMemBtOutput(Operation* op) const;
+
+private:
+     Function* function_;         // Function context
+     SchedulingContext context_;  // Scheduling context
+     ScoringParams params_;       // Scoring parameters
+     DependencyManager depManager_; // Dependency manager for topological sorting
+};
+
+} // namespace npu::tile_fwk
+
+#endif // NPU_TILE_FWK_MEMORY_AWARE_TOPO_SORT_H
