@@ -46,6 +46,7 @@ public:
     void TearDown() override {}
 };
 
+namespace {
 inline void ConstructGraph1(std::shared_ptr<Function>& currFunctionPtr)
 {
     // Prepare the graph
@@ -131,15 +132,20 @@ inline void ConstructGraph4(std::shared_ptr<Function>& currFunctionPtr)
     auto shapeImme = OpImmediate::Specified(shape);
     auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     incast1->SetMemoryTypeBoth(MEM_DEVICE_DDR);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor0->SetMemoryTypeBoth(MEM_UB);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
     outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {incast1}, {ubTensor1});
+    auto& copy_in_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor0});
+    (void)copy_in_op;
+    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor0}, {ubTensor1});
     (void)reshape_op;
     auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor1}, {outCast});
     (void)copy_out_op;
 }
+} // namespace
 /*
 before:
     copyin
