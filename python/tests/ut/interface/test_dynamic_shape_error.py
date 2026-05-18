@@ -11,21 +11,17 @@
 """Test pypto.frontend.jit kernel dynamic shape error behavior."""
 
 import logging
-import os
 
 import pytest
 import torch
 import pypto
 
 logging.basicConfig(level=logging.INFO, format="", force=True)
-DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+SIM_RUNTIME_OPTIONS = {"run_mode": pypto.RunMode.SIM}
+DYNAMIC_SHAPE_ERROR = "Dynamic shape tensors are not allowed as operation operands"
 
 
-# ------------------------------------------------------------------------------
-# Kernel definitions
-# ------------------------------------------------------------------------------
-
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
 def kernel_with_dynamic(
     a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
     out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
@@ -34,7 +30,16 @@ def kernel_with_dynamic(
     out[:] = pypto.exp(a)
 
 
-@pypto.frontend.jit
+def test_kernel_dynamic_shape_error():
+    """Test that dynamic shape (-1) in exp kernel operand causes CheckTensorDynamicShape error."""
+    a = torch.ones(1, 8, dtype=torch.float32)
+    out = torch.zeros(1, 8, dtype=torch.float32)
+
+    with pytest.raises(Exception, match=DYNAMIC_SHAPE_ERROR):
+        kernel_with_dynamic(a, out)
+
+
+@pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
 def matmul_kernel(
     a: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP16),
     b: pypto.Tensor([], pypto.DT_FP16),
@@ -44,7 +49,18 @@ def matmul_kernel(
     out[:] = pypto.matmul(a, b, out_dtype=pypto.DT_FP16)
 
 
-@pypto.frontend.jit
+def test_matmul_dynamic_shape_error():
+    """Test that dynamic shape (-1) in matmul kernel operand causes CheckTensorDynamicShape error."""
+    m, k, n = 128, 128, 128
+    a = torch.rand([m, k], dtype=torch.float16)
+    b = torch.rand([k, n], dtype=torch.float16)
+    out = torch.zeros([m, n], dtype=torch.float16)
+
+    with pytest.raises(Exception, match=DYNAMIC_SHAPE_ERROR):
+        matmul_kernel(a, b, out)
+
+
+@pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
 def one_hot_kernel(
     a: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
     out: pypto.Tensor([], pypto.DT_INT32),
@@ -53,7 +69,16 @@ def one_hot_kernel(
     out[:] = pypto.one_hot(a, 5)
 
 
-@pypto.frontend.jit
+def test_one_hot_dynamic_shape_error():
+    """Test that dynamic shape (-1) in one_hot kernel operand causes CheckTensorDynamicShape error."""
+    x = torch.tensor([0, 2, 4], dtype=torch.int32)
+    out = torch.zeros([3, 5], dtype=torch.int32)
+
+    with pytest.raises(Exception, match=DYNAMIC_SHAPE_ERROR):
+        one_hot_kernel(x, out)
+
+
+@pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
 def kernel_dynamic_reshape(
     q: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
     out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
@@ -70,54 +95,10 @@ def kernel_dynamic_reshape(
         pypto.assemble(temp1, [idx * sq, 0], out)
 
 
-# ------------------------------------------------------------------------------
-# Test cases
-# ------------------------------------------------------------------------------
-
-def test_kernel_dynamic_shape_error():
-    """Test that dynamic shape (-1) in exp kernel operand causes CheckTensorDynamicShape error."""
-    device = f"npu:{DEVICE_ID}"
-
-    a = torch.ones(1, 8, dtype=torch.float32, device=device)
-    out = torch.zeros(1, 8, dtype=torch.float32, device=device)
-
-    with pytest.raises(Exception,
-                       match="ErrCode: F7B007! Enum: RtErr::RT_CAPTURE_FAILED. get capture info failed: 107003"):
-        kernel_with_dynamic(a, out)
-
-
-def test_matmul_dynamic_shape_error():
-    """Test that dynamic shape (-1) in matmul kernel operand causes CheckTensorDynamicShape error."""
-    device = f"npu:{DEVICE_ID}"
-
-    m, k, n = 128, 128, 128
-    a_npu = torch.rand([m, k], dtype=torch.float16, device=device)
-    b_npu = torch.rand([k, n], dtype=torch.float16, device=device)
-    out_npu = torch.zeros([m, n], dtype=torch.float16, device=device)
-
-    with pytest.raises(Exception,
-                       match="ErrCode: F7B007! Enum: RtErr::RT_CAPTURE_FAILED. get capture info failed: 107003"):
-        matmul_kernel(a_npu, b_npu, out_npu)
-
-
-def test_one_hot_dynamic_shape_error():
-    """Test that dynamic shape (-1) in one_hot kernel operand causes CheckTensorDynamicShape error."""
-    device = f"npu:{DEVICE_ID}"
-
-    input_npu = torch.tensor([0, 2, 4], dtype=torch.int32, device=device)
-    out_npu = torch.zeros([3, 5], dtype=torch.int32, device=device)
-
-    with pytest.raises(Exception,
-                       match="ErrCode: F7B007! Enum: RtErr::RT_CAPTURE_FAILED. get capture info failed: 107003"):
-        one_hot_kernel(input_npu, out_npu)
-
-
 def test_dynamic_reshape_error():
     """Test that dynamic reshape without inplace=True causes an error."""
-    device = f"npu:{DEVICE_ID}"
-
-    q = torch.ones(1, 128, 64, dtype=torch.float32, device=device)
-    out = torch.zeros(128, 64, dtype=torch.float32, device=device)
+    q = torch.ones(1, 128, 64, dtype=torch.float32)
+    out = torch.zeros(128, 64, dtype=torch.float32)
 
     with pytest.raises(Exception, match="reshape\\(\\) requires integer shape when 'inplace=False'"):
         kernel_dynamic_reshape(q, out)
@@ -128,8 +109,6 @@ def test_dynamic_reshape_error():
 # ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    torch.npu.set_device(DEVICE_ID)
-
     test_kernel_dynamic_shape_error()
     test_matmul_dynamic_shape_error()
     test_one_hot_dynamic_shape_error()

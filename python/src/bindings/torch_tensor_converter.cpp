@@ -83,6 +83,9 @@ py::object ConvertSingleTensor(
     DataType dtype = DataType::DT_BOTTOM;
 
     ParseTensorData(torchTensor, tensorDef, toDlpack, dataPtr, shape, dtype);
+    if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
+        shape.back() *= 2;
+    }
 
     auto base = py::getattr(tensorDef, "_base", py::none());
     FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(base))
@@ -90,9 +93,6 @@ py::object ConvertSingleTensor(
     auto& t = base.cast<Tensor&>();
 
     TileOpFormat format = ResolveFormat(tensorDef, t, torchTensor, torch_npu);
-    if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
-        shape.back() *= 2;
-    }
         
     out = npu::tile_fwk::dynamic::DeviceTensorData(dtype, dataPtr, shape, format);
 
