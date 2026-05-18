@@ -240,7 +240,7 @@ TEST_F(InterpTypeConvertTest, Fp8ToOperandMul)
     }
 }
 
-// FP8 E4M3 special values: +0(0x00), -0(0x80), +Max(0x7E), -Max(0xFE), Max alias(0x7F)
+// FP8 E4M3 (OCP float8_e4m3fn): +0(0x00), -0(0x80), +Max(0x7E)=448, -Max(0xFE), NaN(0x7F/0xFF)
 TEST_F(InterpTypeConvertTest, Fp8E4M3SpecialValues)
 {
     struct {
@@ -248,7 +248,12 @@ TEST_F(InterpTypeConvertTest, Fp8E4M3SpecialValues)
         float expected;
         bool is_nan;
     } cases[] = {
-        {0x00, 0.0f, false}, {0x80, -0.0f, false}, {0x7E, 240.0f, false}, {0xFE, -240.0f, false}, {0x7F, 240.0f, false},
+        {0x00, 0.0f, false},
+        {0x80, -0.0f, false},
+        {0x7E, 448.0f, false},
+        {0xFE, -448.0f, false},
+        {0x7F, 0.0f, true},
+        {0xFF, 0.0f, true},
     };
 
     for (const auto& c : cases) {

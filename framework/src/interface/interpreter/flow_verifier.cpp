@@ -47,7 +47,12 @@ float DecodeFp8E4M3(uint8_t x)
         const float mantVal = 1.0f + static_cast<float>(mantBits) / 8.0f;
         return sign * std::pow(2.0f, expVal) * mantVal;
     }
-    return sign * 240.0f;
+    // expBits == 15: OCP float8_e4m3fn — mant==111 is NaN; else finite (1+m/8)*2^8, max 448 at mant=110.
+    if (mantBits == 7) {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
+    const float mantVal = 1.0f + static_cast<float>(mantBits) / 8.0f;
+    return sign * std::pow(2.0f, 8.0f) * mantVal;
 }
 
 float DecodeFp8E5M2(uint8_t x)

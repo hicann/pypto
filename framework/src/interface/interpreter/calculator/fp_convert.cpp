@@ -22,6 +22,11 @@
 
 namespace npu::tile_fwk {
 
+// OCP float8_e4m3fn encode thresholds; constexpr so divisors are provably non-zero (G.EXP.22-CPP).
+static constexpr float kE4M3EncodeMinSubnormal = 1.0f / 512.0f;
+static constexpr float kE4M3EncodeMinNormal = 1.0f / 64.0f;
+static constexpr float kE4M3EncodeMaxFinite = 448.0f;
+
 // Round to nearest integer, ties to even, for non-negative inputs.
 static inline int RoundToNearestEvenFloatPos(float x)
 {
@@ -35,6 +40,55 @@ static inline int RoundToNearestEvenFloatPos(float x)
         return base;
     }
     return (base % 2 == 0) ? base : (base + 1);
+}
+
+// abs_times_512 = |value| / (1/512); OCP E4M3fn subnormal mantissa encoding (exp=0).
+static uint8_t EncodeE4M3SubnormalFromAbsTimes512(float abs_times_512, int sign)
+{
+    if (abs_times_512 < 0.0f) {
+        abs_times_512 = 0.0f;
+    }
+    const int mant = RoundToNearestEvenFloatPos(abs_times_512);
+    if (mant <= 0) {
+        return static_cast<uint8_t>(sign << 7);
+    }
+    if (mant >= 8) {
+        return static_cast<uint8_t>((sign << 7) | (1 << 3));
+    }
+    return static_cast<uint8_t>((sign << 7) | mant);
+}
+
+// |v| in [1/64, 448); frexp path with exp=15 / overflow / renorm-to-subnormal.
+static uint8_t EncodeE4M3NormalMagnitude(float absv, int sign)
+{
+    int exp_raw = 0;
+    const float frac = std::frexp(absv, &exp_raw);
+    const float norm_mant = frac * 2.0f;
+    const int unbiased_exp = exp_raw - 1;
+    int stored_exp = unbiased_exp + 7;
+
+    float mant_scaled = (norm_mant - 1.0f) * 8.0f;
+    if (mant_scaled < 0.0f) {
+        mant_scaled = 0.0f;
+    }
+    int mant = RoundToNearestEvenFloatPos(mant_scaled);
+    if (mant >= 8) {
+        mant = 0;
+        stored_exp += 1;
+    }
+    if (stored_exp > 15 || (stored_exp == 15 && mant >= 7)) {
+        return static_cast<uint8_t>((sign << 7) | 0x7E);
+    }
+    if (stored_exp == 15) {
+        return static_cast<uint8_t>((sign << 7) | (15u << 3) | static_cast<uint8_t>(mant & 0x7));
+    }
+    if (stored_exp <= 0) {
+        return EncodeE4M3SubnormalFromAbsTimes512(absv / kE4M3EncodeMinSubnormal, sign);
+    }
+
+    const uint8_t exp_bits = static_cast<uint8_t>(stored_exp & 0xF);
+    const uint8_t mant_bits = static_cast<uint8_t>(mant & 0x7);
+    return static_cast<uint8_t>((sign << 7) | (exp_bits << 3) | mant_bits);
 }
 
 static torch::Tensor Fp8E4M3ToFloat32(const torch::Tensor& self)
@@ -54,13 +108,17 @@ static torch::Tensor Fp8E4M3ToFloat32(const torch::Tensor& self)
     auto mant_val = 1.0f + mant_bits.to(torch::kFloat32) / 8.0f;
     auto normal_val = torch::pow(2.0f, exp_val) * mant_val;
 
-    auto is_max = (exp_bits == 15);
-    auto max_val = 240.0f;
+    auto is_e15 = (exp_bits == 15);
+    auto is_e15_nan = is_e15 & (mant_bits == 7);
+    auto is_e15_fin = is_e15 & (mant_bits < 7);
+    auto e15_fin_val = 256.0f * (1.0f + mant_bits.to(torch::kFloat32) / 8.0f);
+    auto nan_val = std::numeric_limits<float>::quiet_NaN();
 
     auto result = torch::zeros_like(self, torch::TensorOptions().dtype(torch::kFloat32));
     result = torch::where(is_subnormal, subnormal_val * sign, result);
     result = torch::where(is_normal, normal_val * sign, result);
-    result = torch::where(is_max, sign * max_val, result);
+    result = torch::where(is_e15_fin, sign * e15_fin_val, result);
+    result = torch::where(is_e15_nan, nan_val, result);
     return result;
 }
 
@@ -194,77 +252,30 @@ torch::Tensor Fp8ToFloat32(const torch::Tensor& self, DataType actualType)
 
 static inline uint8_t EncodeFloatToFp8E4M3(float v)
 {
-    constexpr float kMinSubnormal = 1.0f / 512.0f;
-    constexpr float kMinNormal = 1.0f / 64.0f;
-    constexpr float kMaxVal = 240.0f;
-
-    if (std::isnan(v) || std::isinf(v)) {
-        int sign = std::signbit(v) ? 1 : 0;
+    if (std::isnan(v)) {
+        const int sign = std::signbit(v) ? 1 : 0;
+        return static_cast<uint8_t>((sign << 7) | 0x7F);
+    }
+    if (std::isinf(v)) {
+        const int sign = std::signbit(v) ? 1 : 0;
         return static_cast<uint8_t>((sign << 7) | 0x7E);
     }
     if (std::fpclassify(v) == FP_ZERO) {
         return static_cast<uint8_t>(std::signbit(v) ? 0x80 : 0x00);
     }
 
-    float absv = std::fabs(v);
-    int sign = std::signbit(v) ? 1 : 0;
-    if (absv < kMinSubnormal) {
+    const float absv = std::fabs(v);
+    const int sign = std::signbit(v) ? 1 : 0;
+    if (absv < kE4M3EncodeMinSubnormal) {
         return static_cast<uint8_t>(sign << 7);
     }
-    if (absv >= kMaxVal) {
+    if (absv >= kE4M3EncodeMaxFinite) {
         return static_cast<uint8_t>((sign << 7) | 0x7E);
     }
-    if (absv < kMinNormal) {
-        float mant_scaled = absv / kMinSubnormal;
-        if (mant_scaled < 0.0f) {
-            mant_scaled = 0.0f;
-        }
-        int mant = RoundToNearestEvenFloatPos(mant_scaled);
-        if (mant <= 0) {
-            return static_cast<uint8_t>(sign << 7);
-        }
-        if (mant >= 8) {
-            return static_cast<uint8_t>((sign << 7) | (1 << 3));
-        }
-        return static_cast<uint8_t>((sign << 7) | mant);
+    if (absv < kE4M3EncodeMinNormal) {
+        return EncodeE4M3SubnormalFromAbsTimes512(absv / kE4M3EncodeMinSubnormal, sign);
     }
-
-    int exp_raw;
-    float frac = std::frexp(absv, &exp_raw);
-    float norm_mant = frac * 2.0f;
-    int unbiased_exp = exp_raw - 1;
-    int stored_exp = unbiased_exp + 7;
-
-    float mant_scaled = (norm_mant - 1.0f) * 8.0f;
-    if (mant_scaled < 0.0f) {
-        mant_scaled = 0.0f;
-    }
-    int mant = RoundToNearestEvenFloatPos(mant_scaled);
-    if (mant >= 8) {
-        mant = 0;
-        stored_exp += 1;
-    }
-    if (stored_exp >= 15) {
-        return static_cast<uint8_t>((sign << 7) | 0x7E);
-    }
-    if (stored_exp <= 0) {
-        float scaled = absv / kMinSubnormal;
-        if (scaled < 0.0f) {
-            scaled = 0.0f;
-        }
-        int sub_mant = RoundToNearestEvenFloatPos(scaled);
-        if (sub_mant <= 0) {
-            return static_cast<uint8_t>(sign << 7);
-        }
-        if (sub_mant >= 8) {
-            return static_cast<uint8_t>((sign << 7) | (1 << 3));
-        }
-        return static_cast<uint8_t>((sign << 7) | sub_mant);
-    }
-
-    uint8_t exp_bits = static_cast<uint8_t>(stored_exp & 0xF);
-    uint8_t mant_bits = static_cast<uint8_t>(mant & 0x7);
-    return static_cast<uint8_t>((sign << 7) | (exp_bits << 3) | mant_bits);
+    return EncodeE4M3NormalMagnitude(absv, sign);
 }
 
 static inline uint8_t EncodeHf8Exponent(int exponent, int expBitCount)
