@@ -50,7 +50,9 @@ Stitch 配置决定了多少个 root function 被同时下发调度。
 @pypto.frontend.jit(
     runtime_options={"stitch_function_max_num": 128}
 )
+
 ```
+
 **参考资料**
 - [stitch_function_max_num 参数设置说明](../../../../docs/api/config/pypto-frontend-jit.md)
 
@@ -70,21 +72,109 @@ Stitch 配置决定了多少个 root function 被同时下发调度。
 
 #### 2.1 Matmul TileShape 深度调优
 
-主要关注**减少重复载入**和**K轴分核**两个调优手段。
-**减少重复载入**
+Matmul 的 TileShape 深度调优需要根据 M、N、K 的实际大小和硬件规格综合选择策略。核心目标是：保证分满核的前提下，最大化算数强度 / L2 命中率，最小化重复载入。
+
+**调优决策树**：
+
+```
+
+M、N 是否足够大（可同时分满 M、N 轴）？
+├─ 是（训练场景，如 M=N=6144）
+│   ├─ 目标 → Compute Bound（算数强度最大化）
+│   ├─ TileShape → mL1=nL1=128~256，如 [128,128],[64,256],[256,256]
+│   └─ 额外优化 → 分核布局调优提升 L2 命中率（→ §6）
+│
+├─ M 或 N 中有一维较小（推理/Decode 场景）
+│   ├─ 目标 → Memory Bound（减少重复载入）
+│   ├─ 策略 → 小维不切分（mL1=M 或 nL1=N），kAL1/kBL1 独立配置
+│   └─ 示例 → [96,96],[64,1536,256],[128,128]（A 矩阵驻留 L1）
+│
+└─ M、N 均小，K 极大
+    ├─ 目标 → 增加并行度
+    ├─ 策略 → K 轴分核（enable_split_k=True）
+    └─ 示例 → [128,128],[64,256],[128,128], enable_split_k=True
+
+```
+
+##### 2.1.1 减少重复载入
+
+当 M、N 中有某个维度相对较小时，Matmul 切分前的算数强度较小，一般只能达到 Memory Bound。此时优化核心是：保证分满核（核使用率 ≥ 80%）的前提下，最小化 MTE2 重复载入量。
+
+**方式一：增大 L1 减少切分次数**
+
 ```python
 pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 256])
-```
-每一个list中，前面的代表L0的切块大小，后面的代表L1的切块大小。L1的设置的大一些，可以减少重复载入。
 
-**K轴分核**
+```
+
+每一个 list 中前面的代表 L0 的切块大小，后面的代表 L1 的切块大小。L1 设大可以减少切分次数，从而减少重复载入。
+
+**方式二：K 轴独立配置，A 矩阵驻留 L1（推荐）**
+
 ```python
-pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
-    enable_split_k=True)          # K轴分核
+pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kAL1, kBL1], [nL0, nL1])
+
 ```
 
-**参数说明**：
-- `enable_split_k`：K轴分核
+- `kAL1 = K`：A 矩阵的 K 轴整体搬入 L1 并驻留，消除 A 的重复搬运
+- `kBL1 = 256`：B 矩阵的 K 轴按 256 分批载入
+
+示例（M=96, K=1536, N=3072, FP16）：
+
+```python
+pypto.set_cube_tile_shapes([96, 96], [64, 1536, 256], [128, 128])
+
+```
+
+**理论依据**：MTE2 总载入量 = M·K·N/nL1·aByte + K·N·M/mL1·bByte。当 A 矩阵驻留 L1 时，载入量降为 M·K·aByte + K·N·bByte，消除 A 矩阵的重复搬运。
+
+##### 2.1.2 K 轴分核
+
+当 M、N 较小而 K 轴极大时，仅在 M、N 轴做分核可能无法用满核。此时将 K 轴切分到多核并行计算部分和再累加。提供两种方式：
+
+**方式一：自动切 K（`enable_split_k=True`）**
+
+框架自动将 K 轴切分到多核并行，使用简单，但部分和累加顺序不定导致**非确定性计算**，逐次运行结果可能存在微小差异。
+
+```python
+pypto.set_cube_tile_shapes([128, 128], [64, 256], [128, 128],
+    enable_split_k=True)
+
+```
+
+**约束**：
+- 仅支持 2 维矩阵（3 维/4 维不支持）
+- 仅支持 out_dtype 为 DT_FP32 或 DT_INT32
+- 不支持叠加 Bias、FixPipe 反量化
+
+**方式二：手动切 K（前端 loop 实现）**
+
+在前端手动编写 K 轴循环，显式控制分块加载和部分和累加，累加顺序确定，**不存在确定性计算问题**。
+
+```python
+c = pypto.Tensor([M, N], pypto.DT_FP32)
+c.fill(0.0)
+for kIdx in pypto.loop(K // kL1, name="LOOP_K", idx_name="kIdx"):
+    a_block = pypto.view(a, [M, kL1], [0, kIdx * kL1])
+    b_block = pypto.view(b, [kL1, N], [kIdx * kL1, 0])
+    pypto.set_cube_tile_shapes([mL1, mL1], [64, kL1], [nL1, nL1])
+    c_partial = pypto.matmul(a_block, b_block, out_dtype=pypto.DT_FP32)
+    c = c + c_partial
+
+```
+
+**选择建议**：精度敏感场景优先使用方式二（手动切 K）；追求简便且接受微小精度波动的场景使用方式一（`enable_split_k=True`）。
+
+##### 2.1.3 TileShape 选择策略速查
+
+| Shape 特征 | 典型场景 | TileShape 策略 | 收益目标 |
+|-----------|---------|---------------|---------|
+| M,N,K 均大（>4096） | 大 Batch 训练 | [128,128],[64,256],[256,256] + 分核布局优化（见 §6） | Compute Bound + L2 调优 |
+| M=N=6144 | 大 Shape Matmul | mL1=128,nL1=256,mDim=6,nDim=4 | 2.1ms→1.6ms（+31%） |
+| M<256，N,K 大 | Decode/推理 | mL1=M, kAL1=K, kBL1=256, nL1≥128 | 消除 A 矩阵重复载入 |
+| M=96,K=1536,N=3072 | 典型推理 | [96,96],[64,1536,256],[128,128] | A 矩阵驻留 L1 |
+| M,N 小，K>4096 | 特殊 Shape | enable_split_k=True | K 轴多核并行 |
+| M 极大，N 极小 | 小 Shape Matmul | 优先走 I-1（Vector 预处理），再按上述策略 | 见核内调优 |
 
 #### 2.2 Vector TileShape 深度调优
 
@@ -94,6 +184,7 @@ pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
 # 上下游 TileShape 对齐时，可以合并在一个子图
 # Transpose TileShape: (64, 128)
 # Add TileShape 应优先选择: (128, 64)
+
 ```
 
 **原则 2**：根据泳道图上的子图大小和并行度调整
@@ -113,6 +204,7 @@ pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
 #### 3.0 核使用率分析流程
 
 ```
+
 采集泳道图数据（debug_options={"runtime_debug_mode": 1}）
     ↓
 统计每个 leafHash 分布在多少个 core 上
@@ -120,6 +212,7 @@ pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
 对每个 AIC/AIV leafHash，判断核是否用满
      ├─ 核未满 → 优先通过 TileShape 调整用满核（跳到 3.2）
     └─ 核已满 → 进入合图阶段（跳到第 4 节）
+
 ```
 
 #### 3.1 统计核使用率
@@ -130,6 +223,7 @@ pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
 
 ```bash
 python3 scripts/analyze_core_usage.py <output_dir> [--device-id N]
+
 ```
 
 **参数说明**：
@@ -139,6 +233,7 @@ python3 scripts/analyze_core_usage.py <output_dir> [--device-id N]
 **输出示例**：
 
 ```
+
 Theoretical cores: AIC=24, AIV=48
 
 psgId | type | tasks |    used/total (usage%) |  avg(us) | total(us) |    status | suggestion
@@ -154,6 +249,7 @@ Summary:
 
 Next step: For NOT FULL leafHashes, use leafhash_to_code.py to map to frontend code,
            then adjust set_cube_tile_shapes() to increase task count.
+
 ```
 
 **关键指标说明**：
@@ -173,6 +269,7 @@ Next step: For NOT FULL leafHashes, use leafhash_to_code.py to map to frontend c
 
 ```bash
 python3 scripts/leafhash_to_code.py <output_dir>
+
 ```
 
 2. 定位到对应的 `pypto.set_cube_tile_shapes()` 调用
@@ -185,6 +282,7 @@ pypto.set_cube_tile_shapes([16, 16], [128, 256], [256, 256])
 
 # 减小 nL0/nL1：4096/128=32 个 N 轴任务 → 可分配到更多核
 pypto.set_cube_tile_shapes([16, 16], [128, 256], [128, 128])
+
 ```
 
 4. **约束**：`nL0 <= nL1 && nL1 % nL0 == 0`，否则编译报错
@@ -205,6 +303,7 @@ pypto.set_cube_tile_shapes([16, 16], [128, 256], [128, 128])
 **负载均衡分析流程**：
 
 ```
+
 Step 1: 按总耗时排序所有子图
     → 使用 analyze_core_usage.py 输出，按 total(us) 降序排列
     → 识别瓶颈子图（total 最大的子图）
@@ -227,6 +326,7 @@ Step 4: 重新采集数据验证
 
 Step 5: 负载均衡达标后进入合图阶段
     → 条件：瓶颈子图 total 与次大 total 差距 < 20%，或连续 3 轮调整无法改善
+
 ```
 
 **负载均衡优化原则**：
@@ -248,6 +348,7 @@ Step 5: 负载均衡达标后进入合图阶段
 
 瓶颈占比: 905.0 / 总计 2210.0 = 41.0%
 瓶颈与次大差距: (905.0 - 665.5) / 905.0 = 26.4% → 存在严重负载不均
+
 ```
 
 #### 3.4 核已满后的合图阶段
@@ -298,6 +399,7 @@ python3 scripts/analyze_swimlane.py \
 #   - t/iter 列 → 单个 root function 中子图数量，合图粒度参考值
 
 # Step 3: 根据分析结果设置配置
+
 ```
 
 #### 4.0 确定合图粒度
@@ -307,9 +409,11 @@ python3 scripts/analyze_swimlane.py \
 **获取方式**：从 `merged_swimlane.json` 中每个事件的 `args.hashOrder-hint` 字段解析，格式为：
 
 ```
+
 l1ReuseInfo hashOrder: func15_1, subGraphCount: 90
 cubeMergeInfo hashOrder: func15_1, subGraphCount: 90
 vecMergeInfo hashOrder: func5_4, subGraphCount: 40
+
 ```
 
 **自动分析**：运行 `analyze_swimlane.py` 后，Merge Tuning Guide 部分会自动输出每个 hashOrder 的 subGraphCount、t/iter 和建议粒度。
@@ -333,6 +437,7 @@ for b_idx in pypto.loop(b, ...):
         for s1_idx in pypto.loop(s_loop, ...):
             for s2_idx in pypto.loop(s_loop, ...):   # 最内层
                 ...
+
 ```
 
 分析方法：
@@ -341,8 +446,10 @@ for b_idx in pypto.loop(b, ...):
 3. `outer_loops = 各外层循环次数的乘积`
 
 可用 `--outer-loops` 参数手动指定精确值：
+
 ```bash
 python3 scripts/analyze_swimlane.py output/output_xxx --outer-loops 32
+
 ```
 
 #### t/iter 对合图粒度的指导
@@ -427,7 +534,9 @@ Merge Tuning Guide (hashOrder = merge key)
         "vec_nbuffer_setting": {"DEFAULT": 1, "func5_4": 8}
     }
 )
+
 ```
+
 **适用场景**：自动切图的vector task之间有直接依赖关系，且每一个task耗时很短（<10us）
 
 **参数说明**
@@ -452,6 +561,7 @@ Merge Tuning Guide (hashOrder = merge key)
 pypto.set_pass_options(sg_set_scope=1)
 # ... 连续的 Vector 操作（有直接数据依赖、同循环层级、无 Cube 夹杂）...
 pypto.set_pass_options(sg_set_scope=-1)
+
 ```
 
 **约束**：
@@ -469,6 +579,7 @@ pypto.set_pass_options(sg_set_scope=-1)
 ```bash
 python3 scripts/analyze_aiv_dep_chains.py <output_dir>
 python3 scripts/analyze_aiv_dep_chains.py <output_dir> --json result.json
+
 ```
 
 **输入文件**（`output_dir` 中）：
@@ -480,6 +591,7 @@ python3 scripts/analyze_aiv_dep_chains.py <output_dir> --json result.json
 **Part 1: 原始依赖链**（完整链路，不截断）
 
 ```
+
 链路A（16次）
 3907163356593077760
   │
@@ -491,6 +603,7 @@ python3 scripts/analyze_aiv_dep_chains.py <output_dir> --json result.json
   3907163356593077760: op=10001, psg=1, [vec] CAST+CAST
   2360323566658746396: op=10002, psg=2, [vec] MUL+CAST+CAST+ROWSUM_SINGLE
   2768731787098226973: op=10001, psg=1, [vec] MULS+SUB+EXP+DIV+SUB+MUL+CAST+CAST
+
 ```
 
 **Part 2: sg_set_scope 优化建议**（在 cube 边界截断）
@@ -500,6 +613,7 @@ python3 scripts/analyze_aiv_dep_chains.py <output_dir> --json result.json
 - 截断后 ≥2 节点且 psgId 有变化的链段，建议用 `sg_set_scope` 合并
 
 ```
+
 sg_set_scope 优化建议
 
   建议 1: 截断后 3 个节点, 16 次, psgId 变化: 1 → 2 → 1
@@ -515,6 +629,7 @@ sg_set_scope 优化建议
     2768731787098226973: psg=1, [vec] MULS+SUB+EXP+DIV+SUB+MUL+CAST+CAST [✂ cube边界]
     → 建议: 用 sg_set_scope 包裹 psgId 1 → 2 → 1 的 vector 操作
     ✂ 截断点 (后继含 cube): ['2768731787098226973']
+
 ```
 
 **输出字段说明**：
@@ -541,6 +656,7 @@ python3 scripts/leafhash_to_code.py <output_dir> --leafhash <hash>
 
 # 查看所有 leafHash
 python3 scripts/leafhash_to_code.py <output_dir>
+
 ```
 
 **验证检查清单**（对建议中的每个链段逐项检查）：
@@ -599,7 +715,9 @@ python3 scripts/leafhash_to_code.py <output_dir>
 @pypto.frontend.jit(
     pass_options={"cube_l1_reuse_setting": {"DEFAULT": 2, "func15_1": 8}}
 )
+
 ```
+
 **调优方法**：
 1. 运行 [analyze_swimlane.py](scripts/analyze_swimlane.py)，查看 `[AIC] cube_l1_reuse_setting` 部分的输出
 2. 根据 `hashOrder` 确定合图 key，优先对 total 耗时大且有重复搬运的子图调优
@@ -625,6 +743,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 @pypto.frontend.jit(
     pass_options={"cube_nbuffer_setting": {"DEFAULT": 2, "func15_1": 4}}
 )
+
 ```
 
 **调优方法**：
@@ -652,6 +771,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 4. **用 analyze_swimlane.py 确定参数**：hashOrder 即合图 key，t/iter 指导粒度。
 
 **反面案例**（flash_attention_score_grad 实测）：
+
 ```python
 # baseline: 728us, Task=1664
 "cube_l1_reuse_setting": {-1: 8},
@@ -661,6 +781,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 # 过度合图: 734us ❌ 性能退化
 "cube_l1_reuse_setting": {-1: 8},
 "cube_nbuffer_setting": {-1: 16}
+
 ```
 
 ##### 4.2.4 自动合图模式（空字典 `{}`）的风险
@@ -673,11 +794,13 @@ python3 scripts/leafhash_to_code.py <output_dir>
 - 核心利用率大幅下降（如 58%→48%）
 
 **反面案例**（flash_attention_score_grad 实测）：
+
 ```python
 # 自动模式: 1038us ❌ 性能退化 42%
 "cube_l1_reuse_setting": {},
 "cube_nbuffer_setting": {}
 # Task Count: 1664 → 6400, 利用率: 58.8% → 48.7%
+
 ```
 
 **建议**：始终使用 [analyze_swimlane.py](scripts/analyze_swimlane.py) 分析泳道图获取 hashOrder 和 t/iter 后手动精确配置，避免使用空字典 `{}` 自动模式。
@@ -689,6 +812,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 
 ```python
 @pypto.frontend.jit(runtime_options={"device_sched_mode": 1})
+
 ```
 
 **调优建议**：
@@ -700,13 +824,67 @@ python3 scripts/leafhash_to_code.py <output_dir>
 - [device_sched_mode 参数设置说明](../../../../docs/api/config/pypto-frontend-jit.md)
 
 
+### 6. Matmul 访存布局优化（L2 命中率优化）
+
+**问题**：大 shape Matmul 场景下（M、N、K 全部较大），即使 TileShape 配置了推荐值，固定的分核布局可能导致 L2 命中率偏低、MTE2 带宽利用率不足。
+
+**原理**：L2 命中率由单轮次分核数 mDim、nDim 和 mL1、nL1 共同决定：
+
+```
+
+l2_hit_ratio = 1 - (1/(nDim·nL1) + 1/(mDim·mL1)) / (1/nL1 + 1/mL1)
+
+```
+
+**最优条件**：`nDim·nL1 = mDim·mL1`，即 M、N 轴分核到 L1 的数据量相等，L2 复用最大化。
+
+例如 mL1=128、nL1=256、24 核平台时，推荐：
+- mDim=6、nDim=4 → 6×128 = 4×256 = 1024 ✅
+- mDim=8、nDim=3 → 8×128 ≈ 3×256 = 768 ✅
+
+**优化方法**：在 M、N 轴外层再套一层 loop，手动控制每轮 M 和 N 的计算范围，从而控制分核数：
+
+```python
+def create_mm_with_l2_opt(M, K, N, mL1, nL1, mDim, nDim):
+    @pypto.frontend.jit(...)
+    def matmul_kernel(a, b):
+        pypto.set_cube_tile_shapes([mL1, mL1], [64, 256], [nL1, nL1])
+
+        m_view = mL1 * mDim
+        n_view = nL1 * nDim
+        m_loop = (M + m_view - 1) // m_view
+        n_loop = (N + n_view - 1) // n_view
+        out = pypto.Tensor([M, N], pypto.DT_FP16)
+
+        for m_idx in pypto.loop(m_loop, name="LOOP_m", idx_name="m_idx"):
+            for n_idx in pypto.loop(n_loop, name="LOOP_n", idx_name="n_idx"):
+                a_block = a[m_idx*m_view : m_idx*m_view+m_view, :]
+                b_block = b[:, n_idx*n_view : n_idx*n_view+n_view]
+                out_block = pypto.matmul(a_block, b_block,
+                    out_dtype=pypto.DT_FP16)
+                out[m_idx*m_view:m_idx*m_view+m_view,
+                    n_idx*n_view:n_idx*n_view+n_view] = out_block
+        return out
+    return matmul_kernel
+
+```
+
+**调试方法**：
+1. 从泳道图或气泡分析中检查 MTE2 带宽利用率（是否明显低于 HBM 带宽）
+2. 根据 mL1/nL1 和芯片总核数，按最优条件计算 mDim/nDim
+3. 按上述模式改写，重新采集性能数据对比
+
+**收益**：M=N=K=6144、TileShape=[128,128],[64,256],[256,256] 场景：
+- 默认分核：2.1ms，等效算力约 220 TFLOPS
+- L2 优化（mDim=6,nDim=4）：1.6ms，等效算力约 290 TFLOPS（+31%）
+
 ## 调优检查清单
 
 **⛔ 必须按以下清单逐项执行。每项标记为 ✅已尝试 或 ❌已失败（附原因），禁止跳过。完整优化点信息参考 [shared/optimization_catalog.md](../shared/optimization_catalog.md)。**
 
 **优化优先级**：
-1. ⭐⭐⭐ **P0 - 核使用率分析** → 详见 [S-1]
-2. ⭐⭐⭐ **P1 - 负载均衡** → 详见 [S-3]
+1. ⭐⭐⭐ **P0 - 核使用率分析 + 核填充** → 详见 [S-1][S-2]
+2. ⭐⭐⭐ **P1 - 负载均衡 + TileShape 深度调优 + 访存布局优化** → 详见 [S-3][S-11][S-12][S-13]
 3. ⭐⭐⭐ **P2 - 手动合图（sg_set_scope）** → 详见 [S-4]
 4. ⭐⭐ **P3 - 自动合图** → 详见 [S-5][S-6][S-7][S-8]
 5. ⭐ **P4 - Stitch + 调度策略** → 详见 [S-9][S-10]
@@ -719,7 +897,9 @@ python3 scripts/leafhash_to_code.py <output_dir>
 **🔥 P1 - 负载均衡 [S-3]**（核填充后强制）：
 - [ ] [S-3] 是否按 total(us) 降序排列所有子图，识别瓶颈子图
 - [ ] 瓶颈差距是否已量化（>20% 必须优化）
-- [ ] [S-11] 是否针对瓶颈子图尝试了 TileShape 深度调优（每次只调一个子图）
+- [ ] [S-11] 是否针对瓶颈子图尝试了 Cube TileShape 深度调优（每次只调一个子图）
+- [ ] [S-12] 是否对 Vector 计算尝试了 Vector TileShape 深度调优（调整 TileShape 对齐上下游）
+- [ ] [S-13] 大 shape Matmul 是否检查了 MTE2 带宽利用率并尝试了分核布局优化
 
 **🔥 P2 - 手动合图 [S-4]**（最重要但最易跳过）：
 - [ ] [S-4] 是否运行 analyze_aiv_dep_chains.py 分析 AIV 依赖链

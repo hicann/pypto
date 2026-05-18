@@ -16,51 +16,53 @@
 
 | 编号 | 优化方向 | 优先级 | 适用条件 | 详细指南 |
 |------|---------|--------|---------|---------|
-| F-1 | 任务粒度检查 | ⭐⭐⭐ | 含 Matmul 算子 | tune-frontend §1.2 |
-| F-2 | 循环体计算量 | ⭐⭐⭐ | 含内层 loop | tune-frontend §1.2 |
-| F-3 | 循环次数优化 | ⭐⭐⭐ | loop 次数 > 100 | tune-frontend §1.2 |
-| F-4 | Reshape 全局优化 | ⭐⭐⭐ | 有 reshape 或 shape 维度大于 2D | tune-frontend §2 |
-| F-5 | 静态轴改 Python for | ⭐⭐ | 有静态轴用 pypto.loop | tune-frontend §1.1 |
-| F-6 | 合并独立 loop | ⭐⭐ | 有多个独立 loop | tune-frontend §1.3 |
-| F-7 | 外层动态轴切块 | ⭐⭐ | 外层动态轴范围大 | tune-frontend §1.2.1 |
-| F-8 | 内层 unroll | ⭐⭐ | 内层动态轴范围大 | tune-frontend §1.2.2 |
-| F-9 | Cube TileShape 设置 | ⭐⭐ | 含 Matmul | tune-frontend §3.2 |
-| F-10 | Vector TileShape 设置 | ⭐⭐ | 含 Vector 计算 | tune-frontend §3.3 |
-| F-11 | 常量配置调整 | ⭐ | 算子有 BLOCK_SIZE 等常量 | tune-frontend §A2 |
-| F-12 | 输入矩阵 NZ 格式 | ⭐ | 权重矩阵较大 | tune-frontend 局部§1 |
-| F-13 | Transpose 优化 | ⭐ | 含 transpose+matmul | tune-frontend 局部§2 |
-| F-14 | 冗余搬运消除 | ⭐ | 有 concat/assemble 搬运 | tune-frontend 局部§3 |
-| F-15 | 尾轴 Broadcast 合轴（combine_axis） | ⭐ | 存在尾轴为1的 broadcast 二元运算 | tune-frontend 局部§4 |
+| F-1 | 任务粒度检查 | ⭐⭐⭐ | 含 Matmul 算子 | tune-frontend SKILL.md §1.2 |
+| F-2 | 循环体计算量 | ⭐⭐⭐ | 含内层 loop | tune-frontend SKILL.md §1.2 |
+| F-3 | 循环次数优化 | ⭐⭐⭐ | loop 次数 > 100 | tune-frontend SKILL.md §1.2 |
+| F-4 | Reshape 全局优化（含 squeeze/unsqueeze → reshape inplace） | ⭐⭐⭐ | 有 reshape/squeeze/unsqueeze 或 shape 维度大于 2D | tune-frontend SKILL.md §2 |
+| F-5 | 静态轴改 Python for | ⭐⭐ | 有静态轴用 pypto.loop | tune-frontend SKILL.md §1.1 |
+| F-6 | 合并独立 loop | ⭐⭐ | 有多个独立 loop | tune-frontend SKILL.md §1.3 |
+| F-7 | 外层动态轴切块 | ⭐⭐ | 外层动态轴范围大 | tune-frontend SKILL.md §1.2.1 |
+| F-8 | 内层 unroll | ⭐⭐ | 内层动态轴范围大 | tune-frontend SKILL.md §1.2.2 |
+| F-9 | Cube TileShape 设置 | ⭐⭐ | 含 Matmul | tune-frontend SKILL.md §3.2 |
+| F-10 | Vector TileShape 设置 | ⭐⭐ | 含 Vector 计算 | tune-frontend SKILL.md §3.3 |
+| F-11 | 常量配置调整 | ⭐ | 算子有 BLOCK_SIZE 等常量 | tune-frontend SKILL.md §A2 |
+| F-12 | 输入矩阵 NZ 格式 | ⭐ | 权重矩阵较大 | tune-frontend SKILL.md 局部§1 |
+| F-13 | Transpose 优化 | ⭐ | 含 transpose+matmul | tune-frontend SKILL.md 局部§2 |
+| F-14 | 冗余搬运消除 | ⭐ | 有 concat/assemble 搬运 | tune-frontend SKILL.md 局部§3 |
+| F-15 | 尾轴 Broadcast 合轴（combine_axis） | ⭐ | 存在尾轴为1的 broadcast 二元运算 | tune-frontend SKILL.md 局部§4 |
 
 ### 深度调优（tune-swimlane）
 
 | 编号 | 优化方向 | 优先级 | 适用条件 | 详细指南 | 前置条件 |
 |------|---------|--------|---------|---------|---------|
-| S-1 | 核使用率分析 | ⭐⭐⭐ | 所有算子 | tune-swimlane §3.1 | 无（强制首选） |
-| S-2 | 核填充（TileShape 调整增任务数） | ⭐⭐⭐ | 核未满 | tune-swimlane §3.2 | S-1 完成 |
-| S-3 | 负载均衡分析 | ⭐⭐⭐ | 多子图算子 | tune-swimlane §3.3 | S-2 完成 |
-| S-4 | Vector 手动合图（sg_set_scope） | ⭐⭐⭐ | 有连续 AIV 操作 | tune-swimlane §4.1.2 | S-3 完成 |
-| S-5 | Vector 自动合图（nbuffer） | ⭐⭐ | 短耗时 AIV 任务 | tune-swimlane §4.1.1 | S-3 完成 |
-| S-6 | Cube L1Reuse（消除重复搬运） | ⭐⭐ | AIC 核满、有重复搬运 | tune-swimlane §4.2.1 | S-3 完成 |
-| S-7 | Cube CubeNBuffer（合并同构子图） | ⭐⭐ | AIC 核满、短耗时 | tune-swimlane §4.2.2 | S-3 完成 |
-| S-8 | L1Reuse + CubeNBuffer 协同 | ⭐ | 已有 S-6/S-7 基础 | tune-swimlane §4.2.3 | S-6 或 S-7 |
-| S-9 | Stitch 调优 | ⭐ | 所有算子 | tune-swimlane §1 | 无 |
-| S-10 | 调度策略 | ⭐ | 依赖简单的上下游 | tune-swimlane §5 | 无 |
-| S-11 | TileShape 深度调优 | ⭐⭐ | 需减少重复载入/K 轴分核 | tune-swimlane §2 | S-2 完成 |
+| S-1 | 核使用率分析 | ⭐⭐⭐ | 所有算子 | tune-swimlane SKILL.md §3.1 | 无（强制首选） |
+| S-2 | 核填充（TileShape 调整增任务数） | ⭐⭐⭐ | 核未满 | tune-swimlane SKILL.md §3.2 | S-1 完成 |
+| S-3 | 负载均衡分析 | ⭐⭐⭐ | 多子图算子 | tune-swimlane SKILL.md §3.3 | S-2 完成 |
+| S-4 | Vector 手动合图（sg_set_scope） | ⭐⭐⭐ | 有连续 AIV 操作 | tune-swimlane SKILL.md §4.1.2 | S-3 完成 |
+| S-5 | Vector 自动合图（nbuffer） | ⭐⭐ | 短耗时 AIV 任务 | tune-swimlane SKILL.md §4.1.1 | S-3 完成 |
+| S-6 | Cube L1Reuse（消除重复搬运） | ⭐⭐ | AIC 核满、有重复搬运 | tune-swimlane SKILL.md §4.2.1 | S-3 完成 |
+| S-7 | Cube CubeNBuffer（合并同构子图） | ⭐⭐ | AIC 核满、短耗时 | tune-swimlane SKILL.md §4.2.2 | S-3 完成 |
+| S-8 | L1Reuse + CubeNBuffer 协同 | ⭐ | 已有 S-6/S-7 基础 | tune-swimlane SKILL.md §4.2.3 | S-6 或 S-7 |
+| S-9 | Stitch 调优 | ⭐ | 所有算子 | tune-swimlane SKILL.md §1 | 无 |
+| S-10 | 调度策略 | ⭐ | 依赖简单的上下游 | tune-swimlane SKILL.md §5 | 无 |
+| S-11 | Cube TileShape 深度调优 | ⭐⭐ | Matmul 需减少重复载入/K 轴分核 | tune-swimlane SKILL.md §2.1 | S-2 完成 |
+| S-12 | Vector TileShape 深度调优 | ⭐⭐ | Vector 计算需深度调优 | tune-swimlane SKILL.md §2.2 | S-2 完成 |
+| S-13 | Matmul 分核布局优化（L2 命中率优化） | ⭐⭐ | 大 shape Matmul L2 命中率低、MTE2 带宽利用率不足 | tune-swimlane SKILL.md §6 | S-2 完成 |
 
 ### 核内调优（tune-incore）
 
 | 编号 | 优化方向 | 优先级 | 适用条件 | 详细指南 |
 |------|---------|--------|---------|---------|
-| I-1 | 小 Shape 矩阵乘 | ⭐⭐⭐ | Matmul Shape 特殊 | tune-incore §1 |
-| I-2 | L2 Cache 策略（权重矩阵 NONE_CACHEABLE） | ⭐⭐ | 含大型权重矩阵 / 融合算子 | tune-incore §2 |
-| I-3 | 冗余计算消依赖 | ⭐⭐ | 一对多子图依赖 | tune-incore §3 |
-| I-4 | 尾轴长度优化 | ⭐⭐ | 尾轴 < 32B 对齐 | tune-incore §4 |
-| I-5 | TileOperation 实现检查 | ⭐ | 上述优化无效时 | tune-incore §5 |
-| I-6 | 操作数连续性检查 | ⭐⭐ | TileOperation 输入非连续 | tune-incore §6 |
-| I-7 | Gather/Scatter 数据搬运方向优化 | ⭐⭐ | 有 HBM↔L1 搬运瓶颈 | tune-incore §7 |
-| I-8 | submit_before_loop 计算与搬运重叠 | ⭐⭐ | 子 loop 未正确提交 | tune-incore §8 |
-| I-9 | valid_shape 尾块零填充避免 | ⭐⭐ | 尾块存在无效零填充计算 | tune-incore §9 |
+| I-1 | 小 Shape 矩阵乘 | ⭐⭐⭐ | Matmul Shape 特殊 | tune-incore SKILL.md §1 |
+| I-2 | L2 Cache 策略（权重矩阵 NONE_CACHEABLE） | ⭐⭐ | 含大型权重矩阵 / 融合算子 | tune-incore SKILL.md §2 |
+| I-3 | 冗余计算消依赖 | ⭐⭐ | 一对多子图依赖 | tune-incore SKILL.md §3 |
+| I-4 | 尾轴长度优化 | ⭐⭐ | 尾轴 < 32B 对齐 | tune-incore SKILL.md §4 |
+| I-5 | TileOperation 实现检查 | ⭐ | 上述优化无效时 | tune-incore SKILL.md §5 |
+| I-6 | 操作数连续性检查 | ⭐⭐ | TileOperation 输入非连续 | tune-incore SKILL.md §6 |
+| I-7 | Gather/Scatter 数据搬运方向优化 | ⭐⭐ | 有 HBM↔L1 搬运瓶颈 | tune-incore SKILL.md §7 |
+| I-8 | submit_before_loop 计算与搬运重叠 | ⭐⭐ | 子 loop 未正确提交 | tune-incore SKILL.md §8 |
+| I-9 | valid_shape 尾块零填充避免 | ⭐⭐ | 尾块存在无效零填充计算 | tune-incore SKILL.md §9 |
 
 ---
 
@@ -72,8 +74,10 @@
 
 | 优先级 | 优化点 | 所在阶段 | 操作速览 |
 |--------|--------|---------|---------|
+| ⭐⭐⭐ | F-2 循环体计算量 | 开箱 | 增大切块或 loop_unroll |
 | ⭐⭐⭐ | F-3 循环次数优化 | 开箱 | 增大 tile size 或切块 |
 | ⭐⭐⭐ | F-8 内层 unroll | 开箱 | `unroll_list=[64,16,4]` |
+| ⭐⭐ | F-6 合并独立 loop | 开箱 | 合并无数据依赖的独立 loop |
 | ⭐⭐ | S-9 Stitch 调优 | 深度 | `stitch_function_max_num: 128` |
 | ⭐⭐ | S-4 / S-5 合图 | 深度 | sg_set_scope 或 nbuffer |
 | ⭐ | S-10 调度策略 | 深度 | `device_sched_mode` 调整 |
@@ -86,7 +90,10 @@
 | ⭐⭐⭐ | F-9 Cube TileShape | 开箱 | 推荐配置 |
 | ⭐⭐⭐ | S-1 核使用率分析 | 深度 | `analyze_core_usage.py` |
 | ⭐⭐⭐ | S-2 核填充 | 深度 | 减小 L0/L1 增加任务数 |
-| ⭐⭐ | F-4 Reshape 全局优化 | 开箱 | `reshape(inplace=True)` 外提 + 合轴 |
+| ⭐⭐ | F-4 Reshape 全局优化（含 squeeze/unsqueeze → reshape inplace） | 开箱 | `reshape(inplace=True)` 外提 + 合轴 |
+| ⭐⭐ | F-7 外层动态轴切块 | 开箱 | 切块增加任务数 |
+| ⭐⭐ | F-10 Vector TileShape | 开箱 | 设置 vec_tile_shapes |
+| ⭐⭐ | S-12 Vector TileShape 深度调优 | 深度 | 对齐上下游 TileShape / 泳道图驱动 |
 | ⭐ | S-10 调度策略 | 深度 | `device_sched_mode` |
 | ⭐ | S-6 / S-7 Cube 合图 | 深度 | 核满后再启用 |
 
@@ -95,7 +102,9 @@
 | 优先级 | 优化点 | 所在阶段 | 操作速览 |
 |--------|--------|---------|---------|
 | ⭐⭐⭐ | S-3 负载均衡分析 | 深度 | 按 total(us) 排序 → 调整瓶颈 |
-| ⭐⭐ | S-11 TileShape 深度调优 | 深度 | 减小瓶颈子图 L0/L1 |
+| ⭐⭐ | S-11 Cube TileShape 深度调优 | 深度 | 减小瓶颈子图 L0/L1 |
+| ⭐⭐ | S-13 Matmul 分核布局优化（L2 命中率优化） | 深度 | 优化分核布局提升 L2 命中率 |
+| ⭐⭐ | S-12 Vector TileShape 深度调优 | 深度 | 调整 Vector TileShape 均衡负载 |
 | ⭐ | S-4 手动合图 | 深度 | sg_set_scope 合并子图 |
 
 ### 症状 D：单 task 耗时过长
@@ -151,18 +160,19 @@
 - **解决方案**: 切块减少循环次数
 - **关联优化**: F-7（外层切块）、F-1（任务粒度）
 
-### [F-4] Reshape 全局优化
+### [F-4] Reshape 全局优化（含 squeeze/unsqueeze → reshape inplace）
 
 - **阶段**: 开箱调优
 - **优先级**: ⭐⭐⭐ P0
-- **适用条件**: 算子中存在 `pypto.reshape` 调用，或循环体内参与计算的 tensor shape 维度超过 2D
-- **检查方法**: 逐行扫描算子代码中所有 `pypto.reshape` 调用，分析每个 reshape 是否必须出现在最内层循环体中（参考 tune-frontend §2.1 分析表格）
+- **适用条件**: 算子中存在 `pypto.reshape`/`pypto.squeeze`/`pypto.unsqueeze` 调用，或循环体内参与计算的 tensor shape 维度超过 2D
+- **检查方法**: 使用 `grep -nE "pypto\.(reshape|squeeze|unsqueeze)"` 获取所有相关调用，逐行分析每个操作是否必须出现在最内层循环体中（参考 tune-frontend §2.1 分析表格）
 - **操作指南**: tune-frontend SKILL.md §2
 - **典型收益**: 5-30%
 - **优化方式**:
   - **方式 1（原始输入 reshape 外提）**：对原始输入（函数参数）的 reshape，挪到算子入口（所有 loop 之前），使用 `inplace=True`，避免循环内重复数据拷贝
   - **方式 2（高维计算提前合轴）**：循环体内计算超过 2D 时，进入循环前对原始输入 `reshape inplace` 合轴为 2D，避免循环体内出现 reshape
   - **方式 3（冗余 reshape 删除）**：检查源 shape 是否等于目标 shape 的冗余 reshape（常见于分析阶段误操作的残留），直接删除无效 reshape 调用，消除不必要的数据搬运
+  - **方式 4（squeeze/unsqueeze 替换为 reshape inplace 外提）**：`pypto.squeeze`/`pypto.unsqueeze` 不支持 `inplace=True`。对原始输入的 squeeze/unsqueeze 操作，替换为等价 `pypto.reshape(..., inplace=True)` 并挪到算子入口（所有 loop 之前），消除循环内的重复搬运（详见 tune-frontend §2.2 方式4）
 - **约束**: 只有原始输入（函数参数）可用 `reshape(inplace=True)`，中间结果和输出 tensor 不能 inplace reshape；输出 tensor inplace reshape 会导致切片写入索引断裂（输出全零）
 - **关联优化**: F-9（Cube TileShape）、F-10（Vector TileShape）
 
@@ -240,7 +250,7 @@
 - **优先级**: ⭐ P3
 - **适用条件**: 算子中有 BLOCK_SIZE 等硬编码常量
 - **检查方法**: 搜索算子代码中的常量定义（如 BLOCK_SIZE_KV、TILE_SIZE 等）
-- **操作指南**: 在算子中写死的部分常量配置参数，可以尝试调整优化
+- **操作指南**: tune-frontend SKILL.md §A2
 - **典型收益**: 3-15%
 - **常见调整值**: BLOCK_SIZE 可尝试 16/32/64/128
 
@@ -301,7 +311,7 @@
 - **操作指南**: tune-swimlane SKILL.md §3.1
 - **输出**: 每个 leafHash 的核使用率（used/total），判定 FULL / NOT FULL
 - **后续路径**: 核未满 → S-2；核已满 → S-3
-- **关联优化**: S-2（核填充）、S-11（TileShape 深度调优）
+- **关联优化**: S-2（核填充）、S-11（Cube TileShape 深度调优）
 
 ### [S-2] 核填充（TileShape 调整增任务数）
 
@@ -399,15 +409,40 @@
 - **配置示例**: `runtime_options={"device_sched_mode": 1}`
 - **调优方法**: 尝试不同调度策略，值域范围 [0, 3]
 
-### [S-11] TileShape 深度调优
+### [S-11] Cube TileShape 深度调优
 
 - **阶段**: 深度调优
 - **优先级**: ⭐⭐ P2
-- **适用条件**: 需减少重复载入或 K 轴分核
+- **适用条件**: Matmul 需减少重复载入 / K 轴分核
 - **前置条件**: S-2 完成
-- **操作指南**: tune-swimlane SKILL.md §2
-- **优化手段**: 减少重复载入（增大 L1）和 K 轴分核（`enable_split_k=True`）
-- **Vector 原则**: 下游 TileShape 尽可能使用上游输出 TileShape；归约轴不切分
+- **操作指南**: tune-swimlane SKILL.md §2.1
+- **优化手段**:
+  - **减少重复载入**（增大 L1 或用 `[kL0, kAL1, kBL1]` 让 A 矩阵驻留 L1）
+  - **K 轴分核**（`enable_split_k=True` 自动切 K 但有非确定性计算问题；或前端手动 loop 切 K，无确定性计算问题，详见 swimlane §2.1.2）
+
+### [S-12] Vector TileShape 深度调优
+
+- **阶段**: 深度调优
+- **优先级**: ⭐⭐ P2
+- **适用条件**: Vector 计算需深度调优 TileShape
+- **前置条件**: S-2 完成
+- **操作指南**: tune-swimlane SKILL.md §2.2
+- **优化原则**:
+  - **上下游对齐**: 下游 Vector Operation 的 TileShape 尽可能使用上游 Operation 的输出 TileShape，减少子图边界
+  - **泳道图驱动**: 并行核数较少（<一半 Vector 核）时减小 TileShape；子图耗时短、调度开销占比高时增大 TileShape
+  - **Cube 协同**: 调整相邻 Cube 和 Vector Operation 的 TileShape，使依赖更简单
+  - **归约轴不切**: 归约类计算尽可能不在归约轴上切分
+
+### [S-13] Matmul 分核布局优化（L2 命中率优化）
+
+- **阶段**: 深度调优
+- **优先级**: ⭐⭐ P2
+- **适用条件**: 大 shape Matmul（M、N、K 均较大），L2 命中率偏低、MTE2 带宽利用率不足
+- **前置条件**: S-2 完成
+- **操作指南**: tune-swimlane SKILL.md §6
+- **优化原理**: L2 命中率由单轮次分核数 mDim、nDim 和 mL1、nL1 共同决定。最优条件为 `nDim·nL1 = mDim·mL1`，使 M、N 轴分核到 L1 的数据量相等，L2 复用最大化
+- **优化方法**: 在 M、N 轴外层添加一层 loop，手动控制每轮 M 和 N 的计算范围，从而控制分核数（详见 swimlane §6）
+- **典型收益**: 大 shape（M=N=K=6144）+31%（2.1ms→1.6ms）
 
 ---
 

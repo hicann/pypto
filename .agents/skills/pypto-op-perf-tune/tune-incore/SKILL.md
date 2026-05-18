@@ -121,7 +121,7 @@ e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 2. 与 Ascend C 小算子的性能对比
 3. 确认性能较差后检查是否使用了更优的指令
 
-## 6. 操作数连续性检查（I-6）
+### 6. 操作数连续性检查（I-6）
 
 当 TileOperation 的输入 Tensor 内存不连续时，会产生额外数据搬运，降低计算效率。
 
@@ -149,7 +149,7 @@ y = pypto.matmul(a, b_c)
 - transpose 后紧跟 matmul 时，优先用 matmul 的 `a_trans`/`b_trans` 参数融合，而非手动修复连续性（参考 F-13）
 - reshape 到相同 shape 是强制连续化的常用手段，不改变数据布局
 
-## 7. 数据搬运方向优化（I-7）
+### 7. 数据搬运方向优化（I-7）
 
 正确选择 HBM 与 L1 之间的数据搬运方向，提升搬运效率。
 
@@ -177,7 +177,7 @@ Scatter（L1 → HBM）方向：使用 `pypto.assemble` 直接写回
 pypto.assemble(result, [row_offset, col_offset], output)
 ```
 
-## 8. 计算与搬运重叠优化（I-8）
+### 8. 计算与搬运重叠优化（I-8）
 
 通过 `submit_before_loop` 使子循环的计算与数据搬运流水化，减少等待时间。
 
@@ -209,7 +209,7 @@ for i in pypto.loop(n, name="LOOP_A", submit_before_loop=True):
 - 外层的简单循环（不含计算操作）不需要设置此参数
 - 必须先通过泳道图确认搬运是瓶颈，再启用此优化
 
-## 9. valid_shape 尾块零填充避免（I-9）
+### 9. valid_shape 尾块零填充避免（I-9）
 
 切块时尾块数据量不足一个完整 BLOCK_SIZE，默认零填充会浪费算力。
 

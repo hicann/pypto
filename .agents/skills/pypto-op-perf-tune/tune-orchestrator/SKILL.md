@@ -193,7 +193,7 @@ Step 0a: 独立性能数据分析
 │     │      → 产出 Loop结构分析表                           │
 │     ├─ A2: 扫描所有常量定义和 jit 参数                      │
 │     │      → 产出 常量依赖关系图（对应F-11）                 │
-│     ├─ A3: 扫描所有 pypto.reshape 调用                    │
+│     ├─ A3: 扫描所有 pypto.reshape/squeeze/unsqueeze 调用    │
 │     │      → 产出 Reshape全局分析表（对应F-4）               │
 │     ├─ A4: 扫描所有 operation + TileShape                  │
 │     │      → 产出 基本块(TileShape)审查表（对应F-9,F-10）   │
