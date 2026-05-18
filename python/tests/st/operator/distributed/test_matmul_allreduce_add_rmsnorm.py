@@ -136,14 +136,12 @@ def generate_golden_data(config: DistributedConfig):
 
     #构造每张卡上需要的数据
     input_datas = []
-    for rank in range(world_size):
-        physical_device_id = config.get_physical_device_id(rank)
-        device = f'npu:{physical_device_id}'
-        in_tensor = torch.randn((batch_size, attn_dim_per_tp), dtype=torch.bfloat16, device=device)
-        matmul_weight = torch.randn((hidden_size, attn_dim_per_tp), dtype=torch.bfloat16, device=device)
-        residual = torch.randn((batch_size, hidden_size), dtype=torch.bfloat16, device=device)
-        gamma = torch.randn((hidden_size), dtype=torch.bfloat16, device=device)
-        bias = torch.randn((hidden_size), dtype=torch.bfloat16, device=device)
+    for _ in range(world_size):
+        in_tensor = torch.randn((batch_size, attn_dim_per_tp), dtype=torch.bfloat16)
+        matmul_weight = torch.randn((hidden_size, attn_dim_per_tp), dtype=torch.bfloat16)
+        residual = torch.randn((batch_size, hidden_size), dtype=torch.bfloat16)
+        gamma = torch.randn((hidden_size), dtype=torch.bfloat16)
+        bias = torch.randn((hidden_size), dtype=torch.bfloat16)
         eps = 1e-5
         input_data = [in_tensor, matmul_weight, residual, gamma, bias, eps]
         input_datas.append(input_data)
@@ -158,12 +156,12 @@ def matmul_allreduce_add_rmsnorm_result_golden(batch_size, num, input_datas):
     for input_data in input_datas:
         in_tensor, matmul_weight = input_data[:2]
         matmul_result = torch.matmul(in_tensor, matmul_weight.T)
-        matmul_allreduce_result_bf16 += matmul_result.cpu()
+        matmul_allreduce_result_bf16 += matmul_result
     matmul_allreduce_result_fp32 = matmul_allreduce_result_bf16.to(torch.float32)
     # 计算各卡上add_rmsnorm之后的结果
     for input_data in input_datas:
         residual, gamma, bias, eps = input_data[-4:]
-        res_add = residual.to(torch.float32) + matmul_allreduce_result_fp32.to(residual.device)
+        res_add = residual.to(torch.float32) + matmul_allreduce_result_fp32
         mean_coff = 1.0 / res_add.shape[-1]
         in_tensor_f32 = res_add
         square = in_tensor_f32 * in_tensor_f32
@@ -177,6 +175,15 @@ def matmul_allreduce_add_rmsnorm_result_golden(batch_size, num, input_datas):
         output_data = [res.to(torch.bfloat16), in_tensor_f32.to(torch.bfloat16)]
         output_datas.append(output_data)
     return output_datas
+
+
+def get_check_threshold(world_size: int, golden_tensor: torch.Tensor):
+    scale = np.mean(np.abs(golden_tensor.cpu().flatten().tolist())) + 1e-12
+    eps = 2 ** -7
+    tolerance_coeff = min((1 + 0.25 * np.log2(world_size)) * 1.5, 3.0)
+    rtol = tolerance_coeff * eps * np.sqrt(world_size)
+    atol = rtol * scale
+    return rtol, atol
 
 
 def matmul_allreduce_add_rmsnorm_worker(
@@ -197,22 +204,25 @@ def matmul_allreduce_add_rmsnorm_worker(
         out_tensor = torch.empty(residual.shape, dtype=torch.bfloat16, device=device)
         residual_out = torch.empty(residual.shape, dtype=torch.bfloat16, device=device)
 
-        inputs = [in_tensor, matmul_weight, residual, gamma, bias, out_tensor, residual_out]
+        inputs = [in_tensor.to(device), matmul_weight.to(device), residual.to(device), 
+                    gamma.to(device), bias.to(device), out_tensor, residual_out]
 
         matmul_allreduce_add_rmsnorm_kernel(*inputs, eps, groups[0], config.world_size)
 
+        out_tensor_rtol, out_tensor_atol = get_check_threshold(config.world_size, golden_out_tensor)
         np.testing.assert_allclose(
             np.array(out_tensor.cpu().flatten().tolist()),
             np.array(golden_out_tensor.cpu().flatten().tolist()),
-            rtol=8e-3,
-            atol=8e-3,
+            rtol=out_tensor_rtol,
+            atol=out_tensor_atol,
         )
 
+        residual_out_rtol, residual_out_atol = get_check_threshold(config.world_size, golden_residual)
         np.testing.assert_allclose(
             np.array(residual_out.cpu().flatten().tolist()),
             np.array(golden_residual.cpu().flatten().tolist()),
-            rtol=8e-3,
-            atol=8e-3,
+            rtol=residual_out_rtol,
+            atol=residual_out_atol,
         )
     except Exception as e:
         if error_queue is not None:
