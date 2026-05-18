@@ -34,7 +34,7 @@ class CastMode(enum.Enum):
 | CAST_FLOOR | 向下舍入，向负无穷方向舍入 | 全部支持 | 全部支持 |
 | CAST_CEIL | 向上舍入，向正无穷方向舍入 | 全部支持 | 全部支持 |
 | CAST_TRUNC | 截断舍入，向零方向舍入 | 全部支持 | 全部支持 |
-| CAST_ODD | 舍入到奇数，Von Neumann舍入方式 | 部分转换 | 部分转换 |
+| CAST_ODD | 舍入到奇数，Von Neumann舍入方式 | FP32→FP16 | FP32→FP16 |
 
 > **注意**：CAST_NONE 不是硬件支持的舍入模式，而是框架层面的概念，表示"不指定舍入模式，由框架自动选择默认值"。
 
