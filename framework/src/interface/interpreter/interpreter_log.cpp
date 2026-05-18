@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -30,10 +31,82 @@
 
 namespace npu::tile_fwk::interpreter {
 namespace {
+constexpr const char* kEnvGlobalLogLevel = "ASCEND_GLOBAL_LOG_LEVEL";
+constexpr const char* kEnvModuleLogLevel = "ASCEND_MODULE_LOG_LEVEL";
+constexpr const char* kModulePrefix = "PYPTO=";
+// Canonical ASCEND log levels: debug=0, info=1, warning=2, error=3, event=5.
+constexpr int kDefaultGlobalLogThreshold = 3;
+
 bool IsEnvEnabled(const char* name)
 {
     const char* value = std::getenv(name);
     return value != nullptr && std::strcmp(value, "1") == 0;
+}
+
+int ParseEnvIntOrDefault(const char* value, int defaultValue)
+{
+    if (value == nullptr || value[0] == '\0') {
+        return defaultValue;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || (end != nullptr && *end != '\0')) {
+        return defaultValue;
+    }
+    if (parsed < 0 || parsed > 5) {
+        return defaultValue;
+    }
+    return static_cast<int>(parsed);
+}
+
+int ParseModuleLogLevel(const char* envValue)
+{
+    if (envValue == nullptr || envValue[0] == '\0') {
+        return -1;
+    }
+    const char* moduleLevel = std::strstr(envValue, kModulePrefix);
+    if (moduleLevel == nullptr) {
+        return -1;
+    }
+    return ParseEnvIntOrDefault(moduleLevel + std::strlen(kModulePrefix), -1);
+}
+
+int GetGlobalLogThreshold()
+{
+    int threshold = kDefaultGlobalLogThreshold;
+    const char* globalLevel = std::getenv(kEnvGlobalLogLevel);
+    if (globalLevel != nullptr && globalLevel[0] != '\0') {
+        const int moduleInGlobal = ParseModuleLogLevel(globalLevel);
+        if (moduleInGlobal >= 0) {
+            threshold = moduleInGlobal;
+        } else {
+            threshold = ParseEnvIntOrDefault(globalLevel, kDefaultGlobalLogThreshold);
+        }
+    }
+    const int moduleLevel = ParseModuleLogLevel(std::getenv(kEnvModuleLogLevel));
+    if (moduleLevel >= 0) {
+        threshold = moduleLevel;
+    }
+    return threshold;
+}
+
+const std::unordered_map<LogLevel, int>& CanonicalLevelMap()
+{
+    static const std::unordered_map<LogLevel, int> kMap = {
+        {LogLevel::kDebug, 0},
+        {LogLevel::kInfo, 1},
+        {LogLevel::kWarn, 2},
+        {LogLevel::kError, 3},
+        {LogLevel::kEvent, 5},
+    };
+    return kMap;
+}
+
+int ToCanonicalLevel(LogLevel level)
+{
+    const auto& levelMap = CanonicalLevelMap();
+    const auto it = levelMap.find(level);
+    return it != levelMap.end() ? it->second : kDefaultGlobalLogThreshold;
 }
 
 struct LogContext {
@@ -41,13 +114,8 @@ struct LogContext {
     std::string logFilePath = "output/interpreter.log";
     FILE* logFile = nullptr;
     bool printToStdout = false;
-    bool writeInfoToFile = false;
 
-    LogContext()
-        : printToStdout(IsEnvEnabled("ASCEND_SLOG_PRINT_TO_STDOUT")),
-          writeInfoToFile(IsEnvEnabled("ASCEND_INTERPRETER_LOG_INFO_TO_FILE"))
-    {
-    }
+    LogContext() : printToStdout(IsEnvEnabled("ASCEND_SLOG_PRINT_TO_STDOUT")) {}
 
     ~LogContext()
     {
@@ -64,19 +132,9 @@ LogContext& GetLogContext()
     return context;
 }
 
-bool ShouldWriteLevel(LogLevel level, const LogContext& context)
+bool ShouldWriteLevel(LogLevel level)
 {
-    switch (level) {
-        case LogLevel::kError:
-        case LogLevel::kEvent:
-        case LogLevel::kWarn:
-            return true;
-        case LogLevel::kInfo:
-            return context.writeInfoToFile;
-        case LogLevel::kDebug:
-        default:
-            return false;
-    }
+    return ToCanonicalLevel(level) >= GetGlobalLogThreshold();
 }
 
 const char* LevelToString(LogLevel level)
@@ -181,11 +239,10 @@ void EmitLogLineToOutputs(LogLevel level, const char* msgPtr)
     }
 
     fprintf(context.logFile, "[%s][%s][tid:%" PRIu64 "] %s\n", timeBuf, levelStr, threadId, msgPtr);
-    if (level == LogLevel::kError) {
-        fflush(context.logFile);
-    }
+    fflush(context.logFile);
     if (context.printToStdout) {
         fprintf(stdout, "[%s][%s][tid:%" PRIu64 "] %s\n", timeBuf, levelStr, threadId, msgPtr);
+        fflush(stdout);
     }
 }
 
@@ -224,8 +281,7 @@ void SetLogFilePath(const std::string& path)
 
 void Log(LogLevel level, const char* fmt, ...)
 {
-    auto& context = GetLogContext();
-    if (!ShouldWriteLevel(level, context)) {
+    if (!ShouldWriteLevel(level)) {
         return;
     }
 

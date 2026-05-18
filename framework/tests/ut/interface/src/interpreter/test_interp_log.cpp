@@ -18,8 +18,11 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <fstream>
+#include <cstdlib>
 
 #include "interpreter_log_test_utils.h"
+#include "interface/interpreter/interpreter_log.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/inner/pre_def.h"
 #include "interface/configs/config_manager.h"
@@ -31,6 +34,67 @@
 #include "interface/interpreter/calc.h"
 
 namespace npu::tile_fwk {
+namespace {
+class EnvGuard {
+public:
+    EnvGuard(const char* name, const char* value) : name_(name)
+    {
+        const char* prev = std::getenv(name);
+        if (prev != nullptr) {
+            hadPrev_ = true;
+            prevValue_ = prev;
+        }
+        setenv(name_, value, 1);
+    }
+
+    ~EnvGuard()
+    {
+        if (hadPrev_) {
+            setenv(name_, prevValue_.c_str(), 1);
+        } else {
+            unsetenv(name_);
+        }
+    }
+
+private:
+    const char* name_;
+    bool hadPrev_ = false;
+    std::string prevValue_;
+};
+
+std::string ReadLogFile(const std::string& path)
+{
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs) {
+        return "";
+    }
+    return {std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};
+}
+} // namespace
+
+TEST(InterpreterLogLevelFilterTest, AscendGlobalLogLevelThreshold)
+{
+    const std::string logPath = "output/interpreter_log_level_ut.log";
+    (void)std::remove(logPath.c_str());
+    npu::tile_fwk::interpreter::SetLogFilePath(logPath);
+
+    {
+        EnvGuard levelGuard("ASCEND_GLOBAL_LOG_LEVEL", "2");
+        npu::tile_fwk::interpreter::Log(npu::tile_fwk::interpreter::LogLevel::kDebug, "ut-debug");
+        npu::tile_fwk::interpreter::Log(npu::tile_fwk::interpreter::LogLevel::kInfo, "ut-info");
+        npu::tile_fwk::interpreter::Log(npu::tile_fwk::interpreter::LogLevel::kWarn, "ut-warn");
+        npu::tile_fwk::interpreter::Log(npu::tile_fwk::interpreter::LogLevel::kError, "ut-error");
+        npu::tile_fwk::interpreter::Log(npu::tile_fwk::interpreter::LogLevel::kEvent, "ut-event");
+    }
+
+    const std::string logOutput = ReadLogFile(logPath);
+    EXPECT_EQ(logOutput.find("ut-debug"), std::string::npos);
+    EXPECT_EQ(logOutput.find("ut-info"), std::string::npos);
+    EXPECT_NE(logOutput.find("ut-warn"), std::string::npos);
+    EXPECT_NE(logOutput.find("ut-error"), std::string::npos);
+    EXPECT_NE(logOutput.find("ut-event"), std::string::npos);
+}
+
 class InterpreterLogTest : public testing::Test {
 public:
     void SetUp() override
