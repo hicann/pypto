@@ -2800,6 +2800,23 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<int>
     return coaLists;
 }
 
+static bool IsInplaceIncast(Operation *op, std::vector<Operation *> &copyInList) {
+    if (op->GetOpcode() != Opcode::OP_VIEW) {
+        return false;
+    }
+    LogicalTensorPtr data = op->GetOOperands()[0];
+    copyInList.clear();
+    for (auto oop : data->GetConsumers()) {
+        if (OpcodeManager::Inst().IsSharedMemory(oop->GetOpcode())) {
+            return false;
+        }
+        if (IsCopyIn(oop->GetOpcode())) {
+            copyInList.push_back(oop);
+        }
+    }
+    return true;
+}
+
 void Function::NormalizeCoaForInCasts(
     std::vector<int>& iOffset, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
     std::unordered_map<LogicalTensorPtr, int>& processedOperands,
@@ -2820,6 +2837,20 @@ void Function::NormalizeCoaForInCasts(
                 GetTensorDataSetCoaIndex(op, coaIndex);
             }
         } else {
+            std::vector<Operation *> copyInList;
+            auto &consOp = *(op->GetOOperands()[0])->GetConsumers().begin();
+            if (!this->IsFromOutCast(op->GetOOperands().front()) &&
+                IsCopyIn(consOp->GetOpcode()) &&
+                IsInplaceIncast(op, copyInList)) {
+                for (auto copyIn : copyInList) {
+                    operandCoaList = NormalizeCopyIn(copyIn, coaIndex, valueToIndex);
+                    copyIn->SetIOpAttrOffset(k, coaIndex);
+                    iOffset.emplace_back(coaIndex);
+                    coaIndex += operandCoaList.size();
+                    coaLists.emplace_back(std::move(operandCoaList));
+                }
+                continue;
+            }
             auto iOperand = op->GetInputOperand(k);
             auto it = processedOperands.find(iOperand);
             if (it != processedOperands.end()) {

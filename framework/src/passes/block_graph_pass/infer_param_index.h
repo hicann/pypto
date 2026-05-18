@@ -45,8 +45,6 @@ private:
         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
     Status UpdateParamIndex(Function& function);
     Status InferShape(Function& function);
-    std::set<Opcode> copyInOps_ = {Opcode::OP_COPY_IN, Opcode::OP_RESHAPE_COPY_IN, Opcode::OP_SHMEM_GET_GM2UB};
-    std::set<Opcode> copyOutOps_ = {Opcode::OP_COPY_OUT, Opcode::OP_RESHAPE_COPY_OUT};
 };
 } // namespace tile_fwk
 } // namespace npu

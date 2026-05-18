@@ -63,13 +63,35 @@ bool InferParamIndex::HandleCopyOpShape(Operation& op, Function &function, bool 
     return false;
 }
 
+static bool IsInGMSpill(Operation& op) {
+    if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode())) {
+        for (auto &iOperand : op.GetIOperands()) {
+            if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool IsOutGMSpill(Operation& op) {
+    if (OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
+        for (auto &oOperand : op.GetOOperands()) {
+            if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function &function)
 {
     const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
                                            Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
                                            Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};
-    bool isCopyIn = copyInOps_.find(op.GetOpcode()) != copyInOps_.end();
-    bool isCopyOut = copyOutOps_.find(op.GetOpcode()) != copyOutOps_.end();
+    bool isCopyIn = IsInGMSpill(op);
+    bool isCopyOut = IsOutGMSpill(op);
     if ((isCopyIn || isCopyOut)) {
         if (HandleCopyOpShape(op, function, isCopyIn)) {
             return SUCCESS;
