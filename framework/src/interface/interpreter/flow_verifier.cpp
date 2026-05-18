@@ -561,6 +561,7 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
     }
 
     std::vector<double> tolerance = config::GetVerifyOption<std::vector<double>>(KEY_PASS_VERIFY_ERROR_TOL);
+    ASSERT(VerifyEnableScene::TOLERANCE_MISMATCH, tolerance.size() == 2) << "Expected tolerance size: 2, actual tolerance size: " << tolerance.size();
     float rtol = static_cast<float>(tolerance[0]);
     float atol = static_cast<float>(tolerance[1]);
 

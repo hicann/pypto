@@ -292,11 +292,12 @@ struct FunctionFrame {
         }
 
         auto raw = inplaceTensor ? inplaceTensor->GetRawTensor() : tensor->GetRawTensor();
+        ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_NULL, raw != nullptr) << "raw is nullptr.";
         bool isSpilled = false;
 
-        std::string spillRawMaigc = "1056964608";
+        const std::string spillRawMagic = "1056964608";
         std::string rawMagic = std::to_string(raw->GetRawMagic());
-        if (rawMagic.find(spillRawMaigc) != std::string::npos) {
+        if (rawMagic.find(spillRawMagic) != std::string::npos) {
             if (spillRawTensorDict.count(tensor)) {
                 raw = spillRawTensorDict[tensor];
             } else {
@@ -585,9 +586,15 @@ struct FunctionInterpreter {
 
     ~FunctionInterpreter()
     {
-        fclose(execOpResultFile);
-        fclose(execProgrameResultFile);
-        fclose(execDumpErrorFile);
+        if (execOpResultFile != nullptr) {
+            fclose(execOpResultFile);
+        }
+        if (execProgrameResultFile != nullptr) {
+            fclose(execProgrameResultFile);
+        }
+        if (execDumpErrorFile != nullptr) {
+            fclose(execDumpErrorFile);
+        }
     }
 
     Function* entry_;
@@ -1744,6 +1751,10 @@ public:
 
     void WriteCsvRow(std::vector<std::string>& row, int& rowNum, FILE* file)
     {
+        if (file == nullptr) {
+            INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "File is nullptr.");
+            return;
+        }
         if (rowNum > 0) {
             row[0] = std::to_string(rowNum);
         }

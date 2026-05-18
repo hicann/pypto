@@ -401,7 +401,8 @@ public:
             static const char* MSG = "DIWEFVN";
             auto now = std::chrono::system_clock::now();
             auto time = std::chrono::system_clock::to_time_t(now);
-            auto tm = *std::localtime(&time);
+            std::tm tm {};
+            (void)localtime_r(&time, &tm);
 
             // Format timestamp
             char timeBuf[128];

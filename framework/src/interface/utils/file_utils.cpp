@@ -161,7 +161,7 @@ bool ReadBytesFromFile(const std::string& fPath, std::vector<char>& buffer)
 
     std::ifstream ifStream(realPath.c_str(), std::ios::binary | std::ios::ate);
     if (!ifStream.is_open()) {
-        PYPTO_LOGW("read file %s failed.", fPath.c_str());
+        PYPTO_LOGW("Read file %s failed.", fPath.c_str());
         return false;
     }
     try {
@@ -411,7 +411,7 @@ std::string GetCurRunningPath()
     char buffer[size] = {};
     std::string cwd = getcwd(buffer, size);
     if (cwd.empty()) {
-        PYPTO_LOGW("failed to call getcwd()");
+        PYPTO_LOGW("Failed to call getcwd()");
         return "";
     }
     return cwd;
@@ -421,7 +421,7 @@ void RemoveOldestDirs(const std::string& path, const std::string& prefix, int le
 {
     DIR* dir = opendir(path.c_str());
     if (dir == nullptr) {
-        PYPTO_LOGW("failed to opendir: %s", path.c_str());
+        PYPTO_LOGW("Failed to opendir: %s", path.c_str());
         return;
     }
 

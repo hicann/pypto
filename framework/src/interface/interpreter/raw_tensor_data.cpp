@@ -17,12 +17,15 @@
 
 namespace npu::tile_fwk {
 
+constexpr size_t LOGICAL_TENSOR_DATA_HEAD_MAX_DIM = 5;
+constexpr size_t LOGICAL_TENSOR_DATA_HEAD_PADDING_SIZE = 3;
+
 struct LogicalTensorDataHead {
     uint32_t version{0};
     uint32_t dataType{0};
     uint32_t dimension{0};
-    int64_t shape[0x5] = {0};
-    uint32_t padding[0x3] = {0};
+    int64_t shape[LOGICAL_TENSOR_DATA_HEAD_MAX_DIM] = {0};
+    uint32_t padding[LOGICAL_TENSOR_DATA_HEAD_PADDING_SIZE] = {0};
 };
 
 std::string LogicalTensorData::DumpRange(
@@ -79,8 +82,10 @@ std::string LogicalTensorData::DumpCoord(int row) const
     int coordDim = row;
     for (size_t k = 0; k < GetShape().size() - 1; k++) {
         int dim = GetShape().size() - 2 - k;
-        coord[dim] = coordDim % GetShape()[dim];
-        coordDim /= GetShape()[dim];
+        int dimLength = GetShape()[dim];
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE, dimLength != 0) << "Shape dimension " << dim << " must not be zero";
+        coord[dim] = coordDim % dimLength;
+        coordDim /= dimLength;
     }
     for (size_t k = 0; k < coord.size(); k++) {
         if (k != 0) {
@@ -99,6 +104,9 @@ std::string LogicalTensorData::DumpData(int indent, const std::vector<ElementDum
     oss << DumpType() << " {\n";
     int rowSize = 1;
     for (size_t k = 0; k < GetShape().size() - 1; k++) {
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE, 
+               GetShape()[k] > 0 && rowSize <= INT_MAX / GetShape()[k]) 
+            << "Tensor shape multiplication overflow at dimension " << k;
         rowSize *= GetShape()[k];
     }
     int colSize = GetShape().back();
@@ -132,70 +140,74 @@ std::string LogicalTensorData::DumpData(int indent, const std::vector<ElementDum
 void LogicalTensorData::Save(const std::string& filepath) const
 {
     FILE* fdata = fopen(filepath.c_str(), "wb");
-    LogicalTensorDataHead head;
-    head.dataType = GetDataType();
-    head.dimension = GetShape().size();
-    for (size_t k = 0; k < GetShape().size(); k++) {
-        head.shape[k] = GetShape()[k];
-    }
-    fwrite(&head, sizeof(head), 1, fdata);
+    if (fdata != nullptr) {
+        LogicalTensorDataHead head;
+        head.dataType = GetDataType();
+        head.dimension = GetShape().size();
+        for (size_t k = 0; k < GetShape().size(); k++) {
+            head.shape[k] = GetShape()[k];
+        }
+        fwrite(&head, sizeof(head), 1, fdata);
 
-    int rowSize = GetShape().back();
-    int totalSize = GetSize();
+        int rowSize = GetShape().back();
+        int totalSize = GetSize();
 
-    switch (GetDataType()) {
-        case DT_INT8:
-            HandleSave<int8_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_INT16:
-            HandleSave<int16_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_INT32:
-            HandleSave<int32_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_INT64:
-            HandleSave<int64_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_FP16:
-            HandleSave<npu::tile_fwk::float16>(fdata, totalSize, rowSize);
-            break;
-        case DT_FP32:
-            HandleSave<float>(fdata, totalSize, rowSize);
-            break;
-        case DT_BF16:
-            HandleSave<npu::tile_fwk::bfloat16>(fdata, totalSize, rowSize);
-            break;
-        case DT_UINT8:
-            HandleSave<uint8_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_UINT16:
-            HandleSave<uint16_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_UINT32:
-            HandleSave<uint32_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_UINT64:
-            HandleSave<uint64_t>(fdata, totalSize, rowSize);
-            break;
-        case DT_DOUBLE:
-            HandleSave<double>(fdata, totalSize, rowSize);
-            break;
-        case DT_BOOL:
-            HandleSave<bool>(fdata, totalSize, rowSize);
-            break;
-        default:
-            ASSERT(false);
-            break;
+        switch (GetDataType()) {
+            case DT_INT8:
+                HandleSave<int8_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_INT16:
+                HandleSave<int16_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_INT32:
+                HandleSave<int32_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_INT64:
+                HandleSave<int64_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_FP16:
+                HandleSave<npu::tile_fwk::float16>(fdata, totalSize, rowSize);
+                break;
+            case DT_FP32:
+                HandleSave<float>(fdata, totalSize, rowSize);
+                break;
+            case DT_BF16:
+                HandleSave<npu::tile_fwk::bfloat16>(fdata, totalSize, rowSize);
+                break;
+            case DT_UINT8:
+                HandleSave<uint8_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_UINT16:
+                HandleSave<uint16_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_UINT32:
+                HandleSave<uint32_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_UINT64:
+                HandleSave<uint64_t>(fdata, totalSize, rowSize);
+                break;
+            case DT_DOUBLE:
+                HandleSave<double>(fdata, totalSize, rowSize);
+                break;
+            case DT_BOOL:
+                HandleSave<bool>(fdata, totalSize, rowSize);
+                break;
+            default:
+                ASSERT(false);
+                break;
+        }
+        fclose(fdata);
     }
-    fclose(fdata);
 }
 
 void LogicalTensorData::SaveFile(const char* filepath) const { return Save(filepath); }
 
 std::string LogicalTensorData::ToString(const PrintOptions* options) const
 {
+    constexpr size_t MAX_AXES_DIM = 8;
+    constexpr int EDGE_ITEMS_MULTIPLIER = 2;
     std::stringstream os;
-    int64_t axes[0x8] = {0}; // max dim is 8
+    int64_t axes[MAX_AXES_DIM] = {0};
 
     if (options == nullptr) {
         options = &config::GetPrintOptions();
@@ -252,7 +264,7 @@ std::string LogicalTensorData::ToString(const PrintOptions* options) const
     printImpl = [&](int dim) {
         os << "[";
         if (dim == ndim - 1) {
-            if (shape[dim] > 0x2 * edgeItems) {
+            if (shape[dim] > EDGE_ITEMS_MULTIPLIER * edgeItems) {
                 print1d(dim, 0, edgeItems);
                 os << " ...";
                 print1d(dim, shape[dim] - edgeItems, shape[dim]);
@@ -260,7 +272,7 @@ std::string LogicalTensorData::ToString(const PrintOptions* options) const
                 print1d(dim, 0, shape[dim]);
             }
         } else {
-            if (shape[dim] > 0x2 * edgeItems) {
+            if (shape[dim] > EDGE_ITEMS_MULTIPLIER * edgeItems) {
                 printnd(dim, 0, edgeItems);
                 os << "\n";
                 repeat(' ', dim + 1);

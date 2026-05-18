@@ -141,9 +141,21 @@ FunctionInterpreter::FunctionInterpreter()
     dumpPath = dumpPath + "/" + "verify_" + MakeVerifyRunTimestampTag() + "/";
     CreateMultiLevelDir(dumpPath);
     interpreter::SetLogFilePath(dumpPath + "interpreter.log");
-    execOpResultFile = fopen((dumpPath + "verify_graph_data_metainfo.csv").c_str(), "w");
-    execProgrameResultFile = fopen((dumpPath + "verify_graph_result_brief.csv").c_str(), "w");
-    execDumpErrorFile = fopen((dumpPath + "verify_graph_result_brief.log").c_str(), "w");
+    const std::string opResultFilePath = dumpPath + "verify_graph_data_metainfo.csv";
+    execOpResultFile = fopen(opResultFilePath.c_str(), "w");
+    if (execOpResultFile == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed", opResultFilePath.c_str());
+    }
+    const std::string programeResultFilePath = dumpPath + "verify_graph_result_brief.csv";
+    execProgrameResultFile = fopen(programeResultFilePath.c_str(), "w");
+    if (execProgrameResultFile == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed", programeResultFilePath.c_str());
+    }
+    const std::string dumpErrorFilePath = dumpPath + "verify_graph_result_brief.log";
+    execDumpErrorFile = fopen(dumpErrorFilePath.c_str(), "w");
+    if (execDumpErrorFile == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed", dumpErrorFilePath.c_str());
+    }
     auto opCsvHeader = MakeOpInfoCsvHeader();
     auto programeCsvHeader = MakeProgrameInfoCsvHeader();
     WriteCsvRow(opCsvHeader, opInfoRowNum, execOpResultFile);
@@ -351,6 +363,10 @@ void FunctionInterpreter::DumpTensorBinary(
         return;
     }
     FILE* fdata = fopen(dumpTensorFilePath.c_str(), "wb");
+    if (fdata == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", dumpTensorFilePath.c_str());
+        return;
+    }
     DumpBinary(validShape, stride, offset, fdata, dataView->GetData()->data(), BytesOf(dataView->GetDataType()));
     fclose(fdata);
 }
@@ -366,6 +382,10 @@ std::shared_ptr<LogicalTensorData> FunctionInterpreter::LoadTensorBinary(
         return nullptr;
     }
     FILE* fdata = fopen(filepath.c_str(), "rb");
+    if (fdata == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", filepath.c_str());
+        return nullptr;
+    }
     auto data = std::make_shared<RawTensorData>(static_cast<DataType>(tensor->Datatype()), shape);
     if (fread(data->data(), 1, data->size(), fdata) != data->size()) {
         fclose(fdata);
@@ -392,6 +412,10 @@ void FunctionInterpreter::DumpTensorList(
 
     std::string dumpTensorFilePath = GetDumpFilePath(execDumpDir, dumpTensorDirName, dumpTensorFileName);
     FILE* dumpTensorFile = fopen(dumpTensorFilePath.c_str(), "w");
+    if (dumpTensorFile == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", dumpTensorFilePath.c_str());
+        return;
+    }
     fprintf(dumpTensorFile, R"HTML(
 <html>
     <head>
@@ -594,6 +618,10 @@ void FunctionInterpreter::DumpPassTensorDiff(
 
     std::string dumpStyleFilePath = execDumpDir + "/entry_" + std::to_string(captureIndex) + ".css";
     execDumpStyleFile = fopen(dumpStyleFilePath.c_str(), "w");
+    if (execDumpStyleFile == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", dumpStyleFilePath.c_str());
+        return;
+    }
     for (size_t idx = 0; idx < captureGolden->GetFrameList().size(); idx++) {
         auto frameExecution = captureExecution->GetFrameList()[idx];
         auto frameGolden = captureGolden->GetFrameList()[idx];
@@ -639,16 +667,24 @@ void FunctionInterpreter::DumpBegin()
     std::string styleFilePath = dumpPath + "/verifier.css";
     if (GetFileSize(styleFilePath) == 0) {
         FILE* fcss = fopen(styleFilePath.c_str(), "w");
-        for (int i = 0; i < MAX_IDENT_LEVEL; i++) {
-            fprintf(fcss, ".indent_%d { margin-left: %dpx; }\n", i, i * 50); // 50 is left margin
+        if (fcss == nullptr) {
+            INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", styleFilePath.c_str());
+        } else {
+            for (int i = 0; i < MAX_IDENT_LEVEL; i++) {
+                fprintf(fcss, ".indent_%d { margin-left: %dpx; }\n", i, i * 50); // 50 is left margin
+            }
+            fprintf(fcss, ".table_head { width: 10%%; }\n");
+            fprintf(fcss, ".tensor_data { vertical-align: top; }\n");
+            fclose(fcss);
         }
-        fprintf(fcss, ".table_head { width: 10%%; }\n");
-        fprintf(fcss, ".tensor_data { vertical-align: top; }\n");
-        fclose(fcss);
     }
 
     std::string dumpFilePath = execDumpDir + "/entry_" + std::to_string(captureIndex) + ".html";
     execDumpFile = fopen(dumpFilePath.c_str(), "w");
+    if (execDumpFile == nullptr) {
+        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", dumpFilePath.c_str());
+        return;
+    }
     fprintf(
         execDumpFile, R"HTML(
 <html>

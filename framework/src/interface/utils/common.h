@@ -485,10 +485,16 @@ inline bool IsPtoDataDumpEnabled()
 }
 
 // 向上取整除法
-inline int CeilDiv(int a, int b) { return (a + (b - 1)) / b; }
+inline int CeilDiv(int a, int b) {
+    ASSERT(b != 0) << "Param(b) must not be zero.";
+    return a / b + (a % b != 0 ? 1 : 0);
+}
 
 // 向下取整除法
-inline int FloorDiv(int a, int b) { return a / b; }
+inline int FloorDiv(int a, int b) {
+    ASSERT(b != 0) << "Param(b) must not be zero.";
+    return a / b;
+}
 
 // 求最小值
 inline int Min(int a, int b) { return (a < b) ? a : b; }

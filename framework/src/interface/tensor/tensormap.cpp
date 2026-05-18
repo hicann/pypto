@@ -58,16 +58,18 @@ bool TensorPtrComparator::operator()(
 // Insert function: Adds a tensor to the map, removing any matching tensors first
 void TensorMap::Insert(std::shared_ptr<LogicalTensor> tobject, bool checkOverlap)
 {
+    FE_ASSERT(tobject != nullptr) << "tobject is nullptr.";
     std::vector<int> tensorShape = tensor2shape(tobject);
 
     if (checkOverlap) {
         auto match = Find(tobject);
         if (!match.empty()) {
-            FE_LOGI("Tensor %d is full coverd in function %s", tobject->magic, belongTo.GetRawName().c_str());
+            FE_LOGI("Tensor %d is full covered in function %s", tobject->magic, belongTo.GetRawName().c_str());
             return;
         }
     }
 
+    FE_ASSERT(tobject->tensor != nullptr) << "tobject->tensor is nullptr.";
     int rawmagic = tobject->tensor->rawmagic;
     // Check if the tensor with the same rawmagic exists
     auto& tensorList = tensorMap_[rawmagic];

@@ -381,6 +381,7 @@ enum class VerifyErrorCategory : uint32_t {
 enum class VerifyEnableScene : uint32_t {
     VERIFY_NOT_ENABLE = 0xB0001U,
     VERIFY_LOAD_CALC_OPS_FAILED = 0xB0002U,
+    TOLERANCE_MISMATCH = 0xB0003,
 };
 
 enum class ControlFlowScene : uint32_t {
@@ -402,6 +403,7 @@ enum class ControlFlowScene : uint32_t {
     MIX_GLOBAL_TENSOR_WAIT_TIMEOUT = 0xB1010U,
     MIX_SPLIT_PARALLEL_LIMIT_EXCEEDED = 0xB1011U,
     INTERPRETER_SYNC_SIM_WAIT_TIMEOUT = 0xB1012U,
+    FUNC_RAW_TENSOR_NULL = 0xB1013U,
 };
 
 enum class ExecuteOperationScene : uint32_t {

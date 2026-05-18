@@ -14,12 +14,15 @@
  */
 
 #include "interface/inner/hash_buffer.h"
+#include "tilefwk/error.h"
 
 namespace npu::tile_fwk {
 
 template <>
 uint64_t HashBuffer::Get<uint64_t>(int index) const
 {
+    FE_ASSERT(index >= 0 && static_cast<size_t>(index + 1) < this->size())
+        << "HashBuffer::Get index out of range: index=" << index << ", size=" << this->size();
     uint64_t l = this->at(index);
     uint64_t h = this->at(index + 1);
     return l + (h << 32); // h takes high 32 bits
@@ -28,6 +31,8 @@ uint64_t HashBuffer::Get<uint64_t>(int index) const
 template <>
 int64_t HashBuffer::Get<int64_t>(int index) const
 {
+    FE_ASSERT(index >= 0 && static_cast<size_t>(index + 1) < this->size())
+        << "HashBuffer::Get index out of range: index=" << index << ", size=" << this->size();
     int64_t l = this->at(index);
     int64_t h = this->at(index + 1);
     return l + (h << 32); // h takes high 32 bits

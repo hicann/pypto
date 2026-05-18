@@ -22,7 +22,7 @@
 
 namespace npu::tile_fwk {
 constexpr uint64_t MAIN_KEY_MASK = 0xFFFFFFFFFFFFF;
-constexpr uint64_t SUB_KEY_OFFSET = 52;
+constexpr uint64_t SUB_KEY_OFFSET = 52UL;
 constexpr uint64_t SUB_KEY_MASK = 0xFFF0000000000000;
 
 class OpInfoManager {

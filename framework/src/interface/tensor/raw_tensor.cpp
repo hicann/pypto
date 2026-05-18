@@ -48,7 +48,7 @@ Json RawTensor::DumpJson() const
         result["actual_rawmagic"] = actualRawmagic;
     }
 
-    if (symbol != "") {
+    if (!symbol.empty()) {
         result["symbol"] = symbol;
     }
     return result;
