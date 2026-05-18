@@ -309,7 +309,7 @@ uint64_t PipeSimulatorFast<PostSimulator>::Simulate(const TileOpPtr& tileOp)
         shape.emplace_back(dstTile->shape);
     }
 
-    ASSERT(!shape.empty() && !shape[0].empty()) << "[SIMULATION]: "
+    ASSERT(CostModel::ForwardSimErrorScene::SHAPE_INVALID, !shape.empty() && !shape[0].empty()) << "[SIMULATION]: "
                                                 << "shape is invalid";
 
     int shapeSize = GetMinShapeSize(shape);
@@ -391,7 +391,7 @@ template <typename PostSimulator>
 uint64_t PipeSimulatorFast<PostSimulator>::SimulateForPass(
     const std::string& op, const std::vector<std::vector<int>>& shape, DataType dtype)
 {
-    ASSERT(!shape.empty() && !shape[0].empty()) << "[SIMULATION]: "
+    ASSERT(CostModel::ForwardSimErrorScene::SHAPE_INVALID, !shape.empty() && !shape[0].empty()) << "[SIMULATION]: "
                                                 << "shape is invalid";
     int shapeSize = GetMinShapeSize(shape);
     int shapeCnt = GetShapeCntSize(shape);

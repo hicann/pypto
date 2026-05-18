@@ -30,6 +30,7 @@
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "tilefwk/core_func_data.h"
 #include "interface/configs/config_manager.h"
+#include "interface/utils/common.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
@@ -439,8 +440,8 @@ public:
         if (ret < 0 || ret >= static_cast<int>(sizeof(cmd))) {
             SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "snprintf_s: %s", cmd);
         }
-
-        ret = std::system(cmd);
+        auto args = SplitString(cmd);
+        ret = SafeExecCommand(args);
         if (ret != 0) {
             SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "cmd error: %s", cmd);
         }

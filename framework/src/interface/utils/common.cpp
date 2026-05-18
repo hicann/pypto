@@ -76,6 +76,17 @@ std::string Trim(const std::string& str)
     return (start == std::string::npos) ? "" : str.substr(start, end - start + 1);
 }
 
+std::vector<std::string> SplitString(const std::string& str)
+{
+    std::vector<std::string> args;
+    std::stringstream ss(str);
+    std::string arg;
+    while (ss >> arg) {
+        args.push_back(arg);
+    }
+    return args;
+}
+
 std::string GetEnvVar(const std::string& varName, bool trim, bool toLower)
 {
     const char* rawValue = std::getenv(varName.c_str());

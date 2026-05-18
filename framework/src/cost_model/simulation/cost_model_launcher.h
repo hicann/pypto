@@ -45,6 +45,7 @@ public:
     uint8_t* AllocHostAddr(uint64_t size)
     {
         auto hostPtr = (uint8_t*)malloc(size);
+        ASSERT(CostModel::InternelErrorScene::NULL_POINTER, hostPtr != nullptr) << "alloc host addr failed.";
         allocatedHostAddr.emplace_back(hostPtr);
         return hostPtr;
     }

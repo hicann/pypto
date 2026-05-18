@@ -41,15 +41,40 @@
 2. 确认文件路径是否正确
 3. 确认文件是否已损坏
 
+### INTERNEL_ERROR 内部错误
+内部错误请联系仿真的oncall解决
 
 
 ### FORWARD_SIM
+#### BUILD_FUNCTION_ERROR
+1. 构建Function错误，请联系仿真的oncall解决
+
+#### SIMULATION_INIT_ERROR
+1. CostModel初始化错误，请联系仿真的oncall解决
+
+#### SCHEDULE_TASK_ERROR
+1. 任务调度出错，请联系仿真的oncall解决
+
+#### RESOLVE_DEPENDENCY_ERROR
+1. 依赖解析错误，请联系仿真的oncall解决
+
+#### SIMULATION_RUN_ERROR
+1. 仿真运行时异常，请联系仿真的oncall解决
 
 #### INVALID_PIPE_TYPE
 1. **无效的pipe类型**：请在`framework/src/cost_model/simulation/common/ISA.h`的SCHED_CORE_PIPE_TYPE数据结构中添加新的pipe类型
 
 #### INVALID_DATA_TYPE
 1. 请检查数据类型是否合法有效
+
+#### SHAPE_INVALID
+1. 输入数据无效的shape，请检查输入数据的shape是否有效
+
+#### CYCLES_ERROR
+1. 时钟周期错误，请联系仿真的oncall解决
+
+#### CALENDAR_ERROR
+1. 日历调度异常，请联系仿真的oncall解决
 
 #### DEAD_LOCK
 1. 请在`output/output_xxx/CostModelSimulationOutput/graphs`下的找到报错对应的dot文件进行分析

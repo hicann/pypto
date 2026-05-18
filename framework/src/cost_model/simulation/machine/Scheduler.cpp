@@ -96,12 +96,9 @@ void Scheduler::SortTile(
     }
     SIMULATION_LOGI(
         "[Cycle: %lu][Scheduler][SortTile] output nodes queue size: %zu", GetSim()->GetCycles(), queue.size());
-    if (queue.empty()) {
-        SIMULATION_LOGI(
-            "[Cycle: %lu][Scheduler][SortTile] Sort Tile Alloc not find output nodes", GetSim()->GetCycles());
 
-        ASSERT(false) << "[SIMULATION]: Sort Tile Alloc not find output nodes";
-    }
+    ASSERT(CostModel::ForwardSimErrorScene::RESOLVE_DEPENDENCY_ERROR, !queue.empty()) 
+        << "[SIMULATION]: Sort Tile Alloc not find output nodes";
 
     // Merge And Sort outcast
     std::deque<std::pair<int, bool>> tmpQueue;

@@ -377,7 +377,7 @@ void ParseInput::BuildFunction(
         func->tileOps.emplace_back(tileOp);
         func->tileOpMap[tileOp->magic] = tileOp;
     }
-    ASSERT(
+    ASSERT(CostModel::ForwardSimErrorScene::BUILD_FUNCTION_ERROR,
         hasCall || func->opSequenceAfterOOO_.size() == 0 || (func->tileOps.size() == func->opSequenceAfterOOO_.size()))
         << "[SIMULATION]: "
         << "hasCall=" << hasCall << " func->opSequenceAfterOOO_.size=" << func->opSequenceAfterOOO_.size()
@@ -486,8 +486,9 @@ void ParseInput::ParseFunction(
 {
     if (topoFromRootFunc) {
         sim->enableExpectValue = true;
-        ASSERT(inputFuncs.size() == 1) << "[SIMULATION]: inputFuncs.size is not equals to 1."
-                                       << "inputFuncs.size=" << inputFuncs.size();
+        ASSERT(CostModel::ForwardSimErrorScene::BUILD_FUNCTION_ERROR, inputFuncs.size() == 1) 
+            << "[SIMULATION]: inputFuncs.size is not equals to 1."
+            << "inputFuncs.size=" << inputFuncs.size();
         for (const auto& rootFunction : inputFuncs) {
             if (sim->pvLevel != PVModelLevel::PV_NON) {
                 sim->pv->Submit(rootFunction, &PvData::Instance(), static_cast<int>(sim->pvLevel), sim->outdir);
@@ -644,8 +645,9 @@ void ParseInput::ParseCalendarJson(std::shared_ptr<CostModel::SimSys> sim, const
                     {task["taskId"].get<int>(), std::stoull(task["functionHash"].get<std::string>())});
                 taskId = task["taskId"].get<int>();
                 if (sim->config.calendarMode == static_cast<uint64_t>(CalendarMode::GLOBAL_COUNTER)) {
-                    ASSERT(waitVector.size() == 1) << "[SIMULATION]: task has two wait in calendar global counter."
-                                                   << "waitVector.size=" << waitVector.size();
+                    ASSERT(CostModel::ForwardSimErrorScene::CALENDAR_ERROR, waitVector.size() == 1) 
+                        << "[SIMULATION]: task has two wait in calendar global counter."
+                        << "waitVector.size=" << waitVector.size();
                     sim->taskFirstSetMap[taskId] = waitVector[0].second + 1;
                 }
                 waitVector.clear();

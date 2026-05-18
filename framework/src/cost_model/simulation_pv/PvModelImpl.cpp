@@ -305,9 +305,10 @@ void PvModelImpl<SystemConfig, CaseConfig>::BinGen(npu::tile_fwk::Function* func
                 cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s",
                 task_.objPath[subFuncPair.first].c_str(), task_.binPath[subFuncPair.first].c_str());
 
-            int ret = std::system(cmd);
+            auto args = SplitString(cmd);
+            int ret = SafeExecCommand(args);
             if (ret != 0) {
-                SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "cmd error: %s", cmd);
+                SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "generate pv bin file failed.");
             }
 
             auto size = PvModelBinHelper::GetBinSize(task_.binPath[subFuncPair.first]);
@@ -455,7 +456,8 @@ void PvModelImpl<SystemConfig, CaseConfig>::RunModel(std::string esgDir)
         esgDir.c_str(), arch_.c_str());
     SIMULATION_LOGI("[PVMODEL] %s", cmd);
 
-    int result = std::system(cmd);
+    auto args = SplitString(cmd);
+    int result = SafeExecCommand(args);
     if (result != 0) {
         SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "cmd error: %s", cmd);
     }

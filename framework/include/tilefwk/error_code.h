@@ -515,7 +515,10 @@ enum class SimulationErrorCategory {
     UNKNOWN = 99000U,
 };
 
-enum class InternelErrorScene : uint32_t { UNKNOWN = 90099U };
+enum class InternelErrorScene : uint32_t { 
+    NULL_POINTER = 90001U,
+    UNKNOWN = 90099U
+};
 
 enum class ExternalErrorScene : uint32_t {
     INVALID_CONFIG = 91001U,
@@ -531,9 +534,17 @@ enum class ExternalErrorScene : uint32_t {
 };
 
 enum class ForwardSimErrorScene : uint32_t {
-    INVALID_PIPE_TYPE = 92001U,
-    INVALID_DATA_TYPE = 92002U,
-    DEAD_LOCK = 92003U,
+    BUILD_FUNCTION_ERROR = 92001U,
+    SIMULATION_INIT_ERROR = 92002U,
+    SCHEDULE_TASK_ERROR = 92003U,
+    RESOLVE_DEPENDENCY_ERROR = 92004U,
+    SIMULATION_RUN_ERROR = 92005U,
+    INVALID_PIPE_TYPE = 92006U,
+    INVALID_DATA_TYPE = 92007U,
+    SHAPE_INVALID = 92008U,
+    CYCLES_ERROR = 92009U,
+    CALENDAR_ERROR = 92010U,
+    DEAD_LOCK = 920011U,
     UNKNOWN = 92099U
 };
 

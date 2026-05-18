@@ -16,6 +16,7 @@
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
 namespace npu::tile_fwk::dynamic {
@@ -188,7 +189,8 @@ void EslModelLauncher::LiteRegisterKernel(Function *function, void *&hdl, int &s
         .length = kernelBinary.size(),
     };
     int ret = RuntimeDevBinaryRegister(&binary, &hdl);
-    ASSERT(ret == RT_SUCCESS) << "register kernel failed: " << ret;
+    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_INIT_ERROR, ret == RT_SUCCESS) 
+        << "register kernel failed: " << ret;
 
     stubFunc = 1;
     std::string kernelName = "";
@@ -222,11 +224,13 @@ int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<Device
     rtArgs.args = deviceAddrs.data();
     rtArgs.argsSize = deviceAddrs.size() * sizeof(void *);
     int ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
-    ASSERT(ret == RT_SUCCESS) << "LiteKernelLaunch failed: " << ret;
+    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_RUN_ERROR, ret == RT_SUCCESS) 
+        << "LiteKernelLaunch failed: " << ret;
 
     // Synchronize and copy back
     ret = AclRtSynchronizeStream(stream);
-    ASSERT(ret == RT_SUCCESS) << "Stream sync failed: " << ret;
+    ASSERT(CostModel::ForwardSimErrorScene::SIMULATION_RUN_ERROR, ret == RT_SUCCESS) 
+        << "Stream sync failed: " << ret;
     for (size_t i = 0; i < tensors.size(); i++) {
         AclRtMemcpy((uint8_t *)tensors[i].GetAddr(), tensors[i].GetDataSize(), deviceAddrs[i],
             tensors[i].GetDataSize(), AclRtMemcpyKind::DEVICE_TO_HOST);

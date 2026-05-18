@@ -24,6 +24,7 @@
 #include "cost_model/simulation/pv/PvModelFactory.h"
 #include "tilefwk/error_code.h"
 #include "interface/utils/file_utils.h"
+#include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
 #include "tilefwk/file.h"
@@ -180,8 +181,9 @@ void SimSys::CalendarDispatchTasksToCore(int key, std::shared_ptr<CoreMachine> c
         TaskPack packet;
         packet.taskId = task.first;
         packet.task.taskPtr = calendarTaskMap[task.first];
-        ASSERT(packet.task.taskPtr != nullptr) << "[SIMULATION]: "
-                                               << "task does not exist. taskId=" << packet.taskId;
+        ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, packet.task.taskPtr != nullptr) 
+            << "[SIMULATION]: "
+            << "task does not exist. taskId=" << packet.taskId;
         packet.task.functionHash = task.second;
         coreMachine->SubmitTask(packet);
     }
@@ -585,9 +587,10 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(pipeDetailPath))
          << "pipe.swim.json does not exist. pipeDetailPath: " << pipeDetailPath;
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
-    int ret = system(cmd.c_str());
+    auto args = SplitString(cmd);
+    int ret = SafeExecCommand(args);
     if (ret != 0) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "draw pipe swim lane cmd error");
     }
 }
 
@@ -619,9 +622,10 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(outSwimPath))
          << "swim.json does not exist. outSwimPath: " << outSwimPath;
     std::string cmd = "python3 " + drawScriptPath + " " + outSwimPath + " -t";
-    int result1 = system(cmd.c_str());
+    auto args1 = SplitString(cmd);
+    int result1 = SafeExecCommand(args1);
     if (result1 != 0) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "draw swim lane cmd error.");
     }
 
     std::string mergeScriptPath = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
@@ -648,10 +652,10 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
         SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topoOutFile;
     }
-    SIMULATION_LOGI("cmd: %s", cmd.c_str());
-    int result2 = system(cmd.c_str());
+    auto args2 = SplitString(cmd);
+    int result2 = SafeExecCommand(args2);
     if (result2 != 0) {
-        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "draw swim lane cmd error.");
     }
 }
 
@@ -817,7 +821,7 @@ uint64_t SimSys::GetCycles() const { return globalCycles; }
 
 void SimSys::UpdateNextCycles(uint64_t nextCycle)
 {
-    ASSERT(nextCycle > globalCycles) << "[SIMULATION]: "
+    ASSERT(CostModel::ForwardSimErrorScene::CYCLES_ERROR, nextCycle > globalCycles) << "[SIMULATION]: "
                                      << "nextCycle is less than or equels to globalCycles. nextCycles=" << nextCycle
                                      << ", globalCycles=" << globalCycles;
     nextSimulationCycles = std::min(nextSimulationCycles, nextCycle);

@@ -46,9 +46,8 @@ public:
         size_t parameterNum = 3;
         for (auto& c : *cfgs) {
             regex_match(c, sm, r);
-            ASSERT(sm.size() == parameterNum)
-                << "ErrCode: F" << static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG)
-                << ",[SIMULATION]: "
+            ASSERT(CostModel::ExternalErrorScene::INVALID_CONFIG, sm.size() == parameterNum)
+                << "[SIMULATION]: "
                 << "the config regex size is 3. the format is error: " << c;
             std::string cfgName{sm.str(1)};
             std::string cfgValue{sm.str(2)};
@@ -59,9 +58,8 @@ public:
     void ParseConfig(std::string const& cfgName, std::string const& cfgValue)
     {
         if (cfgName.substr(0, prefix.size()) == prefix) {
-            ASSERT(cfgName[prefix.size()] == '.')
-                << "ErrCode: F" << static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG)
-                << ",[SIMULATION]: "
+            ASSERT(CostModel::ExternalErrorScene::INVALID_CONFIG, cfgName[prefix.size()] == '.')
+                << "[SIMULATION]: "
                 << "cfgName format is error: " << cfgName;
             auto it = dispatcher.find(cfgName.substr(prefix.size() + 1));
             if (it != dispatcher.end()) {

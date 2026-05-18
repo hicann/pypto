@@ -970,16 +970,18 @@ bool ReadyQueue::Empty() const { return readyQueue.empty(); }
 
 int ReadyQueue::Front()
 {
-    ASSERT(!readyQueue.empty()) << "[SIMULATION]: "
-                                << "readyQueue is empty";
+    ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, !readyQueue.empty()) 
+        << "[SIMULATION]: "
+        << "readyQueue is empty";
     int idx = readyQueue.front();
     return idx;
 }
 
 int ReadyQueue::Pop()
 {
-    ASSERT(!readyQueue.empty()) << "[SIMULATION]: "
-                                << "readyQueue is empty";
+    ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, !readyQueue.empty()) 
+        << "[SIMULATION]: "
+        << "readyQueue is empty";
     int idx = readyQueue.front();
     readyQueue.pop_front();
     return idx;
