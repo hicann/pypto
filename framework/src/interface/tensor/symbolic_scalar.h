@@ -694,8 +694,8 @@ struct SymbolicSymbolTableX {
         std::ostringstream oss;
         for (auto& [name, index] : symbolIndexTable) {
             oss << "\n"
-                << "#define INDEX_" << name << " " << index << "\n"
-                << "#define VALUE_" << name << " (RUNTIME_GetSymbol(INDEX_" << name << "))\n";
+                << "#define SYMBOLIC_INDEX_" << name << " " << index << "\n"
+                << "#define VALUE_" << name << " (RUNTIME_GetSymbol(SYMBOLIC_INDEX_" << name << "))\n";
         }
         return oss.str();
     }
@@ -787,8 +787,8 @@ struct SymbolicSymbolTable {
         for (size_t index = 0; index < GetSymbolTable().size(); index++) {
             std::string name = GetSymbolTable()[index];
             oss << "\n"
-                << "#define INDEX_" << name << " " << index << "\n"
-                << "#define VALUE_" << name << " (RUNTIME_GetSymbol(INDEX_" << name << "))\n";
+                << "#define SYMBOLIC_INDEX_" << name << " " << index << "\n"
+                << "#define VALUE_" << name << " (RUNTIME_GetSymbol(SYMBOLIC_INDEX_" << name << "))\n";
         }
         return oss.str();
     }

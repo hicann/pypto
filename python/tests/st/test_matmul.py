@@ -185,6 +185,7 @@ def test_mm_with_mn_split_nz():
         shape_info
     )
     assert torch.allclose(c1_tensor.cpu().to(torch.float32), golden.cpu().to(torch.float32), atol=1e-3, rtol=1e-3)
+    torch.npu.synchronize()
 
 
 @pytest.mark.soc("950", "910")
