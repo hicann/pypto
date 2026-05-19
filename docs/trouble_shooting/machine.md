@@ -10,140 +10,97 @@
 
 ## 排查建议
 
-### AIC ERROR/The aicore execution is abnormal
+### AICORE ERROR/The aicore execution is abnormal
 
-1. **注释 CallSubFuncTask 及相关代码排除 machine 框架调度问题**
+**前置步骤：初始测试 — 确认 aicore error 可复现**
 
-`framework/src/interface/machine/device/tilefwk/aicore_entry.h`
-
-```cpp
-    INLINE void ExecDynCoreFunctionKernel(ExecuteContext *ctx, uint32_t taskId) {
-        uint64_t t1 = get_sys_cnt();
-        SetStatus(ctx->args, ((uint64_t)taskId << 32) | STAGE_PRE_EXEC_COREFUNC_KERNEL); // high 32 bits used for taskId
-        auto funcData = &ctx->funcDataList[npu::tile_fwk::FuncID(taskId)];
-        auto opAttrs = &funcData->opAttrs[funcData->opAtrrOffsets[npu::tile_fwk::TaskID(taskId)]];
-    #if ENABLE_AICORE_PRINT
-        CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, ctx->logger.Context()};
-    #else
-        CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
-    #endif
-        CallSubFuncTask(opAttrs[0] + funcData->exprTbl[0], &param, funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize,
-                        (__gm__ int64_t *)funcData->startArgs->commContexts);
-        SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
-        PipeSync();
-        ...
-    }
-```
-
-```cpp
-    INLINE void ExecDynCoreFunctionKernel(ExecuteContext *ctx, uint32_t taskId) {
-        uint64_t t1 = get_sys_cnt();
-        SetStatus(ctx->args, ((uint64_t)taskId << 32) | STAGE_PRE_EXEC_COREFUNC_KERNEL); // high 32 bits used for taskId
-        auto funcData = &ctx->funcDataList[npu::tile_fwk::FuncID(taskId)];
-        auto opAttrs = &funcData->opAttrs[funcData->opAtrrOffsets[npu::tile_fwk::TaskID(taskId)]];
-    // #if ENABLE_AICORE_PRINT
-    //     CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, ctx->logger.Context()};
-    // #else
-    //     CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
-    // #endif
-    //     CallSubFuncTask(opAttrs[0] + funcData->exprTbl[0], &param, funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize,
-    //                     (__gm__ int64_t *)funcData->startArgs->commContexts);
-        SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
-        PipeSync();
-        ...
-    }
-```
-
-重新编译安装，运行验证，若问题仍然复现， 则说明是 machine 调度框架的问题，停止后续步骤。若问题不复现，将上述修改恢复，继续后续步骤
-
-2. **启用追踪日志**
-
-`framework/src/interface/configs/tile_fwk_config.json`
-```cpp
-"fixed_output_path": true,
-"force_overwrite": false,
-```
-
-`framework/src/interface/machine/device/tilefwk/aicore_print.h`
-```cpp
-#define ENABLE_AICORE_PRINT 1
-```
-
-`framework/src/machine/utils/device_switch.h`
-```cpp
-#define ENABLE_COMPILE_VERBOSE_LOG 1
-```
-
-重新编译安装
-
-3. **清理日志并运行测试**
-
-（1）清理日志
-```bash
-rm -rf ./my_log/*
-rm -rf ./kernel_aic*
-```
-
-（2）打开DEBUG日志，指定日志落盘路径
-```bash
-export ASCEND_GLOBAL_LOG_LEVEL=0
-export ASCEND_PROCESS_LOG_PATH=./my_log
-```
-
-（3）执行用例
-
-（4）获取 program.json 路径
+**在修改任何代码之前**，先运行一次测试确认 aicore error 确实存在：
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/get_latest_program_json.py run_path/output
+export ASCEND_GLOBAL_LOG_LEVEL=0 && <test_cmd>
 ```
-结果说明：此脚本会给出program.json绝对路径program_json_path，给第6步映射到前端源代码使用
 
-4. **分析追踪日志并定位 CCE 文件**
+检查打屏输出，必须出现 `aicore error`。**如果未出现 aicore error，则不适用于该定位方法，立即停止后续步骤！**
 
-（1）查找 trace 日志、分析缺失 leaf index 并定位问题 CCE 文件
-```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/analyze_trace.py ./my_log run_path/kernel_aicore
-```
-结果说明：此脚本会给出问题CCE文件路径，若输出多个问题CCE文件，需要验证哪个CCE文件才是问题CCE文件，执行第二步，若只输出一个CCE文件，需要check该CCE文件是否是问题文件，执行第二步
+---
 
-（2）测试验证 CCE 文件
-```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/test_cce_file.py <cce_file> test_cmd run_path
-```
-结果说明：此脚本会给出判断，明确输入的CCE文件是否为问题文件
+以下步骤与 [pypto-aicore-error-locator SKILL](../../.agents/skills/pypto-aicore-error-locator/SKILL.md) 中的流程完全一致。各步骤已通过以下脚本实现自动化，也可使用一键定位脚本 [locate_aicore_error.py](../../tools/scripts/locate_aicore_error.py) 全自动完成。
 
-注：run_path为运行目录路径，test_cmd为运行测试命令
+### 1. 排除 machine 框架调度问题 — 判断 aicore error 源于 kernel 还是框架
 
-5. **二分查找定位CCE文件问题代码行**
-
-（1）check错误是否在 T 操作中
+> **说明**：使用单个脚本自动完成全部操作（定位 aicore_entry.h → 注释 CallSubFuncTask → 运行测试 → 恢复文件），**直接修改已安装 pypto 包，无需重新编译安装**。
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/determine_error_scope.py <cce_file> test_cmd run_path
+python3 .agents/skills/pypto-aicore-error-locator/scripts/exclude_machine_framework.py \
+  --test-cmd <test_cmd> \
+  --run-path <run_path>
 ```
-结果说明：此脚本会将所有的操作行（例如TLoad、TMatmul等）全部注释，进行测试，若不复现现象，则说明问题出现在操作行，输出ERROR_IN_T为True，否则ERROR_IN_T为False
 
-（2）获取二分查找初始范围
+**判断**：
+- **脚本退出码 0**（注释后无 aicore error）：问题在 **kernel 代码**中 → 继续后续步骤
+- **脚本退出码 1**（注释后仍有 aicore error）：问题在 **machine 调度框架** → 停止
+- **脚本退出码 2**（定位 aicore_entry.h 或 CallSubFuncTask 失败）：手动排查环境
+
+### 2. 定位问题 CCE 文件
+
+> **说明**：使用单个脚本自动完成全部操作（启用追踪日志 → 条件重编译 → 运行测试 → 分析日志 → 定位并验证 CCE 文件）。脚本内部自动处理并行编译错误（`ld.lld: error: undefined`）。
+
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/get_commentable_range.py <cce_file> ERROR_IN_T
+python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_problem_cce.py \
+  --pypto-path <pypto_path> \
+  --test-cmd <test_cmd> \
+  --run-path <run_path> \
+  --device-log-path <device_log_path>
 ```
-结果说明：此脚本根据ERROR_IN_T的值给出二分查找的范围left值和right值，若ERROR_IN_T为True，则排查范围为全部操作行，若ERROR_IN_T为False，则排查范围为除了同步行的所有行
 
-（3）执行二分查找迭代，直到找到CCE文件问题代码行
+**判断**：
+- **脚本退出码 0**：成功定位，输出 `CCE_FILE=<path>` 和 `PROGRAM_JSON=<path>`，记录这两个路径供后续步骤使用
+- **脚本退出码 1**：未找到问题 CCE 文件 → 停止
+- **脚本退出码 2**：并行编译错误无法自动修复（parallel_compile 已为 1 但仍报错），**停止执行**
+
+### 3. 准备二分查找 — 确定错误范围 + 获取初始范围
+
+> **说明**：单个脚本合并原有两步操作：先注释所有 T 操作行并测试确定错误是否在 T 操作中，再根据结果计算二分查找的初始范围。
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> test_cmd run_path <left> <right> ERROR_IN_T
+python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py <cce_file> <test_cmd> <run_path>
 ```
-结果说明：此脚本运行输出结果为新的left和right值，基于新的left和right值继续执行该脚本，直到出现 找到问题代码行 为止
 
-6. **映射到前端源代码**  
+结果说明：输出 `ERROR_IN_T=True|False`、`LEFT=<left>`、`RIGHT=<right>` 三个值。`ERROR_IN_T=True` 时仅对 T 操作行二分；`ERROR_IN_T=False` 时对除同步行外的所有行二分。
+
+### 4. 执行二分查找迭代
+
+> **说明**：此步骤通过迭代注释缩小范围，每次迭代仅执行一条命令（受超时限制），需多轮逐步收敛至问题行。
+
+多轮迭代执行以下命令，每轮根据输出的 `NEXT_LEFT` / `NEXT_RIGHT` 更新参数：
+
+```bash
+python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> <test_cmd> <run_path> <left> <right> ERROR_IN_T
+```
+
+结果说明：输出新的 `NEXT_LEFT` 和 `NEXT_RIGHT` 值。当 `NEXT_LEFT == NEXT_RIGHT` 时，输出 `FOUND <problem_line>`，即为问题代码行。
+
+### 5. 映射到前端源代码
+
 ```bash
 python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_source_line.py <cce_file> <program_json_path> <problem_line>
 ```
-结果说明：此脚本运行输出结果为前端源代码文件路径和行号
 
-**关联 Skill**：[pypto-aicore-error-locator](../../.agents/skills/pypto-aicore-error-locator/SKILL.md)
+结果说明：通过 funcHash 在 program.json 中匹配，输出前端源代码文件路径和行号。
+
+### 6. 恢复初始状态
+
+定位完成后，使用单个脚本恢复步骤 2 修改的配置文件并重新编译安装 pypto：
+
+```bash
+python3 .agents/skills/pypto-aicore-error-locator/scripts/restore_initial_state.py --pypto-path <pypto_path>
+```
+
+脚本自动完成：恢复 `tile_fwk_config.json` 和 `device_switch.h` 的 `.backup` 备份 → 重新编译安装 pypto。
+
+**关联 SKILL**：[pypto-aicore-error-locator](../../.agents/skills/pypto-aicore-error-locator/SKILL.md)
+
+**关联脚本**：[locate_aicore_error.py](../../tools/scripts/locate_aicore_error.py)（一键定位脚本，自动化执行上述步骤 1-6）
 
 
 ### 怀疑和MACHINE内存处理有关的精度问题

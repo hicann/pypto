@@ -27,7 +27,7 @@ def read_cce_file(cce_path):
             break
 
     if not func_hash:
-        raise ValueError(f"无法找到 funcHash: {cce_path}")
+        return None, None
 
     line_code_map = {idx: line.strip() for idx, line in enumerate(lines, start=1)}
 
@@ -66,8 +66,13 @@ def extract_operation_type(cce_op_val):
 def find_source_location(cce_path, json_path, cce_line_number):
     func_hash, line_code_map = read_cce_file(cce_path)
 
+    if not func_hash or not line_code_map:
+        logger.info("错误：无法找到 funcHash 或无法解析 CCE 文件")
+        return None
+
     if cce_line_number not in line_code_map:
-        raise ValueError(f"CCE 文件中没有第 {cce_line_number} 行")
+        logger.info("错误：CCE 文件中没有第 %d 行", cce_line_number)
+        return None
 
     cce_line = line_code_map[cce_line_number]
     cce_op = get_cce_op(line_code_map)
@@ -91,10 +96,10 @@ def find_source_location(cce_path, json_path, cce_line_number):
                       if func.get('hash') == func_hash), None)
 
     if not func_data:
-        raise ValueError(f"未找到 hash 为 {func_hash} 的函数")
+        logger.info("错误：未找到 hash 为 %s 的函数", func_hash)
+        return None
 
     program_op = func_data.get('operations', [])
-    program_opcode = [op.get('opcode') for op in program_op]
 
     cce_count = len(cce_op_line)
     json_count = len(program_op)
@@ -105,13 +110,9 @@ def find_source_location(cce_path, json_path, cce_line_number):
     logger.info("  program.json 中 操作数: %d 个", json_count)
 
     if cce_count != json_count:
-        logger.error("CCE 文件中的操作为：")
-        logger.error(cce_op_type)
-        logger.error("program.json对应hash中的操作为： ")
-        logger.error(program_opcode)
         return {
             'matched': False,
-            'reason': 'CCE 文件中操作 与 program.json 中操作的个数不一样，请仔细检查',
+            'reason': 'CCE 文件与 program.json 操作数不一致',
             'cce_line_code': cce_line
         }
 
@@ -186,10 +187,14 @@ def main():
 
     logger.info("CCE 文件: %s", cce_path)
     logger.info("问题行号: %d", cce_line_number)
-    logger.info("代码: %s:%d", cce_path, cce_line_number)
     logger.info("-" * 80)
 
     result = find_source_location(cce_path, json_path, cce_line_number)
+
+    if result is None:
+        logger.info("")
+        logger.info("✗ 无法映射到源代码")
+        sys.exit(1)
 
     logger.info("")
     logger.info("[CCE 问题代码]")

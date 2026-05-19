@@ -38,7 +38,6 @@ public:
         auto dynFuncData = GetDynFuncData(dyntask, taskId);
         auto attrBase = &duppedData->GetSource()->GetOperationAttr(opIdx, 0);
 
-        DEV_TRACE_INFO(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex), LActStart(coreIdx)));
         DEV_TRACE_DEBUG_SPLIT(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
             duppedData->GetSource()->SchemaGetCoa(opIdx)));
 

@@ -1099,6 +1099,9 @@ private:
 
     [[gnu::hot]] inline void SendTaskToAiCore(SchDeviceTaskContext* devTaskCtx, CoreType type, int coreIdx, uint64_t newTask)
     {
+        DEV_TRACE_DEBUG(LEvent(
+            LUid(devTaskCtx->TaskId(), FuncID(newTask), GetRootIndex(devTaskCtx, newTask),
+            TaskID(newTask), GetLeafIndex(devTaskCtx, newTask)), LActStart(coreIdx)));
 #if ENABLE_DUMP_OPERATION
         SchemaDumpUtil::DumpSchemaOperationInfo(devTaskCtx, coreIdx, newTask);
 #endif

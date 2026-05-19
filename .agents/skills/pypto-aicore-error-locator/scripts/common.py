@@ -2,10 +2,10 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
 import os
-import re
 import shutil
 import subprocess
 import logging
+from pathlib import Path
 
 
 def setup_logging():
@@ -92,36 +92,10 @@ def comment_lines_by_range(lines, start_idx, end_idx):
             lines[i] = '// ' + lines[i]
 
 
-def uncomment_lines_by_range(lines, start_idx, end_idx):
-    for i in range(start_idx, end_idx + 1):
-        if lines[i].strip().startswith('// '):
-            lines[i] = lines[i][3:]
-        elif lines[i].strip().startswith('//'):
-            lines[i] = lines[i][2:]
-
-
 def has_error(returncode, output):
-    if returncode != 0:
-        return True
-
-    output_lower = output.lower()
-
-    true_error_keywords = [
-        ' error',
-        'error ',
-        'exception',
-        'segmentation fault',
-        'core dump',
-    ]
-
-    for keyword in true_error_keywords:
-        if keyword in output_lower and "aicore error" not in output_lower:
-            raise RuntimeError(f"检测到非 aicore error: {output_lower}")
-
-        if keyword in output_lower:
-            return True
-
-    return False
+    if returncode == 0:
+        return False
+    return "aicore error" in output.lower()
 
 
 def run_test(test_cmd, run_dir):
@@ -148,40 +122,6 @@ def comment_special_lines(lines):
     return lines
 
 
-def parse_luid(luid_str):
-    match = re.search(r'LUid\{(\d+),(\d+),(\d+),(\d+),(\d+)\}', luid_str)
-    if match:
-        return {
-            'deviceTaskId': int(match.group(1)),
-            'funcId': int(match.group(2)),
-            'rootIndex': int(match.group(3)),
-            'opIdx': int(match.group(4)),
-            'leafIndex': int(match.group(5))
-        }
-    return None
-
-
-def parse_core_idx(event_str, pattern):
-    match = re.search(pattern, event_str)
-    if match:
-        return int(match.group(1))
-    return None
-
-
-def find_aicore_entry_h(pypto_path, logger):
-    possible_paths = os.path.join(pypto_path, "framework/src/interface/machine/device/tilefwk/aicore_entry.h")
-
-    if os.path.exists(possible_paths):
-        return possible_paths
-
-    for root, _, files in os.walk(pypto_path):
-        if "aicore_entry.h" in files:
-            return os.path.join(root, "aicore_entry.h")
-
-    logger.info("错误：在 %s 下未找到 aicore_entry.h", pypto_path)
-    return None
-
-
 def backup_and_test(cce_file, test_cmd, run_dir, modify_func):
     backup_file = cce_file + ".bak"
     shutil.copy(cce_file, backup_file)
@@ -202,3 +142,58 @@ def backup_and_test(cce_file, test_cmd, run_dir, modify_func):
             os.remove(backup_file)
 
     return error_exists, output, original_lines
+
+
+_PIP_CMD = shutil.which("pip3") or shutil.which("pip") or "/usr/bin/pip3"
+DEFAULT_TIMEOUT = 1800
+
+KNOWN_LOCATIONS = {
+    'device_switch.h': "framework/src/machine/utils/device_switch.h",
+}
+
+
+def locate_file(base_dir, known_rel_path, filename):
+    primary = os.path.join(base_dir, known_rel_path)
+    if os.path.exists(primary):
+        return primary
+    for root, _, files in os.walk(base_dir):
+        if filename in files:
+            return os.path.join(root, filename)
+    return None
+
+
+def find_installed_tile_fwk_config():
+    result = subprocess.run([_PIP_CMD, "show", "pypto"], capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    location = None
+    for line in result.stdout.split('\n'):
+        if line.startswith('Location:'):
+            location = line.split(':', 1)[1].strip()
+            break
+    if not location:
+        return None
+    for root, _, files in os.walk(location):
+        if 'tile_fwk_config.json' in files:
+            return os.path.join(root, 'tile_fwk_config.json')
+    return None
+
+
+def build_and_install(pypto_path):
+    result = subprocess.run(
+        ["python3", "build_ci.py", "-f", "python3", "--disable_auto_execute"],
+        shell=False, capture_output=True, text=True, cwd=pypto_path,
+        timeout=DEFAULT_TIMEOUT)
+    if result.returncode != 0:
+        return False
+
+    whl_files = list(Path(pypto_path).glob("build_out/pypto*.whl"))
+    if not whl_files:
+        return False
+
+    result = subprocess.run(
+        [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"],
+        shell=False, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        return False
+    return True
