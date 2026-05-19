@@ -602,6 +602,27 @@ Status ReplaceTensor::BackwardAssemble(Operation* op, LogicalTensorPtr& rootTens
     return SUCCESS;
 }
 
+Status ReplaceTensor::BackwardInputIdx(Operation* op, LogicalTensorPtr& rootTensor, Function& function)
+{
+    auto index = op->GetIntAttribute(OpAttributeKey::inplaceIdx);
+    auto inTensor = op->GetIOperands()[index];
+    auto outTensor = op->GetOOperands().front();
+    if (outTensor != rootTensor) {
+        APASS_LOG_INFO_F(
+            Elements::Operation, "op %s[%d] tensorIn %d is not same as rootTensor %d.", op->GetOpcodeStr().c_str(),
+            op->GetOpMagic(), inTensor->GetMagic(), rootTensor->GetMagic());
+        return SUCCESS;
+    }
+    processedOp.insert(op->GetOpMagic());
+    if (!function.IsFromOutCast(outTensor)) {
+        function.UpdateLinkMap(outTensor, inTensor);
+    }
+    inTensor->tensor = rootTensor->tensor;
+    inTensor->UpdateOffset(rootTensor->GetOffset());
+    forRoots.push(inTensor);
+    return SUCCESS;
+}
+
 Status ReplaceTensor::ForwardProcess(Function& function)
 {
     while (!forRoots.empty()) {
@@ -651,7 +672,7 @@ Status ReplaceTensor::ForwardProcess(Function& function)
     return SUCCESS;
 }
 
-Status ReplaceTensor::BackwardProcess()
+Status ReplaceTensor::BackwardProcess(Function& function)
 {
     while (!backRoots.empty()) {
         auto rootTensor = backRoots.front();
@@ -678,6 +699,12 @@ Status ReplaceTensor::BackwardProcess()
                 }
             } else if (producerOp->GetOpcode() == Opcode::OP_VIEW_TYPE) {
                 if (BackwardViewType(producerOp, rootTensor) == FAILED) {
+                    return FAILED;
+                }
+            } else if (
+                (producerOp->GetOpcode() == Opcode::OP_INDEX_PUT || producerOp->GetOpcode() == Opcode::OP_INDEX_ADD) &&
+                producerOp->HasAttribute(OpAttributeKey::inplaceIdx)) {
+                if (BackwardInputIdx(producerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
             } else {
@@ -1094,7 +1121,7 @@ Status ReplaceTensor::RunOnFunction(Function& function)
         backRoots.push(baseTensor);
         forRoots.push(baseTensor);
         while (!forRoots.empty() || !backRoots.empty()) {
-            if (BackwardProcess() == FAILED || ForwardProcess(function) == FAILED) {
+            if (BackwardProcess(function) == FAILED || ForwardProcess(function) == FAILED) {
                 return FAILED;
             }
         }

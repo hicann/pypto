@@ -151,7 +151,7 @@ private:
     Status AdjustOffsetAndRawShape(LogicalTensorPtr& fromView, LogicalTensorPtr& toView) const;
 
     Status ForwardProcess(Function& function);
-    Status BackwardProcess();
+    Status BackwardProcess(Function& function);
 
     Status ForwardView(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
     Status ForwardAssemble(Operation* op, LogicalTensorPtr& rootTensor);
@@ -166,6 +166,7 @@ private:
     Status BackwardView(Operation* op, LogicalTensorPtr& rootTensor);
     Status BackwardInplaceOp(Operation* op, LogicalTensorPtr& rootTensor);
     Status BackwardViewType(Operation* op, LogicalTensorPtr& rootTensor);
+    Status BackwardInputIdx(Operation* op, LogicalTensorPtr& rootTensor, Function& function);
 
     Status ForUpdateView(Operation* op);
     Status BackUpdateAssemble(Operation* op);
