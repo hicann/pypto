@@ -51,6 +51,28 @@ void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTe
                                              << "Dump tensor: " << tensor->Dump();
 }
 
+void CheckViewValidShapesConstraint(
+    const std::vector<SymbolicScalar>& newValidShapes,
+    const std::vector<int64_t>& shapes,
+    const std::vector<int64_t>& operandShape)
+{
+    CHECK_OP(newValidShapes.size() == operandShape.size())
+        << "View operation failed: newValidShapes dimension count must match original tensor's dimension count. "
+        << "newValidShapes has " << newValidShapes.size() << " dimensions, "
+        << "but original tensor has " << operandShape.size() << " dimensions.";
+    
+    auto validShapesConcrete = SymbolicScalar::Concrete(newValidShapes, 0);
+    
+    for (size_t i = 0; i < shapes.size(); i++) {
+        CHECK_OP(operandShape[i] == -1 || validShapesConcrete[i] <= operandShape[i])
+            << "View operation failed: newValidShapes cannot exceed original tensor's shape at dimension " << i << ". "
+        << "newValidShapes[" << i << "] = " << validShapesConcrete[i] << ", "
+        << "but original tensor shape[" << i << "] = " << operandShape[i]
+        << (operandShape[i] == -1 ? " (dynamic dimension)" : "") << ". "
+        << "Note: -1 indicates a dynamic dimension that can be any size.";
+    }
+}
+
 void TiledAssemble(
     Function& function, const TileShape& tileShape, size_t cur, Input& input,
     const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
@@ -1003,6 +1025,10 @@ Tensor View(
     const std::vector<SymbolicScalar>& newOffsets)
 {
     DECLARE_TRACER();
+    
+    const auto& operandShape = operand.GetShape();
+    CheckViewValidShapesConstraint(newValidShapes, shapes, operandShape);
+    
     Tensor result(
         operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
         operand.Format());

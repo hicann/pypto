@@ -46,10 +46,11 @@ def _check_inner_shape(tensor, dtype, is_nz):
         block_align_bytes = 64 if is_b4 else 32
         total_bytes = shape_back if is_b4 else shape_back * tensor.element_size()
         if total_bytes % block_align_bytes != 0:
-            raise RuntimeError("NZ format inner axis must be aligned to 32B(4bit dtype must be aligned to 64).")
+            raise FeError(
+                RuntimeError("NZ format inner axis must be aligned to 32B(4bit dtype must be aligned to 64)."))
     elif is_b4:
         if shape_back % 2 != 0:
-            raise RuntimeError("ND format and 4bit dtype inner axis must be even number.")
+            raise FeError(RuntimeError("ND format and 4bit dtype inner axis must be even number."))
 
 
 @_count_calls
@@ -247,7 +248,7 @@ def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
                 "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
             ))
         else:
-            raise ValueError(f"Input pypto.DataType is not supported or mapped to None. Got {dtype}")
+            raise VerifyError(ValueError(f"Input pypto.DataType is not supported or mapped to None. Got {dtype}"))
     return torch_dtype
 
 

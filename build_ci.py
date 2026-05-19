@@ -1018,35 +1018,6 @@ class BuildCtrl(CMakeParam):
         parser.add_argument("--verbose", action="store_true", default=False,
                             help="verbose, enable verbose output.")
 
-    @staticmethod
-    def _log_npu_smi_info():
-        """获取并记录 npu-smi 信息和残留进程信息
-        """
-        npu_smi_path = shutil.which("npu-smi")
-        if not npu_smi_path:
-            logging.warning("npu-smi not found in PATH, skip NPU info collection")
-            return
-        
-        try:
-            result = subprocess.run([npu_smi_path, "info"], capture_output=True, text=True, timeout=10)
-        except subprocess.TimeoutExpired:
-            logging.warning("npu-smi info command timeout (10s), skip NPU info collection")
-            return
-        except Exception as e:
-            logging.warning("Failed to get npu-smi info: %s", e)
-            return
-        
-        if result.returncode != 0:
-            logging.warning("npu-smi info command failed with return code %d: %s", result.returncode, result.stderr)
-            return
-        
-        logging.error("Timeout detected, NPU-SMI info:\n%s", result.stdout)
-        for line in result.stdout.split('\n'):
-            line = line.strip()
-            parts = [p.strip() for p in line.split('|') if p.strip()]
-            if len(parts) >= 3 and parts[2].isdigit():
-                logging.error("Timeout detected, NPU residue process: %s", line)
-
     @classmethod
     def check_pip_dependencies(cls, deps: Dict[str, str], raise_err: bool = False, log_err: bool = True) -> bool:
         info_lst = []
@@ -1162,7 +1133,6 @@ class BuildCtrl(CMakeParam):
             try:
                 stdout, stderr = process.communicate(timeout=self.remain_timeout)
             except subprocess.TimeoutExpired as e:
-                self._log_npu_smi_info()
                 _stop_pg(_msg=f"Timeout({self.remain_timeout})", _p=process)
                 raise e
             except KeyboardInterrupt as e:
