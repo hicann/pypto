@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_for():
+def test_pil_builder_for():
 
     with TestParser():
 
@@ -122,7 +122,7 @@ def test_pil_parser_for():
                         Expr.str(var_y)
 
 
-def test_pil_parser_while():
+def test_pil_builder_while():
 
     with TestParser():
 
@@ -256,7 +256,7 @@ def test_pil_parser_while():
                 break
 
 
-def test_pil_parser_if():
+def test_pil_builder_if():
 
     with TestParser():
 
@@ -400,7 +400,7 @@ def test_pil_parser_if():
                 Expr.str(5)
 
 
-def test_pil_parser_break():
+def test_pil_builder_break():
 
     with TestParser():
 
@@ -515,7 +515,7 @@ def test_pil_parser_break():
                 break
 
 
-def test_pil_parser_continue():
+def test_pil_builder_continue():
 
     with TestParser():
 
@@ -636,7 +636,7 @@ def test_pil_parser_continue():
                 break
 
 
-def test_pil_parser_with():
+def test_pil_builder_with():
 
     with TestParser():
 

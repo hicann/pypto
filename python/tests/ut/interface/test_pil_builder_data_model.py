@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_constant():
+def test_pil_builder_constant():
 
     with TestParser():
 
@@ -165,7 +165,7 @@ def test_pil_parser_constant():
             Expr.str(var_x)
 
 
-def test_pil_parser_joined_str():
+def test_pil_builder_joined_str():
 
     with TestParser():
 
@@ -251,7 +251,7 @@ def test_pil_parser_joined_str():
             var_x = f"{Expr.str(Expr.int(0))}"
 
 
-def test_pil_parser_dict():
+def test_pil_builder_dict():
 
     with TestParser():
 
@@ -352,7 +352,7 @@ def test_pil_parser_dict():
             var_d = {Expr.int(0): {Expr.int(1): Expr.int(2)}}
 
 
-def test_pil_parser_set():
+def test_pil_builder_set():
 
     with TestParser():
 
@@ -430,7 +430,7 @@ def test_pil_parser_set():
             var_s = {*make_a(), *make_b()}
 
 
-def test_pil_parser_list():
+def test_pil_builder_list():
 
     with TestParser():
 
@@ -520,7 +520,7 @@ def test_pil_parser_list():
             var_l = [Expr.int(0), [Expr.int(1), Expr.int(2)]]
 
 
-def test_pil_parser_tuple():
+def test_pil_builder_tuple():
 
     with TestParser():
 
@@ -604,7 +604,7 @@ def test_pil_parser_tuple():
             var_t = (Expr.int(0), (Expr.int(1), Expr.int(2)))
 
 
-def test_pil_parser_attribute():
+def test_pil_builder_attribute():
 
     with TestParser():
 
@@ -803,7 +803,7 @@ def test_pil_parser_attribute():
             Expr.str(var_x)
 
 
-def test_pil_parser_subscript():
+def test_pil_builder_subscript():
 
     with TestParser():
 

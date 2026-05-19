@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_function_def():
+def test_pil_builder_function_def():
 
     with TestParser():
 
@@ -106,7 +106,7 @@ def test_pil_parser_function_def():
             outer()
 
 
-def test_pil_parser_lambda():
+def test_pil_builder_lambda():
 
     with TestParser():
 
@@ -228,7 +228,7 @@ def test_pil_parser_lambda():
                 var_r = f()
 
 
-def test_pil_parser_return():
+def test_pil_builder_return():
 
     with TestParser():
 
@@ -348,7 +348,7 @@ def test_pil_parser_return():
             Expr.str(var_r)
 
 
-def test_pil_parser_call():
+def test_pil_builder_call():
 
     with TestParser():
 
@@ -610,3 +610,14 @@ def test_pil_parser_call():
             def middle(x):
                 return x
             Expr.str(middle(inner()))
+
+        @TestParser.test
+        def call_star():
+
+            def inner():
+                return [Expr.int(0), Expr.int(1)]
+
+            def middle(a, b):
+                return a, b, Expr.int(3)
+
+            middle(*inner())

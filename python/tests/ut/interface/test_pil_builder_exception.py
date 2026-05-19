@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_raise():
+def test_pil_builder_raise():
 
     with TestParser():
 
@@ -120,7 +120,7 @@ def test_pil_parser_raise():
                 Expr.int(e.value)
 
 
-def test_pil_parser_try():
+def test_pil_builder_try():
 
     with TestParser():
 
@@ -283,7 +283,7 @@ def test_pil_parser_try():
                 Expr.int(e.value)
 
 
-def test_pil_parser_assert():
+def test_pil_builder_assert():
 
     with TestParser():
 

@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_list_comp():
+def test_pil_builder_list_comp():
 
     with TestParser():
 
@@ -100,7 +100,7 @@ def test_pil_parser_list_comp():
                      for var_z in [Expr.int(0), Expr.int(1)]]
 
 
-def test_pil_parser_set_comp():
+def test_pil_builder_set_comp():
 
     with TestParser():
 
@@ -174,7 +174,7 @@ def test_pil_parser_set_comp():
                      for var_z in [Expr.int(0), Expr.int(1)]}
 
 
-def test_pil_parser_dict_comp():
+def test_pil_builder_dict_comp():
 
     with TestParser():
 
@@ -252,7 +252,7 @@ def test_pil_parser_dict_comp():
                      for var_z in [Expr.int(0), Expr.int(1)]}
 
 
-def test_pil_parser_generator_exp():
+def test_pil_builder_generator_exp():
 
     with TestParser():
 
@@ -336,7 +336,7 @@ def test_pil_parser_generator_exp():
             var_l = list(g)
 
 
-def test_pil_parser_yield():
+def test_pil_builder_yield():
 
     with TestParser():
 

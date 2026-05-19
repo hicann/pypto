@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_boolop():
+def test_pil_builder_boolop():
 
     with TestParser():
 
@@ -59,7 +59,7 @@ def test_pil_parser_boolop():
                 Expr.str(4)
 
 
-def test_pil_parser_ifexp():
+def test_pil_builder_ifexp():
 
     with TestParser():
 
@@ -91,7 +91,7 @@ def test_pil_parser_ifexp():
                 Expr.str(4)
 
 
-def test_pil_parser_bin_op():
+def test_pil_builder_bin_op():
 
     with TestParser():
 
@@ -101,7 +101,7 @@ def test_pil_parser_bin_op():
             var_y = Expr.int(0) - Expr.int(1) // Expr.int(2)
 
 
-def test_pil_parser_unary_op():
+def test_pil_builder_unary_op():
 
     with TestParser():
 
@@ -111,7 +111,7 @@ def test_pil_parser_unary_op():
             var_y = -Expr.int(0) - Expr.int(1) // Expr.int(2)
 
 
-def test_pil_parser_compare():
+def test_pil_builder_compare():
 
     with TestParser():
 

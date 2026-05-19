@@ -73,3 +73,4 @@ For detailed developer documentation, see developer_doc.md in the frontend direc
 
 from ... import error
 from .entry import jit, function
+from .pil import parse_stmts

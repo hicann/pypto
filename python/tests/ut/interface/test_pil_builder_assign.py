@@ -12,7 +12,7 @@
 from test_pil_builder_utils import TestParser, Expr
 
 
-def test_pil_parser_expr():
+def test_pil_builder_expr():
 
     with TestParser():
 
@@ -31,7 +31,7 @@ def test_pil_parser_expr():
 
 
 
-def test_pil_parser_named_expr():
+def test_pil_builder_named_expr():
 
     with TestParser():
 
@@ -191,7 +191,7 @@ def test_pil_parser_named_expr():
             Expr.str(var_ann)
 
 
-def test_pil_parser_assign():
+def test_pil_builder_assign():
 
     with TestParser():
 
@@ -447,7 +447,7 @@ def test_pil_parser_assign():
             var_x = [var_c, var_d] = var_a, var_b = [Expr.int(0), Expr.int(1)]
 
 
-def test_pil_parser_aug_assign():
+def test_pil_builder_aug_assign():
 
     with TestParser():
 
@@ -531,7 +531,7 @@ def test_pil_parser_aug_assign():
             var_obj[0:4:2] += Expr.int(2)
 
 
-def test_pil_parser_ann_assign():
+def test_pil_builder_ann_assign():
 
     with TestParser():
 
@@ -618,7 +618,7 @@ def test_pil_parser_ann_assign():
             var_x: Expr.int(0) + Expr.int(1) = Expr.int(2)
 
 
-def test_pil_parser_delete():
+def test_pil_builder_delete():
 
     with TestParser():
 
@@ -644,6 +644,24 @@ def test_pil_parser_delete():
             var_obj = Expr(0)
             var_obj[Expr.str(1)] = Expr.str(2)
             del var_obj[Expr.str(1)]
+
+        @TestParser.test
+        def delete_subscript_slice():
+            var_obj = Expr(0)
+            var_obj[Expr.int(1):Expr.int(2)] = Expr.str(2)
+            del var_obj[Expr.int(1):Expr.int(2)]
+
+        @TestParser.test
+        def delete_subscript_tuple():
+            var_obj = Expr(0)
+            var_obj[Expr.int(1), Expr.int(2)] = Expr.str(2)
+            del var_obj[Expr.int(1), Expr.int(2)]
+
+        @TestParser.test
+        def delete_subscript_tuple_slice():
+            var_obj = Expr(0)
+            var_obj[Expr.int(1), Expr.int(2):Expr.int(3)] = Expr.str(2)
+            del var_obj[Expr.int(1), Expr.int(2):Expr.int(3)]
 
         # --- delete tuple (multiple targets in one del) ---
 
