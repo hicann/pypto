@@ -177,6 +177,8 @@ public:
             { SendTaskToAiCore(devTaskCtx, coreType, arg1, arg2); },
             [&](int coreIdx, int type) { AddReadyCoreIdx(coreIdx, type); });
 
+        context_->lastPendReadyCoreIdx_[static_cast<int>(CoreType::AIV)] = static_cast<uint32_t>(aivStart_);
+        context_->lastPendReadyCoreIdx_[static_cast<int>(CoreType::AIC)] = static_cast<uint32_t>(aicStart_);
         InitCostModelFuncData(deviceTaskCtx);
     }
 
@@ -1148,7 +1150,7 @@ private:
         context_->runReadyCoreIdx_[type][context_->coreRunReadyCnt_[type]++] = coreIdx;
     }
 
-    inline void RemoveReadyCoreIdx(int coreIdx, int type)
+    inline void RemoveRunReadyCoreIdx(int coreIdx, int type)
     {
         uint32_t tail = --context_->coreRunReadyCnt_[type];
         uint8_t pos = context_->coreIdxPosition_[coreIdx];
@@ -1158,7 +1160,6 @@ private:
             context_->coreIdxPosition_[context_->runReadyCoreIdx_[type][pos]] = pos;
         }
         context_->coreIdxPosition_[coreIdx] = INVALID_COREIDX_POSITION;
-        context_->corePendReadyCnt_[type]--;
     }
 
     inline void RemoveReadyCoreIdxTail(int coreIdx, int type)
@@ -1821,7 +1822,7 @@ private:
         aicValidNum_ = deviceArgs->nrValidAic;
         hasAicpuTask_ = deviceArgs->hasAicpuTask;
         enableEslModel_ = deviceArgs->enableEslModel;
-        disableControlCore_ = true;
+        disableControlCore_ = (startArgs->devProg->GetParallelism() > 1);
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
         validGetPgMask_ = deviceArgs->validGetPgMask;
         runningIds_.fill(AICORE_STATUS_INIT);
@@ -2258,28 +2259,25 @@ private:
         return;
     }
 
-    inline void UpdateReadyCoreNum(int preAdjAicEnd, int preAdjAivEnd)
+    inline void UpdateRunReadyCoreNum(int preAdjAicEnd, int preAdjAivEnd)
     {
-        if (aicStart_ != adjAicEnd_) {
-            if (preAdjAicEnd > adjAicEnd_) {
-                for (int i = preAdjAicEnd - 1; i >= adjAicEnd_; i--) {
-                    RemoveReadyCoreIdx(i, static_cast<int>(CoreType::AIC));
-                }
-            } else if (preAdjAicEnd < adjAicEnd_) {
-                for (int i = preAdjAicEnd; i < adjAicEnd_; i++) {
-                    AddReadyCoreIdx(i, static_cast<int>(CoreType::AIC));
-                }
+        if (preAdjAicEnd > adjAicEnd_) {
+            for (int i = preAdjAicEnd - 1; i >= adjAicEnd_; i--) {
+                RemoveRunReadyCoreIdx(i, static_cast<int>(CoreType::AIC));
+            }
+        } else if (preAdjAicEnd < adjAicEnd_) {
+            for (int i = preAdjAicEnd; i < adjAicEnd_; i++) {
+                AddReadyCoreIdx(i, static_cast<int>(CoreType::AIC));
             }
         }
-        if (aivStart_ != adjAivEnd_) {
-            if (preAdjAivEnd > adjAivEnd_) {
-                for (int i = preAdjAivEnd - 1; i >= adjAivEnd_; i--) {
-                    RemoveReadyCoreIdx(i, static_cast<int>(CoreType::AIV));
-                }
-            } else if (preAdjAivEnd < adjAivEnd_) {
-                for (int i = preAdjAivEnd; i < adjAivEnd_; i++) {
-                    AddReadyCoreIdx(i, static_cast<int>(CoreType::AIV));
-                }
+
+        if (preAdjAivEnd > adjAivEnd_) {
+            for (int i = preAdjAivEnd - 1; i >= adjAivEnd_; i--) {
+                RemoveRunReadyCoreIdx(i, static_cast<int>(CoreType::AIV));
+            }
+        } else if (preAdjAivEnd < adjAivEnd_) {
+            for (int i = preAdjAivEnd; i < adjAivEnd_; i++) {
+                AddReadyCoreIdx(i, static_cast<int>(CoreType::AIV));
             }
         }
     }
@@ -2331,7 +2329,7 @@ private:
 
         context_->corePendReadyCnt_[static_cast<int>(CoreType::AIC)] = adjAicEnd_ - aicStart_;
         context_->corePendReadyCnt_[static_cast<int>(CoreType::AIV)] = adjAivEnd_ - aivStart_;
-        UpdateReadyCoreNum(preAdjAicEnd, preAdjAivEnd);
+        UpdateRunReadyCoreNum(preAdjAicEnd, preAdjAivEnd);
     }
 
     inline void ProcessParallellDevTasksFinish(SchDeviceTaskContext* devTaskCtx)

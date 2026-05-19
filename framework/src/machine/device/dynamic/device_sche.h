@@ -492,7 +492,7 @@ struct DynMachineManager {
     void ReCalcDevArgsAicoreNum(DeviceKernelArgs* kargs, DevAscendProgram* devProg)
     {
         if (kargs->parameter.ctrlBlockNum != 0 &&
-            static_cast<uint32_t>(kargs->parameter.ctrlBlockNum) < devProg->devArgs.nrValidAic) {
+            static_cast<uint32_t>(kargs->parameter.ctrlBlockNum) != devProg->devArgs.nrValidAic) {
             devProg->devArgs.nrValidAic = kargs->parameter.ctrlBlockNum;
             DEV_INFO("control aicore before launch, nrValidAic changed to %lu", kargs->parameter.ctrlBlockNum);
         }
