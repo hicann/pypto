@@ -106,9 +106,8 @@ class MixGraphMerger {
 public:
     MixGraphMerger() = default;
     ~MixGraphMerger() = default;
-
     MergeOutput Merge(const MergeInput& input);
-
+    bool enableAutoMix{true};
 private:
     MergeInput mInput;
     MergeOutput mOutput;

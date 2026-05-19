@@ -60,6 +60,7 @@ def set_pass_options(*,
                      cube_l1_reuse_setting: Optional[Dict[Union[int, str], int]] = None,
                      cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
                      sg_set_scope: Optional[Union[int, tuple[int, bool, bool]]] = None,
+                     auto_mix_partition: Optional[int] = None,
                      ) -> None:
     """
     Set pass options.
@@ -94,6 +95,9 @@ def set_pass_options(*,
           * scopeid: int, scope ID
           * allow_parallel_merge: bool, enable parallel branch merging
           * allow_cross_scope_merge: bool, allow supernode with scope to merge with others
+
+    auto_mix_partition : int
+        Control the auto mix partition behavior in ReduceCopyMerge pass.
 
     Raises
     ------
@@ -188,6 +192,8 @@ def set_pass_options(*,
         pass_options['cube_l1_reuse_setting'] = cube_l1_reuse_setting
     if cube_nbuffer_setting is not None:
         pass_options['cube_nbuffer_setting'] = cube_nbuffer_setting
+    if auto_mix_partition is not None:
+        pass_options['auto_mix_partition'] = auto_mix_partition
 
     # 调用 set_options
     if pass_options:
@@ -220,6 +226,7 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
         'cube_l1_reuse_setting_by_label',
         'cube_nbuffer_setting_by_label',
         'sg_set_scope',
+        'auto_mix_partition',
     }
     result = {k: v for k, v in rst.items() if k in allowed_keys}
     val = result.get("sg_set_scope", (-1, False, False))

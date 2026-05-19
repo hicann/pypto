@@ -120,6 +120,7 @@ TEST_F(ReduceCopyTest, TestCase0)
     BuildMatmulAddsGraph(G);
     Function* function = G.GetFunction();
     ReduceCopyMerge merger;
+    function->paramConfigs_.autoMixPartition = 1;
     merger.RunOnFunction(*function);
     const int Num2 = 2;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
@@ -210,6 +211,7 @@ TEST_F(ReduceCopyTest, TestCase1)
     ComputationalGraphBuilder G;
     BuildConnect(G);
     Function* function = G.GetFunction();
+    function->paramConfigs_.autoMixPartition = 1;
     ReduceCopyMerge merger;
     merger.RunOnFunction(*function);
     const int Num3 = 3;
@@ -221,6 +223,7 @@ TEST_F(ReduceCopyTest, TestCase2)
     ComputationalGraphBuilder G;
     BuildConnect(G);
     Function* function = G.GetFunction();
+    function->paramConfigs_.autoMixPartition = 1;
     G.GetOp("adds12")->scopeInfo_.cvFuseId = 0;
     G.GetOp("adds22")->scopeInfo_.cvFuseId = 0;
     ReduceCopyMerge merger;
@@ -234,7 +237,8 @@ TEST_F(ReduceCopyTest, TestCase3)
     ComputationalGraphBuilder G;
     BuildConnect(G);
     Function* function = G.GetFunction();
-    const int largeNum = 10000000; // latency超过阈值的子图不会合并
+    function->paramConfigs_.autoMixPartition = 1;
+    const int largeNum = 2e7; // latency超过阈值的子图不会合并
     G.GetOp("matmul0")->UpdateLatency(largeNum);
     ReduceCopyMerge merger;
     merger.RunOnFunction(*function);

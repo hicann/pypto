@@ -64,14 +64,17 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
         return SUCCESS;
     }
     MergeInput mergeInput;
-    mergeInput.maxLatency = 1000;
-    mergeInput.aivRatio = {0.5, 2.0};
+    mergeInput.maxLatency = 1e7;
+    mergeInput.aivRatio = {1e-6, 1e6};
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph Info before ReduceCopy Pass:");
     BuildGraph(function, mergeInput);
     MarkNoMergeSubgraph(function);
     BuildMergeGroup(function, mergeInput);
     CombineForkSubgraph(function, mergeInput);
     MixGraphMerger merger;
+    bool enableAutoMix = (function.paramConfigs_.autoMixPartition != 0);
+    APASS_LOG_INFO_F(Elements::Operation, "Enable auto CV mix partition: %s", enableAutoMix ? "True" : "False");
+    merger.enableAutoMix = enableAutoMix;
     MergeOutput output = merger.Merge(mergeInput);
     function.SetTotalSubGraphCount(output.numSubgraphUpdated);
     for (auto& op : function.Operations()) {
@@ -643,7 +646,8 @@ MergeOutput MixGraphMerger::Merge(const MergeInput& input)
                 continue;
             }
             if ((input.isEnforceMergeGroup[i] && CanMergeWithoutCycle(actualGroup)) ||
-                (mergeLoopStep != 0 && input.isValidMergeGroup[i] && CanMergeWithConstraints(actualGroup))) {
+                (enableAutoMix && mergeLoopStep != 0 && input.isValidMergeGroup[i] &&
+                    CanMergeWithConstraints(actualGroup))) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "Merge group %zu succeeded", i);
                 PerformMerge(actualGroup);
                 hasUpdated = true;

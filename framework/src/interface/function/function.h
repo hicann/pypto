@@ -481,6 +481,7 @@ struct ParamConfigs {
     std::map<std::string, int64_t> vecNBufferSettingByLabel;
     int copyOutResolveCoalescing{0};
     bool combineAxis{false};
+    int autoMixPartition{0};
     bool enableMemoryAwareSort{false};
 };
 

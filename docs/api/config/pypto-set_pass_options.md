@@ -20,6 +20,7 @@ set_pass_options(*,
                      cube_nbuffer_setting: Optional[Dict[str, int]] = None,
                      sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
                      pg_partition_algorithm: Optional[str] = None,
+                     auto_mix_partition: Optional[int] = None,
                      )
 ```
 
@@ -32,6 +33,7 @@ set_pass_options(*,
 | cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构AIC子图的合并数量。 <br> 说明：该参数适用于结构相同的AIC子图合并，与cube_l1_reuse_setting同时配置时，先进行cube_l1_reuse_setting相关合并，再进行此项合并。<br><br>类型：dict[str, int]。支持两种 key 格式：<br> ① **函数粒度 key**：字符串 `"func{magic}_{order}"` 或 `"DEFAULT"`，可实现不同 root function 间的精细化配置。合图信息会直接展示在泳道图的 hashOrder-hint 字段中（含 subGraphCount，代表合并前的子图数量，可根据核心数匹配合并力度）。详情参见下方"函数粒度配置说明"。<br> ② **语义标签 key**：按语义标签控制（详见下方语义标签key配置说明）。<br> 取值：<br>{"DEFAULT": 1}：跳过AIC子图合并 <br> {} （空字典）：自动合并<br> {"DEFAULT": N, "func8_0": N2}：手动合并，默认粒度为 N<br>默认值：{"DEFAULT": 1} <br> 影响Pass范围：L1CopyInReuseMerge |
 | sg_set_scope            | 输入      | 含义：手动控制子图切分参数。<br> 说明：通过为 Operation 分配 scope，使得相同 scope_id（非-1） 的相邻 Operation 强制合并归入同一子图，从而覆盖切分算法的自动划分结果。 <br> 类型：`Tuple[int, bool, bool]` 或 `int` <br> **tuple 格式**：`(scope_id, allow_parallel_merge, allow_cross_scope_merge)`，各字段含义如下： <br> - `scope_id`（int）：scope 标识，取值范围 -1~2147483647。相同 scope_id 的相邻 Operation 归入同一子图；-1 表示不参与 scope 合并，由切分算法决定子图划分。 <br> - `allow_parallel_merge`（bool）：控制同一 scope_id 下 Operation 的合并方式。取值 True/False。<br>&emsp;&emsp;False（默认）：仅允许存在上下游连接通路的 Operation 合并，即 Operation A 的输出作为 Operation B 的输入时才可合并到同一子图。<br>&emsp;&emsp;True：允许位于并行分支（无数据依赖）的相同 scope_id 的 Operation 也合并到同一子图。 <br> - `allow_cross_scope_merge`（bool）：控制带有 scope 的子图是否可与无 scope（scope_id=-1）的子图合并，扩大scope子图。取值 True/False。<br>&emsp;&emsp;False（默认）：带有 scope 的子图保持独立，不与其他子图合并。<br>&emsp;&emsp;True：允许带有 scope 的子图与 scope_id=-1 的子图合并。不同 scope_id 的子图之间不可合并。 <br> **int 格式**：传入单个 int 时等价于 `(scope_id, False, False)`，即仅设置 scope_id，不允许并行分支合并和跨 scope 合并。 <br> 默认值：(-1, False, False) <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的 scope_id。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
 | pg_partition_algorithm  | 输入      | 含义：指定切分算法。<br> 说明：配置GraphPartition环节进行子图切分所采用的算法。当同时配置了 `sg_set_scope` 时，无论选择哪种切分算法，都会优先遵从 `sg_set_scope` 的强制合图约束。<br> 类型：str <br> 取值范围："Iso", "OspSarkar", "OspBsp" <br> 默认值："Iso" <br> 影响Pass范围：GraphPartition <br> 算法选择指导：请参考下文。|
+| auto_mix_partition      | 输入      | 含义：控制ReduceCopyMerge Pass中的自动混合子图切分行为。<br> 说明：该参数用于控制CV混合场景下子图的自动合并策略。<br> 类型：int <br> 取值：0：不进行自动CV Mix合图；1： 进行自动CV Mix合图。<br> 默认值：0 <br> 影响Pass范围：ReduceCopyMerge |
 
 ## 返回值说明
 

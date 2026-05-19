@@ -2158,6 +2158,7 @@ Json Function::DumpJson(bool useTable)
     funcJson["_sg_mg_copyin_upper_bound"] = paramConfigs_.sgMgCopyInUpperBound;
     funcJson["_mg_vec_parallel_lb"] = paramConfigs_.mgVecParallelLb;
     funcJson["_total_subgraph_count"] = totalSubGraphCount_;
+    funcJson["_auto_mix_partition"] = paramConfigs_.autoMixPartition;
     funcJson["_ooo_preschedule_method"] = paramConfigs_.OoOPreScheduleMethod;
     if (!span_.IsUnknown()) {
         funcJson["file"] = span_.Filename();
@@ -2475,6 +2476,7 @@ std::shared_ptr<Function> Function::LoadJson(Program& belongTo, const Json& func
     func->paramConfigs_.sgPartitionAlgorithm = funcJson["_sg_partition_algorithm"].get<std::string>();
     func->paramConfigs_.sgMgCopyInUpperBound = funcJson["_sg_mg_copyin_upper_bound"].get<int>();
     func->paramConfigs_.mgVecParallelLb = funcJson["_mg_vec_parallel_lb"].get<int>();
+    func->paramConfigs_.autoMixPartition = funcJson["_auto_mix_partition"].get<int>();
     auto subGraphCount = funcJson["_total_subgraph_count"].get<size_t>();
     func->SetTotalSubGraphCount(subGraphCount);
 

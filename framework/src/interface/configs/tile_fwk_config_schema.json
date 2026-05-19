@@ -171,6 +171,15 @@
                     "minimum": 0,
                     "maximum": 1000000
                 },
+                "auto_mix_partition": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "控制ReduceCopyMerge Pass中的自动混合子图切分行为。",
+                        "en": "Controls the automatic mixed subgraph partitioning behavior in the ReduceCopyMerge Pass."
+                    },
+                    "minimum": 0,
+                    "maximum": 1
+                },
                 "sg_set_scope": {
                     "type": "array",
                     "items": {
