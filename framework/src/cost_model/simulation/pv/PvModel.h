@@ -21,13 +21,6 @@
 #include "tilefwk/core_func_data.h"
 
 namespace CostModel {
-class PvModel {
-public:
-    virtual ~PvModel() = default;
-    virtual void Submit(npu::tile_fwk::Function* func, PvData* data, int level, std::string dir) = 0;
-    virtual void Run(int esgId, int psgId) = 0;
-};
-
 class DynPvModel {
 public:
     virtual ~DynPvModel() = default;

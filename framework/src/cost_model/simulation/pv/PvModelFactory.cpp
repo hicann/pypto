@@ -17,24 +17,6 @@
 #include "PvModelFactory.h"
 
 namespace CostModel {
-std::shared_ptr<PvModel> PvModelFactory::Create()
-{
-    std::string arch = "A2A3";
-    std::string soPath = "libtile_fwk_simulation_pv.so";
-    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
-    if (!handle) {
-        throw std::runtime_error("can not load library");
-    }
-
-    // 获取工厂函数符号
-    using CreateFunc = std::shared_ptr<PvModel> (*)();
-    std::string funcName = "CreatePvModelImpl" + arch;
-    auto createFunc = (CreateFunc)(dlsym(handle, funcName.c_str()));
-
-    // 创建对象并返回
-    return createFunc();
-}
-
 std::shared_ptr<DynPvModel> PvModelFactory::CreateDyn()
 {
     std::string soPath = "libtile_fwk_simulation_pv.so";

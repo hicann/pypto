@@ -49,8 +49,6 @@ inline bool IsNeedInput(CostModel::SimMode simMode)
     return false;
 }
 
-enum class PVModelLevel { PV_NON = 0, PV_UT, PV_EXECUTE };
-
 enum class NodeType { LOCAL, INCAST, OUTCAST };
 
 using namespace npu::tile_fwk;

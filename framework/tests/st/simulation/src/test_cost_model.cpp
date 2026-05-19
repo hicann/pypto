@@ -52,74 +52,11 @@ public:
         config::SetPlatformConfig(KEY_ENABLE_BINARY_CACHE, oriEnableBinaryCache);
     }
 
-    void EnablePVModel(int level)
-    {
-        CostModel::PvData::Instance().Enable();
-        CostModel::SoftMemory::Instance().Enable();
-        oriPvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
-        config::SetSimConfig(KEY_PV_LEVEL, level);
-    }
-
-    void ResetPVModelConfig() { config::SetSimConfig(KEY_PV_LEVEL, oriPvLevel); }
-
 protected:
     bool oriEnableAihacBackend = false;
     bool oriEnableCostModel = false;
     bool oriEnableBinaryCache = false;
-    int oriPvLevel = 0;
 };
-
-template <typename InputT, typename OnputT>
-void TestMatmulTrans(int m, int k, int n, string dataPath)
-{
-    std::vector<int64_t> shape_a = {m, k};
-    std::vector<int64_t> shape_b = {n, k};
-    std::vector<int64_t> shape_c = {m, n};
-    const int capacity_a = m * k;
-    const int capacity_b = k * n;
-    const int capacity_c = m * n;
-
-    AclInit(nullptr);
-    RuntimeSetDevice(GetDeviceIdByEnvVar());
-    uint64_t outputSize = capacity_c * sizeof(OnputT);
-    uint8_t* c_ptr = allocDevAddr(outputSize);
-    auto InputDtype = GetAstDtype<InputT>();
-    auto OutputDtype = GetAstDtype<OnputT>();
-
-    std::cout << "####:" << dataPath << "/a.bin" << std::endl;
-
-    PROGRAM("Matmul")
-    {
-        void* a_ptr = readToDev<InputT>(dataPath + "/a.bin", capacity_a);
-        void* b_ptr = readToDev<InputT>(dataPath + "/b.bin", capacity_b);
-
-        Tensor mat_a(InputDtype, shape_a, (uint8_t*)a_ptr, "mat_a");
-        Tensor mat_b(InputDtype, shape_b, (uint8_t*)b_ptr, "mat_b");
-        Tensor mat_c(OutputDtype, shape_c, c_ptr, "mat_c");
-
-        npu::tile_fwk::config::SetBuildStatic(true);
-        FUNCTION("Matmul_T", {mat_a, mat_b, mat_c})
-        {
-            mat_c = npu::tile_fwk::Matrix::Matmul(OutputDtype, mat_a, mat_b, false, true); // result dtype
-        }
-    }
-    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
-    std::vector<OnputT> dev_res(capacity_c);
-    std::vector<OnputT> golden(capacity_c);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
-    readInput(dataPath + "/c_golden.bin", golden);
-    int ret = resultCmp(golden, dev_res, 0.001f);
-    EXPECT_EQ(ret, true);
-}
-
-TEST_F(CostModelTest, test_mm_float32_64_64_64_bt)
-{
-    int level = static_cast<int>(CostModel::PVModelLevel::PV_EXECUTE);
-    EnablePVModel(level);
-    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
-    TestMatmulTrans<npu::tile_fwk::float16, float>(64, 64, 64, GetGoldenDir());
-    ResetPVModelConfig();
-}
 
 class CostModelDynTest : public testing::Test {
 public:
@@ -140,20 +77,10 @@ public:
     {
         config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, cacheEnable);
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
-        ResetPVModelConfig();
     }
-
-    void EnablePVModel(int level)
-    {
-        oriPvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
-        config::SetSimConfig(KEY_PV_LEVEL, level);
-    }
-
-    void ResetPVModelConfig() { config::SetSimConfig(KEY_PV_LEVEL, oriPvLevel); }
 
 protected:
     bool oriEnableAihacBackend = false;
-    int oriPvLevel = 0;
     bool cacheEnable = false;
 };
 

@@ -325,28 +325,16 @@ public:
         oriEnableAihacBackend = config::GetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
         Program::GetInstance().Reset();
-        constexpr int level = 2;
-        EnablePVModel(level);
     }
 
     void TearDown() override
     {
         config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, cacheEnable);
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
-        ResetPVModelConfig();
     }
-
-    void EnablePVModel(int level)
-    {
-        oriPvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
-        config::SetSimConfig(KEY_PV_LEVEL, level);
-    }
-
-    void ResetPVModelConfig() { config::SetSimConfig(KEY_PV_LEVEL, oriPvLevel); }
 
 protected:
     bool oriEnableAihacBackend = false;
-    int oriPvLevel = 0;
     bool cacheEnable = false;
 };
 

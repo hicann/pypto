@@ -25,7 +25,6 @@
 #include <fstream>
 #include "interface/utils/file_utils.h"
 #include "cost_model/simulation/pv/PvModel.h"
-#include "cost_model/simulation_pv/PvMemAllocator.h"
 #include "cost_model/simulation/common/CommonTools.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "tilefwk/core_func_data.h"
@@ -49,117 +48,6 @@ const uint32_t PV_STEP_PIPE_ID = 2;
 const uint32_t PV_SYS_VA_BASE = 67;
 const uint32_t PV_SYS_PHY_BASE = 68;
 uint32_t HBM_PARA_BASE = 0xffff8000;
-inline int64_t CalcShapeSizeFunc(const std::vector<int64_t>& shape)
-{
-    int64_t size = 1;
-    for (auto& i : shape) {
-        size *= i;
-    }
-    return size;
-}
-
-struct InvokeParaOffset {
-    uint8_t* rawTensorAddr{nullptr}; // 原始input output tensor基地址, 如果是子图间workspace incast outcast 则为null
-    uint64_t offset{0};
-    uint64_t rawTensorOffset{0};
-    bool isTensorParam{false};
-    uint64_t rawShapeSize{0};
-    int rawMagic{0};
-    std::string rawSymbol{""};
-    int opOriginArgsSeq{INVALID_ARG_INDEX}; // map origin args seq no
-    int funcitonMagic{-1};
-    int8_t ioIndex{-1};
-    int8_t paramType{-1};
-    std::vector<int64_t> tensorShape;
-    int opMagic{0};
-    npu::tile_fwk::DataType datatype{npu::tile_fwk::DataType::DT_INT32};
-    std::vector<int64_t> rawTensorShape;
-    void LogRawTensor(std::shared_ptr<npu::tile_fwk::RawTensor> rawTensor)
-    {
-        auto& rawShape = rawTensor->GetRawShape();
-        rawShapeSize = CalcShapeSizeFunc(rawShape) * BytesOf(rawTensor->GetDataType());
-        rawMagic = rawTensor->GetRawMagic();
-        rawSymbol = rawTensor->GetSymbol();
-        datatype = rawTensor->GetDataType();
-    }
-};
-
-struct PvModelInvoke {
-    uint64_t programFunctionCnt;    // 同构后的funciton 个数
-    uint64_t coreFunctionCnt;
-    uint64_t workSpaceStackSize{0}; // ooo 调度use stack workspace
-    uint64_t invokeParaWorkSpaceSize{0};
-    size_t invokeOffsetSize{0};
-    std::vector<std::string> commGroups;
-    std::map<uint64_t, std::list<InvokeParaOffset>> invokeParaOffset; // map esgid to all para list
-    std::map<uint64_t, uint64_t> coreFunctionIdToProgramId;           // 对应graph 里 esgid map psgid
-    std::vector<uint64_t> readyAicIdVec;
-    std::vector<uint64_t> readyAivIdVec;
-    std::vector<uint64_t> coreFuncBinOffset;
-    std::vector<std::vector<uint64_t>> invokeArgsOffset; // esgid to all para offset
-    std::vector<std::vector<int64_t>>
-        invokeTensorsIdx; // esgid to all para tensorIdx: input0 input1 ... output0 output1, -1 means workspace
-    std::vector<uint64_t> coreFunctionInvokeEntryOffset;
-    std::vector<uint64_t> coreFunctionTensorInfoOffset;
-    std::vector<uint64_t> coreTensorNum;
-};
-
-class PvModelTask {
-public:
-    std::vector<uint8_t> stack;
-    uint64_t stackAddr;
-    uint64_t stackSize;
-    uint64_t hcclContextAddr;
-    uint64_t hcclContextSize;
-    std::vector<uint8_t> workspace;
-    uint64_t workspaceAddr;
-    uint64_t workspaceSize;
-    PvModelInvoke invoke;
-    std::map<uint64_t, uint64_t> binAddr;
-    std::map<uint64_t, std::string> objPath;
-    std::map<uint64_t, std::string> binPath;
-    std::map<uint64_t, npu::tile_fwk::CoreType> binType;
-    std::vector<npu::tile_fwk::OriArgInfo> oriArgs;
-    std::vector<std::vector<uint8_t>> args;
-    std::vector<uint64_t> oriArgsAddr;
-    std::map<uint64_t, uint64_t> oriArgsMap;
-    std::map<int, uint64_t> stubOutRawTensorAddr;
-};
-
-class PvModelBinHelper {
-public:
-    static void ReadBin(std::string path, std::vector<uint8_t>& bytes);
-    static uint64_t GetBinSize(std::string path);
-    static void DumpBin(std::vector<uint8_t>& bytes, uint64_t size, std::string path);
-};
-
-template <typename SystemConfig, typename CaseConfig>
-class PvModelImpl : public PvModel {
-private:
-    std::string arch_;
-    npu::tile_fwk::Function* func_;
-    std::string dir_;
-    std::string funcDir_;
-    PvData* data_;
-    PvModelTask task_;
-    int level_;
-    std::unique_ptr<PvMemAllocator> allocator_;
-
-public:
-    PvModelImpl(std::string arch) : arch_(arch) {}
-    void Submit(npu::tile_fwk::Function* func, PvData* data, int level, std::string dir);
-    void Run(int esgId, int psgId);
-
-private:
-    void Prepare(npu::tile_fwk::Function* func);
-    void CodeGen(npu::tile_fwk::Function* func);
-    void BinGen(npu::tile_fwk::Function* func);
-    void CalcInvokeWorkespace(npu::tile_fwk::Function* function, PvModelInvoke& invoke);
-    void PrepareInvoke(int esgId, std::vector<uint64_t>& invokeOffsetVec, std::vector<uint64_t>& invokeOffsetOriVec);
-    void SetUp(int esgId, int psgId, std::string esgDir);
-    void RunModel(std::string esgDir);
-    void TearDown(std::string esgDir);
-};
 
 class PvModelCodegen {
 public:
@@ -279,7 +167,6 @@ class DynPvModelImpl : public DynPvModel {
 private:
     npu::tile_fwk::Function* func_;
     std::string dir_;
-    std::unique_ptr<PvMemAllocator> allocator_;
     struct DataMap {
         uint8_t* data;
         uint64_t devPtr;
@@ -316,7 +203,6 @@ public:
 
     explicit DynPvModelImpl()
     {
-        allocator_ = std::make_unique<PvMemAllocator>();
         dir_ = npu::tile_fwk::config::LogTopFolder() + "/PvModelOutput";
         if (npu::tile_fwk::IsPathExist(dir_)) {
             npu::tile_fwk::DeleteDir(dir_);
@@ -399,7 +285,8 @@ public:
                     leaf->GetProgramId(), leaf->GetFunctionHash().GetHash(), npu::tile_fwk::CoreType::HUB));
             } else {
                 auto leafFuncAttr = leaf->GetLeafFuncAttribute();
-                auto binPath = leafFuncAttr == nullptr ? "" : leafFuncAttr->binPath;
+                ASSERT(PrecisionSimErrorScene::LEAF_CALLEE_ATTR_NULL, leafFuncAttr != nullptr)
+                    << "LeafFuncAttr is null for " << leaf;
                 CompileCode(func, leaf, leafFuncAttr->binPath);
                 if (!leafFuncAttr->binPathMainBlock.empty()) {
                     CompileCode(func, leaf, leafFuncAttr->binPathMainBlock);
@@ -453,9 +340,9 @@ public:
     uint8_t* CopyToDev(uint8_t* data, uint64_t size)
     {
         std::vector<uint8_t> s(data, data + size);
-        uint8_t* hostPtr = s.data();
+        uint8_t* devPtr = s.data();
         storage_.emplace_back(std::move(s));
-        return hostPtr;
+        return devPtr;
     }
 
     uint8_t* CopyTensorToDev(uint8_t* data, uint64_t size)
@@ -474,8 +361,6 @@ public:
         std::vector<uint8_t> s(size, 0);
         uint8_t *devPtr = s.data();
         storage_.emplace_back(std::move(s));
-        DataMap m = {nullptr, reinterpret_cast<uint64_t>(devPtr), size};
-        workspace_ = m;
         return devPtr;
     }
 
