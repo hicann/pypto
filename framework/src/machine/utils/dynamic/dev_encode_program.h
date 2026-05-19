@@ -342,6 +342,7 @@ struct DevAscendProgram {
         ArchInfo archInfo;
         uint64_t dynamicCellMatchAddr;
         uint64_t dynamicCellMatchCapacity;
+        bool hasAicpuTask;
     };
 
     DevArgsPreservedParams BackupDevArgsParams(const DeviceArgs& src)
@@ -356,6 +357,7 @@ struct DevAscendProgram {
         params.archInfo = src.archInfo;
         params.dynamicCellMatchAddr = src.dynamicCellMatchAddr;
         params.dynamicCellMatchCapacity = src.dynamicCellMatchCapacity;
+        params.hasAicpuTask = src.hasAicpuTask;
         return params;
     }
 
@@ -370,6 +372,7 @@ struct DevAscendProgram {
         dst.archInfo = params.archInfo;
         dst.dynamicCellMatchAddr = params.dynamicCellMatchAddr;
         dst.dynamicCellMatchCapacity = params.dynamicCellMatchCapacity;
+        dst.hasAicpuTask = params.hasAicpuTask;
     }
 
     void ResetFromLaunch()
