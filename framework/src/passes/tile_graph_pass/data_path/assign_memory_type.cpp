@@ -867,6 +867,17 @@ void AssignMemoryType::ProcessLargeTileToSamllTile(Function& function)
     }
 }
 
+bool AssignMemoryType::CheckUBTileShape(const LogicalTensorPtr& output)
+{
+    if (output->GetShape()[0] % L0C_TILE_SIZE == 0 && output->GetShape()[1] % L0C_TILE_SIZE == 0) {
+        return true;
+    }
+    APASS_LOG_DEBUG_F(Elements::Tensor, 
+        "Set tensor %d original memory type to DDR since vector tile shape is not 16-element aligned.",
+        output->magic);
+    return false;
+}
+
 bool AssignMemoryType::CheckConsumerViewShapeMultiple(const LogicalTensorPtr &output,
                                                        const LogicalTensorPtr &input) {
     for (auto &consumerOp : output->GetConsumers()) {
@@ -906,8 +917,10 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function &function) {
         }
         // 检查shape倍数关系（小搬大）
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
+        bool isVecTileShapeValid = CheckUBTileShape(oOperand);
         // 检查输出shape是否是输入shape的整数倍（小搬大）
-        if (!isToUB || !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple) {
+        if (!isToUB || !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple ||
+            !isVecTileShapeValid) {
             // 不满足条件，降级为DDR
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             const auto &tensorToBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
@@ -935,7 +948,9 @@ void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function &function) {
         if (attrToType == MEM_UB) {
             auto iOperand = op.GetIOperands().front();
             auto oOperand = op.GetOOperands().front();
-            if (iOperand->GetMemoryTypeOriginal() == MEM_L0C && !IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
+            bool isVecTileShapeValid = CheckUBTileShape(oOperand);
+            if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
+                (!IsDimMultiple(iOperand->GetShape(), oOperand->GetShape()) || !isVecTileShapeValid)) {
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
