@@ -36,7 +36,6 @@ void CostModelAgent::BuildCostModel()
     std::vector<std::string> inputArgs = config::GetSimConfig(KEY_ARGS, inputArgs);
     int mode = config::GetSimConfig(KEY_SIM_MODE, 0);
     int accLevel = config::GetSimConfig(KEY_ACCURACY_LEVEL, 2);
-    int pvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
     int logLevel = config::GetSimConfig(KEY_LOG_LEVEL, 3);
     int cycleThreshold = config::GetSimConfig(KEY_EXECUTE_CYCLE_THRESHOLD, -1);
     std::string jsonPath = config::GetSimConfig(KEY_JSON_PATH, "");
@@ -60,8 +59,6 @@ void CostModelAgent::BuildCostModel()
     configs.push_back(std::to_string(accLevel));
     configs.push_back("-t");
     configs.push_back(std::to_string(logLevel));
-    configs.push_back("-p");
-    configs.push_back(std::to_string(pvLevel));
     if (cycleThreshold > 0) {
         configs.push_back("-l");
         configs.push_back(std::to_string(cycleThreshold));

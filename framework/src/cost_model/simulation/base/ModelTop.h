@@ -57,7 +57,6 @@ public:
     std::unordered_map<Pid, std::shared_ptr<Machine>> pidToMachineMp;
     std::shared_ptr<TraceLogger> totalTraceLogger = nullptr;
     std::shared_ptr<GenCalendar> calendarGenerator = nullptr;
-    std::shared_ptr<CostModel::PvModel> pv = nullptr;
 
     ModelConfig config;
     std::shared_ptr<ModelStats> stats = nullptr;
@@ -107,7 +106,6 @@ public:
     std::string jsonPath = ""; // Input json file to load
     int logLevel = 3;          // 1: DEBUG; 2: INFO; 3: WARN; 4: ERROR, 5: FATAL
     int accLevel = 1;
-    PVModelLevel pvLevel = PVModelLevel::PV_NON;
     bool enableExpectValue = false;
     uint64_t executeCycleThreshold = -1;
     std::string outdir = "";
@@ -135,7 +133,6 @@ public:
     void LogRegisterMachine(MachinePtr machine, size_t id, int coreIdx);
     void InitMachineStartSeq();
     void BuildCaches();
-    void BuildPvModel();
 
     void BuildHUBCore();
     MachinePtr GetHUBCore();

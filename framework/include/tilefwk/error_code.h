@@ -554,6 +554,7 @@ enum class PrecisionSimErrorScene : uint32_t {
     NO_SO_EXISTS = 94001U,
     CANN_LOAD_FAILED = 94002U,
     CMD_ERROR = 94003U,
+    LEAF_CALLEE_ATTR_NULL = 94004U,
     UNKNOWN = 94099U
 };
 } // namespace CostModel

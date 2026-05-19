@@ -72,17 +72,6 @@ void DeviceMachine::RunAtBegin()
 
 void DeviceMachine::RunAtEnd() { needTerminate = IsTerminate(); }
 
-void DeviceMachine::RunPVModelDeviceTask()
-{
-    for (const auto& [taskId, task] : taskMap) {
-        auto function = GetSim()->functionCache.GetFunction(task->functionHash);
-        GetSim()->pv->Run(taskId, function->pSgId);
-    }
-    taskMap.clear();
-    SIMULATION_LOGI(
-        "[Cycle: %lu][Device %lu] run pvmodel execute tasks %zu", GetSim()->GetCycles(), machineId, taskMap.size());
-}
-
 void DeviceMachine::SubmitDeviceTask()
 {
     if (!taskMap.empty()) {
@@ -93,10 +82,6 @@ void DeviceMachine::SubmitDeviceTask()
     }
     SetReplayPreEnd();
     taskMap = std::move(taskMapQueue.front()), taskMapQueue.pop_front();
-    if (GetSim()->pvLevel != PVModelLevel::PV_NON) {
-        RunPVModelDeviceTask();
-        return;
-    }
     SetReplayPreStart();
     for (const auto& [taskId, task] : taskMap) {
         currentSeq = task->seqNo;

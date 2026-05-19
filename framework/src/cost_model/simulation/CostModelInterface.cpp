@@ -36,7 +36,6 @@ int CostModelInterface::BuildCostModel(std::vector<std::string>& inputConfigs)
     int mode = 0;
     int logLevel = 3;
     int accLevel = 1;
-    int pvLevel = 0;
     int executeCycleLimit = -1;
     vector<string> configs;
     vector<string> configFilePath;
@@ -46,7 +45,6 @@ int CostModelInterface::BuildCostModel(std::vector<std::string>& inputConfigs)
     argParser.RegisterParam("-o", outdir, "Output Directory. Default: ./ASCPPModelOut");
     argParser.RegisterParam("-d", drawGraph, "Draw Graph. 0: NONE; 1: DRAW");
     argParser.RegisterParam("-a", accLevel, "Accuracy Level. 1: LOW, Fast Model; 2: HIGH, CA Model");
-    argParser.RegisterParam("-p", pvLevel, "PvModel Level. 0: Dry-Run; 1: Run on PvModel");
     argParser.RegisterParam("-l", executeCycleLimit, "Cost Model Execute Cycle Threshold");
     argParser.RegisterParam("-s", configs, "Override default configs");
     argParser.RegisterParam("--conf", configFilePath, "Configuration combination files for different hardware");
@@ -84,7 +82,6 @@ int CostModelInterface::BuildCostModel(std::vector<std::string>& inputConfigs)
     sim->drawGraph = drawGraph;
     sim->totalTraceLogger->sim = sim;
     sim->accLevel = accLevel;
-    sim->pvLevel = static_cast<PVModelLevel>(pvLevel);
     sim->logLevel = logLevel;
     sim->mode = static_cast<SimMode>(mode);
     sim->executeCycleThreshold = (executeCycleLimit < 0) ? uint64_t(-1) : uint64_t(executeCycleLimit);

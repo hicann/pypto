@@ -54,14 +54,6 @@ bool SimSys::IsMachine(CostModel::Pid pid, CostModel::Tid tid)
     return true;
 }
 
-void SimSys::BuildPvModel()
-{
-    if (pvLevel == PVModelLevel::PV_NON) {
-        return;
-    }
-    pv = PvModelFactory::Create();
-}
-
 bool SimSys::IsQueue(CostModel::Tid tid)
 {
     if (tid <= machines[0]->coreTid || tid >= machines[0]->reversedTidNum) {
@@ -368,8 +360,6 @@ void SimSys::BuildSystem()
     // Init Machine Group
     Reset();
     InitMachineStartSeq();
-
-    BuildPvModel();
 
     BuildCaches();
 

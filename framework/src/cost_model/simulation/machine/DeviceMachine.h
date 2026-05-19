@@ -66,7 +66,6 @@ public:
 
     void RunAtBegin();
     void RunAtEnd();
-    void RunPVModelDeviceTask();
     void SubmitDeviceTask();
     void BuildDeviceTask();
     TaskMap BuildATaskMap();

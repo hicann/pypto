@@ -490,9 +490,6 @@ void ParseInput::ParseFunction(
             << "[SIMULATION]: inputFuncs.size is not equals to 1."
             << "inputFuncs.size=" << inputFuncs.size();
         for (const auto& rootFunction : inputFuncs) {
-            if (sim->pvLevel != PVModelLevel::PV_NON) {
-                sim->pv->Submit(rootFunction, &PvData::Instance(), static_cast<int>(sim->pvLevel), sim->outdir);
-            }
             FunctionPtr func = std::make_shared<Function>();
             func->functionHash = rootFunction->GetFunctionHash().GetHash();
             func->magic = rootFunction->GetFuncMagic();

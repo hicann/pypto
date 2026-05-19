@@ -38,11 +38,11 @@ def _pto_to_tensor_data(tensors: List[pypto.Tensor]) -> List[pypto_impl.DeviceTe
 
 
 def _device_to_host_tensor_datas(dev_tensors):
-    host_tensors, _ = _gen_pto_tensor(dev_tensors)
+    host_tensors, torch_tensors = _gen_pto_tensor(dev_tensors)
     host_tensor_datas = _pto_to_tensor_data(host_tensors)
     for i, dev_tensor_data in enumerate(_pto_to_tensor_data(dev_tensors)):
         pypto_impl.CopyToHost(dev_tensor_data, host_tensor_datas[i])
-    return host_tensor_datas
+    return host_tensor_datas, torch_tensors
 
 
 def _host_to_device_tensor_datas(dev_tensors, host_tensors):
@@ -57,9 +57,12 @@ def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: Lis
             isDevice = True
             break
 
+    host_torch_tensors = []
     if isDevice:
-        input_datas = _device_to_host_tensor_datas(inputs)
-        output_datas = _device_to_host_tensor_datas(outputs)
+        input_datas, input_host_torch_tensors = _device_to_host_tensor_datas(inputs)
+        output_datas, output_host_torch_tensors = _device_to_host_tensor_datas(outputs)
+        host_torch_tensors.extend(input_host_torch_tensors)
+        host_torch_tensors.extend(output_host_torch_tensors)
     else:
         input_datas = _pto_to_tensor_data(inputs)
         output_datas = _pto_to_tensor_data(outputs)
@@ -67,5 +70,5 @@ def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: Lis
     pypto_impl.CostModelRunOnceDataFromHost(input_datas, output_datas)
 
     if isDevice:
-        _host_to_device_tensor_datas(inputs, input_datas);
-        _host_to_device_tensor_datas(outputs, output_datas);
+        _host_to_device_tensor_datas(inputs, input_datas)
+        _host_to_device_tensor_datas(outputs, output_datas)

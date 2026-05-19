@@ -213,12 +213,6 @@ private:
         if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr) {
             return;
         }
-
-        DevAscendProgram* functionDevProg =
-            reinterpret_cast<DevAscendProgram*>(function_->GetDyndevAttribute()->devProgBinary.data());
-        if (config_.controlFlowCache) {
-            functionDevProg->controlFlowCache.isRecording = true;
-        }
         RunModel(inputs, outputs);
     }
 
@@ -226,11 +220,7 @@ private:
 
     void RunModel(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
-        if (!config_.runModel) {
-            return;
-        }
         DeviceKernelArgs kArgs;
-        config_.onBoard = false;
         auto dynAttr = function_->GetDyndevAttribute();
         DeviceLauncherConfigFillDeviceInfo(config_);
         MemoryHelper memoryHelper(true);
@@ -300,6 +290,7 @@ private:
             std::getenv("ASCEND_HOME_PATH") == nullptr) {
             return;
         }
+        
         try {
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
@@ -307,7 +298,6 @@ private:
             SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "pv init fail.");
             return;
         }
-
         model_ = std::make_shared<AiCorePvModelImpl>(pv_);
         pv_->Codegen(function_);
         BuildPvKernelArgs(kArgs, inputs, outputs);
