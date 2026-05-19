@@ -22,8 +22,8 @@ concat(tensors: List[Tensor], dim: int = 0) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                                                                                                                                                     |
 | ------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| tensors | 输入      | 源操作数。`<br>` 支持的类型为：Tensor。 `<br>` Tensor支持的数据类型为：DT_BF16，DT_FP32，DT_FP16，DT_INT8，DT_INT16，DT_INT32。 `<br>` 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | 源操作数。`<br>` 支持的数据类型为：int，默认为0。                                                                                                                                                      |
+| tensors | 输入      | 源操作数。支持的类型为：Tensor。 Tensor支持的数据类型为：DT_BF16，DT_FP32，DT_FP16，DT_INT8，DT_INT16，DT_INT32。 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| dim     | 输入      | 源操作数。支持的数据类型为：int，默认为0。                                                                                                                                                      |
 
 ## 返回值说明
 
@@ -33,13 +33,13 @@ concat(tensors: List[Tensor], dim: int = 0) -> Tensor
 
 1.源操作数 tensors 的大小需要大于等于 2，即 len\(tensors \)\>=2；小于等于128。（支持输入一个tensor情况，精度暂时不保证）；
 
-2.输入 tensor 数据类型相同、维度数量相同，并且除待拼接维度（dim）之外的每个维度值相同；
+2.输入 tensor 数据类型相同、维度数量相同，并且除待拼接维度（dim）之外的每个维度值相同，待拼接维度validShape等于tensor对应维度值，其余维度tensors validShape相同;
 
 3.dim: -input.dim <= dim < input.dim（input对应tensors 的任一tensor）；
 
-4.设置viewshape时，dim对应维度不切块（即viewshape对应值\>=tensors 任一tensor的对应值）。
+4.设置viewshape时，dim对应维度不切块（即viewshape对应值\>=tensors 任一tensor的对应值）；
 
-5.输出Tensor out的validShape需由用户在调用concat前确保正确，该接口不会自动推导。
+5.输出Tensor的validShape需由用户在调用concat前确保正确，该接口不会自动推导。
 
 ## 调用示例
 
