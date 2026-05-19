@@ -19,9 +19,13 @@ Classes:
     PyptoError: Base exception class for all PyPTO errors.
     ParserError: Parser exception with AST node association and error codes.
     RenderedParserError: A special error class indicating that the error.
+
+Decorators:
+    _catch_and_wrap_error: Decorator to catch exceptions and wrap them with context.
 """
 import ast
-from typing import Union, Optional
+from functools import wraps
+from typing import Union, Optional, Callable
 
 
 _ERROR_CODE_UNKNOWN = 0xF0FFFF
@@ -52,7 +56,11 @@ class PyptoError(Exception):
 
     def __init__(self, err_code: int, msg: Union[str, Exception]):
         if isinstance(msg, Exception):
-            msg = f"ErrCode: {err_code:X}, {type(msg).__name__}: {msg}"
+            err_str = str(msg)
+            if "ErrCode" in err_str:
+                msg = err_str
+            else:
+                msg = f"ErrCode: {err_code:X}, {type(msg).__name__}: {err_str}"
         elif "ErrCode" not in msg: 
             msg = f"ErrCode: {err_code:X}, {msg}"
         super().__init__(msg)
@@ -107,3 +115,42 @@ class PassError(PyptoGeneralError):
 
 class VerifyError(PyptoGeneralError):
     """Error class for errors when enabling pass verify."""
+
+
+def _catch_and_wrap_error(operation_name: str) -> Callable:
+    """Decorator to catch exceptions and wrap them into PyptoGeneralError with context.
+
+    This decorator wraps methods to provide consistent error handling:
+    - If the exception is already a PyptoError (or its subclass), it's raised directly (avoid double-wrapping)
+    - Otherwise, the exception is wrapped into PyptoGeneralError with context information
+
+    Parameters
+    ----------
+    operation_name : str
+        Description of the operation being performed, used in error message.
+
+    Returns
+    -------
+    Callable
+        Decorated function with unified exception handling.
+
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if isinstance(e, PyptoError):
+                    raise
+                func_name = getattr(args[0], '__name__', func.__name__) if args else func.__name__
+                err_msg = str(e)
+                if "ErrCode" in err_msg:
+                    raise PyptoGeneralError(
+                        f"Failed to {operation_name} '{func_name}'.\n{err_msg}"
+                    ) from e
+                raise PyptoGeneralError(e.__class__(
+                    f"Failed to {operation_name} '{func_name}.\n{err_msg}"
+                )) from e
+        return wrapper
+    return decorator

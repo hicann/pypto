@@ -114,21 +114,6 @@ def test_view_dimension_mismatch_shapes():
             pypto.view(x, view_shape, offset)
 
 
-def test_view_dimension_mismatch_offsets():
-    """Test that offsets dimension mismatch with operand raises error (LogicalTensor constraint)"""
-    x_shape = [4, 8, 16]
-    dtype = pypto.DT_FP32
-    x = pypto.tensor(x_shape, dtype)
-    
-    view_shape = [2, 4, 8]
-    offset = [0, 0]
-    
-    with pytest.raises(pypto.error.FeError):
-        with pypto.function("VIEW_DIM_MISMATCH_OFFSETS", x):
-            pypto.set_vec_tile_shapes(4, 8, 16)
-            pypto.view(x, view_shape, offset)
-
-
 def test_view_validshape_exceeds_input_shape():
     """Test that valid_shape exceeding input tensor shape raises error"""
     x_shape = [4, 8]

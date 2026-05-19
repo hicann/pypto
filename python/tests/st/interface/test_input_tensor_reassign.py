@@ -15,28 +15,6 @@ import pytest
 import torch
 import torch_npu
 import pypto
-from pypto.error import ParserError
-
-
-@pypto.frontend.jit()
-def error_assign_input(
-    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-):
-    pypto.set_vec_tile_shapes(32, 32)
-    c = a + b
-
-
-def test_error_on_input_tensor_reassign():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    device = f'npu:{device_id}'
-    a = torch.rand((32, 32), dtype=torch.float16, device=device)
-    b = torch.rand((32, 32), dtype=torch.float16, device=device)
-    c = torch.zeros((32, 32), dtype=torch.float16, device=device)
-    with pytest.raises(ParserError, match="Input tensor 'c' cannot be reassigned"):
-        error_assign_input(a, b, c)
 
 
 @pypto.frontend.jit()
@@ -111,24 +89,3 @@ def test_non_input_var_reassign_allowed():
     var_reassign_ok(a, b, c)
     torch_npu.npu.synchronize()
     assert torch.allclose(c.cpu(), golden.cpu())
-
-
-@pypto.frontend.jit()
-def error_assign_first_input(
-    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
-):
-    pypto.set_vec_tile_shapes(32, 32)
-    a = b + c
-
-
-def test_error_on_first_input_tensor_reassign():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    device = f'npu:{device_id}'
-    a = torch.rand((32, 32), dtype=torch.float16, device=device)
-    b = torch.rand((32, 32), dtype=torch.float16, device=device)
-    c = torch.zeros((32, 32), dtype=torch.float16, device=device)
-    with pytest.raises(ParserError, match="Input tensor 'a' cannot be reassigned"):
-        error_assign_first_input(a, b, c)

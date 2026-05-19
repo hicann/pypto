@@ -20,7 +20,8 @@ import pytest
 import pypto
 import torch
 
-from pypto.error import ParserError
+from pypto.error import ParserError, PyptoError, PyptoGeneralError, _catch_and_wrap_error
+import pypto.config
 
 
 def test_varargs_error():
@@ -74,6 +75,93 @@ def test_error_message_contains_error_code():
         error_str = str(e)
         assert "ErrCode: F00005" in error_str
         assert len(error_str) > 0
+
+
+def test_pypto_error_init():
+    err = PyptoError(0xF00001, "test error")
+    assert "ErrCode: F00001" in str(err)
+    assert "test error" in str(err)
+
+
+def test_pypto_error_no_duplicate_errcode():
+    err = PyptoError(0xF00001, "ErrCode: F00003, original error")
+    assert "ErrCode: F00003" in str(err)
+    assert str(err).count("ErrCode:") == 1
+
+
+def test_catch_and_wrap_error_normal():
+    @_catch_and_wrap_error("test operation")
+    def normal_func(x):
+        return x * 2
+    
+    assert normal_func(5) == 10
+
+
+def test_catch_and_wrap_error_wraps_exception():
+    @_catch_and_wrap_error("test operation")
+    def failing_func():
+        raise ValueError("test error")
+    
+    with pytest.raises(PyptoGeneralError) as exc_info:
+        failing_func()
+    
+    assert "Failed to test operation" in str(exc_info.value)
+    assert "test error" in str(exc_info.value)
+
+
+def test_catch_and_wrap_error_preserves_errcode():
+    @_catch_and_wrap_error("test operation")
+    def failing_func():
+        raise RuntimeError("ErrCode: F00003, some error")
+    
+    with pytest.raises(PyptoGeneralError) as exc_info:
+        failing_func()
+    
+    assert "ErrCode: F00003" in str(exc_info.value)
+
+
+def test_error_on_input_tensor_reassign():
+    """Test that reassigning input tensor triggers ParserError."""
+    @pypto.frontend.jit(
+        runtime_options={"run_mode": pypto.RunMode.SIM},
+        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+    )
+    def error_assign_input(
+        a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+    ):
+        pypto.set_vec_tile_shapes(32, 32)
+        c = a + b
+    
+    a = torch.rand((32, 32), dtype=torch.float16)
+    b = torch.rand((32, 32), dtype=torch.float16)
+    c = torch.zeros((32, 32), dtype=torch.float16)
+    
+    with pytest.raises(ParserError, match="Input tensor 'c' cannot be reassigned"):
+        error_assign_input(a, b, c)
+
+
+def test_error_on_first_input_tensor_reassign():
+    """Test that reassigning the first input tensor triggers ParserError."""
+    @pypto.frontend.jit(
+        runtime_options={"run_mode": pypto.RunMode.SIM},
+        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+    )
+    def error_assign_first_input(
+        a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+    ):
+        pypto.set_vec_tile_shapes(32, 32)
+        a = b + c
+    
+    a = torch.rand((32, 32), dtype=torch.float16)
+    b = torch.rand((32, 32), dtype=torch.float16)
+    c = torch.zeros((32, 32), dtype=torch.float16)
+    
+    with pytest.raises(ParserError, match="Input tensor 'a' cannot be reassigned"):
+        error_assign_first_input(a, b, c)
 
 
 if __name__ == "__main__":

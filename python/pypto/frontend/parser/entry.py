@@ -17,6 +17,7 @@ including the parse function and JIT decorator.
 
 import inspect
 import os
+from functools import wraps
 from typing import Any, Callable, Optional, Union
 from enum import IntEnum
 import itertools
@@ -30,7 +31,7 @@ from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.runtime import _pto_verify_datas
 from pypto._utils import BuildOnlineManager, get_torch_npu, get_npu_tensor_format
-from pypto.error import FeError
+from pypto.error import FeError, _catch_and_wrap_error
 
 
 def _default_globals() -> dict[str, Any]:
@@ -303,6 +304,7 @@ class JitCallableWrapper:
         self._verify_snapshot_keepalive: Optional[list] = None
 
 
+    @_catch_and_wrap_error("call JIT function")
     def __call__(self, *args, **kwargs):
         """Execute the function with torch tensors and optional non-tensor parameters.
 
@@ -446,6 +448,7 @@ class JitCallableWrapper:
         return str(obj)
 
 
+    @_catch_and_wrap_error("compile function")
     def compile(
         self,
         tensors,
