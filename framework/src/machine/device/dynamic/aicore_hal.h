@@ -348,20 +348,32 @@ public:
         return reinterpret_cast<Metrics*>(arg->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
     }
 
-    int DumpTaskProf(int coreIdx)
+    int DumpTaskProf(int coreIdx, CoreType coreType)
     {
         Metrics* metric = GetMetrics(coreIdx);
         if (metric == nullptr) {
             return DEVICE_MACHINE_ERROR;
         }
-
-        DEV_VERBOSE_DEBUG("Dump core %d prof data , task cnt %ld, metric:%p.", coreIdx, metric->taskCount, metric);
+        metric->coreType = static_cast<int16_t>(coreType);
+        DEV_VERBOSE_DEBUG("Dump core %d coreType[%s] prof data , task cnt %ld, metric:%p.",
+             coreIdx, coreType == CoreType::AIC ? "AIC" : "AIV", metric->taskCount, metric);
         for (int i = 0; i < metric->taskCount; i++) {
             volatile TaskStat* stat = &metric->tasks[i];
             aicoreProf_->ProfGetLog(coreIdx, &(metric)->tasks[i]);
             DEV_VERBOSE_DEBUG(
                 "  Dump prof for task %d, execstart: %ld execend :%ld.", stat->taskId, stat->execStart, stat->execEnd);
         }
+        return 0;
+    }
+
+    int SetAicorePerfTrace(int coreIdx, CoreType coreType, int16_t aicpuIdx) {
+        Metrics* metric = GetMetrics(coreIdx);
+        if (metric == nullptr) {
+            return DEVICE_MACHINE_ERROR;
+        }
+        metric->coreType = static_cast<int16_t>(coreType);
+        DEV_VERBOSE_DEBUG("Aicore %d coreType[%s]", coreIdx, coreType == CoreType::AIC ? "AIC" : "AIV");
+        metric->scheCpuIdx = aicpuIdx;
         return 0;
     }
 

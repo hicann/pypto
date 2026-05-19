@@ -565,13 +565,27 @@ public:
 private:
     inline void DumpTaskProf()
     {
-        ForEachManageAicoreWithRet([this](int coreIdx) -> int { return aicoreHal_.DumpTaskProf(coreIdx); });
+        for (int i = aicStart_; i < aicEnd_; ++i) {
+            aicoreHal_.DumpTaskProf(i, CoreType::AIC);
+        }
+        for (int i = aivStart_; i < aivEnd_; ++i) {
+            aicoreHal_.DumpTaskProf(i, CoreType::AIV);
+        }
     }
 
     inline void ProfStop()
     {
         if (aicoreProf_.ProfIsEnable()) {
             DumpTaskProf();
+        }
+
+        if (unlikely(isOpenPerf_)) {
+            for (int i = aicStart_; i < aicEnd_; ++i) {
+                aicoreHal_.SetAicorePerfTrace(i, CoreType::AIC, aicpuIdx_);
+            }
+            for (int i = aivStart_; i < aivEnd_; ++i) {
+                aicoreHal_.SetAicorePerfTrace(i, CoreType::AIV, aicpuIdx_);
+            }
         }
 
         aicoreProf_.ProfStop();
@@ -1832,6 +1846,9 @@ private:
         pingPongFlag_.fill(0);
         isSendStop = false;
         taskCtrlDequeFinish = false;
+        DEV_IF_DEVICE {
+            isOpenPerf_ = ((DevDfxArgs*)deviceArgs->devDfxArgAddr)->isOpenPerfTrace;
+        }
         if (IsNeedProcAicpuTask()) {
             DEV_VERBOSE_DEBUG("Init aicpu task manager");
             aicpuTaskManager_.InitDeviceArgs(deviceArgs);
@@ -2428,6 +2445,7 @@ private:
     bool isEnableDump{false};
     int64_t dotStatus_{0};
     bool isSendStop{false};
+    bool isOpenPerf_{false};
     std::array<uint8_t, MAX_AICORE_NUM> pingPongFlag_;
 
     std::vector<TaskInfo> sendTask_[MAX_AICORE_NUM];

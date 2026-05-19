@@ -87,6 +87,9 @@ void ConstructTaskInfo(
     json coreObj;
     coreObj["blockIdx"] = index;
     coreObj["coreType"] = coreType;
+    if (aicpuMetric->coreType != -1) {
+        coreObj["coreType"] = aicpuMetric->coreType == static_cast<int16_t>(CoreType::AIC) ? "AIC" : "AIV";
+    }
     json tasksArr = json::array();
     for (size_t j = 0; j < numTasks; ++j) {
         if (taskStats[j].execEnd != 0) {
@@ -228,10 +231,10 @@ inline void DumpAicoreDevTask(
         std::vector<uint8_t> hostBuffer(dataSize);
         RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
         Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
-        std::string coreType = (i < args.nrValidAic) ? "AIC" : "AIV";
+        std::string coreType = aicoreMetric->coreType == static_cast<int16_t>(CoreType::AIC) ? "AIC" : "AIV";
         json aicoreTask;
         aicoreTask["blockIdx"] = i + 1;
-        aicoreTask["coreType"] = "SCHED" + std::to_string(coreArray[i]) + "-" + coreType;
+        aicoreTask["coreType"] = "SCHED" + std::to_string(aicoreMetric->scheCpuIdx) + "-" + coreType;
         aicoreTask["freq"] = freq;
         json tasksArr = json::array();
         ConstructAicorePerfInfo(tasksArr, aicoreMetric, turnNum);
