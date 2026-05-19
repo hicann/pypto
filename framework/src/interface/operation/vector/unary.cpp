@@ -270,7 +270,7 @@ Tensor Sinh(const Tensor& self)
 {
     DECLARE_TRACER();
     
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32, DT_BF16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SINH");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SINH");
     CheckTensorShapeSize(self.GetStorage(), "SINH");
@@ -285,7 +285,7 @@ Tensor Cosh(const Tensor& self)
 {
     DECLARE_TRACER();
 
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32, DT_BF16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COSH");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "COSH");
     CheckTensorShapeSize(self.GetStorage(), "COSH");
@@ -455,10 +455,13 @@ void SinhOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile();
     int dim = shape.size();
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
-    uint64_t intermediateBytes = static_cast<uint64_t>(AlignUp(shape[dim - 1], alignSize)) * BytesOf(DT_FP32) * 4;
+    std::vector<int64_t> tmpShape = shape.tile;
+    tmpShape[dim - 1] = AlignUp(tmpShape[dim - 1], alignSize) * NUM_VALUE_4;
+    uint64_t intermediateBytes =
+        std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) * BytesOf(DT_FP32);
     return TiledUnaryOperation<UnaryOpType::SINH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 
@@ -467,10 +470,13 @@ void CoshOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile();
     int dim = shape.size();
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
-    uint64_t intermediateBytes = static_cast<uint64_t>(AlignUp(shape[dim - 1], alignSize)) * BytesOf(DT_FP32);
+    std::vector<int64_t> tmpShape = shape.tile;
+    tmpShape[dim - 1] = AlignUp(tmpShape[dim - 1], alignSize);
+    uint64_t intermediateBytes =
+        std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>()) * BytesOf(DT_FP32);
     return TiledUnaryOperation<UnaryOpType::COSH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 

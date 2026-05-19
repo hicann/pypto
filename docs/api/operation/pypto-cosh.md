@@ -26,11 +26,15 @@ cosh(input: Tensor) -> Tensor
 
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
-| input  | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32, DT_FP16。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。|
+| input  | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。|
 
 ## 返回值说明
 
 返回Tensor类型。其Shape与输入Tensor一致，数据类型与输入Tensor一致，其元素为输入Tensor对应元素的双曲余弦值。
+
+## 约束说明
+
+1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么3\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
 
 ## 调用示例
 
