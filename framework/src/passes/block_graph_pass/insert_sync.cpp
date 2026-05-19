@@ -1592,6 +1592,10 @@ bool PipeSync::GenSyncOp(PipeCoreRealEx set, PipeCoreRealEx wait, int eventId, b
         op.syncQueue_ = {set.pipe, wait.pipe, set.core, wait.core, eventId, set.aivCore, wait.aivCore};
         return true;
     }
+    if (set.core == CoreType::AIV && set.aivCore != wait.aivCore) {
+        APASS_LOG_WARN_F(Elements::Operation, "Find dependency between AIV0 and AIV1, remove it.");
+        return false;
+    }
     if (set.pipe != wait.pipe) {
         op.SetOpCode(isSet ? Opcode::OP_SYNC_SRC : Opcode::OP_SYNC_DST);
         op.syncQueue_ = {set.pipe, wait.pipe, set.core, wait.core, eventId, set.aivCore, wait.aivCore};
