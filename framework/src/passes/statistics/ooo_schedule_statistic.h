@@ -77,7 +77,7 @@ public:
         MemoryType spillType{MemoryType::MEM_UNKNOWN}; // spill buffer类型
         uint64_t bufferCurrUsage{0};                   // 当前buffer的总使用量
         uint64_t spillTensorSize{0};                   // spill的tensor的大小
-        uint64_t triggerTensorSize{0};                 // 触发当前spill的tensor的大小
+        int64_t triggerTensorSize{0};                 // 触发当前spill的tensor的大小
         uint64_t allocOccupiedSize{0};                 // 当前被alloc占用的buffer大小
         uint64_t spillCopyoutSize{0};                  // spill到ddr的数据量
         int spillTensorMagic;                          // spill tensor的magic

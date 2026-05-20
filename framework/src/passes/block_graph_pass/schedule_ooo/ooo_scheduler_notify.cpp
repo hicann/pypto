@@ -46,27 +46,27 @@ void OoOScheduler::NotifyBufferFreed(MemoryType memType, int memId)
     }
 }
 
-void OoOScheduler::NotifySpill(const SpillInfo& info, LocalBufferPtr allocBuffer)
+void OoOScheduler::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
+    Operation* spillAllocOp, Operation* spillOp)
 {
     if (observers_.empty()) return;
 
-    bool needCopyOut = info.spillOp_->GetOpcodeStr().find("COPY_IN") == std::string::npos;
+    MemoryType memType = spillTensor->GetMemoryTypeOriginal();
+    bool needCopyOut = spillOp->GetOpcodeStr().find("COPY_IN") == std::string::npos;
     uint64_t allocOccupied = 0;
-    for (const auto& pair : tensorOccupyMap[allocBuffer->memType]) {
+    for (const auto& pair : tensorOccupyMap) {
         if (opIsAllocMap[pair.second]) {
             allocOccupied += localBufferMap_.at(pair.first)->size;
         }
     }
     uint64_t spillCopyoutSize = 0;
     if (needCopyOut) {
-        auto dtype = info.ddrTensor_->tensor->datatype;
-        spillCopyoutSize = std::accumulate(
-            info.ddrTensor_->shape.begin(), info.ddrTensor_->shape.end(),
-            1, std::multiplies<int64_t>()) * BytesOf(dtype);
+        spillCopyoutSize = spillTensor->tensor->GetRawDataSize();
     }
-    SpillEvent event{allocBuffer->memType, info.spillMemId_,
-        localBufferMap_.at(info.spillMemId_)->size, allocBuffer->size,
-        info.ddrTensor_->GetMagic(), allocOccupied, spillCopyoutSize, clock};
+    SpillEvent event{memType, spillMemId,
+        localBufferMap_.at(spillMemId)->size,
+        spillAllocOp->GetOutputOperand(0)->tensor->GetRawDataSize(),
+        spillTensor->GetMagic(), allocOccupied, spillCopyoutSize, clock};
     for (auto* obs : observers_) {
         obs->OnSpill(event);
     }

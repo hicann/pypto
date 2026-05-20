@@ -58,7 +58,7 @@ struct SpillEvent {
     MemoryType memType;
     int spillMemId;
     uint64_t spillTensorSize;
-    uint64_t triggerTensorSize;
+    int64_t triggerTensorSize;
     int spillTensorMagic;
     uint64_t allocOccupiedSize;
     uint64_t spillCopyoutSize;

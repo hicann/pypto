@@ -78,7 +78,7 @@ public:
     size_t UpdateIdx(
         size_t& i, size_t sizeNeedSpill, size_t startAddr,
         const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs);
-    Status GetSpillGroup(size_t sizeNeedSpill, std::vector<std::vector<int>>& canSpillGroups);
+    std::vector<std::vector<int>> GetSpillGroup(size_t sizeNeedSpill);
     std::vector<int> GetBufferSlices();
     std::vector<int> GetAddrSortedBufs();
     bool isAllocate(const int tensorId);
