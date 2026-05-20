@@ -187,5 +187,5 @@ def your_kernel(...)
 
 ## 参考资料
 
-- PyPTO API: `docs/api/`
-- pass_verify_save API: `docs/api/others/pypto-pass_verify_save.md`
+- PyPTO API: `docs/zh/api/`
+- pass_verify_save API: `docs/zh/api/others/pypto-pass_verify_save.md`

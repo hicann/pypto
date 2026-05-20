@@ -75,16 +75,16 @@ sed -n '<line-20>,<line+20>p' <source_file>
 
 ### 步骤 6：查官方文档
 
-1. 算子类问题，先查 `docs/api/operation/`。
-2. 参数类问题，先查 `docs/api/config/pypto-set_pass_options.md`。
+1. 算子类问题，先查 `docs/zh/api/operation/`。
+2. 参数类问题，先查 `docs/zh/api/config/pypto-set_pass_options.md`。
 3. 计算图解析类问题，直接使用本文件的“通用分析总流程”和 `scripts/computation_graph_analyzer.py`。
 
 ```bash
-grep -R "<opcode>" docs/api/operation/
+grep -R "<opcode>" docs/zh/api/operation/
 ```
 
 ```bash
-grep -n "<param_name>" docs/api/config/pypto-set_pass_options.md
+grep -n "<param_name>" docs/zh/api/config/pypto-set_pass_options.md
 ```
 
 ### 步骤 7：对比 Before / After
@@ -257,7 +257,7 @@ if (!IsEdgeValid(producer, consumer)) {
 #### 步骤 1：获取参数约束
 
 ```bash
-grep -n "<param_name>" docs/api/config/pypto-set_pass_options.md
+grep -n "<param_name>" docs/zh/api/config/pypto-set_pass_options.md
 ```
 
 #### 步骤 2：检查用户参数配置
@@ -321,7 +321,7 @@ sed -n '<line-20>,<line+20>p' <source_file>
 #### 步骤 5：检查算子约束
 
 ```bash
-grep -R "<opcode>" docs/api/operation/
+grep -R "<opcode>" docs/zh/api/operation/
 ```
 
 #### 步骤 6：对比 Pass 前后变化
@@ -730,7 +730,7 @@ python3 scripts/computation_graph_analyzer.py \
 查阅文档确认该属性的具体作用和约束条件，辅助判断构图逻辑是否存在缺陷。
 
 ```bash
-grep -R "<opcode>" docs/api/operation/
+grep -R "<opcode>" docs/zh/api/operation/
 ```
 
 #### 步骤 5：向上游 Pass 回溯

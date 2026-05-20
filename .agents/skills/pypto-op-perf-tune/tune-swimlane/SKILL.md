@@ -54,7 +54,7 @@ Stitch 配置决定了多少个 root function 被同时下发调度。
 ```
 
 **参考资料**
-- [stitch_function_max_num 参数设置说明](../../../../docs/api/config/pypto-frontend-jit.md)
+- [stitch_function_max_num 参数设置说明](../../../../docs/zh/api/config/pypto-frontend-jit.md)
 
 #### 1.2 参数影响
 
@@ -551,7 +551,7 @@ Merge Tuning Guide (hashOrder = merge key)
 4. 需所有子图均合图时用整数键 `{-2: 1, -1: N}`，需精细控制特定 hashOrder 时用字符串键
 
 **参考资料**
-- [vec_nbuffer_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
+- [vec_nbuffer_setting 参数设置说明](../../../../docs/zh/api/config/pypto-set_pass_options.md)
 
 ##### 4.1.2 手动合图方案（sg_set_scope）
 
@@ -696,7 +696,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 
 **参考资料**
 - [leafHash → 前端代码映射方法](references/leafhash-to-code-mapping.md)
-- [sg_set_scope 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
+- [sg_set_scope 参数设置说明](../../../../docs/zh/api/config/pypto-set_pass_options.md)
 
 
 #### 4.2 Cube 合图
@@ -725,7 +725,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 4. ⚠️ **核未满时通常退化**：如果 `analyze_core_usage.py` 显示核未满，cube_l1_reuse 通常导致性能退化，不建议设置
 
 **参考资料**
-- [cube_l1_reuse_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
+- [cube_l1_reuse_setting 参数设置说明](../../../../docs/zh/api/config/pypto-set_pass_options.md)
 
 ##### 4.2.2 CubeNBuffer 策略（用于合并同构的子图）
 
@@ -753,7 +753,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 4. ⚠️ **核未满时通常退化**：如果 `analyze_core_usage.py` 显示核未满，cube_nbuffer 通常导致性能退化，不建议设置
 
 **参考资料**
-- [cube_nbuffer_setting 参数设置说明](../../../../docs/api/config/pypto-set_pass_options.md)
+- [cube_nbuffer_setting 参数设置说明](../../../../docs/zh/api/config/pypto-set_pass_options.md)
 
 ##### 4.2.3 L1Reuse 与 CubeNBuffer 的协同使用
 
@@ -821,7 +821,7 @@ python3 scripts/leafhash_to_code.py <output_dir>
 **注意事项**：综合考虑 L2 复用与负载均衡的影响，不同场景的最佳配置策略不同。
 
 **参考资料**
-- [device_sched_mode 参数设置说明](../../../../docs/api/config/pypto-frontend-jit.md)
+- [device_sched_mode 参数设置说明](../../../../docs/zh/api/config/pypto-frontend-jit.md)
 
 
 ### 6. Matmul 访存布局优化（L2 命中率优化）
@@ -947,7 +947,7 @@ A:
 
 ## 参考资料
 
-- [性能调优文档](../../../../docs/tutorials/debug/performance.md)
-- [Matmul 高性能编程](../../../../docs/tutorials/debug/matmul_performance_guide.md)
+- [性能调优文档](../../../../docs/zh/tutorials/debug/performance.md)
+- [Matmul 高性能编程](../../../../docs/zh/tutorials/debug/matmul_performance_guide.md)
 - [GLM Attention 案例](../../../../models/glm_v4_5/glm_attention.py)
-- [性能优化案例](../../../../docs/tutorials/debug/performance_case_quantindexerprolog.md)
+- [性能优化案例](../../../../docs/zh/tutorials/debug/performance_case_quantindexerprolog.md)

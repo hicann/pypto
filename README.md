@@ -56,9 +56,9 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 若您希望快速体验PyPTO的使用和开发过程，请访问如下文档获取简易教程。
 
-- [环境部署](https://gitcode.com/cann/pypto/blob/master/docs/install/prepare_environment.md)：介绍项目基础环境的搭建，包括软件包和第三方依赖的获取和安装。
-- [编译安装](https://gitcode.com/cann/pypto/blob/master/docs/install/build_and_install.md)：环境部署后，介绍如何快速获取或编译PyPTO软件包并安装。
-- [样例运行](https://gitcode.com/cann/pypto/blob/master/docs/invocation/examples_invocation.md)：安装PyPTO软件包后，介绍如何快速实现样例运行。
+- [环境部署](docs/zh/install/prepare_environment.md)：介绍项目基础环境的搭建，包括软件包和第三方依赖的获取和安装。
+- [编译安装](docs/zh/install/build_and_install.md)：环境部署后，介绍如何快速获取或编译PyPTO软件包并安装。
+- [样例运行](docs/zh/invocation/examples_invocation.md)：安装PyPTO软件包后，介绍如何快速实现样例运行。
 
 ## 📖文档资源
 
@@ -72,9 +72,10 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 ```
 ├── docs/                       # 文档资源
-│   ├── api/                    # API参考文档
-│   ├── contribute/             # 贡献指南文档
-│   └── tutorials/              # PyPTO编程指南
+│   └── zh/                      
+│      ├── api/                 # API参考文档
+│      ├── contribute/          # 贡献指南文档
+│      └── tutorials/           # PyPTO编程指南
 │
 ├── examples/                   # 示例代码
 │   ├── 01_beginner/            # 初级示例

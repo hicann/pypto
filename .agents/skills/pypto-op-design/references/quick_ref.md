@@ -1,7 +1,7 @@
 # PyPTO 算子设计速查
 
 > 本文档聚焦**约束和决策点**，用于设计阶段的快速检查。
-> API 用法细节请查阅 `docs/` 目录。
+> API 用法细节请查阅 `docs/zh/` 目录。
 
 ---
 
@@ -152,6 +152,6 @@ for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
 ## 7. 搜索优先级
 
 当设计阶段需要查证 API 能力时：
-1. `docs/api/` — API 签名和约束（权威）
-2. `docs/tutorials/` — 用法示例和常见模式
+1. `docs/zh/api/` — API 签名和约束（权威）
+2. `docs/zh/tutorials/` — 用法示例和常见模式
 3. `models/` — 真实算子实现参考

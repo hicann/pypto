@@ -711,7 +711,7 @@ pypto.experimental.set_operation_options(combine_axis=True)
 
 ## 参考资料
 
-- [性能调优文档](../../../../docs/tutorials/debug/performance.md)
-- [GDR 算子案例](../../../../docs/tutorials/debug/performance_case_GDR.md)
-- [Matmul 高性能编程](../../../../docs/tutorials/debug/matmul_performance_guide.md)
+- [性能调优文档](../../../../docs/zh/tutorials/debug/performance.md)
+- [GDR 算子案例](../../../../docs/zh/tutorials/debug/performance_case_GDR.md)
+- [Matmul 高性能编程](../../../../docs/zh/tutorials/debug/matmul_performance_guide.md)
 - [典型案例库](cases/README.md)

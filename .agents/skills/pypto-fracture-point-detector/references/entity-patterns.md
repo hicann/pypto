@@ -31,7 +31,7 @@
 
 **示例**：
 - `python/pypto/operation.py`
-- `docs/api/add.md`
+- `docs/zh/api/add.md`
 - `examples/operator/demo.py`
 - `tests/test_add.py`
 

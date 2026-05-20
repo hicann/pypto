@@ -65,7 +65,7 @@ bash tools/prepare_env.sh --quiet --type=third_party
 | `--install-path` | CANN 安装路径，默认 `/usr/local/Ascend` |
 | `--quiet` | 静默模式，强烈建议始终加上 |
 
-> 手动安装 CANN 的详细步骤见 `$PYPTO_REPO/docs/install/prepare_environment.md`
+> 手动安装 CANN 的详细步骤见 `$PYPTO_REPO/docs/zh/install/prepare_environment.md`
 
 ## pto-isa 获取
 
@@ -88,7 +88,7 @@ test -d "$PTO_TILE_LIB_CODE_PATH/include/pto" && echo OK
 
 ## PyPTO 编译安装
 
-> 官方完整文档：`$PYPTO_REPO/docs/install/build_and_install.md`
+> 官方完整文档：`$PYPTO_REPO/docs/zh/install/build_and_install.md`
 
 ### 前提
 
@@ -109,7 +109,7 @@ pip install build_out/pypto-*.whl --force-reinstall -q
 pip install pypto
 ```
 
-> 高级编译选项（Debug、CMake Generator 等）见 `$PYPTO_REPO/docs/install/build_and_install.md`
+> 高级编译选项（Debug、CMake Generator 等）见 `$PYPTO_REPO/docs/zh/install/build_and_install.md`
 
 ## 环境变量速查
 

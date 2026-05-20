@@ -20,7 +20,7 @@
 - [ ] upstream 已同步：`git fetch upstream master`
 - [ ] 分支未落后 upstream：`git log --oneline HEAD..upstream/master` 输出为空
 - [ ] feat/fix 类型已添加测试用例
-- [ ] code-check 警告已修复（参考 `docs/contribute/code-check-rule.yaml`）
+- [ ] code-check 警告已修复（参考 `docs/zh/contribute/code-check-rule.yaml`）
 
 ## Commit 规范
 

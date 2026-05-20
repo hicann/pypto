@@ -10,4 +10,4 @@ The guide gives a clear suggestion on how to write the PR body.
 Related Issue: #1234,#5678
 ```
 
-更多描述信息见：[Commit Message 规范](https://gitcode.com/cann/pypto/blob/master/docs/contribute/pull-request.md#commit-message)
+更多描述信息见：[Commit Message 规范](../docs/zh/contribute/pull-request.md#commit-message)

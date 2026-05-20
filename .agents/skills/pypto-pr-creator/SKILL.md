@@ -193,5 +193,5 @@ CLA 失败时，读取 [references/troubleshooting.md](references/troubleshootin
 | 贡献指南 | `$PYPTO_REPO/CONTRIBUTION.md` |
 | PR 模板 (EN) | `$PYPTO_REPO/.gitcode/PULL_REQUEST_TEMPLATE.md` |
 | PR 模板 (CN) | `$PYPTO_REPO/.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md` |
-| 详细规范 | `$PYPTO_REPO/docs/contribute/pull-request.md` |
-| 代码检查规则 | `$PYPTO_REPO/docs/contribute/code-check-rule.yaml` |
+| 详细规范 | `$PYPTO_REPO/docs/zh/contribute/pull-request.md` |
+| 代码检查规则 | `$PYPTO_REPO/docs/zh/contribute/code-check-rule.yaml` |

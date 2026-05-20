@@ -173,7 +173,7 @@ python3 your_test_case.py
 
 **2.1 OP报错**：对比 Before/After IR，确认是否误报。
 
-动态shape场景：IR显示符号变量（如 `sym_15_dim_0`）→ 参考 [docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md) 进行排查。
+动态shape场景：IR显示符号变量（如 `sym_15_dim_0`）→ 参考 [docs/trouble_shooting/machine.md](../../../../docs/zh/trouble_shooting/machine.md) 进行排查。
 
 **2.2 精度问题**：
 
@@ -281,7 +281,7 @@ def your_kernel(...)
 
 用于：打印上板tensor数据、验证动态shape/offset值、定位AICORE执行异常。
 
-详细排查方法请参考：**[docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md)**
+详细排查方法请参考：**[docs/trouble_shooting/machine.md](../../../../docs/zh/trouble_shooting/machine.md)**
 
 ### 打印环境配置
 
@@ -343,7 +343,7 @@ python3 .agents/skills/pypto-pass-error-locator/scripts/get_op_info.py \
 1. Pass精度判断：只看 CodegenPreproc 是否通过
 2. tensor_graph FAIL → 调用 precision-verify
 3. 无报错但精度异常 → 调用 precision-binary-search
-4. 动态shape验证/AICORE异常排查：参考 [docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md)
+4. 动态shape验证/AICORE异常排查：参考 [docs/trouble_shooting/machine.md](../../../../docs/zh/trouble_shooting/machine.md)
 5. 打印配置：`fixed_output_path=true`, `force_overwrite=false`
 6. 打印限制：元素数量 ≤ 80
 7. 配置备份：修改配置前建议备份原文件
@@ -355,5 +355,5 @@ python3 .agents/skills/pypto-pass-error-locator/scripts/get_op_info.py \
 
 | 文档 | 内容 |
 |------|------|
-| [docs/trouble_shooting/machine.md](../../../../docs/trouble_shooting/machine.md) | MACHINE组件错误码与排查指南 |
+| [docs/trouble_shooting/machine.md](../../../../docs/zh/trouble_shooting/machine.md) | MACHINE组件错误码与排查指南 |
 | [pypto-aicore-error-locator](../../pypto-aicore-error-locator/SKILL.md) | AICORE错误定位Skill |

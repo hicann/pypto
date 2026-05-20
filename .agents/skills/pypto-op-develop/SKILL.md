@@ -78,11 +78,11 @@ echo ${PATH} | grep cann-8.5.0
 echo ${PTO_TILE_LIB_CODE_PATH}
 ```
 - 如果路径不存在，执行 `scripts/environment_prepare.sh` 进行环境初始化
-- 如果仍不成功，参考 `docs/install/prepare_environment.md` 获取 pto-isa 源码并设置环境变量
+- 如果仍不成功，参考 `docs/zh/install/prepare_environment.md` 获取 pto-isa 源码并设置环境变量
 
 3. **验证关键文档及示例目录**
 ```bash
-ls docs/api/
+ls docs/zh/api/
 ls examples/
 ```
 
@@ -100,7 +100,7 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 
 ⚠️ 未设置 `TILE_FWK_DEVICE_ID` 会导致运行时报错："If no NPU environment is available"
 
-如果以上检查未通过，参考 `docs/install` 中的资料完成环境准备。
+如果以上检查未通过，参考 `docs/zh/install` 中的资料完成环境准备。
 
 ### 阶段二：代码生成
 
@@ -263,7 +263,7 @@ python3 test_{op}.py
 
 1. **PyPTO tensor 创建后是未初始化随机值**：使用前先初始化，或者保证先写后读；不要把 `pypto.tensor(...)` 当成已初始化张量使用。
 2. **禁止无中生有 op**：实现时只能使用 PyPTO 已支持的 API，遇到缺失能力应回退到 API 探索或设计阶段重新确认。
-3. **优先使用 `@pypto.frontend.jit` 写法**：选择最新的非 wrapper 包装写法，参考 `docs/api/config/pypto-frontend-jit.md`，与现有示例和文档保持一致。
+3. **优先使用 `@pypto.frontend.jit` 写法**：选择最新的非 wrapper 包装写法，参考 `docs/zh/api/config/pypto-frontend-jit.md`，与现有示例和文档保持一致。
 4. **golden / impl / test 必须职责分离**：不要把 golden 逻辑、实现逻辑和测试逻辑混写到同一个文件中。
 5. **动态轴涉及 `pypto.view` / `pypto.reshape` 时必须指定 `valid_shape`**：含动态维度的 tensor 经 view/reshape 后框架无法推导有效形状，**必须**显式传入 `valid_shape`；尾块场景同理。**禁止**将动态轴改为静态轴来规避此约束。
 6. **动态循环边界使用 unroll_list**：当循环次数为动态值时，需要使用 `unroll_list`；多层循环嵌套时，最内层使用 `unroll_list`。

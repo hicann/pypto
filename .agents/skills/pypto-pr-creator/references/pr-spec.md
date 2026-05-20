@@ -1,6 +1,6 @@
 # PyPTO PR 规范
 
-> 来源：GitCode cann/pypto 仓库 `docs/contribute/pull-request.md`。编写 commit message 和 PR 内容时加载。
+> 来源：GitCode cann/pypto 仓库 `docs/zh/contribute/pull-request.md`。编写 commit message 和 PR 内容时加载。
 
 ## Commit Message 格式
 

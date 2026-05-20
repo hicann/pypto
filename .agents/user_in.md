@@ -63,7 +63,7 @@
   - 掩码处理：atten_mask值为1的位置不参与计算，值为0的位置参与计算
   - 缩放因子 scale = 1/sqrt(D)
   - 不需要实现 dropout 功能 与 动态轴
-  - 认真阅读 `pypto/docs/api` 下有关接口使用的指导
+  - 认真阅读 `pypto/docs/zh/api` 下有关接口使用的指导
 
 - 完成开发后，逐项确认以下事项：
   - 公式、shape、dtype、精度标准全部符合规格

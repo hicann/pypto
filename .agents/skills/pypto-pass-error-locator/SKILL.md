@@ -274,7 +274,7 @@ license: 完整条款见 LICENSE.txt
 - [PyPTO Pass 异常分析流程指导](references/pass-error-analysis-guide.md)
 - [PyPTO IR分析指导](references/ir-analysis-guide.md)
 - [PyPTO Pass 错误分析报告模板](references/pass-error-report-template.md)
-- [查看计算图](../../../docs/tools/computation_graph/查看计算图.md)
+- [查看计算图](../../../docs/zh/tools/computation_graph/查看计算图.md)
 
 ### 相关技能
 - [pypto-environment-setup](../pypto-environment-setup/SKILL.md)
@@ -282,4 +282,4 @@ license: 完整条款见 LICENSE.txt
 - [pypto-pass-workflow-analyzer](../pypto-pass-workflow-analyzer/SKILL.md)
 
 ### API文档
-- [Pass配置API](../../../docs/api/config/pypto-set_pass_options.md)
+- [Pass配置API](../../../docs/zh/api/config/pypto-set_pass_options.md)

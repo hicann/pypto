@@ -12,10 +12,10 @@
 
 | 规则 | 严重度 | 检查内容 |
 |------|--------|----------|
-| R49 | S1 | skill 中的知识内容（references/ 和 SKILL.md）应与 docs/ 保持一致性，不得存在 P0 级别问题 |
+| R49 | S1 | skill 中的知识内容（references/ 和 SKILL.md）应与 docs/zh/ 保持一致性，不得存在 P0 级别问题 |
 | R50 | S2 | skill 中的路径应在正确的执行上下文中可访问 |
-| R51 | S2 | skill 中引用的 API 应存在于 docs/ 或官方示例中 |
-| R52 | S2 | skill 中的术语应与 docs/tutorials/appendix/glossary.md 保持一致 |
+| R51 | S2 | skill 中引用的 API 应存在于 docs/zh/ 或官方示例中 |
+| R52 | S2 | skill 中的术语应与 docs/zh/tutorials/appendix/glossary.md 保持一致 |
 
 ## 输出格式
 
@@ -29,7 +29,7 @@
   "line": 10,
   "snippet": "（问题代码或描述的原文片段）",
   "description": "（具体问题描述）",
-  "evidence": "（在 docs/ 中找到的矛盾证据或验证命令结果）",
+  "evidence": "（在 docs/zh/ 中找到的矛盾证据或验证命令结果）",
   "suggested_fix": "（具体修复建议）"
 }
 ```
@@ -101,7 +101,7 @@ ls .agents/skills/<skill>/scripts/xxx.py  # 存在 → 不是错误
 | 内容类型 | 识别模式 |
 |----------|----------|
 | API 说明 | `pypto.xxx` API 名称及参数说明 |
-| 路径说明 | 文件路径引用（如 `docs/xxx.md`、`scripts/xxx.py`） |
+| 路径说明 | 文件路径引用（如 `docs/zh/xxx.md`、`scripts/xxx.py`） |
 | 术语定义 | 框架概念术语（tile、tensor、pass、codegen、ub、gm 等） |
 
 **排除模式**（流程语义，不检查）：
@@ -121,10 +121,10 @@ ls .agents/skills/<skill>/scripts/xxx.py  # 存在 → 不是错误
 
 ```bash
 # 搜索 API 定义
-grep -r "pypto\.<api>" docs/api/
+grep -r "pypto\.<api>" docs/zh/api/
 
 # 检查参数说明
-grep -A 20 "def <api>" docs/api/xxx.md
+grep -A 20 "def <api>" docs/zh/api/xxx.md
 ```
 
 **判定标准**：
@@ -137,7 +137,7 @@ grep -A 20 "def <api>" docs/api/xxx.md
 ```markdown
 # P0 错误：API 不存在
 - `pypto.compile` — 编译 API
-# 证据：grep "pypto.compile" docs/ 无结果
+# 证据：grep "pypto.compile" docs/zh/ 无结果
 # 修复：PyPTO 编译入口是 @pypto.frontend.jit
 
 # P1 歧义：使用真实 API 但说它不存在
@@ -184,7 +184,7 @@ cd <skill_dir> && ls <relative_path>
 <command> --help
 
 # 对比 docs 中的命令说明
-grep -A 10 "<command>" docs/cli/
+grep -A 10 "<command>" docs/zh/cli/
 ```
 
 **判定标准**：
@@ -240,10 +240,10 @@ EXPECT_EQ(pass.PostCheck(function), SUCCESS);
 
 ```bash
 # 检查术语表
-grep -i "<term>" docs/tutorials/appendix/glossary.md
+grep -i "<term>" docs/zh/tutorials/appendix/glossary.md
 
 # 检查组件名称
-grep -r "Tile Graph\|Tensor Graph" docs/
+grep -r "Tile Graph\|Tensor Graph" docs/zh/
 ```
 
 **判定标准**：
@@ -268,10 +268,10 @@ docs: "外轴切分大小满足 32B 对齐" / "尾轴 32B 对齐"
 
 ```bash
 # 检查 dtype 支持
-grep -A 20 "dtype" docs/api/<api>.md
+grep -A 20 "dtype" docs/zh/api/<api>.md
 
 # 检查版本要求
-grep -i "version\|cann\|pytorch" docs/installation/
+grep -i "version\|cann\|pytorch" docs/zh/installation/
 ```
 
 **判定标准**：
@@ -286,7 +286,7 @@ grep -i "version\|cann\|pytorch" docs/installation/
 
 # 更清晰（或指向 docs）
 - dtype: INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64
-- dtype: 详见 docs/api/others/pypto-from_torch.md
+- dtype: 详见 docs/zh/api/others/pypto-from_torch.md
 ```
 
 ---
@@ -327,7 +327,7 @@ grep -i "version\|cann\|pytorch" docs/installation/
 |------|------|----------|
 | 代码错误 | 语法错误、拼写错误、函数名错误 | 代码审查、运行验证 |
 | 路径错误 | 文件路径不存在、相对路径指向错误 | `ls <path>` 验证 |
-| API 不存在 | 引用了 docs 中不存在的 API | `grep "pypto\.<api>" docs/` |
+| API 不存在 | 引用了 docs 中不存在的 API | `grep "pypto\.<api>" docs/zh/` |
 | 与 docs 矛盾 | 参数说明、选项值等与 docs 直接矛盾 | 对比 docs 中相同主题 |
 
 ### P1 建议修复
@@ -335,7 +335,7 @@ grep -i "version\|cann\|pytorch" docs/installation/
 | 类型 | 定义 | 识别方法 |
 |------|------|----------|
 | 概念歧义 | 术语使用可能造成误解 | 示例使用真实 API 但声称不存在 |
-| 术语不一致 | 与 docs 术语表不一致 | `grep -i "<term>" docs/tutorials/appendix/glossary.md` |
+| 术语不一致 | 与 docs 术语表不一致 | `grep -i "<term>" docs/zh/tutorials/appendix/glossary.md` |
 | 正则/格式错误 | 正则表达式、格式规范有语法问题 | 正则测试、格式验证 |
 
 ### P2 可选修复

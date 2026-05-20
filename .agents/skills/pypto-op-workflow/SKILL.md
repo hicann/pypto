@@ -131,7 +131,7 @@ description: PyPTO 算子开发工作流程。用于开发华为昇腾 AI 处理
 |------|------|
 | **Skill** | `pypto-api-explore` |
 | **输入** | `SPEC.md` 中的计算逻辑与数据规格 |
-| **核心动作** | 公式分解为原子操作 → 搜索 `docs/api/` 匹配 PyPTO API → 三层约束验证（入口 / API / Tiling）→ 生成报告 |
+| **核心动作** | 公式分解为原子操作 → 搜索 `docs/zh/api/` 匹配 PyPTO API → 三层约束验证（入口 / API / Tiling）→ 生成报告 |
 | **输出工件** | `API_REPORT.md`（含公式分解、API 映射表、约束清单、Tiling 需求、可行性判定） |
 | **完成标准** | 每个原子操作有对应 PyPTO API 映射或标记 unsupported，约束清单完整 |
 

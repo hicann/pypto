@@ -20,7 +20,7 @@ description: 当需要设计 PyPTO 算子实现方案时使用。通过迭代式
 | 来源 | 必须 | 用途 |
 |------|------|------|
 | 算子规格 | 是 | 公式、shape、dtype、动态轴、典型配置 |
-| API 探索报告 | 否 | API 可用性（缺失时在第 1 轮自行查 `docs/`） |
+| API 探索报告 | 否 | API 可用性（缺失时在第 1 轮自行查 `docs/zh/`） |
 | Golden 参考实现 | 否 | 辅助理解计算逻辑 |
 
 **输出**：`DESIGN.md`，基于模板 [templates/design-template.md](templates/design-template.md)
@@ -37,7 +37,7 @@ description: 当需要设计 PyPTO 算子实现方案时使用。通过迭代式
 
 **步骤**：
 1. 拆分公式为原子操作
-2. 查 `docs/api/` 找到对应 API 及其 dtype 限制
+2. 查 `docs/zh/api/` 找到对应 API 及其 dtype 限制
 3. 标注每步的输入/输出 dtype，识别必须的 cast 点
 4. 写出带 shape/dtype 注释的计算伪代码
 5. 记录被排除的替代 API 及原因
@@ -221,8 +221,8 @@ def softmax_kernel(
 
 **参考资源**：
 - [references/quick_ref.md](references/quick_ref.md) — 约束速查与冲突表
-- `docs/api/` — API 签名与 dtype 约束（最高优先级）
-- `docs/tutorials/` — 使用模式
+- `docs/zh/api/` — API 签名与 dtype 约束（最高优先级）
+- `docs/zh/tutorials/` — 使用模式
 - `models/`（排除 experimental）— 真实算子实现参考
 
 ---

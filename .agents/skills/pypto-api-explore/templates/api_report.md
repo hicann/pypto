@@ -128,9 +128,9 @@ feasibility: {feasibility}
 
 | 信息 | 文档路径 |
 |------|----------|
-| API 存在性 | `docs/api/operation/index.md` |
-| {api} 文档 | `docs/api/operation/pypto-{api}.md` |
-| 入口约束 | `docs/api/others/pypto-from_torch.md` |
+| API 存在性 | `docs/zh/api/operation/index.md` |
+| {api} 文档 | `docs/zh/api/operation/pypto-{api}.md` |
+| 入口约束 | `docs/zh/api/others/pypto-from_torch.md` |
 | 参考实现 | `{example_path}`（如有） |
 
 ---

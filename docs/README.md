@@ -6,19 +6,22 @@
 
 ## 贡献
 
-欢迎您参与文档贡献！详细请参考[文档贡献指南](../docs/CONTRIBUTION_DOC.md)，请您务必遵守文档写作规范，并按照流程规则提交。审核通过后，将会在本项目docs目录和文档中心网页中呈现。如果您对文档有任何意见或建议，请在Issues中提交。
+欢迎您参与文档贡献！详细请参考[文档贡献指南](./CONTRIBUTION_DOC.md)，请您务必遵守文档写作规范，并按照流程规则提交。审核通过后，将会在本项目docs目录和文档中心网页中呈现。如果您对文档有任何意见或建议，请在Issues中提交。
 
 ## 目录说明
 
 关键目录结构如下：
 
 ```txt
-├── install                    # 环境部署
-├── invocation                 # 样例运行
-├── tutorials                  # PyPTO 编程指南
-├── api                        # PyPTO API参考
-├── tools                      # PyPTO Toolkit工具用户指南
-└── README
+docs/
+├── zh/                         # 中文文档
+│   ├── install                 # 环境部署
+│   ├── invocation              # 样例运行
+│   ├── tutorials               # PyPTO 编程指南
+│   ├── api                     # PyPTO API参考
+│   └── tools                   # PyPTO Toolkit工具用户指南
+├── CONTRIBUTION_DOC.md         # 文档贡献指南
+└── README.md                   # 本文件
 ```
 
 ## 文档构建

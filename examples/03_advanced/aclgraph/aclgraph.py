@@ -82,7 +82,7 @@ def softmax_kernel(
 ):
     """
     Softmax kernel with return value. Use return pattern for aclgraph compatibility.
-    See docs/tutorials/network_integration/pytorch_integration.md
+    See docs/zh/tutorials/network_integration/pytorch_integration.md
     """
 
     bs = input_tensor.shape[0]
