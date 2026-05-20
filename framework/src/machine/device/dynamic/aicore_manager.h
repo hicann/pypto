@@ -237,7 +237,6 @@ public:
             bool isStageFinish = false;
             switch (deviceTaskCtx->CurStage()) {
                 case DevTaskExecStage::INIT: {
-                    DEV_ATRACE("Schedule aicpu %d Start to Run devTask: %lu", aicpuIdx_, deviceTaskCtx->TaskId());
                     ret = PreProcessTask(deviceTaskCtx, isStageFinish);
                     if (isStageFinish) {
                         deviceTaskCtx->EntryStage(DevTaskExecStage::SEND_CORE_TASK);
@@ -261,7 +260,6 @@ public:
                         if (deviceTaskCtx->GetDeviceTaskCtrl()->Finish(!deviceTaskCtx->IsParallel())) {
                             PerfMtTrace(PERF_TRACE_DEV_TASK_RSP, aicpuIdx_);
                             deviceTaskCtx->EntryStage(DevTaskExecStage::FINISH);
-                            DEV_ATRACE("AicpuIdx: %d DevTask: %lu all leaf task finished", aicpuIdx_, deviceTaskCtx->TaskId());
                         } else {
                             deviceTaskCtx->EntryStage(DevTaskExecStage::WAIT_ALL_SCH_FINISH);
                         }
@@ -277,7 +275,6 @@ public:
                     break;
                 }
                 case DevTaskExecStage::FINISH: {
-                    DEV_ATRACE("Finish Run devTask: %lu", deviceTaskCtx->taskCtrl->taskId);
                     return DEVICE_MACHINE_OK;
                 }
                 default:
@@ -299,9 +296,6 @@ public:
                 return ret; // wait parallel scheduled next time
             }
         }
-        DEV_ATRACE("aicpu %d proc finish devtask(%lu),aic: %lu, aiv: %lu, aicpu: %lu, stage:%d, ret: %d.",
-            aicpuIdx_, deviceTaskCtx->TaskId(), procAicCoreFunctionCnt_,
-            procAivCoreFunctionCnt_, procAicpuFunctionCnt_, ToUnderlying(deviceTaskCtx->CurStage()), ret);
         DEV_DEBUG("aicpu %d proc finish devtask(%lu),aic: %lu, aiv: %lu, aicpu: %lu, stage:%d, ret: %d.",
             aicpuIdx_, deviceTaskCtx->TaskId(), procAicCoreFunctionCnt_,
             procAivCoreFunctionCnt_, procAicpuFunctionCnt_, ToUnderlying(deviceTaskCtx->CurStage()), ret);
@@ -1133,8 +1127,6 @@ private:
         uint64_t encodeTaskId = EncodeTaskId(devTaskCtx, coreIdx, newTask);
         if (!devTaskCtx->isFirstTaskSend) {
             PerfMtTrace(PERF_TRACE_DEV_TASK_SEND_FIRST_LEAF_TASK, aicpuIdx_);
-            DEV_ATRACE("aicpuIdx: %d DevTask: %lu, Send first leafTask: %lu to aicore",
-                        aicpuIdx_, devTaskCtx->TaskId(), newTask);
             devTaskCtx->isFirstTaskSend = 1;
         }
         aicoreHal_.SetReadyQueue(coreIdx, (encodeTaskId + 1));
@@ -2054,13 +2046,11 @@ private:
     inline int HandShake(DevStartArgs* devStartArgs)
     {
         DEV_INFO("aicpu[%d] handshake start.", aicpuIdx_);
-        DEV_ATRACE("Schedule aicpu: %d handShake start", aicpuIdx_);
         int rc = HandShakeByGmWithPreSendTask(devStartArgs);
         if (rc != DEVICE_MACHINE_OK) {
             DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.presend: Aicpu[%d] handshake failed.", aicpuIdx_);
             return rc;
         }
-        DEV_ATRACE("Schedule aicpu: %d handShake success", aicpuIdx_);
         DEV_INFO("Aicpu[%d] handshake success.", aicpuIdx_);
         return 0;
     }

@@ -141,7 +141,6 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs* startArgs, PushTaskEn
 int DeviceExecuteContext::RunControlFlow(DevStartArgs* startArgs)
 {
     PerfBegin(PERF_EVT_CONTROL_FLOW);
-    DEV_ATRACE("Start to Control Flow");
     RuntimeCallEntryType runtimeCallList[static_cast<uint32_t>(RuntimeCallStage::T_RUNTIME_CALL_MAX)] = {
         DeviceExecuteRuntimeCallRootAlloc,
         DeviceExecuteRuntimeCallRootStitch,
@@ -160,7 +159,6 @@ int DeviceExecuteContext::RunControlFlow(DevStartArgs* startArgs)
             finalErrorState);
         return finalErrorState;
     }
-    DEV_ATRACE("Finish Control Flow");
     PerfEnd(PERF_EVT_CONTROL_FLOW);
     return DEVICE_MACHINE_OK;
 }
@@ -395,7 +393,6 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
     PROF_STAGE_BEGIN(PERF_EVT_STAGE_PUSH_TASK, "push.before\n");
     DumpDeviceTask(taskId, dynTask);
     PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, CTRL_CPU_THREAD_IDX);
-    DEV_ATRACE("Ctrl Cpu push devTask: %lu to Sche Cpu", taskId);
     PushTask(dynTask);
     PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
 

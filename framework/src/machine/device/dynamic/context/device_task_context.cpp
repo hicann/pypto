@@ -40,7 +40,6 @@ DynDeviceTask* DeviceTaskContext::BuildDeviceTaskData(
 {
     int ret = DEVICE_MACHINE_OK;
     PerfBegin(PERF_EVT_ALLOCATE_TASK);
-    DEV_ATRACE("Start to Build DeviceTask: %u", taskId);
     DynDeviceTask* dynTask = workspace_->MakeDynDeviceTask();
     ret = stitchContext.MoveTo(dynTask);
     if (unlikely(ret != DEVICE_MACHINE_OK)) {
