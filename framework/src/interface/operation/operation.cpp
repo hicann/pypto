@@ -152,7 +152,8 @@ bool OperationCmp::operator()(const Operation* lhs, const Operation* rhs) const
 
 Operation::Operation(
     Function& cur, Opcode opcode, LogicalTensors iOperands, LogicalTensors oOperands, bool updateTensorMap, int opMagic)
-    : iOperand(std::move(iOperands)),
+    : ir::TensorOpStmt(ir::Span()),
+      iOperand(std::move(iOperands)),
       oOperand(std::move(oOperands)),
       opmagic(opMagic),
       opcode_(opcode),

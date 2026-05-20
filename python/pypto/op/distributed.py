@@ -484,7 +484,7 @@ def my_symbolic_pe(group_name: str) -> SymbolicScalar:
     --------
        my_pe = pypto.distributed.my_symbolic_pe(group_name)
     """
-    return SymbolicScalar.from_base(pypto_impl.GetSymbolicScalarPeId(group_name))
+    return pypto_impl.GetSymbolicScalarPeId(group_name)
 
 
 def __normalize_pred(pred: Union[list[Tensor], None]) -> Tensor:

@@ -30,7 +30,10 @@
 
 #include <nlohmann/json.hpp>
 #include "storage.h"
+#include "ir/expr.h"
+
 using Json = nlohmann::json;
+using namespace pypto;
 
 namespace npu::tile_fwk {
 class TileRange {
@@ -48,7 +51,7 @@ public:
     bool IsEmpty() const { return end <= start; }
 };
 
-class LogicalTensor : public AttrHolder {
+class LogicalTensor : public AttrHolder, public ir::Var {
 public:
     std::shared_ptr<RawTensor> tensor;
     Offset offset;
@@ -79,14 +82,15 @@ public:
         std::vector<SymbolicScalar> tValidShape);
 
     LogicalTensor(LogicalTensor&&) = delete;
-    LogicalTensor(const LogicalTensor&) = default;
+    LogicalTensor(const LogicalTensor&) = delete;
     LogicalTensor& operator=(LogicalTensor&&) = delete;
     LogicalTensor& operator=(const LogicalTensor&) = delete;
+
     std::shared_ptr<LogicalTensor> Clone(Function& dstFunc, bool create = false) const;
 
     Function& BelongFunction() { return *function_; }
     const Function& BelongFunction() const { return *function_; }
-    void UpdateBelongFunction(Function& function) { function_ = &function; }
+    void UpdateBelongFunction(Function* func) { function_ = func; }
 
     std::string DumpType() const;
 

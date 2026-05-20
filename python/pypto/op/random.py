@@ -81,9 +81,6 @@ def uniform_impl(
             f"dtype must be one of DT_FP32, DT_FP16, DT_BF16, got {dtype}"
         ))
 
-    if isinstance(counter0, int):
-        counter0 = SymbolicScalar(counter0).base()
-
     return pypto_impl.Uniform(
         pypto_impl.Element(pypto_impl.DataType.DT_UINT64, key),
         counter0,

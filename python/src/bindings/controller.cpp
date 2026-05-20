@@ -542,7 +542,7 @@ void bind_controller_scope_classes(py::module& m)
         .def("__str__", [](const ConvTile& t) { return t.ToString(); });
 }
 
-void bind_controller(py::module& m)
+void BindController(py::module& m)
 {
     bind_controller_config(m);
     bind_controller_set_tile(m);

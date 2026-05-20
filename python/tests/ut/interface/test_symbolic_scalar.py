@@ -307,3 +307,11 @@ def test_symbolic_scalar_issue36():
     b = pypto.symbolic_scalar('b')
     a = (b >= 2) * (b < 8)
     assert str(a) == '((b>=2)*(b<8))'
+
+
+def test_as_expr():
+    b = pypto.symbolic_scalar('b').as_expr()
+    assert str(b) == 'b'
+
+
+test_as_expr()

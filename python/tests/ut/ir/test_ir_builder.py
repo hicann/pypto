@@ -169,7 +169,7 @@ def test_builder_emit():
     b.emit(ir.EvalStmt(call, sp))
     func = b.end_function(sp)
 
-    assert isinstance(func.body, ir.EvalStmt)
+    assert isinstance(func.body[0], ir.EvalStmt)
 
 
 # ---------- For loop building ----------
@@ -555,8 +555,8 @@ def test_builder_nested_for_loops():
     assert str(inner.loop_var) == "j"
 
     func = b.end_function(sp)
-    assert isinstance(func.body, ir.ForStmt)
-    assert isinstance(func.body.body, ir.ForStmt)
+    assert isinstance(func.body, ir.SeqStmts)
+    assert isinstance(func.body[0], ir.ForStmt)
 
 
 def test_builder_for_with_if():
@@ -581,8 +581,9 @@ def test_builder_for_with_if():
     b.end_for_loop(sp)
 
     func = b.end_function(sp)
-    assert isinstance(func.body, ir.ForStmt)
-    assert isinstance(func.body.body, ir.IfStmt)
+    for_stmt = func.body[0]
+    assert isinstance(for_stmt, ir.ForStmt)
+    assert isinstance(for_stmt.body[0], ir.IfStmt)
 
 
 def test_builder_if_with_nested_for():
@@ -607,8 +608,9 @@ def test_builder_if_with_nested_for():
     b.end_if(sp)
 
     func = b.end_function(sp)
-    assert isinstance(func.body, ir.IfStmt)
-    assert isinstance(func.body.then_body, ir.ForStmt)
+    if_stmt = func.body[0]
+    assert isinstance(if_stmt, ir.IfStmt)
+    assert isinstance(if_stmt.then_body[0], ir.ForStmt)
 
 
 # ---------- Complex end-to-end ----------
@@ -670,5 +672,188 @@ def test_builder_complex_program():
     for_stmt_body = body[0]
     assert isinstance(for_stmt_body, ir.ForStmt)
     for_body = for_stmt_body.body
-    assert isinstance(for_body, ir.IfStmt)
-    assert for_body.else_body is not None
+    if_stmt = for_body[0]
+    assert isinstance(if_stmt, ir.IfStmt)
+    assert if_stmt.else_body is not None
+
+
+# ---------- CreateSymbolicScalar ----------
+
+
+def test_builder_create_scalar_var():
+    b = ir.IRBuilder()
+    ss = b.create_scalar_var("n")
+    ss = b.create_const_int(42)
+
+
+# ---------- create_tensor_var ----------
+
+
+def test_builder_create_tensor_var():
+    b = ir.IRBuilder()
+    tv = b.create_tensor_var(pypto.DT_FP32, [8, 16], name="my_tensor")
+    assert tv is not None
+
+
+def test_builder_create_tensor_var_symbolic_shape():
+    b = ir.IRBuilder()
+    n = b.create_scalar_var("n")
+    tv = b.create_tensor_var(pypto.DT_FP32, [n, 16])
+    assert tv is not None
+
+
+def test_builder_create_tensor_op_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+    result_var = ir.Var("out", st, sp)
+    token = ir.Var("tok", st, sp)
+    arg1 = ir.ConstInt(1, ir.INT32, sp)
+    arg2 = ir.ConstInt(2, ir.INT32, sp)
+    attrs = {
+        "a": 1,
+        "b": [1, 1],
+        "c": b.create_scalar_var("n"),
+        "d": [b.create_scalar_var('b'), b.create_scalar_var('c')],
+    }
+    created = b.create_tensor_op_stmt([result_var], token, "add", [arg1, arg2], [], attrs, sp)
+    manual = ir.TensorOpStmt([result_var], token, "add", [arg1, arg2], [], attrs, sp)
+    assert str(created) == str(manual)
+
+
+def test_builder_create_seq_stmts():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+    x = ir.Var("x", st, sp)
+    stmt1 = ir.AssignStmt(x, ir.ConstInt(1, ir.INT32, sp), sp)
+    stmt2 = ir.AssignStmt(x, ir.ConstInt(2, ir.INT32, sp), sp)
+
+    seq = b.create_seq_stmts([stmt1, stmt2], sp)
+    assert isinstance(seq, ir.SeqStmts)
+    assert len(seq.stmts) == 2
+
+
+def test_builder_create_return_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+
+    stmt = b.create_return_stmt([ir.ConstInt(42, ir.INT32, sp)], sp)
+    assert isinstance(stmt, ir.ReturnStmt)
+    assert str(stmt) == str(ir.ReturnStmt([ir.ConstInt(42, ir.INT32, sp)], sp))
+
+
+def test_builder_create_yield_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+
+    stmt = b.create_yield_stmt([ir.ConstInt(1, ir.INT32, sp)], sp)
+    assert isinstance(stmt, ir.YieldStmt)
+    assert str(stmt) == str(ir.YieldStmt([ir.ConstInt(1, ir.INT32, sp)], sp))
+
+
+def test_builder_create_if_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+    x = ir.Var("x", st, sp)
+    ret_var = ir.Var("out", st, sp)
+    then_body = ir.AssignStmt(x, ir.ConstInt(1, ir.INT32, sp), sp)
+    cond = ir.ConstBool(True, sp)
+    else_body = ir.AssignStmt(x, ir.ConstInt(0, ir.INT32, sp), sp)
+
+    stmt = b.create_if_stmt(cond, then_body, else_body, [ret_var], sp)
+    assert isinstance(stmt, ir.IfStmt)
+    assert len(stmt.return_vars) == 1
+
+
+def test_builder_create_for_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+    i = ir.Var("i", st, sp)
+    iter_arg = ir.IterArg("sum", st, ir.ConstInt(0, ir.INT32, sp), sp)
+    ret_var = ir.Var("sum_out", st, sp)
+    body = ir.YieldStmt([ir.ConstInt(1, ir.INT32, sp)], sp)
+
+    stmt = b.create_for_stmt(
+        i,
+        ir.ConstInt(0, ir.INT32, sp),
+        ir.ConstInt(10, ir.INT32, sp),
+        ir.ConstInt(1, ir.INT32, sp),
+        [iter_arg],
+        body,
+        [ret_var],
+        sp,
+    )
+    assert isinstance(stmt, ir.ForStmt)
+    assert len(stmt.iter_args) == 1
+    assert len(stmt.return_vars) == 1
+    assert str(stmt) == str(
+        ir.ForStmt(
+            i,
+            ir.ConstInt(0, ir.INT32, sp),
+            ir.ConstInt(10, ir.INT32, sp),
+            ir.ConstInt(1, ir.INT32, sp),
+            [iter_arg],
+            body,
+            [ret_var],
+            sp,
+        )
+    )
+
+
+def test_builder_create_while_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+    iter_arg = ir.IterArg("cnt", st, ir.ConstInt(0, ir.INT32, sp), sp)
+    ret_var = ir.Var("cnt_out", st, sp)
+    body = ir.YieldStmt([ir.ConstInt(1, ir.INT32, sp)], sp)
+    cond = ir.ConstBool(True, sp)
+
+    stmt = b.create_while_stmt(cond, [iter_arg], body, [ret_var], sp)
+    assert isinstance(stmt, ir.WhileStmt)
+    assert len(stmt.iter_args) == 1
+    assert len(stmt.return_vars) == 1
+    assert str(stmt) == str(
+        ir.WhileStmt(cond, [iter_arg], body, [ret_var], sp)
+    )
+
+
+def test_builder_create_break_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+
+    stmt = b.create_break_stmt([], sp)
+    assert isinstance(stmt, ir.BreakStmt)
+
+    stmt = b.create_break_stmt([ir.ConstInt(42, ir.INT32, sp)], sp)
+    assert isinstance(stmt, ir.BreakStmt)
+
+
+def test_builder_create_continue_stmt():
+    b = ir.IRBuilder()
+    sp = _span()
+
+    stmt = b.create_continue_stmt([], sp)
+    assert isinstance(stmt, ir.ContinueStmt)
+
+    stmt = b.create_continue_stmt([ir.ConstInt(1, ir.INT32, sp)], sp)
+    assert isinstance(stmt, ir.ContinueStmt)
+
+
+def test_builder_create_function():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+
+    x = ir.Var("x", st, sp)
+    func_a = b.create_function("func_a", [x], [st], ir.AssignStmt(x, ir.ConstInt(1, ir.INT32, sp), sp), sp)
+
+    y = ir.Var("y", st, sp)
+    func_b = b.create_function("func_b", [y], [st], ir.AssignStmt(y, ir.ConstInt(2, ir.INT32, sp), sp), sp)
+
+    prog = b.create_program([func_a, func_b], "multi_prog", sp)
+    assert isinstance(prog, ir.Program)
+    assert len(prog.functions) == 2

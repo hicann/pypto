@@ -75,6 +75,9 @@ DEFINE_KIND_TRAIT(Not, ObjectKind::Not)
 DEFINE_KIND_TRAIT(BitNot, ObjectKind::BitNot)
 DEFINE_KIND_TRAIT(Cast, ObjectKind::Cast)
 
+// Symbolic expression types
+DEFINE_KIND_TRAIT(ScalarExpr, ObjectKind::ScalarExpr)
+
 // Statement types
 DEFINE_KIND_TRAIT(AssignStmt, ObjectKind::AssignStmt)
 DEFINE_KIND_TRAIT(IfStmt, ObjectKind::IfStmt)
@@ -99,6 +102,7 @@ DEFINE_KIND_TRAIT(TupleType, ObjectKind::TupleType)
 DEFINE_KIND_TRAIT(MemRefType, ObjectKind::MemRefType)
 DEFINE_KIND_TRAIT(PtrType, ObjectKind::PtrType)
 DEFINE_KIND_TRAIT(TokenType, ObjectKind::TokenType)
+DEFINE_KIND_TRAIT(LogicalTensorType, ObjectKind::LogicalTensorType)
 
 // Other IR node types
 DEFINE_KIND_TRAIT(Function, ObjectKind::Function)
@@ -128,17 +132,48 @@ template <>
 struct KindTrait<Expr> {
     static constexpr ObjectKind kinds[] = {
         // Direct expression types
-        ObjectKind::Var, ObjectKind::IterArg, ObjectKind::MemRef, ObjectKind::Call, ObjectKind::MakeTuple,
-        ObjectKind::TupleGetItemExpr, ObjectKind::ConstInt, ObjectKind::ConstFloat, ObjectKind::ConstBool,
+        ObjectKind::Var,
+        ObjectKind::IterArg,
+        ObjectKind::MemRef,
+        ObjectKind::Call,
+        ObjectKind::MakeTuple,
+        ObjectKind::TupleGetItemExpr,
+        ObjectKind::ConstInt,
+        ObjectKind::ConstFloat,
+        ObjectKind::ConstBool,
         // Binary expressions (22 kinds)
-        ObjectKind::Add, ObjectKind::Sub, ObjectKind::Mul, ObjectKind::FloorDiv, ObjectKind::FloorMod,
-        ObjectKind::FloatDiv, ObjectKind::Min, ObjectKind::Max, ObjectKind::Pow, ObjectKind::Eq, ObjectKind::Ne,
-        ObjectKind::Lt, ObjectKind::Le, ObjectKind::Gt, ObjectKind::Ge, ObjectKind::And, ObjectKind::Or,
-        ObjectKind::Xor, ObjectKind::BitAnd, ObjectKind::BitOr, ObjectKind::BitXor, ObjectKind::BitShiftLeft,
+        ObjectKind::Add,
+        ObjectKind::Sub,
+        ObjectKind::Mul,
+        ObjectKind::FloorDiv,
+        ObjectKind::FloorMod,
+        ObjectKind::FloatDiv,
+        ObjectKind::Min,
+        ObjectKind::Max,
+        ObjectKind::Pow,
+        ObjectKind::Eq,
+        ObjectKind::Ne,
+        ObjectKind::Lt,
+        ObjectKind::Le,
+        ObjectKind::Gt,
+        ObjectKind::Ge,
+        ObjectKind::And,
+        ObjectKind::Or,
+        ObjectKind::Xor,
+        ObjectKind::BitAnd,
+        ObjectKind::BitOr,
+        ObjectKind::BitXor,
+        ObjectKind::BitShiftLeft,
         ObjectKind::BitShiftRight,
         // Unary expressions (5 kinds)
-        ObjectKind::Abs, ObjectKind::Neg, ObjectKind::Not, ObjectKind::BitNot, ObjectKind::Cast};
-    static constexpr size_t count = 37;
+        ObjectKind::Abs,
+        ObjectKind::Neg,
+        ObjectKind::Not,
+        ObjectKind::BitNot,
+        ObjectKind::Cast,
+        ObjectKind::ScalarExpr,
+    };
+    static constexpr size_t count = 38;
 };
 
 // BinaryExpr base class - matches any binary expression kind
@@ -165,9 +200,9 @@ struct KindTrait<UnaryExpr> {
 // Type base class - matches any type kind
 template <>
 struct KindTrait<Type> {
-    static constexpr ObjectKind kinds[] = {ObjectKind::UnknownType, ObjectKind::ScalarType, ObjectKind::ShapedType,
-                                           ObjectKind::TensorType,  ObjectKind::TileType,   ObjectKind::TupleType,
-                                           ObjectKind::TokenType};
+    static constexpr ObjectKind kinds[] = {
+        ObjectKind::UnknownType, ObjectKind::ScalarType, ObjectKind::ShapedType, ObjectKind::TensorType,
+        ObjectKind::TileType,    ObjectKind::TupleType,  ObjectKind::TokenType,  ObjectKind::LogicalTensorType};
     static constexpr size_t count = sizeof(kinds) / sizeof(ObjectKind);
 };
 

@@ -267,7 +267,11 @@ void DynloopFunctionAttribute::CreateCurrCond()
 
 Function::Function(
     const Program& belongTo, const std::string& funcMagicName, const std::string& funcRawName, Function* parentFunc)
-    : funcMagicName_(funcMagicName), funcRawName_(funcRawName), tensorMap_(*this), belongTo_(belongTo)
+    : ir::Function(ir::Span::Unknown()),
+      funcMagicName_(funcMagicName),
+      funcRawName_(funcRawName),
+      tensorMap_(*this),
+      belongTo_(belongTo)
 {
     parent_ = parentFunc;
     functionMagic_ = IdGen<IdType::FUNCTION>::Inst().NewId();

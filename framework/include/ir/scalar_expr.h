@@ -278,5 +278,17 @@ DEFINE_UNARY_EXPR_NODE(Cast, "Cast expression (cast operand to dtype)")
 
 #undef DEFINE_UNARY_EXPR_NODE
 
+class ScalarExpr : public Expr {
+public:
+    ScalarExpr(DataType dtype, Span span) : Expr(std::move(span), std::make_shared<ScalarType>(dtype)) {}
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::ScalarExpr; }
+    [[nodiscard]] std::string TypeName() const override { return "ScalarExpr"; }
+
+    static constexpr auto GetFieldDescriptors() { return Expr::GetFieldDescriptors(); }
+};
+
+using ScalarExprPtr = std::shared_ptr<const ScalarExpr>;
+
 } // namespace ir
 } // namespace pypto

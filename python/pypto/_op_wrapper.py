@@ -20,7 +20,7 @@ from .error import FeError
 
 
 def _to_base(arg):
-    if isinstance(arg, (Tensor, Element, SymbolicScalar, ShmemTensor)):
+    if isinstance(arg, (Tensor, Element, ShmemTensor)):
         return arg.base()
     elif isinstance(arg, (list, tuple)):
         return [_to_base(a) for a in arg]
@@ -35,8 +35,6 @@ def _from_base(out):
         return Tensor.from_base(out)
     elif isinstance(out, pypto_impl.ShmemTensor):
         return ShmemTensor.from_base(out)
-    elif isinstance(out, pypto_impl.SymbolicScalar):
-        return SymbolicScalar.from_base(out)
     elif isinstance(out, (list, tuple)):
         return [_from_base(a) for a in out]
     elif isinstance(out, dict):

@@ -29,6 +29,7 @@ __all__ = [
     "TupleType",
     "PtrType",
     "TokenType",
+    "LogicalTensorType",
     "DataType",
 
     "FunctionType",
@@ -99,6 +100,7 @@ from ..pypto_impl.ir import (
     TupleType,
     PtrType,
     TokenType,
+    LogicalTensorType,
 )
 
 # --- Data types ---
@@ -179,6 +181,7 @@ from ..pypto_impl.ir import (
     EvalStmt,
     BreakStmt,
     ContinueStmt,
+    TensorOpStmt,
 )
 
 # --- Function / Program ---

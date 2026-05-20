@@ -34,7 +34,7 @@
 #include "attr_holder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "operation_common.h"
-#include "ir/core.h"
+#include "ir/stmt.h"
 
 using Json = nlohmann::json;
 using namespace pypto;
@@ -196,7 +196,7 @@ inline const BiMap<AIVCore>& GetAIVCoreDict()
 
 class Function;
 // Class to represent an operation (opcode) and its operands
-class Operation : public std::enable_shared_from_this<Operation>, public AttrHolder {
+class Operation : public std::enable_shared_from_this<Operation>, public AttrHolder, public ir::TensorOpStmt {
 public:
     // MixSubgraphSplit相关字段的结构体
     struct MixSubgraphFields {

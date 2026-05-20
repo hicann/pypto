@@ -28,13 +28,12 @@
 #include "interface/utils/serialization.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
-#include <cstdint>
 
 using namespace npu::tile_fwk;
 
-LogicalTensor::LogicalTensor(
-    Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname)
-    : tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
+LogicalTensor::LogicalTensor(Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname)
+    : ir::Var(tname, ir::GetLogicalTensorType(), ir::Span::Unknown()),
+      tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
       oriShape(tshape),
@@ -45,7 +44,8 @@ LogicalTensor::LogicalTensor(
 LogicalTensor::LogicalTensor(
     Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape, TileOpFormat format,
     std::string tname)
-    : tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
+    : ir::Var(tname, ir::GetLogicalTensorType(), ir::Span::Unknown()),
+      tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
       oriShape(tshape),
@@ -55,9 +55,9 @@ LogicalTensor::LogicalTensor(
       function_(&function)
 {}
 
-LogicalTensor::LogicalTensor(
-    Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape)
-    : tensor(rawTensor),
+LogicalTensor::LogicalTensor(Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape)
+    : ir::Var(rawTensor->GetSymbol(), ir::GetLogicalTensorType(), ir::Span::Unknown()),
+      tensor(rawTensor),
       offset(toffset),
       shape(tshape),
       oriShape(tshape),
@@ -72,7 +72,8 @@ LogicalTensor::LogicalTensor(
 LogicalTensor::LogicalTensor(
     Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
     std::vector<SymbolicScalar> tValidShape)
-    : tensor(rawTensor),
+    : ir::Var(rawTensor->GetSymbol(), ir::GetLogicalTensorType(), ir::Span::Unknown()),
+      tensor(rawTensor),
       offset(toffset),
       shape(tshape),
       oriShape(tshape),
@@ -212,8 +213,7 @@ std::shared_ptr<LogicalTensor> LogicalTensor::LoadJson(
     }
     int tensorMagic = tensorDump["magic"].get<int>();
 
-    std::shared_ptr<LogicalTensor> tensorJson =
-        std::make_shared<LogicalTensor>(function, rawTensor, toffset, tshape);
+    std::shared_ptr<LogicalTensor> tensorJson = std::make_shared<LogicalTensor>(function, rawTensor, toffset, tshape);
     tensorJson->magic = tensorMagic;
 
     if (tensorDump.count("need_alloc") != 0) {
@@ -331,8 +331,7 @@ std::string LogicalTensor::Dump(bool showFrom, bool showMem) const { return Dump
 std::shared_ptr<LogicalTensor> LogicalTensor::View(
     Function& function, const Shape& newShape, const Offset& newOffset) const
 {
-    FE_ASSERT(FeError::INVALID_VAL, shape.size() == newShape.size())
-        << "Tensor.view, shape must be the same dimension";
+    FE_ASSERT(FeError::INVALID_VAL, shape.size() == newShape.size()) << "Tensor.view, shape must be the same dimension";
     FE_ASSERT(FeError::INVALID_VAL, offset.size() == newOffset.size())
         << "Tensor.view, offset must be the same dimension";
 
@@ -756,8 +755,7 @@ SymbolicScalar UpdateGetTensorDataIOIndex(size_t currOutcastIdx, size_t newOutca
                 std::vector<RawSymbolicScalarPtr> operandList = call->GetExpressionOperandList();
                 auto currIOType = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE];
                 auto currIOTypeIndex = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX];
-                FE_ASSERT(currIOType->IsImmediate())
-                    << "its' kind: " << SymbolicScalarKind2Name(currIOType->kind);
+                FE_ASSERT(currIOType->IsImmediate()) << "its' kind: " << SymbolicScalarKind2Name(currIOType->kind);
                 FE_ASSERT(currIOTypeIndex->IsImmediate())
                     << "its' kind: " << SymbolicScalarKind2Name(currIOTypeIndex->kind);
                 if (currIOType->GetImmediateValue() != GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST)
@@ -796,8 +794,7 @@ SymbolicScalar GetTensorDataFillIO(const GetTensorDataIODescDict& iodescDict, co
                 std::vector<RawSymbolicScalarPtr> operandList = call->GetExpressionOperandList();
                 auto currIOType = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE];
                 auto currIOTypeIndex = operandList[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE_INDEX];
-                FE_ASSERT(currIOType->IsImmediate())
-                    << "its' kind: " << SymbolicScalarKind2Name(currIOType->kind);
+                FE_ASSERT(currIOType->IsImmediate()) << "its' kind: " << SymbolicScalarKind2Name(currIOType->kind);
                 FE_ASSERT(currIOTypeIndex->IsImmediate())
                     << "its' kind: " << SymbolicScalarKind2Name(currIOTypeIndex->kind);
                 if (currIOType->GetImmediateValue() == ioTypeValue &&

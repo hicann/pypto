@@ -61,8 +61,6 @@ def to_sym(value) -> pypto_impl.SymbolicScalar:
         return pypto_impl.SymbolicScalar(value)
     if isinstance(value, pypto_impl.SymbolicScalar):
         return value
-    if isinstance(value, SymbolicScalar):
-        return value.base()
     raise FeError(ValueError("Invalid value type"))
 
 

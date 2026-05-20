@@ -76,6 +76,9 @@ enum class ObjectKind {
     BitNot,
     Cast,
 
+    // Symbolic expression types
+    ScalarExpr,
+
     // Statement kinds
     AssignStmt,
     IfStmt,
@@ -101,6 +104,7 @@ enum class ObjectKind {
     TileType,
     TokenType,
     TupleType,
+    LogicalTensorType,
 
     // Other IR node kinds
     Function,

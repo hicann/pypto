@@ -161,7 +161,7 @@ void bind_pass_configs(py::module& m)
         py::arg("strategy"), py::arg("identifier"));
 }
 
-void bind_pass(py::module& m)
+void BindPass(py::module& m)
 {
     bind_pass_const(m);
     bind_pass_global_config(m);

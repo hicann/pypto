@@ -8,25 +8,11 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #pragma once
-#include <any>
-#include <pybind11/pybind11.h>
 
-#include "Python.h"
-#include "pybind11/chrono.h"
-#include "pybind11/complex.h"
-#include "pybind11/functional.h"
-#include "pybind11/operators.h"
-#include "pybind11/stl.h"
-#include "pybind11/native_enum.h"
+#include <string>
 
-namespace py = pybind11;
+#include "ir/scalar_expr.h"
 
-namespace pypto {
-void BindIR(py::module& m);
-void BindCore(py::module& m);
-
-namespace ir {
-void BindIRBuilder(py::module& m);
-std::vector<std::pair<std::string, std::any>> ConvertAttrDict(const py::dict& attrs);
-} // namespace ir
-} // namespace pypto
+namespace pypto::ir {
+std::string ToString(const ScalarExprPtr& op);
+}

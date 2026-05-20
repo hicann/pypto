@@ -315,8 +315,7 @@ Operation& Program::ConnectCallerGusket(Function& caller, FunctionCallArgs& args
 
 Operation* Program::FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>& scope, bool generateCall)
 {
-    FE_ASSERT(functionMagicNameStack_.size() != 0)
-        << "The stack of functionMagicName is null.";
+    FE_ASSERT(functionMagicNameStack_.size() != 0) << "The stack of functionMagicName is null.";
     auto funcMagicName = currentFunctionPtr_->GetRawName() + "_" + std::to_string(currentFunctionPtr_->GetFuncMagic());
     FE_ASSERT(FeError::NOT_EXIST, currentFunctionPtr_->GetMagicName() == funcMagicName)
         << "currentFunc magicName: " << currentFunctionPtr_->GetMagicName()
@@ -331,8 +330,7 @@ Operation* Program::FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>
     if (!generateCall) {
         return nullptr;
     }
-    FE_ASSERT(currentFunctionPtr_->HasParent())
-        << "CurrentFunction doesn't have a parent function.";
+    FE_ASSERT(currentFunctionPtr_->HasParent()) << "CurrentFunction doesn't have a parent function.";
     if (scope) {
         GetTensorSlotManager()->ConnectSlot(scope);
     }
@@ -481,7 +479,7 @@ void Program::UpdateAliveTensorsParent(int outcastRawMagic, Function& parent)
             continue;
         }
         if (tensor->GetStorage()->tensor->rawmagic == outcastRawMagic) {
-            tensor->GetStorage(false)->UpdateBelongFunction(parent);
+            tensor->GetStorage(false)->UpdateBelongFunction(&parent);
             tensor->GetStorage()->magic = IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId();
         }
     }

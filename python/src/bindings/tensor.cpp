@@ -170,7 +170,19 @@ void BindTensor(py::module& m)
                 }
                 return t.Format();
             },
-            "Get the format of the tensor.");
+            "Get the format of the tensor.")
+        .def(
+            "LogicalTensor",
+            [](const Tensor& t) {
+                if (t.IsEmpty()) {
+                    throw py::value_error("Empty tensor.");
+                }
+                return t.GetStorage(false);
+            },
+            "Get the logical tensor storage.");
+
+    py::class_<LogicalTensor, ir::Var, std::shared_ptr<LogicalTensor>>(m, "LogicalTensor")
+        .def("__str__", [](const LogicalTensor& t) -> std::string { return t.Dump(); });
 
     m.def(
         "GetInputShape",

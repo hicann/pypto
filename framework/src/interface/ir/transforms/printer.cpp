@@ -35,6 +35,11 @@
 #include "ir/transforms/base/visitor.h"
 #include "ir/transforms/printer.h"
 
+#include "tilefwk/symbolic_scalar.h"
+#include "interface/tensor/ir.h"
+
+using npu::tile_fwk::SymbolicScalar;
+
 namespace pypto {
 namespace ir {
 
@@ -107,6 +112,7 @@ Precedence GetPrecedence(const ExprPtr& expr)
         {std::type_index(typeid(ConstFloat)), Precedence::kAtom},
         {std::type_index(typeid(ConstBool)), Precedence::kAtom},
         {std::type_index(typeid(TupleGetItemExpr)), Precedence::kAtom},
+        {std::type_index(typeid(ScalarExpr)), Precedence::kAtom},
     };
 
     INTERNAL_CHECK(expr) << "Expression is null";
@@ -183,6 +189,7 @@ protected:
     void VisitExpr_(const CallPtr& op) override;
     void VisitExpr_(const MakeTuplePtr& op) override;
     void VisitExpr_(const TupleGetItemExprPtr& op) override;
+    void VisitExpr_(const ScalarExprPtr& op) override;
 
     // Binary operations
     void VisitExpr_(const AddPtr& op) override;
@@ -360,6 +367,10 @@ std::string IRPrinter::Print(const TypePtr& type)
         return prefix_ + ".Token";
     }
 
+    if (auto logical_tensor_type = As<LogicalTensorType>(type)) {
+        return prefix_ + ".LogicalTensor";
+    }
+
     return prefix_ + ".Unknown";
 }
 
@@ -404,6 +415,13 @@ void IRPrinter::VisitExpr_(const TupleGetItemExprPtr& op)
 {
     VisitExpr(op->tuple_);
     stream_ << "[" << op->index_ << "]";
+}
+
+void IRPrinter::VisitExpr_(const ScalarExprPtr& op)
+{
+    auto scalar_type = As<ScalarType>(op->GetType());
+    INTERNAL_CHECK_SPAN(scalar_type, op->span_) << "ScalarExpr has non-scalar type";
+    stream_ << ToString(op);
 }
 
 bool IRPrinter::NeedsParens(const ExprPtr& parent, const ExprPtr& child, bool is_left)
@@ -793,15 +811,24 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
             stream_ << (AnyCast<bool>(value) ? "True" : "False");
         } else if (value.type() == typeid(std::string)) {
             stream_ << std::quoted(AnyCast<std::string>(value));
-        } else if (value.type() == typeid(ExprPtr)) {
-            VisitExpr(AnyCast<ExprPtr>(value));
-        } else if (value.type() == typeid(std::vector<ExprPtr>)) {
-            auto valueExpr = AnyCast<std::vector<ExprPtr>>(value);
+        } else if (value.type() == typeid(SymbolicScalar)) {
+            stream_ << AnyCast<SymbolicScalar>(value).Dump();
+        } else if (value.type() == typeid(std::vector<int>)) {
+            auto values = AnyCast<std::vector<int>>(value);
             stream_ << "[";
-            for (size_t i = 0; i < valueExpr.size(); ++i) {
+            for (size_t i = 0; i < values.size(); ++i) {
                 if (i > 0)
                     stream_ << ", ";
-                VisitExpr(valueExpr[i]);
+                stream_ << values[i];
+            }
+            stream_ << "]";
+        } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
+            auto values = AnyCast<std::vector<SymbolicScalar>>(value);
+            stream_ << "[";
+            for (size_t i = 0; i < values.size(); ++i) {
+                if (i > 0)
+                    stream_ << ", ";
+                stream_ << values[i].Dump();
             }
             stream_ << "]";
         } else {

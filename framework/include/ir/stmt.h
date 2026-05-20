@@ -97,6 +97,96 @@ public:
 using AssignStmtPtr = std::shared_ptr<const AssignStmt>;
 
 /**
+ * \brief Sequence of statements
+ *
+ * Represents a sequence of statements: stmt1; stmt2; ... stmtN
+ * where stmts is a list of statements.
+ */
+class SeqStmts : public Stmt {
+public:
+    /**
+     * \brief Create a sequence of statements
+     *
+     * \param stmts List of statements
+     * \param span Source location
+     */
+    SeqStmts(std::vector<StmtPtr> stmts, Span span) : Stmt(std::move(span)), stmts_(std::move(stmts)) {}
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::SeqStmts; }
+    [[nodiscard]] std::string TypeName() const override { return "SeqStmts"; }
+
+    /**
+     * \brief Get field descriptors for reflection-based visitation
+     *
+     * \return Tuple of field descriptors (stmts as USUAL field)
+     */
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&SeqStmts::stmts_, "stmts")));
+    }
+
+    /**
+     * @brief Create a normalized statement from a list of statements
+     *
+     * Flattens nested SeqStmts and unwraps single-child sequences:
+     * - Flatten({a, SeqStmts({b, c}), d}, span) → SeqStmts({a, b, c, d})
+     * - Flatten({a}, span) → a
+     * - Flatten({}, span) → SeqStmts({})
+     */
+    static StmtPtr Flatten(std::vector<StmtPtr> stmts, Span span)
+    {
+        std::vector<StmtPtr> flat;
+        for (auto& s : stmts) {
+            if (auto seq = std::dynamic_pointer_cast<const SeqStmts>(s)) {
+                // Recursively flatten nested SeqStmts
+                for (const auto& inner : seq->stmts_) {
+                    if (auto inner_seq = std::dynamic_pointer_cast<const SeqStmts>(inner)) {
+                        flat.insert(flat.end(), inner_seq->stmts_.begin(), inner_seq->stmts_.end());
+                    } else {
+                        flat.push_back(inner);
+                    }
+                }
+            } else {
+                flat.push_back(std::move(s));
+            }
+        }
+        if (flat.size() == 1) {
+            return flat[0];
+        }
+        return std::make_shared<SeqStmts>(std::move(flat), std::move(span));
+    }
+
+    /**
+     * \brief Wrap a statement in a SeqStmts if it's not already one
+     *
+     * \param stmt Statement to wrap
+     * \param span Source location
+     * \return Wrapped statement
+     */
+    static std::shared_ptr<const SeqStmts> Wrap(StmtPtr stmt, Span span)
+    {
+        if (auto seq = std::dynamic_pointer_cast<const SeqStmts>(stmt)) {
+            return seq;
+        }
+        return std::make_shared<SeqStmts>(std::vector<StmtPtr>{stmt}, std::move(span));
+    }
+
+    static std::optional<std::shared_ptr<const SeqStmts>> Wrap(std::optional<StmtPtr> stmt, Span span)
+    {
+        if (!stmt) {
+            return std::nullopt;
+        }
+        return Wrap(stmt.value(), span);
+    }
+
+public:
+    std::vector<StmtPtr> stmts_; // List of statements
+};
+
+using SeqStmtsPtr = std::shared_ptr<const SeqStmts>;
+
+/**
  * \brief Conditional statement
  *
  * Represents an if-else statement: if condition then then_body else else_body
@@ -117,8 +207,8 @@ public:
         ExprPtr condition, StmtPtr thenBody, std::optional<StmtPtr> elseBody, std::vector<VarPtr> returnVars, Span span)
         : Stmt(std::move(span)),
           condition_(std::move(condition)),
-          thenBody_(std::move(thenBody)),
-          elseBody_(std::move(elseBody)),
+          thenBody_(SeqStmts::Wrap(thenBody, span)),
+          elseBody_(SeqStmts::Wrap(elseBody, span)),
           returnVars_(std::move(returnVars))
     {}
 
@@ -141,10 +231,10 @@ public:
     }
 
 public:
-    ExprPtr condition_;               // Condition expression
-    StmtPtr thenBody_;                // Then branch statement
-    std::optional<StmtPtr> elseBody_; // Else branch statement (optional)
-    std::vector<VarPtr> returnVars_;  // Return variables (can be empty)
+    ExprPtr condition_;                   // Condition expression
+    SeqStmtsPtr thenBody_;                // Then branch statement
+    std::optional<SeqStmtsPtr> elseBody_; // Else branch statement (optional)
+    std::vector<VarPtr> returnVars_;      // Return variables (can be empty)
 };
 
 using IfStmtPtr = std::shared_ptr<const IfStmt>;
@@ -278,7 +368,7 @@ public:
           stop_(std::move(stop)),
           step_(std::move(step)),
           iterArgs_(std::move(iterArgs)),
-          body_(std::move(body)),
+          body_(SeqStmts::Wrap(body, span)),
           returnVars_(std::move(returnVars))
     {}
 
@@ -307,7 +397,7 @@ public:
     ExprPtr stop_;                     // Stop value expression
     ExprPtr step_;                     // Step value expression
     std::vector<IterArgPtr> iterArgs_; // Loop-carried values (scoped to loop body)
-    StmtPtr body_;                     // Loop body statement (must yield if iter_args non-empty)
+    SeqStmtsPtr body_;                 // Loop body statement (must yield if iter_args non-empty)
     std::vector<VarPtr> returnVars_;   // Variables capturing final iteration values (accessible after loop)
 };
 
@@ -349,7 +439,7 @@ public:
         : Stmt(std::move(span)),
           condition_(std::move(condition)),
           iterArgs_(std::move(iterArgs)),
-          body_(std::move(body)),
+          body_(SeqStmts::Wrap(body, span)),
           returnVars_(std::move(returnVars))
     {}
 
@@ -375,78 +465,11 @@ public:
 public:
     ExprPtr condition_;                // Condition expression (evaluated each iteration)
     std::vector<IterArgPtr> iterArgs_; // Loop-carried values (scoped to loop body)
-    StmtPtr body_;                     // Loop body statement (must yield if iter_args non-empty)
+    SeqStmtsPtr body_;                 // Loop body statement (must yield if iter_args non-empty)
     std::vector<VarPtr> returnVars_;   // Variables capturing final iteration values (accessible after loop)
 };
 
 using WhileStmtPtr = std::shared_ptr<const WhileStmt>;
-
-/**
- * \brief Sequence of statements
- *
- * Represents a sequence of statements: stmt1; stmt2; ... stmtN
- * where stmts is a list of statements.
- */
-class SeqStmts : public Stmt {
-public:
-    /**
-     * \brief Create a sequence of statements
-     *
-     * \param stmts List of statements
-     * \param span Source location
-     */
-    SeqStmts(std::vector<StmtPtr> stmts, Span span) : Stmt(std::move(span)), stmts_(std::move(stmts)) {}
-
-    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::SeqStmts; }
-    [[nodiscard]] std::string TypeName() const override { return "SeqStmts"; }
-
-    /**
-     * \brief Get field descriptors for reflection-based visitation
-     *
-     * \return Tuple of field descriptors (stmts as USUAL field)
-     */
-    static constexpr auto GetFieldDescriptors()
-    {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&SeqStmts::stmts_, "stmts")));
-    }
-
-    /**
-     * @brief Create a normalized statement from a list of statements
-     *
-     * Flattens nested SeqStmts and unwraps single-child sequences:
-     * - Flatten({a, SeqStmts({b, c}), d}, span) → SeqStmts({a, b, c, d})
-     * - Flatten({a}, span) → a
-     * - Flatten({}, span) → SeqStmts({})
-     */
-    static StmtPtr Flatten(std::vector<StmtPtr> stmts, Span span)
-    {
-        std::vector<StmtPtr> flat;
-        for (auto& s : stmts) {
-            if (auto seq = std::dynamic_pointer_cast<const SeqStmts>(s)) {
-                // Recursively flatten nested SeqStmts
-                for (const auto& inner : seq->stmts_) {
-                    if (auto inner_seq = std::dynamic_pointer_cast<const SeqStmts>(inner)) {
-                        flat.insert(flat.end(), inner_seq->stmts_.begin(), inner_seq->stmts_.end());
-                    } else {
-                        flat.push_back(inner);
-                    }
-                }
-            } else {
-                flat.push_back(std::move(s));
-            }
-        }
-        if (flat.size() == 1) {
-            return flat[0];
-        }
-        return std::make_shared<SeqStmts>(std::move(flat), std::move(span));
-    }
-
-public:
-    std::vector<StmtPtr> stmts_; // List of statements
-};
-
-using SeqStmtsPtr = std::shared_ptr<const SeqStmts>;
 
 /**
  * \brief Evaluation statement
@@ -590,6 +613,8 @@ public:
           tokens_(std::move(tokens)),
           attrs_(std::move(attrs))
     {}
+
+    explicit TensorOpStmt(Span span) : Stmt(std::move(span)) {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TensorOpStmt; }
     [[nodiscard]] std::string TypeName() const override { return "TensorOpStmt"; }

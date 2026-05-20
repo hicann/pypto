@@ -440,8 +440,8 @@ def lrelu(other: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 
 @op_wrapper
 def remainder(
-    input: Union[Tensor, int, float], 
-    other: Union[Tensor, int, float], 
+    input: Union[Tensor, int, float],
+    other: Union[Tensor, int, float],
     precision_type: PrecisionType = PrecisionType.HIGH_PRECISION
 ) -> Tensor:
     """Computes the element-wise remainder of `input` divided by `other`.
@@ -721,7 +721,7 @@ def exp(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) 
 
     Input x: [0.0    1.0    2.0]
     Output y:[1.0000 2.7183 7.3891]
-    
+
     # Using high precision mode for FP16
     x = pypto.tensor([3], pypto.DT_FP16)
     y = pypto.exp(x, pypto.PrecisionType.HIGH_PRECISION)
@@ -1032,7 +1032,7 @@ def reciprocal(a: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSI
 
     Input x:  [-0.4595, -2.1219, -1.4314,  0.7298]
     Output y: [-2.1763, -0.4713, -0.6986,  1.3702]
-    
+
     # Using high precision mode
     x = pypto.tensor([4], pypto.DT_FP16)
     y = pypto.reciprocal(x, pypto.PrecisionType.HIGH_PRECISION)
@@ -1342,7 +1342,7 @@ def sqrt(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC)
 
     Input x:  [1.0 4.0 9.0 16.0 25.0]
     Output y: [1.0 2.0 3.0 4.0  5.0]
-    
+
     # Using high precision mode for FP16
     x = pypto.tensor([5], pypto.DT_FP16)
     y = pypto.sqrt(x, pypto.PrecisionType.HIGH_PRECISION)
@@ -1407,7 +1407,7 @@ def log(input: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) 
 
     Input x: [1.0     2.0    3.0]
     Output y:[0.0000 0.6931 1.0986]
-    
+
     # Using high precision mode for FP16
     x = pypto.tensor([3], pypto.DT_FP16)
     y = pypto.log(x, pypto.PrecisionType.HIGH_PRECISION)
@@ -1783,8 +1783,6 @@ def triu(
                 [0 5 6],
                 [0 0 9]]
     """
-    if isinstance(diagonal, int):
-        diagonal = SymbolicScalar(diagonal).base()
     return pypto_impl.TriU(input, diagonal)
 
 
@@ -1816,8 +1814,6 @@ def tril(
                 [4 5 0],
                 [7 8 9]]
     """
-    if isinstance(diagonal, int):
-        diagonal = SymbolicScalar(diagonal).base()
     return pypto_impl.TriL(input, diagonal)
 
 

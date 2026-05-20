@@ -23,21 +23,22 @@ namespace pypto {
 PYBIND11_MODULE(pypto_impl, m)
 {
     m.doc() = "PyPTO";
-    bind_enum(m);
+    BindEnum(m);
+
+    BindIR(m);
+    BindCore(m);
+
     BindElement(m);
     BindTensor(m);
     BindSymbolicScalar(m);
-    bind_controller(m);
-    bind_operation(m);
+    BindController(m);
+    BindOperation(m);
     BindRuntime(m);
     BindCostModelRuntime(m);
-    bind_pass(m);
+    BindPass(m);
     BindFunction(m);
     BindDistributed(m);
     BindPlatform(m);
     BindUtils(m);
-
-    BindIR(m);
-    BindCore(m);
 };
 } // namespace pypto

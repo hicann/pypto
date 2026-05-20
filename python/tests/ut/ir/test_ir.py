@@ -144,6 +144,10 @@ def test_basic_types():
     tt3 = ir.TokenType()
     assert str(tt3) == "ir.Token"
 
+    # LogicalTensorType
+    lt = ir.LogicalTensorType()
+    assert str(lt) == "ir.LogicalTensor"
+
 
 def test_basic_expr():
     span = ir.Span("test", 1, 1)

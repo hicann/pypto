@@ -15,13 +15,9 @@
 #include <string>
 #include <vector>
 
-#include "ir/builder.h"
-#include "ir/expr.h"
-#include "ir/function.h"
-#include "ir/type.h"
+#include "interface/tensor/irbuilder.h"
 
-namespace pypto {
-namespace ir {
+namespace npu::tile_fwk {
 
 void BindIRBuilder(py::module_& m)
 {
@@ -37,10 +33,10 @@ void BindIRBuilder(py::module_& m)
         // Function building
         .def(
             "begin_function",
-            [](IRBuilder& self, const std::string& name, const Span& span, FunctionType type) {
+            [](IRBuilder& self, const std::string& name, const ir::Span& span, ir::FunctionType type) {
                 self.BeginFunction(name, span, type);
             },
-            py::arg("name"), py::arg("span"), py::arg("type") = FunctionType::OPAQUE,
+            py::arg("name"), py::arg("span"), py::arg("type") = ir::FunctionType::OPAQUE,
             "Begin building a function.\n\n"
             "Creates a new function context. Must be closed with end_function().\n\n"
             "Args:\n"
@@ -90,8 +86,8 @@ void BindIRBuilder(py::module_& m)
         // For loop building
         .def(
             "begin_for_loop",
-            [](IRBuilder& self, const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step,
-               const Span& span) { self.BeginForLoop(loop_var, start, stop, step, span); },
+            [](IRBuilder& self, const ir::VarPtr& loop_var, const ir::ExprPtr& start, const ir::ExprPtr& stop,
+               const ir::ExprPtr& step, const ir::Span& span) { self.BeginForLoop(loop_var, start, stop, step, span); },
             py::arg("loop_var"), py::arg("start"), py::arg("stop"), py::arg("step"), py::arg("span"),
             "Begin building a for loop.\n\n"
             "Creates a new for loop context. Must be closed with end_for_loop().\n\n"
@@ -266,7 +262,7 @@ void BindIRBuilder(py::module_& m)
             "    Var: The created variable")
 
         .def(
-            "return_", py::overload_cast<const std::vector<ExprPtr>&, const Span&>(&IRBuilder::Return),
+            "return_", py::overload_cast<const std::vector<ir::ExprPtr>&, const ir::Span&>(&IRBuilder::Return),
             py::arg("values"), py::arg("span"),
             "Create a return statement and emit it.\n\n"
             "Convenience method that creates and emits a return statement.\n\n"
@@ -279,7 +275,7 @@ void BindIRBuilder(py::module_& m)
             "    RuntimeError: If not inside a valid context")
 
         .def(
-            "return_", py::overload_cast<const Span&>(&IRBuilder::Return), py::arg("span"),
+            "return_", py::overload_cast<const ir::Span&>(&IRBuilder::Return), py::arg("span"),
             "Create an empty return statement and emit it.\n\n"
             "Convenience method that creates and emits an empty return statement.\n\n"
             "Args:\n"
@@ -353,8 +349,183 @@ void BindIRBuilder(py::module_& m)
             "Args:\n"
             "    gvar: GlobalVar for the function\n\n"
             "Returns:\n"
-            "    List[Type]: Vector of return types");
-}
+            "    List[Type]: Vector of return types")
 
-} // namespace ir
-} // namespace pypto
+        .def(
+            "create_tensor_var",
+            [](IRBuilder& self, DataType t, std::vector<SymbolicScalar> shape, TileOpFormat format, std::string name) {
+                auto staticShape = SymbolicScalar::Concrete(shape, -1);
+                return self.CreateTensorVar(t, std::move(staticShape), std::move(shape), format, std::move(name));
+            },
+            py::arg("dtype"), py::arg("shape"), py::arg("format") = TileOpFormat::TILEOP_ND, py::arg("name") = "",
+            "Create a tensor variable.\n\n"
+            "Args:\n"
+            "    dtype: Data type of the tensor\n"
+            "    shape: Shape of the tensor\n"
+            "    format: Data format of the tensor\n"
+            "    name: Name of the tensor\n\n"
+            "Returns:\n"
+            "    LogicalTensor: The created tensor variable")
+
+        .def(
+            "create_const_int", &IRBuilder::CreateConstInt, py::arg("value"),
+            "Create a constant integer scalar.\n\n"
+            "Args:\n"
+            "    value: Integer value\n\n"
+            "Returns:\n"
+            "    SymbolicScalar: The created constant integer scalar")
+
+        .def(
+            "create_scalar_var", &IRBuilder::CreateScalarVar, py::arg("sym"),
+            "Create a scalar variable.\n\n"
+            "    sym: Symbol of the variable\n\n"
+            "Returns:\n"
+            "    SymbolicScalar: The created scalar variable")
+
+        .def(
+            "create_tensor_op_stmt",
+            [](IRBuilder& self, std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode,
+               std::vector<ir::ExprPtr> args, std::vector<ir::ExprPtr> tokens, py::dict attrs, ir::Span span) {
+                auto attr_list = pypto::ir::ConvertAttrDict(attrs);
+                return self.CreateTensorOpStmt(result, result_token, opcode, args, tokens, attr_list, span);
+            },
+            py::arg("result"), py::arg("result_token"), py::arg("opcode"), py::arg("args"), py::arg("tokens"),
+            py::arg("attrs"), py::arg("span"),
+            "Create a tensor operation statement.\n\n"
+            "Args:\n"
+            "    result: Result of the operation\n"
+            "    result_token: Result token of the operation\n"
+            "    opcode: Opcode of the operation\n"
+            "    args: Arguments of the operation\n"
+            "    tokens: Tokens of the operation\n"
+            "    attrs: Attributes of the operation\n"
+            "    span: Span of the operation\n\n"
+            "Returns:\n"
+            "    TensorOpStmt: The created tensor operation statement")
+
+        .def(
+            "create_assign_stmt", &IRBuilder::CreateAssignStmt, py::arg("var"), py::arg("value"), py::arg("span"),
+            "Create an assignment statement.\n\n"
+            "Args:\n"
+            "    var: Variable of the assignment\n"
+            "    value: Right-hand side of the assignment\n"
+            "    span: Span of the assignment\n\n"
+            "Returns:\n"
+            "    AssignStmt: The created assignment statement")
+
+        .def(
+            "create_seq_stmts", &IRBuilder::CreateSeqStmts, py::arg("stmts"), py::arg("span"),
+            "Create a sequence of statements.\n\n"
+            "Args:\n"
+            "    stmts: Statements to create\n"
+            "    span: Span of the sequence\n\n"
+            "Returns:\n"
+            "    SeqStmts: The created sequence of statements")
+
+        .def(
+            "create_if_stmt", &IRBuilder::CreateIfStmt, py::arg("cond"), py::arg("then_body"), py::arg("else_body"),
+            py::arg("return_vars"), py::arg("span"),
+            "Create an if statement.\n\n"
+            "Args:\n"
+            "    cond: Condition of the if statement\n"
+            "    then_body: Then body of the if statement\n"
+            "    else_body: Else body of the if statement\n"
+            "    return_vars: Return variables of the if statement\n"
+            "    span: Span of the if statement\n\n"
+            "Returns:\n"
+            "    IfStmt: The created if statement")
+
+        .def(
+            "create_return_stmt", &IRBuilder::CreateReturnStmt, py::arg("return_vars"), py::arg("span"),
+            "Create a return statement.\n\n"
+            "Args:\n"
+            "    return_vars: Return variables of the return statement\n"
+            "    span: Span of the return statement\n\n"
+            "Returns:\n"
+            "    ReturnStmt: The created return statement")
+
+        .def(
+            "create_yield_stmt", &IRBuilder::CreateYieldStmt, py::arg("return_vars"), py::arg("span"),
+            "Create a yield statement.\n\n"
+            "Args:\n"
+            "    return_vars: Return variables of the yield statement\n"
+            "    span: Span of the yield statement\n\n"
+            "Returns:\n"
+            "    YieldStmt: The created yield statement")
+
+        .def(
+            "create_for_stmt", &IRBuilder::CreateForStmt, py::arg("loopVar"), py::arg("start"), py::arg("stop"),
+            py::arg("step"), py::arg("iterArgs"), py::arg("body"), py::arg("returnVars"), py::arg("span"),
+            "Create a for statement.\n\n"
+            "Args:\n"
+            "    loopVar: Loop variable of the for statement\n"
+            "    start: Start value of the loop variable\n"
+            "    stop: Stop value of the loop variable\n"
+            "    step: Step value of the loop variable\n"
+            "    body: Body of the for statement\n"
+            "    returnVars: Return variables of the for statement\n"
+            "    span: Span of the for statement\n\n"
+            "Returns:\n"
+            "    ForStmt: The created for statement")
+
+        .def(
+            "create_while_stmt", &IRBuilder::CreateWhileStmt, py::arg("cond"), py::arg("iterArgs"), py::arg("body"),
+            py::arg("returnVars"), py::arg("span"),
+            "Create a while statement.\n\n"
+            "Args:\n"
+            "    cond: Condition of the while statement\n"
+            "    iterArgs: Iteration arguments of the loop\n"
+            "    body: Body of the while statement\n"
+            "    returnVars: Return variables of the while statement\n"
+            "    span: Span of the while statement\n\n"
+            "Returns:\n"
+            "    WhileStmt: The created while statement")
+
+        .def(
+            "create_break_stmt", &IRBuilder::CreateBreakStmt, py::arg("return_vars"), py::arg("span"),
+            "Create a break statement.\n\n"
+            "Args:\n"
+            "    return_vars: Return variables of the break statement\n"
+            "    span: Span of the break statement\n\n"
+            "Returns:\n"
+            "    BreakStmt: The created break statement")
+
+        .def(
+            "create_continue_stmt", &IRBuilder::CreateContinueStmt, py::arg("return_vars"), py::arg("span"),
+            "Create a continue statement.\n\n"
+            "Args:\n"
+            "    return_vars: Return variables of the continue statement\n"
+            "    span: Span of the continue statement\n\n"
+            "Returns:\n"
+            "    ContinueStmt: The created continue statement")
+
+        .def(
+            "create_function",
+            [](IRBuilder& self, std::string name, std::vector<ir::VarPtr> params, std::vector<ir::TypePtr> returnTypes,
+               ir::StmtPtr body, ir::Span span) { return self.CreateFunction(name, params, returnTypes, body, span); },
+            py::arg("name"), py::arg("params"), py::arg("returnTypes"), py::arg("body"), py::arg("span"),
+            "Create a function.\n\n"
+            "Args:\n"
+            "    name: Name of the function\n"
+            "    params: Parameters of the function\n"
+            "    returnTypes: Return types of the function\n"
+            "    body: Body of the function\n"
+            "    span: Span of the function\n\n"
+            "Returns:\n"
+            "    Function: The created function")
+
+        .def(
+            "create_program", &IRBuilder::CreateProgram, py::arg("functions"), py::arg("name"), py::arg("span"),
+            "Create a program.\n\n"
+            "Args:\n"
+            "    functions: Functions of the program\n"
+            "    name: Name of the program\n"
+            "    span: Span of the program\n\n"
+            "Returns:\n"
+            "    Program: The created program");
+}
+} // namespace npu::tile_fwk
+
+namespace pypto::ir {
+void BindIRBuilder(py::module_& m) { npu::tile_fwk::BindIRBuilder(m); }
+} // namespace pypto::ir

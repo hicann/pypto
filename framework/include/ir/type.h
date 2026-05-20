@@ -480,5 +480,29 @@ inline TokenTypePtr GetTokenType()
     return token_type;
 }
 
+/**
+ * \brief Logical tensor type representation
+ *
+ * Represents a logical tensor with dtype and shape, without memory allocation info.
+ * Used for tensor values in the PIL/IR layer before memory planning.
+ */
+class LogicalTensorType : public Type {
+public:
+    LogicalTensorType() = default;
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::LogicalTensorType; }
+    [[nodiscard]] std::string TypeName() const override { return "LogicalTensorType"; }
+
+    static constexpr auto GetFieldDescriptors() { return Type::GetFieldDescriptors(); }
+};
+
+using LogicalTensorTypePtr = std::shared_ptr<const LogicalTensorType>;
+
+inline LogicalTensorTypePtr GetLogicalTensorType()
+{
+    static const auto type = std::make_shared<LogicalTensorType>();
+    return type;
+}
+
 } // namespace ir
 } // namespace pypto

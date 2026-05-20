@@ -63,7 +63,7 @@ def pass_verify_print(*values, cond: Union[int, SymbolicScalar] = 1) -> None:
         elif isinstance(v, Tensor):
             tensors.append(v.base())
             fmt_parts.append("{T}")
-        elif isinstance(v, (int, _impl.SymbolicScalar, SymbolicScalar)):
+        elif isinstance(v, (int, _impl.SymbolicScalar)):
             scalars.append(to_sym(v))
             fmt_parts.append("{S}")
         else:

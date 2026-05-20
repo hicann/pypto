@@ -271,7 +271,7 @@ def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> N
 
 
 def __get_valid_shape(tensor):
-    return [SymbolicScalar.from_base(n) for n in tensor.GetValidShape()]
+    return tensor.GetValidShape()
 
 
 def __validate_shape(input_tensor1: Tensor, input_tensor2: Tensor, a_trans: bool, b_trans: bool) -> None:

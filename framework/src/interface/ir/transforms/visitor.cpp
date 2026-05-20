@@ -97,6 +97,8 @@ void IRVisitor::VisitExpr_(const TupleGetItemExprPtr& op)
     VisitExpr(op->tuple_);
 }
 
+void IRVisitor::VisitExpr_(const ScalarExprPtr& op) { (void)op; }
+
 void IRVisitor::VisitBinaryExpr_(const BinaryExprPtr& op)
 {
     INTERNAL_CHECK_SPAN(op->left_, op->span_) << "BinaryExpr has null left operand";

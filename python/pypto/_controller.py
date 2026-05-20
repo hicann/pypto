@@ -307,13 +307,13 @@ class LoopRange:
         self._stop = self._base.End()
 
     def begin(self) -> SymbolicScalar:
-        return SymbolicScalar.from_base(self._base.Begin())
+        return self._base.Begin()
 
     def end(self) -> SymbolicScalar:
-        return SymbolicScalar.from_base(self._base.End())
+        return self._base.End()
 
     def step(self) -> SymbolicScalar:
-        return SymbolicScalar.from_base(self._base.Step())
+        return self._base.Step()
 
     def __str__(self) -> str:
         return self._base.Dump()
@@ -328,7 +328,7 @@ class LoopRange:
 _loop_range = LoopRange
 
 
-def is_loop_begin(scalar: SymInt) -> SymbolicScalar:
+def is_loop_begin(scalar: SymbolicScalar) -> SymbolicScalar:
     """ Determines if the current iteration is the start of loop
     This function returns a boolean value which specifys whether
     the current iteration is the beginning of the loop
@@ -351,11 +351,10 @@ def is_loop_begin(scalar: SymInt) -> SymbolicScalar:
     if not hasattr(scalar, "_loop_begin"):
         raise FeError(ValueError("not loop index"))
     # implementation
-    return SymbolicScalar.from_base(
-        pypto_impl.IsLoopBegin(to_sym(scalar), getattr(scalar, "_loop_begin")))
+    return pypto_impl.IsLoopBegin(scalar, getattr(scalar, "_loop_begin"))
 
 
-def is_loop_end(scalar: SymInt) -> SymbolicScalar:
+def is_loop_end(scalar: SymbolicScalar) -> SymbolicScalar:
     """ Determines if the current iteration is the end of loop
     This function returns a boolean value which specifys whether
     the current iteration is the end of the loop
@@ -378,8 +377,7 @@ def is_loop_end(scalar: SymInt) -> SymbolicScalar:
     if not hasattr(scalar, "_loop_end"):
         raise FeError(ValueError("not loop index"))
     # implementation
-    return SymbolicScalar.from_base(
-        pypto_impl.IsLoopEnd(to_sym(scalar), getattr(scalar, "_loop_end")))
+    return pypto_impl.IsLoopEnd(scalar, getattr(scalar, "_loop_end"))
 
 
 @contextmanager
@@ -484,7 +482,7 @@ class _LoopFunction:
             self._end = end
 
         def __next__(self):
-            scalar = SymbolicScalar.from_base(self._iter.__next__())
+            scalar = self._iter.__next__()
             setattr(scalar, "_loop_begin", self._begin)
             setattr(scalar, "_loop_end", self._end)
             return scalar

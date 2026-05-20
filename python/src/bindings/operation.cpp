@@ -21,13 +21,13 @@ using namespace npu::tile_fwk;
 
 namespace pypto {
 constexpr const int SCATTER_UPDATE_DIM = -2;
-void bind_operation(py::module& m)
+void BindOperation(py::module& m)
 {
     m.def(
         "Add", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Add(self, other); }, "Tensor add.");
     m.def(
         "Axpy", [](const Tensor& y, const Tensor& x, float alpha) { return npu::tile_fwk::Axpy(y, x, alpha); },
-        py::arg("y"), py::arg("x"), py::arg("alpha") = 1.0f, "Tensor axpy: y = alpha * x + y.");        
+        py::arg("y"), py::arg("x"), py::arg("alpha") = 1.0f, "Tensor axpy: y = alpha * x + y.");
     m.def(
         "Sub", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Sub(self, other); }, "Tensor sub.");
     m.def(
@@ -86,28 +86,15 @@ void bind_operation(py::module& m)
     m.def(
         "View",
         [](const Tensor& operand, const std::vector<int64_t>& shapes, const py::sequence& offsets) {
-            bool has_symbolic = false;
+            std::vector<SymbolicScalar> dynOffsets;
             for (const auto& item : offsets) {
                 if (py::isinstance<SymbolicScalar>(item)) {
-                    has_symbolic = true;
-                    break;
+                    dynOffsets.push_back(item.cast<SymbolicScalar>());
+                } else if (py::isinstance<py::int_>(item)) {
+                    dynOffsets.push_back(item.cast<int64_t>());
                 }
             }
-            if (has_symbolic) {
-                std::vector<SymbolicScalar> symbolic_offsets;
-                symbolic_offsets.reserve(py::len(offsets));
-                for (const auto& item : offsets) {
-                    symbolic_offsets.push_back(item.cast<SymbolicScalar>());
-                }
-                return npu::tile_fwk::View(operand, shapes, symbolic_offsets);
-            } else {
-                std::vector<int64_t> int_offsets;
-                int_offsets.reserve(py::len(offsets));
-                for (const auto& item : offsets) {
-                    int_offsets.push_back(item.cast<int64_t>());
-                }
-                return npu::tile_fwk::View(operand, shapes, int_offsets);
-            }
+            return npu::tile_fwk::View(operand, shapes, dynOffsets);
         },
         py::arg("operand"), py::arg("shapes"), py::arg("offsets"),
         "Create a view of a tensor. The 'offsets' can contain symbolic scalars.");
@@ -125,10 +112,7 @@ void bind_operation(py::module& m)
         py::arg("operand"), py::arg("dstDataType"), "Tensor view_type.");
 
     m.def(
-        "Exp",
-        [](const Tensor& self, PrecisionType precisionType) {
-            return npu::tile_fwk::Exp(self, precisionType);
-        },
+        "Exp", [](const Tensor& self, PrecisionType precisionType) { return npu::tile_fwk::Exp(self, precisionType); },
         py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor exp.");
     m.def(
         "Expm1", [](const Tensor& self) { return npu::tile_fwk::Expm1(self); }, "Tensor expm1.");
@@ -139,8 +123,7 @@ void bind_operation(py::module& m)
     m.def(
         "Exp2", [](const Tensor& self) { return npu::tile_fwk::Exp2(self); }, "Tensor exp2.");
     m.def(
-        "Permute",
-        [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Permute(self, perm); },
+        "Permute", [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Permute(self, perm); },
         "Tensor transpose.");
 
     m.def(
@@ -176,9 +159,7 @@ void bind_operation(py::module& m)
         py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor rsqrt.");
     m.def(
         "Sqrt",
-        [](const Tensor& self, PrecisionType precisionType) {
-            return npu::tile_fwk::Sqrt(self, precisionType);
-        },
+        [](const Tensor& self, PrecisionType precisionType) { return npu::tile_fwk::Sqrt(self, precisionType); },
         py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor sqrt.");
     m.def(
         "Sign", [](const Tensor& self) { return npu::tile_fwk::Sign(self); }, "Tensor sign.");
@@ -202,9 +183,7 @@ void bind_operation(py::module& m)
         "Neg", [](const Tensor& self) { return npu::tile_fwk::Neg(self); }, "Tensor neg.");
     m.def(
         "Reciprocal",
-        [](const Tensor& self, PrecisionType precisionType) {
-            return npu::tile_fwk::Reciprocal(self, precisionType);
-        },
+        [](const Tensor& self, PrecisionType precisionType) { return npu::tile_fwk::Reciprocal(self, precisionType); },
         py::arg("self"), py::arg("precision_type") = PrecisionType::INTRINSIC, "Tensor reciprocal.");
     m.def(
         "Log",
@@ -219,8 +198,7 @@ void bind_operation(py::module& m)
         [](const Tensor& self, const Tensor& other, PrecisionType precisionType) {
             return npu::tile_fwk::Pow(self, other, precisionType);
         },
-        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION,
-        "Tensor pow.");
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PrecisionType::HIGH_PRECISION, "Tensor pow.");
     m.def(
         "Pow",
         [](const Tensor& self, const Element& other, PrecisionType precisionType) {
@@ -237,18 +215,18 @@ void bind_operation(py::module& m)
         py::arg("satmode") = SaturationMode::OFF, "Tensor cast.");
     m.def(
         "Quantize",
-        [](const Tensor &input, const Tensor &scale, DataType otype, int axis, const Tensor &zeroPoints) {
+        [](const Tensor& input, const Tensor& scale, DataType otype, int axis, const Tensor& zeroPoints) {
             return npu::tile_fwk::Quantize(input, scale, otype, axis, zeroPoints);
         },
-        py::arg("input"), py::arg("scale"), py::arg("otype"), py::arg("axis"),
-        py::arg("zero_points") = Tensor(), "Tensor Quantize.");
+        py::arg("input"), py::arg("scale"), py::arg("otype"), py::arg("axis"), py::arg("zero_points") = Tensor(),
+        "Tensor Quantize.");
     m.def(
         "Dequantize",
-        [](const Tensor &input, const Tensor &scale, DataType otype, int axis, const Tensor &zeroPoints) {
+        [](const Tensor& input, const Tensor& scale, DataType otype, int axis, const Tensor& zeroPoints) {
             return npu::tile_fwk::Dequantize(input, scale, otype, axis, zeroPoints);
         },
-        py::arg("input"), py::arg("scale"), py::arg("otype"), py::arg("axis"),
-        py::arg("zero_points") = Tensor(), "Tensor Dequantize.");
+        py::arg("input"), py::arg("scale"), py::arg("otype"), py::arg("axis"), py::arg("zero_points") = Tensor(),
+        "Tensor Dequantize.");
     m.def(
         "Add", [](const Tensor& self, const Element& other) { return npu::tile_fwk::Add(self, other); },
         "Tensor add scalar.");
@@ -319,11 +297,11 @@ void bind_operation(py::module& m)
         py::arg("start"), py::arg("end"), py::arg("step"), "Tensor range.");
     m.def(
         "Uniform",
-        [](const Element &key, const SymbolicScalar& counter0, const Element &counter1,
-           const std::vector<int64_t> &shape, const Element &rounds, DataType dtype) {
-            return npu::tile_fwk::Uniform(key, counter0, counter1, shape, rounds, dtype);
-        },
-        py::arg("key"), py::arg("counter0"), py::arg("counter1"), py::arg("shape"), py::arg("rounds") = Element(DT_UINT16, static_cast<uint16_t>(10)), py::arg("dtype") = DT_FP32,
+        [](const Element& key, const SymbolicScalar& counter0, const Element& counter1,
+           const std::vector<int64_t>& shape, const Element& rounds,
+           DataType dtype) { return npu::tile_fwk::Uniform(key, counter0, counter1, shape, rounds, dtype); },
+        py::arg("key"), py::arg("counter0"), py::arg("counter1"), py::arg("shape"),
+        py::arg("rounds") = Element(DT_UINT16, static_cast<uint16_t>(10)), py::arg("dtype") = DT_FP32,
         "Uniform random number generator.");
     m.def(
         "Amax",
@@ -512,16 +490,15 @@ void bind_operation(py::module& m)
         [](const Tensor& self, int k, int axis, bool islargest, TopKAlgo algo) {
             return npu::tile_fwk::TopK(self, k, axis, islargest, algo);
         },
-        py::arg("operand"), py::arg("k"), py::arg("axis"), py::arg("islargest") = true, py::arg("algo") = TopKAlgo::MERGE_SORT, "Tensor topk.");
+        py::arg("operand"), py::arg("k"), py::arg("axis"), py::arg("islargest") = true,
+        py::arg("algo") = TopKAlgo::MERGE_SORT, "Tensor topk.");
     m.def(
         "QuantMX",
         [](const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis,
-           bool performanceMode) {
-            return npu::tile_fwk::QuantMX(input, quantDtype, mode, axis, performanceMode);
-        },
+           bool performanceMode) { return npu::tile_fwk::QuantMX(input, quantDtype, mode, axis, performanceMode); },
         py::arg("input"), py::arg("quantDtype") = DataType::DT_FP8E4M3,
-        py::arg("mode") = DequantScaleRoundingMode::ROUND_DOWN, py::arg("axis") = -1,
-        py::arg("performanceMode") = true, "Tensor MX quant.");
+        py::arg("mode") = DequantScaleRoundingMode::ROUND_DOWN, py::arg("axis") = -1, py::arg("performanceMode") = true,
+        "Tensor MX quant.");
     m.def(
         "Sort32", [](const Tensor& self, int index) { return npu::tile_fwk::Sort32(self, index); }, py::arg("operand"),
         py::arg("index"), "Tensor sort32.");

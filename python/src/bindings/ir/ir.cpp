@@ -25,7 +25,9 @@
 #include "ir/program.h"
 #include "ir/scalar_expr.h"
 #include "ir/transforms/printer.h"
+#include "tilefwk/symbolic_scalar.h"
 
+using npu::tile_fwk::SymbolicScalar;
 namespace pypto {
 namespace ir {
 
@@ -260,10 +262,11 @@ std::any ConvertAttr(const py::object& attr)
         return py::cast<std::string>(attr);
     } else if (py::isinstance<py::float_>(attr)) {
         return py::cast<double>(attr);
-    } else if (py::isinstance<ExprPtr>(attr)) {
-        return py::cast<ExprPtr>(attr);
+    } else if (py::isinstance<SymbolicScalar>(attr)) {
+        return py::cast<SymbolicScalar>(attr);
     } else {
-        throw TypeError("Unsupported attr type");
+        throw TypeError(
+            std::string("Unsupported attr type ") + std::string(py::str(py::type::of(attr).attr("__name__"))));
     }
 }
 
@@ -273,10 +276,10 @@ std::any ConvertListAttr(const py::list& list)
         return std::any();
     }
     auto item0 = list[0];
-    if (py::isinstance<ExprPtr>(item0)) {
-        std::vector<ExprPtr> ret;
+    if (py::isinstance<SymbolicScalar>(item0)) {
+        std::vector<SymbolicScalar> ret;
         for (auto item : list) {
-            ret.push_back(py::cast<ExprPtr>(item));
+            ret.push_back(py::cast<SymbolicScalar>(item));
         }
         return ret;
     } else if (py::isinstance<std::string>(item0)) {
@@ -531,7 +534,13 @@ void BindTypeClass(py::module& m)
 
     py::class_<PtrType, Type, std::shared_ptr<PtrType>>(m, "PtrType", "Pointer type").def(py::init<>());
 
-    py::class_<TokenType, Type, std::shared_ptr<TokenType>>(m, "TokenType", "Opaque token type").def(py::init<>());
+    py::class_<TokenType, Type, std::shared_ptr<TokenType>>(m, "TokenType", "Opaque token type")
+        .def(py::init<>(), "Create a token type")
+        .def_static("get", GetTokenType, "Get the token type");
+
+    py::class_<LogicalTensorType, Type, std::shared_ptr<LogicalTensorType>>(
+        m, "LogicalTensorType", "Logical tensor type")
+        .def(py::init<>(), "Create a logical tensor type");
 }
 } // namespace ir
 

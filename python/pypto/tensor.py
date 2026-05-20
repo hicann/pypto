@@ -299,7 +299,7 @@ class Tensor:
         key = self._normalize_key(key)
 
         if all(isinstance(k, (int, SymbolicScalar)) for k in key):
-            return SymbolicScalar.from_base(pypto_impl.GetTensorData(self._base, to_syms(key)))
+            return pypto_impl.GetTensorData(self._base, to_syms(key))
 
         if all(isinstance(k, slice) for k in key):
             offsets, shapes = self._get_view_offset_shape(key, self.shape)
@@ -430,8 +430,7 @@ class Tensor:
             return out
         for i, n in enumerate(self._base.GetShape()):
             if n == -1:
-                out.append(SymbolicScalar.from_base(
-                    pypto_impl.GetInputShape(self._base, i)))
+                out.append(pypto_impl.GetInputShape(self._base, i))
             else:
                 out.append(n)
         return out
@@ -441,7 +440,7 @@ class Tensor:
         """
         Return the valid shape of the tensor, debug purpose only.
         """
-        return [SymbolicScalar.from_base(n) for n in self._base.GetValidShape()]
+        return self._base.GetValidShape()
 
     @property
     def dim(self) -> int:
@@ -612,6 +611,9 @@ class Tensor:
 
     def base(self) -> pypto_impl.Tensor:
         return self._base
+
+    def logical_tensor(self) -> 'LogicalTensor':
+        return self._base.LogicalTensor()
 
     @source_location
     def add(self, other: 'Tensor | int | float') -> 'Tensor':

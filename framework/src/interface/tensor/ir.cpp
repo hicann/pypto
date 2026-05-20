@@ -7,26 +7,16 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
-#include <any>
-#include <pybind11/pybind11.h>
 
-#include "Python.h"
-#include "pybind11/chrono.h"
-#include "pybind11/complex.h"
-#include "pybind11/functional.h"
-#include "pybind11/operators.h"
-#include "pybind11/stl.h"
-#include "pybind11/native_enum.h"
+#include "ir.h"
 
-namespace py = pybind11;
+#include "symbolic_scalar.h"
 
-namespace pypto {
-void BindIR(py::module& m);
-void BindCore(py::module& m);
-
-namespace ir {
-void BindIRBuilder(py::module& m);
-std::vector<std::pair<std::string, std::any>> ConvertAttrDict(const py::dict& attrs);
-} // namespace ir
-} // namespace pypto
+namespace pypto::ir {
+std::string ToString(const ScalarExprPtr& op)
+{
+    auto p = std::dynamic_pointer_cast<const npu::tile_fwk::RawSymbolicExpression>(op);
+    ASSERT(p) << "not a RawSymbolicExpression";
+    return p->Dump();
+}
+} // namespace pypto::ir

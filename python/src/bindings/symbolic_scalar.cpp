@@ -15,53 +15,157 @@
 
 #include "pybind_common.h"
 
+#include "ir/kind_traits.h"
+
 using namespace npu::tile_fwk;
 
 namespace pypto {
+
+#define DEFINE_BINARY_OP(name, bop)                                \
+    .def(name, [](const SymbolicScalar& self, py::object& other) { \
+        if (py::isinstance<py::int_>(other)) {                     \
+            auto immediate = other.cast<int64_t>();                \
+            return self bop immediate;                             \
+        } else if (py::isinstance<SymbolicScalar>(other)) {        \
+            return self bop other.cast<SymbolicScalar>();          \
+        }                                                          \
+        throw py::type_error("Invalid type.");                     \
+    })
+
+#define DEFINE_BINARY_OP_CHECKED(name, bop)                        \
+    .def(name, [](const SymbolicScalar& self, py::object& other) { \
+        if (py::isinstance<py::int_>(other)) {                     \
+            auto immediate = other.cast<int64_t>();                \
+            if (immediate == 0) {                                  \
+                throw py::value_error("Division or Mod by zero."); \
+            }                                                      \
+            return self bop immediate;                             \
+        } else if (py::isinstance<SymbolicScalar>(other)) {        \
+            return self bop other.cast<SymbolicScalar>();          \
+        }                                                          \
+        throw py::type_error("Invalid type.");                     \
+    })
+
+#define DEFINE_RBINARY_OP(name, bop)                               \
+    .def(name, [](const SymbolicScalar& self, py::object& other) { \
+        if (py::isinstance<py::int_>(other)) {                     \
+            auto immediate = other.cast<int64_t>();                \
+            return immediate bop self;                             \
+        } else if (py::isinstance<SymbolicScalar>(other)) {        \
+            return other.cast<SymbolicScalar>() bop self;          \
+        }                                                          \
+        throw py::type_error("Invalid type.");                     \
+    })
+
+#define DEFINE_UNARY_OP(name, uop) .def(name, [](const SymbolicScalar& self) { return uop self; })
+
 void BindSymbolicScalar(py::module& m)
 {
-    py::class_<SymbolicScalar> _SymbolicScalar(m, "SymbolicScalar");
-
-    _SymbolicScalar.def(py::init<>())
-        .def(py::init<const SymbolicScalar&>(), py::arg("val"))
-        .def(py::init<std::string>(), py::arg("name"))
-        .def(py::init<std::int64_t>(), py::arg("value"))
-        .def(py::init<std::string, int64_t>(), py::arg("name"), py::arg("value"));
+    py::class_<SymbolicScalar>(m, "SymbolicScalar", py::dynamic_attr())
+        .def(
+            py::init([](int64_t value) { return SymbolicScalar(value); }), py::arg("value"),
+            "Create SymbolicScalar from integer value")
+        .def(
+            py::init([](std::string name) { return SymbolicScalar(name); }), py::arg("name"),
+            "Create SymbolicScalar from symbol name")
+        .def(
+            py::init([](std::string name, int64_t value) { return SymbolicScalar(name, value); }), py::arg("name"),
+            py::arg("value"), "Create SymbolicScalar from symbol name and integer value")
+        .def(
+            py::init([](ir::ExprPtr expr) {
+                if (auto val = ir::As<ir::ConstInt>(expr))
+                    return SymbolicScalar(val->value_);
+                if (auto var = ir::As<ir::Var>(expr))
+                    return SymbolicScalar(var->name_);
+                if (auto sexpr = ir::As<ir::ScalarExpr>(expr)) {
+                    auto raw = std::dynamic_pointer_cast<const RawSymbolicExpression>(sexpr);
+                    return SymbolicScalar(std::const_pointer_cast<RawSymbolicExpression>(raw));
+                }
+                throw py::value_error("Invalid expression.");
+            }),
+            py::arg("expr"), "Create SymbolicScalar from expression")
+        .def("__str__", &SymbolicScalar::Dump)
+        // clang-format off
+        DEFINE_BINARY_OP("__eq__", ==)
+        DEFINE_BINARY_OP("__ne__", !=)
+        DEFINE_BINARY_OP("__lt__", <)
+        DEFINE_BINARY_OP("__le__", <=)
+        DEFINE_BINARY_OP("__gt__", >)
+        DEFINE_BINARY_OP("__ge__", >=)
+        DEFINE_BINARY_OP("__add__", +)
+        DEFINE_RBINARY_OP("__radd__", +)
+        DEFINE_BINARY_OP("__sub__", -)
+        DEFINE_RBINARY_OP("__rsub__", -)
+        DEFINE_BINARY_OP("__mul__", *)
+        DEFINE_RBINARY_OP("__rmul__", *)
+        DEFINE_BINARY_OP_CHECKED("__truediv__", /)
+        DEFINE_RBINARY_OP("__rtruediv__", /)
+        DEFINE_BINARY_OP_CHECKED("__mod__", %)
+        DEFINE_RBINARY_OP("__rmod__", %)
+        DEFINE_BINARY_OP_CHECKED("__floordiv__", /)
+        DEFINE_RBINARY_OP("__rfloordiv__", /)
+        DEFINE_UNARY_OP("__pos__", +)
+        DEFINE_UNARY_OP("__neg__", -)
+        DEFINE_UNARY_OP("__invert__", !)
+        // clang-format on
+        .def(
+            "__bool__",
+            [](const SymbolicScalar& self) {
+                if (self.ConcreteValid()) {
+                    return self.Concrete() != 0;
+                }
+                throw py::value_error("Not concrete value.");
+            })
+        .def(
+            "__int__",
+            [](const SymbolicScalar& self) {
+                if (self.ConcreteValid()) {
+                    return self.Concrete();
+                }
+                throw py::value_error("Not concrete value.");
+            })
+        .def("is_concrete", &SymbolicScalar::ConcreteValid)
+        .def("is_symbol", &SymbolicScalar::IsSymbol)
+        .def("is_expression", &SymbolicScalar::IsExpression)
+        .def("is_immediate", &SymbolicScalar::IsImmediate)
+        .def("simplify", &SymbolicScalar::Simplify)
+        .def(
+            "min",
+            [](const SymbolicScalar& self, py::object& other) {
+                if (py::isinstance<py::int_>(other)) {
+                    return self.Min(other.cast<int64_t>());
+                } else if (py::isinstance<SymbolicScalar>(other)) {
+                    return self.Min(other.cast<SymbolicScalar>());
+                }
+                throw py::type_error("Invalid type.");
+            })
+        .def(
+            "max",
+            [](const SymbolicScalar& self, py::object& other) {
+                if (py::isinstance<py::int_>(other)) {
+                    return self.Max(other.cast<int64_t>());
+                } else if (py::isinstance<SymbolicScalar>(other)) {
+                    return self.Max(other.cast<SymbolicScalar>());
+                }
+                throw py::type_error("Invalid type.");
+            })
+        .def("concrete", py::overload_cast<>(&SymbolicScalar::Concrete, py::const_))
+        .def("as_variable", &SymbolicScalar::AsIntermediateVariable)
+        .def_static(
+            "tenary", [](const SymbolicScalar& cond, const SymbolicScalar& true_val,
+                         const SymbolicScalar& false_val) { return std::ternary(cond, true_val, false_val); })
+        .def("as_expr", [](const SymbolicScalar& self) -> ir::ExprPtr {
+            if (self.IsImmediate()) {
+                return std::dynamic_pointer_cast<const ir::ConstInt>(self.Raw());
+            } else if (self.IsSymbol()) {
+                return std::dynamic_pointer_cast<const ir::Var>(self.Raw());
+            } else if (self.IsExpression()) {
+                return std::dynamic_pointer_cast<const ir::ScalarExpr>(self.Raw());
+            }
+            throw py::value_error("Empty expression.");
+        });
 
     py::implicitly_convertible<int64_t, SymbolicScalar>();
     py::implicitly_convertible<int, SymbolicScalar>();
-
-    _SymbolicScalar.def("IsImmediate", &SymbolicScalar::IsImmediate)
-        .def("IsSymbol", &SymbolicScalar::IsSymbol)
-        .def("IsExpression", &SymbolicScalar::IsExpression)
-        .def("IsValid", &SymbolicScalar::IsValid)
-        .def("ConcreteValid", &SymbolicScalar::ConcreteValid)
-        .def("Concrete", py::overload_cast<>(&SymbolicScalar::Concrete, py::const_))
-        .def("Eq", &SymbolicScalar::Eq) // Total ordering / comparisons
-        .def("Ne", &SymbolicScalar::Ne)
-        .def("Lt", &SymbolicScalar::Lt)
-        .def("Le", &SymbolicScalar::Le)
-        .def("Gt", &SymbolicScalar::Gt)
-        .def("Ge", &SymbolicScalar::Ge)   // Total ordering / comparisons
-        .def("Add", &SymbolicScalar::Add) // Binary operators
-        .def("Sub", &SymbolicScalar::Sub)
-        .def("Mul", &SymbolicScalar::Mul)
-        .def("Div", &SymbolicScalar::Div)
-        .def("Mod", &SymbolicScalar::Mod)
-        .def("RAdd", [](const SymbolicScalar& self, int64_t other) { return other + self; })
-        .def("RSub", [](const SymbolicScalar& self, int64_t other) { return other - self; })
-        .def("RMul", [](const SymbolicScalar& self, int64_t other) { return other * self; })
-        .def("RDiv", [](const SymbolicScalar& self, int64_t other) { return other / self; })
-        .def("RMod", [](const SymbolicScalar& self, int64_t other) { return other % self; });
-
-    _SymbolicScalar.def("AsIntermediateVariable", &SymbolicScalar::AsIntermediateVariable)
-        .def("IsIntermediateVariable", &SymbolicScalar::IsIntermediateVariable)
-        .def("Dump", &SymbolicScalar::Dump)
-        .def("Min", &SymbolicScalar::Min, py::arg("other"))
-        .def("Max", &SymbolicScalar::Max, py::arg("other"));
-
-    _SymbolicScalar.def("Pos", &SymbolicScalar::Pos).def("Neg", &SymbolicScalar::Neg).def("Not", &SymbolicScalar::Not);
-
-    _SymbolicScalar.def("Simplify", &SymbolicScalar::Simplify);
 }
 } // namespace pypto

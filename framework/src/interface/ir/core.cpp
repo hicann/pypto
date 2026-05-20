@@ -28,6 +28,7 @@ public:
     const int beginColumn_;      ///< Beginning column number (1-indexed)
     const int endLine_;          ///< Ending line number (1-indexed), -1 means unknown
     const int endColumn_;        ///< Ending column number (1-indexed), -1 means unknown
+    std::atomic_int refcnt{1};
 
     static SpanImpl* Create(const std::string& filename, int beginLine, int beginColumn, int endLine, int endColumn);
 
@@ -35,7 +36,6 @@ public:
     void Get() { refcnt++; }
 
 private:
-    std::atomic_int refcnt{1};
     SpanImpl(const std::string& filename, int beginLine, int beginColumn, int endLine, int endColumn)
         : filename_(filename),
           beginLine_(beginLine),
@@ -68,33 +68,48 @@ struct SpanImplEqual {
     }
 };
 
-static std::unordered_set<SpanImpl*, SpanImplHash, SpanImplEqual> registry;
-static std::mutex mutex;
+struct SpanRegistry {
+    std::mutex mutex;
+    std::unordered_set<SpanImpl*, SpanImplHash, SpanImplEqual> spans;
+
+    SpanImpl* GetOrInsert(SpanImpl* span)
+    {
+        std::unique_lock lock(mutex);
+        auto it = spans.find(span);
+        if (it != spans.end()) {
+            (*it)->refcnt++;
+            lock.unlock();
+            delete span;
+            return *it;
+        }
+        spans.insert(span);
+        return span;
+    }
+
+    void Put(SpanImpl* span)
+    {
+        std::unique_lock lock(mutex);
+        if (--span->refcnt == 0) {
+            spans.erase(span);
+            lock.unlock();
+            delete span;
+        }
+    }
+};
+
+static SpanRegistry& Registry()
+{
+    static SpanRegistry instance;
+    return instance;
+}
 
 SpanImpl* SpanImpl::Create(const std::string& filename, int beginLine, int beginColumn, int endLine, int endColumn)
 {
-    auto span_ptr = new SpanImpl(filename, beginLine, beginColumn, endLine, endColumn);
-    std::unique_lock lock(mutex);
-    auto it = registry.find(span_ptr);
-    if (it != registry.end()) {
-        (*it)->refcnt++;
-        lock.unlock();
-        delete span_ptr;
-        return *it;
-    }
-    registry.insert(span_ptr);
-    return span_ptr;
+    auto span = new SpanImpl(filename, beginLine, beginColumn, endLine, endColumn);
+    return Registry().GetOrInsert(span);
 }
 
-void SpanImpl::Put()
-{
-    std::unique_lock lock(mutex);
-    if (--refcnt == 0) {
-        registry.erase(this);
-        lock.unlock();
-        delete this;
-    }
-}
+void SpanImpl::Put() { Registry().Put(this); }
 
 Span::Span(const Span& other)
 {

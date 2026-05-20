@@ -236,6 +236,8 @@ ExprPtr IRMutator::VisitExpr_(const TupleGetItemExprPtr& op)
     return op;
 }
 
+ExprPtr IRMutator::VisitExpr_(const ScalarExprPtr& op) { return op; }
+
 ExprPtr IRMutator::VisitBinaryExpr_(const BinaryExprPtr& op)
 {
     INTERNAL_CHECK_SPAN(op->left_, op->span_) << "BinaryExpr has null left operand";

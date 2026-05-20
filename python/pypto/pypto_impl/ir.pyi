@@ -7,8 +7,10 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-from typing import Final, List, Any, Optional, Sequence, overload
+from typing import Final, Union, Any, Optional, Sequence, overload
 import enum
+from .. import pypto_impl
+from .. import SymbolicScalar
 
 
 class DataType:
@@ -846,6 +848,12 @@ class TokenType(Type):
         ...
 
 
+class LogicalTensorType(Type):
+    """Logical tensor type"""
+
+    def __init__(self) -> None: ...
+
+
 class Var(Expr):
     """Variable reference expression."""
 
@@ -1149,10 +1157,10 @@ class IfStmt(Stmt):
     condition: Final[Expr]
     """Condition expression."""
 
-    then_body: Final[Stmt]
+    then_body: Final[SeqStmts]
     """Then branch statement."""
 
-    else_body: Final[Stmt | None]
+    else_body: Final[SeqStmts]
     """Else branch statement (can be None)."""
 
     return_vars: Final[list[Var]]
@@ -1248,7 +1256,7 @@ class ForStmt(Stmt):
     iter_args: Final[list[IterArg]]
     """Iteration arguments (can be empty)."""
 
-    body: Final[Stmt]
+    body: Final[SeqStmts]
     """Loop body statement."""
 
     return_vars: Final[list[Var]]
@@ -1291,7 +1299,7 @@ class WhileStmt(Stmt):
     iter_args: Final[list[IterArg]]
     """Iteration arguments (can be empty)."""
 
-    body: Final[Stmt]
+    body: Final[SeqStmts]
     """Loop body statement."""
 
     return_vars: Final[list[Var]]
@@ -1479,7 +1487,7 @@ class Function(IRNode):
     return_types: Final[list[Type]]
     """Return types."""
 
-    body: Final[Stmt]
+    body: Final[SeqStmts]
     """Function body statement (use SeqStmts for multiple statements)."""
 
     def __init__(
@@ -1875,4 +1883,242 @@ class IRBuilder:
 
         Returns:
             True if inside a program context
+        """
+
+    def create_tensor_var(
+        self,
+        t: pypto_impl.DataType,
+        shape: list[SymbolicScalar | int],
+        format: pypto_impl.TileOpFormat = pypto_impl.TileOpFormat.TILEOP_ND,
+        name: str = "",
+    ) -> pypto_impl.LogicalTensor:
+        """Create a tensor variable with static shape.
+
+        Args:
+            t: Data type of the tensor
+            shape: Shape of the tensor
+            format: Data format of the tensor
+            name: Name of the tensor
+
+        Returns:
+            The created tensor variable
+        """
+
+    def create_tensor_op_stmt(
+        self,
+        result: list[Var],
+        result_token: Var,
+        opcode: str,
+        args: list[Expr],
+        tokens: list[Expr],
+        attrs: dict[str, Any],
+        span: Span,
+    ) -> TensorOpStmt:
+        """Create a tensor operation statement.
+
+        Args:
+            result: Result variables of the operation
+            result_token: Result token of the operation
+            opcode: Opcode of the operation
+            args: Arguments of the operation
+            tokens: Tokens of the operation
+            attrs: Attributes of the operation
+            span: Source location
+
+        Returns:
+            The created tensor operation statement
+        """
+
+    def create_scalar_var(self, value: str) -> 'SymbolicScalar':
+        """Create a scalar variable from a symbol name.
+
+        Args:
+            value: Symbol name
+
+        Returns:
+            The created symbolic scalar
+        """
+
+    def create_const_int(self, value: int) -> 'SymbolicScalar':
+        """Create a constant integer scalar.
+
+        Args:
+            value: Integer value
+
+        Returns:
+            The created constant integer scalar
+        """
+
+    def create_assign_stmt(self, var: Var, value: Expr, span: Span) -> AssignStmt:
+        """Create an assignment statement.
+
+        Args:
+            var: Variable to assign to
+            value: Right-hand side expression
+            span: Source location
+
+        Returns:
+            The created assignment statement
+        """
+
+    def create_seq_stmts(self, stmts: list[Stmt], span: Span) -> SeqStmts:
+        """Create a sequence of statements.
+
+        Args:
+            stmts: Statements in the sequence
+            span: Source location
+
+        Returns:
+            The created sequence of statements
+        """
+
+    def create_if_stmt(
+        self,
+        cond: Expr,
+        then_body: Stmt,
+        else_body: Optional[Stmt],
+        return_vars: list[Var],
+        span: Span,
+    ) -> IfStmt:
+        """Create an if statement.
+
+        Args:
+            cond: Condition expression
+            then_body: Then branch body
+            else_body: Else branch body (can be None)
+            return_vars: Return variables for SSA phi nodes
+            span: Source location
+
+        Returns:
+            The created if statement
+        """
+
+    def create_return_stmt(self, return_vars: list[Expr], span: Span) -> ReturnStmt:
+        """Create a return statement.
+
+        Args:
+            return_vars: Expressions to return
+            span: Source location
+
+        Returns:
+            The created return statement
+        """
+
+    def create_yield_stmt(self, return_vars: list[Expr], span: Span) -> YieldStmt:
+        """Create a yield statement.
+
+        Args:
+            return_vars: Expressions to yield
+            span: Source location
+
+        Returns:
+            The created yield statement
+        """
+
+    def create_for_stmt(
+        self,
+        loopVar: Var,
+        start: Expr,
+        stop: Expr,
+        step: Expr,
+        iterArgs: list[IterArg],
+        body: Stmt,
+        returnVars: list[Var],
+        span: Span,
+    ) -> ForStmt:
+        """Create a for statement.
+
+        Args:
+            loopVar: Loop variable
+            start: Start value expression
+            stop: Stop value expression
+            step: Step value expression
+            iterArgs: Iteration arguments (loop-carried values)
+            body: Loop body
+            returnVars: Return variables
+            span: Source location
+
+        Returns:
+            The created for statement
+        """
+
+    def create_while_stmt(
+        self,
+        cond: Expr,
+        iterArgs: list[IterArg],
+        body: Stmt,
+        returnVars: list[Var],
+        span: Span,
+    ) -> WhileStmt:
+        """Create a while statement.
+
+        Args:
+            cond: Condition expression
+            iterArgs: Iteration arguments (loop-carried values)
+            body: Loop body
+            returnVars: Return variables
+            span: Source location
+
+        Returns:
+            The created while statement
+        """
+
+    def create_break_stmt(self, return_vars: list[Expr], span: Span) -> BreakStmt:
+        """Create a break statement.
+
+        Args:
+            return_vars: Expressions carried by the break
+            span: Source location
+
+        Returns:
+            The created break statement
+        """
+
+    def create_continue_stmt(self, return_vars: list[Expr], span: Span) -> ContinueStmt:
+        """Create a continue statement.
+
+        Args:
+            return_vars: Expressions carried by the continue
+            span: Source location
+
+        Returns:
+            The created continue statement
+        """
+
+    def create_function(
+        self,
+        name: str,
+        params: list[Var],
+        returnTypes: list[Type],
+        body: Stmt,
+        span: Span,
+    ) -> Function:
+        """Create a function.
+
+        Args:
+            name: Function name
+            params: Parameter variables
+            returnTypes: Return types
+            body: Function body statement
+            span: Source location
+
+        Returns:
+            The created function
+        """
+
+    def create_program(
+        self,
+        functions: list[Function],
+        name: str,
+        span: Span,
+    ) -> Program:
+        """Create a program.
+
+        Args:
+            functions: List of functions
+            name: Program name
+            span: Source location
+
+        Returns:
+            The created program
         """

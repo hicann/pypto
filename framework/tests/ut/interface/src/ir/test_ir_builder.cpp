@@ -207,7 +207,7 @@ TEST_F(IRBuilderTest, TestEmit)
     b.Emit(std::make_shared<EvalStmt>(call, sp));
     auto func = b.EndFunction(sp);
 
-    auto evalStmt = std::dynamic_pointer_cast<const EvalStmt>(func->body_);
+    auto evalStmt = std::dynamic_pointer_cast<const EvalStmt>(func->body_->stmts_[0]);
     ASSERT_NE(evalStmt, nullptr);
 }
 
@@ -590,9 +590,9 @@ TEST_F(IRBuilderTest, TestNestedForLoops)
     ASSERT_EQ(inner->loopVar_->name_, "j");
 
     auto func = b.EndFunction(sp);
-    auto funcBody = std::dynamic_pointer_cast<const ForStmt>(func->body_);
+    auto funcBody = std::dynamic_pointer_cast<const ForStmt>(func->body_->stmts_[0]);
     ASSERT_NE(funcBody, nullptr);
-    auto innerBody = std::dynamic_pointer_cast<const ForStmt>(funcBody->body_);
+    auto innerBody = std::dynamic_pointer_cast<const ForStmt>(funcBody->body_->stmts_[0]);
     ASSERT_NE(innerBody, nullptr);
 }
 
@@ -615,9 +615,9 @@ TEST_F(IRBuilderTest, TestForWithIf)
     b.EndForLoop(sp);
 
     auto func = b.EndFunction(sp);
-    auto forStmt = std::dynamic_pointer_cast<const ForStmt>(func->body_);
+    auto forStmt = std::dynamic_pointer_cast<const ForStmt>(func->body_->stmts_[0]);
     ASSERT_NE(forStmt, nullptr);
-    auto ifStmt = std::dynamic_pointer_cast<const IfStmt>(forStmt->body_);
+    auto ifStmt = std::dynamic_pointer_cast<const IfStmt>(forStmt->body_->stmts_[0]);
     ASSERT_NE(ifStmt, nullptr);
 }
 
@@ -640,9 +640,9 @@ TEST_F(IRBuilderTest, TestIfWithNestedFor)
     b.EndIf(sp);
 
     auto func = b.EndFunction(sp);
-    auto ifStmt = std::dynamic_pointer_cast<const IfStmt>(func->body_);
+    auto ifStmt = std::dynamic_pointer_cast<const IfStmt>(func->body_->stmts_[0]);
     ASSERT_NE(ifStmt, nullptr);
-    auto forStmt = std::dynamic_pointer_cast<const ForStmt>(ifStmt->thenBody_);
+    auto forStmt = std::dynamic_pointer_cast<const ForStmt>(ifStmt->thenBody_->stmts_[0]);
     ASSERT_NE(forStmt, nullptr);
 }
 
@@ -707,7 +707,7 @@ TEST_F(IRBuilderTest, TestComplexProgram)
     ASSERT_NE(retStmt, nullptr);
 
     // For body should be IfStmt with else
-    auto ifBody = std::dynamic_pointer_cast<const IfStmt>(forStmt->body_);
+    auto ifBody = std::dynamic_pointer_cast<const IfStmt>(forStmt->body_->stmts_[0]);
     ASSERT_NE(ifBody, nullptr);
     ASSERT_TRUE(ifBody->elseBody_.has_value());
 }

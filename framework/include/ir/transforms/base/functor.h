@@ -60,6 +60,7 @@ protected:
     virtual R VisitExpr_(const CallPtr& op, Args... args) = 0;
     virtual R VisitExpr_(const MakeTuplePtr& op, Args... args) = 0;
     virtual R VisitExpr_(const TupleGetItemExprPtr& op, Args... args) = 0;
+    virtual R VisitExpr_(const ScalarExprPtr& op, Args... args) = 0;
 
     // Binary operations (22 types)
     virtual R VisitExpr_(const AddPtr& op, Args... args) = 0;
@@ -114,6 +115,7 @@ R ExprFunctor<R, Args...>::VisitExpr(const ExprPtr& expr, Args... args)
     EXPR_FUNCTOR_DISPATCH(Call);
     EXPR_FUNCTOR_DISPATCH(MakeTuple);
     EXPR_FUNCTOR_DISPATCH(TupleGetItemExpr);
+    EXPR_FUNCTOR_DISPATCH(ScalarExpr);
 
     // Binary operations
     EXPR_FUNCTOR_DISPATCH(Add);

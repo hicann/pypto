@@ -102,8 +102,10 @@ public:
           funcType_(type),
           params_(std::move(params)),
           returnTypes_(std::move(returnTypes)),
-          body_(std::move(body))
+          body_(SeqStmts::Wrap(body, span))
     {}
+
+    Function(Span span) : IRNode(std::move(span)) {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Function; }
     [[nodiscard]] std::string TypeName() const override { return "Function"; }
@@ -130,7 +132,7 @@ public:
     FunctionType funcType_;            // Function type (orchestration, incore, or opaque)
     std::vector<VarPtr> params_;       // Parameter variables
     std::vector<TypePtr> returnTypes_; // Return types
-    StmtPtr body_;                     // Function body statement
+    SeqStmtsPtr body_;                 // Function body statement
 };
 
 using FunctionPtr = std::shared_ptr<const Function>;

@@ -24,6 +24,8 @@
 #include <map>
 #include <unordered_set>
 
+#include <nlohmann/json.hpp>
+
 #include <tilefwk/symbolic_scalar.h>
 
 #include "tilefwk/error.h"
@@ -32,9 +34,12 @@
 #include "interface/utils/error.h"
 #include "interface/utils/string_utils.h"
 #include "interface/utils/common.h"
+#include "ir/scalar_expr.h"
+#include "ir/expr.h"
 
-#include <nlohmann/json.hpp>
 using Json = nlohmann::json;
+
+using namespace pypto;
 
 namespace npu::tile_fwk {
 
@@ -139,19 +144,20 @@ private:
     bool intermediateVariable_{false};
 };
 
-class RawSymbolicImmediate : public RawSymbolicScalar {
+class RawSymbolicImmediate : public RawSymbolicScalar, public ir::ConstInt {
 public:
     explicit RawSymbolicImmediate(ScalarImmediateType immediate)
-        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE), immediate_(immediate)
+        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE),
+          ir::ConstInt(immediate, ir::DataType::INT64, ir::Span::Unknown())
     {}
 
-    ScalarImmediateType Immediate() const { return immediate_; }
+    ScalarImmediateType Immediate() const { return value_; }
 
     Json DumpJson() const override
     {
         Json immediateDump = Json::array();
         immediateDump.push_back(kind);
-        immediateDump.push_back(immediate_);
+        immediateDump.push_back(value_);
         return immediateDump;
     }
     static RawSymbolicScalarPtr Create(ScalarImmediateType immediate)
@@ -160,15 +166,14 @@ public:
     }
 
 private:
-    void DumpBuffer(std::ostream& buffer) const override { buffer << immediate_; }
-
-    ScalarImmediateType immediate_;
+    void DumpBuffer(std::ostream& buffer) const override { buffer << value_; }
 };
 
-class RawSymbolicSymbol : public RawSymbolicScalar {
+class RawSymbolicSymbol : public RawSymbolicScalar, public ir::Var {
 public:
     explicit RawSymbolicSymbol(const std::string& name)
-        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL), name_(name)
+        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL),
+          ir::Var(name, std::make_shared<ir::ScalarType>(ir::DataType::INT64), ir::Span::Unknown())
     {}
 
     const std::string& Name() const { return name_; }
@@ -185,14 +190,13 @@ public:
 
 private:
     void DumpBuffer(std::ostream& buffer) const override { buffer << name_; }
-
-    std::string name_;
 };
 
-class RawSymbolicExpression : public RawSymbolicScalar {
+class RawSymbolicExpression : public RawSymbolicScalar, public ir::ScalarExpr {
 public:
     RawSymbolicExpression(SymbolicOpcode opcode, const std::vector<RawSymbolicScalarPtr>& operandList)
         : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION),
+          ir::ScalarExpr(ir::DataType::INT64, ir::Span::Unknown()),
           opcode_(opcode),
           operandList_(operandList)
     {

@@ -24,7 +24,6 @@ def test_init_loop_range_end():
     print("11111")
     loop_end = loop.end()
     print("22222")
-    print(type(loop_end.base()))
 
     assert loop_end.is_concrete() == True
     print("2222")

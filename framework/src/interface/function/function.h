@@ -32,6 +32,10 @@
 #include "interface/cache/hash.h"
 #include "passes/pass_utils/subfunc_utils.h"
 
+#include "ir/function.h"
+
+using namespace pypto;
+
 namespace npu::tile_fwk {
 constexpr int FUNCTION_MAX_INCASTS = 10000;
 constexpr int FUNCTION_MAX_CV_CORES = 10000;
@@ -495,7 +499,7 @@ struct FunctionParamInfo {
 #define INVALID_IOINDEX (-1)
 #endif
 
-class Function {
+class Function : public ir::Function {
 public:
     std::vector<OriArgInfo> GetOpOriginArgsInfo();
 

@@ -56,6 +56,7 @@ protected:
     ExprPtr VisitExpr_(const CallPtr& op) override;
     ExprPtr VisitExpr_(const MakeTuplePtr& op) override;
     ExprPtr VisitExpr_(const TupleGetItemExprPtr& op) override;
+    ExprPtr VisitExpr_(const ScalarExprPtr& op) override;
 
     // Binary operations - reconstruct with mutated children
     ExprPtr VisitExpr_(const AddPtr& op) override;
