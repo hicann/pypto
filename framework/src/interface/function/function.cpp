@@ -1640,38 +1640,9 @@ void Function::SubstituteIn(std::shared_ptr<LogicalTensor> oldTensor, std::share
 {
     for (auto& operation : operations_) {
         auto& cur = *operation;
-        std::unordered_set<std::shared_ptr<LogicalTensor>> replaced;
         for (size_t i = 0; i < cur.GetInputOperandSize(); i++) {
-            LogicalTensorPtr inputTensor = cur.GetInputOperand(i);
-            if (inputTensor != oldTensor) {
-                continue;
-            }
-            if (replaced.count(inputTensor) == 0) {
-                FE_ASSERT(inputTensor->HasConsumer(cur)) << "Tensor is not a consumer of the operation:\n"
-                                                         << "Tensor: " << inputTensor->Dump() << "\n"
-                                                         << "Operation: " << cur.Dump();
-                replaced.emplace(inputTensor);
-            }
-            cur.ReplaceIOperand(i, newTensor);
-            if (cur.GetOpAttribute() == nullptr) {
-                continue;
-            }
-            if (auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(cur.GetOpAttribute())) {
-                // VIEW操作的offset要相应被修改。
-                auto& fromOffset = viewOpAttribute->GetFrom();
-                for (size_t j = 0; j < fromOffset.size(); j++) {
-                    fromOffset[j] -= oldTensor->offset[j] - newTensor->offset[j];
-                }
-            } else if (auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(cur.GetOpAttribute())) {
-                // CopyIn操作的offset要相应被修改。
-                if (!copyOpAttribute->IsCopyOut()) {
-                    auto [fromOffset, memType] = copyOpAttribute->GetCopyInAttr();
-                    (void)memType;
-                    for (size_t j = 0; j < fromOffset.size(); j++) {
-                        fromOffset[j] -= oldTensor->offset[j] - newTensor->offset[j];
-                    }
-                    copyOpAttribute->SetFromOffset(fromOffset);
-                }
+            if (cur.GetInputOperand(i) == oldTensor) {
+                cur.ReplaceIOperand(i, newTensor);
             }
         }
     }
@@ -1682,16 +1653,7 @@ void Function::SubstituteOut(std::shared_ptr<LogicalTensor> oldTensor, std::shar
     for (auto& operation : operations_) {
         auto& cur = *operation;
         for (size_t i = 0; i < cur.GetOOperands().size(); i++) {
-            if (cur.GetOOperands()[i] == oldTensor) {
-                FE_ASSERT(FeError::INVALID_VAL, cur.GetOOperands()[i]->shape == newTensor->shape)
-                    << "Shape mismatch:\n"
-                    << "Old Tensor Shape: " << StringUtils::ToString(cur.GetOOperands()[i]->shape) << "\n"
-                    << "New Tensor Shape: " << StringUtils::ToString(newTensor->shape) << "\n"
-                    << "Operation: " << cur.Dump();
-                FE_ASSERT(cur.GetOOperands()[i]->HasProducer(cur))
-                    << "Tensor is not a producer of the operation:\n"
-                    << "Tensor: " << cur.GetOOperands()[i]->Dump() << "\n"
-                    << "Operation: " << cur.Dump();
+            if (cur.GetOutputOperand(i) == oldTensor) {
                 cur.ReplaceOOperand(i, newTensor);
             }
         }
@@ -1768,7 +1730,6 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
     incastSymbol->tensor->UpdateDynRawShape(inArgument->tensor->GetDynRawShape());
     tensorMap_.Insert(incastSymbol);
     inCasts_.push_back(incastSymbol);
-    incastToInArgumentDict[incastSymbol] = inArgument;
 
     UpdateLinkMap(inArgument, incastSymbol);
     return incastSymbol;
@@ -1776,293 +1737,143 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
 
 void Function::CreateFromIncast(
     const std::shared_ptr<LogicalTensor>& symbol, const std::shared_ptr<LogicalTensor>& newIncast,
-    const std::shared_ptr<LogicalTensor>& originIncast)
+    const std::shared_ptr<LogicalTensor>& origin)
 {
     ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
     auto& incastOp = AddOperation(Opcode::OP_VIEW, {symbol}, {newIncast});
     ir::Span::ClearCurrent();
     incastOp.SetAttr(OpAttributeKey::isGlobalInput, true);
 
-    auto validShape = originIncast->GetDynValidShape();
-    if (validShape.empty()) {
-        validShape = GetViewValidShape(
-            symbol->GetDynValidShape(), originIncast->GetOffset(),
-            originIncast->GetDynOffset().empty() ? SymbolicScalar::FromConcrete(originIncast->GetOffset()) :
-                                                   originIncast->GetDynOffset(),
-            newIncast->GetShape());
+    auto dynOffset = origin->GetDynOffset();
+    if (dynOffset.empty()) {
+        dynOffset = SymbolicScalar::FromConcrete(origin->GetOffset());
     }
-    incastOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-        originIncast->GetOffset(),
-        originIncast->GetDynOffset().empty() ? SymbolicScalar::FromConcrete(originIncast->GetOffset()) :
-                                               originIncast->GetDynOffset(),
-        validShape));
+
+    auto validShape = symbol->GetDynValidShape();
+    ASSERT(!validShape.empty());
+
+    incastOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(origin->GetOffset(), dynOffset, validShape));
     newIncast->UpdateDynValidShape(validShape);
     newIncast->GetRawTensor()->UpdateDynRawShape(symbol->GetDynValidShape());
-}
-
-void Function::ReplaceMaybeParams(
-    const std::shared_ptr<LogicalTensor>& newIncast, const std::shared_ptr<LogicalTensor>& originIncast)
-{
-    auto it = std::find(originInCasts_.begin(), originInCasts_.end(), originIncast);
-    FE_ASSERT(FeError::NOT_EXIST, it != originInCasts_.end()) << "OriginIncast not found in originInCasts_:\n"
-                                                              << "OriginIncast: " << originIncast->Dump();
-    *it = newIncast;
+    newIncast->CopyMemoryType(origin);
 }
 
 LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& scope)
 {
-    ASSERT(
-        FeError::INVALID_TYPE,
-        IsGraphType(GraphType::TENSOR_GRAPH) || IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH))
-        << "Invalid function type or graph type";
-    FE_ASSERT(HasParent()) << "Function does not have a parent";
     LogicalTensors inArgumentList;
-    std::unordered_set<int> appearedRawIncasts;
-    std::vector<std::shared_ptr<RawTensor>> rawIncasts;
-    std::map<int, std::vector<std::shared_ptr<LogicalTensor>>> incastWithSameRaw;
-    std::map<std::shared_ptr<RawTensor>, std::shared_ptr<LogicalTensor>> rawToIncast;
-    size_t iOperandIndex = 0;
-    for (auto& originIncast : originInCasts_) {
-        incastWithSameRaw[originIncast->tensor->rawmagic].emplace_back(originIncast);
-        if (appearedRawIncasts.count(originIncast->tensor->rawmagic) != 0) {
-            ++iOperandIndex;
-            continue;
-        }
-        appearedRawIncasts.emplace(originIncast->tensor->rawmagic);
-        rawIncasts.emplace_back(originIncast->tensor);
-        rawToIncast[originIncast->tensor] = originIncast;
-        if (GetSlotScope() != nullptr && GetSlotScope()->oriIncastReadSlotSet.size() > iOperandIndex) {
-            GetSlotScope()->incastReadSlotSet.push_back(GetSlotScope()->oriIncastReadSlotSet[iOperandIndex]);
-            GetSlotScope()->ioslot.incastSlot.push_back(GetSlotScope()->originalIocastsSlot.incastSlot[iOperandIndex]);
-        }
-        ++iOperandIndex;
-    }
 
-    for (auto& [rawMagic, sameRawIncasts] : incastWithSameRaw) {
-        (void)rawMagic;
-        sort(sameRawIncasts.begin(), sameRawIncasts.end(), [](const auto& a, const auto& b) -> bool {
-            return a->shape < b->shape;
-        });
-    }
-
-    int idx = 0;
-    for (auto& rawIncast : rawIncasts) {
-        const auto& sameRawIncasts = incastWithSameRaw[rawIncast->rawmagic];
-
-        std::vector<int64_t> zeroOffset(rawIncast->rawshape.size(), 0);
-        auto inArgument = std::make_shared<LogicalTensor>(Parent(), rawIncast, zeroOffset, rawIncast->rawshape);
+    for (size_t idx = 0; idx < originInCasts_.size(); idx++) {
+        auto origin = originInCasts_[idx];
+        int rank = origin->shape.size();
+        std::vector<int64_t> zeroOffset(rank, 0);
+        auto inArgument = std::make_shared<LogicalTensor>(Parent(), origin->tensor, zeroOffset, origin->shape);
+        Parent().tensorMap_.Insert(inArgument);
         inArgumentList.push_back(inArgument);
 
         auto incastSymbol = CreateIncastTensor(inArgument);
+
         if (scope) {
             scope->incastToInArgumentDict[incastSymbol] = inArgument;
-            scope->incastToInOriginalDict[incastSymbol].insert(sameRawIncasts.begin(), sameRawIncasts.end());
+        }
+        if (slotScope_ && idx < slotScope_->oriIncastReadSlotSet.size()) {
+            slotScope_->incastReadSlotSet.push_back(slotScope_->oriIncastReadSlotSet[idx]);
+            slotScope_->ioslot.incastSlot.push_back(slotScope_->originalIocastsSlot.incastSlot[idx]);
         }
 
-        std::map<ViewKey, std::shared_ptr<LogicalTensor>> newincastMap;
-        for (auto& originIncast : sameRawIncasts) {
-            auto viewKey = ViewKey(
-                originIncast->tensor->rawmagic, originIncast->shape, originIncast->offset,
-                originIncast->GetDynOffset());
-            std::shared_ptr<LogicalTensor> newIncast;
-            if (newincastMap.count(viewKey) != 0) {
-                newIncast = newincastMap[viewKey];
-            } else {
-                newIncast = std::make_shared<LogicalTensor>(
-                    *this, originIncast->tensor->datatype, originIncast->shape, originIncast->Format(),
-                    "INCAST_LOCAL_BUF" + std::to_string(idx++));
-                FE_ASSERT(originIncast->conflicterTensors.empty())
-                    << "OriginIncast has conflicter tensors:" << originIncast->Dump();
-                newIncast->CopyMemoryType(originIncast);
+        auto newIncast = std::make_shared<LogicalTensor>(
+            *this, origin->tensor->datatype, origin->shape, origin->Format(), "INCAST_LOCAL_BUF" + std::to_string(idx));
 
-                newincastMap.emplace(viewKey, newIncast);
-                CreateFromIncast(incastSymbol, newIncast, originIncast);
-            }
-
-            Substitute(originIncast, newIncast);
-
-            ReplaceMaybeParams(newIncast, originIncast);
-
-            for (const auto& producer : inArgument->GetProducers()) {
-                FE_ASSERT(producer->BelongTo() != this)
-                    << inArgument->magic << "-> producer. funcMagic = " << producer->BelongTo()->GetFuncMagic()
-                    << " producer = " << producer->GetOpMagic() << "inArgument = " << inArgument->Dump() << std::endl;
-            }
-            for (const auto& consumer : inArgument->GetConsumers()) {
-                FE_ASSERT(consumer->BelongTo() != this)
-                    << inArgument->magic << "-> consumer. funcMagic = " << consumer->BelongTo()->GetFuncMagic()
-                    << " consumer = " << consumer->GetOpMagic() << "inArgument = " << inArgument->Dump() << std::endl;
-            }
-        }
-    }
-
-    for (auto& rawIncast : rawIncasts) {
-        const auto& sameRawIncasts = incastWithSameRaw[rawIncast->rawmagic];
-        for (const auto& originIncast : sameRawIncasts) {
-            RemoveOriginIncastConsumer(originIncast);
-        }
+        CreateFromIncast(incastSymbol, newIncast, origin);
+        Substitute(origin, newIncast);
+        originInCasts_[idx] = newIncast;
+        RemoveOriginIncastConsumer(origin);
     }
 
     return inArgumentList;
 }
 
+std::shared_ptr<LogicalTensor> Function::CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument)
+{
+    auto idx = outCasts_.size();
+    auto newSymbol = outArgument->tensor->GetSymbol();
+    if (newSymbol == "") {
+        newSymbol = "OUTCAST_SYMBOL" + std::to_string(idx);
+    }
+    auto outSymbol = std::make_shared<LogicalTensor>(
+        *this, outArgument->tensor->datatype, outArgument->shape, outArgument->tensor->GetDynRawShape(),
+        outArgument->Format(), newSymbol);
+    outSymbol->tensor->UpdateDynRawShape(outArgument->tensor->GetDynRawShape());
+
+    tensorMap_.Insert(outSymbol);
+    outCasts_.push_back(outSymbol);
+
+    UpdateLinkMap(outArgument, outSymbol, true);
+    return outSymbol;
+}
+
+void Function::CreateFromOutcast(
+    const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast, const LogicalTensorPtr& origin)
+{
+    ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
+    auto& op = AddOperation(Opcode::OP_ASSEMBLE, {newOutcast}, {symbol});
+    ir::Span::ClearCurrent();
+
+    auto dynOffset = origin->GetDynOffset();
+    if (dynOffset.empty()) {
+        dynOffset = SymbolicScalar::FromConcrete(origin->GetOffset());
+    }
+
+    auto validShape = origin->GetDynValidShape();
+    if (validShape.empty()) {
+        validShape = symbol->GetDynValidShape();
+    }
+    ASSERT(!validShape.empty());
+
+    op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(origin->GetOffset(), dynOffset));
+    newOutcast->UpdateDynValidShape(validShape);
+    newOutcast->GetRawTensor()->UpdateDynRawShape(symbol->GetDynValidShape());
+}
+
 LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& scope)
 {
-    ASSERT(
-        FeError::INVALID_TYPE,
-        IsGraphType(GraphType::TENSOR_GRAPH) || IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH))
-        << "Invalid function type or graph type";
-    FE_ASSERT(HasParent()) << "Function does not have a parent";
     LogicalTensors outArgumentList;
-    std::unordered_set<int> appearedRawOutcasts;
-    std::vector<std::shared_ptr<RawTensor>> rawOutcasts;
-    std::map<int, std::vector<std::shared_ptr<LogicalTensor>>> outcastWithSameRaw;
-    std::map<std::shared_ptr<RawTensor>, std::shared_ptr<LogicalTensor>> rawToOutcast;
-    size_t oOperandIndex = 0;
-    for (const auto& originOutcast : originOutCasts_) {
-        FE_LOGI("originOut cast name %d %d", originOutcast->magic, originOutcast->GetRawMagic());
-        outcastWithSameRaw[originOutcast->tensor->rawmagic].emplace_back(originOutcast);
-        if (appearedRawOutcasts.count(originOutcast->tensor->rawmagic) != 0) {
-            ++oOperandIndex;
-            continue;
-        }
-        appearedRawOutcasts.emplace(originOutcast->tensor->rawmagic);
-        rawOutcasts.emplace_back(originOutcast->tensor);
-        rawToOutcast[originOutcast->tensor] = originOutcast;
-        if (GetSlotScope() != nullptr && GetSlotScope()->oriOutcastWriteSlotSet.size() > oOperandIndex) {
-            GetSlotScope()->outcastWriteSlotSet.push_back(GetSlotScope()->oriOutcastWriteSlotSet[oOperandIndex]);
-            GetSlotScope()->ioslot.outcastSlot.push_back(
-                GetSlotScope()->originalIocastsSlot.outcastSlot[oOperandIndex]);
-        }
-        ++oOperandIndex;
-    }
 
-    FE_LOGI("raw out cast number %zu", rawOutcasts.size());
-    for (const auto& rawOutcast : rawOutcasts) {
-        auto& sameRawOutcasts = outcastWithSameRaw[rawOutcast->rawmagic];
-        std::vector<int64_t> nonOffsets(rawOutcast->rawshape.size(), 0);
-
-        auto idx = outCasts_.size();
-        auto newSymbol = rawOutcast->GetSymbol();
-        if (newSymbol == "") {
-            newSymbol = "OUTCAST_SYMBOL" + std::to_string(idx);
-        }
-        auto rawSymbol = std::make_shared<LogicalTensor>(
-            *this, rawOutcast->datatype, rawOutcast->rawshape, rawOutcast->GetDynRawShape(),
-            rawToOutcast[rawOutcast]->Format(), newSymbol);
-        auto rawBuf = std::make_shared<LogicalTensor>(
-            *this, rawOutcast->datatype, rawOutcast->rawshape, rawOutcast->GetDynRawShape(),
-            rawToOutcast[rawOutcast]->Format(), "OUTCAST_LOCAL_BUF" + std::to_string(idx));
-        auto outArgument = std::make_shared<LogicalTensor>(Parent(), rawOutcast, nonOffsets, rawOutcast->rawshape);
-        rawSymbol->tensor->UpdateDynRawShape(rawOutcast->GetDynRawShape());
-        rawBuf->tensor->UpdateDynRawShape(rawOutcast->GetDynRawShape());
+    for (size_t idx = 0; idx < originOutCasts_.size(); idx++) {
+        auto origin = originOutCasts_[idx];
+        int rank = origin->shape.size();
+        std::vector<int64_t> zeroOffset(rank, 0);
+        auto outArgument = std::make_shared<LogicalTensor>(Parent(), origin->tensor, zeroOffset, origin->shape, origin->tensor->GetDynRawShape());
         Parent().tensorMap_.Insert(outArgument);
         outArgumentList.push_back(outArgument);
-        UpdateLinkMap(outArgument, rawSymbol, true);
-        outCasts_.emplace_back(rawSymbol);
-        outcastToOutArgumentDict[rawSymbol] = outArgument;
 
+        auto outSymbol = CreateOutcastTensor(outArgument);
         if (scope) {
-            scope->outcastToOutArgumentDict[rawSymbol] = outArgument;
-            scope->outcastToOutOriginalDict[rawSymbol].insert(sameRawOutcasts.begin(), sameRawOutcasts.end());
+            scope->outcastToOutArgumentDict[outSymbol] = outArgument;
+        }
+        if (slotScope_ && idx < slotScope_->oriOutcastWriteSlotSet.size()) {
+            slotScope_->outcastWriteSlotSet.push_back(slotScope_->oriOutcastWriteSlotSet[idx]);
+            slotScope_->ioslot.outcastSlot.push_back(slotScope_->originalIocastsSlot.outcastSlot[idx]);
         }
 
-        std::vector<std::vector<int64_t>> newOutcastOffsets;
-        std::vector<std::shared_ptr<LogicalTensor>> iOperand;
-        std::vector<std::shared_ptr<LogicalTensor>> oOperand = {rawSymbol};
-        FE_LOGI("same raw out cast number %zu", sameRawOutcasts.size());
-
-        std::shared_ptr<LogicalTensor> newOutcast = nullptr;
-        for (auto& originOutcast : sameRawOutcasts) {
-            if (newOutcast == nullptr) {
-                newOutcast = rawBuf->View(*this, originOutcast->shape, originOutcast->offset);
-                newOutcast->UpdateDynValidShape(originOutcast->GetDynValidShape());
-                newOutcastOffsets.emplace_back(originOutcast->offset);
-                iOperand.emplace_back(newOutcast);
+        auto& producers = origin->GetProducers();
+        bool isAssembleOut = std::any_of(producers.begin(), producers.end(), [](auto& op) -> bool {
+            return (op->GetOpcode() == Opcode::OP_ASSEMBLE && op->HasAttribute("dassemble")) ||
+                   op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA;
+        });
+        if (isAssembleOut) {
+            Substitute(origin, outSymbol);
+            originOutCasts_[idx] = outSymbol;
+            if (scope) {
+                scope->partialUpdateOutcastDict[outSymbol] = true;
             }
-            auto oldConsumers = originOutcast->GetConsumers(); // only for check
-            tensorMap_.Insert(newOutcast);
-            Substitute(originOutcast, newOutcast);
-            FE_ASSERT(newOutcast->GetConsumers() == oldConsumers) << "Consumers mismatch after substitution:\n"
-                                                                  << "NewOutcast: " << newOutcast->Dump() << "\n"
-                                                                  << "OldConsumers: " << oldConsumers.size();
-            FE_ASSERT(FeError::NOT_EXIST, originOutcast->GetProducers().empty())
-                << "OriginOutcast has producers:" << originOutcast->Dump();
-            auto it = std::find(originOutCasts_.begin(), originOutCasts_.end(), originOutcast);
-            FE_ASSERT(FeError::NOT_EXIST, it != originOutCasts_.end())
-                << "OriginOutcast not found in originOutCasts_:" << originOutcast->Dump();
-            *it = newOutcast;
-        }
-        FE_ASSERT(FeError::NOT_EXIST, rawSymbol->GetProducers().empty())
-            << "RawSymbol has producers:" << rawSymbol->Dump();
-        FE_ASSERT(FeError::OUT_OF_RANGE, iOperand.size() == newOutcastOffsets.size())
-            << "iOperand size does not match newOutcastOffsets size:\n"
-            << "iOperand size: " << iOperand.size() << "\n"
-            << "newOutcastOffsets size: " << newOutcastOffsets.size();
-        for (size_t i = 0; i < iOperand.size(); i++) {
-            auto producerSet = iOperand[i]->GetProducers(); // deep copy
-            auto partitalAssemble = std::any_of(producerSet.begin(), producerSet.end(), [](Operation* op) {
-                return (op->GetOpcode() == Opcode::OP_ASSEMBLE && op->HasAttribute("dassemble")) ||
-                       op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA;
-            });
-            if (partitalAssemble) {
-                for (auto producer : producerSet) {
-                    auto producerAttr = std::static_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
-                    FE_ASSERT(FeError::INVALID_PTR, producerAttr)
-                        << "mix assemble and common operation for same output \n"
-                        << producer->Dump();
-                    auto [offset, dynOffset] = TensorOffset::Add(
-                        iOperand[i]->GetOffset(), iOperand[i]->GetDynOffset(), producerAttr->GetToOffset(),
-                        producerAttr->GetToDynOffset());
-                    producer->ReplaceOOperand(0, rawSymbol);
-                    producer->SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset, dynOffset));
-                }
-                auto consumers = iOperand[i]->GetConsumers(); // deep copy
-                for (auto consumer : consumers) {
-                    for (size_t j = 0; j < consumer->GetIOperands().size(); j++) {
-                        if (consumer->GetInputOperand(j) == iOperand[i]) {
-                            consumer->ReplaceIOperand(j, rawSymbol);
-                        }
-                    }
-                }
-                if (scope) {
-                    scope->partialUpdateOutcastDict[rawSymbol] = partitalAssemble;
-                }
-            } else {
-                ir::Span::SetCurrent(ir::Span(__FILE__, __LINE__, 0));
-                auto& assembleOp = AddOperation(Opcode::OP_ASSEMBLE, {iOperand[i]}, oOperand);
-                ir::Span::ClearCurrent();
-                assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-                    newOutcastOffsets[i], SymbolicScalar::FromConcrete(newOutcastOffsets[i])));
-            }
-        }
-        // Substitute alive tensor magics
-        Program::GetInstance().UpdateAliveTensorsParent(rawOutcast->rawmagic, Parent());
-    }
-
-    for (auto it = tensorMap_.inverseMap_.begin(); it != tensorMap_.inverseMap_.end();) {
-        if (appearedRawOutcasts.count(it->second->tensor->rawmagic) > 0) {
-            it = tensorMap_.inverseMap_.erase(it);
         } else {
-            it++;
+            auto newOutcast = std::make_shared<LogicalTensor>(
+                *this, origin->tensor->datatype, origin->shape, origin->Format(),
+                "OUTCAST_LOCAL_BUF" + std::to_string(idx));
+            CreateFromOutcast(outSymbol, newOutcast, origin);
+            Substitute(origin, newOutcast);
+            originOutCasts_[idx] = newOutcast;
         }
-    }
-
-    std::vector<int> magicToRemove;
-    for (auto it = tensorMap_.tensorMap_.begin(); it != tensorMap_.tensorMap_.end();) {
-        if (appearedRawOutcasts.count(it->first) > 0) {
-            magicToRemove.push_back(it->first);
-            it++;
-        } else {
-            it++;
-        }
-    }
-    for (auto rmagic : magicToRemove) {
-        tensorMap_.EraseRawMagic(rmagic);
-    }
-
-    for (const auto& tensor : outArgumentList) {
-        FE_ASSERT(FeError::NOT_EXIST, tensor->GetProducers().empty()) << "Tensor has producers:" << tensor->Dump();
     }
 
     return outArgumentList;

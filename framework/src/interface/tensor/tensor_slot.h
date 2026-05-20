@@ -140,11 +140,6 @@ struct TensorSlotScope {
     std::vector<std::unordered_set<TensorSlot>> oriIncastReadSlotSet;
     std::vector<std::unordered_set<TensorSlot>> oriOutcastWriteSlotSet;
 
-    std::unordered_map<std::shared_ptr<LogicalTensor>, std::unordered_set<std::shared_ptr<LogicalTensor>>>
-        incastToInOriginalDict;
-    std::unordered_map<std::shared_ptr<LogicalTensor>, std::unordered_set<std::shared_ptr<LogicalTensor>>>
-        outcastToOutOriginalDict;
-
     std::unordered_map<LogicalTensorPtr, int> partialUpdateOutcastDict;
 
     std::vector<int> constructAssembleSlotList;

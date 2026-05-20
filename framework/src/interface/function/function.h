@@ -731,9 +731,6 @@ public:
     bool IsDynloop() const { return dynloopAttr_ != nullptr; }
     bool IsDyndev() const { return dyndevAttr_ != nullptr; }
 
-    std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensor>> incastToInArgumentDict;
-    std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensor>> outcastToOutArgumentDict;
-
     void HandleControlOps(Operation& op, std::vector<Operation*>& toRemoveOps) const;
     void UpdateOperandBeforeRemoveOp(Operation& op, const bool keepOutTensor = false);
     std::pair<bool, Opcode> IsAicpuSubFunction() const
@@ -960,10 +957,11 @@ private:
     void RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& originIncast) const;
     std::shared_ptr<LogicalTensor> CreateIncastTensor(const std::shared_ptr<LogicalTensor>& inArgument);
     void CreateFromIncast(
-        const std::shared_ptr<LogicalTensor>& symbol, const std::shared_ptr<LogicalTensor>& newIncast,
-        const std::shared_ptr<LogicalTensor>& originIncast);
-    void ReplaceMaybeParams(
-        const std::shared_ptr<LogicalTensor>& newIncast, const std::shared_ptr<LogicalTensor>& originIncast);
+        const LogicalTensorPtr& symbol, const LogicalTensorPtr& newIncast, const LogicalTensorPtr& originIncast);
+    std::shared_ptr<LogicalTensor> CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument);
+    void CreateFromOutcast(
+        const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast, const LogicalTensorPtr& originOutcast);
+
     static void AddWhenNotExistOrAssert(
         const std::shared_ptr<LogicalTensor>& tensor, std::map<int, int>& magicToRawMagic,
         std::map<int, std::shared_ptr<LogicalTensor>>& magicToLogicalTensor);

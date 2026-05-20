@@ -45,5 +45,16 @@ def test_config_scope():
     kernel_with_dynamic(a, out)
 
 
+def test_reshape_assemble():
+    a = pypto.Tensor([32, 64], pypto.DT_FP32)
+    out = pypto.Tensor([64, 32], pypto.DT_FP32)
+
+    with pypto.function("main", a, out):
+        pypto.set_vec_tile_shapes(16, 16)
+        b = a + 1
+        pypto.assemble(pypto.reshape(b, [64, 32]), [0, 0], out)
+
+
 if __name__ == "__main__":
     test_config_scope()
+    test_reshape_assemble()
