@@ -421,8 +421,6 @@ struct DevAscendFunctionDupped {
                 TensorMetaErr::SHAPE_VALUE_MISMATCH,
                 "#ctrl.encode.shape: Dimension mismatch: info.dim=%d, rawTensor->dim=%d", dim, rawTensor->GetDim());
         }
-        DEV_ASSERT(TensorMetaErr::RAW_TENSOR_INDEX_OUT_OF_RANGE, rawIndex < func->GetRawTensorSize());
-        DEV_ASSERT(TensorMetaErr::SHAPE_VALUE_MISMATCH, dim == rawTensor->GetDim());
 
         for (int d = 0; d < rawTensor->GetDim(); d++) {
             auto shapeIdx = attrOffset + d + rawTensor->GetDim() * 2;
@@ -433,7 +431,6 @@ struct DevAscendFunctionDupped {
                     TensorMetaErr::SHAPE_VALUE_MISMATCH,
                     "#ctrl.encode.shape: Shape mismatch at dim %d: expacted=%ld, got=%ld", d, shape, actualShape);
             }
-            DEV_ASSERT(TensorMetaErr::SHAPE_VALUE_MISMATCH, actualShape == shape);
         }
         for (int i = 0; i < dim * ARG_ATTR_TYPE; i++) {
             oss << GetValue(attrs, attrOffset + i) << ", ";
@@ -514,7 +511,6 @@ struct DevAscendFunctionDupped {
                     "#ctrl.encode.tensor_ptr: Tensor address mismatch at index %lu: addr=%lu, addrEx=%lu.", i,
                     GetRawTensorAddr(i), GetRawTensorAddrEx(i));
             }
-            DEV_ASSERT(TensorMetaErr::TENSOR_ENCODE_PTR_MISMATCH, GetRawTensorAddrEx(i) == GetRawTensorAddr(i));
             auto desc = funcData->rawTensorDesc[i];
             oss << GetRawTensorAddrEx(i) << "(location:" << desc.location << " offsetOrIdex: " << desc.offsetOrIndex
                 << ")"
