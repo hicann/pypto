@@ -26,18 +26,18 @@
 #include "cost_model/simulation/arch/A5/PostSimulatorA5.h"
 
 namespace CostModel {
-UnifiedPipeMachinePtr CreateSimulator(const std::string& archType, int accLevel)
+UnifiedPipeMachinePtr CreateSimulator(const std::string& archType)
 {
-    if (archType == "A2A3" && accLevel == 1) {
+    if (archType == "A2A3") {
         return CreatePipeSimulatorFast<PostSimulatorA2A3>();
-    } else if (archType == "A5" && accLevel == 1) {
+    } else if (archType == "A5") {
         return CreatePipeSimulatorFast<PostSimulatorA5>();
     } else {
         throw std::invalid_argument("unknown arch type " + archType);
     }
 }
 
-UnifiedPipeMachinePtr PipeFactory::Create(CorePipeType pipeType, std::string archType, int accLevel)
+UnifiedPipeMachinePtr PipeFactory::Create(CorePipeType pipeType, std::string archType)
 {
     switch (pipeType) {
         case CorePipeType::PIPE_TILE_ALLOC:
@@ -48,11 +48,10 @@ UnifiedPipeMachinePtr PipeFactory::Create(CorePipeType pipeType, std::string arc
         case CorePipeType::PIPE_MTE1:
         case CorePipeType::PIPE_MTE_OUT:
         case CorePipeType::PIPE_FIX:
-            return CreateSimulator(archType, accLevel);
         case CorePipeType::PIPE_VECTOR_ALU:
         case CorePipeType::PIPE_S:
         case CorePipeType::PIPE_CUBE:
-            return CreateSimulator(archType, accLevel);
+            return CreateSimulator(archType);
         default:
             throw std::invalid_argument("unknown pipe type " + CorePipeName(pipeType));
     }

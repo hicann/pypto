@@ -19,10 +19,10 @@
 #include "CacheMachineImpl.h"
 
 namespace CostModel {
-UnifiedPipeMachinePtr CreateSimulator(const std::string& archType, int accLevel);
+UnifiedPipeMachinePtr CreateSimulator(const std::string& archType);
 class PipeFactory {
 public:
-    static UnifiedPipeMachinePtr Create(CorePipeType pipeType, std::string archType, int accLevel);
+    static UnifiedPipeMachinePtr Create(CorePipeType pipeType, std::string archType);
     static std::unique_ptr<CacheMachineImpl> CreateCache(CacheType type, std::string archType);
 };
 } // namespace CostModel

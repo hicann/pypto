@@ -101,7 +101,10 @@ py::object ConvertSingleTensor(
 
 int ValidateDeviceAndReturnIndex(py::object& device)
 {
-    if (config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) {
+    if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
+        if (py::getattr(device, "type").cast<std::string>() != "cpu") {
+            throw std::runtime_error("Not cpu device");
+        }
         return 0;
     }
     if (py::getattr(device, "type").cast<std::string>() != "npu") {

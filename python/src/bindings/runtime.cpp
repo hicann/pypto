@@ -1340,7 +1340,7 @@ private:
 
     void DoLaunch(KernelBinary* kbinary)
     {
-        if (config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) {
+        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
             if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
                 kmodule->EslModelLiteLaunch(kbinary, tensors);
             } else {

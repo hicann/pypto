@@ -114,7 +114,7 @@ UnifiedPipeMachinePtr SimSys::GetPipeImpl(CorePipeType pType)
         return nullptr;
     }
     if (pipeImplMap[pType] == nullptr) {
-        pipeImplMap[pType] = PipeFactory::Create(pType, config.deviceArch, accLevel);
+        pipeImplMap[pType] = PipeFactory::Create(pType, config.deviceArch);
     }
     return pipeImplMap[pType];
 }

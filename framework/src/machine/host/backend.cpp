@@ -896,10 +896,6 @@ static void OverCallOpMaxNum(Function* devRoot, DevAscendFunction* funcBin)
 static void CompileControlFlow(
     const std::string& aicpuDirPath, const std::string& funcName, const std::string& constrolFlow, std::string express)
 {
-    if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM &&
-        (config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 1)) {
-        return;
-    }
     if (std::getenv("ENABLE_CTRLFLOW_COMPILE") == nullptr) {
         return;
     }
@@ -1080,11 +1076,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
 
     std::string kernelPath;
 #ifdef BUILD_WITH_CANN
-    bool enableCompile = (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_NPU ||
-                          ((config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) &&
-                           config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM)) &&
-                         config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION;
-    if (enableCompile) {
+    if (config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION && std::getenv("ASCEND_HOME_PATH") != nullptr) {
         if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
             FindLiteNPUKernel(leafDict, kernelPath);
         } else {
