@@ -2074,18 +2074,14 @@ private:
 
         aivStart_ += aicValidNum_;
         aivEnd_ += aicValidNum_;
-        if (disableControlCore_) {
-            adjAicEnd_ = aicEnd_;
-            adjAivEnd_ = aivEnd_;
-        }
+        adjAicEnd_ = aicEnd_;
+        adjAivEnd_ = aivEnd_;
 
         DEV_IF_NONDEVICE
         {
             if (!aicoreHal_.IsHostSimMode()) {
                 context_->corePendReadyCnt_[static_cast<int>(CoreType::AIC)] = aicEnd_ - aicStart_;
                 context_->corePendReadyCnt_[static_cast<int>(CoreType::AIV)] = aivEnd_ - aivStart_;
-                adjAicEnd_ = aicEnd_;
-                adjAivEnd_ = aivEnd_;
                 ForEachManageAicoreReverse([this](int coreIdx) {
                     int coreType = static_cast<int>(AicoreType(coreIdx));
                     AddReadyCoreIdx(coreIdx, coreType);
