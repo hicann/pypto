@@ -17,10 +17,11 @@
 
 #include <gtest/gtest.h>
 #include "interface/interpreter/raw_tensor_data.h"
+#include "interface/program/program.h"
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/utils/device_log.h"
-#include "machine/runtime/device_launcher.h"
-#include "machine/runtime/emulation_launcher.h"
+#include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/launcher/emulation_launcher.h"
 #include "machine/device/dynamic/context/device_execute_context.h"
 
 using namespace npu::tile_fwk;

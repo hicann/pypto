@@ -16,80 +16,57 @@
 #ifndef SRC_MACHINE_DEVICE_LAUNCHER_H
 #define SRC_MACHINE_DEVICE_LAUNCHER_H
 
-#include <cstdint>
 #include <cinttypes>
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "interface/inner/tilefwk.h"
+#include "tilefwk/error_code.h"
 #include "interface/interpreter/raw_tensor_data.h"
-#include "machine/runtime/device_runner.h"
-#include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
 #include "machine/device/dynamic/device_common.h"
 #include "machine/runtime/memory_utils/device_memory_utils.h"
 #include "machine/runtime/distributed/distributed_context.h"
-#include "tilefwk/error_code.h"
+#include "machine/runtime/device_runner.h"
+#include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
-struct AiCpuArgs {
-    DeviceKernelArgs kArgs;
-    const char kernelName[32] = {"DynTileFwkKernelServer"};
-    const char soName[32] = {"libaicpu_extend_kernels.so"};
-    const char opName[32] = {""};
+class DeviceGuard {
+public:
+    DeviceGuard(int32_t devId) : nDevId(devId)
+    {
+        (void)RuntimeGetDevice(&oDevId);
+        if (nDevId != oDevId) {
+            RuntimeSetDevice(nDevId);
+        }
+    }
+    ~DeviceGuard()
+    {
+        if (nDevId != oDevId) {
+            RuntimeSetDevice(oDevId);
+        }
+    }
+
+private:
+    int32_t oDevId{0};
+    int32_t nDevId{0};
 };
 
-int GetCfgBlockdim();
-int GetMaxBlockdim();
-uint32_t GetProcessId();
-void DumpIOTensorsWithCann(
-    AclRtStream stream, std::vector<DeviceTensorData>& tensors, const std::string& funcName);
-
-class DeviceLauncherContext {
+class AclModeGuard {
 public:
-    void DeviceInit()
+    AclModeGuard(AclMdlRICaptureMode tmode) : mode(tmode)
     {
-        // 使能 Aihac 后端
-        oriEnableAihacBackend = config::GetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
-        config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-#ifdef ENABLE_STEST_BINARY_CACHE
-        // BinaryCache
-        oriEnableBinaryCache = config::GetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, oriEnableBinaryCache);
-        config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, true);
-#endif
-#ifdef ENABLE_STEST_DUMP_JSsON
-        oriEnableDumpJson = config::GetPassConfig(KEY_PRINT_GRAPH, oriEnableDumpJson);
-        config::GetPassConfig(KEY_PRINT_GRAPH, true);
-#endif
-        // Reset Program
-
-        Program::GetInstance().Reset();
-        ProgramData::GetInstance().Reset();
+        AclMdlRICaptureThreadExchangeMode(&mode);
+    }
+    ~AclModeGuard()
+    {
+        AclMdlRICaptureThreadExchangeMode(&mode);
     }
 
-    void DeviceFini()
-    {
-        config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
-#ifdef ENABLE_STEST_BINARY_CACHE
-        config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, oriEnableBinaryCache);
-#endif
-#ifdef ENABLE_STEST_DUMO_JSON
-        config::SetHostConfig(KEY_PRINT_GRAPH, oriEnablePrintJson);
-#endif
-    }
-    static DeviceLauncherContext& Get();
-
-protected:
-    bool oriEnableAihacBackend = false;
-#ifdef ENABLE_STEST_BINARY_CACHE
-    bool oriEnableBinaryCache = false;
-#endif
-#ifdef ENABLE_STEST_DUMO_JSON
-    bool oriEnableDumpJson = false;
-#endif
+private:
+    AclMdlRICaptureMode mode;
 };
 
 class DeviceLauncher {
@@ -190,8 +167,10 @@ public:
         devProg->devArgs.nrAiv = kDefaultAivNum;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
-        bool enableVFFusion = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
-        devProg->devArgs.enableVFFusion = (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1 || enableVFFusion);
+        bool enableVFFusion = Platform::Instance().GetSoc().GetNPUArch() ==
+            NPUArch::DAV_3510 && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
+        devProg->devArgs.enableVFFusion =
+            (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1 || enableVFFusion);
 
         if (IsPtoDataDumpEnabled()) { // dump tensor
             devProg->devArgs.hostPid = GetProcessId();
@@ -313,11 +292,10 @@ public:
 
     static void InitAicpuTaskInfo()
     {
-        static bool inited = false;
-        if (!inited) {
+        if (!inited_) {
             AiCpuArgs initArgs;
             (void)memcpy_s(tensorInfo_.data(), sizeof(AiCpuArgs), &initArgs, sizeof(AiCpuArgs));
-            inited = true;
+            inited_ = true;
         }
     }
 
@@ -357,6 +335,7 @@ public:
         size_t outputSize = outputList.size() * sizeof(DevTensorData);
         size_t tensorSize = inputSize + outputSize + 2 * sizeof(uint64_t);
         size_t allSize = tensorSize + sizeof(AiCpuArgs);
+
         if (unlikely(allSize > tensorInfo_.size())) {
             tensorInfo_.resize(allSize);
         }
@@ -434,7 +413,7 @@ public:
     static int RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, bool isCapture);
     static int DeviceLaunchOnceWithDeviceTensorData(
         Function* function, const std::vector<DeviceTensorData>& inputList,
-        const std::vector<DeviceTensorData>& outputList, RtStream aicpuStream, RtStream ctrlStream,
+        const std::vector<DeviceTensorData>& outputList,
         RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator,
         DevControlFlowCache* ctrlCache = nullptr, const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
@@ -445,7 +424,6 @@ public:
     static void FreeControlFlowCache(uint8_t* ctrlCache);
     static void* RegisterKernelBin(const std::vector<uint8_t>& kernelBinary);
     static void UnregisterKernelBin(void* hdl);
-    static void SetCaptureMode(bool captureMode);
     static bool IsCaptureMode();
     static void SaveStream(AclRtStream aicoreStream);
     static void GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel);
@@ -460,40 +438,26 @@ public:
         Function* function, DevControlFlowCache* hostCtrlCache = nullptr,
         const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
-    static void DeviceRunCacheKernelEnable(Function* func, bool enabled);
-    static bool DeviceRunCacheKernelEnable(Function* func);
-    static void DeviceRunCacheKernelSet(Function* func, uint8_t* devProg);
-    static uint8_t* DeviceRunCacheKernelGet(Function* func);
-    static CachedOperator* DeviceRunCacheOperatorGet(Function* func);
-    static void SetDevPerfAddr([[maybe_unused]] const bool& debugEnable, [[maybe_unused]] const bool& isCaptureMode);
+    static void SetDevRunCacheKernelEnable(Function* func, bool enabled);
+    static bool IsDevRunCacheKernelEnable(Function* func);
+    static void SetDevRunCacheKernel(Function* func, uint8_t* devProg);
+    static CachedOperator* GetDevRunCacheOperator(Function* func);
+    static void SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode);
+    static void DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors,
+        const std::string& funcName);
 
-public:
+private:
+    static void DataDumpInit();
+    static void DataDumpUnInit();
+    struct DeviceRunCacheInfo {
+        /* By default: devProg cache is enabled */
+        bool devProgEnabled{true};
+        CachedOperator cacheOperator;
+    };
+
+    static bool inited_;
     static std::vector<uint8_t> tensorInfo_;
-
-private:
-    static bool captureMode_;
-};
-
-void DataDumpInit();
-void DataDumpUnInit();
-
-class DeviceGuard {
-public:
-    DeviceGuard(int32_t devId);
-    ~DeviceGuard();
-
-private:
-    int32_t oDevId{0};
-    int32_t nDevId{0};
-};
-
-class AclModeGuard {
-public:
-    AclModeGuard(AclMdlRICaptureMode tmode);
-    ~AclModeGuard();
-
-private:
-    AclMdlRICaptureMode mode;
+    static std::unordered_map<Function*, DeviceRunCacheInfo> cacheInfoDict_;
 };
 } // namespace npu::tile_fwk::dynamic
 #endif // SRC_MACHINE_DEVICE_LAUNCHER_H

@@ -33,11 +33,11 @@
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
-#include "machine/runtime/device_launcher_binding.h"
-#include "machine/runtime/emulation_launcher.h"
-#include "machine/runtime/eslmodel_launcher.h"
-#include "machine/runtime/aicore_model_launcher.h"
-#include "machine/runtime/device_launcher.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/launcher/emulation_launcher.h"
+#include "machine/runtime/launcher/eslmodel_launcher.h"
+#include "machine/runtime/launcher/aicore_model_launcher.h"
+#include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/runtime_agent.h"
 #include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/runtime/launcher_router.h"
@@ -359,13 +359,11 @@ std::string OperatorDeviceRunOnceDataFromDevice(
     }
 
     auto aicoreStream = incomingStream;
-    auto aicpuStream = DeviceGetAicpuStream();
-    auto ctrlStream = DeviceGetCtrlStream();
     auto workspaceDataAddr = static_cast<uintptr_t>(workspaceData);
     auto ctrlCache = static_cast<uintptr_t>(devCtrlCache);
     if (launchMode != LaunchMode::AICORE_MODEL) {
         int rc = ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
-            op, inputs, outputs, aicpuStream, ctrlStream, aicoreStream, false, reinterpret_cast<uint8_t*>(ctrlCache),
+            op, inputs, outputs, aicoreStream, false, reinterpret_cast<uint8_t*>(ctrlCache),
             DeviceLauncherConfig::CreateConfigWithWorkspaceAddr(workspaceDataAddr));
         if (rc < 0) {
             return "device run failed";
@@ -395,8 +393,7 @@ std::string OperatorDeviceSynchronize(py::int_ incomingStreamPython)
     }
 
     auto aicpuStream = incomingStream;
-    auto aicoreStream = DeviceGetAicoreStream();
-    int rc = DeviceSynchronize(aicpuStream, aicoreStream);
+    int rc = DeviceSynchronize(aicpuStream);
     if (rc < 0) {
         return "device sync failed";
     }
@@ -471,7 +468,7 @@ int64_t BuildCache(
 }
 
 #ifdef BUILD_WITH_CANN
-#define ENABALE_VERBOSE_LOG 0
+#define ENABLE_VERBOSE_LOG 0
 struct ControlFlowCache {
     int64_t hash;
     std::vector<DeviceTensorData> inputs;
@@ -570,7 +567,7 @@ public:
         }
 
         uint8_t* devCache = DeviceLauncher::CopyControlFlowCache(ctrlCache);
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
         std::stringstream ss;
         for (auto& t : inputs) {
             for (auto x : t.GetShape()) {
@@ -953,7 +950,7 @@ public:
                 devCache = kernel->BuildControlFlowCache(tensors, true);
             }
         }
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
         std::stringstream ss;
         for (auto& t : tensors) {
             for (auto& s : t.GetShape()) {
@@ -986,7 +983,7 @@ public:
         auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func));
         kernels.push_back(kernel);
         if (inferCacheShape) {
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
             COMPILER_LOGI("build default cache");
 #endif
             BuildDefaultCache(kernel, module);
@@ -1043,7 +1040,7 @@ public:
         auto isCaptureMode = DeviceLauncher::IsCaptureMode();
         bool debugEnable = !isCaptureMode && isDebugMode;
 
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
         COMPILER_LOGI("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
 #endif
         int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode);
@@ -1124,11 +1121,11 @@ private:
     void InitCachedArgs()
     {
         memset_s(&rtAicpuArgs, sizeof(RtAicpuArgsEx), 0, sizeof(RtAicpuArgsEx));
-        rtAicpuArgs.kernelNameAddrOffset = offsetof(dynamic::AiCpuArgs, kernelName);
-        rtAicpuArgs.soNameAddrOffset = offsetof(dynamic::AiCpuArgs, soName);
+        rtAicpuArgs.kernelNameAddrOffset = offsetof(AiCpuArgs, kernelName);
+        rtAicpuArgs.soNameAddrOffset = offsetof(AiCpuArgs, soName);
         rtAicpuArgs.hostInputInfoNum = 1;
-        hostInfo.addrOffset = offsetof(dynamic::AiCpuArgs, kArgs.inputs);
-        hostInfo.dataOffset = sizeof(dynamic::AiCpuArgs);
+        hostInfo.addrOffset = offsetof(AiCpuArgs, kArgs.inputs);
+        hostInfo.dataOffset = sizeof(AiCpuArgs);
         rtAicpuArgs.hostInputInfoPtr = &hostInfo;
         rtAicpuArgs.timeout = AICPU_EXECUTE_TIMEOUT;
         memset_s(&rtAicoreArgs, sizeof(RtArgsEx), 0, sizeof(RtArgsEx));
@@ -1176,7 +1173,7 @@ private:
                 totalTimeoutSec = host_options["compile_timeout"].cast<int>();
             }
         }
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
         COMPILER_LOGI("infer_cache_shape: %d", inferCacheShape);
 #endif
     }
@@ -1331,7 +1328,7 @@ private:
         jitScopeGuard.emplace("jit_scope", std::map<std::string, Any>{});
         Program::GetInstance().Reset();
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
         COMPILER_LOGI("compile kernel");
 #endif
 
@@ -1355,7 +1352,7 @@ private:
             auto pyalloc = py::getattr(module, "alloc");
             wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
         }
-#if ENABALE_VERBOSE_LOG
+#if ENABLE_VERBOSE_LOG
         COMPILER_LOGI("alloc workspace %ld", wsSize);
 #endif
         HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
@@ -1372,7 +1369,7 @@ private:
         }
         kmodule->Launch(kbinary, aicoreStream, tensors, ctrlFlowCache, wsAddr);
         HOST_PERF_TRACE(TracePhase::Launch);
-        DumpIOTensorsWithCann(aicoreStream, tensors, kbinary->GetFunction()->GetRawName());
+        DeviceLauncher::DumpIOTensorsWithCann(aicoreStream, tensors, kbinary->GetFunction()->GetRawName());
     }
 };
 

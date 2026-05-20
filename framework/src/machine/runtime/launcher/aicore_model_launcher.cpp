@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aicore_model_launcher.h"
+#include "machine/runtime/launcher/aicore_model_launcher.h"
 
 #include <cstdint>
 #include <stdint.h>
@@ -20,15 +20,17 @@
 #if defined(__linux__)
 #include <sched.h>
 #endif
-
+#include "tilefwk/pypto_fwk_log.h"
 #include "machine/simulation/host_aicore_entry_adapter.h"
+#include "interface/machine/device/tilefwk/aicore_entry.h"
+#include "machine/utils/machine_ws_intf.h"
+#include "machine/device/dynamic/device_utils.h"
 #include "machine/simulation/host_core_context.h"
 #include "machine/simulation/aicore_hardware.h"
-#include "machine/runtime/dump_device_perf.h"
-#include "interface/machine/device/tilefwk/aicore_entry.h"
-#include "machine/device/dynamic/device_utils.h"
 #include "machine/simulation/aicore_model_kernel_meta_hook.h"
-#include "tilefwk/pypto_fwk_log.h"
+
+#include "machine/runtime/dump_device_perf.h"
+#include "machine/runtime/launcher/device_launcher.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
 

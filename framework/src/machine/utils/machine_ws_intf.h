@@ -120,11 +120,17 @@ struct DeviceKernelArgs {
     DeviceKernelArgsParameter parameter;
 };
 
+struct AiCpuArgs {
+    DeviceKernelArgs kArgs;
+    const char kernelName[32] = {"DynTileFwkKernelServer"};
+    const char soName[32] = {"libaicpu_extend_kernels.so"};
+    const char opName[32] = {""};
+};
+
 struct LogHead {
     int type;
     int len;
     int64_t data[];
 };
-
 } // namespace npu::tile_fwk
 #endif

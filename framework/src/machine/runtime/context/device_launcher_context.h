@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,29 +9,21 @@
  */
 
 /*!
- * \file test_suite_stest_ops.h
- * \brief Ops STest TestSuite.
+ * \file device_launcher_context.h
+ * \brief
  */
 
 #pragma once
 
-#include <gtest/gtest.h>
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "test_common.h"
-#include "tilefwk/data_type.h"
-#include "interface/interpreter/raw_tensor_data.h"
 #include "interface/configs/config_manager.h"
+#include "interface/interpreter/raw_tensor_data.h"
+#include "interface/program/program.h"
 
-namespace npu::tile_fwk::stest {
-template <typename TestBase>
-class TestSuiteBase : public TestBase {
+namespace npu::tile_fwk {
+class DeviceLauncherContext {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
+    static DeviceLauncherContext& Get();
+    void DeviceInit()
     {
         // 使能 Aihac 后端
         oriEnableAihacBackend = config::GetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
@@ -46,21 +38,24 @@ public:
         config::SetPassConfig(KEY_PRINT_GRAPH, true);
 #endif
         // Reset Program
-        RuntimeSetDevice(GetDeviceIdByEnvVar());
         Program::GetInstance().Reset();
         ProgramData::GetInstance().Reset();
     }
 
-    void TearDown() override
+    void DeviceFini()
     {
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
 #ifdef ENABLE_STEST_BINARY_CACHE
         config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, oriEnableBinaryCache);
 #endif
 #ifdef ENABLE_STEST_DUMP_JSON
-        config::SetHostConfig(KEY_PRINT_GRAPH, oriEnablePrintJson);
+        config::SetHostConfig(KEY_PRINT_GRAPH, oriEnableDumpJson);
 #endif
     }
+
+    void SetCaptureMode(const bool captureMode) { captureMode_ = captureMode; }
+
+    bool IsCaptureMode() const { return captureMode_; }
 
 protected:
     bool oriEnableAihacBackend = false;
@@ -70,11 +65,6 @@ protected:
 #ifdef ENABLE_STEST_DUMP_JSON
     bool oriEnableDumpJson = false;
 #endif
+    bool captureMode_ = false;
 };
-
-template <typename T>
-class TestSuite_STest_Ops_Aihac_param : public TestSuiteBase<testing::TestWithParam<T>> {};
-
-class TestSuite_STest_Ops_Aihac : public TestSuiteBase<testing::Test> {};
-
-} // namespace npu::tile_fwk::stest
+}

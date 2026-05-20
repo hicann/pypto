@@ -13,17 +13,18 @@
  * \brief
  */
 
-#include "machine/runtime/emulation_launcher.h"
-
+#include "machine/runtime/launcher/emulation_launcher.h"
 #include <thread>
-#include "machine/host/backend.h"
-#include "machine/runtime/device_launcher.h"
 #include "tilefwk/error_code.h"
+#include "machine/host/backend.h"
+#include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
 
 namespace npu::tile_fwk::dynamic {
-static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
+static int EmulationLaunchOnce(DeviceKernelArgs &kArgs)
+{
     constexpr int threadNum = MAX_LAUNCH_SCHEDULE_AICPU_NUM + static_cast<int>(dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
     std::thread aicpuThreadList[threadNum];
     int aicpuResultList[threadNum] = {0};
@@ -111,7 +112,7 @@ int EmulationLauncher::EmulationRunOnce(
     if (inputCtrlCache != nullptr) {
         launchCtrlFlowCache =
             reinterpret_cast<DevControlFlowCache*>(memUtils.AllocZero(inputCtrlCache->usedCacheSize, nullptr));
-        if (launchCtrlFlowCache) {
+        if (launchCtrlFlowCache != nullptr) {
             memcpy_s(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
         }
     }
@@ -142,7 +143,8 @@ DevControlFlowCache* EmulationLauncher::CreateHostCtrlFlowCache(
     return hostCtrlFlowCache;
 }
 
-static void TryResetBlockDimForPreLaunch(DevControlFlowCache* ctrlFlowCache, DevAscendProgram *devProg, const DeviceLauncherConfig& config)
+static void TryResetBlockDimForPreLaunch(DevControlFlowCache* ctrlFlowCache, DevAscendProgram *devProg,
+    const DeviceLauncherConfig& config)
 {
     devProg->ctrlBlockDim = static_cast<uint32_t>(config.blockdim);
     if (ctrlFlowCache == nullptr || ctrlFlowCache->deviceTaskCount > 1) {
@@ -206,7 +208,8 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     hostCtrlFlowCache->CalcUsedCacheSize();
     uint64_t contextWorkspaceAddr = hostCtrlFlowCache->contextWorkspaceAddr;
     hostCtrlFlowCache->IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    hostCtrlFlowCache->RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
+    hostCtrlFlowCache->RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr,
+        devProg->GetParallelism());
     hostCtrlFlowCache->RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     hostCtrlFlowCache->TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     hostCtrlFlowCache->TaskAddrRelocProgramAndCtrlCache(
@@ -291,16 +294,16 @@ static std::vector<DeviceTensorData> toHostTensorData(const std::vector<DeviceTe
     std::vector<DeviceTensorData> hostDataList;
     for (auto& devData : devDataList) {
         auto size = devData.GetDataSize();
-        void* ptr = malloc(size);
+        void* dataPtr = malloc(size);
         if (isInput) {
-            RuntimeMemcpy(ptr, size, devData.GetAddr(), size, RtMemcpyKind::DEVICE_TO_HOST);
+            RuntimeMemcpy(dataPtr, size, devData.GetAddr(), size, RtMemcpyKind::DEVICE_TO_HOST);
         }
-        hostDataList.emplace_back(devData.GetDataType(), ptr, devData.GetShape());
+        hostDataList.emplace_back(devData.GetDataType(), dataPtr, devData.GetShape());
     }
     return hostDataList;
 }
 
-static void freeHostTensorData(const std::vector<DeviceTensorData>& hostDataList)
+static void FreeHostTensorData(const std::vector<DeviceTensorData>& hostDataList)
 {
     for (auto& hostData : hostDataList) {
         free(hostData.GetAddr());
@@ -317,8 +320,8 @@ int EmulationLauncher::EmulationLaunchDeviceTensorData(
     auto outList = toHostTensorData(outDevList, false);
     DeviceLauncher::ChangeCaptureModeGlobal();
     int rc = EmulationLaunchOnceWithHostTensorData(function, inList, outList, ctrlCache, memUtils, config);
-    freeHostTensorData(inList);
-    freeHostTensorData(outList);
+    FreeHostTensorData(inList);
+    FreeHostTensorData(outList);
     return rc;
 }
 } // namespace npu::tile_fwk::dynamic

@@ -14,10 +14,12 @@
  */
 
 #pragma once
+
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
 #include "tilefwk/error_code.h"
 #include "adapter/api/runtime_api.h"
+#include "adapter/api/acl_api.h"
 
 namespace npu::tile_fwk {
 inline void CheckDeviceId()
@@ -56,4 +58,33 @@ inline uint64_t GetRuntimeL2Offset()
     MACHINE_LOGD("L2 cache offset of device[%d] is %lu", userDeviceId, offset);
     return offset;
 }
+
+inline uint64_t AlignSize(const uint64_t bytes, const uint32_t aligns = 512U)
+{
+    const uint64_t alignSize = (aligns == 0U) ? sizeof(uintptr_t) : aligns;
+    return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
+}
+
+inline void* DevMallocWithAlignSize(const uint64_t size, const RtMemType memType)
+{
+    uint8_t* devPtr = nullptr;
+    if (RuntimeMalloc(reinterpret_cast<void**>(&devPtr), AlignSize(size), memType, 0) != 0) {
+        MACHINE_LOGW("Fail to malloc dev memory with size[%lu] and mem type[%u].", size, memType);
+        return nullptr;
+    }
+    return devPtr;
+}
+
+inline void ExchangeCaptureMode(const bool& isCapture)
+{
+    if (isCapture) {
+        AclMdlRICaptureMode mode = AclMdlRICaptureMode::GLOBAL;
+        AclMdlRICaptureThreadExchangeMode(&mode);
+        MACHINE_LOGI("captureMode is: %d", static_cast<int>(mode));
+    }
+}
+
+int GetCfgBlockdim();
+
+uint32_t GetProcessId();
 }

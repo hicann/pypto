@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 #include "interface/interpreter/raw_tensor_data.h"
-#include "machine/runtime/device_launcher_binding.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
 #include "cost_model/simulation/cost_model_launcher.h"
 
 using namespace npu::tile_fwk;

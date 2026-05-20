@@ -9,29 +9,16 @@
  */
 
 /*!
- * \file stream_context.cpp
+ * \file device_launcher_context.cpp
  * \brief
  */
 
-#include "machine/runtime/context/stream_context.h"
+#include "machine/runtime/context/device_launcher_context.h"
 
 namespace npu::tile_fwk {
-StreamContext &GetStreamContext()
+DeviceLauncherContext& DeviceLauncherContext::Get()
 {
-    static thread_local StreamContext context;
+    static DeviceLauncherContext context;
     return context;
-}
-
-RtStream GetContextAiCoreStream()
-{
-    return GetStreamContext().GetAiCoreStream();
-}
-RtStream GetContextScheStream()
-{
-    return GetStreamContext().GetScheStream();
-}
-RtStream GetContextCtrlStream()
-{
-    return GetStreamContext().GetCtrlStream();
 }
 }

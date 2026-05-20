@@ -24,10 +24,9 @@
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "machine/device/dynamic/costmodel_utils.h"
-#include "machine/runtime/device_launcher.h"
-#include "machine/runtime/device_launcher_binding.h"
+#include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/runtime/runtime_utils.h"
-#include "machine/runtime/context/stream_context.h"
 #include "cost_model/simulation/backend.h"
 
 using namespace npu::tile_fwk::dynamic;
@@ -423,13 +422,9 @@ private:
         auto dynAttr = InitKernelRuntime(memoryHelper, kArgs);
         PatchRuntimeDynamicCellMatchMeta(memoryHelper, reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data()),
             reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata));
-        auto aicpuStream = GetStreamContext().GetScheStream();
-        auto aicoreStream = GetStreamContext().GetAiCoreStream();
-        auto ctrlStream = GetStreamContext().GetCtrlStream();
         for (int i = 0; i < config_.repeatNum; i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
-            rc = DeviceRunner::Get().DynamicRun(
-                aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config_.blockdim, config_.aicpuNum);
+            rc = DeviceRunner::Get().DynamicRun(0, &kArgs, config_.blockdim, config_.aicpuNum);
             EXPECT_EQ(rc, 0);
             DeviceRunner::Get().SynchronizeDeviceToHostProfData();
         }

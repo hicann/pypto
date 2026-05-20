@@ -18,10 +18,10 @@
 
 #include <vector>
 
-#include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
-#include "machine/runtime/device_launcher.h"
+#include "device_launcher.h"
 #include "machine/runtime/memory_utils/emulation_memory_utils.h"
+#include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
 class EmulationLauncher {

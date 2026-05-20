@@ -16,7 +16,7 @@
 #pragma once
 
 #include "pybind_common.h"
-#include "machine/runtime/device_launcher_binding.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
 #include "interface/inner/dlpack_dtype.h"
 #include "tilefwk/data_type.h"
 

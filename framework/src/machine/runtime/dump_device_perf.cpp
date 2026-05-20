@@ -27,7 +27,7 @@
 namespace npu::tile_fwk::dynamic {
 constexpr int DUMP_LEVEL_FOUR = 4;
 uint32_t g_last_round_num = 0;
-extern "C" void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& perfData, bool isLast)
+void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& perfData, bool isLast)
 {
     if (GetEnvVar("DUMP_DEVICE_PERF") == "true" && !perfData.empty()) {
         uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ? npu::tile_fwk::dynamic::FREQ_DAV_2201 :

@@ -20,12 +20,10 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
-#include "machine/runtime/device_launcher_binding.h"
-#include "interface/interpreter/raw_tensor_data.h"
-#include "interface/function/function.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "machine/runtime/device_launcher.h"
-#include "machine/utils/machine_ws_intf.h"
+#include "interface/interpreter/raw_tensor_data.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
+
 namespace npu::tile_fwk::dynamic {
 
 struct AicoreModelMemoryUtils {
@@ -98,13 +96,12 @@ class AicoreModelLauncher {
 public:
     static int AicoreModelLaunchOnceWithHostTensorData(
         Function* function, const std::vector<DeviceTensorData>& inputList,
-        const std::vector<DeviceTensorData>& outputList, DevControlFlowCache* ctrlCache, AicoreModelMemoryUtils& memUtils,
+        const std::vector<DeviceTensorData>& outputList, DevControlFlowCache* ctrlCache,
+        AicoreModelMemoryUtils& memUtils, const DeviceLauncherConfig& config = DeviceLauncherConfig());
+    static int AicoreModelRunOnce(Function* function, DevControlFlowCache* inputCtrlCache,
         const DeviceLauncherConfig& config = DeviceLauncherConfig());
-    static int AicoreModelRunOnce(
-        Function* function, DevControlFlowCache* inputCtrlCache, const DeviceLauncherConfig& config = DeviceLauncherConfig());
-    static int AicoreModelLaunchDeviceTensorData(
-            Function* function, const std::vector<DeviceTensorData>& inDevList, const std::vector<DeviceTensorData>& outDevList,
-    const DeviceLauncherConfig& config = DeviceLauncherConfig(), DevControlFlowCache* ctrlCache = nullptr);
-};  
-
+    static int AicoreModelLaunchDeviceTensorData(Function* function, const std::vector<DeviceTensorData>& inDevList,
+        const std::vector<DeviceTensorData>& outDevList, const DeviceLauncherConfig& config = DeviceLauncherConfig(),
+        DevControlFlowCache* ctrlCache = nullptr);
+};
 }

@@ -17,8 +17,9 @@
 #include "interface/interpreter/raw_tensor_data.h"
 #include "operator/models/deepseek/page_attention.h"
 #include "machine/utils/dynamic/dev_encode.h"
-#include "machine/runtime/device_launcher.h"
-#include "machine/runtime/emulation_launcher.h"
+#include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/launcher/emulation_launcher.h"
+#include "machine/runtime/context/device_launcher_context.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -93,7 +94,7 @@ TEST_F(DynamicControlFlowCacheTest, KernelReuse)
         0, EmulationLauncher::BuildControlFlowCache(
                Program::GetInstance().GetLastFunction(), memUtils, {}, {}, &ctrlFlowCache, config));
 
-    DeviceLauncher::DeviceRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
+    DeviceLauncher::SetDevRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
 
 #ifdef BUILD_WITH_CANN
     for (int k = 0; k < 3; k++) {
@@ -411,7 +412,7 @@ TEST_F(DynamicControlFlowCacheTest, PartialCache)
     EXPECT_EQ(false, ctrlFlowCache->isRelocDataDev);
     EXPECT_EQ(false, ctrlFlowCache->isRelocMetaDev);
     EXPECT_EQ(true, ctrlFlowCache->isActivated);
-    DeviceLauncher::DeviceRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
+    DeviceLauncher::SetDevRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
 
     EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(Program::GetInstance().GetLastFunction(), ctrlFlowCache, config));
 
@@ -620,7 +621,7 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependData)
     devProgram->RelocProgram((intptr_t)devProgram, 0);
     ctrlCache->RelocMetaCache((intptr_t)ctrlCache, 0);
 
-    DeviceLauncher::DeviceRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
+    DeviceLauncher::SetDevRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
     EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(Program::GetInstance().GetLastFunction(), ctrlCache, config));
 #ifdef BUILD_WITH_CANN
     for (int k = 0; k < 0x3; k++) {
@@ -706,7 +707,7 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependControl)
     devProg->RelocProgram((intptr_t)devProg, 0);
     ctrlFlowCache->RelocMetaCache((intptr_t)ctrlFlowCache, 0);
 
-    DeviceLauncher::DeviceRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
+    DeviceLauncher::SetDevRunCacheKernelEnable(Program::GetInstance().GetLastFunction(), true);
 
     EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(Program::GetInstance().GetLastFunction(), ctrlFlowCache, config));
 

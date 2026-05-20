@@ -21,7 +21,7 @@
 #include "tilefwk/tilefwk_op.h"
 #include "tilefwk/tilefwk.h"
 #include "machine/device/dynamic/device_utils.h"
-#include "machine/runtime/device_launcher_binding.h"
+#include "machine/runtime/launcher/device_launcher_binding.h"
 #include "test_suite_stest_ops.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "test_dev_func_runner.h"

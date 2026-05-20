@@ -50,4 +50,7 @@ private:
     RtStream currentStream_{nullptr};
 };
 StreamContext &GetStreamContext();
+RtStream GetContextAiCoreStream();
+RtStream GetContextScheStream();
+RtStream GetContextCtrlStream();
 }

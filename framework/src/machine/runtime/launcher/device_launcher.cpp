@@ -13,81 +13,27 @@
  * \brief
  */
 
+#include "machine/runtime/launcher/device_launcher.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_code.h"
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/adump_api.h"
 #include "interface/utils/op_info_manager.h"
 
-#include "machine/runtime/device_launcher.h"
-#include "machine/runtime/device_launcher_binding.h"
 #include "machine/runtime/context/stream_context.h"
-#include "machine/host/backend.h"
+#include "machine/runtime/context/device_launcher_context.h"
 #include "machine/host/perf_analysis.h"
-#include "tilefwk/error_code.h"
 
-struct process_sign {
-    pid_t tgid;
-    char sign[49]; // 49 is PROCESS_SIGN_LENGTH
-    char resv[4];  // 4 is PROCESS_RESV_LENGTH
-};
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
 extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
-extern "C" __attribute__((weak)) int drvGetProcessSign(process_sign* sign);
 
 namespace npu::tile_fwk::dynamic {
-namespace {
-constexpr uint32_t kMinDefaultDim = 20;
-// AIC:AIV的比例系数
-constexpr uint32_t AICAIVRATIO = 2;
-} // namespace
-int GetCfgBlockdim()
-{
-    auto blk = Platform::Instance().GetSoc().GetAICoreNum();
-    blk = blk > 0 ? blk : kMinDefaultDim;
-
-    // 通过GetMaxBlockdim接口获取设置的最大核数，如果设置的最大核数大于硬件物理最大核数时，控核不生效
-    // 如果未进行控核，GetMaxBlockdim接口将通过AclRtGetStreamResLimit函数返回硬件物理最大核数
-    auto maxBlk = GetMaxBlockdim();
-    blk = (maxBlk > 0 && maxBlk < static_cast<int>(blk)) ? maxBlk : blk;
-    MACHINE_LOGD("Get blockdim[%zu].", blk);
-    return blk;
-}
-
-int GetMaxBlockdim()
-{
-    uint32_t cubeBlockDim = 0;
-    uint32_t vectorBlockDim = 0;
-    // 若未进行控核，AclRtGetStreamResLimit返回的是满核
-    auto aicoreStream = GetStreamContext().GetCurrentStream();
-    AclRtGetStreamResLimit(aicoreStream, AclRtDevResLimitType::CUBE_CORE, &cubeBlockDim);
-    AclRtGetStreamResLimit(aicoreStream, AclRtDevResLimitType::VECTOR_CORE, &vectorBlockDim);
-    // 若不满足AIC和AIV的比例，手动处理成为符合AIC和AIV的比例最大值
-    if (vectorBlockDim != cubeBlockDim * AICAIVRATIO) {
-        auto rtsMaxBlockDim = std::min(cubeBlockDim, vectorBlockDim / AICAIVRATIO);
-        MACHINE_LOGW(
-            "The cubeBlockDim[%u] and vectorBlockDim[%u] do not conform to the 1: %u ratio of AIC and AIV, "
-            "and will be set to values that conform to the ratio of AIC and AIV. "
-            "The cubeBlockDim and vectorBlockDim are set at %u and %u",
-            cubeBlockDim, vectorBlockDim, AICAIVRATIO, rtsMaxBlockDim, rtsMaxBlockDim * AICAIVRATIO);
-        return rtsMaxBlockDim;
-    } else {
-        return cubeBlockDim;
-    }
-}
-
-void (*forceLinkLibraryCompiler)() = &npu::tile_fwk::ForceLinkLibraryCompiler;
-
-DeviceLauncherContext& DeviceLauncherContext::Get()
-{
-    static DeviceLauncherContext context;
-    return context;
-}
-
+bool DeviceLauncher::inited_ = false;
 std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
-bool DeviceLauncher::captureMode_ = false;
+std::unordered_map<Function*, DeviceLauncher::DeviceRunCacheInfo> DeviceLauncher::cacheInfoDict_;
 
-static const std::unordered_map<AclMdlRICaptureStatus, std::function<void(bool&)>> captureStatusHandlers = {
+const std::unordered_map<AclMdlRICaptureStatus, std::function<void(bool&)>> captureStatusHandlers = {
     {npu::tile_fwk::AclMdlRICaptureStatus::ACTIVE, [](bool& isCapture) { isCapture = true; }},
     {npu::tile_fwk::AclMdlRICaptureStatus::NONE,
      [](bool& isCapture) {
@@ -147,7 +93,6 @@ int DeviceLauncher::SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream
         if (rtModel == nullptr) {
             MACHINE_LOGE(DevCommonErr::NULLPTR, "rtModel is null!");
             return -1;
-            ;
         }
         RtError ret = RuntimeStreamAddToModel(aicpuStream, rtModel);
         if (ret != 0) {
@@ -178,12 +123,14 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
 
 int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     Function* function, const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList,
-    RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream, bool streamSynchronize,
-    CachedOperator* cachedOperator, DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
+    RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator,
+    DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
 {
     bool isCapture = false;
     MACHINE_LOGI("Kernel Launch");
-
+    RtStream aicpuStream = GetContextScheStream();
+    RtStream ctrlStream = GetContextCtrlStream();
+    aicoreStream = aicoreStream == nullptr ? GetContextAiCoreStream() : aicoreStream;
     HOST_PERF_TRACE(TracePhase::RunDeviceInit);
 
     if (cachedOperator == nullptr) { // st scene
@@ -192,13 +139,13 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         }
     }
 
-    /* 1.Add stream to capture model*/
+    // 1.Add stream to capture model
     int rc = SetCaptureStream(aicoreStream, aicpuStream, isCapture);
     if (rc < 0) {
         return rc;
     }
 
-    /* 2. Change capture mode to relaxed*/
+    // 2. Change capture mode to relaxed
     if (isCapture) {
         ChangeCaptureModeRelax();
     }
@@ -214,8 +161,8 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     if (cachedOperator == nullptr) {
         // Not python cached operator mode, consider kernel reuse mode
-        if (DeviceRunCacheKernelEnable(function)) {
-            cachedOperator = DeviceRunCacheOperatorGet(function);
+        if (IsDevRunCacheKernelEnable(function)) {
+            cachedOperator = GetDevRunCacheOperator(function);
         }
     }
 
@@ -230,7 +177,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     DeviceInitTilingData(devMemoryUtilis, kArgs, dynAttr->devProgBinary, inputDevCtrlCache, config, cachedOperator);
     HOST_PERF_TRACE(TracePhase::RunDevInitTiling);
 
-    DeviceRunCacheKernelSet(function, (uint8_t*)kArgs.cfgdata);
+    SetDevRunCacheKernel(function, (uint8_t*)kArgs.cfgdata);
     DeviceInitKernelInOuts(devMemoryUtilis, kArgs, inputList, outputList, dynAttr->disableL2List);
 
     HOST_PERF_TRACE(TracePhase::RunDevInitInOutTensor);
@@ -277,9 +224,6 @@ int DeviceLauncher::DeviceRunOnce(
 {
     auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
-    auto aicpuStream = GetStreamContext().GetScheStream();
-    auto aicoreStream = GetStreamContext().GetAiCoreStream();
-    auto ctrlStream = GetStreamContext().GetCtrlStream();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     DeviceMemoryUtils devMemoryUtilis(true);
@@ -293,9 +237,8 @@ int DeviceLauncher::DeviceRunOnce(
             devMemory.CopyToDev(reinterpret_cast<uint8_t*>(hostCtrlCache), hostCtrlCache->usedCacheSize, nullptr);
     }
 
-    int rc = DeviceLaunchOnceWithDeviceTensorData(
-        function, inputDeviceDataList, outputDeviceDataList, aicpuStream, ctrlStream, aicoreStream, true, nullptr,
-        reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
+    int rc = DeviceLaunchOnceWithDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, nullptr, true,
+        nullptr, reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
     CopyFromDev(DeviceMemoryUtils(), outputDataList);
     if (HasInplaceArgs(function) || outputDataList.size() == 0) {
         CopyFromDev(DeviceMemoryUtils(), inputDataList);
@@ -304,118 +247,33 @@ int DeviceLauncher::DeviceRunOnce(
     return rc;
 }
 
-struct DeviceRunCacheInfo {
-    /* By default: devProg cache is enabled */
-    bool devProgEnabled{true};
-    CachedOperator cacheOperator;
-};
-static std::unordered_map<Function*, DeviceRunCacheInfo>& DeviceRunCacheInfoDict()
+void DeviceLauncher::SetDevRunCacheKernelEnable(Function* func, bool enabled)
 {
-    static std::unordered_map<Function*, DeviceRunCacheInfo> cacheInfoDict;
-    return cacheInfoDict;
+    cacheInfoDict_[func].devProgEnabled = enabled;
 }
-void DeviceLauncher::DeviceRunCacheKernelEnable(Function* func, bool enabled)
+
+bool DeviceLauncher::IsDevRunCacheKernelEnable(Function* func)
 {
-    auto& dict = DeviceRunCacheInfoDict();
-    dict[func].devProgEnabled = enabled;
+    return cacheInfoDict_[func].devProgEnabled;
 }
-bool DeviceLauncher::DeviceRunCacheKernelEnable(Function* func)
+
+void DeviceLauncher::SetDevRunCacheKernel(Function* func, uint8_t* devProg)
 {
-    auto& dict = DeviceRunCacheInfoDict();
-    return dict[func].devProgEnabled;
-}
-void DeviceLauncher::DeviceRunCacheKernelSet(Function* func, uint8_t* devProg)
-{
-    if (!DeviceRunCacheKernelEnable(func)) {
+    if (!IsDevRunCacheKernelEnable(func)) {
         return;
     }
-    auto& dict = DeviceRunCacheInfoDict();
-    *CachedOperator::GetCfgDataDevAddrHolder(&(dict[func].cacheOperator)) = devProg;
+    *CachedOperator::GetCfgDataDevAddrHolder(&(cacheInfoDict_[func].cacheOperator)) = devProg;
 }
 
-uint8_t* DeviceLauncher::DeviceRunCacheKernelGet(Function* func)
+CachedOperator* DeviceLauncher::GetDevRunCacheOperator(Function* func)
 {
-    if (!DeviceRunCacheKernelEnable(func)) {
+    if (!IsDevRunCacheKernelEnable(func)) {
         return nullptr;
     }
-    auto& dict = DeviceRunCacheInfoDict();
-    return *CachedOperator::GetCfgDataDevAddrHolder(&(dict[func].cacheOperator));
+    return &(cacheInfoDict_[func].cacheOperator);
 }
 
-CachedOperator* DeviceLauncher::DeviceRunCacheOperatorGet(Function* func)
-{
-    if (!DeviceRunCacheKernelEnable(func)) {
-        return nullptr;
-    }
-    auto& dict = DeviceRunCacheInfoDict();
-    return &(dict[func].cacheOperator);
-}
-
-DeviceStream DeviceGetAicpuStream()
-{
-    RtStream aicpuStreamValue = GetStreamContext().GetScheStream();
-    return reinterpret_cast<DeviceStream>(aicpuStreamValue);
-}
-
-DeviceStream DeviceGetCtrlStream()
-{
-    RtStream ctrlStreamValue = GetStreamContext().GetCtrlStream();
-    return reinterpret_cast<DeviceStream>(ctrlStreamValue);
-}
-
-DeviceStream DeviceGetAicoreStream()
-{
-    RtStream aicoreStreamValue = GetStreamContext().GetAiCoreStream();
-    return reinterpret_cast<DeviceStream>(aicoreStreamValue);
-}
-
-int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
-    ExportedOperator* op, const std::vector<DeviceTensorData>& inputList,
-    const std::vector<DeviceTensorData>& outputList, DeviceStream aicpuStream, DeviceStream ctrlStream,
-    DeviceStream aicoreStream, bool streamSynchronize, uint8_t* devCtrlCache, const DeviceLauncherConfig& config)
-{
-    RtStream aicpuStreamValue = reinterpret_cast<RtStream>(aicpuStream);
-    RtStream ctrlStreamValue = reinterpret_cast<RtStream>(ctrlStream);
-    RtStream aicoreStreamValue = reinterpret_cast<RtStream>(aicoreStream);
-    return DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
-        op->GetFunction(), inputList, outputList, aicpuStreamValue, ctrlStreamValue, aicoreStreamValue,
-        streamSynchronize, op, reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
-}
-
-int DeviceSynchronize(DeviceStream aicpuStream, DeviceStream aicoreStream)
-{
-    RtStream aicpuStreamValue = reinterpret_cast<RtStream>(aicpuStream);
-    RtStream aicoreStreamValue = reinterpret_cast<RtStream>(aicoreStream);
-    return DeviceLauncher::DeviceSynchronize(aicpuStreamValue, aicoreStreamValue);
-}
-
-int DeviceRunOnce(Function* function, uint8_t* hostCtrlCache, const DeviceLauncherConfig& config)
-{
-    return DeviceLauncher::DeviceRunOnce(function, reinterpret_cast<DevControlFlowCache*>(hostCtrlCache), config);
-}
-
-int HasInplaceArgs(Function* function) { return DeviceLauncher::HasInplaceArgs(function); }
-
-void DeviceLauncherInit() { DeviceLauncherContext::Get().DeviceInit(); }
-
-void DeviceLauncherFini() { DeviceLauncherContext::Get().DeviceFini(); }
-
-void ChangeCaptureModeRelax() { DeviceLauncher::ChangeCaptureModeRelax(); }
-
-void ChangeCaptureModeGlobal() { DeviceLauncher::ChangeCaptureModeGlobal(); }
-
-static std::unordered_map<ExportedOperator*, std::shared_ptr<ExportedOperator>> exportedOperatorDict;
-
-ExportedOperator* ExportedOperatorBegin()
-{
-    std::shared_ptr<ExportedOperator> op = std::make_shared<ExportedOperator>();
-    exportedOperatorDict[op.get()] = op;
-    return op.get();
-}
-
-void ExportedOperatorEnd(ExportedOperator* op) { op->ResetFunction(Program::GetInstance().GetLastFunction()); }
-
-void DataDumpInit()
+void DeviceLauncher::DataDumpInit()
 {
     if (IsPtoDataDumpEnabled()) {
         if (!AdxDataDumpServerInit) {
@@ -430,7 +288,7 @@ void DataDumpInit()
     }
 }
 
-void DataDumpUnInit()
+void DeviceLauncher::DataDumpUnInit()
 {
     if (IsPtoDataDumpEnabled()) {
         if (!AdxDataDumpServerUnInit) {
@@ -447,19 +305,20 @@ void DataDumpUnInit()
 
 int32_t DataFormat2CannFormat(const TileOpFormat format)
 {
-    constexpr int32_t GE_FORAMT_ND = 2;
-    constexpr int32_t GE_FORAMT_NZ = 29;
+    constexpr int32_t GE_FORMAT_ND = 2;
+    constexpr int32_t GE_FORMAT_NZ = 29;
     switch (format) {
         case TileOpFormat::TILEOP_ND:
-            return GE_FORAMT_ND;
+            return GE_FORMAT_ND;
         case TileOpFormat::TILEOP_NZ:
-            return GE_FORAMT_NZ;
+            return GE_FORMAT_NZ;
         default:
             throw std::invalid_argument("Unknown Format");
     }
 }
 
-void DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors, const std::string& funcName)
+void DeviceLauncher::DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors,
+    const std::string& funcName)
 {
     if (AdxDumpGetDumpSwitch(AdxDumpType::OPERATOR) != 0) {
         std::vector<AdxTensorInfoV2> dumpTensors;
@@ -478,67 +337,6 @@ void DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& te
         }
         AdxDumpDumpTensorV2(funcName, funcName, dumpTensors, stream);
     }
-}
-
-uint32_t GetProcessId()
-{
-    if (drvGetProcessSign != nullptr) {
-        process_sign processSign;
-        auto ret = drvGetProcessSign(&processSign);
-        if (ret == 0) {
-            MACHINE_LOGD("Got process sign from drv: tgid=%d", processSign.tgid);
-            return static_cast<uint32_t>(processSign.tgid);
-        }
-        MACHINE_LOGW("drvGetProcessSign failed, ret=%d, falling back to getpid()", ret);
-    } else {
-        MACHINE_LOGW("drvGetProcessSign is nullptr, falling back to getpid()");
-    }
-
-    uint32_t pid = static_cast<uint32_t>(getpid());
-    MACHINE_LOGD("Using getpid(): pid=%u", pid);
-    return pid;
-}
-
-void CopyDevToHost(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
-{
-    DeviceMemoryUtils().CopyFromDev(
-        (uint8_t*)hostTensor.GetAddr(), (uint8_t*)devTensor.GetAddr(), devTensor.GetDataSize());
-}
-
-void CopyHostToDev(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
-{
-    DeviceMemoryUtils().CopyToDev(
-        (uint8_t*)devTensor.GetAddr(), (uint8_t*)hostTensor.GetAddr(), devTensor.GetDataSize());
-}
-
-uint8_t* CopyHostToDev(uint8_t* data, uint64_t size)
-{
-    return DeviceMemoryUtils(false).CopyToDev((uint8_t*)data, size, nullptr);
-}
-
-DeviceGuard::DeviceGuard(int32_t devId) : nDevId(devId)
-{
-    (void)RuntimeGetDevice(&oDevId);
-    if (nDevId != oDevId) {
-        RuntimeSetDevice(nDevId);
-    }
-}
-
-DeviceGuard::~DeviceGuard()
-{
-    if (nDevId != oDevId) {
-        RuntimeSetDevice(oDevId);
-    }
-}
-
-AclModeGuard::AclModeGuard(AclMdlRICaptureMode tmode) : mode(tmode)
-{
-    AclMdlRICaptureThreadExchangeMode(&mode);
-}
-AclModeGuard::~AclModeGuard()
-{
-    AclMdlRICaptureMode mod = AclMdlRICaptureMode::GLOBAL;
-    AclMdlRICaptureThreadExchangeMode(&mod);
 }
 
 void DeviceLauncher::FillDeviceKernelArgs(
@@ -584,12 +382,9 @@ void DeviceLauncher::FreeControlFlowCache(uint8_t* ctrlCache)
 
 void DeviceLauncher::AddAicpuStream(AclMdlRI& rtModel)
 {
-    auto ctrlStream = GetStreamContext().GetCtrlStream();
-    auto schedtream = GetStreamContext().GetScheStream();
-
     if (IsCaptureMode()) {
-        RuntimeStreamAddToModel(ctrlStream, rtModel);
-        RuntimeStreamAddToModel(schedtream, rtModel);
+        RuntimeStreamAddToModel(GetContextCtrlStream(), rtModel);
+        RuntimeStreamAddToModel(GetContextScheStream(), rtModel);
     }
 }
 
@@ -601,7 +396,7 @@ void DeviceLauncher::SaveStream(AclRtStream aicoreStream)
 
 void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
 {
-    SetCaptureMode(false);
+    DeviceLauncherContext::Get().SetCaptureMode(false);
     AclMdlRICaptureStatus status = AclMdlRICaptureStatus::NONE;
     auto ret = AclMdlRICaptureGetInfo(aicoreStream, &status, &rtModel);
     if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
@@ -611,14 +406,12 @@ void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
         return;
     }
     if (status == AclMdlRICaptureStatus::ACTIVE) {
-        SetCaptureMode(true);
+        DeviceLauncherContext::Get().SetCaptureMode(true);
         MACHINE_LOGI("The current mode is capture mode");
     }
 }
 
-void DeviceLauncher::SetCaptureMode(bool captureMode) { captureMode_ = captureMode; }
-
-bool DeviceLauncher::IsCaptureMode() { return captureMode_; }
+bool DeviceLauncher::IsCaptureMode() { return DeviceLauncherContext::Get().IsCaptureMode(); }
 
 void* DeviceLauncher::RegisterKernelBin(const std::vector<uint8_t>& kernelBinary)
 {
@@ -645,8 +438,7 @@ void DeviceLauncher::UnregisterKernelBin(void* hdl)
     }
 }
 
-void DeviceLauncher::SetDevPerfAddr(
-    [[maybe_unused]] const bool& debugEnable, [[maybe_unused]] const bool& isCaptureMode)
+void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode)
 {
     auto& devRunner = DeviceRunner::Get();
     if (debugEnable || devRunner.GetEnableDumpDevPref() || devRunner.GetHostProfInstance().GetProfType() == 1) {

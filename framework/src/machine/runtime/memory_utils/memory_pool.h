@@ -51,18 +51,18 @@ public:
 
     bool AllocDevAddrInPool(uint8_t** devAddr, uint64_t size);
     void FreeDevAddr(void* ptr);
-    void PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize);
     bool CheckAllSentinels();
-    void PrintSentinelVal(std::vector<uint64_t>& sentinelVal, uint8_t* sentinelAddr);
-    bool CheckSentinel(uint8_t* baseAddr, bool remove = true);
-    void DynamicRecycle();
     void DestroyPool();
-    void PrintPoolStatus();
 
 private:
-    void FreeMemBlock(MemoryBlock* block);
+    static void FreeMemBlock(MemoryBlock* block);
+    static void PrintSentinelVal(std::vector<uint64_t>& sentinelVal, uint8_t* sentinelAddr);
+    void PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize);
+    bool CheckSentinel(uint8_t* baseAddr, bool remove = true);
     void RecordAllocation(void* ptr, MemoryBlock* block, size_t size);
     MemoryBlock* CreateNewBlock(uint64_t alignSize);
+    void DynamicRecycle();
+    void PrintPoolStatus() const;
 
     std::vector<MemoryBlock*> memoryBlocks_;
     std::unordered_map<void*, MemoryBlock*> addrToBlock_;

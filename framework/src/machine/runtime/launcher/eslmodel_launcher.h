@@ -9,15 +9,16 @@
  */
 
 /*!
-* \file eslmodel_memory_utils.h
+* \file eslmodel_launcher.h
 * \brief
 */
 
 #pragma once
 
+#include <vector>
 #include <sys/mman.h>
 #include "adapter/api/acl_define.h"
-#include "machine/runtime/device_launcher_binding.h"
+#include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -27,7 +28,6 @@ public:
     static int EslModelLaunchDeviceTensorData(Function *function,
         const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
         RtStream aicpuStream, RtStream aicoreStream, void *kernel, const DeviceLauncherConfig &config);
-    static void ExchangeCaputerMode(const bool &isCapture);
     static int DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStream aicoreStream, void *kernel);
     static int EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs);
     static void CopyInputOutputData();

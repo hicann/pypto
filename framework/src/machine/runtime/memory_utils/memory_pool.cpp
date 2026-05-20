@@ -314,7 +314,7 @@ void DevMemoryPool::DestroyPool()
     MACHINE_LOGI("MemPool destroyed, all memory freed");
 }
 
-void DevMemoryPool::PrintPoolStatus()
+void DevMemoryPool::PrintPoolStatus() const
 {
     size_t cnt_1g = 0;
     size_t cnt_2m = 0;
@@ -379,5 +379,4 @@ MemoryBlock* DevMemoryPool::CreateNewBlock(uint64_t alignSize)
     MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "All memory alloc strategies failed");
     return nullptr;
 }
-
 } // namespace npu::tile_fwk

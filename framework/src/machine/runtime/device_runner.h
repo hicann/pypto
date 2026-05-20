@@ -21,14 +21,11 @@
 #include <vector>
 #include <mutex>
 #include <unistd.h>
-#include <sys/file.h>
 #include <thread>
 #include <atomic>
-#include <condition_variable>
 #include "tilefwk/platform.h"
 #include "machine/runtime/host_prof.h"
 #include "machine/utils/machine_ws_intf.h"
-#include "machine/runtime/pmu_common.h"
 
 namespace npu::tile_fwk {
 struct FileLock {
@@ -62,9 +59,7 @@ public:
         RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream, int64_t taskId,
         DeviceKernelArgs* kernelArgs, int blockdim, int launchAicpuNum);
     int DynamicLaunchSynchronize(RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream);
-    int DynamicRun(
-        RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream, int64_t taskId,
-        DeviceKernelArgs* kernelArgs, int blockdim = 25, int launchAicpuNum = 5);
+    int DynamicRun(int64_t taskId, DeviceKernelArgs* kernelArgs, int blockdim = 25, int launchAicpuNum = 5);
     void InitDynamicArgs(DeviceArgs& args);
     int RegisterKernelBin(void** hdl, std::vector<uint8_t>* funcBinBuf = nullptr);
     static void SetBinData(const std::vector<uint8_t>& binBuf);
