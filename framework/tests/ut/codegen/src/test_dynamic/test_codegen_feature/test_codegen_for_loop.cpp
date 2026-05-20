@@ -142,9 +142,9 @@ TEST_F(TestCodegenForLoop, TestForLoop)
 
     const std::string expect3 = R"(
         auto tileOffsets = TileOffset(0, idx1, idx2);
-        ubTensor_35_low2DimInLoop.SetAddr(ubTensor_35.GetLinearAddr(tileOffsets));
-        ubTensor_39_low2DimInLoop.SetAddr(ubTensor_39.GetLinearAddr(tileOffsets));
-        TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_39_low2DimInLoop, ubTensor_35_low2DimInLoop, ubTensor_40);
+        ubTensor_34_low2DimInLoop.SetAddr(ubTensor_34.GetLinearAddr(tileOffsets));
+        ubTensor_38_low2DimInLoop.SetAddr(ubTensor_38.GetLinearAddr(tileOffsets));
+        TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_38_low2DimInLoop, ubTensor_34_low2DimInLoop, ubTensor_39);
 )";
     CheckStringExist(expect3, res);
 }

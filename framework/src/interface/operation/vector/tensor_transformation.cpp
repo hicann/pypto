@@ -604,8 +604,9 @@ void TiledCastOperation(
         DataType dstDtype = resultTile->Datatype();
 
         bool needTmpBuffer = false;
-        if ((srcDtype == DT_FP32 && dstDtype == DT_INT16) || (srcDtype == DT_FP16 && dstDtype == DT_INT16) ||
-            (srcDtype == DT_FP16 && dstDtype == DT_INT8)) {
+        if (((srcDtype == DT_FP32 && dstDtype == DT_INT16) || (srcDtype == DT_FP16 && dstDtype == DT_INT16) ||
+             (srcDtype == DT_FP16 && dstDtype == DT_INT8)) &&
+            satmode == SaturationMode::OFF) {
             needTmpBuffer = true;
         }
 

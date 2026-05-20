@@ -155,7 +155,6 @@ REGISTER_INFER_SHAPE_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_HUB, Opcode::OP_HUB, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_SIN, Opcode::OP_SIN, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_COS, Opcode::OP_COS, ElewiseInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_CAST, Opcode::OP_CAST, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_DIVS, Opcode::OP_DIVS, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_SUBS, Opcode::OP_SUBS, ElewiseInferFunc);
@@ -277,6 +276,14 @@ void IndexOutCastInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar
         OpImmediate::Specified(op->GetIOperands()[input_dim]->GetDynValidShape()));
 }
 REGISTER_INFER_SHAPE_FUNC(OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, IndexOutCastInferFunc);
+
+void CastInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto srcValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    outValidShapes.push_back(srcValidShape);
+    outValidShapes.push_back({1, srcValidShape[srcValidShape.size() - 1]});
+}
+REGISTER_INFER_SHAPE_FUNC(OP_CAST, Opcode::OP_CAST, CastInferFunc);
 
 void GatherElementInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

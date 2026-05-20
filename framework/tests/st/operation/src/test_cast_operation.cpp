@@ -36,6 +36,30 @@ struct CastOpMetaData {
     nlohmann::json test_data_;
 };
 
+static void CastOperationExeFuncOneCut(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0]}, {outputs[0]})
+    {
+        SymbolicScalar firstDim = inputs[0].GetShape()[0];
+        auto args = static_cast<const CastOpFuncArgs*>(opArgs);
+        const int firstViewShape = args->viewShape_[0];
+        const int bloop = CeilDiv(firstDim, firstViewShape);
+
+        DataType castDType = outputs[0].GetDataType();
+
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            auto tileTensor0 = View(
+                inputs[0], {firstViewShape}, {std::min(firstDim - bIdx * firstViewShape, firstViewShape)},
+                {bIdx * firstViewShape});
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = Cast(tileTensor0, castDType, args->castMode_);
+            Assemble(res, {bIdx * firstViewShape}, outputs[0]);
+        }
+    }
+}
+
 static void CastOperationExeFuncDoubleCut(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -163,8 +187,11 @@ class CastOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac
 
 INSTANTIATE_TEST_SUITE_P(
     TestCast, CastOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<CastOpMetaData>(
-        {CastOperationExeFuncDoubleCut, CastOperationExeFuncTripleCut, CastOperationExeFuncQuadrupleCut}, "Cast")));
+    ::testing::ValuesIn(
+        GetOpMetaData<CastOpMetaData>(
+            {CastOperationExeFuncOneCut, CastOperationExeFuncDoubleCut, CastOperationExeFuncTripleCut,
+             CastOperationExeFuncQuadrupleCut},
+            "Cast")));
 
 TEST_P(CastOperationTest, TestCast)
 {
@@ -172,6 +199,10 @@ TEST_P(CastOperationTest, TestCast)
     auto mode = static_cast<CastMode>(GetValueByName<int>(test_data, "mode"));
     auto args = CastOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), mode);
     auto testCase = CreateTestCaseDesc<CastOpMetaData>(GetParam(), &args);
+    std::vector<OpFunc> opFuncs = {
+        CastOperationExeFuncOneCut, CastOperationExeFuncDoubleCut, CastOperationExeFuncTripleCut,
+        CastOperationExeFuncQuadrupleCut};
+    testCase.opFunc = opFuncs[GetViewShape(test_data).size() - 1];
     TestExecutor::runTest(testCase);
 }
 } // namespace
