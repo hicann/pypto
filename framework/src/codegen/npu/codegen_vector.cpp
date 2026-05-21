@@ -43,7 +43,7 @@ std::string CodeGenOpNPU::GenCastOp() const
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
     AppendLocalBufVarOffsetInOrder(dVar, s0Var);
-    std::vector<int64_t> os = NormalizeShape(originShape[0], SHAPE_DIM4);
+    std::vector<int64_t> os = NormalizeShape(shape[0], SHAPE_DIM4);
     std::vector<int64_t> ss = NormalizeShape(rawShape[srcIdx], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
 
@@ -108,7 +108,7 @@ std::string CodeGenOpNPU::PrintDupOpStatic(const PrintDupOpParam& param) const
     const std::string& dupV = param.dupV;
     AppendLocalBufVarOffsetInOrder(dVar);
     // dst origin shape
-    std::vector<int64_t> dos = NormalizeShape(originShape[0], SHAPE_DIM4);
+    std::vector<int64_t> dos = NormalizeShape(shape[0], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
 
     std::ostringstream os;
@@ -256,7 +256,7 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveLayout(const PrintTransposeDataM
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
-    int correctionAxis = SHAPE_DIM5 - originShape[param.localIdx].size();
+    int correctionAxis = SHAPE_DIM5 - shape[param.localIdx].size();
     std::vector<std::string> uselessVector0;
     std::vector<std::string> uselessVector1;
     std::vector<std::string> uselessVector2;
@@ -277,7 +277,7 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveStatic(const PrintTransposeDataM
     const std::string& localDtypeStr = param.localDtypeStr;
     const std::string& gmDtypeStr = param.gmDtypeStr;
     std::string dstVar = GenGmParamVar(ID0);
-    std::vector<int64_t> os = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> os = NormalizeShape(shape[1], SHAPE_DIM4);
     std::vector<int64_t> gmShape = NormalizeShape(param.gmShape, SHAPE_DIM4);
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::ostringstream oss;
@@ -294,7 +294,7 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveStatic(const PrintTransposeDataM
         paramList.emplace_back(std::to_string(srcShape[i]));
     }
     std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
-    int correctionAxis = SHAPE_DIM4 - originShape[0].size();
+    int correctionAxis = SHAPE_DIM4 - shape[0].size();
     for (auto& axis : transposeAxis) {
         axis += correctionAxis;
         paramList.emplace_back(std::to_string(axis));
@@ -328,7 +328,7 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveDynamic(const PrintTransposeData
     FillVecWithDummyInHead<std::string>(gmOffsetExpr, SHAPE_DIM4 - dim, "0");
     CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
 
-    std::vector<int64_t> os = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> os = NormalizeShape(shape[1], SHAPE_DIM4);
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::ostringstream oss;
     std::vector<std::string> paramList;
@@ -340,7 +340,7 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveDynamic(const PrintTransposeData
         paramList.emplace_back(std::to_string(srcShape[i]));
     }
     std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
-    int correctionAxis = SHAPE_DIM4 - originShape[1].size();
+    int correctionAxis = SHAPE_DIM4 - shape[1].size();
     for (auto& axis : transposeAxis) {
         axis += correctionAxis;
         paramList.emplace_back(std::to_string(axis));
@@ -388,7 +388,7 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveDynamicUnaligned(const PrintTran
         paramList.emplace_back(std::to_string(localShape[i]));
     }
     std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
-    int correctionAxis = SHAPE_DIM5 - originShape[localIdx].size();
+    int correctionAxis = SHAPE_DIM5 - shape[localIdx].size();
     for (auto& axis : transposeAxis) {
         axis += correctionAxis;
         paramList.emplace_back(std::to_string(axis));

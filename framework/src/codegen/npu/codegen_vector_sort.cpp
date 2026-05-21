@@ -72,7 +72,7 @@ std::string CodeGenOpNPU::PrintSortStatic(const SortParam& param) const
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& tmpDtypeStr = param.tmpDtypeStr;
-    const std::vector<int64_t>& oriSrc0Shape = originShape[1];
+    const std::vector<int64_t>& oriSrc0Shape = shape[1];
     constexpr unsigned defaultDim = 1u;
     if (oriSrc0Shape.size() == 1) {
         orisrcShape0 = defaultDim;

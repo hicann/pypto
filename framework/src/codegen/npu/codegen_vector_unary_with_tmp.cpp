@@ -27,7 +27,7 @@ std::string CodeGenOpNPU::PrintVnchwconvStatic(const PrintUnaryTmpBuffParam& par
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& tmpDtypeStr = param.tmpDtypeStr;
     const std::string& dstDtypeStr = param.dstDtypeStr;
-    std::vector<int64_t> os0 = NormalizeShape(originShape[ID2], SHAPE_DIM5);
+    std::vector<int64_t> os0 = NormalizeShape(shape[ID2], SHAPE_DIM5);
     std::vector<int64_t> s0 = NormalizeShape(rawShape[ID2], SHAPE_DIM5);
     std::vector<int64_t> ds = NormalizeShape(rawShape[ID0], SHAPE_DIM5);
     std::ostringstream os;
@@ -128,8 +128,8 @@ std::string CodeGenOpNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam& para
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
     int ret = 0;
 
-    std::vector<int64_t> dstOriginShape = NormalizeShape(originShape[ID0], SHAPE_DIM4);
-    std::vector<int64_t> srcOriginShape = NormalizeShape(originShape[ID2], SHAPE_DIM4);
+    std::vector<int64_t> dstOriginShape = NormalizeShape(shape[ID0], SHAPE_DIM4);
+    std::vector<int64_t> srcOriginShape = NormalizeShape(shape[ID2], SHAPE_DIM4);
     std::vector<int64_t> srcRawShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> dstRawShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
     std::vector<int64_t> tmpRawShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
@@ -258,7 +258,7 @@ std::string CodeGenOpNPU::PrintUnaryOpWithTmpTwoBuff() const
     std::string tmp0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MILOIdx::TMP_IDX));
     std::string tmp1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MILOIdx::TMP2_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MILOIdx::SRC0_IDX));
-    
+
     std::vector<std::string> tileOpCallParamList = {dstTensor, tmp0Tensor, tmp1Tensor, srcTensor};
     std::ostringstream oss;
     oss << tileOpName;
@@ -313,7 +313,7 @@ std::string CodeGenOpNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffParam& pa
     std::vector<int64_t> dstShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
     std::vector<int64_t> tmpShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
-    std::vector<int64_t> os = NormalizeShape(originShape[ID2], SHAPE_DIM4);
+    std::vector<int64_t> os = NormalizeShape(shape[ID2], SHAPE_DIM4);
 
     std::vector<std::string> paramList;
     paramList.emplace_back(param.dstDtypeStr);
@@ -462,7 +462,8 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         return PrintVnchwconv({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
-    if (opCode == Opcode::OP_SIGN || opCode == Opcode::OP_SIGNBIT || opCode == Opcode::OP_SINH || opCode == Opcode::OP_COSH) {
+    if (opCode == Opcode::OP_SIGN || opCode == Opcode::OP_SIGNBIT || opCode == Opcode::OP_SINH ||
+        opCode == Opcode::OP_COSH) {
         return PrintUnaryWithTmpTileTensor();
     }
 

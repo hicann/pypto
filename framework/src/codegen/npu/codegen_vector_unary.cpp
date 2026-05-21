@@ -114,7 +114,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineStatic(const PrintUnaryParam& param) co
     reduceAxis += SHAPE_DIM4 - rawShape[0].size();
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> dstShape = NormalizeShape(rawShape[0], SHAPE_DIM4);
-    std::vector<int64_t> os = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> os = NormalizeShape(shape[1], SHAPE_DIM4);
 
     std::vector<std::string> paramList;
     paramList.emplace_back(param.dstDtypeStr);
@@ -223,7 +223,7 @@ std::string CodeGenOpNPU::PrintReduceExStatic(const PrintUnaryParam& param) cons
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& dVar = param.dVar;
     const std::string& s0Var = param.s0Var;
-    std::vector<int64_t> oriShape = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> oriShape = NormalizeShape(shape[1], SHAPE_DIM4);
     std::vector<int64_t> dstRawShape = NormalizeShape(rawShape[0], SHAPE_DIM4);
     std::ostringstream oss;
     std::vector<std::string> paramList;
@@ -380,8 +380,8 @@ std::string CodeGenOpNPU::PrintExpand(
     const std::string& s0Var, const std::string& dVar, const std::string& srcDtypeStr,
     const std::string& dstDtypeStr) const
 {
-    std::vector<int64_t> dos = NormalizeShape(originShape[0], SHAPE_DIM4);
-    std::vector<int64_t> os = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> dos = NormalizeShape(shape[0], SHAPE_DIM4);
+    std::vector<int64_t> os = NormalizeShape(shape[1], SHAPE_DIM4);
     std::vector<int64_t> ss = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
     auto axesAttr = opAttrs.at(OpAttributeKey::expandDims);
@@ -514,7 +514,7 @@ std::string CodeGenOpNPU::PrintUnaryStatic(const PrintUnaryParam& param) const
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& dVar = param.dVar;
     const std::string& s0Var = param.s0Var;
-    std::vector<int64_t> os0 = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> os0 = NormalizeShape(shape[1], SHAPE_DIM4);
     std::vector<int64_t> ss = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
 

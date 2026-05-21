@@ -116,10 +116,10 @@ std::string CodeGenOpNPU::GenCubeOp(bool zeroC) const
             << SymbolicExpressionTable::BuildExpression(nSymbol) << ", " << (zeroC ? "true" : "false") << ", " << uf
             << ", " << SymbolicExpressionTable::BuildExpression(l0cShapeDyn[ID0]) << ", "
             << SymbolicExpressionTable::BuildExpression(l0cShapeDyn[ID1]) << ");\n";
-    } else {                               // static function
-        int64_t m = originShape[ID0][ID0];
-        int64_t k = originShape[ID1][ID1]; // NEXTNEXT assume A is not transposed for now
-        int64_t n = originShape[ID0][ID1];
+    } else {                         // static function
+        int64_t m = shape[ID0][ID0];
+        int64_t k = shape[ID1][ID1]; // NEXTNEXT assume A is not transposed for now
+        int64_t n = shape[ID0][ID1];
         oss << tileOpName << "<" << cDtypeStr << ", " << aDtypeStr << ", " << bDtypeStr << ", " << offset[ID0][ID0]
             << ", " << offset[ID0][ID1] << ", " << m << ", " << n << ">"
             << "((" << GetAddrTypeByOperandType(operandType[ID0]) << " " << cDtypeStr << "*)" << cVar << ", "

@@ -101,9 +101,7 @@ protected:
     std::vector<int64_t> shape[MAX_OPERANDS] = {};
     std::vector<int64_t> rawShape[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicRawShape[MAX_OPERANDS] = {}; // raw shape
-    // need adapt unaligned scene
-    // Used for unaligned scene. In AST 1.0 it was padded in LogicalTensor constructor
-    std::vector<int64_t> originShape[MAX_OPERANDS] = {};
+
     std::vector<SymbolicScalar> dynamicOffset[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicValidShape[MAX_OPERANDS] = {}; // valid shape
 

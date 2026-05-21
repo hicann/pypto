@@ -48,8 +48,8 @@ std::string CodeGenOpNPU::PrintBinaryStatic(const PrintBinaryParam& param) const
     const std::string& s0Var = param.s0Var;
     const std::string& s1Var = param.s1Var;
 
-    std::vector<int64_t> os0 = NormalizeShape(originShape[ID1], SHAPE_DIM4);
-    std::vector<int64_t> os1 = NormalizeShape(originShape[ID2], SHAPE_DIM4);
+    std::vector<int64_t> os0 = NormalizeShape(shape[ID1], SHAPE_DIM4);
+    std::vector<int64_t> os1 = NormalizeShape(shape[ID2], SHAPE_DIM4);
     std::vector<int64_t> s0 = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
     std::vector<int64_t> s1 = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
@@ -367,7 +367,7 @@ std::string CodeGenOpNPU::PrintBinaryBrcStatic(const PrintBinaryBrcParam& param)
     const std::string& s1Var = param.s1Var;
     const std::string& tmpVar = param.tmpVar;
 
-    std::vector<int64_t> os0 = NormalizeShape(originShape[ID2], SHAPE_DIM4);
+    std::vector<int64_t> os0 = NormalizeShape(shape[ID2], SHAPE_DIM4);
     std::vector<int64_t> s0 = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> s1 = NormalizeShape(rawShape[ID3], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
@@ -418,7 +418,7 @@ std::string CodeGenOpNPU::PrintBinaryBrcDynamicUnaligned(const PrintBinaryBrcPar
     const std::string& s1Var = param.s1Var;
     const std::string& tmpVar = param.tmpVar;
 
-    std::vector<int64_t> os0 = NormalizeShape(originShape[ID2], SHAPE_DIM4);
+    std::vector<int64_t> os0 = NormalizeShape(shape[ID2], SHAPE_DIM4);
     std::vector<int64_t> s0 = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> s1 = NormalizeShape(rawShape[ID3], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
@@ -515,7 +515,7 @@ std::string CodeGenOpNPU::PrintBinaryScalarStatic(const PrintBinaryScalarParam& 
     std::vector dstShape = rawShape[0];
     std::vector src0Shape = rawShape[1];
 
-    std::vector<int64_t> os0 = NormalizeShape(originShape[1], SHAPE_DIM3);
+    std::vector<int64_t> os0 = NormalizeShape(shape[1], SHAPE_DIM3);
     std::vector<int64_t> ss = NormalizeShape(src0Shape, SHAPE_DIM3);
     std::vector<int64_t> ds = NormalizeShape(dstShape, SHAPE_DIM3);
 
@@ -683,7 +683,7 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
 
     std::vector src0RawShape = rawShape[1];
     std::vector dstRawShape = rawShape[0];
-    std::vector<int64_t> os0 = NormalizeShape(originShape[1], SHAPE_DIM4);
+    std::vector<int64_t> os0 = NormalizeShape(shape[1], SHAPE_DIM4);
     std::vector<int64_t> s0 = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
 

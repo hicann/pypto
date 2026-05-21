@@ -42,7 +42,7 @@ using AllocKey = std::tuple<BufferType, int64_t /*RangeStart*/, int64_t /*RangeE
 
 struct TileTensorShape {
     bool isInLoop{false};
-    std::vector<int64_t> originShape;
+    std::vector<int64_t> shape;
     std::vector<int64_t> rawShape;
     std::vector<SymbolicScalar> dynamicValidShape;
 };
@@ -201,13 +201,13 @@ struct TileTensorUsing {
     DataType dtype;
     BufferType bufType;
     int dim;
-    std::vector<int64_t> originShape; // only used for static shape
+    std::vector<int64_t> shape; // only used for static shape
     std::vector<int64_t> rawShape;
 
     bool operator==(const TileTensorUsing& other) const
     {
         bool baseCompare = dtype == other.dtype && bufType == other.bufType && rawShape == other.rawShape;
-        return isConstant ? baseCompare && originShape == other.originShape : baseCompare;
+        return isConstant ? baseCompare && shape == other.shape : baseCompare;
     }
 
     std::string GenName() const
@@ -242,7 +242,7 @@ private:
         std::vector<int64_t> params;
         params.reserve(dim * SHAPE_KIND);
         if (isConstant) {
-            params.insert(params.end(), originShape.begin(), originShape.end());
+            params.insert(params.end(), shape.begin(), shape.end());
         }
         params.insert(params.end(), rawShape.begin(), rawShape.end());
         return WrapParamByAngleBrackets(params);

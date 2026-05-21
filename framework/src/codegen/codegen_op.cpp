@@ -73,15 +73,14 @@ void CodeGenOp::CombineAxis(const Operation& oper, int operandIdx, bool isInput,
         CODEGEN_LOGI("needCombineIOIdx is %s", IntVecToStr(needCombineIOIdx).c_str());
         CombineLastTwoAxis(shape[operandIdx], dim);
         CombineLastTwoAxis(rawShape[operandIdx], dim);
-        CombineLastTwoAxis(originShape[operandIdx], dim);
         CombineLastTwoAxis(dynamicValidShape[operandIdx], dim);
         CombineLastTwoAxis(dynamicRawShape[operandIdx], dim);
         CODEGEN_LOGI(
-            "op code %s, operandIdx: %d, after CombineAxis shape is %s, raw shape is %s, originShape is %s, "
+            "op code %s, operandIdx: %d, after CombineAxis shape is %s, raw shape is %s, "
             "dynamicValidShape is %s, dynamicRawShape is %s",
             oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]).c_str(),
-            IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(originShape[operandIdx]).c_str(),
-            IntVecToStr(dynamicValidShape[operandIdx]).c_str(), IntVecToStr(dynamicRawShape[operandIdx]).c_str());
+            IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(dynamicValidShape[operandIdx]).c_str(),
+            IntVecToStr(dynamicRawShape[operandIdx]).c_str());
     }
 }
 
@@ -97,8 +96,9 @@ void CodeGenOp::UpdateShape(
 
     // raw shape
     rawShape[operandIdx] = logicalTensor.tensor->rawshape;
-    // origin shape equals to valid shape in static scene by pass, use 'LogicalTensor::shape' member variable
-    originShape[operandIdx] = logicalTensor.shape;
+    // tensor shape equals to valid shape in static scene by PASS, just use 'LogicalTensor::shape' member variable
+    shape[operandIdx] = logicalTensor.shape;
+
     if (isDynamicFunction) {
         dynamicValidShape[operandIdx] =
             isMainBlock ? SymbolicScalar::FromConcrete(logicalTensor.shape) : logicalTensor.GetDynValidShape();
@@ -117,8 +117,6 @@ void CodeGenOp::UpdateShape(
         CODEGEN_LOGI(
             "(from op CopyOpAttribute) attrShape = %s, dynamicRawShape = %s",
             IntVecToStr(shapeFromAttr[operandIdx]).c_str(), IntVecToStr(dynamicRawShape[operandIdx]).c_str());
-    } else { // Tile Shape from LogicalTensor (Only used in extremely special cases)
-        shape[operandIdx] = logicalTensor.shape;
     }
 
     if ((opCode == Opcode::OP_L0C_TO_L1) && (operandIdx == 0)) {

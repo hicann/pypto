@@ -61,8 +61,7 @@ TileTensor CodeGenOpLiteNPU::BuildTileTensor(
     tileTensor.magic = operandWithMagic[paramIdx];
     tileTensor.isInLoop = tileTensorShape.isInLoop;
 
-    tileTensor.dim =
-        tileTensor.isConstant ? tileTensorShape.originShape.size() : tileTensorShape.dynamicValidShape.size();
+    tileTensor.dim = tileTensor.isConstant ? tileTensorShape.shape.size() : tileTensorShape.dynamicValidShape.size();
 
     tileTensor.dtype = operandDtype[paramIdx];
     tileTensor.bufType = operandType[paramIdx];
@@ -88,18 +87,18 @@ void CodeGenOpLiteNPU::UpdateTileTensorShapeAndStride(
     [[maybe_unused]] int paramIdx, TileTensor& tileTensor, [[maybe_unused]] bool isSpillToGm,
     const TileTensorShape& tileTensorShape)
 {
-    auto newOriginShape = tileTensorShape.originShape;
+    auto newShape = tileTensorShape.shape;
     auto newRawShape = tileTensorShape.rawShape;
     auto newDynValidShape = tileTensorShape.dynamicValidShape;
     CODEGEN_LOGI(
-        "newOriginShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newOriginShape).c_str(),
+        "newShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newShape).c_str(),
         IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
 
     tileTensor.rawShape = newRawShape;
 
     // ---- static or "main block" ----
     if (functionType == FunctionType::STATIC) {
-        for (auto s : newOriginShape) {
+        for (auto s : newShape) {
             tileTensor.shape.emplace_back(std::to_string(s));
         }
         tileTensor.stride = BuildStride(newRawShape);

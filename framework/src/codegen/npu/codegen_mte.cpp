@@ -553,8 +553,8 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CPar
     const std::vector<SymbolicScalar>& outputOffset = offsetFromAttr[gmIdx];
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
-    int oriTileShape0 = std::min(originShape[localIdx][ID0], localRawShape[ID0]);
-    int oriTileShape1 = std::min(originShape[localIdx][ID1], localRawShape[ID1]);
+    int oriTileShape0 = std::min(shape[localIdx][ID0], localRawShape[ID0]);
+    int oriTileShape1 = std::min(shape[localIdx][ID1], localRawShape[ID1]);
 
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
     int printRet = sprintf_s(
@@ -638,8 +638,8 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CPa
     const std::vector<int64_t>& localRawShape = param.localRawShape;
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
-    int oriTileShape0 = std::min(originShape[localIdx][ID0], localRawShape[ID0]);
-    int oriTileShape1 = std::min(originShape[localIdx][ID1], localRawShape[ID1]);
+    int oriTileShape0 = std::min(shape[localIdx][ID0], localRawShape[ID0]);
+    int oriTileShape1 = std::min(shape[localIdx][ID1], localRawShape[ID1]);
 
     std::vector<std::string> gmShapeExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
     CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
@@ -937,7 +937,7 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBStatic(const PrintMemCopyWithUBParam
     const std::vector<std::string>& addrExpr = param.addrExpr;
     std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
-    std::vector<int64_t> os = NormalizeShape(originShape[localIdx], SHAPE_DIM5);
+    std::vector<int64_t> os = NormalizeShape(shape[localIdx], SHAPE_DIM5);
     std::vector<int64_t> dstStride = NormalizeShape(rawShape[ID0], SHAPE_DIM5);
     std::vector<int64_t> srcStride = NormalizeShape(rawShape[ID1], SHAPE_DIM5);
 
@@ -970,8 +970,8 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBDynamic(const PrintMemCopyWithUBPara
     const std::vector<std::string>& addrExpr = param.addrExpr;
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
-    std::vector<int64_t> newOriginShape = originShape[localIdx];
-    FillVecWithDummyInHead<int64_t>(newOriginShape, MAX_DIM - originShape[localIdx].size(), 1);
+    std::vector<int64_t> newOriginShape = shape[localIdx];
+    FillVecWithDummyInHead<int64_t>(newOriginShape, MAX_DIM - shape[localIdx].size(), 1);
     const std::vector<int64_t>& localRawShape = NormalizeShape(rawShape[localIdx], SHAPE_DIM5);
 
     auto paramPack = PrepareDynamicShapeInfoForMTE(gmIdx, MAX_DIM, param.isSpillingToGM);

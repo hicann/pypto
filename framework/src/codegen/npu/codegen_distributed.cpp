@@ -76,11 +76,11 @@ std::string CodeGenOpNPU::GenExtraTemplateParamsForMoeDistributedCombine(int32_t
     Distributed::MoeCombineAttr distOpAttr =
         AnyCast<Distributed::MoeCombineAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int64_t secondToLastIndex = 2;
-    int64_t rowShape = originShape[operandIndex][originShape[operandIndex].size() - secondToLastIndex];
+    int64_t rowShape = shape[operandIndex][shape[operandIndex].size() - secondToLastIndex];
     if (distOpAttr.rowShape != -1) {
         rowShape = distOpAttr.rowShape;
     }
-    int64_t colShape = originShape[operandIndex][originShape[operandIndex].size() - 1];
+    int64_t colShape = shape[operandIndex][shape[operandIndex].size() - 1];
     std::ostringstream oss;
     oss << "<" << GetTemplateDType() << ", " << distOpAttr.topK << ", " << rowShape << ", " << colShape << ", "
         << distOpAttr.paddedColShape << ">";
@@ -93,7 +93,7 @@ std::string CodeGenOpNPU::GenTemplateParamsForPutAndGet() const
     static const std::unordered_map<Opcode, std::array<int32_t, 2>> opcodeIndexMap = {
         {Opcode::OP_SHMEM_PUT, {3, 4}}, {Opcode::OP_SHMEM_GET, {0, 3}}, {Opcode::OP_SHMEM_GET_GM2UB, {0, 3}}};
     auto [nonShmemDataIndex, shmemDataIndex] = opcodeIndexMap.at(opCode);
-    const std::vector<int64_t>& tileShape = originShape[shmemDataIndex];
+    const std::vector<int64_t>& tileShape = shape[shmemDataIndex];
     int64_t tileRowShape = tileShape[tileShape.size() - 2];
     int64_t tileColShape = tileShape[tileShape.size() - 1];
 
@@ -135,8 +135,8 @@ std::string CodeGenOpNPU::GenTemplateParamsForPutUb2Gm() const
     std::ostringstream oss;
     int32_t shmemDataIndex = 2;
 
-    int64_t tileRowShape = *(originShape[shmemDataIndex].rbegin() + 1);
-    int64_t tileColShape = originShape[shmemDataIndex].back();
+    int64_t tileRowShape = *(shape[shmemDataIndex].rbegin() + 1);
+    int64_t tileColShape = shape[shmemDataIndex].back();
 
     Distributed::ShmemPutAttr distOpAttr = AnyCast<Distributed::ShmemPutAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
 
@@ -241,19 +241,19 @@ std::string CodeGenOpNPU::GenTemplateParams() const
 
 std::string CodeGenOpNPU::GenOffsets(int32_t operandIndex) const
 {
-    int32_t dim = originShape[operandIndex].size();
+    int32_t dim = shape[operandIndex].size();
     return GenGetParamMacroPacked(operandIndex, dim, PREFIX_STR_OFFSET)[0];
 }
 
 std::string CodeGenOpNPU::GenShapes(int32_t operandIndex) const
 {
-    int32_t dim = originShape[operandIndex].size();
+    int32_t dim = shape[operandIndex].size();
     return GenGetParamMacroPacked(operandIndex, dim, "SHAPE")[0];
 }
 
 std::string CodeGenOpNPU::GenRawShapes(int32_t operandIndex) const
 {
-    int32_t dim = originShape[operandIndex].size();
+    int32_t dim = shape[operandIndex].size();
     return GenGetParamMacroPacked(operandIndex, dim, PREFIX_STR_RAW_SHAPE)[0];
 }
 
@@ -264,10 +264,10 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapes(int32_t operandIndex) const
 
 std::string CodeGenOpNPU::GenDynOffCoord(int32_t operandIndex) const
 {
-    size_t dim = originShape[operandIndex].size();
+    size_t dim = shape[operandIndex].size();
 
     // 如果 offset 没有任何 GetTensorData 类型，则从Coa中获取
-    if (!HasGetTensorDataInOffsetAttr(originShape[operandIndex], offsetFromAttr[operandIndex])) {
+    if (!HasGetTensorDataInOffsetAttr(shape[operandIndex], offsetFromAttr[operandIndex])) {
         return GenOffCoord(operandIndex);
     }
 
@@ -289,7 +289,7 @@ std::string CodeGenOpNPU::GenDynOffCoord(int32_t operandIndex) const
 
 std::string CodeGenOpNPU::GenOffCoord(int32_t operandIndex) const
 {
-    size_t dim = originShape[operandIndex].size();
+    size_t dim = shape[operandIndex].size();
     auto OffsetSymbol = GenGetParamMacroPacked(operandIndex, dim, PREFIX_STR_OFFSET);
     std::string wrappedCoord = WrapParamByParentheses(OffsetSymbol);
     return PrintCoord(dim, wrappedCoord);

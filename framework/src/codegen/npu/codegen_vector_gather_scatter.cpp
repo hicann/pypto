@@ -33,7 +33,7 @@ std::string CodeGenOpNPU::PrintGatherStatic(const PrintGatherParam& param) const
     std::vector dstShape = rawShape[ID0];
     std::vector src0Shape = rawShape[ID1];
 
-    std::vector<int64_t> dos = NormalizeShape(originShape[ID0], SHAPE_DIM4);
+    std::vector<int64_t> dos = NormalizeShape(shape[ID0], SHAPE_DIM4);
     std::vector<int64_t> ss = NormalizeShape(src0Shape, SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(dstShape, SHAPE_DIM4);
 
@@ -266,7 +266,7 @@ std::string CodeGenOpNPU::GenGatherElementOp() const
     AppendLocalBufVarOffsetInOrder(dVar, s0Var, s1Var);
 
     // [case1] src0: [S2,D], src1: [B,S], axis: 0, dst: [B,S]
-    std::vector<int64_t> dos = originShape[ID0];
+    std::vector<int64_t> dos = shape[ID0];
     std::vector<int64_t> s0s = src0Shape;
     std::vector<int64_t> s1s = src1Shape;
     std::vector<int64_t> ds = dstShape;
@@ -311,7 +311,7 @@ std::string CodeGenOpNPU::PrintScatterElementSOpStatic(const PrintScatterElemPar
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
     const Element& scala = extOperandVal;
 
-    std::vector src1Shape = originShape[ToUnderlying(MISOIdx::SRC1_IDX)];
+    std::vector src1Shape = shape[ToUnderlying(MISOIdx::SRC1_IDX)];
     std::vector<int64_t> s1os = NormalizeShape(src1Shape, SHAPE_DIM2);
     std::vector<int64_t> s1rs = NormalizeShape(src1RawShape, SHAPE_DIM2);
     std::vector<int64_t> drs = NormalizeShape(dstShape, SHAPE_DIM2);

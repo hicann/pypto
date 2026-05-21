@@ -71,8 +71,8 @@ std::string CodeGenOpNPU::GenIndexOutCastOp() const
     std::vector<std::string> addrExpr(ID2);
     addrExpr[gmIdx] = GenGmParamVar(gmIdx);
 
-    std::vector<int64_t> src0OriginShape = originShape[ID1];
-    std::vector<int64_t> src1OriginShape = originShape[ID2];
+    std::vector<int64_t> src0OriginShape = shape[ID1];
+    std::vector<int64_t> src1OriginShape = shape[ID2];
     std::vector<int64_t> src0RawShape = rawShape[ID1];
     std::vector<int64_t> src1RawShape = rawShape[ID2];
 
