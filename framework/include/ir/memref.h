@@ -11,59 +11,84 @@
 #pragma once
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <tuple>
-#include <utility>
-#include <vector>
 
-#include "core/dtype.h"
+#include "ir/core.h"
 #include "ir/expr.h"
+#include "ir/memory_space.h"
 #include "ir/reflection/field_traits.h"
+#include "ir/span.h"
 
 namespace pypto {
 namespace ir {
+
 /**
- * @brief Memory reference variable for shaped types (tensor and tile)
+ * \brief Memory reference variable for shaped types (tensor and tile)
  *
- * Represents a memory reference combining an allocation identity (base Ptr),
- * a byte offset within that allocation, and a size.
+ * Represents a memory allocation with metadata (space, address, size, id).
+ * Inherits from Var, making it a first-class IR expression that can be
+ * declared and referenced like other variables.
  *
- * - base_: VarPtr to the Ptr variable from tile.alloc/tensor.alloc (allocation identity)
- * - byte_offset_: byte offset from base (0 for root alloc, computed for views)
- * - size_: size in bytes of this memory region
+ * Memory references have auto-generated names based on their ID (e.g., "mem_ddr_0")
+ * and MemRefType as their type.
  *
- * Aliasing is determined by comparing base_ pointers (SameAllocation) and
- * checking for overlapping byte ranges (MayAlias).
+ * Aliasing analysis: use MayAlias() and SameAllocation() static methods to
+ * determine if two MemRefs may reference overlapping memory regions.
  */
-class MemRef : public Expr {
+class MemRef : public Var {
 public:
-    MemorySpace memorySpace_; ///< Memory space of this MemRef, e.g. Global, Local, Constant
-    ExprPtr offset_;          ///< Byte offset from base (0 for full alloc, view offset for views)
-    uint64_t size_;           ///< Size in bytes of this MemRef
+    MemorySpace memorySpace_; ///< Memory space (DDR, Vec, Mat, etc.)
+    ExprPtr addr_;            ///< Starting address expression
+    uint64_t size_;           ///< Size in bytes (64-bit unsigned)
 
     /**
-     * @brief Construct with explicit variable name. Used by deserialization and
-     * address allocation where the name must be preserved exactly.
+     * \brief Constructor with all parameters including explicit ID
+     *
+     * Generates a variable name from the ID (e.g., "mem_ddr_0") and creates
+     * a MemRefType for the type. Calls Var constructor with these values.
+     *
+     * \param memory_space Memory space (DDR, Vec, Mat, etc.)
+     * \param addr Starting address expression
+     * \param size Size in bytes
+     * \param id Unique identifier (used to generate variable name)
+     * \param span Source location (defaults to Span::Unknown())
      */
-    MemRef(MemorySpace memory_space, ExprPtr offset, uint64_t size, Span span = Span::Unknown());
+    MemRef(MemorySpace memory_space, ExprPtr addr, uint64_t size, uint64_t id, Span span = Span::Unknown());
+
+    /**
+     * \brief Constructor without explicit ID (id defaults to 0)
+     *
+     * Backwards-compatible 4-arg constructor for call sites that do not
+     * track an allocation counter.
+     */
+    MemRef(MemorySpace memory_space, ExprPtr addr, uint64_t size, Span span = Span::Unknown());
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::MemRef; }
     [[nodiscard]] std::string TypeName() const override { return "MemRef"; }
 
-    /// Are two MemRefs from the same allocation? (compare base_ Ptr identity)
+    /// Are two MemRefs from the same allocation? (same space, size, and address)
     static bool SameAllocation(const MemRefPtr& a, const MemRefPtr& b);
 
-    /// Do two MemRefs potentially alias? (same base + overlapping byte ranges)
+    /// Do two MemRefs potentially alias? (same space + overlapping byte ranges)
     static bool MayAlias(const MemRefPtr& a, const MemRefPtr& b);
 
+    /**
+     * \brief Get field descriptors for reflection-based visitation
+     *
+     * Note: id_ is an IgnoreField because it is used only for name generation
+     * and should not affect structural equality/hashing between two MemRefs
+     * that share identical memory space, address, and size.
+     *
+     * \return Tuple of field descriptors
+     */
     static constexpr auto GetFieldDescriptors()
     {
         return std::tuple_cat(
-            Expr::GetFieldDescriptors(),
+            Var::GetFieldDescriptors(),
             std::make_tuple(
                 reflection::UsualField(&MemRef::memorySpace_, "memory_space"),
-                reflection::UsualField(&MemRef::offset_, "offset"), reflection::UsualField(&MemRef::size_, "size")));
+                reflection::UsualField(&MemRef::addr_, "addr"), reflection::UsualField(&MemRef::size_, "size")));
     }
 };
 

@@ -27,6 +27,7 @@
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"
 #include "ir/type.h"
+#include "tilefwk/error.h"
 
 namespace pypto {
 namespace ir {
@@ -110,7 +111,7 @@ TEST_F(IRProgramTest, TestProgramDuplicateFunctionNameThrows)
     auto func2 = MakeSimpleFunction("dup_name");
     std::vector<FunctionPtr> funcs = {func1, func2};
 
-    ASSERT_THROW(std::make_shared<Program>(funcs, "test", Span::Unknown()), InternalError);
+    ASSERT_THROW(std::make_shared<Program>(funcs, "test", Span::Unknown()), npu::tile_fwk::Error);
 }
 
 } // namespace ir

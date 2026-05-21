@@ -10,6 +10,8 @@
 
 #pragma once
 #include <any>
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,10 +24,12 @@
 
 #include "core/any_cast.h"
 #include "core/dtype.h"
+#include "core/error.h"
 #include "core/logging.h"
 #include "ir/core.h"
 #include "ir/pipe.h"
 #include "ir/reflection/field_traits.h"
+#include "ir/span.h"
 #include "ir/type.h"
 
 namespace pypto {
@@ -55,7 +59,7 @@ public:
     /**
      * \brief Get the type name of this expression
      *
-     * \return Human-readable type name (e.g., "Var", "Call")
+     * \return Human-readable type name (e.g., "ScalarExpr", "Var", "Call")
      */
     [[nodiscard]] std::string TypeName() const override { return "Expr"; }
 
@@ -74,6 +78,9 @@ public:
 };
 
 using ExprPtr = std::shared_ptr<const Expr>;
+
+// Forward declaration for MemorySpace enum (defined in memory_space.h)
+enum class MemorySpace;
 
 /**
  * \brief Base class for operations/functions
@@ -95,8 +102,8 @@ public:
      * Defines that this operator accepts a kwarg with the given key and type.
      * This is used for validation when creating Call expressions.
      *
-     * Only specific types are allowed: bool, int, std::string, double, DataType
-     * This is enforced at compile-time via static_assert.
+     * Only specific types are allowed: bool, int, std::string, double, DataType, MemorySpace,
+     * std::vector<int>. This is enforced at compile-time via static_assert.
      *
      * \tparam T Expected type of the kwarg value (must be one of the allowed types)
      * \param key Kwarg key (string identifier)
@@ -107,8 +114,9 @@ public:
         // Compile-time check: only allow specific types
         static_assert(
             std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, std::string> ||
-                std::is_same_v<T, double> || std::is_same_v<T, DataType>,
-            "SetAttrType only accepts: bool, int, std::string, double, DataType");
+                std::is_same_v<T, double> || std::is_same_v<T, DataType> || std::is_same_v<T, MemorySpace> ||
+                std::is_same_v<T, std::vector<int>>,
+            "SetAttrType only accepts: bool, int, std::string, double, DataType, MemorySpace, std::vector<int>");
 
         attrs_.emplace(key, std::type_index(typeid(T)));
     }
@@ -118,7 +126,7 @@ public:
      *
      * \param key Kwarg key
      * \return type_index of the expected type
-     * \throws ValueError if kwarg is not registered
+     * \throws pypto::ir::ValueError if kwarg is not registered
      */
     [[nodiscard]] std::type_index GetAttrType(const std::string& key, const Span& span = Span::Unknown()) const
     {
@@ -181,33 +189,6 @@ private:
 };
 
 using OpPtr = std::shared_ptr<const Op>;
-
-/**
- * \brief Global variable reference for functions in a program
- *
- * Represents a reference to a function in the program's global scope.
- * Can be used as an operation in Call expressions to call functions within the same program.
- * The name of the GlobalVar should match the name of the function it references.
- */
-class GlobalVar : public Op {
-public:
-    explicit GlobalVar(std::string name) : Op(std::move(name)) {}
-    ~GlobalVar() override = default;
-    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::GlobalVar; }
-    [[nodiscard]] std::string TypeName() const override { return "GlobalVar"; }
-};
-
-using GlobalVarPtr = std::shared_ptr<const GlobalVar>;
-
-/**
- * \brief Custom comparator for ordering GlobalVarPtr by name
- *
- * Used in std::map to maintain deterministic ordering of functions in a Program.
- * Ensures consistent structural equality and hashing.
- */
-struct GlobalVarPtrLess {
-    bool operator()(const GlobalVarPtr& lhs, const GlobalVarPtr& rhs) const { return lhs->name_ < rhs->name_; }
-};
 
 /**
  * \brief Variable reference expression
@@ -324,7 +305,7 @@ using IterArgPtr = std::shared_ptr<const IterArg>;
  */
 class Call : public Expr {
 public:
-    std::string name_;                                     // Name of the operation/function
+    std::string name_;                                     // Operation name
     std::vector<ExprPtr> args_;                            // Positional arguments
     std::vector<std::pair<std::string, std::any>> kwargs_; // Keyword arguments (metadata, ordered)
 
@@ -351,6 +332,54 @@ public:
         : Expr(std::move(span), std::move(type)), name_(std::move(name)), args_(std::move(args)), kwargs_()
     {}
 
+    Call(std::string name, std::vector<ExprPtr> args, std::vector<std::pair<std::string, std::any>> kwargs, Span span)
+        : Expr(std::move(span)), name_(std::move(name)), args_(std::move(args)), kwargs_(std::move(kwargs))
+    {}
+
+    Call(
+        std::string name, std::vector<ExprPtr> args, std::vector<std::pair<std::string, std::any>> kwargs, TypePtr type,
+        Span span)
+        : Expr(std::move(span), std::move(type)),
+          name_(std::move(name)),
+          args_(std::move(args)),
+          kwargs_(std::move(kwargs))
+    {}
+
+    /**
+     * \brief Get a kwarg value with type checking
+     *
+     * \tparam T Type of the kwarg value
+     * \param key Kwarg key
+     * \param default_value Default value if key doesn't exist
+     * \return The kwarg value or default
+     */
+    template <typename T>
+    T GetKwarg(const std::string& key, const T& default_value = T{}) const
+    {
+        for (const auto& [k, v] : kwargs_) {
+            if (k == key) {
+                return AnyCast<T>(v, "kwarg key: " + key);
+            }
+        }
+        return default_value;
+    }
+
+    /**
+     * \brief Check if a kwarg exists
+     *
+     * \param key Kwarg key
+     * \return true if the kwarg exists
+     */
+    [[nodiscard]] bool HasKwarg(const std::string& key) const
+    {
+        for (const auto& kwarg : kwargs_) {
+            if (kwarg.first == key) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Call; }
     [[nodiscard]] std::string TypeName() const override { return "Call"; }
 
@@ -364,7 +393,8 @@ public:
         return std::tuple_cat(
             Expr::GetFieldDescriptors(),
             std::make_tuple(
-                reflection::UsualField(&Call::name_, "name"), reflection::UsualField(&Call::args_, "args")));
+                reflection::UsualField(&Call::name_, "name"), reflection::UsualField(&Call::args_, "args"),
+                reflection::UsualField(&Call::kwargs_, "kwargs")));
     }
 };
 
@@ -406,43 +436,43 @@ public:
 using MakeTuplePtr = std::shared_ptr<const MakeTuple>;
 
 /**
- * \brief Tuple element access expression
+ * \brief Unified subscript expression: value[slice]
  *
- * Represents accessing an element from a tuple by index.
- * The tuple must have TupleType and index must be a compile-time constant.
+ * Represents Python subscript syntax for both tuple element access and tile offset.
+ * The concrete semantics is determined by the static type of `value_`:
+ *   - `value_` is `TupleType`: tuple element access. `slice_` must be a `ConstInt`
+ *     whose value is the 0-based element index. Result type is the element type.
+ *   - `value_` is `TileType`: tile element offset. `slice_` is an integer expression
+ *     (static or dynamic). Result type is the same TileType as the base tile,
+ *     with physical address shifted by `slice * sizeof(dtype)` bytes.
  */
-class TupleGetItemExpr : public Expr {
+class GetItemExpr : public Expr {
 public:
-    ExprPtr tuple_; // Tuple expression (must have TupleType)
-    int index_;     // Index of the element to access (0-based)
+    ExprPtr value_; ///< Base expression (must have TupleType or TileType)
+    ExprPtr slice_; ///< Subscript expression
 
     /**
-     * \brief Create a tuple element access expression
+     * \brief Create a subscript expression
      *
-     * \param tuple Tuple expression (must have TupleType)
-     * \param index Index of the element (0-based, must be within bounds)
+     * \param value Base expression (must have TupleType or TileType)
+     * \param slice Subscript expression (for TupleType, must be a ConstInt)
      * \param span Source location
      */
-    TupleGetItemExpr(ExprPtr tuple, int index, Span span);
+    GetItemExpr(ExprPtr value, ExprPtr slice, Span span);
 
-    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TupleGetItemExpr; }
-    [[nodiscard]] std::string TypeName() const override { return "TupleGetItemExpr"; }
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::GetItemExpr; }
+    [[nodiscard]] std::string TypeName() const override { return "GetItemExpr"; }
 
-    /**
-     * \brief Get field descriptors for reflection-based visitation
-     *
-     * \return Tuple of field descriptors
-     */
     static constexpr auto GetFieldDescriptors()
     {
         return std::tuple_cat(
             Expr::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&TupleGetItemExpr::tuple_, "tuple"),
-                                             reflection::UsualField(&TupleGetItemExpr::index_, "index")));
+                                             reflection::UsualField(&GetItemExpr::value_, "value"),
+                                             reflection::UsualField(&GetItemExpr::slice_, "slice")));
     }
 };
 
-using TupleGetItemExprPtr = std::shared_ptr<const TupleGetItemExpr>;
+using GetItemExprPtr = std::shared_ptr<const GetItemExpr>;
 
 } // namespace ir
 } // namespace pypto

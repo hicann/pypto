@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #ifndef PYPTO_IR_TRANSFORMS_BASE_VISITOR_H_
@@ -25,7 +23,7 @@ namespace pypto {
 namespace ir {
 
 /**
- * @brief Read-only IR visitor for both expressions and statements
+ * \brief Read-only IR visitor for both expressions and statements
  *
  * Provides default implementations that recursively traverse the IR tree.
  * Subclasses can override specific VisitExpr_ or VisitStmt_ methods to implement custom behavior.
@@ -58,8 +56,8 @@ protected:
     void VisitExpr_(const ConstBoolPtr& op) override;
     void VisitExpr_(const CallPtr& op) override;
     void VisitExpr_(const MakeTuplePtr& op) override;
-    void VisitExpr_(const TupleGetItemExprPtr& op) override;
     void VisitExpr_(const ScalarExprPtr& op) override;
+    void VisitExpr_(const GetItemExprPtr& op) override;
 
     // Binary operations - visit left and right children
     void VisitExpr_(const AddPtr& op) override;
@@ -101,6 +99,8 @@ protected:
     void VisitStmt_(const ForStmtPtr& op) override;
     void VisitStmt_(const WhileStmtPtr& op) override;
     void VisitStmt_(const SeqStmtsPtr& op) override;
+    void VisitStmt_(const OpStmtsPtr& op) override;
+    void VisitStmt_(const SectionStmtPtr& op) override;
     void VisitStmt_(const EvalStmtPtr& op) override;
     void VisitStmt_(const BreakStmtPtr& op) override;
     void VisitStmt_(const ContinueStmtPtr& op) override;

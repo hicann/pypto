@@ -1,17 +1,16 @@
-/*
- * Copyright (c) PyPTO Contributors.
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include "ir/builder.h"
 
-#include <any>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -21,6 +20,7 @@
 
 #include "core/error.h"
 #include "core/logging.h"
+#include "tilefwk/error.h"
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/program.h"
@@ -30,13 +30,34 @@
 
 namespace pypto {
 namespace ir {
+namespace {
 
-static Span combine_span(const Span& begin_span, const Span& end_span)
+StmtPtr MakeStmtBody(const std::vector<StmtPtr>& stmts, const Span& span)
+{
+    if (stmts.empty()) {
+        return std::make_shared<SeqStmts>(std::vector<StmtPtr>(), span);
+    }
+    if (stmts.size() == 1) {
+        return stmts[0];
+    }
+    return std::make_shared<SeqStmts>(stmts, span);
+}
+
+Span MakeCombinedSpan(const Span& begin_span, const Span& end_span)
 {
     return Span(
         begin_span.Filename(), begin_span.BeginLine(), begin_span.BeginColumn(), end_span.EndLine(),
         end_span.EndColumn());
 }
+
+std::string MakeLoopReturnVarsMismatchMessage(const char* loop_kind, size_t iter_arg_count, size_t return_var_count)
+{
+    std::ostringstream oss;
+    oss << loop_kind << " loop has " << iter_arg_count << " iteration arguments but " << return_var_count
+        << " return variables. They must match.";
+    return oss.str();
+}
+} // namespace
 
 // ========== IRBuilder Implementation ==========
 
@@ -78,15 +99,23 @@ FunctionPtr IRBuilder::EndFunction(const Span& end_span)
     auto* func_ctx = static_cast<FunctionContext*>(CurrentContext());
 
     // Build body from accumulated statements
+    StmtPtr body;
     const auto& stmts = func_ctx->GetStmts();
-    StmtPtr body = (stmts.size() == 1) ? stmts[0] : std::make_shared<SeqStmts>(stmts, end_span);
+    if (stmts.empty()) {
+        // Empty body - create empty SeqStmts
+        body = std::make_shared<SeqStmts>(std::vector<StmtPtr>(), end_span);
+    } else if (stmts.size() == 1) {
+        body = stmts[0];
+    } else {
+        body = std::make_shared<SeqStmts>(stmts, end_span);
+    }
 
     // Combine begin and end spans
-    auto new_span = combine_span(func_ctx->GetBeginSpan(), end_span);
+    auto combinedSpan = MakeCombinedSpan(func_ctx->GetBeginSpan(), end_span);
 
     // Create function
     auto func = std::make_shared<Function>(
-        func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body, new_span,
+        func_ctx->GetName(), func_ctx->GetParams(), func_ctx->GetReturnTypes(), body, combinedSpan,
         func_ctx->GetFuncType());
 
     // Pop context
@@ -131,23 +160,18 @@ StmtPtr IRBuilder::EndForLoop(const Span& end_span)
         // Pop context before throwing to maintain stack consistency
         context_stack_.pop_back();
 
-        std::ostringstream oss;
-        oss << "For loop has " << loop_ctx->GetIterArgs().size() << " iteration arguments but "
-            << loop_ctx->GetReturnVars().size() << " return variables. They must match.";
-        throw RuntimeError(oss.str());
+        throw RuntimeError(
+            MakeLoopReturnVarsMismatchMessage("For", loop_ctx->GetIterArgs().size(), loop_ctx->GetReturnVars().size()));
     }
 
-    // Build body from accumulated statements
-    const auto& stmts = loop_ctx->GetStmts();
-    StmtPtr body = (stmts.size() == 1) ? stmts[0] : std::make_shared<SeqStmts>(stmts, end_span);
+    auto body = MakeStmtBody(loop_ctx->GetStmts(), end_span);
 
-    // Combine begin and end spans
-    auto new_span = combine_span(loop_ctx->GetBeginSpan(), end_span);
+    auto combinedSpan = MakeCombinedSpan(loop_ctx->GetBeginSpan(), end_span);
 
     // Create for statement
     auto for_stmt = std::make_shared<ForStmt>(
         loop_ctx->GetLoopVar(), loop_ctx->GetStart(), loop_ctx->GetStop(), loop_ctx->GetStep(), loop_ctx->GetIterArgs(),
-        body, loop_ctx->GetReturnVars(), new_span);
+        body, loop_ctx->GetReturnVars(), combinedSpan);
 
     // Pop context
     context_stack_.pop_back();
@@ -201,22 +225,15 @@ StmtPtr IRBuilder::EndWhileLoop(const Span& end_span)
         // Pop context before throwing to maintain stack consistency
         context_stack_.pop_back();
 
-        std::ostringstream oss;
-        oss << "While loop has " << loop_ctx->GetIterArgs().size() << " iteration arguments but "
-            << loop_ctx->GetReturnVars().size() << " return variables. They must match.";
-        throw RuntimeError(oss.str());
+        throw RuntimeError(MakeLoopReturnVarsMismatchMessage(
+            "While", loop_ctx->GetIterArgs().size(), loop_ctx->GetReturnVars().size()));
     }
 
-    // Build body from accumulated statements
-    const auto& stmts = loop_ctx->GetStmts();
-    StmtPtr body = (stmts.size() == 1) ? stmts[0] : std::make_shared<SeqStmts>(stmts, end_span);
-
-    // Combine begin and end spans
-    auto new_span = combine_span(loop_ctx->GetBeginSpan(), end_span);
-
+    auto body = MakeStmtBody(loop_ctx->GetStmts(), end_span);
+    auto combinedSpan = MakeCombinedSpan(loop_ctx->GetBeginSpan(), end_span);
     // Create while statement
     auto while_stmt = std::make_shared<WhileStmt>(
-        loop_ctx->GetCondition(), loop_ctx->GetIterArgs(), body, loop_ctx->GetReturnVars(), new_span);
+        loop_ctx->GetCondition(), loop_ctx->GetIterArgs(), body, loop_ctx->GetReturnVars(), combinedSpan);
 
     // Pop context
     context_stack_.pop_back();
@@ -261,25 +278,35 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
     auto* if_ctx = static_cast<IfStmtContext*>(CurrentContext());
 
     // Build then body
+    StmtPtr then_body;
     const auto& then_stmts = if_ctx->GetStmts();
-    StmtPtr then_body = (then_stmts.size() == 1) ? then_stmts[0] : std::make_shared<SeqStmts>(then_stmts, end_span);
+    if (then_stmts.empty()) {
+        then_body = std::make_shared<SeqStmts>(std::vector<StmtPtr>(), end_span);
+    } else if (then_stmts.size() == 1) {
+        then_body = then_stmts[0];
+    } else {
+        then_body = std::make_shared<SeqStmts>(then_stmts, end_span);
+    }
 
     // Build else body (optional)
     std::optional<StmtPtr> else_body;
     if (if_ctx->InElseBranch()) {
         const auto& else_stmts = if_ctx->GetElseStmts();
         if (!else_stmts.empty()) {
-            else_body = (else_stmts.size() == 1) ? else_stmts[0] : std::make_shared<SeqStmts>(else_stmts, end_span);
+            if (else_stmts.size() == 1) {
+                else_body = else_stmts[0];
+            } else {
+                else_body = std::make_shared<SeqStmts>(else_stmts, end_span);
+            }
         }
     }
 
     // Combine begin and end spans
-    auto new_span = combine_span(if_ctx->GetBeginSpan(), end_span);
+    auto combinedSpan = MakeCombinedSpan(if_ctx->GetBeginSpan(), end_span);
 
     // Create if statement
     auto if_stmt =
-        std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), new_span);
-
+        std::make_shared<IfStmt>(if_ctx->GetCondition(), then_body, else_body, if_ctx->GetReturnVars(), combinedSpan);
     // Pop context
     context_stack_.pop_back();
 
@@ -291,7 +318,52 @@ StmtPtr IRBuilder::EndIf(const Span& end_span)
     return if_stmt;
 }
 
+// ========== Section Building ==========
+
+void IRBuilder::BeginSection(SectionKind section_kind, const Span& span)
+{
+    CHECK(!context_stack_.empty()) << "Cannot begin section: not inside a function or another valid context at "
+                                   << span.ToString();
+    context_stack_.push_back(std::make_unique<SectionContext>(section_kind, span));
+}
+
+StmtPtr IRBuilder::EndSection(const Span& end_span)
+{
+    CHECK(!context_stack_.empty() && CurrentContext()->GetType() == BuildContext::Type::SECTION)
+        << "Cannot end section: not inside a section context at " << end_span.ToString();
+
+    auto* section_ctx = static_cast<SectionContext*>(CurrentContext());
+
+    // Build body
+    StmtPtr body;
+    const auto& stmts = section_ctx->GetStmts();
+    if (stmts.empty()) {
+        body = std::make_shared<SeqStmts>(std::vector<StmtPtr>(), end_span);
+    } else if (stmts.size() == 1) {
+        body = stmts[0];
+    } else {
+        body = std::make_shared<SeqStmts>(stmts, end_span);
+    }
+
+    // Combine spans
+    auto combinedSpan = MakeCombinedSpan(section_ctx->GetBeginSpan(), end_span);
+
+    // Create section statement
+    auto section_stmt = std::make_shared<SectionStmt>(section_ctx->GetSectionKind(), body, combinedSpan);
+
+    // Pop context
+    context_stack_.pop_back();
+
+    // Emit to parent context if it exists
+    if (!context_stack_.empty()) {
+        CurrentContext()->AddStmt(section_stmt);
+    }
+
+    return section_stmt;
+}
+
 // ========== Program Building ==========
+
 void IRBuilder::BeginProgram(const std::string& name, const Span& span)
 {
     if (InProgram()) {
@@ -317,10 +389,10 @@ ProgramPtr IRBuilder::EndProgram(const Span& end_span)
     auto* prog_ctx = static_cast<ProgramContext*>(CurrentContext());
 
     // Combine begin and end spans
-    auto new_span = combine_span(prog_ctx->GetBeginSpan(), end_span);
+    auto combinedSpan = MakeCombinedSpan(prog_ctx->GetBeginSpan(), end_span);
 
     // Create program from functions vector
-    auto program = std::make_shared<Program>(prog_ctx->GetFunctions(), prog_ctx->GetName(), new_span);
+    auto program = std::make_shared<Program>(prog_ctx->GetFunctions(), prog_ctx->GetName(), combinedSpan);
 
     // Pop context
     context_stack_.pop_back();
@@ -338,13 +410,13 @@ bool IRBuilder::InProgram() const
     return false;
 }
 
-std::vector<TypePtr> IRBuilder::GetFunctionReturnTypes(const GlobalVarPtr& gvar) const
+std::vector<TypePtr> IRBuilder::GetFunctionReturnTypes(const std::string& func_name) const
 {
     // Find the program context in the stack
     for (const auto& ctx : context_stack_) {
         if (ctx->GetType() == BuildContext::Type::PROGRAM) {
             auto* prog_ctx = static_cast<const ProgramContext*>(ctx.get());
-            return prog_ctx->GetReturnTypes(gvar);
+            return prog_ctx->GetReturnTypes(func_name);
         }
     }
     return {};
@@ -386,6 +458,20 @@ ReturnStmtPtr IRBuilder::Return(const Span& span)
     auto return_stmt = std::make_shared<ReturnStmt>(span);
     Emit(return_stmt);
     return return_stmt;
+}
+
+BreakStmtPtr IRBuilder::Break(const Span& span)
+{
+    auto break_stmt = std::make_shared<BreakStmt>(span);
+    Emit(break_stmt);
+    return break_stmt;
+}
+
+ContinueStmtPtr IRBuilder::Continue(const Span& span)
+{
+    auto continue_stmt = std::make_shared<ContinueStmt>(span);
+    Emit(continue_stmt);
+    return continue_stmt;
 }
 
 // ========== Context State Queries ==========
@@ -471,15 +557,11 @@ void IRBuilder::ValidateInProgram(const std::string& operation)
     IRCHECK(InProgram()) << operation << " can only be called inside a program context";
 }
 
+// ========== ProgramContext Implementation ==========
+
 void ProgramContext::AddFunction(const FunctionPtr& func)
 {
     INTERNAL_CHECK(func) << "Cannot add null function to program";
-
-    for (auto cfun : functions_) {
-        if (cfun->name_ == func->name_) {
-            throw RuntimeError("Function '" + func->name_ + "' already declared in program");
-        }
-    }
 
     // Store return types for this function
     return_types_[func->name_] = func->returnTypes_;
@@ -487,9 +569,9 @@ void ProgramContext::AddFunction(const FunctionPtr& func)
     functions_.push_back(func);
 }
 
-std::vector<TypePtr> ProgramContext::GetReturnTypes(const GlobalVarPtr& gvar) const
+std::vector<TypePtr> ProgramContext::GetReturnTypes(const std::string& func_name) const
 {
-    auto it = return_types_.find(gvar->name_);
+    auto it = return_types_.find(func_name);
     if (it != return_types_.end()) {
         return it->second;
     }

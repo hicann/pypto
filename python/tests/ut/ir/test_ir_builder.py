@@ -488,20 +488,16 @@ def test_builder_program_functions_sorted():
     b.add_function(func_a)
     prog = b.end_program(sp)
 
-    # Functions preserve insertion order via builder
-    assert prog.functions[0].name == "zebra"
-    assert prog.functions[1].name == "alpha"
+    # Program.functions is a string -> Function mapping ordered by function name.
+    function_names = [func.name for func in prog.functions.values()]
+    assert function_names == ["alpha", "zebra"]
 
 
 def test_builder_get_function_return_types():
-    """get_function_return_types requires a GlobalVar, not a string."""
+    """get_function_return_types takes a string function name."""
     b = ir.IRBuilder()
     sp = _span()
     st = ir.ScalarType(ir.INT32)
-
-    # The C++ binding expects GlobalVar, not str — verify it raises on wrong type
-    with pytest.raises(TypeError):
-        b.get_function_return_types("foo")
 
     b.begin_program("prog", sp)
 
@@ -514,6 +510,10 @@ def test_builder_get_function_return_types():
 
     # Return types are accessible from the Function object directly
     assert len(func.return_types) == 2
+
+    # get_function_return_types now takes a string function name
+    ret_types = b.get_function_return_types("foo")
+    assert len(ret_types) == 2
 
     b.end_program(sp)
 

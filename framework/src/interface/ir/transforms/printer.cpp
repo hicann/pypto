@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include <cmath>
@@ -42,26 +40,6 @@ using npu::tile_fwk::SymbolicScalar;
 
 namespace pypto {
 namespace ir {
-
-namespace {
-
-enum class Precedence : int {
-    kOr = 1,         // or
-    kXor = 2,        // xor
-    kAnd = 3,        // and
-    kNot = 4,        // not (unary)
-    kComparison = 5, // ==, !=, <, <=, >, >=
-    kBitOr = 6,      // |
-    kBitXor = 7,     // ^
-    kBitAnd = 8,     // &
-    kBitShift = 9,   // <<, >>
-    kAddSub = 10,    // +, -
-    kMulDivMod = 11, // *, /, //, %
-    kUnary = 12,     // -(unary), ~
-    kPow = 13,       // ** (right-associative!)
-    kCall = 14,      // function calls, min(), max(), abs()
-    kAtom = 15       // variables, constants
-};
 
 Precedence GetPrecedence(const ExprPtr& expr)
 {
@@ -111,8 +89,8 @@ Precedence GetPrecedence(const ExprPtr& expr)
         {std::type_index(typeid(ConstInt)), Precedence::kAtom},
         {std::type_index(typeid(ConstFloat)), Precedence::kAtom},
         {std::type_index(typeid(ConstBool)), Precedence::kAtom},
-        {std::type_index(typeid(TupleGetItemExpr)), Precedence::kAtom},
         {std::type_index(typeid(ScalarExpr)), Precedence::kAtom},
+        {std::type_index(typeid(GetItemExpr)), Precedence::kAtom},
     };
 
     INTERNAL_CHECK(expr) << "Expression is null";
@@ -132,6 +110,89 @@ bool IsRightAssociative(const ExprPtr& expr)
     return IsA<Pow>(expr);
 }
 
+bool NeedsParensForPrint(const ExprPtr& parent, const ExprPtr& child, bool is_left)
+{
+    Precedence parent_prec = GetPrecedence(parent);
+    Precedence child_prec = GetPrecedence(child);
+    if (child_prec < parent_prec) {
+        return true;
+    }
+
+    if (child_prec == parent_prec) {
+        if (IsRightAssociative(parent)) {
+            return is_left;
+        } else {
+            return !is_left;
+        }
+    }
+    return false;
+}
+
+void PrintIRNodeWithVisitor(IRVisitor& visitor, std::ostream& stream, const IRNodePtr& node)
+{
+    if (auto program = As<Program>(node)) {
+        visitor.VisitProgram(program);
+    } else if (auto func = As<Function>(node)) {
+        visitor.VisitFunction(func);
+    } else if (auto stmt = As<Stmt>(node)) {
+        visitor.VisitStmt(stmt);
+    } else if (auto expr = As<Expr>(node)) {
+        visitor.VisitExpr(expr);
+    } else {
+        stream << "<unsupported IRNode type>";
+    }
+}
+
+void PrintChildExprWithParens(
+    IRVisitor& visitor, std::ostream& stream, const ExprPtr& parent, const ExprPtr& child, bool is_left)
+{
+    bool needs_parens = NeedsParensForPrint(parent, child, is_left);
+    if (needs_parens) {
+        stream << "(";
+    }
+
+    visitor.VisitExpr(child);
+
+    if (needs_parens) {
+        stream << ")";
+    }
+}
+
+void PrintReturnStmtValues(IRVisitor& visitor, std::ostream& stream, const std::vector<ExprPtr>& values)
+{
+    stream << "return";
+    if (!values.empty()) {
+        stream << " ";
+        for (size_t i = 0; i < values.size(); ++i) {
+            if (i > 0)
+                stream << ", ";
+            visitor.VisitExpr(values[i]);
+        }
+    }
+}
+
+void PrintFunctionReturnAnnotation(
+    std::ostream& stream, const std::vector<TypePtr>& return_types,
+    const std::function<std::string(const TypePtr&)>& print_type)
+{
+    if (!return_types.empty()) {
+        stream << " -> ";
+        if (return_types.size() == 1) {
+            stream << print_type(return_types[0]);
+        } else {
+            stream << "tuple[";
+            for (size_t i = 0; i < return_types.size(); ++i) {
+                if (i > 0)
+                    stream << ", ";
+                stream << print_type(return_types[i]);
+            }
+            stream << "]";
+        }
+    }
+}
+
+namespace {
+
 std::string FormatFloatLiteral(double value)
 {
     // Check if the value is an integer (no fractional part)
@@ -147,10 +208,75 @@ std::string FormatFloatLiteral(double value)
         return oss.str();
     }
 }
+
+void PrintIterArgNames(std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args)
+{
+    stream << "(";
+    for (size_t i = 0; i < iter_args.size(); ++i) {
+        if (i > 0)
+            stream << ", ";
+        stream << iter_args[i]->name_;
+    }
+    if (iter_args.size() == 1) {
+        stream << ",";
+    }
+    stream << ")";
+}
+
+template <typename VisitExprFn>
+void PrintIterArgInitValues(
+    std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args, const VisitExprFn& visit_expr)
+{
+    stream << "init_values=(";
+    for (size_t i = 0; i < iter_args.size(); ++i) {
+        if (i > 0)
+            stream << ", ";
+        visit_expr(iter_args[i]->initValue_);
+    }
+    if (iter_args.size() == 1) {
+        stream << ",";
+    }
+    stream << ")";
+}
+
+template <typename VisitExprFn>
+void PrintForRangeHeader(
+    std::ostringstream& stream, const std::string& prefix, const ForStmtPtr& op, const VisitExprFn& visit_expr)
+{
+    stream << "for " << op->loopVar_->name_;
+    if (!op->iterArgs_.empty()) {
+        stream << ", ";
+        PrintIterArgNames(stream, op->iterArgs_);
+    }
+
+    stream << " in " << prefix << ".range(";
+    visit_expr(op->start_);
+    stream << ", ";
+    visit_expr(op->stop_);
+    stream << ", ";
+    visit_expr(op->step_);
+
+    if (!op->iterArgs_.empty()) {
+        stream << ", ";
+        PrintIterArgInitValues(stream, op->iterArgs_, visit_expr);
+    }
+    stream << "):\n";
+}
+
+template <typename VisitExprFn>
+void PrintWhileIterArgsHeader(
+    std::ostringstream& stream, const std::string& prefix, const WhileStmtPtr& op, const VisitExprFn& visit_expr)
+{
+    stream << "for ";
+    PrintIterArgNames(stream, op->iterArgs_);
+    stream << " in " << prefix << ".while_(";
+    PrintIterArgInitValues(stream, op->iterArgs_, visit_expr);
+    stream << "):\n";
+}
 } // namespace
 
 /**
- * @brief Python-style IR printer
+ * \brief Python-style IR printer
  *
  * Prints IR nodes in Python syntax with type annotations and SSA-style control flow.
  * This is the recommended printer for new code that outputs valid Python syntax.
@@ -162,85 +288,28 @@ std::string FormatFloatLiteral(double value)
  * - Program headers with # pypto.program: name
  */
 class IRPrinter : public IRVisitor {
+    using IRVisitor::VisitExpr_;
+    using IRVisitor::VisitStmt_;
+
 public:
     explicit IRPrinter(std::string prefix = "ir", bool concise = false) : prefix_(std::move(prefix)), concise_(concise)
     {}
     ~IRPrinter() override = default;
 
     /**
-     * @brief Print an IR node to a string in Python IR syntax
+     * \brief Print an IR node to a string in Python IR syntax
      *
-     * @param node IR node to print (can be Expr, Stmt, Function, or Program)
-     * @return Python-style string representation
+     * \param node IR node to print (can be Expr, Stmt, Function, or Program)
+     * \return Python-style string representation
      */
     std::string Print(const IRNodePtr& node);
     std::string Print(const TypePtr& type);
 
 protected:
-    using IRVisitor::VisitExpr_;
-    using IRVisitor::VisitStmt_;
-    // Expression visitors
-    void VisitExpr_(const VarPtr& op) override;
-    void VisitExpr_(const IterArgPtr& op) override;
-    void VisitExpr_(const MemRefPtr& op) override;
-    void VisitExpr_(const ConstIntPtr& op) override;
-    void VisitExpr_(const ConstFloatPtr& op) override;
-    void VisitExpr_(const ConstBoolPtr& op) override;
-    void VisitExpr_(const CallPtr& op) override;
-    void VisitExpr_(const MakeTuplePtr& op) override;
-    void VisitExpr_(const TupleGetItemExprPtr& op) override;
+    PYPTO_IR_PRINTER_COMMON_VISITOR_OVERRIDES();
     void VisitExpr_(const ScalarExprPtr& op) override;
-
-    // Binary operations
-    void VisitExpr_(const AddPtr& op) override;
-    void VisitExpr_(const SubPtr& op) override;
-    void VisitExpr_(const MulPtr& op) override;
-    void VisitExpr_(const FloorDivPtr& op) override;
-    void VisitExpr_(const FloorModPtr& op) override;
-    void VisitExpr_(const FloatDivPtr& op) override;
-    void VisitExpr_(const MinPtr& op) override;
-    void VisitExpr_(const MaxPtr& op) override;
-    void VisitExpr_(const PowPtr& op) override;
-    void VisitExpr_(const EqPtr& op) override;
-    void VisitExpr_(const NePtr& op) override;
-    void VisitExpr_(const LtPtr& op) override;
-    void VisitExpr_(const LePtr& op) override;
-    void VisitExpr_(const GtPtr& op) override;
-    void VisitExpr_(const GePtr& op) override;
-    void VisitExpr_(const AndPtr& op) override;
-    void VisitExpr_(const OrPtr& op) override;
-    void VisitExpr_(const XorPtr& op) override;
-    void VisitExpr_(const BitAndPtr& op) override;
-    void VisitExpr_(const BitOrPtr& op) override;
-    void VisitExpr_(const BitXorPtr& op) override;
-    void VisitExpr_(const BitShiftLeftPtr& op) override;
-    void VisitExpr_(const BitShiftRightPtr& op) override;
-
-    // Unary operations
-    void VisitExpr_(const AbsPtr& op) override;
-    void VisitExpr_(const NegPtr& op) override;
-    void VisitExpr_(const NotPtr& op) override;
-    void VisitExpr_(const BitNotPtr& op) override;
-    void VisitExpr_(const CastPtr& op) override;
-
-    // Statement visitors
-    void VisitStmt_(const AssignStmtPtr& op) override;
-    void VisitStmt_(const IfStmtPtr& op) override;
-    void VisitStmt_(const YieldStmtPtr& op) override;
-    void VisitStmt_(const ReturnStmtPtr& op) override;
-    void VisitStmt_(const ForStmtPtr& op) override;
-    void VisitStmt_(const WhileStmtPtr& op) override;
-    void VisitStmt_(const SeqStmtsPtr& op) override;
-    void VisitStmt_(const EvalStmtPtr& op) override;
-    void VisitStmt_(const BreakStmtPtr& op) override;
-    void VisitStmt_(const ContinueStmtPtr& op) override;
     void VisitStmt_(const TensorOpStmtPtr& op) override;
     void VisitStmt_(const ScalarOpStmtPtr& op) override;
-    void VisitStmt_(const StmtPtr& op) override;
-
-    // Function and program visitors
-    void VisitFunction(const FunctionPtr& func) override;
-    void VisitProgram(const ProgramPtr& prog) override;
 
 private:
     std::ostringstream stream_;
@@ -262,7 +331,6 @@ private:
     void PrintBinaryOp(const BinaryExprPtr& op, const char* op_symbol);
     void PrintFunctionBinaryOp(const BinaryExprPtr& op, const char* func_name);
     void PrintChild(const ExprPtr& parent, const ExprPtr& child, bool is_left);
-    bool NeedsParens(const ExprPtr& parent, const ExprPtr& child, bool is_left);
 
     // Shape printing helper
     void PrintShapeDims(std::ostringstream& oss, const std::vector<ExprPtr>& shape);
@@ -282,21 +350,7 @@ std::string IRPrinter::Print(const IRNodePtr& node)
     stream_.str("");
     stream_.clear();
     indent_ = 0;
-
-    // Try each type in order
-    if (auto prog = As<Program>(node)) {
-        VisitProgram(prog);
-    } else if (auto func = As<Function>(node)) {
-        VisitFunction(func);
-    } else if (auto stmt = As<Stmt>(node)) {
-        VisitStmt(stmt);
-    } else if (auto expr = As<Expr>(node)) {
-        VisitExpr(expr);
-    } else {
-        // Unsupported node type
-        stream_ << "<unsupported IRNode type>";
-    }
-
+    PrintIRNodeWithVisitor(*this, stream_, node);
     return stream_.str();
 }
 
@@ -411,10 +465,12 @@ void IRPrinter::VisitExpr_(const MakeTuplePtr& op)
     stream_ << "]";
 }
 
-void IRPrinter::VisitExpr_(const TupleGetItemExprPtr& op)
+void IRPrinter::VisitExpr_(const GetItemExprPtr& op)
 {
-    VisitExpr(op->tuple_);
-    stream_ << "[" << op->index_ << "]";
+    VisitExpr(op->value_);
+    stream_ << "[";
+    VisitExpr(op->slice_);
+    stream_ << "]";
 }
 
 void IRPrinter::VisitExpr_(const ScalarExprPtr& op)
@@ -424,37 +480,10 @@ void IRPrinter::VisitExpr_(const ScalarExprPtr& op)
     stream_ << ToString(op);
 }
 
-bool IRPrinter::NeedsParens(const ExprPtr& parent, const ExprPtr& child, bool is_left)
-{
-    Precedence parent_prec = GetPrecedence(parent);
-    Precedence child_prec = GetPrecedence(child);
-    if (child_prec < parent_prec) {
-        return true;
-    }
-
-    if (child_prec == parent_prec) {
-        if (IsRightAssociative(parent)) {
-            return is_left;
-        } else {
-            return !is_left;
-        }
-    }
-    return false;
-}
-
 // Binary and unary operators - reuse from base printer logic
 void IRPrinter::PrintChild(const ExprPtr& parent, const ExprPtr& child, bool is_left)
 {
-    bool needs_parens = NeedsParens(parent, child, is_left);
-    if (needs_parens) {
-        stream_ << "(";
-    }
-
-    VisitExpr(child);
-
-    if (needs_parens) {
-        stream_ << ")";
-    }
+    PrintChildExprWithParens(*this, stream_, parent, child, is_left);
 }
 
 void IRPrinter::PrintBinaryOp(const BinaryExprPtr& op, const char* op_symbol)
@@ -606,60 +635,11 @@ void IRPrinter::VisitStmt_(const YieldStmtPtr& op)
     stream_ << ")";
 }
 
-void IRPrinter::VisitStmt_(const ReturnStmtPtr& op)
-{
-    stream_ << "return";
-    if (!op->value_.empty()) {
-        stream_ << " ";
-        for (size_t i = 0; i < op->value_.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            VisitExpr(op->value_[i]);
-        }
-    }
-}
+void IRPrinter::VisitStmt_(const ReturnStmtPtr& op) { PrintReturnStmtValues(*this, stream_, op->value_); }
 
 void IRPrinter::VisitStmt_(const ForStmtPtr& op)
 {
-    stream_ << "for " << op->loopVar_->name_;
-
-    // If we have iter_args, add tuple unpacking without type annotations
-    if (!op->iterArgs_.empty()) {
-        stream_ << ", (";
-        for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            stream_ << op->iterArgs_[i]->name_;
-        }
-        // Add trailing comma for single-element tuples to distinguish from parenthesized expression
-        if (op->iterArgs_.size() == 1) {
-            stream_ << ",";
-        }
-        stream_ << ")";
-    }
-
-    // Select range function based on loop kind
-    stream_ << " in " << prefix_ << ".range(";
-    VisitExpr(op->start_);
-    stream_ << ", ";
-    VisitExpr(op->stop_);
-    stream_ << ", ";
-    VisitExpr(op->step_);
-
-    if (!op->iterArgs_.empty()) {
-        stream_ << ", init_values=(";
-        for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            VisitExpr(op->iterArgs_[i]->initValue_);
-        }
-        // Add trailing comma for single-element tuple
-        if (op->iterArgs_.size() == 1)
-            stream_ << ",";
-        stream_ << ")";
-    }
-
-    stream_ << "):\n";
+    PrintForRangeHeader(stream_, prefix_, op, [this](const ExprPtr& expr) { VisitExpr(expr); });
 
     indent_++;
     VisitStmtBody(op->body_, op->returnVars_);
@@ -680,28 +660,7 @@ void IRPrinter::VisitStmt_(const WhileStmtPtr& op)
         indent_--;
     } else {
         // SSA-style while with iter_args - print as explicit DSL syntax
-        stream_ << "for (";
-        for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            stream_ << op->iterArgs_[i]->name_;
-        }
-        // Add trailing comma for single-element tuples
-        if (op->iterArgs_.size() == 1) {
-            stream_ << ",";
-        }
-        stream_ << ") in " << prefix_ << ".while_(init_values=(";
-
-        // Add init_values for iter_args
-        for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-            if (i > 0)
-                stream_ << ", ";
-            VisitExpr(op->iterArgs_[i]->initValue_);
-        }
-        // Add trailing comma for single-element tuple
-        if (op->iterArgs_.size() == 1)
-            stream_ << ",";
-        stream_ << ")):\n";
+        PrintWhileIterArgsHeader(stream_, prefix_, op, [this](const ExprPtr& expr) { VisitExpr(expr); });
 
         indent_++;
 
@@ -1004,21 +963,7 @@ void IRPrinter::VisitFunction(const FunctionPtr& func)
 
     stream_ << ")";
 
-    // Print return type annotation
-    if (!func->returnTypes_.empty()) {
-        stream_ << " -> ";
-        if (func->returnTypes_.size() == 1) {
-            stream_ << Print(func->returnTypes_[0]);
-        } else {
-            stream_ << "tuple[";
-            for (size_t i = 0; i < func->returnTypes_.size(); ++i) {
-                if (i > 0)
-                    stream_ << ", ";
-                stream_ << Print(func->returnTypes_[i]);
-            }
-            stream_ << "]";
-        }
-    }
+    PrintFunctionReturnAnnotation(stream_, func->returnTypes_, [this](const TypePtr& type) { return Print(type); });
 
     stream_ << ":\n";
 
@@ -1034,12 +979,12 @@ void IRPrinter::VisitProgram(const ProgramPtr& program)
 {
     stream_ << "# ir.program: " << (program->name_.empty() ? "Program" : program->name_) << "\n";
     bool first = true;
-    for (const auto& func : program->functions_) {
+    for (const auto& entry : program->functions_) {
         if (!first) {
             stream_ << "\n"; // Blank line between functions
         }
         first = false;
-        VisitFunction(func);
+        VisitFunction(entry.second);
     }
 }
 
@@ -1071,7 +1016,7 @@ std::string IRPrinter::PrintMemRef(const MemRef& memref)
     oss << prefix_ << ".MemorySpace." << MemorySpaceToString(memref.memorySpace_) << ", ";
 
     IRPrinter temp_printer(prefix_);
-    oss << temp_printer.Print(memref.offset_);
+    oss << temp_printer.Print(memref.addr_);
     // Print size
     oss << ", " << memref.size_ << ")";
     return oss.str();

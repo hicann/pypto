@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "core/dtype.h"
+#include "core/logging.h"
 #include "ir/core.h"
 #include "ir/expr.h"
 #include "ir/reflection/field_traits.h"

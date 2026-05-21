@@ -72,16 +72,22 @@ struct IsIRNodeOptionalField<std::optional<std::shared_ptr<const IRNodeType>>>
 /**
  * \brief Type trait to check if a type is std::map with IRNode pointer values
  *
- * Used to handle map fields specially (e.g., map of GlobalVarPtr to FunctionPtr).
- * Matches any map<shared_ptr<const K>, shared_ptr<const V>, Comp> where V derives from IRNode.
- * The key type K does not need to derive from IRNode (e.g., GlobalVar extends Op, not IRNode).
+ * Used to handle map fields specially (e.g., map of string to FunctionPtr).
+ * Matches any map<shared_ptr<const K>, shared_ptr<const V>, Comp> where V derives from IRNode,
+ * or map<string, shared_ptr<const V>> where V derives from IRNode.
+ * The key type K does not need to derive from IRNode.
  */
 template <typename T>
 struct IsIRNodeMapField : std::false_type {};
 
-// Specialization for std::map with IRNode-derived value type
+// Specialization for std::map with shared_ptr key and IRNode-derived value type
 template <typename KeyType, typename ValueType, typename Compare>
 struct IsIRNodeMapField<std::map<std::shared_ptr<const KeyType>, std::shared_ptr<const ValueType>, Compare>>
+    : std::integral_constant<bool, std::is_base_of_v<IRNode, ValueType>> {};
+
+// Specialization for std::map with std::string key and IRNode-derived value type
+template <typename ValueType>
+struct IsIRNodeMapField<std::map<std::string, std::shared_ptr<const ValueType>>>
     : std::integral_constant<bool, std::is_base_of_v<IRNode, ValueType>> {};
 
 /**

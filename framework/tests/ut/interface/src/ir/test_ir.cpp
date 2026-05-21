@@ -66,13 +66,13 @@ class IRTypeStrTest : public testing::Test {};
 TEST_F(IRTypeStrTest, TestUnknownTypeStr)
 {
     auto ut = std::make_shared<UnknownType>();
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(ut)), "ir.Unknown");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(ut)), "pl.Unknown");
 }
 
 TEST_F(IRTypeStrTest, TestScalarTypeStr)
 {
     auto st = std::make_shared<ScalarType>(DataType::INT32);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(st)), "ir.Scalar[ir.INT32]");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(st)), "pl.Scalar[pl.INT32]");
 }
 
 TEST_F(IRTypeStrTest, TestTensorTypeStr)
@@ -80,7 +80,7 @@ TEST_F(IRTypeStrTest, TestTensorTypeStr)
     auto dim1 = std::make_shared<ConstInt>(16, DataType::INT64, Span::Unknown());
     auto dim2 = std::make_shared<ConstInt>(32, DataType::INT64, Span::Unknown());
     auto tt = std::make_shared<TensorType>(std::vector<ExprPtr>{dim1, dim2}, DataType::FP32);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(tt)), "ir.Tensor[[16, 32], ir.FP32]");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(tt)), "pl.Tensor[[16, 32], pl.FP32]");
 }
 
 TEST_F(IRTypeStrTest, TestTensorTypeWithMemRefStr)
@@ -88,11 +88,11 @@ TEST_F(IRTypeStrTest, TestTensorTypeWithMemRefStr)
     auto dim1 = std::make_shared<ConstInt>(16, DataType::INT64, Span::Unknown());
     auto dim2 = std::make_shared<ConstInt>(32, DataType::INT64, Span::Unknown());
     auto offset = std::make_shared<ConstInt>(0, DataType::INT64, Span::Unknown());
-    auto memref = std::make_shared<MemRef>(MemorySpace::DDR, offset, 1024);
+    MemRefPtr memref = std::make_shared<MemRef>(MemorySpace::DDR, offset, 1024);
     auto tt = std::make_shared<TensorType>(std::vector<ExprPtr>{dim1, dim2}, DataType::FP16, memref);
     ASSERT_EQ(
         PythonPrint(std::static_pointer_cast<const Type>(tt)),
-        "ir.Tensor[[16, 32], ir.FP16, ir.MemRef(ir.MemorySpace.DDR, 0, 1024)]");
+        "pl.Tensor[[16, 32], pl.FP16, pl.MemRef(pl.MemorySpace.DDR, 0, 1024)]");
 }
 
 TEST_F(IRTypeStrTest, TestTupleTypeStr)
@@ -101,13 +101,13 @@ TEST_F(IRTypeStrTest, TestTupleTypeStr)
     auto t2 = std::make_shared<ScalarType>(DataType::FP32);
     auto tup = std::make_shared<TupleType>(std::vector<TypePtr>{t1, t2});
     ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const Type>(tup)), "ir.Tuple[ir.Scalar[ir.INT32], ir.Scalar[ir.FP32]]");
+        PythonPrint(std::static_pointer_cast<const Type>(tup)), "pl.Tuple[pl.Scalar[pl.INT32], pl.Scalar[pl.FP32]]");
 }
 
 TEST_F(IRTypeStrTest, TestPtrTypeStr)
 {
-    auto pt = GetPtrType();
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(pt)), "ir.Ptr");
+    auto pt = std::make_shared<PtrType>(DataType::FP32);
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const Type>(pt)), "pl.Ptr");
 }
 
 // ============================================================================
@@ -200,10 +200,10 @@ TEST_F(IRExprStrTest, TestMinMaxStr)
     auto b = std::make_shared<ConstInt>(2, DataType::INT32, sp);
 
     auto minExpr = std::make_shared<Min>(a, b, DataType::INT32, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(minExpr)), "ir.min(1, 2)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(minExpr)), "pl.min(1, 2)");
 
     auto maxExpr = std::make_shared<Max>(a, b, DataType::INT32, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(maxExpr)), "ir.max(1, 2)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(maxExpr)), "pl.max(1, 2)");
 }
 
 TEST_F(IRExprStrTest, TestUnaryOpsStr)
@@ -218,13 +218,13 @@ TEST_F(IRExprStrTest, TestUnaryOpsStr)
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(notExpr)), "not True");
 
     auto absExpr = std::make_shared<Abs>(a, DataType::INT32, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(absExpr)), "ir.abs(1)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(absExpr)), "pl.abs(1)");
 
     auto cast = std::make_shared<Cast>(a, DataType::FP32, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(cast)), "ir.cast(1, ir.FP32)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(cast)), "pl.cast(1, pl.FP32)");
 }
 
-TEST_F(IRExprStrTest, TestMakeTupleAndTupleGetItemStr)
+TEST_F(IRExprStrTest, TestMakeTupleAndGetItemStr)
 {
     auto a = std::make_shared<ConstInt>(1, DataType::INT32, sp);
     auto b = std::make_shared<ConstInt>(2, DataType::INT32, sp);
@@ -232,7 +232,8 @@ TEST_F(IRExprStrTest, TestMakeTupleAndTupleGetItemStr)
     auto mt = std::make_shared<MakeTuple>(std::vector<ExprPtr>{a, b}, sp);
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(mt)), "[1, 2]");
 
-    auto tgi = std::make_shared<TupleGetItemExpr>(mt, 0, sp);
+    auto idx = std::make_shared<ConstInt>(0, DataType::INDEX, sp);
+    auto tgi = std::make_shared<GetItemExpr>(mt, idx, sp);
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(tgi)), "[1, 2][0]");
 }
 
@@ -241,14 +242,14 @@ TEST_F(IRExprStrTest, TestCallStr)
     auto a = std::make_shared<ConstInt>(1, DataType::INT32, sp);
     auto b = std::make_shared<ConstInt>(2, DataType::INT32, sp);
     auto call = std::make_shared<Call>("my_op", std::vector<ExprPtr>{a, b}, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(call)), "ir.call @my_op(1, 2)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(call)), "pl.call @my_op(1, 2)");
 }
 
 TEST_F(IRExprStrTest, TestMemRefStr)
 {
     auto offset = std::make_shared<ConstInt>(0, DataType::INT64, sp);
     auto memref = std::make_shared<MemRef>(MemorySpace::Vec, offset, 2048, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(memref)), "ir.MemRef(ir.MemorySpace.Vec, 0, 2048)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(memref)), "pl.MemRef(pl.MemorySpace.Vec, 0, 2048)");
 }
 
 // ============================================================================
@@ -266,7 +267,7 @@ TEST_F(IRStmtStrTest, TestAssignStmtStr)
     auto x = std::make_shared<Var>("x", st, sp);
     auto val = std::make_shared<ConstInt>(42, DataType::INT32, sp);
     auto assign = std::make_shared<AssignStmt>(x, val, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(assign)), "x: ir.Scalar[ir.INT32] = 42");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(assign)), "x: pl.Scalar[pl.INT32] = 42");
 }
 
 TEST_F(IRStmtStrTest, TestSeqStmtsStr)
@@ -278,7 +279,7 @@ TEST_F(IRStmtStrTest, TestSeqStmtsStr)
     auto seq = std::make_shared<SeqStmts>(std::vector<StmtPtr>{assign_x, assign_y}, sp);
     ASSERT_EQ(
         PythonPrint(std::static_pointer_cast<const IRNode>(seq)),
-        "x: ir.Scalar[ir.INT32] = 42\ny: ir.Scalar[ir.INT32] = 0");
+        "x: pl.Scalar[pl.INT32] = 42\ny: pl.Scalar[pl.INT32] = 0");
 }
 
 TEST_F(IRStmtStrTest, TestIfStmtStr)
@@ -288,7 +289,7 @@ TEST_F(IRStmtStrTest, TestIfStmtStr)
     auto assign = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(42, DataType::INT32, sp), sp);
 
     auto ifStmt = std::make_shared<IfStmt>(cond, assign, std::nullopt, std::vector<VarPtr>{}, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(ifStmt)), "if True:\n    x: ir.Scalar[ir.INT32] = 42");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(ifStmt)), "if True:\n    x: pl.Scalar[pl.INT32] = 42");
 }
 
 TEST_F(IRStmtStrTest, TestIfElseStmtStr)
@@ -302,7 +303,7 @@ TEST_F(IRStmtStrTest, TestIfElseStmtStr)
     auto ifElse = std::make_shared<IfStmt>(cond, thenBody, elseBody, std::vector<VarPtr>{}, sp);
     ASSERT_EQ(
         PythonPrint(std::static_pointer_cast<const IRNode>(ifElse)),
-        "if True:\n    x: ir.Scalar[ir.INT32] = 42\nelse:\n    y: ir.Scalar[ir.INT32] = 0");
+        "if True:\n    x: pl.Scalar[pl.INT32] = 42\nelse:\n    y: pl.Scalar[pl.INT32] = 0");
 }
 
 TEST_F(IRStmtStrTest, TestForStmtStr)
@@ -321,8 +322,8 @@ TEST_F(IRStmtStrTest, TestForStmtStr)
 
     ASSERT_EQ(
         PythonPrint(std::static_pointer_cast<const IRNode>(forStmt)),
-        "for i, (sum,) in ir.range(0, 10, 1, init_values=(0,)):\n"
-        "    sum_out: ir.Scalar[ir.INT32] = ir.yield_(1)");
+        "for i, (sum,) in pl.range(0, 10, 1, init_values=(0,)):\n"
+        "    sum_out: pl.Scalar[pl.INT32] = pl.yield_(1)");
 }
 
 TEST_F(IRStmtStrTest, TestWhileStmtStr)
@@ -333,17 +334,17 @@ TEST_F(IRStmtStrTest, TestWhileStmtStr)
 
     auto whileStmt = std::make_shared<WhileStmt>(cond, std::vector<IterArgPtr>{}, assign, std::vector<VarPtr>{}, sp);
     ASSERT_EQ(
-        PythonPrint(std::static_pointer_cast<const IRNode>(whileStmt)), "while True:\n    x: ir.Scalar[ir.INT32] = 42");
+        PythonPrint(std::static_pointer_cast<const IRNode>(whileStmt)), "while True:\n    x: pl.Scalar[pl.INT32] = 42");
 }
 
 TEST_F(IRStmtStrTest, TestYieldStmtStr)
 {
     auto val = std::make_shared<ConstInt>(42, DataType::INT32, sp);
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{val}, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(yield)), "ir.yield_(42)");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(yield)), "pl.yield_(42)");
 
     auto emptyYield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(emptyYield)), "ir.yield_()");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(emptyYield)), "pl.yield_()");
 }
 
 TEST_F(IRStmtStrTest, TestReturnStmtStr)
@@ -370,7 +371,7 @@ TEST_F(IRStmtStrTest, TestEvalStmtStr)
     auto val = std::make_shared<ConstInt>(42, DataType::INT32, sp);
     auto call = std::make_shared<Call>("some_op", std::vector<ExprPtr>{val}, sp);
     auto eval = std::make_shared<EvalStmt>(call, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(eval)), "ir.eval(ir.call @some_op(42))");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(eval)), "pl.eval(pl.call @some_op(42))");
 }
 
 TEST_F(IRStmtStrTest, TestFunctionStr)
@@ -381,8 +382,8 @@ TEST_F(IRStmtStrTest, TestFunctionStr)
 
     ASSERT_EQ(
         PythonPrint(std::static_pointer_cast<const IRNode>(func)),
-        "@ir.function\ndef test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
-        "    x: ir.Scalar[ir.INT32] = 42");
+        "@pl.function\ndef test_func(x: pl.Scalar[pl.INT32]) -> pl.Scalar[pl.INT32]:\n"
+        "    x: pl.Scalar[pl.INT32] = 42");
 }
 
 TEST_F(IRStmtStrTest, TestProgramStr)
@@ -395,12 +396,12 @@ TEST_F(IRStmtStrTest, TestProgramStr)
     auto prog = std::make_shared<Program>(std::vector<FunctionPtr>{func1, func2}, "test_prog", sp);
 
     std::string expected = "# ir.program: test_prog\n"
-                           "@ir.function\n"
-                           "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
-                           "    x: ir.Scalar[ir.INT32] = 42\n"
-                           "@ir.function\n"
-                           "def test_func2(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:\n"
-                           "    x: ir.Scalar[ir.INT32] = 42";
+                           "@pl.function\n"
+                           "def test_func(x: pl.Scalar[pl.INT32]) -> pl.Scalar[pl.INT32]:\n"
+                           "    x: pl.Scalar[pl.INT32] = 42\n"
+                           "@pl.function\n"
+                           "def test_func2(x: pl.Scalar[pl.INT32]) -> pl.Scalar[pl.INT32]:\n"
+                           "    x: pl.Scalar[pl.INT32] = 42";
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(prog)), expected);
 
     ASSERT_NE(prog->GetFunction("test_func"), nullptr);

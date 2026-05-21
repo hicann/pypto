@@ -168,7 +168,7 @@ TEST_F(IRBuilderTest, TestAssign)
     b.EndFunction(sp);
 
     ASSERT_NE(stmt, nullptr);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(stmt)), "x: ir.Scalar[ir.INT32] = 42");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(stmt)), "x: pl.Scalar[pl.INT32] = 42");
 }
 
 TEST_F(IRBuilderTest, TestReturnWithValues)
@@ -533,8 +533,10 @@ TEST_F(IRBuilderTest, TestProgramFunctionsInsertionOrder)
     b.AddFunction(funcA);
     auto prog = b.EndProgram(sp);
 
-    ASSERT_EQ(prog->functions_[0]->name_, "zebra");
-    ASSERT_EQ(prog->functions_[1]->name_, "alpha");
+    ASSERT_TRUE(prog->functions_.count("zebra"));
+    ASSERT_TRUE(prog->functions_.count("alpha"));
+    ASSERT_EQ(prog->functions_.at("zebra")->name_, "zebra");
+    ASSERT_EQ(prog->functions_.at("alpha")->name_, "alpha");
 }
 
 TEST_F(IRBuilderTest, TestGetFunctionReturnTypes)

@@ -1,5 +1,4 @@
-/*
- * Copyright (c) PyPTO Contributors.
+/**
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include "bindings.h"
@@ -56,8 +54,7 @@ void BindIRBuilder(py::module_& m)
             "Args:\n"
             "    name: Parameter name\n"
             "    type: Parameter type\n"
-            "    span: Source location for parameter\n"
-            "    direction: Parameter direction (default: In)\n\n"
+            "    span: Source location for parameter\n\n"
             "Returns:\n"
             "    Var: Variable representing the parameter\n\n"
             "Raises:\n"
@@ -227,6 +224,27 @@ void BindIRBuilder(py::module_& m)
             "Raises:\n"
             "    RuntimeError: If not inside an if context")
 
+        // Section building
+        .def(
+            "begin_section", &IRBuilder::BeginSection, py::arg("section_kind"), py::arg("span"),
+            "Begin building a section statement.\n\n"
+            "Creates a new section context. Must be closed with end_section().\n\n"
+            "Args:\n"
+            "    section_kind: The kind of section (Vector or Cube)\n"
+            "    span: Source location for section statement\n\n"
+            "Raises:\n"
+            "    RuntimeError: If not inside a function or loop")
+        .def(
+            "end_section", &IRBuilder::EndSection, py::arg("end_span"),
+            "End building a section statement.\n\n"
+            "Finalizes the section statement and returns it.\n\n"
+            "Args:\n"
+            "    end_span: Source location for end of section\n\n"
+            "Returns:\n"
+            "    SectionStmt: The built section statement\n\n"
+            "Raises:\n"
+            "    RuntimeError: If not inside a section context")
+
         // Statement recording
         .def(
             "emit", &IRBuilder::Emit, py::arg("stmt"),
@@ -342,12 +360,12 @@ void BindIRBuilder(py::module_& m)
             "    RuntimeError: If not inside a program context")
 
         .def(
-            "get_function_return_types", &IRBuilder::GetFunctionReturnTypes, py::arg("name"),
-            "Get return types for a function by its name.\n\n"
+            "get_function_return_types", &IRBuilder::GetFunctionReturnTypes, py::arg("func_name"),
+            "Get return types for a function by name.\n\n"
             "Returns the return types for a function if it has been added to the program.\n"
             "Returns empty list if not inside a program or function not yet added.\n\n"
             "Args:\n"
-            "    gvar: GlobalVar for the function\n\n"
+            "    func_name: Function name\n\n"
             "Returns:\n"
             "    List[Type]: Vector of return types")
 

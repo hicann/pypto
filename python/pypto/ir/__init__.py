@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) PyPTO Contributors.
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software; you can redistribute it and/or modify it under the terms and conditions of
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
-
-
 __all__ = [
     "IRBuilder",
     "IRNode",
@@ -43,6 +39,7 @@ __all__ = [
     "ConstBool",
     "Call",
     "MakeTuple",
+    "GetItemExpr",
     "TupleGetItem",
 
     # BinaryExpr
@@ -129,7 +126,7 @@ from ..pypto_impl.ir import (
     ConstBool,
     Call,
     MakeTuple,
-    TupleGetItemExpr as TupleGetItem,
+    GetItemExpr,
 )
 
 # --- Binary expression ops ---
@@ -186,6 +183,15 @@ from ..pypto_impl.ir import (
 
 # --- Function / Program ---
 from ..pypto_impl.ir import Function, Program
+
+
+def tuple_get_item(value, index, span):
+    if isinstance(index, int):
+        index = ConstInt(index, INDEX, span)
+    return GetItemExpr(value, index, span)
+
+
+TupleGetItem = tuple_get_item
 
 # --- DataType static instances ---
 BOOL = DataType.BOOL

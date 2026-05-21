@@ -90,9 +90,10 @@ TEST_F(IRPrinterTest, TestPrintConstantsAndBasicExprs)
     auto b = std::make_shared<ConstInt>(2, DataType::INT32, Sp());
     EXPECT_EQ(Print(std::make_shared<MakeTuple>(std::vector<ExprPtr>{a, b}, Sp())), "[1, 2]");
 
-    // TupleGetItem
+    // GetItemExpr
     auto tup = std::make_shared<MakeTuple>(std::vector<ExprPtr>{a}, Sp());
-    EXPECT_EQ(Print(std::make_shared<TupleGetItemExpr>(tup, 0, Sp())), "[1][0]");
+    auto idx = std::make_shared<ConstInt>(0, DataType::INDEX, Sp());
+    EXPECT_EQ(Print(std::make_shared<GetItemExpr>(tup, idx, Sp())), "[1][0]");
 }
 
 // ============================================================================
@@ -200,7 +201,7 @@ TEST_F(IRPrinterTest, TestPrintTypes)
 
     // TensorType
     auto off = std::make_shared<ConstInt>(0, DataType::INT64, Sp());
-    auto memref = std::make_shared<MemRef>(MemorySpace::DDR, off, 128, Sp());
+    MemRefPtr memref = std::make_shared<MemRef>(MemorySpace::DDR, off, 128, Sp());
     auto tensor = std::make_shared<TensorType>(
         std::vector<ExprPtr>{
             std::make_shared<ConstInt>(4, DataType::INT64, Sp()), std::make_shared<ConstInt>(8, DataType::INT64, Sp())},
@@ -235,7 +236,7 @@ TEST_F(IRPrinterTest, TestPrintTypes)
     EXPECT_NE(PrintType(GetMemRefType()).find("MemRefType"), std::string::npos);
 
     // PtrType
-    EXPECT_NE(PrintType(std::make_shared<PtrType>()).find("Ptr"), std::string::npos);
+    EXPECT_NE(PrintType(std::make_shared<PtrType>(DataType::FP32)).find("Ptr"), std::string::npos);
 }
 
 TEST_F(IRPrinterTest, TestPrintTensorTypeWithVarShape)
@@ -384,8 +385,9 @@ TEST_F(IRPrinterTest, TestPrintWhileStmt)
         std::vector<ExprPtr>{
             std::make_shared<ConstInt>(1, DataType::INT32, Sp()), std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
         Sp());
-    auto multiStr = Print(std::make_shared<WhileStmt>(
-        cond, std::vector<IterArgPtr>{ia, ia2}, multiBody, std::vector<VarPtr>{rv, rv2}, Sp()));
+    auto multiStr = Print(
+        std::make_shared<WhileStmt>(
+            cond, std::vector<IterArgPtr>{ia, ia2}, multiBody, std::vector<VarPtr>{rv, rv2}, Sp()));
     EXPECT_NE(multiStr.find("while_"), std::string::npos);
     EXPECT_NE(multiStr.find("b"), std::string::npos);
 }
@@ -404,7 +406,7 @@ TEST_F(IRPrinterTest, TestPrintFunction)
     auto funcStr = Print(std::make_shared<Function>(
         "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp()));
     EXPECT_NE(funcStr.find("def f"), std::string::npos);
-    EXPECT_NE(funcStr.find("@ir.function"), std::string::npos);
+    EXPECT_NE(funcStr.find("@pl.function"), std::string::npos);
 
     // Multi params
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
@@ -437,15 +439,16 @@ TEST_F(IRPrinterTest, TestPrintFunctionBodies)
     auto a2 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(2, DataType::INT32, Sp()), Sp());
     auto yieldStmt =
         std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp())}, Sp());
-    auto seqFunc = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
-        std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2, yieldStmt}, Sp()), Sp()));
+    auto seqFunc = Print(
+        std::make_shared<Function>(
+            "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+            std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2, yieldStmt}, Sp()), Sp()));
     EXPECT_NE(seqFunc.find("return 3"), std::string::npos);
 
     // Empty SeqStmts body → pass
     auto emptyFunc = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{}, std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp()),
-        Sp()));
+        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{},
+        std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp()), Sp()));
     EXPECT_NE(emptyFunc.find("pass"), std::string::npos);
 }
 

@@ -10,7 +10,7 @@
 
 /*!
  * \file test_expr.cpp
- * \brief Unit tests for IR expression types (MakeTuple, TupleGetItemExpr)
+ * \brief Unit tests for IR expression types (MakeTuple, GetItemExpr)
  */
 
 #include "gtest/gtest.h"
@@ -61,7 +61,7 @@ TEST_F(IRExprTest, TestMakeTupleSingleElement)
 }
 
 // ============================================================================
-// TupleGetItemExpr Tests
+// GetItemExpr Tests
 // ============================================================================
 
 TEST_F(IRExprTest, TestTupleGetItemBasic)
@@ -71,8 +71,10 @@ TEST_F(IRExprTest, TestTupleGetItemBasic)
     std::vector<ExprPtr> elements = {elem1, elem2};
     auto tuple = std::make_shared<MakeTuple>(elements, Span::Unknown());
 
-    auto item0 = std::make_shared<TupleGetItemExpr>(tuple, 0, Span::Unknown());
-    auto item1 = std::make_shared<TupleGetItemExpr>(tuple, 1, Span::Unknown());
+    auto idx0 = std::make_shared<ConstInt>(0, DataType::INDEX, Span::Unknown());
+    auto idx1 = std::make_shared<ConstInt>(1, DataType::INDEX, Span::Unknown());
+    auto item0 = std::make_shared<GetItemExpr>(tuple, idx0, Span::Unknown());
+    auto item1 = std::make_shared<GetItemExpr>(tuple, idx1, Span::Unknown());
 
     auto type0 = As<ScalarType>(item0->GetType());
     auto type1 = As<ScalarType>(item1->GetType());
@@ -89,9 +91,10 @@ TEST_F(IRExprTest, TestTupleGetItemIndex)
     std::vector<ExprPtr> elements = {elem1, elem2};
     auto tuple = std::make_shared<MakeTuple>(elements, Span::Unknown());
 
-    auto item = std::make_shared<TupleGetItemExpr>(tuple, 1, Span::Unknown());
-    ASSERT_EQ(item->index_, 1);
-    ASSERT_EQ(item->tuple_, tuple);
+    auto idx = std::make_shared<ConstInt>(1, DataType::INDEX, Span::Unknown());
+    auto item = std::make_shared<GetItemExpr>(tuple, idx, Span::Unknown());
+    ASSERT_EQ(As<ConstInt>(item->slice_)->value_, 1);
+    ASSERT_EQ(item->value_, tuple);
 }
 
 } // namespace ir

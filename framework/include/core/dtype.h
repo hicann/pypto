@@ -350,7 +350,7 @@ inline constexpr DataType DataType::HF8 = DataType(kHf8Code);
 inline constexpr DataType DataType::INDEX = DataType(kIndexCode);
 
 /**
- * @brief Convert DataType to its canonical enum name string
+ * \brief Convert DataType to its canonical enum name string
  *
  * Returns the uppercase enum-style name for a DataType, suitable for use
  * as a suffix in code generation (e.g., "FP32", "BF16", "INT32").
@@ -359,8 +359,8 @@ inline constexpr DataType DataType::INDEX = DataType(kIndexCode);
  *   - Python printer: prefix + "." + DTypeToString(dtype)
  *   - C++ codegen:    "DataType::" + DTypeToString(dtype)
  *
- * @param dtype The data type to convert
- * @return Uppercase enum name string
+ * \param dtype The data type to convert
+ * \return Uppercase enum name string
  */
 inline std::string DTypeToString(const DataType& dtype)
 {

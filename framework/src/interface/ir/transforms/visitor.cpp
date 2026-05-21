@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include "ir/transforms/base/visitor.h"
@@ -30,8 +28,8 @@ namespace ir {
 // Top-level entry points
 void IRVisitor::VisitProgram(const ProgramPtr& program)
 {
-    for (auto& func : program->functions_) {
-        VisitFunction(func);
+    for (const auto& entry : program->functions_) {
+        VisitFunction(entry.second);
     }
 }
 
@@ -67,7 +65,11 @@ void IRVisitor::VisitExpr_(const IterArgPtr& op)
     VisitExpr(op->initValue_);
 }
 
-void IRVisitor::VisitExpr_(const MemRefPtr& op) { (void)op; }
+void IRVisitor::VisitExpr_(const MemRefPtr& op)
+{
+    INTERNAL_CHECK_SPAN(op->addr_, op->span_) << "MemRef has null offset";
+    VisitExpr(op->addr_);
+}
 
 void IRVisitor::VisitExpr_(const ConstIntPtr& op) { (void)op; }
 
@@ -91,10 +93,12 @@ void IRVisitor::VisitExpr_(const MakeTuplePtr& op)
     }
 }
 
-void IRVisitor::VisitExpr_(const TupleGetItemExprPtr& op)
+void IRVisitor::VisitExpr_(const GetItemExprPtr& op)
 {
-    INTERNAL_CHECK_SPAN(op->tuple_, op->span_) << "TupleGetItemExpr has null tuple";
-    VisitExpr(op->tuple_);
+    INTERNAL_CHECK_SPAN(op->value_, op->span_) << "GetItemExpr has null value";
+    INTERNAL_CHECK_SPAN(op->slice_, op->span_) << "GetItemExpr has null slice";
+    VisitExpr(op->value_);
+    VisitExpr(op->slice_);
 }
 
 void IRVisitor::VisitExpr_(const ScalarExprPtr& op) { (void)op; }
@@ -237,6 +241,20 @@ void IRVisitor::VisitStmt_(const SeqStmtsPtr& op)
         INTERNAL_CHECK_SPAN(op->stmts_[i], op->span_) << "SeqStmts has null statement at index " << i;
         VisitStmt(op->stmts_[i]);
     }
+}
+
+void IRVisitor::VisitStmt_(const OpStmtsPtr& op)
+{
+    for (size_t i = 0; i < op->stmts_.size(); ++i) {
+        INTERNAL_CHECK_SPAN(op->stmts_[i], op->span_) << "OpStmts has null statement at index " << i;
+        VisitStmt(op->stmts_[i]);
+    }
+}
+
+void IRVisitor::VisitStmt_(const SectionStmtPtr& op)
+{
+    INTERNAL_CHECK_SPAN(op->body_, op->span_) << "SectionStmt has null body";
+    VisitStmt(op->body_);
 }
 
 void IRVisitor::VisitStmt_(const EvalStmtPtr& op)

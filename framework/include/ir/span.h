@@ -104,15 +104,19 @@ public:
     std::string ToString() const;
 
     /**
+     * \brief Check if the span is unknown (has valid line/column numbers)
+     *
+     * \return true if the span impl is the same as the unknown singleton
+     */
+    bool IsUnknown() const { return impl_ == Unknown().impl_; }
+
+    /**
      * \brief Check if the span is valid (has valid line/column numbers)
      *
-     * \return true if all line/column numbers are positive
+     * \return true if the span has valid coordinates
      */
-    bool IsUnknown() const
-    {
-        static Span unknown = Unknown();
-        return impl_ == unknown.impl_;
-    }
+    bool IsValid() const;
+    static bool IsUnknown(const Span& span);
 
     /**
      * \brief Create an unknown/invalid span

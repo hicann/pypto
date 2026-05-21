@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include "ir/core.h"
@@ -168,6 +166,24 @@ int Span::EndLine() const { return impl_->endLine_; }
 
 int Span::EndColumn() const { return impl_->endColumn_; }
 
+bool Span::IsValid() const
+{
+    if (impl_->beginLine_ <= 0 || (impl_->beginColumn_ <= 0 && impl_->beginColumn_ != -1)) {
+        return false;
+    }
+    if (impl_->endLine_ == -1 || impl_->endColumn_ == -1) {
+        return true;
+    }
+    if (impl_->endLine_ <= 0 || (impl_->endColumn_ <= 0 && impl_->endColumn_ != -1)) {
+        return false;
+    }
+    if (impl_->beginColumn_ == -1 || impl_->endColumn_ == -1) {
+        return impl_->endLine_ >= impl_->beginLine_;
+    }
+    return impl_->endLine_ >= impl_->beginLine_ &&
+           (impl_->endLine_ > impl_->beginLine_ || impl_->endColumn_ >= impl_->beginColumn_);
+}
+
 std::string Span::ToString() const
 {
     std::ostringstream oss;
@@ -180,6 +196,8 @@ Span& Span::Unknown()
     static Span span = Span("", -1, -1, -1, -1);
     return span;
 }
+
+bool Span::IsUnknown(const Span& span) { return span.IsUnknown(); }
 
 void Span::SetCurrent(const Span& span) { Current() = span; }
 

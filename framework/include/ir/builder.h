@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,11 +6,11 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 #pragma once
 
 #include <any>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,7 +34,7 @@ class ForLoopContext;
 class IfStmtContext;
 
 /**
- * @brief IR Builder for incremental IR construction with context management
+ * \brief IR Builder for incremental IR construction with context management
  *
  * The IRBuilder provides a stateful API for building IR incrementally using
  * Begin/End patterns (C++) or context managers (Python). It maintains a
@@ -72,383 +71,366 @@ public:
     // ========== Function Building ==========
 
     /**
-     * @brief Begin building a function
+     * \brief Begin building a function
      *
      * Creates a new function context and pushes it onto the context stack.
      * Must be closed with EndFunction().
      *
-     * @param name Function name
-     * @param span Source location for function definition
-     * @param type Function type (default: Opaque)
-     * @param level Hierarchy level (default: nullopt — unspecified)
-     * @param role Function role (default: nullopt)
-     * @throws RuntimeError if already inside a function (no nested functions allowed)
+     * \param name Function name
+     * \param span Source location for function definition
+     * \param type Function type (default: Opaque)
+     * \param level Hierarchy level (default: nullopt — unspecified)
+     * \param role Function role (default: nullopt)
+     * \throws RuntimeError if already inside a function (no nested functions allowed)
      */
     void BeginFunction(const std::string& name, const Span& span, FunctionType type = FunctionType::OPAQUE);
 
     /**
-     * @brief Add a function parameter
+     * \brief Add a function parameter
      *
      * Must be called within a function context (after BeginFunction).
      *
-     * @param name Parameter name
-     * @param type Parameter type
-     * @param span Source location for parameter
-     * @param direction Parameter direction (default: In)
-     * @return Variable representing the parameter
-     * @throws RuntimeError if not inside a function context
+     * \param name Parameter name
+     * \param type Parameter type
+     * \param span Source location for parameter
+     * \param direction Parameter direction (default: In)
+     * \return Variable representing the parameter
+     * \throws RuntimeError if not inside a function context
      */
     VarPtr FuncArg(const std::string& name, const TypePtr& type, const Span& span);
 
     /**
-     * @brief Add a return type to the current function
+     * \brief Add a return type to the current function
      *
      * Can be called multiple times to add multiple return types.
      *
-     * @param type Return type
-     * @throws RuntimeError if not inside a function context
+     * \param type Return type
+     * \throws RuntimeError if not inside a function context
      */
     void ReturnType(const TypePtr& type);
 
     /**
-     * @brief End building a function
+     * \brief End building a function
      *
      * Finalizes the function and pops the function context from the stack.
      *
-     * @param end_span Source location for end of function
-     * @return The built function
-     * @throws RuntimeError if not inside a function context
+     * \param end_span Source location for end of function
+     * \return The built function
+     * \throws RuntimeError if not inside a function context
      */
     FunctionPtr EndFunction(const Span& end_span);
 
     // ========== For Loop Building ==========
 
     /**
-     * @brief Begin building a for loop
+     * \brief Begin building a for loop
      *
      * Creates a new for loop context and pushes it onto the context stack.
      * Must be closed with EndForLoop().
      *
-     * @param loop_var Loop variable
-     * @param start Start value expression
-     * @param stop Stop value expression
-     * @param step Step value expression
-     * @param span Source location for loop definition
-     * @param kind Loop kind (Sequential or Parallel, default: Sequential)
-     * @throws RuntimeError if not inside a function or another loop
+     * \param loop_var Loop variable
+     * \param start Start value expression
+     * \param stop Stop value expression
+     * \param step Step value expression
+     * \param span Source location for loop definition
+     * \param kind Loop kind (Sequential or Parallel, default: Sequential)
+     * \throws RuntimeError if not inside a function or another loop
      */
     void BeginForLoop(
         const VarPtr& loop_var, const ExprPtr& start, const ExprPtr& stop, const ExprPtr& step, const Span& span);
 
     /**
-     * @brief Add an iteration argument to the current for loop
+     * \brief Add an iteration argument to the current for loop
      *
      * Iteration arguments are loop-carried values (SSA-style).
      *
-     * @param iter_arg Iteration argument with initial value
-     * @throws RuntimeError if not inside a for loop context
+     * \param iter_arg Iteration argument with initial value
+     * \throws RuntimeError if not inside a for loop context
      */
     void AddIterArg(const IterArgPtr& iter_arg);
 
     /**
-     * @brief Add a return variable to the current for loop
+     * \brief Add a return variable to the current for loop
      *
      * Return variables capture the final values of iteration arguments.
      * The number of return variables must match the number of iteration arguments.
      *
-     * @param var Return variable
-     * @throws RuntimeError if not inside a for loop context
+     * \param var Return variable
+     * \throws RuntimeError if not inside a for loop context
      */
     void AddReturnVar(const VarPtr& var);
 
     /**
-     * @brief End building a for loop
+     * \brief End building a for loop
      *
      * Finalizes the loop and pops the loop context from the stack.
      *
-     * @param end_span Source location for end of loop
-     * @return The built for statement
-     * @throws RuntimeError if not inside a for loop context
-     * @throws RuntimeError if number of return variables doesn't match iteration arguments
+     * \param end_span Source location for end of loop
+     * \return The built for statement
+     * \throws RuntimeError if not inside a for loop context
+     * \throws RuntimeError if number of return variables doesn't match iteration arguments
      */
     StmtPtr EndForLoop(const Span& end_span);
 
     // ========== While Loop Building ==========
 
     /**
-     * @brief Begin building a while loop
+     * \brief Begin building a while loop
      *
      * Creates a new while loop context and pushes it onto the context stack.
      * Must be closed with EndWhileLoop().
      *
-     * @param condition Condition expression
-     * @param span Source location for loop definition
-     * @throws RuntimeError if not inside a function or another loop
+     * \param condition Condition expression
+     * \param span Source location for loop definition
+     * \throws RuntimeError if not inside a function or another loop
      */
     void BeginWhileLoop(const ExprPtr& condition, const Span& span);
 
     /**
-     * @brief Add an iteration argument to the current while loop
+     * \brief Add an iteration argument to the current while loop
      *
      * Iteration arguments are loop-carried values (SSA-style).
      *
-     * @param iter_arg Iteration argument with initial value
-     * @throws RuntimeError if not inside a while loop context
+     * \param iter_arg Iteration argument with initial value
+     * \throws RuntimeError if not inside a while loop context
      */
     void AddWhileIterArg(const IterArgPtr& iter_arg);
 
     /**
-     * @brief Add a return variable to the current while loop
+     * \brief Add a return variable to the current while loop
      *
      * Return variables capture the final values of iteration arguments.
      * The number of return variables must match the number of iteration arguments.
      *
-     * @param var Return variable
-     * @throws RuntimeError if not inside a while loop context
+     * \param var Return variable
+     * \throws RuntimeError if not inside a while loop context
      */
     void AddWhileReturnVar(const VarPtr& var);
 
     /**
-     * @brief Set the condition for the current while loop
+     * \brief Set the condition for the current while loop
      *
      * Used to update the loop condition after setting up iter_args. This allows
      * the condition to reference iter_arg variables that are defined in the loop.
      *
-     * @param condition New condition expression
-     * @throws RuntimeError if not inside a while loop context
+     * \param condition New condition expression
+     * \throws RuntimeError if not inside a while loop context
      */
     void SetWhileLoopCondition(const ExprPtr& condition);
 
     /**
-     * @brief End building a while loop
+     * \brief End building a while loop
      *
      * Finalizes the loop and pops the loop context from the stack.
      *
-     * @param end_span Source location for end of loop
-     * @return The built while statement
-     * @throws RuntimeError if not inside a while loop context
-     * @throws RuntimeError if number of return variables doesn't match iteration arguments
+     * \param end_span Source location for end of loop
+     * \return The built while statement
+     * \throws RuntimeError if not inside a while loop context
+     * \throws RuntimeError if number of return variables doesn't match iteration arguments
      */
     StmtPtr EndWhileLoop(const Span& end_span);
 
     // ========== If Statement Building ==========
 
     /**
-     * @brief Begin building an if statement
+     * \brief Begin building an if statement
      *
      * Creates a new if context and pushes it onto the context stack.
      * Must be closed with EndIf().
      *
-     * @param condition Condition expression
-     * @param span Source location for if statement
-     * @throws RuntimeError if not inside a function or loop
+     * \param condition Condition expression
+     * \param span Source location for if statement
+     * \throws RuntimeError if not inside a function or loop
      */
     void BeginIf(const ExprPtr& condition, const Span& span);
 
     /**
-     * @brief Begin the else branch of the current if statement
+     * \brief Begin the else branch of the current if statement
      *
      * Must be called after building the then branch and before EndIf().
      *
-     * @param span Source location for else keyword
-     * @throws RuntimeError if not inside an if context
-     * @throws RuntimeError if else branch already begun
+     * \param span Source location for else keyword
+     * \throws RuntimeError if not inside an if context
+     * \throws RuntimeError if else branch already begun
      */
     void BeginElse(const Span& span);
 
     /**
-     * @brief Add a return variable to the current if statement
+     * \brief Add a return variable to the current if statement
      *
      * Return variables are used for SSA phi nodes when if has return values.
      *
-     * @param var Return variable
-     * @throws RuntimeError if not inside an if context
+     * \param var Return variable
+     * \throws RuntimeError if not inside an if context
      */
     void AddIfReturnVar(const VarPtr& var);
 
     /**
-     * @brief End building an if statement
+     * \brief End building an if statement
      *
      * Finalizes the if statement and pops the context from the stack.
      *
-     * @param end_span Source location for end of if
-     * @return The built if statement
-     * @throws RuntimeError if not inside an if context
+     * \param end_span Source location for end of if
+     * \return The built if statement
+     * \throws RuntimeError if not inside an if context
      */
     StmtPtr EndIf(const Span& end_span);
+
+    // ========== Section Building ==========
+
+    void BeginSection(SectionKind section_kind, const Span& span);
+    StmtPtr EndSection(const Span& end_span);
 
     // ========== Statement Recording ==========
 
     /**
-     * @brief Emit a statement in the current context
+     * \brief Emit a statement in the current context
      *
      * Adds a statement to the current context's statement list.
      *
-     * @param stmt Statement to emit
-     * @throws RuntimeError if not inside a valid context for emitting statements
+     * \param stmt Statement to emit
+     * \throws RuntimeError if not inside a valid context for emitting statements
      */
     void Emit(const StmtPtr& stmt);
 
     /**
-     * @brief Create an assignment statement and emit it
+     * \brief Create an assignment statement and emit it
      *
      * Convenience method that creates an assignment and emits it.
      *
-     * @param var Variable to assign to
-     * @param value Expression value
-     * @param span Source location for assignment
-     * @return The created assignment statement
-     * @throws RuntimeError if not inside a valid context
+     * \param var Variable to assign to
+     * \param value Expression value
+     * \param span Source location for assignment
+     * \return The created assignment statement
+     * \throws RuntimeError if not inside a valid context
      */
     AssignStmtPtr Assign(const VarPtr& var, const ExprPtr& value, const Span& span);
 
     /**
-     * @brief Create a variable (does not emit)
+     * \brief Create a variable (does not emit)
      *
      * Helper to create a variable. User must create assignment separately.
      *
-     * @param name Variable name
-     * @param type Variable type
-     * @param span Source location
-     * @return The created variable
+     * \param name Variable name
+     * \param type Variable type
+     * \param span Source location
+     * \return The created variable
      */
     VarPtr Var(const std::string& name, const TypePtr& type, const Span& span);
 
     /**
-     * @brief Create a return statement and emit it
+     * \brief Create a return statement and emit it
      *
      * Convenience method that creates a return statement and emits it.
      *
-     * @param values List of expressions to return (can be empty)
-     * @param span Source location for return statement
-     * @return The created return statement
-     * @throws RuntimeError if not inside a valid context
+     * \param values List of expressions to return (can be empty)
+     * \param span Source location for return statement
+     * \return The created return statement
+     * \throws RuntimeError if not inside a valid context
      */
     ReturnStmtPtr Return(const std::vector<ExprPtr>& values, const Span& span);
 
     /**
-     * @brief Create a return statement without values and emit it
+     * \brief Create a return statement without values and emit it
      *
      * Convenience method that creates an empty return statement and emits it.
      *
-     * @param span Source location for return statement
-     * @return The created return statement
-     * @throws RuntimeError if not inside a valid context
+     * \param span Source location for return statement
+     * \return The created return statement
+     * \throws RuntimeError if not inside a valid context
      */
     ReturnStmtPtr Return(const Span& span);
+
+    BreakStmtPtr Break(const Span& span);
+    ContinueStmtPtr Continue(const Span& span);
 
     // ========== Context State Queries ==========
 
     /**
-     * @brief Get the current context
+     * \brief Get the current context
      *
-     * @return Pointer to current context, or nullptr if no context
+     * \return Pointer to current context, or nullptr if no context
      */
     BuildContext* CurrentContext();
 
     /**
-     * @brief Check if currently inside a function
+     * \brief Check if currently inside a function
      *
-     * @return true if inside a function context
+     * \return true if inside a function context
      */
     [[nodiscard]] bool InFunction() const;
 
     /**
-     * @brief Check if currently inside a for loop
+     * \brief Check if currently inside a for loop
      *
-     * @return true if inside a for loop context
+     * \return true if inside a for loop context
      */
     [[nodiscard]] bool InLoop() const;
 
     /**
-     * @brief Check if currently inside an if statement
+     * \brief Check if currently inside an if statement
      *
-     * @return true if inside an if statement context
+     * \return true if inside an if statement context
      */
     [[nodiscard]] bool InIf() const;
 
     /**
-     * @brief Check if currently inside a while loop
+     * \brief Check if currently inside a while loop
      *
-     * @return true if inside a while loop context
+     * \return true if inside a while loop context
      */
     [[nodiscard]] bool InWhileLoop() const;
 
     // ========== Program Building ==========
 
     /**
-     * @brief Begin building a program
+     * \brief Begin building a program
      *
      * Creates a new program context and pushes it onto the context stack.
      * Must be closed with EndProgram().
      *
-     * @param name Program name
-     * @param span Source location for program definition
-     * @throws RuntimeError if already inside another program
+     * \param name Program name
+     * \param span Source location for program definition
+     * \throws RuntimeError if already inside another program
      */
     void BeginProgram(const std::string& name, const Span& span);
 
     /**
-     * @brief Declare a function in the current program
+     * \brief Add a completed function to the current program
      *
-     * Creates a GlobalVar for the function that can be used in Call expressions
-     * before the function is fully built. This enables cross-function calls.
-     *
-     * @param func_name Function name to declare
-     * @return GlobalVar that can be used in Call expressions
-     * @throws RuntimeError if not inside a program context
-     */
-    GlobalVarPtr DeclareFunction(const std::string& func_name);
-
-    /**
-     * @brief Get a GlobalVar for a declared function
-     *
-     * Retrieves a GlobalVar that was previously declared with DeclareFunction.
-     *
-     * @param func_name Function name
-     * @return GlobalVar for the function
-     * @throws RuntimeError if not inside a program context or function not declared
-     */
-    GlobalVarPtr GetGlobalVar(const std::string& func_name);
-
-    /**
-     * @brief Add a completed function to the current program
-     *
-     * The function must have been previously declared with DeclareFunction.
-     *
-     * @param func Completed function to add
-     * @throws RuntimeError if not inside a program context
+     * \param func Completed function to add
+     * \throws RuntimeError if not inside a program context
      */
     void AddFunction(const FunctionPtr& func);
 
     /**
-     * @brief End building a program
+     * \brief End building a program
      *
      * Finalizes the program and pops the program context from the stack.
      *
-     * @param end_span Source location for end of program
-     * @return The built program
-     * @throws RuntimeError if not inside a program context
+     * \param end_span Source location for end of program
+     * \return The built program
+     * \throws RuntimeError if not inside a program context
      */
     ProgramPtr EndProgram(const Span& end_span);
 
     /**
-     * @brief Check if currently inside a program
+     * \brief Check if currently inside a program
      *
-     * @return true if inside a program context
+     * \return true if inside a program context
      */
     [[nodiscard]] bool InProgram() const;
 
     /**
-     * @brief Get return types for a function by its GlobalVar
+     * \brief Get return types for a function by name
      *
      * Returns the return types for a function if it has been added to the program.
      * Returns empty vector if not inside a program or function not yet added.
      *
-     * @param gvar GlobalVar for the function
-     * @return Vector of return types
+     * \param func_name Function name
+     * \return Vector of return types
      */
-    [[nodiscard]] std::vector<TypePtr> GetFunctionReturnTypes(const GlobalVarPtr& gvar) const;
+    [[nodiscard]] std::vector<TypePtr> GetFunctionReturnTypes(const std::string& func_name) const;
 
 private:
     std::vector<std::unique_ptr<BuildContext>> context_stack_;
@@ -466,14 +448,14 @@ private:
 };
 
 /**
- * @brief Base class for build contexts
+ * \brief Base class for build contexts
  *
  * Each context type (function, loop, if) maintains state for building
  * that construct incrementally.
  */
 class BuildContext {
 public:
-    enum class Type { FUNCTION, FOR_LOOP, WHILE_LOOP, IF_STMT, SCOPE, PROGRAM };
+    enum class Type { FUNCTION, FOR_LOOP, WHILE_LOOP, IF_STMT, SECTION, PROGRAM };
 
     explicit BuildContext(Type type, Span span) : type_(type), begin_span_(std::move(span)) {}
     virtual ~BuildContext() = default;
@@ -492,7 +474,7 @@ protected:
 };
 
 /**
- * @brief Context for building a function
+ * \brief Context for building a function
  */
 class FunctionContext : public BuildContext {
 public:
@@ -519,7 +501,7 @@ private:
 };
 
 /**
- * @brief Context for building a for loop
+ * \brief Context for building a for loop
  */
 class ForLoopContext : public BuildContext {
 public:
@@ -554,7 +536,7 @@ private:
 };
 
 /**
- * @brief Context for building a while loop
+ * \brief Context for building a while loop
  */
 class WhileLoopContext : public BuildContext {
 public:
@@ -578,7 +560,7 @@ private:
 };
 
 /**
- * @brief Context for building an if statement
+ * \brief Context for building an if statement
  */
 class IfStmtContext : public BuildContext {
 public:
@@ -608,7 +590,23 @@ private:
 };
 
 /**
- * @brief Context for building a program
+ * \brief Context for building a section statement
+ */
+class SectionContext : public BuildContext {
+public:
+    SectionContext(SectionKind section_kind, Span span)
+        : BuildContext(Type::SECTION, std::move(span)), section_kind_(section_kind)
+    {}
+
+    void AddStmt(const StmtPtr& stmt) override { stmts_.push_back(stmt); }
+    [[nodiscard]] SectionKind GetSectionKind() const { return section_kind_; }
+
+private:
+    SectionKind section_kind_;
+};
+
+/**
+ * \brief Context for building a program
  */
 class ProgramContext : public BuildContext {
 public:
@@ -616,33 +614,33 @@ public:
     {}
 
     /**
-     * @brief Add a function to the program
+     * \brief Add a function to the program
      *
-     * @param func Function to add
+     * \param func Function to add
      */
     void AddFunction(const FunctionPtr& func);
 
     /**
-     * @brief Get the program name
+     * \brief Get the program name
      *
-     * @return Program name
+     * \return Program name
      */
     [[nodiscard]] const std::string& GetName() const { return name_; }
 
     /**
-     * @brief Get all functions in the program
+     * \brief Get all functions in the program
      *
-     * @return Vector of functions
+     * \return Vector of functions
      */
     [[nodiscard]] const std::vector<FunctionPtr>& GetFunctions() const { return functions_; }
 
     /**
-     * @brief Get return types for a function by its GlobalVar
+     * \brief Get return types for a function by name
      *
-     * @param gvar GlobalVar for the function
-     * @return Vector of return types, or empty vector if function not yet added
+     * \param func_name Function name
+     * \return Vector of return types, or empty vector if function not yet added
      */
-    [[nodiscard]] std::vector<TypePtr> GetReturnTypes(const GlobalVarPtr& gvar) const;
+    [[nodiscard]] std::vector<TypePtr> GetReturnTypes(const std::string& func_name) const;
 
     // ProgramContext doesn't accumulate statements
     void AddStmt(const StmtPtr&) override

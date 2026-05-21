@@ -9,6 +9,7 @@
  */
 
 #pragma once
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -16,9 +17,11 @@
 #include <utility>
 #include <vector>
 
+#include "core/logging.h"
 #include "ir/core.h"
 #include "ir/expr.h"
 #include "ir/reflection/field_traits.h"
+#include "tilefwk/error.h"
 
 namespace pypto {
 namespace ir {
@@ -26,6 +29,32 @@ namespace ir {
 // Forward declarations for friend classes
 class IRVisitor;
 class IRMutator;
+
+enum class SectionKind : uint8_t { Vector = 0, Cube = 1 };
+
+inline std::string SectionKindToString(SectionKind kind)
+{
+    switch (kind) {
+        case SectionKind::Vector:
+            return "Vector";
+        case SectionKind::Cube:
+            return "Cube";
+        default:
+            break;
+    }
+    CHECK(false) << "Unknown SectionKind";
+    return "Unknown";
+}
+
+inline SectionKind StringToSectionKind(const std::string& str)
+{
+    if (str == "Vector")
+        return SectionKind::Vector;
+    if (str == "Cube")
+        return SectionKind::Cube;
+    CHECK(false) << "Unknown SectionKind: " << str;
+    return SectionKind::Vector;
+}
 
 /**
  * \brief Base class for all statements in the IR
@@ -449,15 +478,15 @@ public:
     /**
      * \brief Get field descriptors for reflection-based visitation
      *
-     * \return Tuple of field descriptors (condition as USUAL, iter_args as DEF, body as USUAL, return_vars as
-     * DEF)
+     * \return Tuple of field descriptors (iter_args as DEF, condition as USUAL, body as USUAL, return_vars as
+     * DEF). Iter args must be visited before condition/body so structural comparison can bind loop-carried vars first.
      */
     static constexpr auto GetFieldDescriptors()
     {
         return std::tuple_cat(
             Stmt::GetFieldDescriptors(), std::make_tuple(
-                                             reflection::UsualField(&WhileStmt::condition_, "condition"),
                                              reflection::DefField(&WhileStmt::iterArgs_, "iter_args"),
+                                             reflection::UsualField(&WhileStmt::condition_, "condition"),
                                              reflection::UsualField(&WhileStmt::body_, "body"),
                                              reflection::DefField(&WhileStmt::returnVars_, "return_vars")));
     }
@@ -470,6 +499,50 @@ public:
 };
 
 using WhileStmtPtr = std::shared_ptr<const WhileStmt>;
+
+
+class SectionStmt : public Stmt {
+public:
+    SectionStmt(SectionKind sectionKind, StmtPtr body, Span span)
+        : Stmt(std::move(span)), sectionKind_(sectionKind), body_(std::move(body))
+    {}
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::SectionStmt; }
+    [[nodiscard]] std::string TypeName() const override { return "SectionStmt"; }
+
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Stmt::GetFieldDescriptors(), std::make_tuple(
+                                             reflection::UsualField(&SectionStmt::sectionKind_, "section_kind"),
+                                             reflection::UsualField(&SectionStmt::body_, "body")));
+    }
+
+public:
+    SectionKind sectionKind_;
+    StmtPtr body_;
+};
+
+using SectionStmtPtr = std::shared_ptr<const SectionStmt>;
+
+class OpStmts : public Stmt {
+public:
+    OpStmts(std::vector<StmtPtr> stmts, Span span);
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::OpStmts; }
+    [[nodiscard]] std::string TypeName() const override { return "OpStmts"; }
+
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&OpStmts::stmts_, "stmts")));
+    }
+
+public:
+    std::vector<StmtPtr> stmts_;
+};
+
+using OpStmtsPtr = std::shared_ptr<const OpStmts>;
 
 /**
  * \brief Evaluation statement

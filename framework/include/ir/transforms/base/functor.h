@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 #pragma once
 
@@ -25,13 +23,13 @@ namespace pypto {
 namespace ir {
 
 /**
- * @brief Base template for expression functors
+ * \brief Base template for expression functors
  *
  * Provides a visitor-like interface for operating on IR expressions.
  * Subclasses implement specific operations by overriding VisitExpr_ methods.
  *
- * @tparam R Return type of the visit operations
- * @tparam Args Additional arguments passed to visit methods
+ * \tparam R Return type of the visit operations
+ * \tparam Args Additional arguments passed to visit methods
  */
 template <typename R, typename... Args>
 class ExprFunctor {
@@ -39,13 +37,13 @@ public:
     virtual ~ExprFunctor() = default;
 
     /**
-     * @brief Dispatcher for expression types
+     * \brief Dispatcher for expression types
      *
      * Uses dynamic_cast to determine concrete type and dispatch to appropriate handler.
      *
-     * @param expr Expression pointer (non-null)
-     * @param args Additional arguments
-     * @return Result of visiting the expression
+     * \param expr Expression pointer (non-null)
+     * \param args Additional arguments
+     * \return Result of visiting the expression
      */
     virtual R VisitExpr(const ExprPtr& expr, Args... args);
 
@@ -59,8 +57,8 @@ protected:
     virtual R VisitExpr_(const ConstBoolPtr& op, Args... args) = 0;
     virtual R VisitExpr_(const CallPtr& op, Args... args) = 0;
     virtual R VisitExpr_(const MakeTuplePtr& op, Args... args) = 0;
-    virtual R VisitExpr_(const TupleGetItemExprPtr& op, Args... args) = 0;
     virtual R VisitExpr_(const ScalarExprPtr& op, Args... args) = 0;
+    virtual R VisitExpr_(const GetItemExprPtr& op, Args... args) = 0;
 
     // Binary operations (22 types)
     virtual R VisitExpr_(const AddPtr& op, Args... args) = 0;
@@ -114,8 +112,8 @@ R ExprFunctor<R, Args...>::VisitExpr(const ExprPtr& expr, Args... args)
     EXPR_FUNCTOR_DISPATCH(ConstBool);
     EXPR_FUNCTOR_DISPATCH(Call);
     EXPR_FUNCTOR_DISPATCH(MakeTuple);
-    EXPR_FUNCTOR_DISPATCH(TupleGetItemExpr);
     EXPR_FUNCTOR_DISPATCH(ScalarExpr);
+    EXPR_FUNCTOR_DISPATCH(GetItemExpr);
 
     // Binary operations
     EXPR_FUNCTOR_DISPATCH(Add);
@@ -156,13 +154,13 @@ R ExprFunctor<R, Args...>::VisitExpr(const ExprPtr& expr, Args... args)
 #undef EXPR_FUNCTOR_DISPATCH
 
 /**
- * @brief Base template for statement functors
+ * \brief Base template for statement functors
  *
  * Provides a visitor-like interface for operating on IR statements.
  * Subclasses implement specific operations by overriding VisitStmt_ methods.
  *
- * @tparam R Return type of the visit operations
- * @tparam Args Additional arguments passed to visit methods
+ * \tparam R Return type of the visit operations
+ * \tparam Args Additional arguments passed to visit methods
  */
 template <typename R, typename... Args>
 class StmtFunctor {
@@ -170,13 +168,13 @@ public:
     virtual ~StmtFunctor() = default;
 
     /**
-     * @brief Dispatcher for statement types
+     * \brief Dispatcher for statement types
      *
      * Uses dynamic_cast to determine concrete type and dispatch to appropriate handler.
      *
-     * @param stmt Statement pointer (non-null)
-     * @param args Additional arguments
-     * @return Result of visiting the statement
+     * \param stmt Statement pointer (non-null)
+     * \param args Additional arguments
+     * \return Result of visiting the statement
      */
     virtual R VisitStmt(const StmtPtr& stmt, Args... args);
 
@@ -189,6 +187,8 @@ protected:
     virtual R VisitStmt_(const ForStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const WhileStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const SeqStmtsPtr& op, Args... args) = 0;
+    virtual R VisitStmt_(const OpStmtsPtr& op, Args... args) = 0;
+    virtual R VisitStmt_(const SectionStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const EvalStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const BreakStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const ContinueStmtPtr& op, Args... args) = 0;
@@ -214,6 +214,8 @@ R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
     STMT_FUNCTOR_DISPATCH(ForStmt);
     STMT_FUNCTOR_DISPATCH(WhileStmt);
     STMT_FUNCTOR_DISPATCH(SeqStmts);
+    STMT_FUNCTOR_DISPATCH(OpStmts);
+    STMT_FUNCTOR_DISPATCH(SectionStmt);
     STMT_FUNCTOR_DISPATCH(EvalStmt);
     STMT_FUNCTOR_DISPATCH(BreakStmt);
     STMT_FUNCTOR_DISPATCH(ContinueStmt);
@@ -227,13 +229,13 @@ R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
 #undef STMT_FUNCTOR_DISPATCH
 
 /**
- * @brief Unified functor for both expressions and statements
+ * \brief Unified functor for both expressions and statements
  *
  * Combines ExprFunctor and StmtFunctor to provide a unified interface
  * for visiting both expression and statement IR nodes.
  *
- * @tparam R Return type of the visit operations
- * @tparam Args Additional arguments passed to visit methods
+ * \tparam R Return type of the visit operations
+ * \tparam Args Additional arguments passed to visit methods
  */
 template <typename R, typename... Args>
 class IRFunctor : public ExprFunctor<R, Args...>, public StmtFunctor<R, Args...> {
@@ -241,13 +243,13 @@ public:
     virtual ~IRFunctor() = default;
 
     /**
-     * @brief Dispatcher for IR node types (Expr or Stmt)
+     * \brief Dispatcher for IR node types (Expr or Stmt)
      *
      * Determines whether the node is an Expr or Stmt and dispatches accordingly.
      *
-     * @param node IR node pointer (non-null)
-     * @param args Additional arguments
-     * @return Result of visiting the IR node
+     * \param node IR node pointer (non-null)
+     * \param args Additional arguments
+     * \return Result of visiting the IR node
      */
     R VisitIRNode(const IRNodePtr& node, Args... args)
     {

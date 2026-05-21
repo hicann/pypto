@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #ifndef PYPTO_IR_TRANSFORMS_BASE_MUTATOR_H_
@@ -27,7 +25,7 @@ namespace pypto {
 namespace ir {
 
 /**
- * @brief IR mutator for immutable transformations
+ * \brief IR mutator for immutable transformations
  *
  * Provides default implementations that recursively transform the IR tree.
  * Returns new ExprPtr or StmtPtr for transformed IR nodes, respecting immutability.
@@ -55,8 +53,8 @@ protected:
     ExprPtr VisitExpr_(const ConstBoolPtr& op) override;
     ExprPtr VisitExpr_(const CallPtr& op) override;
     ExprPtr VisitExpr_(const MakeTuplePtr& op) override;
-    ExprPtr VisitExpr_(const TupleGetItemExprPtr& op) override;
     ExprPtr VisitExpr_(const ScalarExprPtr& op) override;
+    ExprPtr VisitExpr_(const GetItemExprPtr& op) override;
 
     // Binary operations - reconstruct with mutated children
     ExprPtr VisitExpr_(const AddPtr& op) override;
@@ -98,6 +96,8 @@ protected:
     StmtPtr VisitStmt_(const ForStmtPtr& op) override;
     StmtPtr VisitStmt_(const WhileStmtPtr& op) override;
     StmtPtr VisitStmt_(const SeqStmtsPtr& op) override;
+    StmtPtr VisitStmt_(const OpStmtsPtr& op) override;
+    StmtPtr VisitStmt_(const SectionStmtPtr& op) override;
     StmtPtr VisitStmt_(const EvalStmtPtr& op) override;
     StmtPtr VisitStmt_(const BreakStmtPtr& op) override;
     StmtPtr VisitStmt_(const ContinueStmtPtr& op) override;

@@ -14,9 +14,10 @@
 #include <utility>
 #include <vector>
 
-#include "core/error.h"
 #include "core/logging.h"
 #include "ir/kind_traits.h"
+#include "ir/scalar_expr.h"
+#include "ir/span.h"
 #include "ir/type.h"
 
 namespace pypto {
@@ -35,21 +36,30 @@ MakeTuple::MakeTuple(std::vector<ExprPtr> elements, Span span) : Expr(std::move(
     type_ = std::make_shared<TupleType>(std::move(elementTypes));
 }
 
-TupleGetItemExpr::TupleGetItemExpr(ExprPtr tuple, int index, Span span)
-    : Expr(std::move(span)), tuple_(std::move(tuple)), index_(index)
+GetItemExpr::GetItemExpr(ExprPtr value, ExprPtr slice, Span span)
+    : Expr(std::move(span)), value_(std::move(value)), slice_(std::move(slice))
 {
-    // Type checking: tuple must have TupleType
-    auto tupleType = As<TupleType>(tuple_->GetType());
-    INTERNAL_CHECK(tupleType) << "TupleGetItemExpr requires tuple to have TupleType, got "
-                              << tuple_->GetType()->TypeName() << " at " << span_.ToString();
+    CHECK(value_) << "GetItemExpr requires a non-null value";
+    CHECK(slice_) << "GetItemExpr requires a non-null slice";
 
-    // Bounds checking
-    INTERNAL_CHECK(index >= 0 && index < static_cast<int>(tupleType->types_.size()))
-        << "TupleGetItemExpr index " << index << " out of bounds for tuple with " << tupleType->types_.size()
-        << " elements at " << span_.ToString();
+    auto value_type = value_->GetType();
+    if (auto tile_type = As<TileType>(value_type)) {
+        type_ = tile_type;
+        return;
+    }
 
-    // Set result type to the accessed element's type
-    type_ = tupleType->types_[index];
+    if (auto tuple_type = As<TupleType>(value_type)) {
+        auto const_idx = As<ConstInt>(slice_);
+        CHECK(const_idx) << "GetItemExpr on a tuple requires slice to be a ConstInt, got " << slice_->TypeName();
+        int index = static_cast<int>(const_idx->value_);
+        CHECK(index >= 0 && index < static_cast<int>(tuple_type->types_.size()))
+            << "GetItemExpr index " << index << " out of bounds for tuple with " << tuple_type->types_.size()
+            << " elements";
+        type_ = tuple_type->types_[index];
+        return;
+    }
+
+    CHECK(false) << "GetItemExpr requires value to have TupleType or TileType, got " << value_type->TypeName();
 }
 
 } // namespace ir

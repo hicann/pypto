@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,8 +6,10 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
+
+#include <any>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -17,17 +18,18 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "core/any_cast.h"
 #include "core/dtype.h"
+#include "core/error.h"
 #include "core/logging.h"
 #include "ir/core.h"
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/kind_traits.h"
-#include "ir/memory_space.h"
 #include "ir/memref.h"
 #include "ir/program.h"
 #include "ir/reflection/field_visitor.h"
@@ -48,10 +50,12 @@ bool AreForSyntaxScalarDtypesEquivalent(const DataType& lhs, const DataType& rhs
     return (lhs == DataType::INT64 && rhs == DataType::INDEX) || (lhs == DataType::INDEX && rhs == DataType::INT64);
 }
 
+bool AreDoublesEquivalent(double lhs, double rhs) { return std::abs(lhs - rhs) <= 1e-10; }
+
 } // namespace
 
 /**
- * @brief Unified structural equality checker for IR nodes
+ * \brief Unified structural equality checker for IR nodes
  *
  * Template parameter controls behavior on mismatch:
  * - AssertMode=false: Returns false (for structural_equal)
@@ -167,9 +171,9 @@ public:
         return true;
     }
 
-    template <typename KeyType, typename ValueType, typename Compare>
-    ResultType VisitIRNodeMapField(
-        const std::map<KeyType, ValueType, Compare>& lhs, const std::map<KeyType, ValueType, Compare>& rhs)
+    template <typename MapType, typename EntryChecker, typename KeyFormatter>
+    ResultType VisitIRNodeMapFieldImpl(
+        const MapType& lhs, const MapType& rhs, EntryChecker&& check_entry, KeyFormatter&& format_key)
     {
         if (lhs.size() != rhs.size()) {
             if constexpr (AssertMode) {
@@ -179,28 +183,25 @@ public:
             }
             return false;
         }
+
         auto lhs_it = lhs.begin();
         auto rhs_it = rhs.begin();
         while (lhs_it != lhs.end()) {
-            INTERNAL_CHECK(lhs_it->first) << "structural_equal encountered null lhs key in map";
-            INTERNAL_CHECK(lhs_it->second) << "structural_equal encountered null lhs value in map";
-            INTERNAL_CHECK(rhs_it->first) << "structural_equal encountered null rhs key in map";
-            INTERNAL_CHECK_SPAN(rhs_it->second, lhs_it->second->span_)
-                << "structural_equal encountered null rhs value in map";
+            check_entry(lhs_it, rhs_it);
 
-            if (lhs_it->first->name_ != rhs_it->first->name_) {
+            std::string lhs_key = format_key(lhs_it->first);
+            std::string rhs_key = format_key(rhs_it->first);
+            if (lhs_key != rhs_key) {
                 if constexpr (AssertMode) {
                     std::ostringstream msg;
-                    msg << "Map key mismatch ('" << lhs_it->first->name_ << "' != '" << rhs_it->first->name_ << "')";
+                    msg << "Map key mismatch ('" << lhs_key << "' != '" << rhs_key << "')";
                     ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
                 }
                 return false;
             }
 
             if constexpr (AssertMode) {
-                std::ostringstream key_str;
-                key_str << "['" << lhs_it->first->name_ << "']";
-                path_.emplace_back(key_str.str());
+                path_.emplace_back("['" + lhs_key + "']");
             }
 
             if (!Equal(lhs_it->second, rhs_it->second)) {
@@ -217,6 +218,36 @@ public:
             ++rhs_it;
         }
         return true;
+    }
+
+    template <typename KeyType, typename ValueType, typename Compare>
+    ResultType VisitIRNodeMapField(
+        const std::map<KeyType, ValueType, Compare>& lhs, const std::map<KeyType, ValueType, Compare>& rhs)
+    {
+        return VisitIRNodeMapFieldImpl(
+            lhs, rhs,
+            [](const auto& lhs_it, const auto& rhs_it) {
+                INTERNAL_CHECK(lhs_it->first) << "structural_equal encountered null lhs key in map";
+                INTERNAL_CHECK(lhs_it->second) << "structural_equal encountered null lhs value in map";
+                INTERNAL_CHECK(rhs_it->first) << "structural_equal encountered null rhs key in map";
+                INTERNAL_CHECK_SPAN(rhs_it->second, lhs_it->second->span_)
+                    << "structural_equal encountered null rhs value in map";
+            },
+            [](const auto& key) { return key->name_; });
+    }
+
+    template <typename ValueType>
+    ResultType VisitIRNodeMapField(
+        const std::map<std::string, ValueType>& lhs, const std::map<std::string, ValueType>& rhs)
+    {
+        return VisitIRNodeMapFieldImpl(
+            lhs, rhs,
+            [](const auto& lhs_it, const auto& rhs_it) {
+                INTERNAL_CHECK(lhs_it->second) << "structural_equal encountered null lhs value in map";
+                INTERNAL_CHECK_SPAN(rhs_it->second, lhs_it->second->span_)
+                    << "structural_equal encountered null rhs value in map";
+            },
+            [](const std::string& key) { return key; });
     }
 
     // Leaf field comparisons (dual-node version)
@@ -261,7 +292,7 @@ public:
 
     ResultType VisitLeafField(const double& lhs, const double& rhs)
     {
-        if (std::abs(lhs - rhs) > 1e-10) {
+        if (!AreDoublesEquivalent(lhs, rhs)) {
             if constexpr (AssertMode) {
                 std::ostringstream msg;
                 msg << "double value mismatch (" << lhs << " != " << rhs << ")";
@@ -308,6 +339,93 @@ public:
                 ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
             }
             return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] ResultType VisitLeafField(const SectionKind& lhs, const SectionKind& rhs)
+    {
+        if (lhs != rhs) {
+            if constexpr (AssertMode) {
+                std::ostringstream msg;
+                msg << "SectionKind mismatch (" << SectionKindToString(lhs) << " != " << SectionKindToString(rhs)
+                    << ")";
+                ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+            }
+            return false;
+        }
+        return true;
+    }
+
+    // Compare kwargs (vector of pairs to preserve order)
+    ResultType VisitLeafField(
+        const std::vector<std::pair<std::string, std::any>>& lhs,
+        const std::vector<std::pair<std::string, std::any>>& rhs)
+    {
+        if (lhs.size() != rhs.size()) {
+            if constexpr (AssertMode) {
+                std::ostringstream msg;
+                msg << "Kwargs size mismatch (" << lhs.size() << " != " << rhs.size() << ")";
+                ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+            }
+            return false;
+        }
+        for (size_t i = 0; i < lhs.size(); ++i) {
+            if (lhs[i].first != rhs[i].first) {
+                if constexpr (AssertMode) {
+                    std::ostringstream msg;
+                    msg << "Kwargs key mismatch at index " << i << " ('" << lhs[i].first << "' != '" << rhs[i].first
+                        << "')";
+                    ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            // Compare std::any values by type and content
+            const auto& lhs_val = lhs[i].second;
+            const auto& rhs_val = rhs[i].second;
+            if (lhs_val.type() != rhs_val.type()) {
+                if constexpr (AssertMode) {
+                    std::ostringstream msg;
+                    msg << "Kwargs value type mismatch for key '" << lhs[i].first << "'";
+                    ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            // Type-specific comparison
+            bool values_equal = true;
+            if (lhs_val.type() == typeid(int)) {
+                values_equal =
+                    (AnyCast<int>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                     AnyCast<int>(rhs_val, "comparing kwarg: " + lhs[i].first));
+            } else if (lhs_val.type() == typeid(bool)) {
+                values_equal =
+                    (AnyCast<bool>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                     AnyCast<bool>(rhs_val, "comparing kwarg: " + lhs[i].first));
+            } else if (lhs_val.type() == typeid(std::string)) {
+                values_equal =
+                    (AnyCast<std::string>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                     AnyCast<std::string>(rhs_val, "comparing kwarg: " + lhs[i].first));
+            } else if (lhs_val.type() == typeid(double)) {
+                values_equal = AreDoublesEquivalent(
+                    AnyCast<double>(lhs_val, "comparing kwarg: " + lhs[i].first),
+                    AnyCast<double>(rhs_val, "comparing kwarg: " + lhs[i].first));
+            } else if (lhs_val.type() == typeid(DataType)) {
+                values_equal =
+                    (AnyCast<DataType>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                     AnyCast<DataType>(rhs_val, "comparing kwarg: " + lhs[i].first));
+            } else if (lhs_val.type() == typeid(std::vector<int>)) {
+                values_equal =
+                    (AnyCast<std::vector<int>>(lhs_val, "comparing kwarg: " + lhs[i].first) ==
+                     AnyCast<std::vector<int>>(rhs_val, "comparing kwarg: " + lhs[i].first));
+            }
+            if (!values_equal) {
+                if constexpr (AssertMode) {
+                    std::ostringstream msg;
+                    msg << "Kwargs value mismatch for key '" << lhs[i].first << "'";
+                    ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
         }
         return true;
     }
@@ -376,10 +494,9 @@ public:
     }
 
     // Path tracking hooks called by FieldIterator::VisitFieldImpl for each field.
-    // PushFieldName pushes ".name" only when not inside a transparent container.
-    // Transparent containers (Program, SeqStmts) suppress their own field
-    // names so that their vector/map element accessors ([i] / ['key']) attach directly
-    // to the parent field name, producing paths like body[1] instead of body.stmts[1].
+    // Transparent containers (Program, SeqStmts) suppress their own field names
+    // so that vector/map element accessors ([i] / ['key']) attach directly to the
+    // parent field name, producing paths like body[1] instead of body.stmts[1].
     void PushFieldName(const char* name)
     {
         if (transparent_depth_ == 0) {
@@ -387,7 +504,7 @@ public:
         }
         if constexpr (AssertMode) {
             if (transparent_depth_ == 0) {
-                path_.emplace_back(name); // No dot prefix — ThrowMismatch adds '.' separators
+                path_.emplace_back(name);
             }
         }
     }
@@ -425,14 +542,14 @@ private:
     }
 
     /**
-     * @brief Generic field-based equality check for IR nodes using FieldIterator
+     * \brief Generic field-based equality check for IR nodes using FieldIterator
      *
      * Uses the dual-node Visit overload which passes two fields to each visitor method.
      *
-     * @tparam NodePtr Shared pointer type to the node
-     * @param lhs_op Left-hand side node
-     * @param rhs_op Right-hand side node
-     * @return true if all fields are equal
+     * \tparam NodePtr Shared pointer type to the node
+     * \param lhs_op Left-hand side node
+     * \param rhs_op Right-hand side node
+     * \return true if all fields are equal
      */
     template <typename NodePtr>
     bool EqualWithFields(const NodePtr& lhs_op, const NodePtr& rhs_op)
@@ -464,6 +581,16 @@ private:
                     if (i < path_.size() - 1 && path_[i + 1][0] != '[') {
                         msg << ".";
                     }
+                }
+            }
+
+            if (!node_type_stack_.empty()) {
+                msg << "\nNode stack: ";
+                for (size_t i = 0; i < node_type_stack_.size(); ++i) {
+                    if (i > 0) {
+                        msg << " > ";
+                    }
+                    msg << node_type_stack_[i];
                 }
             }
             msg << "\n\n";
@@ -509,13 +636,12 @@ private:
     std::vector<std::string> path_; // Only used in assert mode
     std::vector<std::string> field_name_stack_;
     std::vector<std::string> node_type_stack_;
-    int transparent_depth_ = 0; // Depth inside transparent containers (Program/SeqStmts)
+    int transparent_depth_ = 0;
 };
 
 // Type dispatch macro for generic field-based comparison.
 // Saves and resets transparent_depth_ to 0 before entering EqualWithFields so that
-// field names of this (non-transparent) node are always pushed into the path, even
-// when Equal() is called recursively from within a transparent container's field visit.
+// field names of this (non-transparent) node are always pushed into the path.
 #define EQUAL_DISPATCH(Type)                                                 \
     if (auto lhs_##Type = As<Type>(lhs)) {                                   \
         auto rhs_##Type = As<Type>(rhs);                                     \
@@ -529,9 +655,7 @@ private:
     }
 
 // Dispatch macro for transparent container nodes (Program, SeqStmts).
-// Increments transparent_depth_ so that their field names are suppressed in the path,
-// allowing vector/map element accessors ([i] / ['key']) to attach directly to the
-// parent field name: e.g., body[1] instead of body.stmts[1].
+// Increments transparent_depth_ so that their field names are suppressed in the path.
 #define EQUAL_DISPATCH_TRANSPARENT(Type)                                     \
     if (auto lhs_##Type = As<Type>(lhs)) {                                   \
         transparent_depth_++;                                                \
@@ -566,19 +690,25 @@ bool StructuralEqualImpl<AssertMode>::Equal(const IRNodePtr& lhs, const IRNodePt
 
     // Check MemRef before IterArg and Var (MemRef inherits from Var)
     if (auto lhs_memref = As<MemRef>(lhs)) {
+        node_type_stack_.emplace_back("MemRef");
         auto rhs_memref = std::static_pointer_cast<const MemRef>(rhs);
         bool result = rhs_memref && EqualMemRef(lhs_memref, rhs_memref);
+        node_type_stack_.pop_back();
         return result;
     }
 
     // Check IterArg before Var (IterArg inherits from Var)
     if (auto lhs_iter = As<IterArg>(lhs)) {
+        node_type_stack_.emplace_back("IterArg");
         bool result = EqualIterArg(lhs_iter, std::static_pointer_cast<const IterArg>(rhs));
+        node_type_stack_.pop_back();
         return result;
     }
 
     if (auto lhs_var = As<Var>(lhs)) {
+        node_type_stack_.emplace_back("Var");
         bool result = EqualVar(lhs_var, std::static_pointer_cast<const Var>(rhs));
+        node_type_stack_.pop_back();
         return result;
     }
 
@@ -588,9 +718,9 @@ bool StructuralEqualImpl<AssertMode>::Equal(const IRNodePtr& lhs, const IRNodePt
     EQUAL_DISPATCH(ConstBool)
     EQUAL_DISPATCH(Call)
     EQUAL_DISPATCH(MakeTuple)
-    EQUAL_DISPATCH(TupleGetItemExpr)
+    EQUAL_DISPATCH(GetItemExpr)
 
-    // BinaryExpr and UnaryExpr are abstract base classes matching multiple kinds
+    // BinaryExpr and UnaryExpr are abstract base classes
     EQUAL_DISPATCH(BinaryExpr)
     EQUAL_DISPATCH(UnaryExpr)
 
@@ -600,7 +730,9 @@ bool StructuralEqualImpl<AssertMode>::Equal(const IRNodePtr& lhs, const IRNodePt
     EQUAL_DISPATCH(ReturnStmt)
     EQUAL_DISPATCH(ForStmt)
     EQUAL_DISPATCH(WhileStmt)
+    EQUAL_DISPATCH(SectionStmt)
     EQUAL_DISPATCH_TRANSPARENT(SeqStmts)
+    EQUAL_DISPATCH(OpStmts)
     EQUAL_DISPATCH(EvalStmt)
     EQUAL_DISPATCH(BreakStmt)
     EQUAL_DISPATCH(ContinueStmt)
@@ -677,7 +809,6 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             if (!Equal(lhs_tensor->shape_[i], rhs_tensor->shape_[i]))
                 return false;
         }
-
         return true;
     } else if (auto lhs_tile = As<TileType>(lhs)) {
         auto rhs_tile = As<TileType>(rhs);
@@ -711,7 +842,83 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
             if (!Equal(lhs_tile->shape_[i], rhs_tile->shape_[i]))
                 return false;
         }
-
+        // Compare tile_view
+        if (lhs_tile->tileView_.has_value() != rhs_tile->tileView_.has_value()) {
+            if constexpr (AssertMode) {
+                ThrowMismatch("TileType tile_view presence mismatch", IRNodePtr(), IRNodePtr(), "", "");
+            }
+            return false;
+        }
+        if (lhs_tile->tileView_.has_value()) {
+            const auto& lhs_tv = lhs_tile->tileView_.value();
+            const auto& rhs_tv = rhs_tile->tileView_.value();
+            // Compare valid_shape
+            if (lhs_tv.validShape.size() != rhs_tv.validShape.size()) {
+                if constexpr (AssertMode) {
+                    std::ostringstream msg;
+                    msg << "TileView valid_shape size mismatch (" << lhs_tv.validShape.size()
+                        << " != " << rhs_tv.validShape.size() << ")";
+                    ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            for (size_t i = 0; i < lhs_tv.validShape.size(); ++i) {
+                if (!Equal(lhs_tv.validShape[i], rhs_tv.validShape[i]))
+                    return false;
+            }
+            // Compare stride
+            if (lhs_tv.stride.size() != rhs_tv.stride.size()) {
+                if constexpr (AssertMode) {
+                    std::ostringstream msg;
+                    msg << "TileView stride size mismatch (" << lhs_tv.stride.size() << " != " << rhs_tv.stride.size()
+                        << ")";
+                    ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            for (size_t i = 0; i < lhs_tv.stride.size(); ++i) {
+                if (!Equal(lhs_tv.stride[i], rhs_tv.stride[i]))
+                    return false;
+            }
+            // Compare start_offset
+            if (!Equal(lhs_tv.startOffset, rhs_tv.startOffset))
+                return false;
+        }
+        // Compare hardware_info
+        if (lhs_tile->hardwareInfo_.has_value() != rhs_tile->hardwareInfo_.has_value()) {
+            if constexpr (AssertMode) {
+                ThrowMismatch("TileType hardware_info presence mismatch", IRNodePtr(), IRNodePtr(), "", "");
+            }
+            return false;
+        }
+        if (lhs_tile->hardwareInfo_.has_value()) {
+            const auto& lhs_hw = lhs_tile->hardwareInfo_.value();
+            const auto& rhs_hw = rhs_tile->hardwareInfo_.value();
+            if (lhs_hw.blayout != rhs_hw.blayout) {
+                if constexpr (AssertMode) {
+                    ThrowMismatch("HardwareInfo blayout mismatch", IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            if (lhs_hw.slayout != rhs_hw.slayout) {
+                if constexpr (AssertMode) {
+                    ThrowMismatch("HardwareInfo slayout mismatch", IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            if (lhs_hw.fractal != rhs_hw.fractal) {
+                if constexpr (AssertMode) {
+                    ThrowMismatch("HardwareInfo fractal mismatch", IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+            if (lhs_hw.pad != rhs_hw.pad) {
+                if constexpr (AssertMode) {
+                    ThrowMismatch("HardwareInfo pad mismatch", IRNodePtr(), IRNodePtr(), "", "");
+                }
+                return false;
+            }
+        }
         return true;
     } else if (auto lhs_tuple = As<TupleType>(lhs)) {
         auto rhs_tuple = As<TupleType>(rhs);

@@ -126,7 +126,7 @@ TEST(ExprTest, MakeTupleConstruction)
     ASSERT_EQ(tupleType->types_.size(), 2u);
 }
 
-TEST(ExprTest, TupleGetItemExpr)
+TEST(ExprTest, GetItemExpr)
 {
     auto span = TestSpan();
     auto intType = Int32Type();
@@ -135,17 +135,18 @@ TEST(ExprTest, TupleGetItemExpr)
     auto y = std::make_shared<Var>("y", floatType, span);
 
     auto tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{x, y}, span);
-    auto getItem = std::make_shared<TupleGetItemExpr>(tuple, 0, span);
+    auto idx = std::make_shared<ConstInt>(0, DataType::INDEX, span);
+    auto getItem = std::make_shared<GetItemExpr>(tuple, idx, span);
 
     ASSERT_NE(getItem, nullptr);
-    ASSERT_EQ(getItem->index_, 0);
+    ASSERT_EQ(As<ConstInt>(getItem->slice_)->value_, 0);
     // Type should be the first element's type (INT32)
     auto ResultType = As<ScalarType>(getItem->GetType());
     ASSERT_NE(ResultType, nullptr);
     ASSERT_EQ(ResultType->dtype_, DataType::INT32);
 }
 
-TEST(ExprTest, TupleGetItemSecondElement)
+TEST(ExprTest, GetItemSecondElement)
 {
     auto span = TestSpan();
     auto intType = Int32Type();
@@ -154,7 +155,8 @@ TEST(ExprTest, TupleGetItemSecondElement)
     auto y = std::make_shared<Var>("y", floatType, span);
 
     auto tuple = std::make_shared<MakeTuple>(std::vector<ExprPtr>{x, y}, span);
-    auto getItem = std::make_shared<TupleGetItemExpr>(tuple, 1, span);
+    auto idx = std::make_shared<ConstInt>(1, DataType::INDEX, span);
+    auto getItem = std::make_shared<GetItemExpr>(tuple, idx, span);
 
     auto ResultType = As<ScalarType>(getItem->GetType());
     ASSERT_NE(ResultType, nullptr);

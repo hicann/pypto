@@ -14,7 +14,11 @@ file(GLOB _Interface_Srcs
         # Core infrastructure
         core/*.cpp
         ir/*.cpp
+        ir/op/*.cpp
+        ir/op/*/*.cpp
+        ir/reporter/*.cpp
         ir/transforms/*.cpp
+        ir/verifier/*.cpp
         # 前端框架
         schema/*.cpp
         configs/*.cpp

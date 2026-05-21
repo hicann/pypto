@@ -35,7 +35,7 @@ TEST(IRMemRefTest, TestMemRefBasicConstructor)
     MemRef memref(MemorySpace::DDR, addr, 1024);
 
     ASSERT_EQ(memref.memorySpace_, MemorySpace::DDR);
-    ASSERT_EQ(memref.offset_, addr);
+    ASSERT_EQ(memref.addr_, addr);
     ASSERT_EQ(memref.size_, 1024);
 }
 
@@ -88,8 +88,8 @@ TEST(IRMemRefTest, TestMemRefWithZeroAddress)
     auto addr = std::make_shared<ConstInt>(0, DataType::INT64, Span::Unknown());
     MemRef memref(MemorySpace::DDR, addr, 1024);
 
-    ASSERT_NE(memref.offset_, nullptr);
-    auto constAddr = std::dynamic_pointer_cast<const ConstInt>(memref.offset_);
+    ASSERT_NE(memref.addr_, nullptr);
+    auto constAddr = std::dynamic_pointer_cast<const ConstInt>(memref.addr_);
     ASSERT_NE(constAddr, nullptr);
     ASSERT_EQ(constAddr->value_, 0);
 }
@@ -100,8 +100,8 @@ TEST(IRMemRefTest, TestMemRefWithNonZeroAddress)
     auto addr = std::make_shared<ConstInt>(0x1000, DataType::INT64, Span::Unknown());
     MemRef memref(MemorySpace::Vec, addr, 2048);
 
-    ASSERT_NE(memref.offset_, nullptr);
-    auto constAddr = std::dynamic_pointer_cast<const ConstInt>(memref.offset_);
+    ASSERT_NE(memref.addr_, nullptr);
+    auto constAddr = std::dynamic_pointer_cast<const ConstInt>(memref.addr_);
     ASSERT_NE(constAddr, nullptr);
     ASSERT_EQ(constAddr->value_, 0x1000);
 }
@@ -115,8 +115,8 @@ TEST(IRMemRefTest, TestMemRefWithVariableAddress)
 
     MemRef memref(MemorySpace::Mat, addr, 512);
 
-    ASSERT_NE(memref.offset_, nullptr);
-    ASSERT_EQ(memref.offset_->TypeName(), "Add");
+    ASSERT_NE(memref.addr_, nullptr);
+    ASSERT_EQ(memref.addr_->TypeName(), "Add");
 }
 
 // ============================================================================
@@ -178,13 +178,13 @@ TEST(IRMemRefTest, TestMemRefCopyConstructor)
 
     // Verify fields via shared_ptr
     ASSERT_EQ(original->memorySpace_, MemorySpace::DDR);
-    ASSERT_EQ(original->offset_, addr);
+    ASSERT_EQ(original->addr_, addr);
     ASSERT_EQ(original->size_, 1024);
 
     // Test that another MemRef with same params has same field values
     auto another = std::make_shared<MemRef>(MemorySpace::DDR, addr, 1024);
     ASSERT_EQ(another->memorySpace_, original->memorySpace_);
-    ASSERT_EQ(another->offset_, original->offset_);
+    ASSERT_EQ(another->addr_, original->addr_);
     ASSERT_EQ(another->size_, original->size_);
 }
 
@@ -199,7 +199,7 @@ TEST(IRMemRefTest, TestMemRefAssignment)
 
     // Verify they have different values
     ASSERT_NE(ref1->memorySpace_, ref2->memorySpace_);
-    ASSERT_NE(ref1->offset_, ref2->offset_);
+    ASSERT_NE(ref1->addr_, ref2->addr_);
     ASSERT_NE(ref1->size_, ref2->size_);
 }
 
@@ -252,7 +252,7 @@ TEST(IRMemRefTest, TestMemRefWithOffsetAddress)
 
     ASSERT_EQ(memref.memorySpace_, MemorySpace::Mat);
     ASSERT_EQ(memref.size_, 512);
-    ASSERT_EQ(memref.offset_->TypeName(), "Add");
+    ASSERT_EQ(memref.addr_->TypeName(), "Add");
 }
 
 // ============================================================================
@@ -269,7 +269,7 @@ TEST(IRMemRefTest, TestMemRefEquality)
 
     // Note: This tests structural equality, not pointer equality
     ASSERT_EQ(ref1.memorySpace_, ref2.memorySpace_);
-    ASSERT_EQ(ref1.offset_, ref2.offset_);
+    ASSERT_EQ(ref1.addr_, ref2.addr_);
     ASSERT_EQ(ref1.size_, ref2.size_);
 }
 
@@ -283,7 +283,7 @@ TEST(IRMemRefTest, TestMemRefInequality)
     MemRef ref2(MemorySpace::Vec, addr2, 2048);
 
     ASSERT_NE(ref1.memorySpace_, ref2.memorySpace_);
-    ASSERT_NE(ref1.offset_, ref2.offset_);
+    ASSERT_NE(ref1.addr_, ref2.addr_);
     ASSERT_NE(ref1.size_, ref2.size_);
 }
 
@@ -313,8 +313,8 @@ TEST(IRMemRefTest, TestMemRefWithComplexAddressExpression)
 
     MemRef memref(MemorySpace::Mat, addr, 256);
 
-    ASSERT_NE(memref.offset_, nullptr);
-    ASSERT_EQ(memref.offset_->TypeName(), "Add");
+    ASSERT_NE(memref.addr_, nullptr);
+    ASSERT_EQ(memref.addr_->TypeName(), "Add");
 }
 
 } // namespace ir

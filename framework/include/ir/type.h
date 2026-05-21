@@ -8,7 +8,10 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#pragma once
+#ifndef PYPTO_IR_TYPE_H_
+#define PYPTO_IR_TYPE_H_
+
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -17,15 +20,13 @@
 #include <vector>
 
 #include "core/dtype.h"
-#include "core/logging.h"
 #include "ir/core.h"
-#include "ir/memory_space.h"
 #include "ir/reflection/field_traits.h"
 
 namespace pypto {
 namespace ir {
 
-// Forward declaration
+// Forward declarations
 class Expr;
 using ExprPtr = std::shared_ptr<const Expr>;
 
@@ -122,7 +123,7 @@ public:
 using ScalarTypePtr = std::shared_ptr<const ScalarType>;
 
 /**
- * @brief Tensor layout enumeration
+ * \brief Tensor layout enumeration
  *
  * Defines the available tensor layout types:
  * - ND: ND layout
@@ -133,6 +134,122 @@ enum class TensorLayout {
     ND, ///< ND layout
     DN, ///< DN layout
     NZ  ///< NZ layout
+};
+
+/**
+ * \brief Tensor view representation
+ *
+ * Represents the view information for a tensor, including stride and layout.
+ * The shape is stored in TensorType itself, so TensorView only needs
+ * stride and layout information.
+ */
+struct TensorView {
+    std::vector<ExprPtr> validShape; ///< Valid shape dimensions (symbolic or constant)
+    std::vector<ExprPtr> stride;     ///< Stride for each dimension
+    TensorLayout layout;             ///< Tensor layout type
+    std::optional<ExprPtr> ptr;      ///< Source pointer (set for ptr.make_tensor-created views)
+
+    TensorView() : layout(TensorLayout::ND) {}
+
+    TensorView(std::vector<ExprPtr> strideIn, TensorLayout layoutIn) : stride(std::move(strideIn)), layout(layoutIn) {}
+
+    TensorView(std::vector<ExprPtr> strideIn, TensorLayout layoutIn, ExprPtr ptrExpr)
+        : stride(std::move(strideIn)), layout(layoutIn), ptr(std::move(ptrExpr))
+    {}
+
+    TensorView(std::vector<ExprPtr> validShapeIn, std::vector<ExprPtr> strideIn, TensorLayout layoutIn)
+        : validShape(std::move(validShapeIn)), stride(std::move(strideIn)), layout(layoutIn)
+    {}
+
+    TensorView(std::vector<ExprPtr> validShapeIn, std::vector<ExprPtr> strideIn, TensorLayout layoutIn, ExprPtr ptrExpr)
+        : validShape(std::move(validShapeIn)), stride(std::move(strideIn)), layout(layoutIn), ptr(std::move(ptrExpr))
+    {}
+
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::make_tuple(
+            reflection::UsualField(&TensorView::validShape, "valid_shape"),
+            reflection::UsualField(&TensorView::stride, "stride"),
+            reflection::UsualField(&TensorView::layout, "layout"));
+    }
+};
+
+/**
+ * \brief Tile layout enumeration
+ *
+ * Shared by blayout and slayout fields in TileView:
+ * - none_box: No layout constraint
+ * - row_major: Row-major layout
+ * - col_major: Column-major layout
+ */
+enum class TileLayout {
+    none_box,  ///< No layout constraint
+    row_major, ///< Row-major layout
+    col_major  ///< Column-major layout
+};
+
+/**
+ * \brief Tile pad enumeration
+ *
+ * Defines the padding mode for out-of-bound tile accesses:
+ * - null: No padding
+ * - zero: Pad with zero
+ * - max: Pad with maximum value of the element type
+ * - min: Pad with minimum value of the element type
+ */
+enum class TilePad {
+    null, ///< No padding
+    zero, ///< Zero padding
+    max,  ///< Max value padding
+    min   ///< Min value padding
+};
+
+/**
+ * \brief Compact mode enumeration for tile buffer
+ *
+ * Defines the compact mode for tile buffers, used to handle
+ * tail-block scenarios
+ * where L0A/L0B split layouts are non-contiguous:
+ * - null: No compact mode (default)
+ * - normal: Normal compact mode
+ * - row_plus_one: Row plus one compact mode
+ */
+enum class CompactMode {
+    null,        ///< No compact mode (default)
+    normal,      ///< Normal compact mode
+    row_plus_one ///< Row plus one compact mode
+};
+
+/**
+ * \brief Hardware-specific tile information
+ *
+ * Contains layout, fractal, padding, and compact mode parameters
+ * that describe how a tile is physically stored in hardware memory.
+ */
+struct HardwareInfo {
+    TileLayout blayout = TileLayout::row_major; ///< Block layout
+    TileLayout slayout = TileLayout::none_box;  ///< Scatter layout
+    uint64_t fractal = 512;                     ///< Fractal size
+    TilePad pad = TilePad::null;                ///< Pad mode
+    CompactMode compact = CompactMode::null;    ///< Compact mode
+
+    HardwareInfo() = default;
+
+    HardwareInfo(
+        TileLayout blayoutIn, TileLayout slayoutIn = TileLayout::none_box, uint64_t fractalIn = 512,
+        TilePad padIn = TilePad::null, CompactMode compactIn = CompactMode::null)
+        : blayout(blayoutIn), slayout(slayoutIn), fractal(fractalIn), pad(padIn), compact(compactIn)
+    {}
+
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::make_tuple(
+            reflection::UsualField(&HardwareInfo::blayout, "blayout"),
+            reflection::UsualField(&HardwareInfo::slayout, "slayout"),
+            reflection::UsualField(&HardwareInfo::fractal, "fractal"),
+            reflection::UsualField(&HardwareInfo::pad, "pad"),
+            reflection::UsualField(&HardwareInfo::compact, "compact"));
+    }
 };
 
 /**
@@ -147,27 +264,12 @@ struct TileView {
     std::vector<ExprPtr> stride;     ///< Stride for each dimension
     ExprPtr startOffset;             ///< Starting offset
 
-    /**
-     * \brief Default constructor for aggregate initialization
-     */
     TileView() = default;
 
-    /**
-     * \brief Constructor with all parameters
-     *
-     * \param validShape Valid shape dimensions
-     * \param stride Stride for each dimension
-     * \param startOffset Starting offset
-     */
     TileView(std::vector<ExprPtr> validShapeIn, std::vector<ExprPtr> strideIn, ExprPtr startOffsetIn)
         : validShape(std::move(validShapeIn)), stride(std::move(strideIn)), startOffset(std::move(startOffsetIn))
     {}
 
-    /**
-     * \brief Get field descriptors for reflection-based visitation
-     *
-     * \return Tuple of field descriptors
-     */
     static constexpr auto GetFieldDescriptors()
     {
         return std::make_tuple(
@@ -208,6 +310,17 @@ public:
     ShapedType(DataType dtype, const std::vector<int64_t>& shape, std::optional<MemRefPtr> memref);
 
     /**
+     * \brief Create a shaped type with memory reference (shared_ptr)
+     *
+     * \param dtype Element data type
+     * \param shape Shape dimensions
+     * \param memref Memory reference (shared pointer)
+     */
+    ShapedType(DataType dtype, std::vector<ExprPtr> shape, MemRefPtr memref)
+        : dtype_(dtype), shape_(std::move(shape)), memref_(std::move(memref))
+    {}
+
+    /**
      * \brief Create a shaped type with optional memory reference (shared_ptr)
      *
      * \param dtype Element data type
@@ -240,25 +353,14 @@ using ShapedTypePtr = std::shared_ptr<const ShapedType>;
  */
 class TensorType : public ShapedType {
 public:
-    std::vector<ExprPtr> validShape; ///< Valid shape dimensions (symbolic or constant)
-    TensorLayout layout;             ///< Tensor layout
+    std::optional<TensorView> tensor_view_; ///< Optional tensor view information
 
-    /**
-     * \brief Create a tensor type without memory reference
-     *
-     * \param shape Shape dimensions
-     * \param dtype Element data type
-     */
-    TensorType(std::vector<ExprPtr> shape, DataType dtype) : ShapedType(dtype, std::move(shape)) {}
+    TensorType(std::vector<ExprPtr> shape, DataType dtype)
+        : ShapedType(dtype, std::move(shape)), tensor_view_(std::nullopt)
+    {}
 
-    /**
-     * \brief Create a tensor type with constant shape
-     *
-     * \param shape Shape dimensions
-     * \param dtype Element data type
-     */
-    TensorType(const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref)
-        : ShapedType(dtype, shape, std::move(memref))
+    TensorType(std::vector<ExprPtr> shape, DataType dtype, MemRefPtr memref)
+        : ShapedType(dtype, std::move(shape), std::move(memref)), tensor_view_(std::nullopt)
     {}
 
     /**
@@ -269,7 +371,23 @@ public:
      * \param memref Optional memory reference (shared pointer)
      */
     TensorType(std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref)
-        : ShapedType(dtype, std::move(shape), std::move(memref))
+        : ShapedType(dtype, std::move(shape), std::move(memref)), tensor_view_(std::nullopt)
+    {}
+
+    TensorType(const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref)
+        : ShapedType(dtype, shape, std::move(memref)), tensor_view_(std::nullopt)
+    {}
+
+    TensorType(
+        std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref,
+        std::optional<TensorView> tensorView)
+        : ShapedType(dtype, std::move(shape), std::move(memref)), tensor_view_(std::move(tensorView))
+    {}
+
+    TensorType(
+        const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref,
+        std::optional<TensorView> tensorView)
+        : ShapedType(dtype, shape, std::move(memref)), tensor_view_(std::move(tensorView))
     {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TensorType; }
@@ -277,10 +395,9 @@ public:
 
     static constexpr auto GetFieldDescriptors()
     {
-        auto newFields = std::make_tuple(
-            reflection::UsualField(&TensorType::validShape, "valid_shape"),
-            reflection::UsualField(&TensorType::layout, "layout"));
-        return std::tuple_cat(ShapedType::GetFieldDescriptors(), newFields);
+        return std::tuple_cat(
+            ShapedType::GetFieldDescriptors(),
+            std::make_tuple(reflection::UsualField(&TensorType::tensor_view_, "tensor_view")));
     }
 };
 
@@ -295,55 +412,43 @@ using TensorTypePtr = std::shared_ptr<const TensorType>;
  */
 class TileType : public ShapedType {
 public:
-    std::optional<TileView> tileView_; ///< Optional tile view information
+    std::optional<TileView> tileView_;         ///< Optional tile view information
+    std::optional<HardwareInfo> hardwareInfo_; ///< Optional hardware-specific tile information
 
-    /**
-     * \brief Create a tile type without memory reference or tile view
-     *
-     * \param shape Shape dimensions (supports multi-dimensional tensors)
-     * \param dtype Element data type
-     */
-    TileType(std::vector<ExprPtr> shape, DataType dtype) : ShapedType(dtype, std::move(shape)), tileView_(std::nullopt)
+    TileType(std::vector<ExprPtr> shape, DataType dtype)
+        : ShapedType(dtype, std::move(shape)), tileView_(std::nullopt), hardwareInfo_(std::nullopt)
     {}
 
-    /**
-     * \brief Create a tile type with optional memory reference (shared_ptr)
-     *
-     * \param shape Shape dimensions (supports multi-dimensional tensors)
-     * \param dtype Element data type
-     * \param memref Optional memory reference (shared pointer)
-     */
-    TileType(std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref)
-        : ShapedType(dtype, std::move(shape), std::move(memref)), tileView_(std::nullopt)
-    {
-        // No dimension limit at type level; code generation may have constraints
-    }
+    TileType(std::vector<ExprPtr> shape, DataType dtype, MemRefPtr memref)
+        : ShapedType(dtype, std::move(shape), std::move(memref)), tileView_(std::nullopt), hardwareInfo_(std::nullopt)
+    {}
 
-    /**
-     * \brief Create a tile type with constant shape
-     *
-     * \param shape Shape dimensions (supports multi-dimensional tensors)
-     * \param dtype Element data type
-     * \param memref Optional memory reference (shared pointer)
-     * \param tileView Optional tile view information
-     */
+    TileType(std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref)
+        : ShapedType(dtype, std::move(shape), std::move(memref)), tileView_(std::nullopt), hardwareInfo_(std::nullopt)
+    {}
+
     TileType(
         const std::vector<int64_t>& shape, DataType dtype, std::optional<MemRefPtr> memref,
-        std::optional<TileView> tileView)
-        : ShapedType(dtype, shape, std::move(memref)), tileView_(std::move(tileView))
+        std::optional<TileView> tileView, std::optional<HardwareInfo> hardwareInfo = std::nullopt)
+        : ShapedType(dtype, shape, std::move(memref)),
+          tileView_(std::move(tileView)),
+          hardwareInfo_(std::move(hardwareInfo))
     {}
 
-    /**
-     * \brief Create a tile type with optional memory reference and tile view (shared_ptr)
-     *
-     * \param shape Shape dimensions (supports multi-dimensional tensors)
-     * \param dtype Element data type
-     * \param memref Optional memory reference (shared pointer)
-     * \param tileView Tile view information
-     */
     TileType(
-        std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref, std::optional<TileView> tileView)
-        : ShapedType(dtype, std::move(shape), std::move(memref)), tileView_(std::move(tileView))
+        std::vector<ExprPtr> shape, DataType dtype, MemRefPtr memref, std::optional<TileView> tileView,
+        std::optional<HardwareInfo> hardwareInfo = std::nullopt)
+        : ShapedType(dtype, std::move(shape), std::move(memref)),
+          tileView_(std::move(tileView)),
+          hardwareInfo_(std::move(hardwareInfo))
+    {}
+
+    TileType(
+        std::vector<ExprPtr> shape, DataType dtype, std::optional<MemRefPtr> memref, std::optional<TileView> tileView,
+        std::optional<HardwareInfo> hardwareInfo = std::nullopt)
+        : ShapedType(dtype, std::move(shape), std::move(memref)),
+          tileView_(std::move(tileView)),
+          hardwareInfo_(std::move(hardwareInfo))
     {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TileType; }
@@ -352,8 +457,9 @@ public:
     static constexpr auto GetFieldDescriptors()
     {
         return std::tuple_cat(
-            ShapedType::GetFieldDescriptors(),
-            std::make_tuple(reflection::UsualField(&TileType::tileView_, "tile_view")));
+            ShapedType::GetFieldDescriptors(), std::make_tuple(
+                                                   reflection::UsualField(&TileType::tileView_, "tile_view"),
+                                                   reflection::UsualField(&TileType::hardwareInfo_, "hardware_info")));
     }
 };
 
@@ -421,34 +527,54 @@ inline MemRefTypePtr GetMemRefType()
 }
 
 /**
- * \brief Pointer type for base allocation identity tokens
+ * \brief Pointer type representation
  *
- * Represents the type of variables returned by tile.alloc / tensor.alloc.
- * A Ptr variable is the allocation identity token that MemRefs reference
- * via their base_ field.
+ * Represents a raw pointer to global memory of a specific element type.
+ * Corresponds to `!pto.ptr<dtype>` in PTO MLIR.
+ * Used as the base-pointer argument for `pl.make_tensor` body ops.
+ *
+ * `base_ptr` and `offset` are codegen-level annotations (excluded from
+ * structural equality) that track the decomposition of chained addptr calls.
  */
 class PtrType : public Type {
 public:
-    PtrType() = default;
+    DataType dtype_; ///< Element type pointed to
+
+    /// Original ptr function param expr (codegen-level, excluded from reflection)
+    std::optional<ExprPtr> base_ptr;
+    /// Accumulated element offset expr (codegen-level, excluded from reflection)
+    std::optional<ExprPtr> offset;
+
+    /**
+     * \brief Create a pointer type
+     *
+     * \param dtype Element data type
+     */
+    explicit PtrType(DataType dtype) : dtype_(dtype) {}
+
+    /**
+     * \brief Create a pointer type with addptr decomposition
+     *
+     * \param dtype Element data type
+     * \param base Original pointer parameter expression
+     * \param off  Accumulated element offset expression
+     */
+    PtrType(DataType dtype, ExprPtr base, ExprPtr off)
+        : dtype_(dtype), base_ptr(std::move(base)), offset(std::move(off))
+    {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::PtrType; }
-    [[nodiscard]] std::string TypeName() const override { return "Ptr"; }
+    [[nodiscard]] std::string TypeName() const override { return "PtrType"; }
 
-    static constexpr auto GetFieldDescriptors() { return Type::GetFieldDescriptors(); }
+    // Only dtype_ participates in structural equality; base_ptr/offset are codegen annotations.
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Type::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&PtrType::dtype_, "dtype")));
+    }
 };
 
 using PtrTypePtr = std::shared_ptr<const PtrType>;
-
-/**
- * @brief Get a shared pointer to the singleton PtrType instance
- *
- * @return Shared pointer to PtrType
- */
-inline PtrTypePtr GetPtrType()
-{
-    static const auto ptr_type = std::make_shared<PtrType>();
-    return ptr_type;
-}
 
 /**
  * \brief Token type representation
@@ -470,14 +596,14 @@ public:
 using TokenTypePtr = std::shared_ptr<const TokenType>;
 
 /**
- * @brief Get a shared pointer to the singleton TokenType instance
+ * \brief Get a shared pointer to the singleton TokenType instance
  *
- * @return Shared pointer to TokenType
+ * \return Shared pointer to TokenType
  */
 inline TokenTypePtr GetTokenType()
 {
-    static const auto token_type = std::make_shared<TokenType>();
-    return token_type;
+    static const auto tokenType = std::make_shared<TokenType>();
+    return tokenType;
 }
 
 /**
@@ -506,3 +632,5 @@ inline LogicalTensorTypePtr GetLogicalTensorType()
 
 } // namespace ir
 } // namespace pypto
+
+#endif // PYPTO_IR_TYPE_H_

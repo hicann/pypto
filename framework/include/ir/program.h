@@ -9,7 +9,6 @@
  */
 
 #pragma once
-#include <set>
 #include <map>
 #include <memory>
 #include <string>
@@ -31,61 +30,23 @@ namespace ir {
  * Represents a complete program with functions.
  * Programs are immutable IR nodes.
  *
- * Functions are stored in a sorted vector (by name) to ensure deterministic
+ * Functions are stored in an ordered map by name to ensure deterministic
  * ordering for structural equality and hashing.
  *
- * \note The GlobalVar name must match the function name and be unique within the program.
- *       Validation of this constraint may be added in future passes.
+ * \note The function name must be unique within the program.
  */
 class Program : public IRNode {
 public:
-    /**
-     * \brief Create a program from a vector of functions
-     *
-     * \param functions Vector of functions
-     * \param name Program name (optional)
-     * \param span Source location
-     */
-    Program(std::vector<FunctionPtr> functions, std::string name, Span span)
+    Program(std::map<std::string, FunctionPtr> functions, std::string name, Span span)
         : IRNode(std::move(span)), name_(std::move(name)), functions_(std::move(functions))
-    {
-        std::set<std::string> funcNames;
-        for (auto func : functions_) {
-            if (funcNames.count(func->name_)) {
-                throw InternalError("Duplicate function name: " + func->name_);
-            }
-            funcNames.insert(func->name_);
-        }
-    }
+    {}
+
+    Program(const std::vector<FunctionPtr>& functions, std::string name, Span span);
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Program; }
     [[nodiscard]] std::string TypeName() const override { return "Program"; }
 
-    /**
-     * \brief Get a function by name
-     *
-     * \param name Function name to look up
-     * \return Shared pointer to the function, or nullptr if not found
-     */
-    [[nodiscard]] FunctionPtr GetFunction(const std::string& name) const
-    {
-        {
-            for (auto func : functions_) {
-                if (func->name_ == name) {
-                    return func;
-                }
-            }
-            return nullptr;
-        }
-    }
-
-    /**
-     * \brief Get a GlobalVar by name
-     *
-     * \param name GlobalVar name to look up
-     * \return Shared pointer to the GlobalVar, or nullptr if not found
-     */
-    [[nodiscard]] GlobalVarPtr GetGlobalVar(const std::string& name) const;
+    [[nodiscard]] FunctionPtr GetFunction(const std::string& name) const;
 
     /**
      * \brief Get field descriptors for reflection-based visitation
@@ -101,8 +62,8 @@ public:
     }
 
 public:
-    std::string name_;                   // Program name
-    std::vector<FunctionPtr> functions_; // Vector of Functions
+    std::string name_;
+    std::map<std::string, FunctionPtr> functions_;
 };
 
 using ProgramPtr = std::shared_ptr<const Program>;

@@ -1,4 +1,3 @@
-# Copyright (c) PyPTO Contributors.
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -6,7 +5,6 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
-# -----------------------------------------------------------------------------------------------------------
 from typing import Final, Union, Any, Optional, Sequence, overload
 import enum
 from .. import pypto_impl
@@ -776,6 +774,9 @@ class MemorySpace(enum.IntEnum):
     Right = ...
     """Right matrix operand buffer."""
 
+    Scaling = ...
+    """Scaling/FBuffer tile buffer."""
+
     Acc = ...
     """Accumulator buffer."""
 
@@ -816,25 +817,29 @@ class CoreType(enum.IntEnum):
     CUBE = ...
 
 
-class FunctionType(enum.Enum):
+class FunctionType(enum.IntEnum):
     """Function type classification.
 
     Categorizes functions by their execution context and purpose:
     - Opaque: Unspecified (default)
+    - Orchestration: Host/AICPU control and coordination
+    - InCore: AICore sub-graph execution
+    - Helper: Scalar helper function callable from kernels
     """
 
     Opaque = ...
+    Orchestration = ...
+    InCore = ...
+    Helper = ...
 
 
 class PtrType(Type):
-    """Pointer type for allocation identity tokens (returned by tile.alloc/tensor.alloc)."""
+    """Pointer type with element dtype."""
 
-    def __init__(self) -> None: ...
+    dtype: Final[DataType]
+    """Element data type pointed to."""
 
-    @staticmethod
-    def get() -> PtrType:
-        """Get the singleton PtrType instance."""
-        ...
+    def __init__(self, dtype: DataType = DataType.INT8) -> None: ...
 
 
 class TokenType(Type):
@@ -1092,26 +1097,22 @@ class MakeTuple(Expr):
         """Detailed representation of the tuple construction expression."""
 
 
-class TupleGetItemExpr(Expr):
-    """Tuple element access expression."""
+class GetItemExpr(Expr):
+    """Subscript expression for tuple element access or tile offset."""
 
-    tuple: Final[Expr]
-    """Tuple expression (must have TupleType)."""
+    value: Final[Expr]
+    """Base expression (must have TupleType or TileType)."""
 
-    index: Final[int]
-    """Index of the element to access (0-based)."""
+    slice: Final[Expr]
+    """Subscript expression."""
 
-    def __init__(self, tuple: Expr, index: int, span: Span) -> None:
-        """Create a tuple element access expression.
+    def __init__(self, value: Expr, slice: Expr, span: Span) -> None:
+        """Create a subscript expression.
 
         Args:
-            tuple: Tuple expression (must have TupleType type)
-            index: Index of the element (0-based, must be within bounds)
+            value: Base expression
+            slice: Subscript expression
             span: Source location
-
-        Raises:
-            Exception: If tuple does not have TupleType
-            Exception: If index is out of bounds
         """
 
     def __str__(self) -> str:
@@ -1324,6 +1325,32 @@ class WhileStmt(Stmt):
         """
 
 
+class SectionKind(enum.IntEnum):
+    """Section kind classification."""
+
+    Vector = ...
+    Cube = ...
+
+
+class SectionStmt(Stmt):
+    """Section statement: with section_vector/section_cube."""
+
+    section_kind: Final[SectionKind]
+    """Section kind."""
+
+    body: Final[Stmt]
+    """Nested statement body."""
+
+    def __init__(self, section_kind: SectionKind, body: Stmt, span: Span) -> None:
+        """Create a section statement.
+
+        Args:
+            section_kind: Section kind
+            body: Nested statement body
+            span: Source location
+        """
+
+
 class SeqStmts(Stmt):
     """Sequence of statements: a sequence of statements."""
 
@@ -1349,6 +1376,21 @@ class SeqStmts(Stmt):
 
         Raises:
             IndexError: If index is out of range
+        """
+
+
+class OpStmts(Stmt):
+    """Operation statement block."""
+
+    stmts: Final[list[Stmt]]
+    """List of statements."""
+
+    def __init__(self, stmts: list[Stmt], span: Span) -> None:
+        """Create an operation statement block.
+
+        Args:
+            stmts: List of statements
+            span: Source location
         """
 
 
@@ -1503,7 +1545,7 @@ class Function(IRNode):
 
         Args:
             name: Function name
-            params: Parameter variables, either Var (defaults to In) or (Var, ParamDirection) tuples
+            params: Parameter variables
             return_types: Return types
             body: Function body statement (use SeqStmts for multiple statements)
             span: Source location
@@ -1612,7 +1654,6 @@ class IRBuilder:
             name: Parameter name
             type: Parameter type
             span: Source location for parameter
-            direction: Parameter direction (default: In)
 
         Returns:
             Variable representing the parameter
@@ -1760,6 +1801,25 @@ class IRBuilder:
 
         Returns:
             The built if statement
+        """
+
+    # Section building
+    def begin_section(self, section_kind: SectionKind, span: Span) -> None:
+        """Begin building a section statement.
+
+        Args:
+            section_kind: Section kind
+            span: Source location for section statement
+        """
+
+    def end_section(self, end_span: Span) -> SectionStmt:
+        """End building a section statement.
+
+        Args:
+            end_span: Source location for end of section
+
+        Returns:
+            The built section statement
         """
 
     # Program building

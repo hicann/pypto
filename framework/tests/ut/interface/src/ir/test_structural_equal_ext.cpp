@@ -100,9 +100,11 @@ TEST_F(IRStructEqExprTest, TestCallAndTupleExprsEqual)
     auto t3 = std::make_shared<MakeTuple>(std::vector<ExprPtr>{a1, a1}, Sp());
     EXPECT_FALSE(structural_equal(Node(t1), Node(t3)));
 
-    // TupleGetItemExpr
-    auto g1 = std::make_shared<TupleGetItemExpr>(t1, 0, Sp());
-    auto g2 = std::make_shared<TupleGetItemExpr>(t2, 0, Sp());
+    // GetItemExpr
+    auto idx1 = std::make_shared<ConstInt>(0, DataType::INDEX, Sp());
+    auto idx2 = std::make_shared<ConstInt>(0, DataType::INDEX, Sp());
+    auto g1 = std::make_shared<GetItemExpr>(t1, idx1, Sp());
+    auto g2 = std::make_shared<GetItemExpr>(t2, idx2, Sp());
     EXPECT_TRUE(structural_equal(Node(g1), Node(g2)));
 
     // BinaryExpr
@@ -470,10 +472,12 @@ TEST_F(IRStructEqExprTest, TestForStmtWithIterArgs)
     // Not equal with different init
     auto ia3 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), one, Sp());
     EXPECT_FALSE(structural_equal(
-        Node(std::make_shared<ForStmt>(
-            i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1, std::vector<VarPtr>{rv1}, Sp())),
-        Node(std::make_shared<ForStmt>(
-            i1, zero, ten, one, std::vector<IterArgPtr>{ia3}, body1, std::vector<VarPtr>{rv1}, Sp()))));
+        Node(
+            std::make_shared<ForStmt>(
+                i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1, std::vector<VarPtr>{rv1}, Sp())),
+        Node(
+            std::make_shared<ForStmt>(
+                i1, zero, ten, one, std::vector<IterArgPtr>{ia3}, body1, std::vector<VarPtr>{rv1}, Sp()))));
 }
 
 } // namespace ir

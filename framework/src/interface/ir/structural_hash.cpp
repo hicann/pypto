@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include <algorithm>
@@ -55,7 +53,7 @@ DataType CanonicalizeForSyntaxScalarDtype(const DataType& dtype)
 } // namespace
 
 /**
- * @brief Hash combine using Boost-inspired algorithm
+ * \brief Hash combine using Boost-inspired algorithm
  */
 inline uint64_t hash_combine(uint64_t seed, uint64_t value)
 {
@@ -63,7 +61,7 @@ inline uint64_t hash_combine(uint64_t seed, uint64_t value)
 }
 
 /**
- * @brief Structural hasher for IR nodes
+ * \brief Structural hasher for IR nodes
  *
  * Computes hash based on IR node tree structure, ignoring Span (source location).
  * Also serves as a FieldVisitor for the reflection-based field iteration.
@@ -126,6 +124,20 @@ public:
         return h;
     }
 
+    template <typename ValueType>
+    ResultType VisitIRNodeMapField(const std::map<std::string, ValueType>& field)
+    {
+        ResultType h = 0;
+        for (const auto& [key, value] : field) {
+            INTERNAL_CHECK(value) << "structural_hash encountered null value in map";
+            // Hash key string
+            h = hash_combine(h, static_cast<ResultType>(std::hash<std::string>{}(key)));
+            // Hash value (values are IRNode types)
+            h = hash_combine(h, HashNode(value));
+        }
+        return h;
+    }
+
     template <typename FVisitOp>
     void VisitIgnoreField([[maybe_unused]] FVisitOp&& visit_op)
     {
@@ -171,17 +183,17 @@ public:
         return static_cast<ResultType>(std::hash<std::string>{}(field));
     }
 
-    ResultType VisitLeafField(const OpPtr& field)
-    {
-        return static_cast<ResultType>(std::hash<std::string>{}(field->name_));
-    }
-
     ResultType VisitLeafField(const DataType& field)
     {
         return static_cast<ResultType>(std::hash<uint8_t>{}(field.Code()));
     }
 
     ResultType VisitLeafField(const FunctionType& field)
+    {
+        return static_cast<ResultType>(std::hash<uint8_t>{}(static_cast<uint8_t>(field)));
+    }
+
+    ResultType VisitLeafField(const SectionKind& field)
     {
         return static_cast<ResultType>(std::hash<uint8_t>{}(static_cast<uint8_t>(field)));
     }
@@ -228,9 +240,16 @@ public:
                 h = hash_combine(h, std::hash<float>{}(AnyCast<float>(value, "hashing kwarg: " + key)));
             } else if (value.type() == typeid(DataType)) {
                 h = hash_combine(h, std::hash<uint8_t>{}(AnyCast<DataType>(value, "hashing kwarg: " + key).Code()));
+            } else if (value.type() == typeid(std::vector<int>)) {
+                const auto& vec = AnyCast<std::vector<int>>(value, "hashing kwarg: " + key);
+                for (int v : vec) {
+                    h = hash_combine(h, std::hash<int>{}(v));
+                }
             } else {
-                throw TypeError(
-                    "Unsupported kwarg type for key: " + key + ": " + DemangleTypeName(value.type().name()));
+                CHECK(false) << "Invalid kwarg type for key: " << key
+                             << ", expected int, bool, std::string, double, float, DataType, "
+                                "or std::vector<int>, but got "
+                             << DemangleTypeName(value.type().name());
             }
         }
         return h;
@@ -279,10 +298,8 @@ StructuralHasher::ResultType StructuralHasher::HashNodeImpl(const NodePtr& node)
     node_type_stack_.emplace_back(node->TypeName());
 
     // Mirror EQUAL_DISPATCH / EQUAL_DISPATCH_TRANSPARENT from structural_equal.cpp:
-    // - Transparent containers (Program, SeqStmts) suppress their own field names by
-    //   incrementing transparent_depth_, so PushFieldName skips them.
-    // - Non-transparent nodes reset transparent_depth_ to 0 so their fields are always
-    //   tracked, even when visited from within a transparent container.
+    // - Transparent containers (Program, SeqStmts) suppress their own field names.
+    // - Non-transparent nodes reset transparent_depth_ to 0 so their fields are always tracked.
     constexpr bool is_transparent = std::is_same_v<NodeType, Program> || std::is_same_v<NodeType, SeqStmts>;
     int saved_depth = transparent_depth_;
     if constexpr (is_transparent) {
@@ -333,10 +350,36 @@ StructuralHasher::ResultType StructuralHasher::HashType(const TypePtr& type)
             INTERNAL_CHECK(dim) << "structural_hash encountered null shape dimension in TileType";
             h = hash_combine(h, HashNode(dim));
         }
-
-        h = hash_combine(h, static_cast<ResultType>(0)); // indicate absence
-        // Hash memory_space
-        h = hash_combine(h, static_cast<ResultType>(0)); // indicate absence
+        // Hash tile_view if present
+        if (tile_type->tileView_.has_value()) {
+            const auto& tv = tile_type->tileView_.value();
+            h = hash_combine(h, static_cast<ResultType>(1)); // indicate presence
+            h = hash_combine(h, static_cast<ResultType>(tv.validShape.size()));
+            for (const auto& dim : tv.validShape) {
+                INTERNAL_CHECK(dim) << "structural_hash encountered null valid_shape dimension in TileView";
+                h = hash_combine(h, HashNode(dim));
+            }
+            h = hash_combine(h, static_cast<ResultType>(tv.stride.size()));
+            for (const auto& dim : tv.stride) {
+                INTERNAL_CHECK(dim) << "structural_hash encountered null stride dimension in TileView";
+                h = hash_combine(h, HashNode(dim));
+            }
+            INTERNAL_CHECK(tv.startOffset) << "structural_hash encountered null start_offset in TileView";
+            h = hash_combine(h, HashNode(tv.startOffset));
+        } else {
+            h = hash_combine(h, static_cast<ResultType>(0)); // indicate absence
+        }
+        // Hash hardware_info if present
+        if (tile_type->hardwareInfo_.has_value()) {
+            const auto& hw = tile_type->hardwareInfo_.value();
+            h = hash_combine(h, static_cast<ResultType>(1));
+            h = hash_combine(h, static_cast<ResultType>(hw.blayout));
+            h = hash_combine(h, static_cast<ResultType>(hw.slayout));
+            h = hash_combine(h, static_cast<ResultType>(hw.fractal));
+            h = hash_combine(h, static_cast<ResultType>(hw.pad));
+        } else {
+            h = hash_combine(h, static_cast<ResultType>(0));
+        }
     } else if (auto tuple_type = As<TupleType>(type)) {
         h = hash_combine(h, static_cast<ResultType>(tuple_type->types_.size()));
         for (const auto& t : tuple_type->types_) {
@@ -344,7 +387,7 @@ StructuralHasher::ResultType StructuralHasher::HashType(const TypePtr& type)
             h = hash_combine(h, HashType(t));
         }
     } else if (IsA<MemRefType>(type) || IsA<UnknownType>(type)) {
-        // MemRefType, PtrType, and UnknownType have no fields, only hash type name (already done above)
+        // MemRefType and UnknownType have no fields, only hash type name (already done above)
     } else {
         INTERNAL_CHECK(false) << "HashType encountered unhandled Type: " << type->TypeName();
     }
@@ -372,51 +415,54 @@ StructuralHasher::ResultType StructuralHasher::HashNode(const IRNodePtr& node)
     bool dispatched = false;
 
     // MemRef needs special handling: dispatch for fields, then add Var mapping
-    // HASH_DISPATCH(MemRef)
+    HASH_DISPATCH(MemRef)
     // IterArg needs special handling: dispatch for fields, then add Var mapping
-    // HASH_DISPATCH(IterArg)
+    HASH_DISPATCH(IterArg)
     HASH_DISPATCH(Var)
-    // HASH_DISPATCH(ConstInt)
-    // HASH_DISPATCH(ConstFloat)
-    // HASH_DISPATCH(ConstBool)
-    // HASH_DISPATCH(Call)
-    // HASH_DISPATCH(MakeTuple)
-    // HASH_DISPATCH(TupleGetItemExpr)
+    HASH_DISPATCH(ConstInt)
+    HASH_DISPATCH(ConstFloat)
+    HASH_DISPATCH(ConstBool)
+    HASH_DISPATCH(Call)
+    HASH_DISPATCH(MakeTuple)
+    HASH_DISPATCH(GetItemExpr)
 
-    // // BinaryExpr and UnaryExpr are abstract base classes, use dynamic_pointer_cast
-    // HASH_DISPATCH_BASE(BinaryExpr)
-    // HASH_DISPATCH_BASE(UnaryExpr)
+    // BinaryExpr and UnaryExpr are abstract base classes
+    HASH_DISPATCH(BinaryExpr)
+    HASH_DISPATCH(UnaryExpr)
 
-    // HASH_DISPATCH(AssignStmt)
-    // HASH_DISPATCH(IfStmt)
-    // HASH_DISPATCH(YieldStmt)
-    // HASH_DISPATCH(ReturnStmt)
-    // HASH_DISPATCH(ForStmt)
-    // HASH_DISPATCH(WhileStmt)
-    // HASH_DISPATCH(SeqStmts)
-    // HASH_DISPATCH(EvalStmt)
-    // HASH_DISPATCH(BreakStmt)
-    // HASH_DISPATCH(ContinueStmt)
-    // HASH_DISPATCH(Function)
+    HASH_DISPATCH(AssignStmt)
+    HASH_DISPATCH(IfStmt)
+    HASH_DISPATCH(YieldStmt)
+    HASH_DISPATCH(ReturnStmt)
+    HASH_DISPATCH(ForStmt)
+    HASH_DISPATCH(WhileStmt)
+    HASH_DISPATCH(SectionStmt)
+    HASH_DISPATCH(SeqStmts)
+    HASH_DISPATCH(OpStmts)
+    HASH_DISPATCH(EvalStmt)
+    HASH_DISPATCH(BreakStmt)
+    HASH_DISPATCH(ContinueStmt)
+    HASH_DISPATCH(Function)
+    HASH_DISPATCH(Program)
 
     // Free Var types (including MemRef and IterArg) that may be mapped to other free vars.
     // These have already been dispatched above for field hashing;
     // here we add the variable identity hash.
-    auto hash_var_identity = [&](const std::string& name) {
+    auto hash_var_identity = [&](const Var* var) {
         if (enable_auto_mapping_) {
             hash_value = hash_combine(hash_value, free_var_counter_++);
         } else {
-            hash_value = hash_combine(hash_value, std::hash<std::string>{}(name));
+            hash_value = hash_combine(hash_value, std::hash<std::string>{}(var->name_));
         }
     };
 
     auto kind = node->GetKind();
     if (kind == ObjectKind::MemRef || kind == ObjectKind::IterArg || kind == ObjectKind::Var) {
-        hash_var_identity(static_cast<const Var*>(node.get())->name_);
+        hash_var_identity(static_cast<const Var*>(node.get()));
     }
 
     if (!dispatched) {
-        throw pypto::ir::TypeError("Unknown IR node type in StructuralHasher::HashNode");
+        INTERNAL_UNREACHABLE << "Unknown IR node type in StructuralHasher::HashNode";
     }
 
     hash_value_map_.emplace(node, hash_value);
@@ -424,7 +470,6 @@ StructuralHasher::ResultType StructuralHasher::HashNode(const IRNodePtr& node)
 }
 
 #undef HASH_DISPATCH
-#undef HASH_DISPATCH_BASE
 
 // Public API
 uint64_t structural_hash(const IRNodePtr& node, bool enable_auto_mapping)
@@ -434,6 +479,18 @@ uint64_t structural_hash(const IRNodePtr& node, bool enable_auto_mapping)
 }
 
 uint64_t structural_hash(const TypePtr& type, bool enable_auto_mapping)
+{
+    StructuralHasher hasher(enable_auto_mapping);
+    return hasher(type);
+}
+
+uint64_t structural_hash_with_var_identity(const IRNodePtr& node, bool enable_auto_mapping)
+{
+    StructuralHasher hasher(enable_auto_mapping);
+    return hasher(node);
+}
+
+uint64_t structural_hash_with_var_identity(const TypePtr& type, bool enable_auto_mapping)
 {
     StructuralHasher hasher(enable_auto_mapping);
     return hasher(type);

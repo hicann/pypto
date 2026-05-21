@@ -1,5 +1,4 @@
 /*
- * Copyright (c) PyPTO Contributors.
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,11 +6,11 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 #include "ir/transforms/base/mutator.h"
 
+#include <any>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -114,6 +113,27 @@ ExprPtr ReconstructUnaryExpr(ObjectKind kind, ExprPtr operand, DataType dtype, c
     }
 }
 
+/// Cast an expression back to VarPtr while preserving MemRef instances, which are valid Var subclasses.
+VarPtr AsVarLikeExpr(const ExprPtr& expr, const Span& span, const std::string& context)
+{
+    if (auto var = As<Var>(expr)) {
+        return var;
+    }
+    if (auto memref = As<MemRef>(expr)) {
+        return std::static_pointer_cast<const Var>(memref);
+    }
+    INTERNAL_CHECK_SPAN(false, span) << context;
+    return nullptr;
+}
+
+/// Rebuild a Call while preserving kwargs_.
+ExprPtr ReconstructCallWithKwargs(
+    const std::string& name, std::vector<ExprPtr> args, const std::vector<std::pair<std::string, std::any>>& kwargs,
+    const TypePtr& type, const Span& span)
+{
+    return std::make_shared<Call>(name, std::move(args), kwargs, type, span);
+}
+
 } // namespace
 
 // Top-level entry points
@@ -121,10 +141,10 @@ ProgramPtr IRMutator::VisitProgram(const ProgramPtr& program)
 {
     std::vector<FunctionPtr> new_functions;
     bool changed = false;
-    for (auto& func : program->functions_) {
-        auto new_func = VisitFunction(func);
+    for (const auto& entry : program->functions_) {
+        auto new_func = VisitFunction(entry.second);
         new_functions.emplace_back(new_func);
-        if (new_func != func) {
+        if (new_func != entry.second) {
             changed = true;
         }
     }
@@ -197,7 +217,7 @@ ExprPtr IRMutator::VisitExpr_(const CallPtr& op)
     }
 
     if (changed) {
-        return std::make_shared<const Call>(op->name_, std::move(new_args), op->GetType(), op->span_);
+        return ReconstructCallWithKwargs(op->name_, std::move(new_args), op->kwargs_, op->GetType(), op->span_);
     }
     return op;
 }
@@ -224,14 +244,17 @@ ExprPtr IRMutator::VisitExpr_(const MakeTuplePtr& op)
     return op;
 }
 
-ExprPtr IRMutator::VisitExpr_(const TupleGetItemExprPtr& op)
+ExprPtr IRMutator::VisitExpr_(const GetItemExprPtr& op)
 {
-    INTERNAL_CHECK_SPAN(op->tuple_, op->span_) << "TupleGetItemExpr has null tuple";
-    auto new_tuple = ExprFunctor<ExprPtr>::VisitExpr(op->tuple_);
-    INTERNAL_CHECK_SPAN(new_tuple, op->span_) << "TupleGetItemExpr tuple mutated to null";
+    INTERNAL_CHECK_SPAN(op->value_, op->span_) << "GetItemExpr has null value";
+    INTERNAL_CHECK_SPAN(op->slice_, op->span_) << "GetItemExpr has null slice";
+    auto new_value = ExprFunctor<ExprPtr>::VisitExpr(op->value_);
+    auto new_slice = ExprFunctor<ExprPtr>::VisitExpr(op->slice_);
+    INTERNAL_CHECK_SPAN(new_value, op->span_) << "GetItemExpr value mutated to null";
+    INTERNAL_CHECK_SPAN(new_slice, op->span_) << "GetItemExpr slice mutated to null";
 
-    if (new_tuple.get() != op->tuple_.get()) {
-        return std::make_shared<const TupleGetItemExpr>(new_tuple, op->index_, op->span_);
+    if (new_value.get() != op->value_.get() || new_slice.get() != op->slice_.get()) {
+        return std::make_shared<const GetItemExpr>(std::move(new_value), std::move(new_slice), op->span_);
     }
     return op;
 }
@@ -317,8 +340,7 @@ StmtPtr IRMutator::VisitStmt_(const AssignStmtPtr& op)
     INTERNAL_CHECK_SPAN(new_var_expr, op->span_) << "AssignStmt var mutated to null";
     INTERNAL_CHECK_SPAN(new_value, op->span_) << "AssignStmt value mutated to null";
 
-    auto new_var = As<Var>(new_var_expr);
-    INTERNAL_CHECK_SPAN(new_var, op->span_) << "AssignStmt var is not a Var after mutation";
+    auto new_var = AsVarLikeExpr(new_var_expr, op->span_, "AssignStmt var is not a Var after mutation");
     if (new_var.get() != op->var_.get() || new_value.get() != op->value_.get()) {
         return std::make_shared<const AssignStmt>(std::move(new_var), std::move(new_value), op->span_);
     }
@@ -355,9 +377,9 @@ StmtPtr IRMutator::VisitStmt_(const IfStmtPtr& op)
         INTERNAL_CHECK_SPAN(op->returnVars_[i], op->span_) << "IfStmt has null return_vars at index " << i;
         auto new_var_expr = ExprFunctor<ExprPtr>::VisitExpr(op->returnVars_[i]);
         INTERNAL_CHECK_SPAN(new_var_expr, op->span_) << "IfStmt return_vars at index " << i << " mutated to null";
-        auto new_var = As<Var>(new_var_expr);
-        INTERNAL_CHECK_SPAN(new_var, op->span_)
-            << "IfStmt return_vars at index " << i << " is not a Var after mutation";
+        auto new_var = AsVarLikeExpr(
+            new_var_expr, op->span_,
+            "IfStmt return_vars at index " + std::to_string(i) + " is not a Var after mutation");
         new_return_vars.push_back(new_var);
         if (new_var.get() != op->returnVars_[i].get()) {
             return_vars_changed = true;
@@ -430,8 +452,7 @@ StmtPtr IRMutator::VisitStmt_(const ForStmtPtr& op)
     INTERNAL_CHECK_SPAN(op->step_, op->span_) << "ForStmt has null step";
     auto new_loop_var_expr = ExprFunctor<ExprPtr>::VisitExpr(op->loopVar_);
     INTERNAL_CHECK_SPAN(new_loop_var_expr, op->span_) << "ForStmt loop_var mutated to null";
-    auto new_loop_var = As<Var>(new_loop_var_expr);
-    INTERNAL_CHECK_SPAN(new_loop_var, op->span_) << "ForStmt loop_var is not a Var after mutation";
+    auto new_loop_var = AsVarLikeExpr(new_loop_var_expr, op->span_, "ForStmt loop_var is not a Var after mutation");
 
     auto new_start = ExprFunctor<ExprPtr>::VisitExpr(op->start_);
     INTERNAL_CHECK_SPAN(new_start, op->span_) << "ForStmt start mutated to null";
@@ -484,9 +505,9 @@ StmtPtr IRMutator::VisitStmt_(const ForStmtPtr& op)
         INTERNAL_CHECK_SPAN(op->returnVars_[i], op->span_) << "ForStmt has null return_vars at index " << i;
         auto new_var_expr = ExprFunctor<ExprPtr>::VisitExpr(op->returnVars_[i]);
         INTERNAL_CHECK_SPAN(new_var_expr, op->span_) << "ForStmt return_vars at index " << i << " mutated to null";
-        auto new_var = As<Var>(new_var_expr);
-        INTERNAL_CHECK_SPAN(new_var, op->span_)
-            << "ForStmt return_vars at index " << i << " is not a Var after mutation";
+        auto new_var = AsVarLikeExpr(
+            new_var_expr, op->span_,
+            "ForStmt return_vars at index " + std::to_string(i) + " is not a Var after mutation");
         new_return_vars.push_back(new_var);
         if (new_var.get() != op->returnVars_[i].get()) {
             return_vars_changed = true;
@@ -553,9 +574,9 @@ StmtPtr IRMutator::VisitStmt_(const WhileStmtPtr& op)
         INTERNAL_CHECK_SPAN(op->returnVars_[i], op->span_) << "WhileStmt has null return_vars at index " << i;
         auto new_var_expr = ExprFunctor<ExprPtr>::VisitExpr(op->returnVars_[i]);
         INTERNAL_CHECK_SPAN(new_var_expr, op->span_) << "WhileStmt return_vars at index " << i << " mutated to null";
-        auto new_var = As<Var>(new_var_expr);
-        INTERNAL_CHECK_SPAN(new_var, op->span_)
-            << "WhileStmt return_vars at index " << i << " is not a Var after mutation";
+        auto new_var = AsVarLikeExpr(
+            new_var_expr, op->span_,
+            "WhileStmt return_vars at index " + std::to_string(i) + " is not a Var after mutation");
         new_return_vars.push_back(new_var);
         if (new_var.get() != op->returnVars_[i].get()) {
             return_vars_changed = true;
@@ -587,6 +608,38 @@ StmtPtr IRMutator::VisitStmt_(const SeqStmtsPtr& op)
 
     if (changed) {
         return SeqStmts::Flatten(std::move(new_stmts), op->span_);
+    }
+    return op;
+}
+
+StmtPtr IRMutator::VisitStmt_(const OpStmtsPtr& op)
+{
+    std::vector<StmtPtr> new_stmts;
+    bool changed = false;
+    new_stmts.reserve(op->stmts_.size());
+    for (size_t i = 0; i < op->stmts_.size(); ++i) {
+        INTERNAL_CHECK_SPAN(op->stmts_[i], op->span_) << "OpStmts has null statement at index " << i;
+        auto new_stmt = StmtFunctor<StmtPtr>::VisitStmt(op->stmts_[i]);
+        INTERNAL_CHECK_SPAN(new_stmt, op->span_) << "OpStmts statement at index " << i << " mutated to null";
+        new_stmts.push_back(new_stmt);
+        if (new_stmt.get() != op->stmts_[i].get()) {
+            changed = true;
+        }
+    }
+    if (changed) {
+        return std::make_shared<const OpStmts>(std::move(new_stmts), op->span_);
+    }
+    return op;
+}
+
+StmtPtr IRMutator::VisitStmt_(const SectionStmtPtr& op)
+{
+    INTERNAL_CHECK_SPAN(op->body_, op->span_) << "SectionStmt has null body";
+    auto new_body = StmtFunctor<StmtPtr>::VisitStmt(op->body_);
+    INTERNAL_CHECK_SPAN(new_body, op->span_) << "SectionStmt body mutated to null";
+
+    if (new_body.get() != op->body_.get()) {
+        return std::make_shared<const SectionStmt>(op->sectionKind_, std::move(new_body), op->span_);
     }
     return op;
 }

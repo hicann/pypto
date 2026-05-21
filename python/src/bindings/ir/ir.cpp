@@ -1,5 +1,4 @@
-/*
- * Copyright (c) PyPTO Contributors.
+/**
  * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
@@ -7,7 +6,6 @@
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
- * -----------------------------------------------------------------------------------------------------------
  */
 
 /*!
@@ -74,7 +72,8 @@ void BindSpan(py::module& m)
         .def(
             py::init<std::string, int, int, int, int>(), py::arg("filename"), py::arg("begin_line"),
             py::arg("begin_column"), py::arg("end_line") = -1, py::arg("end_column") = -1, "Create a source span")
-        .def("is_unknown", &ir::Span::IsUnknown, "Check if the span is unknown")
+        .def(
+            "is_unknown", [](const ir::Span& self) { return self.IsUnknown(); }, "Check if the span is unknown")
         .def_static("unknown", &ir::Span::Unknown, "Create an unknown span", py::return_value_policy::reference)
         .def("__repr__", &ir::Span::ToString)
         .def("__str__", &ir::Span::ToString)
@@ -182,12 +181,12 @@ void BindExpr(py::module& m)
              "Create a tuple construction expression");
     BindFields<MakeTuple>(make_tuple);
 
-    auto tuple_get_item = py::class_<TupleGetItemExpr, Expr, std::shared_ptr<TupleGetItemExpr>>(m, "TupleGetItemExpr",
-            "Tuple element access expression")
-        .def(py::init<const ExprPtr&, int, const Span&>(),
-             py::arg("tuple"), py::arg("index"), py::arg("span"),
-             "Create a tuple element access expression");
-    BindFields<TupleGetItemExpr>(tuple_get_item);
+    auto get_item = py::class_<GetItemExpr, Expr, std::shared_ptr<GetItemExpr>>(m, "GetItemExpr",
+            "Subscript expression for tuple element access or tile offset")
+        .def(py::init<const ExprPtr&, const ExprPtr&, const Span&>(),
+             py::arg("value"), py::arg("slice"), py::arg("span"),
+             "Create a subscript expression");
+    BindFields<GetItemExpr>(get_item);
 
     auto binary_expr = py::class_<BinaryExpr, Expr, std::shared_ptr<BinaryExpr>>(m, "BinaryExpr",
         "Base class for binary operations");
@@ -376,6 +375,13 @@ void BindStmt(py::module& m)
             "Create a while loop statement");
     BindFields<WhileStmt>(while_stmt);
 
+    auto section_stmt = py::class_<SectionStmt, Stmt, std::shared_ptr<SectionStmt>>(m, "SectionStmt",
+        "Section statement: with section_vector/section_cube")
+        .def(py::init<SectionKind, const StmtPtr&, const Span&>(),
+             py::arg("section_kind"), py::arg("body"), py::arg("span"),
+             "Create a section statement");
+    BindFields<SectionStmt>(section_stmt);
+
     auto seq_stmt = py::class_<SeqStmts, Stmt, std::shared_ptr<SeqStmts>>(m, "SeqStmts",
         "Sequence of statements: a sequence of statements")
         .def(py::init<const std::vector<StmtPtr>&, const Span&>(),
@@ -391,6 +397,13 @@ void BindStmt(py::module& m)
             return self->stmts_[index];
         }, py::arg("index"), "Get statement by index, supports negative indexing");
     BindFields<SeqStmts>(seq_stmt);
+
+    auto op_stmts = py::class_<OpStmts, Stmt, std::shared_ptr<OpStmts>>(m, "OpStmts",
+        "Operation statement block")
+        .def(py::init<const std::vector<StmtPtr>&, const Span&>(),
+             py::arg("stmts"), py::arg("span"),
+             "Create an operation statement block");
+    BindFields<OpStmts>(op_stmts);
 
     auto eval_stmt_class = py::class_<EvalStmt, Stmt, std::shared_ptr<EvalStmt>>(m, "EvalStmt",
             "Evaluation statement: expr")
@@ -462,6 +475,15 @@ void BindType(py::module& m)
 {
     py::native_enum<FunctionType>(m, "FunctionType", "enum.IntEnum", "Function type classification")
         .value("Opaque", FunctionType::OPAQUE, "Unspecified function type (default)")
+        .value("Orchestration", FunctionType::ORCHESTRATION, "Host/AICPU control and coordination")
+        .value("InCore", FunctionType::IN_CORE, "AICore sub-graph execution")
+        .value("Helper", FunctionType::HELPER, "Scalar helper function callable from kernels")
+        .export_values()
+        .finalize();
+
+    py::native_enum<SectionKind>(m, "SectionKind", "enum.IntEnum", "Section kind classification")
+        .value("Vector", SectionKind::Vector, "Vector section for vector operations")
+        .value("Cube", SectionKind::Cube, "Cube section for cube operations")
         .export_values()
         .finalize();
 
@@ -478,6 +500,7 @@ void BindType(py::module& m)
         .value("Mat", MemorySpace::Mat, "Matrix/L1 buffer")
         .value("Left", MemorySpace::Left, "Left matrix operand buffer")
         .value("Right", MemorySpace::Right, "Right matrix operand buffer")
+        .value("Scaling", MemorySpace::Scaling, "Scaling/FBuffer tile buffer")
         .value("Acc", MemorySpace::Acc, "Accumulator buffer")
         .value("Bias", MemorySpace::Bias, "Bias buffer")
         .export_values()
@@ -532,7 +555,9 @@ void BindTypeClass(py::module& m)
         .def(py::init<std::vector<TypePtr>>(), py::arg("types"))
         .def_readonly("types", &TupleType::types_);
 
-    py::class_<PtrType, Type, std::shared_ptr<PtrType>>(m, "PtrType", "Pointer type").def(py::init<>());
+    py::class_<PtrType, Type, std::shared_ptr<PtrType>>(m, "PtrType", "Pointer type")
+        .def(py::init<DataType>(), py::arg("dtype") = DataType::INT8)
+        .def_readonly("dtype", &PtrType::dtype_);
 
     py::class_<TokenType, Type, std::shared_ptr<TokenType>>(m, "TokenType", "Opaque token type")
         .def(py::init<>(), "Create a token type")

@@ -71,7 +71,8 @@ TEST_F(IRMutatorTest, TestIdentityAllExprs)
     EXPECT_EQ(m.VisitExpr(mt).get(), mt.get());
 
     auto tup = std::make_shared<MakeTuple>(std::vector<ExprPtr>{a}, Sp());
-    auto tgi = std::make_shared<TupleGetItemExpr>(tup, 0, Sp());
+    auto idx = std::make_shared<ConstInt>(0, DataType::INDEX, Sp());
+    auto tgi = std::make_shared<GetItemExpr>(tup, idx, Sp());
     EXPECT_EQ(m.VisitExpr(tgi).get(), tgi.get());
 
 // Binary expressions

@@ -35,7 +35,8 @@ namespace ir {
 enum class FunctionType : uint8_t {
     OPAQUE = 0,        ///< Default: unspecified function type
     ORCHESTRATION = 1, ///< Host/AICPU control and coordination
-    IN_CORE = 2        ///< AICore sub-graph execution
+    IN_CORE = 2,       ///< AICore sub-graph execution
+    HELPER = 3         ///< Scalar helper function callable from kernels
 };
 
 /**
@@ -52,6 +53,8 @@ inline std::string FunctionTypeToString(FunctionType type)
             return "Orchestration";
         case FunctionType::IN_CORE:
             return "InCore";
+        case FunctionType::HELPER:
+            return "Helper";
         default:
             return "Unknown";
     }
@@ -71,6 +74,8 @@ inline FunctionType StringToFunctionType(const std::string& str)
         return FunctionType::ORCHESTRATION;
     } else if (str == "InCore") {
         return FunctionType::IN_CORE;
+    } else if (str == "Helper") {
+        return FunctionType::HELPER;
     } else {
         throw std::invalid_argument("Unknown FunctionType: " + str);
     }
@@ -129,7 +134,7 @@ public:
 
 public:
     std::string name_;                 // Function name
-    FunctionType funcType_;            // Function type (orchestration, incore, or opaque)
+    FunctionType funcType_;            // Function type (incore, or opaque)
     std::vector<VarPtr> params_;       // Parameter variables
     std::vector<TypePtr> returnTypes_; // Return types
     SeqStmtsPtr body_;                 // Function body statement

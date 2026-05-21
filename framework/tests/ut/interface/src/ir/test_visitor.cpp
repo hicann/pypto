@@ -130,7 +130,8 @@ TEST_F(IRVisitorTest, TestVisitTupleGetItem)
     TestVisitor v;
     auto a = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto tup = std::make_shared<MakeTuple>(std::vector<ExprPtr>{a}, Sp());
-    v.VisitExpr(std::make_shared<TupleGetItemExpr>(tup, 0, Sp()));
+    auto idx = std::make_shared<ConstInt>(0, DataType::INDEX, Sp());
+    v.VisitExpr(std::make_shared<GetItemExpr>(tup, idx, Sp()));
     ASSERT_FALSE(v.visited.empty());
 }
 

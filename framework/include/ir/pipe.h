@@ -32,9 +32,9 @@ enum PipeType : int {
 };
 
 /**
- * @brief Convert PipeType to its string name
- * @param pipe The pipeline type
- * @return String representation (e.g., "MTE1", "MTE2", "V")
+ * \brief Convert PipeType to its string name
+ * \param pipe The pipeline type
+ * \return String representation (e.g., "MTE1", "MTE2", "V")
  */
 inline std::string PipeTypeToString(PipeType pipe)
 {

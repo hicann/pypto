@@ -10,13 +10,18 @@
 
 #include "ir/memref.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <string>
 #include <utility>
 
-#include "ir/type.h"
-#include "ir/kind_traits.h"
+#include "core/error.h"
 #include "ir/expr.h"
+#include "ir/kind_traits.h"
 #include "ir/scalar_expr.h"
+#include "ir/span.h"
+#include "ir/type.h"
 
 namespace pypto {
 namespace ir {
@@ -34,6 +39,8 @@ std::string MemorySpaceToString(MemorySpace space)
             return "Left";
         case MemorySpace::Right:
             return "Right";
+        case MemorySpace::Scaling:
+            return "Scaling";
         case MemorySpace::Acc:
             return "Acc";
         case MemorySpace::Bias:
@@ -55,6 +62,8 @@ MemorySpace StringToMemorySpace(const std::string& str)
         return MemorySpace::Left;
     if (str == "Right")
         return MemorySpace::Right;
+    if (str == "Scaling")
+        return MemorySpace::Scaling;
     if (str == "Acc")
         return MemorySpace::Acc;
     if (str == "Bias")
@@ -62,17 +71,36 @@ MemorySpace StringToMemorySpace(const std::string& str)
     throw ValueError("Unknown MemorySpace: " + str);
 }
 
-MemRef::MemRef(MemorySpace memory_space, ExprPtr offset, uint64_t size, Span span)
-    : Expr(std::move(span), GetMemRefType()), memorySpace_(memory_space), offset_(std::move(offset)), size_(size)
+// Helper for auto-generated variable names
+static std::string ToLowerCase(const std::string& str)
+{
+    std::string result = str;
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return std::tolower(c); });
+    return result;
+}
+
+// 5-arg constructor (block semantics, with explicit id)
+MemRef::MemRef(MemorySpace memory_space, ExprPtr addr, uint64_t size, uint64_t id, Span span)
+    : Var("mem_" + ToLowerCase(MemorySpaceToString(memory_space)) + "_" + std::to_string(id), GetMemRefType(),
+          std::move(span)),
+      memorySpace_(memory_space),
+      addr_(std::move(addr)),
+      size_(size)
 {}
 
+// 4-arg constructor (id_ defaults to 0, for callers that do not track allocation counter)
+MemRef::MemRef(MemorySpace memory_space, ExprPtr addr, uint64_t size, Span span)
+    : MemRef(memory_space, std::move(addr), size, 0, std::move(span))
+{}
+
+// Aliasing analysis (merged from outer version)
 bool MemRef::MayAlias(const MemRefPtr& a, const MemRefPtr& b)
 {
     if (a->memorySpace_ != b->memorySpace_)
         return false;
 
-    auto off_a = As<ConstInt>(a->offset_);
-    auto off_b = As<ConstInt>(b->offset_);
+    auto off_a = As<ConstInt>(a->addr_);
+    auto off_b = As<ConstInt>(b->addr_);
     if (off_a && off_b) {
         int64_t end_a = off_a->value_ + static_cast<int64_t>(a->size_);
         int64_t end_b = off_b->value_ + static_cast<int64_t>(b->size_);
@@ -85,13 +113,13 @@ bool MemRef::SameAllocation(const MemRefPtr& a, const MemRefPtr& b)
 {
     if (a->memorySpace_ != b->memorySpace_ || a->size_ != b->size_)
         return false;
-    auto off_a = As<ConstInt>(a->offset_);
-    auto off_b = As<ConstInt>(b->offset_);
+    auto off_a = As<ConstInt>(a->addr_);
+    auto off_b = As<ConstInt>(b->addr_);
     if (off_a && off_b) {
         return off_a->value_ == off_b->value_;
-    } else {
-        return a->offset_ == b->offset_;
     }
+    return a->addr_ == b->addr_;
 }
+
 } // namespace ir
 } // namespace pypto
