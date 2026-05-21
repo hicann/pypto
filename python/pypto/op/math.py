@@ -1043,6 +1043,32 @@ def signbit(a: Tensor) -> Tensor:
 
 
 @op_wrapper
+def tanh(a: Tensor) -> Tensor:
+    """
+    Computes the hyperbolic tangent of each element in input.
+
+    Parameters
+    ----------
+    a : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the hyperbolic tangent of each element in input.
+
+    Examples
+    --------
+    x = pypto.tensor([2], pypto.DT_FP32)
+    y = pypto.tanh(x)
+
+    Input x: [0.0, 1.0, -1.0]
+    Output y: [0.0, 0.7615941559557649, -0.7615941559557649]
+    """
+    return pypto_impl.Tanh(a)
+
+
+@op_wrapper
 def abs(a: Tensor) -> Tensor:
     """
     Computes the absolute value of each element in input.

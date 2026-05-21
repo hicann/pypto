@@ -959,6 +959,21 @@ def gen_signbit_op_golden(case_name: str, output: Path, case_index: int = None) 
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestTanh/TanhOperationTest.TestTanh",
+    ]
+)
+def gen_tanh_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs: list, _config: dict):
+        x = safe_tensor_conversion(inputs[0])
+        x = torch.tanh(x)
+        return [to_numpy(x)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Tanh", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestRelu/ReluOperationTest.TestRelu",
     ]
 )

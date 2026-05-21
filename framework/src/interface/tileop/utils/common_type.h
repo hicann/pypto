@@ -44,7 +44,8 @@ enum class UnaryOp : uint8_t {
     SINH,
     COSH,
     SIN,
-    COS
+    COS,
+    TANH
 };
 
 enum class BinaryOp : uint8_t {

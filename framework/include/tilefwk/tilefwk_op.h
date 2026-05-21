@@ -188,6 +188,7 @@ Tensor Sign(const Tensor& operand);
 Tensor Signbit(const Tensor& operand);
 Tensor Sinh(const Tensor& self);
 Tensor Cosh(const Tensor& self);
+Tensor Tanh(const Tensor &operand);
 
 Tensor Duplicate(const Tensor& operand);
 Tensor Gather(const Tensor& params, const Tensor& indices, int axis);

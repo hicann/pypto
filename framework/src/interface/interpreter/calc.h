@@ -101,6 +101,7 @@ inline void Signbit(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
 {
     GetCalcOps()->Signbit(Trans(out), Trans(self));
 }
+inline void Tanh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Tanh(Trans(out), Trans(self));}
 inline void Reciprocal(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
 {
     GetCalcOps()->Reciprocal(Trans(out), Trans(self));

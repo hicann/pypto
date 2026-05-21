@@ -41,6 +41,7 @@
 #include "vector/cast.h"
 #include "vector/sign.h"
 #include "vector/signbit.h"
+#include "vector/tanh.h"
 #include "vector/reduce.h"
 #include "vector/mte.h"
 #include "vector/atan.h"

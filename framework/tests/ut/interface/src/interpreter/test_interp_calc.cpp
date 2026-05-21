@@ -368,6 +368,14 @@ TEST_F(TorchAdaptorTest, UnaryOps)
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        // tanh
+        auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, std::tanh(1.0f));
+        calc::Tanh(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // abs
         auto self = makeTensorData(DT_FP32, {16, 16}, -4.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);

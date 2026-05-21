@@ -787,6 +787,9 @@ class Tensor:
     @source_location
     def signbit(self) -> 'Tensor':
         return pypto.signbit(self)
+        
+    def tanh(self) -> 'Tensor':
+        return pypto.tanh(self)
 
     @source_location
     def exp2(self) -> 'Tensor':

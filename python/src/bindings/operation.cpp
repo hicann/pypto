@@ -166,6 +166,8 @@ void BindOperation(py::module& m)
     m.def(
         "Signbit", [](const Tensor& self) { return npu::tile_fwk::Signbit(self); }, "Tensor signbit.");
     m.def(
+        "Tanh", [](const Tensor &self) { return npu::tile_fwk::Tanh(self); }, "Tensor tanh.");
+    m.def(
         "Ceil", [](const Tensor& self) { return npu::tile_fwk::Ceil(self); }, "Tensor ceil.");
     m.def(
         "Floor", [](const Tensor& self) { return npu::tile_fwk::Floor(self); }, "Tensor floor.");

@@ -92,6 +92,7 @@ enum class Opcode {
     OP_HUB,
     OP_SIGN,
     OP_SIGNBIT,
+    OP_TANH,
     OP_BRCB,
     OP_BITWISERIGHTSHIFTS,
     OP_BITWISELEFTSHIFTS,
@@ -640,7 +641,8 @@ const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_ROWPROD_SINGLE,
     Opcode::OP_SIN,
     Opcode::OP_COS,
-    Opcode::OP_SINH
+    Opcode::OP_SINH,
+    Opcode::OP_TANH
 };
 
 const std::unordered_set<Opcode> VECTOR_SCALAR_OPS{

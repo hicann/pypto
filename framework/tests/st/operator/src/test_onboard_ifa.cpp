@@ -510,6 +510,37 @@ TEST_F(OnBoardIFATest, test_32_1_signbit)
     EXPECT_EQ(ret, true);
 }
 
+// TANH (32, 1)
+TEST_F(OnBoardIFATest, test_32_1_tanh) {
+    AclInit(nullptr);
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
+    int outCapa = 32 * 1;
+    uint64_t outputSize = outCapa * sizeof(float);
+    uint8_t* out_ptr = allocDevAddr(outputSize);
+    PROGRAM("Tanh") {
+        std::vector<int64_t> shape1 = {32, 1};
+        void *x_ptr = readToDev(GetGoldenDir() + "/x.bin", outCapa);
+        TileShape::Current().SetVecTile({8, 1});
+        Tensor input_a(DataType::DT_FP32, shape1, (uint8_t *)x_ptr, "A");
+        Tensor output(DataType::DT_FP32, shape1, out_ptr, "C");
+        ConfigManager::Instance();
+
+        config::SetBuildStatic(true);
+        FUNCTION("Tanh_T", {input_a, output}) {
+            output = Tanh(input_a);
+        }
+    }
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+
+    std::vector<float> golden(outCapa);
+    std::vector<float> res(outCapa);
+    machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
+    
+    readInput(GetGoldenDir() + "/res.bin", golden);
+    int ret = resultCmp(golden, res, 0.001f);
+    EXPECT_EQ(ret, true);
+}
+
 // concat ((32, 512), (32, 64))
 TEST_F(OnBoardIFATest, test_concat_32_512_32_64)
 {
