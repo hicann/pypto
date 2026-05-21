@@ -29,6 +29,14 @@ def assert_option_type_error(setter, pattern):
             "Option 'pass.sg_set_scope' has invalid type. Expected int64 or tuple, but got str.",
         ),
         (
+            lambda: pypto.set_pass_options(sg_set_scope=-2),
+            r"Option 'pass\.sg_set_scope' scope_id -2 is out of range\. Expected -1~2147483647\.",
+        ),
+        (
+            lambda: pypto.set_pass_options(sg_set_scope=(2147483648, True, False)),
+            r"Option 'pass\.sg_set_scope' scope_id 2147483648 is out of range\. Expected -1~2147483647\.",
+        ),
+        (
             lambda: pypto.set_pass_options(cube_nbuffer_setting=[1, 2]),
             "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'pass.cube_nbuffer_setting' has invalid type. "

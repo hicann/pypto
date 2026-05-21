@@ -29,6 +29,74 @@ class CompStage(enum.Enum):
     CODEGEN_BINARY = 5
 
 
+_FUNC_HASH_ORDER_PATTERN = re.compile(r'^func\d+_\d+$')
+_DEFAULT_KEY = 'DEFAULT'
+
+
+def _validate_hash_order_setting(setting_dict: Optional[Dict[Union[int, str], int]], param_name: str):
+    if setting_dict is None:
+        return
+    if not isinstance(setting_dict, dict):
+        return
+
+    has_int_keys = False
+    has_func_keys = False
+
+    for key in setting_dict.keys():
+        if isinstance(key, int):
+            has_int_keys = True
+        elif isinstance(key, str):
+            if _FUNC_HASH_ORDER_PATTERN.match(key) or key == _DEFAULT_KEY:
+                has_func_keys = True
+
+    if has_int_keys and has_func_keys:
+        raise FeError(ValueError(
+            f"{param_name} cannot mix integer keys with func/DEFAULT keys. "
+            f"Please use either all integer keys or all func/DEFAULT keys."
+        ))
+
+
+def _validate_scope_id(scope_id: int):
+    if scope_id < -1 or scope_id > 2147483647:
+        raise FeError(ValueError(
+            f"Option 'pass.sg_set_scope' scope_id {scope_id} is out of range. "
+            f"Expected -1~2147483647."
+        ))
+
+
+def _process_sg_set_scope(sg_set_scope: Union[int, tuple, list]) -> list:
+    if isinstance(sg_set_scope, int):
+        _validate_scope_id(sg_set_scope)
+        return [sg_set_scope, False, False]
+    if isinstance(sg_set_scope, (tuple, list)):
+        if len(sg_set_scope) != 3:
+            raise FeError(ValueError(
+                f"Option 'pass.sg_set_scope' has invalid length. "
+                f"Expected 3, but got {len(sg_set_scope)}."
+            ))
+        if not isinstance(sg_set_scope[0], int):
+            raise FeError(ValueError(
+                f"Option 'pass.sg_set_scope[0]' has invalid type. "
+                f"Expected int, but got {type(sg_set_scope[0]).__name__}."
+            ))
+        _validate_scope_id(sg_set_scope[0])
+        if not isinstance(sg_set_scope[1], bool):
+            raise FeError(ValueError(
+                f"Option 'pass.sg_set_scope[1]' has invalid type. "
+                f"Expected bool, but got {type(sg_set_scope[1]).__name__}."
+            ))
+        if not isinstance(sg_set_scope[2], bool):
+            raise FeError(ValueError(
+                f"Option 'pass.sg_set_scope[2]' has invalid type. "
+                f"Expected bool, but got {type(sg_set_scope[2]).__name__}."
+            ))
+        return list(sg_set_scope)
+    raise FeError(TypeError(
+        f"Option 'pass.sg_set_scope' has invalid type. "
+        f"Expected int64 or tuple, but got {type(sg_set_scope).__name__}."
+    ))
+
+
 def set_print_options(*,
                      edgeitems: Optional[int] = 3,
                      precision: Optional[int] = 4,
@@ -105,87 +173,13 @@ def set_pass_options(*,
         If mixing function-granularity keys ("func{magic}_{order}") with integer keys
         in the same setting parameter.
     """
-    # Function-granularity hashOrder pattern: func{magic}_{order}
-    _func_hash_order_pattern = re.compile(r'^func\d+_\d+$')
-    # Default key for function-granularity format
-    _default_key = 'DEFAULT'
-
-    def _validate_hash_order_setting(setting_dict: Optional[Dict[Union[int, str], int]], param_name: str):
-        """Validate hashOrder setting keys.
-
-        Valid key formats:
-        - Integer key: global setting (e.g., -1, 0, 1)
-        - String key 'func{magic}_{order}': function-granularity setting (e.g., 'func123_0')
-        - String key 'DEFAULT': default function-granularity setting
-        - Other string keys: semantic label settings
-
-        Invalid:
-        - Mixing integer keys (global) with func/DEFAULT keys (function-granularity)
-        """
-        if setting_dict is None:
-            return
-        if not isinstance(setting_dict, dict):
-            return
-
-        has_int_keys = False
-        has_func_keys = False
-
-        for key in setting_dict.keys():
-            if isinstance(key, int):
-                has_int_keys = True
-            elif isinstance(key, str):
-                if _func_hash_order_pattern.match(key) or key == _default_key:
-                    has_func_keys = True
-
-        if has_int_keys and has_func_keys:
-            raise FeError(ValueError(
-                f"{param_name} cannot mix integer keys with func/DEFAULT keys. "
-                f"Please use either all integer keys or all func/DEFAULT keys."
-            ))
-
-    # Validate hashOrder settings
     _validate_hash_order_setting(vec_nbuffer_setting, 'vec_nbuffer_setting')
     _validate_hash_order_setting(cube_l1_reuse_setting, 'cube_l1_reuse_setting')
     _validate_hash_order_setting(cube_nbuffer_setting, 'cube_nbuffer_setting')
 
-    # 处理 sg_set_scope 参数
-    if sg_set_scope is not None:
-        if isinstance(sg_set_scope, int):
-            # 向后兼容：仅设置 scopeid
-            processed_sg_set_scope = [sg_set_scope, False, False]
-        elif isinstance(sg_set_scope, (tuple, list)):
-            # 新格式：解析元组
-            if len(sg_set_scope) != 3:
-                raise FeError(ValueError(
-                    f"Option 'pass.sg_set_scope' has invalid length. "
-                    f"Expected 3, but got {len(sg_set_scope)}."
-                ))
-            if not isinstance(sg_set_scope[0], int):
-                raise FeError(ValueError(
-                    f"Option 'pass.sg_set_scope[0]' has invalid type. "
-                    f"Expected int, but got {type(sg_set_scope[0]).__name__}."
-                ))
-            if not isinstance(sg_set_scope[1], bool):
-                raise FeError(ValueError(
-                    f"Option 'pass.sg_set_scope[1]' has invalid type. "
-                    f"Expected bool, but got {type(sg_set_scope[1]).__name__}."
-                ))
-            if not isinstance(sg_set_scope[2], bool):
-                raise FeError(ValueError(
-                    f"Option 'pass.sg_set_scope[2]' has invalid type. "
-                    f"Expected bool, but got {type(sg_set_scope[2]).__name__}."
-                ))
-            processed_sg_set_scope = list(sg_set_scope)
-        else:
-            raise FeError(TypeError(
-                f"Option 'pass.sg_set_scope' has invalid type. "
-                f"Expected int64 or tuple, but got {type(sg_set_scope).__name__}."
-            ))
-
-    # 构建 pass_options 字典
     pass_options = {}
     if sg_set_scope is not None:
-        pass_options['sg_set_scope'] = processed_sg_set_scope
+        pass_options['sg_set_scope'] = _process_sg_set_scope(sg_set_scope)
     if vec_nbuffer_setting is not None:
         pass_options['vec_nbuffer_setting'] = vec_nbuffer_setting
     if cube_l1_reuse_setting is not None:
@@ -195,7 +189,6 @@ def set_pass_options(*,
     if auto_mix_partition is not None:
         pass_options['auto_mix_partition'] = auto_mix_partition
 
-    # 调用 set_options
     if pass_options:
         set_options(pass_options=pass_options)
 
