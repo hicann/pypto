@@ -985,7 +985,7 @@ Status SubgraphToFunction::TransViewToCopyInBeforeGenSubgraph(Function& function
                 canTrans = false;
                 break;
             }
-            if (consumer->GetOpcode() != Opcode::OP_COPY_OUT) {
+            if (OpcodeManager::Inst().IsCopyIn(consumer->GetOpcode())) {
                 return SUCCESS;
             }
         }
