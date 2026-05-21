@@ -38,4 +38,5 @@ AclError AclRtFree(void *devPtr);
 AclError AclRtCreateStream(AclRtStream *stream);
 AclError AclRtSynchronizeStream(AclRtStream stream);
 AclError AclRtDestroyStream(AclRtStream stream);
+AclError AclSysGetVersionStr(const char *pkgName, char *versionStr);
 }

@@ -38,4 +38,5 @@ AclError StubRtSynchronizeStream(AclRtStream stream);
 AclError StubRtDestroyStream(AclRtStream stream);
 AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus *status, AclMdlRI *modelRI);
 AclError StubMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode *mode);
+AclError StubSysGetVersionStr(const char *pkgName, char *versionStr);
 }

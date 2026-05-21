@@ -20,7 +20,7 @@
 #include "adapter/api/acl_api.h"
 #include "adapter/api/adump_api.h"
 #include "interface/utils/op_info_manager.h"
-
+#include "machine/runtime/launcher/device_launcher_driver_gate.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/host/perf_analysis.h"
@@ -66,6 +66,11 @@ int DeviceLauncher::GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtMode
     }
     MACHINE_LOGI("capture mode[%d]", isCapture);
     return 0;
+}
+
+void DeviceLauncher::CheckAscendDriverVersionOnboard()
+{
+    AscendDriverVersionGate::EnsureDriverVersionForOnboardOnce();
 }
 
 void DeviceLauncher::ChangeCaptureModeRelax()
@@ -158,6 +163,8 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     if (rc != 0 && rc != ACLRT_ERROR_REPEAT_INITIALIZE) {
         return rc;
     }
+
+    CheckAscendDriverVersionOnboard();
 
     if (cachedOperator == nullptr) {
         // Not python cached operator mode, consider kernel reuse mode

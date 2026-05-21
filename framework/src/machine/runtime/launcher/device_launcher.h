@@ -81,6 +81,10 @@ public:
 
     static bool HasInplaceArgs(Function* function) { return GetDevProg(function)->outputInplaceSlotList.size() != 0; }
 
+    /** Query Ascend driver package version once per process (skipped on ArchInfo::DAV_3510). Abort if official x.y.z
+     *  format and below 25.5; ACL failure, empty string, or non-official format skips gate with MACHINE_LOGW. */
+    static void CheckAscendDriverVersionOnboard();
+
     static void DeviceLauncherConfigFillDeviceInfo(const DeviceLauncherConfig& config)
     {
         DeviceLauncherConfig& devConfig = const_cast<DeviceLauncherConfig&>(config);

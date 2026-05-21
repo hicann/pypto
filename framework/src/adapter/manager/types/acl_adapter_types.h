@@ -40,6 +40,7 @@ enum class AclFunc {
     RtSynchronizeStream,
     RtFree,
     RtDestroyStream,
+    SysGetVersionStr,
     Bottom
 };
 
@@ -64,6 +65,7 @@ const std::map<AclFunc, std::string> kAclFuncStrMap {
     {AclFunc::RtCreateStream, "aclrtCreateStream"},
     {AclFunc::RtSynchronizeStream, "aclrtSynchronizeStream"},
     {AclFunc::RtFree, "aclrtFree"},
-    {AclFunc::RtDestroyStream, "aclrtDestroyStream"}
+    {AclFunc::RtDestroyStream, "aclrtDestroyStream"},
+    {AclFunc::SysGetVersionStr, "aclsysGetVersionStr"}
 };
 }

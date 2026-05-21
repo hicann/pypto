@@ -1345,6 +1345,8 @@ private:
             return;
         }
 
+        DeviceLauncher::CheckAscendDriverVersionOnboard();
+
         int64_t* wsAddr = nullptr;
         int64_t wsSize = kmodule->GetWorkspaceSize(kbinary, tensors);
         if (wsSize) {

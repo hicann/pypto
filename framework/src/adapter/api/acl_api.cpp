@@ -271,6 +271,19 @@ AclError AclMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode *mode)
 #endif
     return StubMdlRICaptureThreadExchangeMode(mode);
 }
+
+AclError AclSysGetVersionStr(const char *pkgName, char *versionStr)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::SysGetVersionStr);
+    if (func != nullptr) {
+        // Match acl_rt.h: aclsysGetVersionStr(char *pkgName, char *versionStr)
+        aclError(*aclFunc)(char *, char *) = reinterpret_cast<aclError(*)(char *, char *)>(func);
+        return aclFunc(const_cast<char *>(pkgName), versionStr);
+    }
+#endif
+    return StubSysGetVersionStr(pkgName, versionStr);
+}
 #ifdef BUILD_WITH_CANN
 static_assert(std::is_same<AclError, aclError>::value);
 static_assert(std::is_same<AclRtStream, aclrtStream>::value);

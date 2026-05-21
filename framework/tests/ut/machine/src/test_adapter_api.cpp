@@ -45,6 +45,9 @@ TEST_F(TestAdapterApi, test_acl_api)
     EXPECT_EQ(AclRtSetExceptionInfoCallback(nullptr), ACLRT_SUCCESS);
     EXPECT_EQ(AclMdlRICaptureGetInfo(nullptr, nullptr, nullptr), ACLRT_SUCCESS);
     EXPECT_EQ(AclMdlRICaptureThreadExchangeMode(nullptr), ACLRT_SUCCESS);
+    char versionBuf[1] = {'x'};
+    EXPECT_EQ(AclSysGetVersionStr("pkg", versionBuf), ACLRT_SUCCESS);
+    EXPECT_EQ(versionBuf[0], '\0');
 }
 
 TEST_F(TestAdapterApi, test_adump_api)
@@ -127,6 +130,7 @@ TEST_F(TestAdapterApi, test_acl_adapter)
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtSetExceptionInfoCallback) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::MdlRICaptureGetInfo) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::MdlRICaptureThreadExchangeMode) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::SysGetVersionStr) != nullptr, hasCann);
 }
 
 TEST_F(TestAdapterApi, test_adump_adapter)

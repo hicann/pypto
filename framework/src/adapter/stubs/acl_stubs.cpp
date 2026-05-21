@@ -175,4 +175,14 @@ AclError StubMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode *mode)
     (void)mode;
     return ACLRT_SUCCESS;
 }
+
+AclError StubSysGetVersionStr(const char *pkgName, char *versionStr)
+{
+    ADAPTER_LOGD("Enter stub function of AclSysGetVersionStr.");
+    (void)pkgName;
+    if (versionStr != nullptr) {
+        versionStr[0] = '\0';
+    }
+    return ACLRT_SUCCESS;
+}
 }
