@@ -486,26 +486,17 @@ std::string CodeGenOpNPU::GetGmTensorAddrByAttr(unsigned gmParamIdx) const
 
 std::string CodeGenOpNPU::GenGmParamVar(unsigned gmParamIdx) const
 {
-    if (isUnderDynamicFunction) {
-        std::string gmParamVar = GetGmTensorAddrByAttr(gmParamIdx);
-        if (!gmParamVar.empty()) {
-            return gmParamVar;
-        }
-        // Use CodeGen generation as the fallback
-        std::ostringstream os;
-        os << "GET_PARAM_ADDR(" << GM_TENSOR_PARAM_STR << ", " << GmTensorParamIdxInCallFunc << ", "
-           << paramLocation[gmParamIdx] << ")";
-        gmParamVar = os.str();
-        CODEGEN_LOGI("gmParamVar by codegen: %s", gmParamVar.c_str());
+    std::string gmParamVar = GetGmTensorAddrByAttr(gmParamIdx);
+    if (!gmParamVar.empty()) {
         return gmParamVar;
     }
-
-    auto paramLoc = paramLocation[gmParamIdx];
-    auto iter = paramLocToParamListOffset.find(paramLoc);
-    ASSERT(GenCodeErr::PARAM_IDX_INVALID, iter != paramLocToParamListOffset.end())
-        << "paramLoc " << paramLoc << " can not be found in paramLocToParamListOffset!! gmParamIdx: " << gmParamIdx;
-    std::string gmVar = "((" + GM_PARAM_TYPE_FOR_STATIC + "*)(param) + " + std::to_string(iter->second) + ")->Addr";
-    return gmVar;
+    // Use CodeGen generation as the fallback
+    std::ostringstream os;
+    os << "GET_PARAM_ADDR(" << GM_TENSOR_PARAM_STR << ", " << GmTensorParamIdxInCallFunc << ", "
+       << paramLocation[gmParamIdx] << ")";
+    gmParamVar = os.str();
+    CODEGEN_LOGI("gmParamVar by codegen: %s", gmParamVar.c_str());
+    return gmParamVar;
 }
 
 // Used for parameter of GM shape and offset, e.g.

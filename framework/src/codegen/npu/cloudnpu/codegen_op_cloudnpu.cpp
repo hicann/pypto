@@ -22,8 +22,29 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const CodeGenOpNPUCtx& ctx) : CodeGenOpNPU(
     InitOpsGenMap();
     forBlkMgr_ = ctx.forBlockManager;
     CodeGenOp::Init(ctx.operation);
+    GetGmParamIdx(ctx.operation);
     UpdateTileTensorInfo();
     UpdateLoopInfo();
+}
+
+void CodeGenOpCloudNPU::GetGmParamIdx(const Operation& oper)
+{
+    if (oper.HasAttribute(OpAttributeKey::gmTensorParamIdxInCall)) {
+        GmTensorParamIdxInCallFunc = oper.GetIntAttribute(OpAttributeKey::gmTensorParamIdxInCall);
+    }
+
+    for (size_t i = 0; i < oper.GetOOperands().size(); ++i) {
+        if (oper.GetOOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
+            paramLocation[i] = oper.GetOOpAttrOffset(i);
+        }
+    }
+
+    size_t iOffset = oper.GetOOperands().size() == 0 ? 1 : oper.GetOOperands().size();
+    for (size_t i = 0; i < oper.GetIOperands().size(); ++i) {
+        if (oper.GetIOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
+            paramLocation[i + iOffset] = oper.GetIOpAttrOffset(i);
+        }
+    }
 }
 
 } // namespace npu::tile_fwk

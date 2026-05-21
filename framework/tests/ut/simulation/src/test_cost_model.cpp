@@ -212,11 +212,16 @@ TEST_F(CostModelTest, TestErrorInput)
 
 TEST_F(CostModelTest, TestFixedLatencyTasks)
 {
+    RunAttentionPostCostModel();
+
     std::string jsonPath("./config/fixed_task_topo.json");
     std::vector<std::string> arg = config::GetSimConfig(KEY_ARGS, std::vector<std::string>{});
     arg.emplace_back("Model.simulationFixedLatencyTask=true");
     arg.emplace_back("Model.fixedLatencyTaskInfoPath=" + jsonPath);
     config::SetSimConfig(KEY_ARGS, arg);
+
+    std::string jPath = config::LogTopFolder() + "/program.json";
+    config::SetSimConfig(KEY_AGENT_JSON_PATH, jPath);
 
     CostModelAgent costModelAgent;
     costModelAgent.SubmitToCostModel(nullptr);

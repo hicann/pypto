@@ -25,6 +25,9 @@ public:
     explicit CodeGenOpCloudNPU(const CodeGenOpNPUCtx& ctx);
 
     ~CodeGenOpCloudNPU() override = default;
+
+private:
+    void GetGmParamIdx(const Operation& oper);
 };
 } // namespace npu::tile_fwk
 

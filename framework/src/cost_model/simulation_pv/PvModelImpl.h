@@ -310,8 +310,7 @@ public:
         npu::tile_fwk::CodeGenCloudNPU cga(ctx);
         auto coreType = leafFuncAttr == nullptr ? npu::tile_fwk::CoreType::INVALID : leafFuncAttr->coreType;
         bool isCube = coreType == npu::tile_fwk::CoreType::AIC;
-        npu::tile_fwk::CompileInfo compileInfo(
-            *func, ctx, {leaf->GetProgramId(), leaf}, isCube, leaf->IsUnderDynamicFunction());
+        npu::tile_fwk::CompileInfo compileInfo(*func, ctx, {leaf->GetProgramId(), leaf}, isCube);
         compileInfo.SetCCEAbsPath(srcPath);
         compileInfo.SetBinAbsPath(objPath);
         cga.CompileCode(cga.PrepareCmd(compileInfo, ""));
@@ -359,7 +358,7 @@ public:
     uint8_t* AllocWorkspace(uint64_t size)
     {
         std::vector<uint8_t> s(size, 0);
-        uint8_t *devPtr = s.data();
+        uint8_t* devPtr = s.data();
         storage_.emplace_back(std::move(s));
         return devPtr;
     }

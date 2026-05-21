@@ -125,8 +125,7 @@ std::string CodeGenNPU::GenFuncHeader(uint64_t programId, Function& topFunc, Com
     compileInfo.SetKernelName(kernelName);
     funcHeader << kernelName;
     // kernel func param
-    std::string paramType = GetParamType(topFunc, compileInfo.isUnderDyn());
-    funcHeader << "(" << paramType
+    funcHeader << "(" << GM_PARAM_TYPE_FOR_DYN
                << "* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ TaskStat* taskStat)";
     auto funcDec = funcHeader.str() + ";";
     compileInfo.SetFuncDeclare(funcDec);
@@ -217,14 +216,6 @@ std::string CodeGenNPU::GenDynParamForExpr(const Function& func) const
     return dynParamList;
 }
 
-std::string CodeGenNPU::GetParamType(const Function& func, bool isUnderDynFunc) const
-{
-    if (isUnderDynFunc) {
-        return GM_PARAM_TYPE_FOR_DYN;
-    }
-    return func.GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH ? GM_PARAM_TYPE_FOR_DYN : GM_PARAM_TYPE_FOR_STATIC;
-}
-
 void CodeGenNPU::GenCode(
     Function& topFunc, [[maybe_unused]] const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset)
 {
@@ -243,7 +234,7 @@ void CodeGenNPU::GenCode(
                 return;
             }
             bool isCube = subFunc->IsCube();
-            CompileInfo compileInfo(topFunc, ctx, subFuncPair, isCube, subFunc->IsUnderDynamicFunction());
+            CompileInfo compileInfo(topFunc, ctx, subFuncPair, isCube);
             std::ostringstream leafKernelFunc;
             GenFuncBodyBefore(subFuncPair, topFunc, compileInfo, leafKernelFunc);
             GenFuncBody(*subFunc, topFunc, leafKernelFunc);

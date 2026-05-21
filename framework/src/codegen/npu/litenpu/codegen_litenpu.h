@@ -24,9 +24,8 @@ const std::string CODEGEN_LITENPU_WORKSPACE = "workspace";
 class CompileInfoLiteNPU : public CompileInfo {
 public:
     CompileInfoLiteNPU(
-        Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair, bool isCube,
-        bool isUnderDyn)
-        : CompileInfo(topFunc, ctx, subFuncPair, isCube, isUnderDyn)
+        Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair, bool isCube)
+        : CompileInfo(topFunc, ctx, subFuncPair, isCube)
     {
         std::ostringstream ss;
         ss << userSpecCCEDir_ << "/" << cceFileName_ << ".json";

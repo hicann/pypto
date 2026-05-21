@@ -37,6 +37,8 @@ private:
         int paramIdx, TileTensor& tileTensor, bool isSpillToGm, const TileTensorShape& tileTensorShape = {}) override;
 
     std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx) const override;
+
+    void UpdateGmParamIdx(const Operation& oper);
 };
 
 } // namespace npu::tile_fwk

@@ -269,7 +269,6 @@ void CodeGenOp::Init(const Operation& ops)
 
     operandCnt = oOperandCnt + iOperandCnt;
 
-    GetGmParamIdx(ops);
     syncQueue = ops.syncQueue_;
     UpdateScalarValue(ops);
     UpdateOpAttribute(ops);
@@ -447,44 +446,6 @@ void CodeGenOp::UpdateTileOpInfo(const Operation& ops)
     CODEGEN_LOGI(
         "after UpdateTileOpInfo: tileOpName = %s, opCode = %s", tileOpName.c_str(),
         OpcodeManager::Inst().GetOpcodeStr(opCode).c_str());
-}
-
-void CodeGenOp::GetGmParamIdx(const Operation& oper)
-{
-    if (!isUnderDynamicFunction || oper.IsNeedStackGM()) {
-        auto inParamLocSize = oper.inParamLocation_.size();
-        auto outParamLocSize = oper.outParamLocation_.size();
-
-        // Ops like UB_ALLOC have output operands, but does not have output
-        // param locs, so here we should not assert 'outParamLocSize == outputTensors.size()' !
-        ASSERT(OperErr::OPERAND_COUNT_NOT_MATCHED, inParamLocSize <= oper.iOperand.size())
-            << "size of Op.inParamLocation_ is larger than input operands, Op is " << oper.Dump();
-        ASSERT(OperErr::OPERAND_COUNT_NOT_MATCHED, outParamLocSize <= oper.oOperand.size())
-            << "size of Op.outParamLocation_ is larger than output operands, Op is " << oper.Dump();
-
-        CODEGEN_LOGI("inParamLocation = %s", IntVecToStr(oper.inParamLocation_).c_str());
-        CODEGEN_LOGI("outParamLocation = %s", IntVecToStr(oper.outParamLocation_).c_str());
-
-        std::copy(oper.outParamLocation_.begin(), oper.outParamLocation_.end(), paramLocation);
-        std::copy(oper.inParamLocation_.begin(), oper.inParamLocation_.end(), paramLocation + oper.oOperand.size());
-        return;
-    }
-
-    if (oper.HasAttribute(OpAttributeKey::gmTensorParamIdxInCall)) {
-        GmTensorParamIdxInCallFunc = oper.GetIntAttribute(OpAttributeKey::gmTensorParamIdxInCall);
-    }
-
-    for (size_t i = 0; i < oper.GetOOperands().size(); ++i) {
-        if (oper.GetOOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
-            paramLocation[i] = oper.GetOOpAttrOffset(i);
-        }
-    }
-    size_t iOffset = oper.GetOOperands().size() == 0 ? 1 : oper.GetOOperands().size();
-    for (size_t i = 0; i < oper.GetIOperands().size(); ++i) {
-        if (oper.GetIOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
-            paramLocation[i + iOffset] = oper.GetIOpAttrOffset(i);
-        }
-    }
 }
 
 } // namespace npu::tile_fwk

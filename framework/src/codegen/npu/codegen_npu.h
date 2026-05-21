@@ -44,11 +44,9 @@ struct CompileTaskInfo {
 class CompileInfo {
 public:
     CompileInfo(
-        Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair, bool isCube,
-        bool isUnderDyn)
+        Function& topFunc, const CodeGenCtx& ctx, const std::pair<uint64_t, Function*>& subFuncPair, bool isCube)
         : userSpecCCEDir_(ctx.cceDir),
           isCube_(isCube),
-          isUnderDyn_(isUnderDyn),
           attr_(subFuncPair.second->GetLeafFuncAttribute()),
           isMainBlock_(ctx.isMainBlock)
     {
@@ -66,7 +64,6 @@ public:
     void SetFuncDeclare(const std::string& funcDeclare) { funcDeclare_ = funcDeclare; }
     std::string GetFuncDeclare() const { return funcDeclare_; }
     bool IsCube() const { return isCube_; }
-    bool isUnderDyn() const { return isUnderDyn_; }
 
 protected:
     void Init(Function& topFunc, uint64_t subProgramId)
@@ -110,7 +107,6 @@ protected:
 
     std::string userSpecCCEDir_;
     bool isCube_{false};
-    bool isUnderDyn_{false};
     std::string cceFileName_;
     std::string cceAbsPath_;
     std::string binAbsPath_;
@@ -164,8 +160,6 @@ protected:
     std::string GenAlloc(
         const std::shared_ptr<SymbolManager>& manager, BufferType bufferType, DataType dataType,
         const TileRange& range) const;
-
-    std::string GetParamType(const Function& func, bool isUnderDynFunc) const;
 
     std::string GenDynParamForExpr(const Function& func) const;
 

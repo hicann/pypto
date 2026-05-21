@@ -33,7 +33,6 @@ constexpr const int UPDATE_SHAPE_MAX_DIM = 6;
 const std::string GET_PARAM_VALID_SHAPE_BY_IDX = "GET_PARAM_VALID_SHAPE_BY_IDX";
 const std::string GET_PARAM_OFFSET_BY_IDX = "GET_PARAM_OFFSET_BY_IDX";
 
-const std::string GM_PARAM_TYPE_FOR_STATIC = "__gm__ GMTensorInfo";
 const std::string GM_PARAM_TYPE_FOR_DYN = "CoreFuncParam";
 const std::string GM_STACK_BASE = "GMStackBase";
 

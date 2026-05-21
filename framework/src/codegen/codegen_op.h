@@ -64,7 +64,6 @@ public:
         : originalOp(ctx.operation),
           functionType(ctx.topFunc.GetFunctionType()),
           paramLocToParamListOffset(ctx.locToOffset),
-          isUnderDynamicFunction(ctx.topFunc.IsUnderDynamicFunction()),
           isMainBlock(ctx.isMainBlock),
           isDynamicAligned(ctx.isDynamicAligned)
     {
@@ -133,7 +132,6 @@ protected:
     bool isSupportDynamicAligned{false}; // NEXTNEXT delete after all TileOp is changed to TileTensor Mode
     bool isDynamicFunction{false};
     bool isSupportLayout{false};
-    bool isUnderDynamicFunction{false};
     int operandCnt{0};
     bool isMainBlock{false};
     bool isDynamicAligned{false};
@@ -144,8 +142,6 @@ private:
         size_t ioIdx);
 
     void UpdateTileOpInfo(const Operation& ops);
-
-    void GetGmParamIdx(const Operation& oper);
 
     void ConvertPoolAttribute(const Operation& operation);
     void ConvertAttribute(const Operation& operation);

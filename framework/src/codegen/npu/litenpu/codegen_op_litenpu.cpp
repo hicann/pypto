@@ -24,6 +24,7 @@ CodeGenOpLiteNPU::CodeGenOpLiteNPU(const CodeGenOpNPUCtx& ctx) : CodeGenOpNPU(ct
     InitOpsGenMap();
     forBlkMgr_ = ctx.forBlockManager;
     CodeGenOp::Init(ctx.operation);
+    UpdateGmParamIdx(ctx.operation);
     UpdateTileTensorInfo();
 }
 
@@ -115,6 +116,25 @@ std::vector<std::string> CodeGenOpLiteNPU::GetGmOffsetForTileTensor(unsigned gmI
     }
 
     return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
+}
+
+void CodeGenOpLiteNPU::UpdateGmParamIdx(const Operation& oper)
+{
+    auto inParamLocSize = oper.inParamLocation_.size();
+    auto outParamLocSize = oper.outParamLocation_.size();
+
+    // Ops like UB_ALLOC have output operands, but does not have output
+    // param locs, so here we should not assert 'outParamLocSize == outputTensors.size()' !
+    ASSERT(OperErr::OPERAND_COUNT_NOT_MATCHED, inParamLocSize <= oper.iOperand.size())
+        << "size of Op.inParamLocation_ is larger than input operands, Op is " << oper.Dump();
+    ASSERT(OperErr::OPERAND_COUNT_NOT_MATCHED, outParamLocSize <= oper.oOperand.size())
+        << "size of Op.outParamLocation_ is larger than output operands, Op is " << oper.Dump();
+
+    CODEGEN_LOGI("inParamLocation = %s", IntVecToStr(oper.inParamLocation_).c_str());
+    CODEGEN_LOGI("outParamLocation = %s", IntVecToStr(oper.outParamLocation_).c_str());
+
+    std::copy(oper.outParamLocation_.begin(), oper.outParamLocation_.end(), paramLocation);
+    std::copy(oper.inParamLocation_.begin(), oper.inParamLocation_.end(), paramLocation + oper.oOperand.size());
 }
 
 } // namespace npu::tile_fwk

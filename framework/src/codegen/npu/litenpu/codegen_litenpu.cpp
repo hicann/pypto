@@ -104,7 +104,7 @@ void CodeGenLiteNPU::GenCode(
                 return;
             }
             bool isCube = subFunc->IsCube();
-            CompileInfoLiteNPU compileInfo(topFunc, ctx, subFuncPair, isCube, subFunc->IsUnderDynamicFunction());
+            CompileInfoLiteNPU compileInfo(topFunc, ctx, subFuncPair, isCube);
             std::ostringstream leafKernelFunc;
             GenFuncBody(*subFunc, topFunc, leafKernelFunc);
 
