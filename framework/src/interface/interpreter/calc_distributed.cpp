@@ -68,10 +68,14 @@ void ExecuteOpShmemPut(ExecuteOperationContext *ctx) {
         atomicType = 0;
     }
 
-    auto castedIn = LogicalTensorData::CreateEmpty(shm->GetDataType(), shm->GetShape(), shm->GetValidShape(), shm->GetShape());
-    calc::Cast(castedIn, in);
+    if (shm->GetDataType() != in->GetDataType()) {
+        auto castedIn = LogicalTensorData::CreateEmpty(shm->GetDataType(), shm->GetShape(), shm->GetValidShape(), shm->GetShape());
+        calc::Cast(castedIn, in);
+        context->Put(castedIn, dstRank, shm->GetShmStorageOffset(), atomicType);
+    } else {
+        context->Put(in, dstRank, shm->GetShmStorageOffset(), atomicType);
+    }
 
-    context->Put(castedIn, dstRank, shm->GetShmStorageOffset(), atomicType);
 }
 REGISTER_CALC_OP(OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT, ExecuteOpShmemPut);
 
