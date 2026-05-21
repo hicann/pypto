@@ -144,7 +144,7 @@ private:
 #define AICPU_PMU_END(sampler_name, section_name_literal) \
     do { \
         (sampler_name).End(); \
-        DEV_ERROR(ERROR_CODE_UNDEFINED, "[AICPU_PMU] %s", section_name_literal); \
+        DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", section_name_literal); \
         (sampler_name).Dump(); \
     } while (0)
 
@@ -155,7 +155,7 @@ private:
 #define AICPU_PMU_END_EXTERNAL(sampler_ptr, section_name_literal) \
     do { \
         (sampler_ptr)->End(); \
-        DEV_ERROR(ERROR_CODE_UNDEFINED, "[AICPU_PMU] %s", section_name_literal); \
+        DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", section_name_literal); \
         (sampler_ptr)->Dump(); \
     } while (0)
 #else

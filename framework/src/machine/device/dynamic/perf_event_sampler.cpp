@@ -239,7 +239,7 @@ void AicpuPerfEventSampler::Dump()
 {
     if (!pmuAvailable || !pmuEnabled || events.GetValidEventCount() == 0) {
         DumpSummary("ExecDyn Summary (PMU unavailable)");
-        DEV_ERROR(ERROR_CODE_UNDEFINED, "  Note: PMU events disabled due to permission restrictions");
+        DEV_ERROR(MachineError::UNKNOWN, "  Note: PMU events disabled due to permission restrictions");
         return;
     }
 
@@ -268,43 +268,43 @@ void AicpuPerfEventSampler::TryAddCacheEvent(uint64_t cacheId, uint64_t opId, ui
 
 void AicpuPerfEventSampler::DumpSummary(const char* title)
 {
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "[AICPU_PMU] %s", title);
+    DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", title);
     DumpElapsedCycles();
 }
 
 void AicpuPerfEventSampler::DumpReport(const uint64_t* counts)
 {
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "[AICPU_PMU] Performance Report");
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "============================================================");
+    DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] Performance Report");
+    DEV_ERROR(MachineError::UNKNOWN, "============================================================");
     DumpElapsedCycles();
     DumpRawCounters(counts);
     DumpDerivedMetrics(BuildDerivedMetrics(counts));
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "============================================================");
+    DEV_ERROR(MachineError::UNKNOWN, "============================================================");
 }
 
 void AicpuPerfEventSampler::DumpElapsedCycles()
 {
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "Elapsed Cycles: %s", FormatNumber(cycles).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "Elapsed Cycles: %s", FormatNumber(cycles).c_str());
 }
 
 void AicpuPerfEventSampler::DumpSectionHeader(const char* title)
 {
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "------------------------------------------------------------");
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "%s", title);
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "------------------------------------------------------------");
+    DEV_ERROR(MachineError::UNKNOWN, "------------------------------------------------------------");
+    DEV_ERROR(MachineError::UNKNOWN, "%s", title);
+    DEV_ERROR(MachineError::UNKNOWN, "------------------------------------------------------------");
 }
 
 void AicpuPerfEventSampler::DumpRawCounters(const uint64_t* counts)
 {
     DumpSectionHeader("PMU Event Counters");
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  CPU Cycles:         %s", FormatNumber(counts[IDX_CPU_CYCLES]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  Instructions:       %s", FormatNumber(counts[IDX_INSTRUCTIONS]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  Branch Instructions:%s", FormatNumber(counts[IDX_BRANCH_INST]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  Branch Misses:      %s", FormatNumber(counts[IDX_BRANCH_MISS]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  L1D Cache Refs:     %s", FormatNumber(counts[IDX_L1D_CACHE_REFS]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  L1D Cache Misses:   %s", FormatNumber(counts[IDX_L1D_CACHE_MISSES]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  LL Cache Refs:      %s", FormatNumber(counts[IDX_LL_CACHE_REFS]).c_str());
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  LL Cache Misses:    %s", FormatNumber(counts[IDX_LL_CACHE_MISSES]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  CPU Cycles:         %s", FormatNumber(counts[IDX_CPU_CYCLES]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  Instructions:       %s", FormatNumber(counts[IDX_INSTRUCTIONS]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  Branch Instructions:%s", FormatNumber(counts[IDX_BRANCH_INST]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  Branch Misses:      %s", FormatNumber(counts[IDX_BRANCH_MISS]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  L1D Cache Refs:     %s", FormatNumber(counts[IDX_L1D_CACHE_REFS]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  L1D Cache Misses:   %s", FormatNumber(counts[IDX_L1D_CACHE_MISSES]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  LL Cache Refs:      %s", FormatNumber(counts[IDX_LL_CACHE_REFS]).c_str());
+    DEV_ERROR(MachineError::UNKNOWN, "  LL Cache Misses:    %s", FormatNumber(counts[IDX_LL_CACHE_MISSES]).c_str());
 }
 
 PerfDerivedMetrics AicpuPerfEventSampler::BuildDerivedMetrics(const uint64_t* counts)
@@ -320,9 +320,9 @@ PerfCacheMetrics AicpuPerfEventSampler::BuildCacheMetrics(uint64_t refs, uint64_
 void AicpuPerfEventSampler::DumpDerivedMetrics(const PerfDerivedMetrics& metrics)
 {
     DumpSectionHeader("Derived Metrics");
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  IPC:                %.2f", metrics.ipc);
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  CPI:                %.2f", metrics.cpi);
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  Branch Miss Rate:   %.2f%%", metrics.branchMissRate);
+    DEV_ERROR(MachineError::UNKNOWN, "  IPC:                %.2f", metrics.ipc);
+    DEV_ERROR(MachineError::UNKNOWN, "  CPI:                %.2f", metrics.cpi);
+    DEV_ERROR(MachineError::UNKNOWN, "  Branch Miss Rate:   %.2f%%", metrics.branchMissRate);
     DumpCacheDerivedMetric("L1D Cache", metrics.l1dCache);
     DumpCacheDerivedMetric("LL Cache", metrics.llCache);
 }
@@ -330,12 +330,12 @@ void AicpuPerfEventSampler::DumpDerivedMetrics(const PerfDerivedMetrics& metrics
 void AicpuPerfEventSampler::DumpCacheDerivedMetric(const char* name, const PerfCacheMetrics& metrics)
 {
     if (!metrics.valid) {
-        DEV_ERROR(ERROR_CODE_UNDEFINED, "  %s Hit Rate: N/A", name);
-        DEV_ERROR(ERROR_CODE_UNDEFINED, "  %s Miss Rate:N/A", name);
+        DEV_ERROR(MachineError::UNKNOWN, "  %s Hit Rate: N/A", name);
+        DEV_ERROR(MachineError::UNKNOWN, "  %s Miss Rate:N/A", name);
         return;
     }
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  %s Hit Rate: %.2f%%", name, 100.0 - metrics.missRate);
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "  %s Miss Rate:%.2f%%", name, metrics.missRate);
+    DEV_ERROR(MachineError::UNKNOWN, "  %s Hit Rate: %.2f%%", name, 100.0 - metrics.missRate);
+    DEV_ERROR(MachineError::UNKNOWN, "  %s Miss Rate:%.2f%%", name, metrics.missRate);
 }
 
 double AicpuPerfEventSampler::Divide(uint64_t dividend, uint64_t divisor)
@@ -357,7 +357,7 @@ AicpuPerfScopedSampler::AicpuPerfScopedSampler(const char* sectionName)
 AicpuPerfScopedSampler::~AicpuPerfScopedSampler()
 {
     sampler_.End();
-    DEV_ERROR(ERROR_CODE_UNDEFINED, "[AICPU_PMU] %s", sectionName_);
+    DEV_ERROR(MachineError::UNKNOWN, "[AICPU_PMU] %s", sectionName_);
     sampler_.Dump();
 }
 

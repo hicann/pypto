@@ -335,7 +335,8 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFunctionData(ExecuteContext *ctx,
 INLINE void PmuTestBegin(__gm__ KernelArgs* args)
 {
     UNUSED(args);
-#if PERF_PMU_TEST_SWITCH
+#if PERF_PMU_TEST_SWITCH && IS_AICORE
+    // set_ctrl/get_ctrl are CANN CCE intrinsics; unavailable on host AICore model simulation.
     if (args->taskEntry.reserved[0] == PRO_LEVEL2) {
         set_ctrl((uint64_t)get_ctrl() | 0x1);
     }
@@ -345,7 +346,7 @@ INLINE void PmuTestBegin(__gm__ KernelArgs* args)
 INLINE void PmuTestEnd(__gm__ KernelArgs* args)
 {
     UNUSED(args);
-#if PERF_PMU_TEST_SWITCH
+#if PERF_PMU_TEST_SWITCH && IS_AICORE
     if (args->taskEntry.reserved[0] == PRO_LEVEL2) {
         set_ctrl((uint64_t)get_ctrl() - 1);
     }

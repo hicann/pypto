@@ -32,7 +32,10 @@ def parse_log_file(log_file_path):
             line = line.strip()
             if "Begin dump machine perf trace:" in line:
                 if in_perf_trace_block:
-                    print(f"Error: Nested perf trace block at line {line_num}. Block started at line {block_start_line} is not properly closed.")
+                    print(
+                        f"Error: Nested perf trace block at line {line_num}. "
+                        f"Block started at line {block_start_line} is not properly closed."
+                    )
                     return {"error": f"Nested perf trace block at line {line_num}"}
 
                 in_perf_trace_block = True
@@ -569,15 +572,18 @@ def calc_aicore_init_preprocess_us(aicore_exec_rows: List[Dict[str, Any]]) -> Op
     return to_us(max(min(wait_first_values) - min(min_end_values), 0.0), freq)
 
 
-def calc_aicore_last_core_exit_wait_us(aicore_exec_rows: List[Dict[str, Any]]) -> Optional[float]:
+def calc_aicore_last_core_exit_wait_us(
+    aicore_exec_rows: List[Dict[str, Any]],
+    aicore_core_bounds: List[Dict[str, Any]],
+) -> Optional[float]:
     all_exec_values = [
         float(row["all_exec_cycle"]) for row in aicore_exec_rows if row.get("all_exec_cycle") is not None
     ]
-    max_end_values = [float(row["max_end"]) for row in aicore_exec_rows if row.get("max_end") is not None]
+    max_end_values = [float(row["max_end"]) for row in aicore_core_bounds if row.get("max_end") is not None]
     if not all_exec_values or not max_end_values:
         return None
 
-    freq = float(aicore_exec_rows[0].get("freq", 1.0)) or 1.0
+    freq = float(aicore_core_bounds[0].get("freq", 1.0)) or 1.0
     return to_us(max(max(max_end_values) - max(all_exec_values), 0.0), freq)
 
 
@@ -587,11 +593,38 @@ def format_sched_post_process(post_dur_cycles: Optional[float], sched_freq: floa
     return f"{to_us(post_dur_cycles, sched_freq):.2f}"
 
 
+def is_aicore_sched(core_type: str) -> bool:
+    return core_type.startswith("SCHED") and ("-AIC" in core_type or "-AIV" in core_type)
+
+
+def collect_aicore_core_bounds(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for core in aicpu_dev_pref:
+        core_type = str(core.get("coreType", ""))
+        if not is_aicore_sched(core_type):
+            continue
+        sorted_tasks = sort_tasks_by_end(core.get("tasks", []))
+        min_end, max_end = get_end_bounds(sorted_tasks, round_id, sorted_tasks)
+        if min_end is None or max_end is None:
+            continue
+        rows.append(
+            {
+                "core_type": core_type,
+                "block_idx": int(core.get("blockIdx", -1)),
+                "freq": float(core.get("freq", 0)) or 1.0,
+                "min_end": min_end,
+                "max_end": max_end,
+            }
+        )
+    rows.sort(key=lambda x: x["block_idx"])
+    return rows
+
+
 def collect_aicore_exec_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for core in aicpu_dev_pref:
         core_type = str(core.get("coreType", ""))
-        if not (core_type.startswith("SCHED") and ("-AIC" in core_type or "-AIV" in core_type)):
+        if not is_aicore_sched(core_type):
             continue
         tasks = core.get("tasks", [])
         sorted_tasks = sort_tasks_by_end(tasks)
@@ -632,47 +665,88 @@ def collect_aicore_exec_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Opt
     return rows
 
 
-def calc_aicore_timing_summary(aicore_exec_rows: List[Dict[str, Any]]) -> Tuple[str, str]:
-    if not aicore_exec_rows:
-        return "-", "-"
+def _min_optional(current: Optional[float], value: float) -> float:
+    if current is None:
+        return value
+    return min(current, value)
 
-    total_runtime_freq = 1.0
-    total_runtime_min_end: Optional[float] = None
-    total_runtime_max_end: Optional[float] = None
+
+def _max_optional(current: Optional[float], value: float) -> float:
+    if current is None:
+        return value
+    return max(current, value)
+
+
+def _accumulate_aicore_exec_timing(
+    aicore_exec_rows: List[Dict[str, Any]],
+) -> Tuple[float, Optional[float], Optional[float], Optional[float], Optional[float]]:
+    freq = 1.0
+    min_end: Optional[float] = None
+    max_end: Optional[float] = None
     first_wait_cycle: Optional[float] = None
     last_all_exec_cycle: Optional[float] = None
     for row in aicore_exec_rows:
-        min_end = row.get("min_end")
-        max_end = row.get("max_end")
-        if min_end is None or max_end is None:
+        row_min_end = row.get("min_end")
+        row_max_end = row.get("max_end")
+        if row_min_end is None or row_max_end is None:
             continue
-        total_runtime_freq = float(row.get("freq", 1.0)) or 1.0
-        total_runtime_min_end = min(min_end, total_runtime_min_end) if total_runtime_min_end is not None else min_end
-        total_runtime_max_end = max(max_end, total_runtime_max_end) if total_runtime_max_end is not None else max_end
+        freq = float(row.get("freq", 1.0)) or 1.0
+        min_end = _min_optional(min_end, float(row_min_end))
+        max_end = _max_optional(max_end, float(row_max_end))
         wait_first_cycle = row.get("wait_first_cycle")
-        all_exec_cycle = row.get("all_exec_cycle")
         if wait_first_cycle is not None:
-            first_wait_cycle = (
-                min(float(wait_first_cycle), first_wait_cycle)
-                if first_wait_cycle is not None
-                else float(wait_first_cycle)
-            )
+            first_wait_cycle = _min_optional(first_wait_cycle, float(wait_first_cycle))
+        all_exec_cycle = row.get("all_exec_cycle")
         if all_exec_cycle is not None:
-            last_all_exec_cycle = (
-                max(float(all_exec_cycle), last_all_exec_cycle)
-                if last_all_exec_cycle is not None
-                else float(all_exec_cycle)
-            )
+            last_all_exec_cycle = _max_optional(last_all_exec_cycle, float(all_exec_cycle))
+    return freq, min_end, max_end, first_wait_cycle, last_all_exec_cycle
 
+
+def _extend_aicore_bounds_max_end(
+    aicore_core_bounds: List[Dict[str, Any]],
+    freq: float,
+    max_end: Optional[float],
+) -> Tuple[float, Optional[float]]:
+    for row in aicore_core_bounds:
+        row_max_end = row.get("max_end")
+        if row_max_end is None:
+            continue
+        freq = float(row.get("freq", 1.0)) or 1.0
+        max_end = _max_optional(max_end, float(row_max_end))
+    return freq, max_end
+
+
+def _format_aicore_timing_e2e(
+    freq: float,
+    first_wait_cycle: Optional[float],
+    last_all_exec_cycle: Optional[float],
+    min_end: Optional[float],
+    max_end: Optional[float],
+) -> Tuple[str, str]:
     e2e_time = "-"
     total_runtime_e2e = "-"
     if first_wait_cycle is not None and last_all_exec_cycle is not None:
         e2e_cycles = max(last_all_exec_cycle - first_wait_cycle, 0.0)
-        e2e_time = f"{to_us(e2e_cycles, total_runtime_freq):.2f}"
-    if total_runtime_min_end is not None and total_runtime_max_end is not None:
-        total_runtime_e2e_cycles = max(total_runtime_max_end - total_runtime_min_end, 0.0)
-        total_runtime_e2e = f"{to_us(total_runtime_e2e_cycles, total_runtime_freq):.2f}"
+        e2e_time = f"{to_us(e2e_cycles, freq):.2f}"
+    if min_end is not None and max_end is not None:
+        total_runtime_e2e_cycles = max(max_end - min_end, 0.0)
+        total_runtime_e2e = f"{to_us(total_runtime_e2e_cycles, freq):.2f}"
     return e2e_time, total_runtime_e2e
+
+
+def calc_aicore_timing_summary(
+    aicore_exec_rows: List[Dict[str, Any]],
+    aicore_core_bounds: List[Dict[str, Any]],
+) -> Tuple[str, str]:
+    if not aicore_exec_rows:
+        return "-", "-"
+    freq, min_end, max_end, first_wait_cycle, last_all_exec_cycle = _accumulate_aicore_exec_timing(
+        aicore_exec_rows
+    )
+    freq, max_end = _extend_aicore_bounds_max_end(aicore_core_bounds, freq, max_end)
+    return _format_aicore_timing_e2e(
+        freq, first_wait_cycle, last_all_exec_cycle, min_end, max_end
+    )
 
 
 def build_ctrl_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> Optional[List[str]]:
@@ -733,11 +807,12 @@ def build_sched_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[in
 
 def build_aicore_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[str]:
     aicore_exec_rows = collect_aicore_exec_rows(aicpu_dev_pref, round_id)
-    aicore_post_process_us = calc_aicore_last_core_exit_wait_us(aicore_exec_rows)
+    aicore_core_bounds = collect_aicore_core_bounds(aicpu_dev_pref, round_id)
+    aicore_post_process_us = calc_aicore_last_core_exit_wait_us(aicore_exec_rows, aicore_core_bounds)
     aicore_init_us = calc_aicore_init_preprocess_us(aicore_exec_rows)
     if not aicore_exec_rows:
         return ["AICore", "-", "-", "-", "-", "-", "-", "-", "-"]
-    e2e_time, total_runtime_e2e = calc_aicore_timing_summary(aicore_exec_rows)
+    e2e_time, total_runtime_e2e = calc_aicore_timing_summary(aicore_exec_rows, aicore_core_bounds)
     return [
         "AICore",
         "-",
