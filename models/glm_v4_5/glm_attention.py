@@ -279,16 +279,15 @@ def softmax(x, is_fp16=False):
 
 
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 128},
+    runtime_options={
+        "stitch_function_max_num": 128,
+        "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
+    },
     # 当子图大小达到上界不允许与其他子图合并
     pass_options={
-    # Q常驻，0代表第一组mmad，4代表4次matmul合并
-    "cube_l1_reuse_setting": {0: 4}},
-    host_options={"compile_monitor_enable": True,
-        "compile_timeout": 22,
-        "compile_timeout_stage": 5,
-        "compile_monitor_print_interval": 60},
-    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
+        # Q常驻，0代表第一组mmad，4代表4次matmul合并
+        "cube_l1_reuse_setting": {0: 4}
+    }
 )
 def ifa_func_kernel(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -445,18 +444,17 @@ def ifa_func_kernel(
 
 
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 1024, "device_sched_mode": 1},
+    runtime_options={
+        "stitch_function_max_num": 1024, 
+        "device_sched_mode": 1,
+        "ready_on_host_tensors": ["block_table", "kv_act_seqs"]
+    },
     # 当子图大小达到上界不允许与其他子图合并
     pass_options={
-    # Q常驻，0代表第一组mmad，4代表4次matmul合并
-    "cube_l1_reuse_setting": {-1: 8},
-    "cube_nbuffer_setting": {-1: 4}
-    },
-    host_options={"compile_monitor_enable": True,
-        "compile_timeout": 75,
-        "compile_timeout_stage": 30,
-        "compile_monitor_print_interval": 60},
-    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
+        # Q常驻，0代表第一组mmad，4代表4次matmul合并
+        "cube_l1_reuse_setting": {-1: 8},
+        "cube_nbuffer_setting": {-1: 4}
+    }
 )
 def ifa_func_kernel_for_950(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),

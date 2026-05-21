@@ -679,6 +679,8 @@ def test_b128_s4k4_pa_nd_bf16_quantb_p():
 
     tile_config.pre_quant_cube_tile[0] = m_tile_value
     tile_config.pre_quant_cube_tile[1] = m_tile_value
+    tile_config.cube_qb_tile = [m_tile_value, m_tile_value, 256, 256, 256, 256]
+    tile_config.cube_wuk_tile = [m_tile_value, m_tile_value, 128, 128, 128, 128]
     tile_config.mv_tile = mv_tile_value
     tile_config.q_vec_tile0 = 32
     tile_config.q_vec_tile1 = 128
@@ -727,6 +729,8 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
     tile_config.m_tile = m_tile_value
 
     tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 256, 256, 128, 128]
+    tile_config.cube_qb_tile = [m_tile_value, m_tile_value, 256, 256, 256, 256]
+    tile_config.cube_wuk_tile = [tile_config.m_tile, tile_config.m_tile, 128, 128, 128, 128]
     tile_config.mv_tile = mv_tile_value
     tile_config.q_vec_tile0 = 1
     tile_config.q_vec_tile1 = 32
@@ -769,15 +773,17 @@ def test_b64_s64k2_pa_nd_bf16_quantb_d():
     tile_config = MlaTileConfig()
     tile_config.tile_bs = 32
 
-    tile_config.m_tile = 32
+    tile_config.m_tile = 128 
 
     tile_config.pre_quant_cube_tile = [32, 32, 256, 256, 128, 128]
+    tile_config.cube_qb_tile = [128, 128, 128, 256, 256, 256]
+    tile_config.cube_wuk_tile = [tile_config.m_tile, tile_config.m_tile, 128, 256, 256, 256]
     tile_config.mv_tile = 8
-    tile_config.q_vec_tile0 = 1
-    tile_config.q_vec_tile1 = 32
-    tile_config.k_vec_tile0 = 2
+    tile_config.q_vec_tile0 = 32
+    tile_config.q_vec_tile1 = 128
+    tile_config.k_vec_tile0 = 32
     tile_config.k_vec_tile1 = 512
-    tile_config.unroll_list = [32, 8, 4, 2, 1]
+    tile_config.unroll_list = [64, 32, 8, 4, 2, 1]
 
     actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
     input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \
@@ -820,6 +826,8 @@ def test_b4_s64k2_pa_nd_bf16_d():
     tile_config.m_tile = m_tile_value
 
     tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 64, 256, 128, 128]
+    tile_config.cube_qb_tile = [m_tile_value, m_tile_value, 64, 256, 256, 256]
+    tile_config.cube_wuk_tile = [tile_config.m_tile, tile_config.m_tile, 128, 128, 128, 128]
     tile_config.mv_tile = mv_tile_value
     tile_config.q_vec_tile0 = 1
     tile_config.q_vec_tile1 = 32
@@ -866,13 +874,23 @@ def test_b64_s64k2_pa_nd_bf16_d():
     mv_tile_value = min(8, tile_config.tile_bs)
     tile_config.m_tile = m_tile_value
 
-    tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 64, 256, 128, 128]
+    if pypto.platform.npuarch == 'DAV_3510':
+        tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 64, 256, 128, 128]
+        tile_config.cube_qb_tile = [m_tile_value, m_tile_value, 64, 256, 256, 256]
+        tile_config.cube_wuk_tile = [tile_config.m_tile, tile_config.m_tile, 128, 128, 128, 128]
+    else:
+        tile_config.pre_quant_cube_tile = [32, 32, 64, 256, 128, 128]
+        tile_config.cube_qb_tile = [128, 128, 64, 256, 256, 256]
+        tile_config.cube_wuk_tile = [tile_config.m_tile, tile_config.m_tile, 128, 256, 256, 256]
     tile_config.mv_tile = mv_tile_value
     tile_config.q_vec_tile0 = 32
     tile_config.q_vec_tile1 = 128
     tile_config.k_vec_tile0 = 32
     tile_config.k_vec_tile1 = 512
-    tile_config.unroll_list = [128, 64, 32, 16, 8, 4, 2, 1]
+    if pypto.platform.npuarch == 'DAV_3510':
+        tile_config.unroll_list = [128, 64, 32, 16, 8, 4, 2, 1]
+    else:
+        tile_config.unroll_list = [64, 32, 16, 8, 4, 2, 1]
 
     actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
     input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \
