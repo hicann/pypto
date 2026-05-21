@@ -38,6 +38,7 @@ from typing import List, Optional, Tuple
 
 import pytest
 import torch
+import torch_npu
 import torch.nn.functional as F
 
 from block_attn_res_impl import (
@@ -302,13 +303,13 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
       4. NPU kernel 正向 (产出 caches) -> NPU kernel 反向 (使用 caches)
       5. 精度对比：forward output + backward gradients
     """
-    logger.info("=" * 70)
-    logger.info(f"[Cascade 2.1] {case_name}")
+    logger.info("=" * 80)
+    logger.info(f"[Block Attn Res Cascade Test 2.1] {case_name}")
     logger.info(
         f"  B={b}, T={t}, N={n}, D={d}, dtype={dtype_str}, "
         f"rmsnorm={enable_rmsnorm}, scale={scale}, partial_block={has_partial_block}"
     )
-    logger.info("=" * 70)
+    logger.info("=" * 80)
 
     npu_device = f"npu:{device_id}" if device_id is not None else "cpu"
     dtype = torch.bfloat16 if dtype_str == "bf16" else torch.float16
@@ -396,21 +397,21 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
     npu_h_cmp = npu_h.to(torch.float32).cpu()
     bm_h_cmp = bm_h.to(torch.float32).cpu()
     cpu_h_cmp = cpu_h.to(torch.float32).cpu()
-    compare(npu_h_cmp, bm_h_cmp, cpu_h_cmp, name="fwd_output")
+    compare(npu_h_cmp, bm_h_cmp, cpu_h_cmp, name="fwd_h")
     del npu_h_cmp, bm_h_cmp, cpu_h_cmp
 
     if enable_rmsnorm and rms_out_flag:
         npu_rms_cmp = npu_rms_cache.to(torch.float32).cpu()
         bm_rms_cmp = bm_rms.to(torch.float32).cpu()
         cpu_rms_cmp = cpu_rms.to(torch.float32).cpu()
-        compare(npu_rms_cmp, bm_rms_cmp, cpu_rms_cmp, name="fwd_output")
+        compare(npu_rms_cmp, bm_rms_cmp, cpu_rms_cmp, name="fwd_rms_cache")
         del npu_rms_cmp, bm_rms_cmp, cpu_rms_cmp
 
     if alpha_out_flag:
         npu_alpha_cmp = npu_alpha_cache.to(torch.float32).cpu()
         bm_alpha_cmp = bm_alpha.to(torch.float32).cpu()
         cpu_alpha_cmp = cpu_alpha.to(torch.float32).cpu()
-        compare(npu_alpha_cmp, bm_alpha_cmp, cpu_alpha_cmp, name="fwd_output")
+        compare(npu_alpha_cmp, bm_alpha_cmp, cpu_alpha_cmp, name="fwd_alpha_cache")
         del npu_alpha_cmp, bm_alpha_cmp, cpu_alpha_cmp
 
     # -- 5.2 grad_partial_block --
@@ -418,21 +419,21 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
         npu_pb = npu_grad_partial.to(torch.float32).cpu()
         bm_pb = bm_grad_partial.to(torch.float32).cpu()
         cpu_pb = cpu_grad_partial.to(torch.float32).cpu()
-        compare(npu_pb, bm_pb, cpu_pb, name="grad_partial_block")
+        compare(npu_pb, bm_pb, cpu_pb, name="bwd_grad_partial_block")
         del npu_pb, bm_pb, cpu_pb
 
     # -- 5.3 grad_block[0] --
     npu_b0 = npu_grad_blocks[0].to(torch.float32).cpu()
     bm_b0 = bm_grad_blocks[0].to(torch.float32).cpu()
     cpu_b0 = cpu_grad_blocks[0].to(torch.float32).cpu()
-    compare(npu_b0, bm_b0, cpu_b0, name="grad_block[0]")
+    compare(npu_b0, bm_b0, cpu_b0, name="bwd_grad_block[0]")
     del npu_b0, bm_b0, cpu_b0
 
     # -- 5.4 grad_proj_weight --
     npu_pw = npu_grad_proj.to(torch.float32).cpu()
     bm_pw = bm_grad_proj.to(torch.float32).cpu()
     cpu_pw = cpu_grad_proj.to(torch.float32).cpu()
-    compare(npu_pw, bm_pw, cpu_pw, name="grad_proj_weight")
+    compare(npu_pw, bm_pw, cpu_pw, name="bwd_grad_proj_weight")
     del npu_pw, bm_pw, cpu_pw
 
     # -- 5.5 grad_gamma --
@@ -440,7 +441,7 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
         npu_gg = npu_grad_gamma.to(torch.float32).cpu()
         bm_gg = bm_grad_gamma.to(torch.float32).cpu()
         cpu_gg = cpu_grad_gamma.to(torch.float32).cpu()
-        compare(npu_gg, bm_gg, cpu_gg, name="grad_gamma")
+        compare(npu_gg, bm_gg, cpu_gg, name="bwd_grad_gamma")
         del npu_gg, bm_gg, cpu_gg
 
     # 释放所有大张量
@@ -451,8 +452,6 @@ def run_cascade_test(case_name, b, t, n, d, dtype_str, device_id=None,
     del npu_rms_cache, npu_alpha_cache
     torch.npu.empty_cache()
     gc.collect()
-
-    logger.info(f"[CASCADE_2.1_PASS] {case_name}\n")
 
 
 # ---------------------------------------------------------------------------
