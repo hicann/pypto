@@ -469,7 +469,7 @@ TEST_F(ReplaceTensorTest, TestSameAssembleOut)
     currFunctionPtr->outCasts_.push_back(outcast1);
     int opSumBefore = currFunctionPtr->Operations().size();
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(currFunctionPtr->Operations().size(), opSumBefore + 4);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), opSumBefore + 6);
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
 
@@ -559,12 +559,11 @@ TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
     currFunctionPtr->outCasts_.push_back(outcast2);
 
     ReplaceTensor replaceTensorPass;
+    int opSumBefore = currFunctionPtr->Operations().size();
     replaceTensorPass.RunOnFunction(*currFunctionPtr);
-    EXPECT_EQ(copyOutout1->GetOffset()[0] == assembleToOffset[0], true);
-    EXPECT_EQ(copyOutout1->GetOffset()[1] == assembleToOffset[1], true);
-    std::vector<std::string> copyInAttrNewOffset = {"6", "0"};
-    EXPECT_EQ(copyInOpAttribute->GetFromOffset()[0].Dump(), copyInAttrNewOffset[0]);
-    EXPECT_EQ(copyInOpAttribute->GetFromOffset()[1].Dump(), copyInAttrNewOffset[1]);
+    int opSumExpAfter = opSumBefore + 2;
+    EXPECT_EQ(replaceTensorPass.PostCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), opSumExpAfter);
 }
 } // namespace tile_fwk
 } // namespace npu

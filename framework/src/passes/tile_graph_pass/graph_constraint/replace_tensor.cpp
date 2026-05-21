@@ -1006,7 +1006,7 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     }
     if (!sameAssembleOut) {
         for (const auto& con : consumers) {
-            if (con->GetOpMagic() != op.GetOpMagic() && con->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            if (con->GetOpcode() == Opcode::OP_ASSEMBLE) {
                 visitedAssOps.insert(con->GetOpMagic());
                 needInsertCopyAssOps.insert(con);
             }
