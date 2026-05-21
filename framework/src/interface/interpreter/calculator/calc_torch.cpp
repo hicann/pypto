@@ -2002,6 +2002,23 @@ void IndexPut(
     ToOperand(result, tout.first, out.dtype);
 }
 
+static void Atan(const TensorData& out, const TensorData& in)
+{
+    auto tout = From(out);
+    auto input = From(in);
+    torch::atan_out(tout.second, input.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void Atan2(const TensorData& out, const TensorData& y, const TensorData& x)
+{
+    auto tout = From(out);
+    auto input0 = From(y);
+    auto input1 = From(x);
+    torch::atan2_out(tout.second, input0.second, input1.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void Copy(const TensorData& out, const TensorData& self, bool trans)
 {
     auto tout = From(out);
@@ -2932,6 +2949,8 @@ static struct CalcOps calcOps = {
     .CumSum = CumSum,
     .CumProd = CumProd,
     .IndexPut = IndexPut,
+    .Atan = Atan,
+    .Atan2 = Atan2,
     .Reshape = Reshape,
     .Permute = Permute,
     .Transpose = Transpose,

@@ -103,6 +103,9 @@ void ExecuteOpBinary(ExecuteOperationContext* ctx)
         case Opcode::OP_FLOORDIV:
             calc::FloorDiv(ret, lhs, rhs);
             break;
+        case Opcode::OP_ATAN2:
+            calc::Atan2(ret, lhs, rhs);
+            break;
         case Opcode::OP_POW:
             calc::Pow(ret, lhs, rhs);
             break;
@@ -155,6 +158,7 @@ REGISTER_CALC_OP(OP_MUL_BRC, Opcode::OP_MUL_BRC, ExecuteOpBinary<Opcode::OP_MUL_
 REGISTER_CALC_OP(OP_DIV, Opcode::OP_DIV, ExecuteOpBinary<Opcode::OP_DIV>);
 REGISTER_CALC_OP(OP_DIV_BRC, Opcode::OP_DIV_BRC, ExecuteOpBinary<Opcode::OP_DIV_BRC>);
 REGISTER_CALC_OP(OP_FLOORDIV, Opcode::OP_FLOORDIV, ExecuteOpBinary<Opcode::OP_FLOORDIV>);
+REGISTER_CALC_OP(OP_ATAN2, Opcode::OP_ATAN2, ExecuteOpBinary<Opcode::OP_ATAN2>);
 REGISTER_CALC_OP(OP_POW, Opcode::OP_POW, ExecuteOpBinary<Opcode::OP_POW>);
 REGISTER_CALC_OP(OP_REM, Opcode::OP_REM, ExecuteOpBinary<Opcode::OP_REM>);
 REGISTER_CALC_OP(OP_S_ADD, Opcode::OP_S_ADD, ExecuteOpBinary<Opcode::OP_ADD>);
@@ -371,6 +375,9 @@ void ExecuteOpUnary(ExecuteOperationContext* ctx)
         case Opcode::OP_RELU:
             calc::Relu(ret, iop);
             break;
+        case Opcode::OP_ATAN:
+            calc::Atan(ret, iop);
+            break;
         case Opcode::OP_BITWISENOT:
             calc::BitwiseNot(ret, iop);
             break;
@@ -406,6 +413,7 @@ REGISTER_CALC_OP(OP_RSQRT, Opcode::OP_RSQRT, ExecuteOpUnary<Opcode::OP_RSQRT>);
 REGISTER_CALC_OP(OP_SQRT, Opcode::OP_SQRT, ExecuteOpUnary<Opcode::OP_SQRT>);
 REGISTER_CALC_OP(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ExecuteOpUnary<Opcode::OP_RECIPROCAL>);
 REGISTER_CALC_OP(OP_RELU, Opcode::OP_RELU, ExecuteOpUnary<Opcode::OP_RELU>);
+REGISTER_CALC_OP(OP_ATAN, Opcode::OP_ATAN, ExecuteOpUnary<Opcode::OP_ATAN>);
 REGISTER_CALC_OP(OP_BITWISENOT, Opcode::OP_BITWISENOT, ExecuteOpUnary<Opcode::OP_BITWISENOT>);
 REGISTER_CALC_OP(OP_ABS, Opcode::OP_ABS, ExecuteOpUnary<Opcode::OP_ABS>);
 REGISTER_CALC_OP(OP_BRCB, Opcode::OP_BRCB, ExecuteOpUnary<Opcode::OP_BRCB>);

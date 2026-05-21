@@ -162,6 +162,7 @@ Tensor Permute(const Tensor& self, std::vector<int> perm);
 Tensor Exp(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Exp2(const Tensor& self);
 Tensor Expm1(const Tensor& self);
+Tensor Atan(const Tensor& self);
 Tensor Sin(const Tensor& self);
 Tensor Cos(const Tensor& self);
 Tensor Neg(const Tensor& self);
@@ -264,6 +265,7 @@ Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisi
 Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor CopySign(const Tensor& self, const Tensor& other);
 Tensor PReLU(const Tensor& self, const Tensor& weight);
+Tensor Atan2(const Tensor& y, const Tensor& x);
 Tensor Axpy(const Tensor& self, const Tensor& other, float alpha);
 
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other);

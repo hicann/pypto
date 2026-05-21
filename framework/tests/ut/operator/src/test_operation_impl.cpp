@@ -1111,6 +1111,23 @@ TEST_F(OperationImplTest, Test_Amin)
     FUNCTION("TestAmin") { result = Amin(operand, -1, true); }
 }
 
+TEST_F(OperationImplTest, test_Atan)
+{
+    TileShape::Current().SetVecTile(16, 16);
+    Tensor input(DT_FP16, {16, 16}, "input");
+    Tensor result;
+    FUNCTION("TestAtan") { result = Atan(input); }
+}
+
+TEST_F(OperationImplTest, test_Atan2)
+{
+    TileShape::Current().SetVecTile(16, 16);
+    Tensor input1(DT_FP16, {16, 16}, "input1");
+    Tensor input2(DT_FP16, {16, 16}, "input2");
+    Tensor result;
+    FUNCTION("TestAtan2") { result = Atan2(input1, input2); }
+}
+
 TEST_F(OperationImplTest, test_Gather)
 {
     TileShape::Current().SetVecTile(8, 8, 8);

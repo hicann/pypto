@@ -48,6 +48,7 @@ enum class BinaryOpType {
     MAXIMUM,
     MINIMUM,
     LRELU,
+    ATAN2,
     CMP,
     MOD,
     REM,
@@ -83,6 +84,8 @@ std::string GetBinaryOpName()
             return "MINIMUM";
         case BinaryOpType::LRELU:
             return "LRELU";
+        case BinaryOpType::ATAN2:
+            return "ATAN2";
         case BinaryOpType::POW:
             return "POW";
         case BinaryOpType::MOD:
@@ -197,6 +200,7 @@ Opcode GetBinaryOpNameCode()
         CASE(MAXIMUM);
         CASE(MINIMUM);
         CASE(LRELU);
+        CASE(ATAN2);
         CASE(POW);
         CASE(MOD);
         CASE(REM);

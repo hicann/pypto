@@ -105,6 +105,24 @@ Tensor IsFinite(const Tensor& self)
         DT_BOOL);
 }
 
+Tensor Atan(const Tensor& self)
+{
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32, DT_BF16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Atan");
+    auto castSelf = self.GetStorage();
+    if (self.GetDataType() != DataType::DT_FP32) {
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    auto res = CALL(UnaryOperation<UnaryOpType::ATAN>, *Program::GetInstance().GetCurrentFunction(), castSelf);
+    if (self.GetDataType() != DataType::DT_FP32) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            res, self.GetDataType(), CastMode::CAST_NONE);
+    }
+    return res;
+}
+
 Tensor Rsqrt(const Tensor& self, PrecisionType precisionType)
 {
     DECLARE_TRACER();
@@ -352,6 +370,20 @@ void ReluOperationTileFunc(
     return TiledUnaryOperation<UnaryOpType::RELU>(function, tileShape, iOperand[0], oOperand[0]);
 }
 
+void AtanOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    auto shape = tileShape.GetVecTile();
+    auto tmpShape = shape.tile;
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    tmpShape[shape.size() - 1] = AlignUp(tmpShape[shape.size() - 1], alignSize) * NUM3;
+    auto workspace = BytesOf(DT_FP32) *
+        std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>());
+    return TiledUnaryOperation<UnaryOpType::ATAN>(function, tileShape, iOperand[0], oOperand[0], workspace);
+}
+
 void CeilOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
@@ -517,6 +549,7 @@ void CosOperationTileFunc(
 REGISTER_OPERATION_TILED_FUNC(OP_EXP, Opcode::OP_EXP, ExpOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RSQRT, Opcode::OP_RSQRT, RsqrtOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RELU, Opcode::OP_RELU, ReluOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ATAN, Opcode::OP_ATAN, AtanOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SQRT, Opcode::OP_SQRT, SqrtOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_CEIL, Opcode::OP_CEIL, CeilOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_FLOOR, Opcode::OP_FLOOR, FloorOperationTileFunc);

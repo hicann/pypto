@@ -320,6 +320,14 @@ TEST_F(TorchAdaptorTest, UnaryOps)
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        // atan
+        auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, (float)(3.14159265358979323 / 4));
+        calc::Atan(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // reciprocal
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
@@ -614,6 +622,15 @@ TEST_F(TorchAdaptorTest, BinaryOps)
         auto out = makeTensorData(DT_BOOL, {16, 16}, true);
         auto golden = makeTensorData(DT_BOOL, {16, 16}, true);
         calc::IsFinite(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // atan2
+        auto self = makeTensorData(DT_FP32, {16, 16}, 2.0f);
+        auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, (float)(3.14159265358979323 / 4));
+        calc::Atan2(out, self, other);
         ASSERT_ALLCLOSE(out, golden);
     }
     {

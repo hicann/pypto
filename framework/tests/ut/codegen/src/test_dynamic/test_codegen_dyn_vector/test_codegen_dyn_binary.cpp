@@ -204,6 +204,38 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor)
     CheckStringExist(expect, res);
 }
 
+TEST_F(TestCodegenDynBinary, TestAtan2FP32)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+
+    std::vector<int64_t> shape = {32, 32};
+    TileShape::Current().SetVecTile({32, 32});
+    Tensor input1(DataType::DT_FP32, shape, "input1");
+    Tensor input2(DataType::DT_FP32, shape, "input2");
+    Tensor output(DataType::DT_FP32, shape, "output");
+
+    std::string funcName = "TestAtan2FP32";
+    FUNCTION(funcName, {input1, input2, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Atan2(input1, input2);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TAtan2(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
 TEST_F(TestCodegenDynBinary, AddUnalignTileTensor)
 {
     TileShape::Current().SetVecTile(64, 64);

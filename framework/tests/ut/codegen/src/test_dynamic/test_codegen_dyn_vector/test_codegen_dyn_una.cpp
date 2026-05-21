@@ -90,6 +90,37 @@ TEST_F(TestCodegenDynUna, TestDynExpand)
     EXPECT_EQ(res, expect);
 }
 
+TEST_F(TestCodegenDynUna, TestAtanFP32)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+
+    std::vector<int64_t> shape = {32, 32};
+    TileShape::Current().SetVecTile({32, 32});
+    Tensor input(DataType::DT_FP32, shape, "input");
+    Tensor output(DataType::DT_FP32, shape, "output");
+
+    std::string funcName = "TestAtanFP32";
+    FUNCTION(funcName, {input, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Atan(input);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TAtan(ubTensor_2, ubTensor_3, ubTensor_0);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
 TEST_F(TestCodegenDynUna, TestPadDynamic)
 {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);

@@ -799,6 +799,68 @@ def expm1(input: Tensor) -> Tensor:
 
 
 @op_wrapper
+def atan(self: Tensor) -> Tensor:
+    """Computes the element-wise arctangent of `self`.
+
+    This function calculates the trigonometric arctangent for each element in the input tensor.
+    Mathematically, it computes: `out = arctan(self)`.
+
+    Parameters
+    ----------
+    self : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise arctangent value.
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.atan(x)
+
+    Input  x: [0.0    1.0    -1.0   ]
+    Output y: [0.0000 0.7854 -0.7854]
+    """
+    return pypto_impl.Atan(self)
+
+
+@op_wrapper
+def atan2(y: Tensor, x: Tensor) -> Tensor:
+    """Computes the element-wise arctangent of `y / x` considering the quadrant.
+
+    This function calculates the trigonometric arctangent for each pair of element in the input tensors.
+    Mathematically, it computes: `out = arctan2(y, x)`
+        where `x` corresponds to x-coordinate and `y` corresponds to y-coordinate.
+    The result is in the range (-pi, pi].
+
+    Parameters
+    ----------
+    y : Tensor
+        The y-coordinate tensor.
+    x : Tensor
+        The x-coordinate tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise arctangent value with correct quadrant.
+
+    Examples
+    --------
+    y = pypto.tensor([4], pypto.DT_FP32)
+    x = pypto.tensor([4], pypto.DT_FP32)
+    z = pypto.atan2(y, x)
+
+    Input  y: [1.0    -1.0     1.0    -1.0   ]
+    Input  x: [1.0     1.0    -1.0    -1.0   ]
+    Output z: [0.7854  2.3562 -2.3562 -0.7854]
+    """
+    return pypto_impl.Atan2(y, x)
+
+
+@op_wrapper
 def sin(self: Tensor) -> Tensor:
     """Computes the element-wise sine of `self`.
 

@@ -43,6 +43,7 @@
 #include "vector/signbit.h"
 #include "vector/reduce.h"
 #include "vector/mte.h"
+#include "vector/atan.h"
 #include "vector/logicalnot.h"
 #include "vector/compare.h"
 #include "vector/hypot.h"

@@ -475,7 +475,7 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         return PrintRound();
     }
 
-    if (opCode == Opcode::OP_EXPM1 || opCode == Opcode::OP_SIN || opCode == Opcode::OP_COS) {
+    if (opCode == Opcode::OP_EXPM1 || opCode == Opcode::OP_SIN || opCode == Opcode::OP_COS || opCode == Opcode::OP_ATAN) {
         return PrintUnaryOpWithTmpBuff();
     }
 

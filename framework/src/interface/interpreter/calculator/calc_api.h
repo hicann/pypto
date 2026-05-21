@@ -172,6 +172,8 @@ struct CalcOps {
     void (*CumSum)(const TensorData&, const TensorData&, int);
     void (*CumProd)(const TensorData&, const TensorData&, int);
     void (*IndexPut)(const TensorData&, const TensorData&, const std::vector<TensorData>&, const TensorData&, bool);
+    void (*Atan)(const TensorData&, const TensorData&);
+    void (*Atan2)(const TensorData&, const TensorData&, const TensorData&);
 
     void (*Reshape)(const TensorData&, const TensorData&);
     void (*Permute)(const TensorData&, const TensorData&, const std::vector<int64_t>&);

@@ -122,6 +122,19 @@ void TiledBinaryOperation(
             auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
             op = &function.AddOperation(
                 GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
+        } else if (opName == "ATAN2") {
+            std::vector<int64_t> tmpShape(resultTileInfo.shape);
+            auto lastDim = tmpShape[resultTileInfo.shape.size() - 1];
+            auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
+            tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(lastDim, alignSize) * NUM4 * BytesOf(DT_FP32);
+            std::vector<SymbolicScalar> tmpValidShape;
+            for (auto s : tmpShape) {
+                tmpValidShape.emplace_back(s);
+            }
+            LogicalTensorPtr workspace = std::make_shared<LogicalTensor>(
+                function, DT_UINT8, tmpShape, tmpValidShape);
+            op = &function.AddOperation(
+                GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, workspace});
         } else if (opName == "FLOORDIV") {
             std::vector<int64_t> tmpShape;
             auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
@@ -936,6 +949,29 @@ Tensor LReLU(const Tensor& self, const Element& other)
         other);
 }
 
+Tensor Atan2(const Tensor& y, const Tensor& x)
+{
+    DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(y.GetStorage(), x.GetStorage(), "ATAN2");
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
+    CheckTensorDataType(y.GetStorage(), supportedTypes, "ATAN2");
+    auto castY = y.GetStorage();
+    auto castX = x.GetStorage();
+    DataType dataType = y.GetDataType();
+    if (dataType != DataType::DT_FP32) {
+        castY = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            y.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+        castX = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            x.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    auto res = CALL(BinaryOperation<BinaryOpType::ATAN2>, *Program::GetInstance().GetCurrentFunction(), castY, castX);
+    if (dataType != DataType::DT_FP32) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            res, dataType, CastMode::CAST_NONE);
+    }
+    return res;
+}
+
 Tensor CeilDiv(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
@@ -1440,6 +1476,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, BinaryOperat
 REGISTER_OPERATION_TILED_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, BinaryOperationTileFunc<BinaryOpType::COPYSIGN>);
 REGISTER_OPERATION_TILED_FUNC(OP_GCD, Opcode::OP_GCD, BinaryOperationTileFunc<BinaryOpType::GCD>);
 REGISTER_OPERATION_TILED_FUNC(OP_PRELU, Opcode::OP_PRELU, PReLUOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ATAN2, Opcode::OP_ATAN2, BinaryOperationTileFunc<BinaryOpType::ATAN2>);
 REGISTER_OPERATION_TILED_FUNC(OP_FLOORDIV, Opcode::OP_FLOORDIV, BinaryOperationTileFunc<BinaryOpType::FLOORDIV>);
 REGISTER_OPERATION_TILED_FUNC(OP_AXPY, Opcode::OP_AXPY, AxpyOperationTileFunc);
 

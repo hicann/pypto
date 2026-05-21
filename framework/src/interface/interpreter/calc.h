@@ -463,6 +463,14 @@ inline void IndexPut(
 {
     GetCalcOps()->IndexPut(Trans(out), Trans(self), TransVec(indices), Trans(values), accumulate);
 }
+inline void Atan(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
+{
+    GetCalcOps()->Atan(Trans(out), Trans(self));
+}
+inline void Atan2(LogicalTensorDataPtr out, LogicalTensorDataPtr y, LogicalTensorDataPtr x)
+{
+    GetCalcOps()->Atan2(Trans(out), Trans(y), Trans(x));
+}
 inline void Reshape(LogicalTensorDataPtr out, LogicalTensorDataPtr self)
 {
     GetCalcOps()->Reshape(Trans(out), Trans(self));

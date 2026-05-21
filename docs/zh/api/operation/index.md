@@ -12,6 +12,8 @@ pypto-argmin
 pypto-arange
 pypto-argsort
 pypto-assemble
+pypto-atan
+pypto-atan2
 pypto-bitwise_and
 pypto-bitwise_left_shift
 pypto-bitwise_not
