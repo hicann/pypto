@@ -24,6 +24,7 @@ struct OpTestParam {
     char group[128]{0};
     int rankSize;
     int rankId;
+    int worldRankId;
 };
 
 template <typename T>
@@ -39,6 +40,8 @@ template <typename T>
 void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir);
 template <typename T>
 void TestAllReduceAddAllReduce(OpTestParam& testParam, std::string& goldenDir);
+template <typename T>
+void Test2GroupsAllGather(OpTestParam& testParam, std::string& goldenDir);
 } // namespace Distributed
 } // namespace npu::tile_fwk
 

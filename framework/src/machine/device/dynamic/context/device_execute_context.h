@@ -25,6 +25,9 @@
 
 namespace npu::tile_fwk::dynamic {
 
+constexpr uint64_t MAX_SHMEM_GROUP_NUM = 2;    // max comm groups
+constexpr uint64_t SHMEM_MEM_TYPE_NUM = 2; // shmem type (data + status)
+
 using DeviceTaskInspectorEntry = void (*)(void* inspector_, DeviceExecuteContext* execCtx, DynDeviceTask* task);
 
 struct ParallelForContext {
@@ -92,7 +95,7 @@ struct DeviceExecuteContext {
     uint64_t duppedRootCount{0};
     bool controlFlowCacheActivated{false};
 
-    uint64_t shmemAddrOffset[2] = {0};
+    uint64_t shmemAddrOffset[MAX_SHMEM_GROUP_NUM][SHMEM_MEM_TYPE_NUM] = {0};
 
     int8_t loopDieId_ = -1;
 

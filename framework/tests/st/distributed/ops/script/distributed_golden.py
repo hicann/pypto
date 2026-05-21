@@ -576,9 +576,48 @@ def generate_all_gather_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='output'
+            filename_prefix='gather_out'
         )
     )
+    return True
+
+
+def gen_2_groups_allgather_golden(config: dict, output: Path) -> bool:
+    case = parse_base_case(config)
+    validate_world_size(case.world_size)
+    params = (*case.shape, *case.valid_shape, get_dtype_num(case.dtype), *case.tile_shape)
+    save_params(params, output)
+    even_size = case.world_size // 2 + case.world_size % 2
+    odd_size = case.world_size // 2
+    gen_tensor_case_even = GenTensorCase(
+        dtype=case.dtype, shape=case.shape, world_size=even_size, value_range=case.value_range
+    )
+    gen_tensor_case_odd = GenTensorCase(
+        dtype=case.dtype, shape=case.shape, world_size=odd_size, value_range=case.value_range
+    )
+    inputs_odd = generate_random_tensor_list_and_save(gen_tensor_case_odd, output, 'input_odd')
+    inputs_even = generate_random_tensor_list_and_save(gen_tensor_case_even, output, 'input_even')
+    all_gather_and_save(
+        DistributedOpAndSaveArgs(
+            inputs=inputs_odd,
+            world_size=odd_size,
+            shape=case.shape,
+            valid_shape=case.valid_shape,
+            save_dir=output,
+            filename_prefix='output_odd'
+        )
+    )
+    all_gather_and_save(
+        DistributedOpAndSaveArgs(
+            inputs=inputs_even,
+            world_size=even_size,
+            shape=case.shape,
+            valid_shape=case.valid_shape,
+            save_dir=output,
+            filename_prefix='output_even'
+        )
+    )
+    return True
 
 
 def generate_reduce_scatter_golden(config: dict, output: Path) -> bool:
@@ -597,6 +636,7 @@ def generate_reduce_scatter_golden(config: dict, output: Path) -> bool:
     )
     inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
     reduce_scatter_and_save(inputs, row, case.world_size, output, 'output')
+    return True
 
 
 def generate_all_reduce_golden(config: dict, output: Path) -> bool:
@@ -626,6 +666,7 @@ def generate_all_reduce_golden(config: dict, output: Path) -> bool:
             filename_prefix='output'
         )
     )
+    return True
 
 
 def generate_allreduce_add_allreduce_golden(config: dict, output: Path) -> bool:
@@ -659,11 +700,13 @@ def generate_allreduce_add_allreduce_golden(config: dict, output: Path) -> bool:
             filename_prefix='out'
         )
     )
+    return True
 
 
 def generate_moe_dispatch_golden(config: dict, output: Path) -> bool:
     case = parse_moe_case(config)
     generate_moe_dispatch_case(case, output)
+    return True
 
 
 def generate_moe_distributed_combine_golden(config: dict, output: Path) -> bool:
@@ -677,6 +720,7 @@ def generate_moe_distributed_combine_golden(config: dict, output: Path) -> bool:
     dispatch_save_dir.mkdir(parents=True, exist_ok=True)
     generate_moe_dispatch_case(case, dispatch_save_dir)
     generate_moe_distributed_combine_case(case, output, dispatch_save_dir)
+    return True
 
 
 def prepare_attention_input(case, output: Path):
@@ -736,6 +780,7 @@ def gen_allgather_attnpost_reducescatter_case(config: dict, output: Path) -> boo
     attention_input = prepare_attention_input(case, output)
     reduce_scatter_inputs = compute_attention_outputs(attention_input, case, output)
     reduce_scatter_and_save(reduce_scatter_inputs, case.batch_size * case.seq_len, case.world_size, output, 'rs_out')
+    return True
 
 
 def get_case_files() -> list[Path]:
@@ -784,6 +829,7 @@ OPERATOR_DISPATCHERS = {
     'MoeDistributedCombine': generate_moe_distributed_combine_golden,
     'AllReduceAddAllReduce': generate_allreduce_add_allreduce_golden,
     'AllGatherAttnPostReduceScatter': gen_allgather_attnpost_reducescatter_case,
+    'MultiCommGroupsOp': gen_2_groups_allgather_golden,
 }
 
 

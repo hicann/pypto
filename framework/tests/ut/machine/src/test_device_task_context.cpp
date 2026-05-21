@@ -503,8 +503,8 @@ TEST_F(TestDeviceTaskContext, DeviceExecuteRuntimeCallShmemAllocator_ExceedsWinS
     args.commGroupNum = 1;
     args.commContexts = commPtrs;
     ctx->args = &args;
-    ctx->shmemAddrOffset[0] = 0;
-    ctx->shmemAddrOffset[1] = 0;
+    ctx->shmemAddrOffset[0][0] = 0;	 
+    ctx->shmemAddrOffset[0][1] = 0;
 
     uint64_t payload[] = {0, 0, 128, 8};
     (void)DeviceExecuteContext::DeviceExecuteRuntimeCallShmemAllocator(ctx, reinterpret_cast<uint64_t>(payload));

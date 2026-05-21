@@ -27,8 +27,13 @@ public:
     static void SetUpTestCase() { GegisterOps(); }
 
     void SetUp() override
-    {
-        Distributed::TestFrameworkInit(testParam, hcomTestParam, physicalDeviceId);
+    {   const nlohmann::json& testData = GetParam().testData_;
+        std::string opName = testData["operation"].get<std::string>();
+        if (opName == "MultiCommGroupsOp") {
+            Distributed::TestFrameworkInit2Groups(testParam, hcomTestParam, physicalDeviceId);
+        } else {
+            Distributed::TestFrameworkInit(testParam, hcomTestParam, physicalDeviceId);
+        }
         std::string outputDir = "output";
         bool res = CreateDir(outputDir);
         CHECK(res) << "Failed to create directory: " << outputDir;
@@ -107,6 +112,9 @@ void GegisterOps()
                                                               std::string& goldenDir) {
         Distributed::TestAllGatherAttentionPostReducescatter(testParam, goldenDir);
     };
+    reg.RegisterOp("MultiCommGroupsOp", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::Test2GroupsAllGather<T>(testParam, goldenDir);
+    });
     // 后续按照上面格式增加算子
 }
 

@@ -28,6 +28,7 @@ struct HcomTestParam {
 };
 
 void TestFrameworkInit(OpTestParam& testParam, HcomTestParam& hcomTestParam, int& physicalDeviceId);
+void TestFrameworkInit2Groups(OpTestParam& testParam, HcomTestParam& hcomTestParam, int& physicalDeviceId);
 void TestFrameworkDestroy(int32_t timeout);
 std::string getTimeStamp();
 } // namespace Distributed
