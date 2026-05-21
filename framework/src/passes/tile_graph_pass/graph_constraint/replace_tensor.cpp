@@ -1043,12 +1043,21 @@ Status ReplaceTensor::FindNeedToCopyReshape(
     auto producerOps = op.ProducerOps();
     auto consumerOps = op.ConsumerOps();
     for (auto producesOp : producerOps) {
-        if (producesOp->GetOpcode() == Opcode::OP_VIEW && isBoundTensor(op.GetOOperands().front()) &&
+        if (producesOp->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        if (isBoundTensor(op.GetOOperands().front()) &&
             !isBoundTensor(producesOp->GetIOperands().front()) &&
             !function.IsFromInCast(producesOp->GetIOperands().front()) &&
             producesOp->GetIOperands().front()->tensor->GetRawShapeSize() !=
             op.GetOOperands().front()->tensor->GetRawShapeSize()) {
             needInsertCopyAssOps.insert(&op);
+            continue;
+        }
+        for (auto consumerOp : consumerOps) {
+            if (inplaceOpSet.find(consumerOp->GetOpcode()) != inplaceOpSet.end()) {
+                needInsertCopyAssOps.insert(&op);
+            }
         }
     }
     for (auto consumerOp : consumerOps) {
