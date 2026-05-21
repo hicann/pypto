@@ -34,6 +34,8 @@
 #include <cstdio>
 #include <atomic>
 #define MAX_MSG_LEN 112
+static constexpr int MAX_AICPU_NUM = 8;
+static constexpr int MAX_EVENT_NUM = 2;
 
 #define DEV_ATRACE(fmt, ...)                                                             \
     do {                                                                                 \
@@ -156,8 +158,8 @@ private:
 
 private:
     void* handle_{nullptr};
-    std::vector<TraHandle> pyptoHandleArray_;
-    std::vector<TraEventHandle> eventHandleArry_;
+    TraHandle pyptoHandleArray_[MAX_AICPU_NUM] = {-1};
+    TraEventHandle eventHandleArry_[MAX_EVENT_NUM] = {-1};
     std::atomic<int> threadIdx;
 
     DeviceTrace(const DeviceTrace&) = delete;

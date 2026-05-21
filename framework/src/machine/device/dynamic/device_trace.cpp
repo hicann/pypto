@@ -42,6 +42,9 @@ DeviceTrace::~DeviceTrace() {
         handle_ = nullptr;
     }
     for (auto pyptoHandle : pyptoHandleArray_) {
+        if (pyptoHandle < 0) {
+            continue;
+        }
         TraceDestroy(pyptoHandle);
     }
     for (auto enventHandle : eventHandleArry_) {
@@ -258,23 +261,24 @@ int32_t DeviceTrace::ConnectTraceD2H(void* targ) {
         }
         DEV_INFO("Set Global Attr success");
     }
-    return 0;
-}
-
-int32_t DeviceTrace::BindHandleToEventHandle(TraHandle handle, uint8_t threadIdx) {
-    // Primarily, each AICPU creates one obj handle.
-    //  The trace module limits each event handle to binding at most 5 obj handles.
-    if (threadIdx % MAX_HANDLE_NUM == 0) {
-        std::string eventTraceHandleName = "PYPTO_Event_Trace_" + std::to_string(threadIdx);
+    // create two event handle
+    for (int i = 0; i < MAX_EVENT_NUM; i++) {
+        std::string eventTraceHandleName = "PYPTO_Event_Trace_" + std::to_string(i);
         auto eventHandle = TraceEventCreate(eventTraceHandleName.c_str());
         if (eventHandle < 0) {
             DEV_WARN("Create pypto event trace failed");
             return static_cast<int32_t>(DevCommonErr::LOAD_LIBRARY_FAILED);
         }
         DEV_INFO("Create pypto eventHandle_ successful");
-        eventHandleArry_.emplace_back(eventHandle);
+        eventHandleArry_[i] = eventHandle;
     }
-    auto status = TraceEventBindTrace(eventHandleArry_.back(), handle);
+    return 0;
+}
+
+int32_t DeviceTrace::BindHandleToEventHandle(TraHandle handle, uint8_t threadIdx) {
+    // Primarily, each AICPU creates one obj handle.
+    //  The trace module limits each event handle to binding at most 5 obj handles.
+    auto status = TraceEventBindTrace(eventHandleArry_[threadIdx / MAX_HANDLE_NUM], handle);
     if (status < 0) {
         DEV_WARN("Bind pypto trace handle to pypto event trace failed, error status: %d", status);
         return static_cast<int32_t>(DevCommonErr::LOAD_LIBRARY_FAILED);
@@ -294,7 +298,13 @@ TraHandle DeviceTrace::CreateTraceHandle() {
         DEV_WARN("Create pypto trace failed");
         return -1;
     }
-    pyptoHandleArray_.emplace_back(pyptoHandle);
+    if (threadIdx < MAX_AICPU_NUM) {
+        pyptoHandleArray_[threadIdx] = pyptoHandle;
+    } else {
+        pyptoHandle = -1;
+        DEV_WARN("Create pypto trace failed because aicpu more than %d", MAX_AICPU_NUM);
+        return pyptoHandle;
+    }
     DEV_INFO("Create pypto trace Handle successful");
     auto status = BindHandleToEventHandle(pyptoHandle, threadIdx);
     if (status != 0) {
@@ -321,6 +331,9 @@ void DeviceTrace::SubmitTraceMsg(const std::string& traceMsg) {
 
 void DeviceTrace::ReportTraceMsg() {
     for (auto enventHandle : eventHandleArry_) {
+        if(enventHandle < 0) {
+            continue;
+        }
         auto ret = TraceEventReport(enventHandle);
         if (ret < 0) {
             DEV_WARN("Report pypto event Handle buffer info failed, ret: %d", ret);
