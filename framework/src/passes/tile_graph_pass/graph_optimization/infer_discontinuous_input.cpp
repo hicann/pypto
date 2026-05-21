@@ -339,7 +339,7 @@ void InferDiscontinuousInput::InsertCopyOp(Function& function, LogicalTensorPtr 
     InsertViewOp(function, newTensor, oOperand);
 }
 
-inline void DDRTensorAssignUB(Function& function, std::map<LogicalTensorPtr, std::set<Operation*>> insertedNodes)
+inline void DDRTensorAssignUB(Function& function, std::map<LogicalTensorPtr, std::set<Operation*>>& insertedNodes)
 {
     auto opList = function.Operations().DuplicatedOpList();
     for (size_t i = 0; i < opList.size(); ++i) {

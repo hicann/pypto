@@ -286,5 +286,104 @@ TEST_F(TestInferDiscontinuousInput, testValidShapeInfer)
     }
     EXPECT_TRUE(foundViewWithValidShape);
 }
+
+// Construct DDR VIEW->ASSEMBLE chain: DDRTensorAssignUB converts tensor type to UB
+// so InsertTensorCopy skips copy insertion, no extra VIEW/ASSEMBLE inserted.
+void ConstructDDRTensorAssignUB(ComputationalGraphBuilder& G)
+{
+    G.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "t80");
+    G.GetTensor("t80")->tensor->UpdateRawShape({128, 128});
+    G.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "t327");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "t339");
+
+    // === Intermediate tensors ===
+    // VIEW from t80
+    G.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "t61");
+    G.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "t60");
+    G.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "t63");
+    G.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "t62");
+    // ASSEMBLE output
+    G.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "t609");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "t613");
+    // VIEW from assembled
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "t397");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "t401");
+    // SUB output
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "t396");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "t400");
+    // EXP output -> final
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "t403");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, "t405");
+    // COPY_OUT output
+    G.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "t900");
+    G.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "t901");
+
+    // === DDR VIEW -> ASSEMBLE chain ===
+
+    G.AddOp(Opcode::OP_VIEW, {"t80"}, {"t61"}, "view_80_61");
+    G.GetOp("view_80_61")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"t80"}, {"t60"}, "view_80_60");
+    G.GetOp("view_80_60")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"t80"}, {"t63"}, "view_80_63");
+    G.GetOp("view_80_63")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"t80"}, {"t62"}, "view_80_62");
+    G.GetOp("view_80_62")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t61"}, {"t609"}, "asm_61_609");
+    G.GetOp("asm_61_609")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t60"}, {"t609"}, "asm_60_609");
+    G.GetOp("asm_60_609")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t63"}, {"t613"}, "asm_63_613");
+    G.GetOp("asm_63_613")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t62"}, {"t613"}, "asm_62_613");
+    G.GetOp("asm_62_613")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    G.AddOp(Opcode::OP_VIEW, {"t609"}, {"t397"}, "view_609_397");
+    G.GetOp("view_609_397")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    G.AddOp(Opcode::OP_VIEW, {"t613"}, {"t401"}, "view_613_401");
+    G.GetOp("view_613_401")->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    G.AddOp(Opcode::OP_SUB, {"t397", "t327"}, {"t396"}, "sub_397_327");
+    G.AddOp(Opcode::OP_SUB, {"t401", "t339"}, {"t400"}, "sub_401_339");
+
+    G.AddOp(Opcode::OP_EXP, {"t396"}, {"t403"}, "exp_396");
+    G.AddOp(Opcode::OP_EXP, {"t400"}, {"t405"}, "exp_400");
+
+    G.AddOp(Opcode::OP_COPY_OUT, {"t403"}, {"t900"}, "copyout_0");
+    G.AddOp(Opcode::OP_COPY_OUT, {"t405"}, {"t901"}, "copyout_1");
+
+    // === Set InCast and OutCast ===
+    G.SetInCast({"t80", "t327", "t339"});
+    G.SetOutCast({"t900", "t901"});
+}
+
+// DDR discontinuous input through VIEW->ASSEMBLE: DDRTensorAssignUB converts type,
+// InsertTensorCopy skips copy, no extra VIEW/ASSEMBLE inserted.
+TEST_F(TestInferDiscontinuousInput, testDDRTensorAssignUBNoInsert)
+{
+    ComputationalGraphBuilder G;
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    ConstructDDRTensorAssignUB(G);
+    // run pass
+    InferDiscontinuousInput inferDiscontinuousInput;
+    EXPECT_EQ(inferDiscontinuousInput.Run(*function, "", "", 0), SUCCESS);
+    EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
+
+    // Verify no new VIEW or ASSEMBLE ops were inserted
+    auto opList = function->Operations().DuplicatedOpList();
+    int viewCount = 0;
+    int assembleCount = 0;
+    for (auto& op : opList) {
+        if (op->GetOpcode() == Opcode::OP_VIEW) {
+            viewCount++;
+        }
+        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
+        }
+    }
+    EXPECT_EQ(viewCount, 6);
+    EXPECT_EQ(assembleCount, 4);
+}
 } // namespace tile_fwk
 } // namespace npu
