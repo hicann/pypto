@@ -532,6 +532,10 @@ void CodeGenNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& co
     std::string coreArch = GetCoreArch(compileInfo);
     compileOpts.emplace_back("--cce-aicore-arch=" + coreArch);
 
+    if (platform_ == NPUArch::DAV_3510 && !compileInfo.IsCube()) {
+        compileOpts.emplace_back("--cce-long-scbz=true");
+    }
+
     std::string allCompileOpts = JoinString(compileOpts, " ");
     oss << allCompileOpts << " ";
 }
