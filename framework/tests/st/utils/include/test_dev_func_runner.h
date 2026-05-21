@@ -300,7 +300,6 @@ private:
         functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem =
             eval.Evaluate(dynAttr->maxDynamicCellMatchTableMem);
         uint64_t totalDynamicCellMatchSlotNum =
-            static_cast<uint64_t>(functionDevProg->memBudget.tensor.parallelism) *
             functionDevProg->memBudget.metadata.dynamicCellMatchSlotNum;
         functionDevProg->memBudget.metadata.dynamicCellMatch =
             totalDynamicCellMatchSlotNum * functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;

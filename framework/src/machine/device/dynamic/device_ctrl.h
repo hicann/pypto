@@ -255,8 +255,7 @@ public:
         }
         if (kargs->maxDynamicCellMatchTableMem != 0) {
             metadataBudget.maxDynamicCellMatchTableMem = kargs->maxDynamicCellMatchTableMem;
-            uint64_t totalDynamicCellMatchSlotNum =
-                static_cast<uint64_t>(tensorBudget.parallelism) * metadataBudget.dynamicCellMatchSlotNum;
+            uint64_t totalDynamicCellMatchSlotNum = metadataBudget.dynamicCellMatchSlotNum;
             metadataBudget.dynamicCellMatch = totalDynamicCellMatchSlotNum * metadataBudget.maxDynamicCellMatchTableMem;
         }
         PerfBegin(PERF_EVT_INIT);

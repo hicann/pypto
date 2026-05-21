@@ -598,8 +598,7 @@ public:
             if (dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
                 devProg->memBudget.metadata.maxDynamicCellMatchTableMem =
                     eval.Evaluate(dynAttr->maxDynamicCellMatchTableMem);
-                uint64_t totalDynamicCellMatchSlotNum =
-                    static_cast<uint64_t>(devProg->memBudget.tensor.parallelism) * devProg->memBudget.metadata.dynamicCellMatchSlotNum;
+                uint64_t totalDynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
                 devProg->memBudget.metadata.dynamicCellMatch =
                     totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
             }

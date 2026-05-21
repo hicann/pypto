@@ -50,10 +50,6 @@ static void PrepareRuntimeDynamicPartialUpdateTable(
     }
     partialUpdate->cellMatchRuntimePartialUpdateTable.HostAssignDataSize(
         reinterpret_cast<uintdevptr_t>(partialUpdate->cellMatchRuntimePartialUpdateTable.Data()), tableSize);
-    auto tableData = partialUpdate->cellMatchRuntimePartialUpdateTable.Data();
-    for (size_t i = 0; i < tableSize; ++i) {
-        tableData[i] = AICORE_TASK_INIT;
-    }
 }
 
 void DeviceSlotContext::InitAllocator(DeviceWorkspaceAllocator& workspace, uint64_t slotSize)

@@ -713,8 +713,7 @@ public:
     {
         size_t blockHeaderSize = sizeof(WsSlotAllocator::BlockHeader);
         uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.devTaskBoundaryOutcastNum;
-        uint64_t dynamicCellMatchSlotNum =
-            static_cast<uint64_t>(devProg->memBudget.tensor.parallelism) * devProg->memBudget.metadata.dynamicCellMatchSlotNum;
+        uint64_t dynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
         DEV_DEBUG(
             "boundaryOutcastSlotNum=%lu, dynamicCellMatchSlotNum=%lu", boundaryOutcastSlotNum, dynamicCellMatchSlotNum);
         uint64_t blockHeadersBytes = (boundaryOutcastSlotNum + dynamicCellMatchSlotNum) * blockHeaderSize;
@@ -884,8 +883,7 @@ private:
             none(),
             WorkspaceMetadataStitch(Range(stitchPoolAddr, stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));
 
-        uint64_t dynamicCellMatchSlotNum = static_cast<uint64_t>(devProg->GetParallelism()) *
-                                           devProg->memBudget.metadata.dynamicCellMatchSlotNum;
+        uint64_t dynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
         uint64_t dynamicCellMatchSlotBytes = devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
         uint64_t dynamicCellMatchAddr = devStartArgs->deviceRuntimeDataDesc.dynamicCellMatchAddr;
         uint64_t dynamicCellMatchBytes = devProg->memBudget.metadata.dynamicCellMatch;
