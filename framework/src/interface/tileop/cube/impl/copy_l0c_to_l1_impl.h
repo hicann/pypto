@@ -19,21 +19,6 @@
 
 #include "cube_utils.h"
 
-// create Scale Tile Data
-template <typename FpTileData>
-INLINE auto CreateScaleTileData(FpTileData& fixbuf)
-{
-    constexpr uint64_t shapeSize = Std::tuple_size<typename FpTileData::Shape>::value;
-    constexpr int64_t scaleTileH =
-        Std::tuple_element<shapeSize - SHAPE_DIM2, typename FpTileData::TileShape>::type::value;
-    constexpr int64_t scaleTileW = Std::tuple_element<shapeSize - 1, typename FpTileData::TileShape>::type::value;
-    int64_t scaleShape0 = GetShape<0>(fixbuf);
-    int64_t scaleShape1 = GetShape<1>(fixbuf);
-    using scaleTileData =
-        pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor, -1, -1>;
-    return scaleTileData(scaleShape0, scaleShape1);
-}
-
 // Copy data from L0C to L1(Extract)
 template <typename config, typename l1Data, typename l0cData, typename FpTileData>
 TILEOP void TExtractL0CToL1(

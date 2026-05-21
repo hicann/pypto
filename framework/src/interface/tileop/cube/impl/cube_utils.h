@@ -89,4 +89,34 @@ INLINE bool CheckShapeValid(const T& dst, const U& src)
     return true;
 }
 
+// create Scale Tile Data
+template <typename FpTileData>
+INLINE auto CreateScaleTileData(FpTileData& fixbuf)
+{
+    constexpr uint64_t shapeSize = Std::tuple_size<typename FpTileData::Shape>::value;
+    constexpr int64_t scaleTileH =
+        Std::tuple_element<shapeSize - SHAPE_DIM2, typename FpTileData::TileShape>::type::value;
+    constexpr int64_t scaleTileW = Std::tuple_element<shapeSize - 1, typename FpTileData::TileShape>::type::value;
+    int64_t scaleShape0 = GetShape<0>(fixbuf);
+    int64_t scaleShape1 = GetShape<1>(fixbuf);
+    using scaleTileData =
+        pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor, -1, -1>;
+    return scaleTileData(scaleShape0, scaleShape1);
+}
+
+// Type compatibility check for quantization mode
+template <typename l0cDType, typename ubDType>
+constexpr INLINE bool IsSupportedQuantMode()
+{
+    return std::is_same<l0cDType, int32_t>::value && std::is_same<ubDType, half>::value;
+}
+
+// Type compatibility check for basic mode
+template <typename l0cDType, typename ubDType>
+constexpr INLINE bool IsSupportedBasicMode()
+{
+    return (std::is_same<l0cDType, float>::value && std::is_same<ubDType, half>::value) ||
+           (std::is_same<l0cDType, float>::value && std::is_same<ubDType, bfloat16_t>::value);
+}
+
 #endif // TILEOP_TILE_OPERATOR_CUBE_UTILS__H

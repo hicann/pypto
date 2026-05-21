@@ -128,27 +128,7 @@ std::string CodeGenOpNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) const
     return buffer;
 }
 
-std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
-{
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr();
-    std::string nzVar = "CopyOutMode::NZ2ND"; // current only support NZ2ND in L0C -> UB
-    std::ostringstream oss;
-    int64_t aivId = 0;
-    GetOpAttr(OpAttributeKey::subBlockIdx, aivId);
-    int64_t copyMode = 0;
-    if (opAttrs.count(OpAttributeKey::localCopyLocalMode)) {
-        copyMode = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::localCopyLocalMode));
-    }
-    auto cpMode = static_cast<Matrix::CopyMode>(copyMode);
-    std::string cpModeStr = CopyModeToString(cpMode);
-    oss << tileOpName;
-    oss << WrapParamByAngleBrackets({nzVar, cpModeStr});
-    oss << WrapParamByParentheses({dstTensor, src0Tensor, coordDst, coordSrc, std::to_string(aivId)});
-    oss << STMT_END;
-    return oss.str();
-}
+std::string CodeGenOpNPU::GenL0CToUBTileTensor() const { return PrintL0CToL1UBTileTensor(); }
 
 std::string CodeGenOpNPU::GenL0CToUBTileTensorDualDst() const
 {
@@ -323,7 +303,7 @@ std::string CodeGenOpNPU::GenReshapeCopyIn() const { return GenMemUBTransfer(fal
 
 std::string CodeGenOpNPU::GenReshapeCopyOut() const { return GenMemUBTransfer(true); }
 
-std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
+std::string CodeGenOpNPU::PrintL0CToL1UBTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -335,18 +315,36 @@ std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
     int64_t reluMode = 0;
     GetOpAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
     std::string nzVar = "CopyOutMode::NZ2NZ";
+    if (opCode == Opcode::OP_L0C_COPY_UB) {
+        nzVar = "CopyOutMode::NZ2ND";
+    }
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
     std::string storeConfig = WrapParamByAngleBrackets(storeConfigList);
-    Element scaleValue = Element(DataType::DT_UINT64, 0);
+    std::vector<std::string> templateParam = {TSTORE_CONF + storeConfig};
+    if (opCode == Opcode::OP_L0C_COPY_UB) {
+        int64_t copyMode = 0;
+        GetOpAttr(OpAttributeKey::localCopyLocalMode, copyMode);
+        std::string cpModeStr = CopyModeToString(static_cast<Matrix::CopyMode>(copyMode));
+        templateParam.emplace_back(cpModeStr);
+    }
 
+    Element scaleValue = Element(DataType::DT_UINT64, 0);
     GetOpAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
     if ((!scaleValue.GetUnsignedData()) && ((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16))) {
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor,
-                                                coordDst,  coordSrc,  std::to_string(scaleValue.GetUnsignedData())};
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coordDst, coordSrc};
+
+    if (opCode == Opcode::OP_L0C_COPY_UB) {
+        int64_t aivId = 0;
+        GetOpAttr(OpAttributeKey::subBlockIdx, aivId);
+        tileOpParamList.emplace_back(std::to_string(aivId));
+    }
+
+    tileOpParamList.emplace_back(std::to_string(scaleValue.GetUnsignedData()));
+
     std::ostringstream oss;
-    oss << tileOpName << "<" << TSTORE_CONF << storeConfig << ">";
+    oss << tileOpName << WrapParamByAngleBrackets(templateParam);
     oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
@@ -355,7 +353,7 @@ std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
 std::string CodeGenOpNPU::GenMemL0CToL1() const
 {
     if (isSupportLayout) {
-        return PrintL0CToL1TileTensor();
+        return PrintL0CToL1UBTileTensor();
     }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
     std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
