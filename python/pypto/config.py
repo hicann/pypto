@@ -193,6 +193,19 @@ def set_pass_options(*,
         set_options(pass_options=pass_options)
 
 
+def _merge_split_settings(rst: dict, base_key: str) -> dict:
+    merged = {}
+    if base_key in rst:
+        merged.update(rst[base_key])
+    by_func_key = base_key + '_by_func'
+    if by_func_key in rst:
+        merged.update(rst[by_func_key])
+    by_label_key = base_key + '_by_label'
+    if by_label_key in rst:
+        merged.update(rst[by_label_key])
+    return merged
+
+
 def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], Dict[str, int]]]:
     """
     Get pass options.
@@ -200,30 +213,20 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     Returns
     -------
     Dict[str, Union[str, int, List[int], Dict[int, int], Dict[str, int]]]
-        All pass options from C++ scope, including:
-        - *_setting: integer key settings
-        - *_by_func: func{magic}_{order} format key settings
-        - *_by_label: semantic label key settings
-        - sg_set_scope: scope configuration
+        All pass options from C++ scope, with _by_func/_by_label merged back
+        into their parent setting keys (vec_nbuffer_setting, etc.).
     """
     scope = get_current_scope()
     rst = scope.get_pass_options()
-    allowed_keys = {
-        'vec_nbuffer_setting',
-        'cube_l1_reuse_setting',
-        'cube_nbuffer_setting',
-        'vec_nbuffer_setting_by_func',
-        'cube_l1_reuse_setting_by_func',
-        'cube_nbuffer_setting_by_func',
-        'vec_nbuffer_setting_by_label',
-        'cube_l1_reuse_setting_by_label',
-        'cube_nbuffer_setting_by_label',
-        'sg_set_scope',
-        'auto_mix_partition',
-    }
-    result = {k: v for k, v in rst.items() if k in allowed_keys}
-    val = result.get("sg_set_scope", (-1, False, False))
+    result = {}
+    for base_key in ('vec_nbuffer_setting', 'cube_l1_reuse_setting', 'cube_nbuffer_setting'):
+        merged = _merge_split_settings(rst, base_key)
+        if merged:
+            result[base_key] = merged
+    val = rst.get("sg_set_scope", (-1, False, False))
     result['sg_set_scope'] = (int(val[0]), bool(val[1]), bool(val[2]))
+    if 'auto_mix_partition' in rst:
+        result['auto_mix_partition'] = rst['auto_mix_partition']
     return result
 
 
