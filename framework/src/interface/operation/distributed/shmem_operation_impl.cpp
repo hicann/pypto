@@ -330,6 +330,7 @@ Tensor ShmemGet(const ShmemTensor& src, const SymbolicScalar& srcRank, const Ten
     if (src.data.GetValidShape().size() == 0) {
         src.data.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(src.data.GetShape()));
     }
+    out->UpdateDynValidShape(src.data.GetValidShape());
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}), OpImmediate::Specified(src.data.GetShape()),
         OpImmediate::Specified(src.data.GetShape()), OpImmediate::Specified(src.data.GetValidShape())));
@@ -358,6 +359,7 @@ Tensor ShmemLoad(const ShmemTensor& src, const SymbolicScalar& srcRank, const Te
     if (src.data.GetValidShape().size() == 0) {
         src.data.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(src.data.GetShape()));
     }
+    out->UpdateDynValidShape(src.data.GetValidShape());
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, OpImmediate::Specified(src.data.GetShape()),
         OpImmediate::Specified(out->shape), OpImmediate::Specified(src.data.GetValidShape())));
