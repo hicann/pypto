@@ -23,10 +23,11 @@ namespace tile_fwk {
 namespace {
 // 常量定义
 constexpr size_t MIN_DIMENSIONS = 2;
-constexpr size_t MAX_DIMENSIONS = 4;
+constexpr size_t MAX_DIMENSIONS = 5;
 constexpr size_t DIMENSIONS_2D = 2;
 constexpr size_t DIMENSIONS_3D = 3;
 constexpr size_t DIMENSIONS_4D = 4;
+constexpr size_t DIMENSIONS_5D = 5;
 
 uint32_t GetPowerOfTwo(uint32_t cur)
 {
@@ -41,6 +42,111 @@ bool CheckDynRawShape(const Shape& shape)
 {
     return std::any_of(shape.begin(), shape.end(), [](int dim) { return dim < 0; });
 }
+
+bool HasNegativeDimAfterFirst(const LogicalTensorPtr& tensor)
+{
+    if (!tensor) {
+        return false;
+    }
+
+    const auto& shape = tensor->GetShape();
+    return shape.size() > 1 && std::any_of(shape.begin() + 1, shape.end(), [](int dim) { return dim < 0; });
+}
+
+// BMM场景只支持incast的最高轴为动轴
+bool HasNegativeDimAfterFirstIncast(const Function& function)
+{
+    for (const auto& incast : function.GetIncast()) {
+        if (HasNegativeDimAfterFirst(incast)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HasOnlyViewConsumers(const LogicalTensorPtr& tensor)
+{
+    return std::all_of(tensor->GetConsumers().begin(), tensor->GetConsumers().end(),
+        [](const auto& consumer) {
+            return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_VIEW;
+        });
+}
+
+bool HasMatmulConsumerWithSingleProducer(const LogicalTensorPtr& tensor)
+{
+    for (const auto& consumer : tensor->GetConsumers()) {
+        if (consumer == nullptr) {
+            continue;
+        }
+        if (OpcodeManager::Inst().GetOpCalcType(consumer->GetOpcode()) == OpCalcType::MATMUL) {
+            auto matmulIn = consumer->GetIOperands().front();
+            return matmulIn->GetProducers().size() == 1;
+        }
+    }
+    return false;
+}
+
+bool AreReshapeShapesValid(const Shape& inputShape, const Shape& outputShape)
+{
+    const size_t inputDims = inputShape.size();
+    const size_t outputDims = outputShape.size();
+    if (inputDims < MIN_DIMENSIONS || outputDims < MIN_DIMENSIONS || inputDims > MAX_DIMENSIONS ||
+        outputDims > MAX_DIMENSIONS) {
+        return false;
+    }
+
+    return std::accumulate(inputShape.begin(), inputShape.end(), int64_t{1}, std::multiplies<int64_t>()) ==
+           std::accumulate(outputShape.begin(), outputShape.end(), int64_t{1}, std::multiplies<int64_t>());
+}
+
+bool MatchReshapeDimensionPair(const Shape& inputShape, const Shape& outputShape)
+{
+    const size_t inputDims = inputShape.size();
+    const size_t outputDims = outputShape.size();
+    const uint32_t dimensionPair = (inputDims << 4) | outputDims;
+
+    switch (dimensionPair) {
+        case (DIMENSIONS_4D << 4) | DIMENSIONS_2D:
+            return inputShape[0] == 1 && inputShape[1] == 1 && inputShape[2] == outputShape[0] &&
+                   inputShape[3] == outputShape[1];
+        case (DIMENSIONS_2D << 4) | DIMENSIONS_4D:
+            return outputShape[0] == 1 && outputShape[1] == 1 && inputShape[0] == outputShape[2] &&
+                   inputShape[1] == outputShape[3];
+        case (DIMENSIONS_3D << 4) | DIMENSIONS_2D:
+            return inputShape[0] == 1 && inputShape[1] == outputShape[0] && inputShape[2] == outputShape[1];
+        case (DIMENSIONS_2D << 4) | DIMENSIONS_3D:
+            return outputShape[0] == 1 && inputShape[0] == outputShape[1] && inputShape[1] == outputShape[2];
+        case (DIMENSIONS_4D << 4) | DIMENSIONS_3D:
+            return inputShape[0] == 1 && inputShape[1] == outputShape[0] && inputShape[2] == outputShape[1] &&
+                   inputShape[3] == outputShape[2];
+        case (DIMENSIONS_3D << 4) | DIMENSIONS_4D:
+            return outputShape[0] == 1 && inputShape[0] == outputShape[1] && inputShape[1] == outputShape[2] &&
+                   inputShape[2] == outputShape[3];
+        case (DIMENSIONS_5D << 4) | DIMENSIONS_3D:
+            return inputShape[0] == 1 && inputShape[1] == 1 && inputShape[2] == outputShape[0] &&
+                   inputShape[3] == outputShape[1] && inputShape[4] == outputShape[2];
+        case (DIMENSIONS_3D << 4) | DIMENSIONS_5D:
+            return outputShape[0] == 1 && outputShape[1] == 1 && inputShape[0] == outputShape[2] &&
+                   inputShape[1] == outputShape[3] && inputShape[2] == outputShape[4];
+        default:
+            return false;
+    }
+}
+
+bool AccumulateRawShapeSize(const Shape& shape, const char* shapeName, int64_t& rawSize)
+{
+    for (size_t i = 0; i < shape.size(); ++i) {
+        if (shape[i] < 0) {
+            APASS_LOG_DEBUG_F(
+                Elements::Operation, "%s[%zu] = %ld, dynamic shape should trigger conflict", shapeName, i,
+                static_cast<long>(shape[i]));
+            return false;
+        }
+        rawSize *= shape[i];
+    }
+    return true;
+}
+
 } // namespace
 
 Status InferMemoryConflict::RunOnFunction(Function& function)
@@ -112,8 +218,7 @@ bool InferMemoryConflict::CheckConflict(const LogicalTensorPtr& inTensor, const 
     return true;
 }
 
-bool InferMemoryConflict::CheckRawShapeConflict(
-    const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor, const Operation* reshapeOp)
+bool InferMemoryConflict::CheckRawShapeConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor)
 {
     int64_t inRawSize = 1;
     int64_t outRawSize = 1;
@@ -137,28 +242,9 @@ bool InferMemoryConflict::CheckRawShapeConflict(
             outRawSize *= (outEntry->second / inEntry->second);
         }
     }
-    for (size_t i = 0; i < inShape.size(); ++i) {
-        if (inShape[i] < 0) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "inShape[%zu] = %ld, dynamic shape should trigger conflict", i,
-                static_cast<long>(inShape[i]));
-            return true;
-        }
-        inRawSize *= inShape[i];
-    }
-    for (size_t i = 0; i < outShape.size(); ++i) {
-        if (outShape[i] < 0) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "outShape[%zu] = %ld, dynamic shape should trigger conflict", i,
-                static_cast<long>(outShape[i]));
-            return true;
-        }
-        outRawSize *= outShape[i];
-    }
-    auto reshapeInput = reshapeOp->GetInputOperand(0);
-    auto reshapeOutput = reshapeOp->GetOutputOperand(0);
-    if (MatchReshapePattern(reshapeInput, reshapeOutput)) {
-        return false;
+    if (!AccumulateRawShapeSize(inShape, "inShape", inRawSize) ||
+        !AccumulateRawShapeSize(outShape, "outShape", outRawSize)) {
+        return true;
     }
     if (inRawSize > 0 && outRawSize > 0 && inRawSize != outRawSize) {
         APASS_LOG_DEBUG_F(
@@ -204,92 +290,69 @@ bool InferMemoryConflict::IsValidTileShape(const Operation& op) const
 }
 
 /*
-仅支持两种场景
+支持四种优化场景（不插入registercopy）
 1. View -> Reshape -> MatMul (MatMul 的输入只有一个，且为当前处理的reshape)
-2. MatMul ->Reshape -> Assemble (MatMul 的输出只有一个，且为当前处理的reshape)
+2. MatMul -> Reshape -> Assemble (MatMul 的输出只有一个，且为当前处理的reshape)
+3. View -> Reshape -> View(s) (reshape后面所有consumer都是View)
+4. ADD/REDUCE_ACC -> Reshape -> Assemble (ADD/REDUCE_ACC的输出只有一个，且为当前处理的reshape)
 */
-bool InferMemoryConflict::MatMulPattern(const LogicalTensorPtr& reshapeIn, const LogicalTensorPtr& reshapeOut)
+bool InferMemoryConflict::CheckReshapeContext(const LogicalTensorPtr& reshapeIn, const LogicalTensorPtr& reshapeOut)
 {
     if (reshapeIn->GetProducers().empty() || reshapeOut->GetConsumers().empty()) {
         return false;
     }
+
     auto producer = *(reshapeIn->GetProducers().begin());
-    auto consumer = *(reshapeOut->GetConsumers().begin());
-    if (producer == nullptr || consumer == nullptr) {
+    if (producer == nullptr) {
         return false;
     }
-    if (producer->GetOpcode() == Opcode::OP_VIEW &&
-        OpcodeManager::Inst().GetOpCalcType(consumer->GetOpcode()) == OpCalcType::MATMUL) {
-        auto matmulIn = consumer->GetIOperands().front();
-        return matmulIn->GetProducers().size() == 1;
-    } else if (
-        OpcodeManager::Inst().GetOpCalcType(producer->GetOpcode()) == OpCalcType::MATMUL &&
-        consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
-        auto matmulOut = producer->GetOOperands().front();
-        return matmulOut->GetConsumers().size() == 1;
+
+    if (producer->GetOpcode() == Opcode::OP_VIEW) {
+        return HasMatmulConsumerWithSingleProducer(reshapeOut) || HasOnlyViewConsumers(reshapeOut);
     }
+
+    auto calcType = OpcodeManager::Inst().GetOpCalcType(producer->GetOpcode());
+    if (calcType == OpCalcType::MATMUL || producer->GetOpcode() == Opcode::OP_ADD ||
+        producer->GetOpcode() == Opcode::OP_REDUCE_ACC) {
+        if (producer->GetOOperands().empty()) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation, "%s[%d] has no output operands.", producer->GetOpcodeStr().c_str(),
+                producer->GetOpMagic());
+            return false;
+        }
+        auto producerOut = producer->GetOOperands().front();
+        if (producerOut->GetConsumers().size() != 1) {
+            return false;
+        }
+        return std::all_of(reshapeOut->GetConsumers().begin(), reshapeOut->GetConsumers().end(),
+            [](const auto& consumer) {
+                return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_ASSEMBLE;
+            });
+    }
+
     return false;
 }
 
 // batch MatMul优化pattern，不插入register copy
-bool InferMemoryConflict::MatchReshapePattern(const LogicalTensorPtr& reshapeIn, const LogicalTensorPtr& reshapeOut)
+bool InferMemoryConflict::MatchReshapePattern(
+    Function& function, const LogicalTensorPtr& reshapeIn, const LogicalTensorPtr& reshapeOut)
 {
-    if (!reshapeIn || !reshapeOut)
-        return false;
-    Shape inRawShape = reshapeIn->GetRawTensor()->GetRawShape();
-    Shape outRawShape = reshapeOut->GetRawTensor()->GetRawShape();
-    if (CheckDynRawShape(inRawShape) || CheckDynRawShape(outRawShape)) {
+    if (!reshapeIn || !reshapeOut || HasNegativeDimAfterFirstIncast(function)) {
         return false;
     }
-
-    if (!MatMulPattern(reshapeIn, reshapeOut)) {
+    Shape inRawShape = reshapeIn->GetRawTensor()->GetRawShape();
+    Shape outRawShape = reshapeOut->GetRawTensor()->GetRawShape();
+    if (CheckDynRawShape(inRawShape) || CheckDynRawShape(outRawShape) || !CheckReshapeContext(reshapeIn, reshapeOut)) {
         return false;
     }
 
     const auto& inputShape = reshapeIn->GetShape();
     const auto& outputShape = reshapeOut->GetShape();
-    const size_t inputDims = inputShape.size();
-    const size_t outputDims = outputShape.size();
-
-    if (inputDims < MIN_DIMENSIONS || outputDims < MIN_DIMENSIONS || inputDims > MAX_DIMENSIONS ||
-        outputDims > MAX_DIMENSIONS)
-        return false;
-
-    // 验证总元素数是否相等（reshape的基本要求）
-    if (std::accumulate(inputShape.begin(), inputShape.end(), int64_t{1}, std::multiplies<int64_t>()) !=
-        std::accumulate(outputShape.begin(), outputShape.end(), int64_t{1}, std::multiplies<int64_t>())) {
+    if (!AreReshapeShapesValid(inputShape, outputShape)) {
         return false;
     }
 
-    // 编码维度对：输入维度在高位，输出维度在低位
-    const uint32_t dimensionPair = (inputDims << 4) | outputDims;
-
-    switch (dimensionPair) {
-        // 4D转2D：[1, 1, H, W] -> [H, W]
-        case (DIMENSIONS_4D << 4) | DIMENSIONS_2D: {
-            return inputShape[0] == 1 && inputShape[1] == 1 && inputShape[2] == outputShape[0] &&
-                   inputShape[3] == outputShape[1];
-        }
-
-        // 2D转4D：[H, W] -> [1, 1, H, W]
-        case (DIMENSIONS_2D << 4) | DIMENSIONS_4D: {
-            return outputShape[0] == 1 && outputShape[1] == 1 && inputShape[0] == outputShape[2] &&
-                   inputShape[1] == outputShape[3];
-        }
-
-        // 3D转2D：[1, H, W] -> [H, W]
-        case (DIMENSIONS_3D << 4) | DIMENSIONS_2D: {
-            return inputShape[0] == 1 && inputShape[1] == outputShape[0] && inputShape[2] == outputShape[1];
-        }
-
-        // 2D转3D：[H, W] -> [1, H, W]
-        case (DIMENSIONS_2D << 4) | DIMENSIONS_3D: {
-            return outputShape[0] == 1 && inputShape[0] == outputShape[1] && inputShape[1] == outputShape[2];
-        }
-
-        default:
-            return false;
-    }
+    return MatchReshapeDimensionPair(inputShape, outputShape);
 }
 
 Status InferMemoryConflict::UpdateForwardTensor(
@@ -298,8 +361,10 @@ Status InferMemoryConflict::UpdateForwardTensor(
 {
     for (const auto& outputTensor : consumer->GetOOperands()) {
         if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
+            auto reshapeInput = consumer->GetIOperands().front();
             bool isInplace = consumer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
-            if (!isInplace && CheckRawShapeConflict(memoryInfo[curTensor], outputTensor, consumer)) {
+            if (!isInplace && CheckRawShapeConflict(memoryInfo[curTensor], outputTensor) &&
+                 !MatchReshapePattern(function, reshapeInput, outputTensor)) {
                 preregcopys.insert(consumer);
                 continue;
             }
@@ -322,7 +387,8 @@ Status InferMemoryConflict::UpdateForwardTensor(
 }
 
 Status InferMemoryConflict::UpdateBackwardTensor(
-    const LogicalTensorPtr& curTensor, Operation* producer, std::queue<LogicalTensorPtr>& curTensors)
+    Function& function, const LogicalTensorPtr& curTensor, Operation* producer,
+    std::queue<LogicalTensorPtr>& curTensors)
 {
     for (auto& inputTensor : producer->GetIOperands()) {
         int index = 2;
@@ -331,15 +397,17 @@ Status InferMemoryConflict::UpdateBackwardTensor(
         }
         auto reshapeOutput = producer->GetOOperands().front();
         if (producer->GetOpcode() == Opcode::OP_RESHAPE) {
+            auto reshapeInput = producer->GetIOperands().front();
             bool isInplace = producer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
-            if (!isInplace && CheckRawShapeConflict(inputTensor, memoryInfo[curTensor], producer)) {
+            if (!isInplace && CheckRawShapeConflict(inputTensor, memoryInfo[curTensor]) &&
+                 !MatchReshapePattern(function, reshapeInput, reshapeOutput)) {
                 postregcopys.insert(producer);
                 continue;
             }
         }
         if (memoryInfo.find(inputTensor) != memoryInfo.end()) {
             if (CheckConflict(memoryInfo[curTensor], memoryInfo[inputTensor])) {
-                if (producer->GetOpcode() == Opcode::OP_RESHAPE && !MatchReshapePattern(inputTensor, reshapeOutput)) {
+                if (producer->GetOpcode() == Opcode::OP_RESHAPE && !MatchReshapePattern(function, inputTensor, reshapeOutput)) {
                     postregcopys.insert(producer);
                 } else {
                     preregcopys.insert(producer);
@@ -392,7 +460,7 @@ Status InferMemoryConflict::BackwardPropagation(Function& function)
             if (!CheckTransmit(*producer)) {
                 continue;
             }
-            if (UpdateBackwardTensor(curTensor, producer, curTensors) != SUCCESS) {
+            if (UpdateBackwardTensor(function, curTensor, producer, curTensors) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "UpdateBackwardTensor failed.");
                 return FAILED;
             }

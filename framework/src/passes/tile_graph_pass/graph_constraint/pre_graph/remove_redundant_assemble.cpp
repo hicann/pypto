@@ -97,6 +97,75 @@ bool CalculateNewRawShapeReduce(
     return true;
 }
 
+bool CalculateNewDynRawShapeExpand(
+    const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& oriDynRawShape,
+    std::vector<SymbolicScalar>& newDynRawShape)
+{
+    newDynRawShape.resize(newShape.size());
+    if (oriDynRawShape.size() < newShape.size()) {
+        APASS_LOG_ERROR_F(
+            Elements::Function,
+            "Cannot calculate NewDynRawShape as oriDynRawShape size [%zu] is smaller than newShape size [%zu].",
+            oriDynRawShape.size(), newShape.size());
+        return false;
+    }
+    size_t diff = oriDynRawShape.size() - newShape.size();
+    std::copy(oriDynRawShape.begin() + diff, oriDynRawShape.end(), newDynRawShape.begin());
+    SymbolicScalar newShapeSize(1);
+    if (newDynRawShape.size() > 1) {
+        newShapeSize =
+            std::accumulate(newDynRawShape.begin() + 1, newDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+    }
+    SymbolicScalar oriShapeSize =
+        std::accumulate(oriDynRawShape.begin(), oriDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+    if (newShapeSize.ConcreteValid() && newShapeSize == 0) {
+        APASS_LOG_ERROR_F(Elements::Function, "Cannot calculate NewDynRawShape as the dimension is zero.");
+        return false;
+    }
+    newDynRawShape[0] = oriShapeSize / newShapeSize;
+    return true;
+}
+
+bool CalculateNewDynRawShapeExpand(
+    const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& oriDynRawShape,
+    const std::vector<int64_t>& newRawShape, std::vector<SymbolicScalar>& newDynRawShape)
+{
+    if (oriDynRawShape.empty()) {
+        newDynRawShape = SymbolicScalar::FromConcrete(newRawShape);
+        return true;
+    }
+    return CalculateNewDynRawShapeExpand(newShape, oriDynRawShape, newDynRawShape);
+}
+
+bool CalculateNewDynRawShapeReduce(
+    const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& oriDynRawShape,
+    std::vector<SymbolicScalar>& newDynRawShape)
+{
+    newDynRawShape = SymbolicScalar::FromConcrete(newShape);
+    SymbolicScalar newShapeSize =
+        std::accumulate(newDynRawShape.begin(), newDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+    SymbolicScalar oriShapeSize =
+        std::accumulate(oriDynRawShape.begin(), oriDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+    if (newShapeSize.ConcreteValid() && newShapeSize == 0) {
+        APASS_LOG_ERROR_F(Elements::Function, "Cannot calculate NewDynRawShape as the dimension is zero.");
+        return false;
+    }
+    SymbolicScalar remainShapeSize = oriShapeSize / newShapeSize;
+    newDynRawShape.back() = newDynRawShape.back() * remainShapeSize;
+    return true;
+}
+
+bool CalculateNewDynRawShapeReduce(
+    const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& oriDynRawShape,
+    const std::vector<int64_t>& newRawShape, std::vector<SymbolicScalar>& newDynRawShape)
+{
+    if (oriDynRawShape.empty()) {
+        newDynRawShape = SymbolicScalar::FromConcrete(newRawShape);
+        return true;
+    }
+    return CalculateNewDynRawShapeReduce(newShape, oriDynRawShape, newDynRawShape);
+}
+
 void RemoveRedundantAssemble::HandleForAssembleFromInOut(
     Function& function, Operation& assembleOp, std::set<Operation*, LogicalTensor::CompareOp>& producersBackup) const
 {
@@ -171,6 +240,41 @@ void GetDynOffsetBeforeReshape(
     }
 }
 
+void GetDynOffsetBeforeDynReshape(
+    const std::vector<SymbolicScalar>& oriOffset, const std::vector<SymbolicScalar>& oriShape,
+    const std::vector<SymbolicScalar>& newShape, std::vector<SymbolicScalar>& newOffset)
+{
+    if (oriShape.size() != oriOffset.size()) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "OriDynShape and oriOffset size mismatch.");
+        return;
+    }
+    size_t oriSize = oriOffset.size();
+    size_t newSize = newShape.size();
+    std::vector<SymbolicScalar> oriStride(oriShape.size());
+    SymbolicScalar currentStride(1);
+    for (int i = oriSize - 1; i >= 0; --i) {
+        oriStride[i] = currentStride;
+        currentStride = currentStride * oriShape[i];
+    }
+    SymbolicScalar linearIndex = oriOffset[0] * oriStride[0];
+    for (size_t i = 1; i < oriOffset.size(); ++i) {
+        linearIndex = linearIndex + oriOffset[i] * oriStride[i];
+    }
+
+    std::vector<SymbolicScalar> newStride(newSize);
+    currentStride = SymbolicScalar(1);
+    for (int i = newSize - 1; i >= 0; --i) {
+        newStride[i] = currentStride;
+        currentStride = currentStride * newShape[i];
+    }
+
+    newOffset.resize(newSize);
+    for (size_t i = 0; i < newSize; ++i) {
+        newOffset[i] = linearIndex / newStride[i];
+        linearIndex = linearIndex % newStride[i];
+    }
+}
+
 std::vector<int64_t> removeAllOnes(const std::vector<int64_t>& vec)
 {
     std::vector<int64_t> result = vec;
@@ -189,12 +293,14 @@ bool MatchReshapePattern(const LogicalTensorPtr& reshapeInput, const LogicalTens
 }
 
 void RemoveRedundantAssemble::UpdateReshapeShape(
-    Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape) const
+    Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape,
+    const std::vector<SymbolicScalar>& newDynRawShape, const std::vector<SymbolicScalar>& newDynValidShape) const
 {
-    tensorPtr->dynValidShape_ = SymbolicScalar::FromConcrete(newRawShape);
+    tensorPtr->dynValidShape_ = newDynValidShape;
     reshapeOp.SetAttr(OP_ATTR_PREFIX + "validShape", tensorPtr->dynValidShape_);
     tensorPtr->shape = newRawShape;
     tensorPtr->tensor->UpdateRawShape(newRawShape);
+    tensorPtr->tensor->UpdateDynRawShape(newDynRawShape);
 }
 
 Status RemoveRedundantAssemble::ProcessView(Function& function) const
@@ -237,27 +343,38 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
             APASS_LOG_INFO_F(
                 Elements::Operation, "No producers found for RESHAPE op's input %d.", reshapeOp.GetOpMagic());
             continue;
-            ;
         }
         auto producerOp = *producers.begin();
         if (producerOp == nullptr || producers.size() != 1 || producerOp->GetOpcode() != Opcode::OP_VIEW)
             continue;
         auto viewInput = producerOp->GetIOperands().front();
         for (auto reshapeConsumer : reshapeOp.GetOOperands().front()->GetConsumers()) {
-            if (reshapeConsumer->GetOpcode() != Opcode::OP_COPY_IN)
+            if (!IsCopyIn(reshapeConsumer->GetOpcode()))
                 return SUCCESS;
         }
         auto opAttr = std::dynamic_pointer_cast<ViewOpAttribute>(producerOp->GetOpAttribute());
         if (opAttr == nullptr) {
             APASS_LOG_INFO_F(Elements::Operation, "Op %d Attribute is nullptr.", producerOp->GetOpMagic());
             continue;
-            ;
         }
-        auto& offset = opAttr->GetFromDynOffset();
+        auto offset = opAttr->GetFromDynOffset();
+        if (offset.empty()) {
+            offset = SymbolicScalar::FromConcrete(opAttr->GetFromOffset());
+        }
         Shape newRawShape = reshapeOp.GetOOperands().front()->shape;
+        std::vector<SymbolicScalar> newDynRawShape;
         if (!CalculateNewRawShapeExpand(
                 reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetRawShape(), newRawShape))
             return SUCCESS;
+        if (!CalculateNewDynRawShapeExpand(
+                reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetDynRawShape(), newRawShape,
+                newDynRawShape)) {
+            return SUCCESS;
+        }
+        auto newDynValidShape = reshapeOp.GetOOperands().front()->GetDynValidShape();
+        if (newDynValidShape.empty()) {
+            newDynValidShape = SymbolicScalar::FromConcrete(reshapeOp.GetOOperands().front()->shape);
+        }
         std::vector<SymbolicScalar> newDynOffset;
         GetDynOffsetBeforeReshape(offset, viewInput->shape, newRawShape, newDynOffset);
         APASS_LOG_DEBUG_F(
@@ -277,8 +394,13 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
             }
             copyAttr->SetFromOffset(newOffset);
             copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
+            auto copyDynValidShape = copyIn->GetOOperands().front()->GetDynValidShape();
+            if (copyDynValidShape.empty()) {
+                copyDynValidShape = newDynValidShape;
+            }
+            copyAttr->SetToDynValidShape(OpImmediate::Specified(copyDynValidShape));
         }
-        UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), newRawShape);
+        UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), newRawShape, newDynRawShape, newDynValidShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
     }
@@ -446,10 +568,23 @@ Status RemoveRedundantAssemble::RemoveViewMultiReshape(
             return FAILED;
         }
         auto oriRawShape = secondReshape->GetIOperands().front()->GetRawTensor()->GetRawShape();
+        auto oriDynRawShape = secondReshape->GetIOperands().front()->GetRawTensor()->GetDynRawShape();
         Shape newShape;
         std::remove_copy_if(
             oriRawShape.begin(), oriRawShape.end(), std::back_inserter(newShape), [](const auto& e) { return e == 1; });
+        std::vector<SymbolicScalar> newDynShape;
+        if (!oriDynRawShape.empty() && oriDynRawShape.size() == oriRawShape.size()) {
+            for (size_t idx = 0; idx < oriRawShape.size(); ++idx) {
+                if (oriRawShape[idx] != 1) {
+                    newDynShape.push_back(oriDynRawShape[idx]);
+                }
+            }
+        }
+        if (newDynShape.empty() && !newShape.empty()) {
+            newDynShape = SymbolicScalar::FromConcrete(newShape);
+        }
         secondReshape->GetOOperands().front()->GetRawTensor()->UpdateRawShape(newShape);
+        secondReshape->GetOOperands().front()->GetRawTensor()->UpdateDynRawShape(newDynShape);
         secondReshape->ReplaceIOperand(0, firstReshape->GetIOperands().front());
         firstReshape->SetAsDeleted();
         viewOp->SetAsDeleted();
@@ -492,13 +627,24 @@ Status RemoveRedundantAssemble::HandleDynOffsetForReshape(
         return SUCCESS;
     }
     auto& assembleOutShape = assembleOp.GetOOperands()[0]->tensor->rawshape;
+    auto assembleOutDynShape = assembleOp.GetOOperands()[0]->tensor->GetDynRawShape();
     bool isReduce = assembleOutShape.size() < producer->GetIOperands()[0]->shape.size();
     bool isSuccess = isReduce ?
                          CalculateNewRawShapeReduce(producer->GetIOperands()[0]->shape, assembleOutShape, newRawShape) :
                          CalculateNewRawShapeExpand(producer->GetIOperands()[0]->shape, assembleOutShape, newRawShape);
     if (!isSuccess)
         return SUCCESS;
-    GetDynOffsetBeforeReshape(dynOffset, assembleOutShape, newRawShape, newDynOffset);
+    std::vector<SymbolicScalar> newDynRawShape;
+    isSuccess = isReduce ? CalculateNewDynRawShapeReduce(
+                               producer->GetIOperands()[0]->shape, assembleOutDynShape, newRawShape, newDynRawShape) :
+                           CalculateNewDynRawShapeExpand(
+                               producer->GetIOperands()[0]->shape, assembleOutDynShape, newRawShape, newDynRawShape);
+    if (!isSuccess) {
+        return SUCCESS;
+    }
+    auto dynAssembleOutShape =
+        assembleOutDynShape.empty() ? SymbolicScalar::FromConcrete(assembleOutShape) : assembleOutDynShape;
+    GetDynOffsetBeforeDynReshape(dynOffset, dynAssembleOutShape, newDynRawShape, newDynOffset);
     APASS_LOG_DEBUG_F(
         Elements::Operation, "Process Assemble %d Tensor[%d]: newRawshape: %s, newOffset: %s.", assembleOp.GetOpMagic(),
         producer->GetIOperands()[0]->GetMagic(), IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynOffset).c_str());
@@ -518,6 +664,7 @@ Status RemoveRedundantAssemble::HandleDynOffsetForReshape(
         copyAttr->SetToOffset(newOffset);
     }
     producer->GetIOperands()[0]->tensor->UpdateRawShape(newRawShape);
+    producer->GetIOperands()[0]->tensor->UpdateDynRawShape(newDynRawShape);
     return SUCCESS;
 }
 

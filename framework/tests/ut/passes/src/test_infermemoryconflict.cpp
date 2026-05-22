@@ -62,6 +62,50 @@ public:
     void TearDown() override {}
 };
 
+int CountRegisterCopy(Function* function)
+{
+    int cnt = 0;
+    for (auto& op : function->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            cnt += 1;
+        }
+    }
+    return cnt;
+}
+
+void ExpectNoRegisterCopyForViewReshapeMatmul(const Shape& reshapeInputShape)
+{
+    const Shape reshapeOutputShape = {NUM_64, NUM_128, NUM_64};
+    const Shape matmulRhsShape = {NUM_64, NUM_64};
+    const Shape conflictRawShape = {NUM_64, NUM_128, NUM_32};
+
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, reshapeInputShape, "t1"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, reshapeInputShape, "t2"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, reshapeInputShape, "t3"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, reshapeOutputShape, "t4"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, matmulRhsShape, "t5"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, matmulRhsShape, "t6"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, reshapeOutputShape, "o1"));
+    ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, reshapeOutputShape, "o2"));
+
+    ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "V1"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "V2"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "R1"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"t4", "t5"}, {"o1"}, "MUL1"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"t4", "t6"}, {"o2"}, "MUL2"));
+
+    G.GetTensor("t4")->tensor->UpdateRawShape(conflictRawShape);
+    ASSERT_TRUE(G.SetInCast({"t1", "t5", "t6"}));
+    ASSERT_TRUE(G.SetOutCast({"o1", "o2"}));
+
+    auto currFunctionPtr = G.GetFunction();
+    InferMemoryConflict pass;
+    auto status = pass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(CountRegisterCopy(currFunctionPtr), NUM_ZERO);
+}
+
 TEST_F(InferMemoryConflictTest, CheckRawShapeConflictInShapeNegative)
 {
     auto currFunctionPtr =
@@ -75,7 +119,7 @@ TEST_F(InferMemoryConflictTest, CheckRawShapeConflictInShapeNegative)
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {outTensor});
     InferMemoryConflict pass;
     // 这里只关注 inShape 中存在负值时的早返回分支，reshapeOp 不会被访问，传入 nullptr 即可
-    EXPECT_TRUE(pass.CheckRawShapeConflict(inTensor, outTensor, nullptr));
+    EXPECT_TRUE(pass.CheckRawShapeConflict(inTensor, outTensor));
 }
 
 TEST_F(InferMemoryConflictTest, CheckRawShapeConflictOutShapeNegative)
@@ -90,7 +134,7 @@ TEST_F(InferMemoryConflictTest, CheckRawShapeConflictOutShapeNegative)
     auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, outRaw, std::vector<int64_t>{0, 0}, outShape);
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {outTensor});
     InferMemoryConflict pass;
-    EXPECT_TRUE(pass.CheckRawShapeConflict(inTensor, outTensor, nullptr));
+    EXPECT_TRUE(pass.CheckRawShapeConflict(inTensor, outTensor));
 }
 
 TEST_F(InferMemoryConflictTest, TestInit)
@@ -1088,6 +1132,26 @@ TEST_F(InferMemoryConflictTest, STest4)
         }
     }
     EXPECT_EQ(cnt, 0);
+}
+
+/*
+STest4_4DTo3D
+view->reshape(4D->3D)->matmul
+raw shape 冲突但 reshape shape 满足 MatchReshapeDimensionPair，优化场景不插入 register copy
+*/
+TEST_F(InferMemoryConflictTest, STest4_4DTo3D)
+{
+    ExpectNoRegisterCopyForViewReshapeMatmul({1, NUM_64, NUM_128, NUM_64});
+}
+
+/*
+STest4_5DTo3D
+view->reshape(5D->3D)->matmul
+raw shape 冲突但 reshape shape 满足 MatchReshapeDimensionPair，优化场景不插入 register copy
+*/
+TEST_F(InferMemoryConflictTest, STest4_5DTo3D)
+{
+    ExpectNoRegisterCopyForViewReshapeMatmul({1, 1, NUM_64, NUM_128, NUM_64});
 }
 
 /*

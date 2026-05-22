@@ -1383,6 +1383,7 @@ bool MatchBatchMatMulPattern(const std::vector<int64_t>& inputShape, const std::
     constexpr size_t DIMENSIONS_2D = 2;
     constexpr size_t DIMENSIONS_3D = 3;
     constexpr size_t DIMENSIONS_4D = 4;
+    constexpr size_t DIMENSIONS_5D = 5;
     // 定义所有有效的模式：{input_size, output_size, 验证函数}
     using Validator = std::function<bool(const std::vector<int64_t>&, const std::vector<int64_t>&)>;
 
@@ -1395,8 +1396,24 @@ bool MatchBatchMatMulPattern(const std::vector<int64_t>& inputShape, const std::
          [](const auto& in, const auto& out) {
              return in[0] == 1 && in[1] == 1 && in[2] == out[0] && in[3] == out[1];
          }},
-        {{DIMENSIONS_2D, DIMENSIONS_4D}, [](const auto& in, const auto& out) {
+        {{DIMENSIONS_2D, DIMENSIONS_4D},
+         [](const auto& in, const auto& out) {
              return out[0] == 1 && out[1] == 1 && in[0] == out[2] && in[1] == out[3];
+         }},
+        {{DIMENSIONS_4D, DIMENSIONS_3D},
+         [](const auto& in, const auto& out) {
+             return in[0] == 1 && in[1] == out[0] && in[2] == out[1] && in[3] == out[2];
+         }},
+        {{DIMENSIONS_3D, DIMENSIONS_4D},
+         [](const auto& in, const auto& out) {
+             return out[0] == 1 && in[0] == out[1] && in[1] == out[2] && in[2] == out[3];
+         }},
+        {{DIMENSIONS_5D, DIMENSIONS_3D},
+         [](const auto& in, const auto& out) {
+             return in[0] == 1 && in[1] == 1 && in[2] == out[0] && in[3] == out[1] && in[4] == out[2];
+         }},
+        {{DIMENSIONS_3D, DIMENSIONS_5D}, [](const auto& in, const auto& out) {
+             return out[0] == 1 && out[1] == 1 && in[0] == out[2] && in[1] == out[3] && in[2] == out[4];
          }}};
 
     for (const auto& [sizes, validator] : patterns) {

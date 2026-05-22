@@ -41,7 +41,8 @@ private:
         std::queue<LogicalTensorPtr>& curTensors);
     Status BackwardPropagation(Function& function);
     Status UpdateBackwardTensor(
-        const LogicalTensorPtr& curTensor, Operation* producer, std::queue<LogicalTensorPtr>& curTensors);
+        Function& function, const LogicalTensorPtr& curTensor, Operation* producer,
+        std::queue<LogicalTensorPtr>& curTensors);
     Status InsertPrecededCopys(Function& function);
     Status InsertPostCopys(Function& function);
     Status InsertCopys(Function& function);
@@ -53,11 +54,10 @@ private:
 
     bool CheckTransmit(Operation& curOp);
     bool CheckConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
-    bool CheckRawShapeConflict(
-        const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor, const Operation* reshapeOp);
+    bool CheckRawShapeConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
     bool IsValidTileShape(const Operation& op) const;
-    bool MatchReshapePattern(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
-    bool MatMulPattern(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
+    bool MatchReshapePattern(Function& function, const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
+    bool CheckReshapeContext(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
 
     std::set<Operation*> preregcopys;
     std::set<Operation*> postregcopys;

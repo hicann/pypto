@@ -38,7 +38,9 @@ public:
     Status ProcessView(Function& function) const;
 
 private:
-    void UpdateReshapeShape(Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape) const;
+    void UpdateReshapeShape(
+        Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape,
+        const std::vector<SymbolicScalar>& newDynRawShape, const std::vector<SymbolicScalar>& newDynValidShape) const;
     Status SplitMultiConsumerReshape(
         Function& function, std::vector<std::pair<Operation*, Operation*>>& multiReshapeVector) const;
     Status ProcessReshape(
