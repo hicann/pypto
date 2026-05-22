@@ -17,6 +17,8 @@
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
@@ -118,7 +120,7 @@ void BuildGraphForCollectCopyOut(
     auto& assemble_op3 = func->AddOperation(Opcode::OP_ASSEMBLE, {copyTensor}, {ubTensor});
     assemble_op3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset3));
 
-    validShape = {SymbolicScalar("a"), kNumEight};
+    validShape = {CreateTestScalarVar("a"), kNumEight};
     auto& reshape_op = func->AddOperation(Opcode::OP_RESHAPE, {ubTensor}, {output});
     reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
 }
@@ -233,43 +235,43 @@ TEST_F(TestSplitReshapePass, TestCheckDynStatus)
     input = {kNumFour, kNumTwo};
     output = {kNumTwo, kNumFour};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {SymbolicScalar("a"), kNumFour};
+    dynOutput = {CreateTestScalarVar("a"), kNumFour};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), WARNING);
 
     input = {kNumFour, kNumTwo};
     output = {kNumTwo, kNumFour};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {kNumTwo, SymbolicScalar("a")};
+    dynOutput = {kNumTwo, CreateTestScalarVar("a")};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), WARNING);
 
     input = {kNumFour, kNumTwo};
     output = {kNumTwo, kNumFour};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {kNumTwo, kNumOne, SymbolicScalar("a")};
+    dynOutput = {kNumTwo, kNumOne, CreateTestScalarVar("a")};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), FAILED);
 
     input = {kNumTwo, kNumOne, kNumFour};
     output = {kNumTwo, kNumOne, kNumTwo, kNumTwo};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {SymbolicScalar("a"), kNumOne, kNumTwo, kNumTwo};
+    dynOutput = {CreateTestScalarVar("a"), kNumOne, kNumTwo, kNumTwo};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), SUCCESS);
 
     input = {kNumTwo, kNumOne, kNumTwo, kNumTwo};
     output = {kNumTwo, kNumOne, kNumFour};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {SymbolicScalar("a"), kNumOne, kNumFour};
+    dynOutput = {CreateTestScalarVar("a"), kNumOne, kNumFour};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), SUCCESS);
 
     input = {kNumTwo, kNumOne, kNumTwo, kNumTwo};
     output = {kNumTwo, kNumOne, kNumFour};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {kNumTwo, kNumOne, SymbolicScalar("a")};
+    dynOutput = {kNumTwo, kNumOne, CreateTestScalarVar("a")};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), WARNING);
 
     input = {kNumTwo, kNumOne, kNumTwo, kNumTwo};
     output = {kNumTwo, kNumOne, kNumFour};
     alignedShape = {kNumTwo, kNumTwo, kNumTwo};
-    dynOutput = {kNumTwo, SymbolicScalar("a"), kNumFour};
+    dynOutput = {kNumTwo, CreateTestScalarVar("a"), kNumFour};
     EXPECT_EQ(pass.CheckDynStatus(alignedShape, input, output, dynOutput), SUCCESS);
 }
 
@@ -687,7 +689,7 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatch)
     std::vector<int64_t> shape1 = {kNumTwo, kNumTwo, kNumTwo};
     std::vector<int64_t> shape2 = {kNumFour, kNumTwo};
     std::vector<int64_t> view_offset = {kNumZero, kNumZero};
-    std::vector<SymbolicScalar> validShape = {kNumFour, SymbolicScalar("a")};
+    std::vector<SymbolicScalar> validShape = {kNumFour, CreateTestScalarVar("a")};
 
     std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
     auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor, offset, shape1);
@@ -858,7 +860,7 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     std::vector<int64_t> offset2 = {kNumZero, kNumZero};
     std::vector<int64_t> view_offset1 = {kNumZero, kNumZero};
     std::vector<int64_t> view_offset2 = {kNumZero, kNumTwo};
-    std::vector<SymbolicScalar> validShape = {SymbolicScalar("a"), kNumFour};
+    std::vector<SymbolicScalar> validShape = {CreateTestScalarVar("a"), kNumFour};
 
     std::shared_ptr<RawTensor> RawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
     auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, RawTensor1, offset1, shape1);
@@ -912,7 +914,7 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     para.oriViewDynShape = newValidShape2;
     EXPECT_EQ(pass.ProcessOnetoMulti(*currFunctionPtr, view_op2, para), SUCCESS);
 
-    std::vector<SymbolicScalar> expectShape = {SymbolicScalar("a") * 1, kNumFour};
+    std::vector<SymbolicScalar> expectShape = {CreateTestScalarVar("a") * 1, kNumFour};
     EXPECT_EQ(pass.reshapes_.size(), kSizeOne);
     auto newReshape = pass.reshapes_.begin()->second;
     auto newReshapeResource = newReshape->input;
@@ -1045,7 +1047,7 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatchWithAll)
     std::vector<int64_t> offset1 = {kNumZero, kNumZero};
     std::vector<int64_t> offset2 = {kNumZero, kNumTwo};
     std::vector<int64_t> view_offset = {kNumZero, kNumZero, kNumZero};
-    std::vector<SymbolicScalar> validShape = {SymbolicScalar("a"), kNumTwo, kNumTwo};
+    std::vector<SymbolicScalar> validShape = {CreateTestScalarVar("a"), kNumTwo, kNumTwo};
 
     std::shared_ptr<RawTensor> RawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
     auto input1 = std::make_shared<LogicalTensor>(*currFunctionPtr, RawTensor1, offset1, shape2);
@@ -1080,8 +1082,8 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatchWithAll)
         std::make_shared<LogicalTensor>(*currFunctionPtr, input1->tensor, newInput1TileOffset, newInput1TileShape);
     std::vector<int64_t> newInput2TileOffset = {kNumZero, kNumOne, kNumZero};
     std::vector<int64_t> newInput2TileShape = {kNumTwo, kNumOne, kNumTwo};
-    std::vector<SymbolicScalar> newInput2DynOffset = {SymbolicScalar("b"), kNumOne, kNumZero};
-    std::vector<SymbolicScalar> newInput2DynShape = {SymbolicScalar("a"), kNumOne, kNumTwo};
+    std::vector<SymbolicScalar> newInput2DynOffset = {CreateTestScalarVar("b"), kNumOne, kNumZero};
+    std::vector<SymbolicScalar> newInput2DynShape = {CreateTestScalarVar("a"), kNumOne, kNumTwo};
     auto newInput2 =
         std::make_shared<LogicalTensor>(*currFunctionPtr, input2->tensor, newInput2TileOffset, newInput2TileShape);
     para.newOverlaps = {newInput1, newInput2};
@@ -1393,8 +1395,8 @@ LogicalTensors BuildDynPerfectlyMatchFunc(std::shared_ptr<Function> func)
     std::vector<int64_t> assembleOffset2 = {kNumZero, kNumZero, kNumTwo};
     std::vector<int64_t> viewOffset1 = {kNumZero, kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> viewOffset2 = {kNumZero, kNumZero, kNumZero, kNumTwo};
-    std::vector<SymbolicScalar> validShape = {SymbolicScalar("a0"), SymbolicScalar("a1"), kNumOne, kNumFour};
-    std::vector<SymbolicScalar> dynInputShape = {SymbolicScalar("a0"), SymbolicScalar("a1"), kNumTwo};
+    std::vector<SymbolicScalar> validShape = {CreateTestScalarVar("a0"), CreateTestScalarVar("a1"), kNumOne, kNumFour};
+    std::vector<SymbolicScalar> dynInputShape = {CreateTestScalarVar("a0"), CreateTestScalarVar("a1"), kNumTwo};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape2);
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);
@@ -1453,7 +1455,7 @@ TEST_F(TestSplitReshapePass, TestDynPerfectlyMatchSTest)
     EXPECT_TRUE(func != nullptr);
     std::vector<int64_t> assembleOffset1 = {kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> assembleOffset2 = {kNumZero, kNumZero, kNumTwo};
-    std::vector<SymbolicScalar> dynInputShape = {SymbolicScalar("a0"), SymbolicScalar("a1"), kNumTwo};
+    std::vector<SymbolicScalar> dynInputShape = {CreateTestScalarVar("a0"), CreateTestScalarVar("a1"), kNumTwo};
 
     auto inputs = BuildDynPerfectlyMatchFunc(func);
 
@@ -1495,8 +1497,8 @@ LogicalTensors BuildDynBeCoveredFunc(std::shared_ptr<Function> func)
     std::vector<int64_t> viewOffset2 = {kNumZero, kNumTwo};
     std::vector<int64_t> viewOffset3 = {kNumTwo, kNumZero};
     std::vector<int64_t> viewOffset4 = {kNumTwo, kNumTwo};
-    std::vector<SymbolicScalar> validShape = {kNumFour, SymbolicScalar("a")};
-    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, SymbolicScalar("a")};
+    std::vector<SymbolicScalar> validShape = {kNumFour, CreateTestScalarVar("a")};
+    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, CreateTestScalarVar("a")};
 
     auto ubTensor1 = std::make_shared<LogicalTensor>(*func, DT_FP32, shape2);
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UNKNOWN, false);
@@ -1562,7 +1564,7 @@ TEST_F(TestSplitReshapePass, TestDynBeCoveredSTest)
 
     std::vector<int64_t> assembleOffset1 = {kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> assembleOffset2 = {kNumZero, kNumZero, kNumTwo};
-    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, SymbolicScalar("a")};
+    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, CreateTestScalarVar("a")};
 
     auto inputs = BuildDynBeCoveredFunc(func);
     RunPassStra(*func, PassName::SPLIT_RESHAPE);
@@ -1613,8 +1615,8 @@ LogicalTensors BuildDynPerfectlyMatchWithAllFunc(std::shared_ptr<Function> func)
     std::vector<int64_t> assembleOffset4 = {kNumZero, kNumSix, kNumZero};
     std::vector<int64_t> viewOffset1 = {kNumZero, kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> viewOffset2 = {kNumZero, kNumTwo, kNumZero, kNumZero};
-    std::vector<SymbolicScalar> validShape = {kNumTwo, kNumFour, kNumTwo, SymbolicScalar("a")};
-    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, SymbolicScalar("a")};
+    std::vector<SymbolicScalar> validShape = {kNumTwo, kNumFour, kNumTwo, CreateTestScalarVar("a")};
+    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, CreateTestScalarVar("a")};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape2);
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);
@@ -1681,7 +1683,7 @@ TEST_F(TestSplitReshapePass, TestDynPerfectlyMatchWithAllSTest)
     std::vector<int64_t> assembleOffset2 = {kNumZero, kNumTwo, kNumZero};
     std::vector<int64_t> assembleOffset3 = {kNumZero, kNumFour, kNumZero};
     std::vector<int64_t> assembleOffset4 = {kNumZero, kNumSix, kNumZero};
-    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, SymbolicScalar("a")};
+    std::vector<SymbolicScalar> dynInputShape = {kNumTwo, kNumTwo, CreateTestScalarVar("a")};
 
     auto inputs = BuildDynPerfectlyMatchWithAllFunc(func);
     RunPassStra(*func, PassName::SPLIT_RESHAPE);
@@ -1738,7 +1740,7 @@ const CastMode attrCastmode = CAST_FLOOR;
 const std::string keyString = "key_string";
 const std::string attrString = "attr_string";
 const std::string keySymbolicScalar = "key_symbolicScalar";
-const SymbolicScalar attrSymbolicScalar = SymbolicScalar(4);
+const SymbolicScalar attrSymbolicScalar = IRBuilder().CreateConstInt(4);
 } // namespace
 
 // 测试新生成的op是否继承了原op的scopeID和attribute。
@@ -1953,7 +1955,7 @@ TEST_F(TestSplitReshapePass, TestExceptionCase4)
     std::vector<int64_t> assembleOffset2 = {kNumZero, kNumZero, kNumTwo};
     std::vector<int64_t> viewOffset1 = {kNumZero, kNumZero, kNumZero, kNumZero};
     std::vector<int64_t> viewOffset2 = {kNumZero, kNumZero, kNumOne, kNumZero};
-    std::vector<SymbolicScalar> validShape = {kNumTwo, kNumTwo, kNumTwo, SymbolicScalar("a")};
+    std::vector<SymbolicScalar> validShape = {kNumTwo, kNumTwo, kNumTwo, CreateTestScalarVar("a")};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape2);
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);

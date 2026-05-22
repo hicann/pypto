@@ -17,6 +17,8 @@
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "ut_json/ut_json_tool.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -459,8 +461,8 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest12)
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     std::vector<SymbolicScalar> dynValidShape1;
     std::vector<SymbolicScalar> dynValidShape2;
-    dynValidShape1.push_back(SymbolicScalar("Tensor1"));
-    dynValidShape2.push_back(SymbolicScalar("Tensor2"));
+    dynValidShape1.push_back(CreateTestScalarVar("Tensor1"));
+    dynValidShape2.push_back(CreateTestScalarVar("Tensor2"));
     ubTensor1->UpdateDynValidShape(dynValidShape1);
     ubTensor2->UpdateDynValidShape(dynValidShape2);
     currFunctionPtr->AddOperation(Opcode::OP_EXPAND, {ubTensor1}, {ubTensor2});
@@ -1071,14 +1073,14 @@ TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleDynSpecialCase)
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(
         *currFunctionPtr, DT_FP32, shape1, TileOpFormat::TILEOP_ND, "outCast");
-    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
+    outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    ubTensor1->UpdateDynValidShape({SymbolicScalar("Reshape_0_Dim_0"), SymbolicScalar("Reshape_0_Dim_1")});
+    ubTensor1->UpdateDynValidShape({CreateTestScalarVar("Reshape_0_Dim_0"), CreateTestScalarVar("Reshape_0_Dim_1")});
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    ubTensor2->UpdateDynValidShape({SymbolicScalar("Reshape_0_Dim_0"), SymbolicScalar("Reshape_0_Dim_1")});
+    ubTensor2->UpdateDynValidShape({CreateTestScalarVar("Reshape_0_Dim_0"), CreateTestScalarVar("Reshape_0_Dim_1")});
 
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {ubTensor1});
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
@@ -1102,8 +1104,8 @@ TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleDynSpecialCase)
             ++assembleNum;
         }
     }
-    EXPECT_EQ(currFunctionPtr->GetOutcast()[0]->GetDynValidShape()[0].Dump(), SymbolicScalar("Reshape_0_Dim_0").Dump());
-    EXPECT_EQ(currFunctionPtr->GetOutcast()[0]->GetDynValidShape()[1].Dump(), SymbolicScalar("Reshape_0_Dim_1").Dump());
+    EXPECT_EQ(currFunctionPtr->GetOutcast()[0]->GetDynValidShape()[0].Dump(), "Reshape_0_Dim_0");
+    EXPECT_EQ(currFunctionPtr->GetOutcast()[0]->GetDynValidShape()[1].Dump(), "Reshape_0_Dim_1");
     EXPECT_EQ(viewNum, kNumZero);
     EXPECT_EQ(assembleNum, kNumZero);
 }
@@ -1232,8 +1234,8 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase)
     }
     EXPECT_EQ(viewNum, kNumOne);
     EXPECT_EQ(assembleNum, kNumZero);
-    EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[0].Dump(), SymbolicScalar("0").Dump());
-    EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[1].Dump(), SymbolicScalar("0").Dump());
+    EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[0].Dump(), "0");
+    EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[1].Dump(), "0");
 }
 
 /*
@@ -1422,11 +1424,11 @@ TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
 
     auto expOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape8x16);
     expOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    expOutput->UpdateDynValidShape({SymbolicScalar("exp_output_dim0"), SymbolicScalar("exp_output_dim1")});
+    expOutput->UpdateDynValidShape({CreateTestScalarVar("exp_output_dim0"), CreateTestScalarVar("exp_output_dim1")});
 
     auto reshapeOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape16x8);
     reshapeOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    reshapeOutput->UpdateDynValidShape({SymbolicScalar("reshape_output_dim0"), SymbolicScalar("reshape_output_dim1")});
+    reshapeOutput->UpdateDynValidShape({CreateTestScalarVar("reshape_output_dim0"), CreateTestScalarVar("reshape_output_dim1")});
 
     auto outCast = std::make_shared<LogicalTensor>(
         *currFunctionPtr, DT_FP32, shape16x8, TileOpFormat::TILEOP_ND, "outCast");
@@ -1461,8 +1463,8 @@ TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
     auto outcastAfterPass = currFunctionPtr->GetOutcast()[0];
     EXPECT_FALSE(outcastAfterPass->GetDynValidShape().empty());
     EXPECT_EQ(outcastAfterPass->GetDynValidShape().size(), kNumTwo);
-    EXPECT_EQ(outcastAfterPass->GetDynValidShape()[0].Dump(), SymbolicScalar("reshape_output_dim0").Dump());
-    EXPECT_EQ(outcastAfterPass->GetDynValidShape()[1].Dump(), SymbolicScalar("reshape_output_dim1").Dump());
+    EXPECT_EQ(outcastAfterPass->GetDynValidShape()[0].Dump(), "reshape_output_dim0");
+    EXPECT_EQ(outcastAfterPass->GetDynValidShape()[1].Dump(), "reshape_output_dim1");
     EXPECT_EQ(assembleNum, kNumZero);
     EXPECT_EQ(reshapeNum, kNumOne);
 }
@@ -1498,7 +1500,7 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
 
     auto viewOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4x16);
     viewOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
-    viewOutput->UpdateDynValidShape({SymbolicScalar("view_output_dim0"), SymbolicScalar("view_output_dim1")});
+    viewOutput->UpdateDynValidShape({CreateTestScalarVar("view_output_dim0"), CreateTestScalarVar("view_output_dim1")});
 
     auto assembleOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4x16);
     assembleOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
@@ -1544,8 +1546,8 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     auto newViewOutput = newViewOp->GetOOperands()[0];
     EXPECT_FALSE(newViewOutput->GetDynValidShape().empty());
     EXPECT_EQ(newViewOutput->GetDynValidShape().size(), kNumTwo);
-    EXPECT_EQ(newViewOutput->GetDynValidShape()[0].Dump(), SymbolicScalar("view_output_dim0").Dump());
-    EXPECT_EQ(newViewOutput->GetDynValidShape()[1].Dump(), SymbolicScalar("view_output_dim1").Dump());
+    EXPECT_EQ(newViewOutput->GetDynValidShape()[0].Dump(), "view_output_dim0");
+    EXPECT_EQ(newViewOutput->GetDynValidShape()[1].Dump(), "view_output_dim1");
 }
 }
 }

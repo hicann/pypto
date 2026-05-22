@@ -13,6 +13,7 @@
  * \brief Unit test for mixSubgraphSplit
  * */
 #include <gtest/gtest.h>
+#include "interface/tensor/irbuilder.h"
 #include "passes/block_graph_pass/mix_subgraph_split.h"
 #include "computational_graph_builder.h"
 
@@ -267,7 +268,7 @@ Operation& CreateCallOp(
     std::vector<SymbolicScalar> linearArgs;
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 9; j++) {
-            linearArgs.push_back(SymbolicScalar(static_cast<int64_t>(j + i * 10)));
+            linearArgs.push_back(IRBuilder().CreateConstInt(static_cast<int64_t>(j + i * 10)));
         }
     }
     callAttr->linearArgList_ = linearArgs;
@@ -440,7 +441,7 @@ void CreateCallOpForNonMix(
     std::vector<SymbolicScalar> linearArgs;
     for (int argIdx = 0; argIdx < 2; argIdx++) {
         for (int j = 0; j < 9; j++) {
-            linearArgs.push_back(SymbolicScalar(static_cast<int64_t>(j + argIdx * 10)));
+            linearArgs.push_back(IRBuilder().CreateConstInt(static_cast<int64_t>(j + argIdx * 10)));
         }
     }
     callAttr->linearArgList_ = linearArgs;
@@ -522,7 +523,7 @@ void CreateCallOpsForMixFunction(
         std::vector<SymbolicScalar> linearArgs;
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 9; j++) {
-                linearArgs.push_back(SymbolicScalar(static_cast<int64_t>(j + i * 10)));
+                linearArgs.push_back(IRBuilder().CreateConstInt(static_cast<int64_t>(j + i * 10)));
             }
         }
         callAttr->linearArgList_ = linearArgs;

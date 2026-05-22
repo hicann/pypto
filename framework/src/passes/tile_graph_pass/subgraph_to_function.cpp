@@ -16,6 +16,7 @@
 #include "passes/tile_graph_pass/subgraph_to_function.h"
 #include <fstream>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -32,6 +33,17 @@
 #define MODULE_NAME "SubgraphToFunction"
 
 namespace npu::tile_fwk {
+namespace {
+const SymbolicScalar& GetParamAddrSymbol()
+{
+    static const SymbolicScalar kGetParamAddr = []() {
+        IRBuilder builder;
+        return builder.CreateScalarVar(AddRuntimeCoaPrefix("GET_PARAM_ADDR"));
+    }();
+    return kGetParamAddr;
+}
+} // namespace
+
 void SubgraphToFunction::Init()
 {
     subFuncInvokeInfos.clear();
@@ -899,7 +911,7 @@ Status SubgraphToFunction::GetTensorDataDependencyClear(Function& function)
 {
     auto root = function.GetRootFunction();
 
-    SymbolicScalar getAddr = SymbolicScalar(AddRuntimeCoaPrefix("GET_PARAM_ADDR"));
+    IRBuilder builder;
     for (const auto& [psgId, leaf] : root->programs_) {
         (void)psgId;
         auto iodescDict = leaf->GetTensorDataForLeafGraph();
@@ -926,7 +938,9 @@ Status SubgraphToFunction::GetTensorDataDependencyClear(Function& function)
             }
             auto incastIndex = leaf->GetIncastIndex(copyInOp.GetIOperands()[0]);
             auto desc =
-                GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, incastIndex, getAddr(-1, addrCoaIndex));
+                GetTensorDataIODesc(
+                    GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, incastIndex,
+                    GetParamAddrSymbol()(builder.CreateConstInt(-1), builder.CreateConstInt(addrCoaIndex)));
             iodescDict[tensorIndex] = desc;
         }
         leaf->GetTensorDataRefreshIO(iodescDict);

@@ -18,6 +18,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -753,6 +754,7 @@ void Allocator::UpdateStorageForActualRaw(LogicalTensorPtr& input) const
 
 void UpdateCallOpRawShape(Operation& consumer, const LogicalTensorPtr& output)
 {
+    IRBuilder builder;
     const std::vector<LogicalTensorPtr>& consumerInputs = consumer.GetIOperands();
     const size_t outputShapeSize = output->shape.size();
     const size_t rawShapeStartIndex = OFFSET_INDEX + RAW_SHAPE_POS * outputShapeSize;
@@ -773,7 +775,7 @@ void UpdateCallOpRawShape(Operation& consumer, const LogicalTensorPtr& output)
         // 更新原始形状参数
         for (size_t dimIndex = 0; dimIndex < outputShapeSize; dimIndex++) {
             size_t argPosition = rawShapeStartIndex + dimIndex;
-            argList[argPosition] = SymbolicScalar(output->tensor->rawshape[dimIndex]);
+            argList[argPosition] = builder.CreateConstInt(output->tensor->rawshape[dimIndex]);
         }
     }
 }
@@ -793,6 +795,7 @@ std::string vectorToString(const std::vector<int64_t>& vec, const std::string& d
 void RefreshCallRawShape(
     Operation& callOp, size_t outputIndex, const LogicalTensorPtr& output, const LogicalTensorPtr& reusableInput)
 {
+    IRBuilder builder;
     if (output->tensor->rawshape == reusableInput->tensor->rawshape) {
         return;
     }
@@ -817,7 +820,7 @@ void RefreshCallRawShape(
 
     for (size_t dim = 0; dim < shapeSize; dim++) {
         size_t argPos = rawShapeStartIdx + dim;
-        argList[argPos] = SymbolicScalar(output->tensor->rawshape[dim]);
+        argList[argPos] = builder.CreateConstInt(output->tensor->rawshape[dim]);
     }
 
     // 刷新对应的consumer CallOp的Attr中的input rawshape数据

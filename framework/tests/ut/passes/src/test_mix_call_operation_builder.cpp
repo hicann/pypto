@@ -13,6 +13,7 @@
  * \brief Unit test for MixCallOperationBuilder
  * */
 #include <gtest/gtest.h>
+#include "interface/tensor/irbuilder.h"
 #include "passes/block_graph_pass/mix_subgraph_split/mix_call_operation_builder.h"
 #include "computational_graph_builder.h"
 
@@ -598,11 +599,11 @@ private:
     std::vector<SymbolicScalar> createTensorArgsFor2D(int tensorIndex)
     {
         std::vector<SymbolicScalar> tensorArgs;
-        tensorArgs.push_back(SymbolicScalar(tensorIndex));
+        tensorArgs.push_back(IRBuilder().CreateConstInt(tensorIndex));
 
         for (int i = 0; i < MS_NUM4; ++i) {
             for (int d = 0; d < TENSOR_DIMENSIONS; ++d) {
-                tensorArgs.push_back(SymbolicScalar(i == 0 ? 0 : MS_NUM16));
+                tensorArgs.push_back(IRBuilder().CreateConstInt(i == 0 ? 0 : MS_NUM16));
             }
         }
         return tensorArgs;

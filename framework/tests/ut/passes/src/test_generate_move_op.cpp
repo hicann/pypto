@@ -15,6 +15,8 @@
 
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -1003,12 +1005,12 @@ TEST_F(GenerateMoveOpPassTest, l1CopyInConvOffsetAccumulation)
     // L1_COPY_IN_CONV: fromOffset=[3, 4]
     auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
     std::vector<OpImmediate> shapeImm = {
-        OpImmediate::Specified(SymbolicScalar(shape[0])),
-        OpImmediate::Specified(SymbolicScalar(shape[1]))
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
     };
     std::vector<OpImmediate> fromOffset = {
-        OpImmediate::Specified(SymbolicScalar(3)),
-        OpImmediate::Specified(SymbolicScalar(4))
+        OpImmediate::Specified(IRBuilder().CreateConstInt(3)),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(4))
     };
     copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(fromOffset, MEM_L1, shapeImm, shapeImm));
 
@@ -1044,19 +1046,19 @@ TEST_F(GenerateMoveOpPassTest, l1CopyInConvSymbolicScalarOffsetAccumulation)
     auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {input}, {mid});
     auto viewAttr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2},
-        std::vector<SymbolicScalar>{SymbolicScalar("a"), SymbolicScalar("b")},
+        std::vector<SymbolicScalar>{CreateTestScalarVar("a"), CreateTestScalarVar("b")},
         std::vector<SymbolicScalar>{});
     viewOp.SetOpAttribute(viewAttr);
 
     // L1_COPY_IN_CONV: fromOffset=[Sym("c"), Sym("d")]
     auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
     std::vector<OpImmediate> shapeImm = {
-        OpImmediate::Specified(SymbolicScalar(shape[0])),
-        OpImmediate::Specified(SymbolicScalar(shape[1]))
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
     };
     std::vector<OpImmediate> fromOffset = {
-        OpImmediate::Specified(SymbolicScalar("c")),
-        OpImmediate::Specified(SymbolicScalar("d"))
+        OpImmediate::Specified(CreateTestScalarVar("c")),
+        OpImmediate::Specified(CreateTestScalarVar("d"))
     };
     copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(fromOffset, MEM_L1, shapeImm, shapeImm));
 
@@ -1135,12 +1137,12 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvOffsetAccumulation)
     // L0C_COPY_OUT_CONV: toOffset=[1, 2]
     auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
     std::vector<OpImmediate> shapeImm = {
-        OpImmediate::Specified(SymbolicScalar(shape[0])),
-        OpImmediate::Specified(SymbolicScalar(shape[1]))
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
     };
     std::vector<OpImmediate> toOffset = {
-        OpImmediate::Specified(SymbolicScalar(1)),
-        OpImmediate::Specified(SymbolicScalar(2))
+        OpImmediate::Specified(IRBuilder().CreateConstInt(1)),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(2))
     };
     copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, toOffset, shapeImm, shapeImm));
 
@@ -1180,12 +1182,12 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvSymbolicScalarOffsetAccumulation)
     // L0C_COPY_OUT_CONV: toOffset=[Sym("a"), Sym("b")]
     auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
     std::vector<OpImmediate> shapeImm = {
-        OpImmediate::Specified(SymbolicScalar(shape[0])),
-        OpImmediate::Specified(SymbolicScalar(shape[1]))
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
+        OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
     };
     std::vector<OpImmediate> toOffset = {
-        OpImmediate::Specified(SymbolicScalar("a")),
-        OpImmediate::Specified(SymbolicScalar("b"))
+        OpImmediate::Specified(CreateTestScalarVar("a")),
+        OpImmediate::Specified(CreateTestScalarVar("b"))
     };
     copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, toOffset, shapeImm, shapeImm));
 
@@ -1193,7 +1195,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvSymbolicScalarOffsetAccumulation)
     auto& assembleOp = func->AddRawOperation(Opcode::OP_ASSEMBLE, {mid}, {output});
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(
         std::vector<int64_t>{1, 2},
-        std::vector<SymbolicScalar>{SymbolicScalar("c"), SymbolicScalar("d")});
+        std::vector<SymbolicScalar>{CreateTestScalarVar("c"), CreateTestScalarVar("d")});
     assembleOp.SetOpAttribute(assembleAttr);
 
     GenerateMoveOp pass;

@@ -14,6 +14,7 @@
  */
 
 #include "remove_redundant_assemble.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
@@ -124,6 +125,7 @@ void GetDynOffsetBeforeReshape(
     const std::vector<SymbolicScalar>& oriOffset, const std::vector<int64_t>& oriShape,
     const std::vector<int64_t>& newShape, std::vector<SymbolicScalar>& newOffset)
 {
+    IRBuilder builder;
     // 计算原始shape的步长（stride）
     if (oriShape.size() != oriOffset.size()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "OriShape and oriOffset size mismatch.");
@@ -137,10 +139,15 @@ void GetDynOffsetBeforeReshape(
         oriStride[i] = currentStride;
         currentStride *= oriShape[i];
     }
+    std::vector<SymbolicScalar> oriStrideScalar;
+    oriStrideScalar.reserve(oriStride.size());
+    for (auto stride : oriStride) {
+        oriStrideScalar.emplace_back(builder.CreateConstInt(stride));
+    }
     // 计算原始偏移量对应的线性索引
-    SymbolicScalar linearIndex = oriOffset[0] * SymbolicScalar(oriStride[0]);
+    SymbolicScalar linearIndex = oriOffset[0] * oriStrideScalar[0];
     for (size_t i = 1; i < oriOffset.size(); ++i) {
-        linearIndex = linearIndex + oriOffset[i] * SymbolicScalar(oriStride[i]);
+        linearIndex = linearIndex + oriOffset[i] * oriStrideScalar[i];
     }
 
     // 计算新shape的步长
@@ -150,12 +157,17 @@ void GetDynOffsetBeforeReshape(
         newStride[i] = currentStride;
         currentStride *= newShape[i];
     }
+    std::vector<SymbolicScalar> newStrideScalar;
+    newStrideScalar.reserve(newStride.size());
+    for (auto stride : newStride) {
+        newStrideScalar.emplace_back(builder.CreateConstInt(stride));
+    }
 
     // 根据线性索引计算新的偏移量
     newOffset.resize(newSize);
     for (size_t i = 0; i < newSize; ++i) {
-        newOffset[i] = linearIndex / SymbolicScalar(newStride[i]);
-        linearIndex = linearIndex % SymbolicScalar(newStride[i]);
+        newOffset[i] = linearIndex / newStrideScalar[i];
+        linearIndex = linearIndex % newStrideScalar[i];
     }
 }
 

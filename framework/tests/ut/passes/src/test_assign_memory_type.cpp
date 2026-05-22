@@ -17,6 +17,8 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
@@ -1191,8 +1193,8 @@ void ConstructL0C2L1GraphWithNonImmediateValidShape(std::shared_ptr<Function>& c
     currFunctionPtr->outCasts_.push_back(outputC2);
 
     std::vector<SymbolicScalar> dynValidShape;
-    dynValidShape.push_back(SymbolicScalar("dim0"));
-    dynValidShape.push_back(SymbolicScalar("dim1"));
+    dynValidShape.push_back(CreateTestScalarVar("dim0"));
+    dynValidShape.push_back(CreateTestScalarVar("dim1"));
     matmul1Output->UpdateDynValidShape(dynValidShape);
 }
 
@@ -1835,7 +1837,7 @@ void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
 
     std::vector<int64_t> shape = {16, 32};
     std::vector<int64_t> shape1 = {32, 16};
-    std::vector<SymbolicScalar> dynShape = {SymbolicScalar(6), SymbolicScalar(6)};
+    std::vector<SymbolicScalar> dynShape = {IRBuilder().CreateConstInt(6), IRBuilder().CreateConstInt(6)};
     std::shared_ptr<LogicalTensor> input_tensor1 =
         std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, dynShape);
     std::shared_ptr<LogicalTensor> input_tensor2 =

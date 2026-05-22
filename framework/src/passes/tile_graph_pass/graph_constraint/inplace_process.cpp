@@ -14,6 +14,7 @@
  */
 
 #include "inplace_process.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "tilefwk/error_code.h"
 
@@ -384,6 +385,7 @@ Status InplaceProcess::AdjustOffsetAndRawShape(LogicalTensorPtr& fromView, Logic
 
 Status InplaceProcess::AlignCopyInConsumer(std::shared_ptr<LogicalTensor> tensorGm) const
 {
+    IRBuilder builder;
     APASS_LOG_DEBUG_F(Elements::Tensor, "InplaceProcess::AlignCopyInConsumer tensor[%d].", tensorGm->magic);
     for (auto& consumerOp : tensorGm->GetConsumers()) {
         if (consumerOp->GetOpcode() == Opcode::OP_COPY_IN) {
@@ -398,7 +400,7 @@ Status InplaceProcess::AlignCopyInConsumer(std::shared_ptr<LogicalTensor> tensor
             std::vector<OpImmediate> newFromOffset;
             for (size_t i = 0; i < opAttr->GetFromOffset().size(); i++) {
                 newFromOffset.push_back(
-                    opAttr->GetFromOffset()[i] + OpImmediate::Specified(SymbolicScalar(tensorGm->offset[i])));
+                    opAttr->GetFromOffset()[i] + OpImmediate::Specified(builder.CreateConstInt(tensorGm->offset[i])));
             }
             opAttr->SetFromOffset(newFromOffset);
             opAttr->SetRawShape(OpImmediate::Specified(tensorGm->tensor->GetRawShape()));
@@ -409,6 +411,7 @@ Status InplaceProcess::AlignCopyInConsumer(std::shared_ptr<LogicalTensor> tensor
 
 Status InplaceProcess::AlignCopyOutProducer(std::shared_ptr<LogicalTensor> tensorGm) const
 {
+    IRBuilder builder;
     APASS_LOG_DEBUG_F(Elements::Tensor, "InplaceProcess::AlignCopyOutProducer tensor[%d].", tensorGm->magic);
     for (auto& producerOp : tensorGm->GetProducers()) {
         if (producerOp->GetOpcode() == Opcode::OP_COPY_OUT) {
@@ -423,7 +426,7 @@ Status InplaceProcess::AlignCopyOutProducer(std::shared_ptr<LogicalTensor> tenso
             std::vector<OpImmediate> newToOffset;
             for (size_t i = 0; i < opAttr->GetToOffset().size(); i++) {
                 newToOffset.push_back(
-                    opAttr->GetToOffset()[i] + OpImmediate::Specified(SymbolicScalar(tensorGm->offset[i])));
+                    opAttr->GetToOffset()[i] + OpImmediate::Specified(builder.CreateConstInt(tensorGm->offset[i])));
             }
             opAttr->SetToOffset(newToOffset);
             opAttr->SetRawShape(OpImmediate::Specified(tensorGm->tensor->GetRawShape()));

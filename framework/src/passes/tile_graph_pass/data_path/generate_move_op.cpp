@@ -16,6 +16,7 @@
 #include "passes/tile_graph_pass/data_path/generate_move_op.h"
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -235,9 +236,10 @@ void GenerateMoveOp::SetL0C2L1CopyAttr(
     Operation& op, const Shape& realShape, const std::vector<OpImmediate>& fromOffset,
     const std::vector<OpImmediate>& toOffset, Matrix::CopyMode copyMode) const
 {
+    IRBuilder builder;
     std::vector<SymbolicScalar> validShape;
     for (auto dim : realShape) {
-        SymbolicScalar scal = SymbolicScalar(dim);
+        SymbolicScalar scal = builder.CreateConstInt(dim);
         validShape.push_back(scal);
     }
     auto copyAttr = std::make_shared<CopyOpAttribute>(
@@ -253,9 +255,10 @@ void GenerateMoveOp::SetL0C2UBCopyAttr(
     Operation& op, const Shape& realShape, const std::vector<OpImmediate>& fromOffset,
     const std::vector<OpImmediate>& toOffset, Matrix::CopyMode copyMode) const
 {
+    IRBuilder builder;
     std::vector<SymbolicScalar> validShape;
     for (auto dim : realShape) {
-        SymbolicScalar scal = SymbolicScalar(dim);
+        SymbolicScalar scal = builder.CreateConstInt(dim);
         validShape.push_back(scal);
     }
     auto copyAttr = std::make_shared<CopyOpAttribute>(
@@ -271,10 +274,11 @@ void GenerateMoveOp::SetUB2L1CopyAttr(
     Operation& op, const Shape& copyShape, const std::vector<OpImmediate>& fromOffset,
     const std::vector<OpImmediate>& toOffset, Matrix::CopyMode copyMode) const
 {
+    IRBuilder builder;
     // 实际搬运的 shape 转换为 validShape
     std::vector<SymbolicScalar> validShape;
     for (auto dim : copyShape) {
-        SymbolicScalar scal = SymbolicScalar(dim);
+        SymbolicScalar scal = builder.CreateConstInt(dim);
         validShape.push_back(scal);
     }
     // 创建 CopyOpAttribute
@@ -610,10 +614,11 @@ Status GenerateMoveOp::ProcessViewOp(Function& function, Operation& op) const
 
 Status GenerateMoveOp::ProcessDuplicateOp(Operation& op) const
 {
+    IRBuilder builder;
     op.SetOpCode(Opcode::OP_COPY_OUT);
     std::vector<OpImmediate> newOffset;
     for (size_t i = 0; i < op.iOperand.front()->shape.size(); i++) {
-        newOffset.push_back(OpImmediate::Specified(SymbolicScalar(0)));
+        newOffset.push_back(OpImmediate::Specified(builder.CreateConstInt(0)));
     }
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         op.iOperand.front()->GetMemoryTypeOriginal(), newOffset, OpImmediate::Specified(op.iOperand.front()->shape),

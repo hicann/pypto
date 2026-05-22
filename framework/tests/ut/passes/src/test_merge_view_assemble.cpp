@@ -15,6 +15,8 @@
 
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -1116,7 +1118,7 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeView)
     std::unique_ptr<Function> function = std::make_unique<Function>(program, funcMagicName, funcRawName, nullptr);
 
     std::vector<int64_t> shape = {8, 16};
-    std::vector<SymbolicScalar> inputDynValidShape = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> inputDynValidShape = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
 
     auto rawTensor = std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "inputTensor");
     auto input = std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, shape);
@@ -1169,7 +1171,7 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeAssemble)
 
     std::vector<int64_t> shape = {8, 16};
     std::vector<SymbolicScalar> tensorDynValidShape = {
-        SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+        CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
 
     auto rawTensor = std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "inputTensor");
     auto input = std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, shape);

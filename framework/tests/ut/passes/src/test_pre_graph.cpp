@@ -1116,7 +1116,6 @@ TEST_F(PreGraphTest, TestTransposeMoveout)
     G.AddOp(Opcode::OP_COPY_IN, {"vec_in"}, {"copy_in"}, "copyin");
     G.AddOp(Opcode::OP_TRANSPOSE_MOVEOUT, {"copy_in"}, {"vec_out"}, "transpose_moveout");
     auto transpose_moveout = G.GetOp("transpose_moveout");
-    SymbolicScalar a = SymbolicScalar(8);
     // set incast and outcast
     G.SetInCast({"vec_in"});
     G.SetOutCast({"vec_out"});

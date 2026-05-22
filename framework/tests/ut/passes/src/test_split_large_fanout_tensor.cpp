@@ -18,6 +18,8 @@
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -95,7 +97,7 @@ public:
     void TileExpandSub(ComputationalGraphBuilder& G, const int N, const int T)
     {
         std::vector<int64_t> tileShape{T, T};
-        std::vector<SymbolicScalar> dynShape{SymbolicScalar("a"), T};
+        std::vector<SymbolicScalar> dynShape{CreateTestScalarVar("a"), T};
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 std::vector<int64_t> offset = {i * T, j * T};
@@ -149,7 +151,7 @@ public:
         std::vector<int64_t> tiledShape4{NUM_128, NUM_64};
 
         // InCast a
-        std::vector<SymbolicScalar> dynShapeA = {SymbolicScalar("a"), NUM_256};
+        std::vector<SymbolicScalar> dynShapeA = {CreateTestScalarVar("a"), NUM_256};
         G.AddTensor(DataType::DT_FP32, shape1, "a"); // [256, 256]
         auto a = G.GetTensor("a");
         a->UpdateDynValidShape(dynShapeA);
@@ -176,7 +178,7 @@ public:
         View_B->SetOpAttribute(attrB);
 
         // InCast c
-        std::vector<SymbolicScalar> dynShapeC = {SymbolicScalar("c"), NUM_64};
+        std::vector<SymbolicScalar> dynShapeC = {CreateTestScalarVar("c"), NUM_64};
         G.AddTensor(DataType::DT_FP32, shape2, "c"); // [256, 64]
         auto c = G.GetTensor("c");
         c->UpdateDynValidShape(dynShapeC);
@@ -345,7 +347,7 @@ public:
         View_UR->SetOpAttribute(attrUR);
 
         // 左半边 [16, 8] + 右半边 [16, 8]
-        std::vector<SymbolicScalar> subDynShape = {SymbolicScalar("a"), T};
+        std::vector<SymbolicScalar> subDynShape = {CreateTestScalarVar("a"), T};
         G.AddTensor(DataType::DT_FP32, shape2, "add_out");
         G.AddOp(Opcode::OP_ADD, {"sub_out_right", "sub_out_left"}, {"add_out"}, "Add");
         auto addOut = G.GetTensor("add_out");
@@ -396,7 +398,7 @@ public:
         auto attrLL = std::make_shared<ViewOpAttribute>(offsetLL, MemoryType::MEM_UNKNOWN);
         G.GetOp("View_Lower_Left")->SetOpAttribute(attrLL);
 
-        std::vector<SymbolicScalar> addDynShape = {SymbolicScalar("a"), T};
+        std::vector<SymbolicScalar> addDynShape = {CreateTestScalarVar("a"), T};
         G.AddTensor(DataType::DT_FP32, shape1, "add_out");
         G.AddOp(Opcode::OP_ADD, {"sub_out_upper_right", "sub_out_lower_left"}, {"add_out"}, "Add");
         G.GetTensor("add_out")->SetMemoryTypeBoth(MemoryType::MEM_UNKNOWN, true);
@@ -556,7 +558,7 @@ TEST_F(SplitLargeFanoutTensorTest, BeCovered_Full)
     ComputationalGraphBuilder G;
 
     // [128, 512] --> View(64, 0) --> [32, 512]
-    std::vector<SymbolicScalar> dynShapeA = {SymbolicScalar("a"), NUM_512};
+    std::vector<SymbolicScalar> dynShapeA = {CreateTestScalarVar("a"), NUM_512};
     G.AddTensor(DataType::DT_FP32, shape1, "a"); // [128, 512]
     auto a = G.GetTensor("a");
     a->UpdateDynValidShape(dynShapeA);
@@ -572,7 +574,7 @@ TEST_F(SplitLargeFanoutTensorTest, BeCovered_Full)
     View_A->SetOpAttribute(attrA);
 
     // [128, 64] --> View(64, 0) --> [32, 64]
-    std::vector<SymbolicScalar> dynShapeB = {SymbolicScalar("a"), NUM_64};
+    std::vector<SymbolicScalar> dynShapeB = {CreateTestScalarVar("a"), NUM_64};
     G.AddTensor(DataType::DT_FP32, shape0, "b"); // [128, 64]
     auto b = G.GetTensor("b");
     b->UpdateDynValidShape(dynShapeB);

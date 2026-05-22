@@ -14,6 +14,7 @@
  */
 
 #include "axis_combine.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -79,6 +80,7 @@ static void UpdateOperand(
 
 static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx, Shape& shape)
 {
+    IRBuilder builder;
     int expandDim = inputTensor[idx]->GetShape().size() - 1;
     op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{expandDim});
     auto dynValidShape = SymbolicScalar::FromConcrete(shape);
@@ -86,9 +88,9 @@ static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx
         dynValidShape = inputTensor[idx]->GetDynValidShape();
     }
     if (!(inputTensor[idx ^ 1]->GetDynValidShape().empty())) {
-        dynValidShape[expandDim] = SymbolicScalar(inputTensor[idx ^ 1]->GetDynValidShape()[expandDim]);
+        dynValidShape[expandDim] = inputTensor[idx ^ 1]->GetDynValidShape()[expandDim];
     } else {
-        dynValidShape[expandDim] = SymbolicScalar(inputTensor[idx ^ 1]->GetShape()[expandDim]);
+        dynValidShape[expandDim] = builder.CreateConstInt(inputTensor[idx ^ 1]->GetShape()[expandDim]);
     }
     op.SetAttribute(OP_ATTR_PREFIX + "validShape", dynValidShape);
 }

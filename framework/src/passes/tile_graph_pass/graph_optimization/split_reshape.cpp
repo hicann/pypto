@@ -14,6 +14,7 @@
  */
 
 #include "split_reshape.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
@@ -1280,8 +1281,9 @@ Status SplitReshape::GetAssembleDynShape(
     }
     dynValidShape = output->GetDynValidShape();
     if (dynValidShape.empty()) {
+        IRBuilder builder;
         for (size_t i = 0; i < dynInputShape.size(); ++i) {
-            dynValidShape.push_back(SymbolicScalar(0));
+            dynValidShape.push_back(builder.CreateConstInt(0));
         }
     }
     for (size_t i = 0U; i < dynValidShape.size(); i++) {

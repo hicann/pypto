@@ -17,6 +17,7 @@
 #include <vector>
 #include "tilefwk/tilefwk.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "computational_graph_builder.h"
@@ -235,10 +236,10 @@ TEST_F(TestInferDiscontinuousInput, testValidShapeInfer)
     G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "inputTensor3");
     G.AddTensor(DataType::DT_FP16, {64, 128}, MemoryType::MEM_DEVICE_DDR, "outputTensor");
 
-    G.GetTensor("inputTensor0")->UpdateDynValidShape({SymbolicScalar(16), SymbolicScalar(128)});
-    G.GetTensor("inputTensor1")->UpdateDynValidShape({SymbolicScalar(16), SymbolicScalar(128)});
-    G.GetTensor("inputTensor2")->UpdateDynValidShape({SymbolicScalar(16), SymbolicScalar(128)});
-    G.GetTensor("inputTensor3")->UpdateDynValidShape({SymbolicScalar(16), SymbolicScalar(128)});
+    G.GetTensor("inputTensor0")->UpdateDynValidShape({IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
+    G.GetTensor("inputTensor1")->UpdateDynValidShape({IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
+    G.GetTensor("inputTensor2")->UpdateDynValidShape({IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
+    G.GetTensor("inputTensor3")->UpdateDynValidShape({IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
 
     G.GetTensor("inputTensor3")->tensor = G.GetTensor("inputTensor1")->tensor;
     G.GetTensor("inputTensor1")->tensor->UpdateRawShape({32, 128});

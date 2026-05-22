@@ -22,6 +22,8 @@
 #include "passes/block_graph_pass/infer_param_index.h"
 #include "interface/operation/attribute.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 
 using namespace npu::tile_fwk;
 
@@ -55,11 +57,11 @@ TEST_F(GetParamIdxTest, TestAdd)
     auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    ubTensor1->UpdateDynValidShape({SymbolicScalar("S0"), SymbolicScalar("S1")});
+    ubTensor1->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("S1")});
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    ubTensor2->UpdateDynValidShape({SymbolicScalar("Z0"), SymbolicScalar("Z1")});
+    ubTensor2->UpdateDynValidShape({CreateTestScalarVar("Z0"), CreateTestScalarVar("Z1")});
     auto ubTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    ubTensor3->UpdateDynValidShape({SymbolicScalar("S0"), SymbolicScalar("Z1")});
+    ubTensor3->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("Z1")});
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
 
     auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
@@ -109,11 +111,11 @@ TEST_F(GetParamIdxTest, TestAddExp)
     auto incast1 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
     auto incast2 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
-    ubTensor1->UpdateDynValidShape({SymbolicScalar("S0"), SymbolicScalar("S1")});
+    ubTensor1->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("S1")});
     auto ubTensor2 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
-    ubTensor2->UpdateDynValidShape({SymbolicScalar("Z0"), SymbolicScalar("Z1")});
+    ubTensor2->UpdateDynValidShape({CreateTestScalarVar("Z0"), CreateTestScalarVar("Z1")});
     auto ubTensor3 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
-    ubTensor3->UpdateDynValidShape({SymbolicScalar("S0"), SymbolicScalar("Z1")});
+    ubTensor3->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("Z1")});
     auto outCast = std::make_shared<LogicalTensor>(*subGraphPtr1, DT_FP32, shape);
 
     auto& copy_op1 = subGraphPtr0->AddOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
@@ -141,7 +143,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     copy_out_op.SetOOpAttrOffset(0, 10);
 
     auto ubTensor4 = std::make_shared<LogicalTensor>(*subGraphPtr1, DT_FP32, shape);
-    ubTensor4->UpdateDynValidShape({SymbolicScalar("X0"), SymbolicScalar("X1")});
+    ubTensor4->UpdateDynValidShape({CreateTestScalarVar("X0"), CreateTestScalarVar("X1")});
     auto& copy_op3 = subGraphPtr1->AddOperation(Opcode::OP_COPY_IN, {tmpCast}, {ubTensor4});
     fromOffset = {OpImmediate::Parameter(16), OpImmediate::Parameter(17)};
     auto copyin3Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);

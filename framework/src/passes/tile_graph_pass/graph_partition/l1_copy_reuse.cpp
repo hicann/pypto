@@ -14,6 +14,7 @@
  */
 
 #include "l1_copy_reuse.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
@@ -32,9 +33,10 @@ inline std::vector<uint64_t> GetGMInputFeature(const Operation& op)
         std::shared_ptr<ViewOpAttribute> attr = std::static_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
         opImmList = OpImmediate::Specified(attr->GetFromTensorOffset());
     } else if (op.GetOpcode() == Opcode::OP_CONVERT) {
+        IRBuilder builder;
         auto inputOffset = op.GetIOperands().front()->GetOffset();
         for (size_t i = 0; i < op.oOperand.front()->shape.size(); i++) {
-            opImmList.push_back(OpImmediate::Specified(SymbolicScalar(inputOffset[i])));
+            opImmList.push_back(OpImmediate::Specified(builder.CreateConstInt(inputOffset[i])));
         }
     }
     for (auto& opImm : opImmList) {

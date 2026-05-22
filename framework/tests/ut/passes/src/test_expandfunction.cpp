@@ -19,6 +19,8 @@
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "ut_json/ut_json_tool.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -48,6 +50,8 @@ static const uint16_t kNumExpFive = 32u;
 static const uint16_t kNumExpSix = 64u;
 static const uint16_t kNumExpSeven = 128u;
 
+std::shared_ptr<AssembleOpAttribute> CreateAssembleOpAttr();
+
 void MakeExpandGrpah(std::shared_ptr<Function>& currFunctionPtr, LogicalTensorPtr& outCast)
 {
     std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
@@ -59,9 +63,7 @@ void MakeExpandGrpah(std::shared_ptr<Function>& currFunctionPtr, LogicalTensorPt
 
     auto& div_op = currFunctionPtr->AddOperation(Opcode::OP_DIV, {inCast1, inCast2}, {ubTensor});
     auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
-    std::vector<int64_t> toOffset = {kNumZero, kNumZero};
-    std::vector<SymbolicScalar> symbol = {SymbolicScalar("sym")};
-    auto op_attr = std::make_shared<AssembleOpAttribute>(toOffset, symbol);
+    auto op_attr = CreateAssembleOpAttr();
     assemble_op.SetOpAttribute(op_attr);
     div_op.tileShape_.SetVecTile(tile_shape);
     assemble_op.tileShape_.SetVecTile(tile_shape);
@@ -70,6 +72,13 @@ void MakeExpandGrpah(std::shared_ptr<Function>& currFunctionPtr, LogicalTensorPt
     currFunctionPtr->inCasts_.push_back(inCast2);
     currFunctionPtr->outCasts_.push_back(outCast);
     currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+}
+
+std::shared_ptr<AssembleOpAttribute> CreateAssembleOpAttr()
+{
+    std::vector<int64_t> toOffset = {kNumZero, kNumZero};
+    std::vector<SymbolicScalar> symbol = {CreateTestScalarVar("sym")};
+    return std::make_shared<AssembleOpAttribute>(toOffset, symbol);
 }
 
 struct ScopeCfg {
@@ -281,9 +290,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest3)
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
 
-    std::vector<int64_t> toOffset = {kNumZero, kNumZero};
-    std::vector<SymbolicScalar> symbol = {SymbolicScalar("sym")};
-    auto op_attr = std::make_shared<AssembleOpAttribute>(toOffset, symbol);
+    auto op_attr = CreateAssembleOpAttr();
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
 
     std::shared_ptr<Operation> assemble_op;
@@ -391,9 +398,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest5)
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
 
-    std::vector<int64_t> toOffset = {kNumZero, kNumZero};
-    std::vector<SymbolicScalar> symbol = {SymbolicScalar("sym")};
-    auto op_attr = std::make_shared<AssembleOpAttribute>(toOffset, symbol);
+    auto op_attr = CreateAssembleOpAttr();
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor});
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
 
@@ -602,9 +607,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest6)
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
 
-    std::vector<int64_t> toOffset = {kNumZero, kNumZero};
-    std::vector<SymbolicScalar> symbol = {SymbolicScalar("sym")};
-    auto op_attr = std::make_shared<AssembleOpAttribute>(toOffset, symbol);
+    auto op_attr = CreateAssembleOpAttr();
     auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
     assemble_op.SetOpAttribute(op_attr);
 

@@ -19,6 +19,8 @@
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "passes/tile_graph_pass/graph_constraint/remove_unaligned_reshape_op.h"
 #include "passes/tile_graph_pass/graph_constraint/pad_local_buffer.h"
 #include "tilefwk/tilefwk.h"
@@ -47,12 +49,10 @@ public:
 };
 
 namespace {
-inline void ConstructGraph1(std::shared_ptr<Function>& currFunctionPtr)
+inline void ConstructGraphWithCopyInAndReshape(
+    std::shared_ptr<Function>& currFunctionPtr, const std::vector<int64_t>& shape,
+    const std::vector<int64_t>& reshape_shape)
 {
-    // Prepare the graph
-    std::vector<int64_t> shape = {7, 15};
-    std::vector<int64_t> reshape_shape = {15, 7};
-    std::vector<int64_t> expect_shape = {7, 16};
     auto shapeImme = OpImmediate::Specified(shape);
     auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
@@ -60,12 +60,12 @@ inline void ConstructGraph1(std::shared_ptr<Function>& currFunctionPtr)
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
     ubTensor2->SetMemoryTypeBoth(MEM_UB);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
-    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
+    outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
-        OpImmediate(SymbolicScalar("Input_0_Dim_0")), OpImmediate(SymbolicScalar("Input_0_Dim_1"))};
+        OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
     auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
@@ -76,33 +76,16 @@ inline void ConstructGraph1(std::shared_ptr<Function>& currFunctionPtr)
     currFunctionPtr->outCasts_.push_back(outCast);
 }
 
+inline void ConstructGraph1(std::shared_ptr<Function>& currFunctionPtr)
+{
+    // Prepare the graph
+    ConstructGraphWithCopyInAndReshape(currFunctionPtr, {7, 15}, {15, 7});
+}
+
 inline void ConstructGraph2(std::shared_ptr<Function>& currFunctionPtr)
 {
     // Prepare the graph
-    std::vector<int64_t> shape = {8, 16};
-    std::vector<int64_t> reshape_shape = {16, 8};
-    std::vector<int64_t> expect_shape = {8, 16};
-    auto shapeImme = OpImmediate::Specified(shape);
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    ubTensor1->SetMemoryTypeBoth(MEM_UB);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
-    ubTensor2->SetMemoryTypeBoth(MEM_UB);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
-    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
-    auto copyin1Attr = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
-    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
-        OpImmediate(SymbolicScalar("Input_0_Dim_0")), OpImmediate(SymbolicScalar("Input_0_Dim_1"))};
-    copyin1Attr->SetToDynValidShape(toValidShape);
-    copy_op1.SetOpAttribute(copyin1Attr);
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    (void)reshape_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor2}, {outCast});
-    (void)copy_out_op;
-    currFunctionPtr->inCasts_.push_back(incast1);
-    currFunctionPtr->outCasts_.push_back(outCast);
+    ConstructGraphWithCopyInAndReshape(currFunctionPtr, {8, 16}, {16, 8});
 }
 
 inline void ConstructGraph3(std::shared_ptr<Function>& currFunctionPtr)
@@ -117,7 +100,7 @@ inline void ConstructGraph3(std::shared_ptr<Function>& currFunctionPtr)
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
-    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
+    outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {incast1}, {ubTensor1});
     (void)reshape_op;
     auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor1}, {outCast});
@@ -137,7 +120,7 @@ inline void ConstructGraph4(std::shared_ptr<Function>& currFunctionPtr)
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshape_shape);
-    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
+    outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto& copy_in_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor0});
     (void)copy_in_op;
     auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor0}, {ubTensor1});
@@ -401,11 +384,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1)
     copyinTensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto copyoutTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inShape);
     copyoutTensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor1->UpdateDynValidShape(validShape1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
     auto copyinTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     copyinTensor2->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
@@ -451,11 +434,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnUB)
     copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto copyout_Tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inShape);
     copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {SymbolicScalar("Input_00_Dim_0"), SymbolicScalar("Input_00_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")};
     copyout_Tensor1->UpdateDynValidShape(validShape1);
     auto reshape_Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     reshape_Tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {SymbolicScalar("Input_01_Dim_0"), SymbolicScalar("Input_01_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_01_Dim_0"), CreateTestScalarVar("Input_01_Dim_1")};
     reshape_Tensor->UpdateDynValidShape(validShape2);
     auto copyin_Tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     copyin_Tensor2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -504,13 +487,13 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
     copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto copyout_Tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, copyoutShape);
     copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {SymbolicScalar("Input_00_Dim_0"), SymbolicScalar("Input_00_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")};
     copyout_Tensor1->UpdateDynValidShape(validShape1);
     auto copyin_Tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inShape);
     copyin_Tensor2->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto reshape_Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     reshape_Tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape3 = {SymbolicScalar("Input_02_Dim_0"), SymbolicScalar("Input_02_Dim_1")};
+    std::vector<SymbolicScalar> validShape3 = {CreateTestScalarVar("Input_02_Dim_0"), CreateTestScalarVar("Input_02_Dim_1")};
     reshape_Tensor->UpdateDynValidShape(validShape3);
     auto copyin_Tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     copyin_Tensor3->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
@@ -559,11 +542,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeConsumerAssembleOnUB)
     copyInTensor_1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto copyOutTensor_1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inShape);
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     copyOutTensor_1->UpdateDynValidShape(validShape_1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
     auto copyInTensor_2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -604,17 +587,17 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
     incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto copyInTensor_1 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     copyInTensor_1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     copyInTensor_1->UpdateDynValidShape(validShape_1);
     auto copyOutTensor_1 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto assembleTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     assembleTensor->UpdateDynValidShape(validShape_2);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_3 = {SymbolicScalar("Input_2_Dim_0"), SymbolicScalar("Input_2_Dim_1")};
+    std::vector<SymbolicScalar> validShape_3 = {CreateTestScalarVar("Input_2_Dim_0"), CreateTestScalarVar("Input_2_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_3);
     auto copyInTensor_2 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -673,11 +656,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithAddOp)
     copyinTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto copyoutTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, inShape);
     copyoutTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor->UpdateDynValidShape(validShape1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
     auto addTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType, reshapeShape);
     addTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
@@ -733,11 +716,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithMultiOps)
     copyinTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto copyoutTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inShape);
     copyoutTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor->UpdateDynValidShape(validShape1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
     auto addTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
     addTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
@@ -799,11 +782,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape2)
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto assembleTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType32, inShape);
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     assembleTensor->UpdateDynValidShape(validShape_1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType32, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
     auto copyInTensor_2 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataType32, reshapeShape);
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -868,11 +851,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto assembleTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataTypeFp32, inShape);
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     assembleTensor->UpdateDynValidShape(validShape_1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataTypeFp32, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
     auto copyInTensor_2 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataTypeFp32, reshapeShape);
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -932,11 +915,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
     copyOutTensor_1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto assembleTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataTypeFP32, inShape);
     assembleTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape_1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     assembleTensor->UpdateDynValidShape(validShape_1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, dataTypeFP32, reshapeShape);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape_2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape_2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape_2);
     auto copyInTensor_2 = std::make_shared<LogicalTensor>(*currFunctionPtr, dataTypeFP32, reshapeShape);
     copyInTensor_2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -987,11 +970,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1OverUB)
     copyinTensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
     auto copyoutTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inShapeOverUB);
     copyoutTensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape1 = {SymbolicScalar("Input_0_Dim_0"), SymbolicScalar("Input_0_Dim_1")};
+    std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
     copyoutTensor1->UpdateDynValidShape(validShape1);
     auto reshapeTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShapeOverUB);
     reshapeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    std::vector<SymbolicScalar> validShape2 = {SymbolicScalar("Input_1_Dim_0"), SymbolicScalar("Input_1_Dim_1")};
+    std::vector<SymbolicScalar> validShape2 = {CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")};
     reshapeTensor->UpdateDynValidShape(validShape2);
     auto copyinTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShapeOverUB);
     copyinTensor2->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
@@ -1028,15 +1011,15 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
 
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{128, 64});
     inCast->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
-    inCast->UpdateDynValidShape({SymbolicScalar(128), SymbolicScalar(64)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(128), IRBuilder().CreateConstInt(64)});
 
     auto reshapeInput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{128, 64});
     reshapeInput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
-    reshapeInput->UpdateDynValidShape({SymbolicScalar(128), SymbolicScalar(64)});
+    reshapeInput->UpdateDynValidShape({IRBuilder().CreateConstInt(128), IRBuilder().CreateConstInt(64)});
 
     auto reshapeOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 128});
     reshapeOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
-    reshapeOutput->UpdateDynValidShape({SymbolicScalar(64), SymbolicScalar(128)});
+    reshapeOutput->UpdateDynValidShape({IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
 
     auto outCast = std::make_shared<LogicalTensor>(
         *currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 128}, TileOpFormat::TILEOP_ND, "outCast");

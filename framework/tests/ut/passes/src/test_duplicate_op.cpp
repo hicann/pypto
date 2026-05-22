@@ -17,6 +17,7 @@
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "ut_json/ut_json_tool.h"
@@ -66,7 +67,7 @@ static std::shared_ptr<LogicalTensor> CreateGatherInAuxTensor(Function& function
 {
     std::vector<int64_t> shape = {1, rows};
     auto tensor = std::make_shared<LogicalTensor>(function, DT_INT64, shape);
-    std::vector<SymbolicScalar> dynValidShape = {SymbolicScalar(1), SymbolicScalar(rows)};
+    std::vector<SymbolicScalar> dynValidShape = {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(rows)};
     tensor->UpdateDynValidShape(dynValidShape);
     return tensor;
 }
@@ -133,12 +134,12 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest2)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(1), SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    ubTensor->UpdateDynValidShape({SymbolicScalar(1), SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    ubTensor->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    outCast2->UpdateDynValidShape({SymbolicScalar(1), SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    outCast2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
@@ -205,11 +206,11 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest3)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(1), SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    ubTensor1->UpdateDynValidShape({SymbolicScalar(1), SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    ubTensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    ubTensor2->UpdateDynValidShape({SymbolicScalar(1), SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    ubTensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
@@ -312,7 +313,7 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest1)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
 
@@ -360,7 +361,7 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest2)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
@@ -432,7 +433,7 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest3)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
@@ -505,7 +506,7 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest4)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
 
@@ -543,7 +544,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest1)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
@@ -607,7 +608,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest2)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
@@ -626,7 +627,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest2)
     auto& tensorOffset1 = ubTensor0->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor1->GetDynValidShape()));
-    ubTensor1->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    ubTensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto& gatherin1 =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {ubTensor1, offsets2, blockTable2}, {ubTensor2});
     gatherin1.SetAttribute(OpAttributeKey::startOffset, j);
@@ -670,7 +671,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
     auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
@@ -684,7 +685,7 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
     auto& tensorOffset1 = inCast->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         tensorOffset1.GetOffset(), tensorOffset1.GetDynOffset(), ubTensor0->GetDynValidShape()));
-    ubTensor0->UpdateDynValidShape({SymbolicScalar(kNumEight), SymbolicScalar(kNumExpFour)});
+    ubTensor0->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
     auto& gatherin =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {ubTensor0, offsets, blockTable}, {ubTensor1});
     gatherin.SetAttribute(OpAttributeKey::startOffset, i);
@@ -733,13 +734,13 @@ TEST_F(TestDuplicateOpPass, TestCheck1)
     int64_t i = 0;
     std::vector<int64_t> shape = {8, 16};
     auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    incast->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    incast->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor1->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    tensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor2->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    tensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor3->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    tensor3->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outcast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
@@ -796,16 +797,16 @@ TEST_F(TestDuplicateOpPass, TestCheck2)
     int64_t i = 0;
     std::vector<int64_t> shape = {8, 16};
     auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    incast->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    incast->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outcast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor1->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    tensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor2->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    tensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
     auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor3->UpdateDynValidShape({SymbolicScalar(8), SymbolicScalar(16)});
+    tensor3->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
 
     auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, 8);
     auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, 1);
@@ -947,7 +948,7 @@ TEST_F(TestDuplicateOpPass, TestSpan)
     std::vector<int64_t> shape = {kNumExpFour, kNumExpFour};
     auto span = ir::Span("gatherIn", kNumOne, 0);
     auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    inCast->UpdateDynValidShape({SymbolicScalar(kNumExpFour), SymbolicScalar(kNumExpFour)});
+    inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumExpFour), IRBuilder().CreateConstInt(kNumExpFour)});
     auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);

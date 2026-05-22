@@ -20,6 +20,8 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "passes/tile_graph_pass/graph_partition/iso_partitioner.h"
 #include "passes/tile_graph_pass/graph_partition/graph_partition.h"
 #include "tilefwk/tilefwk.h"
@@ -1287,9 +1289,9 @@ TEST_F(GraphPartitionTest, TestUbToUbViewWithDynOffsetNotMergeable)
     auto viewOp = G.GetOp("viewOp");
     ASSERT_NE(viewOp, nullptr);
 
-    std::vector<SymbolicScalar> dynOffset = {SymbolicScalar("dynamicOffsetDim0"), SymbolicScalar(0)};
+    std::vector<SymbolicScalar> dynOffset = {CreateTestScalarVar("dynamicOffsetDim0"), IRBuilder().CreateConstInt(0)};
     auto viewAttr = std::make_shared<ViewOpAttribute>(
-        std::vector<int64_t>{0, 0}, dynOffset, std::vector<SymbolicScalar>{SymbolicScalar(32), SymbolicScalar(16)});
+        std::vector<int64_t>{0, 0}, dynOffset, std::vector<SymbolicScalar>{IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(16)});
     viewOp->SetOpAttribute(viewAttr);
 
     Function* function = G.GetFunction();
@@ -1334,7 +1336,7 @@ TEST_F(GraphPartitionTest, TestUbToUbViewWithoutDynOffsetMergeable)
 
     auto viewAttr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{},
-        std::vector<SymbolicScalar>{SymbolicScalar(32), SymbolicScalar(16)});
+        std::vector<SymbolicScalar>{IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(16)});
     viewOp->SetOpAttribute(viewAttr);
 
     Function* function = G.GetFunction();
@@ -1377,7 +1379,7 @@ TEST_F(GraphPartitionTest, TestUbToUbAssembleWithDynOffsetNotMergeable)
     auto assembleOp = G.GetOp("assembleOp");
     ASSERT_NE(assembleOp, nullptr);
 
-    std::vector<SymbolicScalar> toDynOffset = {SymbolicScalar("dynamicOffsetDim0"), SymbolicScalar(0)};
+    std::vector<SymbolicScalar> toDynOffset = {CreateTestScalarVar("dynamicOffsetDim0"), IRBuilder().CreateConstInt(0)};
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}, toDynOffset);
     assembleOp->SetOpAttribute(assembleAttr);
 

@@ -14,6 +14,7 @@
  */
 
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -525,6 +526,7 @@ std::pair<int, int> ParseRuntimeGetParamAddr(const std::string& input)
 // Helper function to set paramAddr attribute for a tensor
 void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor>& tensor, const std::set<int>& inOutCast)
 {
+    IRBuilder builder;
     std::map<int, SymbolicScalar> paramAddrMap;
     tensor->GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
     for (auto& paramAddr : paramAddrMap) {
@@ -532,9 +534,9 @@ void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor>& tensor, const std::se
         int aiCpuFlag = inOutCast.count(tensor->GetRawMagic()) ? 3 : 2;
         if (paramAddr.second.IsExpression() && paramArgs.first != -1 && paramArgs.second != -1) {
             paramAddr.second = GET_PARAM_ADDR_MAYBE_CONST(
-                SymbolicScalar(static_cast<int64_t>(aiCpuFlag)), SymbolicScalar(static_cast<int64_t>(0)),
-                SymbolicScalar(static_cast<int64_t>(paramArgs.first)),
-                SymbolicScalar(static_cast<int64_t>(paramArgs.second)));
+                builder.CreateConstInt(static_cast<int64_t>(aiCpuFlag)), builder.CreateConstInt(static_cast<int64_t>(0)),
+                builder.CreateConstInt(static_cast<int64_t>(paramArgs.first)),
+                builder.CreateConstInt(static_cast<int64_t>(paramArgs.second)));
         }
     }
     tensor->SetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);

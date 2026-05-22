@@ -16,6 +16,8 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
@@ -80,7 +82,7 @@ void SetTensorAttr(LogicalTensorPtr tensor, MemoryType memType, int memId) {
     tensor->SetMemoryTypeOriginal(memType);
     tensor->SetMemoryTypeToBe(memType);
     tensor->memoryrange.memId = memId;
-    tensor->UpdateDynValidShape({SymbolicScalar("S0"), SymbolicScalar("S1")});
+    tensor->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("S1")});
 }
 
 void SetAllocAttr(Operation& alloc, int latency) { alloc.UpdateLatency(latency); }

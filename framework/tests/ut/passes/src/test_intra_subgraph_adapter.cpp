@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
@@ -140,7 +141,7 @@ TEST_F(IntraSubgraphAdapterTest, TestValidShapeInfer)
     EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
 
     auto t2 = subGraph.GetTensor("t2");
-    t2->UpdateDynValidShape({SymbolicScalar(32), SymbolicScalar(32)});
+    t2->UpdateDynValidShape({IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(32)});
 
     subGraph.GetOp("adds")->UpdateSubgraphID(0);
     subGraph.GetOp("convert")->UpdateSubgraphID(0);

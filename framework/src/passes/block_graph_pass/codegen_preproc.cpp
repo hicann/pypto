@@ -15,6 +15,7 @@
 
 #include "interface/function/function.h"
 #include "interface/operation/opcode.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -35,7 +36,26 @@
 namespace npu {
 namespace tile_fwk {
 const std::string REDUCE_AXIS = OP_ATTR_PREFIX + "AXIS";
-static const SymbolicScalar GET_PARAM_ADDR = AddRuntimePrefix("GET_PARAM_ADDR");
+
+namespace {
+const SymbolicScalar& GetParamAddrSymbol()
+{
+    static const SymbolicScalar kGetParamAddr = []() {
+        IRBuilder builder;
+        return builder.CreateScalarVar(AddRuntimePrefix("GET_PARAM_ADDR"));
+    }();
+    return kGetParamAddr;
+}
+
+const SymbolicScalar& GetRuntimeParamSymbol()
+{
+    static const SymbolicScalar kRuntimeParam = []() {
+        IRBuilder builder;
+        return builder.CreateScalarVar(AddRuntimePrefix("param"));
+    }();
+    return kRuntimeParam;
+}
+} // namespace
 
 // only save general gm input/output, not contain spill-out scene
 bool CodegenPreproc::IsCopyNeedSave(const Operation& op) const
@@ -46,8 +66,9 @@ bool CodegenPreproc::IsCopyNeedSave(const Operation& op) const
 void CodegenPreproc::SetTensorParamAddr(
     LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar, int opMagic) const
 {
+    IRBuilder builder;
     SymbolicScalar paramAddr =
-        GET_PARAM_ADDR(AddRuntimePrefix("param"), SymbolicScalar(tensorParamIdx), attrOffsetScalar);
+        GetParamAddrSymbol()(GetRuntimeParamSymbol(), builder.CreateConstInt(tensorParamIdx), attrOffsetScalar);
     std::map<int, SymbolicScalar> opParamAddrs;
     tensor.GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
     opParamAddrs[opMagic] = paramAddr;
@@ -57,6 +78,7 @@ void CodegenPreproc::SetTensorParamAddr(
 // only used in DYNAMIC_LOOP_PATH scene
 Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
 {
+    IRBuilder builder;
     if (!func.IsUnderDynamicFunction()) {
         return SUCCESS;
     }
@@ -110,7 +132,8 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                 }
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
                     SetTensorParamAddr(
-                        *tensor, gmTensorParamIdx, SymbolicScalar(op.GetIOpAttrOffset(attrOffset++)), op.GetOpMagic());
+                        *tensor, gmTensorParamIdx, builder.CreateConstInt(op.GetIOpAttrOffset(attrOffset++)),
+                        op.GetOpMagic());
                 }
             }
             attrOffset = 0;
@@ -122,7 +145,8 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                 }
                 if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
                     SetTensorParamAddr(
-                        *tensor, gmTensorParamIdx, SymbolicScalar(op.GetOOpAttrOffset(attrOffset++)), op.GetOpMagic());
+                        *tensor, gmTensorParamIdx, builder.CreateConstInt(op.GetOOpAttrOffset(attrOffset++)),
+                        op.GetOpMagic());
                 }
             }
         }
@@ -139,8 +163,9 @@ void CodegenPreproc::CombineTailAxis(std::vector<int64_t>& shape, size_t shapeSi
 
 void CodegenPreproc::CombineLastAxis(std::vector<SymbolicScalar>& shape, size_t shapeSize) const
 {
+    IRBuilder builder;
     shape[shapeSize - 1] = shape[shapeSize - 1] * shape[shapeSize - NUM2];
-    shape[shapeSize - NUM2] = SymbolicScalar(1);
+    shape[shapeSize - NUM2] = builder.CreateConstInt(1);
 }
 
 Status CodegenPreproc::ProcessAxis(Operation& op, std::vector<bool> attr, bool isInput) const

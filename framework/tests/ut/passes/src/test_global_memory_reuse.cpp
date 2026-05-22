@@ -20,6 +20,8 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/cache/function_cache.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
+#include "symbolic_scalar_test_utils.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "interface/tensor/tensormap.h"
@@ -570,31 +572,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormal)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -702,31 +704,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseOutputActualRawmagic)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -834,31 +836,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseInputActualRawmagic)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -965,31 +967,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseInputLessThanOutput)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(63), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(63), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -1096,31 +1098,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseInputEightTimesOutput)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(8), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(8), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(8), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -1227,31 +1229,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseInputLessThanEightTimesOutput
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(9), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(9), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(9), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(9), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(9), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(9), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -1358,31 +1360,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseDim)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(1), SymbolicScalar(63), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(63), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(1), SymbolicScalar(63), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(63), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(1), SymbolicScalar(63), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(63), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -1489,31 +1491,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseDataType)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -1620,31 +1622,31 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNotMaxmunAxisNotEqual)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(127)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(127)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(127)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(127)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(127)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(127)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -1783,44 +1785,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormal2)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(64)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(64)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(64)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(64)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(64)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(64)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(64)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(64)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(32), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(64)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(64)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(64)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(64)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -1968,44 +1970,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormal3)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(32), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -2153,44 +2155,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseOffsetNotImmediate1)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar("x")},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), CreateTestScalarVar("x")},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(32), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -2334,44 +2336,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseOffsetNotImmediate2)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar("x"), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {CreateTestScalarVar("x"), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -2515,44 +2517,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseShapeNotImmediate1)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar("x")});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), CreateTestScalarVar("x")});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(32), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -2700,44 +2702,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseShapeNotImmediate2)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(32), SymbolicScalar(0)},
-        {SymbolicScalar("x"), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(0)},
+        {CreateTestScalarVar("x"), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -2881,44 +2883,44 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormalOverlap)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(31), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(31), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
@@ -3061,43 +3063,43 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormal4)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_e, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_e, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_h, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_h, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_i, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(8), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_i, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -3240,43 +3242,43 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseNormal5)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_e, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_e, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(32), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_h, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(8), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_h, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_i, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_i, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_b, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_b, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_f, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_f, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
@@ -3453,61 +3455,61 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseMultiOpSerialConn)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction5;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction5, leaffunc5_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction5, leaffunc5_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction5, leaffunc5_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction5, leaffunc5_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall5 = std::make_shared<CallOpAttribute>(leafFunc5.ComputeHash(), symbolicScalarFunction5);
     G.GetOp("call5")->SetOpAttribute(opAttributeCall5);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction6;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction6, leaffunc6_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction6, leaffunc6_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction6, leaffunc6_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction6, leaffunc6_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall6 = std::make_shared<CallOpAttribute>(leafFunc6.ComputeHash(), symbolicScalarFunction6);
     G.GetOp("call6")->SetOpAttribute(opAttributeCall6);
 
@@ -3685,61 +3687,61 @@ TEST_F(TestGlobalMemoryReuse, TestGlobalMemoryReuseMultiOpParallelConn)
     // set CallOpAttribute for op
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction1;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction1, leaffunc1_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(64), SymbolicScalar(128)});
+        symbolicScalarFunction1, leaffunc1_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(64), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall1 = std::make_shared<CallOpAttribute>(leafFunc1.ComputeHash(), symbolicScalarFunction1);
     G.GetOp("call1")->SetOpAttribute(opAttributeCall1);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction2;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction2, leaffunc2_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction2, leaffunc2_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall2 = std::make_shared<CallOpAttribute>(leafFunc2.ComputeHash(), symbolicScalarFunction2);
     G.GetOp("call2")->SetOpAttribute(opAttributeCall2);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction3;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_a, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_a, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction3, leaffunc3_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction3, leaffunc3_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall3 = std::make_shared<CallOpAttribute>(leafFunc3.ComputeHash(), symbolicScalarFunction3);
     G.GetOp("call3")->SetOpAttribute(opAttributeCall3);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction4;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_a, {SymbolicScalar(16), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_a, {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction4, leaffunc4_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction4, leaffunc4_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall4 = std::make_shared<CallOpAttribute>(leafFunc4.ComputeHash(), symbolicScalarFunction4);
     G.GetOp("call4")->SetOpAttribute(opAttributeCall4);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction5;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction5, leaffunc5_mat_a, {SymbolicScalar(32), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction5, leaffunc5_mat_a, {IRBuilder().CreateConstInt(32), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction5, leaffunc5_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction5, leaffunc5_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall5 = std::make_shared<CallOpAttribute>(leafFunc5.ComputeHash(), symbolicScalarFunction5);
     G.GetOp("call5")->SetOpAttribute(opAttributeCall5);
 
     std::vector<std::vector<SymbolicScalar>> symbolicScalarFunction6;
     SetSymbolicScalarFunction(
-        symbolicScalarFunction6, leaffunc6_mat_a, {SymbolicScalar(48), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction6, leaffunc6_mat_a, {IRBuilder().CreateConstInt(48), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     SetSymbolicScalarFunction(
-        symbolicScalarFunction6, leaffunc6_mat_d, {SymbolicScalar(0), SymbolicScalar(0)},
-        {SymbolicScalar(16), SymbolicScalar(128)});
+        symbolicScalarFunction6, leaffunc6_mat_d, {IRBuilder().CreateConstInt(0), IRBuilder().CreateConstInt(0)},
+        {IRBuilder().CreateConstInt(16), IRBuilder().CreateConstInt(128)});
     auto opAttributeCall6 = std::make_shared<CallOpAttribute>(leafFunc6.ComputeHash(), symbolicScalarFunction6);
     G.GetOp("call6")->SetOpAttribute(opAttributeCall6);
 
