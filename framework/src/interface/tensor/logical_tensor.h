@@ -94,7 +94,7 @@ public:
     std::string DumpType() const;
 
     /* By default, RawTensor is dumped. In whole function dumping, we only dump the magic */
-    Json DumpJson(bool dumpRawTensor = true) const;
+    Json DumpJson(Function& func, bool dumpRawTensor = true) const;
     static std::shared_ptr<LogicalTensor> LoadJson(
         Function& function, const std::unordered_map<int, std::shared_ptr<RawTensor>>& rawTensorDict,
         const Json& tensorDump);

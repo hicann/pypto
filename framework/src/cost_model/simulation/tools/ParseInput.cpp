@@ -170,7 +170,7 @@ bool ParseInput::FilterOpcode(std::string& opcode)
     return false;
 }
 
-void ParseInput::BuildTile(std::shared_ptr<npu::tile_fwk::LogicalTensor> logicalTensor, TilePtr tile)
+void ParseInput::BuildTile(npu::tile_fwk::Function &func, std::shared_ptr<npu::tile_fwk::LogicalTensor> logicalTensor, TilePtr tile)
 {
     tile->magic = logicalTensor->magic;
     for (auto& s : logicalTensor->shape) {
@@ -188,7 +188,7 @@ void ParseInput::BuildTile(std::shared_ptr<npu::tile_fwk::LogicalTensor> logical
 
     tile->dataTypeStr = npu::tile_fwk::DataType2String(logicalTensor->tensor->datatype);
     tile->dataType = CostModel::ToDataType(tile->dataTypeStr);
-    std::string type = npu::tile_fwk::NodeType2String(FunctionUtils::GetNodeType(*logicalTensor, logicalTensor->BelongFunction()));
+    std::string type = npu::tile_fwk::NodeType2String(FunctionUtils::GetNodeType(*logicalTensor, func));
     tile->nodeType = CostModel::ToNodeType(type);
 
     tile->rawMagic = logicalTensor->tensor->rawmagic;
@@ -334,7 +334,7 @@ void ParseInput::BuildFunction(
             tileMagicIdMap[magic] = func->tiles.size();
 
             TilePtr tile = std::make_shared<Tile>();
-            BuildTile(input, tile);
+            BuildTile(*parentFunc, input, tile);
             tile->funcPtr = func;
             tile->consumers.emplace_back(tileOp);
             func->tiles.emplace_back(tile);
@@ -352,7 +352,7 @@ void ParseInput::BuildFunction(
             }
             tileMagicIdMap[magic] = int(func->tiles.size());
             TilePtr tile = std::make_shared<Tile>();
-            BuildTile(out, tile);
+            BuildTile(*parentFunc, out, tile);
             tile->funcPtr = func;
             tile->producer = tileOp;
             tile->producers.emplace_back(tileOp);

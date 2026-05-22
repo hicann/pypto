@@ -1842,7 +1842,8 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         auto origin = originOutCasts_[idx];
         int rank = origin->shape.size();
         std::vector<int64_t> zeroOffset(rank, 0);
-        auto outArgument = std::make_shared<LogicalTensor>(Parent(), origin->tensor, zeroOffset, origin->shape, origin->tensor->GetDynRawShape());
+        auto outArgument = std::make_shared<LogicalTensor>(
+            Parent(), origin->tensor, zeroOffset, origin->shape, origin->tensor->GetDynRawShape());
         Parent().tensorMap_.Insert(outArgument);
         outArgumentList.push_back(outArgument);
 
@@ -2014,10 +2015,10 @@ Json Function::DumpJson(bool useTable)
         Json outcasts = Json::array();
         Json globalTensors = Json::array();
         for (auto& i : inCasts_) {
-            incasts.push_back(i->DumpJson(true));
+            incasts.push_back(i->DumpJson(*this, true));
         }
         for (auto& o : outCasts_) {
-            outcasts.push_back(o->DumpJson(true));
+            outcasts.push_back(o->DumpJson(*this, true));
         }
         funcJson["incasts"] = incasts;
         funcJson["outcasts"] = outcasts;
@@ -2120,7 +2121,7 @@ Json Function::DumpJson(bool useTable)
             rawtensors.push_back(rawTensor->DumpJson());
         }
         for (auto& tensor : tensorList) {
-            tensors.push_back(tensor->DumpJson(false));
+            tensors.push_back(tensor->DumpJson(*this, false));
         }
         funcJson["rawtensors"] = rawtensors;
         funcJson["tensors"] = tensors;
@@ -2617,7 +2618,8 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<int>
     return coaLists;
 }
 
-static bool IsInplaceIncast(Operation *op, std::vector<Operation *> &copyInList) {
+static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
+{
     if (op->GetOpcode() != Opcode::OP_VIEW) {
         return false;
     }
@@ -2654,10 +2656,9 @@ void Function::NormalizeCoaForInCasts(
                 GetTensorDataSetCoaIndex(op, coaIndex);
             }
         } else {
-            std::vector<Operation *> copyInList;
-            auto &consOp = *(op->GetOOperands()[0])->GetConsumers().begin();
-            if (!this->IsFromOutCast(op->GetOOperands().front()) &&
-                IsCopyIn(consOp->GetOpcode()) &&
+            std::vector<Operation*> copyInList;
+            auto& consOp = *(op->GetOOperands()[0])->GetConsumers().begin();
+            if (!this->IsFromOutCast(op->GetOOperands().front()) && IsCopyIn(consOp->GetOpcode()) &&
                 IsInplaceIncast(op, copyInList)) {
                 for (auto copyIn : copyInList) {
                     operandCoaList = NormalizeCopyIn(copyIn, coaIndex, valueToIndex);

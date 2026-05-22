@@ -30,7 +30,7 @@ class ParseInput {
 public:
     static void ParseJson(std::shared_ptr<CostModel::SimSys> sim, const std::string& jsonPath);
     static bool FilterOpcode(std::string& opcode);
-    static void BuildTile(std::shared_ptr<npu::tile_fwk::LogicalTensor> logicalTensor, TilePtr tile);
+    static void BuildTile(npu::tile_fwk::Function &func, std::shared_ptr<npu::tile_fwk::LogicalTensor> logicalTensor, TilePtr tile);
     static void GetTileAllocSeq(const std::vector<Operation*>& operationList, FunctionPtr func);
     static void BuildFunction(
         std::shared_ptr<CostModel::SimSys> sim, npu::tile_fwk::Function* parentFunc, FunctionPtr func);

@@ -178,7 +178,7 @@ TEST_F(DynamicFunctionTest, TestDynOffset)
     auto func = Program::GetInstance().GetFunctionByRawName("TENSOR_main");
     Tensor t(DT_FP32, {4, 4}, "t0");
     t.GetStorage()->UpdateOffset(TensorOffset(offset, dynoffset));
-    auto tt = LogicalTensor::LoadJson(*func, {}, t.GetStorage()->DumpJson());
+    auto tt = LogicalTensor::LoadJson(*func, {}, t.GetStorage()->DumpJson(*func));
     EXPECT_EQ(tt->GetShape(), t.GetStorage()->GetShape());
 }
 

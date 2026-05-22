@@ -128,18 +128,14 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool crea
     return newTensor;
 }
 
-Json LogicalTensor::DumpJson(bool dumpRawTensor) const
+Json LogicalTensor::DumpJson(Function& func, bool dumpRawTensor) const
 {
     Json result;
     result[T_FIELD_KIND] = static_cast<int>(Kind::T_KIND_TENSOR);
     result["offset"] = offset;
     result["shape"] = shape;
     result["validshape"] = oriShape;
-    if (this->function_ != nullptr) {
-        result["nodetype"] = static_cast<int>(FunctionUtils::GetNodeType(*this, this->BelongFunction()));
-    } else {
-        result["nodetype"] = static_cast<int>(NodeType::LOCAL);
-    }
+    result["nodetype"] = static_cast<int>(FunctionUtils::GetNodeType(*this, func));
     if (dumpRawTensor) {
         result[T_FIELD_RAWTENSOR] = tensor->DumpJson();
     } else {

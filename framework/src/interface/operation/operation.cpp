@@ -366,14 +366,14 @@ void Operation::DumpOperandsJson(Json& opDump, bool dumpTensor) const
     Json ooperandsDump = Json::array();
     for (auto& i : iOperand) {
         if (dumpTensor) {
-            ioperandsDump.push_back(i->DumpJson());
+            ioperandsDump.push_back(i->DumpJson(*this->function_));
         } else {
             ioperandsDump.push_back(i->GetMagic());
         }
     }
     for (auto& o : oOperand) {
         if (dumpTensor) {
-            ooperandsDump.push_back(o->DumpJson());
+            ooperandsDump.push_back(o->DumpJson(*this->function_));
         } else {
             ooperandsDump.push_back(o->GetMagic());
         }
