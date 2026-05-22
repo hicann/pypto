@@ -86,6 +86,7 @@ inline void Exp2(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcO
 inline void Expm1(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Expm1(Trans(out), Trans(self)); }
 inline void Sinh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Sinh(Trans(out), Trans(self)); }
 inline void Cosh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Cosh(Trans(out), Trans(self)); }
+inline void Erfc(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Erfc(Trans(out), Trans(self)); }
 inline void Asin(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Asin(Trans(out), Trans(self)); }
 inline void Acos(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Acos(Trans(out), Trans(self)); }
 inline void Neg(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Neg(Trans(out), Trans(self)); }

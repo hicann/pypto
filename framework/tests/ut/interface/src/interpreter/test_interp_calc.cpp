@@ -2098,4 +2098,12 @@ TEST_F(TorchAdaptorTest, QuantMXFp32)
     ASSERT_ALLCLOSE(scaling, scalingGolden);
 }
 
+TEST_F(TorchAdaptorTest, Erfc)
+{
+    auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, 0.1573f);
+    calc::Erfc(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
 } // namespace npu::tile_fwk

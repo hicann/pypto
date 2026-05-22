@@ -696,5 +696,44 @@ TEST_F(InferShapeTest, TestPermuteElement)
     std::cout << currFunctionPtr->Dump() << std::endl;
     EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
 }
+
+TEST_F(InferShapeTest, TestErfcUnary)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestErfcInferShape", "TestErfcInferShape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {8, 16};
+    auto shapeImme = OpImmediate::Specified(shape);
+    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensorOut = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
+
+    auto& copyInOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {ubTensor});
+    auto copyinAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
+    std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
+        OpImmediate(SymbolicScalar("Input_0_Dim_0")), OpImmediate(SymbolicScalar("Input_0_Dim_1"))};
+    copyinAttr->SetToDynValidShape(toValidShape);
+    copyInOp.SetOpAttribute(copyinAttr);
+
+    auto& erfcOp = currFunctionPtr->AddOperation(Opcode::OP_ERFC, {ubTensor}, {ubTensorOut});
+    (void)erfcOp;
+
+    auto& copyOutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {ubTensorOut}, {outCast});
+    auto copyoutAttr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
+    copyOutOp.SetOpAttribute(copyoutAttr);
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    InferDynShape inferShapeTest;
+    inferShapeTest.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
 } // namespace tile_fwk
 } // namespace npu

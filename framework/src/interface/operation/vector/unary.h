@@ -46,6 +46,7 @@ enum class UnaryOpType {
     COSH,
     SIN,
     COS,
+    ERFC,
     ASIN,
     ACOS,
 };
@@ -96,6 +97,8 @@ std::string GetUnaryOpName()
             return "SIN";
         case UnaryOpType::COS:
             return "COS";
+        case UnaryOpType::ERFC:
+            return "ERFC";
         case UnaryOpType::TANH:
             return "TANH";
         case UnaryOpType::ASIN:
@@ -136,6 +139,7 @@ Opcode GetUnaryOpNameCode()
         CASE(COSH);
         CASE(SIN);
         CASE(COS);
+        CASE(ERFC);
         CASE(TANH);
         CASE(ASIN);
         CASE(ACOS);

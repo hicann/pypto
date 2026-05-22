@@ -989,6 +989,40 @@ def cosh(input: Tensor) -> Tensor:
 
 
 @op_wrapper
+def erfc(input: Tensor) -> Tensor:
+    """Computes the element-wise complementary error function of `input`.
+
+    This function calculates the complementary error function: `erfc(x) = 1 - erf(x)`.
+    It is often used in probability theory, statistics, and partial differential equations.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise complementary error function results.
+
+    See Also
+    -------
+    exp : Element-wise exponential function
+    log : Element-wise logarithm function
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.erfc(x)
+
+    Input x: [0.0     1.0     2.0]
+    Output y:[1.0000  0.1573  0.0047]
+    """
+
+    return pypto_impl.Erfc(input)
+
+
+@op_wrapper
 def asin(self: Tensor) -> Tensor:
     """Computes the element-wise arcsine of `self`.
 

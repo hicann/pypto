@@ -527,6 +527,17 @@ void ExecuteOpExpm1(ExecuteOperationContext* ctx)
 }
 REGISTER_CALC_OP(OP_EXPM1, Opcode::OP_EXPM1, ExecuteOpExpm1);
 
+void ExecuteOpErfc(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
+    auto& output = ctx->ooperandInplaceDataViewList->at(0);
+    auto& input = ctx->ioperandDataViewList->at(0);
+
+    calc::Erfc(output, input);
+}
+REGISTER_CALC_OP(OP_ERFC, Opcode::OP_ERFC, ExecuteOpErfc);
+
 void ExecuteOpOneHot(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);

@@ -147,6 +147,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_COS, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_SINH, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_COSH, [this]() { return GenUnaryOpWithTmpBuff(); }},
+          {Opcode::OP_ERFC, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_TANH, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_ASIN, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_ACOS, [this]() { return GenUnaryOpWithTmpBuff(); }},

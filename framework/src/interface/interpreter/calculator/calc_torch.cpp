@@ -428,6 +428,14 @@ static void Cosh(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void Erfc(const TensorData& out, const TensorData& self)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    tout.second = torch::erfc(tself.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void Asin(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -2888,6 +2896,7 @@ static struct CalcOps calcOps = {
     .Cos = Cos,
     .Sinh = Sinh,
     .Cosh = Cosh,
+    .Erfc = Erfc,
     .Asin = Asin,
     .Acos = Acos,
     .Neg = Neg,

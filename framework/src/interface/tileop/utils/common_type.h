@@ -45,6 +45,7 @@ enum class UnaryOp : uint8_t {
     COSH,
     SIN,
     COS,
+    ERFC,
     TANH
 };
 

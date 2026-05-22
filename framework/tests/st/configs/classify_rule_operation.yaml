@@ -291,6 +291,9 @@ stest:
       - TestAtan2/Atan2OperationTest.TestAtan2/5
       - TestSinh/SinhOperationTest.TestSinh/2
       - TestCosh/CoshOperationTest.TestCosh/2
+      - TestErfc/ErfcOperationTest.TestErfc/0
+      - TestErfc/ErfcOperationTest.TestErfc/1
+      - TestErfc/ErfcOperationTest.TestErfc/2
       - TestAsin/AsinOperationTest.TestAsin/0
       - TestAcos/AcosOperationTest.TestAcos/0
       # - GatherInL1Test.gather_in_a_unalign

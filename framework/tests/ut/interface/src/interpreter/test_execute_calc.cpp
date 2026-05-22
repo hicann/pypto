@@ -1182,4 +1182,44 @@ TEST_F(CalcCommonTest, ExecuteOpPermute3D)
         EXPECT_FLOAT_EQ(outputView->Get<float>(i), expectedVals[i]);
     }
 }
+
+TEST_F(CalcCommonTest, ExecuteOpErfcBasic)
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestErfc", "TestErfc", nullptr);
+
+    std::vector<int64_t> shape = {4};
+    auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+
+    auto& erfcOp = func->AddOperation(Opcode::OP_ERFC, {inputTensor}, {outputTensor});
+
+    Tensor inputTensorData(DT_FP32, shape);
+    Tensor outputTensorData(DT_FP32, shape);
+
+    std::vector<float> inputVals = {1.0f, 2.0f, 0.0f, -1.0f};
+    auto inputData = RawTensorData::CreateTensor<float>(inputTensorData, inputVals);
+    auto outputData = RawTensorData::CreateConstantTensor<float>(outputTensorData, 0.0f);
+
+    auto inputView = std::make_shared<LogicalTensorData>(inputData);
+    auto outputView = std::make_shared<LogicalTensorData>(outputData);
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {inputView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputView};
+
+    ExecuteOperationContext ctx = {
+        &frame, &opInter, &erfcOp, &ioperandDataViewList, nullptr, &ooperandInplaceDataViewList};
+
+    opInter.ExecuteOperation(&ctx);
+
+    ASSERT_EQ(outputView->GetSize(), static_cast<int>(inputVals.size()));
+    for (int i = 0; i < outputView->GetSize(); ++i) {
+        float value = outputView->Get<float>(i);
+        float expected = std::erfc(inputVals[i]);
+        ASSERT_FLOAT_EQ(value, expected);
+    }
+}
 } // namespace npu::tile_fwk

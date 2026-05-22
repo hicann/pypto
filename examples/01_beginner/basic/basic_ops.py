@@ -127,6 +127,35 @@ def test_elementwise_ops(device_id=None):
     print("✓ Element-wise operations completed successfully\n")
 
 
+@pypto.frontend.jit(runtime_options={'run_mode': global_run_mode})
+def erfc_kernel(
+    x: pypto.Tensor([], pypto.DT_FP32),
+    out: pypto.Tensor([], pypto.DT_FP32)):
+    pypto.set_vec_tile_shapes(8, 8)
+    out.move(pypto.erfc(x))
+
+
+def test_erfc(device_id=None):
+    '''Element-wise complementary error function: out = erfc(x).'''
+    print('=' * 60)
+    print('Example 3: Mathematical Function (Erfc)')
+    print('=' * 60)
+
+    shape = (8, 8)
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
+
+    x = torch.randn(shape, dtype=torch.float32, device=device)
+    out = torch.zeros(shape, dtype=torch.float32, device=device)
+    erfc_kernel(x, out)
+
+    if global_run_mode == pypto.RunMode.NPU:
+        expected = torch.erfc(x)
+        max_diff = (out - expected).abs().max().item()
+        print(f'  Max difference: {max_diff:.6f}')
+        assert max_diff < 1e-5, 'Result mismatch!'
+    print('✓ Erfc operation completed successfully\n')
+
+
 # ============================================================================
 # 3. Matrix Multiplication
 # ============================================================================

@@ -162,6 +162,7 @@ Tensor Permute(const Tensor& self, std::vector<int> perm);
 Tensor Exp(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Exp2(const Tensor& self);
 Tensor Expm1(const Tensor& self);
+Tensor Erfc(const Tensor& self);
 Tensor Atan(const Tensor& self);
 Tensor Sin(const Tensor& self);
 Tensor Cos(const Tensor& self);

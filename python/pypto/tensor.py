@@ -800,6 +800,10 @@ class Tensor:
         return pypto.expm1(self)
 
     @source_location
+    def erfc(self) -> 'Tensor':
+        return pypto.erfc(self)
+
+    @source_location
     def log(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
         return pypto.log(self, precision_type)
 

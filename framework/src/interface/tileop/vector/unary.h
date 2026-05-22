@@ -1064,6 +1064,186 @@ TILEOP void TCos(T0 dst, T1 tmp, T2 src)
     TrigCompute<UnaryOp::COS>(dst, tmp, src);
 }
 
+constexpr float ERFC_FP32_MIN = 2.168404344971009e-19f;
+constexpr float ERFC_BOUNDARY_MAX = 10.0f;
+constexpr float ERFC_NEG_BOUNDARY_MAX = -10.0f;
+constexpr float ERFC_NEG_ONE = -1.0f;
+constexpr float ERFC_ONE = 1.0f;
+
+constexpr float ERFC_R0 = 0.1735313680e-7f;
+constexpr float ERFC_R1 = -0.9856738394e-6f;
+constexpr float ERFC_R2 = 0.2517003236e-4f;
+constexpr float ERFC_R3 = -0.3848015171e-3f;
+constexpr float ERFC_R4 = 0.5681528564e0f;
+constexpr float ERFC_R5 = 0.5245623129e1f;
+constexpr float ERFC_R6 = 0.2107740710e2f;
+constexpr float ERFC_R7 = 0.4212761755e2f;
+constexpr float ERFC_R8 = 0.4380524149e2f;
+
+constexpr float ERFC_S1 = 0.9349684299e1f;
+constexpr float ERFC_S2 = 0.3756930664e2f;
+constexpr float ERFC_S3 = 0.8058268949e2f;
+constexpr float ERFC_S4 = 0.9155653738e2f;
+constexpr float ERFC_S5 = 0.4380524152e2f;
+
+template <typename TileType>
+TILEOP inline void ErfcClip(TileType& dst, const TileType& src)
+{
+    pto::TMINS(dst, src, ERFC_BOUNDARY_MAX);
+    SyncV();
+    pto::TMAXS(dst, dst, ERFC_NEG_BOUNDARY_MAX);
+    SyncV();
+}
+
+template <typename TileType>
+TILEOP inline void ErfcPreCompute(TileType& xb, const TileType& clipped_x, TileType& xa)
+{
+    pto::TABS(xa, clipped_x);
+    SyncV();
+    pto::TADDS(xa, xa, ERFC_FP32_MIN);
+    SyncV();
+    pto::TDIV(xb, clipped_x, xa);
+    SyncV();
+}
+
+template <typename TileType>
+TILEOP inline void ErfcComputeR(TileType& tmpCompBuf2, TileType& tmpCompBuf3, const TileType& z)
+{
+    pto::TMULS(tmpCompBuf2, z, ERFC_R0);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R1);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R2);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R3);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R4);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R5);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R6);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R7);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, z, tmpCompBuf3);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf2, ERFC_R8);
+    SyncV();
+}
+
+template <typename TileType>
+TILEOP inline void ErfcComputeS(TileType& tmpCompBuf2, TileType& tmpCompBuf4, const TileType& z)
+{
+    pto::TADDS(tmpCompBuf2, z, ERFC_S1);
+    SyncV();
+    pto::TMUL(tmpCompBuf4, z, tmpCompBuf2);
+    SyncV();
+    pto::TADDS(tmpCompBuf2, tmpCompBuf4, ERFC_S2);
+    SyncV();
+    pto::TMUL(tmpCompBuf4, z, tmpCompBuf2);
+    SyncV();
+    pto::TADDS(tmpCompBuf2, tmpCompBuf4, ERFC_S3);
+    SyncV();
+    pto::TMUL(tmpCompBuf4, z, tmpCompBuf2);
+    SyncV();
+    pto::TADDS(tmpCompBuf2, tmpCompBuf4, ERFC_S4);
+    SyncV();
+    pto::TMUL(tmpCompBuf4, z, tmpCompBuf2);
+    SyncV();
+    pto::TADDS(tmpCompBuf2, tmpCompBuf4, ERFC_S5);
+    SyncV();
+}
+
+template <typename TileType>
+TILEOP inline void ErfcPublicSteps(
+    TileType& tmpCompBuf1, TileType& tmpCompBuf2, TileType& tmpCompBuf3, TileType& tmpCompBuf4)
+{
+    ErfcComputeR(tmpCompBuf2, tmpCompBuf3, tmpCompBuf1);
+    ErfcComputeS(tmpCompBuf2, tmpCompBuf4, tmpCompBuf1);
+
+    pto::TDIV(tmpCompBuf2, tmpCompBuf3, tmpCompBuf2);
+    SyncV();
+    pto::TMUL(tmpCompBuf1, tmpCompBuf1, tmpCompBuf1);
+    SyncV();
+    pto::TMULS(tmpCompBuf1, tmpCompBuf1, ERFC_NEG_ONE);
+    SyncV();
+    pto::TEXP(tmpCompBuf1, tmpCompBuf1);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, tmpCompBuf1, tmpCompBuf2);
+    SyncV();
+}
+
+template <typename TileType>
+TILEOP inline void ErfcPostCompute(TileType& dst, const TileType& xb, TileType& tmpCompBuf2, TileType& tmpCompBuf3)
+{
+    pto::TMULS(tmpCompBuf3, xb, ERFC_NEG_ONE);
+    SyncV();
+    pto::TADDS(tmpCompBuf3, tmpCompBuf3, ERFC_ONE);
+    SyncV();
+    pto::TMUL(tmpCompBuf2, tmpCompBuf2, xb);
+    SyncV();
+    pto::TADD(dst, tmpCompBuf2, tmpCompBuf3);
+    SyncV();
+}
+
+#define OP_TILE_OP_ERFC TErfc
+template <typename T0, typename T1, typename T2>
+TILEOP void TErfc(T0 dst, T1 tmp, T2 src)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T2, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
+    if (shape0 == 0 || shape1 == 0 || shape2 == 0 || shape3 == 0 || shape4 == 0) {
+        return;
+    }
+
+    using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T2::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    TmpFP32Tile dstTile(shape3, shape4);
+    TmpFP32Tile srcTile(shape3, shape4);
+    TmpFP32Tile tmpCompBuf1(shape3, shape4);
+    TmpFP32Tile tmpCompBuf2(shape3, shape4);
+    TmpFP32Tile tmpCompBuf3(shape3, shape4);
+    TmpFP32Tile tmpCompBuf4(shape3, shape4);
+
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                pto::TASSIGN(
+                    dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
+                pto::TASSIGN(
+                    srcTile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
+
+                pto::TASSIGN(tmpCompBuf1, (uint64_t)(tmp.GetAddr()));
+                pto::TASSIGN(tmpCompBuf2, (uint64_t)(tmp.GetAddr() + 1 * tileW * tileH * sizeof(typename T2::Type)));
+                pto::TASSIGN(tmpCompBuf3, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * sizeof(typename T2::Type)));
+                pto::TASSIGN(tmpCompBuf4, (uint64_t)(tmp.GetAddr() + 3 * tileW * tileH * sizeof(typename T2::Type)));
+
+                ErfcClip(dstTile, srcTile);
+                ErfcPreCompute(dstTile, dstTile, tmpCompBuf1);
+                ErfcPublicSteps(tmpCompBuf1, tmpCompBuf2, tmpCompBuf3, tmpCompBuf4);
+                ErfcPostCompute(dstTile, dstTile, tmpCompBuf2, tmpCompBuf3);
+            }
+        }
+    }
+}
 
 // Horner evaluation of arcsin Taylor on t in [0, 1/sqrt(2)]:
 //   arcsin(t) = t * (c0 + c1*s + c2*s^2 + ... + c7*s^7),  s = t^2

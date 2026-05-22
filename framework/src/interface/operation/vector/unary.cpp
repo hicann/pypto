@@ -348,6 +348,25 @@ Tensor Cos(const Tensor& self)
     return castResult;
 }
 
+Tensor Erfc(const Tensor& self)
+{
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_BF16, DT_FP16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Erfc");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "Erfc");
+    CheckTensorShapeSize(self.GetStorage(), "Erfc");
+    if (self.GetDataType() != DataType::DT_FP32) {
+        auto castSelf = Cast(self, DataType::DT_FP32);
+        auto result = CALL(
+            UnaryOperation<UnaryOpType::ERFC>, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage());
+        auto castResult = Cast(result, self.GetDataType());
+        return castResult;
+    }
+    auto result =
+        CALL(UnaryOperation<UnaryOpType::ERFC>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    return result;
+}
+
 Tensor Asin(const Tensor& self)
 {
     DECLARE_TRACER();
@@ -582,6 +601,21 @@ void CosOperationTileFunc(
     return TiledUnaryOperation<UnaryOpType::COS>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 
+void ErfcOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    std::vector<int64_t> tmpShape;
+    tmpShape.assign(shape.begin(), shape.end());
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
+    uint64_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP32)) * 4 *
+                                 std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>());
+    return TiledUnaryOperation<UnaryOpType::ERFC>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
+}
+
 template <UnaryOpType T>
 void AsinAcosOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
@@ -616,6 +650,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_SINH, Opcode::OP_SINH, SinhOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_COSH, Opcode::OP_COSH, CoshOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SIN, Opcode::OP_SIN, SinOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_COS, Opcode::OP_COS, CosOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ERFC, Opcode::OP_ERFC, ErfcOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ASIN, Opcode::OP_ASIN, AsinAcosOperationTileFunc<UnaryOpType::ASIN>);
 REGISTER_OPERATION_TILED_FUNC(OP_ACOS, Opcode::OP_ACOS, AsinAcosOperationTileFunc<UnaryOpType::ACOS>);
 } // namespace npu::tile_fwk

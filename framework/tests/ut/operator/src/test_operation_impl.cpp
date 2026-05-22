@@ -1679,3 +1679,19 @@ TEST_F(OperationImplTest, Test_Matmul_SFA_T)
     Tensor result;
     FUNCTION("TestMatmulSFAT") { result = npu::tile_fwk::Matrix::Matmul(DT_FP32, matA, matB, true, false, false); }
 }
+
+TEST_F(OperationImplTest, test_Erfc_fp16)
+{
+    TileShape::Current().SetVecTile(8, 128);
+    Tensor input(DT_FP16, {8, 4608}, "input");
+    Tensor result;
+    FUNCTION("TestErfc") { result = Erfc(input); }
+}
+
+TEST_F(OperationImplTest, test_Erfc_fp32)
+{
+    TileShape::Current().SetVecTile(8, 128);
+    Tensor input(DT_FP32, {8, 4608}, "input");
+    Tensor result;
+    FUNCTION("TestErfc") { result = Erfc(input); }
+}

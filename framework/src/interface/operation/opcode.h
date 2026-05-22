@@ -106,6 +106,7 @@ enum class Opcode {
     OP_COS,
     OP_SINH,
     OP_COSH,
+    OP_ERFC,
     OP_ASIN,
     OP_ACOS,
     // Binary Vector
@@ -628,7 +629,7 @@ const std::unordered_set<Opcode> UNARY_OPS{
     Opcode::OP_ROWMAX, Opcode::OP_ROWEXPSUM,  Opcode::OP_ROWEXPMAX, Opcode::OP_L1_TO_L1,    Opcode::OP_COPY_UB_TO_UB,
     Opcode::OP_ROUND,  Opcode::OP_ROWSUMLINE, Opcode::OP_ABS,       Opcode::OP_LN,          Opcode::OP_ISFINITE,
     Opcode::OP_HUB,    Opcode::OP_BITWISENOT, Opcode::OP_SIGN,      Opcode::OP_ROWPRODLINE, Opcode::OP_SIGNBIT,
-    Opcode::OP_SIN,    Opcode::OP_COS,        Opcode::OP_COSH,      Opcode::OP_ASIN,
+    Opcode::OP_SIN,    Opcode::OP_COS,        Opcode::OP_COSH,      Opcode::OP_ERFC,      Opcode::OP_ASIN,
     Opcode::OP_ACOS
 };
 
@@ -647,6 +648,7 @@ const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_SIN,
     Opcode::OP_COS,
     Opcode::OP_SINH,
+    Opcode::OP_ERFC,
     Opcode::OP_TANH,
     Opcode::OP_ASIN,
     Opcode::OP_ACOS
@@ -791,6 +793,7 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{
     Opcode::OP_PRELU,
     Opcode::OP_SIN,
     Opcode::OP_COS,
+    Opcode::OP_ERFC,
     Opcode::OP_TILEDMRGSORT,
     Opcode::OP_ROWMAXLINE,
     Opcode::OP_PAIRMIN,

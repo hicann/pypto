@@ -431,6 +431,11 @@ void OpcodeManager::RegisterVectorUnary()
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
         TileShapeVerifier::Verify);
     RegisterInfo(
+        Opcode::OP_ERFC, OpCoreType::AIV, "ERFC", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TErfc", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
+    RegisterInfo(
         Opcode::OP_TANH, OpCoreType::AIV, "TANH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Ttanh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
@@ -1294,6 +1299,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_GCD, "TGcd"},
     {Opcode::OP_SIN, "TSin"},
     {Opcode::OP_COS, "TCos"},
+    {Opcode::OP_ERFC, "TErfc"},
     {Opcode::OP_ADD, "TAdd"},
     {Opcode::OP_AXPY, "TAxpy"},
     {Opcode::OP_CUM_SUM, "TCumOperation"},
