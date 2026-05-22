@@ -750,6 +750,164 @@ TEST_F(TestPadLocalBuffer, axiscombine4)
     EXPECT_EQ(graph.GetTensor("t2")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>({16, 1})));
 }
 
+// 1dim brcb
+TEST_F(TestPadLocalBuffer, axiscombine5)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"t1"}, "copyin1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"t2"}, "copyin2", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t1", "t2"}, {"t3"}, "add", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16}, MemoryType::MEM_DEVICE_DDR, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t3"}, {"out"}, "copyout", true), true);
+    auto* rootFuncPtr = graph.GetFunction();
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    AxisCombine axisCombineTest;
+    EXPECT_EQ(axisCombineTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    auto updatedOps = rootFuncPtr->Operations();
+    for (const auto& op : updatedOps) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
+            auto inputTensor = op.GetIOperands()[0];
+            EXPECT_EQ(inputTensor->GetRawTensor()->GetRawShape()[0], K_8);
+            break;
+        }
+    }
+}
+
+// scale_ub have multiple BRCB consumer
+TEST_F(TestPadLocalBuffer, axiscombine6)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {4, 256}, MemoryType::MEM_DEVICE_DDR, "x_gm"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1}, MemoryType::MEM_DEVICE_DDR, "scale_gm"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 6144}, MemoryType::MEM_DEVICE_DDR, "w_scale_gm"), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {4, 64}, MemoryType::MEM_UB, "x_ub1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {4, 64}, MemoryType::MEM_UB, "x_ub2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "x_fp32_1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "x_fp32_2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1}, MemoryType::MEM_UB, "scale_ub"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 64}, MemoryType::MEM_UB, "w_scale_ub1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 64}, MemoryType::MEM_UB, "w_scale_ub2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "mul1_out1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "mul1_out2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "mul2_out1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "mul2_out2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "cast_out1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 64}, MemoryType::MEM_UB, "cast_out2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {4, 128}, MemoryType::MEM_UB, "assemble_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {4, 1, 128}, MemoryType::MEM_UB, "reshape_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 4, 128}, MemoryType::MEM_DEVICE_DDR, "trans_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {4, 128}, MemoryType::MEM_DEVICE_DDR, "output"), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"x_gm"}, {"x_ub1"}, "copyin1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"scale_gm"}, {"scale_ub"}, "copyin_scale", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"w_scale_gm"}, {"w_scale_ub1"}, "copyin_wscale1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"w_scale_gm"}, {"w_scale_ub2"}, "copyin_wscale2", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"x_ub1"}, {"x_fp32_1"}, "cast1", true), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_MUL, {"x_fp32_1", "scale_ub"}, {"mul1_out1"}, "mul1_1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_MUL, {"mul1_out1", "w_scale_ub1"}, {"mul2_out1"}, "mul2_1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"mul2_out1"}, {"cast_out1"}, "cast_out1", true), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"x_gm"}, {"x_ub2"}, "copyin2", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"x_ub2"}, {"x_fp32_2"}, "cast2", true), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_MUL, {"x_fp32_2", "scale_ub"}, {"mul1_out2"}, "mul1_2", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_MUL, {"mul1_out2", "w_scale_ub2"}, {"mul2_out2"}, "mul2_2", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"mul2_out2"}, {"cast_out2"}, "cast_out2", true), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"cast_out1"}, {"assemble_out"}, "assemble1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ASSEMBLE, {"cast_out2"}, {"assemble_out"}, "assemble2", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_RESHAPE, {"assemble_out"}, {"reshape_out"}, "reshape1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_TRANSPOSE_MOVEOUT, {"reshape_out"}, {"trans_out"}, "trans_moveout", true), true);
+    graph.GetOp("trans_moveout")->SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{0, 1});
+    EXPECT_EQ(graph.AddOp(Opcode::OP_RESHAPE, {"trans_out"}, {"output"}, "reshape2", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    AxisCombine axisCombineTest;
+    EXPECT_EQ(axisCombineTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+    for (const auto& op : rootFuncPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
+            EXPECT_EQ(op.oOperand[0]->GetRawTensor()->GetRawShape()[0], K_8);
+        }
+    }
+}
+
+/*
+Test case from PROD
+  t_pairprod_1 [4,1,3,1]  t_pairprod_2 [4,1,3,1]
+         \                   /
+          PAIRPROD [4,1,3,1] (t_pairprod_3)
+                |
+          ROWPRODLINE (AXIS=2) [4,1,1,1]
+                |
+             RESHAPE
+*/
+TEST_F(TestPadLocalBuffer, axiscombine7)
+{
+    ComputationalGraphBuilder graph;
+    // Input tensors for the first PAIRPROD: [4,1,3,1] x [4,1,3,1] -> [4,1,3,1]
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 3, 1}, MemoryType::MEM_UB, "t_input_1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 3, 1}, MemoryType::MEM_UB, "t_input_2"), true);
+    // Input tensors for the second PAIRPROD: [4,1,3,1] x [4,1,1,1] -> [4,1,3,1]
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 3, 1}, MemoryType::MEM_UB, "t_input_3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 1, 1}, MemoryType::MEM_UB, "t_input_4"), true);
+
+    // Output of first PAIRPROD
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 3, 1}, MemoryType::MEM_UB, "t_pairprod_1"), true);
+    // Output of second PAIRPROD
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 3, 1}, MemoryType::MEM_UB, "t_pairprod_2"), true);
+    // Output of third PAIRPROD (combines results from first two): [4,1,3,1] x [4,1,3,1] -> [4,1,3,1]
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 3, 1}, MemoryType::MEM_UB, "t_pairprod_3"), true);
+    // Output of ROWPRODLINE (reduce along AXIS=2): [4,1,3,1] -> [4,1,1,1]
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 1, 1}, MemoryType::MEM_UB, "t_rowprodline"), true);
+    // Output of RESHAPE: [4,1,1,1] -> [4,1,1]
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 1}, MemoryType::MEM_UB, "t_reshape_out"), true);
+    // GM output tensor
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 1, 1}, MemoryType::MEM_DEVICE_DDR, "t_gm_out"), true);
+
+    // Build the graph
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRPROD, {"t_input_1", "t_input_2"}, {"t_pairprod_1"}, "pairprod1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRPROD, {"t_input_3", "t_input_4"}, {"t_pairprod_2"}, "pairprod2", true), true);
+    EXPECT_EQ(
+        graph.AddOp(Opcode::OP_PAIRPROD, {"t_pairprod_1", "t_pairprod_2"}, {"t_pairprod_3"}, "pairprod3", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWPRODLINE, {"t_pairprod_3"}, {"t_rowprodline"}, "rowprodline", true), true);
+    graph.GetOp("rowprodline")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_RESHAPE, {"t_rowprodline"}, {"t_reshape_out"}, "reshape", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t_reshape_out"}, {"t_gm_out"}, "copyout", true), true);
+
+    auto* currFunctionPtr = graph.GetFunction();
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    currFunctionPtr->paramConfigs_.combineAxis = true;
+    AxisCombine axisCombineTest;
+    EXPECT_EQ(axisCombineTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    // Verify that the tensors are padded correctly
+    // The last dim 1 should be padded to 8 for vector operations
+    auto tPairprod3 = graph.GetTensor("t_pairprod_3");
+    EXPECT_EQ(tPairprod3->GetRawTensor()->GetRawShape()[3], 8);
+
+    auto tRowprodline = graph.GetTensor("t_rowprodline");
+    EXPECT_EQ(tRowprodline->GetRawTensor()->GetRawShape()[3], 8);
+
+    auto tReshape = graph.GetTensor("t_reshape_out");
+    EXPECT_EQ(tReshape->GetRawTensor()->GetRawShape()[2], 8);
+}
+
 TEST_F(TestPadLocalBuffer, L1toBt1)
 {
     ComputationalGraphBuilder graph;
