@@ -1,4 +1,5 @@
 case_name,input_shape,input_dtype,input_format,input_datarange,output_shape,output_dtype,output_format,view_shape,tile_shape,pad_value,pad_value_type,func_id
+FillPad_1D_int8_zero,"[32]",int8,ND,"[1, 1]","[32]",int8,ND,"[16]","[32]",0,"custom",1
 FillPad_1D_test_0,"[32]",fp16,ND,"[-10, 10]","[32]",fp16,ND,"[16]","[32]",,"zero",1
 FillPad_1D_test_1,"[32]",fp32,ND,"[-100, 100]","[32]",fp32,ND,"[16]","[16]",,"zero",1
 FillPad_1D_test_2,"[16]",fp32,ND,"[-5, 5]","[8]",fp32,ND,"[8]","[8]",,"zero",1

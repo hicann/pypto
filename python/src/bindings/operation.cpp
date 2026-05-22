@@ -137,19 +137,11 @@ void BindOperation(py::module& m)
     m.def(
         "Relu", [](const Tensor& operand) { return npu::tile_fwk::Relu(operand); }, "Tensor relu.");
     m.def(
-        "Pad",
-        [](const Tensor& self, const std::vector<int64_t>& padding, const std::string& mode, float value) {
-            return npu::tile_fwk::Pad(self, padding, mode, value);
-        },
-        "Pads tensor with constant value (supports right/bottom padding only).", py::arg("input"), py::arg("pad"),
-        py::arg("mode") = "constant", py::arg("value") = 0.0f);
+        "Pad", &npu::tile_fwk::Pad, "Pads tensor with constant value (supports right/bottom padding only).",
+        py::arg("input"), py::arg("pad"), py::arg("mode") = "constant", py::arg("value") = Element(DT_FP32, 0.0));
     m.def(
-        "FillPad",
-        [](const Tensor& self, const std::string& mode, float value) {
-            return npu::tile_fwk::FillPad(self, mode, value);
-        },
-        "Fills padding region of tensor with constant value.", py::arg("input"), py::arg("mode") = "constant",
-        py::arg("value") = 0.0f);
+        "FillPad", &npu::tile_fwk::FillPad, "Fills padding region of tensor with constant value.", py::arg("input"),
+        py::arg("mode") = "constant", py::arg("value") = Element(DT_FP32, 0.0));
     m.def(
         "Round", [](const Tensor& self, int decimals) { return npu::tile_fwk::Round(self, decimals); }, py::arg("self"),
         py::arg("decimals") = 0, "Tensor round.");

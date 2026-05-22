@@ -50,7 +50,7 @@ static void FillPadOperationExeFunc1Dims(
             auto tileTensor = View(
                 inputs[0], {firstViewShape}, SymbolicScalar::FromConcrete(args->viewShape_), {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
-            auto res = FillPad(tileTensor, "constant", args->padValue_);
+            auto res = FillPad(tileTensor, "constant", Element(tileTensor.GetDataType(), args->padValue_));
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
         }
     }
@@ -76,7 +76,7 @@ static void FillPadOperationExeFunc2Dims(
                     inputs[0], {firstViewShape, secondViewShape}, SymbolicScalar::FromConcrete(args->viewShape_),
                     {bIdx * firstViewShape, sIdx * secondViewShape});
                 TileShape::Current().SetVecTile(args->tileShape_);
-                auto res = FillPad(tileTensor, "constant", args->padValue_);
+                auto res = FillPad(tileTensor, "constant", Element(tileTensor.GetDataType(), args->padValue_));
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
             }
         }

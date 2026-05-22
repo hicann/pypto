@@ -17,16 +17,16 @@
 ## 函数原型
 
 ```python
-fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor
+fillpad(input: Tensor, mode: str = "constant", value: Union[float, int] = 0) -> Tensor
 ```
 
 ## 参数说明
 
 | 参数名 | 输入/输出 | 说明                                                                                                                                                                                                                           |
 | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| input  | 输入      | 需要进行填充的源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16。<br> 不支持空Tensor；Shape支持1-2维；Shape Size不大于2147483647（即INT32_MAX）。                                                    |
+| input  | 输入      | 需要进行填充的源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16、DT_INT8、DT_INT16、DT_INT32、DT_UINT8、DT_UINT16、DT_UINT32。<br> 不支持空Tensor；Shape支持1-2维；Shape Size不大于2147483647（即INT32_MAX）。                                                     |
 | mode   | 输入      | 填充模式。<br> 支持的类型为：str。<br> 可选值为 `'constant'`、`'reflect'`、`'replicate'` 或 `'circular'`。<br> 默认值：`'constant'`。<br> **注意**：当前仅支持 `'constant'` 模式。                                             |
-| value  | 输入      | 当填充模式为常量填充 (`'constant'`) 时的填充值。<br> 支持的类型为：float。<br> 支持任意浮点数值，包括 `-inf`、`inf`、`0.0` 以及其他任意浮点数（如 `1.0`、`-1.0`、`0.5` 等）。 默认值：`0.0`。                                                                                                                                 |
+| value  | 输入      | 当填充模式为常量填充 (`'constant'`) 时的填充值。<br> 支持的类型为：float 或 int。<br> 对于浮点类型（DT_FP32、DT_FP16、DT_BF16），支持任意浮点数值，包括 `-inf`、`inf`、`0.0` 以及其他任意浮点数（如 `1.0`、`-1.0`、`0.5` 等）。<br> 对于整型类型（DT_INT8、DT_INT16、DT_INT32、DT_UINT8、DT_UINT16、DT_UINT32），支持任意整数值。<br> 默认值：`0`。                                                                                                                                   |
 
 ## 返回值说明
 
@@ -35,7 +35,7 @@ fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor
 ## 约束说明
 
 1. mode当前**仅支持 `'constant'`（常量填充）模式**，其他模式暂不支持。
-2. value 支持任意浮点数值，填充值的数据类型会自动转换为与输入 Tensor 一致。
+2. value 支持任意浮点数值或整数值，填充值的数据类型会自动转换为与输入 Tensor 一致。
 3. 如果 `input` 不是 Tensor 类型，将抛出 `TypeError`。
 
 ## 调用示例

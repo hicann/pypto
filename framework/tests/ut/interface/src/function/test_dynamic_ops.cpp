@@ -198,7 +198,7 @@ TEST_F(DynamicOpsTest, FillPad1DFp32)
             {
                 (void)i;
                 auto t0_view = View(t0, {s}, SymbolicScalar::FromConcrete({16}), {0});
-                auto filled = FillPad(t0_view, "constant", 0.0f);
+                auto filled = FillPad(t0_view, "constant", Element(DT_FP32, 0.0f));
                 Assemble(filled, {0}, out);
             }
         }

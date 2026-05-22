@@ -100,22 +100,22 @@ def where(
 
 
 @op_wrapper
-def pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float = 0.0) -> Tensor:
+def pad(x: Tensor, padding: Sequence[int], mode: str = "constant", value: Union[float, int] = 0) -> Tensor:
     """
     Pads the input tensor.
 
     Padding size:
     The padding size by which to pad some dimensions of input are described starting from
     the last dimension and moving forward.
-    For pad has format (d_last_dim, d_last_dim-1, ..., d_last_dim-k).
+    For padding has format (d_last_dim, d_last_dim-1, ..., d_last_dim-k).
     Current implementation supports padding the last 2 dimensions (Right and Bottom) with
     constant values.
 
     Parameters
     ----------
-    input : Tensor
+    x : Tensor
         The input tensor to be padded.
-    pad : tuple or list of int
+    padding : tuple or list of int
         m-elements tuple, where m/2 <= input dimensions and m is even.
         Format is (pad_left, pad_right, pad_top, pad_bottom, ...).
         Note: Currently only supports pad_left=0 and pad_top=0 (Right/Bottom padding only).
@@ -123,10 +123,14 @@ def pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float 
     mode : str, optional
         'constant', 'reflect', 'replicate' or 'circular'. Default: 'constant'
         Note: Currently only 'constant' is supported.
-    value : float, optional
-        fill value for 'constant' padding. Default: 0.0
-        Note: The value supports arbitrary floating-point values, and the data
-        type of the padding value will automatically be converted to match that of the input Tensor.
+    value : Union[float, int], optional
+        fill value for 'constant' padding. Default: 0
+        Note: For float types (DT_FP32, DT_FP16, DT_BF16), the value supports
+        arbitrary floating-point values including -inf, inf.
+        For integer types (DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32),
+        the value must be an integer.
+        The data type of the padding value will automatically be converted to match
+        that of the input Tensor.
 
     Returns
     -------
@@ -159,12 +163,19 @@ def pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float 
 
     """
 
-    pad_list = list(pad)
-    return pypto_impl.Pad(input, pad_list, mode, float(value))
+    pad_list = list(padding)
+    if isinstance(value, int):
+        return pypto_impl.Pad(
+            x, pad_list, mode, pypto_impl.Element(x.dtype, value)
+        )
+    else:
+        return pypto_impl.Pad(
+            x, pad_list, mode, pypto_impl.Element(x.dtype, float(value))
+        )
 
 
 @op_wrapper
-def fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor:
+def fillpad(x: Tensor, mode: str = "constant", value: Union[float, int] = 0) -> Tensor:
     """
     Fills the padding region of the input tensor with a constant value.
 
@@ -173,15 +184,19 @@ def fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor
 
     Parameters
     ----------
-    input : Tensor
+    x : Tensor
         The input tensor with padding region to be filled.
     mode : str, optional
         'constant'. Default: 'constant'
         Note: Currently only 'constant' is supported.
-    value : float, optional
-        fill value for 'constant' padding. Default: 0.0
-        Note: The value supports arbitrary floating-point values, and the data
-        type of the padding value will automatically be converted to match that of the input Tensor.
+    value : Union[float, int], optional
+        fill value for 'constant' padding. Default: 0
+        Note: For float types (DT_FP32, DT_FP16, DT_BF16), the value supports
+        arbitrary floating-point values including -inf, inf.
+        For integer types (DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32),
+        the value must be an integer.
+        The data type of the padding value will automatically be converted to match
+        that of the input Tensor.
 
     Returns
     -------
@@ -212,7 +227,12 @@ def fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor
 
     """
 
-    return pypto_impl.FillPad(input, mode, float(value))
+    if isinstance(value, int):
+        return pypto_impl.FillPad(x, mode, pypto_impl.Element(x.dtype, value))
+    else:
+        return pypto_impl.FillPad(
+            x, mode, pypto_impl.Element(x.dtype, float(value))
+        )
 
 
 @op_wrapper

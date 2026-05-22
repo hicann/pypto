@@ -1553,7 +1553,7 @@ TEST_F(OperationImplTest, test_Pad_1D)
     TileShape::Current().SetVecTile(8);
     Tensor input(DT_FP32, {10}, "input");
     Tensor result;
-    FUNCTION("TestPad1D") { result = Pad(input, {0, 36}, "constant", 0.0f); }
+    FUNCTION("TestPad1D") { result = Pad(input, {0, 36}, "constant", Element(DT_FP32, 0.0f)); }
 }
 
 TEST_F(OperationImplTest, test_Pad_2D)
@@ -1561,7 +1561,7 @@ TEST_F(OperationImplTest, test_Pad_2D)
     TileShape::Current().SetVecTile(4, 4);
     Tensor input(DT_FP32, {6, 6}, "input");
     Tensor result;
-    FUNCTION("TestPad2D") { result = Pad(input, {0, 12, 0, 12}, "constant", 0.0f); }
+    FUNCTION("TestPad2D") { result = Pad(input, {0, 12, 0, 12}, "constant", Element(DT_FP32, 0.0f)); }
 }
 
 TEST_F(OperationImplTest, Test_Matmul_Bias)
@@ -1603,7 +1603,7 @@ TEST_F(OperationImplTest, test_FillPad_1D)
     TileShape::Current().SetVecTile(8);
     Tensor input(DT_FP32, {10}, "input");
     Tensor result;
-    FUNCTION("TestFillPad1D") { result = FillPad(input, "constant", 0.0f); }
+    FUNCTION("TestFillPad1D") { result = FillPad(input, "constant", Element(DT_FP32, 0.0f)); }
 }
 
 TEST_F(OperationImplTest, test_FillPad_2D)
@@ -1611,7 +1611,7 @@ TEST_F(OperationImplTest, test_FillPad_2D)
     TileShape::Current().SetVecTile(4, 4);
     Tensor input(DT_FP32, {6, 6}, "input");
     Tensor result;
-    FUNCTION("TestFillPad2D") { result = FillPad(input, "constant", 0.0f); }
+    FUNCTION("TestFillPad2D") { result = FillPad(input, "constant", Element(DT_FP32, 0.0f)); }
 }
 
 TEST_F(OperationImplTest, Test_Permute_3D_FP32)

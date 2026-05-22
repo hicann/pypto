@@ -135,7 +135,7 @@ void TiledFillPadOperation(
 }
 
 LogicalTensorPtr TensorPadOperation(
-    Function& function, const Tensor& self, const std::vector<int64_t>& padding, const std::string& mode, float value)
+    Function& function, const Tensor& self, const std::vector<int64_t>& padding, const std::string& mode, const Element& value)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "Pad: only 'constant' mode is supported.";
     auto operand = self.GetStorage();
@@ -184,21 +184,22 @@ LogicalTensorPtr TensorPadOperation(
     auto& op = function.AddOperation(Opcode::OP_PAD, {operand}, {result});
     op.SetAttribute(OP_ATTR_PREFIX + "pad_right", static_cast<int64_t>(padRight));
     op.SetAttribute(OP_ATTR_PREFIX + "pad_bottom", static_cast<int64_t>(padBottom));
-    op.SetAttribute(OpAttributeKey::scalar, Element(self.GetDataType(), value));
+    op.SetAttribute(OpAttributeKey::scalar, value);
     return result;
 }
 
-Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode, float value)
+Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode, const Element& value)
 {
     DECLARE_TRACER();
     CheckTensorDimRange(self.GetStorage(), 1, 4, "PAD");
     CheckTensorShapeSize(self.GetStorage(), "PAD");
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
+    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,
+                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PAD");
     RETURN_CALL(PadOperation, *Program::GetInstance().GetCurrentFunction(), self, padding, mode, value);
 }
 
-LogicalTensorPtr TensorFillPadOperation(Function& function, const Tensor& self, const std::string& mode, float value)
+LogicalTensorPtr TensorFillPadOperation(Function& function, const Tensor& self, const std::string& mode, const Element& value)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "FillPad: only 'constant' mode is supported.";
     auto operand = self.GetStorage();
@@ -208,16 +209,17 @@ LogicalTensorPtr TensorFillPadOperation(Function& function, const Tensor& self, 
     auto result = std::make_shared<LogicalTensor>(
         function, operand->Datatype(), outputShape, SymbolicScalar::FromConcrete(outputShape));
     auto& op = function.AddOperation(Opcode::OP_FILLPAD, {operand}, {result});
-    op.SetAttribute(OpAttributeKey::scalar, Element(self.GetDataType(), value));
+    op.SetAttribute(OpAttributeKey::scalar, value);
     return result;
 }
 
-Tensor FillPad(const Tensor& self, std::string mode, float value)
+Tensor FillPad(const Tensor& self, std::string mode, const Element& value)
 {
     DECLARE_TRACER();
     CheckTensorDimRange(self.GetStorage(), 1, 2, "FILLPAD");
     CheckTensorShapeSize(self.GetStorage(), "FILLPAD");
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
+    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16,  DT_BF16,   DT_INT8,  DT_INT16,
+                                                   DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "FILLPAD");
     RETURN_CALL(FillPadOperation, *Program::GetInstance().GetCurrentFunction(), self, mode, value);
 }

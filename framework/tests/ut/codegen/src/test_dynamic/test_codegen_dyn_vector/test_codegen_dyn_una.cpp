@@ -142,7 +142,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamic)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = Pad(input, {0, 6, 0, 8}, "constant", 2.0);
+            output = Pad(input, {0, 6, 0, 8}, "constant", Element(DT_FP32, 2.0));
         }
     }
     auto function =
@@ -178,7 +178,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamicFP16)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = Pad(input, {0, 6, 0, 8}, "constant", std::numeric_limits<float>::infinity());
+            output = Pad(input, {0, 6, 0, 8}, "constant", Element(DT_FP16, std::numeric_limits<float>::infinity()));
         }
     }
     auto function =
@@ -214,7 +214,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = FillPad(input, "constant", 0.0f);
+            output = FillPad(input, "constant", Element(DT_BF16, 0.0f));
         }
     }
     auto function =
@@ -250,7 +250,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamic)
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
         {
             (void)i;
-            output = FillPad(input, "constant", 0.0f);
+            output = FillPad(input, "constant", Element(DT_FP32, 0.0f));
         }
     }
     auto function =

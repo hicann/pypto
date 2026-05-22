@@ -54,7 +54,7 @@ static void PadOperationExeFunc1Dims(
                 {bIdx * firstViewShape});
             TileShape::Current().SetVecTile(args->tileShape_);
             int64_t padRight = outputs[0].GetShape()[0] - inputs[0].GetShape()[0];
-            auto res = Pad(tileTensor, {0, padRight}, "constant", args->padValue_);
+            auto res = Pad(tileTensor, {0, padRight}, "constant", Element(tileTensor.GetDataType(), args->padValue_));
             Assemble(res, {bIdx * firstViewShape}, outputs[0]);
         }
     }
@@ -86,7 +86,7 @@ static void PadOperationExeFunc2Dims(
                 TileShape::Current().SetVecTile(args->tileShape_);
                 int64_t padRight = outputs[0].GetShape()[1] - inputs[0].GetShape()[1];
                 int64_t padBottom = outputs[0].GetShape()[0] - inputs[0].GetShape()[0];
-                auto res = Pad(tileTensor, {0, padRight, 0, padBottom}, "constant", args->padValue_);
+                auto res = Pad(tileTensor, {0, padRight, 0, padBottom}, "constant", Element(tileTensor.GetDataType(), args->padValue_));
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
             }
         }
@@ -125,7 +125,7 @@ static void PadOperationExeFunc3Dims(
                     TileShape::Current().SetVecTile(args->tileShape_);
                     int64_t padRight = outputs[0].GetShape()[2] - inputs[0].GetShape()[2];
                     int64_t padBottom = outputs[0].GetShape()[1] - inputs[0].GetShape()[1];
-                    auto res = Pad(tileTensor, {0, padRight, 0, padBottom}, "constant", args->padValue_);
+                    auto res = Pad(tileTensor, {0, padRight, 0, padBottom}, "constant", Element(tileTensor.GetDataType(), args->padValue_));
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
                 }
             }
@@ -173,7 +173,7 @@ static void PadOperationExeFunc4Dims(
                         TileShape::Current().SetVecTile(args->tileShape_);
                         int64_t padRight = outputs[0].GetShape()[3] - inputs[0].GetShape()[3];
                         int64_t padBottom = outputs[0].GetShape()[2] - inputs[0].GetShape()[2];
-                        auto res = Pad(tileTensor0, {0, padRight, 0, padBottom}, "constant", args->padValue_);
+                        auto res = Pad(tileTensor0, {0, padRight, 0, padBottom}, "constant", Element(tileTensor0.GetDataType(), args->padValue_));
                         Assemble(
                             res,
                             {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,

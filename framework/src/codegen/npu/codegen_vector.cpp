@@ -1284,20 +1284,35 @@ std::string CodeGenOpNPU::PrintPadTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    auto c = extOperandVal.Cast<float>();
+    DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor};
     std::ostringstream oss;
-    if (std::isinf(c)) {
-        std::string padValue = c < 0 ? "pto::PadValue::Min" : "pto::PadValue::Max";
-        oss << tileOpName << "<" << padValue << ">";
-        oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
-        return oss.str();
+
+    bool isFloatType = (dstDtype == DT_FP32 || dstDtype == DT_FP16 || dstDtype == DT_BF16);
+
+    if (isFloatType) {
+        auto c = extOperandVal.Cast<float>();
+        if (std::isinf(c)) {
+            oss << tileOpName << "<" << (c < 0 ? "pto::PadValue::Min" : "pto::PadValue::Max") << ">"
+                << WrapParamByParentheses(tileOpParamList) << STMT_END;
+            return oss.str();
+        }
     }
-    std::string padValueStr = FormatFloat(extOperandVal.Cast<float>());
-    DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
+
+    std::string padValueStr;
+    if (isFloatType) {
+        padValueStr = FormatFloat(extOperandVal.Cast<float>());
+    } else if (dstDtype == DT_INT16 || dstDtype == DT_UINT16) {
+        padValueStr = std::to_string(extOperandVal.Cast<int16_t>());
+    } else if (dstDtype == DT_INT8 || dstDtype == DT_UINT8) {
+        padValueStr = std::to_string(extOperandVal.Cast<int8_t>());
+    } else {
+        padValueStr = std::to_string(extOperandVal.Cast<int32_t>());
+    }
+
     std::string padValueArg = "(" + std::string(DataType2CCEStr(dstDtype)) + ")" + padValueStr;
-    oss << tileOpName << "<pto::PadValueCustom(" << padValueArg << ")>";
-    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    oss << tileOpName << "<pto::PadValueCustom(" << padValueArg << ")>" << WrapParamByParentheses(tileOpParamList)
+        << STMT_END;
     return oss.str();
 }
 

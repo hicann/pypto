@@ -940,11 +940,11 @@ class Tensor:
         return pypto.expand_clone(self, shape, valid_shape=valid_shape)
 
     @source_location
-    def pad(self, pad: Sequence[int], mode: str = "constant", value: float = 0.0) -> 'Tensor':
+    def pad(self, pad: Sequence[int], mode: str = "constant", value: Union[float, int] = 0) -> 'Tensor':
         return pypto.pad(self, pad, mode, value)
 
     @source_location
-    def fillpad(self, mode: str = "constant", value: float = 0.0) -> 'Tensor':
+    def fillpad(self, mode: str = "constant", value: Union[float, int] = 0) -> 'Tensor':
         return pypto.fillpad(self, mode, value)
 
     @source_location
