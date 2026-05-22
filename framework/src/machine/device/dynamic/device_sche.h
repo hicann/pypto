@@ -335,6 +335,8 @@ struct DynMachineManager {
         UNUSED(entry);
 
         DeviceArgs* devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
+        DEV_INFO("DeviceMode=%s, isDeviceMode=%d, stage=%s, threadIdx=%d", IsDeviceMode() ? "device" : "sim", IsDeviceMode(),
+            "RunSche.before", threadIdx);
         DEV_INFO("ThreadScheEnter idx=%d", threadIdx);
 
         DEV_INFO(
