@@ -515,10 +515,13 @@ Status GenerateMoveOp::ProcessL1CopyInConv(Operation& op) const
             return FAILED;
         }
     }
+
+    // 4. 更新 rawShape 为 VIEW 输入 tensor 的 dynRawShape
+    auto viewInput = producerOp->GetIOperands().front();
+    copyAttr->SetRawShape(OpImmediate::Specified(viewInput->tensor->GetDynRawShape()));
     op.SetOpAttribute(copyAttr);
 
-    // 4. 标记删除 VIEW
-    auto viewInput = producerOp->GetIOperands().front();
+    // 5. 标记删除 VIEW
     op.ReplaceIOperand(0, viewInput);
     producerOp->SetAsDeleted();
     return SUCCESS;
@@ -577,10 +580,13 @@ Status GenerateMoveOp::ProcessL0CCopyOutConv(Operation& op) const
             return FAILED;
         }
     }
+
+    // 4. 更新 rawShape 为 ASSEMBLE 输出 tensor 的 dynRawShape
+    auto assembleOutput = consumerOp->GetOOperands().front();
+    copyAttr->SetRawShape(OpImmediate::Specified(assembleOutput->tensor->GetDynRawShape()));
     op.SetOpAttribute(copyAttr);
 
-    // 4. 标记删除 ASSEMBLE
-    auto assembleOutput = consumerOp->GetOOperands().front();
+    // 5. 标记删除 ASSEMBLE
     op.ReplaceOOperand(0, assembleOutput);
     consumerOp->SetAsDeleted();
     return SUCCESS;
