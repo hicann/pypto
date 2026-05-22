@@ -18,7 +18,7 @@ import pytest
 import pypto
 import torch
 
-from matmul_test_case import BASIC_TESTS, MatmulConfig
+from testcase.matmul_test_case import BASIC_TESTS, MatmulConfig
 
 
 @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
@@ -116,11 +116,21 @@ def test_matmul_basic(case: dict):
     run_matmul_test(case)
 
 
-def run_matmul_demo():
+def run_matmul_demo(run_mode):
     m_size, k_size, n_size = 256, 256, 256
     m_view_size, n_view_size = 128, 128
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1})
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(
+        debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 1},
+        runtime_options={"run_mode": mode}
+    )
     def matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_FP16),
         b: pypto.Tensor([], pypto.DT_FP16),
@@ -141,11 +151,12 @@ def run_matmul_demo():
                     n_idx * n_view_size: n_idx * n_view_size + n_view_size,
                 ] = out_view
 
-    a = torch.randn([m_size, k_size], dtype=torch.float16, device="npu:0")
-    b = torch.randn([k_size, n_size], dtype=torch.float16, device="npu:0")
-    out = torch.empty(m_size, n_size, dtype=torch.float16, device="npu:0")
+    device = "npu:0" if run_mode == "npu" else "cpu"
+    a = torch.randn([m_size, k_size], dtype=torch.float16, device=device)
+    b = torch.randn([k_size, n_size], dtype=torch.float16, device=device)
+    out = torch.empty(m_size, n_size, dtype=torch.float16, device=device)
     matmul_demo_kernel(a, b, out)
 
 
 if __name__ == "__main__":
-    run_matmul_demo()
+    run_matmul_demo("npu")

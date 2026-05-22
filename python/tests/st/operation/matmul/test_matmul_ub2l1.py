@@ -21,7 +21,7 @@ import pypto
 import torch
 import numpy as np
 
-from matmul_ub2l1_test_case import (
+from testcase.matmul_ub2l1_test_case import (
     CastMatmulConfig,
     CAST_RIGHT_MATMUL_TESTS,
     CAST_LEFT_MATMUL_TESTS,
@@ -151,11 +151,21 @@ def test_cast_matmul(case: dict):
     run_cast_matmul_test(case)
 
 
-def run_cast_matmul_demo():
+def run_cast_matmul_demo(run_mode):
     m_size, k_size, n_size = 256, 256, 256
     m_view_size, n_view_size = 128, 128
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(
+        debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0},
+        runtime_options={"run_mode": mode}
+    )
     def cast_matmul_demo_kernel(
         a: pypto.Tensor([], pypto.DT_FP32),
         b: pypto.Tensor([], pypto.DT_FP16),
@@ -179,15 +189,12 @@ def run_cast_matmul_demo():
                     n_idx * n_view_size: n_idx * n_view_size + n_view_size,
                 ] = out_view
 
-    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
-    torch.npu.set_device(device_id)
-
-    a = torch.randn([m_size, k_size], dtype=torch.float32, device=f"npu:{device_id}")
-    b = torch.randn([k_size, n_size], dtype=torch.float16, device=f"npu:{device_id}")
-    out = torch.empty(m_size, n_size, dtype=torch.float16, device=f"npu:{device_id}")
-
+    device = "npu:0" if run_mode == "npu" else "cpu"
+    a = torch.randn([m_size, k_size], dtype=torch.float32, device=device)
+    b = torch.randn([k_size, n_size], dtype=torch.float16, device=device)
+    out = torch.empty(m_size, n_size, dtype=torch.float16, device=device)
     cast_matmul_demo_kernel(a, b, out)
 
 
 if __name__ == "__main__":
-    run_cast_matmul_demo()
+    run_cast_matmul_demo("npu")
