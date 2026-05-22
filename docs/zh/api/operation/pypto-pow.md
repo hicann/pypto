@@ -23,8 +23,8 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionTy
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 指数。 <br> 支持的类型为Tensor、int或float。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32、DT_INT8、DT_UINT8、DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 指数。 <br> 支持的类型为Tensor、int或float。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32、DT_INT8、DT_UINT8、DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | precision_type | 输入      | 精度模式枚举类型，用以控制指数计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
@@ -40,13 +40,15 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionTy
 ## 约束说明
 
 1. 高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
+2. 两个输入均为Tensor且输入类型为int8/uint8/int16时，两个输入参数数据类型需相同。
 
 ## 数据类型提升说明
 
 我们约定float32>float16>bfloat16>int32。
 
-1. 当两个输入参数类型一个为float16而另一个bfloat16时输出的数据类型为float32。
-2. 其他情况下输出类型为输入参数类型的更大值，如输入float32和float16则输出为float32。
+1. 当两个输入参数类型均为int8/uint8/int16时，输出类型与输入一致。
+2. 当两个输入参数类型一个为float16而另一个bfloat16时输出的数据类型为float32。
+3. 其他情况下输出类型为输入参数类型的更大值，如输入float32和float16则输出为float32，参考下述表格。
 
 | 参数类型    | float32    | float16    | bfloat16   | int32      |
 |-------------|------------|------------|------------|------------|

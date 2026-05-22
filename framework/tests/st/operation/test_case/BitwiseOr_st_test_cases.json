@@ -779,6 +779,171 @@
                 "func_id": -1
             },
             "index": 11
+        },
+        {
+            "case_index": 0,
+            "case_name": "BitwiseOr_test_1",
+            "operation": "BitwiseOr",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 1,
+            "case_name": "BitwiseOr_test_2",
+            "operation": "BitwiseOr",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 2,
+            "case_name": "BitwiseOr_test_3",
+            "operation": "BitwiseOr",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "data_range": {
+                        "min": -1000,
+                        "max": 1000
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "data_range": {
+                        "min": -1000,
+                        "max": 1000
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "func_id": -1
+            }
         }
     ]
 }

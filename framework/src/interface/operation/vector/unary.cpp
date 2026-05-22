@@ -248,7 +248,9 @@ Tensor BitwiseNot(const Tensor& self)
     if (self.GetDataType() == DT_BOOL) {
         return LogicalNot(self);
     }
-    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    static const std::unordered_set<DataType> BITWISE_A2A3_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8};
+    static const std::unordered_set<DataType> BITWISE_A5_TYPES = {DT_INT16, DT_UINT16, DT_INT8, DT_UINT8, DT_INT32};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISE_A2A3_TYPES, BITWISE_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseNot");
     RETURN_CALL(
         UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());

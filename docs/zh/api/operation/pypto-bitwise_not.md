@@ -1,4 +1,4 @@
-﻿# pypto.bitwise\_not
+# pypto.bitwise\_not
 
 ## 产品支持情况
 
@@ -27,7 +27,7 @@ bitwise_not(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_BOOL。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor支持的数据类型为DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_BOOL。 <br> Atlas A5系列产品：Tensor支持的数据类型为DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32，DT_BOOL。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 

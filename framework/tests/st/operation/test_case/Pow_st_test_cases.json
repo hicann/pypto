@@ -1799,6 +1799,171 @@
                 "func_id": -1
             },
             "index": 28
+        },
+        {
+            "case_index": 28,
+            "case_name": "Pow_test_29",
+            "operation": "Pow",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 29,
+            "case_name": "Pow_test_30",
+            "operation": "Pow",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "uint8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 30,
+            "case_name": "Pow_test_31",
+            "operation": "Pow",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "func_id": -1
+            }
         }
     ]
 }

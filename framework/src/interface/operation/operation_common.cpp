@@ -297,4 +297,12 @@ void CheckBinaryInputTensors(
     CheckTensorsShapeConsistencyOrBroadcast({tensor1, tensor2}, opName);
     CheckTensorsFormatConsistency(tensor1, tensor2, opName);
 }
+
+const std::unordered_set<DataType>& GetSupportedDataTypesByArch(
+    const std::unordered_set<DataType>& a2a3Types,
+    const std::unordered_set<DataType>& a5Types)
+{
+    bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    return isA5Architecture ? a5Types : a2a3Types;
+}
 } // namespace npu::tile_fwk

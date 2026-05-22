@@ -359,7 +359,6 @@ TILEOP void TBitwiseXor(T0 dst, T1 src0, T2 src1, T3 tmp)
 template <auto PrecisionType = pto::PowAlgorithm::DEFAULT, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp)
 {
-    static_assert(std::is_same_v<typename T1::Type, float> || std::is_same_v<typename T1::Type, int32_t>);
     BinaryTmpCompute<BinaryOp::POW, PrecisionType>(dst, src0, src1, tmp);
 }
 

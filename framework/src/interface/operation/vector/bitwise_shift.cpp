@@ -265,7 +265,9 @@ LogicalTensorPtr TensorBitwiseShiftOperationSelfScalar(
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_INT32, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     RETURN_CALL(
         BitwiseShiftOperation<BitwiseShiftOpType::BITWISERIGHTSHIFT>, *Program::GetInstance().GetCurrentFunction(),
@@ -275,7 +277,9 @@ Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
 Tensor BitwiseRightShift(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_INT32, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
@@ -289,7 +293,9 @@ Tensor BitwiseRightShift(const Tensor& self, const Element& other)
 Tensor BitwiseRightShift(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_INT32, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
@@ -302,7 +308,9 @@ Tensor BitwiseRightShift(const Element& self, const Tensor& other)
 Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_INT32, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     RETURN_CALL(
         BitwiseShiftOperation<BitwiseShiftOpType::BITWISELEFTSHIFT>, *Program::GetInstance().GetCurrentFunction(), self,
@@ -312,7 +320,9 @@ Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
 Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_INT32, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
@@ -326,7 +336,9 @@ Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
 Tensor BitwiseLeftShift(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A2A3_TYPES = {DT_INT16};
+    static const std::unordered_set<DataType> BITWISESHIFT_A5_TYPES = {DT_INT16, DT_INT32, DT_INT8};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(BITWISESHIFT_A2A3_TYPES, BITWISESHIFT_A5_TYPES);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
