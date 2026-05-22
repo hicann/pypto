@@ -148,6 +148,7 @@ private:
     {
         int32_t ret = DEVICE_MACHINE_OK;
         auto taskType = GetTaskType(taskId);
+        DEV_VERBOSE_DEBUG("Dispatch aicpu task %lu.", taskId);
         if (taskType < TaskType::TASK_TYPE_NUM) {
             TaskStat* taskStat = nullptr;
             if (aicpuTaskStat_ != nullptr) {

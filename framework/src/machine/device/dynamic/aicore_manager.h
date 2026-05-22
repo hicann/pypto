@@ -1488,6 +1488,7 @@ private:
 
     inline void PushAicpuTaskQueue(SchDeviceTaskContext* devTaskCtx, uint64_t taskId)
     {
+        DEV_VERBOSE_DEBUG("PushAicpuTaskQueue taskId = %lu", taskId);
         PushReadyQue(devTaskCtx->readyAicpuFunctionQue, &taskId, 1);
     }
 

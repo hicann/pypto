@@ -41,6 +41,7 @@ inline bool SignalTileOp::PollCompleted() const
     if (addr_[0] != expectedSum_) {
         return false;
     }
+    DEV_DEBUG("expectedSum_=%d, addr_[0]=%d, resolve taskId=%lu", expectedSum_, addr_[0], taskId_);
     if (resetSignal_) {
         addr_[0] = 0;
     }

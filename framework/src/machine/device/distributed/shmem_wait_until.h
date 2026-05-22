@@ -235,9 +235,9 @@ public:
             CalcLinearOffset(totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) * paramInfo_.bufferStride;
 
         DEV_DEBUG(
-            "PrepareTask baseAddr=0x%lx, actualAddr=0x%lx, ownerRank=%u, actual rawShape=[%lu, %u],"
+            "PrepareTask taskId=%lu, baseAddr=0x%lx, actualAddr=0x%lx, ownerRank=%u, actual rawShape=[%lu, %u],"
             "actual offset=[%u, %u], buffer maxTileNum=%lu, bufferStride=%u",
-            info.rawAddr, reinterpret_cast<uint64_t>(addr), info.offset[OWNER_RANK_ID_INDEX],
+            taskId, info.rawAddr, reinterpret_cast<uint64_t>(addr), info.offset[OWNER_RANK_ID_INDEX],
             GetRankNum(hcclContextAddr_, info.vaddr), totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex,
             TileOp::Distributed::DecodeShmemAddrMaxTileNum(info.vaddr), paramInfo_.bufferStride);
 
