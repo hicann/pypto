@@ -185,6 +185,7 @@ Tensor Abs(const Tensor& self);
 Tensor Ln(const Tensor& operand, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Hub(const Tensor& operand);
 Tensor Sign(const Tensor& operand);
+Tensor Tan(const Tensor& operand);
 Tensor Signbit(const Tensor& operand);
 Tensor Sinh(const Tensor& self);
 Tensor Cosh(const Tensor& self);

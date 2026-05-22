@@ -407,6 +407,10 @@ void OpcodeManager::RegisterVectorUnary()
         {"TileOp::Tsignbit", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
     RegisterInfo(
+        Opcode::OP_TAN, OpCoreType::AIV, "TAN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::Ttan", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(
         Opcode::OP_SIN, OpCoreType::AIV, "SIN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tsin", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
@@ -1363,6 +1367,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_SIGN, "TSign"},
     {Opcode::OP_SIGNBIT, "TSignbit"},
     {Opcode::OP_TANH, "TTanh"},
+    {Opcode::OP_TAN, "Ttan"},
     {Opcode::OP_CEIL, "TCeil"},
     {Opcode::OP_FLOOR, "TFloor"},
     {Opcode::OP_TRUNC, "TTrunc"},

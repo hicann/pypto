@@ -142,6 +142,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
 
           {Opcode::OP_SIGN, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_SIGNBIT, [this]() { return GenUnaryOpWithTmpBuff(); }},
+          {Opcode::OP_TAN, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_SIN, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_COS, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_SINH, [this]() { return GenUnaryOpWithTmpBuff(); }},

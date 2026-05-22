@@ -795,6 +795,20 @@ def gen_log1p_op_golden(case_name: str, output: Path, case_index: int = None) ->
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestTan/TanOperationTest.TestTan",
+    ]
+)
+def gen_tan_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs, _config: dict):
+        base = _config["params"]
+        output = [np.tan(inputs[0])]
+        return output
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Tan", golden_func, output, case_index)
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestPow/PowOperationTest.TestPow",
     ]
 )
@@ -971,6 +985,19 @@ def gen_tanh_op_golden(case_name: str, output: Path, case_index: int = None) -> 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Tanh", golden_func, output, case_index)
 
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestTan/TanOperationTest.TestTan",
+    ]
+)
+def gen_tan_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs: list, _config: dict):
+        x = safe_tensor_conversion(inputs[0])
+        x = torch.tan(x)
+        return [to_numpy(x)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Tan", golden_func, output, case_index)
 
 @GoldenRegister.reg_golden_func(
     case_names=[

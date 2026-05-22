@@ -108,6 +108,7 @@ pypto-sqrt
 pypto-sub
 pypto-sum
 pypto-tanh
+pypto-tan
 pypto-topk
 pypto-transpose
 pypto-tril

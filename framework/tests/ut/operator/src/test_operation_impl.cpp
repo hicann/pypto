@@ -541,6 +541,45 @@ TEST_F(OperationImplTest, Test_Signbit_FP32)
     }
 }
 
+TEST_F(OperationImplTest, Test_Tan_FP16)
+{
+    PROGRAM("Tan")
+    {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP16, shape, "A");
+        auto output = Tensor(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Tan_FP16") { output = Tan(input_a); }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Tan_FP32)
+{
+    PROGRAM("Tan")
+    {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP32, shape, "A");
+        auto output = Tensor(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Tan_FP32") { output = Tan(input_a); }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Tan_BF16)
+{
+    PROGRAM("Tan")
+    {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_BF16, shape, "A");
+        auto output = Tensor(DT_BF16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Tan_BF16") { output = Tan(input_a); }
+    }
+}
+
 TEST_F(OperationImplTest, Test_Tanh_FP16) {
     PROGRAM("Tanh") {
         std::vector<int64_t> shape = {128, 32};

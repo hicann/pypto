@@ -389,6 +389,158 @@ Tensor Log1p(const Tensor& self)
     return resTensorBeforeCast;
 }
 
+void TiledTanOperation(
+    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& result,
+    DataType srcDtype)
+{
+    if (cur == input.tensor.GetShape().size()) {
+        auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
+
+        int64_t tmpSize = 7 * MultiplyLastTwoDims<float>(input.tileInfo.shape);
+        std::vector<int64_t> tmpShape({tmpSize});
+        auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
+        function.AddOperation(Opcode::OP_TAN, {tile}, {resultTile, tmpTensor});
+
+        return;
+    }
+    auto& vecTile = tileShape.GetVecTile();
+    for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
+        input.tileInfo.offset[cur] = i;
+        TiledTanOperation(function, tileShape, cur + 1, input, result, srcDtype);
+    }
+}
+
+void TiledTanOperation(
+    Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result,
+    DataType srcDtype)
+{
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
+
+    TileInfo tileInfo(result->shape.size(), result->offset.size());
+    auto input = Input{self, tileInfo};
+    TiledTanOperation(function, tileShape, 0, input, result, srcDtype);
+}
+
+LogicalTensorPtr TensorTanOperation(Function& function, LogicalTensorPtr self)
+{
+    auto srcDtype = self->tensor->datatype;
+    LogicalTensorPtr operandCast = self;
+    if (srcDtype == DataType::DT_FP16 || srcDtype == DataType::DT_BF16) {
+        operandCast = TensorCastOperation<CastOpType::CAST>(function, self, DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    auto result = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, self->shape, self->GetDynValidShape());
+    function.AddOperation(Opcode::OP_TAN, {operandCast}, {result});
+    if (srcDtype == DataType::DT_FP16 || srcDtype == DataType::DT_BF16) {
+        auto resultCast = TensorCastOperation<CastOpType::CAST>(function, result, srcDtype, CastMode::CAST_NONE);
+        return resultCast;
+    }
+    return result;
+}
+
+Tensor Tan(const Tensor& operand)
+{
+    DECLARE_TRACER();
+    auto dType = operand.GetStorage()->Datatype();
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        dType == DataType::DT_FP32 || dType == DataType::DT_FP16 || dType == DataType::DT_BF16)
+        << "The datatype is not supported";
+    RETURN_CALL(TanOperation, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+}
+
+LogicalTensorPtr IntegerPow(const Tensor& self, int32_t intExponent)
+{
+    // 快速幂
+    auto result = GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
+    auto current = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, result);
+
+    while (intExponent != NUM_VALUE_0) {
+        if (intExponent % NUM_VALUE_2 != NUM_VALUE_0) {
+            result =
+                CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, current);
+        }
+        current =
+            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), current, current);
+        intExponent /= NUM_VALUE_2;
+    }
+    return result;
+}
+
+LogicalTensorPtr GeneralPow(const Tensor& self, double exponent)
+{
+    // 如果指数小于0，先计算a^(-b)，最后再取倒数
+    bool expLessThanZero = exponent < NUM_VALUE_0;
+    exponent = std::abs(exponent);
+
+    LogicalTensorPtr result;
+    int32_t intExponent = static_cast<int32_t>(std::floor(exponent));
+    if (exponent - intExponent < NUM_VALUE_EPS) {
+        result = IntegerPow(self, intExponent);
+    } else {
+        auto lnSelf =
+            CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+        auto exponentLnSelf = CALL(
+            BinaryOperationScalar<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), lnSelf,
+            Element(DataType::DT_FP32, exponent));
+        result = CALL(UnaryOperation<UnaryOpType::EXP>, *Program::GetInstance().GetCurrentFunction(), exponentLnSelf);
+    }
+
+    // 指数小于零，结果取倒数
+    if (expLessThanZero) {
+        auto oneTensor = GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
+        // 求倒数
+        RETURN_CALL(
+            BinaryOperation<BinaryOpType::DIV>, *Program::GetInstance().GetCurrentFunction(), oneTensor, result);
+    }
+    return result;
+}
+
+Tensor Pow(const Tensor& self, const Element& other)
+{
+    DECLARE_TRACER();
+
+    LogicalTensorPtr castSelf = self.GetStorage();
+    if ((self.GetDataType() == DT_INT32 || self.GetDataType() == DT_INT16) && other.GetDataType() != DT_INT32) {
+        castSelf = CALL(
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
+            CastMode::CAST_NONE);
+    }
+    double exponent = other.Cast<double>();
+    // 指数为0，输出全1
+    if (std::abs(exponent) < NUM_VALUE_EPS) {
+        return GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
+    }
+    DataType dataType = castSelf->Datatype();
+    bool shouldUpToFp32 = dataType == DT_FP16 || dataType == DT_BF16;
+    if (shouldUpToFp32) {
+        castSelf = CALL(
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
+            CastMode::CAST_NONE);
+    }
+    auto result = castSelf;
+    if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {
+        result = CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), result);
+    } else if (std::abs(exponent - NUM_VALUE_2) < NUM_VALUE_EPS) {
+        result = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
+    } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) {
+        auto doubleSelf =
+            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
+        result =
+            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), doubleSelf, result);
+    } else {
+        result = GeneralPow(result, exponent);
+    }
+    if (shouldUpToFp32) {
+        RETURN_CALL(
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, dataType,
+            CastMode::CAST_NONE);
+    }
+    return result;
+}
+
 void TiledOneHot(
     Function& function, const TileShape& tileShape, size_t cur, Input& input, Input& output, int numClasses)
 {
@@ -580,6 +732,13 @@ void OneHotOperationTileFunc(Function &function, const TileShape &tileShape,
     UnaryOperationOperandCheck(iOperand, oOperand);
     int numClasses = op.GetIntAttribute(OP_ATTR_PREFIX + "numClasses");
     TiledOneHot(function, tileShape, iOperand[0], oOperand[0], numClasses);
+}
+
+void TanOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    TiledTanOperation(function, tileShape, iOperand[0], oOperand[0], iOperand[0]->tensor->datatype);
 }
 
 struct CumOperationTileInfoPara {
@@ -1363,4 +1522,5 @@ REGISTER_OPERATION_TILED_FUNC(OP_TRIUL, Opcode::OP_TRIUL, TriULOperationTileFunc
 REGISTER_OPERATION_TILED_FUNC(OP_SIGN, Opcode::OP_SIGN, SignOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SIGNBIT, Opcode::OP_SIGNBIT, SignbitOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_TANH, Opcode::OP_TANH, TanhOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_TAN, Opcode::OP_TAN, TanOperationTileFunc);
 } // namespace npu::tile_fwk
