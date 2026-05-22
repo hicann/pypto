@@ -90,7 +90,6 @@ public:
 
     Function& BelongFunction() { return *function_; }
     const Function& BelongFunction() const { return *function_; }
-    void UpdateBelongFunction(Function* func) { function_ = func; }
 
     std::string DumpType() const;
 

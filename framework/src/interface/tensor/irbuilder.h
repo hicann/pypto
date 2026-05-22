@@ -53,6 +53,20 @@ public:
     LogicalTensorPtr CreateTensorVar(
         std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape, std::vector<SymbolicScalar> validShape = {});
 
+    /* create logical tensor with static shape, associate with function */
+    LogicalTensorPtr CreateTensorVar(
+        Function& f, DataType t, Shape shape, TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
+
+    /* create logical tensor with dynamic shape, associate with function */
+    LogicalTensorPtr CreateTensorVar(
+        Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape,
+        TileOpFormat format = TileOpFormat::TILEOP_ND, std::string name = "");
+
+    /* create logical tensor from raw tensor, associate with function */
+    LogicalTensorPtr CreateTensorVar(
+        Function& f, std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
+        std::vector<SymbolicScalar> validShape = {});
+
     /* create tensor operation statement */
     Operation& CreateTensorOpStmt(
         Function& f, const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,

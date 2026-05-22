@@ -104,17 +104,17 @@ IRBuilder::IRBuilder() : irContext_(IRContext::Get()) {}
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(DataType t, Shape shape, TileOpFormat format, std::string name)
 {
-    auto tensor = std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), format, std::move(name));
-    tensor->name_ = irContext_.GetVarName(name);
+    auto tensorName = irContext_.GetVarName(name);
+    auto tensor = std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), format, tensorName);
     return tensor;
 }
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(
     DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
 {
+    auto tensorName = irContext_.GetVarName(name);
     auto tensor = std::make_shared<LogicalTensor>(
-        DummyFunc(), t, std::move(shape), std::move(validShape), format, std::move(name));
-    tensor->name_ = irContext_.GetVarName(name);
+        DummyFunc(), t, std::move(shape), std::move(validShape), format, tensorName);
     return tensor;
 }
 
@@ -122,6 +122,7 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
     std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape, std::vector<SymbolicScalar> validShape)
 {
     LogicalTensorPtr tensor;
+    auto tensorName = irContext_.GetVarName(rawTensor->GetSymbol());
     if (validShape.empty()) {
         tensor =
             std::make_shared<LogicalTensor>(DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape));
@@ -129,7 +130,39 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
         tensor = std::make_shared<LogicalTensor>(
             DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape), std::move(validShape));
     }
-    tensor->name_ = irContext_.GetVarName(rawTensor->GetSymbol());
+    tensor->name_ = tensorName;
+    return tensor;
+}
+
+LogicalTensorPtr IRBuilder::CreateTensorVar(Function& f, DataType t, Shape shape, TileOpFormat format, std::string name)
+{
+    auto tensorName = irContext_.GetVarName(name);
+    auto tensor = std::make_shared<LogicalTensor>(f, t, std::move(shape), format, tensorName);
+    return tensor;
+}
+
+LogicalTensorPtr IRBuilder::CreateTensorVar(
+    Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
+{
+    auto tensorName = irContext_.GetVarName(name);
+    auto tensor =
+        std::make_shared<LogicalTensor>(f, t, std::move(shape), std::move(validShape), format, tensorName);
+    return tensor;
+}
+
+LogicalTensorPtr IRBuilder::CreateTensorVar(
+    Function& f, std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape,
+    std::vector<SymbolicScalar> validShape)
+{
+    LogicalTensorPtr tensor;
+    auto tensorName = irContext_.GetVarName(rawTensor->GetSymbol());
+    if (validShape.empty()) {
+        tensor = std::make_shared<LogicalTensor>(f, std::move(rawTensor), std::move(offset), std::move(shape));
+    } else {
+        tensor = std::make_shared<LogicalTensor>(
+            f, std::move(rawTensor), std::move(offset), std::move(shape), std::move(validShape));
+    }
+    tensor->name_ = tensorName;
     return tensor;
 }
 

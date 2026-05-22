@@ -472,19 +472,6 @@ std::string Program::DumpStack(const std::string& funcName) const
     return oss.str();
 }
 
-void Program::UpdateAliveTensorsParent(int outcastRawMagic, Function& parent)
-{
-    for (auto* tensor : aliveTensors_) {
-        if (tensor->GetStorage() == nullptr) {
-            continue;
-        }
-        if (tensor->GetStorage()->tensor->rawmagic == outcastRawMagic) {
-            tensor->GetStorage(false)->UpdateBelongFunction(&parent);
-            tensor->GetStorage()->magic = IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId();
-        }
-    }
-}
-
 void TraverAndDumpParent(Function* func, Json& programDump)
 {
     if (func != nullptr) {

@@ -54,7 +54,6 @@ public: // public api for torch
 
     void InsertAliveTensor(Tensor* t) { aliveTensors_.insert(t); };
     void EraseAliveTensor(Tensor* t) { aliveTensors_.erase(t); }
-    void UpdateAliveTensorsParent(int outcastRawMagic, Function& parent);
     const auto& GetAliveTensors() const { return aliveTensors_; }
 
     const std::map<std::string, std::shared_ptr<npu::tile_fwk::Function>>& GetFunctionMap() const
