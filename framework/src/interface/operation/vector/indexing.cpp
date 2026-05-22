@@ -20,12 +20,26 @@
 #include "passes/pass_utils/graph_utils.h"
 #include "interface/function/function.h"
 #include "interface/program/program.h"
+#include "interface/operation/operation_common.h"
 #include "tensor_transformation.h"
 #include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 
 constexpr float FP16_MAX = 65504.0f;
+
+namespace {
+bool IsFp8DataType(DataType dtype) { return dtype == DT_FP8E4M3 || dtype == DT_FP8E5M2 || dtype == DT_FP8E8M0; }
+
+void CheckFp8ArchSupport(const Tensor& tensor, const std::string& opName)
+{
+    if (!IsFp8DataType(tensor.GetDataType())) {
+        return;
+    }
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
+        << opName << ": DT_FP8E4M3, DT_FP8E5M2 and DT_FP8E8M0 are only supported on DAV_3510 architecture.";
+}
+} // namespace
 
 struct IndexAddPara {
     const LogicalTensorPtr& selfInput;
@@ -567,6 +581,7 @@ void CheckGatherParamsInvalid(const Tensor& params, const Tensor& indices, int a
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16,    DT_BF16,    DT_INT32,  DT_INT16,
                                                    DT_INT8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
     CheckTensorDataType(params.GetStorage(), supportedTypes, opName);
+    CheckFp8ArchSupport(params, opName);
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, opName);
     CheckTensorDimRange(params.GetStorage(), 1, 4, opName);
