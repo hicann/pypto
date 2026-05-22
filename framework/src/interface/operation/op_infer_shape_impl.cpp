@@ -218,6 +218,25 @@ REGISTER_INFER_SHAPE_FUNC(OP_FLOORDIVS, Opcode::OP_FLOORDIVS, InferShapeWithTail
 REGISTER_INFER_SHAPE_FUNC(OP_SINH, Opcode::OP_SINH, InferShapeWithTailScaleFunc<4>);
 REGISTER_INFER_SHAPE_FUNC(OP_COSH, Opcode::OP_COSH, InferShapeWithTailScaleFunc<1>);
 
+void AsinAcosInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    if (inputValidShape.empty()) {
+        return;
+    }
+    size_t ndim = inputValidShape.size();
+    outValidShapes.emplace_back(inputValidShape);
+    // tmp: 5 个 H x W 中间块，1D 输入退化为 H=1
+    if (ndim >= 2) {
+        outValidShapes.emplace_back(
+            std::vector<SymbolicScalar>{inputValidShape[ndim - 2] * inputValidShape[ndim - 1] * 5});
+    } else {
+        outValidShapes.emplace_back(std::vector<SymbolicScalar>{inputValidShape[ndim - 1] * 5});
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_ASIN, Opcode::OP_ASIN, AsinAcosInferShapeFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_ACOS, Opcode::OP_ACOS, AsinAcosInferShapeFunc);
+
 void PadInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();

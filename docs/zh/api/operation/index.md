@@ -4,6 +4,7 @@
 :maxdepth: 2
 
 pypto-abs
+pypto-acos
 pypto-add
 pypto-amax
 pypto-amin
@@ -11,6 +12,7 @@ pypto-argmax
 pypto-argmin
 pypto-arange
 pypto-argsort
+pypto-asin
 pypto-assemble
 pypto-atan
 pypto-atan2

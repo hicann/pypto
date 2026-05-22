@@ -989,6 +989,74 @@ def cosh(input: Tensor) -> Tensor:
 
 
 @op_wrapper
+def asin(self: Tensor) -> Tensor:
+    """Computes the element-wise arcsine of `self`.
+
+    This function calculates the inverse trigonometric sine for each element in the input tensor.
+    Mathematically, it computes: `out = asin(self)`. The result is in the range [-pi/2, pi/2].
+    Inputs with magnitude greater than 1 produce NaN.
+
+    Parameters
+    ----------
+    self : Tensor
+        The input tensor. Values are expected to be in [-1, 1].
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise arcsine.
+
+    See Also
+    -------
+    acos : Element-wise arccosine function
+    sin : Element-wise sine function
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.asin(x)
+
+    Input x: [-1.0    0.0    1.0]
+    Output y:[-1.5708 0.0000 1.5708]
+    """
+    return pypto_impl.Asin(self)
+
+
+@op_wrapper
+def acos(self: Tensor) -> Tensor:
+    """Computes the element-wise arccosine of `self`.
+
+    This function calculates the inverse trigonometric cosine for each element in the input tensor.
+    Mathematically, it computes: `out = acos(self)`. The result is in the range [0, pi].
+    Inputs with magnitude greater than 1 produce NaN.
+
+    Parameters
+    ----------
+    self : Tensor
+        The input tensor. Values are expected to be in [-1, 1].
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise arccosine.
+
+    See Also
+    -------
+    asin : Element-wise arcsine function
+    cos : Element-wise cosine function
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.acos(x)
+
+    Input x: [-1.0    0.0    1.0]
+    Output y:[3.1416  1.5708 0.0000]
+    """
+    return pypto_impl.Acos(self)
+
+
+@op_wrapper
 def sign(a: Tensor) -> Tensor:
     """Computes the element-wise exponential of `input`.
 

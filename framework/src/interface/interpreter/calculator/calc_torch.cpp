@@ -428,6 +428,22 @@ static void Cosh(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void Asin(const TensorData& out, const TensorData& self)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    torch::asin_out(tout.second, tself.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static void Acos(const TensorData& out, const TensorData& self)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    torch::acos_out(tout.second, tself.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void Neg(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -2864,6 +2880,8 @@ static struct CalcOps calcOps = {
     .Cos = Cos,
     .Sinh = Sinh,
     .Cosh = Cosh,
+    .Asin = Asin,
+    .Acos = Acos,
     .Neg = Neg,
     .Rsqrt = Rsqrt,
     .Sign = Sign,

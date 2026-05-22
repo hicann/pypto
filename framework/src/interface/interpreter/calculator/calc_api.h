@@ -71,6 +71,8 @@ struct CalcOps {
     void (*Cos)(const TensorData&, const TensorData&);
     void (*Sinh)(const TensorData&, const TensorData&);
     void (*Cosh)(const TensorData&, const TensorData&);
+    void (*Asin)(const TensorData&, const TensorData&);
+    void (*Acos)(const TensorData&, const TensorData&);
     void (*Neg)(const TensorData&, const TensorData&);
     void (*Rsqrt)(const TensorData&, const TensorData&);
     void (*Sign)(const TensorData&, const TensorData&);

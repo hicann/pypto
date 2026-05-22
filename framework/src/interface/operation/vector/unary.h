@@ -46,6 +46,8 @@ enum class UnaryOpType {
     COSH,
     SIN,
     COS,
+    ASIN,
+    ACOS,
 };
 
 template <UnaryOpType T>
@@ -96,6 +98,10 @@ std::string GetUnaryOpName()
             return "COS";
         case UnaryOpType::TANH:
             return "TANH";
+        case UnaryOpType::ASIN:
+            return "ASIN";
+        case UnaryOpType::ACOS:
+            return "ACOS";
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
             return "";
@@ -131,6 +137,8 @@ Opcode GetUnaryOpNameCode()
         CASE(SIN);
         CASE(COS);
         CASE(TANH);
+        CASE(ASIN);
+        CASE(ACOS);
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
     }

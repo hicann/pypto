@@ -1063,4 +1063,201 @@ TILEOP void TCos(T0 dst, T1 tmp, T2 src)
 {
     TrigCompute<UnaryOp::COS>(dst, tmp, src);
 }
+
+
+// Horner evaluation of arcsin Taylor on t in [0, 1/sqrt(2)]:
+//   arcsin(t) = t * (c0 + c1*s + c2*s^2 + ... + c7*s^7),  s = t^2
+template <typename TOut, typename TIn, typename TScratch>
+TILEOP void ArcsinPolyHorner(TOut outTile, TIn tTile, TScratch sScratch)
+{
+    constexpr float ASIN_C0 = 1.0f;             // 1
+    constexpr float ASIN_C1 = 0.16666667f;      // 1/6
+    constexpr float ASIN_C2 = 0.075f;           // 3/40
+    constexpr float ASIN_C3 = 0.04464286f;      // 5/112
+    constexpr float ASIN_C4 = 0.03038194f;      // 35/1152
+    constexpr float ASIN_C5 = 0.02237216f;      // 63/2816
+    constexpr float ASIN_C6 = 0.01735276f;      // 231/13312
+    constexpr float ASIN_C7 = 0.01396484f;      // 143/10240
+
+    // s = t^2
+    pto::TMUL(sScratch, tTile, tTile);
+    SyncV();
+    // acc = c7*s + c6
+    pto::TMULS(outTile, sScratch, ASIN_C7);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C6);
+    SyncV();
+    // acc = acc*s + c5
+    pto::TMUL(outTile, outTile, sScratch);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C5);
+    SyncV();
+    // acc = acc*s + c4
+    pto::TMUL(outTile, outTile, sScratch);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C4);
+    SyncV();
+    // acc = acc*s + c3
+    pto::TMUL(outTile, outTile, sScratch);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C3);
+    SyncV();
+    // acc = acc*s + c2
+    pto::TMUL(outTile, outTile, sScratch);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C2);
+    SyncV();
+    // acc = acc*s + c1
+    pto::TMUL(outTile, outTile, sScratch);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C1);
+    SyncV();
+    // acc = acc*s + c0
+    pto::TMUL(outTile, outTile, sScratch);
+    SyncV();
+    pto::TADDS(outTile, outTile, ASIN_C0);
+    SyncV();
+    // result = acc * t
+    pto::TMUL(outTile, outTile, tTile);
+    SyncV();
+}
+
+template <bool IsAsin, typename TDst, typename TSrc, typename TTmp0, typename TTmp1, typename TTmp2, typename TTmp3,
+    typename TTmp4, typename TMask>
+TILEOP void TAsinAcosTileImpl(
+    TDst dstTile, TSrc srcTile, TTmp0 tmp0Tile, TTmp1 tmp1Tile, TTmp2 tmp2Tile, TTmp3 tmp3Tile, TTmp4 tmp4Tile,
+    TMask maskTile)
+{
+    constexpr float ASIN_THRESHOLD = 0.70710678f;   // 1/sqrt(2)
+    constexpr float PI_HALF        = 1.57079633f;
+    constexpr float SCALAR_ONE          = 1.0f;
+    constexpr float SCALAR_NEGATIVE_ONE = -1.0f;
+    constexpr float SCALAR_ZERO         = 0.0f;
+
+    // ---- 1) tmp0 = |x| ----
+    pto::TABS(tmp0Tile, srcTile);
+    SyncV();
+
+    // ---- 2) Small branch: tmp1 = arcsin(|x|), scratch = tmp4 ----
+    ArcsinPolyHorner(tmp1Tile, tmp0Tile, tmp4Tile);
+
+    // ---- 3) Large branch ----
+    // tmp4 = x^2 (= |x|^2, tmp0 holds |x|)
+    pto::TMUL(tmp4Tile, tmp0Tile, tmp0Tile);
+    SyncV();
+    pto::TMULS(tmp4Tile, tmp4Tile, SCALAR_NEGATIVE_ONE);
+    SyncV();
+    pto::TADDS(tmp4Tile, tmp4Tile, SCALAR_ONE);
+    SyncV();
+    // tmp2 = sqrt(1 - x^2)
+    pto::TSQRT(tmp2Tile, tmp4Tile);
+    SyncV();
+    // tmp3 = arcsin(sqrt(1 - x^2)), scratch = tmp4 (gets clobbered by Horner)
+    ArcsinPolyHorner(tmp3Tile, tmp2Tile, tmp4Tile);
+    // tmp3 = pi/2 - arcsin(sqrt(1 - x^2))
+    pto::TMULS(tmp3Tile, tmp3Tile, SCALAR_NEGATIVE_ONE);
+    SyncV();
+    pto::TADDS(tmp3Tile, tmp3Tile, PI_HALF);
+    SyncV();
+
+    // ---- 4) Branch select: dst = (|x| <= 1/sqrt(2)) ? small : large ----
+    pto::TCMPS(maskTile, tmp0Tile, ASIN_THRESHOLD, pto::CmpMode::LE);
+    SyncV();
+    pto::TSEL(dstTile, maskTile, tmp1Tile, tmp3Tile, tmp0Tile);
+    SyncV();
+    // dst now == arcsin(|x|), >= 0
+
+    // ---- 5) Sign restore ----
+    if constexpr (IsAsin) {
+        // arcsin is odd: dst = src >= 0 ? dst : -dst
+        pto::TMULS(tmp1Tile, dstTile, SCALAR_NEGATIVE_ONE);
+        SyncV();
+        pto::TCMPS(maskTile, srcTile, SCALAR_ZERO, pto::CmpMode::GE);
+        SyncV();
+        pto::TSEL(dstTile, maskTile, dstTile, tmp1Tile, tmp0Tile);
+        SyncV();
+    } else {
+        // arccos(x) = pi/2 - sign(src)*arcsin(|x|)
+        //   src >= 0: pi/2 - dst
+        //   src <  0: pi/2 + dst
+        pto::TMULS(tmp1Tile, dstTile, SCALAR_NEGATIVE_ONE);
+        SyncV();
+        pto::TADDS(tmp1Tile, tmp1Tile, PI_HALF);     // pi/2 - dst
+        SyncV();
+        pto::TADDS(tmp2Tile, dstTile, PI_HALF);      // pi/2 + dst
+        SyncV();
+        pto::TCMPS(maskTile, srcTile, SCALAR_ZERO, pto::CmpMode::GE);
+        SyncV();
+        pto::TSEL(dstTile, maskTile, tmp1Tile, tmp2Tile, tmp0Tile);
+        SyncV();
+    }
+}
+
+// Unified body for TAsin / TAcos.
+//   |x| <= 1/sqrt(2):  arcsin(|x|) via 8-term Taylor on |x|
+//   |x| >  1/sqrt(2):  arcsin(|x|) = pi/2 - arcsin(sqrt(1 - x^2))
+template <bool IsAsin, typename T0, typename T1, typename T2>
+TILEOP void TAsinAcosImpl(T0 dst, T1 src, T2 tmp)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+
+    using DataTileDefine =
+        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using MaskTileDefine =
+        pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
+
+    DataTileDefine dstTile(shape3, shape4);
+    DataTileDefine srcTile(shape3, shape4);
+    DataTileDefine tmp0Tile(shape3, shape4);   // |x|
+    DataTileDefine tmp1Tile(shape3, shape4);   // small-branch result
+    DataTileDefine tmp2Tile(shape3, shape4);   // sqrt(1 - x^2) for large branch
+    DataTileDefine tmp3Tile(shape3, shape4);   // large-branch result
+    DataTileDefine tmp4Tile(shape3, shape4);   // generic scratch (Horner s, 1-x^2, ...)
+    MaskTileDefine maskTile(shape3, shape4);   // aliases tmp4
+
+    constexpr size_t tmpStride = tileH * tileW * dstTypeSize;
+    pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + 0 * tmpStride));
+    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + 1 * tmpStride));
+    pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tmpStride));
+    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + 3 * tmpStride));
+    pto::TASSIGN(tmp4Tile, (uint64_t)(tmp.GetAddr() + 4 * tmpStride));
+    pto::TASSIGN(maskTile, (uint64_t)(tmp.GetAddr() + 4 * tmpStride));
+
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                pto::TASSIGN(
+                    dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * dstTypeSize));
+                pto::TASSIGN(
+                    srcTile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * dstTypeSize));
+                TAsinAcosTileImpl<IsAsin>(
+                    dstTile, srcTile, tmp0Tile, tmp1Tile, tmp2Tile, tmp3Tile, tmp4Tile, maskTile);
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_ASIN TAsin
+template <typename T0, typename T1, typename T2>
+TILEOP void TAsin(T0 dst, T1 src, T2 tmp)
+{
+    TAsinAcosImpl<true>(dst, src, tmp);
+}
+
+#define OP_TILE_OP_ACOS TAcos
+template <typename T0, typename T1, typename T2>
+TILEOP void TAcos(T0 dst, T1 src, T2 tmp)
+{
+    TAsinAcosImpl<false>(dst, src, tmp);
+}
 #endif
