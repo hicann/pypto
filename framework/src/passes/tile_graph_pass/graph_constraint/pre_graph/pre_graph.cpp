@@ -208,10 +208,10 @@ Status PreGraphProcess::RunOnFunction(Function& function)
     SetCopyAttr setCopyAttr;
     for (auto& op : opList) {
         bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
-        if (IsCopyOut(op.GetOpcode()) && op.GetOpcode() != Opcode::OP_COPY_OUT && !(distCopyType && *distCopyType)) {
+        if (IsCopyOut(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) && !(distCopyType && *distCopyType)) {
             setCopyAttr.ProcessSpecialMTEOperation(op);
         }
-        if (IsCopyIn(op.GetOpcode()) && op.GetOpcode() != Opcode::OP_COPY_IN && !(distCopyType && !*distCopyType)) {
+        if (IsCopyIn(op.GetOpcode()) && (op.GetOpAttribute() == nullptr) && !(distCopyType && !*distCopyType)) {
             setCopyAttr.ProcessMoveInOperation(op);
         }
     }

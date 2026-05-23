@@ -32,7 +32,7 @@ void SetCopyAttr::ProcessSpecialMTEOperation(Operation& op) const
     }
     /* transpose datamove 输入和输出的shape不相同 */
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_UB, OpImmediate::Specified(outputTensor->GetTensorOffset()),
+        inputTensor->GetMemoryTypeOriginal(), OpImmediate::Specified(outputTensor->GetTensorOffset()),
         OpImmediate::Specified(outputTensor->GetShape()),
         OpImmediate::Specified(outputTensor->tensor->GetDynRawShape())));
 }
@@ -46,6 +46,7 @@ void SetCopyAttr::ProcessMoveInOperation(Operation& op) const
     }
     TensorOffset offset = inputTensor->GetTensorOffset();
     auto producers = inputTensor->GetProducers();
+    auto outputTensor = op.oOperand.front();
     if (!producers.empty()) {
         auto pre = *(producers.begin());
         if (pre != nullptr && pre->GetOpcode() == Opcode::OP_VIEW) {
@@ -53,7 +54,7 @@ void SetCopyAttr::ProcessMoveInOperation(Operation& op) const
             if (attr != nullptr) {
                 op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
                     OpImmediate::Specified(TensorOffset(attr->GetFromOffset(), attr->GetFromDynOffset())),
-                    MemoryType::MEM_UB, OpImmediate::Specified(inputTensor->GetShape()),
+                    outputTensor->GetMemoryTypeOriginal(), OpImmediate::Specified(inputTensor->GetShape()),
                     OpImmediate::Specified(inputTensor->tensor->GetDynRawShape()),
                     OpImmediate::Specified(inputTensor->GetDynValidShape())));
                 return;
