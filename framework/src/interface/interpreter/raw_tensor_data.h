@@ -146,6 +146,21 @@ struct RawTensorData {
           elemSize_(GetDataSize(dataType))
     {}
 
+    RawTensorData(const RawTensorData& other)
+        : devPtr_(nullptr),
+          dataType_(other.dataType_),
+          shape_(other.shape_),
+          stride_(other.stride_),
+          nelem(other.nelem),
+          elemSize_(other.elemSize_),
+          isShmTensor_(other.isShmTensor_),
+          shmOffset_(other.shmOffset_)
+    {
+        if (other.data_) {
+            data_ = std::make_shared<StorageData>(*other.data_);
+        }
+    }
+
     const Shape& GetShape() const { return shape_; }
     const Stride& GetStride() const { return stride_; }
     DataType GetDataType() const { return dataType_; }

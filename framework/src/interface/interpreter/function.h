@@ -1589,7 +1589,6 @@ struct FunctionInterpreter {
         }
     }
 
-    std::string DumpDataView(const std::shared_ptr<LogicalTensorData>& dataView);
     std::string DumpSymbolDict() const
     {
         std::ostringstream oss;
@@ -1625,9 +1624,6 @@ public:
     void DumpBinary(
         std::vector<int64_t>& shape, std::vector<int64_t>& stride, std::vector<int64_t>& offset, FILE* fdata,
         uint8_t* data, size_t dtypeSize);
-    void DumpTensorList(
-        const std::string& name, const std::vector<std::shared_ptr<LogicalTensor>>* tensorList,
-        const std::vector<std::shared_ptr<LogicalTensorData>>* dataViewList);
     std::shared_ptr<LogicalTensorData> LoadTensorBinary(
         const std::shared_ptr<LogicalTensor>& tensor, const std::string dumpTensorFileName);
     void DumpFunctionHead(Function* func);
@@ -1642,11 +1638,6 @@ public:
     {
         std::string dirName = "frame_" + GetFrameCurrIndex();
         return dirName;
-    }
-    std::string GetDumpTensorListFileName(const std::string& name) const
-    {
-        std::string fileName = "frame_" + GetFrameCurrIndex() + "_" + name + ".html";
-        return fileName;
     }
     std::string GetDumpOperationTensorFileName(Operation* op) const
     {
@@ -1814,7 +1805,6 @@ public:
         unitCapture->CaptureSymbolDictFrom(capture->symbolDict);
         unitCapture->frameList = ExecuteFunctionCapture(target, nullptr, unitCapture->golden);
 
-        DumpTensorList("Golden", &target->GetOutcast(), &capture->golden->outcastDataViewList);
         return unitCapture;
     }
 

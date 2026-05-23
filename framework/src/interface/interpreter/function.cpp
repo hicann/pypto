@@ -240,64 +240,6 @@ void FunctionInterpreter::DumpOperation(Operation* op)
     }
 }
 
-static void DumpLine(FILE* f, const std::vector<std::string>& textList, const std::string& cssClass = "")
-{
-    fprintf(f, "<tr>\n");
-    for (size_t k = 0; k < textList.size(); k++) {
-        std::string attr = " class=\"" + cssClass + "\"";
-        fprintf(f, "  <td%s>%s</td>\n", attr.c_str(), textList[k].c_str());
-    }
-    fprintf(f, "</tr>\n");
-}
-
-static void DumpDataViewParallel(
-    const std::shared_ptr<LogicalTensorData>& dataView, std::vector<ElementDump>& elementDumpList,
-    util::ThreadPool* pool)
-{
-    struct DumpTask {
-        DumpTask(
-            std::vector<ElementDump>* ret_, const std::shared_ptr<LogicalTensorData> view_, int indexBegin_,
-            int indexEnd_)
-            : ret(ret_), view(view_), indexBegin(indexBegin_), indexEnd(indexEnd_)
-        {}
-
-        std::vector<ElementDump>* ret;
-        const std::shared_ptr<LogicalTensorData> view;
-        int indexBegin;
-        int indexEnd;
-
-        static void Entry(void* c)
-        {
-            auto [ret, view, indexBegin, indexEnd] = *(DumpTask*)c;
-            for (int i = indexBegin; i < indexEnd; i++) {
-                view->DumpElement(i, &ret->at(i));
-            }
-        }
-    };
-
-    if (static_cast<int>(elementDumpList.size()) < dataView->GetSize()) {
-        elementDumpList.resize(dataView->GetSize());
-    }
-
-    std::vector<DumpTask> dumpTaskList;
-    int count = (dataView->GetSize() + pool->GetThreadCount() - 1) / pool->GetThreadCount();
-    for (int i = 0; i < pool->GetThreadCount(); i++) {
-        dumpTaskList.emplace_back(
-            &elementDumpList, dataView, count * i, std::min(count * (i + 1), dataView->GetSize()));
-    }
-    for (size_t i = 0; i < dumpTaskList.size(); i++) {
-        pool->SubmitTask(&dumpTaskList[i], DumpTask::Entry);
-    }
-    pool->NotifyAll();
-    pool->WaitForAll();
-}
-
-std::string FunctionInterpreter::DumpDataView(const std::shared_ptr<LogicalTensorData>& dataView)
-{
-    DumpDataViewParallel(dataView, execDumpElementList, &interpreterThreadPool_);
-    return dataView->Dump(&execDumpElementList);
-}
-
 std::string FunctionInterpreter::GetDumpFilePath(
     const std::string& lv0, const std::string& lv1, const std::string& filename)
 {
@@ -394,67 +336,6 @@ std::shared_ptr<LogicalTensorData> FunctionInterpreter::LoadTensorBinary(
     auto dataView = std::make_shared<LogicalTensorData>(data, shape, shape, std::vector<int64_t>(shape.size(), 0));
     fclose(fdata);
     return dataView;
-}
-
-void FunctionInterpreter::DumpTensorList(
-    const std::string& name, const std::vector<std::shared_ptr<LogicalTensor>>* tensorList,
-    const std::vector<std::shared_ptr<LogicalTensorData>>* dataViewList)
-{
-    if (execDumpLevel < EXEC_DUMP_LEVEL_TENSOR || !execDumpFile)
-        return;
-
-    std::string dumpTensorDirName = GetDumpFrameDirName();
-    std::string dumpTensorFileName = GetDumpTensorListFileName(name);
-    int indent = GetFrameSize();
-    fprintf(
-        execDumpFile, "<div class=\"detail indent_%d\"><a href=\"%s\">%s</a></div>", indent,
-        (dumpTensorDirName + "/" + dumpTensorFileName).c_str(), dumpTensorFileName.c_str());
-
-    std::string dumpTensorFilePath = GetDumpFilePath(execDumpDir, dumpTensorDirName, dumpTensorFileName);
-    FILE* dumpTensorFile = fopen(dumpTensorFilePath.c_str(), "w");
-    if (dumpTensorFile == nullptr) {
-        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "Failed to open file: %s", dumpTensorFilePath.c_str());
-        return;
-    }
-    fprintf(dumpTensorFile, R"HTML(
-<html>
-    <head>
-    <link rel="stylesheet" type="text/css" href="../../verifier.css">
-    </head>
-    <body>
-)HTML");
-
-    std::vector<std::string> textList(tensorList->size());
-    constexpr int ONE_THOUSAND = 1000;
-    fprintf(dumpTensorFile, "<table width=\"%dpx\">", static_cast<int>(tensorList->size() * ONE_THOUSAND));
-    for (size_t k = 0; k < tensorList->size(); k++) {
-        textList[k] = std::to_string(static_cast<int>(k));
-        if (tensorList->at(k)) {
-            textList[k] += " tileOpFormat:" + std::to_string(tensorList->at(k)->Format());
-        }
-    }
-    DumpLine(dumpTensorFile, textList, "table_head");
-
-    for (size_t k = 0; k < tensorList->size(); k++) {
-        if (tensorList->at(k) != nullptr) {
-            textList[k] = HtmlEscape(tensorList->at(k)->Dump());
-        } else {
-            textList[k] = "";
-        }
-    }
-    DumpLine(dumpTensorFile, textList);
-
-    for (size_t k = 0; k < tensorList->size(); k++) {
-        textList[k] = HtmlEscape(k < dataViewList->size() ? DumpDataView(dataViewList->at(k)) : "--");
-    }
-    DumpLine(dumpTensorFile, textList, "tensor_data");
-    fprintf(dumpTensorFile, "</table>\n");
-
-    fprintf(execDumpFile, R"HTML(
-    </body>
-</html>
-)HTML");
-    fclose(dumpTensorFile);
 }
 
 void FunctionInterpreter::FillOperationBasicInfo(Operation* op, FunctionFrame* frame, std::vector<std::string>& opInfo)
