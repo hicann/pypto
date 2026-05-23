@@ -146,11 +146,13 @@ def _catch_and_wrap_error(operation_name: str) -> Callable:
                 func_name = getattr(args[0], '__name__', func.__name__) if args else func.__name__
                 err_msg = str(e)
                 if "ErrCode" in err_msg:
-                    raise PyptoGeneralError(
+                    err = PyptoGeneralError(
                         f"Failed to {operation_name} '{func_name}'.\n{err_msg}"
-                    ) from e
-                raise PyptoGeneralError(e.__class__(
-                    f"Failed to {operation_name} '{func_name}.\n{err_msg}"
-                )) from e
+                    )
+                else:
+                    err = PyptoGeneralError(e.__class__(
+                        f"Failed to {operation_name} '{func_name}'.\n{err_msg}"
+                    ))
+                raise err.with_traceback(e.__traceback__) from None
         return wrapper
     return decorator
