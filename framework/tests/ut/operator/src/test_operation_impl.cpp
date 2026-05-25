@@ -255,19 +255,6 @@ TEST_F(OperationImplTest, Test_IndexAddUB_BF16)
     FUNCTION("TestIndxAdd") { result = IndexAddUB(self, src, index, axis, alpha); }
 }
 
-TEST_F(OperationImplTest, Test_IndexAddUB_INT8)
-{
-    int scalar = 2;
-    int axis = 1;
-
-    TileShape::Current().SetVecTile({8, 16});
-    Tensor self(DT_INT8, {10, 16}, "operand0");
-    Tensor src(DT_INT8, {10, 18}, "operand1");
-    Tensor index(DT_INT32, {18}, "operand2");
-    Element alpha(DT_INT8, scalar);
-    Tensor result;
-    FUNCTION("TestIndxAdd") { result = IndexAddUB(self, src, index, axis, alpha); }
-}
 
 TEST_F(OperationImplTest, Test_IndexAddUB_INT16)
 {

@@ -40,11 +40,11 @@ index_add_(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Uni
 
 1. index必须是整数类型（DT\_INT32 或 DT\_INT64），值不超过 input 在 dim 维度上的Shape大小，维数为1，Shape大小与 source 所在dim轴的Shape大小相同；
 
-2. dim为int类型，取值范围：$ -input.dim \le dim < input.dim $；
+2. dim为int类型，取值范围：$-input.dim\leq dim < input.dim$；
 
 3. input和source的数据类型和维数均相同；
 
-4. input.shape 和 source.shape 的非 dim 轴 ViewShape 不可切，即 $ ViewShape[i]\ge input.shape[i]=source.shape[i], i \ne dim $；
+4. input.shape 和 source.shape 的非 dim 轴 ViewShape 不可切，即 $ViewShape[i] \geq input.shape[i]=source.shape[i], i \ne dim$；
 
 5. TileShape的维度与 source 相同，只用来切分 source 和 index，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 

@@ -1365,8 +1365,8 @@
                     "format": "ND",
                     "need_trans": false,
                     "data_range": {
-                        "min": -10,
-                        "max": 10
+                        "min": -100,
+                        "max": 100
                     }
                 },
                 {
@@ -1379,8 +1379,8 @@
                     "format": "ND",
                     "need_trans": false,
                     "data_range": {
-                        "min": -10,
-                        "max": 10
+                        "min": -100,
+                        "max": 100
                     }
                 },
                 {
@@ -1415,11 +1415,11 @@
             ],
             "tile_shape": [
                 10,
-                16
+                32
             ],
             "params": {
                 "axis": 1,
-                "alpha": 1.0,
+                "alpha": 127.0,
                 "on_board": true,
                 "func_id": -1
             },
@@ -1490,7 +1490,7 @@
             ],
             "tile_shape": [
                 10,
-                16
+                32
             ],
             "params": {
                 "axis": 0,

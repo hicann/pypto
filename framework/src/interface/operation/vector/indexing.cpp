@@ -93,26 +93,7 @@ void IndexAddUBExpandFunc(Function& function, const IndexAddPara& indexaddPara, 
         (tempShape[dstTile->GetShape().size() - 1] + alignSize - 1) / alignSize * alignSize;
     auto tempBuffer = std::make_shared<LogicalTensor>(function, DT_BF16, tempShape);
 
-    if (selfTile->Datatype() == DT_INT8) { // vector指令不支持int8的直接计算
-        LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, selfTile->GetShape());
-        Operation& castSelfOp = function.AddOperation(Opcode::OP_CAST, {selfTile}, {selfConvertedTile});
-        selfConvertedTile->UpdateDynValidShape(selfTile->GetDynValidShape());
-        castSelfOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr srcConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, srcTile->GetShape());
-        Operation& castSrcOp = function.AddOperation(Opcode::OP_CAST, {srcTile}, {srcConvertedTile});
-        srcConvertedTile->UpdateDynValidShape(srcTile->GetDynValidShape());
-        castSrcOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, dstTile->GetShape());
-
-        auto& op = function.AddOperation(
-            Opcode::OP_INDEX_ADD_UB, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile, tempBuffer});
-        dstConvertedTile->UpdateDynValidShape(dstTile->GetDynValidShape());
-        op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
-        op.SetAttribute(OpAttributeKey::scalar, alpha);
-        Operation& castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
-        castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
-    } else if (
-        selfTile->Datatype() == DT_BF16 || (selfTile->Datatype() == DT_FP16 && indexTile->Datatype() == DT_INT64 &&
+    if (selfTile->Datatype() == DT_BF16 || (selfTile->Datatype() == DT_FP16 && indexTile->Datatype() == DT_INT64 &&
                                             (std::abs(alpha.Cast<float>() - 1) < 1e-6f))) {
         // vector和scalar均不支持BF16直接计算; alpha=1,且index类型为int64时逻辑不一样
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, selfTile->GetShape());
@@ -235,7 +216,8 @@ bool CheckAlphaOverflow(Element alpha, DataType dtype)
 }
 
 void CheckIndexAddParamsInvalid(
-    const Tensor& self, const Tensor& src, const Tensor& indices, const int axis, const Element& alpha)
+    const Tensor& self, const Tensor& src, const Tensor& indices, const int axis, const Element& alpha,
+    const Opcode& opCode)
 {
     ASSERT(
         VectorErrorCode::ERR_PARAM_INVALID,
@@ -260,7 +242,10 @@ void CheckIndexAddParamsInvalid(
     }
 
     // 检查数据类型和格式
-    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT8};
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    if (opCode == Opcode::OP_INDEX_ADD) {
+        supportedTypes.insert(DT_INT8);
+    }
     CheckTensorDataType(self.GetStorage(), supportedTypes, "INDEXADD");
     CheckTensorsDataTypeConsistency(self.GetStorage(), src.GetStorage(), "INDEXADD");
     CheckTensorsFormatConsistency(self.GetStorage(), src.GetStorage(), "INDEXADD");
@@ -278,7 +263,7 @@ Tensor IndexAddUB(const Tensor& self, const Tensor& src, const Tensor& indices, 
 {
     DECLARE_TRACER();
     CheckAxisRange(self, axis);
-    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
+    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha, Opcode::OP_INDEX_ADD_UB);
     DataType selfDataType = self.GetDataType();
     Element alpha_ = Element(selfDataType, alpha.Cast<float>());
     Tensor result(selfDataType, self.GetShape());
@@ -313,9 +298,9 @@ void IndexAddExpandFunc(
     auto indexTile =
         indicesInput->View(function, indexaddTileInfo.indicesTileInfo.shape, indexaddTileInfo.indicesTileInfo.offset);
     Shape tmpShape(2, 1);
-    auto alignSize = BLOCK_SIZE / BytesOf(DT_BF16);
+    auto alignSize = BLOCK_SIZE / BytesOf(srcTile->Datatype());
     tmpShape[1] = AlignUp(srcTile->GetShape()[srcTile->GetShape().size() - 1], alignSize);
-    auto tmpTile = std::make_shared<LogicalTensor>(function, DT_BF16, tmpShape);
+    auto tmpTile = std::make_shared<LogicalTensor>(function, srcTile->Datatype(), tmpShape);
 
     auto& op = function.AddOperation(Opcode::OP_INDEX_ADD, {selfTile, srcTile, indexTile}, {dstTile, tmpTile});
     op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
@@ -416,26 +401,14 @@ void IndexAdd_(Tensor& self, const Tensor& src, const Tensor& indices, int axis,
 {
     DECLARE_TRACER();
     CheckAxisRange(self, axis);
-    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
+    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha, Opcode::OP_INDEX_ADD);
     DataType selfDataType = self.GetDataType();
     Element castedAlpha = Element(selfDataType, alpha.Cast<float>());
     Tensor result(selfDataType, self.GetShape());
-    if (selfDataType == DT_INT8 && axis != static_cast<int>(self.GetShape().size() - 1)) { // int8->fp16
-        Tensor selfCasted = Cast(self, DT_FP16, CastMode::CAST_NONE);
-        Tensor srcCasted = Cast(src, DT_FP16, CastMode::CAST_NONE);
-        Tensor resultCasted(DT_FP16, self.GetShape());
-        CALL(
-            IndexAdd, *Program::GetInstance().GetCurrentFunction(),
-            {selfCasted.GetStorage(), srcCasted.GetStorage(), indices.GetStorage(), resultCasted.GetStorage(), axis,
-             castedAlpha});
-        selfCasted = resultCasted;
-        self = Cast(resultCasted, selfDataType, CastMode::CAST_TRUNC, SaturationMode::OFF);
-    } else {
-        CALL(
-            IndexAdd, *Program::GetInstance().GetCurrentFunction(),
-            {self.GetStorage(), src.GetStorage(), indices.GetStorage(), result.GetStorage(), axis, castedAlpha});
-        self = result;
-    }
+    CALL(
+        IndexAdd, *Program::GetInstance().GetCurrentFunction(),
+        {self.GetStorage(), src.GetStorage(), indices.GetStorage(), result.GetStorage(), axis, castedAlpha});
+    self = result;
 }
 
 void TiledGatherOperation(
