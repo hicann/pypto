@@ -711,7 +711,8 @@ std::vector<SymbolicScalar> CodeGenOpNPU::GetLoopAxes()
 {
     std::vector<SymbolicScalar> dynloopAxes;
     std::vector<int64_t> loopAxes;
-    
+    GetOpAttr(OpAttributeKey::loopAxes, loopAxes);
+    CODEGEN_LOGI("loopAxes from attr is %s", IntVecToStr(loopAxes).c_str());
 
     if (!isMainBlock) {
         GetOpAttr(OpAttributeKey::dynloopAxes, dynloopAxes);

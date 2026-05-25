@@ -138,19 +138,15 @@ void ForBlockManager::PrintTileOps(std::ostringstream& os) const
 
 bool NeedUpdateOffsetInLoop(Opcode opCode, int tensorMagic, const Operation& oper)
 {
-    bool res = SUPPORT_BRC_INLINE.find(opCode) != SUPPORT_BRC_INLINE.end() || opCode == Opcode::OP_EXPAND;
-    if (!res) {
-        return false;
-    }
-
+    // expand op only update input offset
     if (opCode == Opcode::OP_EXPAND) {
         const auto& tensors = oper.GetIOperands();
         bool isInput = std::any_of(
             tensors.begin(), tensors.end(), [&](const auto& tensor) { return tensor->GetMagic() == tensorMagic; });
-        return res && isInput;
+        return isInput;
     }
 
-    return res;
+    return true;
 }
 
 /*
@@ -259,6 +255,7 @@ OffsetInLoop ForBlockManager::BuildOffsetInLoop(int tensorMagic, const Operation
         }
     }
 
+    CODEGEN_LOGI("newOffset is : %s", IntVecToStr(newOffset).c_str());
     return newOffset;
 }
 
