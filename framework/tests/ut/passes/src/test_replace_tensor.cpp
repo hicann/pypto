@@ -567,5 +567,56 @@ TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
     EXPECT_EQ(replaceTensorPass.PostCheck(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(currFunctionPtr->Operations().size(), opSumExpAfter);
 }
+
+/*
+ * 验证场景：SHMEM_WAIT_UNTIL 的输出 tensor 被多个 ASSEMBLE 消费且输出到不同 outcast 时，
+ * ReplaceTensor 不插入 COPY_IN/COPY_OUT。
+ */
+TEST_F(ReplaceTensorTest, TestShmemWaitUntilWithDiffAssembleOut)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestShmemWaitUntilAssemble", "TestShmemWaitUntilAssemble", nullptr);
+    EXPECT_NE(currFunctionPtr, nullptr);
+    std::vector<int64_t> shape = {kNumEight, kNumEight};
+    std::vector<int64_t> shape1 = {kNumEight, kNumFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::vector<int64_t> offset1 = {kNumZero, kNumFour};
+    std::shared_ptr<RawTensor> inRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> inRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> shmemRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> outRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> outRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
+    auto incast0 = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor0, offset0, shape);
+    incast0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor1, offset0, shape);
+    incast1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto shmemOut = std::make_shared<LogicalTensor>(*currFunctionPtr, shmemRawTensor, offset0, shape);
+    shmemOut->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto outcast0 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor0, offset0, shape);
+    outcast0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor1, offset1, shape1);
+    outcast1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
+    currFunctionPtr->AddOperation(Opcode::OP_SHMEM_WAIT_UNTIL, {incast0, incast1}, {shmemOut});
+    auto& assOp0 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {shmemOut}, {outcast0});
+    auto& assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {shmemOut}, {outcast1});
+    auto assAttr0 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0);
+    auto assAttr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
+    assOp0.SetOpAttribute(assAttr0);
+    assOp1.SetOpAttribute(assAttr1);
+    currFunctionPtr->inCasts_.push_back(incast0);
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast0);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    ReplaceTensor pass;
+    int opSumBefore = currFunctionPtr->Operations().size();
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), opSumBefore);
+    for (auto& op : currFunctionPtr->Operations()) {
+        EXPECT_TRUE(op.GetOpcode() != Opcode::OP_COPY_IN && op.GetOpcode() != Opcode::OP_COPY_OUT);
+    }
+    EXPECT_EQ(shmemOut->GetRawMagic(), outcast0->GetRawMagic());
+    EXPECT_EQ(shmemOut->GetRawMagic(), outcast1->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
 } // namespace tile_fwk
 } // namespace npu

@@ -994,7 +994,8 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     auto assembleIn = op.GetIOperands()[0];
     auto producers = assembleIn->GetProducers();
     auto& inOp = *(assembleIn)->GetProducers().begin();
-    if ((!producers.empty()) && (*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) {
+    if ((!producers.empty()) && (((*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) ||
+                                 (*producers.begin())->GetOpcode() == Opcode::OP_SHMEM_WAIT_UNTIL)) {
         return FAILED;
     }
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));

@@ -738,6 +738,7 @@ public:
         Opcode code = Opcode::OP_UNKNOWN;
         for (size_t i = 0UL; i < operations_.size(); i++) {
             if ((operations_[i]->GetOpcode() != Opcode::OP_VIEW) &&
+                (operations_[i]->GetOpcode() != Opcode::OP_ASSEMBLE) &&
                 (operations_[i]->GetCoreType() != CoreType::AICPU)) {
                 return std::make_pair(false, Opcode::OP_UNKNOWN);
             } else if (operations_[i]->GetCoreType() == CoreType::AICPU) {
