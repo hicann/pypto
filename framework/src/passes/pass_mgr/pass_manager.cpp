@@ -32,6 +32,7 @@
 #include "passes/tensor_graph_pass/expand_function.h"
 #include "passes/tensor_graph_pass/loop_unroll.h"
 //  tile graph pass
+#include "passes/tile_graph_pass/graph_partition/common_operation_eliminate.h"
 #include "passes/tile_graph_pass/graph_partition/graph_partition.h"
 #include "passes/tile_graph_pass/graph_partition/l1_copy_reuse.h"
 #include "passes/tile_graph_pass/graph_partition/n_buffer_merge.h"

@@ -21,10 +21,12 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include <fstream>
+#include <set>
 #include <vector>
 #include <string>
 #include <nlohmann/json.hpp>
 #include "computational_graph_builder.h"
+#include "passes/tile_graph_pass/graph_partition/graph_partition.h"
 #include "passes/tile_graph_pass/graph_partition/l1_copy_reuse.h"
 #include "interface/tensor/irbuilder.h"
 
@@ -131,6 +133,144 @@ void InitGraphBuilder(ComputationalGraphBuilder& G, std::vector<int64_t> tileSha
     EXPECT_EQ(G.SetOutCast({"outcast"}), true);
 }
 
+void BuildParallelAssembleSource(
+    ComputationalGraphBuilder& G, const std::string& prefix, int branchNum, std::vector<std::string>& gmTensors)
+{
+    std::vector<int64_t> tileShape{16, 16};
+    std::string input = prefix + "In";
+    std::string viewUb = prefix + "ViewUb";
+    std::string cast0Ub = prefix + "Cast0Ub";
+    std::string addsUb = prefix + "AddsUb";
+    std::string cast1Ub = prefix + "Cast1Ub";
+
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, input), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_UB, viewUb), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_UB, cast0Ub), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_UB, addsUb), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_UB, cast1Ub), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {input}, {viewUb}, prefix + "View"), true);
+    auto viewOp = G.GetOp(prefix + "View");
+    viewOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, MEM_UB, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_CONVERT, {viewUb}, {cast0Ub}, prefix + "Cast0"), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_ADDS, {cast0Ub}, {addsUb}, prefix + "Adds"), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_CONVERT, {addsUb}, {cast1Ub}, prefix + "Cast1"), true);
+
+    for (int i = 0; i < branchNum; ++i) {
+        std::string branchId = std::to_string(i);
+        std::string gmTensor = prefix + "Gm" + branchId;
+        std::string assembleName = prefix + "Assemble" + branchId;
+        EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, gmTensor), true);
+        EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {cast1Ub}, {gmTensor}, assembleName), true);
+        auto assembleOp = G.GetOp(assembleName);
+        assembleOp->SetOpAttribute(
+            std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{0, 0}));
+        gmTensors.push_back(gmTensor);
+    }
+}
+
+void BuildParallelMatmulBranch(
+    ComputationalGraphBuilder& G, const std::vector<std::string>& gmTensorsA, const std::vector<std::string>& gmTensorsB,
+    int branchIndex, std::vector<std::string>& outcasts)
+{
+    std::vector<int64_t> tileShape{16, 16};
+    std::string branchId = std::to_string(branchIndex);
+    std::string viewA = "viewA" + branchId;
+    std::string viewB = "viewB" + branchId;
+    std::string l1A = "l1A" + branchId;
+    std::string l1B = "l1B" + branchId;
+    std::string l0A = "l0A" + branchId;
+    std::string l0B = "l0B" + branchId;
+    std::string l0C = "l0C" + branchId;
+    std::string matmul = "matmul" + branchId;
+    std::string copyOut = "copyOut" + branchId;
+    std::string out = "out" + branchId;
+
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L1, l1A), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L1, l1B), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L0A, l0A), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L0B, l0B), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L0C, l0C), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, out), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {gmTensorsA[branchIndex]}, {l1A}, viewA), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {gmTensorsB[branchIndex]}, {l1B}, viewB), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {l1A}, {l0A}, "toA" + branchId), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {l1B}, {l0B}, "toB" + branchId), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {l0A, l0B}, {l0C}, matmul), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_COPY_OUT, {l0C}, {out}, copyOut), true);
+
+    auto viewAOp = G.GetOp(viewA);
+    auto viewBOp = G.GetOp(viewB);
+    viewAOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
+    viewBOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
+
+    auto toAOp = G.GetOp("toA" + branchId);
+    auto toBOp = G.GetOp("toB" + branchId);
+    auto matmulOp = G.GetOp(matmul);
+    auto copyOutOp = G.GetOp(copyOut);
+
+    viewAOp->SetAttr(OpAttributeKey::isCube, true);
+    viewBOp->SetAttr(OpAttributeKey::isCube, true);
+    toAOp->SetAttr(OpAttributeKey::isCube, true);
+    toBOp->SetAttr(OpAttributeKey::isCube, true);
+    matmulOp->SetAttr(OpAttributeKey::isCube, true);
+    copyOutOp->SetAttr(OpAttributeKey::isCube, true);
+
+    outcasts.push_back(out);
+}
+
+void BuildParallelMatmulGraph(ComputationalGraphBuilder& G, int branchNum)
+{
+    std::vector<std::string> gmTensorsA;
+    std::vector<std::string> gmTensorsB;
+    BuildParallelAssembleSource(G, "srcA", branchNum, gmTensorsA);
+    BuildParallelAssembleSource(G, "srcB", branchNum, gmTensorsB);
+
+    std::vector<std::string> outcasts;
+    for (int i = 0; i < branchNum; ++i) {
+        BuildParallelMatmulBranch(G, gmTensorsA, gmTensorsB, i, outcasts);
+    }
+
+    EXPECT_EQ(G.SetInCast({"srcAIn", "srcBIn"}), true);
+    EXPECT_EQ(G.SetOutCast(outcasts), true);
+}
+
+std::set<int> GetTensorRawMagics(ComputationalGraphBuilder& G, const std::string& prefix, int branchNum)
+{
+    std::set<int> rawMagics;
+    for (int i = 0; i < branchNum; ++i) {
+        rawMagics.insert(G.GetTensor(prefix + "Gm" + std::to_string(i))->GetRawMagic());
+    }
+    return rawMagics;
+}
+
+int CountOpcode(Function& function, Opcode opcode)
+{
+    int count = 0;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() == opcode) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+std::set<int> GetMatmulSubgraphIds(ComputationalGraphBuilder& G, int branchNum)
+{
+    std::set<int> subgraphIds;
+    for (int i = 0; i < branchNum; ++i) {
+        subgraphIds.insert(G.GetOp("matmul" + std::to_string(i))->GetSubgraphID());
+    }
+    return subgraphIds;
+}
+
 TEST_F(L1CopyInReuseTest, TestInvalidOp)
 {
     ComputationalGraphBuilder G;
@@ -165,6 +305,53 @@ TEST_F(L1CopyInReuseTest, TestNormal)
     L1CopyInReuseMerge LCRM;
     EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
     EXPECT_EQ(function->GetTotalSubGraphCount(), result);
+}
+
+/*
+GraphPartitionCoeThenL1ReuseMerge
+    srcAIn -> view -> cast -> adds -> cast -> assemble0/1/2/3 -> srcAGm0/1/2/3 -> view(L1) -> l0A -> matmul
+    srcBIn -> view -> cast -> adds -> cast -> assemble0/1/2/3 -> srcBGm0/1/2/3 -> view(L1) -> l0B -> matmul
+
+GraphPartition 内部新增的 COE 会删除冗余 assemble，只保留一份共享的 GM 输出；
+随后 L1CopyInReuseMerge 基于统一后的 GM->L1 view，将多路并行 matmul 合并到同一子图。
+*/
+TEST_F(L1CopyInReuseTest, TestParallelAssembleEnableParallelMatmulL1ReuseMerge)
+{
+    constexpr int branchNum = 4;
+
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestGraphPartitionCoeL1Reuse",
+        "TestGraphPartitionCoeL1Reuse", nullptr);
+    ComputationalGraphBuilder graph(func.get());
+    BuildParallelMatmulGraph(graph, branchNum);
+
+    auto rawMagicsABefore = GetTensorRawMagics(graph, "srcA", branchNum);
+    auto rawMagicsBBefore = GetTensorRawMagics(graph, "srcB", branchNum);
+    EXPECT_EQ(rawMagicsABefore.size(), static_cast<size_t>(branchNum));
+    EXPECT_EQ(rawMagicsBBefore.size(), static_cast<size_t>(branchNum));
+
+    Function* function = graph.GetFunction();
+    function->paramConfigs_.sgPartitionAlgorithm = "Iso";
+    GraphPartition graphPartition;
+    EXPECT_EQ(graphPartition.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(graphPartition.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(graphPartition.PostCheck(*function), SUCCESS);
+
+    EXPECT_EQ(CountOpcode(*function, Opcode::OP_ASSEMBLE), 2);
+
+    auto matmulSubgraphIdsAfterPartition = GetMatmulSubgraphIds(graph, branchNum);
+    EXPECT_EQ(matmulSubgraphIdsAfterPartition.size(), static_cast<size_t>(branchNum));
+
+    const int funcMagic = function->GetFuncMagic();
+    std::string funcHashOrderKey = "func" + std::to_string(funcMagic) + "_0";
+    function->paramConfigs_.cubeL1ReuseSetting.clear();
+    function->paramConfigs_.cubeNBufferSetting.clear();
+    function->paramConfigs_.cubeL1ReuseSettingByFunc = {{"DEFAULT", 1}, {funcHashOrderKey, branchNum}};
+    function->paramConfigs_.cubeNBufferSettingByFunc = {{"DEFAULT", 1}, {funcHashOrderKey, 1}};
+    L1CopyInReuseMerge l1CopyInReuse;
+    EXPECT_EQ(l1CopyInReuse.RunOnFunction(*function), SUCCESS);
+
+    auto matmulSubgraphIdsAfterL1Reuse = GetMatmulSubgraphIds(graph, branchNum);
+    EXPECT_EQ(matmulSubgraphIdsAfterL1Reuse.size(), 1UL);
 }
 
 TEST_F(L1CopyInReuseTest, TestNoL1Num)

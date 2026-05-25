@@ -1093,6 +1093,7 @@ TEST_F(GraphPartitionTest, TestBoundaryConvert)
     std::vector<std::string> opNames{"muls", "convert", "L1ToL0A"};
     EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorMemTypes, tensorNames, 0), true);
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetOutCast({"t4"}), true);
     G.GetOp("convert")->SetOpAttribute(std::make_shared<ConvertOpAttribute>(MemoryType::MEM_UB, MemoryType::MEM_L1));
     Function* function = G.GetFunction();
     GraphPartition gpp;
@@ -1170,7 +1171,7 @@ void ConstructGraphForMatMulMultipleViewSuccessors(ComputationalGraphBuilder& G)
                                                     {"matC3L0C"}, {"viewC3L0C_1"}, {"viewC3L0C_2"}, {"outcast3"}};
     EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
     EXPECT_EQ(G.SetInCast({"matA3DDR", "matB3DDR"}), true);
-    EXPECT_EQ(G.SetOutCast({"outcast3"}), true);
+    EXPECT_EQ(G.SetOutCast({"outcast3", "viewC3L0C_2"}), true);
 }
 
 TEST_F(GraphPartitionTest, TestMatMulMultipleViewSuccessors)
@@ -1201,7 +1202,7 @@ void ConstructGraphForMatMulViewNonL0C(ComputationalGraphBuilder& G)
         MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_L1,
         MemoryType::MEM_L0A,        MemoryType::MEM_L0B,        MemoryType::MEM_L0C};
     EXPECT_EQ(G.AddTensors(dataType, shape, oriTensorMemoryType, oriTensorNames, 0), true);
-    std::vector<std::string> afterViewTensorNames{"viewC4DDR", "viewC4L1", "outcast4"};
+    std::vector<std::string> afterViewTensorNames{"outcast1", "viewC4L1", "outcast2"};
     std::vector<MemoryType> afterViewTensorMemoryType{
         MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_DEVICE_DDR};
     EXPECT_EQ(G.AddTensors(dataType, viewShape, afterViewTensorMemoryType, afterViewTensorNames, 0), true);
@@ -1213,10 +1214,10 @@ void ConstructGraphForMatMulViewNonL0C(ComputationalGraphBuilder& G)
         {"matA4DDR"}, {"matB4DDR"}, {"matA4L1"}, {"matB4L1"}, {"matA4L0A", "matB4L0B"},
         {"matC4L0C"}, {"matC4L0C"}, {"viewC4L1"}};
     std::vector<std::vector<std::string>> oOperands{{"matA4L1"},  {"matB4L1"},   {"matA4L0A"}, {"matB4L0B"},
-                                                    {"matC4L0C"}, {"viewC4DDR"}, {"viewC4L1"}, {"outcast4"}};
+                                                    {"matC4L0C"}, {"outcast1"}, {"viewC4L1"}, {"outcast2"}};
     EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
     EXPECT_EQ(G.SetInCast({"matA4DDR", "matB4DDR"}), true);
-    EXPECT_EQ(G.SetOutCast({"outcast4"}), true);
+    EXPECT_EQ(G.SetOutCast({"outcast1", "outcast2"}), true);
 }
 
 TEST_F(GraphPartitionTest, TestMatMulViewNonL0C)
@@ -1250,6 +1251,7 @@ TEST_F(GraphPartitionTest, TestViewAssembleScopeId)
     std::vector<std::string> opNames{"m1", "a1", "a2", "v1", "v2", "m2"};
     EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorMemTypes, tensorNames, 0), true);
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetOutCast({"t3", "t4", "t7"}), true);
     G.GetOp("m1")->SetScopeId(0);
     G.GetOp("m2")->SetScopeId(1);
     Function* function = G.GetFunction();

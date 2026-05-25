@@ -110,6 +110,7 @@ bool ComputationalGraphBuilder::AddOp(
             itensors[0]->GetMemoryTypeOriginal(), OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     }
     operations_[name] = &op;
+    operationMagics_[name] = op.GetOpMagic();
     return true;
 }
 
@@ -162,7 +163,7 @@ Operation* ComputationalGraphBuilder::GetOp(const std::string& name)
     if (operations_.count(name) == 0) {
         return nullptr;
     }
-    return operations_[name];
+    return function->GetOpByOpMagic(operationMagics_[name]);
 }
 
 std::shared_ptr<LogicalTensor> ComputationalGraphBuilder::GetTensor(const std::string& name)

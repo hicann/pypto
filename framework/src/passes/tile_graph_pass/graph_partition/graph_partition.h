@@ -19,7 +19,6 @@
 #include "passes/tile_graph_pass/graph_partition/osp_partitioner.h"
 #include "passes/tile_graph_pass/graph_partition/n_buffer_merge.h"
 #include "passes/tile_graph_pass/graph_partition/l1_copy_reuse.h"
-#include "passes/tile_graph_pass/graph_partition/common_operation_eliminate.h"
 #include "passes/tile_graph_pass/graph_partition/reduce_copy.h"
 
 namespace npu::tile_fwk {

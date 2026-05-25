@@ -64,6 +64,7 @@ public:
     Function* function;
     std::unordered_map<std::string, std::shared_ptr<LogicalTensor>> tensors_;
     std::unordered_map<std::string, Operation*> operations_;
+    std::unordered_map<std::string, int> operationMagics_;
 };
 } // namespace tile_fwk
 } // namespace npu

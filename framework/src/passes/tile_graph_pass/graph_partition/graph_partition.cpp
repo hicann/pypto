@@ -18,6 +18,7 @@
 #include "interface/function/function.h"
 #include "passes/pass_check/iso_partitioner_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/common_operation_eliminate_utils.h"
 
 namespace npu::tile_fwk {
 
@@ -34,6 +35,10 @@ Status RunIsoPartition(Function &function)
     }
     if (partitioner.PartitionGraph(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "GraphPartition failed.");
+        return FAILED;
+    }
+    if (CommonOperationEliminateUtils::EliminateCommonOperation(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Common operation eliminate failed!");
         return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End GraphPartition.");
