@@ -966,7 +966,8 @@ public:
         COMPILER_LOGI("New frontend compile from torch begin once.");
         // Prepare stage starts here and ends at Program::UpdateCompileTask() for NEW
         // "Prepare" 在Initialize中设置
-        MonitorManager::Instance().Initialize(compileMonitorEnable, intervalSec, timeoutSec, totalTimeoutSec);
+        MonitorManager::Instance().Initialize(
+            compileMonitorEnable, intervalSec, timeoutSec, totalTimeoutSec, compileMonitorPassDetailEnable);
         auto compile = py::getattr(module, "compile");
         compile(torch_tensors, tensor_defs);
         return RegisterLastCompiledKernel(module);
@@ -1162,11 +1163,14 @@ private:
             if (host_options.contains("compile_monitor_enable")) {
                 compileMonitorEnable = host_options["compile_monitor_enable"].cast<bool>();
             }
+            if (host_options.contains("compile_monitor_pass_detail_enable")) {
+                compileMonitorPassDetailEnable = host_options["compile_monitor_pass_detail_enable"].cast<bool>();
+            }
             if (host_options.contains("compile_monitor_print_interval")) {
                 intervalSec = host_options["compile_monitor_print_interval"].cast<int>();
             }
             if (host_options.contains("compile_timeout_stage")) {
-                timeoutSec = host_options["compile_timeout_stage"].cast<int>();
+                timeoutSec = static_cast<double>(host_options["compile_timeout_stage"].cast<int>());
             }
             if (host_options.contains("compile_timeout")) {
                 totalTimeoutSec = host_options["compile_timeout"].cast<int>();
@@ -1252,8 +1256,9 @@ private:
     bool compileStageAllComplete{true};
     LaunchMode launchMode_{LaunchMode::DEVICE_RT};
     bool compileMonitorEnable{true};
+    bool compileMonitorPassDetailEnable{false};
     int intervalSec{60};
-    int timeoutSec{-1};
+    double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};
     int totalTimeoutSec{600};
 
     RtHostInputInfo hostInfo;

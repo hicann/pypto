@@ -29,6 +29,7 @@
     "host": {
         "compile_stage": 0,
         "compile_monitor_enable": false,
+        "compile_monitor_pass_detail_enable": false,
         "compile_timeout": 600,
         "compile_timeout_stage": -1,
         "compile_monitor_print_interval": 60

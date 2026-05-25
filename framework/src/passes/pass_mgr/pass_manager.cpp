@@ -17,6 +17,7 @@
 
 #include <unistd.h>
 #include "interface/configs/config_manager.h"
+#include "interface/compiler_monitor/monitor_pass_scope.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_interface/pass_type.h"
 #include "pass_registry.h"
@@ -286,13 +287,23 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         APASS_LOG_INFO_F(
             Elements::Function, "Apply pass <%s> on function: %s.", identifier.c_str(),
             function.GetMagicName().c_str());
-        auto start = std::chrono::high_resolution_clock::now();
-        if (pass->Run(function, strategy, identifier, i) != SUCCESS) {
+        MonitorPassCompileScope passCompileScope(
+            strategy, identifier, i, function.GetMagicName(), MonitorManager::Instance().GetCurrentFunctionIndex(),
+            MonitorManager::Instance().GetCurrentFuncOpSize());
+        Status status = pass->Run(function, strategy, identifier, i);
+        auto passEnd = std::chrono::high_resolution_clock::now();
+        passCompileScope.FinishAt(status == SUCCESS, passEnd);
+        if (status != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function, "Run pass <%s> failed.", identifier.c_str());
             return FAILED;
         }
+        if (identifier == "ExpandFunction") {
+            // ExpandFunction 之后的图规模，作为后续 pass 的阈值基线。
+            MonitorManager::Instance().SetCurrentFuncOpSize(
+                static_cast<int>(function.GetOperationSize()), true);
+        }
         if (passDfxCfg.dumpPassTimeCost) {
-            LogPassRuntime(identifier, program, function, start);
+            LogPassRuntime(identifier, program, function, passCompileScope.GetStartTime());
         }
         if (config::GetVerifyOption<bool>(KEY_ENABLE_PASS_VERIFY)) {
             Program::GetInstance().VerifyPass(&function, i, identifier);

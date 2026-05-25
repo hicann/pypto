@@ -57,6 +57,7 @@ constexpr const char* DEVICE_SCHED_PARALLELISM = "device_sched_parallelism";
 // host
 constexpr const char* COMPILE_STAGE = "compile_stage";
 constexpr const char* COMPILE_MONITOR_ENABLE = "compile_monitor_enable";
+constexpr const char* COMPILE_MONITOR_PASS_DETAIL_ENABLE = "compile_monitor_pass_detail_enable";
 constexpr const char* INTERVAL_SEC = "compile_monitor_print_interval";
 constexpr const char* TIMEOUT_SEC = "compile_timeout_stage";
 constexpr const char* TOTAL_TIMEOUT_SEC = "compile_timeout";

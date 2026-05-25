@@ -658,6 +658,10 @@ class JitCallableWrapper:
             self._host_options["compile_monitor_enable"] = pypto.get_host_options().get(
                 "compile_monitor_enable", False
             )
+        if "compile_monitor_pass_detail_enable" not in self._host_options:
+            self._host_options["compile_monitor_pass_detail_enable"] = pypto.get_host_options().get(
+                "compile_monitor_pass_detail_enable", False
+            )
         if "compile_timeout" not in self._host_options:
             self._host_options["compile_timeout"] = pypto.get_host_options().get(
                 "compile_timeout", 600

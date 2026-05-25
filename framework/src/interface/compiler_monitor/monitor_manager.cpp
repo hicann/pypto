@@ -8,10 +8,11 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
+#include <iomanip>
 #include <mutex>
 #include <string>
 #include <iostream>
@@ -24,6 +25,32 @@
 #include "interface/compiler_monitor/monitor_util.h"
 
 namespace npu::tile_fwk {
+namespace {
+constexpr int kPassTimeoutBaseOpSize = 200000;
+constexpr double kSinglePassTimeoutBaseSec = 20.0;
+constexpr double kPassStageTimeoutBaseSec = 90.0;
+constexpr double kMillisecondsPerSecond = 1000.0;
+constexpr int kPassDurationPrecision = 3;
+
+double CalcPassTimeoutSec(int opSize, double baseTimeoutSec)
+{
+    if (opSize < 0) {
+        return -1.0;
+    }
+    int normalizedOpSize = std::max(opSize, 1);
+    return baseTimeoutSec * static_cast<double>(normalizedOpSize) / static_cast<double>(kPassTimeoutBaseOpSize);
+}
+
+std::string FormatPassDuration(double seconds)
+{
+    if (seconds < 0.0) {
+        return "-1";
+    }
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(kPassDurationPrecision) << seconds * kMillisecondsPerSecond << "ms";
+    return oss.str();
+}
+} // namespace
 
 MonitorManager::~MonitorManager() { Shutdown(); }
 
@@ -33,14 +60,26 @@ MonitorManager& MonitorManager::Instance()
     return instance;
 }
 
-void MonitorManager::Initialize(bool enable, int interval_sec, int timeout_sec, int total_timeout_sec)
+double MonitorManager::CalcPassStageTimeoutSec(int op_size)
+{
+    return CalcPassTimeoutSec(op_size, kPassStageTimeoutBaseSec);
+}
+
+std::string MonitorManager::FormatPassDurationForLog(double seconds)
+{
+    return FormatPassDuration(seconds);
+}
+
+void MonitorManager::Initialize(
+    bool enable, int interval_sec, double timeout_sec, int total_timeout_sec, bool pass_detail_enable)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    this->SetCompilerMonitorOptions(enable, interval_sec, timeout_sec, total_timeout_sec);
+    this->SetCompilerMonitorOptions(
+        enable, interval_sec, timeout_sec, total_timeout_sec, enable && pass_detail_enable);
     if (initialized_) {
         return;
     }
-    if (!enable_) {
+    if (!enable) {
         return;
     }
     impl_ = new MonitorImpl(this);
@@ -52,6 +91,11 @@ void MonitorManager::Initialize(bool enable, int interval_sec, int timeout_sec, 
     initialized_ = true;
     stage_doing_ = true;
     stage_elapsed_totals_.clear();
+    pass_compile_timings_.clear();
+    pass_elapsed_totals_.clear();
+    last_pass_detail_function_index_ = -1;
+    last_pass_detail_function_name_.clear();
+    last_pass_detail_strategy_.clear();
     stage_timeout_flag_.clear();
     stage_timeout_flag_["Prepare"] = false;
     stage_timeout_flag_["Pass"] = false;
@@ -120,6 +164,11 @@ void MonitorManager::SetTotalFunctionCount(int n)
             total_start_ = std::chrono::steady_clock::now();
             stage_start_ = total_start_;
             stage_elapsed_totals_.clear();
+            pass_compile_timings_.clear();
+            pass_elapsed_totals_.clear();
+            last_pass_detail_function_index_ = -1;
+            last_pass_detail_function_name_.clear();
+            last_pass_detail_strategy_.clear();
             stage_timeout_flag_.clear();
             python_stage_ended_ = false;
             to_start = impl_;
@@ -290,8 +339,9 @@ void MonitorManager::PrintCompilationFinished()
                           << n << " functions)\n";
             }
         }
-        COMPILER_LOGI("[Compiler Monitor] Stage timing (aggregated by stage):%s", stage_msg.str().c_str());
-        (void)fprintf(stdout, "[Compiler Monitor] Stage timing (aggregated by stage):%s", stage_msg.str().c_str());
+        std::string stageTimingMsg = "[Compiler Monitor] Stage timing (aggregated by stage):" + stage_msg.str();
+        COMPILER_LOGI("%s", stageTimingMsg.c_str());
+        (void)fprintf(stdout, "%s\n", stageTimingMsg.c_str());
         (void)fflush(stdout);
 
         std::string final_msg =
@@ -305,13 +355,104 @@ void MonitorManager::PrintCompilationFinished()
     }
 }
 
-void MonitorManager::SetCompilerMonitorOptions(bool enable, int interval_sec, int timeout_sec, int total_timeout_sec)
+std::string MonitorManager::BuildPassCompileTimingsForFunction(int functionIndex, const std::string& functionName) const
+{
+    if (pass_compile_timings_.empty()) {
+        return "";
+    }
+
+    std::vector<PassCompileTiming> timings;
+    for (const auto& timing : pass_compile_timings_) {
+        if (timing.functionIndex == functionIndex && timing.functionName == functionName) {
+            timings.push_back(timing);
+        }
+    }
+    if (timings.empty()) {
+        return "";
+    }
+
+    std::sort(timings.begin(), timings.end(), [](const PassCompileTiming& lhs, const PassCompileTiming& rhs) {
+        if (lhs.strategy != rhs.strategy) {
+            return lhs.strategy < rhs.strategy;
+        }
+        return lhs.passIndex < rhs.passIndex;
+    });
+
+    std::ostringstream detailMsg;
+    detailMsg << BuildPassFunctionHeaderLocked(functionIndex, functionName);
+    std::string lastStrategy;
+    for (const auto& timing : timings) {
+        if (timing.strategy != lastStrategy) {
+            detailMsg << "  |__ [Compiler Monitor] Strategy:[" << timing.strategy << "]\n";
+            lastStrategy = timing.strategy;
+        }
+        double passTimeoutSec = CalcPassTimeoutSec(timing.functionOpSize, kSinglePassTimeoutBaseSec);
+        bool passTimeoutEnabled = passTimeoutSec >= 0.0;
+        bool passTimedOut = passTimeoutEnabled && timing.elapsedSec > passTimeoutSec;
+        detailMsg << "  |__   [" << std::setw(2) << std::setfill('0') << timing.passIndex << std::setfill(' ') << "] "
+                  << timing.passIdentifier << " | Pass elapsed: " << FormatPassDuration(timing.elapsedSec);
+        if (passTimeoutEnabled) {
+            detailMsg << " | Threshold: " << FormatPassDuration(passTimeoutSec);
+        }
+        detailMsg << (passTimedOut ? " | [** WARNING **] single pass timeout" : "")
+                  << (timing.success ? "" : " | Result:[FAILED]") << "\n";
+    }
+
+    return detailMsg.str();
+}
+
+std::string MonitorManager::BuildPassFunctionHeaderLocked(
+    int functionIndex, const std::string& functionName, const std::string& strategy) const
+{
+    int totalFunctions = total_function_count_ > 0 ? total_function_count_ : 1;
+    std::ostringstream oss;
+    oss << "  |__ [Compiler Monitor] Function: " << functionIndex << "/" << totalFunctions
+        << " | Pass timing detail";
+    if (!strategy.empty()) {
+        oss << " | Strategy:[" << strategy << "]";
+    }
+    oss << " | Func:[" << functionName << "]\n";
+    return oss.str();
+}
+
+std::string MonitorManager::BuildPassProgressLineLocked(
+    const std::string& passIdentifier, size_t passIndex, int functionOpSize, const std::string& status,
+    double elapsedSec, bool success) const
+{
+    double passTimeoutSec = CalcPassTimeoutSec(functionOpSize, kSinglePassTimeoutBaseSec);
+    bool passTimeoutEnabled = passTimeoutSec >= 0.0;
+    bool passTimedOut = passTimeoutEnabled && elapsedSec > passTimeoutSec;
+
+    std::ostringstream oss;
+    oss << "  |__ [Compiler Monitor] [" << std::setw(2) << std::setfill('0') << passIndex << std::setfill(' ') << "] "
+        << passIdentifier;
+    if (status == "running") {
+        oss << " start";
+    } else {
+        oss << " | Pass elapsed: " << FormatPassDuration(elapsedSec);
+    }
+    if (status != "running" && passTimeoutEnabled) {
+        oss << " | Threshold: " << FormatPassDuration(passTimeoutSec);
+    }
+    if (passTimedOut) {
+        oss << " | [** WARNING **] single pass timeout";
+    }
+    if (!success) {
+        oss << " | Result:[FAILED]";
+    }
+    oss << "\n";
+    return oss.str();
+}
+
+void MonitorManager::SetCompilerMonitorOptions(
+    bool enable, int interval_sec, double timeout_sec, int total_timeout_sec, bool pass_detail_enable)
 {
     enable_ = enable;
+    pass_detail_enable_ = pass_detail_enable;
     interval_sec_.store((interval_sec > 0) ? interval_sec : 60);
     std::string interval_str = std::to_string(interval_sec_.load());
     (void)setenv("PYPTO_COMPILER_MONITOR_INTERVAL_SEC", interval_str.c_str(), 1);
-    timeout_sec_.store((timeout_sec >= -1) ? timeout_sec : 0);
+    timeout_sec_.store((timeout_sec >= -1.0) ? timeout_sec : 0.0);
     std::string timeout_str = std::to_string(timeout_sec_.load());
     (void)setenv("PYPTO_COMPILER_MONITOR_TIMEOUT_SEC", timeout_str.c_str(), 1);
     total_timeout_sec_.store((total_timeout_sec >= 0) ? total_timeout_sec : 600);
@@ -320,6 +461,8 @@ void MonitorManager::SetCompilerMonitorOptions(bool enable, int interval_sec, in
 }
 
 bool MonitorManager::IsEnabled() const { return enable_; }
+
+bool MonitorManager::IsPassDetailEnabled() const { return pass_detail_enable_; }
 
 void MonitorManager::SetStageTimeoutFlag(const std::string& name)
 {
@@ -351,7 +494,7 @@ void MonitorManager::SetActiveStageWarningPrinted(const std::string& name, int r
 
 int MonitorManager::GetIntervalSec() const { return interval_sec_.load(); }
 
-int MonitorManager::GetTimeoutSec() const { return timeout_sec_.load(); }
+double MonitorManager::GetTimeoutSec() const { return timeout_sec_.load(); }
 
 int MonitorManager::GetTotalTimeoutSec() const { return total_timeout_sec_.load(); }
 
@@ -389,13 +532,22 @@ int MonitorManager::GetCurrentFuncOpSize() const
     return current_func_opsize_;
 }
 
-void MonitorManager::SetCurrentFuncOpSize(size_t op_size)
+void MonitorManager::SetCurrentFuncOpSize(int op_size, bool update_active_stage)
 {
     if (!enable_) {
         return;
     }
     std::lock_guard<std::mutex> lock(mutex_);
-    current_func_opsize_ = static_cast<int>(op_size);
+    current_func_opsize_ = op_size;
+    if (!update_active_stage) {
+        return;
+    }
+    for (auto& info : active_stages_) {
+        if (info.stageName == "Pass" && info.functionIndex == current_function_index_ &&
+            info.functionName == current_function_) {
+            info.functionOpSize = op_size;
+        }
+    }
 }
 
 void MonitorManager::PrintCurrentTotalElapsed(std::string str_temp)
@@ -460,6 +612,120 @@ std::unordered_map<std::string, double> MonitorManager::GetStageElapsedTotals() 
     return stage_elapsed_totals_;
 }
 
+void MonitorManager::RecordPassCompileTime(
+    const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+    const std::string& functionName, int functionIndex, int functionOpSize, double elapsedSec, bool success)
+{
+    std::string progressLine;
+    bool passTimedOut = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!enable_ || !initialized_) {
+            return;
+        }
+        PassCompileTiming timing{
+            functionIndex, functionName, functionOpSize, strategy, passIdentifier, passIndex, elapsedSec, success};
+        pass_compile_timings_.push_back(timing);
+        pass_elapsed_totals_[strategy + "::" + passIdentifier] += elapsedSec;
+        if (pass_detail_enable_ && current_stage_ == STAGE_PASS) {
+            progressLine = BuildPassProgressLineLocked(
+                passIdentifier, passIndex, functionOpSize, "completed", elapsedSec, success);
+            double passTimeoutSec = CalcPassTimeoutSec(functionOpSize, kSinglePassTimeoutBaseSec);
+            passTimedOut = passTimeoutSec >= 0.0 && elapsedSec > passTimeoutSec;
+        }
+    }
+    if (!progressLine.empty()) {
+        std::lock_guard<std::mutex> printLock(pass_detail_print_mutex_);
+        (void)fprintf(stdout, "%s", progressLine.c_str());
+        (void)fflush(stdout);
+        if (passTimedOut) {
+            COMPILER_LOGW("%s", progressLine.c_str());
+        } else {
+            COMPILER_LOGI("%s", progressLine.c_str());
+        }
+    }
+}
+
+std::vector<PassCompileTiming> MonitorManager::GetPassCompileTimings() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return pass_compile_timings_;
+}
+
+std::map<std::string, double> MonitorManager::GetPassElapsedTotals() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return pass_elapsed_totals_;
+}
+
+void MonitorManager::StartPassCompile(
+    const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+    const std::string& functionName, int functionIndex, int functionOpSize)
+{
+    std::string progressLine;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!enable_ || !initialized_) {
+            return;
+        }
+        current_pass_.active = true;
+        current_pass_.functionIndex = functionIndex;
+        current_pass_.functionName = functionName;
+        current_pass_.functionOpSize = functionOpSize;
+        current_pass_.strategy = strategy;
+        current_pass_.passIdentifier = passIdentifier;
+        current_pass_.passIndex = passIndex;
+        current_pass_.startTime = std::chrono::steady_clock::now();
+        if (pass_detail_enable_ && current_stage_ == STAGE_PASS) {
+            if (last_pass_detail_function_index_ != functionIndex ||
+                last_pass_detail_function_name_ != functionName || last_pass_detail_strategy_ != strategy) {
+                progressLine += BuildPassFunctionHeaderLocked(functionIndex, functionName, strategy);
+                last_pass_detail_function_index_ = functionIndex;
+                last_pass_detail_function_name_ = functionName;
+                last_pass_detail_strategy_ = strategy;
+            }
+            progressLine += BuildPassProgressLineLocked(
+                passIdentifier, passIndex, functionOpSize, "running", 0.0, true);
+        }
+    }
+    if (!progressLine.empty()) {
+        std::lock_guard<std::mutex> printLock(pass_detail_print_mutex_);
+        (void)fprintf(stdout, "%s", progressLine.c_str());
+        (void)fflush(stdout);
+        COMPILER_LOGI("%s", progressLine.c_str());
+    }
+}
+
+void MonitorManager::EndPassCompile(
+    const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
+    const std::string& functionName, int functionIndex)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!current_pass_.active) {
+        return;
+    }
+    if (current_pass_.strategy == strategy && current_pass_.passIdentifier == passIdentifier &&
+        current_pass_.passIndex == passIndex && current_pass_.functionName == functionName &&
+        current_pass_.functionIndex == functionIndex) {
+        current_pass_ = CurrentPassInfo{};
+    }
+}
+
+std::string MonitorManager::GetCurrentPassDescription() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!current_pass_.active) {
+        return "";
+    }
+    auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - current_pass_.startTime).count();
+    std::ostringstream oss;
+    oss << " | Current pass:[" << current_pass_.passIdentifier << "]"
+        << " | Pass idx:[" << current_pass_.passIndex << "]"
+        << " | Pass elapsed:[" << FormatPassDuration(elapsed) << "]"
+        << " | Strategy:[" << current_pass_.strategy << "]";
+    return oss.str();
+}
+
 void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
                                 int rootFuncOpSize)
 {
@@ -491,6 +757,7 @@ void MonitorManager::StartStage(const std::string& name, int rootFuncIndex, cons
     info.startTime = stage_start_;
     info.functionIndex = current_function_index_;
     info.functionName = current_function_;
+    info.functionOpSize = current_func_opsize_;
     info.rootFuncIndex = (rootFuncIndex < 0) ? current_root_func_index_ : rootFuncIndex;
     info.rootFuncName = (rootFuncIndex < 0) ? current_root_func_ : rootFuncName;
     info.rootFuncOpSize = rootFuncOpSize;
@@ -504,6 +771,9 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
     int actualRootFuncIndex = rootFuncIndex;
     std::string actualRootFuncName = rootFuncName;
     auto stageStartTime = stage_start_;
+    int actualFunctionIndex = current_function_index_;
+    std::string actualFunctionName = current_function_;
+    int actualFunctionOpSize = current_func_opsize_;
 
     auto it = active_stages_.rend();
     if (rootFuncIndex < 0) {
@@ -514,6 +784,9 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
             actualRootFuncIndex = it->rootFuncIndex;
             actualRootFuncName = it->rootFuncName;
             stageStartTime = it->startTime;
+            actualFunctionIndex = it->functionIndex;
+            actualFunctionName = it->functionName;
+            actualFunctionOpSize = it->functionOpSize;
         } else {
             actualRootFuncIndex = current_root_func_index_;
             actualRootFuncName = current_root_func_;
@@ -524,24 +797,32 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
         });
         if (it != active_stages_.rend()) {
             stageStartTime = it->startTime;
+            actualFunctionIndex = it->functionIndex;
+            actualFunctionName = it->functionName;
+            actualFunctionOpSize = it->functionOpSize;
         }
     }
 
     if (it != active_stages_.rend()) {
         active_stages_.erase(std::prev(it.base()));
     }
-    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex, rootFuncOpSize);
+    EndStageInternal(
+        name, actualRootFuncIndex, actualRootFuncName, stageStartTime, rootFuncIndex, rootFuncOpSize,
+        actualFunctionIndex, actualFunctionName, actualFunctionOpSize);
 }
 
 void MonitorManager::EndStageInternal(
     const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
-    const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal, int rootFuncOpSize)
+    const std::chrono::steady_clock::time_point& startTime, int rootFuncIndexOriginal, int rootFuncOpSize,
+    int functionIndex, const std::string& functionName, int functionOpSize)
 {
     if (!initialized_ || !impl_ || !enable_) {
         return;
     }
-    if (timeout_sec_.load() != 0) {
-        stage_timeout_flag_[name] = false;
+    bool stageWarningPrinted = false;
+    auto timeoutFlagIt = stage_timeout_flag_.find(name);
+    if (timeoutFlagIt != stage_timeout_flag_.end()) {
+        stageWarningPrinted = timeoutFlagIt->second;
     }
     if (rootFuncIndexOriginal == -1) {
         impl_->StopMonitoring();
@@ -573,15 +854,36 @@ void MonitorManager::EndStageInternal(
         int pw = GetProgressWidth();
         stage_finish_msg =
             "[Compiler Monitor] " + PadLabel("Function: ") +
-            PadRight(std::to_string(current_function_index_) + "/" + std::to_string(total_function_count_), pw) +
+            PadRight(std::to_string(functionIndex) + "/" + std::to_string(total_function_count_), pw) +
             " | Stage: " + PadStageName(name) + "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
-            " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed)) + " | Func:[" + current_function_ +
-            "] Ops: " + std::to_string(current_func_opsize_);
+            " | Total elapsed: " + PadElapsed(FormatElapsed(total_elapsed)) + " | Func:[" + functionName +
+            "] Ops: " + std::to_string(functionOpSize);
     }
 
     (void)fprintf(stdout, "%s\n", stage_finish_msg.c_str());
     (void)fflush(stdout);
     COMPILER_LOGI("%s", stage_finish_msg.c_str());
+    if (name == "Pass") {
+        double timeoutSec = CalcPassTimeoutSec(functionOpSize, kPassStageTimeoutBaseSec);
+        if (timeoutSec >= 0.0 && elapsed > timeoutSec && !stageWarningPrinted) {
+            int pw = GetProgressWidth();
+            std::string passTimeoutWarnMsg =
+                "[Compiler Monitor] | [** WARNING **] Function: " +
+                PadRight(std::to_string(functionIndex) + "/" + std::to_string(total_function_count_), pw) +
+                " | Stage [Pass] elapsed [" + FormatPassDuration(elapsed) +
+                "] exceeded the pass stage time threshold [" + FormatPassDuration(timeoutSec) +
+                "] | Func:[" + functionName + "] | Number of op: " + std::to_string(functionOpSize) +
+                " | Standard: 200000 ops / 90.0s linear scaled" +
+                ", you can terminate the process by pressing Ctrl+C !!!";
+            stage_timeout_flag_[name] = true;
+            (void)fprintf(stdout, "%s\n", passTimeoutWarnMsg.c_str());
+            (void)fflush(stdout);
+            COMPILER_LOGW("%s", passTimeoutWarnMsg.c_str());
+        }
+    }
+    if (timeout_sec_.load() < 0.0 || timeout_sec_.load() > 0.0) {
+        stage_timeout_flag_[name] = false;
+    }
 }
 
 std::vector<ActiveStageInfo> MonitorManager::GetActiveStages() const
