@@ -48,7 +48,17 @@ private:
         std::vector<std::pair<Operation*, Operation*>>& multiReshapeVector) const;
     Status RemoveViewMultiReshape(const std::vector<std::pair<Operation*, Operation*>>& multiReshapeVector) const;
     Status RemoveViewSingleReshape(Function& function) const;
-    Status HandleDynOffsetForReshape(
+    Status HandleCopyOutToAssemble(
+        Operation& assembleOp, LogicalTensorPtr output,
+        const std::set<Operation*, LogicalTensor::CompareOp>& producers) const;
+    bool CalculateReshapeToAssembleInfo(
+        Operation& assembleOp, Operation& reshapeOp, const std::vector<SymbolicScalar>& dynOffset,
+        std::vector<int64_t>& newRawShape, std::vector<SymbolicScalar>& newDynRawShape,
+        std::vector<SymbolicScalar>& newDynOffset) const;
+    Status UpdateCopyOutBeforeReshape(
+        LogicalTensorPtr reshapeInput, const std::vector<int64_t>& newRawShape,
+        const std::vector<SymbolicScalar>& newDynOffset) const;
+    Status HandleReshapeToAssemble(
         Operation& assembleOp, const std::set<Operation*, LogicalTensor::CompareOp>& producers) const;
 };
 } // namespace npu::tile_fwk

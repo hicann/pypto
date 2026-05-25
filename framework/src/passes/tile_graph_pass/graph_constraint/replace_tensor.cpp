@@ -999,7 +999,18 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
         return FAILED;
     }
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
+    auto inProducerOps = inOp->ProducerOps();
+    bool allProducerCopyOut = !inProducerOps.empty();
+    bool allProducerAssemble = !inProducerOps.empty();
+    
+    // BMM优化场景：Reshape前驱全为CopyOut或全为Assemble时不插copy。
+    for (const auto& producer : inProducerOps) {
+        allProducerCopyOut = allProducerCopyOut && IsCopyOut(producer->GetOpcode());
+        allProducerAssemble = allProducerAssemble && producer->GetOpcode() == Opcode::OP_ASSEMBLE;
+    }
+    
     if (inOp->GetOpcode() == Opcode::OP_RESHAPE &&
+        (!allProducerCopyOut && !allProducerAssemble) &&
         op.GetIOperands()[0]->tensor->GetRawDataSize() <= UB_SIZE_THRESHOLD) {
         needInsertCopyAssOps.insert(&op);
         return SUCCESS;
@@ -1066,12 +1077,6 @@ Status ReplaceTensor::FindNeedToCopyReshape(
             if (inplaceOpSet.find(consumerOp->GetOpcode()) != inplaceOpSet.end()) {
                 needInsertCopyAssOps.insert(&op);
             }
-        }
-    }
-    for (auto consumerOp : consumerOps) {
-        if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE &&
-            consumerOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-            needInsertCopyAssOps.insert(consumerOp);
         }
     }
     return SUCCESS;
