@@ -627,6 +627,7 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 | **AiCorePrintGmTensor** | 打印 GM Tensor | 查看 Global Memory 数据 |
 | **AiCorePrintUbTensor** | 打印 UB Tensor | 查看 Unified Buffer 数据（仅 AIV kernel） |
 | **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel，且仅支持A2/A3平台） |
+| **AiCorePrintL0CTensor** | 打印 L0C Tensor | 查看 Accumulator Buffer 数据（仅 AIC kernel） |
 
 #### 支持的数据类型
 
@@ -730,16 +731,21 @@ ls kernel_aicore/*.cpp
 
 ```cpp
 AiCoreLogF(param->ctx, "format string", args...);
-AiCorePrintShape(param->ctx, Shape2Dim(dim0, dim1));
+AiCorePrintShape(param->ctx, Shape2Dim(dim0, dim1), "name");
 AiCorePrintGmTensor(param->ctx, (__gm__ T*)addr, end, begin, "name");
 AiCorePrintUbTensor(param->ctx, (__ubuf__ T*)addr, end, begin, "name");
 AiCorePrintL1Tensor(param->ctx, (__cbuf__ T*)addr, end, begin, l1_staging, "name");
+AiCorePrintL0CTensor(param->ctx, (__cc__ T*)addr, end, begin, l0cShape0, l0cShape1, l0c_staging, "name");
 ```
 
-**步骤 3.3：配置 L1 staging buffer（仅 AiCorePrintL1Tensor 需要）**
+**步骤 3.3：配置 L1/L0C staging buffer（仅 AiCorePrintL1Tensor / AiCorePrintL0CTensor 需要）**
 
 ```cpp
+// L1 staging buffer（从 workspace 分配）
 __gm__ T* l1_staging = (__gm__ T*)(param->funcData->workspaceAddr);
+
+// L0C staging buffer（从 workspace 分配，需 32 字节对齐）
+__gm__ T* l0c_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 ```
 
 **关键注意事项**：首次运行或切换用例删除 kernel_aic*，同一用例重复运行保留修改。
@@ -812,9 +818,21 @@ AiCorePrintGmTensor(param->ctx, (__gm__ hifloat8_t*)gmTensor_hf8.GetAddr(), 8, 0
 AiCorePrintShape：
 
 ```cpp
-AiCorePrintShape(param->ctx, Shape2Dim(sym_161_dim_0, sym_161_dim_1));
+AiCorePrintShape(param->ctx, Shape2Dim(sym_161_dim_0, sym_161_dim_1), "sym_161");
 AiCorePrintShape(param->ctx, Shape3Dim(dim0, dim1, dim2));
-AiCorePrintShape(param->ctx, Shape4Dim(dim0, dim1, dim2, dim3));
+AiCorePrintShape(param->ctx, Shape4Dim(dim0, dim1, dim2, dim3), "conv_out");
+```
+
+L1 Tensor 打印示例：
+```cpp
+__gm__ half* l1_staging = (__gm__ half*)(param->funcData->workspaceAddr);
+AiCorePrintL1Tensor(param->ctx, (__cbuf__ half*)l1Tensor.GetAddr(), 16, 0, l1_staging, "fp16_l1");
+```
+
+L0C Tensor 打印示例（L0C 数据通过 DMA 搬运到 GM staging buffer 后打印）：
+```cpp
+__gm__ int32_t* l0c_staging = (__gm__ int32_t*)(param->funcData->workspaceAddr);
+AiCorePrintL0CTensor(param->ctx, (__cc__ int32_t*)l0cTensor.GetAddr(), 1024, 0, 32, 32, l0c_staging, "int32_l0c");
 ```
 
 AiCoreLogF：
@@ -827,13 +845,31 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 #### 注意事项
 
-1. **L1 staging buffer 对齐**：l1_staging 地址必须 32 字节对齐，workspaceAddr 默认满足要求。
+1. **L1/L0C staging buffer 对齐**：l1_staging 和 l0c_staging 地址必须 32 字节对齐，workspaceAddr 默认满足要求。
 
 2. **打印数量控制**：PRINT_BUFFER_SIZE 当前为 128KB（定义于 `framework/src/interface/machine/device/tilefwk/aicpu_common.h`），若触发 overflow warning，需增大该值后重新编译。
 
 3. **FP8/HiFloat8 支持平台**：仅 `A5` 平台支持（见 `SUPPORT_FP8_HF8_PRINT` 宏定义）。
 
-4. **AiCorePrintL1Tensor 支持平台**：仅 `A2/A3` 平台支持（见`SUPPORT_L1_COPY` 宏定义）
+4. **AiCorePrintL1Tensor 支持平台**：仅 `A2/A3` 平台支持（见`SUPPORT_L1_COPY` 宏定义）。
+
+5. **AIC (Cube核) 中不能使用 AiCorePrintUbTensor**：AIC (Cube核) 的标量处理器 (SP) 没有到 UB 地址空间的物理通路，无法从 UB 标量读取数据。编译期已通过 `static_assert` 拦截，在 AIC kernel 中调用 `AiCorePrintUbTensor` 会触发编译报错：
+   ```
+   error: static assertion failed: [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
+   ```
+   UB 数据检查请在 AIV (Vector核) kernel 中完成，或在 AIC 中使用 `AiCorePrintGmTensor` 打印已搬到 GM 的数据。
+
+6. **AiCoreLogF 在 AIC 中打印 UB 数据值会触发运行时错误**：`AiCoreLogF` 在 AIC kernel 中使用 `%f`、`%d` 等格式打印 UB 数据值时（如 `((__ubuf__ float*)addr)[521]`），编译器会生成一条从 UB 地址空间的标量 load 指令，AIC SP 不支持此操作，触发 MPU error 271：
+   ```
+   error from aicore error exception, core id is 0, error code = 271
+   errorStr: The MPU address access is invalid
+   ```
+   `%p` 打印地址值（不读取 UB 数据）是安全的。**正确做法**：AIC kernel 中不直接读取 UB 数据值，将 UB 打印逻辑移到 AIV kernel 中。
+
+7. **不可通过 DMA 将 UB 数据搬到 GM 再打印**：AIC (Cube核) 上没有 MTE3 DMA 引擎（`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2` 等 intrinsic 不支持 cube target），`TStoreVec`（`OP_UB_COPY_OUT`）的 `OpCoreType` 为 `AIV`，属于 Vector 核专用。在 AIC kernel 中调用这些接口会编译报错：
+   ```
+   error: function type '...' of 'copy_ubuf_to_gm' does not support the given target feature
+   ```
 
 #### 常见问题
 
@@ -841,9 +877,9 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 检查：ENABLE_AICORE_PRINT=1、已重新编译安装，已指定日志落盘路径，已设置日志级别为debug级别（0），grep搜索文件正确。
 
-##### 2. L1 Print 对齐 WARNING
+##### 2. L1/L0C Print 对齐 WARNING
 
-确保 l1_staging 地址 32B 对齐，workspaceAddr 本身已对齐。
+确保 l1_staging / l0c_staging 地址 32B 对齐，workspaceAddr 本身已对齐。
 
 ##### 3. Overflow Warning
 
@@ -868,6 +904,56 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 ```json
 "parallel_compile": 1
 ```
+
+##### 7. AIC kernel 中调用 AiCorePrintUbTensor 编译报错
+
+AIC (Cube核) kernel 中使用 `AiCorePrintUbTensor` 时，编译器会触发 `static_assert`：
+
+```
+error: static assertion failed due to requirement '!std::is_same_v<float, float>':
+  [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
+  AIC Scalar Processor cannot scalar-load from UB address space.
+  Please use AiCorePrintUbTensor in AIV (Vector) kernel instead,
+  or use AiCorePrintGmTensor to print data that has been moved to GM.
+```
+
+**原因**：AIC (Cube核) 的标量处理器 (SP) 没有到 UB 地址空间的物理通路，无法从 UB 标量读取数据。
+
+**解决方案**：将 `AiCorePrintUbTensor` 调用移到 AIV (Vector核) kernel 中，或使用 `AiCorePrintGmTensor` 打印已搬到 GM 的数据。
+
+##### 8. AIC kernel 中使用 AiCoreLogF 打印 UB 数据值触发 error 271
+
+在 AIC kernel 的 CCE 文件中使用如下代码：
+
+```cpp
+AiCoreLogF(param->ctx, "ubTensor val=%f", ((__ubuf__ float*)ubTensor.GetAddr())[521]);
+```
+
+运行时触发 aicore error：
+
+```
+error from aicore error exception, core id is 0, error code = 271
+errorStr: The MPU address access is invalid
+```
+
+**原因**：`((__ubuf__ float*)addr)[521]` 会生成一条从 UB 地址空间的标量 load 指令，AIC SP 不支持此操作。**注意**：AIC kernel 中从 UB 地址空间标量读取无法在编译期被 `static_assert` 拦截（因为 `AiCoreLogF` 的变参模板在参数表达式求值后，`__ubuf__` 属性已丢失），也无法在运行时拦截（MPU error 是硬件 trap，无软件恢复机制）。
+
+**解决方案**：
+- 将 UB 数据打印逻辑移到 AIV kernel 中
+- AIC kernel 中仅使用 `%p` 打印 UB 地址值（不读取数据），这是安全的
+- 检查 AIC kernel 的 CCE 代码，删除所有对 UB 地址空间做 `[]` 下标访问的表达式
+
+##### 9. AIC kernel 中尝试 TStoreVec / copy_ubuf_to_gm 搬运 UB 数据编译报错
+
+在 AIC kernel 中调用 `TStoreVec`、`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2` 等接口编译报错：
+
+```
+error: function type 'void (__gm__ void *, __ubuf__ void *, ...)' of 'copy_ubuf_to_gm' does not support the given target feature
+```
+
+**原因**：Cube 核上没有 MTE3 DMA 输出引擎，所有从 UB 源地址搬迁数据的 intrinsic 均不支持 cube target。`TStoreVec`（`OP_UB_COPY_OUT`）的 `OpCoreType` 为 `AIV`，是 Vector 核专用操作。
+
+**解决方案**：此类操作只能在 AIV (Vector核) kernel 中使用，不要在 AIC kernel 中调用。需要打印 UB 数据时，在 AIV 中完成。
 
 ---
 
