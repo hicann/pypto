@@ -23,6 +23,7 @@
 #include <cstring>
 #include <cerrno>
 #include <sched.h>
+#include <algorithm>
 #include "utils/test_cost_macro.h"
 
 #if defined(ENABLE_STEST)
