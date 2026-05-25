@@ -17,6 +17,7 @@
 #include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
+#include "computational_graph_builder.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -69,8 +70,8 @@ TEST_F(TestDeadOperationEliminatePass, DeadOperationEliminateUTest1)
     auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& view1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ddrTensor});
-    auto& view2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {outCast});
+    auto& view1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ddrTensor});
+    auto& view2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);

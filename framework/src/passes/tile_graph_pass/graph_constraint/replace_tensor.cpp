@@ -16,6 +16,7 @@
 #include "replace_tensor.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "tilefwk/error_code.h"
 #include "passes/pass_utils/alignment_utils.h"
 
@@ -783,7 +784,7 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
         auto nopOutput = builder.CreateTensorVar(
             srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape(), std::vector<SymbolicScalar>{});
         nopOutput->SetMemoryTypeBoth(oOperand->GetMemoryTypeOriginal());
-        auto& nop = function.AddRawOperation(Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
+        auto& nop = IRBuilder().CreateTensorOpStmt(function, Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
         nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); 
         nop.UpdateSubgraphID(op->GetSubgraphID());
         auto consumers = oOperand->GetConsumers(); 
@@ -914,7 +915,7 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
         builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    auto& copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
+    auto& copyOutOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
 
     copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         input->GetMemoryTypeOriginal(), OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
@@ -924,7 +925,8 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
     auto copyInOutputPtr =
         builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr});
+    auto& copyInOp = PassOperationUtils::AddOperation(
+        function, Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset), input->GetMemoryTypeOriginal(), OpImmediate::Specified(copyShape),
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
@@ -965,7 +967,7 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
 
     // 为copy到Ub的Tensor进行32B对齐
     AlignmentUtils::ProcessLastDim32BAlignedOnUB(copyInOutputPtr);
-    auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {input}, {copyInOutputPtr});
+    auto& copyInOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {input}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(inOffset), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
@@ -974,7 +976,8 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     auto copyOutOutputPtr =
         builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto& copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});
+    auto& copyOutOp = PassOperationUtils::AddOperation(
+        function, Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});
     copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_UB, OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));

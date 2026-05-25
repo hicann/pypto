@@ -26,6 +26,7 @@
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/program/program.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #define private public
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #undef private
@@ -228,8 +229,8 @@ TEST_F(SubgraphToFunctionCheckTest, NOPCheckHasInCtrlOperations)
     config::SetPassConfig("PVC2_OOO", "SubgraphToFunction", KEY_POST_CHECK, true);
     TileShape::Current().SetVecTile(kTileSize, kTileSize);
     auto func = std::make_shared<Function>(Program::GetInstance(), "NopCtrlInTest", "NopCtrlInTest", nullptr);
-    Operation& nopOp = func->AddOperation(Opcode::OP_NOP, {}, {}, false);
-    Operation& dummyOp = func->AddOperation(Opcode::OP_NOP, {}, {}, false);
+    Operation& nopOp = PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {}, {});
+    Operation& dummyOp = PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {}, {});
     nopOp.AddInCtrlOperation(dummyOp);
     SubGraphToFuncChecker checker;
     Status ret = checker.NOPCheck(nopOp);
@@ -246,7 +247,7 @@ TEST_F(SubgraphToFunctionCheckTest, NOPCheckHasOOperands)
     std::vector<int64_t> shape = {kVectorSize, kVectorSize};
     auto func = std::make_shared<Function>(Program::GetInstance(), "NopOutputTest", "NopOutputTest", nullptr);
     LogicalTensorPtr outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    Operation& nopOp = func->AddOperation(Opcode::OP_NOP, {}, {outTensor}, false);
+    Operation& nopOp = PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {}, {outTensor});
     SubGraphToFuncChecker checker;
     Status ret = checker.NOPCheck(nopOp);
     EXPECT_EQ(ret, FAILED);
@@ -259,8 +260,8 @@ TEST_F(SubgraphToFunctionCheckTest, NOPCheckHasOutCtrlOperations)
     config::SetPassConfig("PVC2_OOO", "SubgraphToFunction", KEY_POST_CHECK, true);
     TileShape::Current().SetVecTile(kTileSize, kTileSize);
     auto func = std::make_shared<Function>(Program::GetInstance(), "NopCtrlOutTest", "NopCtrlOutTest", nullptr);
-    Operation& nopOp = func->AddOperation(Opcode::OP_NOP, {}, {}, false);
-    Operation& dummyOp = func->AddOperation(Opcode::OP_NOP, {}, {}, false);
+    Operation& nopOp = PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {}, {});
+    Operation& dummyOp = PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {}, {});
     nopOp.AddOutCtrlOperation(dummyOp);
     SubGraphToFuncChecker checker;
     Status ret = checker.NOPCheck(nopOp);

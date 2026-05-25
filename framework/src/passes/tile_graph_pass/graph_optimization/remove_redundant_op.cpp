@@ -19,6 +19,7 @@
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
 
@@ -446,7 +447,7 @@ void RemoveRedundantOp::GenerateNewView(
         function.GetTensorMap().Erase(endTensor);
     }
     // 新建一个view op
-    auto& newViewOp = function.AddOperation(Opcode::OP_VIEW, {startTensor}, {newViewTensor});
+    auto& newViewOp = PassOperationUtils::AddOperation(function, Opcode::OP_VIEW, {startTensor}, {newViewTensor});
     // 获取view上的dynoffset属性
     std::shared_ptr<ViewOpAttribute> viewAttribute =
         std::make_shared<ViewOpAttribute>(newoffset, newDynoffset, newViewTensor->GetDynValidShape());

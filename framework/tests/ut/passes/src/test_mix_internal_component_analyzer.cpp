@@ -131,7 +131,7 @@ Operation& CreateCubeOp(
     Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
     int internalSubgraphId)
 {
-    auto& op = mixFunc.AddRawOperation(Opcode::OP_A_MUL_B, {inTensor}, {outTensor});
+    auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_A_MUL_B, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
     op.SetAttr(OpAttributeKey::isCube, true);
     op.SetAIVCore(AIVCore::UNSPECIFIED);
@@ -142,7 +142,7 @@ Operation& CreateVectorOp(
     Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
     AIVCore aivCore, int internalSubgraphId)
 {
-    auto& op = mixFunc.AddRawOperation(Opcode::OP_ADD, {inTensor}, {outTensor});
+    auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_ADD, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
     op.SetAIVCore(aivCore);
     return op;
@@ -152,7 +152,7 @@ Operation& CreateSyncOp(
     Function& mixFunc, Opcode syncOpcode, std::shared_ptr<LogicalTensor>& inTensor,
     std::shared_ptr<LogicalTensor>& outTensor)
 {
-    auto& op = mixFunc.AddRawOperation(syncOpcode, {inTensor}, {outTensor});
+    auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, syncOpcode, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(MS_NEG1); // 初始无ID，触发未分配逻辑
     return op;
 }
@@ -161,7 +161,7 @@ Operation& CreateCopyInOp(
     Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
     int internalSubgraphId)
 {
-    auto& op = mixFunc.AddRawOperation(Opcode::OP_COPY_IN, {inTensor}, {outTensor});
+    auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_COPY_IN, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
     op.SetAIVCore(AIVCore::AIV0);
     return op;
@@ -171,7 +171,7 @@ Operation& CreateL0CCopyUbOp(
     Function& mixFunc, std::shared_ptr<LogicalTensor>& inTensor, std::shared_ptr<LogicalTensor>& outTensor,
     int internalSubgraphId)
 {
-    auto& op = mixFunc.AddRawOperation(Opcode::OP_L0C_COPY_UB, {inTensor}, {outTensor});
+    auto& op = IRBuilder().CreateTensorOpStmt(mixFunc, Opcode::OP_L0C_COPY_UB, {inTensor}, {outTensor});
     op.UpdateInternalSubgraphID(internalSubgraphId);
     op.SetAttr(OpAttributeKey::isCube, true);
     op.SetAIVCore(AIVCore::UNSPECIFIED);
@@ -264,7 +264,7 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSingleVectorScopeBasicSplit)
     test_utils::CreateVectorOp(*mixFuncPtr_, t1, t2, AIVCore::AIV0, MS_NUM0);
     test_utils::CreateVectorOp(*mixFuncPtr_, t2, t3, AIVCore::AIV0, MS_NUM0);
     // 插入NOP算子（验证隐式跳过逻辑）
-    mixFuncPtr_->AddRawOperation(Opcode::OP_NOP, {}, {});
+    IRBuilder().CreateTensorOpStmt(*mixFuncPtr_, Opcode::OP_NOP, {}, {});
 
     // 2. 执行分析
     std::vector<InternalComponentInfo> components;

@@ -223,20 +223,20 @@ std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
     auto outputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape2, CreateTestConstIntVector(outputShape2));
     outputB->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
 
-    func->AddRawOperation(Opcode::OP_ADDS, {oriInput}, {sharedInput}, true);
-    func->AddRawOperation(Opcode::OP_ADDS, {oriInput}, {anotherInput}, true);
+    IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADDS, {oriInput}, {sharedInput});
+    IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADDS, {oriInput}, {anotherInput});
 
-    auto& assemble1 = func->AddRawOperation(Opcode::OP_ASSEMBLE, {anotherInput}, {outputA}, true);
+    auto& assemble1 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {anotherInput}, {outputA});
     assemble1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& assemble2 = func->AddRawOperation(Opcode::OP_ASSEMBLE, {sharedInput}, {outputA}, true);
+    auto& assemble2 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {sharedInput}, {outputA});
     assemble2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{32, 0}));
-    auto& assemble3 = func->AddRawOperation(Opcode::OP_ASSEMBLE, {sharedInput}, {outputB}, true);
+    auto& assemble3 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {sharedInput}, {outputB});
     assemble3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
     std::vector<int64_t> reshapeShape = {4096};
     auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
     reshapeOut->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    func->AddRawOperation(Opcode::OP_RESHAPE, {outputB}, {reshapeOut}, true);
+    IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_RESHAPE, {outputB}, {reshapeOut});
 
     func->inCasts_.push_back(oriInput);
     func->outCasts_.push_back(outputA);
@@ -276,4 +276,3 @@ TEST_F(RemoveRedundantOpTest, ProcessParallelAssembleWithReshape)
     EXPECT_EQ(newAssembleCount, oriAssembleCount)
         << "ASSEMBLE ops should NOT be deleted when hasParallelAssemble=true and hasReshapeConsumer=true";
 }
-

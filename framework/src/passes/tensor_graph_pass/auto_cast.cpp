@@ -16,6 +16,7 @@
 #include "auto_cast.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_check/auto_cast_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_log/pass_log.h"
@@ -163,7 +164,8 @@ void AutoCast::InsertCastOp(
     Function& function, LogicalTensorPtr src, LogicalTensorPtr tgt, const TileShape& tileShape,
     const Operation::ScopeInfo& scopeInfo)
 {
-    Operation& newCast = function.AddRawOperation(Opcode::OP_CAST, {src}, {tgt});
+    IRBuilder builder;
+    Operation& newCast = builder.CreateTensorOpStmt(function, Opcode::OP_CAST, {src}, {tgt});
     newCast.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
     auto newTileShape = tileShape;
     auto vecTile = newTileShape.GetVecTile();

@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "computational_graph_builder.h"
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "symbolic_scalar_test_utils.h"
@@ -452,15 +453,15 @@ TEST_F(GenerateMoveOpPassTest, L1TOL0)
     std::shared_ptr<LogicalTensor> output_c = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     output_c->SetMagic(tensorMagic4);
 
-    auto& convert_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_CONVERT, {input_a}, {tmp_a});
+    auto& convert_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONVERT, {input_a}, {tmp_a});
     convert_op1.opmagic = opMagic0;
     convert_op1.SetOpAttribute(std::make_shared<ConvertOpAttribute>(MemoryType::MEM_L1, MemoryType::MEM_L0A));
 
-    auto& convert_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_CONVERT, {input_b}, {tmp_b});
+    auto& convert_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_CONVERT, {input_b}, {tmp_b});
     convert_op2.opmagic = opMagic1;
     convert_op2.SetOpAttribute(std::make_shared<ConvertOpAttribute>(MemoryType::MEM_L1, MemoryType::MEM_L0B));
 
-    auto& matmul_op = currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {tmp_a, tmp_b}, {output_c});
+    auto& matmul_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {tmp_a, tmp_b}, {output_c});
     matmul_op.opmagic = opMagic2;
 
     currFunctionPtr->inCasts_.push_back(input_a);
@@ -536,24 +537,24 @@ void TransViewTensorWithAttr(std::shared_ptr<Function>& currFunctionPtr)
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     output->SetMemoryTypeOriginal(MemoryType::MEM_L0C);
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in1}, {tensor1});
-    auto viewAttribute1 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
-    viewAttribute1->SetToType(MemoryType::MEM_L1);
-    view_op1.SetOpAttribute(viewAttribute1);
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor1}, {view_out1});
-    auto viewAttribute2 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
-    viewAttribute2->SetToType(MemoryType::MEM_BT);
-    view_op2.SetOpAttribute(viewAttribute2);
-    auto& view_op3 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in2}, {tensor2});
-    auto viewAttribute3 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
-    viewAttribute3->SetToType(MemoryType::MEM_L1);
-    view_op3.SetOpAttribute(viewAttribute3);
-    auto& view_op4 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor2}, {view_out2});
+    auto& view_op4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor2}, {view_out2});
     auto viewAttribute4 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute4->SetToType(MemoryType::MEM_FIX_QUANT_PRE);
     view_op4.SetOpAttribute(viewAttribute4);
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in2}, {tensor2});
+    auto viewAttribute3 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
+    viewAttribute3->SetToType(MemoryType::MEM_L1);
+    view_op3.SetOpAttribute(viewAttribute3);
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor1}, {view_out1});
+    auto viewAttribute2 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
+    viewAttribute2->SetToType(MemoryType::MEM_BT);
+    view_op2.SetOpAttribute(viewAttribute2);
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in1}, {tensor1});
+    auto viewAttribute1 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
+    viewAttribute1->SetToType(MemoryType::MEM_L1);
+    view_op1.SetOpAttribute(viewAttribute1);
 
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {view_out1, view_out2}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {view_out1, view_out2}, {output});
 
     currFunctionPtr->inCasts_.push_back(view_in1);
     currFunctionPtr->inCasts_.push_back(view_in2);
@@ -615,11 +616,11 @@ void ViewconnectAssemble(std::shared_ptr<Function>& currFunctionPtr)
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     output->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
 
-    auto& view_op = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input}, {tensor1});
+    auto& view_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input}, {tensor1});
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_DEVICE_DDR);
     view_op.SetOpAttribute(viewAttribute);
-    auto& assemble_op = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {tensor1}, {output});
+    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {tensor1}, {output});
     auto assembleAttribute = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
     assemble_op.SetOpAttribute(assembleAttribute);
 
@@ -897,7 +898,7 @@ TEST_F(GenerateMoveOpPassTest, ProcessDefault_L0C_UB_SetIsCube)
         ubTensor->SetMemoryTypeToBe(MEM_UB);
 
         // 使用AddRawOperation将OP_VIEW添加到func中
-        auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {l0cTensor}, {ubTensor});
+        auto& viewOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {l0cTensor}, {ubTensor});
 
         // 验证输入输出内存类型不同
         ASSERT_EQ(viewOp.iOperand.front()->GetMemoryTypeOriginal(), MEM_L0C) << "Input memory type should be L0C";
@@ -930,7 +931,7 @@ TEST_F(GenerateMoveOpPassTest, SetOpcodeByMemPath)
 
     LogicalTensors emptyIOperands;
     LogicalTensors emptyOOperands;
-    Operation& testOp = testFunc->AddRawOperation(Opcode::OP_VIEW, emptyIOperands, emptyOOperands, false);
+    Operation& testOp = IRBuilder().CreateTensorOpStmt(*testFunc, Opcode::OP_VIEW, emptyIOperands, emptyOOperands);
     Status ret = generateMoveOp.SetOpcodeByMemPath(testOp, MemoryType::MEM_L0AMX, MemoryType::MEM_L0BMX);
     EXPECT_EQ(ret, FAILED);
 }
@@ -948,7 +949,7 @@ TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_L0C2UB)
     auto outputTensor = CreateTestLogicalTensor(MEM_UB, TileOpFormat::TILEOP_ND, shape);
 
     // 创建 Assemble 操作
-    auto& assembleOp = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
     assembleOp.SetOpAttribute(assembleAttr);
 
@@ -972,7 +973,7 @@ TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_UB2L1)
     auto outputTensor = CreateTestLogicalTensor(MEM_L1, TileOpFormat::TILEOP_NZ, shape);
 
     // 创建 Assemble 操作
-    auto& assembleOp = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
     assembleOp.SetOpAttribute(assembleAttr);
 
@@ -996,11 +997,11 @@ TEST_F(GenerateMoveOpPassTest, l1CopyInConvOffsetAccumulation)
     auto output = CreateTestLogicalTensor(MEM_L1, TileOpFormat::TILEOP_ND, shape);
 
     // VIEW: fromOffset=[1, 2]
-    auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {input}, {mid});
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {input}, {mid});
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{1, 2}));
 
     // L1_COPY_IN_CONV: fromOffset=[3, 4]
-    auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
+    auto& copyOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
     std::vector<OpImmediate> shapeImm = {
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
@@ -1045,7 +1046,7 @@ TEST_F(GenerateMoveOpPassTest, l1CopyInConvSymbolicScalarOffsetAccumulation)
     auto copyOffsetD = CreateTestScalarVar("d");
 
     // VIEW: fromOffset=[1, 2] + fromDynOffset=[Sym("a"), Sym("b")]
-    auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {input}, {mid});
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {input}, {mid});
     auto viewAttr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2},
         std::vector<SymbolicScalar>{viewDynA, viewDynB},
@@ -1053,7 +1054,7 @@ TEST_F(GenerateMoveOpPassTest, l1CopyInConvSymbolicScalarOffsetAccumulation)
     viewOp.SetOpAttribute(viewAttr);
 
     // L1_COPY_IN_CONV: fromOffset=[Sym("c"), Sym("d")]
-    auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
+    auto& copyOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
     std::vector<OpImmediate> shapeImm = {
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
@@ -1094,10 +1095,10 @@ TEST_F(GenerateMoveOpPassTest, l1CopyInConvDynRawShapePropagation)
     auto mid = CreateTestLogicalTensor(MEM_L1, TileOpFormat::TILEOP_ND, viewShape);
     auto output = CreateTestLogicalTensor(MEM_L1, TileOpFormat::TILEOP_ND, viewShape);
 
-    auto& viewOp = func->AddRawOperation(Opcode::OP_VIEW, {input}, {mid});
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_VIEW, {input}, {mid});
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{1, 2}));
 
-    auto& copyOp = func->AddRawOperation(Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
+    auto& copyOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L1_COPY_IN_CONV, {mid}, {output});
     std::vector<OpImmediate> viewShapeImm = {
         OpImmediate::Specified(IRBuilder().CreateConstInt(viewShape[0])),
         OpImmediate::Specified(IRBuilder().CreateConstInt(viewShape[1]))
@@ -1137,7 +1138,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvOffsetAccumulation)
     auto output = CreateTestLogicalTensor(MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, shape);
 
     // L0C_COPY_OUT_CONV: toOffset=[1, 2]
-    auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
+    auto& copyOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
     std::vector<OpImmediate> shapeImm = {
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
@@ -1149,7 +1150,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvOffsetAccumulation)
     copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, toOffset, shapeImm, shapeImm));
 
     // ASSEMBLE: toOffset=[3, 4]
-    auto& assembleOp = func->AddRawOperation(Opcode::OP_ASSEMBLE, {mid}, {output});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {mid}, {output});
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{3, 4}));
 
     GenerateMoveOp pass;
@@ -1187,7 +1188,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvSymbolicScalarOffsetAccumulation)
     auto assembleDynD = CreateTestScalarVar("d");
 
     // L0C_COPY_OUT_CONV: toOffset=[Sym("a"), Sym("b")]
-    auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
+    auto& copyOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
     std::vector<OpImmediate> shapeImm = {
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[0])),
         OpImmediate::Specified(IRBuilder().CreateConstInt(shape[1]))
@@ -1199,7 +1200,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvSymbolicScalarOffsetAccumulation)
     copyOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, toOffset, shapeImm, shapeImm));
 
     // ASSEMBLE: toOffset=[1, 2] + toDynOffset=[Sym("c"), Sym("d")]
-    auto& assembleOp = func->AddRawOperation(Opcode::OP_ASSEMBLE, {mid}, {output});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {mid}, {output});
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(
         std::vector<int64_t>{1, 2},
         std::vector<SymbolicScalar>{assembleDynC, assembleDynD});
@@ -1235,7 +1236,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvDynRawShapePropagation)
     auto output = CreateTestLogicalTensor(MEM_DEVICE_DDR, TileOpFormat::TILEOP_ND, outputShape);
     output->tensor->UpdateDynRawShape({CreateTestScalarVar("N"), CreateTestScalarVar("C")});
 
-    auto& copyOp = func->AddRawOperation(Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
+    auto& copyOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_L0C_COPY_OUT_CONV, {input}, {mid});
     std::vector<OpImmediate> l0cShapeImm = {
         OpImmediate::Specified(IRBuilder().CreateConstInt(l0cShape[0])),
         OpImmediate::Specified(IRBuilder().CreateConstInt(l0cShape[1]))
@@ -1248,7 +1249,7 @@ TEST_F(GenerateMoveOpPassTest, l0CCopyOutConvDynRawShapePropagation)
         MEM_L0C, toOffset, l0cShapeImm,
         OpImmediate::Specified(mid->tensor->GetDynRawShape())));
 
-    auto& assembleOp = func->AddRawOperation(Opcode::OP_ASSEMBLE, {mid}, {output});
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ASSEMBLE, {mid}, {output});
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{3, 4}));
 
     GenerateMoveOp pass;

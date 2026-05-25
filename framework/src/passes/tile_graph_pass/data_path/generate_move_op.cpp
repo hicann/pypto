@@ -406,7 +406,7 @@ void GenerateMoveOp::ProcessUB2L1(Function& function, Operation& op) const
             builder.CreateTensorVar(newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape());
         ubNzTensor->SetMemoryTypeBoth(MemoryType::MEM_UB);
         // 插入UB2UB节点（ND2NZ)
-        auto& ub2ub = function.AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {inputTensor}, {ubNzTensor});
+        auto& ub2ub = builder.CreateTensorOpStmt(function, Opcode::OP_UB_COPY_ND2NZ, {inputTensor}, {ubNzTensor});
         ub2ub.SetSpan(op.GetSpan());
         ub2ub.SetScopeInfo(op.GetScopeInfo());
         ub2ub.UpdateSubgraphID(op.GetSubgraphID());

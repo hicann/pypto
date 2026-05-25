@@ -15,6 +15,7 @@
 
 #include "passes/pass_utils/subfunc_utils.h"
 #include "passes/block_graph_pass/mix_subgraph_split/mix_call_operation_builder.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -108,7 +109,8 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(
         originalIOperands, originalOOperands, originalIncasts, originalOutcasts, actualIncasts, actualOutcasts,
         newIOperands, newOOperands, processedIncasts, processedOutcasts);
     APASS_LOG_INFO_F(Elements::Tensor, "===> FindIOperandsAndOOperands end.");
-    auto& callOp = rootFunc.AddRawOperation(Opcode::OP_CALL, newIOperands, newOOperands, false);
+    IRBuilder builder;
+    auto& callOp = builder.CreateTensorOpStmt(rootFunc, Opcode::OP_CALL, newIOperands, newOOperands);
     APASS_LOG_INFO_F(
         Elements::Tensor, "Created operands for new callOp %d: %zu inputs, %zu outputs", callOp.GetOpMagic(),
         newIOperands.size(), newOOperands.size());

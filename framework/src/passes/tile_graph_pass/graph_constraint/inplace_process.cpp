@@ -646,7 +646,8 @@ static Status ProcessVisitedViewOps(Function& function, const std::unordered_map
             srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape(),
             std::vector<SymbolicScalar>{});
         nopOutput->SetMemoryTypeBoth(oOperand->GetMemoryTypeOriginal());
-        auto& nop = function.AddRawOperation(Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
+        IRBuilder irBuilder;
+        auto& nop = irBuilder.CreateTensorOpStmt(function, Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
         nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); // 期望上设成任何一个都可以，因为来源一致
         nop.UpdateSubgraphID(op->GetSubgraphID());
         auto consumers = oOperand->GetConsumers(); // deep copy

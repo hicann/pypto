@@ -43,7 +43,7 @@ public:
         Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
         const std::vector<std::vector<SymbolicScalar>>& outDynShape = {});
     /**
-     * @brief Add a raw operation by AddRawOperation and set the DynValidShape of the output.
+     * @brief Add a raw operation by IRBuilder and set the DynValidShape of the output.
      *
      * @param function the target function for the operation to be added.
      * @param opCode type of the operation to be added (Besides Assemble, View, Convert, CopyIn, CopyOut, Reshape)

@@ -66,11 +66,11 @@ TEST_F(RemoveAllocTest, RemoveAlloc)
     auto tensor4 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor5 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor6 = IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
-    currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor2}, {tensor4});
-    currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
-    currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
-    currFunctionPtr->AddRawOperation(Opcode::OP_UB_ALLOC, {}, {tensor5});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor2}, {tensor4});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_ALLOC, {}, {tensor5});
 
     npu::tile_fwk::RemoveAlloc removeAllocPass;
     removeAllocPass.RemoveAllocCall(*rootFuncPtr);

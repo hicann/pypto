@@ -571,7 +571,7 @@ Status InferMemoryConflict::InsertPrecededCopys(Function& function)
         IRBuilder builder;
         LogicalTensorPtr newTensor =
             builder.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
-        auto& copyOp = function.AddRawOperation(Opcode::OP_REGISTER_COPY, {inputTensor}, {newTensor});
+        auto& copyOp = IRBuilder().CreateTensorOpStmt(function, Opcode::OP_REGISTER_COPY, {inputTensor}, {newTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d]", copyOp.GetOpMagic());
         Shape reshapeTile;
         if (op->GetOpcode() == Opcode::OP_RESHAPE) {
@@ -600,7 +600,7 @@ Status InferMemoryConflict::InsertPostCopys(Function& function)
         IRBuilder builder;
         LogicalTensorPtr newTensor =
             builder.CreateTensorVar(newRawTensor, newOffset, outputTensor->GetShape(), outputTensor->GetDynValidShape());
-        auto& copyOp = function.AddRawOperation(Opcode::OP_REGISTER_COPY, {newTensor}, {outputTensor});
+        auto& copyOp = IRBuilder().CreateTensorOpStmt(function, Opcode::OP_REGISTER_COPY, {newTensor}, {outputTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d]", copyOp.GetOpMagic());
         Shape reshapeTile;
         if (ObtainReshapeTile(*op, ObtainTileShape(op->ProducerOps()).GetVecTile().tile, reshapeTile) != SUCCESS) {

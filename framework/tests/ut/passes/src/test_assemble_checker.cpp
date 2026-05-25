@@ -266,7 +266,7 @@ TEST_F(TestAssembleChecker, CheckAssembleOverlap_AssembleAttrNull) {
     auto t1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto t2Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto &assembleOp = currFunctionPtr->AddOperation(
+    auto &assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, 
         Opcode::OP_ASSEMBLE, 
         {t1Tensor}, 
         {t2Tensor}

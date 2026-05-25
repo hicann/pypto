@@ -98,7 +98,9 @@ bool ComputationalGraphBuilder::AddOp(
         }
         otensors.push_back(tensors_[oop]);
     }
-    Operation& op = function->AddRawOperation(opcode, itensors, otensors, updateFunctionMap);
+    (void)updateFunctionMap;
+    IRBuilder builder;
+    Operation& op = builder.CreateTensorOpStmt(*function, opcode, itensors, otensors);
     if (op.GetOpcode() == Opcode::OP_COPY_IN) {
         auto shapeImme = OpImmediate::Specified(itensors[0]->GetShape());
         op.SetOpAttribute(std::make_shared<CopyOpAttribute>(

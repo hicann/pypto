@@ -713,7 +713,8 @@ LogicalTensorPtr OoOScheduler::CreateParticalTensor(
 Operation* OoOScheduler::CreateAllocOp(LogicalTensorPtr oOperand) {
     Opcode opcode =
         oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB ? Opcode::OP_UB_ALLOC : Opcode::OP_L1_ALLOC;
-    Operation& allocOp = function_.AddRawOperation(opcode, {}, {oOperand});
+    IRBuilder builder;
+    Operation& allocOp = builder.CreateTensorOpStmt(function_, opcode, {}, {oOperand});
     allocOp.UpdateLatency(1);
     tensorAllocMap[oOperand->memoryrange.memId] = &allocOp;
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create %s", GetOpInfo(&allocOp).c_str());
@@ -733,7 +734,8 @@ Operation* OoOScheduler::CloneCopyinOp(Operation* spillOp, LogicalTensorPtr iOpe
 Operation* OoOScheduler::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
     std::vector<OpImmediate> offset, bool isND2NZ)
 {
-    Operation& copyinOp = function_.AddRawOperation(Opcode::OP_COPY_IN, {iOperand}, {oOperand});
+    IRBuilder builder;
+    Operation& copyinOp = builder.CreateTensorOpStmt(function_, Opcode::OP_COPY_IN, {iOperand}, {oOperand});
     copyinOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         offset, // 搬运GM上的偏移
         oOperand->GetMemoryTypeOriginal(),
@@ -758,7 +760,8 @@ Operation* OoOScheduler::CreateCopyinOp(LogicalTensorPtr iOperand, LogicalTensor
 
 Operation* OoOScheduler::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand,
     std::vector<OpImmediate> offset) {
-    Operation &copyoutOp = function_.AddRawOperation(Opcode::OP_COPY_OUT, {iOperand}, {oOperand});
+    IRBuilder builder;
+    Operation &copyoutOp = builder.CreateTensorOpStmt(function_, Opcode::OP_COPY_OUT, {iOperand}, {oOperand});
     copyoutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         iOperand->GetMemoryTypeOriginal(),
         offset, OpImmediate::Specified(iOperand->GetShape()),
@@ -785,7 +788,8 @@ Operation* OoOScheduler::CreateCopyoutOp(Operation* spillOp, LogicalTensorPtr iO
 }
 
 Operation* OoOScheduler::CreateReshapeOp(LogicalTensorPtr iOperand, LogicalTensorPtr oOperand) {
-    Operation& reshapeOp = function_.AddRawOperation(Opcode::OP_RESHAPE, {iOperand}, {oOperand});
+    IRBuilder builder;
+    Operation& reshapeOp = builder.CreateTensorOpStmt(function_, Opcode::OP_RESHAPE, {iOperand}, {oOperand});
     bool isCube = true;
     if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
         isCube = false;
@@ -800,7 +804,8 @@ Operation* OoOScheduler::CreateAssembleOp(LogicalTensorPtr iOperand, LogicalTens
     std::vector<int64_t> toOffset, std::vector<SymbolicScalar> toDynOffset,
     std::vector<SymbolicScalar> fromDynValidShape)
 {
-    Operation& assembleOp = function_.AddRawOperation(Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
+    IRBuilder builder;
+    Operation& assembleOp = builder.CreateTensorOpStmt(function_, Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
     assembleOp.UpdateLatency(1);
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(iOperand->GetMemoryTypeOriginal(),
         toOffset, toDynOffset, fromDynValidShape));

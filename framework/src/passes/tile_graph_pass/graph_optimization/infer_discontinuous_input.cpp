@@ -287,7 +287,8 @@ Status InferDiscontinuousInput::InferFromIncast(Function& function)
 }
 void InferDiscontinuousInput::InsertViewOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
 {
-    auto& insertViewOp = function.AddRawOperation(Opcode::OP_VIEW, {iOperand}, {oOperand});
+    IRBuilder builder;
+    auto& insertViewOp = builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {oOperand});
     newOps.push_back(&insertViewOp);
     insertViewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         iOperand->GetOffset(), oOperand->GetMemoryTypeOriginal(), iOperand->GetDynOffset(),
@@ -296,7 +297,8 @@ void InferDiscontinuousInput::InsertViewOp(Function& function, LogicalTensorPtr 
 }
 void InferDiscontinuousInput::InsertAssembleOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
 {
-    auto& insertAssembleOp = function.AddRawOperation(Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
+    IRBuilder builder;
+    auto& insertAssembleOp = builder.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {iOperand}, {oOperand});
     newOps.push_back(&insertAssembleOp);
     insertAssembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
         iOperand->GetMemoryTypeOriginal(), oOperand->GetOffset(), oOperand->GetDynOffset(),

@@ -52,19 +52,19 @@ TEST_F(TestCheckerUtils, TestOpChecker)
     std::shared_ptr<LogicalTensor> incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, npu::tile_fwk::SymbolicScalar::FromConcrete(shape2));
     std::shared_ptr<LogicalTensor> L1A = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, npu::tile_fwk::SymbolicScalar::FromConcrete(shape1));
     std::shared_ptr<LogicalTensor> L1B = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, npu::tile_fwk::SymbolicScalar::FromConcrete(shape2));
-    auto& viewA = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {incast1}, {L1A});
-    auto& viewB = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {incast2}, {L1B});
+    auto& viewA = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {incast1}, {L1A});
+    auto& viewB = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {incast2}, {L1B});
 
     std::shared_ptr<LogicalTensor> L0A = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, npu::tile_fwk::SymbolicScalar::FromConcrete(shape1));
     std::shared_ptr<LogicalTensor> L0B = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, npu::tile_fwk::SymbolicScalar::FromConcrete(shape2));
-    auto& l1ToL0A = currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0A, {L1A}, {L0A});
-    auto& l1ToL0B = currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0B, {L1B}, {L0B});
+    auto& l1ToL0A = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {L1A}, {L0A});
+    auto& l1ToL0B = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {L1B}, {L0B});
 
     std::shared_ptr<LogicalTensor> L0C = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, npu::tile_fwk::SymbolicScalar::FromConcrete(shape3));
-    auto& aMulB = currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {L0A, L0B}, {L0C});
+    auto& aMulB = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {L0A, L0B}, {L0C});
 
     std::shared_ptr<LogicalTensor> outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, npu::tile_fwk::SymbolicScalar::FromConcrete(shape3));
-    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_L0C_COPY_OUT, {L0C}, {outcast1});
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L0C_COPY_OUT, {L0C}, {outcast1});
 
     EXPECT_TRUE(OpChecker::check(aMulB, OpChecker::CalcTypeChecker(OpCalcType::MATMUL)));
     EXPECT_FALSE(OpChecker::check(aMulB, OpChecker::CoreTypeChecker(OpCoreType::AIV)));

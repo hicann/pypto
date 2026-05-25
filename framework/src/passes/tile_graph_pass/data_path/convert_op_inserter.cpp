@@ -15,6 +15,7 @@
 #include "convert_op_inserter.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
@@ -642,7 +643,8 @@ void ConvertInserter::InsertConvertOps(Function& function)
     APASS_LOG_INFO_F(Elements::Operation, "--- Need to insert %zu convert operations ---", converts.size());
     for (const auto& c : converts) {
         GraphUtils::CopyDynStatus(c.output, c.input);
-        auto& convertOp = function.AddRawOperation(Opcode::OP_CONVERT, {c.input}, {c.output});
+        IRBuilder builder;
+        auto& convertOp = builder.CreateTensorOpStmt(function, Opcode::OP_CONVERT, {c.input}, {c.output});
         convertOp.SetOpAttribute(std::make_shared<ConvertOpAttribute>(c.from, c.to));
         if (!CreateMoveOpForConvert(convertOp)) {
             auto producerScopeInfo = (*(c.input->GetProducers().begin()))->GetScopeInfo();

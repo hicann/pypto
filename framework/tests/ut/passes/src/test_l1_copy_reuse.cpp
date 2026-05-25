@@ -75,24 +75,24 @@ TEST_F(L1CopyInReuseTest, TwoCopyIn)
     tensor3->tensor->rawmagic = 3;
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {tensor1});
+    auto& copy_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast1}, {tensor1});
     copy_op1.UpdateSubgraphID(subGraphID0);
     copy_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
-    auto& copy_out1 = currFunctionPtr->AddOperation(Opcode::OP_L1_TO_L0A, {tensor1}, {tensor2});
+    auto& copy_out1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {tensor1}, {tensor2});
     copy_out1.UpdateSubgraphID(subGraphID0);
 
-    auto& view_op1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {incast2});
+    auto& view_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast1}, {incast2});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op1.UpdateSubgraphID(subGraphID1);
-    auto& alloc_op1 = currFunctionPtr->AddOperation(Opcode::OP_L1_ALLOC, {}, {tensor3});
+    auto& alloc_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L1_ALLOC, {}, {tensor3});
     alloc_op1.UpdateSubgraphID(subGraphID1);
-    auto& copy_op2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast2}, {tensor3});
+    auto& copy_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast2}, {tensor3});
     copy_op2.UpdateSubgraphID(subGraphID1);
     incast2->AddConsumer(copy_op2);
     copy_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, MEM_L1, std::vector<SymbolicScalar>(), std::vector<SymbolicScalar>()));
-    auto& copy_out2 = currFunctionPtr->AddOperation(Opcode::OP_L1_TO_L0A, {tensor3}, {tensor4});
+    auto& copy_out2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {tensor3}, {tensor4});
     copy_out2.UpdateSubgraphID(subGraphID1);
 
     currFunctionPtr->inCasts_.push_back(incast1);

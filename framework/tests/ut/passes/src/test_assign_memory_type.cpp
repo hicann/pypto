@@ -188,21 +188,21 @@ TEST_F(AssignMemoryTypeTest, AddReshape)
     assemble_output->SetMemoryTypeBoth(MEM_UNKNOWN);
     assemble_output->SetMagic(tensorMagic5);
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor1}, {view_output1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor1}, {view_output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op1.opmagic = opMagic0;
 
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor2}, {view_output2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor2}, {view_output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op2.opmagic = opMagic3;
 
-    auto& add_op = currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
+    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
     add_op.opmagic = opMagic1;
 
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {add_output}, {reshape_output});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {add_output}, {reshape_output});
     reshape_op.opmagic = opMagic4;
 
-    auto& assemble_op = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {reshape_output}, {assemble_output});
+    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output}, {assemble_output});
     assemble_op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     assemble_op.opmagic = opMagic2;
 
@@ -547,32 +547,32 @@ void GetInvalidPatternGraph(std::shared_ptr<Function>& currFunctionPtr)
     std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     output_cast->SetMagic(tensorMagic7);
 
-    auto& reshape_op0 = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {input_cast}, {input_tensor1});
+    auto& reshape_op0 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {input_cast}, {input_tensor1});
     reshape_op0.opmagic = opMagic0;
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor1}, {view_output1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor1}, {view_output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op1.opmagic = opMagic1;
 
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor1}, {view_output2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor1}, {view_output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{8, 0}));
     view_op2.opmagic = opMagic2;
 
-    auto& reshape_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {view_output1}, {reshape_output1});
+    auto& reshape_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output1}, {reshape_output1});
     reshape_op1.opmagic = opMagic3;
 
-    auto& reshape_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {view_output2}, {reshape_output2});
+    auto& reshape_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output2}, {reshape_output2});
     reshape_op2.opmagic = opMagic4;
 
-    auto& assemble_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {reshape_output1}, {assemble_output});
+    auto& assemble_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output1}, {assemble_output});
     assemble_op1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
     assemble_op1.opmagic = opMagic5;
 
-    auto& assemble_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {reshape_output2}, {assemble_output});
+    auto& assemble_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output2}, {assemble_output});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{8, 0}));
     assemble_op2.opmagic = opMagic6;
 
-    auto& view_op3 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {assemble_output}, {output_cast});
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {assemble_output}, {output_cast});
     view_op3.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op3.opmagic = opMagic7;
 
@@ -666,21 +666,21 @@ void GetViewReshapeGraph(std::shared_ptr<Function>& currFunctionPtr)
     output_cast->SetMagic(tensorMagic5);
 
     auto& transpose_op =
-        currFunctionPtr->AddRawOperation(Opcode::OP_TRANSPOSE_VNCHWCONV, {input_cast}, {transpose_out});
+        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {input_cast}, {transpose_out});
     transpose_op.opmagic = opMagic0;
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {transpose_out}, {view_output1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {transpose_out}, {view_output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op1.opmagic = opMagic1;
 
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {view_output1}, {reshape_output});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {view_output1}, {reshape_output});
     reshape_op.opmagic = opMagic2;
 
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {reshape_output}, {view_output2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {reshape_output}, {view_output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     view_op2.opmagic = opMagic3;
 
-    auto& expand_op = currFunctionPtr->AddRawOperation(Opcode::OP_EXPAND, {view_output2}, {output_cast});
+    auto& expand_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXPAND, {view_output2}, {output_cast});
     expand_op.opmagic = opMagic4;
 }
 TEST_F(AssignMemoryTypeTest, ViewReshape)
@@ -725,31 +725,31 @@ void L1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
     std::shared_ptr<LogicalTensor> a_mul_b_out2 =
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     // std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto& view_L1_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast1}, {op_view_L1_out1});
+    auto& view_L1_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1}, {op_view_L1_out1});
     std::vector<int> newoffset{0, 0};
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_L1);
     view_L1_op1.SetOpAttribute(viewAttribute);
 
-    auto& view_L1_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast2}, {op_view_L1_out2});
+    auto& view_L1_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2}, {op_view_L1_out2});
     view_L1_op2.SetOpAttribute(viewAttribute);
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out1}, {view_out1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out1}, {view_out1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out1}, {view_out2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out1}, {view_out2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 32}));
-    auto& view_op3 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out2}, {view_out3});
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out2}, {view_out3});
     view_op3.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& view_op4 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out2}, {view_out4});
+    auto& view_op4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out2}, {view_out4});
     view_op4.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{32, 0}));
 
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0A, {view_out1}, {l0a_out1});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0A, {view_out2}, {l0a_out2});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0B, {view_out3}, {l0b_out1});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0B, {view_out4}, {l0b_out2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {view_out1}, {l0a_out1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {view_out2}, {l0a_out2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {view_out3}, {l0b_out1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {view_out4}, {l0b_out2});
 
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {l0a_out1, l0b_out1}, {a_mul_b_out1});
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {l0a_out2, l0b_out2}, {a_mul_b_out2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a_out1, l0b_out1}, {a_mul_b_out1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a_out2, l0b_out2}, {a_mul_b_out2});
 
     currFunctionPtr->inCasts_.push_back(input_cast1);
     currFunctionPtr->inCasts_.push_back(input_cast2);
@@ -837,40 +837,40 @@ void AssignViewTensorWithAttr(std::shared_ptr<Function>& currFunctionPtr)
     std::shared_ptr<LogicalTensor> output =
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in1}, {tensor1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in1}, {tensor1});
     auto viewAttribute1 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute1->SetToType(MemoryType::MEM_L1);
     view_op1.SetOpAttribute(viewAttribute1);
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor1}, {view_out1});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor1}, {view_out1});
     auto viewAttribute2 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute2->SetToType(MemoryType::MEM_BT);
     view_op2.SetOpAttribute(viewAttribute2);
-    auto& view_op3 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in2}, {tensor2});
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in2}, {tensor2});
     auto viewAttribute3 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute3->SetToType(MemoryType::MEM_L1);
     view_op3.SetOpAttribute(viewAttribute3);
-    auto& view_op4 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor2}, {view_out2});
+    auto& view_op4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor2}, {view_out2});
     auto viewAttribute4 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute4->SetToType(MemoryType::MEM_FIX_QUANT_PRE);
     view_op4.SetOpAttribute(viewAttribute4);
-    auto& view_op5 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in3}, {tensor3});
+    auto& view_op5 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in3}, {tensor3});
     auto viewAttribute5 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute5->SetToType(MemoryType::MEM_L1);
     view_op5.SetOpAttribute(viewAttribute5);
-    auto& view_op6 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor3}, {view_out3});
+    auto& view_op6 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor3}, {view_out3});
     auto viewAttribute6 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute6->SetToType(MemoryType::MEM_L0A);
     view_op6.SetOpAttribute(viewAttribute6);
-    auto& view_op7 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in4}, {tensor4});
+    auto& view_op7 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in4}, {tensor4});
     auto viewAttribute7 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute7->SetToType(MemoryType::MEM_L1);
     view_op7.SetOpAttribute(viewAttribute7);
-    auto& view_op8 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor4}, {view_out4});
+    auto& view_op8 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor4}, {view_out4});
     auto viewAttribute8 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute8->SetToType(MemoryType::MEM_L0B);
     view_op8.SetOpAttribute(viewAttribute7);
 
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {view_out3, view_out4, view_out1, view_out2}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {view_out3, view_out4, view_out1, view_out2}, {output});
 
     currFunctionPtr->inCasts_.push_back(view_in1);
     currFunctionPtr->inCasts_.push_back(view_in2);
@@ -1169,22 +1169,22 @@ void ConstructL0C2L1GraphWithNonImmediateValidShape(std::shared_ptr<Function>& c
     auto viewL1Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1, CreateTestConstIntVector(shapeC1));
     auto viewL0AOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC1, CreateTestConstIntVector(shapeC1));
 
-    auto& matmul1Op = currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {inputA1, inputB1}, {matmul1Output});
+    auto& matmul1Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA1, inputB1}, {matmul1Output});
     matmul1Op.opmagic = 1001;
 
-    auto& viewL1Op = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {matmul1Output}, {viewL1Output});
+    auto& viewL1Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {matmul1Output}, {viewL1Output});
     auto viewL1Attr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewL1Attr->SetToType(MemoryType::MEM_L1);
     viewL1Op.SetOpAttribute(viewL1Attr);
     viewL1Op.opmagic = 1002;
 
-    auto& viewL0AOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {viewL1Output}, {viewL0AOutput});
+    auto& viewL0AOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {viewL1Output}, {viewL0AOutput});
     auto viewL0AAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewL0AAttr->SetToType(MemoryType::MEM_L0A);
     viewL0AOp.SetOpAttribute(viewL0AAttr);
     viewL0AOp.opmagic = 1003;
 
-    auto& matmul2Op = currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {inputA2, viewL0AOutput}, {outputC2});
+    auto& matmul2Op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA2, viewL0AOutput}, {outputC2});
     matmul2Op.opmagic = 1004;
 
     currFunctionPtr->inCasts_.push_back(inputA1);
@@ -1854,13 +1854,13 @@ void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
     std::shared_ptr<LogicalTensor> assem_output =
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, dynShape);
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor1}, {view_output1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor1}, {view_output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_tensor2}, {view_output2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_tensor2}, {view_output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
-    currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {add_output}, {reshape_output});
-    auto& assemble_op = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {reshape_output}, {assem_output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {view_output1, view_output2}, {add_output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {add_output}, {reshape_output});
+    auto& assemble_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshape_output}, {assem_output});
     assemble_op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
     currFunctionPtr->inCasts_.push_back(input_tensor1);

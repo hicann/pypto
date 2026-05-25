@@ -18,6 +18,7 @@
 #include <string>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -110,19 +111,19 @@ void BuildGraphForCollectCopyOut(
     ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    auto& assemble_op1 = func->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor});
     assemble_op1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1));
 
-    auto& assemble_op2 = func->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input2}, {ubTensor});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2));
 
-    func->AddOperation(Opcode::OP_COPY_OUT, {input3}, {copyTensor});
+    PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {input3}, {copyTensor});
 
-    auto& assemble_op3 = func->AddOperation(Opcode::OP_ASSEMBLE, {copyTensor}, {ubTensor});
+    auto& assemble_op3 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {copyTensor}, {ubTensor});
     assemble_op3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset3));
 
     validShape = {CreateTestScalarVar("a"), kNumEight};
-    auto& reshape_op = func->AddOperation(Opcode::OP_RESHAPE, {ubTensor}, {output});
+    auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor}, {output});
     reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
 }
 
@@ -184,37 +185,37 @@ TEST_F(TestSplitReshapePass, TestCheckSplit)
     auto case1Input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset2, shape1, CreateTestConstIntVector(shape1));
     auto case1UbTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case1Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& assemble_op1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {case1Input1}, {case1UbTensor});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case1Input1}, {case1UbTensor});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {case1Input2}, {case1UbTensor});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case1Input2}, {case1UbTensor});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {case1UbTensor}, {case1Output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case1UbTensor}, {case1Output});
 
     auto case2Input = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case2Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {case2Input}, {case2Output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case2Input}, {case2Output});
 
     auto case3Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
     auto case3Input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape1, CreateTestConstIntVector(shape1));
     auto case3UbTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case3Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& assemble_op3 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {case3Input1}, {case3UbTensor});
+    auto& assemble_op3 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case3Input1}, {case3UbTensor});
     auto assemble_Attr3 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op3.SetOpAttribute(assemble_Attr3);
-    auto& assemble_op4 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {case3Input2}, {case3UbTensor});
+    auto& assemble_op4 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case3Input2}, {case3UbTensor});
     auto assemble_Attr4 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op4.SetOpAttribute(assemble_Attr4);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {case3UbTensor}, {case3Output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case3UbTensor}, {case3Output});
 
     auto case4Input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
     auto case4UbTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto case4Output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& assemble_op5 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {case4Input1}, {case4UbTensor});
+    auto& assemble_op5 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {case4Input1}, {case4UbTensor});
     auto assemble_Attr5 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op5.SetOpAttribute(assemble_Attr5);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {case4UbTensor}, {case4Output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {case4UbTensor}, {case4Output});
 
     SplitReshape pass;
     auto status = pass.CollectCopyOut(*currFunctionPtr);
@@ -529,13 +530,13 @@ TEST_F(TestSplitReshapePass, TestObtainCopyOutTileBeCovered)
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    auto& assemble_op1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input1}, {ubTensor});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input2}, {ubTensor});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
-    auto& reshapeOp = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor}, {output});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor}, {output});
 
     SplitReshape pass;
     LogicalTensors overlaps;
@@ -573,10 +574,10 @@ TEST_F(TestSplitReshapePass, TestObtainCopyOutTilePerfectlyMatched)
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input}, {ubTensor});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset);
     assemble_op.SetOpAttribute(assemble_Attr);
-    auto& reshapeOp = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor}, {output});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor}, {output});
 
     SplitReshape pass;
     LogicalTensors overlaps;
@@ -625,11 +626,11 @@ TEST_F(TestSplitReshapePass, TestUpdateForPerfectlyMatch)
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     output->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset);
     assemble_op.SetOpAttribute(assemble_Attr);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& view_op = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& view_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output});
     std::vector<int64_t> view_offset = {0, 0};
     auto view_Attr = std::make_shared<ViewOpAttribute>(view_offset);
     view_op.SetOpAttribute(view_Attr);
@@ -700,11 +701,11 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatch)
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     output->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset);
     assemble_op.SetOpAttribute(assemble_Attr);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& view_op = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& view_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output});
     auto view_Attr = std::make_shared<ViewOpAttribute>(view_offset);
     view_op.SetOpAttribute(view_Attr);
 
@@ -783,14 +784,14 @@ TEST_F(TestSplitReshapePass, TestUpdateForBeCovered)
     auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op.SetOpAttribute(assemble_Attr);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& view_op1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& view_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output1});
     auto view_Attr1 = std::make_shared<ViewOpAttribute>(view_offset1);
     view_op1.SetOpAttribute(view_Attr1);
-    auto& view_op2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output2});
+    auto& view_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output2});
     auto view_Attr2 = std::make_shared<ViewOpAttribute>(view_offset2);
     view_op2.SetOpAttribute(view_Attr2);
 
@@ -872,14 +873,14 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForBeCovered)
     auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input}, {ubTensor1});
     auto assemble_Attr = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op.SetOpAttribute(assemble_Attr);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& view_op1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& view_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output1});
     auto view_Attr1 = std::make_shared<ViewOpAttribute>(view_offset1);
     view_op1.SetOpAttribute(view_Attr1);
-    auto& view_op2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output2});
+    auto& view_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output2});
     auto view_Attr2 = std::make_shared<ViewOpAttribute>(view_offset2);
     view_op2.SetOpAttribute(view_Attr2);
 
@@ -977,14 +978,14 @@ TEST_F(TestSplitReshapePass, TestUpdateForPerfectlyMatchWithAll)
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& view_op = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& view_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output});
     auto view_Attr = std::make_shared<ViewOpAttribute>(view_offset);
     view_op.SetOpAttribute(view_Attr);
 
@@ -1057,14 +1058,14 @@ TEST_F(TestSplitReshapePass, TestDynUpdateForPerfectlyMatchWithAll)
     auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     output->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& view_op = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& view_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor2}, {output});
     auto view_Attr = std::make_shared<ViewOpAttribute>(view_offset);
     view_op.SetOpAttribute(view_Attr);
 
@@ -1409,18 +1410,18 @@ LogicalTensors BuildDynPerfectlyMatchFunc(std::shared_ptr<Function> func)
     auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op1 = func->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
     auto assemble_Attr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset1);
     assemble_op1.SetOpAttribute(assemble_Attr1);
-    auto& assemble_op2 = func->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     auto assemble_Attr2 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset2);
     assemble_op2.SetOpAttribute(assemble_Attr2);
-    auto& reshape_op = func->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
     reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
-    auto& view_op1 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output1});
+    auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     auto view_Attr1 = std::make_shared<ViewOpAttribute>(viewOffset1);
     view_op1.SetOpAttribute(view_Attr1);
-    auto& view_op2 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output2});
+    auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
     auto view_Attr2 = std::make_shared<ViewOpAttribute>(viewOffset2);
     view_op2.SetOpAttribute(view_Attr2);
 
@@ -1515,19 +1516,19 @@ LogicalTensors BuildDynBeCoveredFunc(std::shared_ptr<Function> func)
     auto output4 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset4, shape4, CreateTestConstIntVector(shape4));
     output4->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op1 = func->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
     assemble_op1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset1));
-    auto& assemble_op2 = func->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset2));
-    auto& reshape_op = func->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
     reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
-    auto& view_op1 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output1});
+    auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset1));
-    auto& view_op2 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output2});
+    auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset2));
-    auto& view_op3 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output3});
+    auto& view_op3 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output3});
     view_op3.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset3));
-    auto& view_op4 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output4});
+    auto& view_op4 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output4});
     view_op4.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset4));
 
     func->inCasts_ = {input1, input2};
@@ -1633,19 +1634,19 @@ LogicalTensors BuildDynPerfectlyMatchWithAllFunc(std::shared_ptr<Function> func)
     auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& assemble_op1 = func->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
     assemble_op1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset1));
-    auto& assemble_op2 = func->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset2));
-    auto& assemble_op3 = func->AddOperation(Opcode::OP_ASSEMBLE, {input3}, {ubTensor1});
+    auto& assemble_op3 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input3}, {ubTensor1});
     assemble_op3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset3));
-    auto& assemble_op4 = func->AddOperation(Opcode::OP_ASSEMBLE, {input4}, {ubTensor1});
+    auto& assemble_op4 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input4}, {ubTensor1});
     assemble_op4.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset4));
-    auto& reshape_op = func->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
     reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
-    auto& view_op1 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output1});
+    auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset1));
-    auto& view_op2 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output2});
+    auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset2));
 
     func->inCasts_ = {input1, input2, input3, input4};
@@ -1968,15 +1969,15 @@ TEST_F(TestSplitReshapePass, TestExceptionCase4)
     auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, viewOffset2, shape4, CreateTestConstIntVector(shape4));
     output2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& reshape_op = func->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
     reshape_op.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
-    auto& view_op1 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output1});
+    auto& view_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset1));
-    auto& view_op2 = func->AddOperation(Opcode::OP_VIEW, {ubTensor2}, {output2});
+    auto& view_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ubTensor2}, {output2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(viewOffset2));
-    auto& assemble_op1 = func->AddOperation(Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
+    auto& assemble_op1 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input1}, {ubTensor1});
     assemble_op1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset1));
-    auto& assemble_op2 = func->AddOperation(Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
+    auto& assemble_op2 = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {input2}, {ubTensor1});
     assemble_op2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, assembleOffset2));
 
     func->inCasts_.push_back(input1);
@@ -2194,12 +2195,12 @@ TEST_F(TestSplitReshapePass, TestCollectCopyOutWithCopyOutProducer)
 
     auto reshapeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeOutputShape, CreateTestConstIntVector(reshapeOutputShape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {ubTensor}, {ddrTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor}, {ddrTensor});
 
-    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ddrTensor}, {ddrTensor2});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor}, {ddrTensor2});
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset));
 
-    auto& reshapeOp = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ddrTensor2}, {reshapeOutput});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ddrTensor2}, {reshapeOutput});
     std::vector<SymbolicScalar> validShape = {kNumTwo, kNumTwo, kNumTwo};
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
 
@@ -2245,25 +2246,25 @@ void BuildMultipleParallelCopyOutAssembleGraph(
             npu::tile_fwk::IRBuilder().CreateTensorVar(sharedDdrRawTensor, shapes.assembleOffsets[i], shapes.ubShape, CreateTestConstIntVector(shapes.ubShape));
         ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
         ddrTensors.push_back(ddrTensor);
-        func->AddOperation(Opcode::OP_COPY_OUT, {input}, {ddrTensor});
+        PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {input}, {ddrTensor});
     }
     auto ddrBigTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.ddrBigShape, CreateTestConstIntVector(shapes.ddrBigShape));
     ddrBigTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
     for (size_t i = 0; i < kNumThree; i++) {
-        auto& assembleOp = func->AddOperation(Opcode::OP_ASSEMBLE, {ddrTensors[i]}, {ddrBigTensor});
+        auto& assembleOp = PassOperationUtils::AddOperation(*func, Opcode::OP_ASSEMBLE, {ddrTensors[i]}, {ddrBigTensor});
         assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, shapes.assembleOffsets[i]));
     }
     auto ddrReshape = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.reshapeShape, CreateTestConstIntVector(shapes.reshapeShape));
     ddrReshape->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
-    auto& reshapeOp = func->AddOperation(Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {ddrBigTensor}, {ddrReshape});
     reshapeOp.SetAttribute(OP_ATTR_PREFIX + "validShape", std::vector<SymbolicScalar>{kNumThree, kNumEight});
     for (size_t i = 0; i < kNumThree; i++) {
         auto ubOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
         ubOut->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
-        auto& viewOp = func->AddOperation(Opcode::OP_VIEW, {ddrReshape}, {ubOut});
+        auto& viewOp = PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {ddrReshape}, {ubOut});
         viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(shapes.viewOffsets[i]));
         auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shapes.viewOutShape, CreateTestConstIntVector(shapes.viewOutShape));
-        func->AddOperation(Opcode::OP_ADDS, {ubOut}, {output});
+        PassOperationUtils::AddOperation(*func, Opcode::OP_ADDS, {ubOut}, {output});
         outputs.push_back(output);
     }
     func->inCasts_ = inputs;

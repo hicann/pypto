@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 #include "symbolic_scalar_test_utils.h"
 #include <algorithm>
+#include "computational_graph_builder.h"
 #include "tilefwk/platform.h"
 #include "passes/block_graph_pass/tune_tileopseq_for_vf.h"
 #include "interface/tensor/irbuilder.h"
@@ -119,17 +120,17 @@ void BuildGraphForTest(std::shared_ptr<Function> currFunctionPtr, std::vector<Op
     auto tensor10 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor10->memoryrange.start = TT_NUM90;
     tensor10->memoryrange.end = TT_NUM100;
-    auto& vecop1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
+    auto& vecop1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {tensor2});
     opListPtr.emplace_back(&vecop1);
-    auto& vecop2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor3}, {tensor4});
+    auto& vecop2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor3}, {tensor4});
     opListPtr.emplace_back(&vecop2);
-    auto& vecop3 = currFunctionPtr->AddRawOperation(Opcode::OP_RECIPROCAL, {tensor5}, {tensor6});
+    auto& vecop3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RECIPROCAL, {tensor5}, {tensor6});
     opListPtr.emplace_back(&vecop3);
-    auto& op1 = currFunctionPtr->AddRawOperation(Opcode::OP_TRANSPOSE_MOVEIN, {tensor7}, {tensor8});
+    auto& op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_MOVEIN, {tensor7}, {tensor8});
     opListPtr.emplace_back(&op1);
-    auto& op2 = currFunctionPtr->AddRawOperation(Opcode::OP_TRANSPOSE_MOVEOUT, {tensor6}, {tensor9});
+    auto& op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_MOVEOUT, {tensor6}, {tensor9});
     opListPtr.emplace_back(&op2);
-    auto& vecop4 = currFunctionPtr->AddRawOperation(Opcode::OP_EXPAND, {tensor8}, {tensor10});
+    auto& vecop4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXPAND, {tensor8}, {tensor10});
     opListPtr.emplace_back(&vecop4);
 }
 
@@ -194,11 +195,11 @@ TEST_F(TuneTileopseqForVFTest, TestMainProcess)
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     std::vector<std::shared_ptr<LogicalTensor>> input;
     std::vector<std::shared_ptr<LogicalTensor>> output;
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {input}, {output});
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MULACC_B, {input}, {output});
-    currFunctionPtr->AddRawOperation(Opcode::OP_SYNC_SRC, {input}, {output});
-    currFunctionPtr->AddRawOperation(Opcode::OP_SYNC_DST, {input}, {output});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_COPY_UB, {input}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {input}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MULACC_B, {input}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SYNC_SRC, {input}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SYNC_DST, {input}, {output});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_COPY_UB, {input}, {output});
     TuneTileOpSeqForVF tuneSync;
     tuneSync.RunOnFunction(*rootFuncPtr);
     auto it = rootFuncPtr->rootFunc_->programs_.begin();
@@ -225,13 +226,13 @@ void BuildGraphForNonGroup(std::shared_ptr<Function> currFunctionPtr, std::vecto
     auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->memoryrange.start = TT_NUM90;
     tensor5->memoryrange.end = TT_NUM100;
-    auto& vecop1 = currFunctionPtr->AddRawOperation(Opcode::OP_RECIPROCAL, {tensor1}, {tensor2});
+    auto& vecop1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RECIPROCAL, {tensor1}, {tensor2});
     opListPtr.emplace_back(&vecop1);
-    auto& op1 = currFunctionPtr->AddRawOperation(Opcode::OP_TRANSPOSE_MOVEIN, {tensor2}, {tensor3});
+    auto& op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_MOVEIN, {tensor2}, {tensor3});
     opListPtr.emplace_back(&op1);
-    auto& op2 = currFunctionPtr->AddRawOperation(Opcode::OP_TRANSPOSE_MOVEOUT, {tensor3}, {tensor4});
+    auto& op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_MOVEOUT, {tensor3}, {tensor4});
     opListPtr.emplace_back(&op2);
-    auto& vecop2 = currFunctionPtr->AddRawOperation(Opcode::OP_EXPAND, {tensor4}, {tensor5});
+    auto& vecop2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXPAND, {tensor4}, {tensor5});
     opListPtr.emplace_back(&vecop2);
 }
 
@@ -293,8 +294,8 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_NoUbCopyOp)
     auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
     auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
 
-    auto& op1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
-    auto& op2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor3}, {tensor4});
+    auto& op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {tensor2});
+    auto& op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor3}, {tensor4});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;
@@ -320,8 +321,8 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_NoNonUbCopyOp)
     auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
     auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
 
-    auto& ubCopyOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor1}, {tensor2});
-    auto& ubCopyOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
+    auto& ubCopyOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor1}, {tensor2});
+    auto& ubCopyOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;
@@ -350,9 +351,9 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_UbCopyMoveFront)
     auto tensor5 = CreateTensor(TT_NUM60, TT_NUM70);
     auto tensor6 = CreateTensor(TT_NUM70, TT_NUM80);
 
-    auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
-    auto& ubCopyOp = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
-    auto& vecOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor5}, {tensor6});
+    auto& vecOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {tensor2});
+    auto& ubCopyOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
+    auto& vecOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor5}, {tensor6});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;
@@ -380,9 +381,9 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_UbCopyMoveBack)
     auto tensor4 = CreateTensor(TT_NUM40, TT_NUM50);
     auto tensor5 = CreateTensor(TT_NUM50, TT_NUM60);
 
-    auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
-    auto& ubCopyOp = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor2}, {tensor3});
-    auto& vecOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor4}, {tensor5});
+    auto& vecOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {tensor2});
+    auto& ubCopyOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor2}, {tensor3});
+    auto& vecOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor4}, {tensor5});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;
@@ -409,9 +410,9 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_UbCopyCannotMove)
     auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
     auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
 
-    auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
-    auto& ubCopyOp = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor2}, {tensor3});
-    auto& vecOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor3}, {tensor4});
+    auto& vecOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {tensor2});
+    auto& ubCopyOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor2}, {tensor3});
+    auto& vecOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor3}, {tensor4});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;
@@ -441,9 +442,9 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_MultipleUbCopyOps)
     auto tensor5 = CreateTensor(TT_NUM60, TT_NUM70);
     auto tensor6 = CreateTensor(TT_NUM70, TT_NUM80);
 
-    auto& ubCopyOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor1}, {tensor2});
-    auto& vecOp = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor3}, {tensor4});
-    auto& ubCopyOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor5}, {tensor6});
+    auto& ubCopyOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor1}, {tensor2});
+    auto& vecOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor3}, {tensor4});
+    auto& ubCopyOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor5}, {tensor6});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;
@@ -475,10 +476,10 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_MultipleGroups)
     auto tensor7 = CreateTensor(TT_NUM70, TT_NUM80);
     auto tensor8 = CreateTensor(TT_NUM80, TT_NUM90);
 
-    auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
-    auto& ubCopyOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
-    auto& vecOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor5}, {tensor6});
-    auto& ubCopyOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor7}, {tensor8});
+    auto& vecOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {tensor1}, {tensor2});
+    auto& ubCopyOp1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
+    auto& vecOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_SQRT, {tensor5}, {tensor6});
+    auto& ubCopyOp2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_UB_COPY_ND2NZ, {tensor7}, {tensor8});
 
     TuneTileOpSeqForVF tuneTileop;
     PipeSync ps;

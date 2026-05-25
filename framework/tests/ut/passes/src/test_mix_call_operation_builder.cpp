@@ -117,7 +117,7 @@ protected:
         auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-        auto& callOp = func.AddRawOperation(Opcode::OP_CALL, {input1, input2}, {output1});
+        auto& callOp = IRBuilder().CreateTensorOpStmt(func, Opcode::OP_CALL, {input1, input2}, {output1});
 
         auto callAttr = std::make_shared<CallOpAttribute>();
         callOp.SetOpAttribute(callAttr);
@@ -383,15 +383,15 @@ protected:
         func->inCasts_.push_back(input2);
         func->outCasts_.push_back(output);
 
-        auto& copyIn1 = func->AddRawOperation(Opcode::OP_COPY_IN, {input1}, {internal1});
+        auto& copyIn1 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input1}, {internal1});
         copyIn1.opmagic = OP_MAGIC_BASE + 1;
         copyIn1.SetIOpAttrOffset(0, 100);
 
-        auto& copyIn2 = func->AddRawOperation(Opcode::OP_COPY_IN, {input2}, {internal2});
+        auto& copyIn2 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input2}, {internal2});
         copyIn2.opmagic = OP_MAGIC_BASE + 2;
         copyIn2.SetIOpAttrOffset(0, 101);
 
-        auto& addOp = func->AddRawOperation(Opcode::OP_ADD, {internal1, internal2}, {output});
+        auto& addOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADD, {internal1, internal2}, {output});
         addOp.opmagic = OP_MAGIC_BASE + 3;
         addOp.SetIOpAttrOffset(0, 200);
         addOp.SetIOpAttrOffset(1, 201);
@@ -436,7 +436,7 @@ protected:
         auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-        auto& callOp = func.AddRawOperation(Opcode::OP_CALL, {input1, input2}, {output1});
+        auto& callOp = IRBuilder().CreateTensorOpStmt(func, Opcode::OP_CALL, {input1, input2}, {output1});
 
         return &callOp;
     }
@@ -459,7 +459,7 @@ private:
         static int copyInOpMagicCounter = 50000;
         int opMagic = copyInOpMagicCounter++;
 
-        auto& copyIn = func->AddRawOperation(Opcode::OP_COPY_IN, {input}, {output});
+        auto& copyIn = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input}, {output});
         copyIn.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
         copyIn.SetIOpAttrOffset(TENSOR_INDEX_0, offset);
@@ -472,7 +472,7 @@ private:
         const std::shared_ptr<Function>& func, int internalSubgraphId, const std::shared_ptr<LogicalTensor>& input1,
         const std::shared_ptr<LogicalTensor>& input2, const std::shared_ptr<LogicalTensor>& output)
     {
-        auto& addOp = func->AddRawOperation(Opcode::OP_ADD, {input1, input2}, {output});
+        auto& addOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADD, {input1, input2}, {output});
         addOp.SetIOpAttrOffset(TENSOR_INDEX_0, OFFSET_ADD_INPUT1);
         addOp.SetIOpAttrOffset(TENSOR_INDEX_1, OFFSET_ADD_INPUT2);
         addOp.SetOOpAttrOffset(TENSOR_INDEX_0, OFFSET_ADD_OUTPUT);
@@ -493,7 +493,7 @@ private:
         static int copyOutOpMagicCounter = 60000;
         int opMagic = copyOutOpMagicCounter++;
 
-        auto& copyOut = func->AddRawOperation(Opcode::OP_COPY_OUT, {input}, {output});
+        auto& copyOut = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_OUT, {input}, {output});
         copyOut.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
         copyOut.SetOOpAttrOffset(TENSOR_INDEX_0, offset);
@@ -536,16 +536,16 @@ private:
 
         static int opMagicCounter = OP_MAGIC_BASE;
 
-        auto& copyIn1 = func->AddRawOperation(Opcode::OP_COPY_IN, {input1}, {internal1});
+        auto& copyIn1 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input1}, {internal1});
         copyIn1.opmagic = opMagicCounter++;
 
-        auto& copyIn2 = func->AddRawOperation(Opcode::OP_COPY_IN, {input2}, {internal2});
+        auto& copyIn2 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input2}, {internal2});
         copyIn2.opmagic = opMagicCounter++;
 
-        auto& addOp = func->AddRawOperation(Opcode::OP_ADD, {internal1, internal2}, {internal3});
+        auto& addOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADD, {internal1, internal2}, {internal3});
         addOp.opmagic = opMagicCounter++;
 
-        auto& copyOut = func->AddRawOperation(Opcode::OP_COPY_OUT, {internal3}, {output});
+        auto& copyOut = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_OUT, {internal3}, {output});
         copyOut.opmagic = opMagicCounter++;
 
         copyIn1.SetIOpAttrOffset(TENSOR_INDEX_0, OFFSET_INPUT1);
@@ -615,7 +615,7 @@ private:
         uint64_t programId, const std::shared_ptr<LogicalTensor>& input1, const std::shared_ptr<LogicalTensor>& input2,
         const std::shared_ptr<LogicalTensor>& output)
     {
-        auto& callOp = rootFunc->AddRawOperation(Opcode::OP_CALL, {input1, input2}, {output});
+        auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFunc, Opcode::OP_CALL, {input1, input2}, {output});
 
         std::vector<std::vector<SymbolicScalar>> argList;
         argList.push_back(createTensorArgsFor2D(TENSOR_INDEX_0));
@@ -653,7 +653,7 @@ private:
         const TestScenario& scenario, const PropagatedTensors& propagatedTensors,
         const std::shared_ptr<LogicalTensor>& propagatedInput2, const std::shared_ptr<LogicalTensor>& propagatedOutput2)
     {
-        auto& originalCallOp = rootFunc->AddRawOperation(
+        auto& originalCallOp = IRBuilder().CreateTensorOpStmt(*rootFunc, 
             Opcode::OP_CALL, {scenario.inputTensor1, scenario.inputTensor2, propagatedTensors.input, propagatedInput2},
             {scenario.outputTensor, propagatedTensors.output, propagatedOutput2});
 

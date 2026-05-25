@@ -15,6 +15,7 @@
 
 #include <unordered_set>
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/tensor/irbuilder.h"
 #include "intra_subgraph_adapter.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
@@ -400,7 +401,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     APASS_LOG_DEBUG_F(Elements::Tensor, "Compare New: %s", newTensor->Dump().c_str());
 
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
-    Operation* newOp = &function.AddRawOperation(opcode, {newTensor}, {tensor});
+    Operation* newOp = &builder.CreateTensorOpStmt(function, opcode, {newTensor}, {tensor});
     newOps.push_back(newOp);
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
@@ -452,7 +453,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     }
 
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
-    Operation* newOp = &function.AddRawOperation(opcode, {tensor}, {newTensor});
+    Operation* newOp = &builder.CreateTensorOpStmt(function, opcode, {tensor}, {newTensor});
     newOps.push_back(newOp);
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(

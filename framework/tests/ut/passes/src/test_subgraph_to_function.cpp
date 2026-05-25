@@ -106,7 +106,7 @@ static std::shared_ptr<LogicalTensor> BuildDifferentOffsetSubgraph0(const std::s
     tensor0->SetMemoryTypeBoth(MEM_UB);
     tensor0->SetMagic(15);
 
-    auto& copyopin0 = func->AddOperation(Opcode::OP_COPY_IN, {incast}, {tensor0});
+    auto& copyopin0 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_IN, {incast}, {tensor0});
     copyopin0.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({16, 0, 0}), MEM_UB, shape3Imme, shape3Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyopin0.UpdateSubgraphID(0);
@@ -116,7 +116,7 @@ static std::shared_ptr<LogicalTensor> BuildDifferentOffsetSubgraph0(const std::s
     tensor1->SetMemoryTypeBoth(MEM_UB);
     tensor1->SetMagic(66);
 
-    auto& reshapeop = func->AddOperation(Opcode::OP_RESHAPE, {tensor0}, {tensor1});
+    auto& reshapeop = PassOperationUtils::AddOperation(*func, Opcode::OP_RESHAPE, {tensor0}, {tensor1});
     reshapeop.UpdateSubgraphID(0);
     reshapeop.opmagic = 10039;
 
@@ -124,7 +124,7 @@ static std::shared_ptr<LogicalTensor> BuildDifferentOffsetSubgraph0(const std::s
     input_tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     input_tensor->SetMagic(79);
 
-    auto& copyoutop0 = func->AddOperation(Opcode::OP_COPY_OUT, {tensor1}, {input_tensor});
+    auto& copyoutop0 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {tensor1}, {input_tensor});
     copyoutop0.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MEM_UB, OpImmediate::Specified({0, 0}), shape1Imme, shape1Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyoutop0.UpdateSubgraphID(0);
@@ -143,7 +143,7 @@ static void BuildDifferentOffsetSubgraph1(const std::shared_ptr<Function>& func,
     inner_tensor1->UpdateOffset({0, 0});
     inner_tensor1->SetMagic(30);
 
-    auto& copyopin1 = func->AddOperation(Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor1});
+    auto& copyopin1 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor1});
     copyopin1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyopin1.UpdateSubgraphID(1);
@@ -153,11 +153,11 @@ static void BuildDifferentOffsetSubgraph1(const std::shared_ptr<Function>& func,
     result_tensor1->SetMemoryTypeBoth(MEM_UB);
     result_tensor1->SetMagic(29);
 
-    auto& expopin1 = func->AddOperation(Opcode::OP_EXP, {inner_tensor1}, {result_tensor1});
+    auto& expopin1 = PassOperationUtils::AddOperation(*func, Opcode::OP_EXP, {inner_tensor1}, {result_tensor1});
     expopin1.UpdateSubgraphID(1);
     expopin1.opmagic = 10023;
 
-    auto& copyoutop1 = func->AddOperation(Opcode::OP_COPY_OUT, {result_tensor1}, {output_tensor});
+    auto& copyoutop1 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {result_tensor1}, {output_tensor});
     copyoutop1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MEM_UB, OpImmediate::Specified({0, 0}), shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyoutop1.UpdateSubgraphID(1);
@@ -174,7 +174,7 @@ static void BuildDifferentOffsetSubgraph2(const std::shared_ptr<Function>& func,
     inner_tensor2->UpdateOffset({0, 32});
     inner_tensor2->SetMagic(35);
 
-    auto& copyopin2 = func->AddOperation(Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor2});
+    auto& copyopin2 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor2});
     copyopin2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 32}), MEM_UB, shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyopin2.UpdateSubgraphID(2);
@@ -184,11 +184,11 @@ static void BuildDifferentOffsetSubgraph2(const std::shared_ptr<Function>& func,
     result_tensor2->SetMemoryTypeBoth(MEM_UB);
     result_tensor2->SetMagic(34);
 
-    auto& expopin2 = func->AddOperation(Opcode::OP_EXP, {inner_tensor2}, {result_tensor2});
+    auto& expopin2 = PassOperationUtils::AddOperation(*func, Opcode::OP_EXP, {inner_tensor2}, {result_tensor2});
     expopin2.UpdateSubgraphID(2);
     expopin2.opmagic = 10026;
 
-    auto& copyoutop2 = func->AddOperation(Opcode::OP_COPY_OUT, {result_tensor2}, {output_tensor});
+    auto& copyoutop2 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {result_tensor2}, {output_tensor});
     copyoutop2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MEM_UB, OpImmediate::Specified({0, 32}), shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyoutop2.UpdateSubgraphID(2);
@@ -243,7 +243,7 @@ static void BuildSameOffsetSubgraph0(const std::shared_ptr<Function>& func,
     inner_tensor1->SetMagic(30);
     inner_tensor1->SetMemoryTypeBoth(MEM_UB);
 
-    auto& copyopin1 = func->AddOperation(Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor1});
+    auto& copyopin1 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor1});
     copyopin1.UpdateSubgraphID(0);
     copyopin1.opmagic = 10021;
     copyopin1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
@@ -254,11 +254,11 @@ static void BuildSameOffsetSubgraph0(const std::shared_ptr<Function>& func,
     result_tensor1->SetMemoryTypeBoth(MEM_UB);
     result_tensor1->SetMagic(29);
 
-    auto& expopin1 = func->AddOperation(Opcode::OP_EXP, {inner_tensor1}, {result_tensor1});
+    auto& expopin1 = PassOperationUtils::AddOperation(*func, Opcode::OP_EXP, {inner_tensor1}, {result_tensor1});
     expopin1.UpdateSubgraphID(0);
     expopin1.opmagic = 10023;
 
-    auto& copyoutop1 = func->AddOperation(Opcode::OP_COPY_OUT, {result_tensor1}, {output_tensor});
+    auto& copyoutop1 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {result_tensor1}, {output_tensor});
     copyoutop1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MEM_UB, OpImmediate::Specified({0, 0}), shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyoutop1.UpdateSubgraphID(0);
@@ -275,7 +275,7 @@ static void BuildSameOffsetSubgraph1(const std::shared_ptr<Function>& func,
     inner_tensor2->UpdateOffset({0, 0});
     inner_tensor2->SetMagic(35);
 
-    auto& copyopin2 = func->AddOperation(Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor2});
+    auto& copyopin2 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_IN, {input_tensor}, {inner_tensor2});
     copyopin2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyopin2.UpdateSubgraphID(1);
@@ -285,11 +285,11 @@ static void BuildSameOffsetSubgraph1(const std::shared_ptr<Function>& func,
     result_tensor2->SetMemoryTypeBoth(MEM_UB);
     result_tensor2->SetMagic(34);
 
-    auto& expopin2 = func->AddOperation(Opcode::OP_EXP, {inner_tensor2}, {result_tensor2});
+    auto& expopin2 = PassOperationUtils::AddOperation(*func, Opcode::OP_EXP, {inner_tensor2}, {result_tensor2});
     expopin2.UpdateSubgraphID(1);
     expopin2.opmagic = 10026;
 
-    auto& copyoutop2 = func->AddOperation(Opcode::OP_COPY_OUT, {result_tensor2}, {output_tensor});
+    auto& copyoutop2 = PassOperationUtils::AddOperation(*func, Opcode::OP_COPY_OUT, {result_tensor2}, {output_tensor});
     copyoutop2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         MEM_UB, OpImmediate::Specified({16, 0}), shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
     copyoutop2.UpdateSubgraphID(1);

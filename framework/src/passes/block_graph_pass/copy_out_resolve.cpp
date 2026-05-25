@@ -16,6 +16,7 @@
 #include "copy_out_resolve.h"
 
 #include "interface/program/program.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
@@ -114,8 +115,7 @@ void CopyOutResolve::InsertCopyOutResolveForLeaf(int copyOutResolveCoalescing, F
             opList.push_back(op);
 
             Opcode opcode = leafFunc->IsCube() ? Opcode::OP_AICPU_CALL_AIC : Opcode::OP_AICPU_CALL_AIV;
-            auto& aicpuCall =
-                leafFunc->AddOperation(opcode, std::vector<std::shared_ptr<LogicalTensor>>({outcast}), {});
+            auto& aicpuCall = PassOperationUtils::AddOperation(*leafFunc, opcode, {outcast}, {});
             aicpuCall.UpdateSubgraphID(subgraphID);
             aicpuCall.SetAttribute(
                 OpAttributeKey::aicpuCall,

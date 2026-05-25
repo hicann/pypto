@@ -40,7 +40,7 @@ void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
             operandUb.push_back(input);
 
             // add UB_Alloc && UB_COPY_IN
-            auto& ubCopyIn = function.AddRawOperation(Opcode::OP_COPY_IN, operandGm, operandUb);
+            auto& ubCopyIn = builder.CreateTensorOpStmt(function, Opcode::OP_COPY_IN, operandGm, operandUb);
             ubCopyIn.SetOpAttribute(std::make_shared<CopyOpAttribute>(
                 OpImmediate::Specified(input->GetTensorOffset()), MemoryType::MEM_UB,
                 OpImmediate::Specified(input->GetShape()), OpImmediate::Specified(input->tensor->GetDynRawShape()),

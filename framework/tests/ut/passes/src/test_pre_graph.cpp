@@ -661,16 +661,16 @@ TEST_F(PreGraphTest, TestFixPipeReconnectGraph)
     tensor4->SetMemoryTypeBoth(MemoryType::MEM_L0C);
     auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
-    auto& copyin = funcPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor0}, {tensor1});
+    auto& copyin = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_COPY_IN, {tensor0}, {tensor1});
     (void)copyin;
-    auto& l1CopyFB = funcPtr->AddRawOperation(Opcode::OP_L1_TO_FIX_QUANT_PRE, {tensor1}, {tensor2});
+    auto& l1CopyFB = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_L1_TO_FIX_QUANT_PRE, {tensor1}, {tensor2});
     (void)l1CopyFB;
-    auto& aMulB = funcPtr->AddRawOperation(Opcode::OP_A_MUL_B, {tensor2}, {tensor3});
+    auto& aMulB = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_A_MUL_B, {tensor2}, {tensor3});
     aMulB.SetAttribute(A_MUL_B_SCALE_ATTR, Element(DataType::DT_UINT64, NUM10));
     aMulB.SetAttribute(A_MUL_B_RELU_ATTR, 1);
-    auto& aMulAccB = funcPtr->AddRawOperation(Opcode::OP_A_MULACC_B, {tensor3}, {tensor4});
+    auto& aMulAccB = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_A_MULACC_B, {tensor3}, {tensor4});
     (void)aMulAccB;
-    auto& copyout = funcPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor4}, {tensor5});
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*funcPtr, Opcode::OP_COPY_OUT, {tensor4}, {tensor5});
 
     // Test Reconnect Graph
     CubeProcess cubeProcess;

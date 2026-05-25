@@ -87,14 +87,14 @@ TEST_F(ReplaceTensorTest, TestViewAssemble)
         incast -                                        - outcast
                 \————> view1 ————> copy ————> assemble /
     */
-    auto& viewOp0 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {viewOut0});
-    auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {viewOut1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {viewOut0}, {copyOut0});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {viewOut1}, {copyOut1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyOut0}, {assOut0});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyOut1}, {assOut1});
-    auto& assOp0 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {assOut0}, {outcast});
-    auto& assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {assOut1}, {outcast});
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {incast}, {viewOut1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {viewOut0}, {copyOut0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {viewOut1}, {copyOut1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyOut0}, {assOut0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyOut1}, {assOut1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assOut0}, {outcast});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assOut1}, {outcast});
     // Init Attribute
     auto viewAttr0 = std::make_shared<ViewOpAttribute>(offset0);
     auto viewAttr1 = std::make_shared<ViewOpAttribute>(offset1);
@@ -136,9 +136,9 @@ TEST_F(ReplaceTensorTest, TestReshape)
     /* Init Graph
         incast -> CopyIn -> Reshape -> CopyOut -> outCast
     */
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {reshape0});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {reshape0}, {reshape1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {reshape1}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {reshape0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshape0}, {reshape1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshape1}, {outcast});
     // Run the Pass
     ReplaceTensor pass;
     currFunctionPtr->inCasts_.push_back(incast);
@@ -167,7 +167,7 @@ TEST_F(ReplaceTensorTest, TestIndexOutCast)
     /* Init Graph
         incast -> Index_OutCast -> outCast
     */
-    currFunctionPtr->AddOperation(Opcode::OP_INDEX_OUTCAST, {inTensor0, inTensor1, inTensor2}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_INDEX_OUTCAST, {inTensor0, inTensor1, inTensor2}, {outcast});
     // Run the Pass
     ReplaceTensor pass;
     currFunctionPtr->inCasts_.push_back(inTensor2);
@@ -197,9 +197,9 @@ TEST_F(ReplaceTensorTest, TestViewType)
     /* Init Graph
         incast -> CopyIn -> ViewType -> CopyOut -> outCast
     */
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {viewType0});
-    currFunctionPtr->AddOperation(Opcode::OP_VIEW_TYPE, {viewType0}, {viewType1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {viewType1}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {viewType0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW_TYPE, {viewType0}, {viewType1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {viewType1}, {outcast});
     // Run the Pass
     ReplaceTensor pass;
     currFunctionPtr->inCasts_.push_back(incast);
@@ -221,8 +221,8 @@ TEST_F(ReplaceTensorTest, TestHasSameConsecutive_True)
     auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
-    auto& viewOp2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor2}, {tensor3});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {tensor1}, {tensor2});
+    auto& viewOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {tensor2}, {tensor3});
 
     // 设置操作连接
     tensor2->AddConsumer(&viewOp2);
@@ -244,8 +244,8 @@ TEST_F(ReplaceTensorTest, TestHasSameConsecutive_False)
     auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
-    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {tensor2}, {tensor3});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {tensor1}, {tensor2});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {tensor2}, {tensor3});
 
     // 设置操作连接
     tensor2->AddConsumer(&assembleOp);
@@ -266,7 +266,7 @@ TEST_F(ReplaceTensorTest, TestPreCheck_FailNoSubgraphID)
     auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {tensor1}, {tensor2});
     // 不设置subgraph ID
 
     ReplaceTensor pass;
@@ -309,16 +309,16 @@ TEST_F(ReplaceTensorTest, TestBackView)
     auto assIn1 = npu::tile_fwk::IRBuilder().CreateTensorVar(assRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset0, shape, CreateTestConstIntVector(shape));
     // Init Graph
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copy0});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copy1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copy0}, {viewIn0});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copy1}, {viewIn1});
-    auto& viewOp0 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {viewIn0}, {viewTypeIn0});
-    auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {viewIn1}, {viewTypeIn1});
-    currFunctionPtr->AddOperation(Opcode::OP_VIEW_TYPE, {viewTypeIn0}, {assIn0});
-    currFunctionPtr->AddOperation(Opcode::OP_VIEW_TYPE, {viewTypeIn1}, {assIn1});
-    auto& assOp0 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {assIn0}, {outcast});
-    auto& assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {assIn1}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copy0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copy1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copy0}, {viewIn0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copy1}, {viewIn1});
+    auto& viewOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {viewIn0}, {viewTypeIn0});
+    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {viewIn1}, {viewTypeIn1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW_TYPE, {viewTypeIn0}, {assIn0});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW_TYPE, {viewTypeIn1}, {assIn1});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assIn0}, {outcast});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assIn1}, {outcast});
     // Init Attribute
     auto view_Attr0 = std::make_shared<ViewOpAttribute>(offset0);
     auto view_Attr1 = std::make_shared<ViewOpAttribute>(offset1);
@@ -368,8 +368,8 @@ TEST_F(ReplaceTensorTest, TestProcessHubAssembleOp_Success)
     assembleOutput->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
 
     // 创建操作
-    auto& hubOp = currFunctionPtr->AddOperation(Opcode::OP_HUB, {hubInput}, {hubOutput});
-    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {hubOutput}, {assembleOutput});
+    auto& hubOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_HUB, {hubInput}, {hubOutput});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {hubOutput}, {assembleOutput});
 
     // 设置操作连接
     hubOutput->AddConsumer(&assembleOp);
@@ -410,8 +410,8 @@ TEST_F(ReplaceTensorTest, TestA_MULACC_B)
     /* Init Graph
         incast -> Index_OutCast -> mulAccOut-> op
     */
-    currFunctionPtr->AddOperation(Opcode::OP_A_MULACC_B, {inTensor0, inTensor1, mulAccIn}, {mulAccOut});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {mulAccOut}, {outTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MULACC_B, {inTensor0, inTensor1, mulAccIn}, {mulAccOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {mulAccOut}, {outTensor});
     ReplaceTensor pass;
     currFunctionPtr->inCasts_.push_back(mulAccIn);
     currFunctionPtr->outCasts_.push_back(outTensor);
@@ -450,10 +450,10 @@ TEST_F(ReplaceTensorTest, TestSameAssembleOut)
         incast ————> copyIn -                 - outcast0
                              \————> assemble /
     */
-    auto& copyInOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInOut});
-    auto& assOp0 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyInOut}, {outcast0});
-    auto& assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyInOut}, {outcast0});
-    auto& assOp2 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyInOut}, {outcast1});
+    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInOut});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyInOut}, {outcast0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyInOut}, {outcast0});
+    auto& assOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyInOut}, {outcast1});
     // Init Attribute
     auto copyInAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset0), MEM_UB, OpImmediate::Specified(shape), OpImmediate::Specified(shape));
@@ -497,9 +497,9 @@ TEST_F(ReplaceTensorTest, TestNotInplaceReshape)
     /* Init Graph
         incast0 -> Reshape -> View -> Reshape -> outcast
     */
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {incast}, {reshapeOut0});
-    auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {reshapeOut0}, {viewOut});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {viewOut}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {incast}, {reshapeOut0});
+    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {reshapeOut0}, {viewOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {viewOut}, {outcast});
 
     auto view_Attr = std::make_shared<ViewOpAttribute>(offset0, MEM_DEVICE_DDR);
     viewOp.SetOpAttribute(view_Attr);
@@ -539,11 +539,11 @@ TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
         incast -- CopyIn -- copyInout1 -- CopyOut -- copyOutOut1 -- Assemble -- outcast1
                                                                  -- CopyIn   -- copyInout2 -- CopyOut -- outcast2
     */
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInout1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInout1}, {copyOutout1});
-    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutout1}, {outcast1});
-    auto& copyInOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {copyOutout1}, {copyInout2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInout2}, {outcast2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInout1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInout1}, {copyOutout1});
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutout1}, {outcast1});
+    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {copyOutout1}, {copyInout2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInout2}, {outcast2});
 
     Offset assembleToOffset = {4, 0};
     auto assembleOpAttribute =
@@ -596,9 +596,9 @@ TEST_F(ReplaceTensorTest, TestShmemWaitUntilWithDiffAssembleOut)
     outcast0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
     auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor1, offset1, shape1);
     outcast1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
-    currFunctionPtr->AddOperation(Opcode::OP_SHMEM_WAIT_UNTIL, {incast0, incast1}, {shmemOut});
-    auto& assOp0 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {shmemOut}, {outcast0});
-    auto& assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {shmemOut}, {outcast1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SHMEM_WAIT_UNTIL, {incast0, incast1}, {shmemOut});
+    auto& assOp0 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {shmemOut}, {outcast0});
+    auto& assOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {shmemOut}, {outcast1});
     auto assAttr0 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset0);
     auto assAttr1 = std::make_shared<AssembleOpAttribute>(MEM_DEVICE_DDR, offset1);
     assOp0.SetOpAttribute(assAttr0);

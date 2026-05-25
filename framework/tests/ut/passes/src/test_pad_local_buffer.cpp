@@ -67,23 +67,23 @@ inline void ConstructGraphWithTwoInputs(std::shared_ptr<Function>& currFunctionP
     ubTensor3->SetMemoryTypeBoth(MEM_UB);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
-    auto& copy_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
+    auto& copy_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {
         OpImmediate(CreateTestScalarVar("Input_1_Dim_0")), OpImmediate(CreateTestScalarVar("Input_1_Dim_1"))};
     copyin2Attr->SetToDynValidShape(toValidShape1);
     copy_op2.SetOpAttribute(copyin2Attr);
-    auto& add_op = currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
     (void)add_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->inCasts_.push_back(incast2);
@@ -111,23 +111,23 @@ inline void ConstructGraph2(std::shared_ptr<Function>& currFunctionPtr)
     ubTensor3->SetMemoryTypeBoth(MEM_UB);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
-    auto& copy_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
+    auto& copy_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {
         OpImmediate(CreateTestScalarVar("Input_1_Dim_0")), OpImmediate(CreateTestScalarVar("Input_1_Dim_1"))};
     copyin2Attr->SetToDynValidShape(toValidShape1);
     copy_op2.SetOpAttribute(copyin2Attr);
-    auto& add_op = currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    auto& add_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
     (void)add_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->inCasts_.push_back(incast2);
@@ -154,23 +154,23 @@ inline void ConstructGraph3(std::shared_ptr<Function>& currFunctionPtr)
     l0Ctensor0->SetMemoryTypeBoth(MEM_L0C);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, expOriShape, CreateTestConstIntVector(expOriShape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {l0Atensor0});
+    auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {l0Atensor0});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_L0A, AShapeImme, AShapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
-    auto& copy_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast2}, {l0Btensor0});
+    auto& copy_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {l0Btensor0});
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_L0B, BShapeImme, BShapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {
         OpImmediate(CreateTestScalarVar("Input_1_Dim_0")), OpImmediate(CreateTestScalarVar("Input_1_Dim_1"))};
     copyin2Attr->SetToDynValidShape(toValidShape1);
     copy_op2.SetOpAttribute(copyin2Attr);
-    auto& matmul_op = currFunctionPtr->AddRawOperation(Opcode::OP_A_MULACC_B, {l0Atensor0, l0Btensor0}, {l0Ctensor0});
+    auto& matmul_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MULACC_B, {l0Atensor0, l0Btensor0}, {l0Ctensor0});
     (void)matmul_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {l0Ctensor0}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {l0Ctensor0}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->inCasts_.push_back(incast2);
@@ -200,22 +200,22 @@ inline void ConstructGraph9(std::shared_ptr<Function>& currFunctionPtr)
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
     auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outCast2->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
-    auto& abs_op = currFunctionPtr->AddRawOperation(Opcode::OP_ABS, {ubTensor1}, {ubTensor2});
+    auto& abs_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ABS, {ubTensor1}, {ubTensor2});
     (void)abs_op;
     auto& transpose_op =
-        currFunctionPtr->AddRawOperation(Opcode::OP_TRANSPOSE_VNCHWCONV, {ubTensor2}, {ubTensor3, ubTensor4});
+        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {ubTensor2}, {ubTensor3, ubTensor4});
     (void)transpose_op;
     transpose_op.SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{1, 0});
-    auto& exp_op = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {ubTensor3}, {ubTensor5});
+    auto& exp_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_EXP, {ubTensor3}, {ubTensor5});
     (void)exp_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor5}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor5}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->outCasts_.push_back(outCast2);

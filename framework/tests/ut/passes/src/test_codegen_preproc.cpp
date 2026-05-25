@@ -73,13 +73,13 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
     auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     std::vector<Operation*> opLogPtr;
-    auto& copyin1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    auto& copyin1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
     opLogPtr.emplace_back(&copyin1);
-    auto& copyin2 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor2}, {tensor4});
+    auto& copyin2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor2}, {tensor4});
     opLogPtr.emplace_back(&copyin2);
-    auto& add = currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
+    auto& add = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
     opLogPtr.emplace_back(&add);
-    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
     opLogPtr.emplace_back(&copyout);
 
     int index{0};
@@ -127,17 +127,17 @@ TEST_F(CodegenPreprocTest, TestForceCombineAxis)
     auto tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor6->tensor->rawshape = shape;
     std::vector<Operation*> opLogPtr;
-    auto& copyin1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    auto& copyin1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
     copyin1.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
     opLogPtr.emplace_back(&copyin1);
-    auto& copyin2 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor2}, {tensor4});
+    auto& copyin2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor2}, {tensor4});
     copyin2.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
     opLogPtr.emplace_back(&copyin2);
-    auto& add = currFunctionPtr->AddRawOperation(Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
+    auto& add = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
     add.SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
     add.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
     opLogPtr.emplace_back(&add);
-    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
     copyout.SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
     opLogPtr.emplace_back(&copyout);
 
@@ -433,11 +433,11 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermute)
     auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copyin = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    auto& copyin = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
     copyin.SetIOpAttrOffset(0, 0);
-    auto& permute_op = currFunctionPtr->AddRawOperation(Opcode::OP_PERMUTE, {tensor3}, {tensor2});
+    auto& permute_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_PERMUTE, {tensor3}, {tensor2});
     permute_op.SetIOpAttrOffset(0, 0);
-    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
     copyout.SetOOpAttrOffset(0, 1);
 
     CodegenPreproc codegenPreprocPass;
@@ -466,11 +466,11 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
     auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copyin = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    auto& copyin = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
     copyin.SetIOpAttrOffset(0, 0);
-    auto& permute_elem_op = currFunctionPtr->AddRawOperation(Opcode::OP_PERMUTE_ELEMENT, {tensor3}, {tensor2});
+    auto& permute_elem_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_PERMUTE_ELEMENT, {tensor3}, {tensor2});
     permute_elem_op.SetIOpAttrOffset(0, 0);
-    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
+    auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
     copyout.SetOOpAttrOffset(0, 1);
 
     CodegenPreproc codegenPreprocPass;

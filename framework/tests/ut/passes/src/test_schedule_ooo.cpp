@@ -98,7 +98,7 @@ LogicalTensorPtr CreateTensor(
 
 Operation& CreateAllocOp(Function& currFunction, LogicalTensorPtr tensor, int latency)
 {
-    Operation& alloc = currFunction.AddOperation(Opcode::OP_UB_ALLOC, {}, LogicalTensors({tensor}));
+    Operation& alloc = PassOperationUtils::AddOperation(currFunction, Opcode::OP_UB_ALLOC, {}, LogicalTensors({tensor}));
     SetAllocAttr(alloc, latency);
     return alloc;
 }
@@ -108,7 +108,7 @@ Operation& CreateCopyOp(
     std::vector<int64_t> shape)
 {
     std::vector<int64_t> offset = {0, 0};
-    auto& copy = currFunction.AddOperation(opcode, LogicalTensors({inTensor}), LogicalTensors({outTensor}));
+    auto& copy = PassOperationUtils::AddOperation(currFunction, opcode, LogicalTensors({inTensor}), LogicalTensors({outTensor}));
     auto shapeImme = OpImmediate::Specified(shape);
     if (opcode == Opcode::OP_COPY_IN) {
         copy.SetOpAttribute(
@@ -124,8 +124,8 @@ Operation& CreateCopyOp(
 Operation& CreateAddOp(
     Function& currFunction, LogicalTensorPtr inTensor1, LogicalTensorPtr inTensor2, LogicalTensorPtr outTensor)
 {
-    auto& add =
-        currFunction.AddOperation(Opcode::OP_ADD, LogicalTensors({inTensor1, inTensor2}), LogicalTensors({outTensor}));
+    auto& add = PassOperationUtils::AddOperation(
+        currFunction, Opcode::OP_ADD, LogicalTensors({inTensor1, inTensor2}), LogicalTensors({outTensor}));
     return add;
 }
 
@@ -1388,8 +1388,7 @@ TEST_F(ScheduleOoOTest, TestGetSpillTensor)
     tensor3->SetMemoryTypeToBe(MEM_UB);
     tensor3->memoryrange.memId = 3;
 
-    auto& alloc1 =
-        function.AddOperation(Opcode::OP_UB_ALLOC, {}, std::vector<std::shared_ptr<LogicalTensor>>({tensor3}));
+    auto& alloc1 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor3});
     alloc1.UpdateLatency(1);
 
     OoOScheduler oooSchedule(function);
@@ -1413,8 +1412,7 @@ TEST_F(ScheduleOoOTest, TestCheckAllocIssue)
     tensor3->SetMemoryTypeToBe(MEM_UB);
     tensor3->memoryrange.memId = 1;
 
-    auto& alloc1 =
-        function.AddOperation(Opcode::OP_UB_ALLOC, {}, std::vector<std::shared_ptr<LogicalTensor>>({tensor3, tensor2}));
+    auto& alloc1 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor3, tensor2});
     alloc1.UpdateLatency(1);
 
     OoOScheduler oooSchedule(function);
@@ -2096,11 +2094,11 @@ TEST_F(ScheduleOoOTest, TestMixGraphAndDAV_3510)
     CreateAllocOp(*currFunctionPtr, tensor2, 1);
     CreateAllocOp(*currFunctionPtr, tensor3, 1);
     CreateAllocOp(*currFunctionPtr, tensor4, 1);
-    currFunctionPtr->AddOperation(Opcode::OP_L0A_ALLOC, {}, LogicalTensors({tensor5}));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_L0A_ALLOC, {}, LogicalTensors({tensor5}));
     CreateCopyOp(*currFunctionPtr, Opcode::OP_COPY_IN, tensor0, tensor2, shape);
     CreateCopyOp(*currFunctionPtr, Opcode::OP_COPY_IN, tensor1, tensor3, shape);
     CreateAddOp(*currFunctionPtr, tensor2, tensor3, tensor4);
-    currFunctionPtr->AddOperation(Opcode::OP_UB_COPY_L1, LogicalTensors({tensor4}), LogicalTensors({tensor5}));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_UB_COPY_L1, LogicalTensors({tensor4}), LogicalTensors({tensor5}));
     for (auto& program : rootFuncPtr->rootFunc_->programs_) {
         ReorderOperations(*(program.second));
     }
@@ -2120,7 +2118,7 @@ TEST_F(ScheduleOoOTest, TensorMemTypeMismatch)
     t->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
     t->SetMemoryTypeToBe(MemoryType::MEM_UB); // 不一致
     
-    func->AddOperation(Opcode::OP_NOP, {t}, {t});
+    PassOperationUtils::AddOperation(*func, Opcode::OP_NOP, {t}, {t});
     func->inCasts_.push_back(t);
 
     OoOScheduleChecker checker;
@@ -2174,7 +2172,7 @@ TEST_F(ScheduleOoOTest, ViewMemIdMismatch)
     outTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB);
     outTensor->SetMemoryTypeToBe(MemoryType::MEM_UB);
     outTensor->memoryrange.memId = 1;
-    func->AddOperation(Opcode::OP_VIEW, {inTensor}, {outTensor});
+    PassOperationUtils::AddOperation(*func, Opcode::OP_VIEW, {inTensor}, {outTensor});
     OoOScheduleChecker checker;
     bool ret = checker.PreCheckOpInfo(func->Operations().DuplicatedOpList()[0]);
     EXPECT_FALSE(ret);

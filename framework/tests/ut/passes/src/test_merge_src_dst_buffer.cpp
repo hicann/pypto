@@ -77,30 +77,21 @@ TEST_F(MergeSrcDstBufferTest, AppointInplace)
     tensor5->SetMemoryTypeOriginal(MEM_UB);
     tensor5->SetMemoryTypeToBe(MEM_UB);
 
-    auto& alloc1 =
-        function.AddOperation(Opcode::OP_UB_ALLOC, {}, std::vector<std::shared_ptr<LogicalTensor>>({tensor3}));
+    auto& alloc1 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor3});
     alloc1.UpdateLatency(1);
-    auto& copyin1 = function.AddOperation(
-        Opcode::OP_COPY_IN, std::vector<std::shared_ptr<LogicalTensor>>({tensor1}),
-        std::vector<std::shared_ptr<LogicalTensor>>({tensor3}));
+    auto& copyin1 = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
     copyin1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>()));
 
-    auto& alloc2 =
-        function.AddOperation(Opcode::OP_UB_ALLOC, {}, std::vector<std::shared_ptr<LogicalTensor>>({tensor4}));
+    auto& alloc2 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor4});
     alloc2.UpdateLatency(1);
-    auto& copyin2 = function.AddOperation(
-        Opcode::OP_COPY_IN, std::vector<std::shared_ptr<LogicalTensor>>({tensor2}),
-        std::vector<std::shared_ptr<LogicalTensor>>({tensor4}));
+    auto& copyin2 = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {tensor2}, {tensor4});
     copyin2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>()));
 
-    auto& alloc3 =
-        function.AddOperation(Opcode::OP_UB_ALLOC, {}, std::vector<std::shared_ptr<LogicalTensor>>({tensor5}));
+    auto& alloc3 = PassOperationUtils::AddOperation(function, Opcode::OP_UB_ALLOC, {}, {tensor5});
     alloc3.UpdateLatency(1);
-    auto& add1 = function.AddOperation(
-        Opcode::OP_ADD, std::vector<std::shared_ptr<LogicalTensor>>({tensor3, tensor4}),
-        std::vector<std::shared_ptr<LogicalTensor>>({tensor5}));
+    auto& add1 = PassOperationUtils::AddOperation(function, Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
     add1.SetAttribute(OpAttributeKey::inplaceIdx, 0);
 
     SrcDstBufferMergeImpl srcDstMerge;

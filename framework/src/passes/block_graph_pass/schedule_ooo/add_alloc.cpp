@@ -14,6 +14,7 @@
  */
 
 #include "add_alloc.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "AddAlloc"
@@ -122,7 +123,8 @@ Status AddAlloc::GenAllocOpcode(const Opcode& allocOpcode, const TensorAllocMsg&
         if (oOperand->memoryrange.memId != tensorAllocMsg.memId) {
             continue;
         }
-        function.AddOperation(allocOpcode, {}, std::vector<std::shared_ptr<LogicalTensor>>({oOperand}));
+        PassOperationUtils::AddOperation(
+            function, allocOpcode, {}, std::vector<std::shared_ptr<LogicalTensor>>({oOperand}));
     }
     return SUCCESS;
 }

@@ -14,6 +14,7 @@
  */
 
 #include "merge_view_assemble_utils.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/operation/attribute.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
@@ -107,8 +108,9 @@ Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
             APASS_LOG_ERROR_F(Elements::Function, "Failed to create ViewOpAttribute.");
             return FAILED;
         }
+        IRBuilder builder;
         auto& mergedViewOp =
-            function.AddRawOperation(Opcode::OP_VIEW, {viewOp.input}, {viewOp.output}, true, viewOp.span);
+            builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {viewOp.input}, {viewOp.output}, viewOp.span);
         mergedViewOp.SetScopeInfo(viewOp.scopeInfo);
         mergedViewOp.SetOpAttribute(attr);
         // 继承op_attr_copy_in_mode属性
@@ -128,8 +130,9 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
         if (!attr) {
             return FAILED;
         }
-        auto& mergedAssembleOp = function.AddRawOperation(
-            Opcode::OP_ASSEMBLE, {assembleOp.input}, {assembleOp.output}, true, assembleOp.span);
+        IRBuilder builder;
+        auto& mergedAssembleOp = builder.CreateTensorOpStmt(
+            function, Opcode::OP_ASSEMBLE, {assembleOp.input}, {assembleOp.output}, assembleOp.span);
         mergedAssembleOp.SetScopeInfo(assembleOp.scopeInfo);
         mergedAssembleOp.SetOpAttribute(attr);
         newOps_.push_back(&mergedAssembleOp);

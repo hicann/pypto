@@ -24,6 +24,7 @@
 #include "ut_json/ut_json_tool.h"
 
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #define private public
 #include "passes/tensor_graph_pass/remove_redundant_reshape.h"
 
@@ -81,9 +82,9 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest1)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    auto& reshape1 = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    auto& reshape2 = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& sqrt = currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor2}, {outCast});
+    auto& reshape1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
+    auto& reshape2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& sqrt = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -125,8 +126,8 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest2)
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor});
-    auto& sqrt = currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor});
+    auto& sqrt = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -170,10 +171,10 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest3)
     auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor});
-    auto& sqrt = currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast1});
-    auto& exp = currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor}, {outCast2});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor}, {outCast3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor});
+    auto& sqrt = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor}, {outCast1});
+    auto& exp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor}, {outCast2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor}, {outCast3});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast1);
@@ -224,10 +225,10 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest4)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    auto& reshape1 = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor1}, {outCast1});
-    auto& reshape2 = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor2}, {outCast2});
+    auto& reshape1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor1}, {outCast1});
+    auto& reshape2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast2});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast1);
@@ -329,9 +330,9 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest5)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor2}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor2}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -359,8 +360,8 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeContainNegativeOne)
     auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -387,7 +388,7 @@ TEST_F(TestRemoveRedundantReshapePass, ReshapeNoConsumer) {
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {outCast});
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
     RemoveRedundantReshape pass;

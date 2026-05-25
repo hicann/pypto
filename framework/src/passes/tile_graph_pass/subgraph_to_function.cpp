@@ -17,6 +17,7 @@
 #include <fstream>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -895,7 +896,8 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
             }
 
             copyInTensor->SetMemoryTypeBoth(subgraphMemoryType);
-            auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyInSourceTensor}, {copyInTensor}, false);
+            auto& copyInOp = PassOperationUtils::AddOperation(
+                function, Opcode::OP_COPY_IN, {copyInSourceTensor}, {copyInTensor});
             copyInOp.UpdateSubgraphID(subgraphID);
             copyInOp.SetOpAttribute(copyInAttr);
             SetEmuOpcode(&copyInOp, EMUOP_TENSOR_GETDATA_DEPEND);

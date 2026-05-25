@@ -14,6 +14,7 @@
  */
 
 #include "duplicate_op.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_check/duplicate_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
@@ -98,8 +99,10 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation, st
                 return FAILED;
             }
             consumer->ReplaceInput(dst, oOperand);
-            auto& newOp = function.AddRawOperation(
-                Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst}, true, operation.GetSpan());
+            IRBuilder builder;
+            auto& newOp =
+                builder.CreateTensorOpStmt(function, Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst},
+                                              operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             newOp.SetAttribute(OpAttributeKey::startOffset, operation.GetIntAttribute(OpAttributeKey::startOffset));
             newOps.push_back(&newOp);
@@ -145,7 +148,9 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::v
                 return FAILED;
             }
             consumer->ReplaceInput(dst, oOperand);
-            auto& newOp = function.AddRawOperation(Opcode::OP_VIEW, {iOperand}, {dst}, true, operation.GetSpan());
+            IRBuilder builder;
+            auto& newOp =
+                builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {iOperand}, {dst}, operation.GetSpan());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             auto oriViewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
             if (oriViewAttr != nullptr) {

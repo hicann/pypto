@@ -62,8 +62,8 @@ void MakeExpandGrpah(std::shared_ptr<Function>& currFunctionPtr, LogicalTensorPt
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& div_op = currFunctionPtr->AddOperation(Opcode::OP_DIV, {inCast1, inCast2}, {ubTensor});
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
+    auto& div_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_DIV, {inCast1, inCast2}, {ubTensor});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
     auto op_attr = CreateAssembleOpAttr();
     assemble_op.SetOpAttribute(op_attr);
     div_op.tileShape_.SetVecTile(tile_shape);
@@ -149,7 +149,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest1)
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& nop_op = currFunctionPtr->AddOperation(Opcode::OP_NOP, {inCast}, {outCast});
+    auto& nop_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_NOP, {inCast}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -203,8 +203,8 @@ TEST_F(TestExpandFunctionPass, TestCVSeperate2)
     auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& opAdd = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {out1});
-    auto& opMatmul = currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {L1Tensor1, L1Tensor2}, {out2});
+    auto& opAdd = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {out1});
+    auto& opMatmul = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {L1Tensor1, L1Tensor2}, {out2});
 
     currFunctionPtr->inCasts_.push_back(ubTensor1);
     currFunctionPtr->inCasts_.push_back(ubTensor2);
@@ -237,8 +237,8 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest2)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto op_attr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{kNumZero, kNumZero});
-    currFunctionPtr->AddOperation(Opcode::OP_NOP, {inCast}, {ubTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor1}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_NOP, {inCast}, {ubTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {outCast});
 
     std::shared_ptr<Operation> nop_op, view_op;
     for (uint32_t uIndex = 0; uIndex < currFunctionPtr->Operations().size(); ++uIndex) {
@@ -292,7 +292,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest3)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto op_attr = CreateAssembleOpAttr();
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {outCast});
 
     std::shared_ptr<Operation> assemble_op;
     for (uint32_t uIndex = 0; uIndex < currFunctionPtr->Operations().size(); ++uIndex) {
@@ -400,8 +400,8 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest5)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
     auto op_attr = CreateAssembleOpAttr();
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {inCast}, {ubTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
 
     std::shared_ptr<Operation> reshape_op;
     std::shared_ptr<Operation> assemble_op;
@@ -613,10 +613,10 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest6)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto op_attr = CreateAssembleOpAttr();
-    auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
+    auto& assemble_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {outCast});
     assemble_op.SetOpAttribute(op_attr);
 
-    auto& assemble_op_loop = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {outCast}, {inCast});
+    auto& assemble_op_loop = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {outCast}, {inCast});
     assemble_op_loop.SetOpAttribute(op_attr);
 
     currFunctionPtr->inCasts_.push_back(inCast);

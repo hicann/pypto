@@ -15,6 +15,8 @@
 
 #include "graph_utils.h"
 #include "pass_utils.h"
+#include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -34,7 +36,7 @@ Operation& GraphUtils::AddDynOperation(
     Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
     const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = function.AddOperation(opCode, iOperands, oOperands);
+    auto& newOp = PassOperationUtils::AddOperation(function, opCode, std::move(iOperands), oOperands);
     SetDynShape(&newOp, outDynShape);
     return newOp;
 }
@@ -43,7 +45,8 @@ Operation& GraphUtils::AddDynRawOperation(
     Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
     const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = function.AddRawOperation(opCode, iOperands, oOperands);
+    IRBuilder builder;
+    auto& newOp = builder.CreateTensorOpStmt(function, opCode, iOperands, oOperands);
     SetDynShape(&newOp, outDynShape);
     return newOp;
 }
@@ -62,7 +65,9 @@ Operation& GraphUtils::AddViewOperation(
 Operation& GraphUtils::AddAssembleOperation(
     Function& function, const AssembleOp& assemble, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = function.AddRawOperation(Opcode::OP_ASSEMBLE, {assemble.input}, {assemble.output});
+    IRBuilder builder;
+    auto& newOp = builder.CreateTensorOpStmt(
+        function, Opcode::OP_ASSEMBLE, {assemble.input}, {assemble.output});
     if (assemble.originOp != nullptr) {
         newOp.SetScopeInfo(assemble.originOp->GetScopeInfo());
         newOp.CopyAttrFrom(*assemble.originOp, "");
@@ -76,7 +81,7 @@ Operation& GraphUtils::AddReshapeOperation(
     Function& function, const LogicalTensorPtr iOperand, const LogicalTensorPtr& oOperand, const ReshapeOp& reshapeOp,
     const std::vector<SymbolicScalar>& outDynShape)
 {
-    auto& newOp = function.AddOperation(Opcode::OP_RESHAPE, {iOperand}, {oOperand});
+    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_RESHAPE, {iOperand}, {oOperand});
     if (reshapeOp.originOpPtr != nullptr) {
         newOp.SetScopeInfo(reshapeOp.originOpPtr->GetScopeInfo());
         newOp.CopyAttrFrom(*reshapeOp.originOpPtr, "");
@@ -111,7 +116,7 @@ void GraphUtils::SetCopyOutAttr(Operation& op, const CopyInOutOp& copy)
 Operation& GraphUtils::AddCopyInOperation(
     Function& function, const CopyInOutOp& copy, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = function.AddOperation(Opcode::OP_COPY_IN, {copy.input}, {copy.output});
+    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {copy.input}, {copy.output});
     SetCopyInAttr(newOp, copy);
     SetDynShape(&newOp, outDynShape);
     newOp.UpdateSubgraphID(CommonUtils::GetTensorSubgraphID(copy.output));
@@ -121,7 +126,7 @@ Operation& GraphUtils::AddCopyInOperation(
 Operation& GraphUtils::AddCopyOutOperation(
     Function& function, const CopyInOutOp& copy, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = function.AddOperation(Opcode::OP_COPY_OUT, {copy.input}, {copy.output});
+    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_OUT, {copy.input}, {copy.output});
     SetCopyOutAttr(newOp, copy);
     SetDynShape(&newOp, outDynShape);
     newOp.UpdateSubgraphID(CommonUtils::GetTensorSubgraphID(copy.input));

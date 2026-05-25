@@ -18,6 +18,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include "computational_graph_builder.h"
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "symbolic_scalar_test_utils.h"
@@ -62,16 +63,16 @@ inline void ConstructGraphWithCopyInAndReshape(
     ubTensor2->SetMemoryTypeBoth(MEM_UB);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
     (void)reshape_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor2}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor2}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -97,16 +98,16 @@ inline void ConstructGraph2(std::shared_ptr<Function>& currFunctionPtr)
     ubTensor2->SetMemoryTypeBoth(MEM_UB);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<npu::tile_fwk::OpImmediate>());
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
     copyin1Attr->SetToDynValidShape(toValidShape);
     copy_op1.SetOpAttribute(copyin1Attr);
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
     (void)reshape_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor2}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor2}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -125,9 +126,9 @@ inline void ConstructGraph3(std::shared_ptr<Function>& currFunctionPtr)
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {incast1}, {ubTensor1});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {incast1}, {ubTensor1});
     (void)reshape_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor1}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor1}, {outCast});
     (void)copy_out_op;
 }
 
@@ -145,11 +146,11 @@ inline void ConstructGraph4(std::shared_ptr<Function>& currFunctionPtr)
     ubTensor1->SetMemoryTypeBoth(MEM_UB);
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshape_shape, CreateTestConstIntVector(reshape_shape));
     outCast->UpdateDynValidShape({CreateTestScalarVar("output_0_Dim_0"), CreateTestScalarVar("output_0_Dim_1")});
-    auto& copy_in_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor0});
+    auto& copy_in_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor0});
     (void)copy_in_op;
-    auto& reshape_op = currFunctionPtr->AddRawOperation(Opcode::OP_RESHAPE, {ubTensor0}, {ubTensor1});
+    auto& reshape_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor0}, {ubTensor1});
     (void)reshape_op;
-    auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor1}, {outCast});
+    auto& copy_out_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor1}, {outCast});
     (void)copy_out_op;
 }
 } // namespace
@@ -421,13 +422,13 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1)
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyinTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor1}, {copyoutTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyoutTensor1}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor3});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor2}, {outcast});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor3}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyinTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor1}, {copyoutTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyoutTensor1}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor2}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor3}, {outcast});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast);
@@ -471,13 +472,13 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnUB)
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
-    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
-    auto& copyinOp1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor2});
-    auto& copyinOp2 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {outcast});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
+    auto& copyoutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
+    auto& copyinOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor2});
+    auto& copyinOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor2}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast);
@@ -527,17 +528,17 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
 
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast);
@@ -582,12 +583,12 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeConsumerAssembleOnUB)
     auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyOutTensor_1}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {reshapeTensor}, {outcast_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyOutTensor_1}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {reshapeTensor}, {outcast_2});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast_1);
@@ -635,16 +636,16 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape1)
     auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape, CreateTestConstIntVector(outShape));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
+    auto& copyoutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
     auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
         OpImmediate::Specified(inShape), OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
     copyoutOp.SetOpAttribute(copyoutAttr);
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {outcast_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {outcast_2});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast_1);
@@ -694,11 +695,11 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithAddOp)
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyinTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor}, {copyoutTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyoutTensor}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_ADD, {reshapeTensor}, {addTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {addTensor}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyinTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor}, {copyoutTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyoutTensor}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {reshapeTensor}, {addTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {addTensor}, {outcast});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast);
@@ -758,13 +759,13 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestHandleNoCopyInConsumerWithMultiOps)
     auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
     outcast2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyinTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor}, {copyoutTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyoutTensor}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_ADD, {reshapeTensor}, {addTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_MUL, {reshapeTensor}, {mulTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {addTensor}, {outcast1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {mulTensor}, {outcast2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyinTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor}, {copyoutTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyoutTensor}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {reshapeTensor}, {addTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {reshapeTensor}, {mulTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {addTensor}, {outcast1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {mulTensor}, {outcast2});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast1);
@@ -824,16 +825,16 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestBranchBetweenCopyOutReshape2)
     auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataType32, outShape, CreateTestConstIntVector(outShape));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
+    auto& copyoutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
     auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),OpImmediate::Specified(inShape),
         OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
     copyoutOp.SetOpAttribute(copyoutAttr);
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {assembleTensor}, {outcast_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assembleTensor}, {outcast_2});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast_1);
@@ -893,17 +894,17 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFp32, outShape, CreateTestConstIntVector(outShape));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast_1}, {copyInTensor_1});
-    auto& copyoutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast_1}, {copyInTensor_1});
+    auto& copyoutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
     auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
         OpImmediate::Specified(inShape), OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
     copyoutOp.SetOpAttribute(copyoutAttr);
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {incast_2}, {assembleTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {outcast_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {incast_2}, {assembleTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {outcast_2});
 
     currFunctionPtr->inCasts_.push_back(incast_1);
     currFunctionPtr->inCasts_.push_back(incast_2);
@@ -959,17 +960,17 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiConsumersBetweenCopyOutReshape)
     auto outcast_3 = npu::tile_fwk::IRBuilder().CreateTensorVar(dataTypeFP32, inShape, CreateTestConstIntVector(inShape));
     outcast_3->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
-    auto& copyout_Op = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyInTensor_1});
+    auto& copyout_Op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_1}, {copyOutTensor_1});
     auto copyoutAttr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}),
         OpImmediate::Specified(inShape), OpImmediate::Specified(inShape), std::vector<npu::tile_fwk::OpImmediate>());
     copyout_Op.SetOpAttribute(copyoutAttr);
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {outcast_2});
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {assembleTensor}, {outcast_3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {assembleTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {assembleTensor}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyInTensor_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyInTensor_2}, {outcast_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {copyOutTensor_1}, {outcast_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {assembleTensor}, {outcast_3});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast_1);
@@ -1012,13 +1013,13 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1OverUB)
     auto outcast_2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShapeOverUB, CreateTestConstIntVector(outShapeOverUB));
     outcast_2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyinTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor1}, {copyoutTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyoutTensor1}, {reshapeTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor3});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor3}, {outcast_1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyinTensor2}, {outcast_2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyinTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor1}, {copyoutTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyoutTensor1}, {reshapeTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeTensor}, {copyinTensor3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor3}, {outcast_1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyinTensor2}, {outcast_2});
 
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast_1);
@@ -1051,10 +1052,10 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 128}, CreateTestConstIntVector(std::vector<int64_t>{64, 128}), TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& reshapeOp = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    auto& reshapeOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
     reshapeOp.UpdateSubgraphID(0);
 
-    auto& copyOutOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {reshapeOutput}, {outCast});
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {reshapeOutput}, {outCast});
     copyOutOp.UpdateSubgraphID(0);
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -1113,15 +1114,15 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
     auto outcast = builder.CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
         
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
         
     currFunctionPtr->inCasts_.push_back(incast);
     currFunctionPtr->outCasts_.push_back(outcast);

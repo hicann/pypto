@@ -64,7 +64,7 @@ TEST_F(TestSetHeuristicTileShapes, TestCube)
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape, CreateTestConstIntVector(inputBShape));
     auto outputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape, CreateTestConstIntVector(outputCShape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
 
     currFunctionPtr->inCasts_.push_back(inputA);
     currFunctionPtr->inCasts_.push_back(inputB);
@@ -96,14 +96,14 @@ TEST_F(TestSetHeuristicTileShapes, TestVector)
     auto ubTensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_SQRT, {inCast}, {ubTensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor2}, {ubTensor3});
-    currFunctionPtr->AddOperation(Opcode::OP_ROWMAX, {ubTensor3}, {ubTensor4});
-    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor4}, {ubTensor5});
-    auto& transpose = currFunctionPtr->AddOperation(Opcode::OP_TRANSPOSE_VNCHWCONV, {ubTensor5}, {ubTensor6});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {inCast}, {ubTensor1});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {ubTensor3});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ROWMAX, {ubTensor3}, {ubTensor4});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor4}, {ubTensor5});
+    auto& transpose = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {ubTensor5}, {ubTensor6});
     transpose.SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{1, 0});
-    currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor6}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor6}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -129,7 +129,7 @@ TEST_F(TestSetHeuristicTileShapes, TestSemanticLabel)
     auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape, CreateTestConstIntVector(inputBShape));
     auto outputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape, CreateTestConstIntVector(outputCShape));
 
-    currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
 
     std::shared_ptr<SemanticLabel> label = std::make_shared<SemanticLabel>("test", "test", 10);
     std::cout << currFunctionPtr->GetSortedOperations().size() << std::endl;
@@ -166,7 +166,7 @@ TEST_F(TestSetHeuristicTileShapes, TestPythonJsonGeneration)
     TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64});
     currFunctionPtr->SetGraphType(GraphType::TILE_GRAPH);
     ir::Span::SetCurrent(ir::Span("noexist.cpp", 1, 0));
-    auto& add_op = currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
+    auto& add_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
     add_op.tileShape_.SetCubeTile({64, 64}, {64, 64}, {64, 64});
 
     currFunctionPtr->inCasts_.push_back(inputA);

@@ -81,14 +81,14 @@ protected:
         std::vector<OpImmediate> emptyVec;
 
         // Component 1 (CUBE)
-        auto& copyout1 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_OUT, {inputTensor}, {tensor1});
+        auto& copyout1 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_OUT, {inputTensor}, {tensor1});
         copyout1.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
         copyout1.SetOOpAttrOffset(0, 0);
         copyout1.UpdateInternalSubgraphID(1);
         copyout1.SetAttr(OpAttributeKey::isCube, true);
 
-        auto& copyin3 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor2}, {outputTensor});
+        auto& copyin3 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {tensor2}, {outputTensor});
         copyin3.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
         copyin3.SetIOpAttrOffset(0, 0);
@@ -96,7 +96,7 @@ protected:
         copyin3.SetAttr(OpAttributeKey::isCube, true);
 
         // Component 0 (VECTOR)
-        auto& copyin2 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor2});
+        auto& copyin2 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor2});
         copyin2.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
         copyin2.SetIOpAttrOffset(0, 0);
@@ -259,7 +259,7 @@ Operation& CreateCallOp(
     auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
 
     auto& callOp =
-        rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {callInTensor1, callInTensor2, callInTensor3}, {callOutTensor});
+        IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {callInTensor1, callInTensor2, callInTensor3}, {callOutTensor});
 
     auto callAttr = std::make_shared<CallOpAttribute>();
     auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
@@ -300,16 +300,16 @@ void CreateVectorScope(
     std::vector<OpImmediate> emptyVec;
 
     // Vector scope op（internalSubgraphID=1）
-    auto& vectorAdd = mixFuncPtr->AddRawOperation(Opcode::OP_ADD, {cubeTensor3, incast3}, {vectorTensor1});
+    auto& vectorAdd = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_ADD, {cubeTensor3, incast3}, {vectorTensor1});
     vectorAdd.SetIOpAttrOffset(1, 5);
     vectorAdd.UpdateInternalSubgraphID(1);
     vectorAdd.SetAIVCore(AIVCore::AIV0);
 
-    auto& vectorSqrt = mixFuncPtr->AddRawOperation(Opcode::OP_SQRT, {vectorTensor1}, {vectorTensor2});
+    auto& vectorSqrt = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_SQRT, {vectorTensor1}, {vectorTensor2});
     vectorSqrt.UpdateInternalSubgraphID(1);
     vectorSqrt.SetAIVCore(AIVCore::AIV0);
 
-    auto& vectorCopyOut = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_OUT, {vectorTensor2}, {outcast1});
+    auto& vectorCopyOut = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_OUT, {vectorTensor2}, {outcast1});
     vectorCopyOut.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
     vectorCopyOut.SetOOpAttrOffset(0, 0);
@@ -333,21 +333,21 @@ void CreateCubeScope(
     std::vector<OpImmediate> emptyVec;
 
     // Cube scope op（internalSubgraphID=0）
-    auto& cubeCopyIn1 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {cubeTensor1});
+    auto& cubeCopyIn1 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {incast1}, {cubeTensor1});
     cubeCopyIn1.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
     cubeCopyIn1.SetIOpAttrOffset(0, 0);
     cubeCopyIn1.UpdateInternalSubgraphID(0);
     cubeCopyIn1.SetAttr(OpAttributeKey::isCube, true);
 
-    auto& cubeCopyIn2 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
+    auto& cubeCopyIn2 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
     cubeCopyIn2.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
     cubeCopyIn2.SetIOpAttrOffset(0, 0);
     cubeCopyIn2.UpdateInternalSubgraphID(0);
     cubeCopyIn2.SetAttr(OpAttributeKey::isCube, true);
 
-    auto& cubeMul = mixFuncPtr->AddRawOperation(Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2}, {cubeTensor3});
+    auto& cubeMul = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2}, {cubeTensor3});
     cubeMul.UpdateInternalSubgraphID(0);
     cubeMul.SetAttr(OpAttributeKey::isCube, true);
 }
@@ -433,7 +433,7 @@ void CreateCallOpForNonMix(
     auto callInTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {callInTensor}, {callOutTensor});
+    auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {callInTensor}, {callOutTensor});
     auto callAttr = std::make_shared<CallOpAttribute>();
     auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
     invokeInfo->UpdateProgramSubgraphId(programIdx);
@@ -471,7 +471,7 @@ void CreateNonMixFunctions(
         nonMixFunc->outCasts_.push_back(outcastTensor);
 
         auto internalTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-        auto& copyInOp = nonMixFunc->AddRawOperation(Opcode::OP_COPY_IN, {incastTensor}, {internalTensor1});
+        auto& copyInOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_IN, {incastTensor}, {internalTensor1});
         copyInOp.SetIOpAttrOffset(0, 0);
 
         auto shapeImme = OpImmediate::Specified(shape);
@@ -483,9 +483,9 @@ void CreateNonMixFunctions(
         copyInOp.SetOpAttribute(copyInAttr);
 
         auto internalTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-        auto& expOp = nonMixFunc->AddRawOperation(Opcode::OP_EXP, {internalTensor1}, {internalTensor2});
+        auto& expOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_EXP, {internalTensor1}, {internalTensor2});
         (void)expOp;
-        auto& copyOutOp = nonMixFunc->AddRawOperation(Opcode::OP_COPY_OUT, {internalTensor2}, {outcastTensor});
+        auto& copyOutOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_OUT, {internalTensor2}, {outcastTensor});
         copyOutOp.SetOOpAttrOffset(0, 0);
 
         auto copyOutAttr =
@@ -514,7 +514,7 @@ void CreateCallOpsForMixFunction(
         auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-        auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {callInTensor1, callInTensor2}, {callOutTensor});
+        auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {callInTensor1, callInTensor2}, {callOutTensor});
 
         auto callAttr = std::make_shared<CallOpAttribute>();
         auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
@@ -546,11 +546,11 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
         Opcode opcode = (compIdx % 2 == 0) ? Opcode::OP_NEG : Opcode::OP_SQRT;
 
         if (compIdx % 2 == 0) {
-            auto& cubeOp = mixFunc->AddRawOperation(opcode, {lastTensor}, {newTensor});
+            auto& cubeOp = IRBuilder().CreateTensorOpStmt(*mixFunc, opcode, {lastTensor}, {newTensor});
             cubeOp.UpdateInternalSubgraphID(compIdx);
             cubeOp.SetAttr(OpAttributeKey::isCube, true);
         } else {
-            auto& vectorOp = mixFunc->AddRawOperation(opcode, {lastTensor}, {newTensor});
+            auto& vectorOp = IRBuilder().CreateTensorOpStmt(*mixFunc, opcode, {lastTensor}, {newTensor});
             vectorOp.UpdateInternalSubgraphID(compIdx);
             vectorOp.SetAIVCore(AIVCore::AIV0);
         }
@@ -558,7 +558,7 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
     }
 
     // 创建COPY_OUT op
-    auto& copyOut = mixFunc->AddRawOperation(Opcode::OP_COPY_OUT, {lastTensor}, {mixFunc->outCasts_[0]});
+    auto& copyOut = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_OUT, {lastTensor}, {mixFunc->outCasts_[0]});
     copyOut.UpdateInternalSubgraphID(componentCount - 1);
     copyOut.SetOOpAttrOffset(0, 0);
 
@@ -608,7 +608,7 @@ void CreateMixFunctions(
         auto offsetImme = OpImmediate::Specified(offsetVec);
         std::vector<OpImmediate> emptyVec;
 
-        auto& copyIn1 = mixFunc->AddRawOperation(Opcode::OP_COPY_IN, {incast1}, {cubeTensor1});
+        auto& copyIn1 = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_IN, {incast1}, {cubeTensor1});
         copyIn1.UpdateInternalSubgraphID(0);
         copyIn1.SetIOpAttrOffset(0, 0);
         copyIn1.SetAttr(OpAttributeKey::isCube, true);
@@ -616,7 +616,7 @@ void CreateMixFunctions(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
         copyIn1.SetOpAttribute(copyIn1Attr);
 
-        auto& copyIn2 = mixFunc->AddRawOperation(Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
+        auto& copyIn2 = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
         copyIn2.UpdateInternalSubgraphID(0);
         copyIn2.SetIOpAttrOffset(0, 0);
         copyIn2.SetAttr(OpAttributeKey::isCube, true);
@@ -624,11 +624,11 @@ void CreateMixFunctions(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
         copyIn2.SetOpAttribute(copyIn2Attr);
 
-        auto& cubeMul = mixFunc->AddRawOperation(Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2}, {cubeTensor3});
+        auto& cubeMul = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_A_MUL_B, {cubeTensor1, cubeTensor2}, {cubeTensor3});
         cubeMul.UpdateInternalSubgraphID(0);
         cubeMul.SetAttr(OpAttributeKey::isCube, true);
 
-        auto& cubeExp = mixFunc->AddRawOperation(Opcode::OP_EXP, {cubeTensor3}, {cubeOutput});
+        auto& cubeExp = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_EXP, {cubeTensor3}, {cubeOutput});
         cubeExp.UpdateInternalSubgraphID(0);
         cubeExp.SetAttr(OpAttributeKey::isCube, true);
 
@@ -770,7 +770,7 @@ TEST_F(MixSubgraphSplitTest, TestNoMixSubgraphScenario)
         auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         func->inCasts_.push_back(inputTensor);
         func->outCasts_.push_back(outputTensor);
-        auto& expOp = func->AddRawOperation(Opcode::OP_EXP, {inputTensor}, {outputTensor});
+        auto& expOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_EXP, {inputTensor}, {outputTensor});
         (void)expOp;
         func->ComputeHash();
         FunctionHash hash = func->GetFunctionHash();
@@ -779,7 +779,7 @@ TEST_F(MixSubgraphSplitTest, TestNoMixSubgraphScenario)
         rootFuncPtr->programs_[programIds[i]] = func.get();
         nonMixFunctions.push_back(func);
         // 创建callOp
-        auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {}, {});
+        auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {}, {});
         auto callAttr = std::make_shared<CallOpAttribute>();
         auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
         invokeInfo->UpdateProgramSubgraphId(programIds[i]);
@@ -843,7 +843,7 @@ void CreateExternalMixFunction(
         auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         Opcode opcode = Opcode::OP_EXP;
-        auto& op = externalMixFuncPtr->AddRawOperation(opcode, {inputTensor}, {outputTensor});
+        auto& op = IRBuilder().CreateTensorOpStmt(*externalMixFuncPtr, opcode, {inputTensor}, {outputTensor});
         op.UpdateInternalSubgraphID(compIdx);
 
         // 交替设置Cube和Vector
@@ -919,7 +919,7 @@ TEST_F(MixSubgraphSplitTest, TestCrossFunctionMixSubgraph)
     FunctionHash mixFuncHash = externalMixFuncPtr->GetFunctionHash();
 
     // 4. 创建指向外部Mix子图的callOp
-    auto& crossCallOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {}, {});
+    auto& crossCallOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {}, {});
     auto crossCallAttr = std::make_shared<CallOpAttribute>();
     auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
     crossCallAttr->SetCalleeHash(mixFuncHash);

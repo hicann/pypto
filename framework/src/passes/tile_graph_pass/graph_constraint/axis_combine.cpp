@@ -146,7 +146,8 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
                 return FAILED;
             }
             auto alignedTensor = CreateAlignedTensor(function, srcTensor, alignedShape);
-            auto& expand = function.AddRawOperation(Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
+            IRBuilder builder;
+            auto& expand = builder.CreateTensorOpStmt(function, Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
             SetAttrForExpand(expand, inputTensor, idx, alignedShape);
             expand.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
@@ -157,7 +158,8 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
                 return FAILED;
             }
             auto alignedTensor = CreateAlignedTensor(function, srcTensor, alignedShape);
-            auto& brcb = function.AddRawOperation(Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
+            IRBuilder builder;
+            auto& brcb = builder.CreateTensorOpStmt(function, Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
             brcb.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
         }

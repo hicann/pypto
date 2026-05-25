@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -165,7 +166,7 @@ TEST_F(MergeViewAssembleTest, MergeTwoConsecutiveViews)
         std::vector<SymbolicScalar>{}, // from_dyn_offset
         std::vector<SymbolicScalar>{}  // to_dyn_valid_shape
     );
-    auto& view1Op = function->AddRawOperation(Opcode::OP_VIEW, {inputTensor}, {midTensor});
+    auto& view1Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {inputTensor}, {midTensor});
     view1Op.SetOpAttribute(view1Attr);
 
     // 2. 创建第2个VIEW操作，偏移量[3,4]
@@ -176,7 +177,7 @@ TEST_F(MergeViewAssembleTest, MergeTwoConsecutiveViews)
         std::vector<SymbolicScalar>{}, // from_dyn_offset
         std::vector<SymbolicScalar>{}  // to_dyn_valid_shape
     );
-    auto& view2Op = function->AddRawOperation(Opcode::OP_VIEW, {midTensor}, {outputTensor});
+    auto& view2Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {midTensor}, {outputTensor});
     view2Op.SetOpAttribute(view2Attr);
 
     // 3. 执行MergeViewAssemble pass
@@ -187,8 +188,8 @@ TEST_F(MergeViewAssembleTest, MergeTwoConsecutiveViews)
     // 4.1 检查原始VIEW操作是否被标记为删除
 
     const auto& operations = function->Operations();
-    EXPECT_EQ(operations.Contains(view1Op), false);
-    EXPECT_EQ(operations.Contains(view2Op), false);
+    EXPECT_FALSE(operations.Contains(view1Op));
+    EXPECT_FALSE(operations.Contains(view2Op));
 
     // 4.2 检查合并后的VIEW操作
     int viewOpCount = 0;
@@ -250,7 +251,7 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
         std::vector<int64_t>{1, 0},   // to_offset
         std::vector<SymbolicScalar>{} // to_dyn_offset
     );
-    auto& assemble1Op = function->AddRawOperation(Opcode::OP_ASSEMBLE, {inputTensor}, {midTensor1});
+    auto& assemble1Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {inputTensor}, {midTensor1});
     assemble1Op.SetOpAttribute(assemble1Attr);
 
     // 第二个ASSEMBLE：偏移量[0,2]
@@ -259,7 +260,7 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
         std::vector<int64_t>{0, 2},   // to_offset
         std::vector<SymbolicScalar>{} // to_dyn_offset
     );
-    auto& assemble2Op = function->AddRawOperation(Opcode::OP_ASSEMBLE, {midTensor1}, {midTensor2});
+    auto& assemble2Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {midTensor1}, {midTensor2});
     assemble2Op.SetOpAttribute(assemble2Attr);
 
     // 第三个ASSEMBLE：偏移量[3,0]
@@ -269,7 +270,7 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
         std::vector<int64_t>{3, 0},   // to_offset
         std::vector<SymbolicScalar>{} // to_dyn_offset
     );
-    auto& assemble3Op = function->AddRawOperation(Opcode::OP_ASSEMBLE, {midTensor2}, {outputTensor});
+    auto& assemble3Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {midTensor2}, {outputTensor});
     assemble3Op.SetOpAttribute(assemble3Attr);
 
     // 3.执行MergeViewAssemble pass
@@ -279,9 +280,9 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     // 4.验证结果
     // 4.1检查原始ASSEMBLE操作是否被标记为已删除
     const auto& operations = function->Operations();
-    EXPECT_EQ(operations.Contains(assemble1Op), false);
-    EXPECT_EQ(operations.Contains(assemble2Op), false);
-    EXPECT_EQ(operations.Contains(assemble3Op), false);
+    EXPECT_FALSE(operations.Contains(assemble1Op));
+    EXPECT_FALSE(operations.Contains(assemble2Op));
+    EXPECT_FALSE(operations.Contains(assemble3Op));
 
     // 4.2检查合并后的ASSEMBLE操作
     ASSERT_EQ(operations.size(), 0) << "所有op都应该被删除";
@@ -746,41 +747,41 @@ void MergeViewL1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
     std::shared_ptr<LogicalTensor> a_mul_b_out2 =
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     // std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto& head_view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast1}, {input_cast1_view});
+    auto& head_view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1}, {input_cast1_view});
     head_view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& head_view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast2}, {input_cast2_view});
+    auto& head_view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2}, {input_cast2_view});
     head_view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
 
-    auto& head_view_op11 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast1_view}, {redundant_view_out1});
+    auto& head_view_op11 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast1_view}, {redundant_view_out1});
     head_view_op11.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& head_view_op12 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast2_view}, {redundant_view_out2});
+    auto& head_view_op12 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {input_cast2_view}, {redundant_view_out2});
     head_view_op12.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
 
-    auto& view_L1_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {redundant_view_out1}, {op_view_L1_out1});
+    auto& view_L1_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {redundant_view_out1}, {op_view_L1_out1});
     std::vector<int> newoffset{0, 0};
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_L1);
     view_L1_op1.SetOpAttribute(viewAttribute);
 
-    auto& view_L1_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {redundant_view_out2}, {op_view_L1_out2});
+    auto& view_L1_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {redundant_view_out2}, {op_view_L1_out2});
     view_L1_op2.SetOpAttribute(viewAttribute);
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out1}, {view_out1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out1}, {view_out1});
     view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out1}, {view_out2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out1}, {view_out2});
     view_op2.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 32}));
-    auto& view_op3 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out2}, {view_out3});
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out2}, {view_out3});
     view_op3.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
-    auto& view_op4 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {op_view_L1_out2}, {view_out4});
+    auto& view_op4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {op_view_L1_out2}, {view_out4});
     view_op4.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{32, 0}));
 
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0A, {view_out1}, {l0a_out1});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0A, {view_out2}, {l0a_out2});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0B, {view_out3}, {l0b_out1});
-    currFunctionPtr->AddRawOperation(Opcode::OP_L1_TO_L0B, {view_out4}, {l0b_out2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {view_out1}, {l0a_out1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0A, {view_out2}, {l0a_out2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {view_out3}, {l0b_out1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_L1_TO_L0B, {view_out4}, {l0b_out2});
 
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {l0a_out1, l0b_out1}, {a_mul_b_out1});
-    currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {l0a_out2, l0b_out2}, {a_mul_b_out2});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a_out1, l0b_out1}, {a_mul_b_out1});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {l0a_out2, l0b_out2}, {a_mul_b_out2});
 
     currFunctionPtr->inCasts_.push_back(input_cast1);
     currFunctionPtr->inCasts_.push_back(input_cast2);
@@ -843,23 +844,23 @@ void MergeViewWithAttr(std::shared_ptr<Function>& currFunctionPtr)
     std::shared_ptr<LogicalTensor> view_out =
         npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
 
-    auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in}, {tensor1});
+    auto& view_op1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {view_in}, {tensor1});
     auto viewAttribute1 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute1->SetToType(MemoryType::MEM_UNKNOWN);
     view_op1.SetOpAttribute(viewAttribute1);
-    auto& view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
+    auto& view_op2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor1}, {tensor2});
     auto viewAttribute2 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute2->SetToType(MemoryType::MEM_BT);
     view_op2.SetOpAttribute(viewAttribute2);
-    auto& view_op3 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor2}, {tensor3});
+    auto& view_op3 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor2}, {tensor3});
     auto viewAttribute3 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute3->SetToType(MemoryType::MEM_BT);
     view_op3.SetOpAttribute(viewAttribute3);
-    auto& view_op4 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor3}, {tensor4});
+    auto& view_op4 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor3}, {tensor4});
     auto viewAttribute4 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute4->SetToType(MemoryType::MEM_UB);
     view_op4.SetOpAttribute(viewAttribute4);
-    auto& view_op5 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {tensor4}, {view_out});
+    auto& view_op5 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {tensor4}, {view_out});
     auto viewAttribute5 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute5->SetToType(MemoryType::MEM_UB);
     view_op5.SetOpAttribute(viewAttribute5);
@@ -920,8 +921,8 @@ TEST_F(MergeViewAssembleTest, TestPreCheck)
     auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {ubTensor});
-    currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor}, {});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {inCast}, {ubTensor});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor}, {});
 
     currFunctionPtr->inCasts_.push_back(inCast);
 
@@ -949,12 +950,12 @@ TEST_F(MergeViewAssembleTest, TestSpan)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto& viewOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1}, true, span1);
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1}, span1);
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
     viewAttribute->SetToType(MemoryType::MEM_UB);
     viewOp.SetOpAttribute(viewAttribute);
-    currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2}, true, span2);
-    currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2}, span2);
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->inCasts_.push_back(outCast);
@@ -987,7 +988,7 @@ TEST_F(MergeViewAssembleTest, ViewChainSameScopeIdsShouldMerge)
     auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{8, 8}, CreateTestConstIntVector(std::vector<int64_t>{8, 8}));
     auto view1Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
-    auto& view1Op = function->AddRawOperation(Opcode::OP_VIEW, {inputTensor}, {midTensor});
+    auto& view1Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {inputTensor}, {midTensor});
     view1Op.SetOpAttribute(view1Attr);
     view1Op.SetScopeId(1);
 
@@ -995,7 +996,7 @@ TEST_F(MergeViewAssembleTest, ViewChainSameScopeIdsShouldMerge)
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outputTensor);
     auto view2Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{3, 4}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
-    auto& view2Op = function->AddRawOperation(Opcode::OP_VIEW, {midTensor}, {outputTensor});
+    auto& view2Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {midTensor}, {outputTensor});
     view2Op.SetOpAttribute(view2Attr);
     view2Op.SetScopeId(1);
 
@@ -1031,14 +1032,14 @@ TEST_F(MergeViewAssembleTest, ViewChainMixedDefaultAndValidScopeIdShouldMerge)
     auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{8, 8}, CreateTestConstIntVector(std::vector<int64_t>{8, 8}));
     auto view1Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
-    auto& view1Op = function->AddRawOperation(Opcode::OP_VIEW, {inputTensor}, {midTensor});
+    auto& view1Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {inputTensor}, {midTensor});
     view1Op.SetOpAttribute(view1Attr);
 
     auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{6, 6}, CreateTestConstIntVector(std::vector<int64_t>{6, 6}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outputTensor);
     auto view2Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{3, 4}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
-    auto& view2Op = function->AddRawOperation(Opcode::OP_VIEW, {midTensor}, {outputTensor});
+    auto& view2Op = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {midTensor}, {outputTensor});
     view2Op.SetOpAttribute(view2Attr);
     view2Op.SetScopeId(1);
 
@@ -1131,17 +1132,17 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeView)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outCast);
 
-    auto& view1 = function->AddRawOperation(Opcode::OP_VIEW, {input}, {tensor1});
+    auto& view1 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {input}, {tensor1});
     auto view1Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, MemoryType::MEM_UB, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
     view1.SetOpAttribute(view1Attr);
 
-    auto& view2 = function->AddRawOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
+    auto& view2 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {tensor1}, {tensor2});
     auto view2Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, MemoryType::MEM_UB, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
     view2.SetOpAttribute(view2Attr);
 
-    function->AddOperation(Opcode::OP_EXP, {tensor2}, {outCast});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tensor2}, {outCast});
 
     MergeViewAssemble mergePass;
     ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
@@ -1185,18 +1186,18 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeAssemble)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outCast);
 
-    auto& viewOp = function->AddRawOperation(Opcode::OP_VIEW, {input}, {tensor0});
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_VIEW, {input}, {tensor0});
     auto viewAttr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{0, 0}, MemoryType::MEM_UB, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
     viewOp.SetOpAttribute(viewAttr);
 
-    auto& assemble1 = function->AddRawOperation(Opcode::OP_ASSEMBLE, {tensor0}, {tensor1});
+    auto& assemble1 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {tensor0}, {tensor1});
     assemble1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
-    auto& assemble2 = function->AddRawOperation(Opcode::OP_ASSEMBLE, {tensor1}, {tensor2});
+    auto& assemble2 = IRBuilder().CreateTensorOpStmt(*function, Opcode::OP_ASSEMBLE, {tensor1}, {tensor2});
     assemble2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
-    function->AddOperation(Opcode::OP_EXP, {tensor2}, {outCast});
+    PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tensor2}, {outCast});
 
     MergeViewAssemble mergePass;
     ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);

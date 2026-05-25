@@ -23,6 +23,7 @@
 #include "passes/pass_mgr/pass_manager.h"
 
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #define private public
 #include "passes/block_graph_pass/loopaxes_proc.h"
 
@@ -59,7 +60,7 @@ public:
         config::SetPassGlobalConfig(KEY_VF_OPT_MARK_FOR, true);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "ExpandFunctionTestStrategy");
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
     void TearDown() override {}
 };
@@ -116,13 +117,13 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     outCast->UpdateDynValidShape(symShape3);
 
-    auto& expand = currFunctionPtr->AddOperation(Opcode::OP_EXPAND, {inCast2}, {ubTensor2});
+    auto& expand = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXPAND, {inCast2}, {ubTensor2});
     expand.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{kNum3});
-    currFunctionPtr->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {inCast1}, {ubTensor2});
-    auto& add = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor2, ubTensor3}, {ubTensor4});
-    auto& mul = currFunctionPtr->AddOperation(Opcode::OP_MUL, {ubTensor2, ubTensor4}, {ubTensor5});
-    auto& sub = currFunctionPtr->AddOperation(Opcode::OP_SUB, {ubTensor6, ubTensor7}, {ubTensor8});
-    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor5}, {outCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, npu::tile_fwk::Opcode::OP_BAR_ALL, {inCast1}, {ubTensor2});
+    auto& add = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ubTensor2, ubTensor3}, {ubTensor4});
+    auto& mul = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {ubTensor2, ubTensor4}, {ubTensor5});
+    auto& sub = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SUB, {ubTensor6, ubTensor7}, {ubTensor8});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor5}, {outCast});
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -131,7 +132,7 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     auto rootInCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     auto rootInCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto rootOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
-    auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {rootInCast1, rootInCast2}, {rootOutCast}, false);
+    auto& callOp = IRBuilder().CreateTensorOpStmt(*rootFuncPtr, Opcode::OP_CALL, {rootInCast1, rootInCast2}, {rootOutCast});
     std::vector<std::vector<SymbolicScalar>> argList;
     std::map<int, SymbolicScalar> outIndexToExpr;
     callOp.SetOpAttribute(currFunctionPtr->CreateCallOpAttribute(argList, outIndexToExpr));

@@ -23,6 +23,7 @@
 #include "interface/operation/attribute.h"
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "interface/tensor/irbuilder.h"
 #include "symbolic_scalar_test_utils.h"
 #include "interface/tensor/irbuilder.h"
@@ -66,7 +67,7 @@ TEST_F(GetParamIdxTest, TestAdd)
     ubTensor3->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("Z1")});
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     std::vector<npu::tile_fwk::OpImmediate> fromOffset = {OpImmediate::Parameter(1), OpImmediate::Parameter(2)};
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate::Parameter(3), OpImmediate::Parameter(4)};
@@ -74,7 +75,7 @@ TEST_F(GetParamIdxTest, TestAdd)
     copy_op1.SetIOpAttrOffset(0, 0);
     copy_op1.SetOpAttribute(copyin1Attr);
 
-    auto& copy_op2 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
+    auto& copy_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
     fromOffset = {OpImmediate::Parameter(6), OpImmediate::Parameter(7)};
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {OpImmediate::Parameter(8), OpImmediate::Parameter(9)};
@@ -82,9 +83,9 @@ TEST_F(GetParamIdxTest, TestAdd)
     copy_op2.SetIOpAttrOffset(0, 5);
     copy_op2.SetOpAttribute(copyin2Attr);
 
-    auto& add_op = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    auto& add_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
     (void)add_op;
-    auto& copy_out_op = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
+    auto& copy_out_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
     copy_out_op.SetOOpAttrOffset(0, 11);
 
     currFunctionPtr->inCasts_.push_back(incast1);
@@ -120,7 +121,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     ubTensor3->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("Z1")});
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copy_op1 = subGraphPtr0->AddOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
+    auto& copy_op1 = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     std::vector<npu::tile_fwk::OpImmediate> fromOffset = {OpImmediate::Parameter(1), OpImmediate::Parameter(2)};
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate::Parameter(3), OpImmediate::Parameter(4)};
@@ -128,7 +129,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     copy_op1.SetIOpAttrOffset(0, 0);
     copy_op1.SetOpAttribute(copyin1Attr);
 
-    auto& copy_op2 = subGraphPtr0->AddOperation(Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
+    auto& copy_op2 = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
     fromOffset = {OpImmediate::Parameter(6), OpImmediate::Parameter(7)};
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {OpImmediate::Parameter(8), OpImmediate::Parameter(9)};
@@ -136,17 +137,17 @@ TEST_F(GetParamIdxTest, TestAddExp)
     copy_op2.SetIOpAttrOffset(0, 5);
     copy_op2.SetOpAttribute(copyin2Attr);
 
-    auto& add_op = subGraphPtr0->AddOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
+    auto& add_op = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
     (void)add_op;
     auto tmpCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto& copy_out_op = subGraphPtr0->AddOperation(Opcode::OP_COPY_OUT, {ubTensor3}, {tmpCast});
+    auto& copy_out_op = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_COPY_OUT, {ubTensor3}, {tmpCast});
     auto copyout1Attr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme);
     copy_out_op.SetOpAttribute(copyout1Attr);
     copy_out_op.SetOOpAttrOffset(0, 10);
 
     auto ubTensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor4->UpdateDynValidShape({CreateTestScalarVar("X0"), CreateTestScalarVar("X1")});
-    auto& copy_op3 = subGraphPtr1->AddOperation(Opcode::OP_COPY_IN, {tmpCast}, {ubTensor4});
+    auto& copy_op3 = PassOperationUtils::AddOperation(*subGraphPtr1, Opcode::OP_COPY_IN, {tmpCast}, {ubTensor4});
     fromOffset = {OpImmediate::Parameter(16), OpImmediate::Parameter(17)};
     auto copyin3Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape2 = {OpImmediate::Parameter(18), OpImmediate::Parameter(19)};
@@ -155,10 +156,10 @@ TEST_F(GetParamIdxTest, TestAddExp)
     copy_op3.SetOpAttribute(copyin3Attr);
 
     auto ubTensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto& exp = subGraphPtr1->AddOperation(Opcode::OP_EXP, {ubTensor4}, {ubTensor5});
+    auto& exp = PassOperationUtils::AddOperation(*subGraphPtr1, Opcode::OP_EXP, {ubTensor4}, {ubTensor5});
     (void)exp;
 
-    auto& copy_out_op1 = subGraphPtr1->AddOperation(Opcode::OP_COPY_OUT, {ubTensor5}, {outCast});
+    auto& copy_out_op1 = PassOperationUtils::AddOperation(*subGraphPtr1, Opcode::OP_COPY_OUT, {ubTensor5}, {outCast});
     copy_out_op1.SetOOpAttrOffset(0, 11);
 
     subGraphPtr0->inCasts_.push_back(incast1);

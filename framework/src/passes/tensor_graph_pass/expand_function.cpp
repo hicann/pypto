@@ -16,6 +16,7 @@
 #include "passes/tensor_graph_pass/expand_function.h"
 #include <map>
 #include "interface/function/function.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 #include "interface/tensor/raw_tensor.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
@@ -70,7 +71,7 @@ Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOpe
 
 void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) const
 {
-    auto& newOp = function.AddOperation(op.GetOpcode(), op.GetIOperands(), op.GetOOperands());
+    auto& newOp = PassOperationUtils::AddOperation(function, op.GetOpcode(), op.GetIOperands(), op.GetOOperands());
     newOp.SetOpAttribute(op.GetOpAttribute());
     newOp.SetScopeInfo(op.GetScopeInfo());
     newOp.CopyAttrFrom(op, OP_EMUOP_PREFIX);

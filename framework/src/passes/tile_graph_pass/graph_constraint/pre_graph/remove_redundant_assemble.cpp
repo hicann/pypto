@@ -520,7 +520,8 @@ Status RemoveRedundantAssemble::ProcessReshape(
             return FAILED;
         }
         consumer->ReplaceInput(dst, oOperand);
-        auto& newReshapeOp = function.AddRawOperation(Opcode::OP_RESHAPE, {iOperand}, {dst});
+        IRBuilder builder;
+        auto& newReshapeOp = builder.CreateTensorOpStmt(function, Opcode::OP_RESHAPE, {iOperand}, {dst});
         const std::shared_ptr<OpAttribute> oriReshapeAttr = operation->GetOpAttribute();
         if (oriReshapeAttr != nullptr) {
             newReshapeOp.SetOpAttribute(oriReshapeAttr);

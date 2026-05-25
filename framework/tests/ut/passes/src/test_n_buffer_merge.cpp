@@ -72,23 +72,23 @@ std::shared_ptr<Function> BuildMultiInputOutputFunction()
     auto outcast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto outcast4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& mulOp1 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor1});
-    auto& expOp1 = function->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
+    auto& mulOp1 = PassOperationUtils::AddOperation(*function, Opcode::OP_MUL, {incast1, incast2}, {tensor1});
+    auto& expOp1 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tensor1}, {outcast1});
     mulOp1.UpdateSubgraphID(0);
     expOp1.UpdateSubgraphID(0);
 
-    auto& mulOp2 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor2});
-    auto& expOp2 = function->AddOperation(Opcode::OP_EXP, {tensor2}, {outcast2});
+    auto& mulOp2 = PassOperationUtils::AddOperation(*function, Opcode::OP_MUL, {incast1, incast2}, {tensor2});
+    auto& expOp2 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tensor2}, {outcast2});
     mulOp2.UpdateSubgraphID(1);
     expOp2.UpdateSubgraphID(1);
 
-    auto& mulOp3 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor3});
-    auto& expOp3 = function->AddOperation(Opcode::OP_EXP, {tensor3}, {outcast3});
+    auto& mulOp3 = PassOperationUtils::AddOperation(*function, Opcode::OP_MUL, {incast1, incast2}, {tensor3});
+    auto& expOp3 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tensor3}, {outcast3});
     mulOp3.UpdateSubgraphID(2);
     expOp3.UpdateSubgraphID(2);
 
-    auto& mulOp4 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor4});
-    auto& expOp4 = function->AddOperation(Opcode::OP_EXP, {tensor4}, {outcast4});
+    auto& mulOp4 = PassOperationUtils::AddOperation(*function, Opcode::OP_MUL, {incast1, incast2}, {tensor4});
+    auto& expOp4 = PassOperationUtils::AddOperation(*function, Opcode::OP_EXP, {tensor4}, {outcast4});
     mulOp4.UpdateSubgraphID(3);
     expOp4.UpdateSubgraphID(3);
 
@@ -119,13 +119,13 @@ TEST_F(NBufferMergeTest, TestNBufferMerge)
     auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast1}, {tensor1});
+    auto& copy_op1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast1}, {tensor1});
     copy_op1.UpdateSubgraphID(subGraphID0);
-    auto& copy_op2 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast2}, {tensor3});
+    auto& copy_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {tensor3});
     copy_op2.UpdateSubgraphID(subGraphID1);
-    auto& copy_out1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {tensor1}, {tensor2});
+    auto& copy_out1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor1}, {tensor2});
     copy_out1.UpdateSubgraphID(subGraphID0);
-    auto& copy_out2 = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {tensor3}, {tensor4});
+    auto& copy_out2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor3}, {tensor4});
     copy_out2.UpdateSubgraphID(subGraphID1);
 
     currFunctionPtr->inCasts_.push_back(incast1);

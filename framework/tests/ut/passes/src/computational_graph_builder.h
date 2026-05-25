@@ -20,9 +20,11 @@
 #include <unordered_map>
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
+#include "passes/pass_utils/pass_operation_utils.h"
 
 namespace npu {
 namespace tile_fwk {
