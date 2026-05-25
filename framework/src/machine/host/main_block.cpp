@@ -58,8 +58,8 @@ bool MainBlockCondBulider::CheckShapeEquality(const Shape& shape, const std::vec
 bool MainBlockCondBulider::GetValidShapeFromCoa(
     const std::vector<SymbolicScalar>& argList, Shape& shape, std::vector<SymbolicScalar>& dynValidShape)
 {
-    if (argList.empty()) {
-        MACHINE_LOGW("argList is empty!");
+    if (argList.empty() || (argList.size() <= COA_INDEX_TYPE_COUNT)) {
+        MACHINE_LOGW("argList is invalid!");
         return false;
     }
 
@@ -116,11 +116,21 @@ void MainBlockCondBulider::CollectCallopMainBlockConds(Function* func)
     }
 }
 
-void MainBlockCondBulider::CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList)
+bool MainBlockCondBulider::CheckReshapeCopy(Function* func)
+{
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op.GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MainBlockCondBulider::CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList, Function* func)
 {
     bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
     enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
-    if (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) != 1 && !enableVF) {
+    if ((config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) != 1 && !enableVF) || CheckReshapeCopy(func)) {
         AddUniqueCondition(SymbolicScalar(false));
         return;
     }

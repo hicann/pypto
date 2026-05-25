@@ -351,6 +351,7 @@ protected:
     std::string PrintCompactStatic(const PrintUnaryTmpBuffParam& param) const;
 
     std::vector<std::string> GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx) const;
+    void AppendValidShapeForReshapeCopy(std::vector<std::string>& tileOpParamList) const;
     std::string PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CParam& param) const;

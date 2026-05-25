@@ -502,13 +502,14 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     // Prepare the graph
-    std::vector<int64_t> inShape = {2, 2};
     std::vector<int64_t> copyoutShape = {2, 4};
     std::vector<int64_t> reshapeShape = {4, 2};
+    std::vector<int64_t> inShape = {2, 2};
     std::vector<int64_t> outShape = {4, 4};
-    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+
     auto copyin_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
     copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
     auto copyout_Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, copyoutShape, CreateTestConstIntVector(copyoutShape));
     copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     std::vector<SymbolicScalar> validShape1 = {CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")};
@@ -526,14 +527,16 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
     outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
+
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {outcast});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
+
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
 
     currFunctionPtr->inCasts_.push_back(incast);
@@ -1067,4 +1070,62 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
             EXPECT_FALSE(dynValidShape.empty());
         }
     }
+}
+
+// in - COPYIN - COPYOUT - RESHAPE - COPYIN - COPYOUT - out
+//    - COPYIN - COPYOUT           - COPYIN - COPYOUT - out
+TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnUB)
+{
+    auto currFunctionPtr =
+ 	    std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
+ 	EXPECT_TRUE(currFunctionPtr != nullptr);
+ 	 
+ 	// Prepare the graph
+    std::vector<int64_t> inShape = {2, 2};
+    std::vector<int64_t> copyoutShape = {2, 4};
+    std::vector<int64_t> reshapeShape = {4, 2};
+    std::vector<int64_t> outShape = {4, 4};
+    IRBuilder builder;
+    auto incast = builder.CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+
+    auto copyin_Tensor1 = builder.CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    copyin_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    auto copyout_Tensor1 = builder.CreateTensorVar(DT_FP32, copyoutShape, {
+        CreateTestScalarVar("Input_00_Dim_0"), CreateTestScalarVar("Input_00_Dim_1")
+    });
+    copyout_Tensor1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    auto copyin_Tensor2 = builder.CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    copyin_Tensor2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    auto reshape_Tensor = builder.CreateTensorVar(DT_FP32, reshapeShape, {
+        CreateTestScalarVar("Input_02_Dim_0"), CreateTestScalarVar("Input_02_Dim_1")
+    });
+    reshape_Tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    auto copyin_Tensor3 = builder.CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    copyin_Tensor3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    auto copyin_Tensor4 = builder.CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    copyin_Tensor4->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    auto outcast = builder.CreateTensorVar(DT_FP32, outShape, CreateTestConstIntVector(outShape));
+    outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+        
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor1}, {copyout_Tensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor2}, {copyout_Tensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor4}, {outcast});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyin_Tensor3}, {outcast});
+        
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+        
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
 }

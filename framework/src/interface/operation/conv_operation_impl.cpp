@@ -806,7 +806,7 @@ LogicalTensorPtr ConstructFmapTile(
         SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.kL0Size}), tensorGraphNodes.fmapTensorPtr->Format(),
         "aL0Tensor");
 
-    dstAL1TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.kL0Size}));
+    dstAL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.kL0Size}));
 
     auto& load3dOpAl0 = function.AddOperation(Opcode::OP_LOAD3D_CONV, {dstAL1TensorPtr}, {dstAL0TensorPtr});
     load3dOpAl0.SetAttribute("l0_tile_shape", SymbolicScalar::FromConcrete(dstAL0Shape));

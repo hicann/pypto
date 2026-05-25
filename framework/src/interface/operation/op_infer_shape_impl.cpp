@@ -986,6 +986,20 @@ REGISTER_INFER_SHAPE_FUNC(OP_COPY_IN, Opcode::OP_COPY_IN, CopyInInferFunc);
 
 void ReshapeCopyInInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
+    // ReshapeCopyInInferFunc函数增加：
+ 	// 优先检查输出是否已有 dynValidShape，如果有则直接使用不再推导
+ 	if (!op->GetOOperands().empty() && !op->GetOOperands()[0]->GetDynValidShape().empty()) {
+        auto validshape = op->GetOOperands()[0]->GetDynValidShape();
+ 	    outValidShapes.push_back(validshape);
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+        if (op->GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
+            copyAttr->SetToDynValidShape(OpImmediate::Specified(validshape));
+        } else {
+            copyAttr->SetFromDynValidShape(OpImmediate::Specified(validshape));
+        }
+ 	    return;
+ 	}
+    // 输出没有 dynValidShape 时，从输入获取
     if (!op->GetIOperands().empty()) {
         auto validShape = op->GetIOperands().front()->GetDynValidShape();
         outValidShapes.push_back(validShape);

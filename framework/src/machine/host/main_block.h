@@ -44,7 +44,8 @@ class MainBlockCondBulider {
 public:
     MainBlockCondBulider();
     void CollectCallopMainBlockConds(Function* func);
-    void CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList);
+    bool CheckReshapeCopy(Function* func);
+    void CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList, Function* func);
     SymbolicScalar BuildMainBlockExpression();
     static void Gencode(Function* function);
     const std::vector<SymbolicScalar>& GetCondGroup() const;

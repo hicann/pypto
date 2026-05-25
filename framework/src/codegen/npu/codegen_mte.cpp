@@ -528,6 +528,22 @@ std::vector<std::string> CodeGenOpNPU::GenTileOpParamForNormalCopyTileTensor(uns
     return tileOpParamList;
 }
 
+void CodeGenOpNPU::AppendValidShapeForReshapeCopy(std::vector<std::string>& tileOpParamList) const
+{
+    if (opCode != Opcode::OP_RESHAPE_COPY_OUT && opCode != Opcode::OP_RESHAPE_COPY_IN) {
+        return;
+    }
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(originalOp.GetOpAttribute());
+    ASSERT(OperErr::ATTRIBUTE_INVALID, copyAttr != nullptr) << "CopyOpAttribute is null for RESHAPE_COPY operation";
+    std::vector<SymbolicScalar> dynValidShape;
+    dynValidShape = opCode == Opcode::OP_RESHAPE_COPY_OUT ? OpImmediate::ToSpecified(copyAttr->GetToDynValidShape()) :
+                                                            OpImmediate::ToSpecified(copyAttr->GetFromDynValidShape());
+    FillVecWithDummyInHead<SymbolicScalar>(dynValidShape, MAX_DIM - dynValidShape.size(), 1);
+    for (auto s : dynValidShape) {
+        tileOpParamList.emplace_back(SymbolicExpressionTable::BuildExpression(s));
+    }
+}
+
 std::string CodeGenOpNPU::PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const
 {
     if (isSupportLayout) {
@@ -1069,6 +1085,7 @@ std::vector<std::string> CodeGenOpNPU::GetGmOffsetForTileTensor(unsigned gmIdx) 
 std::string CodeGenOpNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBParam& param) const
 {
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx);
+    AppendValidShapeForReshapeCopy(tileOpParamList);
     std::ostringstream oss;
     oss << tileOpName;
     if (opCode == Opcode::OP_UB_COPY_OUT) {

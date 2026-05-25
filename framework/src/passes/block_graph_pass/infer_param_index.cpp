@@ -106,9 +106,26 @@ Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function &functi
                 validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));
             }
         }
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_L0C_COPY_UB && op.GetOpcode() != Opcode::OP_VIEW) {
+        bool shouldUpdateDynValidShape = op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_L0C_COPY_UB && op.GetOpcode() != Opcode::OP_VIEW && !function.IsFromOutCast(outOperand);
+        if (shouldUpdateDynValidShape) {
             outOperand->UpdateDynValidShape(validShape);
         }
+        // 通信类Op的输出需要GetTensorData格式从CopyAttr拿而不是Coa拿出，需要特殊处理
+        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+        if (distCopyType && function.IsFromOutCast(outOperand)) {
+            if (*distCopyType) {
+                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+                if (attr->GetFromDynValidShape().size() != 0) {
+                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetFromDynValidShape()));
+                }
+            } else if (!*distCopyType) {
+                auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+                if (attr->GetToDynValidShape().size() != 0 && attr->GetToDynValidShape()[0].IsSpecified()) {
+                    outOperand->UpdateDynValidShape(OpImmediate::ToSpecified(attr->GetToDynValidShape()));
+                }
+            }
+        }
+        
     }
     return SUCCESS;
 }

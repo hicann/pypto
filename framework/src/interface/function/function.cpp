@@ -2449,6 +2449,36 @@ static void MaybeNormalizeValue(
     }
 }
 
+static void NormalizeReshapeCopyDynValidShape(
+    Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex, bool valueToIndex)
+{
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (copyAttr == nullptr) {
+        return;
+    }
+
+    bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT;
+    auto opImmList =
+        useToDynValidShape ? copyAttr->GetToDynValidShape() : copyAttr->GetFromDynValidShape();
+    if (opImmList.empty()) {
+        return;
+    }
+
+    std::vector<SymbolicScalar> dynValidShape = OpImmediate::ToSpecified(opImmList);
+    std::vector<SymbolicScalar> valueCoaList;
+    for (auto& value : dynValidShape) {
+        MaybeNormalizeValue(valueCoaList, value, coaIndex + static_cast<int>(valueCoaList.size()), valueToIndex);
+    }
+
+    if (useToDynValidShape) {
+        copyAttr->SetToDynValidShape(OpImmediate::Specified(dynValidShape));
+    } else {
+        copyAttr->SetFromDynValidShape(OpImmediate::Specified(dynValidShape));
+    }
+    coaLists.emplace_back(valueCoaList);
+    coaIndex += valueCoaList.size();
+}
+
 static std::vector<SymbolicScalar> NormalizeCopyIn(Operation* op, int coaIndexBase, bool valueToIndex)
 {
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
@@ -2794,6 +2824,9 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 coaLists.emplace_back(valueCoaList);
                 coaIndex += 1;
             }
+        } else if (op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT ||
+                   op->GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
+            NormalizeReshapeCopyDynValidShape(op.get(), coaLists, coaIndex, valueToIndex);
         }
     }
 }

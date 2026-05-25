@@ -22,8 +22,17 @@ bool NeedInferShape(const Operation* op)
     if (op->GetOOperands().empty()) {
         return false;
     }
-    if (!(op->GetOOperands()[0]->GetDynValidShape().empty()) && op->GetOpcode() != Opcode::OP_ASSEMBLE) {
-        return false;
+    if (op->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        bool anyEmpty = false;
+        for (auto output : op->GetOOperands()) {
+            if (output->GetDynValidShape().empty()) {
+                anyEmpty = true;
+                break;
+            }
+        }
+        if (!anyEmpty) {
+            return false;
+        }
     }
     return true;
 }

@@ -116,30 +116,46 @@ __aicore__ inline void TStoreVec(T dst, U src, C coordinate)
 }
 
 #define OP_TILE_OP_RESHAPE_COPY_IN TReshapeLoad
-template <typename T, typename U, typename C>
-__aicore__ inline void TReshapeLoad(T dst, U src, C coordinate)
+template <typename C, typename S1, typename S2, typename S3, typename S4>
+__aicore__ inline size_t GetReshapeGmOffset(
+    C coordinate, S1 gmValidShape1, S2 gmValidShape2, S3 gmValidShape3, S4 gmValidShape4, Stride5Dim& reshapeStride)
 {
+    size_t reshapeStride0 = gmValidShape1 * gmValidShape2 * gmValidShape3 * gmValidShape4;
+    size_t reshapeStride1 = gmValidShape2 * gmValidShape3 * gmValidShape4;
+    size_t reshapeStride2 = gmValidShape3 * gmValidShape4;
+    size_t reshapeStride3 = gmValidShape4;
+    size_t reshapeStride4 = 1;
+    reshapeStride = {reshapeStride0, reshapeStride1, reshapeStride2, reshapeStride3, reshapeStride4};
+
+    auto c0 = TileOp::GetTupleElement<C, DIM_1ST, MAX_DIMS, 0>(coordinate);
+    auto c1 = TileOp::GetTupleElement<C, DIM_2ND, MAX_DIMS, 0>(coordinate);
+    auto c2 = TileOp::GetTupleElement<C, DIM_3RD, MAX_DIMS, 0>(coordinate);
+    auto c3 = TileOp::GetTupleElement<C, DIM_4TH, MAX_DIMS, 0>(coordinate);
+    auto c4 = TileOp::GetTupleElement<C, DIM_5TH, MAX_DIMS, 0>(coordinate);
+
+    return c0 * reshapeStride0 + c1 * reshapeStride1 + c2 * reshapeStride2 +
+           c3 * reshapeStride3 + c4 * reshapeStride4;
+}
+
+template <typename T, typename U, typename C, typename S0, typename S1, typename S2, typename S3, typename S4>
+__aicore__ inline void TReshapeLoad(
+    T dst, U src, C coordinate, S0 gmValidShape0, S1 gmValidShape1, S2 gmValidShape2, S3 gmValidShape3,
+    S4 gmValidShape4)
+{
+    (void)gmValidShape0;
     if constexpr (T::FORMAT == Hardware::UB && U::FORMAT == Hardware::GM) {
-        // Reshape 场景：GM 侧数据按 reshape 后的 dst shape 行优先排列，
-        // 因此 GM stride 必须基于 dst shape 推导（reshapeStride），而非 src 原始 stride。
+        // Copy the current GM tile while addressing GM with its valid-shape contiguous strides.
         const auto dstLayout = dst.GetLayout();
         auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
         auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
         auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
-        auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
-        auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+        Stride5Dim reshapeStride{};
+        auto gmOffset = GetReshapeGmOffset(
+            coordinate, gmValidShape1, gmValidShape2, gmValidShape3, gmValidShape4, reshapeStride);
 
-        size_t reshapeStride0 = dstShape1 * dstShape2 * dstShape3 * dstShape4;
-        size_t reshapeStride1 = dstShape2 * dstShape3 * dstShape4;
-        size_t reshapeStride2 = dstShape3 * dstShape4;
-        size_t reshapeStride3 = dstShape4;
-        size_t reshapeStride4 = 1;
-        Stride5Dim reshapeStride{reshapeStride0, reshapeStride1, reshapeStride2, reshapeStride3, reshapeStride4};
-
-        auto c0 = TileOp::GetTupleElement<C, DIM_1ST, MAX_DIMS, 0>(coordinate);
-        auto c1 = TileOp::GetTupleElement<C, DIM_2ND, MAX_DIMS, 0>(coordinate);
-        auto c2 = TileOp::GetTupleElement<C, DIM_3RD, MAX_DIMS, 0>(coordinate);
-        auto gmOffset = c0 * reshapeStride0 + c1 * reshapeStride1 + c2 * reshapeStride2;
+        auto reshapeStride0 = TileOp::GetTupleElement<Stride5Dim, DIM_1ST, MAX_DIMS, 0>(reshapeStride);
+        auto reshapeStride1 = TileOp::GetTupleElement<Stride5Dim, DIM_2ND, MAX_DIMS, 0>(reshapeStride);
+        auto reshapeStride2 = TileOp::GetTupleElement<Stride5Dim, DIM_3RD, MAX_DIMS, 0>(reshapeStride);
 
         if constexpr (TileOp::IsConstContinous<T>() == true) {
             auto srcGlobal =
@@ -169,30 +185,24 @@ __aicore__ inline void TReshapeLoad(T dst, U src, C coordinate)
 }
 
 #define OP_TILE_OP_RESHAPE_COPY_OUT TReshapeStore
-template <typename T, typename U, typename C>
-__aicore__ inline void TReshapeStore(T dst, U src, C coordinate)
+template <typename T, typename U, typename C, typename S0, typename S1, typename S2, typename S3, typename S4>
+__aicore__ inline void TReshapeStore(
+    T dst, U src, C coordinate, S0 gmValidShape0, S1 gmValidShape1, S2 gmValidShape2, S3 gmValidShape3,
+    S4 gmValidShape4)
 {
+    (void)gmValidShape0;
     if constexpr (U::FORMAT == Hardware::UB && T::FORMAT == Hardware::GM) {
-        // Reshape 场景：GM 侧数据按 reshape 后的 src shape 行优先排列，
-        // 因此 GM stride 必须基于 src shape 推导（reshapeStride），而非 dst 原始 stride。
+        // Copy the current UB tile while addressing GM with its valid-shape contiguous strides.
         const auto srcLayout = src.GetLayout();
         auto srcShape0 = srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
         auto srcShape1 = srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
         auto srcShape2 = srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
-        auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
-        auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-
-        size_t reshapeStride0 = srcShape1 * srcShape2 * srcShape3 * srcShape4;
-        size_t reshapeStride1 = srcShape2 * srcShape3 * srcShape4;
-        size_t reshapeStride2 = srcShape3 * srcShape4;
-        size_t reshapeStride3 = srcShape4;
-        size_t reshapeStride4 = 1;
-        Stride5Dim reshapeStride{reshapeStride0, reshapeStride1, reshapeStride2, reshapeStride3, reshapeStride4};
-
-        auto c0 = TileOp::GetTupleElement<C, DIM_1ST, MAX_DIMS, 0>(coordinate);
-        auto c1 = TileOp::GetTupleElement<C, DIM_2ND, MAX_DIMS, 0>(coordinate);
-        auto c2 = TileOp::GetTupleElement<C, DIM_3RD, MAX_DIMS, 0>(coordinate);
-        auto gmOffset = c0 * reshapeStride0 + c1 * reshapeStride1 + c2 * reshapeStride2;
+        Stride5Dim reshapeStride{};
+        auto gmOffset = GetReshapeGmOffset(
+            coordinate, gmValidShape1, gmValidShape2, gmValidShape3, gmValidShape4, reshapeStride);
+        auto reshapeStride0 = TileOp::GetTupleElement<Stride5Dim, DIM_1ST, MAX_DIMS, 0>(reshapeStride);
+        auto reshapeStride1 = TileOp::GetTupleElement<Stride5Dim, DIM_2ND, MAX_DIMS, 0>(reshapeStride);
+        auto reshapeStride2 = TileOp::GetTupleElement<Stride5Dim, DIM_3RD, MAX_DIMS, 0>(reshapeStride);
 
         if constexpr (TileOp::IsConstContinous<U>() == true) {
             auto dstGlobal =

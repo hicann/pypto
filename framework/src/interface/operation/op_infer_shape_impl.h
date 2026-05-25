@@ -64,7 +64,9 @@ public:
         }
         // 设置属性
         for (size_t i = 0; i < op->GetOOperands().size(); ++i) {
-            op->GetOOperands()[i]->UpdateDynValidShape(outValidShapes[i]);
+            if (op->GetOOperands()[i]->GetDynValidShape().empty() || op-> GetOpcode() == Opcode::OP_COPY_OUT || op-> GetOpcode() == Opcode::OP_ASSEMBLE) {
+                op->GetOOperands()[i]->UpdateDynValidShape(outValidShapes[i]);
+            }
         }
     }
 
