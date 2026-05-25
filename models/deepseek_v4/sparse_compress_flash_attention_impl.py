@@ -141,7 +141,6 @@ def sparse_compress_flash_attention_compute(query, actual_seq_q, ori_kv, cmp_kv,
 @pypto.frontend.jit(
     pass_options={
         "cube_l1_reuse_setting": {-1: 2, 0: 8},
-        # "vec_nbuffer_setting": {-1: 8}
     },
     runtime_options={
         "stitch_function_max_num": 128,

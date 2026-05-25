@@ -115,8 +115,6 @@ def ifa_golden(q, kv, attn_sink, blk_cfa, start_pos, out, enable_flash=True, cmp
         nkv = kv.shape[2]
         d = kv.shape[3]
         softmax_scale = d**-0.5
-        # if is_prefill:
-        #     softmax_scale = 37        
         ori_act_seqs = start_pos + s1
         compress_actual_seqs = ori_act_seqs // cmp_r
         kv_bsnd = kv_cache_concat_bsnd(
@@ -217,8 +215,6 @@ def ifa_flash_torch(q, kv, attn_sink, block_table, start_pos, out, cmp_r=1, is_n
     kv_2d = kv.reshape(-1, d)
     q_2d = q.reshape(-1, d)
     scale = d ** -0.5
-    # if is_prefill:
-    #     scale = 37
 
     for b_idx in range(b):
         for s1_idx in range(s1):
