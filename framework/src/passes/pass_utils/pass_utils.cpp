@@ -16,6 +16,7 @@
 #include "pass_utils.h"
 
 #include <climits>
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
@@ -153,6 +154,18 @@ std::unordered_map<MemoryType, int64_t> CommonUtils::GetLocalMemorySize()
 
     return localMemorySize;
 }
+
+std::vector<SymbolicScalar> CommonUtils::CreateConstIntVector(const std::vector<int64_t>& values)
+{
+    IRBuilder builder;
+    std::vector<SymbolicScalar> result;
+    result.reserve(values.size());
+    for (auto value : values) {
+        result.emplace_back(builder.CreateConstInt(value));
+    }
+    return result;
+}
+
 int CommonUtils::GetTensorSubgraphID(const LogicalTensorPtr& tensor) { return GetTensorSubgraphID(tensor.get()); }
 
 int CommonUtils::GetTensorSubgraphID(const LogicalTensor* tensor)

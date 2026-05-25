@@ -15,6 +15,7 @@
 
 #include "passes/tile_graph_pass/data_path/generate_move_op.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/operation/operation.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
@@ -400,8 +401,9 @@ void GenerateMoveOp::ProcessUB2L1(Function& function, Operation& op) const
         std::shared_ptr<RawTensor> newRawTensor =
             std::make_shared<RawTensor>(ubNdTensor->Datatype(), ubNdTensor->GetShape(), TileOpFormat::TILEOP_NZ);
         std::vector<int64_t> newoffset(inputTensor->GetShape().size(), 0);
-        std::shared_ptr<LogicalTensor> ubNzTensor = std::make_shared<LogicalTensor>(
-            function, newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape());
+        IRBuilder builder;
+        std::shared_ptr<LogicalTensor> ubNzTensor =
+            builder.CreateTensorVar(newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape());
         ubNzTensor->SetMemoryTypeBoth(MemoryType::MEM_UB);
         // 插入UB2UB节点（ND2NZ)
         auto& ub2ub = function.AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {inputTensor}, {ubNzTensor});

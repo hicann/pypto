@@ -96,8 +96,13 @@ private:
 
 Function& DummyFunc()
 {
-    static Function func(Program::GetInstance(), "Dummy", "Dummy", nullptr);
-    return func;
+    static auto func = []() {
+        auto funcId = IdGen<IdType::FUNCTION>::Inst().CurId();
+        auto dummyFunc = std::make_unique<Function>(Program::GetInstance(), "Dummy", "Dummy", nullptr);
+        IdGen<IdType::FUNCTION>::Inst().SetId(funcId);
+        return dummyFunc;
+    }();
+    return *func;
 }
 
 IRBuilder::IRBuilder() : irContext_(IRContext::Get()) {}

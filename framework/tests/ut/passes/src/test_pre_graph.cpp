@@ -14,6 +14,7 @@
  */
 
 #include <fstream>
+#include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
 #include "gtest/gtest.h"
@@ -28,6 +29,7 @@
 #include "ut_json/ut_json_tool.h"
 #include "computational_graph_builder.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "interface/tensor/irbuilder.h"
 #define private public
 
 using namespace npu::tile_fwk;
@@ -647,17 +649,17 @@ TEST_F(PreGraphTest, TestFixPipeReconnectGraph)
 
     // Build graph
     std::vector<int64_t> shape = {NUM16, NUM16};
-    auto tensor0 = std::make_shared<LogicalTensor>(*funcPtr, DT_FP32, shape);
+    auto tensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor0->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
-    auto tensor1 = std::make_shared<LogicalTensor>(*funcPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->SetMemoryTypeBoth(MemoryType::MEM_L1);
-    auto tensor2 = std::make_shared<LogicalTensor>(*funcPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->SetMemoryTypeBoth(MemoryType::MEM_FIX_QUANT_PRE);
-    auto tensor3 = std::make_shared<LogicalTensor>(*funcPtr, DT_FP32, shape);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->SetMemoryTypeBoth(MemoryType::MEM_L0C);
-    auto tensor4 = std::make_shared<LogicalTensor>(*funcPtr, DT_FP32, shape);
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor4->SetMemoryTypeBoth(MemoryType::MEM_L0C);
-    auto tensor5 = std::make_shared<LogicalTensor>(*funcPtr, DT_FP32, shape);
+    auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
     auto& copyin = funcPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor0}, {tensor1});
     (void)copyin;

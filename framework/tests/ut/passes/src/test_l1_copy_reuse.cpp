@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -25,6 +26,7 @@
 #include <nlohmann/json.hpp>
 #include "computational_graph_builder.h"
 #include "passes/tile_graph_pass/graph_partition/l1_copy_reuse.h"
+#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk;
 namespace npu {
@@ -56,20 +58,20 @@ TEST_F(L1CopyInReuseTest, TwoCopyIn)
     constexpr int subGraphID1 = 1;
     std::vector<int64_t> shape = {8, 16};
     auto shapeImme = OpImmediate::Specified(shape);
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     incast1->tensor->rawmagic = 1;
     incast1->memoryTypeToBe_ = MEM_DEVICE_DDR;
-    auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     incast2->tensor->rawmagic = 1;
     incast2->memoryTypeOriginal_ = MEM_DEVICE_DDR;
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->memoryTypeOriginal_ = MEM_L1;
     tensor1->tensor->rawmagic = 2;
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->memoryTypeOriginal_ = MEM_L1;
     tensor3->tensor->rawmagic = 3;
-    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {tensor1});
     copy_op1.UpdateSubgraphID(subGraphID0);

@@ -17,11 +17,13 @@
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "AxisCombine"
 
 namespace npu {
 namespace tile_fwk {
+
 constexpr size_t INPUT_SIZE = 2;
 
 bool InsertCondition(const Opcode& code) { return SUPPORT_BRC_INLINE.count(code) > 0; }
@@ -63,8 +65,10 @@ inline int GetExpandDim(const std::vector<int64_t>& lhsShape, const std::vector<
 static LogicalTensorPtr CreateAlignedTensor(
     Function& function, const LogicalTensorPtr& srcTensor, const std::vector<int64_t>& alignedShape)
 {
-    auto alignedTensor =
-        std::make_shared<LogicalTensor>(function, srcTensor->Datatype(), alignedShape, srcTensor->Format());
+    (void)function;
+    IRBuilder builder;
+    auto alignedTensor = builder.CreateTensorVar(
+        srcTensor->Datatype(), alignedShape, std::vector<SymbolicScalar>{}, srcTensor->Format());
     alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     return alignedTensor;
 }
@@ -83,7 +87,7 @@ static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx
     IRBuilder builder;
     int expandDim = inputTensor[idx]->GetShape().size() - 1;
     op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{expandDim});
-    auto dynValidShape = SymbolicScalar::FromConcrete(shape);
+    auto dynValidShape = CommonUtils::CreateConstIntVector(shape);
     if (!(inputTensor[idx]->GetDynValidShape().empty())) {
         dynValidShape = inputTensor[idx]->GetDynValidShape();
     }

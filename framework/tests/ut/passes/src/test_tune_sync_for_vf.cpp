@@ -13,8 +13,10 @@
  * \brief Unit test for TuneSyncForVF.
  */
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/platform.h"
 #include "passes/block_graph_pass/tune_sync_for_vf.h"
+#include "interface/tensor/irbuilder.h"
 #define private public
 
 namespace npu {
@@ -53,22 +55,22 @@ public:
 void BuildGraphForTest(std::shared_ptr<Function>& currFunctionPtr, std::vector<Operation*>& opListPtr)
 {
     std::vector<int64_t> shape = {TS_NUM16, TS_NUM16};
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->memoryrange.start = 0;
     tensor1->memoryrange.end = TS_NUM10;
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->memoryrange.start = TS_NUM10;
     tensor2->memoryrange.end = TS_NUM20;
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->memoryrange.start = TS_NUM20;
     tensor3->memoryrange.end = TS_NUM30;
-    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor4->memoryrange.start = TS_NUM30;
     tensor4->memoryrange.end = TS_NUM40;
-    auto tensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->memoryrange.start = TS_NUM40;
     tensor5->memoryrange.end = TS_NUM50;
-    auto tensor6 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor6->memoryrange.start = TS_NUM50;
     tensor6->memoryrange.end = TS_NUM60;
 

@@ -18,8 +18,10 @@
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 #include "interface/operation/operation.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/tensor/symbolic_scalar.h"
 #include "interface/function/function.h"
 
 namespace npu::tile_fwk {
@@ -108,5 +110,7 @@ public:
     
     static int GetTensorSubgraphID(const LogicalTensorPtr& tensor);
     static int GetTensorSubgraphID(const LogicalTensor* tensor);
+
+    static std::vector<SymbolicScalar> CreateConstIntVector(const std::vector<int64_t>& values);
 };
 } // namespace npu::tile_fwk

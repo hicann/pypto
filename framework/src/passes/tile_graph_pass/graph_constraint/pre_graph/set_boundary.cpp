@@ -14,6 +14,7 @@
  */
 
 #include "set_boundary.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu::tile_fwk {
 void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
@@ -25,8 +26,10 @@ void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
         if (input->GetProducers().size() == 0 && input->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
             // insert Copy_In before the op
             LogicalTensors operandGm;
+            IRBuilder builder;
             LogicalTensorPtr tensorGM =
-                std::make_shared<LogicalTensor>(function, input->Datatype(), input->shape, input->Format());
+                builder.CreateTensorVar(input->Datatype(), input->shape, std::vector<SymbolicScalar>{},
+                    input->Format());
             GraphUtils::CopyDynStatus(tensorGM, input);
             tensorGM->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             tensorGM->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);

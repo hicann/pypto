@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
@@ -22,6 +23,7 @@
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
 
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/pass_utils/dead_operation_eliminate.h"
 
@@ -63,9 +65,9 @@ TEST_F(TestDeadOperationEliminatePass, DeadOperationEliminateUTest1)
 
     // Prepare the graph
     std::vector<int64_t> shape = {kNumEight, kNumEight};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ddrTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ddrTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& view1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ddrTensor});
     auto& view2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {outCast});

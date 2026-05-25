@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
 #include "tilefwk/tilefwk.h"
@@ -21,6 +22,7 @@
 #include "interface/operation/operation.h"
 #include "passes/pass_mgr/pass_manager.h"
 
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/block_graph_pass/loopaxes_proc.h"
 
@@ -91,27 +93,27 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     currFunctionPtr->SetFunctionType(FunctionType::STATIC);
     rootFuncPtr->SetUnderDynamicFunction(true);
 
-    auto inCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast1->UpdateDynValidShape(symShape1);
-    auto inCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     inCast2->UpdateDynValidShape(symShape2);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor1->UpdateDynValidShape(symShape1);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor2->UpdateDynValidShape(symShape2);
-    auto ubTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor3->UpdateDynValidShape(symShape2);
-    auto ubTensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor4->UpdateDynValidShape(symShape2);
-    auto ubTensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor5->UpdateDynValidShape(symShape2);
-    auto ubTensor6 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4);
+    auto ubTensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4, CreateTestConstIntVector(shape4));
     ubTensor6->UpdateDynValidShape(symShape4);
-    auto ubTensor7 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4);
+    auto ubTensor7 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4, CreateTestConstIntVector(shape4));
     ubTensor7->UpdateDynValidShape(symShape4);
-    auto ubTensor8 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4);
+    auto ubTensor8 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4, CreateTestConstIntVector(shape4));
     ubTensor8->UpdateDynValidShape(symShape4);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     outCast->UpdateDynValidShape(symShape3);
 
     auto& expand = currFunctionPtr->AddOperation(Opcode::OP_EXPAND, {inCast2}, {ubTensor2});
@@ -126,9 +128,9 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     currFunctionPtr->outCasts_.push_back(outCast);
 
     // Create a call operation in rootFunc to connect to currFunctionPtr
-    auto rootInCast1 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape1);
-    auto rootInCast2 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape2);
-    auto rootOutCast = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape3);
+    auto rootInCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto rootInCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto rootOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {rootInCast1, rootInCast2}, {rootOutCast}, false);
     std::vector<std::vector<SymbolicScalar>> argList;
     std::map<int, SymbolicScalar> outIndexToExpr;

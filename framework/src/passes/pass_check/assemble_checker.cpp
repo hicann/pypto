@@ -26,6 +26,17 @@ namespace tile_fwk {
 // assemble存在dynOffset和输入存在dynValidShape场景暂不判断。
 Status CheckDynSkip(const LogicalTensorPtr& outputTensor, bool& needSkip)
 {
+    auto isConcreteValidShape = [](const Shape& shape, const std::vector<SymbolicScalar>& validShape) -> bool {
+        if (validShape.size() != shape.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < shape.size(); ++i) {
+            if (!validShape[i].ConcreteValid() || validShape[i].Concrete() != shape[i]) {
+                return false;
+            }
+        }
+        return true;
+    };
     for (const auto& producerOp : outputTensor->GetProducers()) {
         if (producerOp->GetOpcode() != Opcode::OP_ASSEMBLE) {
             needSkip = true;
@@ -52,7 +63,8 @@ Status CheckDynSkip(const LogicalTensorPtr& outputTensor, bool& needSkip)
             return SUCCESS;
         }
         auto input = producerOp->iOperand.front();
-        if (input->GetDynValidShape().size() != 0) {
+        const auto& validShape = input->GetDynValidShape();
+        if (!validShape.empty() && !isConcreteValidShape(input->GetShape(), validShape)) {
             needSkip = true;
             return SUCCESS;
         }

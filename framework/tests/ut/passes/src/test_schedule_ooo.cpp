@@ -23,6 +23,7 @@
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
 #include "passes/block_graph_pass/schedule_ooo/core_assign.h"
@@ -88,9 +89,9 @@ void SetTensorAttr(LogicalTensorPtr tensor, MemoryType memType, int memId) {
 void SetAllocAttr(Operation& alloc, int latency) { alloc.UpdateLatency(latency); }
 
 LogicalTensorPtr CreateTensor(
-    Function& currFunction, DataType dateType, std::vector<int64_t> shape, MemoryType memType, int memId)
+    DataType dateType, std::vector<int64_t> shape, MemoryType memType, int memId)
 {
-    LogicalTensorPtr tensor = std::make_shared<LogicalTensor>(currFunction, dateType, shape);
+    LogicalTensorPtr tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(dateType, shape, CreateTestConstIntVector(shape));
     SetTensorAttr(tensor, memType, memId);
     return tensor;
 }
@@ -158,15 +159,15 @@ TEST_F(ScheduleOoOTest, TestMainScheduleOoO)
     std::vector<int64_t> shape = {128, 128};
     auto shapeImme = OpImmediate::Specified(shape);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 0);
-    auto tensor2 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 1);
-    auto tensor3 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 2);
-    auto tensor4 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 3);
-    auto tensor5 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 4);
-    auto tensor6 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 5);
-    auto tensor7 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 6);
-    auto tensor8 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 7);
-    auto tensor9 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 8);
+    auto tensor1 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 0);
+    auto tensor2 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 1);
+    auto tensor3 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 2);
+    auto tensor4 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 3);
+    auto tensor5 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 4);
+    auto tensor6 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 5);
+    auto tensor7 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 6);
+    auto tensor8 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 7);
+    auto tensor9 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 8);
     auto& alloc1 = CreateAllocOp(*currFunctionPtr, tensor3, 1);
     auto& alloc2 = CreateAllocOp(*currFunctionPtr, tensor4, 1);
     auto& alloc3 = CreateAllocOp(*currFunctionPtr, tensor5, 1);
@@ -1382,7 +1383,7 @@ TEST_F(ScheduleOoOTest, TestGetSpillTensor)
     std::vector<Operation*> scheduleOpList;
 
     std::vector<int64_t> shape = {128, 128};
-    std::shared_ptr<LogicalTensor> tensor3 = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, shape);
+    std::shared_ptr<LogicalTensor> tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->SetMemoryTypeOriginal(MEM_UB);
     tensor3->SetMemoryTypeToBe(MEM_UB);
     tensor3->memoryrange.memId = 3;
@@ -1402,12 +1403,12 @@ TEST_F(ScheduleOoOTest, TestCheckAllocIssue)
     std::vector<Operation*> scheduleOpList;
 
     std::vector<int64_t> shape = {128, 128};
-    std::shared_ptr<LogicalTensor> tensor3 = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, shape);
+    std::shared_ptr<LogicalTensor> tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->SetMemoryTypeOriginal(MEM_UB);
     tensor3->SetMemoryTypeToBe(MEM_UB);
     tensor3->memoryrange.memId = 3;
 
-    std::shared_ptr<LogicalTensor> tensor2 = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, shape);
+    std::shared_ptr<LogicalTensor> tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->SetMemoryTypeOriginal(MEM_UB);
     tensor3->SetMemoryTypeToBe(MEM_UB);
     tensor3->memoryrange.memId = 1;
@@ -2086,12 +2087,12 @@ TEST_F(ScheduleOoOTest, TestMixGraphAndDAV_3510)
     std::vector<int64_t> shape = {16, 16};
     auto shapeImme = OpImmediate::Specified(shape);
 
-    auto tensor0 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 0);
-    auto tensor1 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 1);
-    auto tensor2 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 2);
-    auto tensor3 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 3);
-    auto tensor4 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 4);
-    auto tensor5 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_L0A, 5);
+    auto tensor0 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 0);
+    auto tensor1 = CreateTensor(DataType::DT_FP32, shape, MEM_DEVICE_DDR, 1);
+    auto tensor2 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 2);
+    auto tensor3 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 3);
+    auto tensor4 = CreateTensor(DataType::DT_FP32, shape, MEM_UB, 4);
+    auto tensor5 = CreateTensor(DataType::DT_FP32, shape, MEM_L0A, 5);
     CreateAllocOp(*currFunctionPtr, tensor2, 1);
     CreateAllocOp(*currFunctionPtr, tensor3, 1);
     CreateAllocOp(*currFunctionPtr, tensor4, 1);
@@ -2115,7 +2116,7 @@ TEST_F(ScheduleOoOTest, TensorMemTypeMismatch)
     auto func = std::make_shared<Function>(Program::GetInstance(), "TestMemTypeMismatch", "TestMemTypeMismatch", nullptr);
     std::vector<int64_t> shape = {16, 16};
     
-    auto t = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto t = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     t->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
     t->SetMemoryTypeToBe(MemoryType::MEM_UB); // 不一致
     
@@ -2132,7 +2133,7 @@ TEST_F(ScheduleOoOTest, TensorMemIdInvalid)
     auto func = std::make_shared<Function>(Program::GetInstance(), "TestMemIdInvalid", "TestMemIdInvalid", nullptr);
     std::vector<int64_t> shape = {16, 16};
     
-    auto t = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto t = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     t->SetMemoryTypeOriginal(MemoryType::MEM_UB);
     t->SetMemoryTypeToBe(MemoryType::MEM_UB);
     t->memoryrange.memId = -1; // 非法
@@ -2165,11 +2166,11 @@ TEST_F(ScheduleOoOTest, ViewMemIdMismatch)
 {
     auto func = std::make_shared<Function>(Program::GetInstance(), "ViewMemIdMismatch", "ViewMemIdMismatch", nullptr);
     std::vector<int64_t> shape = {16, 16};
-    auto inTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     inTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB);
     inTensor->SetMemoryTypeToBe(MemoryType::MEM_UB);
     inTensor->memoryrange.memId = 0;
-    auto outTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB);
     outTensor->SetMemoryTypeToBe(MemoryType::MEM_UB);
     outTensor->memoryrange.memId = 1;

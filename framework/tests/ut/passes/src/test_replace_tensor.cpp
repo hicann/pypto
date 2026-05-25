@@ -14,6 +14,7 @@
  */
 
 #include "gtest/gtest.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
@@ -26,6 +27,7 @@
 #include <vector>
 #include <string>
 #include "computational_graph_builder.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -72,14 +74,14 @@ TEST_F(ReplaceTensorTest, TestViewAssemble)
     std::shared_ptr<RawTensor> assRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
     std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
     // init LogicalTensor
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, shape);
-    auto viewOut0 = std::make_shared<LogicalTensor>(*currFunctionPtr, viewRawTensor0, offset0, shape1);
-    auto viewOut1 = std::make_shared<LogicalTensor>(*currFunctionPtr, viewRawTensor1, offset1, shape1);
-    auto copyOut0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto copyOut1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto assOut0 = std::make_shared<LogicalTensor>(*currFunctionPtr, assRawTensor0, offset0, shape1);
-    auto assOut1 = std::make_shared<LogicalTensor>(*currFunctionPtr, assRawTensor1, offset1, shape1);
-    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset0, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape, CreateTestConstIntVector(shape));
+    auto viewOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor0, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto viewOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto copyOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto copyOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto assOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(assRawTensor0, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto assOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(assRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset0, shape, CreateTestConstIntVector(shape));
     /*       Init Graph
                 /————> view0 ————> copy ————> assemble \
         incast -                                        - outcast
@@ -127,10 +129,10 @@ TEST_F(ReplaceTensorTest, TestReshape)
     std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
     std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, shape1);
     // init LogicalTensor
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto reshape0 = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, shape);
-    auto reshape1 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset1, shape1);
-    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto reshape0 = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape, CreateTestConstIntVector(shape));
+    auto reshape1 = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     /* Init Graph
         incast -> CopyIn -> Reshape -> CopyOut -> outCast
     */
@@ -158,10 +160,10 @@ TEST_F(ReplaceTensorTest, TestIndexOutCast)
     std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
     std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
     // init LogicalTensor
-    auto inTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto inTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto inTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, shape);
-    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset0, shape);
+    auto inTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape, CreateTestConstIntVector(shape));
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset0, shape, CreateTestConstIntVector(shape));
     /* Init Graph
         incast -> Index_OutCast -> outCast
     */
@@ -188,10 +190,10 @@ TEST_F(ReplaceTensorTest, TestViewType)
     std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_INT8, shape);
     std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, shape1);
     // init LogicalTensor
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_INT8, shape);
-    auto viewType0 = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, shape);
-    auto viewType1 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset1, shape1);
-    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT8, shape, CreateTestConstIntVector(shape));
+    auto viewType0 = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape, CreateTestConstIntVector(shape));
+    auto viewType1 = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     /* Init Graph
         incast -> CopyIn -> ViewType -> CopyOut -> outCast
     */
@@ -215,9 +217,9 @@ TEST_F(ReplaceTensorTest, TestHasSameConsecutive_True)
 
     std::vector<int64_t> shape = {kNumEight, kNumEight};
 
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
     auto& viewOp2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor2}, {tensor3});
@@ -238,9 +240,9 @@ TEST_F(ReplaceTensorTest, TestHasSameConsecutive_False)
 
     std::vector<int64_t> shape = {kNumEight, kNumEight};
 
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
     auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {tensor2}, {tensor3});
@@ -261,8 +263,8 @@ TEST_F(ReplaceTensorTest, TestPreCheck_FailNoSubgraphID)
 
     std::vector<int64_t> shape = {kNumEight, kNumEight};
 
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {tensor1}, {tensor2});
     // 不设置subgraph ID
@@ -296,16 +298,16 @@ TEST_F(ReplaceTensorTest, TestBackView)
     std::shared_ptr<RawTensor> assRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape1);
     std::shared_ptr<RawTensor> assRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
     // init LogicalTensor
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto copy0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto copy1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto viewIn0 = std::make_shared<LogicalTensor>(*currFunctionPtr, viewRawTensor0, offset0, shape1);
-    auto viewIn1 = std::make_shared<LogicalTensor>(*currFunctionPtr, viewRawTensor1, offset0, shape1);
-    auto viewTypeIn0 = std::make_shared<LogicalTensor>(*currFunctionPtr, viewTypeRaw0, offset0, shape1);
-    auto viewTypeIn1 = std::make_shared<LogicalTensor>(*currFunctionPtr, viewTypeRaw1, offset0, shape1);
-    auto assIn0 = std::make_shared<LogicalTensor>(*currFunctionPtr, assRawTensor0, offset0, shape1);
-    auto assIn1 = std::make_shared<LogicalTensor>(*currFunctionPtr, assRawTensor1, offset1, shape1);
-    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset0, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto copy0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto copy1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto viewIn0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor0, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto viewIn1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor1, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto viewTypeIn0 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewTypeRaw0, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto viewTypeIn1 = npu::tile_fwk::IRBuilder().CreateTensorVar(viewTypeRaw1, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto assIn0 = npu::tile_fwk::IRBuilder().CreateTensorVar(assRawTensor0, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto assIn1 = npu::tile_fwk::IRBuilder().CreateTensorVar(assRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset0, shape, CreateTestConstIntVector(shape));
     // Init Graph
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copy0});
     currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copy1});
@@ -354,11 +356,11 @@ TEST_F(ReplaceTensorTest, TestProcessHubAssembleOp_Success)
     std::shared_ptr<RawTensor> rawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
 
     // 创建HUB操作相关张量
-    auto hubInput = std::make_shared<LogicalTensor>(*currFunctionPtr, rawTensor, offset, shape);
-    auto hubOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, rawTensor, offset, shape);
+    auto hubInput = npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, offset, shape, CreateTestConstIntVector(shape));
+    auto hubOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, offset, shape, CreateTestConstIntVector(shape));
 
     // 创建ASSEMBLE操作相关张量
-    auto assembleOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, rawTensor, offset, shape);
+    auto assembleOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, offset, shape, CreateTestConstIntVector(shape));
 
     // 设置内存类型
     hubInput->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
@@ -400,11 +402,11 @@ TEST_F(ReplaceTensorTest, TestA_MULACC_B)
     std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, mulAccshape);
     std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, mulAccshape);
     // init LogicalTensor
-    auto inTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, mulAccshape);
-    auto inTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, mulAccshape);
-    auto mulAccIn = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, mulAccshape);
-    auto mulAccOut = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset0, mulAccshape);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, mulAccshape);
+    auto inTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto inTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto mulAccIn = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto mulAccOut = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset0, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
     /* Init Graph
         incast -> Index_OutCast -> mulAccOut-> op
     */
@@ -434,13 +436,13 @@ TEST_F(ReplaceTensorTest, TestSameAssembleOut)
     std::shared_ptr<RawTensor> outRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
     std::shared_ptr<RawTensor> outRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
     // init LogicalTensor
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, shape, CreateTestConstIntVector(shape));
     incast->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
-    auto copyInOut = std::make_shared<LogicalTensor>(*currFunctionPtr, copyInRawTensor, offset0, shape1);
+    auto copyInOut = npu::tile_fwk::IRBuilder().CreateTensorVar(copyInRawTensor, offset0, shape1, CreateTestConstIntVector(shape1));
     copyInOut->SetMemoryTypeBoth(MEM_UB, true);
-    auto outcast0 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor0, offset0, shape);
+    auto outcast0 = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor0, offset0, shape, CreateTestConstIntVector(shape));
     outcast0->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor1, offset0, shape1);
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor1, offset0, shape1, CreateTestConstIntVector(shape1));
     outcast1->SetMemoryTypeBoth(MEM_DEVICE_DDR, true);
     /*       Init Graph
                             /—————> assemble -outcast1
@@ -488,10 +490,10 @@ TEST_F(ReplaceTensorTest, TestNotInplaceReshape)
     std::shared_ptr<RawTensor> reshapeRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
     std::shared_ptr<RawTensor> viewRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
     // init LogicalTensor
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto reshapeOut0 = std::make_shared<LogicalTensor>(*currFunctionPtr, reshapeRawTensor0, offset0, shape1);
-    auto viewOut = std::make_shared<LogicalTensor>(*currFunctionPtr, viewRawTensor, offset0, shape2);
-    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto reshapeOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(reshapeRawTensor0, offset0, shape1, CreateTestConstIntVector(shape1));
+    auto viewOut = npu::tile_fwk::IRBuilder().CreateTensorVar(viewRawTensor, offset0, shape2, CreateTestConstIntVector(shape2));
+    auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
     /* Init Graph
         incast0 -> Reshape -> View -> Reshape -> outcast
     */
@@ -521,17 +523,17 @@ TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
     std::vector<int64_t> outshape1 = {8, 4};
     std::vector<int64_t> outshape2 = {2, 4};
 
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inshape, CreateTestConstIntVector(inshape));
     incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyInout1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto copyInout1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inshape, CreateTestConstIntVector(inshape));
     copyInout1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto copyOutout1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto copyOutout1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inshape, CreateTestConstIntVector(inshape));
     copyOutout1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto copyInout2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto copyInout2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inshape, CreateTestConstIntVector(inshape));
     copyInout2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape1);
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outshape1, CreateTestConstIntVector(outshape1));
     outcast1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape2);
+    auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outshape2, CreateTestConstIntVector(outshape2));
     outcast2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     /* Init Graph
         incast -- CopyIn -- copyInout1 -- CopyOut -- copyOutOut1 -- Assemble -- outcast1
@@ -545,7 +547,7 @@ TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
 
     Offset assembleToOffset = {4, 0};
     auto assembleOpAttribute =
-        std::make_shared<AssembleOpAttribute>(assembleToOffset, SymbolicScalar::FromConcrete(assembleToOffset));
+        std::make_shared<AssembleOpAttribute>(assembleToOffset, CreateTestConstIntVector(assembleToOffset));
     assembleOp.SetOpAttribute(assembleOpAttribute);
     Offset copyIn2FromOffset = {2, 0};
     auto copyInOpAttribute = std::make_shared<CopyOpAttribute>(

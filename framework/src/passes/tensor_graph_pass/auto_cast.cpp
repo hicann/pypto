@@ -14,6 +14,7 @@
  */
 
 #include "auto_cast.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_check/auto_cast_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
@@ -24,6 +25,14 @@
 
 namespace npu {
 namespace tile_fwk {
+namespace {
+LogicalTensorPtr CreateFp32TensorLike(const LogicalTensorPtr& tensor)
+{
+    IRBuilder builder;
+    return builder.CreateTensorVar(DataType::DT_FP32, tensor->GetShape(), tensor->GetDynValidShape(),
+        tensor->Format());
+}
+} // namespace
 
 Status AutoCast::GetInOutConnectedTensor(Function& function)
 {
@@ -118,8 +127,7 @@ Status AutoCast::InsertInt32Fp16Cast(Function& function)
             continue;
         }
         APASS_LOG_INFO_F(Elements::Operation, "Cast[%d] is cast between int32 and fp16.", op->GetOpMagic());
-        auto fp32Tensor = std::make_shared<LogicalTensor>(
-            function, DataType::DT_FP32, tgtTensor->shape, tgtTensor->GetDynValidShape(), tgtTensor->Format());
+        auto fp32Tensor = CreateFp32TensorLike(tgtTensor);
         InsertCastOp(function, srcTensor, fp32Tensor, op->GetTileShape(), op->GetScopeInfo());
         op->ReplaceInput(fp32Tensor, srcTensor);
     }
@@ -188,8 +196,7 @@ Status AutoCast::InsertBF16Cast(Function& function)
                 op->ReplaceInput(newInput, iop);
                 continue;
             }
-            auto newInput = std::make_shared<LogicalTensor>(
-                function, DataType::DT_FP32, iop->shape, iop->GetDynValidShape(), iop->Format());
+            auto newInput = CreateFp32TensorLike(iop);
             InsertCastOp(function, iop, newInput, op->GetTileShape(), op->GetScopeInfo());
             op->ReplaceInput(newInput, iop);
             oldMagic2Input[iop->GetMagic()] = newInput;
@@ -205,8 +212,7 @@ Status AutoCast::InsertBF16Cast(Function& function)
             }
             visitedOOp.insert(oop->GetMagic());
             if (oop->Datatype() == DataType::DT_BF16) {
-                auto newOutput = std::make_shared<LogicalTensor>(
-                    function, DataType::DT_FP32, oop->shape, oop->GetDynValidShape(), oop->Format());
+                auto newOutput = CreateFp32TensorLike(oop);
                 op->ReplaceOutput(newOutput, oop);
                 InsertCastOp(function, newOutput, oop, op->GetTileShape(), op->GetScopeInfo());
                 oldMagic2Input[oop->GetMagic()] = newOutput;
@@ -240,8 +246,7 @@ Status AutoCast::InsertFP16Cast(Function& function)
                 op->ReplaceInput(newInput, iop);
                 continue;
             }
-            auto newInput = std::make_shared<LogicalTensor>(
-                function, DataType::DT_FP32, iop->shape, iop->GetDynValidShape(), iop->Format());
+            auto newInput = CreateFp32TensorLike(iop);
             InsertCastOp(function, iop, newInput, op->GetTileShape(), op->GetScopeInfo());
             op->ReplaceInput(newInput, iop);
             oldMagic2Input[iop->GetMagic()] = newInput;
@@ -256,8 +261,7 @@ Status AutoCast::InsertFP16Cast(Function& function)
                 continue;
             }
             visitedOOp.insert(oop->GetMagic());
-            auto newOutput = std::make_shared<LogicalTensor>(
-                function, DataType::DT_FP32, oop->shape, oop->GetDynValidShape(), oop->Format());
+            auto newOutput = CreateFp32TensorLike(oop);
             op->ReplaceOutput(newOutput, oop);
             InsertCastOp(function, newOutput, oop, op->GetTileShape(), op->GetScopeInfo());
             oldMagic2Input[oop->GetMagic()] = newOutput;

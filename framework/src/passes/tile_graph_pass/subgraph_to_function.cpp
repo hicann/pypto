@@ -830,6 +830,7 @@ static std::vector<GetTensorDataUsageDesc> GetTensorDataBuildUsageDesc(Function&
 
 Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
 {
+    IRBuilder builder;
     std::unordered_map<int, GetTensorDataOutcastDesc> getTensorDataOutcastDescDict =
         GetTensorDataBuildOutcastDescDict(function);
     std::vector<GetTensorDataUsageDesc> getTensorDataUsageDescList = GetTensorDataBuildUsageDesc(function);
@@ -855,8 +856,8 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
             std::shared_ptr<CopyOpAttribute> copyInAttr;
             if (getTensorDataIOType == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) {
                 copyInSourceTensor = function.GetIncast()[getTensorDataIOTypeIndex];
-                copyInTensor = std::make_shared<LogicalTensor>(
-                    function, copyInSourceTensor->Datatype(), copyInSourceTensor->GetShape(),
+                copyInTensor = builder.CreateTensorVar(
+                    copyInSourceTensor->Datatype(), copyInSourceTensor->GetShape(), std::vector<SymbolicScalar>{},
                     copyInSourceTensor->Format());
                 GraphUtils::CopyDynStatus(copyInTensor, copyInSourceTensor);
                 std::vector<OpImmediate> copyInOffset(
@@ -876,9 +877,9 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
                 auto& outcastDesc = getTensorDataOutcastDescDict[index];
                 auto outcastAttr = std::static_pointer_cast<CopyOpAttribute>(outcastDesc.copyout->GetOpAttribute());
                 copyInSourceTensor = outcastDesc.outcast;
-                copyInTensor = std::make_shared<LogicalTensor>(
-                    function, outcastDesc.outcast->Datatype(), outcastDesc.outcast->GetShape(),
-                    outcastDesc.outcast->Format());
+                copyInTensor = builder.CreateTensorVar(
+                    copyInSourceTensor->Datatype(), copyInSourceTensor->GetShape(), std::vector<SymbolicScalar>{},
+                    copyInSourceTensor->Format());
                 GraphUtils::CopyDynStatus(copyInTensor, copyInSourceTensor);
                 copyInAttr = std::make_shared<CopyOpAttribute>(
                     outcastAttr->GetToOffset(), MemoryType::MEM_UB, outcastAttr->GetShape(),

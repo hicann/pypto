@@ -13,6 +13,7 @@
  * \brief
  */
 #include "convert_op_inserter.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
@@ -505,6 +506,8 @@ std::shared_ptr<LogicalTensor> ConvertInserter::RecordInsertConvertOp(
     const std::shared_ptr<LogicalTensor>& oOperand, const std::vector<MemoryType>& paths, Function& function,
     const Operation& op)
 {
+    (void)function;
+    IRBuilder builder;
     std::shared_ptr<LogicalTensor> input = oOperand;
     for (size_t i = 0; i < paths.size() - 1; ++i) {
         std::shared_ptr<RawTensor> newRawTensor =
@@ -513,7 +516,7 @@ std::shared_ptr<LogicalTensor> ConvertInserter::RecordInsertConvertOp(
         input->SetMemoryTypeToBe(paths[i]); // 后续删除
         std::vector<int64_t> newoffset(input->offset.size(), 0);
         std::shared_ptr<LogicalTensor> output =
-            std::make_shared<LogicalTensor>(function, newRawTensor, newoffset, input->shape);
+            builder.CreateTensorVar(newRawTensor, newoffset, input->shape, std::vector<SymbolicScalar>{});
         output->SetMemoryTypeBoth(paths[i + 1]); // 后续只用设置original
         converts.emplace_back(ConvertOpInfo{paths[i], paths[i + 1], input, output});
         APASS_LOG_DEBUG_F(

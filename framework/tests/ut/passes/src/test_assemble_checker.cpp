@@ -14,9 +14,11 @@
  */
 
 #include "gtest/gtest.h"
+#include "symbolic_scalar_test_utils.h"
 #include "interface/program/program.h"
 #include "passes/pass_check/assemble_checker.h"
 #include "computational_graph_builder.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -261,8 +263,8 @@ TEST_F(TestAssembleChecker, CheckAssembleOverlap_AssembleAttrNull) {
     );
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {16, 32};
-    auto t1Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto t2Tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto t1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto t2Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto &assembleOp = currFunctionPtr->AddOperation(
         Opcode::OP_ASSEMBLE, 

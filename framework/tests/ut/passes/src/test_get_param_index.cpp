@@ -23,7 +23,9 @@
 #include "interface/operation/attribute.h"
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
+#include "interface/tensor/irbuilder.h"
 #include "symbolic_scalar_test_utils.h"
+#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk;
 
@@ -54,15 +56,15 @@ TEST_F(GetParamIdxTest, TestAdd)
     // Prepare the graph
     std::vector<int64_t> shape = {8, 16};
     auto shapeImme = OpImmediate::Specified(shape);
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor1->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("S1")});
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor2->UpdateDynValidShape({CreateTestScalarVar("Z0"), CreateTestScalarVar("Z1")});
-    auto ubTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor3->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("Z1")});
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     std::vector<npu::tile_fwk::OpImmediate> fromOffset = {OpImmediate::Parameter(1), OpImmediate::Parameter(2)};
@@ -108,15 +110,15 @@ TEST_F(GetParamIdxTest, TestAddExp)
     // Prepare the graph
     std::vector<int64_t> shape = {8, 16};
     auto shapeImme = OpImmediate::Specified(shape);
-    auto incast1 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor1->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("S1")});
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor2->UpdateDynValidShape({CreateTestScalarVar("Z0"), CreateTestScalarVar("Z1")});
-    auto ubTensor3 = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
+    auto ubTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor3->UpdateDynValidShape({CreateTestScalarVar("S0"), CreateTestScalarVar("Z1")});
-    auto outCast = std::make_shared<LogicalTensor>(*subGraphPtr1, DT_FP32, shape);
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& copy_op1 = subGraphPtr0->AddOperation(Opcode::OP_COPY_IN, {incast1}, {ubTensor1});
     std::vector<npu::tile_fwk::OpImmediate> fromOffset = {OpImmediate::Parameter(1), OpImmediate::Parameter(2)};
@@ -136,13 +138,13 @@ TEST_F(GetParamIdxTest, TestAddExp)
 
     auto& add_op = subGraphPtr0->AddOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
     (void)add_op;
-    auto tmpCast = std::make_shared<LogicalTensor>(*subGraphPtr0, DT_FP32, shape);
+    auto tmpCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& copy_out_op = subGraphPtr0->AddOperation(Opcode::OP_COPY_OUT, {ubTensor3}, {tmpCast});
     auto copyout1Attr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme);
     copy_out_op.SetOpAttribute(copyout1Attr);
     copy_out_op.SetOOpAttrOffset(0, 10);
 
-    auto ubTensor4 = std::make_shared<LogicalTensor>(*subGraphPtr1, DT_FP32, shape);
+    auto ubTensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor4->UpdateDynValidShape({CreateTestScalarVar("X0"), CreateTestScalarVar("X1")});
     auto& copy_op3 = subGraphPtr1->AddOperation(Opcode::OP_COPY_IN, {tmpCast}, {ubTensor4});
     fromOffset = {OpImmediate::Parameter(16), OpImmediate::Parameter(17)};
@@ -152,7 +154,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     copy_op3.SetIOpAttrOffset(0, 15);
     copy_op3.SetOpAttribute(copyin3Attr);
 
-    auto ubTensor5 = std::make_shared<LogicalTensor>(*subGraphPtr1, DT_FP32, shape);
+    auto ubTensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& exp = subGraphPtr1->AddOperation(Opcode::OP_EXP, {ubTensor4}, {ubTensor5});
     (void)exp;
 

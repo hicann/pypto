@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <memory>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -31,6 +32,7 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "passes/statistics/execute_graph_statistic.h"
 #include "ut_json/ut_json_tool.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -95,12 +97,12 @@ static std::shared_ptr<LogicalTensor> BuildDifferentOffsetSubgraph0(const std::s
     auto shape3Imme = OpImmediate::Specified({16, 8, 8});
     auto shape1Imme = OpImmediate::Specified({16, 64});
 
-    auto incast = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{32, 8, 8});
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 8, 8}, CreateTestConstIntVector(std::vector<int64_t>{32, 8, 8}));
     incast->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     incast->SetMagic(3);
     func->inCasts_.push_back(incast);
 
-    auto tensor0 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 8, 8});
+    auto tensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 8, 8}, CreateTestConstIntVector(std::vector<int64_t>{16, 8, 8}));
     tensor0->SetMemoryTypeBoth(MEM_UB);
     tensor0->SetMagic(15);
 
@@ -110,7 +112,7 @@ static std::shared_ptr<LogicalTensor> BuildDifferentOffsetSubgraph0(const std::s
     copyopin0.UpdateSubgraphID(0);
     copyopin0.opmagic = 10032;
 
-    auto tensor1 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 64});
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 64}, CreateTestConstIntVector(std::vector<int64_t>{16, 64}));
     tensor1->SetMemoryTypeBoth(MEM_UB);
     tensor1->SetMagic(66);
 
@@ -118,7 +120,7 @@ static std::shared_ptr<LogicalTensor> BuildDifferentOffsetSubgraph0(const std::s
     reshapeop.UpdateSubgraphID(0);
     reshapeop.opmagic = 10039;
 
-    auto input_tensor = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 64});
+    auto input_tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 64}, CreateTestConstIntVector(std::vector<int64_t>{16, 64}));
     input_tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     input_tensor->SetMagic(79);
 
@@ -136,7 +138,7 @@ static void BuildDifferentOffsetSubgraph1(const std::shared_ptr<Function>& func,
 {
     auto shape2Imme = OpImmediate::Specified({16, 32});
 
-    auto inner_tensor1 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto inner_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     inner_tensor1->SetMemoryTypeBoth(MEM_UB);
     inner_tensor1->UpdateOffset({0, 0});
     inner_tensor1->SetMagic(30);
@@ -147,7 +149,7 @@ static void BuildDifferentOffsetSubgraph1(const std::shared_ptr<Function>& func,
     copyopin1.UpdateSubgraphID(1);
     copyopin1.opmagic = 10021;
 
-    auto result_tensor1 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto result_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     result_tensor1->SetMemoryTypeBoth(MEM_UB);
     result_tensor1->SetMagic(29);
 
@@ -167,7 +169,7 @@ static void BuildDifferentOffsetSubgraph2(const std::shared_ptr<Function>& func,
 {
     auto shape2Imme = OpImmediate::Specified({16, 32});
 
-    auto inner_tensor2 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto inner_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     inner_tensor2->SetMemoryTypeBoth(MEM_UB);
     inner_tensor2->UpdateOffset({0, 32});
     inner_tensor2->SetMagic(35);
@@ -178,7 +180,7 @@ static void BuildDifferentOffsetSubgraph2(const std::shared_ptr<Function>& func,
     copyopin2.UpdateSubgraphID(2);
     copyopin2.opmagic = 10024;
 
-    auto result_tensor2 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto result_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     result_tensor2->SetMemoryTypeBoth(MEM_UB);
     result_tensor2->SetMagic(34);
 
@@ -202,7 +204,7 @@ TEST_F(SubgraphToFunctionTest, DifferentOffset)
 
     auto input_tensor = BuildDifferentOffsetSubgraph0(func);
 
-    auto output_tensor = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 64});
+    auto output_tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 64}, CreateTestConstIntVector(std::vector<int64_t>{16, 64}));
     output_tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     output_tensor->SetMagic(7);
     func->outCasts_.push_back(output_tensor);
@@ -236,7 +238,7 @@ static void BuildSameOffsetSubgraph0(const std::shared_ptr<Function>& func,
 {
     auto shape2Imme = OpImmediate::Specified({16, 32});
 
-    auto inner_tensor1 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto inner_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     inner_tensor1->UpdateOffset({0, 0});
     inner_tensor1->SetMagic(30);
     inner_tensor1->SetMemoryTypeBoth(MEM_UB);
@@ -248,7 +250,7 @@ static void BuildSameOffsetSubgraph0(const std::shared_ptr<Function>& func,
         OpImmediate::Specified({0, 0}), MEM_UB, shape2Imme, shape2Imme, std::vector<npu::tile_fwk::OpImmediate>()));
 
 
-    auto result_tensor1 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto result_tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     result_tensor1->SetMemoryTypeBoth(MEM_UB);
     result_tensor1->SetMagic(29);
 
@@ -268,7 +270,7 @@ static void BuildSameOffsetSubgraph1(const std::shared_ptr<Function>& func,
 {
     auto shape2Imme = OpImmediate::Specified({16, 32});
 
-    auto inner_tensor2 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto inner_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     inner_tensor2->SetMemoryTypeBoth(MEM_UB);
     inner_tensor2->UpdateOffset({0, 0});
     inner_tensor2->SetMagic(35);
@@ -279,7 +281,7 @@ static void BuildSameOffsetSubgraph1(const std::shared_ptr<Function>& func,
     copyopin2.UpdateSubgraphID(1);
     copyopin2.opmagic = 10024;
 
-    auto result_tensor2 = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 32});
+    auto result_tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 32}, CreateTestConstIntVector(std::vector<int64_t>{16, 32}));
     result_tensor2->SetMemoryTypeBoth(MEM_UB);
     result_tensor2->SetMagic(34);
 
@@ -300,11 +302,11 @@ TEST_F(SubgraphToFunctionTest, SameOffset)
     EXPECT_TRUE(func != nullptr);
     Program::GetInstance().InsertFuncToFunctionMap("TILE_SameOffset", func);
 
-    auto input_tensor = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{16, 64});
+    auto input_tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{16, 64}, CreateTestConstIntVector(std::vector<int64_t>{16, 64}));
     input_tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     input_tensor->SetMagic(79);
 
-    auto output_tensor = std::make_shared<LogicalTensor>(*func, DT_FP32, std::vector<int64_t>{32, 32});
+    auto output_tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
     output_tensor->SetMemoryTypeBoth(MEM_DEVICE_DDR);
     output_tensor->SetMagic(7);
 

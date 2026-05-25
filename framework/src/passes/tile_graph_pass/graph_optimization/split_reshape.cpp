@@ -638,6 +638,8 @@ Status SplitReshape::AlignToRaw(
 Status SplitReshape::ObtainCopyOutTile(
     Function& function, const copyOutTilePara& copyOutTile, LogicalTensors& overlaps, LogicalTensors& newOverlaps)
 {
+    (void)function;
+    IRBuilder builder;
     ReshapeTilePara CopyOutInfo;
     CopyOutInfo.shape = copyOutTile.reshapeSource->GetRawTensor()->GetRawShape();
     CopyOutInfo.newShape = copyOutTile.alignedShape;
@@ -658,9 +660,9 @@ Status SplitReshape::ObtainCopyOutTile(
             std::vector<int64_t> newCopyOutTileOffset;
             result.st = RawToAlign(CopyOutInfo, newCopyOutTileOffset, newCopyOutTileShape);
             if (result.st == SUCCESS) {
-                result.newCopyOutSource = std::make_shared<LogicalTensor>(
-                    function, copyOutTile.reshapeSource->GetRawTensor(), std::move(newCopyOutTileOffset),
-                    std::move(newCopyOutTileShape));
+                result.newCopyOutSource = builder.CreateTensorVar(
+                    copyOutTile.reshapeSource->GetRawTensor(), newCopyOutTileOffset, newCopyOutTileShape,
+                    std::vector<SymbolicScalar>{});
             }
             rawToAlignCache_[std::make_pair(assembleOpMagic, reshapeOpMagic)] = result;
         }
@@ -690,14 +692,17 @@ Status SplitReshape::ObtainCopyOutTile(
 
 Status SplitReshape::ObtainReshapeSource(Function& function, const OpPara& para, LogicalTensorPtr& newReshapeSource)
 {
+    (void)function;
+    IRBuilder builder;
     auto overlap = para.oldInput;
     auto reshapeSource = para.oldOutput;
     std::vector<int64_t> assembleOffset = ObtainMapOffset(overlap, reshapeSource);
     if (AddReshapeRawInputs(overlap->GetRawTensor()->GetRawMagic(), overlap) == FAILED) {
         return FAILED;
     }
-    newReshapeSource = std::make_shared<LogicalTensor>(
-        function, reshapeRawInputs_[overlap->GetRawTensor()->GetRawMagic()], assembleOffset, overlap->shape);
+    newReshapeSource = builder.CreateTensorVar(
+        reshapeRawInputs_[overlap->GetRawTensor()->GetRawMagic()], assembleOffset, overlap->shape,
+        std::vector<SymbolicScalar>{});
     if (newReshapeSource == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a shared ptr for newReshapeSource.");
         return FAILED;
@@ -762,6 +767,7 @@ Status SplitReshape::ProcessPerfectlyMatch(Function& function, Operation& op, co
 
 Status SplitReshape::ProcessOnetoOne(Function& function, Operation& op, const CalcOverlapPara& para)
 {
+    IRBuilder builder;
     std::vector<int64_t> alignedShape = para.alignedShape;
     LogicalTensorPtr reshapeSource = para.reshapeSource;
     LogicalTensorPtr input = para.input;
@@ -792,8 +798,9 @@ Status SplitReshape::ProcessOnetoOne(Function& function, Operation& op, const Ca
         }
         reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
     }
-    auto reshapeOutput = std::make_shared<LogicalTensor>(
-        function, reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()], reshapeTileOffset, reshapeTileShape);
+    auto reshapeOutput = builder.CreateTensorVar(
+        reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()], reshapeTileOffset, reshapeTileShape,
+        std::vector<SymbolicScalar>{});
     reshapeOutput->SetMemoryTypeBoth(input->GetMemoryTypeOriginal());
     PerfectlyMatchPara perfectlyMatchPara = {input,         output,        overlap,
                                              reshapeSource, reshapeOutput, para.oriViewDynShape};
@@ -890,6 +897,7 @@ Status SplitReshape::CalcTileInfo(
 
 Status SplitReshape::ProcessOnetoMulti(Function& function, Operation& op, const CalcOverlapPara& para)
 {
+    IRBuilder builder;
     auto input = para.input;
     auto output = para.output;
     auto inputView = para.inputView;
@@ -920,8 +928,9 @@ Status SplitReshape::ProcessOnetoMulti(Function& function, Operation& op, const 
         }
         reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
     }
-    auto reshapeOutput = std::make_shared<LogicalTensor>(
-        function, reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()], reshapeTileOffset, reshapeTileShape);
+    auto reshapeOutput = builder.CreateTensorVar(
+        reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()], reshapeTileOffset, reshapeTileShape,
+        std::vector<SymbolicScalar>{});
     reshapeOutput->SetMemoryTypeBoth(input->GetMemoryTypeOriginal());
     BeCoveredPara beCoveredPara = {overlap, input, reshapeOutput, para.reshapeSource, newOffset, para.oriViewDynShape};
     if (ProcessBeCovered(function, op, beCoveredPara) != SUCCESS) {
@@ -979,6 +988,7 @@ Status SplitReshape::ProcessPerfectlyMatchWithAll(
 Status SplitReshape::UpdateForPerfectlyMatchWithAll(
     Function& function, Operation& op, const CalcOverlapPara& para, const ReshapeSourcePara& sourcePara)
 {
+    IRBuilder builder;
     LogicalTensors overlaps = para.overlaps;
     LogicalTensorPtr reshapeSource = para.reshapeSource;
     LogicalTensorPtr input = para.input;
@@ -990,9 +1000,9 @@ Status SplitReshape::UpdateForPerfectlyMatchWithAll(
     if (AddReshapeRawInputs(tensor->GetRawTensor()->GetRawMagic(), tensor) == FAILED) {
         return FAILED;
     }
-    auto newReshapeSource = std::make_shared<LogicalTensor>(
-        function, reshapeRawInputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], newReshapeSourceTileOffset,
-        newReshapeSourceTileShape);
+    auto newReshapeSource = builder.CreateTensorVar(
+        reshapeRawInputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], newReshapeSourceTileOffset,
+        newReshapeSourceTileShape, std::vector<SymbolicScalar>{});
     if (newReshapeSource == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a newReshapeSource ptr.");
         return FAILED;
@@ -1007,9 +1017,9 @@ Status SplitReshape::UpdateForPerfectlyMatchWithAll(
         }
         reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
     }
-    auto reshapeOutput = std::make_shared<LogicalTensor>(
-        function, reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], inputView->offset,
-        inputView->shape);
+    auto reshapeOutput = builder.CreateTensorVar(
+        reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], inputView->offset, inputView->shape,
+        std::vector<SymbolicScalar>{});
     if (reshapeOutput == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a reshapeOutput ptr.");
         return FAILED;
@@ -1181,6 +1191,7 @@ Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& chec
 
 Status SplitReshape::CheckOp(Function& function, Operation& op)
 {
+    IRBuilder builder;
     LogicalTensors overlaps;
     LogicalTensors newOverlaps;
     auto input = op.GetIOperands().front();
@@ -1200,8 +1211,8 @@ Status SplitReshape::CheckOp(Function& function, Operation& op)
             GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    auto inputView =
-        std::make_shared<LogicalTensor>(function, input->GetRawTensor(), viewOpAttribute->GetFrom(), output->shape);
+    auto inputView = builder.CreateTensorVar(
+        input->GetRawTensor(), viewOpAttribute->GetFrom(), output->shape, std::vector<SymbolicScalar>{});
     CheckOutputParam checkOutputParam;
     CheckParam checkParam = {input, output, inputView};
     auto checkRet = CheckValidOp(checkParam, checkOutputParam);
@@ -1215,9 +1226,9 @@ Status SplitReshape::CheckOp(Function& function, Operation& op)
             GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    auto newInputView = std::make_shared<LogicalTensor>(
-        function, inputView->GetRawTensor(), checkOutputParam.newInputViewTileOffset,
-        checkOutputParam.newInputViewTileShape);
+    auto newInputView = builder.CreateTensorVar(
+        inputView->GetRawTensor(), checkOutputParam.newInputViewTileOffset, checkOutputParam.newInputViewTileShape,
+        std::vector<SymbolicScalar>{});
     auto reshapeOp = *input->GetProducers().begin();
     copyOutTilePara copyOutTile = {
         checkOutputParam.reshapeSource, reshapeOp->GetOpMagic(), inputView, newInputView,

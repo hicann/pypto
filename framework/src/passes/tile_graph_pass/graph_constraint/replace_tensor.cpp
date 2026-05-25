@@ -14,6 +14,7 @@
  */
 
 #include "replace_tensor.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "tilefwk/error_code.h"
 #include "passes/pass_utils/alignment_utils.h"
@@ -778,14 +779,14 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
         ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, iOperand->GetRawTensor() == srcTensor->GetRawTensor());
         ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, oOperand->GetRawTensor() == srcTensor->GetRawTensor());
         op->ReplaceIOperand(0, srcTensor);
-        // 含inplace语义，都为同一个RawTensor
-        auto nopOutput = std::make_shared<LogicalTensor>(
-            function, srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape());
+        IRBuilder builder;
+        auto nopOutput = builder.CreateTensorVar(
+            srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape(), std::vector<SymbolicScalar>{});
         nopOutput->SetMemoryTypeBoth(oOperand->GetMemoryTypeOriginal());
         auto& nop = function.AddRawOperation(Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
-        nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); // 期望上设成任何一个都可以，因为来源一致
+        nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); 
         nop.UpdateSubgraphID(op->GetSubgraphID());
-        auto consumers = oOperand->GetConsumers(); // deep copy
+        auto consumers = oOperand->GetConsumers(); 
         for (auto consumer : consumers) {
             if (consumer->GetOpcode() == Opcode::OP_NOP || !consumer->HasAttribute(OpAttributeKey::inplaceIdx)) {
                 continue;
@@ -907,8 +908,10 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
     auto copyRawShape = input->tensor->GetDynRawShape();
     auto copyDynShape = input->GetDynValidShape();
     Offset offset(copyShape.size(), 0);
+    IRBuilder builder;
 
-    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    auto copyOutOutputPtr =
+        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     auto& copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
@@ -918,7 +921,8 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
     copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
-    auto copyInOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    auto copyInOutputPtr =
+        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
@@ -945,8 +949,10 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
         auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(inOp->GetOpAttribute());
         inOffset = viewOpAttr->GetFrom();
     }
+    IRBuilder builder;
 
-    auto copyInOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    auto copyInOutputPtr =
+        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
     auto memType = copyInOutputPtr->GetMemoryTypeOriginal();
@@ -965,7 +971,8 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
         OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
-    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(function, input->Datatype(), copyShape);
+    auto copyOutOutputPtr =
+        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto& copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});
     copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(

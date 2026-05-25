@@ -22,6 +22,7 @@
 #define MODULE_NAME "PreGraphProcess"
 
 namespace npu::tile_fwk {
+
 std::vector<OpImmediate> SumOffset(const std::vector<OpImmediate> offset1, const std::vector<OpImmediate> offset2)
 {
     std::vector<OpImmediate> res;
@@ -114,10 +115,10 @@ bool CalculateNewDynRawShapeExpand(
     SymbolicScalar newShapeSize(1);
     if (newDynRawShape.size() > 1) {
         newShapeSize =
-            std::accumulate(newDynRawShape.begin() + 1, newDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+            std::accumulate(newDynRawShape.begin() + 1, newDynRawShape.end(), IRBuilder().CreateConstInt(1), std::multiplies<>());
     }
     SymbolicScalar oriShapeSize =
-        std::accumulate(oriDynRawShape.begin(), oriDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+        std::accumulate(oriDynRawShape.begin(), oriDynRawShape.end(), IRBuilder().CreateConstInt(1), std::multiplies<>());
     if (newShapeSize.ConcreteValid() && newShapeSize == 0) {
         APASS_LOG_ERROR_F(Elements::Function, "Cannot calculate NewDynRawShape as the dimension is zero.");
         return false;
@@ -131,7 +132,7 @@ bool CalculateNewDynRawShapeExpand(
     const std::vector<int64_t>& newRawShape, std::vector<SymbolicScalar>& newDynRawShape)
 {
     if (oriDynRawShape.empty()) {
-        newDynRawShape = SymbolicScalar::FromConcrete(newRawShape);
+        newDynRawShape = CommonUtils::CreateConstIntVector(newRawShape);
         return true;
     }
     return CalculateNewDynRawShapeExpand(newShape, oriDynRawShape, newDynRawShape);
@@ -141,11 +142,11 @@ bool CalculateNewDynRawShapeReduce(
     const std::vector<int64_t>& newShape, const std::vector<SymbolicScalar>& oriDynRawShape,
     std::vector<SymbolicScalar>& newDynRawShape)
 {
-    newDynRawShape = SymbolicScalar::FromConcrete(newShape);
+    newDynRawShape = CommonUtils::CreateConstIntVector(newShape);
     SymbolicScalar newShapeSize =
-        std::accumulate(newDynRawShape.begin(), newDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+        std::accumulate(newDynRawShape.begin(), newDynRawShape.end(), IRBuilder().CreateConstInt(1), std::multiplies<>());
     SymbolicScalar oriShapeSize =
-        std::accumulate(oriDynRawShape.begin(), oriDynRawShape.end(), SymbolicScalar(1), std::multiplies<>());
+        std::accumulate(oriDynRawShape.begin(), oriDynRawShape.end(), IRBuilder().CreateConstInt(1), std::multiplies<>());
     if (newShapeSize.ConcreteValid() && newShapeSize == 0) {
         APASS_LOG_ERROR_F(Elements::Function, "Cannot calculate NewDynRawShape as the dimension is zero.");
         return false;
@@ -160,7 +161,7 @@ bool CalculateNewDynRawShapeReduce(
     const std::vector<int64_t>& newRawShape, std::vector<SymbolicScalar>& newDynRawShape)
 {
     if (oriDynRawShape.empty()) {
-        newDynRawShape = SymbolicScalar::FromConcrete(newRawShape);
+        newDynRawShape = CommonUtils::CreateConstIntVector(newRawShape);
         return true;
     }
     return CalculateNewDynRawShapeReduce(newShape, oriDynRawShape, newDynRawShape);
@@ -262,7 +263,7 @@ void GetDynOffsetBeforeDynReshape(
     }
 
     std::vector<SymbolicScalar> newStride(newSize);
-    currentStride = SymbolicScalar(1);
+    currentStride = IRBuilder().CreateConstInt(1);
     for (int i = newSize - 1; i >= 0; --i) {
         newStride[i] = currentStride;
         currentStride = currentStride * newShape[i];
@@ -359,7 +360,7 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
         }
         auto offset = opAttr->GetFromDynOffset();
         if (offset.empty()) {
-            offset = SymbolicScalar::FromConcrete(opAttr->GetFromOffset());
+            offset = CommonUtils::CreateConstIntVector(opAttr->GetFromOffset());
         }
         Shape newRawShape = reshapeOp.GetOOperands().front()->shape;
         std::vector<SymbolicScalar> newDynRawShape;
@@ -373,7 +374,7 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
         }
         auto newDynValidShape = reshapeOp.GetOOperands().front()->GetDynValidShape();
         if (newDynValidShape.empty()) {
-            newDynValidShape = SymbolicScalar::FromConcrete(reshapeOp.GetOOperands().front()->shape);
+            newDynValidShape = CommonUtils::CreateConstIntVector(reshapeOp.GetOOperands().front()->shape);
         }
         std::vector<SymbolicScalar> newDynOffset;
         GetDynOffsetBeforeReshape(offset, viewInput->shape, newRawShape, newDynOffset);
@@ -581,7 +582,7 @@ Status RemoveRedundantAssemble::RemoveViewMultiReshape(
             }
         }
         if (newDynShape.empty() && !newShape.empty()) {
-            newDynShape = SymbolicScalar::FromConcrete(newShape);
+            newDynShape = CommonUtils::CreateConstIntVector(newShape);
         }
         secondReshape->GetOOperands().front()->GetRawTensor()->UpdateRawShape(newShape);
         secondReshape->GetOOperands().front()->GetRawTensor()->UpdateDynRawShape(newDynShape);
@@ -643,7 +644,7 @@ Status RemoveRedundantAssemble::HandleDynOffsetForReshape(
         return SUCCESS;
     }
     auto dynAssembleOutShape =
-        assembleOutDynShape.empty() ? SymbolicScalar::FromConcrete(assembleOutShape) : assembleOutDynShape;
+        assembleOutDynShape.empty() ? CommonUtils::CreateConstIntVector(assembleOutShape) : assembleOutDynShape;
     GetDynOffsetBeforeDynReshape(dynOffset, dynAssembleOutShape, newDynRawShape, newDynOffset);
     APASS_LOG_DEBUG_F(
         Elements::Operation, "Process Assemble %d Tensor[%d]: newRawshape: %s, newOffset: %s.", assembleOp.GetOpMagic(),

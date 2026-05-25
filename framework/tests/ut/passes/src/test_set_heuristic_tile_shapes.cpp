@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
 #include "gtest/gtest.h"
@@ -28,6 +29,7 @@
 #include "passes/tensor_graph_pass/set_heuristic_tile_shapes.h"
 #include "computational_graph_builder.h"
 #include "ut_json/ut_json_tool.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu::tile_fwk {
 
@@ -58,9 +60,9 @@ TEST_F(TestSetHeuristicTileShapes, TestCube)
     std::vector<int64_t> inputBShape = {128, 64};
     std::vector<int64_t> outputCShape = {64, 64};
 
-    auto inputA = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputAShape);
-    auto inputB = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputBShape);
-    auto outputC = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outputCShape);
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputAShape, CreateTestConstIntVector(inputAShape));
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape, CreateTestConstIntVector(inputBShape));
+    auto outputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape, CreateTestConstIntVector(outputCShape));
 
     currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
 
@@ -85,14 +87,14 @@ TEST_F(TestSetHeuristicTileShapes, TestVector)
     std::vector<int64_t> reshapeShape = {32, 64};
     std::vector<int64_t> rowmaxShape = {64, 1};
     std::vector<int64_t> outputShape = {1, 64};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputShape);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputShape);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
-    auto ubTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reshapeShape);
-    auto ubTensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, rowmaxShape);
-    auto ubTensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, rowmaxShape);
-    auto ubTensor6 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outputShape);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outputShape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto ubTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    auto ubTensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, rowmaxShape, CreateTestConstIntVector(rowmaxShape));
+    auto ubTensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, rowmaxShape, CreateTestConstIntVector(rowmaxShape));
+    auto ubTensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape, CreateTestConstIntVector(outputShape));
 
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {inCast}, {ubTensor1});
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
@@ -123,9 +125,9 @@ TEST_F(TestSetHeuristicTileShapes, TestSemanticLabel)
     std::vector<int64_t> inputBShape = {128, 64};
     std::vector<int64_t> outputCShape = {64, 64};
 
-    auto inputA = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputAShape);
-    auto inputB = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputBShape);
-    auto outputC = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outputCShape);
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputAShape, CreateTestConstIntVector(inputAShape));
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape, CreateTestConstIntVector(inputBShape));
+    auto outputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape, CreateTestConstIntVector(outputCShape));
 
     currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {inputA, inputB}, {outputC});
 
@@ -157,9 +159,9 @@ TEST_F(TestSetHeuristicTileShapes, TestPythonJsonGeneration)
     std::vector<int64_t> inputBShape = {128, 64};
     std::vector<int64_t> outputCShape = {64, 64};
 
-    auto inputA = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputAShape);
-    auto inputB = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inputBShape);
-    auto outputC = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outputCShape);
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputAShape, CreateTestConstIntVector(inputAShape));
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputBShape, CreateTestConstIntVector(inputBShape));
+    auto outputC = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputCShape, CreateTestConstIntVector(outputCShape));
 
     TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64});
     currFunctionPtr->SetGraphType(GraphType::TILE_GRAPH);

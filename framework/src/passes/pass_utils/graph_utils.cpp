@@ -18,6 +18,7 @@
 
 namespace npu {
 namespace tile_fwk {
+
 void GraphUtils::SetDynShape(Operation* newOp, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
     if (outDynShape.empty()) {
@@ -140,7 +141,7 @@ void GraphUtils::UpdateViewAttr(Function& function, Operation& op)
     if (function.IsFromInCast(input) || function.IsFromOutCast(output)) {
         if (viewAttribute->GetFromDynOffset().empty()) {
             std::vector<int64_t> fromOffset = viewAttribute->GetFromOffset();
-            std::vector<SymbolicScalar> fromDynOffset = SymbolicScalar::FromConcrete(fromOffset);
+            std::vector<SymbolicScalar> fromDynOffset = CommonUtils::CreateConstIntVector(fromOffset);
             viewAttribute->SetFromOffset(fromOffset, fromDynOffset);
         }
     }

@@ -15,6 +15,7 @@
 
 #include "infer_discontinuous_input.h"
 #include <queue>
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/infer_discontinuous_input_checker.h"
 #include "passes/pass_utils/infer_shape_utils.h"
@@ -305,13 +306,14 @@ void InferDiscontinuousInput::InsertAssembleOp(Function& function, LogicalTensor
 
 void InferDiscontinuousInput::InsertCopyOp(Function& function, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand)
 {
+    IRBuilder builder;
     if ((iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) &&
         (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR)) {
         std::shared_ptr<RawTensor> newRawTensor =
             std::make_shared<RawTensor>(iOperand->Datatype(), iOperand->GetShape(), iOperand->Format());
         Offset newOffset(iOperand->GetShape().size(), 0);
-        LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
-            function, newRawTensor, newOffset, iOperand->GetShape(), iOperand->GetDynValidShape());
+        LogicalTensorPtr newTensor =
+            builder.CreateTensorVar(newRawTensor, newOffset, iOperand->GetShape(), iOperand->GetDynValidShape());
         newTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
         newTensor->SetMemoryTypeToBe(MemoryType::MEM_UB);
         InsertViewOp(function, iOperand, newTensor);
@@ -331,8 +333,8 @@ void InferDiscontinuousInput::InsertCopyOp(Function& function, LogicalTensorPtr 
     std::shared_ptr<RawTensor> newRawTensor =
         std::make_shared<RawTensor>(iOperand->Datatype(), iOperand->GetShape(), iOperand->Format());
     Offset newOffset(iOperand->GetShape().size(), 0);
-    LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
-        function, newRawTensor, newOffset, iOperand->GetShape(), iOperand->GetDynValidShape());
+    LogicalTensorPtr newTensor =
+        builder.CreateTensorVar(newRawTensor, newOffset, iOperand->GetShape(), iOperand->GetDynValidShape());
     newTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
     newTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
     InsertAssembleOp(function, iOperand, newTensor);
@@ -379,6 +381,7 @@ inline void DDRTensorAssignUB(Function& function, std::map<LogicalTensorPtr, std
 }
 Status InferDiscontinuousInput::InsertTensorCopy(Function& function)
 {
+    IRBuilder builder;
     std::map<LogicalTensorPtr, std::set<Operation*>> insertedNodes;
     DDRTensorAssignUB(function, insertedNodes);
     for (auto& copyInserts : insertCopys_) {
@@ -394,8 +397,8 @@ Status InferDiscontinuousInput::InsertTensorCopy(Function& function)
             std::shared_ptr<RawTensor> newRawTensor =
                 std::make_shared<RawTensor>(inputTensor->Datatype(), inputTensor->GetShape(), inputTensor->Format());
             Offset newOffset(inputTensor->GetShape().size(), 0);
-            LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
-                function, newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
+            LogicalTensorPtr newTensor =
+                builder.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
             LogicalTensorPtr customTensor = inplaceNode.second->GetOOperands()[0];
             newTensor->SetMemoryTypeOriginal(customTensor->GetMemoryTypeOriginal(), true);
             newTensor->SetMemoryTypeToBe(newTensor->GetMemoryTypeOriginal());

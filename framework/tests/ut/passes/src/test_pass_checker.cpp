@@ -16,15 +16,17 @@
 #include "gtest/gtest.h"
 #include <algorithm>
 #include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "tilefwk/data_type.h"
-#include "interface/inner/tile_shape.h"
-#include "interface/function/function.h"
+#include "symbolic_scalar_test_utils.h"
 #include "interface/operation/operation.h"
 #include "interface/configs/config_manager.h"
+#include "tilefwk/data_type.h"
+#include "interface/inner/tilefwk.h"
+#include "interface/inner/tile_shape.h"
+#include "interface/function/function.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "passes/pass_check/checker.h"
 #include "passes/pass_check/pre_graph_checker.h"
+#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk;
 using namespace std;
@@ -56,7 +58,7 @@ TEST_F(PassCheckTest, TestCheckCompletenessWithIncastHasNoConsumer)
         Program::GetInstance(), "IntraSubGraphAdapterTest", "IntraSubGraphAdapterTest", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->inCasts_.push_back(incast1);
     Checker checker;
     EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
@@ -70,8 +72,8 @@ TEST_F(PassCheckTest, TestCheckCompletenessWithoutOutcast)
 
     std::vector<int64_t> shape = {8, 16};
 
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& exp_op0 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {incast1}, {tensor1});
     exp_op0.UpdateSubgraphID(0);
 
@@ -86,8 +88,8 @@ TEST_F(PassCheckTest, TestCheckCompletenessWithNullOutcast)
         Program::GetInstance(), "IntraSubGraphAdapterTest", "IntraSubGraphAdapterTest", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {tensor1});
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->outCasts_.push_back(nullptr);
@@ -101,11 +103,11 @@ TEST_F(PassCheckTest, TestCheckCompletenessWithOutcastHasNoProducer)
         Program::GetInstance(), "IntraSubGraphAdapterTest", "IntraSubGraphAdapterTest", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {tensor1});
     currFunctionPtr->inCasts_.push_back(incast1);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->outCasts_.push_back(outcast1);
     Checker checker;
     EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), SUCCESS);
@@ -119,11 +121,11 @@ TEST_F(PassCheckTest, TestCheckGraphLoop)
 
     std::vector<int64_t> shape = {8, 16};
 
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {incast1}, {tensor1});
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {tensor2, outcast1});
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor2}, {tensor1});
 
@@ -141,12 +143,10 @@ TEST_F(PassCheckTest, TestPublicCheck)
 
     std::vector<int64_t> shape = {8, 16};
 
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {incast1}, {tensor1});
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
 
     currFunctionPtr->inCasts_.push_back(incast1);
@@ -163,8 +163,8 @@ TEST_F(PassCheckTest, TestCheckDynAttrForView)
 
     std::vector<int64_t> shape = {8, 16};
 
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {outcast1});
     auto& tensorOffset = incast1->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(tensorOffset.GetOffset(), tensorOffset.GetDynOffset()));
@@ -183,8 +183,8 @@ TEST_F(PassCheckTest, TestCheckDynAttrForViewWithoutToDynValidShape)
 
     std::vector<int64_t> shape = {16, 16};
 
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {outcast1});
     Offset offset = {0, 128};
     std::vector<SymbolicScalar> dynOffset = {0, 128};
@@ -204,8 +204,8 @@ TEST_F(PassCheckTest, TestCheckToDynOffsetForAssemble)
 
     std::vector<int64_t> shape = {8, 16};
 
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {incast1}, {outcast1});
     auto& tensorOffset = incast1->GetTensorOffset();
     assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(tensorOffset.GetOffset()));
@@ -224,9 +224,9 @@ TEST_F(PassCheckTest, TestPreGraphCheckerAssembleViewReshapeInvalidIO)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {8, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1, incast2}, {outcast1});
     currFunctionPtr->Operations().back().UpdateSubgraphID(0);
 
@@ -246,9 +246,9 @@ TEST_F(PassCheckTest, TestPreGraphCheckerTensorNotInSubgraph)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {8, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1}, {tensor1});
     currFunctionPtr->AddOperation(Opcode::OP_ADD, {tensor1}, {outcast1});
@@ -272,7 +272,7 @@ TEST_F(PassCheckTest, TestCheckConsumerProducer_ProducerIsNull)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     tensor->GetProducers().insert(nullptr);
 
@@ -288,7 +288,7 @@ TEST_F(PassCheckTest, TestCheckConsumerProducer_ConsumerIsNull)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     tensor->GetConsumers().insert(nullptr);
 
@@ -303,10 +303,8 @@ TEST_F(PassCheckTest, TestCheckOpIOValid_OutputIsNull)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     auto& addOp = currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1}, {outcast1});
     addOp.oOperand[0] = nullptr;
@@ -325,8 +323,7 @@ TEST_F(PassCheckTest, TestCheckCompleteness_IncastIsNull)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     currFunctionPtr->inCasts_.push_back(nullptr);
     currFunctionPtr->outCasts_.push_back(outcast1);
@@ -342,8 +339,7 @@ TEST_F(PassCheckTest, TestCheckCompleteness_OutcastEmpty)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     currFunctionPtr->inCasts_.push_back(incast1);
 
@@ -358,8 +354,7 @@ TEST_F(PassCheckTest, TestCheckCompleteness_OutcastIsNull)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->outCasts_.push_back(nullptr);
@@ -375,10 +370,9 @@ TEST_F(PassCheckTest, TestCheckGraphLoop_HasLoop)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& op1 = currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1, tensor2}, {tensor1});
     auto& op2 = currFunctionPtr->AddOperation(Opcode::OP_ADD, {tensor1}, {tensor2});
@@ -398,10 +392,8 @@ TEST_F(PassCheckTest, TestCheckDynAttrForView_FromDynOffsetEmpty)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {outcast1});
     auto viewAttr = std::make_shared<ViewOpAttribute>(Offset(0, 0));
     viewAttr->GetFromDynOffset().clear();
@@ -422,10 +414,8 @@ TEST_F(PassCheckTest, TestCheckDynAttrForView_ToDynValidShapeEmpty)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {outcast1});
     auto viewAttr = std::make_shared<ViewOpAttribute>(Offset(0, 0));
@@ -447,10 +437,8 @@ TEST_F(PassCheckTest, TestCheckToDynOffsetForAssemble_ToDynOffsetEmpty)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {incast1}, {outcast1});
     auto assembleAttr = std::make_shared<AssembleOpAttribute>(Offset(0, 0));
@@ -472,11 +460,9 @@ TEST_F(PassCheckTest, TestCheckLocalTensor_LocalInput)
 
     std::vector<int64_t> shape = {32, 32};
 
-    auto incast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
-    auto localTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
+    auto localTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
     currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1, localTensor}, {outcast1});
 
     currFunctionPtr->inCasts_.push_back(incast1);
@@ -493,8 +479,7 @@ TEST_F(PassCheckTest, TestPublicCheck_IncastEmpty)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {32, 32};
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "");
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "");
 
     currFunctionPtr->outCasts_.push_back(outcast1);
 

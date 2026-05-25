@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -25,6 +26,7 @@
 #include <vector>
 #include <string>
 #include "computational_graph_builder.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -59,16 +61,16 @@ std::shared_ptr<Function> BuildMultiInputOutputFunction()
     EXPECT_TRUE(function != nullptr);
 
     std::vector<int64_t> shape = {8, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto tensor3 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto tensor4 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto outcast2 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto outcast3 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
-    auto outcast4 = std::make_shared<LogicalTensor>(*function, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& mulOp1 = function->AddOperation(Opcode::OP_MUL, {incast1, incast2}, {tensor1});
     auto& expOp1 = function->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
@@ -110,12 +112,12 @@ TEST_F(NBufferMergeTest, TestNBufferMerge)
     constexpr int subGraphID0 = 0;
     constexpr int subGraphID1 = 1;
     std::vector<int64_t> shape = {8, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast1}, {tensor1});
     copy_op1.UpdateSubgraphID(subGraphID0);

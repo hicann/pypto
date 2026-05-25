@@ -16,6 +16,7 @@
 #include <unordered_set>
 #include "passes/pass_utils/graph_utils.h"
 #include "intra_subgraph_adapter.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_check/intra_subgraph_adapter_checker.h"
 #include "passes/pass_utils/infer_shape_utils.h"
@@ -388,8 +389,9 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
                                              "IntraSubgraphAdapter::InsertOpBetween must be OP_ASSEMBLE.";
     auto newRawTensor =
         std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
+    IRBuilder builder;
     LogicalTensorPtr newTensor =
-        std::make_shared<LogicalTensor>(function, newRawTensor, tensor->GetOffset(), tensor->GetShape());
+        builder.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), std::vector<SymbolicScalar>{});
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
     function.GetTensorMap().Insert(newTensor, false);
@@ -435,8 +437,9 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     ASSERT(opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE)
         << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for IntraSubgraphAdapter::InsertOpBetween must be OP_VIEW or OP_ASSEMBLE.";
     auto newRawTensor = std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
-    LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
-        function, newRawTensor, tensor->GetOffset(), tensor->GetShape(), tensor->GetDynValidShape());
+    IRBuilder builder;
+    LogicalTensorPtr newTensor =
+        builder.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), tensor->GetDynValidShape());
     newTensor->UpdateOffset(tensor->GetTensorOffset());
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);

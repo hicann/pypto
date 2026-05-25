@@ -13,9 +13,11 @@
  * \brief Unit test for TuneTileOpSeqForVF.
  */
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <algorithm>
 #include "tilefwk/platform.h"
 #include "passes/block_graph_pass/tune_tileopseq_for_vf.h"
+#include "interface/tensor/irbuilder.h"
 #define private public
 
 namespace npu {
@@ -50,10 +52,10 @@ public:
     void TearDown() override {}
 
 protected:
-    std::shared_ptr<LogicalTensor> CreateTensor(Function& func, int64_t start, int64_t end)
+    std::shared_ptr<LogicalTensor> CreateTensor(int64_t start, int64_t end)
     {
         std::vector<int64_t> shape = {TT_NUM16, TT_NUM16};
-        auto tensor = std::make_shared<LogicalTensor>(func, DT_FP32, shape);
+        auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         tensor->memoryrange.start = start;
         tensor->memoryrange.end = end;
         return tensor;
@@ -87,34 +89,34 @@ protected:
 void BuildGraphForTest(std::shared_ptr<Function> currFunctionPtr, std::vector<Operation*>& opListPtr)
 {
     std::vector<int64_t> shape = {TT_NUM16, TT_NUM16};
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->memoryrange.start = 0;
     tensor1->memoryrange.end = TT_NUM10;
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->memoryrange.start = TT_NUM10;
     tensor2->memoryrange.end = TT_NUM20;
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->memoryrange.start = TT_NUM20;
     tensor3->memoryrange.end = TT_NUM30;
-    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor4->memoryrange.start = TT_NUM30;
     tensor4->memoryrange.end = TT_NUM40;
-    auto tensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->memoryrange.start = TT_NUM40;
     tensor5->memoryrange.end = TT_NUM50;
-    auto tensor6 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor6->memoryrange.start = TT_NUM50;
     tensor6->memoryrange.end = TT_NUM60;
-    auto tensor7 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor7 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor7->memoryrange.start = TT_NUM60;
     tensor7->memoryrange.end = TT_NUM70;
-    auto tensor8 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor8 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor8->memoryrange.start = TT_NUM70;
     tensor8->memoryrange.end = TT_NUM80;
-    auto tensor9 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor9 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor9->memoryrange.start = TT_NUM80;
     tensor9->memoryrange.end = TT_NUM90;
-    auto tensor10 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor10 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor10->memoryrange.start = TT_NUM90;
     tensor10->memoryrange.end = TT_NUM100;
     auto& vecop1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
@@ -208,19 +210,19 @@ TEST_F(TuneTileopseqForVFTest, TestMainProcess)
 void BuildGraphForNonGroup(std::shared_ptr<Function> currFunctionPtr, std::vector<Operation*>& opListPtr)
 {
     std::vector<int64_t> shape = {TT_NUM16, TT_NUM16};
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->memoryrange.start = TT_NUM40;
     tensor1->memoryrange.end = TT_NUM50;
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->memoryrange.start = TT_NUM50;
     tensor2->memoryrange.end = TT_NUM60;
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->memoryrange.start = TT_NUM60;
     tensor3->memoryrange.end = TT_NUM70;
-    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor4->memoryrange.start = TT_NUM70;
     tensor4->memoryrange.end = TT_NUM80;
-    auto tensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor5->memoryrange.start = TT_NUM90;
     tensor5->memoryrange.end = TT_NUM100;
     auto& vecop1 = currFunctionPtr->AddRawOperation(Opcode::OP_RECIPROCAL, {tensor1}, {tensor2});
@@ -286,10 +288,10 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_NoUbCopyOp)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestNoUbCopy", "TestNoUbCopyLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM20, TT_NUM30);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM30, TT_NUM40);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
+    auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
 
     auto& op1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
     auto& op2 = currFunctionPtr->AddRawOperation(Opcode::OP_SQRT, {tensor3}, {tensor4});
@@ -313,10 +315,10 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_NoNonUbCopyOp)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestNoNonUbCopy", "TestNoNonUbCopyLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM20, TT_NUM30);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM30, TT_NUM40);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
+    auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
 
     auto& ubCopyOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor1}, {tensor2});
     auto& ubCopyOp2 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
@@ -341,12 +343,12 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_UbCopyMoveFront)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestMoveFront", "TestMoveFrontLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM40, TT_NUM50);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM50, TT_NUM60);
-    auto tensor5 = CreateTensor(*currFunctionPtr, TT_NUM60, TT_NUM70);
-    auto tensor6 = CreateTensor(*currFunctionPtr, TT_NUM70, TT_NUM80);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM40, TT_NUM50);
+    auto tensor4 = CreateTensor(TT_NUM50, TT_NUM60);
+    auto tensor5 = CreateTensor(TT_NUM60, TT_NUM70);
+    auto tensor6 = CreateTensor(TT_NUM70, TT_NUM80);
 
     auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
     auto& ubCopyOp = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});
@@ -372,11 +374,11 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_UbCopyMoveBack)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestMoveBack", "TestMoveBackLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM20, TT_NUM30);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM40, TT_NUM50);
-    auto tensor5 = CreateTensor(*currFunctionPtr, TT_NUM50, TT_NUM60);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
+    auto tensor4 = CreateTensor(TT_NUM40, TT_NUM50);
+    auto tensor5 = CreateTensor(TT_NUM50, TT_NUM60);
 
     auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
     auto& ubCopyOp = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor2}, {tensor3});
@@ -402,10 +404,10 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_UbCopyCannotMove)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestCannotMove", "TestCannotMoveLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM20, TT_NUM30);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM30, TT_NUM40);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
+    auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
 
     auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
     auto& ubCopyOp = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor2}, {tensor3});
@@ -432,12 +434,12 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_MultipleUbCopyOps)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestMultipleUbCopy", "TestMultipleUbCopyLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM30, TT_NUM40);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM40, TT_NUM50);
-    auto tensor5 = CreateTensor(*currFunctionPtr, TT_NUM60, TT_NUM70);
-    auto tensor6 = CreateTensor(*currFunctionPtr, TT_NUM70, TT_NUM80);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM30, TT_NUM40);
+    auto tensor4 = CreateTensor(TT_NUM40, TT_NUM50);
+    auto tensor5 = CreateTensor(TT_NUM60, TT_NUM70);
+    auto tensor6 = CreateTensor(TT_NUM70, TT_NUM80);
 
     auto& ubCopyOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor1}, {tensor2});
     auto& vecOp = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor3}, {tensor4});
@@ -464,14 +466,14 @@ TEST_F(TuneTileopseqForVFTest, TestAdjustUbCopyNd2NzOrder_MultipleGroups)
     auto [rootFuncPtr, currFunctionPtr] = CreateFunctionPair("TestMultipleGroups", "TestMultipleGroupsLeaf");
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    auto tensor1 = CreateTensor(*currFunctionPtr, 0, TT_NUM10);
-    auto tensor2 = CreateTensor(*currFunctionPtr, TT_NUM10, TT_NUM20);
-    auto tensor3 = CreateTensor(*currFunctionPtr, TT_NUM20, TT_NUM30);
-    auto tensor4 = CreateTensor(*currFunctionPtr, TT_NUM30, TT_NUM40);
-    auto tensor5 = CreateTensor(*currFunctionPtr, TT_NUM50, TT_NUM60);
-    auto tensor6 = CreateTensor(*currFunctionPtr, TT_NUM60, TT_NUM70);
-    auto tensor7 = CreateTensor(*currFunctionPtr, TT_NUM70, TT_NUM80);
-    auto tensor8 = CreateTensor(*currFunctionPtr, TT_NUM80, TT_NUM90);
+    auto tensor1 = CreateTensor(0, TT_NUM10);
+    auto tensor2 = CreateTensor(TT_NUM10, TT_NUM20);
+    auto tensor3 = CreateTensor(TT_NUM20, TT_NUM30);
+    auto tensor4 = CreateTensor(TT_NUM30, TT_NUM40);
+    auto tensor5 = CreateTensor(TT_NUM50, TT_NUM60);
+    auto tensor6 = CreateTensor(TT_NUM60, TT_NUM70);
+    auto tensor7 = CreateTensor(TT_NUM70, TT_NUM80);
+    auto tensor8 = CreateTensor(TT_NUM80, TT_NUM90);
 
     auto& vecOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_EXP, {tensor1}, {tensor2});
     auto& ubCopyOp1 = currFunctionPtr->AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {tensor3}, {tensor4});

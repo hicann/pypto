@@ -14,6 +14,7 @@
  */
 
 #include "gtest/gtest.h"
+#include "symbolic_scalar_test_utils.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
@@ -27,6 +28,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk;
 
@@ -210,15 +212,15 @@ std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
     std::vector<int64_t> outputShape1 = {64, 128};
     std::vector<int64_t> outputShape2 = {32, 128};
 
-    auto oriInput = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    auto oriInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
     oriInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto sharedInput = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    auto sharedInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
     sharedInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto anotherInput = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    auto anotherInput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inputShape, CreateTestConstIntVector(inputShape));
     anotherInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outputA = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape1);
+    auto outputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape1, CreateTestConstIntVector(outputShape1));
     outputA->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-    auto outputB = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape2);
+    auto outputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outputShape2, CreateTestConstIntVector(outputShape2));
     outputB->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
 
     func->AddRawOperation(Opcode::OP_ADDS, {oriInput}, {sharedInput}, true);
@@ -232,7 +234,7 @@ std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
     assemble3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
 
     std::vector<int64_t> reshapeShape = {4096};
-    auto reshapeOut = std::make_shared<LogicalTensor>(*func, DT_FP32, reshapeShape);
+    auto reshapeOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
     reshapeOut->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     func->AddRawOperation(Opcode::OP_RESHAPE, {outputB}, {reshapeOut}, true);
 

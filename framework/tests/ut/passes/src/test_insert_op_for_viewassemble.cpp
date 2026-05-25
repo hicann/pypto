@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
@@ -22,6 +23,7 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/tile_graph_pass/graph_optimization/insert_op_for_viewassemble.h"
 
@@ -70,17 +72,17 @@ TEST_F(TestInsertCopyPass, TestNormalCase)
     std::vector<int64_t> offset2 = {kSizeZero, kSizeEight};
     std::vector<int64_t> offset3 = {kSizeZero, kSizeTwelve};
 
-    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     inTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
-    auto midTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor0->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
-    auto midTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
-    auto midTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
-    auto midTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor3->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
 
     auto& viewOp0 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor0});
@@ -128,17 +130,17 @@ TEST_F(TestInsertCopyPass, TestNoEqualSize)
     std::vector<int64_t> offset2 = {kSizeZero, kSizeEight};
     std::vector<int64_t> offset3 = {kSizeZero, kSizeTwelve};
 
-    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     inTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     outTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor0->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor3->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
 
     auto& viewOp0 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor0});
@@ -181,15 +183,15 @@ TEST_F(TestInsertCopyPass, TestInsert)
     std::vector<int64_t> offset0 = {kSizeZero, kSizeZero};
     std::vector<int64_t> offset1 = {kSizeZero, kSizeEight};
 
-    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     inTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     outTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor0->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
-    auto midTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
+    auto midTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, midShape, CreateTestConstIntVector(midShape));
     midTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
 
     auto& viewOp0 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor0});

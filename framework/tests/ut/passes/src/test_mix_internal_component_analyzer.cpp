@@ -16,6 +16,8 @@
 #include "passes/block_graph_pass/mix_subgraph_split/mix_internal_components_analyzer.h"
 #include "computational_graph_builder.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "symbolic_scalar_test_utils.h"
+#include "interface/tensor/irbuilder.h"
 
 #define IS_SYNC_OPERATION(op)                                                                               \
     ((op) && ((op)->GetOpcode() == Opcode::OP_SYNC_SRC || (op)->GetOpcode() == Opcode::OP_SYNC_DST ||       \
@@ -64,7 +66,7 @@ Operation& CreateL0CCopyUbOp(
     int internalSubgraphId);
 
 // 场景构建：创建基础张量（默认FP32，16*16）
-std::shared_ptr<LogicalTensor> CreateBasicTensor(Function& mixFunc);
+std::shared_ptr<LogicalTensor> CreateBasicTensor();
 
 // 结果校验：Scope基础信息（数量、ID、类型）
 void VerifyScopeBasicInfo(
@@ -176,9 +178,9 @@ Operation& CreateL0CCopyUbOp(
     return op;
 }
 
-std::shared_ptr<LogicalTensor> CreateBasicTensor(Function& mixFunc)
+std::shared_ptr<LogicalTensor> CreateBasicTensor()
 {
-    return std::make_shared<LogicalTensor>(mixFunc, DT_FP32, Shape({MS_TENSOR_DIM, MS_TENSOR_DIM}));
+    return npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, Shape({MS_TENSOR_DIM, MS_TENSOR_DIM}), CreateTestConstIntVector(Shape({MS_TENSOR_DIM, MS_TENSOR_DIM})));
 }
 
 void VerifyScopeBasicInfo(
@@ -234,10 +236,10 @@ void VerifyOpInternalId(const Operation& op, int expectedId)
 TEST_F(MixInternalComponentsAnalyzerTest, TestSingleCubeScopeBasicSplit)
 {
     // 1. 构建场景
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t4 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
+    auto t4 = test_utils::CreateBasicTensor();
     test_utils::CreateCubeOp(*mixFuncPtr_, t1, t2, MS_NUM0);
     test_utils::CreateCubeOp(*mixFuncPtr_, t2, t3, MS_NUM0);
     test_utils::CreateCubeOp(*mixFuncPtr_, t3, t4, MS_NUM0);
@@ -256,9 +258,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSingleCubeScopeBasicSplit)
 TEST_F(MixInternalComponentsAnalyzerTest, TestSingleVectorScopeBasicSplit)
 {
     // 1. 构建场景
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     test_utils::CreateVectorOp(*mixFuncPtr_, t1, t2, AIVCore::AIV0, MS_NUM0);
     test_utils::CreateVectorOp(*mixFuncPtr_, t2, t3, AIVCore::AIV0, MS_NUM0);
     // 插入NOP算子（验证隐式跳过逻辑）
@@ -278,10 +280,10 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSingleVectorScopeBasicSplit)
 TEST_F(MixInternalComponentsAnalyzerTest, TestMultiScopeBasicSplit_Cube_Vector)
 {
     // 1. 构建场景（ID=0:Cube，ID=2:Vector，非连续ID验证）
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t4 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
+    auto t4 = test_utils::CreateBasicTensor();
     test_utils::CreateCubeOp(*mixFuncPtr_, t1, t2, MS_NUM0);
     test_utils::CreateVectorOp(*mixFuncPtr_, t3, t4, AIVCore::AIV1, MS_NUM2);
 
@@ -302,9 +304,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestMultiScopeBasicSplit_Cube_Vector)
 TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_SyncSrc_Backward)
 {
     // 1. 构建场景：Vector(ID=0) + OP_SYNC_SRC(初始-1)
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     test_utils::CreateVectorOp(*mixFuncPtr_, t1, t2, AIVCore::AIV0, MS_NUM0);
     auto& syncSrcOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_SYNC_SRC, t2, t3);
 
@@ -323,9 +325,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_SyncSrc_Backward)
 TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_BarAll_Forward)
 {
     // 1. 构建场景：OP_BAR_ALL(初始-1) + Vector(ID=2)
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     auto& barAllOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_BAR_ALL, t1, t2);
     test_utils::CreateVectorOp(*mixFuncPtr_, t2, t3, AIVCore::AIV1, MS_NUM2);
 
@@ -344,9 +346,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_BarAll_Forward)
 TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_Phase2_CopyIn)
 {
     // 1. 构建场景：COPY_IN(ID=1) + OP_PHASE2(初始-1)
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     test_utils::CreateCopyInOp(*mixFuncPtr_, t1, t2, MS_NUM1);
     auto& phase2Op = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_PHASE2, t2, t3);
 
@@ -366,9 +368,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_Phase2_CopyIn)
 TEST_F(MixInternalComponentsAnalyzerTest, TestCubeScope_WithL0CCopyUb_AIV1)
 {
     // 1. 构建场景：L0C_COPY_UB(ID=0,Cube) → Vector(ID=1,AIV1)
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     auto& copyUbOp = test_utils::CreateL0CCopyUbOp(*mixFuncPtr_, t1, t2, MS_NUM0);
     test_utils::CreateVectorOp(*mixFuncPtr_, t2, t3, AIVCore::AIV1, MS_NUM1);
 
@@ -388,9 +390,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestCubeScope_WithL0CCopyUb_AIV1)
 TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentIsCube)
 {
     // 1. 构建场景：2个算子同ID=0，一个isCube=true，一个isCube=false
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     test_utils::CreateCubeOp(*mixFuncPtr_, t1, t2, MS_NUM0);
     auto& vecOp = test_utils::CreateVectorOp(*mixFuncPtr_, t2, t3, AIVCore::AIV0, MS_NUM0);
     vecOp.SetAttr(OpAttributeKey::isCube, false); // 制造属性不一致
@@ -407,9 +409,9 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentIsCube)
 TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentAIVCore)
 {
     // 1. 构建场景：2个Vector算子同ID=1，一个AIV0，一个AIV1
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t3 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
+    auto t3 = test_utils::CreateBasicTensor();
     test_utils::CreateVectorOp(*mixFuncPtr_, t1, t2, AIVCore::AIV0, MS_NUM1);
     test_utils::CreateVectorOp(*mixFuncPtr_, t2, t3, AIVCore::AIV1, MS_NUM1); // 制造属性不一致
 
@@ -425,8 +427,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_InconsistentAIVCore)
 TEST_F(MixInternalComponentsAnalyzerTest, TestException_OnlySyncOpInComponent)
 {
     // 1. 构建场景：仅OP_BAR_ALL算子，手动设置ID=0，无任何非同步算子
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
     auto& barAllOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_BAR_ALL, t1, t2);
     barAllOp.UpdateInternalSubgraphID(MS_NUM0); // 制造全同步算子Scope
 
@@ -442,8 +444,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_OnlySyncOpInComponent)
 TEST_F(MixInternalComponentsAnalyzerTest, TestException_SyncOpMergeFail_NoTarget)
 {
     // 1. 构建场景：仅OP_SYNC_SRC算子，无任何非同步算子可合并
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
     auto& syncSrcOp = test_utils::CreateSyncOp(*mixFuncPtr_, Opcode::OP_SYNC_SRC, t1, t2);
 
     // 2. 执行分析
@@ -459,8 +461,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestException_SyncOpMergeFail_NoTarget
 TEST_F(MixInternalComponentsAnalyzerTest, TestNonSyncFailed)
 {
     // 1. 构建场景
-    auto t1 = test_utils::CreateBasicTensor(*mixFuncPtr_);
-    auto t2 = test_utils::CreateBasicTensor(*mixFuncPtr_);
+    auto t1 = test_utils::CreateBasicTensor();
+    auto t2 = test_utils::CreateBasicTensor();
 
     test_utils::CreateCubeOp(*mixFuncPtr_, t1, t2, MS_NEG1);
 

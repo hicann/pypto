@@ -14,6 +14,8 @@
  */
 
 #include "computational_graph_builder.h"
+#include "symbolic_scalar_test_utils.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -24,10 +26,12 @@ bool ComputationalGraphBuilder::AddTensor(
     if (tensors_.count(name) > 0) {
         return false;
     }
-    auto tensor = std::make_shared<LogicalTensor>(*function, dataType, tileShape, TileOpFormat::TILEOP_ND, name);
+    auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        dataType, tileShape, CreateTestConstIntVector(tileShape), TileOpFormat::TILEOP_ND, name);
     if (tensor == nullptr) {
         return false;
     }
+    function->GetTensorMap().Insert(tensor, false);
     tensors_[name] = tensor;
     return true;
 }

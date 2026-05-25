@@ -25,6 +25,7 @@
 #include "interface/configs/config_manager.h"
 #include "passes/pass_utils/graph_utils.h"
 
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "interface/operation/operation.h"
 #include "passes/tensor_graph_pass/expand_function.h"
@@ -56,10 +57,10 @@ void MakeExpandGrpah(std::shared_ptr<Function>& currFunctionPtr, LogicalTensorPt
 {
     std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
     std::vector<int64_t> tile_shape = {kNumExpFive, kNumExpFive};
-    auto inCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto inCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto inCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& div_op = currFunctionPtr->AddOperation(Opcode::OP_DIV, {inCast1, inCast2}, {ubTensor});
     auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
@@ -145,8 +146,8 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest1)
 
     // Prepare the graph
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& nop_op = currFunctionPtr->AddOperation(Opcode::OP_NOP, {inCast}, {outCast});
 
@@ -195,12 +196,12 @@ TEST_F(TestExpandFunctionPass, TestCVSeperate2)
 
     currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
 
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto L1Tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto L1Tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto out1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto out2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto L1Tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto L1Tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto out1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto out2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& opAdd = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {out1});
     auto& opMatmul = currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {L1Tensor1, L1Tensor2}, {out2});
@@ -230,10 +231,10 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest2)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto op_attr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{kNumZero, kNumZero});
     currFunctionPtr->AddOperation(Opcode::OP_NOP, {inCast}, {ubTensor1});
@@ -287,8 +288,8 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest3)
 
     // Prepare the graph
     std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto op_attr = CreateAssembleOpAttr();
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
@@ -394,9 +395,9 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest5)
     std::vector<int64_t> shape1 = {kNumExpFive, kNumExpSeven};
     std::vector<int64_t> shape2 = {kNumExpSix, kNumExpSix};
     std::vector<int64_t> shape3 = {kNumExpFive, kNumExpSeven};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape3, CreateTestConstIntVector(shape3));
 
     auto op_attr = CreateAssembleOpAttr();
     currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {inCast}, {ubTensor});
@@ -463,7 +464,9 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionSTest1)
     Tensor input(DT_FP32, shape, "input");
     Tensor output(DT_FP32, shape, "output");
     TileShape::Current().SetVecTile(tile_shape);
+    config::SetHostOption(COMPILE_STAGE, CS_TENSOR_GRAPH);
     FUNCTION("STCase1") { output = Exp(input); }
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase1");
     EXPECT_EQ(func->Operations().size(), kSizeThree);
@@ -532,6 +535,7 @@ void ConstructGraphST2()
     Tensor sqrt(DT_FP32, view_shape, "sqrt");
     Tensor output2(DT_FP32, reshape_shape, "sqrt");
 
+    config::SetHostOption(COMPILE_STAGE, CS_TENSOR_GRAPH);
     FUNCTION("STCase2")
     {
         TileShape::Current().SetVecTile(tile_shape);
@@ -541,6 +545,7 @@ void ConstructGraphST2()
         sqrt = Sqrt(view);
         output2 = Reshape(sqrt, reshape_shape);
     }
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 }
 
 TEST_F(TestExpandFunctionPass, ExpandFunctionSTest2)
@@ -604,8 +609,8 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest6)
 
     // Prepare the graph
     std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto op_attr = CreateAssembleOpAttr();
     auto& assemble_op = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});

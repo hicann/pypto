@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include "split_large_fanout_tensor.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
 #include "passes/pass_log/pass_log.h"
@@ -22,6 +23,7 @@
 #define MODULE_NAME "SplitLargeFanoutTensor"
 
 namespace npu::tile_fwk {
+
 Status SplitLargeFanoutTensor::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start SplitLargeFanoutTensor.");
@@ -201,6 +203,7 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
     Function& function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset, LogicalTensors overlaps,
     LogicalTensors dualOverlaps)
 {
+    IRBuilder builder;
     for (const auto& dualOverlap : dualOverlaps) {
         auto viewOp = *dualOverlap->GetProducers().begin();
         if (viewOp->GetIOperands().front()->tensor->rawmagic != largeTensor->tensor->rawmagic) {
@@ -208,8 +211,8 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
                 Elements::Tensor, "ViewOp[%d]'s input has been replaced, don't deal with this ViewOp.",
                 viewOp->GetOpMagic());
         } else {
-            auto newTensor =
-                std::make_shared<LogicalTensor>(function, largeTensor->Datatype(), lcmTileShape, largeTensor->Format());
+            auto newTensor = builder.CreateTensorVar(
+                largeTensor->Datatype(), lcmTileShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
             auto overlap = overlaps[0];
             if (AddNewAssembleOp(function, overlap, largeTensor, lcmTileOffset, newTensor) != SUCCESS) {
                 continue;
@@ -241,6 +244,8 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
 void SplitLargeFanoutTensor::ExtractDualOverlapTiles(Function &function, LogicalTensorPtr largeTensor,
     const LogicalTensors &dualOverlaps, LogicalTensors &dualOverlapTiles, LogicalTensors &filteredDualOverlaps)
 {
+    (void)function;
+    IRBuilder builder;
     for (const auto &dualOverlap : dualOverlaps) {
         Offset dualOverlapOffset;
         for (const auto &producerOp : dualOverlap->GetProducers()) {
@@ -255,8 +260,8 @@ void SplitLargeFanoutTensor::ExtractDualOverlapTiles(Function &function, Logical
         if (dualOverlapOffset.size() == 0) {
             continue;
         }
-        auto dualOverlapTile =
-            std::make_shared<LogicalTensor>(function, largeTensor->tensor, dualOverlapOffset, dualOverlap->shape);
+        auto dualOverlapTile = builder.CreateTensorVar(
+            largeTensor->tensor, dualOverlapOffset, dualOverlap->shape, std::vector<SymbolicScalar>{});
         dualOverlapTiles.emplace_back(dualOverlapTile);
         filteredDualOverlaps.push_back(dualOverlap);
     }
@@ -278,6 +283,8 @@ bool SplitLargeFanoutTensor::HasIntersectionWithAnyDualOverlap(
 void SplitLargeFanoutTensor::FilterOverlaps(Function &function, LogicalTensorPtr largeTensor,
     LogicalTensors &overlaps, const LogicalTensors &dualOverlaps)
 {
+    (void)function;
+    IRBuilder builder;
     LogicalTensors filteredOverlaps;
     LogicalTensors filteredDualOverlaps;
     LogicalTensors dualOverlapTiles;
@@ -296,8 +303,8 @@ void SplitLargeFanoutTensor::FilterOverlaps(Function &function, LogicalTensorPtr
         if (overlapOffset.size() == 0) {
             return;
         }
-        auto overlapTile =
-            std::make_shared<LogicalTensor>(function, largeTensor->tensor, overlapOffset, overlap->shape);
+        auto overlapTile = builder.CreateTensorVar(
+            largeTensor->tensor, overlapOffset, overlap->shape, std::vector<SymbolicScalar>{});
         if (HasIntersectionWithAnyDualOverlap(overlapTile, dualOverlapTiles)) {
             filteredOverlaps.push_back(overlap);
         }
@@ -310,8 +317,9 @@ void SplitLargeFanoutTensor::CreateOpForMtoM(
     Function& function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset, LogicalTensors overlaps,
     LogicalTensors dualOverlaps)
 {
-    auto newTensor =
-        std::make_shared<LogicalTensor>(function, largeTensor->Datatype(), lcmTileShape, largeTensor->Format());
+    IRBuilder builder;
+    auto newTensor = builder.CreateTensorVar(
+        largeTensor->Datatype(), lcmTileShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
     for (const auto& overlap : overlaps) {
         if (AddNewAssembleOp(function, overlap, largeTensor, lcmTileOffset, newTensor) != SUCCESS) {
             continue;
@@ -394,9 +402,10 @@ void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(
     Function& function, LogicalTensorPtr largeTensor, const LogicalTensors& overlaps,
     LogicalTensorPtr newGcdTensor, const Shape& gcdTileOffsetForLarge, Shape& newViewOffset)
 {
+    IRBuilder builder;
     for (const auto& overlap : overlaps) {
-        auto gcdTile =
-            std::make_shared<LogicalTensor>(function, largeTensor->tensor, gcdTileOffsetForLarge, newGcdTensor->shape);
+        auto gcdTile = builder.CreateTensorVar(
+            largeTensor->tensor, gcdTileOffsetForLarge, newGcdTensor->shape, std::vector<SymbolicScalar>{});
         auto oldAssembleOp = *overlap->GetConsumers().begin();
         auto oldopmagic = oldAssembleOp->opmagic;
         for (const auto& consumer : overlap->GetConsumers()) {
@@ -420,8 +429,8 @@ void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(
             continue;
         }
         auto oldAssembleOffset = oldAssembleOpAttr->GetToOffset();
-        auto toTile =
-            std::make_shared<LogicalTensor>(function, largeTensor->tensor, oldAssembleOffset, overlap->shape);
+        auto toTile = builder.CreateTensorVar(
+            largeTensor->tensor, oldAssembleOffset, overlap->shape, std::vector<SymbolicScalar>{});
         auto status = CalcOverlap(gcdTile, toTile, true);
         if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH) {
             for (size_t j = 0; j < newViewOffset.size(); j++) {
@@ -444,9 +453,10 @@ void SplitLargeFanoutTensor::CreateOpForMoreSplit(
     Function& function, LogicalTensorPtr largeTensor, LogicalTensors overlaps, Shape gcdShape,
     LogicalTensorPtr dualOverlap, std::vector<Shape> gcdTileOffsets, Offset viewOpOffset)
 {
+    IRBuilder builder;
     for (auto& gcdTileOffset : gcdTileOffsets) {
-        auto newGcdTensor =
-            std::make_shared<LogicalTensor>(function, largeTensor->Datatype(), gcdShape, largeTensor->Format());
+        auto newGcdTensor = builder.CreateTensorVar(
+            largeTensor->Datatype(), gcdShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
         auto& newAssembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {newGcdTensor}, {dualOverlap});
         newAssembleOp.SetOpAttribute(
             std::make_shared<AssembleOpAttribute>(largeTensor->GetMemoryTypeOriginal(), gcdTileOffset));
@@ -555,9 +565,11 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
 bool SplitLargeFanoutTensor::IsBeCovered(
     Function& function, LogicalTensorPtr largeTensor, std::vector<std::pair<LogicalTensorPtr, Offset>> toTensorInfos)
 {
+    (void)function;
+    IRBuilder builder;
     for (const auto& toTensorInfo : toTensorInfos) {
-        auto toTile = std::make_shared<LogicalTensor>(
-            function, largeTensor->tensor, toTensorInfo.second, toTensorInfo.first->shape);
+        auto toTile = builder.CreateTensorVar(
+            largeTensor->tensor, toTensorInfo.second, toTensorInfo.first->shape, std::vector<SymbolicScalar>{});
         auto status = CalcOverlap(toTile, largeTensor, true);
         if (!(status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH)) {
             return false;
@@ -881,7 +893,7 @@ void SplitLargeFanoutTensor::UpdateForRedundantView(Operation& op, Operation& co
     } else if (!consumerOOperand->GetDynValidShape().empty()) {
         dynValidShape = consumerOOperand->GetDynValidShape();
     } else {
-        dynValidShape = SymbolicScalar::FromConcrete(consumerOOperand->GetShape());
+        dynValidShape = CommonUtils::CreateConstIntVector(consumerOOperand->GetShape());
     }
     if (nextViewAttr->GetToDynValidShape().empty()) {
         nextViewAttr->SetToDynValidShape(dynValidShape);

@@ -20,6 +20,26 @@
 
 namespace npu {
 namespace tile_fwk {
+namespace {
+bool IsValidShapeInTensorShape(const LogicalTensorPtr& tensor)
+{
+    const auto& tensorShape = tensor->GetShape();
+    const auto& validShape = tensor->GetDynValidShape();
+    if (validShape.empty()) {
+        return true;
+    }
+    if (tensorShape.size() != validShape.size()) {
+        return false;
+    }
+    for (size_t idx = 0; idx < validShape.size(); ++idx) {
+        if (validShape[idx].ConcreteValid() && tensorShape[idx] >= 0 && validShape[idx].Concrete() > tensorShape[idx]) {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
 Status InferDynShapeChecker::DoPostCheck(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "PostCheck for InferDynShape.");
@@ -42,6 +62,13 @@ Status InferDynShapeChecker::DoPostCheck(Function& function)
             if (opOut->GetDynValidShape().empty()) {
                 APASS_LOG_ERROR_F(
                     Elements::Tensor, "Op %s[%d] output [%d] has no dynamic valid shape.", op.GetOpcodeStr().c_str(),
+                    op.GetOpMagic(), opOut->GetMagic());
+                return FAILED;
+            }
+            if (!IsValidShapeInTensorShape(opOut)) {
+                APASS_LOG_ERROR_F(
+                    Elements::Tensor,
+                    "Op %s[%d] output [%d] dynamic valid shape is out of tensor shape.", op.GetOpcodeStr().c_str(),
                     op.GetOpMagic(), opOut->GetMagic());
                 return FAILED;
             }

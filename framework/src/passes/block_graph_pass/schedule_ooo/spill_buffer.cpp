@@ -14,6 +14,7 @@
  */
 
 #include "ooo_scheduler.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 
 namespace npu::tile_fwk {
@@ -642,8 +643,9 @@ Status OoOScheduler::CreateParticalBuffer(int spillMemid, Operation* producerOp,
 }
 
 LogicalTensorPtr OoOScheduler::CreateLocalTensor(LogicalTensorPtr spillTensor) {
-    LogicalTensorPtr localTensor =
-        std::make_shared<LogicalTensor>(function_, spillTensor->Datatype(), spillTensor->GetShape(), spillTensor->Format());
+    IRBuilder builder;
+    LogicalTensorPtr localTensor = builder.CreateTensorVar(
+        spillTensor->Datatype(), spillTensor->GetShape(), std::vector<SymbolicScalar>{}, spillTensor->Format());
     localTensor->SetMemoryTypeToBe(spillTensor->GetMemoryTypeOriginal());
     localTensor->SetMemoryTypeOriginal(spillTensor->GetMemoryTypeOriginal());
     localTensor->UpdateDynValidShape(spillTensor->GetDynValidShape());
@@ -672,9 +674,9 @@ LogicalTensorPtr OoOScheduler::CreateGMTensor(LogicalTensorPtr spillTensor, Logi
         std::make_shared<RawTensor>(spillTensor->Datatype(),
         GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape),
         TileOpFormat::TILEOP_ND, "WorkspaceGm");
-    LogicalTensorPtr gmTensor =
-        std::make_shared<LogicalTensor>(function_, gmRawTensor, spillTensor->GetOffset(),
-        actualSpillTensor->GetShape());
+    IRBuilder builder;
+    LogicalTensorPtr gmTensor = builder.CreateTensorVar(
+        gmRawTensor, spillTensor->GetOffset(), actualSpillTensor->GetShape(), std::vector<SymbolicScalar>{});
     gmTensor->SetAttr(OpAttributeKey::workspaceBaseOffset, workspaceOffset);
     gmTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
     gmTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
@@ -695,8 +697,9 @@ LogicalTensorPtr OoOScheduler::CreateParticalTensor(
     LogicalTensorPtr iOperand, LogicalTensorPtr oriOperand, LogicalTensorPtr spillTensor,
     std::vector<int64_t> toOffset)
 {
-    LogicalTensorPtr particalTensor =
-        std::make_shared<LogicalTensor>(function_, iOperand->Datatype(), iOperand->GetShape(), iOperand->Format());
+    IRBuilder builder;
+    LogicalTensorPtr particalTensor = builder.CreateTensorVar(
+        iOperand->Datatype(), iOperand->GetShape(), std::vector<SymbolicScalar>{}, iOperand->Format());
     particalTensor->SetMemoryTypeToBe(oriOperand->GetMemoryTypeToBe());
     particalTensor->SetMemoryTypeOriginal(oriOperand->GetMemoryTypeOriginal());
     particalTensor->tensor = oriOperand->tensor;

@@ -14,6 +14,7 @@
  */
 #include <climits>
 #include "remove_redundant_op.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_check/remove_redundant_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
@@ -433,8 +434,9 @@ void RemoveRedundantOp::GenerateNewView(
         RemoveViewAssembleForOutcast(function, startTensor, endTensor);
     } else {
         std::vector<long> curOffset(endTensor->shape.size(), 0);
-        newViewTensor =
-            std::make_shared<LogicalTensor>(function, endTensor->GetRawTensor(), curOffset, endTensor->shape);
+        IRBuilder builder;
+        newViewTensor = builder.CreateTensorVar(
+            endTensor->GetRawTensor(), curOffset, endTensor->shape, std::vector<SymbolicScalar>{});
         newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
         for (auto& assembleConsumer : endTensor->GetConsumers()) {
             assembleConsumer->iOperand = {newViewTensor};

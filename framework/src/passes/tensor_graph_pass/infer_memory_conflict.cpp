@@ -14,6 +14,7 @@
  */
 
 #include "infer_memory_conflict.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "InferMemoryConflict"
@@ -567,8 +568,9 @@ Status InferMemoryConflict::InsertPrecededCopys(Function& function)
         std::shared_ptr<RawTensor> newRawTensor =
             std::make_shared<RawTensor>(inputTensor->Datatype(), inputTensor->GetShape());
         Offset newOffset(inputTensor->GetShape().size(), 0);
-        LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
-            function, newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
+        IRBuilder builder;
+        LogicalTensorPtr newTensor =
+            builder.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
         auto& copyOp = function.AddRawOperation(Opcode::OP_REGISTER_COPY, {inputTensor}, {newTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d]", copyOp.GetOpMagic());
         Shape reshapeTile;
@@ -595,8 +597,9 @@ Status InferMemoryConflict::InsertPostCopys(Function& function)
         std::shared_ptr<RawTensor> newRawTensor =
             std::make_shared<RawTensor>(outputTensor->Datatype(), outputTensor->GetShape());
         Offset newOffset(outputTensor->GetShape().size(), 0);
-        LogicalTensorPtr newTensor = std::make_shared<LogicalTensor>(
-            function, newRawTensor, newOffset, outputTensor->GetShape(), outputTensor->GetDynValidShape());
+        IRBuilder builder;
+        LogicalTensorPtr newTensor =
+            builder.CreateTensorVar(newRawTensor, newOffset, outputTensor->GetShape(), outputTensor->GetDynValidShape());
         auto& copyOp = function.AddRawOperation(Opcode::OP_REGISTER_COPY, {newTensor}, {outputTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d]", copyOp.GetOpMagic());
         Shape reshapeTile;

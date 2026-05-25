@@ -27,6 +27,7 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -155,10 +156,10 @@ TEST_F(MergeViewAssembleTest, MergeTwoConsecutiveViews)
     auto rawTensor = std::make_shared<RawTensor>(
         DataType::DT_FP32, std::vector<int64_t>{10, 10}, TileOpFormat::TILEOP_ND, "input_tensor");
     std::shared_ptr<LogicalTensor> inputTensor =
-        std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10}, CreateTestConstIntVector(std::vector<int64_t>{10, 10}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(inputTensor);
     // 创建第一个VIEW操作，偏移量[1,2]
-    auto midTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{8, 8});
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{8, 8}, CreateTestConstIntVector(std::vector<int64_t>{8, 8}));
     auto view1Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2},    // from_offset
         std::vector<SymbolicScalar>{}, // from_dyn_offset
@@ -168,7 +169,7 @@ TEST_F(MergeViewAssembleTest, MergeTwoConsecutiveViews)
     view1Op.SetOpAttribute(view1Attr);
 
     // 2. 创建第2个VIEW操作，偏移量[3,4]
-    auto outputTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{6, 6});
+    auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{6, 6}, CreateTestConstIntVector(std::vector<int64_t>{6, 6}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outputTensor);
     auto view2Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{3, 4},    // from_offset
@@ -239,12 +240,12 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     auto rawTensor = std::make_shared<RawTensor>(
         DataType::DT_FP32, std::vector<int64_t>{10, 10}, TileOpFormat::TILEOP_ND, "input_tensor");
     std::shared_ptr<LogicalTensor> inputTensor =
-        std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10}, CreateTestConstIntVector(std::vector<int64_t>{10, 10}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(inputTensor);
 
     // 2.创建三个连续的ASSEMBLE操作
     // 第一个ASSEMBLE：偏移量[1,0]
-    auto midTensor1 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{9, 10});
+    auto midTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{9, 10}, CreateTestConstIntVector(std::vector<int64_t>{9, 10}));
     auto assemble1Attr = std::make_shared<AssembleOpAttribute>(
         std::vector<int64_t>{1, 0},   // to_offset
         std::vector<SymbolicScalar>{} // to_dyn_offset
@@ -253,7 +254,7 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     assemble1Op.SetOpAttribute(assemble1Attr);
 
     // 第二个ASSEMBLE：偏移量[0,2]
-    auto midTensor2 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{9, 8});
+    auto midTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{9, 8}, CreateTestConstIntVector(std::vector<int64_t>{9, 8}));
     auto assemble2Attr = std::make_shared<AssembleOpAttribute>(
         std::vector<int64_t>{0, 2},   // to_offset
         std::vector<SymbolicScalar>{} // to_dyn_offset
@@ -262,7 +263,7 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     assemble2Op.SetOpAttribute(assemble2Attr);
 
     // 第三个ASSEMBLE：偏移量[3,0]
-    auto outputTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{6, 8});
+    auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{6, 8}, CreateTestConstIntVector(std::vector<int64_t>{6, 8}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outputTensor);
     auto assemble3Attr = std::make_shared<AssembleOpAttribute>(
         std::vector<int64_t>{3, 0},   // to_offset
@@ -709,42 +710,42 @@ TEST_F(MergeViewAssembleTest, TestMixedBranchWithViewAndAssemble)
 void MergeViewL1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
 {
     std::shared_ptr<LogicalTensor> input_cast1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> input_cast2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
     std::shared_ptr<LogicalTensor> input_cast1_view =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> input_cast2_view =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
     std::shared_ptr<LogicalTensor> redundant_view_out1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> redundant_view_out2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
     std::shared_ptr<LogicalTensor> op_view_L1_out1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> op_view_L1_out2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{64, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{64, 16}, CreateTestConstIntVector(std::vector<int64_t>{64, 16}));
     std::shared_ptr<LogicalTensor> view_out1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 32});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
     std::shared_ptr<LogicalTensor> view_out2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 32});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
     std::shared_ptr<LogicalTensor> view_out3 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     std::shared_ptr<LogicalTensor> view_out4 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     std::shared_ptr<LogicalTensor> l0a_out1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 32});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
     std::shared_ptr<LogicalTensor> l0a_out2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 32});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 32}, CreateTestConstIntVector(std::vector<int64_t>{32, 32}));
     std::shared_ptr<LogicalTensor> l0b_out1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     std::shared_ptr<LogicalTensor> l0b_out2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     std::shared_ptr<LogicalTensor> a_mul_b_out1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 16});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
     std::shared_ptr<LogicalTensor> a_mul_b_out2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 16});
-    // std::shared_ptr<LogicalTensor> output_cast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 16}, CreateTestConstIntVector(std::vector<int64_t>{32, 16}));
+    // std::shared_ptr<LogicalTensor> output_cast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& head_view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast1}, {input_cast1_view});
     head_view_op1.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
     auto& head_view_op2 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {input_cast2}, {input_cast2_view});
@@ -830,17 +831,17 @@ TEST_F(MergeViewAssembleTest, MergeViewL1DataMove)
 void MergeViewWithAttr(std::shared_ptr<Function>& currFunctionPtr)
 {
     std::shared_ptr<LogicalTensor> view_in =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> tensor1 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> tensor2 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> tensor3 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> tensor4 =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
     std::shared_ptr<LogicalTensor> view_out =
-        std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32, 64});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, std::vector<int64_t>{32, 64}, CreateTestConstIntVector(std::vector<int64_t>{32, 64}));
 
     auto& view_op1 = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {view_in}, {tensor1});
     auto viewAttribute1 = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
@@ -916,8 +917,8 @@ TEST_F(MergeViewAssembleTest, TestPreCheck)
 
     std::vector<int64_t> shape1 = {8, 4};
     std::vector<int64_t> shape2 = {1, 8, 4};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {ubTensor});
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor}, {});
@@ -943,10 +944,10 @@ TEST_F(MergeViewAssembleTest, TestSpan)
     std::vector<int64_t> shape2 = {8, 4};
     auto span1 = ir::Span("view", NUM1, 0);
     auto span2 = ir::Span("view", NUM2, 0);
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     auto& viewOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1}, true, span1);
     auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
@@ -979,18 +980,18 @@ TEST_F(MergeViewAssembleTest, ViewChainSameScopeIdsShouldMerge)
     auto rawTensor = std::make_shared<RawTensor>(
         DataType::DT_FP32, std::vector<int64_t>{10, 10}, TileOpFormat::TILEOP_ND, "input_tensor");
     std::shared_ptr<LogicalTensor> inputTensor =
-        std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10}, CreateTestConstIntVector(std::vector<int64_t>{10, 10}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(inputTensor);
 
     // VIEW1(scopeId=1) -> VIEW2(scopeId=1), should merge
-    auto midTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{8, 8});
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{8, 8}, CreateTestConstIntVector(std::vector<int64_t>{8, 8}));
     auto view1Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
     auto& view1Op = function->AddRawOperation(Opcode::OP_VIEW, {inputTensor}, {midTensor});
     view1Op.SetOpAttribute(view1Attr);
     view1Op.SetScopeId(1);
 
-    auto outputTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{6, 6});
+    auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{6, 6}, CreateTestConstIntVector(std::vector<int64_t>{6, 6}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outputTensor);
     auto view2Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{3, 4}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
@@ -1023,17 +1024,17 @@ TEST_F(MergeViewAssembleTest, ViewChainMixedDefaultAndValidScopeIdShouldMerge)
     auto rawTensor = std::make_shared<RawTensor>(
         DataType::DT_FP32, std::vector<int64_t>{10, 10}, TileOpFormat::TILEOP_ND, "input_tensor");
     std::shared_ptr<LogicalTensor> inputTensor =
-        std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10});
+        npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, std::vector<int64_t>{0, 0}, std::vector<int64_t>{10, 10}, CreateTestConstIntVector(std::vector<int64_t>{10, 10}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(inputTensor);
 
     // VIEW1(scopeId=-1, default) -> VIEW2(scopeId=1), should merge and inherit scopeId=1
-    auto midTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{8, 8});
+    auto midTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{8, 8}, CreateTestConstIntVector(std::vector<int64_t>{8, 8}));
     auto view1Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{1, 2}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
     auto& view1Op = function->AddRawOperation(Opcode::OP_VIEW, {inputTensor}, {midTensor});
     view1Op.SetOpAttribute(view1Attr);
 
-    auto outputTensor = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, std::vector<int64_t>{6, 6});
+    auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, std::vector<int64_t>{6, 6}, CreateTestConstIntVector(std::vector<int64_t>{6, 6}));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outputTensor);
     auto view2Attr = std::make_shared<ViewOpAttribute>(
         std::vector<int64_t>{3, 4}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{});
@@ -1121,13 +1122,13 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeView)
     std::vector<SymbolicScalar> inputDynValidShape = {CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
 
     auto rawTensor = std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "inputTensor");
-    auto input = std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, shape);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, std::vector<int64_t>{0, 0}, shape, CreateTestConstIntVector(shape));
     input->UpdateDynValidShape(inputDynValidShape);
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(input);
 
-    auto tensor1 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outCast);
 
     auto& view1 = function->AddRawOperation(Opcode::OP_VIEW, {input}, {tensor1});
@@ -1174,14 +1175,14 @@ TEST_F(MergeViewAssembleTest, TestInferShapeAfterMergeAssemble)
         CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")};
 
     auto rawTensor = std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "inputTensor");
-    auto input = std::make_shared<LogicalTensor>(*function, rawTensor, std::vector<int64_t>{0, 0}, shape);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(rawTensor, std::vector<int64_t>{0, 0}, shape, CreateTestConstIntVector(shape));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetIncast()).push_back(input);
 
-    auto tensor0 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
+    auto tensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor0->UpdateDynValidShape(tensorDynValidShape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
-    auto tensor2 = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
-    auto outCast = std::make_shared<LogicalTensor>(*function, DataType::DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DataType::DT_FP32, shape, CreateTestConstIntVector(shape));
     const_cast<std::vector<std::shared_ptr<LogicalTensor>>&>(function->GetOutcast()).push_back(outCast);
 
     auto& viewOp = function->AddRawOperation(Opcode::OP_VIEW, {input}, {tensor0});

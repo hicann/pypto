@@ -9,9 +9,12 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <initializer_list>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "interface/tensor/irbuilder.h"
 
@@ -32,5 +35,21 @@ inline SymbolicScalar CreateTestScalarVar(const std::string& sym)
     IRBuilder builder;
     auto result = scalarVars.emplace(sym, builder.CreateScalarVar(sym));
     return result.first->second;
+}
+
+inline std::vector<SymbolicScalar> CreateTestConstIntVector(const std::vector<int64_t>& values)
+{
+    IRBuilder builder;
+    std::vector<SymbolicScalar> result;
+    result.reserve(values.size());
+    for (auto value : values) {
+        result.emplace_back(builder.CreateConstInt(value));
+    }
+    return result;
+}
+
+inline std::vector<SymbolicScalar> CreateTestConstIntVector(std::initializer_list<int64_t> values)
+{
+    return CreateTestConstIntVector(std::vector<int64_t>(values));
 }
 } // namespace npu::tile_fwk

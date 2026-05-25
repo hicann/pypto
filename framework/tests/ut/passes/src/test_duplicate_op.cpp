@@ -24,7 +24,9 @@
 #include "interface/configs/config_manager.h"
 #include "passes/tile_graph_pass/graph_optimization/duplicate_op.h"
 #include "passes/pass_check/duplicate_op_checker.h"
+#include "symbolic_scalar_test_utils.h"
 
+#include "interface/tensor/irbuilder.h"
 #define private public
 namespace npu {
 namespace tile_fwk {
@@ -63,10 +65,10 @@ public:
     void TearDown() override {}
 };
 
-static std::shared_ptr<LogicalTensor> CreateGatherInAuxTensor(Function& function, int64_t rows = 1)
+static std::shared_ptr<LogicalTensor> CreateGatherInAuxTensor(int64_t rows = 1)
 {
     std::vector<int64_t> shape = {1, rows};
-    auto tensor = std::make_shared<LogicalTensor>(function, DT_INT64, shape);
+    auto tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_INT64, shape, CreateTestConstIntVector(shape));
     std::vector<SymbolicScalar> dynValidShape = {IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(rows)};
     tensor->UpdateDynValidShape(dynValidShape);
     return tensor;
@@ -87,9 +89,9 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest1)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
     auto& tensorOffset = inCast->GetTensorOffset();
@@ -133,14 +135,14 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest2)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     outCast2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
     auto& tensorOffset = inCast->GetTensorOffset();
@@ -205,15 +207,15 @@ TEST_F(TestDuplicateOpPass, DuplicateViewUTest3)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     ubTensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(1), IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1});
     auto& tensorOffset = inCast->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
@@ -270,10 +272,10 @@ TEST_F(TestDuplicateOpPass, TestDupViewL1)
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> shape = {8, 16};
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {tensor1});
     auto& expOp1 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
     auto& expOp2 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast2});
@@ -312,13 +314,13 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest1)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor});
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor}, {outCast});
@@ -360,15 +362,15 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest2)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     auto& gatherinOp =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor});
@@ -432,18 +434,18 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest3)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets1 = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable1 = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
-    auto offsets2 = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable2 = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets1 = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable1 = CreateGatherInAuxTensor(kNumOne);
+    auto offsets2 = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable2 = CreateGatherInAuxTensor(kNumOne);
 
     auto& gatherinOp =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor1});
@@ -505,15 +507,15 @@ TEST_F(TestDuplicateOpPass, DuplicateGatherInUTest4)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumOne, kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets1 = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable1 = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
-    auto offsets2 = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable2 = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets1 = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable1 = CreateGatherInAuxTensor(kNumOne);
+    auto offsets2 = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable2 = CreateGatherInAuxTensor(kNumOne);
 
     currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor});
     currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {ubTensor, offsets2, blockTable2}, {outCast});
@@ -543,16 +545,16 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest1)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     auto& gatherin = currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor1});
     gatherin.SetAttribute(OpAttributeKey::startOffset, i);
@@ -607,18 +609,18 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest2)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets1 = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable1 = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
-    auto offsets2 = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable2 = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets1 = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable1 = CreateGatherInAuxTensor(kNumOne);
+    auto offsets2 = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable2 = CreateGatherInAuxTensor(kNumOne);
 
     auto& gatherin =
         currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {inCast, offsets1, blockTable1}, {ubTensor0});
@@ -670,16 +672,16 @@ TEST_F(TestDuplicateOpPass, DuplicateViewGatherInUTest3)
     // Prepare the graph
     std::vector<int64_t> shape1 = {kNumEight, kNumExpFour};
     std::vector<int64_t> shape2 = {kNumEight, kNumExpFour};
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumEight), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, kNumEight);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets = CreateGatherInAuxTensor(kNumEight);
+    auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor0});
     auto& tensorOffset1 = inCast->GetTensorOffset();
@@ -733,20 +735,20 @@ TEST_F(TestDuplicateOpPass, TestCheck1)
 
     int64_t i = 0;
     std::vector<int64_t> shape = {8, 16};
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     incast->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, 8);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, 1);
+    auto offsets = CreateGatherInAuxTensor(8);
+    auto blockTable = CreateGatherInAuxTensor(1);
 
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {tensor1});
     auto viewAttr = std::make_shared<ViewOpAttribute>(
@@ -796,20 +798,20 @@ TEST_F(TestDuplicateOpPass, TestCheck2)
 
     int64_t i = 0;
     std::vector<int64_t> shape = {8, 16};
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     incast->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor1->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor2->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
-    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     tensor3->UpdateDynValidShape({IRBuilder().CreateConstInt(8), IRBuilder().CreateConstInt(16)});
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, 8);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, 1);
+    auto offsets = CreateGatherInAuxTensor(8);
+    auto blockTable = CreateGatherInAuxTensor(1);
 
     auto& gatherinOp = currFunctionPtr->AddOperation(Opcode::OP_GATHER_IN_L1, {incast, offsets, blockTable}, {tensor1});
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor3}, {outcast2});
@@ -853,9 +855,9 @@ TEST_F(TestDuplicateOpPass, TestCheck3)
         std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {});
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
     currFunctionPtr->inCasts_.push_back(incast);
@@ -874,10 +876,10 @@ TEST_F(TestDuplicateOpPass, TestCheck4)
         std::make_shared<Function>(Program::GetInstance(), "TestPostCheck", "TestPostCheck", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {8, 16};
-    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast}, {tensor1});
     auto& tensorOffset = incast->GetTensorOffset();
     viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
@@ -947,14 +949,14 @@ TEST_F(TestDuplicateOpPass, TestSpan)
     // Prepare the graph
     std::vector<int64_t> shape = {kNumExpFour, kNumExpFour};
     auto span = ir::Span("gatherIn", kNumOne, 0);
-    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     inCast->UpdateDynValidShape({IRBuilder().CreateConstInt(kNumExpFour), IRBuilder().CreateConstInt(kNumExpFour)});
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outCast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto offsets = CreateGatherInAuxTensor(*currFunctionPtr, kNumExpFour);
-    auto blockTable = CreateGatherInAuxTensor(*currFunctionPtr, kNumOne);
+    auto offsets = CreateGatherInAuxTensor(kNumExpFour);
+    auto blockTable = CreateGatherInAuxTensor(kNumOne);
 
     auto& gatherIn = currFunctionPtr->AddRawOperation(
         Opcode::OP_GATHER_IN_L1, {inCast, offsets, blockTable}, {ubTensor}, true, span);

@@ -14,6 +14,7 @@
  */
 
 #include "gtest/gtest.h"
+#include "symbolic_scalar_test_utils.h"
 #include <algorithm>
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -24,6 +25,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/program/program.h"
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #undef private
@@ -121,6 +123,7 @@ TEST_F(SubgraphToFunctionCheckTest, TestPrePostCheck)
         RawTensorData::CreateConstantTensor<float>(c2, 0.0f),
     });
 
+    config::SetHostOption(COMPILE_STAGE, CS_TENSOR_GRAPH);
     FUNCTION("SimpleTest", {a, b}, {c1, c2})
     {
         Tensor temp1 = Add(a, b);
@@ -131,6 +134,7 @@ TEST_F(SubgraphToFunctionCheckTest, TestPrePostCheck)
         temp2 = Mul(temp2, a);
         c2 = Sub(temp2, b);
     }
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_SimpleTest_2");
     EXPECT_NE(mainFunc, nullptr);
 }
@@ -241,7 +245,7 @@ TEST_F(SubgraphToFunctionCheckTest, NOPCheckHasOOperands)
     TileShape::Current().SetVecTile(kTileSize, kTileSize);
     std::vector<int64_t> shape = {kVectorSize, kVectorSize};
     auto func = std::make_shared<Function>(Program::GetInstance(), "NopOutputTest", "NopOutputTest", nullptr);
-    LogicalTensorPtr outTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    LogicalTensorPtr outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     Operation& nopOp = func->AddOperation(Opcode::OP_NOP, {}, {outTensor}, false);
     SubGraphToFuncChecker checker;
     Status ret = checker.NOPCheck(nopOp);

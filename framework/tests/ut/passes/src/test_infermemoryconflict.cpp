@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include <vector>
 #include <string>
 #include "interface/function/function.h"
@@ -22,6 +23,7 @@
 #include "interface/configs/config_manager.h"
 #include "computational_graph_builder.h"
 
+#include "interface/tensor/irbuilder.h"
 #define private public
 #include "passes/tensor_graph_pass/infer_memory_conflict.h"
 
@@ -114,8 +116,8 @@ TEST_F(InferMemoryConflictTest, CheckRawShapeConflictInShapeNegative)
     std::vector<int64_t> outShape = {2, 4};
     std::shared_ptr<RawTensor> inRaw = std::make_shared<RawTensor>(DT_FP32, inShape);
     std::shared_ptr<RawTensor> outRaw = std::make_shared<RawTensor>(DT_FP32, outShape);
-    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, inRaw, std::vector<int64_t>{0, 0}, inShape);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, outRaw, std::vector<int64_t>{0, 0}, outShape);
+    auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(inRaw, std::vector<int64_t>{0, 0}, inShape, CreateTestConstIntVector(inShape));
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(outRaw, std::vector<int64_t>{0, 0}, outShape, CreateTestConstIntVector(outShape));
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {outTensor});
     InferMemoryConflict pass;
     // 这里只关注 inShape 中存在负值时的早返回分支，reshapeOp 不会被访问，传入 nullptr 即可
@@ -130,8 +132,8 @@ TEST_F(InferMemoryConflictTest, CheckRawShapeConflictOutShapeNegative)
     std::vector<int64_t> outShape = {-1, 4};
     std::shared_ptr<RawTensor> inRaw = std::make_shared<RawTensor>(DT_FP32, inShape);
     std::shared_ptr<RawTensor> outRaw = std::make_shared<RawTensor>(DT_FP32, outShape);
-    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, inRaw, std::vector<int64_t>{0, 0}, inShape);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, outRaw, std::vector<int64_t>{0, 0}, outShape);
+    auto inTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(inRaw, std::vector<int64_t>{0, 0}, inShape, CreateTestConstIntVector(inShape));
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(outRaw, std::vector<int64_t>{0, 0}, outShape, CreateTestConstIntVector(outShape));
     currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {outTensor});
     InferMemoryConflict pass;
     EXPECT_TRUE(pass.CheckRawShapeConflict(inTensor, outTensor));
@@ -150,10 +152,10 @@ TEST_F(InferMemoryConflictTest, TestInit)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_2};
 
     std::shared_ptr<RawTensor> ddrRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input1 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor, offset1, shape1);
-    auto input2 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor, offset2, shape1);
-    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto input1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto input2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor, offset2, shape1, CreateTestConstIntVector(shape1));
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     currFunctionPtr->inCasts_.push_back(input1);
     currFunctionPtr->inCasts_.push_back(input2);
@@ -196,9 +198,9 @@ TEST_F(InferMemoryConflictTest, TestForwardPropagation1)
     std::vector<int64_t> shape = {NUM_2, NUM_4};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape, CreateTestConstIntVector(shape));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape);
 
@@ -209,7 +211,7 @@ TEST_F(InferMemoryConflictTest, TestForwardPropagation1)
     ddrRawTensor1->memoryId = 0;
     ddrRawTensor2->memoryId = 1;
 
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape, CreateTestConstIntVector(shape));
 
     currFunctionPtr->outCasts_.push_back(output);
 
@@ -250,11 +252,11 @@ TEST_F(InferMemoryConflictTest, TestForwardPropagation2)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape2);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset2, shape2);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
 
     ddrRawTensor1->memoryId = 0;
     ddrRawTensor2->memoryId = 1;
@@ -297,10 +299,10 @@ TEST_F(InferMemoryConflictTest, TestForwardPropagation3)
     std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape);
-    auto T = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape, CreateTestConstIntVector(shape));
+    auto T = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape, CreateTestConstIntVector(shape));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
@@ -343,18 +345,18 @@ TEST_F(InferMemoryConflictTest, TestForwardPropagation4)
     std::vector<int64_t> shape2 = {NUM_2, NUM_4};
     std::vector<int64_t> shape1 = {NUM_ONE, NUM_2};
 
-    auto tensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto tensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
 
     std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
 
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape0);
+    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape0, CreateTestConstIntVector(shape0));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape0);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape0, CreateTestConstIntVector(shape0));
 
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape0);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape0, CreateTestConstIntVector(shape0));
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
     ddrRawTensor1->memoryId = 0;
@@ -394,14 +396,14 @@ TEST_F(InferMemoryConflictTest, TestForwardPropagation5)
 
     std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
 
-    auto logicalTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto logicalTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto logicalTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto logicalTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape0);
-    auto logicalTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape0);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape0, CreateTestConstIntVector(shape0));
+    auto logicalTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape0, CreateTestConstIntVector(shape0));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape0);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape0, CreateTestConstIntVector(shape0));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
@@ -442,13 +444,13 @@ TEST_F(InferMemoryConflictTest, TestBackwardPropagation1)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_2};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output1 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset1, shape2);
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset1, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor3 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output2 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor3, offset2, shape2);
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor3, offset2, shape2, CreateTestConstIntVector(shape2));
 
     ddrRawTensor1->SetSymbol("input1");
     ddrRawTensor2->SetSymbol("output1");
@@ -502,12 +504,12 @@ TEST_F(InferMemoryConflictTest, TestBackwardPropagation2)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset2, shape2);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
@@ -558,15 +560,15 @@ TEST_F(InferMemoryConflictTest, TestBackwardPropagation3)
     std::vector<int64_t> offset3 = {NUM_ZERO, NUM_4};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output1 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset1, shape2);
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset1, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor3 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output2 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor3, offset2, shape2);
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor3, offset2, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor4 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output3 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor4, offset3, shape2);
+    auto output3 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor4, offset3, shape2, CreateTestConstIntVector(shape2));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output1");
@@ -628,14 +630,14 @@ TEST_F(InferMemoryConflictTest, TestBackwardPropagation4)
 
     std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
 
-    auto T0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto T0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape0);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape0);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape0, CreateTestConstIntVector(shape0));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape0, CreateTestConstIntVector(shape0));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto output1 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape0);
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape0, CreateTestConstIntVector(shape0));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output1");
@@ -682,14 +684,14 @@ TEST_F(InferMemoryConflictTest, TestBackwardPropagation5)
     std::vector<int64_t> offset1 = {NUM_ZERO, NUM_ZERO};
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_ZERO, NUM_ZERO};
 
-    auto T0 = std::make_shared<LogicalTensor>(*currFunctionPtr1, DT_FP32, shape2);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr1, DT_FP32, shape1);
+    auto T0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr1, ddrRawTensor1, offset1, shape2);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr1, DT_FP32, shape2);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape2, CreateTestConstIntVector(shape2));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr1, ddrRawTensor2, offset2, shape4);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape4, CreateTestConstIntVector(shape4));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
@@ -727,16 +729,16 @@ TEST_F(InferMemoryConflictTest, TestBothPropagation1)
     std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape, CreateTestConstIntVector(shape));
 
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape, CreateTestConstIntVector(shape));
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
     ddrRawTensor1->memoryId = 0;
     ddrRawTensor2->memoryId = 1;
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     currFunctionPtr->inCasts_.push_back(input);
     currFunctionPtr->outCasts_.push_back(output);
 
@@ -780,11 +782,11 @@ TEST_F(InferMemoryConflictTest, TestBothPropagation2)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape3);
-    auto output1 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset2, shape2);
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
     ddrRawTensor2->SetSymbol("output");
     ddrRawTensor1->SetSymbol("input1");
 
@@ -833,14 +835,14 @@ TEST_F(InferMemoryConflictTest, TestInsertCopys)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset3, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset3, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape2);
 
     ddrRawTensor1->SetSymbol("input1");
     ddrRawTensor2->SetSymbol("output");
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset2, shape2);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
     ddrRawTensor1->memoryId = 0;
     currFunctionPtr->inCasts_.push_back(input);
     currFunctionPtr->outCasts_.push_back(output);
@@ -902,11 +904,11 @@ TEST_F(InferMemoryConflictTest, STest1)
     std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset, shape);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset, shape, CreateTestConstIntVector(shape));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset, shape);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset, shape, CreateTestConstIntVector(shape));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output");
@@ -967,16 +969,16 @@ TEST_F(InferMemoryConflictTest, STest2)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_ZERO, NUM_ZERO, NUM_ZERO};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape0);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
 
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2));
 
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape2);
-    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset2, shape2);
+    auto output = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset2, shape2, CreateTestConstIntVector(shape2));
 
     ddrRawTensor1->SetSymbol("input1");
     ddrRawTensor2->SetSymbol("output");
@@ -1036,13 +1038,13 @@ TEST_F(InferMemoryConflictTest, STest3)
     std::vector<int64_t> offset2 = {NUM_ZERO, NUM_2};
 
     std::shared_ptr<RawTensor> ddrRawTensor1 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto input = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor1, offset1, shape1);
-    auto T1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    auto T2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto input = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor1, offset1, shape1, CreateTestConstIntVector(shape1));
+    auto T1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
+    auto T2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     std::shared_ptr<RawTensor> ddrRawTensor2 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output1 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor2, offset1, shape2);
+    auto output1 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor2, offset1, shape2, CreateTestConstIntVector(shape2));
     std::shared_ptr<RawTensor> ddrRawTensor3 = std::make_shared<RawTensor>(DT_FP32, shape1);
-    auto output2 = std::make_shared<LogicalTensor>(*currFunctionPtr, ddrRawTensor3, offset2, shape2);
+    auto output2 = npu::tile_fwk::IRBuilder().CreateTensorVar(ddrRawTensor3, offset2, shape2, CreateTestConstIntVector(shape2));
 
     ddrRawTensor1->SetSymbol("input");
     ddrRawTensor2->SetSymbol("output1");

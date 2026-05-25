@@ -13,9 +13,11 @@
  * \brief Unit test for mixSubgraphSplit
  * */
 #include <gtest/gtest.h>
+#include "symbolic_scalar_test_utils.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/block_graph_pass/mix_subgraph_split.h"
 #include "computational_graph_builder.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -59,10 +61,10 @@ protected:
         mixFuncPtr->SetFunctionType(FunctionType::STATIC);
 
         // 创建tensors
-        auto inputTensor = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-        auto outputTensor = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-        auto tensor1 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-        auto tensor2 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+        auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+        auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+        auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+        auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
 
         // 设置边界tensor
         mixFuncPtr->inCasts_.push_back(inputTensor);
@@ -251,10 +253,10 @@ Operation& CreateCallOp(
 {
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
 
-    auto callInTensor1 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, tensorShape);
-    auto callInTensor2 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, tensorShape);
-    auto callInTensor3 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, tensorShape);
-    auto callOutTensor = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, tensorShape);
+    auto callInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto callInTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
 
     auto& callOp =
         rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {callInTensor1, callInTensor2, callInTensor3}, {callOutTensor});
@@ -289,8 +291,8 @@ void CreateVectorScope(
     auto operations = mixFuncPtr->Operations(false);
     auto cubeTensor3 = operations[operations.size() - 1].GetOOperands()[0];
 
-    auto vectorTensor1 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-    auto vectorTensor2 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+    auto vectorTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto vectorTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
 
     auto shapeImme = OpImmediate::Specified(tensorShape);
     std::vector<int64_t> offsetVec = {0, 0};
@@ -321,9 +323,9 @@ void CreateCubeScope(
     std::shared_ptr<LogicalTensor>& incast2)
 {
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
-    auto cubeTensor1 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-    auto cubeTensor2 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-    auto cubeTensor3 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+    auto cubeTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto cubeTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto cubeTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
 
     auto shapeImme = OpImmediate::Specified(tensorShape);
     std::vector<int64_t> offsetVec = {0, 0};
@@ -356,10 +358,10 @@ void SetupMixSubgraphStructure(std::shared_ptr<Function>& mixFuncPtr, FunctionHa
     std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
 
     // 创建incast和outcast
-    auto incast1 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-    auto incast2 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-    auto incast3 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto incast3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, tensorShape, CreateTestConstIntVector(tensorShape));
 
     mixFuncPtr->inCasts_.push_back(incast1);
     mixFuncPtr->inCasts_.push_back(incast2);
@@ -428,8 +430,8 @@ TEST_F(MixSubgraphSplitTest, TestSingleMixSubgraphBasicSplit)
 void CreateCallOpForNonMix(
     std::shared_ptr<Function>& rootFuncPtr, uint64_t programIdx, FunctionHash hash, const std::vector<int64_t>& shape)
 {
-    auto callInTensor = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape);
-    auto callOutTensor = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape);
+    auto callInTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {callInTensor}, {callOutTensor});
     auto callAttr = std::make_shared<CallOpAttribute>();
@@ -462,13 +464,13 @@ void CreateNonMixFunctions(
         nonMixFunc->SetFunctionType(FunctionType::STATIC);
 
         std::vector<int64_t> shape = {8, 8};
-        auto incastTensor = std::make_shared<LogicalTensor>(*nonMixFunc, DT_FP32, shape);
-        auto outcastTensor = std::make_shared<LogicalTensor>(*nonMixFunc, DT_FP32, shape);
+        auto incastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto outcastTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
         nonMixFunc->inCasts_.push_back(incastTensor);
         nonMixFunc->outCasts_.push_back(outcastTensor);
 
-        auto internalTensor1 = std::make_shared<LogicalTensor>(*nonMixFunc, DT_FP32, shape);
+        auto internalTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto& copyInOp = nonMixFunc->AddRawOperation(Opcode::OP_COPY_IN, {incastTensor}, {internalTensor1});
         copyInOp.SetIOpAttrOffset(0, 0);
 
@@ -480,7 +482,7 @@ void CreateNonMixFunctions(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
         copyInOp.SetOpAttribute(copyInAttr);
 
-        auto internalTensor2 = std::make_shared<LogicalTensor>(*nonMixFunc, DT_FP32, shape);
+        auto internalTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto& expOp = nonMixFunc->AddRawOperation(Opcode::OP_EXP, {internalTensor1}, {internalTensor2});
         (void)expOp;
         auto& copyOutOp = nonMixFunc->AddRawOperation(Opcode::OP_COPY_OUT, {internalTensor2}, {outcastTensor});
@@ -508,9 +510,9 @@ void CreateCallOpsForMixFunction(
     int callOpCount = (mixIdx % 2 == 0) ? 1 : 2;
 
     for (int callIdx = 0; callIdx < callOpCount; callIdx++) {
-        auto callInTensor1 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape);
-        auto callInTensor2 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape);
-        auto callOutTensor = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape);
+        auto callInTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto callInTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto callOutTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
         auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {callInTensor1, callInTensor2}, {callOutTensor});
 
@@ -540,7 +542,7 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
     auto lastTensor = operations.back().GetOOperands()[0];
 
     for (int compIdx = 1; compIdx < componentCount; compIdx++) {
-        auto newTensor = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
+        auto newTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         Opcode opcode = (compIdx % 2 == 0) ? Opcode::OP_NEG : Opcode::OP_SQRT;
 
         if (compIdx % 2 == 0) {
@@ -587,19 +589,19 @@ void CreateMixFunctions(
         mixFunc->SetFunctionType(FunctionType::STATIC);
 
         std::vector<int64_t> shape = {16, 16};
-        auto incast1 = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
-        auto incast2 = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
-        auto outcast = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
+        auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
         mixFunc->inCasts_.push_back(incast1);
         mixFunc->inCasts_.push_back(incast2);
         mixFunc->outCasts_.push_back(outcast);
 
         // 创建Cube scope
-        auto cubeTensor1 = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
-        auto cubeTensor2 = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
-        auto cubeTensor3 = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
-        auto cubeOutput = std::make_shared<LogicalTensor>(*mixFunc, DT_FP32, shape);
+        auto cubeTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto cubeTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto cubeTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto cubeOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
         auto shapeImme = OpImmediate::Specified(shape);
         std::vector<int64_t> offsetVec = {0, 0};
@@ -764,8 +766,8 @@ TEST_F(MixSubgraphSplitTest, TestNoMixSubgraphScenario)
         func->SetFunctionType(FunctionType::STATIC);
         // 创建简单op（无internalSubgraphID标记）
         std::vector<int64_t> shape = {8, 8};
-        auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
-        auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+        auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         func->inCasts_.push_back(inputTensor);
         func->outCasts_.push_back(outputTensor);
         auto& expOp = func->AddRawOperation(Opcode::OP_EXP, {inputTensor}, {outputTensor});
@@ -828,9 +830,9 @@ void CreateExternalMixFunction(
 
     // 创建Mix子图内部结构
     std::vector<int64_t> shape = {16, 16};
-    auto incast1 = std::make_shared<LogicalTensor>(*externalMixFuncPtr, DT_FP32, shape);
-    auto incast2 = std::make_shared<LogicalTensor>(*externalMixFuncPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*externalMixFuncPtr, DT_FP32, shape);
+    auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto incast2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    auto outcast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     externalMixFuncPtr->inCasts_.push_back(incast1);
     externalMixFuncPtr->inCasts_.push_back(incast2);
@@ -838,8 +840,8 @@ void CreateExternalMixFunction(
 
     // 创建3个scope的op
     for (int compIdx = 0; compIdx < 3; compIdx++) {
-        auto inputTensor = std::make_shared<LogicalTensor>(*externalMixFuncPtr, DT_FP32, shape);
-        auto outputTensor = std::make_shared<LogicalTensor>(*externalMixFuncPtr, DT_FP32, shape);
+        auto inputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+        auto outputTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         Opcode opcode = Opcode::OP_EXP;
         auto& op = externalMixFuncPtr->AddRawOperation(opcode, {inputTensor}, {outputTensor});
         op.UpdateInternalSubgraphID(compIdx);

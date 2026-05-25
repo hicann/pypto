@@ -13,6 +13,7 @@
  * \brief
  */
 #include "insert_op_for_viewassemble.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "InsertOpForViewAssemble"
@@ -22,11 +23,13 @@ namespace tile_fwk {
 void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* viewOp, Operation* assembleOp)
 {
     auto& moveOutTensorPtr = viewOp->GetOOperands()[0];
+    auto shape = moveOutTensorPtr->GetShape();
+    IRBuilder builder;
     LogicalTensorPtr ddrTensorPtr =
-        std::make_shared<LogicalTensor>(function, moveOutTensorPtr->Datatype(), moveOutTensorPtr->GetShape());
+        builder.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
     ddrTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     LogicalTensorPtr moveInTensorPtr =
-        std::make_shared<LogicalTensor>(function, moveOutTensorPtr->Datatype(), moveOutTensorPtr->GetShape());
+        builder.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
     moveInTensorPtr->SetMemoryTypeBoth(moveOutTensorPtr->GetMemoryTypeOriginal(), true);
     std::vector<int64_t> offset(moveOutTensorPtr->GetShape().size(), 0);
     std::vector<SymbolicScalar> dynOffset(moveOutTensorPtr->GetShape().size(), 0);

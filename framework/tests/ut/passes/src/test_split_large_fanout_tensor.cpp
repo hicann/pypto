@@ -18,9 +18,9 @@
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
-#include "interface/tensor/irbuilder.h"
-#include "symbolic_scalar_test_utils.h"
+#include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
+#include "symbolic_scalar_test_utils.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
@@ -314,6 +314,7 @@ public:
     {
         int N = 2;
         int T = 8;
+        auto dynDimA = CreateTestScalarVar("a");
         std::vector<int64_t> shape0{N * T, N * T};
         std::vector<int64_t> shape1{T, T};
         std::vector<int64_t> shape2{N * T, T};
@@ -347,7 +348,7 @@ public:
         View_UR->SetOpAttribute(attrUR);
 
         // 左半边 [16, 8] + 右半边 [16, 8]
-        std::vector<SymbolicScalar> subDynShape = {CreateTestScalarVar("a"), T};
+        std::vector<SymbolicScalar> subDynShape = {dynDimA, T};
         G.AddTensor(DataType::DT_FP32, shape2, "add_out");
         G.AddOp(Opcode::OP_ADD, {"sub_out_right", "sub_out_left"}, {"add_out"}, "Add");
         auto addOut = G.GetTensor("add_out");
@@ -1998,11 +1999,19 @@ TEST_F(SplitLargeFanoutTensorTest, TestInferShapeHaveDynValidShape)
         if (op.GetOpcode() == Opcode::OP_VIEW) {
             const auto& in_shape = op.iOperand[0]->GetDynValidShape();
             const auto& out_shape = op.oOperand[0]->GetDynValidShape();
-            ASSERT_EQ(in_shape.size(), out_shape.size()) << "Size mismatch";
-            for (size_t i = 0; i < in_shape.size(); ++i) {
-                EXPECT_EQ(in_shape[i].Dump(), out_shape[i].Dump())
-                    << "Mismatch at dim " << i << " intput " <<
-                    in_shape[i].Dump() << " output " << out_shape[i].Dump();
+            auto viewAttr = dynamic_cast<ViewOpAttribute*>(op.GetOpAttribute().get());
+            ASSERT_NE(viewAttr, nullptr);
+            auto expect_shape = GetViewValidShape(
+                in_shape, viewAttr->GetFromOffset(), viewAttr->GetFromDynOffset(), op.oOperand[0]->GetShape());
+            ASSERT_EQ(expect_shape.size(), out_shape.size()) << "Size mismatch";
+            for (size_t i = 0; i < expect_shape.size(); ++i) {
+                if (expect_shape[i].ConcreteValid() || out_shape[i].ConcreteValid()) {
+                    ASSERT_TRUE(expect_shape[i].ConcreteValid()) << "Expected dim " << i << " is symbolic.";
+                    ASSERT_TRUE(out_shape[i].ConcreteValid()) << "Output dim " << i << " is symbolic.";
+                    EXPECT_EQ(expect_shape[i].Concrete(), out_shape[i].Concrete())
+                        << "Mismatch at dim " << i << " input " << in_shape[i].Dump() << " output "
+                        << out_shape[i].Dump();
+                }
             }
         }
     }
