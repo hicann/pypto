@@ -30,7 +30,7 @@ Status InferDiscontinuousInput::RunOnFunction(Function& function)
     APASS_LOG_INFO_F(
         Elements::Function, "===> Start InferDiscontinuousInput for function [%s].", function.GetRawName().c_str());
     Init(function);
-    if (InferFromIncast() != SUCCESS) {
+    if (InferFromIncast(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Infer INCAST and OUTCAST address failed.");
         return FAILED;
     }
@@ -155,7 +155,7 @@ inline bool IsTraceableView(Operation* cur)
     return true;
 }
 
-inline bool NoViewConflict(const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
+inline bool NoViewConflict(Function& function, const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
 {
     std::vector<Operation*> viewOps(inplaceTensors.size(), nullptr);
     for (size_t i = 0; i < inplaceTensors.size(); i++) {
@@ -176,7 +176,7 @@ inline bool NoViewConflict(const std::vector<std::pair<LogicalTensorPtr, Operati
         }
         // incast outcast Check
         for (auto& producerTensor : viewOps[i]->GetIOperands()) {
-            if (FunctionUtils::GetNodeType(*producerTensor, producerTensor->BelongFunction()) != NodeType::LOCAL) {
+            if (FunctionUtils::GetNodeType(*producerTensor, function) != NodeType::LOCAL) {
                 return false;
             }
         }
@@ -185,7 +185,7 @@ inline bool NoViewConflict(const std::vector<std::pair<LogicalTensorPtr, Operati
 }
 
 inline std::vector<size_t> GetInputTileConflict(
-    const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
+    Function& function, const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
 {
     std::vector<int> rawTensorMagics;
     std::vector<Shape> rawShapes;
@@ -216,7 +216,7 @@ inline std::vector<size_t> GetInputTileConflict(
         return {};
     }
     if (!(PerfectOffsetOverlap(rawTensorMagics, rawShapes, shapes, offsets, offsetTos) &&
-          NoViewConflict(inplaceTensors)) &&
+          NoViewConflict(function, inplaceTensors)) &&
         inplaceTensors.size() > 1) {
         for (size_t i = 0; i < inplaceTensors.size(); i++) {
             copyIdx.push_back(i);
@@ -227,13 +227,13 @@ inline std::vector<size_t> GetInputTileConflict(
 }
 
 std::vector<std::pair<LogicalTensorPtr, Operation*>> InferDiscontinuousInput::FilterCopyScenes(
-    const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
+    Function& function, const std::vector<std::pair<LogicalTensorPtr, Operation*>>& inplaceTensors)
 {
     std::vector<std::pair<LogicalTensorPtr, Operation*>> needInsertCopys;
     if (inplaceTensors.empty()) {
         return needInsertCopys;
     }
-    auto copyIdx = GetInputTileConflict(inplaceTensors);
+    auto copyIdx = GetInputTileConflict(function, inplaceTensors);
     for (auto idx : copyIdx) {
         needInsertCopys.push_back(inplaceTensors[idx]);
         APASS_LOG_DEBUG_F(Elements::Tensor, "Input tensor [%d] conflit.", inplaceTensors[idx].first->GetMagic());
@@ -253,7 +253,7 @@ void InferDiscontinuousInput::Init(Function& function)
 }
 
 // 从INCAST出发，按DFS做前向推导
-Status InferDiscontinuousInput::InferFromIncast()
+Status InferDiscontinuousInput::InferFromIncast(Function& function)
 {
     std::queue<Operation*> procOpQueue;
     for (auto& opInputDegree : opInputDegree_) {
@@ -279,7 +279,7 @@ Status InferDiscontinuousInput::InferFromIncast()
                 continue;
             }
             auto inplacedTensor = GetInplacedTileTensors(outputTensor);
-            filterdTensor = FilterCopyScenes(inplacedTensor);
+            filterdTensor = FilterCopyScenes(function, inplacedTensor);
             insertCopys_.emplace(outputTensor, filterdTensor);
         }
     }

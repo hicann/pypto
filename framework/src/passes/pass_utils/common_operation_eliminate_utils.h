@@ -50,7 +50,7 @@ private:
         const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
         const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
     bool TensorProducersMerge(
-        const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
+        Function& function, const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
         const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap);
     void UpdateView(
         ViewOpAttribute* viewOpAttribute, const std::shared_ptr<LogicalTensor> oldTensor,

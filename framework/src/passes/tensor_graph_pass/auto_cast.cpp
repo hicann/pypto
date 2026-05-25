@@ -303,13 +303,13 @@ Status AutoCast::ShortenChain(Function& function, const std::vector<Operation*>&
 {
     std::shared_ptr<LogicalTensor> tgtTensor = *(tailOp->GetOOperands().begin());
     DataType tgtType = tgtTensor->Datatype();
-    bool isTgtOut = (FunctionUtils::GetNodeType(*tgtTensor, tgtTensor->BelongFunction()) == NodeType::OUTCAST);
+    bool isTgtOut = (FunctionUtils::GetNodeType(*tgtTensor, function) == NodeType::OUTCAST);
     bool isTgtOutConnected = (outCastConnectedTensors_.count(tgtTensor->GetMagic()) > 0);
     for (int i = static_cast<int>(castChain.size()) - 1; i >= 0; i--) {
         std::shared_ptr<LogicalTensor> srcTensor = *(castChain[i]->GetIOperands().begin());
         DataType srcType = srcTensor->Datatype();
-        bool isSrcIn = (FunctionUtils::GetNodeType(*srcTensor, srcTensor->BelongFunction()) == NodeType::INCAST);
-        bool isSrcOut = (FunctionUtils::GetNodeType(*srcTensor, srcTensor->BelongFunction()) == NodeType::OUTCAST);
+        bool isSrcIn = (FunctionUtils::GetNodeType(*srcTensor, function) == NodeType::INCAST);
+        bool isSrcOut = (FunctionUtils::GetNodeType(*srcTensor, function) == NodeType::OUTCAST);
         bool isSrcInConnected = (inCastConnectedTensors_.count(srcTensor->GetMagic()) > 0);
         if (srcType == tgtType && !(isTgtOutConnected && isSrcInConnected)) {
             if (!isTgtOut) {

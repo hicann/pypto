@@ -293,7 +293,7 @@ Status ConvertInserter::RecordConflict(Function& function)
                 }
 
                 // step3：处理特殊生产者消费者场景
-                ProcessSpecialProducersOrConsumers(op, oOperand, consumers, requiredMemoryType);
+                ProcessSpecialProducersOrConsumers(function, op, oOperand, consumers, requiredMemoryType);
                 if (requiredMemoryType == oOperand->GetMemoryTypeOriginal()) {
                     continue;
                 }
@@ -331,7 +331,7 @@ void ConvertInserter::InsertConvertOpForEachConsumer(
 
 // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
 void ConvertInserter::ProcessSpecialProducersOrConsumers(
-    const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
+    Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
     std::set<Operation*, OpMagicComparator>& consumers, MemoryType& requiredMemoryType)
 {
     // case1:当tensor的生产者都是assemble，并且tensor的mem路径需要经过DDR，则将tensor的ori刷成DDR
@@ -348,7 +348,7 @@ void ConvertInserter::ProcessSpecialProducersOrConsumers(
         oOperand->SetMemoryTypeToBe(oOperand->GetMemoryTypeOriginal());
     }
     // case2:当tensor的消费者都是view或者assemble，并且tensor的mem路径需要经过DDR时，将tensor的tobe刷成DDR
-    bool canSetBoth = isAllConsumersValid(consumers);
+    bool canSetBoth = isAllConsumersValid(function, consumers);
     if (canSetBoth && crossCore) {
         requiredMemoryType = MEM_DEVICE_DDR;
     }
@@ -485,16 +485,15 @@ bool ConvertInserter::isAllProducerAssemble(const std::shared_ptr<LogicalTensor>
 }
 
 // 检查tensor所有的消费者是否是view或者assemble
-bool ConvertInserter::isAllConsumersValid(const std::set<Operation*, OpMagicComparator>& consumers) const
+bool ConvertInserter::isAllConsumersValid(
+    Function& function, const std::set<Operation*, OpMagicComparator>& consumers) const
 {
     for (const auto consumer : consumers) {
         if (consumer->GetOpcode() != Opcode::OP_VIEW && consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
             return false;
         }
         if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE &&
-            (FunctionUtils::GetNodeType(
-                 *(consumer->GetOOperands().front()), consumer->GetOOperands().front()->BelongFunction()) !=
-             NodeType::OUTCAST)) {
+            FunctionUtils::GetNodeType(*(consumer->GetOOperands().front()), function) != NodeType::OUTCAST) {
             return false;
         }
     }

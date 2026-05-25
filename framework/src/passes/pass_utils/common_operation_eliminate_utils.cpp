@@ -133,7 +133,7 @@ Status CommonOperationEliminateUtils::Process(Function& function)
     std::unordered_set<Operation*> cacheProducers;
     for (auto& orderedTensor : sequence) {
         auto& producerGroup = tensorProducerMap[orderedTensor];
-        if (producerGroup.empty() || !TensorProducersMerge(orderedTensor, cacheProducers, tensorProducerMap)) {
+        if (producerGroup.empty() || !TensorProducersMerge(function, orderedTensor, cacheProducers, tensorProducerMap)) {
             continue;
         }
         for (auto op : producerGroup) {
@@ -281,7 +281,7 @@ void CommonOperationEliminateUtils::UpdateConnection(LogicalTensorPtr oldTensor,
 }
 
 bool CommonOperationEliminateUtils::TensorProducersMerge(
-    const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
+    Function& function, const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
     const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap)
 {
     auto& producers = tensorProducerMap.at(orderedTensor);
@@ -300,7 +300,7 @@ bool CommonOperationEliminateUtils::TensorProducersMerge(
     }
     LogicalTensorPtr oldTensor = orderedTensor;
     LogicalTensorPtr newTensor = existOp.first;
-    if (FunctionUtils::GetNodeType(*oldTensor, oldTensor->BelongFunction()) == NodeType::OUTCAST) {
+    if (FunctionUtils::GetNodeType(*oldTensor, function) == NodeType::OUTCAST) {
         return false;
     }
     if (producers.size() == existOp.second.size()) {

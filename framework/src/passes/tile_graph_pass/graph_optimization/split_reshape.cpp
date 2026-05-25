@@ -51,6 +51,45 @@ std::string GetStr(const std::vector<SymbolicScalar>& vec)
     }
     return "{" + ret + "}";
 }
+
+Status MarkRedundantOutputOp(Operation& op, Function& function, bool allowEmptyOOperand)
+{
+    if (op.oOperand.empty()) {
+        if (!allowEmptyOOperand) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation, "Found empty oOperand for op[%d]. %s", op.opmagic,
+                GetFormatBacktrace(op).c_str());
+            return FAILED;
+        }
+        op.SetAsDeleted();
+        return SUCCESS;
+    }
+    auto output = op.oOperand.front();
+    if (output == nullptr) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "Found null oOperand ptr for op[%d]. %s", op.opmagic,
+            GetFormatBacktrace(op).c_str());
+        return FAILED;
+    }
+    if (FunctionUtils::GetNodeType(*output, function) == NodeType::LOCAL && output->GetConsumers().empty()) {
+        op.SetAsDeleted();
+    }
+    return SUCCESS;
+}
+
+Status EraseRedundantOutputOps(Function& function, Opcode opcode, bool updateTensor, bool allowEmptyOOperand)
+{
+    for (auto& op : function.Operations(false)) {
+        if (op.GetOpcode() != opcode) {
+            continue;
+        }
+        if (MarkRedundantOutputOp(op, function, allowEmptyOOperand) != SUCCESS) {
+            return FAILED;
+        }
+    }
+    function.EraseOperations(true, updateTensor);
+    return SUCCESS;
+}
 } // namespace
 
 Status SplitReshape::RunOnFunction(Function& function)
@@ -1407,44 +1446,12 @@ Status SplitReshape::EraseReshape(Function& function)
     }
     function.EraseOperations(true, false);
 
-    for (auto& op : function.Operations(false)) {
-        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
-            continue;
-        }
-        if (op.oOperand.empty()) {
-            op.SetAsDeleted();
-            continue;
-        }
-        auto output = op.oOperand.front();
-        if (output == nullptr) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Found null oOperand ptr for op[%d]. %s", op.opmagic,
-                GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
-        if (FunctionUtils::GetNodeType(*output, output->BelongFunction()) == NodeType::LOCAL &&
-            output->GetConsumers().empty()) {
-            op.SetAsDeleted();
-        }
+    if (EraseRedundantOutputOps(function, Opcode::OP_RESHAPE, false, true) != SUCCESS) {
+        return FAILED;
     }
-    function.EraseOperations(true, false);
-
-    for (auto& op : function.Operations(false)) {
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) {
-            continue;
-        }
-        auto output = op.oOperand.front();
-        if (output == nullptr) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "Found null oOperand ptr for op[%d]. %s", op.opmagic,
-                GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
-        if (FunctionUtils::GetNodeType(*output, function) == NodeType::LOCAL && output->GetConsumers().empty()) {
-            op.SetAsDeleted();
-        }
+    if (EraseRedundantOutputOps(function, Opcode::OP_ASSEMBLE, true, false) != SUCCESS) {
+        return FAILED;
     }
-    function.EraseOperations(true, true);
     return SUCCESS;
 }
 

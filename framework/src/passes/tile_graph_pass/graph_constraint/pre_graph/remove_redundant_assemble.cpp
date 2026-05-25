@@ -783,8 +783,7 @@ void RemoveRedundantAssemble::HandleForAssembleToOutcast(
 {
     int outCastMagic = -1;
     if (function.IsFromOutCast(assembleOp.oOperand[0]) &&
-        FunctionUtils::GetNodeType(*(assembleOp.oOperand[0]), assembleOp.oOperand[0]->BelongFunction()) ==
-            NodeType::OUTCAST) {
+        FunctionUtils::GetNodeType(*(assembleOp.oOperand[0]), function) == NodeType::OUTCAST) {
         outCastMagic = assembleOp.oOperand[0]->GetMagic();
     }
     if (outCastMagic != -1) {

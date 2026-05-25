@@ -122,7 +122,7 @@ public:
     bool isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const;
 
     // 检查tensor所有的消费者是否都有效
-    bool isAllConsumersValid(const std::set<Operation*, OpMagicComparator>& consumers) const;
+    bool isAllConsumersValid(Function& function, const std::set<Operation*, OpMagicComparator>& consumers) const;
 
     // 为每个存在内存冲突的消费者插入convert op
     void InsertConvertOpForEachConsumer(
@@ -153,8 +153,8 @@ public:
     
     // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
     void ProcessSpecialProducersOrConsumers(
-        const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, std::set<Operation*, OpMagicComparator>& consumers,
-        MemoryType& requiredMemoryType);
+        Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
+        std::set<Operation*, OpMagicComparator>& consumers, MemoryType& requiredMemoryType);
 
     // 构造转换路径
     Status ProcessConvertPath(
