@@ -94,6 +94,10 @@ public:
     static const std::string loopAxes;
     static const std::string loopGroupStart;
     static const std::string loopGroupEnd;
+    static const std::string dynloopGroup;
+    static const std::string dynloopAxes;
+    static const std::string dynloopGroupStart;
+    static const std::string dynloopGroupEnd;
     static const std::string lastUse;
     static const std::string isUpper;
     static const std::string blockSize;

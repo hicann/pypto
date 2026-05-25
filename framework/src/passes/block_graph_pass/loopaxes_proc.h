@@ -32,14 +32,25 @@ public:
 private:
     Status UpdateFuncLoopAxes(Function& function);
     Status UpdateOpLoopAxes(Operation& op, Function& subFunc);
-    bool SameLoopAxes(const std::vector<SymbolicScalar>& curLoopAxes, const Function& subFunc);
+    bool SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxes, const Function& subFunc);
+    bool SameLoopAxes(const std::vector<int64_t>& curLoopAxes);
     void ClearStatus();
+    void ProcessDynLoopGroup(Operation& op, const std::vector<SymbolicScalar>& dynloopAxes, const Function& subFunc);
+    void ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes);
+    void ResetGroupState();
+    void FinalizeLoopGroups();
 
     int64_t groupIdx{INVALID_LOOP_GROUPID};
     int64_t lastGroupIdx{INVALID_LOOP_GROUPID};
     int64_t previousOutputMagic{INVALID_LOOP_GROUPID};
     std::shared_ptr<Operation> lastOpInLoop{nullptr};
-    std::vector<SymbolicScalar> previousLoopAxes;
+    std::vector<int64_t> previousLoopAxes;
+
+    int64_t dynGroupIdx{INVALID_LOOP_GROUPID};
+    int64_t dynLastGroupIdx{INVALID_LOOP_GROUPID};
+    int64_t dynPreviousOutputMagic{INVALID_LOOP_GROUPID};
+    std::shared_ptr<Operation> dynLastOpInLoop{nullptr};
+    std::vector<SymbolicScalar> dynPreviousLoopAxes;
 };
 
 } // namespace tile_fwk

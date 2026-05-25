@@ -29,6 +29,66 @@
 
 namespace npu {
 namespace tile_fwk {
+
+namespace {
+constexpr size_t MIN_SHAPE_DIM = 2;
+
+void SetOpLoopEnd(std::shared_ptr<Operation> op)
+{
+    op->SetAttribute(OpAttributeKey::loopGroupEnd, true);
+    APASS_LOG_INFO_F(
+        Elements::Operation, "Op Code %s, Op[%d] set loopGroup --End--", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+}
+
+void SetOpDynLoopEnd(std::shared_ptr<Operation> op)
+{
+    op->SetAttribute(OpAttributeKey::dynloopGroupEnd, true);
+    APASS_LOG_INFO_F(
+        Elements::Operation, "Op Code %s, Op[%d] set dynloopGroup --End--", op->GetOpcodeStr().c_str(),
+        op->GetOpMagic());
+}
+
+bool NeedClearStatus(const Operation& op)
+{
+    auto opCode = op.GetOpcode();
+    if (SUPPORT_VF_FUSE_OPS.find(opCode) == SUPPORT_VF_FUSE_OPS.end()) {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "%d %s doesn't support VF fuse", op.GetOpMagic(), op.GetOpcodeStr().c_str());
+        return true;
+    }
+    return false;
+}
+
+void GetOpLoopAxes(const Operation& op, std::vector<int64_t>& loopAxes, std::vector<SymbolicScalar>& dynloopAxes)
+{
+    auto output = op.GetOOperands().front();
+    auto shape = output->GetShape();
+    auto dynShape = output->GetDynValidShape();
+
+    if (op.HasAttr(OpAttributeKey::dynloopAxes)) {
+        dynloopAxes = op.GetVectorSymbolicScalarAttribute(OpAttributeKey::dynloopAxes);
+    } else {
+        for (size_t i = 0; i < dynShape.size() - MIN_SHAPE_DIM; ++i) {
+            dynloopAxes.push_back(dynShape[i]);
+        }
+    }
+
+    if (op.HasAttr(OpAttributeKey::loopAxes)) {
+        loopAxes = op.GetVectorIntAttribute(OpAttributeKey::loopAxes);
+    } else {
+        for (size_t i = 0; i < shape.size() - MIN_SHAPE_DIM; ++i) {
+            loopAxes.push_back(shape[i]);
+        }
+    }
+}
+
+void HandleSmallShapeOp(Operation& op)
+{
+    op.SetAttribute(OpAttributeKey::dynloopGroup, INVALID_LOOP_GROUPID);
+    op.SetAttribute(OpAttributeKey::loopGroup, INVALID_LOOP_GROUPID);
+}
+} // namespace
+
 Status LoopaxesProc::RunOnFunction(Function& function)
 {
     bool enableVF = config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
@@ -45,13 +105,6 @@ Status LoopaxesProc::RunOnFunction(Function& function)
     return SUCCESS;
 }
 
-void SetOpLoopEnd(std::shared_ptr<Operation> op)
-{
-    op->SetAttribute(OpAttributeKey::loopGroupEnd, true);
-    APASS_LOG_INFO_F(
-        Elements::Operation, "Op Code %s, Op[%d] set loopGroup --End--", op->GetOpcodeStr().c_str(), op->GetOpMagic());
-}
-
 void LoopaxesProc::ClearStatus()
 {
     lastGroupIdx = INVALID_LOOP_GROUPID;
@@ -61,19 +114,14 @@ void LoopaxesProc::ClearStatus()
         SetOpLoopEnd(lastOpInLoop);
         lastOpInLoop.reset();
     }
-}
 
-bool NeedClearStatus(const Operation& op)
-{
-    auto opCode = op.GetOpcode();
-    auto iter = SUPPORT_VF_FUSE_OPS.find(opCode);
-    if (iter == SUPPORT_VF_FUSE_OPS.end()) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "%d %s doesn't support VF fuse", op.GetOpMagic(), op.GetOpcodeStr().c_str());
-        return true;
+    dynLastGroupIdx = INVALID_LOOP_GROUPID;
+    dynPreviousOutputMagic = INVALID_LOOP_GROUPID;
+    dynPreviousLoopAxes.clear();
+    if (dynLastOpInLoop != nullptr) {
+        SetOpDynLoopEnd(dynLastOpInLoop);
+        dynLastOpInLoop.reset();
     }
-
-    return false;
 }
 
 Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
@@ -89,83 +137,149 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
         return SUCCESS;
     }
 
-    std::vector<SymbolicScalar> loopAxes;
     auto output = op.GetOOperands().front();
-    auto shape = output->GetDynValidShape();
-    if (shape.size() <= NUM2) {
-        // 被纳入group的要求维度大于2，否则将其设置为-1
-        op.SetAttribute(OpAttributeKey::loopGroup, INVALID_LOOP_GROUPID);
-        ClearStatus();
-    } else {
-        if (op.HasAttr(OpAttributeKey::loopAxes)) {
-            loopAxes = op.GetVectorSymbolicScalarAttribute(OpAttributeKey::loopAxes);
-        } else {
-            for (size_t i = 0UL; i < shape.size() - 2UL; ++i) {
-                loopAxes.push_back(shape[i]);
-            }
-        }
-        // 当前节点的loopaxes和group的loopaxes一致，当前节点划入当前的loopaxes
-        // 当前节点的loopaxes和group的loopaxes不一致，划入一个新的group起点，进行group
-        if (!SameLoopAxes(loopAxes, subFunc)) {
-            lastGroupIdx = groupIdx++;
-            previousLoopAxes = loopAxes;
-            op.SetAttribute(OpAttributeKey::loopGroupStart, true);
-            if (lastOpInLoop != nullptr) {
-                SetOpLoopEnd(lastOpInLoop);
-            }
-            APASS_LOG_INFO_F(
-                Elements::Operation, "Op Code %s, Op[%d] set loopGroup ++Start++", op.GetOpcodeStr().c_str(),
-                op.GetOpMagic());
-        }
-        op.SetAttribute(OpAttributeKey::loopGroup, groupIdx);
-        op.SetAttribute(OpAttributeKey::loopAxes, loopAxes);
-        lastOpInLoop = op.shared_from_this();
-        previousOutputMagic = output->GetMagic();
-        APASS_LOG_INFO_F(
-            Elements::Operation, "Op Code %s, Op[%d] groupIdx is %ld, loopAxes is %s", op.GetOpcodeStr().c_str(),
-            op.GetOpMagic(), groupIdx, IntVecToStr(loopAxes).c_str());
+    auto shape = output->GetShape();
+    auto dynShape = output->GetDynValidShape();
+
+    if (shape.size() != dynShape.size()) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "Op Code %s, Op[%d] output dynShape size != shape size.", op.GetOpcodeStr().c_str(),
+            op.GetOpMagic());
+        return FAILED;
     }
+
+    if (dynShape.size() <= MIN_SHAPE_DIM) {
+        HandleSmallShapeOp(op);
+        ClearStatus();
+        return SUCCESS;
+    }
+
+    std::vector<int64_t> loopAxes;
+    std::vector<SymbolicScalar> dynloopAxes;
+    GetOpLoopAxes(op, loopAxes, dynloopAxes);
+
+    ProcessDynLoopGroup(op, dynloopAxes, subFunc);
+    ProcessStaticLoopGroup(op, loopAxes);
+
+    APASS_LOG_INFO_F(
+        Elements::Operation, "Op Code %s, Op[%d] groupIdx=%ld, loopAxes=%s, dynGroupIdx=%ld, dynLoopAxes=%s",
+        op.GetOpcodeStr().c_str(), op.GetOpMagic(), groupIdx, IntVecToStr(loopAxes).c_str(), dynGroupIdx,
+        IntVecToStr(dynloopAxes).c_str());
+
     return SUCCESS;
+}
+
+void LoopaxesProc::ProcessDynLoopGroup(
+    Operation& op, const std::vector<SymbolicScalar>& dynloopAxes, const Function& subFunc)
+{
+    if (!SameDynLoopAxes(dynloopAxes, subFunc)) {
+        dynLastGroupIdx = dynGroupIdx++;
+        dynPreviousLoopAxes = dynloopAxes;
+        op.SetAttribute(OpAttributeKey::dynloopGroupStart, true);
+        if (dynLastOpInLoop != nullptr) {
+            SetOpDynLoopEnd(dynLastOpInLoop);
+        }
+        APASS_LOG_INFO_F(
+            Elements::Operation, "Op Code %s, Op[%d] set dynloopGroup ++Start++", op.GetOpcodeStr().c_str(),
+            op.GetOpMagic());
+    }
+
+    op.SetAttribute(OpAttributeKey::dynloopGroup, dynGroupIdx);
+    op.SetAttribute(OpAttributeKey::dynloopAxes, dynloopAxes);
+    dynLastOpInLoop = op.shared_from_this();
+    dynPreviousOutputMagic = op.GetOOperands().front()->GetMagic();
+}
+
+void LoopaxesProc::ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes)
+{
+    if (!SameLoopAxes(loopAxes)) {
+        lastGroupIdx = groupIdx++;
+        previousLoopAxes = loopAxes;
+        op.SetAttribute(OpAttributeKey::loopGroupStart, true);
+        if (lastOpInLoop != nullptr) {
+            SetOpLoopEnd(lastOpInLoop);
+        }
+        APASS_LOG_INFO_F(
+            Elements::Operation, "Op Code %s, Op[%d] set loopGroup ++Start++", op.GetOpcodeStr().c_str(),
+            op.GetOpMagic());
+    }
+
+    op.SetAttribute(OpAttributeKey::loopGroup, groupIdx);
+    op.SetAttribute(OpAttributeKey::loopAxes, loopAxes);
+    lastOpInLoop = op.shared_from_this();
+    previousOutputMagic = op.GetOOperands().front()->GetMagic();
 }
 
 Status LoopaxesProc::UpdateFuncLoopAxes(Function& function)
 {
     DynAttrToStatic dyn2Static;
-    // 遍历所有rootFunc, 找到每个leaf的所有caller, 生成leaf2Caller map
     if (dyn2Static.BuildLeafToCaller(&function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Failed to call BuildLeafToCaller.");
         return FAILED;
     }
 
-    // 遍历leaf2Caller
     for (auto& pair : dyn2Static.leaf2Caller) {
-        groupIdx = INVALID_LOOP_GROUPID;
-        lastGroupIdx = groupIdx;
-        lastOpInLoop.reset();
         if (pair.first == nullptr) {
             APASS_LOG_DEBUG_F(Elements::Operation, "subProgram of Function is nullptr.");
             continue;
         }
+
+        ResetGroupState();
+
         for (auto& op : pair.first->Operations(false)) {
-            auto& subFunc = *pair.first;
-            UpdateOpLoopAxes(op, subFunc);
+            UpdateOpLoopAxes(op, *pair.first);
         }
-        if (lastGroupIdx != INVALID_LOOP_GROUPID && lastOpInLoop != nullptr) {
-            SetOpLoopEnd(lastOpInLoop);
-        }
+
+        FinalizeLoopGroups();
     }
     return SUCCESS;
 }
 
-bool LoopaxesProc::SameLoopAxes(const std::vector<SymbolicScalar>& curLoopAxes, const Function& subFunc)
+void LoopaxesProc::ResetGroupState()
+{
+    groupIdx = INVALID_LOOP_GROUPID;
+    lastGroupIdx = groupIdx;
+    lastOpInLoop.reset();
+
+    dynGroupIdx = INVALID_LOOP_GROUPID;
+    dynLastGroupIdx = dynGroupIdx;
+    dynLastOpInLoop.reset();
+}
+
+void LoopaxesProc::FinalizeLoopGroups()
+{
+    if (lastGroupIdx != INVALID_LOOP_GROUPID && lastOpInLoop != nullptr) {
+        SetOpLoopEnd(lastOpInLoop);
+    }
+    if (dynLastGroupIdx != INVALID_LOOP_GROUPID && dynLastOpInLoop != nullptr) {
+        SetOpDynLoopEnd(dynLastOpInLoop);
+    }
+}
+
+bool LoopaxesProc::SameLoopAxes(const std::vector<int64_t>& curLoopAxes)
 {
     if (curLoopAxes.size() != previousLoopAxes.size()) {
         return false;
     }
+    for (size_t i = 0; i < curLoopAxes.size(); i++) {
+        if (curLoopAxes[i] != previousLoopAxes[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxes, const Function& subFunc)
+{
+    if (curLoopAxes.size() != dynPreviousLoopAxes.size()) {
+        return false;
+    }
+
     auto dynParamTable = subFunc.GetDynParamTable();
     for (size_t i = 0; i < curLoopAxes.size(); ++i) {
         auto curExpr = SymbolicExpressionTable::BuildExpression(curLoopAxes[i]);
-        auto prevExpr = SymbolicExpressionTable::BuildExpression(previousLoopAxes[i]);
+        auto prevExpr = SymbolicExpressionTable::BuildExpression(dynPreviousLoopAxes[i]);
+
         if (dynParamTable.find(curExpr) != dynParamTable.end() && dynParamTable.find(prevExpr) != dynParamTable.end()) {
             auto curParamInfo = dynParamTable[curExpr];
             auto preParamInfo = dynParamTable[prevExpr];
@@ -176,11 +290,13 @@ bool LoopaxesProc::SameLoopAxes(const std::vector<SymbolicScalar>& curLoopAxes, 
                 return true;
             }
         }
+
         if (curExpr != prevExpr) {
             return false;
         }
     }
     return true;
 }
+
 } // namespace tile_fwk
 } // namespace npu

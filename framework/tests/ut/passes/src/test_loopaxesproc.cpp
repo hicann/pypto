@@ -142,25 +142,25 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     LoopaxesProc loopaxesprocpass;
     EXPECT_EQ(loopaxesprocpass.RunOnFunction(*rootFuncPtr), SUCCESS);
 
-    EXPECT_TRUE(expand.HasAttr(OpAttributeKey::loopGroup));
-    EXPECT_EQ(expand.GetIntAttribute(OpAttributeKey::loopGroup), kNum0);
-    EXPECT_TRUE(expand.HasAttr(OpAttributeKey::loopAxes));
-    EXPECT_TRUE(EqualSymShape(expand.GetVectorSymbolicScalarAttribute(OpAttributeKey::loopAxes), expectedLoopAxis1));
+    EXPECT_TRUE(expand.HasAttr(OpAttributeKey::dynloopGroup));
+    EXPECT_EQ(expand.GetIntAttribute(OpAttributeKey::dynloopGroup), kNum0);
+    EXPECT_TRUE(expand.HasAttr(OpAttributeKey::dynloopAxes));
+    EXPECT_TRUE(EqualSymShape(expand.GetVectorSymbolicScalarAttribute(OpAttributeKey::dynloopAxes), expectedLoopAxis1));
 
-    EXPECT_TRUE(add.HasAttr(OpAttributeKey::loopGroup));
-    EXPECT_EQ(add.GetIntAttribute(OpAttributeKey::loopGroup), kNum1);
-    EXPECT_TRUE(add.HasAttr(OpAttributeKey::loopAxes));
-    EXPECT_TRUE(EqualSymShape(add.GetVectorSymbolicScalarAttribute(OpAttributeKey::loopAxes), expectedLoopAxis1));
+    EXPECT_TRUE(add.HasAttr(OpAttributeKey::dynloopGroup));
+    EXPECT_EQ(add.GetIntAttribute(OpAttributeKey::dynloopGroup), kNum1);
+    EXPECT_TRUE(add.HasAttr(OpAttributeKey::dynloopAxes));
+    EXPECT_TRUE(EqualSymShape(add.GetVectorSymbolicScalarAttribute(OpAttributeKey::dynloopAxes), expectedLoopAxis1));
 
-    EXPECT_TRUE(mul.HasAttr(OpAttributeKey::loopGroup));
-    EXPECT_EQ(mul.GetIntAttribute(OpAttributeKey::loopGroup), kNum1);
-    EXPECT_TRUE(mul.HasAttr(OpAttributeKey::loopAxes));
-    EXPECT_TRUE(EqualSymShape(mul.GetVectorSymbolicScalarAttribute(OpAttributeKey::loopAxes), expectedLoopAxis1));
+    EXPECT_TRUE(mul.HasAttr(OpAttributeKey::dynloopGroup));
+    EXPECT_EQ(mul.GetIntAttribute(OpAttributeKey::dynloopGroup), kNum1);
+    EXPECT_TRUE(mul.HasAttr(OpAttributeKey::dynloopAxes));
+    EXPECT_TRUE(EqualSymShape(mul.GetVectorSymbolicScalarAttribute(OpAttributeKey::dynloopAxes), expectedLoopAxis1));
 
-    EXPECT_TRUE(sub.HasAttr(OpAttributeKey::loopGroup));
-    EXPECT_EQ(sub.GetIntAttribute(OpAttributeKey::loopGroup), kNum2);
-    EXPECT_TRUE(sub.HasAttr(OpAttributeKey::loopAxes));
-    EXPECT_TRUE(EqualSymShape(sub.GetVectorSymbolicScalarAttribute(OpAttributeKey::loopAxes), expectedLoopAxis2));
+    EXPECT_TRUE(sub.HasAttr(OpAttributeKey::dynloopGroup));
+    EXPECT_EQ(sub.GetIntAttribute(OpAttributeKey::dynloopGroup), kNum2);
+    EXPECT_TRUE(sub.HasAttr(OpAttributeKey::dynloopAxes));
+    EXPECT_TRUE(EqualSymShape(sub.GetVectorSymbolicScalarAttribute(OpAttributeKey::dynloopAxes), expectedLoopAxis2));
 }
 
 TEST_F(TestLoopaxesProcPass, LoopaxesProcSubProgramNullptr)

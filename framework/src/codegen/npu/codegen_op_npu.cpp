@@ -710,16 +710,20 @@ bool CodeGenOpNPU::ShouldSkipProcInLoop(int paramIdx)
 
 std::vector<SymbolicScalar> CodeGenOpNPU::GetLoopAxes()
 {
-    std::vector<SymbolicScalar> loopAxes;
-    GetOpAttr(OpAttributeKey::loopAxes, loopAxes);
+    std::vector<SymbolicScalar> dynloopAxes;
+    std::vector<int64_t> loopAxes;
+    
 
     if (!isMainBlock) {
-        return loopAxes;
+        GetOpAttr(OpAttributeKey::dynloopAxes, dynloopAxes);
+        return dynloopAxes;
+    } else {
+        GetOpAttr(OpAttributeKey::loopAxes, loopAxes);
     }
     // use dst shape as loop axes in main block
     std::vector<SymbolicScalar> newLoopAxes;
     for (size_t i = 0; i < loopAxes.size(); ++i) {
-        SymbolicScalar axis = isDynamicFunction ? dynamicValidShape[0][i] : SymbolicScalar(shape[0][i]);
+        SymbolicScalar axis = SymbolicScalar(loopAxes[i]);
         newLoopAxes.emplace_back(axis);
     }
 
@@ -738,7 +742,8 @@ void CodeGenOpNPU::UpdateLoopInfo()
     }
 
     bool isLoopStart{false};
-    if (GetOpAttr(OpAttributeKey::loopGroupStart, isLoopStart) && isLoopStart) {
+    if ((isMainBlock && GetOpAttr(OpAttributeKey::loopGroupStart, isLoopStart) && isLoopStart) ||
+        (GetOpAttr(OpAttributeKey::dynloopGroupStart, isLoopStart) && isLoopStart)) {
         forBlkMgr_->LoopStart();
         forBlkMgr_->UpdateAxesList(loopAxes);
     }
@@ -877,7 +882,11 @@ std::string CodeGenOpNPU::GenOpCode() const
     forBlkMgr_->AddOpInLoopBody(ret);
 
     bool isLoopEnd{false};
-    GetOpAttr(OpAttributeKey::loopGroupEnd, isLoopEnd);
+    if (isMainBlock) {
+        GetOpAttr(OpAttributeKey::loopGroupEnd, isLoopEnd);
+    } else {
+        GetOpAttr(OpAttributeKey::dynloopGroupEnd, isLoopEnd);
+    }
     if (!isLoopEnd) {
         return "";
     }
