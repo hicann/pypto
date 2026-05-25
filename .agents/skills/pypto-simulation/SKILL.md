@@ -1,13 +1,13 @@
 ---
-name: pypto-simulation-esl
-description: PyPTO ESL 仿真执行技能。用于在 CPU 上模拟昇腾 AI 处理器行为，生成核内流水报告。触发词：ESL 仿真、核内流水、流水报告。
+name: pypto-simulation
+description: PyPTO Soc CAModel 仿真执行技能。用于在 CPU 上模拟昇腾 AI 处理器行为，生成核内流水报告。触发词：Soc CAModel 仿真、核内流水、流水报告。
 ---
 
-# PyPTO ESL 仿真执行
+# PyPTO Soc CAModel 仿真执行
 
 ## 概述
 
-ESL（Emulation System Level）仿真在 CPU 上模拟昇腾 AI 处理器，无需 NPU 硬件即可分析核内流水。
+Soc CAModel 仿真在 CPU 上模拟昇腾 AI 处理器，无需 NPU 硬件即可分析核内流水。
 
 **关键特点：**
 - 仿真速度比真实 NPU 慢 100-1000 倍
@@ -292,12 +292,12 @@ ls cannsim_*/report/
 
 ## 触发词
 
-- ESL 仿真、核内流水、流水报告、性能仿真
+- Soc CAModel 仿真、核内流水、流水报告、性能仿真
 
 ---
 
 ## 相关技能
 
 - `pypto-environment-setup`：环境准备
-- `tune-incore`：核内流水优化（基于 ESL 报告）
+- `tune-incore`：核内流水优化（基于 Soc CAModel 报告）
 - `tune-swimlane`：泳道图分析优化
