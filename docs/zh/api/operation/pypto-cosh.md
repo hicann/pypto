@@ -34,7 +34,11 @@ cosh(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么3\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
+1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么 
+
+    $$ 
+    3*a*b*c*CeilAlign(d, 8)*sizeof(DT\_FP32) <= UB 
+    $$。
 
 ## 调用示例
 

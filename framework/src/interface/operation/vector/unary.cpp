@@ -47,7 +47,7 @@ void TiledUnaryOperation(
         if (T == UnaryOpType::EXP || T == UnaryOpType::SQRT || T == UnaryOpType::LN || T == UnaryOpType::RECIPROCAL) {
             op->SetAttribute(OpAttributeKey::precisionType, precisionType);
         }
-        if (T == UnaryOpType::ASIN || T == UnaryOpType::ACOS) {
+        if (T == UnaryOpType::ASIN || T == UnaryOpType::ACOS || T == UnaryOpType::SINH) {
             std::vector<bool> dimMap({true});
             op->SetAttr(OpAttributeKey::rowPad, dimMap);
         }

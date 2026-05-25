@@ -736,6 +736,9 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
     constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
 
+    constexpr auto tileShapeSize =
+        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+
     using DataTileDefine =
         pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using MaskTileDefine =
@@ -753,15 +756,15 @@ TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
             for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto srcOffset = GenTileOffset(src, tileOffsets);
-                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + srcOffset * dstTypeSize));
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
                 
-                auto tmpOffset = srcOffset * 4;
-                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + tmpOffset * dstTypeSize));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (tmpOffset + tileH * tileW) * dstTypeSize));
-                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (tmpOffset + 2 * tileH * tileW) * dstTypeSize));
-                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + (tmpOffset + 3 * tileH * tileW) * dstTypeSize));
-                pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + (tmpOffset + tileH * tileW) * dstTypeSize));
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 3 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
 
                 // sinh(x) = x + x^3 / 3! + x^5 / 5! + x^7 / 7! for small x
                 pto::TABS(tmp0Tile, srcTile);

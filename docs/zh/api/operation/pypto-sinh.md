@@ -34,7 +34,11 @@ sinh(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么6\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
+1. 考虑输入、输出及临时空间占用，TileShape大小有额外约束。假设TileShape为\[a,b,c,d\]，记$d_{align}=CeilAlign(d, 8), k=d_{align}/8$，$p=\lceil8/k\rceil$，$c_{pad}=c+p-1$，则总的UB空间占用为：
+
+   $$
+   a*b*c_{pad}*d_{align}*sizeof(DT\_FP32)+5*a*b*c*d_{align}*sizeof(DT\_FP32) <= UB
+   $$
 
 ## 调用示例
 
