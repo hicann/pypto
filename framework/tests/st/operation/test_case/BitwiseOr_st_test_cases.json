@@ -781,7 +781,7 @@
             "index": 11
         },
         {
-            "case_index": 0,
+            "case_index": 12,
             "case_name": "BitwiseOr_test_1",
             "operation": "BitwiseOr",
             "input_tensors": [
@@ -833,10 +833,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 12
         },
         {
-            "case_index": 1,
+            "case_index": 13,
             "case_name": "BitwiseOr_test_2",
             "operation": "BitwiseOr",
             "input_tensors": [
@@ -888,10 +889,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 13
         },
         {
-            "case_index": 2,
+            "case_index": 14,
             "case_name": "BitwiseOr_test_3",
             "operation": "BitwiseOr",
             "input_tensors": [
@@ -943,7 +945,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 14
         }
     ]
 }

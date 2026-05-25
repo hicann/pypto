@@ -2776,7 +2776,7 @@
             "index": 50
         },
         {
-            "case_index": 15,
+            "case_index": 51,
             "case_name": "Minimum_test_16",
             "operation": "Minimum",
             "input_tensors": [
@@ -2828,10 +2828,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 51
         },
         {
-            "case_index": 16,
+            "case_index": 52,
             "case_name": "Minimum_test_17",
             "operation": "Minimum",
             "input_tensors": [
@@ -2883,10 +2884,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 52
         },
         {
-            "case_index": 17,
+            "case_index": 53,
             "case_name": "Minimum_test_18",
             "operation": "Minimum",
             "input_tensors": [
@@ -2938,10 +2940,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 53
         },
         {
-            "case_index": 18,
+            "case_index": 54,
             "case_name": "Minimum_test_19",
             "operation": "Minimum",
             "input_tensors": [
@@ -2993,7 +2996,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 54
         }
     ]
 }

@@ -1368,7 +1368,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 21
         },
         {
             "case_index": 22,
@@ -1423,7 +1424,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 22
         },
         {
             "case_index": 23,
@@ -1478,7 +1480,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 23
         },
         {
             "case_index": 24,
@@ -1533,7 +1536,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 24
         }
     ]
 }

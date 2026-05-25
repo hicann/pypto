@@ -443,7 +443,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 6
         },
         {
             "case_index": 7,
@@ -498,7 +499,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 7
         }
     ]
 }

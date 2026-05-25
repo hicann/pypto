@@ -1801,7 +1801,7 @@
             "index": 28
         },
         {
-            "case_index": 28,
+            "case_index": 29,
             "case_name": "Pow_test_29",
             "operation": "Pow",
             "input_tensors": [
@@ -1853,10 +1853,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 29
         },
         {
-            "case_index": 29,
+            "case_index": 30,
             "case_name": "Pow_test_30",
             "operation": "Pow",
             "input_tensors": [
@@ -1908,10 +1909,11 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 30
         },
         {
-            "case_index": 30,
+            "case_index": 31,
             "case_name": "Pow_test_31",
             "operation": "Pow",
             "input_tensors": [
@@ -1963,7 +1965,8 @@
             ],
             "params": {
                 "func_id": -1
-            }
+            },
+            "index": 31
         }
     ]
 }
