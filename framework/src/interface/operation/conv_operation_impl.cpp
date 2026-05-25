@@ -31,23 +31,6 @@ namespace npu {
 namespace tile_fwk {
 namespace Conv {
 
-const std::string L12L0ConvOpAttributeKey::postK = "POST_K";
-const std::string L12L0ConvOpAttributeKey::postM = "POST_M";
-const std::string L12L0ConvOpAttributeKey::postN = "POST_N";
-const std::string L12L0ConvOpAttributeKey::filterH = "FILTER_H";
-const std::string L12L0ConvOpAttributeKey::filterW = "FILTER_W";
-const std::string L12L0ConvOpAttributeKey::strideH = "STRIDE_H";
-const std::string L12L0ConvOpAttributeKey::strideW = "STRIDE_W";
-const std::string L12L0ConvOpAttributeKey::dilationH = "DILATION_H";
-const std::string L12L0ConvOpAttributeKey::dilationW = "DILATION_W";
-const std::string L12L0ConvOpAttributeKey::paddingLeft = "PAD_LEFT";
-const std::string L12L0ConvOpAttributeKey::paddingRight = "PAD_RIGHT";
-const std::string L12L0ConvOpAttributeKey::paddingTop = "PAD_TOP";
-const std::string L12L0ConvOpAttributeKey::paddingBottom = "PAD_BOTTOM";
-const std::string L12L0ConvOpAttributeKey::padValue = "PAD_VALUE";
-const std::string L12L0ConvOpAttributeKey::repeatStride = "REPEAT_STRIDE";
-const std::string L12L0ConvOpAttributeKey::repeatTime = "REPEAT_TIME";
-const std::string L12L0ConvOpAttributeKey::wStride = "W_STRIDE";
 const std::string LoadStoreConvOpAttributeKey::cutW = "CUT_W";
 const std::string LoadStoreConvOpAttributeKey::copyInMode = "COPY_IN_MODE";
 const std::string LoadStoreConvOpAttributeKey::copyOutMode = "COPY_OUT_MODE";
@@ -665,49 +648,49 @@ void SetImg2ColAttr(
     int64_t dilationW = convAttrParam.dilations[1];
     int64_t dilatedKernelH = (convTileInfo.orgKh - 1) * dilationH + 1;
     int64_t dilatedKernelW = (convTileInfo.orgKw - 1) * dilationW + 1;
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::strideH, strideH);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::strideW, strideW);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::dilationH, dilationH);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::dilationW, dilationW);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::filterH, convTileInfo.orgKh);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::filterW, convTileInfo.orgKw);
+    load3dOpAl0.SetAttribute(OpAttributeKey::strideH, strideH);
+    load3dOpAl0.SetAttribute(OpAttributeKey::strideW, strideW);
+    load3dOpAl0.SetAttribute(OpAttributeKey::dilationH, dilationH);
+    load3dOpAl0.SetAttribute(OpAttributeKey::dilationW, dilationW);
+    load3dOpAl0.SetAttribute(OpAttributeKey::filterH, convTileInfo.orgKh);
+    load3dOpAl0.SetAttribute(OpAttributeKey::filterW, convTileInfo.orgKw);
     // cal H padding
     if (iterInfo.hL1InOffset >= 0) {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingTop, 0);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingTop, 0);
     } else {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingTop, 0 - iterInfo.hL1InOffset);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingTop, 0 - iterInfo.hL1InOffset);
     }
     int64_t hinAL1Used = (iterInfo.houtL1Size - 1) * strideH + dilatedKernelH;
     int64_t hinBottomPadOffset = iterInfo.hL1InOffset + hinAL1Used;
     if (hinBottomPadOffset > convTileInfo.orgHin) {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingBottom, hinBottomPadOffset - convTileInfo.orgHin);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingBottom, hinBottomPadOffset - convTileInfo.orgHin);
     } else {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingBottom, 0);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingBottom, 0);
     }
     // cal W padding
     if (iterInfo.wL1InOffset >= 0) {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingLeft, 0);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingLeft, 0);
     } else {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingLeft, 0 - iterInfo.wL1InOffset);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingLeft, 0 - iterInfo.wL1InOffset);
     }
     int64_t winAL1Used = (iterInfo.woutL1Size - 1) * strideW + dilatedKernelW;
     int64_t winRightPadOffset = iterInfo.wL1InOffset + winAL1Used;
     if (winRightPadOffset > convTileInfo.orgWin) {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingRight, winRightPadOffset - convTileInfo.orgWin);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingRight, winRightPadOffset - convTileInfo.orgWin);
     } else {
-        load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::paddingRight, 0);
+        load3dOpAl0.SetAttribute(OpAttributeKey::paddingRight, 0);
     }
     // cal postm postk
     int64_t mStartPt = iterInfo.hL0Offset * iterInfo.woutL1Size + iterInfo.wL0Offset;
     int64_t kStartPt = iterInfo.kL0Offset % convTileInfo.kAL1;
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::postM, mStartPt);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::postK, kStartPt);
+    load3dOpAl0.SetAttribute(OpAttributeKey::postM, mStartPt);
+    load3dOpAl0.SetAttribute(OpAttributeKey::postK, kStartPt);
     // set pad value
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::padValue, 0);
+    load3dOpAl0.SetAttribute(OpAttributeKey::padValue, 0);
     // set load3dv2 params
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::repeatStride, iterInfo.repeatStride);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::repeatTime, iterInfo.repeatTime);
-    load3dOpAl0.SetAttribute(L12L0ConvOpAttributeKey::wStride, iterInfo.wStride);
+    load3dOpAl0.SetAttribute(OpAttributeKey::repeatStride, iterInfo.repeatStride);
+    load3dOpAl0.SetAttribute(OpAttributeKey::repeatTime, iterInfo.repeatTime);
+    load3dOpAl0.SetAttribute(OpAttributeKey::wStride, iterInfo.wStride);
     // set conv/conv3d flag
     load3dOpAl0.SetAttribute("isConv", true);
     load3dOpAl0.SetAttribute(Conv::LoadStoreConvOpAttributeKey::isConv3D, convAttrParam.isConv3D);
@@ -740,6 +723,7 @@ void SetCopyInAL1Op(
         OpImmediate::Specified(dstAL1Shape));
     copyInOpAl1.SetOpAttribute(copyAttr);
     copyInOpAl1.SetAttribute("l1_tile_shape", SymbolicScalar::FromConcrete(dstAL1Shape));
+    copyInOpAl1.SetAttribute(OpAttributeKey::srcGmConvValidShape, SymbolicScalar::FromConcrete(srcGmValidShape));
     iterInfo.aL1UpadateFlag = false;
 }
 
@@ -806,7 +790,7 @@ LogicalTensorPtr ConstructFmapTile(
         SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.kL0Size}), tensorGraphNodes.fmapTensorPtr->Format(),
         "aL0Tensor");
 
-    dstAL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.kL0Size}));
+    dstAL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstAL0Shape));
 
     auto& load3dOpAl0 = function.AddOperation(Opcode::OP_LOAD3D_CONV, {dstAL1TensorPtr}, {dstAL0TensorPtr});
     load3dOpAl0.SetAttribute("l0_tile_shape", SymbolicScalar::FromConcrete(dstAL0Shape));
@@ -844,6 +828,7 @@ void SetCopyInBL1Op(
         OpImmediate::Specified(dstBL1Shape));
     copyInOpBl1.SetOpAttribute(copyAttr);
     copyInOpBl1.SetAttribute("l1_tile_shape", SymbolicScalar::FromConcrete(dstBL1Shape));
+    copyInOpBl1.SetAttribute(OpAttributeKey::srcGmConvValidShape, SymbolicScalar::FromConcrete(srcGmValidShape));
     iterInfo.bL1UpadateFlag = false;
 }
 
@@ -902,10 +887,10 @@ LogicalTensorPtr ConstructWeightTile(
         function, tensorGraphNodes.weightTensorPtr->Datatype(), dstBL0Shape,
         SymbolicScalar::FromConcrete({iterInfo.kL0Size, iterInfo.nL0Size}), tensorGraphNodes.weightTensorPtr->Format(),
         "bL0Tensor");
-    dstBL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete({iterInfo.kL0Size, iterInfo.nL0Size}));
+    dstBL0TensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(dstBL0Shape));
     auto& load2dOpBl0 = function.AddOperation(Opcode::OP_LOAD2D_CONV, {dstBL1TensorPtr}, {dstBL0TensorPtr});
-    load2dOpBl0.SetAttribute(L12L0ConvOpAttributeKey::postK, iterInfo.kL0Offset % convTileInfo.kBL1);
-    load2dOpBl0.SetAttribute(L12L0ConvOpAttributeKey::postN, iterInfo.nL0Offset);
+    load2dOpBl0.SetAttribute(OpAttributeKey::postK, iterInfo.kL0Offset % convTileInfo.kBL1);
+    load2dOpBl0.SetAttribute(OpAttributeKey::postN, iterInfo.nL0Offset);
     load2dOpBl0.SetAttribute("l0_tile_shape", SymbolicScalar::FromConcrete(dstBL0Shape));
     load2dOpBl0.SetAttribute("isConv", true);
     return dstBL0TensorPtr;
@@ -965,7 +950,7 @@ LogicalTensorPtr DoMmad(
             function, DataType::DT_FP32, cL0PartialSumShape,
             SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.nL0Size}), TileOpFormat::TILEOP_NZ,
             "cL0PartialSumTensor");
-        tileGraphNodes.cL0PartialSumPtr->UpdateDynValidShape({iterInfo.mL0Size, iterInfo.nL0Size});
+        tileGraphNodes.cL0PartialSumPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(cL0PartialSumShape));
         mmadOutputs = {tileGraphNodes.cL0PartialSumPtr};
     }
     auto& aMulBOp = function.AddOperation(MmadOpStr, mmadInputs, mmadOutputs);
@@ -987,12 +972,17 @@ void ConstrucCopyOutTile(
     fixpipeOpRes.SetAttribute(
         LoadStoreConvOpAttributeKey::copyOutMode, static_cast<int64_t>(CopyOutMode::COPY_MOD_NZ2DN));
     fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::isConv3D, convAttrParam.isConv3D);
+    fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN,
+                              SymbolicScalar::FromConcrete({iterInfo.mL0Size, iterInfo.nL0Size}));
+
+    resCl0TensorPtr->UpdateDynValidShape({ConvAlignB(iterInfo.mL0Size, MKN_M_VALUE),
+                                          ConvAlignB(iterInfo.nL0Size, MKN_N_VALUE)});
 
     // 设置cutW参数：L0C M方向(hw合轴)的w大小
     int64_t cutW = std::min(iterInfo.woutL1Size - iterInfo.wL0Offset, convTileInfo.wL0);
     fixpipeOpRes.SetAttribute(LoadStoreConvOpAttributeKey::cutW, cutW);
 
-    fixpipeOpRes.SetAttribute("res_tile_shape", SymbolicScalar::FromConcrete(tensorGraphNodes.resTensorPtr->shape));
+    fixpipeOpRes.SetAttribute("res_tile_shape", tensorGraphNodes.resTensorPtr->GetDynValidShape());
 
     int64_t dst_n_offset = iterInfo.batchOffset;
     int64_t dst_c_offset = iterInfo.groupOffset * convTileInfo.coutPerGroup + iterInfo.nL1Offset + iterInfo.nL0Offset;
@@ -1005,9 +995,9 @@ void ConstrucCopyOutTile(
     }
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         MemoryType::MEM_L1, OpImmediate::Specified(dstResGmOffset),
-        OpImmediate::Specified({iterInfo.mL0Size, iterInfo.nL0Size}),
+        OpImmediate::Specified(tensorGraphNodes.resTensorPtr->tensor->GetRawShape()),
         OpImmediate::Specified(tensorGraphNodes.resTensorPtr->tensor->GetDynRawShape()),
-        OpImmediate::Specified({iterInfo.mL0Size, iterInfo.nL0Size}));
+        OpImmediate::Specified({ConvAlignB(iterInfo.mL0Size, MKN_M_VALUE), ConvAlignB(iterInfo.nL0Size, MKN_N_VALUE)}));
     fixpipeOpRes.SetOpAttribute(copyAttr);
 }
 

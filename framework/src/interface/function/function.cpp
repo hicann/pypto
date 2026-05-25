@@ -2485,7 +2485,8 @@ static std::vector<SymbolicScalar> NormalizeCopyIn(Operation* op, int coaIndexBa
     int dim = copyAttr->GetShape().size();
     int operandCoaIndex = COA_INDEX_DIM_BASE;
     int coaIndex = coaIndexBase + COA_INDEX_DIM_BASE;
-    std::vector<SymbolicScalar> operandCoaList(COA_INDEX_DIM_BASE + dim * COA_INDEX_TYPE_COUNT, 0);
+    int dimCount = dim * 0x3 + copyAttr->GetToDynValidShape().size(); // toValidShape may has different dim in conv
+    std::vector<SymbolicScalar> operandCoaList(COA_INDEX_DIM_BASE + dimCount, 0);
 
     operandCoaList[0] = MakeTensorIndex(op->GetIOperands()[0]->GetRawMagic());
 
@@ -2510,8 +2511,18 @@ static std::vector<SymbolicScalar> NormalizeCopyIn(Operation* op, int coaIndexBa
     coaIndex += dim;
 
     opImmList = copyAttr->GetToDynValidShape();
-    MaybeNormalizeValue(
-        RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+    if (op->GetOpcode() == Opcode::OP_L1_COPY_IN_CONV) {
+        std::vector<SymbolicScalar> valueCoaList;
+        for (auto validshape : OpImmediate::ToSpecified(opImmList)) {
+            MaybeNormalizeValue(valueCoaList, validshape, coaIndex, valueToIndex);
+            coaIndex += 1;
+        }
+        operandCoaList.erase(operandCoaList.end() - valueCoaList.size(), operandCoaList.end());
+        operandCoaList.insert(operandCoaList.end(), valueCoaList.begin(), valueCoaList.end());
+    } else {
+        MaybeNormalizeValue(
+            RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+    }
     copyAttr->SetToDynValidShape(opImmList);
 
     return operandCoaList;
@@ -2523,7 +2534,8 @@ static std::vector<SymbolicScalar> NormalizeCopyOut(Operation* op, int coaIndexB
     int dim = copyAttr->GetShape().size();
     int operandCoaIndex = COA_INDEX_DIM_BASE;
     int coaIndex = coaIndexBase + COA_INDEX_DIM_BASE;
-    std::vector<SymbolicScalar> operandCoaList(COA_INDEX_DIM_BASE + dim * COA_INDEX_TYPE_COUNT, 0);
+    int dimCount = dim * 0x3 + copyAttr->GetFromDynValidShape().size();
+    std::vector<SymbolicScalar> operandCoaList(COA_INDEX_DIM_BASE + dimCount, 0);
 
     operandCoaList[0] = MakeTensorIndex(op->GetOOperands()[0]->GetRawMagic());
 
@@ -2548,8 +2560,18 @@ static std::vector<SymbolicScalar> NormalizeCopyOut(Operation* op, int coaIndexB
     coaIndex += dim;
 
     opImmList = copyAttr->GetFromDynValidShape();
-    MaybeNormalizeValue(
-        RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+    if (op->GetOpcode() == Opcode::OP_L0C_COPY_OUT_CONV) {
+        std::vector<SymbolicScalar> valueCoaList;
+        for (auto validshape : OpImmediate::ToSpecified(opImmList)) {
+            MaybeNormalizeValue(valueCoaList, validshape, coaIndex, valueToIndex);
+            coaIndex += 1;
+        }
+        operandCoaList.erase(operandCoaList.end() - valueCoaList.size(), operandCoaList.end());
+        operandCoaList.insert(operandCoaList.end(), valueCoaList.begin(), valueCoaList.end());
+    } else {
+        MaybeNormalizeValue(
+            RUNTIME_COA_GetValidShape, operandCoaList, operandCoaIndex, opImmList, coaIndexBase, valueToIndex);
+    }
     copyAttr->SetFromDynValidShape(opImmList);
 
     return operandCoaList;

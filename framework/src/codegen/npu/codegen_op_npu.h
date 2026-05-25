@@ -194,10 +194,11 @@ protected:
         std::vector<int64_t>& staticOffsets) const;
     std::vector<std::string> BuildCopyInParamList(
         const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-        const std::vector<int64_t>& staticOffsets, const std::vector<int64_t>& srcShape, bool isConv3D) const;
+        const std::vector<int64_t>& staticOffsets, const std::vector<std::string>& srcShape, bool isConv3D) const;
     std::vector<std::string> BuildCopyOutParamList(
         const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-        const std::vector<int64_t>& staticOffsets, int64_t realM, int64_t realN, int64_t cutW) const;
+        const std::vector<int64_t>& staticOffsets, const std::string& realM, const std::string& realN,
+        int64_t cutW) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForLoad() const;

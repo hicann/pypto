@@ -126,6 +126,26 @@ public:
     static const std::string vecMergeSubgraphCount;
     static const std::string atomicAdd;
     static const std::string splitMN; // for L0C->UB Dual Dst
+    // HashOrder attribute keys for conv
+    static const std::string postK;
+    static const std::string postM;
+    static const std::string postN;
+    static const std::string filterH;
+    static const std::string filterW;
+    static const std::string strideH;
+    static const std::string strideW;
+    static const std::string dilationH;
+    static const std::string dilationW;
+    static const std::string paddingLeft;
+    static const std::string paddingRight;
+    static const std::string paddingTop;
+    static const std::string paddingBottom;
+    static const std::string padValue;
+    static const std::string repeatStride;
+    static const std::string repeatTime;
+    static const std::string wStride;
+    static const std::string srcGmConvValidShape;
+    static const std::string l0cValidMN;
 };
 
 class ConvOpAttributeKey {

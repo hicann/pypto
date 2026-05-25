@@ -237,27 +237,6 @@ const std::vector<int64_t> CONV3D_ATTR_DEFAULT_LIST = {1, 1, 1};
 const std::vector<int64_t> CONV2D_PAD_ATTR_DEFAULT_LIST = {0, 0, 0, 0};
 const std::vector<int64_t> CONV3D_PAD_ATTR_DEFAULT_LIST = {0, 0, 0, 0, 0, 0};
 
-class L12L0ConvOpAttributeKey {
-public:
-    static const std::string postK;
-    static const std::string postM;
-    static const std::string postN;
-    static const std::string filterH;
-    static const std::string filterW;
-    static const std::string strideH;
-    static const std::string strideW;
-    static const std::string dilationH;
-    static const std::string dilationW;
-    static const std::string paddingLeft;
-    static const std::string paddingRight;
-    static const std::string paddingTop;
-    static const std::string paddingBottom;
-    static const std::string padValue;
-    static const std::string repeatStride;
-    static const std::string repeatTime;
-    static const std::string wStride;
-};
-
 class LoadStoreConvOpAttributeKey {
 public:
     static const std::string copyInMode;

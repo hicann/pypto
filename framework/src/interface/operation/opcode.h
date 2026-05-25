@@ -1029,7 +1029,7 @@ inline bool IsCopyIn(const Opcode opCode)
     return opCode == Opcode::OP_COPY_IN || opCode == Opcode::OP_UB_COPY_IN || opCode == Opcode::OP_L1_COPY_IN ||
            opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
            opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
-           opCode == Opcode::OP_L1_COPY_IN_B_SCALE;
+           opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV;
 }
 
 inline bool IsCopyOut(const Opcode& op)
@@ -1041,7 +1041,8 @@ inline bool IsCopyOut(const Opcode& op)
         op == Opcode::OP_COPY_TO_LOCAL_EXPERT || op == Opcode::OP_SHMEM_PUT || op == Opcode::OP_SHMEM_SIGNAL ||
         op == Opcode::OP_SHMEM_GET || op == Opcode::OP_SHMEM_SET || op == Opcode::OP_RESHAPE_COPY_OUT ||
         op == Opcode::OP_SHMEM_STORE || op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE ||
-        op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND || op == Opcode::OP_INDEX_ADD);
+        op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND || op == Opcode::OP_INDEX_ADD ||
+        op == Opcode::OP_L0C_COPY_OUT_CONV);
 }
 
 inline bool IsOpCodeSupportMultiProducers(Opcode opCode)

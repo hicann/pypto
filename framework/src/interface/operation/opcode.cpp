@@ -931,17 +931,24 @@ void OpcodeManager::RegisterCube()
         {"CUBE_CONCAT_C", PIPE_MTE1, PIPE_FIX, CoreType::AIC}, OpCalcType::CONV);
     RegisterInfo(
         Opcode::OP_L1_COPY_IN_CONV, OpCoreType::AIC, "L1_COPY_IN_CONV", {MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_L1}, {"TileOp::L1CopyInConv", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::MOVE_IN);
+        {MemoryType::MEM_L1}, {"TileOp::L1CopyInConv", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::MOVE_IN,
+        {OpAttributeKey::srcGmConvValidShape});
     RegisterInfo(
         Opcode::OP_LOAD3D_CONV, OpCoreType::AIC, "IMG2COL", {MemoryType::MEM_L1}, {MemoryType::MEM_L0A},
-        {"TileOp::TLoad3D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL);
+        {"TileOp::TLoad3D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
+        {OpAttributeKey::postK, OpAttributeKey::postM, OpAttributeKey::filterH, OpAttributeKey::filterW,
+         OpAttributeKey::strideH, OpAttributeKey::strideW, OpAttributeKey::dilationH, OpAttributeKey::dilationW,
+         OpAttributeKey::paddingLeft,OpAttributeKey::paddingRight,
+         OpAttributeKey::paddingTop, OpAttributeKey::paddingBottom,OpAttributeKey::padValue,
+         OpAttributeKey::repeatStride, OpAttributeKey::repeatTime, OpAttributeKey::wStride});
     RegisterInfo(
         Opcode::OP_LOAD2D_CONV, OpCoreType::AIC, "LOAD2D", {MemoryType::MEM_L1}, {MemoryType::MEM_L0B},
-        {"TileOp::TLoad2D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL);
+        {"TileOp::TLoad2D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
+        {OpAttributeKey::postK, OpAttributeKey::postN});
     RegisterInfo(
         Opcode::OP_L0C_COPY_OUT_CONV, OpCoreType::AIC, "L0C_COPY_OUT_CONV", {MemoryType::MEM_L0C},
         {MemoryType::MEM_DEVICE_DDR}, {"TileOp::L0CCopyOutConv", PIPE_FIX, PIPE_FIX, CoreType::AIC},
-        OpCalcType::MOVE_OUT, {OpAttributeKey::excludeBufferReuse});
+        OpCalcType::MOVE_OUT, {OpAttributeKey::excludeBufferReuse, OpAttributeKey::l0cValidMN});
 
     RegisterInfo(
         Opcode::OP_L1_ALLOC, OpCoreType::AIC, "L1_ALLOC", {}, {MemoryType::MEM_L1},

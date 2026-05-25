@@ -65,8 +65,9 @@ void SetConvL1CopyInOpAttr(
     }
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset), MemoryType::MEM_L1, OpImmediate::Specified(gmShape),
-        OpImmediate::Specified(dstL1Shape), OpImmediate::Specified(dstL1Shape));
+        OpImmediate::Specified(gmShape), OpImmediate::Specified(dstL1Shape));
     op.SetOpAttribute(copyAttr);
+    op.SetAttribute(OpAttributeKey::srcGmConvValidShape, SymbolicScalar::FromConcrete(gmShape));
 }
 
 std::string TestConvL1CopyInBody(
@@ -161,9 +162,11 @@ std::string TestConvL0COutBody(
     op.SetAttribute("COPY_OUT_MODE", copyOutMode);
     op.SetAttribute("IS_CONV3D", isConv3D);
     op.SetAttribute("CUT_W", cutW);
+    op.SetAttribute(OpAttributeKey::l0cValidMN, SymbolicScalar::FromConcrete(l0cShape));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     op.SetOpAttribute(
-        std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified(offset), shapeImme, shapeImme, shapeImme));
+        std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified(offset),
+        OpImmediate::Specified(gmShape), OpImmediate::Specified(gmShape), shapeImme));
 
     CodeGenCtx ctx;
     CodeGenCloudNPU codegen(ctx);
@@ -193,19 +196,19 @@ TEST_F(TestCodegenDynConv, L0COutTileTensorConv3D)
 
 void SetConvLoad3DAttributes(Operation& op, const bool& isConv3D)
 {
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::postM, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::postK, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::paddingLeft, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::paddingRight, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::paddingTop, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::paddingBottom, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::padValue, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::filterH, (int64_t)1);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::filterW, (int64_t)1);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::dilationH, (int64_t)1);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::dilationW, (int64_t)1);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::strideH, (int64_t)1);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::strideW, (int64_t)1);
+    op.SetAttribute(OpAttributeKey::postM, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::postK, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::paddingLeft, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::paddingRight, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::paddingTop, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::paddingBottom, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::padValue, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::filterH, (int64_t)1);
+    op.SetAttribute(OpAttributeKey::filterW, (int64_t)1);
+    op.SetAttribute(OpAttributeKey::dilationH, (int64_t)1);
+    op.SetAttribute(OpAttributeKey::dilationW, (int64_t)1);
+    op.SetAttribute(OpAttributeKey::strideH, (int64_t)1);
+    op.SetAttribute(OpAttributeKey::strideW, (int64_t)1);
     op.SetAttribute(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
 }
 
@@ -245,8 +248,8 @@ TEST_F(TestCodegenDynConv, Load3DConv3D)
 
 void SetConvLoad2DAttributes(Operation& op)
 {
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::postK, (int64_t)0);
-    op.SetAttribute(Conv::L12L0ConvOpAttributeKey::postN, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::postK, (int64_t)0);
+    op.SetAttribute(OpAttributeKey::postN, (int64_t)0);
 }
 
 std::string TestConvLoad2DBody(const std::string& funcName)

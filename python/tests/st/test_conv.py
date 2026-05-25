@@ -360,7 +360,6 @@ def test_conv1d_dynamic_wout():
     assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
 
 
-@pytest.mark.skip(reason="wait for fixing gm raw shape normalization")
 @pytest.mark.soc("950")
 def test_conv2d_dynamic_hout():
     """Conv2D dynamic hout axis with pad=0 (constraint), stride=1, dilation=1, dtype=FP32"""

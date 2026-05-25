@@ -896,16 +896,9 @@ void L1ToL0ConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>
 void L0CCopyOutConvInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
-    const std::string RES_TILE_SHAPE = "res_tile_shape";
-    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, op->HasAttr(RES_TILE_SHAPE)) << "op should have RES_TILE_SHAPE attr";
-    std::vector<SymbolicScalar> tile;
-    op->GetAttr(RES_TILE_SHAPE, tile);
-    std::vector<SymbolicScalar> outShape;
-    for (size_t i = 0; i < tile.size(); i++) {
-        outShape.push_back(tile[i]);
-    }
-    for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(outShape);
+
+    if (!(op->GetOOperands()[0]->GetDynValidShape().empty())) {
+        outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
     }
 }
 
