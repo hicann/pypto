@@ -17,6 +17,7 @@
 #include "tilefwk/error_code.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 
@@ -27,17 +28,16 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
         std::shared_ptr<RawTensor> ddrRawTensor =
             std::make_shared<RawTensor>(info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName, info.magic);
         std::vector<int64_t> offset = std::vector<int64_t>(info.shape.size(), 0);
-        auto ddrTensor = std::make_shared<LogicalTensor>(info.function, ddrRawTensor, offset, info.shape);
+        IRBuilder builder;
+        auto ddrTensor = builder.CreateTensorVar(info.function, ddrRawTensor, offset, info.shape, info.dynValidShape);
         ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
         ddrTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
-        if (!info.dynValidShape.empty()) {
-            ddrTensor->UpdateDynValidShape(info.dynValidShape);
-        }
         return ddrTensor;
     }
 
-    auto localTensor = std::make_shared<LogicalTensor>(
-        info.function, info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName);
+    IRBuilder builder;
+    auto localTensor = builder.CreateTensorVar(
+        info.function, info.dType, info.shape, info.dynValidShape, TileOpFormat::TILEOP_ND, info.tensorName);
     localTensor->SetMemoryTypeOriginal(info.memType);
     localTensor->SetMemoryTypeToBe(info.memType);
     localTensor->SetAttr(OpAttributeKey::needAlloc, true);
@@ -46,9 +46,6 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
     localTensor->memoryrange.end = 0;
     if (info.magic != -1) {
         localTensor->SetMagic(info.magic);
-    }
-    if (!info.dynValidShape.empty()) {
-        localTensor->UpdateDynValidShape(info.dynValidShape);
     }
     info.function.GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
     return localTensor;
@@ -113,13 +110,14 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
     Function& function, const DataType& dtype, const std::vector<int64_t>& shape, const MemoryType& memType,
     const bool& isCopyIn)
 {
+    IRBuilder builder;
     std::shared_ptr<LogicalTensor> tensorPtr = nullptr;
     if (isCopyIn) {
         if (memType == MemoryType::MEM_DEVICE_DDR) {
-            tensorPtr = std::make_shared<LogicalTensor>(
+            tensorPtr = builder.CreateTensorVar(
                 function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor");
         } else {
-            tensorPtr = std::make_shared<LogicalTensor>(
+            tensorPtr = builder.CreateTensorVar(
                 function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L1Tensor");
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
@@ -128,10 +126,10 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
         }
     } else {
         if (memType == MemoryType::MEM_DEVICE_DDR) {
-            tensorPtr = std::make_shared<LogicalTensor>(
+            tensorPtr = builder.CreateTensorVar(
                 function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_ND, "GmTensor");
         } else {
-            tensorPtr = std::make_shared<LogicalTensor>(
+            tensorPtr = builder.CreateTensorVar(
                 function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L0CTensor");
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
