@@ -54,11 +54,11 @@ std::string CodeGenOpNPU::GetTemplateDType() const
         {Opcode::OP_FFN_BATCHING, 1},
         {Opcode::OP_FFN_VALIDCNT, 1},
         {Opcode::OP_SHMEM_PUT, 1},
-        {Opcode::OP_SHMEM_PUT_UB2GM, 1},
+        {Opcode::OP_SHMEM_STORE, 1},
         {Opcode::OP_SHMEM_SIGNAL, 1},
         {Opcode::OP_SHMEM_WAIT_UNTIL, 1},
         {Opcode::OP_SHMEM_GET, 1},
-        {Opcode::OP_SHMEM_GET_GM2UB, 1},
+        {Opcode::OP_SHMEM_LOAD, 0},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, 1},
         {Opcode::OP_FFN_COMBINEINFO, 2},
         {Opcode::OP_SHMEM_SET, 3},
@@ -91,7 +91,7 @@ std::string CodeGenOpNPU::GenTemplateParamsForPutAndGet() const
 {
     std::ostringstream oss;
     static const std::unordered_map<Opcode, std::array<int32_t, 2>> opcodeIndexMap = {
-        {Opcode::OP_SHMEM_PUT, {3, 4}}, {Opcode::OP_SHMEM_GET, {0, 3}}, {Opcode::OP_SHMEM_GET_GM2UB, {0, 3}}};
+        {Opcode::OP_SHMEM_PUT, {3, 4}}, {Opcode::OP_SHMEM_GET, {0, 3}}};
     auto [nonShmemDataIndex, shmemDataIndex] = opcodeIndexMap.at(opCode);
     const std::vector<int64_t>& tileShape = shape[shmemDataIndex];
     int64_t tileRowShape = tileShape[tileShape.size() - 2];
@@ -118,7 +118,7 @@ std::string CodeGenOpNPU::GenTemplateParamsForPutAndGet() const
     const std::vector<int64_t>& nonShmemTensorRawShape = rawShape[nonShmemDataIndex];
     int64_t srcStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
     int64_t dstStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
-    if ((opCode == Opcode::OP_SHMEM_GET) || (opCode == Opcode::OP_SHMEM_GET_GM2UB)) {
+    if (opCode == Opcode::OP_SHMEM_GET) {
         srcStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
         dstStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
     }
@@ -130,7 +130,18 @@ std::string CodeGenOpNPU::GenTemplateParamsForPutAndGet() const
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenTemplateParamsForPutUb2Gm() const
+std::string CodeGenOpNPU::GenTemplateParamsForLoad() const
+{
+    std::ostringstream oss;
+    int32_t nonShmemDataIndex = 0;
+    int32_t shmemDataIndex = 2;
+
+    oss << "<" << DataType2CCEStr(operandDtype[nonShmemDataIndex]) << ", "
+        << DataType2CCEStr(operandDtype[shmemDataIndex]) << ">";
+    return oss.str();
+}
+
+std::string CodeGenOpNPU::GenTemplateParamsForStore() const
 {
     std::ostringstream oss;
     int32_t shmemDataIndex = 2;
@@ -222,8 +233,8 @@ std::string CodeGenOpNPU::GenTemplateParams() const
     static const std::unordered_map<Opcode, std::function<std::string(CodeGenOpNPU const*)>> templateParamHandlers = {
         {Opcode::OP_SHMEM_PUT, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForPutAndGet(); }},
         {Opcode::OP_SHMEM_GET, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForPutAndGet(); }},
-        {Opcode::OP_SHMEM_PUT_UB2GM, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForPutUb2Gm(); }},
-        {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForPutAndGet(); }},
+        {Opcode::OP_SHMEM_STORE, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForStore(); }},
+        {Opcode::OP_SHMEM_LOAD, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForLoad(); }},
         {Opcode::OP_SHMEM_SIGNAL, [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForSignal(); }},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND,
          [](const CodeGenOpNPU* self) { return self->GenTemplateParamsForMoeDistributedCombineSend(); }},
@@ -332,7 +343,7 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemGet() const
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemPutUB() const
+std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemStore() const
 {
     std::ostringstream oss;
     int32_t nonShmemDataIndex = 1;
@@ -345,16 +356,14 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemPutUB() const
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemGetUB() const
+std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemLoad() const
 {
     std::ostringstream oss;
     int32_t nonShmemDataIndex = 0;
-    int32_t shmemDataIndex = 3;
-    int32_t outPutDataIndex = 0;
+    int32_t shmemDataIndex = 2;
 
-    oss << ", " << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex)
-        << ", " << GenOffCoord(nonShmemDataIndex) << ", " << GenDynOffCoord(shmemDataIndex) << ", "
-        << GenDynValidShape(outPutDataIndex);
+    oss << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex) << ", "
+        << GenDynOffCoord(shmemDataIndex);
     return oss.str();
 }
 
@@ -457,10 +466,10 @@ std::string CodeGenOpNPU::GenExtraParamsStr() const
         offsetsAndRawShapesHandlers = {
             {Opcode::OP_SHMEM_PUT, [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemPut(); }},
             {Opcode::OP_SHMEM_GET, [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemGet(); }},
-            {Opcode::OP_SHMEM_PUT_UB2GM,
-             [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutUB(); }},
-            {Opcode::OP_SHMEM_GET_GM2UB,
-             [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemGetUB(); }},
+            {Opcode::OP_SHMEM_STORE,
+             [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemStore(); }},
+            {Opcode::OP_SHMEM_LOAD,
+             [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemLoad(); }},
             {Opcode::OP_SHMEM_SIGNAL,
              [](const CodeGenOpNPU* self) { return self->GenOffsetsAndRawShapesForShmemSignal(); }},
             {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND,
@@ -512,7 +521,7 @@ std::string CodeGenOpNPU::GenDistOp() const
     std::unordered_set<int32_t> skipOperands = {};
     static const std::unordered_map<Opcode, std::unordered_set<int32_t>> skipIndexMap = {
         {Opcode::OP_SHMEM_PUT, {0, 2, 3, 4}},           {Opcode::OP_SHMEM_GET, {0, 2, 3}},
-        {Opcode::OP_SHMEM_PUT_UB2GM, {0, 1, 2, 3}},     {Opcode::OP_SHMEM_GET_GM2UB, {0, 2, 3}},
+        {Opcode::OP_SHMEM_STORE, {0, 1, 2, 3}},         {Opcode::OP_SHMEM_LOAD, {0, 1, 2}},
         {Opcode::OP_SHMEM_SIGNAL, {0, 2, 3}},           {Opcode::OP_SHMEM_SET, {0, 2, 3}},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, {0}}, {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, {4}},
     }; // 跳过部分操作数索引，对于 shmem api 只需要获得 ub 地址信息

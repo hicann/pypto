@@ -38,7 +38,6 @@ std::unordered_set<Opcode> SKIP_TILETENSOR_FOR_SHMEM_OPS = {
     Opcode::OP_SHMEM_PUT,
     Opcode::OP_SHMEM_GET,
     Opcode::OP_SHMEM_SIGNAL,
-    Opcode::OP_SHMEM_GET_GM2UB,
 };
 
 CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
@@ -312,10 +311,10 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_COPY_TO_LOCAL_EXPERT, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_SET, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_PUT, [this]() { return GenDistOp(); }},
-          {Opcode::OP_SHMEM_PUT_UB2GM, [this]() { return GenDistOp(); }},
+          {Opcode::OP_SHMEM_STORE, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_SIGNAL, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_GET, [this]() { return GenDistOp(); }},
-          {Opcode::OP_SHMEM_GET_GM2UB, [this]() { return GenDistOp(); }},
+          {Opcode::OP_SHMEM_LOAD, [this]() { return GenDistOp(); }},
           {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, [this]() { return GenDistOp(); }},
           {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, [this]() { return GenDistOp(); }},
       }),

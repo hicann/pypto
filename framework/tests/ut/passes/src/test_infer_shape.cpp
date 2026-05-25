@@ -451,10 +451,10 @@ TEST_F(InferShapeTest, TestReshape)
     EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
 }
 
-TEST_F(InferShapeTest, TestSHMEM_GET_GM2UB)
+TEST_F(InferShapeTest, TestSHMEM_LOAD)
 {
     auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestSHMEM_GET_GM2UB", "TestSHMEM_GET_GM2UB", nullptr);
+        std::make_shared<Function>(Program::GetInstance(), "TestSHMEM_LOAD", "TestSHMEM_LOAD", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
 
     std::vector<int64_t> inshape0 = {1, 1};
@@ -464,21 +464,19 @@ TEST_F(InferShapeTest, TestSHMEM_GET_GM2UB)
 
     auto incast0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inshape0, CreateTestConstIntVector(inshape0));
     auto incast1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, inshape1, CreateTestConstIntVector(inshape1));
-    auto shmemGetGm2UBOut0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outshape, CreateTestConstIntVector(outshape));
-    auto shmemGetGm2UBOut1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outshape, CreateTestConstIntVector(outshape));
+    auto shmemLoadOut = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outshape, CreateTestConstIntVector(outshape));
     auto outcast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, outshape, CreateTestConstIntVector(outshape));
 
-    auto& shmemGetGm2UB_op = currFunctionPtr->AddOperation(
-        Opcode::OP_SHMEM_GET_GM2UB, {incast0, incast1}, {shmemGetGm2UBOut0, shmemGetGm2UBOut1});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {shmemGetGm2UBOut0}, {outcast});
+    auto& shmemLoad_op = currFunctionPtr->AddOperation(Opcode::OP_SHMEM_LOAD, {incast0, incast1}, {shmemLoadOut});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {shmemLoadOut}, {outcast});
 
-    auto shmemGetGm2UB_Attr = std::make_shared<CopyOpAttribute>(
+    auto shmemLoad_Attr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified({0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<OpImmediate>());
 
     std::vector<OpImmediate> toValidShape = {
         OpImmediate(CreateTestScalarVar("Input_0_Dim_0")), OpImmediate(CreateTestScalarVar("Input_0_Dim_1"))};
-    shmemGetGm2UB_Attr->SetToDynValidShape(toValidShape);
-    shmemGetGm2UB_op.SetOpAttribute(shmemGetGm2UB_Attr);
+    shmemLoad_Attr->SetToDynValidShape(toValidShape);
+    shmemLoad_op.SetOpAttribute(shmemLoad_Attr);
 
     currFunctionPtr->inCasts_.push_back(incast0);
     currFunctionPtr->inCasts_.push_back(incast1);
@@ -487,7 +485,7 @@ TEST_F(InferShapeTest, TestSHMEM_GET_GM2UB)
     InferDynShape inferShapeTest;
     inferShapeTest.RunOnFunction(*currFunctionPtr);
     std::cout << currFunctionPtr->Dump() << std::endl;
-    EXPECT_NE(shmemGetGm2UBOut1->GetDynValidShape().size(), 0);
+    EXPECT_NE(shmemLoadOut->GetDynValidShape().size(), 0);
     EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
 }
 

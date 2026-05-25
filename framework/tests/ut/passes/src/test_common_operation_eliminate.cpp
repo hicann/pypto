@@ -269,16 +269,16 @@ TEST_F(CommonOperationEliminateTest, IgnoreSpecialOp)
     EXPECT_EQ(function->Operations().size(), validOpNum);
 }
 
-TEST_F(CommonOperationEliminateTest, TestShmemGetGm2UBChecker)
+TEST_F(CommonOperationEliminateTest, TestShmemLoadChecker)
 {
     ComputationalGraphBuilder G;
     EXPECT_EQ(G.AddTensors(DataType::DT_INT32, {1, 1}, {"dummy"}), true);
     EXPECT_EQ(G.AddTensors(DataType::DT_INT32, {1, 1, 4, 64}, {"shmemData"}), true);
     EXPECT_EQ(G.AddTensors(DataType::DT_INT32, {4, 64}, {"out"}), true);
-    std::vector<Opcode> opCodes{Opcode::OP_SHMEM_GET_GM2UB};
+    std::vector<Opcode> opCodes{Opcode::OP_SHMEM_LOAD};
     std::vector<std::vector<std::string>> ioperands{{"dummy", "shmemData"}};
     std::vector<std::vector<std::string>> ooperands{{"out"}};
-    std::vector<std::string> opNames{"TILE_SHMEM_GET_GM2UB"};
+    std::vector<std::string> opNames{"TILE_SHMEM_LOAD"};
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     EXPECT_EQ(G.SetInCast({"dummy", "shmemData"}), true);
     EXPECT_EQ(G.SetOutCast({"out"}), true);
@@ -286,7 +286,7 @@ TEST_F(CommonOperationEliminateTest, TestShmemGetGm2UBChecker)
     EXPECT_NE(function, nullptr);
     CommonOperationEliminate COE;
     Status preCheckStatus = COE.PreCheck(*function);
-    EXPECT_EQ(preCheckStatus, SUCCESS) << "COE Precheck failed for OP_SHMEM_GET_GM2UB!";
+    EXPECT_EQ(preCheckStatus, SUCCESS) << "COE Precheck failed for OP_SHMEM_LOAD!";
 }
 
 TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_InvalidInputNum)

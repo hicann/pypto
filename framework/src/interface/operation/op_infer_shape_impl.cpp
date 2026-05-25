@@ -1027,7 +1027,7 @@ void ShmemGetInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
 }
 REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_GET, Opcode::OP_SHMEM_GET, ShmemGetInferFunc);
 
-void ShmemPutUB2GMInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+void ShmemStoreInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
     if (op->iOperand[1]->GetDynOffset().size() != 0) {
@@ -1041,9 +1041,9 @@ void ShmemPutUB2GMInferFunc(Operation* op, std::vector<std::vector<SymbolicScala
         outValidShapes.push_back(fromValidShapeSym);
     }
 }
-REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_PUT_UB2GM, Opcode::OP_SHMEM_PUT_UB2GM, ShmemPutUB2GMInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_STORE, Opcode::OP_SHMEM_STORE, ShmemStoreInferFunc);
 
-void ShmemGetGm2UBInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+void ShmemLoadInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
     if (op->iOperand[1]->GetDynOffset().size() != 0) {
@@ -1057,7 +1057,7 @@ void ShmemGetGm2UBInferFunc(Operation* op, std::vector<std::vector<SymbolicScala
         outValidShapes.push_back(toValidShapeSym);
     }
 }
-REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_GET_GM2UB, Opcode::OP_SHMEM_GET_GM2UB, ShmemGetGm2UBInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_LOAD, Opcode::OP_SHMEM_LOAD, ShmemLoadInferFunc);
 
 void CopyOutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

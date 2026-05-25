@@ -200,7 +200,8 @@ protected:
         const std::vector<int64_t>& staticOffsets, int64_t realM, int64_t realN, int64_t cutW) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
-    std::string GenTemplateParamsForPutUb2Gm() const;
+    std::string GenTemplateParamsForLoad() const;
+    std::string GenTemplateParamsForStore() const;
     std::string GenTemplateParamsForSignal() const;
     std::string GenTemplateParamsForMoeDistributedCombineSend() const;
     std::string GenTemplateParamsForMoeDistributedCombineReceive() const;
@@ -209,8 +210,8 @@ protected:
 
     std::string GenOffsetsAndRawShapesForShmemPut() const;
     std::string GenOffsetsAndRawShapesForShmemGet() const;
-    std::string GenOffsetsAndRawShapesForShmemPutUB() const;
-    std::string GenOffsetsAndRawShapesForShmemGetUB() const;
+    std::string GenOffsetsAndRawShapesForShmemStore() const;
+    std::string GenOffsetsAndRawShapesForShmemLoad() const;
     std::string GenOffsetsAndRawShapesForShmemSignal() const;
     std::string GenOffsetsAndRawShapesForMoeDistributedCombineSend() const;
     std::string GenOffsetsAndRawShapesForMoeDistributedCombineReceive() const;

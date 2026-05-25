@@ -75,6 +75,7 @@ struct TileTensor<T, LA, Hardware::GM> {
 
     __aicore__ inline TileTensor(T* addr) : addr_(addr) {}
     __aicore__ inline T* GetAddr() { return addr_; }
+    __aicore__ inline void SetAddr(T* addr) { addr_ = addr; }
     __aicore__ inline LA GetLayout() { return layout_; }
     __aicore__ inline const LA GetLayout() const { return layout_; }
     __aicore__ inline static constexpr bool IsStaticLayout() { return LayoutType::IsStaticLayout(); }

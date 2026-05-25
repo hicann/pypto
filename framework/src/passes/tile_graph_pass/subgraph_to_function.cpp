@@ -781,10 +781,10 @@ std::shared_ptr<LogicalTensor> GetTensorDataSubgraphTensor(Operation& refOp)
         case Opcode::OP_BIND_TENSOR:
             subgraphTensor = refOp.GetOOperands()[0];
             break;
-        case Opcode::OP_SHMEM_GET_GM2UB:
+        case Opcode::OP_SHMEM_LOAD:
             subgraphTensor = refOp.GetOOperands()[0];
             break;
-        case Opcode::OP_SHMEM_PUT_UB2GM:
+        case Opcode::OP_SHMEM_STORE:
             subgraphTensor = refOp.GetIOperands()[1];
             break;
         case Opcode::OP_SHMEM_GET:

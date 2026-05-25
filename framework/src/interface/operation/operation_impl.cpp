@@ -1729,16 +1729,16 @@ void ExpandOperationInto(
             npu::tile_fwk::Distributed::TiledShmemPut(function, tileShape, iOperand, oOperand, op);
             break;
         }
-        case Opcode::OP_SHMEM_PUT_UB2GM: {
-            npu::tile_fwk::Distributed::TiledShmemPutUB2GM(function, tileShape, iOperand, oOperand, op);
+        case Opcode::OP_SHMEM_STORE: {
+            npu::tile_fwk::Distributed::TiledShmemStore(function, tileShape, iOperand, oOperand, op);
             break;
         }
         case Opcode::OP_SHMEM_GET: {
             npu::tile_fwk::Distributed::TiledShmemGet(function, tileShape, iOperand, oOperand, op);
             break;
         }
-        case Opcode::OP_SHMEM_GET_GM2UB: {
-            npu::tile_fwk::Distributed::TiledShmemGetGM2UB(function, tileShape, iOperand, oOperand, op);
+        case Opcode::OP_SHMEM_LOAD: {
+            npu::tile_fwk::Distributed::TiledShmemLoad(function, tileShape, iOperand, oOperand, op);
             break;
         }
         case Opcode::OP_SHMEM_SIGNAL: {

@@ -15,6 +15,7 @@
 
 #ifndef TILEOP_TILE_OPERATOR_MTE__H
 #define TILEOP_TILE_OPERATOR_MTE__H
+#include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 

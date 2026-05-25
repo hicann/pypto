@@ -26,7 +26,7 @@ Status CommonOperationEliminateChecker::DoPreCheck(Function& function)
     APASS_LOG_INFO_F(Elements::Operation, "PreCheck for CommonOperationEliminate.");
 
     for (auto& op : function.Operations().DuplicatedOpList()) {
-        if (op->GetOpcode() == Opcode::OP_SHMEM_GET_GM2UB) {
+        if (op->GetOpcode() == Opcode::OP_SHMEM_LOAD) {
             continue;
         }
         if (op->GetOpAttribute() != nullptr) {

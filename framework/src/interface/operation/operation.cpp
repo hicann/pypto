@@ -1177,9 +1177,9 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
             }
         } break;
         case Opcode::OP_SHMEM_PUT:
-        case Opcode::OP_SHMEM_PUT_UB2GM:
+        case Opcode::OP_SHMEM_STORE:
         case Opcode::OP_SHMEM_GET:
-        case Opcode::OP_SHMEM_GET_GM2UB: {
+        case Opcode::OP_SHMEM_LOAD: {
             auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
             if (copyAttr == nullptr) {
                 break;

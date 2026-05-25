@@ -1097,9 +1097,9 @@ void OpcodeManager::RegisterDistribute()
         {"TileOp::Distributed::ShmemPut", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
         {OpAttributeKey::requiresBoundaryCopy, OpAttributeKey::distOpAttr, OpAttributeKey::ownerRank});
     RegisterInfo(
-        Opcode::OP_SHMEM_PUT_UB2GM, OpCoreType::AIV, "SHMEM_PUT_UB2GM",
+        Opcode::OP_SHMEM_STORE, OpCoreType::AIV, "SHMEM_STORE",
         {MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR},
-        {"TileOp::Distributed::ShmemPutUb2Gm", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
+        {"TileOp::Distributed::ShmemStore", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
         {OpAttributeKey::requiresBoundaryCopy, OpAttributeKey::distOpAttr, OpAttributeKey::ownerRank});
     RegisterInfo(
         Opcode::OP_SHMEM_SIGNAL, OpCoreType::AIV, "SHMEM_SIGNAL",
@@ -1117,10 +1117,10 @@ void OpcodeManager::RegisterDistribute()
         {"TileOp::Distributed::ShmemGet", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
         {OpAttributeKey::requiresBoundaryCopy, OpAttributeKey::distOpAttr, OpAttributeKey::ownerRank});
     RegisterInfo(
-        Opcode::OP_SHMEM_GET_GM2UB, OpCoreType::AIV, "SHMEM_GET_GM2UB",
+        Opcode::OP_SHMEM_LOAD, OpCoreType::AIV, "SHMEM_LOAD",
         {MemoryType::MEM_DEVICE_DDR /* dummy */, MemoryType::MEM_DEVICE_DDR /* shmemData */},
-        {MemoryType::MEM_UB /* UBData */, MemoryType::MEM_UB /* ubTensor */},
-        {"TileOp::Distributed::ShmemGetGm2Ub", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
+        {MemoryType::MEM_UB /* UBData */}, {"TileOp::Distributed::ShmemLoad", PIPE_S, PIPE_S, CoreType::AIV},
+        OpCalcType::DISTRIBUTED,
         {OpAttributeKey::requiresBoundaryCopy, OpAttributeKey::distOpAttr, OpAttributeKey::ownerRank});
     RegisterInfo(
         Opcode::OP_BIND_TENSOR, OpCoreType::ANY, "BIND_TENSOR", {}, {MemoryType::MEM_DEVICE_DDR},
@@ -1452,8 +1452,8 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_SHMEM_PUT, "TileOp::Distributed::ShmemPut"},
     {Opcode::OP_SHMEM_GET, "TileOp::Distributed::ShmemGet"},
     {Opcode::OP_SHMEM_SIGNAL, "TileOp::Distributed::ShmemSignal"},
-    {Opcode::OP_SHMEM_PUT_UB2GM, "TileOp::Distributed::ShmemPutUb2Gm"},
-    {Opcode::OP_SHMEM_GET_GM2UB, "TileOp::Distributed::ShmemGetGm2Ub"},
+    {Opcode::OP_SHMEM_STORE, "TileOp::Distributed::ShmemStore"},
+    {Opcode::OP_SHMEM_LOAD, "TileOp::Distributed::ShmemLoad"},
     {Opcode::OP_SHMEM_SET, "TileOp::Distributed::ShmemSet"},
 };
 

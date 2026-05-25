@@ -295,11 +295,11 @@ enum class Opcode {
     OP_FFN_VALIDCNT,
     OP_SHMEM_SET,
     OP_SHMEM_PUT,
-    OP_SHMEM_PUT_UB2GM,
+    OP_SHMEM_STORE,
     OP_SHMEM_SIGNAL,
     OP_SHMEM_WAIT_UNTIL,
     OP_SHMEM_GET,
-    OP_SHMEM_GET_GM2UB,
+    OP_SHMEM_LOAD,
     OP_BIND_TENSOR,
     OP_MOE_DISTRIBUTED_COMBINE_SEND,
     OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
@@ -508,7 +508,7 @@ public:
         return opCode == Opcode::OP_COPY_IN || opCode == Opcode::OP_UB_COPY_IN || opCode == Opcode::OP_L1_COPY_IN ||
                opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
                opCode == Opcode::OP_L1_TO_FIX_QUANT_PRE || opCode == Opcode::OP_L1_TO_BT ||
-               opCode == Opcode::OP_SHMEM_GET_GM2UB || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
+               opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
                opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV;
     }
 
@@ -521,7 +521,7 @@ public:
                opCode == Opcode::OP_INDEX_ADD || opCode == Opcode::OP_FFN_VALIDCNT ||
                opCode == Opcode::OP_COPY_TO_LOCAL_EXPERT || opCode == Opcode::OP_SHMEM_PUT ||
                opCode == Opcode::OP_SHMEM_SIGNAL || opCode == Opcode::OP_SHMEM_GET ||
-               opCode == Opcode::OP_SHMEM_PUT_UB2GM || opCode == Opcode::OP_RESHAPE_COPY_OUT ||
+               opCode == Opcode::OP_SHMEM_STORE || opCode == Opcode::OP_RESHAPE_COPY_OUT ||
                opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND ||
                opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_L0C_COPY_OUT_CONV;
     }
@@ -535,7 +535,7 @@ public:
         return opCode == Opcode::OP_SHMEM_WAIT_UNTIL || opCode == Opcode::OP_SHMEM_PUT ||
                opCode == Opcode::OP_SHMEM_SIGNAL || opCode == Opcode::OP_SHMEM_GET ||
                opCode == Opcode::OP_FFN_VALIDCNT || opCode == Opcode::OP_SHMEM_SET ||
-               opCode == Opcode::OP_SHMEM_PUT_UB2GM || opCode == Opcode::OP_SHMEM_GET_GM2UB ||
+               opCode == Opcode::OP_SHMEM_STORE || opCode == Opcode::OP_SHMEM_LOAD ||
                opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND ||
                opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_FFN_BATCHING ||
                opCode == Opcode::OP_SEND_TO_ROUTING_EXPERT || opCode == Opcode::OP_COPY_TO_LOCAL_EXPERT ||
@@ -1004,8 +1004,8 @@ const std::unordered_set<Opcode> DISTRIBUTED_OPS{
     Opcode::OP_SHMEM_GET,
     Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
     Opcode::OP_BIND_TENSOR,
-    Opcode::OP_SHMEM_PUT_UB2GM,
-    Opcode::OP_SHMEM_GET_GM2UB,
+    Opcode::OP_SHMEM_STORE,
+    Opcode::OP_SHMEM_LOAD,
     Opcode::OP_SHMEM_SET,
     Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND};
 
@@ -1028,7 +1028,7 @@ inline bool IsCopyIn(const Opcode opCode)
 {
     return opCode == Opcode::OP_COPY_IN || opCode == Opcode::OP_UB_COPY_IN || opCode == Opcode::OP_L1_COPY_IN ||
            opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
-           opCode == Opcode::OP_SHMEM_GET_GM2UB || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
+           opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
            opCode == Opcode::OP_L1_COPY_IN_B_SCALE;
 }
 
@@ -1040,7 +1040,7 @@ inline bool IsCopyOut(const Opcode& op)
         op == Opcode::OP_INDEX_PUT || op == Opcode::OP_FFN_COMBINEINFO || op == Opcode::OP_FFN_VALIDCNT ||
         op == Opcode::OP_COPY_TO_LOCAL_EXPERT || op == Opcode::OP_SHMEM_PUT || op == Opcode::OP_SHMEM_SIGNAL ||
         op == Opcode::OP_SHMEM_GET || op == Opcode::OP_SHMEM_SET || op == Opcode::OP_RESHAPE_COPY_OUT ||
-        op == Opcode::OP_SHMEM_PUT_UB2GM || op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE ||
+        op == Opcode::OP_SHMEM_STORE || op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE ||
         op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND || op == Opcode::OP_INDEX_ADD);
 }
 

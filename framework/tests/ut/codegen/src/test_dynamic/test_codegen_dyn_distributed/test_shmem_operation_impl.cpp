@@ -278,7 +278,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
     CheckStringExist(expect, res);
 }
 
-TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
+TEST_F(TestDistributedShmemImpl, TestShmemLoad)
 {
     Tensor out(DT_BF16, {3, 4, 64}, "out");
     Tensor predToken(DT_INT32, {1, 1}, "predToken");
@@ -299,16 +299,16 @@ TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TileOp::Distributed::ShmemGetGm2Ub<bfloat16_t, bfloat16_t, 4, 64, 3, 16, 64, 64)!!!";
+    std::string expect = R"!!!(TileOp::Distributed::ShmemLoad<bfloat16_t, bfloat16_t>)!!!";
     CheckStringExist(expect, res);
 }
 
-TEST_F(TestDistributedShmemImpl, TestShmemPutUb2Gm)
+TEST_F(TestDistributedShmemImpl, TestShmemStore)
 {
     Tensor in(DT_FP32, {4, 3, 16, 32}, "in");
     Tensor out(DT_INT32, {1, 1}, "out");
     Tensor predToken(DT_INT32, {1, 1}, "predToken");
-    std::string functionName = "ShmemPutUb2Gm";
+    std::string functionName = "ShmemStore";
     FUNCTION(functionName + "Main", {in, predToken}, {out})
     {
         TileShape::Current().SetVecTile({4, 3, 16, 32});
@@ -326,7 +326,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemPutUb2Gm)
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
     std::string expect =
-        R"!!!(TileOp::Distributed::ShmemPutUb2Gm<float, 16, 32, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
+        R"!!!(TileOp::Distributed::ShmemStore<float, 16, 32, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk::Distributed

@@ -136,5 +136,5 @@ void ExecuteOpShmemGet(ExecuteOperationContext *ctx) {
     calc::Copy(out, tmp);
 }
 REGISTER_CALC_OP(OP_SHMEM_GET, Opcode::OP_SHMEM_GET, ExecuteOpShmemGet);
-REGISTER_CALC_OP(OP_SHMEM_GET_GM2UB, Opcode::OP_SHMEM_GET_GM2UB, ExecuteOpShmemGet);
+REGISTER_CALC_OP(OP_SHMEM_LOAD, Opcode::OP_SHMEM_LOAD, ExecuteOpShmemGet);
 }

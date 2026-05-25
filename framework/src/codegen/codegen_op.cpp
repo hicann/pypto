@@ -160,7 +160,7 @@ void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor&
         Opcode::OP_L1_TO_L0_BT, Opcode::OP_L1_TO_BT,        Opcode::OP_L1_TO_FIX_QUANT_PRE,
         Opcode::OP_L0C_TO_L1,   Opcode::OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0B_SCALE,
         Opcode::OP_L0C_COPY_UB, Opcode::OP_UB_COPY_L1,      Opcode::OP_L0C_COPY_UB_DUAL_DST};
-    static const std::set<Opcode> distOpcode = {Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT_UB2GM};
+    static const std::set<Opcode> distOpcode = {Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_STORE};
     bool cubeMDLCondition = cubeMDLOpCode.count(opCode);
     bool distCondition = distOpcode.count(opCode);
     bool useAttrShapeOffsetForInputGM =
