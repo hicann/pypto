@@ -266,6 +266,7 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
                     for (LoopVar l = 0; l < n3DstShape; l++) { // e
                         __ubuf__ dstType* dst3 = dst2;
                         for (LoopVar p = 0; p < n4DstShape; p++) {
+                            dcci(idx0, 0);
                             uint64_t index = idx0[p];
                             src2 = src1 + index;
                             *dst3 = *src2;
@@ -283,6 +284,8 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
             srcAddr += n0SrcStride;
             dstAddr += n0DstStride;
         }
+        dcci(src.GetAddr(), 0);
+        dcci(idx.GetAddr(), 0);
         set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
         wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
     }
