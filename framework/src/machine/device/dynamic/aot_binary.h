@@ -28,7 +28,7 @@
 #define STR(n) STR_(n)
 #endif
 
-#define AOT_CODE_POOL_CODE_SIZE (4096 * 0x800)
+#define AOT_CODE_POOL_CODE_SIZE (4096 * 0x1000)
 extern uint8_t aotCodePoolCode[];
 
 namespace npu::tile_fwk::dynamic {
@@ -66,13 +66,26 @@ struct AOTBinary {
 
     void InitCodeSize(const void* data, uint64_t size)
     {
+        if (size > AOT_CODE_POOL_CODE_SIZE) {
+            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "AOTBinary code size %zu is too large, max %d", size, AOT_CODE_POOL_CODE_SIZE);
+            DEV_ASSERT(DevCommonErr::MEMCPY_FAILED, false);
+            return;
+        }
         auto& pool = AOTCodePool::GetCodePool();
-        PerfBegin(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
-        memcpy_s(reinterpret_cast<void*>(pool.base), size, data, size);
-        __builtin___clear_cache(reinterpret_cast<char*>(pool.base), reinterpret_cast<char*>(pool.base) + size);
-        PerfEnd(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
         code_ = reinterpret_cast<unsigned char*>(pool.base);
         size_ = size;
+        if (size == 0) {
+            return;
+        }
+        PerfBegin(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
+        int ret = memcpy_s(reinterpret_cast<void*>(pool.base), size, data, size);
+        if (ret != 0) {
+            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "AOTBinary memcpy_s failed, ret %d", ret);
+            DEV_ASSERT(DevCommonErr::MEMCPY_FAILED, false);
+            return;
+        }
+        __builtin___clear_cache(reinterpret_cast<char*>(pool.base), reinterpret_cast<char*>(pool.base) + size);
+        PerfEnd(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
     }
     void InitCode(const void* data) { code_ = reinterpret_cast<const unsigned char*>(data); }
 
