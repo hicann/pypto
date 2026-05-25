@@ -19,6 +19,9 @@
 #include "tilefwk/aicpu_common.h"
 #include "interface/utils/common.h"
 #include "tilefwk/core_func_data.h"
+#include "tilefwk/error_code.h"
+#include "machine/utils/device_log.h"
+#include "machine/utils/queues.h"
 
 namespace npu::tile_fwk {
 enum class MachineStatus { START = 0, FINISH = 1, STOP = 2 };
@@ -29,16 +32,6 @@ enum class MachineStatus { START = 0, FINISH = 1, STOP = 2 };
 #define WRAP_IDX_AIV1 2
 static constexpr uint16_t INVALID_UINT16_IDX = 0xffff;
 
-// aic aiv 已经ready的core function id队列
-struct ReadyCoreFunctionQueue {
-    uint32_t head;
-    uint32_t tail;
-    uint32_t capacity;
-    uint32_t* elem;
-    size_t lock;
-
-    uint64_t Size() { return tail - head; }
-};
 
 struct StaticReadyCoreFunctionQueue {
     uint32_t head;
@@ -61,18 +54,6 @@ struct WrapInfoQueue {
     size_t lock;
     uint64_t Size() { return tail - head; }
 };
-
-inline void ReadyQueueLock(ReadyCoreFunctionQueue* rq)
-{
-    while (!__sync_bool_compare_and_swap(&rq->lock, 0, 1)) {
-    }
-}
-
-inline void ReadyQueueUnLock(ReadyCoreFunctionQueue* rq)
-{
-    while (!__sync_bool_compare_and_swap(&rq->lock, 1, 0)) {
-    }
-}
 
 enum class BinDataType {
     READY_STATUS,        // CoreFunction ready_status(no need update)

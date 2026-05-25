@@ -21,6 +21,7 @@
 #include <fstream>
 #include <cstdio>
 #define private public
+#define protected public
 #include "interface/configs/config_manager.h"
 #include "machine/device/dynamic/context/device_task_context.h"
 #include "machine/utils/dynamic/dev_workspace.h"
@@ -333,10 +334,10 @@ TEST_F(TestDeviceTaskContext, test_init_die_ready_queues_mix_arch)
 
         EXPECT_NE(aivQueue, nullptr);
         EXPECT_NE(aicQueue, nullptr);
-        EXPECT_EQ(aivQueue->head, 0U);
-        EXPECT_EQ(aivQueue->tail, 0U);
-        EXPECT_EQ(aicQueue->head, 0U);
-        EXPECT_EQ(aicQueue->tail, 0U);
+        EXPECT_EQ(aivQueue->head_, 0U);
+        EXPECT_EQ(aivQueue->tail_, 0U);
+        EXPECT_EQ(aicQueue->head_, 0U);
+        EXPECT_EQ(aicQueue->tail_, 0U);
     }
 }
 
@@ -375,16 +376,76 @@ TEST_F(TestDeviceTaskContext, test_build_ready_queue_core_function_mix_arch)
     EXPECT_EQ(ret, DEVICE_MACHINE_OK);
 }
 
+TEST_F(TestDeviceTaskContext, test_build_ready_queue_dupped_data)
+{
+    DeviceTaskContext taskContext;
+    DevStartArgsBase startArgs;
+    constexpr size_t kControlFlowCacheSize = 64 * 1024 * 8;
+    auto controlFlowCacheBuf = std::make_unique<uint8_t[]>(kControlFlowCacheSize);
+
+    DevAscendProgram devProg;
+    CreateMockDevAscendProgram(&devProg, ArchInfo::DAV_3510);
+    devProg.controlFlowCache.cacheData = DevRelocVector<uint8_t>(kControlFlowCacheSize, controlFlowCacheBuf.get());
+    devProg.controlFlowCache.isRecording = true;
+
+    DeviceWorkspaceAllocator workspace(&devProg);
+    taskContext.InitAllocator(&devProg, workspace, &startArgs);
+
+    auto dyntask = std::make_unique<DynDeviceTask>(workspace);
+    CreateMockDynDeviceTask(dyntask.get(), 100);
+
+    constexpr size_t kOpCount = 32;
+    constexpr size_t kFuncBufferSize = kOpCount * 1024;
+    constexpr size_t kDuppedDataBufferSize = kOpCount * 512;
+
+    std::unique_ptr<uint8_t[]> funcBuffer;
+    uint8_t* funcDataPtr;
+    DevAscendFunction* devFunc = CreateDevAscendFunctionBuffer(funcBuffer, funcDataPtr, kOpCount, kFuncBufferSize);
+
+    SetupDevAscendFunctionData(devFunc, funcDataPtr, funcBuffer.get(), kOpCount);
+
+    std::unique_ptr<uint8_t[]> duppedDataBuffer;
+    uint8_t* duppedDataPtr;
+    DevAscendFunctionDuppedData* duppedData =
+        CreateDevAscendFunctionDuppedData(duppedDataBuffer, duppedDataPtr, devFunc, kOpCount, kDuppedDataBufferSize);
+
+    devFunc->predInfo_.totalZeroPredAIV = 10;
+    devFunc->predInfo_.totalZeroPredAIC = 10;
+    devFunc->predInfo_.totalZeroPredAicpu = 0;
+
+    dyntask->dynFuncDataCacheList[0].devFunc = devFunc;
+    dyntask->dynFuncDataCacheList[0].duppedData = duppedData;
+    dyntask->dynFuncDataCacheListSize = 1;
+
+    int ret = taskContext.BuildReadyQueue(dyntask.get(), &devProg);
+
+    auto aivQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+        dyntask->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[0]);
+    auto aicQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(
+        dyntask->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[0]);
+
+    EXPECT_EQ(aivQueue->head_, 0);
+    EXPECT_EQ(aivQueue->tail_, 10);
+    EXPECT_EQ(aicQueue->head_, 0);
+    EXPECT_EQ(aicQueue->tail_, 10);
+
+	ReadyCoreFunctionQueue::ValueType aivQueueGold[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    ReadyCoreFunctionQueue::ValueType aicQueueGold[] = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+
+    EXPECT_TRUE(std::equal(aivQueue->begin(), aivQueue->end(), aivQueueGold));
+    EXPECT_TRUE(std::equal(aicQueue->begin(), aicQueue->end(), aicQueueGold));
+
+    EXPECT_EQ(ret, DEVICE_MACHINE_OK);
+}
+
 namespace {
 
 void InitReadyQueueSlot(
     ReadyCoreFunctionQueue& q, std::array<taskid_t, 4>& elemBuf, uint32_t head, uint32_t tail, taskid_t firstId)
 {
-    q.lock = 0;
-    q.head = head;
-    q.tail = tail;
-    q.capacity = static_cast<uint32_t>(elemBuf.size());
-    q.elem = elemBuf.data();
+    new (&q) ReadyCoreFunctionQueue(elemBuf.size(), elemBuf.data());
+    q.UnsafeEnqueue(&elemBuf[0], tail);
+    q.Dequeue(head);
     if (tail > head) {
         elemBuf[0] = firstId;
     }
@@ -394,11 +455,10 @@ void InitReadyQueueSlotMulti(
     ReadyCoreFunctionQueue& q, std::array<taskid_t, 4>& elemBuf, uint32_t head, uint32_t tail,
     const std::vector<taskid_t>& ids)
 {
-    q.lock = 0;
-    q.head = head;
-    q.tail = tail;
-    q.capacity = static_cast<uint32_t>(elemBuf.size());
-    q.elem = elemBuf.data();
+    new (&q) ReadyCoreFunctionQueue(elemBuf.size(), elemBuf.data());
+    q.UnsafeEnqueue(&elemBuf[0], tail);
+    q.Dequeue(head);
+
     for (size_t i = 0; i < ids.size() && (head + i) < tail && i < elemBuf.size(); ++i) {
         elemBuf[i] = ids[i];
     }

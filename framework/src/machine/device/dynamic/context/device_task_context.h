@@ -97,10 +97,10 @@ private:
                     q = reinterpret_cast<ReadyCoreFunctionQueue*>(
                         dyntask->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[dieId]);
                 }
-                q->elem[q->tail++] = MakeTaskID(funcIdx, succIdx);
+                q->UnsafeEnqueue(MakeTaskID(funcIdx, succIdx));
             } else {
                 auto q = dyntask->readyQueue[dyntask->GetReadyQueueIndexByCoreType(static_cast<CoreType>(coreType))];
-                q->elem[q->tail++] = MakeTaskID(funcIdx, succIdx);
+                q->UnsafeEnqueue(MakeTaskID(funcIdx, succIdx));
             }
             readyTaskNum++;
         }

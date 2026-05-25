@@ -39,16 +39,14 @@ public:
         TASK_TYPE_NUM,
     };
 
-    AicpuTaskManager(){};
-    ~AicpuTaskManager(){};
+    AicpuTaskManager() {};
+    ~AicpuTaskManager() {};
 
     // 每个AICPU都会调用
     inline void TaskEnqueue(uint64_t taskId)
     {
-        ReadyQueueLock();
-        readyQueue_->elem[readyQueue_->tail] = taskId;
-        readyQueue_->tail += 1;
-        ReadyQueueUnLock();
+        bool res = readyQueue_->TryEnqueue(taskId);
+        DEV_ASSERT(SchedErr::READY_QUEUE_OVERFLOW, res); // fail on queue overflow
     }
 
     // 仅AICPU_0会调用
@@ -77,17 +75,13 @@ public:
     // 仅AICPU_0会调用
     inline int32_t TaskProcess(uint64_t& taskCount)
     {
-        if (__atomic_load_n(&readyQueue_->tail, __ATOMIC_RELAXED) ==
-            __atomic_load_n(&readyQueue_->head, __ATOMIC_RELAXED)) {
+        if (readyQueue_->UnsafeAtomicSize() == 0) {
             return DEVICE_MACHINE_OK;
         }
-        ReadyQueueLock();
-        uint64_t taskIdx = readyQueue_->head;
-        taskCount = readyQueue_->tail - readyQueue_->head;
-        readyQueue_->head += taskCount;
-        ReadyQueueUnLock();
-        for (uint32_t i = 0; i < taskCount; ++i) {
-            auto ret = TaskDispatch(readyQueue_->elem[taskIdx + i]);
+        auto tasksRange = readyQueue_->DequeueAll();
+        taskCount = tasksRange.second - tasksRange.first;
+        for (auto it = tasksRange.first; it != tasksRange.second; ++it) {
+            auto ret = TaskDispatch(*it);
             if (ret != DEVICE_MACHINE_OK) {
                 return ret;
             }
@@ -115,18 +109,6 @@ public:
     }
 
 private:
-    inline void ReadyQueueLock()
-    {
-        while (!__sync_bool_compare_and_swap(&readyQueue_->lock, 0, 1))
-            ;
-    }
-
-    inline void ReadyQueueUnLock()
-    {
-        while (!__sync_bool_compare_and_swap(&readyQueue_->lock, 1, 0))
-            ;
-    }
-
     inline TaskType GetTaskType(uint64_t taskId)
     {
         auto funcId = FuncID(taskId);

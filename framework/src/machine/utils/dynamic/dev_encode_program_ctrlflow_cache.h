@@ -38,23 +38,13 @@ inline constexpr size_t DEFAULT_STITCH_CFGCACHE_SIZE = 100000000;
 
 struct ReadyQueueCache {
     uint32_t coreFunctionCnt;
-    struct Queue {
-        uint32_t head;
-        uint32_t tail;
-        uint32_t capacity;
-        uint32_t* elem;
-    } queueList[READY_QUEUE_SIZE];
+    ReadyCoreFunctionQueueUnsafe queueList[READY_QUEUE_SIZE];
     uint32_t readyTaskNum;
 };
 
 struct DieReadyQueueCache {
     uint32_t coreFunctionCnt;
-    struct Queue {
-        uint32_t head;
-        uint32_t tail;
-        uint32_t capacity;
-        uint32_t* elem;
-    } queueList[DIE_READY_QUEUE_SIZE * DIE_NUM];
+    ReadyCoreFunctionQueueUnsafe queueList[DIE_READY_QUEUE_SIZE * DIE_NUM];
     uint32_t readyTaskNum;
 };
 
@@ -414,19 +404,16 @@ struct DevControlFlowCache {
         readyQueueBackup->coreFunctionCnt = base->devTask.coreFunctionCnt;
         uint32_t readyTaskNum = 0;
         for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
-            size_t backupSize = sizeof(uint32_t) * base->readyQueue[i]->capacity;
+            size_t backupSize = sizeof(uint32_t) * base->readyQueue[i]->Capacity();
             uint32_t* readyQueueBackupElem = reinterpret_cast<uint32_t*>(AllocateCache(backupSize));
             if (readyQueueBackupElem == nullptr) {
                 return;
             }
 
-            readyQueueBackup->queueList[i].head = base->readyQueue[i]->head;
-            readyQueueBackup->queueList[i].tail = base->readyQueue[i]->tail;
-            readyQueueBackup->queueList[i].capacity = base->readyQueue[i]->capacity;
-            readyQueueBackup->queueList[i].elem = readyQueueBackupElem;
-            memcpy_s(readyQueueBackup->queueList[i].elem, backupSize, base->readyQueue[i]->elem, backupSize);
-
-            readyTaskNum += base->readyQueue[i]->tail - base->readyQueue[i]->head;
+            new (&readyQueueBackup->queueList[i])
+                ReadyCoreFunctionQueueUnsafe(base->readyQueue[i]->Capacity(), readyQueueBackupElem);
+            readyQueueBackup->queueList[i] = *base->readyQueue[i];
+            readyTaskNum += base->readyQueue[i]->UnsafeSize();
         }
         readyQueueBackup->readyTaskNum = readyTaskNum;
         base->readyQueueBackup = readyQueueBackup;
@@ -437,11 +424,7 @@ struct DevControlFlowCache {
         ReadyQueueCache* readyQueueBackup = base->readyQueueBackup;
         base->devTask.coreFunctionCnt = readyQueueBackup->coreFunctionCnt;
         for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
-            size_t backupSize = sizeof(uint32_t) * base->readyQueue[i]->capacity;
-
-            base->readyQueue[i]->head = readyQueueBackup->queueList[i].head;
-            base->readyQueue[i]->tail = readyQueueBackup->queueList[i].tail;
-            memcpy_s(base->readyQueue[i]->elem, backupSize, readyQueueBackup->queueList[i].elem, backupSize);
+            *base->readyQueue[i] = readyQueueBackup->queueList[i];
         }
     }
 
@@ -459,25 +442,19 @@ struct DevControlFlowCache {
                 (i < DIE_NUM) ? base->devTask.dieReadyFunctionQue.readyDieAivCoreFunctionQue[i] :
                                 base->devTask.dieReadyFunctionQue.readyDieAicCoreFunctionQue[i - DIE_NUM]);
             if (dieReadyQueue == nullptr) {
-                dieReadyQueueBackup->queueList[i].head = 0;
-                dieReadyQueueBackup->queueList[i].tail = 0;
-                dieReadyQueueBackup->queueList[i].capacity = 0;
-                dieReadyQueueBackup->queueList[i].elem = nullptr;
+                new (&dieReadyQueueBackup->queueList[i]) ReadyCoreFunctionQueueUnsafe(0, nullptr);
                 continue;
             }
-            size_t backupSize = sizeof(uint32_t) * dieReadyQueue->capacity;
+            size_t backupSize = sizeof(uint32_t) * dieReadyQueue->Capacity();
             uint32_t* dieReadyQueueBackupElem = reinterpret_cast<uint32_t*>(AllocateCache(backupSize));
             if (dieReadyQueueBackupElem == nullptr) {
                 return;
             }
 
-            dieReadyQueueBackup->queueList[i].head = dieReadyQueue->head;
-            dieReadyQueueBackup->queueList[i].tail = dieReadyQueue->tail;
-            dieReadyQueueBackup->queueList[i].capacity = dieReadyQueue->capacity;
-            dieReadyQueueBackup->queueList[i].elem = dieReadyQueueBackupElem;
-            memcpy_s(dieReadyQueueBackup->queueList[i].elem, backupSize, dieReadyQueue->elem, backupSize);
-
-            readyTaskNum += dieReadyQueue->tail - dieReadyQueue->head;
+            new (&dieReadyQueueBackup->queueList[i])
+                ReadyCoreFunctionQueueUnsafe(dieReadyQueue->Capacity(), dieReadyQueueBackupElem);
+            dieReadyQueueBackup->queueList[i] = *dieReadyQueue;
+            readyTaskNum += dieReadyQueue->UnsafeSize();
         }
         dieReadyQueueBackup->readyTaskNum = readyTaskNum;
         base->dieReadyQueueBackup = dieReadyQueueBackup;
@@ -497,13 +474,7 @@ struct DevControlFlowCache {
             if (dieReadyQueue == nullptr) {
                 continue;
             }
-            size_t backupSize = sizeof(uint32_t) * dieReadyQueue->capacity;
-
-            dieReadyQueue->head = dieReadyQueueBackup->queueList[i].head;
-            dieReadyQueue->tail = dieReadyQueueBackup->queueList[i].tail;
-            if (dieReadyQueueBackup->queueList[i].elem != nullptr) {
-                memcpy_s(dieReadyQueue->elem, backupSize, dieReadyQueueBackup->queueList[i].elem, backupSize);
-            }
+            *dieReadyQueue = dieReadyQueueBackup->queueList[i];
         }
     }
 
@@ -896,15 +867,16 @@ struct DevControlFlowCache {
             runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts = allocator[i].devTaskBoundaryOutcasts;
 
             uint64_t backupSize = sizeof(WsSlotAllocator::BlockHeader) * allocator[i].devTaskBoundaryOutcasts.slotNum_;
-            (void)memcpy_s(runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data(),
-                backupSize, allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase(), backupSize);
+            (void)memcpy_s(
+                runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data(), backupSize,
+                allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase(), backupSize);
 
-            WsSlotAllocator::BlockHeader *base = allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase();
+            WsSlotAllocator::BlockHeader* base = allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase();
             Backup::BackupBlockHeader(
                 runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.freeListHeader_, base);
             Backup::BackupBlockHeader(
                 runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.notInUseHeaders_, base);
-            WsSlotAllocator::BlockHeader *checkpointBase =
+            WsSlotAllocator::BlockHeader* checkpointBase =
                 runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data();
             for (uint64_t k = 0; k < allocator[i].devTaskBoundaryOutcasts.slotNum_; k++) {
                 Backup::BackupBlockHeader(checkpointBase[k].listNext, base);
@@ -940,20 +912,21 @@ struct DevControlFlowCache {
         };
 
         for (uint32_t i = 0; i < parallelism; i++) {
-            Restore::RestoreSeqAllocator(
-                allocator[i].rootInner, runtimeBackup.workspace.tensorAllocators[i].rootInner);
+            Restore::RestoreSeqAllocator(allocator[i].rootInner, runtimeBackup.workspace.tensorAllocators[i].rootInner);
             Restore::RestoreSeqAllocator(
                 allocator[i].devTaskInnerExclusiveOutcasts,
                 runtimeBackup.workspace.tensorAllocators[i].devTaskInnerExclusiveOutcasts);
             allocator[i].devTaskBoundaryOutcasts.availableSlots_ =
                 runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.availableSlots_;
 
-            WsSlotAllocator::BlockHeader *base = allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase();
-            Restore::RestoreBlockHeader(allocator[i].devTaskBoundaryOutcasts.freeListHeader_, base,
+            WsSlotAllocator::BlockHeader* base = allocator[i].devTaskBoundaryOutcasts.GetBlockHeaderBase();
+            Restore::RestoreBlockHeader(
+                allocator[i].devTaskBoundaryOutcasts.freeListHeader_, base,
                 runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.freeListHeader_);
-            Restore::RestoreBlockHeader(allocator[i].devTaskBoundaryOutcasts.notInUseHeaders_, base,
+            Restore::RestoreBlockHeader(
+                allocator[i].devTaskBoundaryOutcasts.notInUseHeaders_, base,
                 runtimeBackup.workspace.tensorAllocators[i].devTaskBoundaryOutcasts.notInUseHeaders_);
-            WsSlotAllocator::BlockHeader *checkpointBase =
+            WsSlotAllocator::BlockHeader* checkpointBase =
                 runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList.Data();
             for (uint64_t k = 0; k < allocator[i].devTaskBoundaryOutcasts.slotNum_; k++) {
                 Restore::RestoreBlockHeader(base[k].listNext, base, checkpointBase[k].listNext);
@@ -1102,7 +1075,7 @@ struct DevControlFlowCache {
             ReadyCoreFunctionQueue* queue = RelocControlFlowCachePointer(queueRef, relocCtrlCache);
             relocCtrlCache.Reloc(queuePtrValue);
             if (queue != nullptr) {
-                relocCtrlCache.Reloc(queue->elem);
+                queue->Reloc(relocCtrlCache);
             }
         };
         for (size_t i = 0; i < DIE_NUM; i++) {
@@ -1114,13 +1087,13 @@ struct DevControlFlowCache {
         DieReadyQueueCache* dieReadyQueueBackup = RelocControlFlowCachePointer(dieReadyQueueBackupRef, relocCtrlCache);
         if (dieReadyQueueBackup != nullptr) {
             for (size_t i = 0; i < DIE_READY_QUEUE_SIZE * DIE_NUM; i++) {
-                relocCtrlCache.Reloc(dieReadyQueueBackup->queueList[i].elem);
+                dieReadyQueueBackup->queueList[i].Reloc(relocCtrlCache);
             }
         }
     }
-    void RelocDuppedDataAndDynFuncData(RelocRange& relocProgram, RelocRange& relocCtrlCache,
-        DevAscendFunctionDuppedData* duppedData, DynFuncData* dynData, DynFuncDataCache* dynDataCache,
-        DynFuncDataBackup* dynDataBackup)
+    void RelocDuppedDataAndDynFuncData(
+        RelocRange& relocProgram, RelocRange& relocCtrlCache, DevAscendFunctionDuppedData* duppedData,
+        DynFuncData* dynData, DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup)
     {
         // Reloc Dupped
         relocProgram.Reloc(duppedData->source_);
@@ -1158,7 +1131,7 @@ struct DevControlFlowCache {
             for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
                 ReadyCoreFunctionQueue*& readyQueueRef = dynTaskBase->readyQueue[i];
                 ReadyCoreFunctionQueue* readyQueue = RelocControlFlowCachePointer(readyQueueRef, relocCtrlCache);
-                relocCtrlCache.Reloc(readyQueue->elem);
+                readyQueue->Reloc(relocCtrlCache);
             }
             relocProgram.Reloc(dynTaskBase->cceBinary);
             relocProgram.Reloc(dynTaskBase->aicpuLeafBinary);
@@ -1166,7 +1139,7 @@ struct DevControlFlowCache {
             ReadyQueueCache*& readyQueueBackupRef = dynTaskBase->readyQueueBackup;
             ReadyQueueCache* readyQueueBackup = RelocControlFlowCachePointer(readyQueueBackupRef, relocCtrlCache);
             for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
-                relocCtrlCache.Reloc(readyQueueBackup->queueList[i].elem);
+                readyQueueBackup->queueList[i].Reloc(relocCtrlCache);
             }
 
             DynFuncHeader*& dynFuncDataListRef = dynTaskBase->dynFuncDataList;
@@ -1193,7 +1166,8 @@ struct DevControlFlowCache {
                         nodePtr = &node->Next();
                     }
                 }
-                RelocDuppedDataAndDynFuncData(relocProgram, relocCtrlCache, duppedData, dynData, dynDataCache, dynDataBackup);
+                RelocDuppedDataAndDynFuncData(
+                    relocProgram, relocCtrlCache, duppedData, dynData, dynDataCache, dynDataBackup);
             }
         }
     }

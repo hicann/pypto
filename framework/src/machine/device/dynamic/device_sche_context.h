@@ -132,11 +132,10 @@ struct SchDeviceTaskContext {
         DEV_ERROR(
             SchedErr::ABNOMAL_LAST_WORD,
             "Devtask:parallelidx=%u, taskid=%lu,ver=%u,forid=%u,iterid=%u,wsid=%u,allsent=%u,total=%lu,stage=%d,"
-            "%u, %u, %u, %u",
+            "%s, %s",
             parallelIdx, taskCtrl->taskId, bindParallelCtxVersion, taskCtrl->ParallelForId(),
             taskCtrl->ParallelIterId(), taskCtrl->ParallelWsId(), allSent, taskCtrl->devTask->coreFunctionCnt,
-            ToUnderlying(curStage), readyAicCoreFunctionQue->head, readyAicCoreFunctionQue->tail,
-            readyAivCoreFunctionQue->head, readyAivCoreFunctionQue->tail);
+            ToUnderlying(curStage), readyAicCoreFunctionQue->Str().c_str(), readyAivCoreFunctionQue->Str().c_str());
     }
 };
 

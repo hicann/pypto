@@ -420,20 +420,15 @@ private:
     {
         DEV_DEBUG("===== ready aic func =====");
         ReadyCoreFunctionQueue* readyFunc = reinterpret_cast<ReadyCoreFunctionQueue*>(devTask->readyAicCoreFunctionQue);
-        for (uint64_t i = readyFunc->head; i < readyFunc->tail; i++) {
-            DEV_DEBUG("aic taskId[%lu]=%u.", i, readyFunc->elem[i]);
-        }
+        DEV_DEBUG("aic [%s]", readyFunc->Dump().c_str());
 
         DEV_DEBUG("===== ready aiv func =====");
         readyFunc = reinterpret_cast<ReadyCoreFunctionQueue*>(devTask->readyAivCoreFunctionQue);
-        for (uint64_t i = readyFunc->head; i < readyFunc->tail; i++) {
-            DEV_DEBUG("aiv taskId[%lu]=%u.", i, readyFunc->elem[i]);
-        }
+        DEV_DEBUG("aiv [%s]", readyFunc->Dump().c_str());
+
         DEV_DEBUG("===== ready aicpu func =====");
         readyFunc = reinterpret_cast<ReadyCoreFunctionQueue*>(devTask->readyAicpuFunctionQue);
-        for (uint64_t i = readyFunc->head; i < readyFunc->tail; i++) {
-            DEV_DEBUG("aicpu taskId[%lu]=%u.", i, readyFunc->elem[i]);
-        }
+        DEV_DEBUG("aicpu [%s]", readyFunc->Dump().c_str());
 
         if (isDyn) {
             DEV_DEBUG("===== dyn info =====");
