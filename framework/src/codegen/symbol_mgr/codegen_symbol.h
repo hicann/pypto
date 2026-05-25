@@ -206,7 +206,16 @@ struct TileTensorUsing {
 
     bool operator==(const TileTensorUsing& other) const
     {
-        bool baseCompare = dtype == other.dtype && bufType == other.bufType && rawShape == other.rawShape;
+        if (dtype != other.dtype || bufType != other.bufType || dim != other.dim) {
+            return false;
+        }
+        if (bufType == BUF_DDR) {
+            return true;
+        }
+        if (isConstant != other.isConstant) {
+            return false;
+        }
+        bool baseCompare = rawShape == other.rawShape;
         return isConstant ? baseCompare && shape == other.shape : baseCompare;
     }
 
