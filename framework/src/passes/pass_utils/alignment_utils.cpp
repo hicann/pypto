@@ -82,8 +82,8 @@ void AlignmentUtils::ProcessLastDim32BAlignedOnUB(LogicalTensorPtr tensor)
         int64_t oriRawshapeValue = tensor->tensor->rawshape[lastIdx];
 
         // pad 32B
-        tensor->shape[lastIdx] = Pad(tensor->shape[lastIdx], paddingValue);
-        tensor->tensor->rawshape[lastIdx] = Pad(oriRawshapeValue, tensor->shape[lastIdx]);
+        auto rawShapePadded = Pad(oriRawshapeValue, paddingValue);
+        tensor->tensor->rawshape[lastIdx] = Pad(oriRawshapeValue, rawShapePadded);
     }
 }
 
