@@ -276,6 +276,9 @@ bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxe
     }
 
     auto dynParamTable = subFunc.GetDynParamTable();
+    bool allReplacedSymbolsMatch = true;
+    bool allExprsMatch = true;
+
     for (size_t i = 0; i < curLoopAxes.size(); ++i) {
         auto curExpr = SymbolicExpressionTable::BuildExpression(curLoopAxes[i]);
         auto prevExpr = SymbolicExpressionTable::BuildExpression(dynPreviousLoopAxes[i]);
@@ -283,19 +286,20 @@ bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxe
         if (dynParamTable.find(curExpr) != dynParamTable.end() && dynParamTable.find(prevExpr) != dynParamTable.end()) {
             auto curParamInfo = dynParamTable[curExpr];
             auto preParamInfo = dynParamTable[prevExpr];
-            if (!curParamInfo.replacedSymbol.empty() && !preParamInfo.replacedSymbol.empty() &&
-                curParamInfo.replacedSymbol == preParamInfo.replacedSymbol) {
-                APASS_LOG_INFO_F(
-                    Elements::Operation, "%s & %s has same replacedSymbol.", curExpr.c_str(), prevExpr.c_str());
-                return true;
+            if (curParamInfo.replacedSymbol.empty() || preParamInfo.replacedSymbol.empty() ||
+                curParamInfo.replacedSymbol != preParamInfo.replacedSymbol) {
+                allReplacedSymbolsMatch = false;
             }
+        } else {
+            allReplacedSymbolsMatch = false;
         }
 
         if (curExpr != prevExpr) {
-            return false;
+            allExprsMatch = false;
         }
     }
-    return true;
+
+    return allReplacedSymbolsMatch || allExprsMatch;
 }
 
 } // namespace tile_fwk
