@@ -365,27 +365,33 @@ public:
             stats[i] = GetCacheStats(i);
         }
     }
-
+    void DumpSlabUsage(const char* title) const
+    {
+        int percent = 100;
+        AllocatorStats allocStats = GetAllocatorStats();
+        uint64_t usedBytes = static_cast<uint64_t>(allocStats.allocatedSlabCount) * allocStats.slabSize;
+        uint64_t freeBytes = static_cast<uint64_t>(allocStats.freeSlabCount) * allocStats.slabSize;
+        DEV_DEBUG(
+            "[workspaceSize.slab.usage] %s totalBytes=%u, usedBytes=%lu, freeBytes=%lu, totalSlabs=%u, "
+            "allocatedSlabs=%u, freeSlabs=%u, slabSize=%u, usage=%.2f%%.",
+            title, totalMemSize_, usedBytes, freeBytes,
+            allocStats.totalSlabCount, allocStats.allocatedSlabCount, allocStats.freeSlabCount, allocStats.slabSize,
+            allocStats.usage * percent);
+    }
     void DumpMemoryStatusWhenAbnormal(const char* title) const
     {
         DEV_WARN("[SlabWsAllocator]%s\n", title);
         int percent = 100;
 
         // Dump allocator-level statistics
-        AllocatorStats allocStats = GetAllocatorStats();
-        DEV_WARN(
-            "Slab allocator Stats: BaseMemAddr=%p, TotalSize=%u, TotalSlabs=%u,"
-            "AllocatedSlabs=%u, FreeSlabs=%u, SlabSize=%u, Usage=%.2f%%\n",
-            memBaseaddr_, totalMemSize_, allocStats.totalSlabCount, allocStats.allocatedSlabCount,
-            allocStats.freeSlabCount, allocStats.slabSize, allocStats.usage * percent);
-
+        DumpSlabUsage(title);
         // Dump cache-level statistics
         for (int i = 0; i < SLAB_ALLOCATOR_MAX_CACHES; i++) {
             if (caches_[i].objSize == 0)
                 continue;
 
             CacheStats cacheStats = GetCacheStats(i);
-            DEV_WARN(
+            DEV_DEBUG(
                 "Slab cache[%d]: ObjSize=%u, AlloCatedSlabs=%u, TotalObjs=%u,"
                 "AllocatedObjs=%u, FreeObjs=%u, Usage=%.2f%%\n",
                 i, cacheStats.objSize, cacheStats.slabCount, cacheStats.totalObjCount, cacheStats.allocatedObjCount,

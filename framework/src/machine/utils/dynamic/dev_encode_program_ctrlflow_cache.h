@@ -262,8 +262,12 @@ struct DevControlFlowCache {
             cacheDataOffset += (size + CFGCACHE_ALIGN - 1) / CFGCACHE_ALIGN * CFGCACHE_ALIGN;
             DEV_VERBOSE_DEBUG("cacheDataOffset is: %lu", cacheDataOffset);
         } else {
+            DEV_DEBUG(
+                "[ctrl.cache.record] Recording is stopped, requestSize=%lu, "
+                "cacheDataOffset=%lu, cacheDataSize=%lu.",
+                size, cacheDataOffset,cacheData.size());
+            
             isRecordingStopped = true;
-            DEV_DEBUG("Recording is stopped");
         }
         return result;
     }

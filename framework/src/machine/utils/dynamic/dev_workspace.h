@@ -843,6 +843,14 @@ public:
             metadataAllocators_.stitchSlab.PopStageAllocMem(false, 0); // not support keep alloc memory
         return stageMem;
     }
+    void DumpSlabUsageBeforeSubmit(uint32_t taskId, DynDeviceTask* devTask)
+    {
+        DEV_VERBOSE_DEBUG(
+            "[workspace.slab.usage] before submit devTask, taskId=%u, devTask=%p. ",
+            taskId, devTask);
+        metadataAllocators_.generalSlab.DumpSlabUsage("General metadata slab");
+        metadataAllocators_.stitchSlab.DumpSlabUsage("Stitch pool slab");
+    }
 
     void SlabStageAllocMemSubmmit(DynDeviceTask* devTask) {
         TIMEOUT_CHECK_INIT(devProg_->devArgs.archInfo, TIMEOUT_20MIN);
@@ -863,7 +871,8 @@ public:
         DEV_ASSERT_MSG(
             WsErr::WORKSPACE_CATEGORY_INVALID, category == WsMemCategory::VECTOR_STITCHED_LIST,
             "Unexpected category=%s", GetCategoryName(category));
-        return SlabAlloc(count * sizeof(T), WsAicpuSlabMemType::VEC_STITCHED_LIST);
+        uint64_t size = count * sizeof(T);
+        return ControlFlowAllocateSlab(devProg_, size, SlabAlloc(size, WsAicpuSlabMemType::VEC_STITCHED_LIST));
     }
 
     void Deallocate(WsAllocation) {} // just for support vector allocator,so need have this fucntion member

@@ -57,7 +57,14 @@ DynDeviceTask* DeviceTaskContext::BuildDeviceTaskData(
     PerfBegin(PERF_EVT_SLAB_MEM_SUBMIT);
     // cache allocated memory , when task finish will recycle
     dynTask->taskStageAllocMem = workspace_->SlabGetStageAllocMem(withoutTail, WsAicpuSlabMemType::DUPPED_FUNC_DATA);
-    workspace_->SlabStageAllocMemSubmmit(dynTask);
+    DEV_IF_DEBUG {
+        workspace_->DumpSlabUsageBeforeSubmit(taskId, dynTask);
+    }
+    if (!devProg->ctrlFlowCacheAnchor->IsRecording()) {
+        workspace_->SlabStageAllocMemSubmmit(dynTask);
+    } else {
+        DEV_VERBOSE_DEBUG("[workspace.slab.submit] skip slab stage submit in ctrlflow cache recording, taskId=%u.", taskId);
+    }
     PerfEnd(PERF_EVT_SLAB_MEM_SUBMIT);
     return dynTask;
 }
