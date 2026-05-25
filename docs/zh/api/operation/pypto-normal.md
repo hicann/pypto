@@ -21,7 +21,6 @@ normal(shape: List[int], key: List[int], counter: List[int], alg: List[int], dty
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|--------------------------------------------------------------------|
 | shape   | 输入      | 输出Tensor的形状。 <br> 长度支持1-4维。                                        |
@@ -31,6 +30,7 @@ normal(shape: List[int], key: List[int], counter: List[int], alg: List[int], dty
 | dtype   | 输入      | 输出Tensor的数据类型。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。            |
 
 ## 约束说明
+
 - 只在A5上支持。
 - 不支持shape切分多个view shape，view shape必须和输入的shape一致。
 - 不支持shape切分多个tile shape，tile shape必须和输入的shape一致。

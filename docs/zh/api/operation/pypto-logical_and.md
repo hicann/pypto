@@ -12,8 +12,8 @@
 
 对两个输入的Tensor行逐元素逻辑与（AND）运算。运算规则：
 
--   如果输入的Tensor为 bool 则 True and True -\> True，其余情况皆为 False。
--   如果输入的Tensor数值，会自动转换成 True/False，0 为 False，非 0 为 True。
+- 如果输入的Tensor为 bool 则 True and True -\> True，其余情况皆为 False。
+- 如果输入的Tensor数值，会自动转换成 True/False，0 为 False，非 0 为 True。
 
 ## 函数原型
 
@@ -22,7 +22,6 @@ logical_and(input: Tensor, other: Tensor) -> Tensor
 ```
 
 ## 参数说明
-
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
@@ -35,8 +34,8 @@ logical_and(input: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  TileShape与input、other维度保持一致；
-2.  由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(other\) + a\*b\*c\*d\*sizeof\(BOOL\) + 1.1875KB<UB。
+1. TileShape与input、other维度保持一致；
+2. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(other\) + a\*b\*c\*d\*sizeof\(BOOL\) + 1.1875KB<UB。
 
 ## 调用示例
 

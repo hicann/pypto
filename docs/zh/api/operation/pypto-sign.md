@@ -28,7 +28,6 @@ sign(input: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -39,8 +38,8 @@ sign(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  TileShape与input维度保持一致；
-2.  由于存在临时内存使用，当输入数据类型为DT\_INT8，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + c\*d\*sizeof\(INT8\) <UB。
+1. TileShape与input维度保持一致；
+2. 由于存在临时内存使用，当输入数据类型为DT\_INT8，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + c\*d\*sizeof\(INT8\) <UB。
 
 ## 调用示例
 

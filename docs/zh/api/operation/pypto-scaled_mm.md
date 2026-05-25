@@ -8,10 +8,10 @@
 
 ## 功能说明
 
-实现mat_a 、mat_b矩阵的mx量化矩阵乘运算，计算公式为：out = (mat_a * scale_a) @ (mat_b * scale_b)
+实现mat_a 、mat_b矩阵的mx量化矩阵乘运算，计算公式为：out = (mat_a *scale_a) @ (mat_b* scale_b)
 
--   mat_a 、mat_b 、scale_a 、scale_b为源操作数，mat_a 为左矩阵；mat_b为右矩阵；scale_a为左矩阵量化参数；scale_b为右矩阵量化参数
--   out 为目的操作数，存放矩阵乘结果的矩阵
+- mat_a 、mat_b 、scale_a 、scale_b为源操作数，mat_a 为左矩阵；mat_b为右矩阵；scale_a为左矩阵量化参数；scale_b为右矩阵量化参数
+- out 为目的操作数，存放矩阵乘结果的矩阵
 
 ## 函数原型
 
@@ -20,7 +20,6 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 ```
 
 ## 参数说明
-
 
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
@@ -48,8 +47,8 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 
 ## 约束说明
 
--   调用scaled_mm接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小。
--   调用scaled_mm接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
+- 调用scaled_mm接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小。
+- 调用scaled_mm接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
 
 ## 调用示例
 

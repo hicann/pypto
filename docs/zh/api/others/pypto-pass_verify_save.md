@@ -24,7 +24,6 @@ pass_verify_save(
 
 ## 参数说明
 
-
 | 参数名   | 输入/输出 | 说明                                                                 |
 |----------|-----------|----------------------------------------------------------------------|
 | tensor   | 输入      | 含义：pypto kernel function 中的 pypto.Tensor。 <br> 说明：Tensor 的变量名称。 <br> 类型：pypto.Tensor <br> 取值范围：NA |

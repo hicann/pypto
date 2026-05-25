@@ -20,7 +20,6 @@ gt(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16, DT_BF16, DT_FP32，两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -32,8 +31,8 @@ gt(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 
 ## 约束说明
 
-1.  input 和 other 类型须保持一致。
-2.  支持一维广播。
+1. input 和 other 类型须保持一致。
+2. 支持一维广播。
 
 ## 调用示例
 

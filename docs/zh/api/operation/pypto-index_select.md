@@ -23,6 +23,7 @@ dim = d \\
 \mathbf{result}[s_0, \ldots, s_{d-1}, i, s_{d+1}, \ldots, s_{n-1}] = \mathbf{input}[s_0, \ldots, s_{d-1}, \mathbf{index}[i], s_{d+1}, \ldots, s_{n-1}]
 \end{array}
 $$
+
 ## 函数原型
 
 ```python
@@ -30,7 +31,6 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor:
 ```
 
 ## 参数说明
-
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|

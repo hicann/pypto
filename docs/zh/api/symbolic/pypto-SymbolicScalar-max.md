@@ -16,10 +16,12 @@
 当需要对 SymbolicScalar（如从 `tensor.shape` 获取的动态维度值）进行比较时，应使用此方法。
 
 **与 pypto.maximum 的区别**：
+
 - `pypto.maximum`：用于 Tensor 的逐元素最大值计算
 - `SymbolicScalar.max`：用于符号标量的最大值计算
 
 **不支持 Python 三元表达式**：
+
 ```python
 # ❌ 错误：不支持三元表达式
 cur_seq = kv_act_seqs[b_idx]
@@ -38,7 +40,6 @@ max(self, other: 'SymbolicScalar | int') -> 'SymbolicScalar'
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | other   | 输入      | 待比较的符号标量或整数。 |
@@ -49,8 +50,8 @@ max(self, other: 'SymbolicScalar | int') -> 'SymbolicScalar'
 
 ## 约束说明
 
--   如果两个值都是具体的，将返回具体的常量值
--   如果至少有一个不是具体的，将返回符号表达式
+- 如果两个值都是具体的，将返回具体的常量值
+- 如果至少有一个不是具体的，将返回符号表达式
 
 ## 调用示例
 

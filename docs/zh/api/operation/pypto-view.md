@@ -25,7 +25,6 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 
 ## 参数说明
 
-
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
 | input       | 输入      | 源操作数。<br> 支持的数据类型为：PyPto支持的数据类型<br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -38,10 +37,9 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为参数shape指定大小，若指定了valid\_shape，则真实大小为valid\_shape。若指定dtype，则会将输入按照dtype进行读取。
 
-
 ## 调用示例
 
--   基本使用方法
+- 基本使用方法
 
     ```python
     x = pypto.tensor([4, 8], pypto.DT_FP32)
@@ -63,7 +61,7 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
                 [3 3 4 4]]
     ```
 
--   增加valid\_shape
+- 增加valid\_shape
 
     ```python
     x = pypto.tensor([4, 8], pypto.DT_FP32)
@@ -86,7 +84,7 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
                 [0 0 0 0]]
     ```
 
--   指定dtype
+- 指定dtype
 
     ```python
     x = pypto.tensor([2, 2], pypto.DT_FP32)

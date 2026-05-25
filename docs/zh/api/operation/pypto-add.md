@@ -37,9 +37,9 @@ add(input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1)
 
 ## 约束说明
 
-1.  input 和 other 类型应该相同。
-2.  other 为数字的时候，不支持隐式转化。
-3.  other 不支持nan、inf等特殊值
+1.input 和 other 类型应该相同。
+2.other 为数字的时候，不支持隐式转化。
+3.other 不支持nan、inf等特殊值
 
 ## 调用示例
 

@@ -23,7 +23,6 @@ var(input: Tensor, dim: Union[int, List[int], Tuple[int]] = None, *, correction:
 
 ## 参数说明
 
-
 | 参数名      | 输入/输出 | 说明                                                                 |
 |------------|---------- |----------------------------------------------------------------------|
 | input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -66,7 +65,7 @@ y = pypto.var(x, 1, correction=1, keepdim=True)
 
 结果示例如下：
 
-```
+```txt
 输入数据 x: [[1., 2., 3.],
             [4., 5., 6.]]
 输出数据 y: [[1.],

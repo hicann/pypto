@@ -27,7 +27,6 @@ maximum(
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为 int, float, Element, Tensor类型。 <br> 当为 int 或者 float 类型时会自动转换为 Element 类型，其中 int 对应 DT_INT32，float 对应 DT_FP32。当需要使用其他数据类型时，可以通过 Element 构建。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor和Element支持的数据类型为DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。 <br> Atlas A5系列产品：Tensor和Element支持的数据类型为DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |

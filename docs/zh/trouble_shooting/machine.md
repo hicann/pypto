@@ -2,6 +2,7 @@
 
 - **范围**：F7-F8XXXX
 - 本文档说明 MACHINE 组件的错误码定义、场景说明与排查建议。
+
 ---
 
 ## 错误码定义与使用说明
@@ -37,6 +38,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/exclude_machine_framew
 ```
 
 **判断**：
+
 - **脚本退出码 0**（注释后无 aicore error）：问题在 **kernel 代码**中 → 继续后续步骤
 - **脚本退出码 1**（注释后仍有 aicore error）：问题在 **machine 调度框架** → 停止
 - **脚本退出码 2**（定位 aicore_entry.h 或 CallSubFuncTask 失败）：手动排查环境
@@ -54,6 +56,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_problem_cce.py 
 ```
 
 **判断**：
+
 - **脚本退出码 0**：成功定位，输出 `CCE_FILE=<path>` 和 `PROGRAM_JSON=<path>`，记录这两个路径供后续步骤使用
 - **脚本退出码 1**：未找到问题 CCE 文件 → 停止
 - **脚本退出码 2**：并行编译错误无法自动修复（parallel_compile 已为 1 但仍报错），**停止执行**
@@ -102,7 +105,6 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/restore_initial_state.
 
 **关联脚本**：[locate_aicore_error.py](../../../tools/scripts/locate_aicore_error.py)（一键定位脚本，自动化执行上述步骤 1-6）
 
-
 ### 怀疑和MACHINE内存处理有关的精度问题
 
 1. **检查输入初始化**：
@@ -114,6 +116,7 @@ eg：reshape/view、交换维度、索引/切片后的 tensor 可能非连续；
 
 3. **扩大 workspace 大小**:
 `python/pypto/frontend/parser/entry.py`
+
 ```python
 workspace_tensor = torch.empty(workspace_size, dtype=torch.uint8, device=device)
 ```
@@ -121,10 +124,12 @@ workspace_tensor = torch.empty(workspace_size, dtype=torch.uint8, device=device)
 ```python
 workspace_tensor = torch.empty(workspace_size * 10, dtype=torch.uint8, device=device)
 ```
+
 如果问题不复现，则是workspace计算问题
 
 4. **workspace从torch管理，改为内部自管理**
 `framework/src/machine/runtime/device_launcher.cpp`
+
 ```cpp
     static void PrepareDevProgArgs(DevAscendProgram *devProg, DeviceLauncherConfig &config,
                                   [[maybe_unused]]bool isDevice) {
@@ -150,16 +155,19 @@ workspace_tensor = torch.empty(workspace_size * 10, dtype=torch.uint8, device=de
         ...
     }
 ```
+
 如果问题不复现，则是workspace使用问题，存在内存踩踏等
 
 5. **leaf function粒度的内存重叠检测**
 （1）打开 Operation 信息 Dump 开关
 `framework/src/machine/utils/device_switch.h`
+
 ```cpp
 #define ENABLE_DUMP_OPERATION 1
 ```
 
 （2）打开DEBUG日志，指定日志落盘路径
+
 ```bash
 export ASCEND_GLOBAL_LOG_LEVEL=1
 export ASCEND_PROCESS_LOG_PATH=./my_log
@@ -180,11 +188,13 @@ export ASCEND_PROCESS_LOG_PATH=./my_log
 （6）执行内存检测脚本
 
 命令格式：
+
 ```bash
 python3 tools/schema/schema_memory_check.py -d <device_log_dir_absolute_path> -t <topo_file_absolute_path>
 ```
 
 示例（请替换为实际绝对路径）：
+
 ```bash
 python3 tools/schema/schema_memory_check.py -d /path/to/my_log/debug/device-8/ -t /path/to/output/output_20260314_112655_964781_3025352/dyn_topo.txt
 ```
@@ -210,7 +220,7 @@ python3 tools/schema/schema_memory_check.py -d /path/to/my_log/debug/device-8/ -
 
 1. **工具入口与位置**：
 
-```
+```txt
 tools/verify_dep_correctness.py     # 工具入口
 tools/dep_verifier/                 # 规则引擎包
 ```
@@ -278,13 +288,14 @@ python tools/verify_dep_correctness.py ./output/output_20260514_103201_123456_78
 5. **输出结果**：
 
 无问题时控制台打印：
-```
+
+```txt
 PASS
 ```
 
 发现问题时按类别聚合打印摘要，例如：
 
-```
+```txt
 FAIL: 3 issue(s) detected.
 
 [Missing producer/consumer dependency (data flow broken)]
@@ -299,7 +310,7 @@ FAIL: 3 issue(s) detected.
 
 同时在 `<dump_dir>/dep_check_report.csv` 生成详细报告，列格式为：
 
-```
+```txt
 category, rule, slot, tensor, func, cell, message
 ```
 
@@ -319,7 +330,6 @@ category, rule, slot, tensor, func, cell, message
 
 ---
 
-
 ### encode 阶段 actualRawMagic 断言触发
 
 **问题特征**：运行用例时在 encode 阶段触发断言，错误信息包含 `Shape size mismatch` 或 `Data size mismatch`，并伴随 `rawTensor->actualRawmagic`、`rawShape`、`actualrawShape` 等字段输出，报错位置为 `framework/src/machine/utils/dynamic/dev_encode.cpp` 中 `InitRawTensorAndMemoryRequirement` 函数。
@@ -332,7 +342,7 @@ category, rule, slot, tensor, func, cell, message
 
    触发断言时，错误日志中会包含以下关键字段（对应 `dev_encode.cpp` 第 412~420 行）：
 
-   ```
+   ```txt
    Shape size mismatch: <rawShapeSize> != <actualRawShapeSize>,
    rootMagic=<...>, rootHash=<...>,
    rawShape=<...>, actualrawShape=<...>,
@@ -387,23 +397,25 @@ category, rule, slot, tensor, func, cell, message
    （2）**框架侧问题**：若用例写法无误，联系 **pass 同事**进行进一步分析，排查框架在处理 actualRawmagic 传递时是否存在遗漏或错误更新的场景。
 
 注：
+
 - actualRawmagic 断言失败本质是编译期一致性校验，去掉断言后若运行精度仍正确，说明该路径的运行时读写并未越界，属于校验口径过严或 pass 侧信息同步遗漏问题，需与 pass 同事联合分析
 - 此类问题若在动态 shape（含负数维度）场景下触发，`dev_encode.cpp` 会跳过动态维度的校验（`isDynamicShape` 分支），排查时需注意区分静态与动态 shape 场景
 
 ---
+
 ### Workspace 内存异常偏大
 
 **问题特征**：运行用例时内存分配失败，报错信息为以下两类之一：
 
 - torch 申请失败：
 
-```
+```txt
 torch.OutOfMemoryError: NPU out of memory. Tried to allocate 6.69 GiB (NPU 5; 60.96 GiB total capacity; ...)
 ```
 
 - device 内存申请失败：
 
-```
+```txt
 rtMalloc failed. size:5254523547
 ```
 
@@ -474,7 +486,7 @@ struct {
 
    在日志路径 `./debug` 下搜索 `[workspaceSize]` 关键字，可以看到如下格式的日志：
 
-   ```
+   ```txt
    [workspaceSize] Metadata=12062240, workspaceSize=599916544, tensor=592543744, aicoreSpillen=7372800, debug.DumpTensor=0, leafDumpWorkspace=0.
    [workspaceSize] Tensor:rootInner=182452224, devTaskInnerOutCasts=29360128, slotted=6144x61964(slots).
    ```
@@ -494,7 +506,7 @@ struct {
 
    结合每个 Root Function 级别的日志进一步缩小范围：
 
-   ```
+   ```txt
    [workspaceSize] MaxRootInnerMem is 182452224, maxDevTaskInnerExclusiveOutcastMem is 4194304.
    [workspaceSize] Rootfunction: TENSOR_LOOP_s2_Unroll8_PATH3_hiddenfunc0_root ->MaxRootInnerMem is 182452224, maxDevTaskInnerExclusiveOutcastMem is 4194304.
    ```
@@ -505,7 +517,7 @@ struct {
 
    先确认是否为 `stitch_function_max_num` 或 `unroll_list` 配置过大导致。内存膨胀关系大致为（近似，非精确公式）：
 
-   ```
+   ```txt
    rootInner ≈ per_root_budget / unroll × WorkspaceRecyclePeriod
    devTaskInnerOutCasts ≈ per_root_budget / unroll × EstimatedStitchingCount
    ```
@@ -520,7 +532,7 @@ struct {
 
    日志中会对 shape 超过 512×512 的 Tensor 打印警告：
 
-   ```
+   ```txt
    [workspaceSize] Root=[TENSOR_LOOP_s2_Unroll8_PATH3_hiddenfunc0_root], symbol=[atten_out],rawmagic=[3066]: staticMemReq=[12582912] is too larger, which might indicate an error
    ```
 
@@ -542,11 +554,14 @@ struct {
    | `unroll_list` / max_unroll | rootInner、devTaskInnerOutCasts | 控制 loop 展开次数，影响 CalcUnrolledRootBudget |
 
 注：
+
 - 动态 shape 场景下 `maxStaticMemReq` 为 0（无法从符号 shape 推算静态大小），此类 Tensor 不会出现在超大 Tensor 的警告中
 - `aicoreSpilled` 为 AICore 栈溢出到 workspace 的内存，若该项异常偏大，需检查算子的 `stackWorkSpaceSize`
 - `debug.DumpTensor` 和 `leafDumpWorkspace` 为调试模式下的额外内存开销，正常模式下为 0
 **关联 Skill**：[pypto-environment-setup](../../../.agents/skills/pypto-machine-workspace/SKILL.md)
+
 ---
+
 ### F70006 HANDSHAKE_TIMEOUT
 
 1. **确认设备与驱动**：NPU 设备可用、驱动正常，`npu-smi info` 无异常。
@@ -557,11 +572,13 @@ struct {
 **关联 Skill**：[pypto-environment-setup](../../../.agents/skills/pypto-environment-setup/SKILL.md)（环境与 NPU 设备诊断、`npu-smi`、驱动与编译运行）
 
 ---
+
 ### Host侧捕获异常打印汇编堆栈信息
 
 **问题特征**：执行用例在host打屏输出堆栈信息
 例如：
-```
+
+```txt
 floating point exception !!!
 libtile_fwk_interface.so(npu::tile_fwk::Pad(long, long)+0xe) [0X77188ae025ae]
 ```
@@ -569,7 +586,8 @@ libtile_fwk_interface.so(npu::tile_fwk::Pad(long, long)+0xe) [0X77188ae025ae]
 **定位步骤**：
 
 1. **编译带有Debug信息的pypto包并安装**：
-```
+
+```bash
 python3 build_ci.py -f=python3 --build_type=Debug
 pip install build_out/pypto*whl --force-reinstall --no-dep
 ```
@@ -578,15 +596,18 @@ pip install build_out/pypto*whl --force-reinstall --no-dep
 
 3. **查找二进制文件位置**：
 如果不清楚包安装在哪里可以使用find全局搜索
-```
+
+```bash
 find / -name "libtile_fwk_interface.so"
 ```
 
 4. **反汇编得到具体代码行**：
 例如：
-```
+
+```bash
 objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::Pad(long, long)>"
 ```
+
 可得到触发问题的函数具体行号。
 
 5.**关联skill**：[pypto-host-stacktrace-analyzer](../../../.agents/skills/pypto-host-stacktrace-analyzer/SKILL.md)
@@ -612,11 +633,13 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 AiCore Print 支持以下数据类型：
 
 **浮点类型**（所有平台支持）：
+
 - **fp32**：`float`
 - **fp16**：`half`
 - **bf16**：`bfloat16_t`
 
 **整数类型**（所有平台支持）：
+
 - **int8**：`int8_t`
 - **uint8**：`uint8_t`
 - **int16**：`int16_t`
@@ -627,12 +650,14 @@ AiCore Print 支持以下数据类型：
 - **uint64**：`uint64_t`
 
 **FP8 类型**（平台限制）：
+
 - **fp8_e4m3**：`float8_e4m3_t`
 - **fp8_e5m2**：`float8_e5m2_t`
 - **fp8_e8m0**：`float8_e8m0_t`
 - **hifloat8**：`hifloat8_t`
 
 **平台限制说明**：FP8 和 HiFloat8 类型仅在以下平台支持（`SUPPORT_FP8_HF8_PRINT=1`）：
+
 - `__NPU_ARCH__ == 3510`
 
 其他平台不支持 FP8/HiFloat8 打印功能。
@@ -644,6 +669,7 @@ AiCore Print 支持以下数据类型：
 修改配置文件：
 
 `framework/src/interface/configs/tile_fwk_config.json`
+
 ```json
 "fixed_output_path": true,
 "force_overwrite": false,
@@ -652,6 +678,7 @@ AiCore Print 支持以下数据类型：
 修改头文件：
 
 `framework/src/interface/machine/device/tilefwk/aicore_print.h`
+
 ```cpp
 #define ENABLE_AICORE_PRINT 1
 ```
@@ -667,18 +694,21 @@ rm -rf build_out/ && python build_ci.py && pip install build_out/pypto*whl --for
 **重要流程说明**：
 
 **何时删除 kernel_aic* 目录**：
+
 - 首次运行或切换用例：删除 kernel_aic* 目录
 - 同一用例重复运行：保留 kernel_aic* 目录（保留修改）
 
 **步骤 3.1：首次运行生成 kernel CCE 文件**
 
 首次运行或切换用例：
+
 ```bash
 rm -rf kernel_aic* output/ wk/
 export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
 ```
 
 同一用例重复运行（已添加打印代码）：
+
 ```bash
 rm -rf output/ wk/
 export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
@@ -687,6 +717,7 @@ export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && pytho
 **步骤 3.2：在生成的 CCE 文件中添加打印代码**
 
 查看生成的 kernel 文件：
+
 ```bash
 ls kernel_aicore/*.cpp
 ```
@@ -696,6 +727,7 @@ ls kernel_aicore/*.cpp
 （2）在合适位置（数据加载或计算后的同步点）添加打印调用
 
 打印接口调用格式：
+
 ```cpp
 AiCoreLogF(param->ctx, "format string", args...);
 AiCorePrintShape(param->ctx, Shape2Dim(dim0, dim1));
@@ -705,6 +737,7 @@ AiCorePrintL1Tensor(param->ctx, (__cbuf__ T*)addr, end, begin, l1_staging, "name
 ```
 
 **步骤 3.3：配置 L1 staging buffer（仅 AiCorePrintL1Tensor 需要）**
+
 ```cpp
 __gm__ T* l1_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 ```
@@ -732,6 +765,7 @@ export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && rm -r
 以下示例展示每种数据类型的打印用法。打印代码需在合适位置插入（如 TLoad/TAdd 后的同步点）。
 
 ##### 浮点类型
+
 ```cpp
 AiCorePrintGmTensor(param->ctx, (__gm__ float*)gmTensor_fp32.GetAddr(), 8, 0, "fp32_gm");
 
@@ -776,6 +810,7 @@ AiCorePrintGmTensor(param->ctx, (__gm__ hifloat8_t*)gmTensor_hf8.GetAddr(), 8, 0
 ##### 其他接口
 
 AiCorePrintShape：
+
 ```cpp
 AiCorePrintShape(param->ctx, Shape2Dim(sym_161_dim_0, sym_161_dim_1));
 AiCorePrintShape(param->ctx, Shape3Dim(dim0, dim1, dim2));
@@ -783,6 +818,7 @@ AiCorePrintShape(param->ctx, Shape4Dim(dim0, dim1, dim2, dim3));
 ```
 
 AiCoreLogF：
+
 ```cpp
 AiCoreLogF(param->ctx, "GM address=%p", ((__gm__ float*)gmTensor.GetAddr()));
 AiCoreLogF(param->ctx, "Shape=[%ld,%ld]", dim0, dim1);
@@ -838,9 +874,11 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 ### 泳道图相关问题指导
 
 <a id="output-目录产物说明"></a>
+
 #### output 目录产物说明
 
 在 `output/output_时间戳` 目录下，泳道图相关文件通常包括：
+
 - `merged_swimlane.json`：IDE 展示用的综合泳道图文件。
 - `machine_runtime_operator_trace*.json`：AI CPU/AI Core 泳道图展示文件，可用于观察联合时序。
 - `machine_trace_perf_data*.json`：Machine 组件原始 Profiling 数据文件。
@@ -848,6 +886,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 其中，`machine_trace_perf_data*.json` 与 `tilefwk_L1_prof_data_*.json` 可用于判断底层数据采集是否成功（例如文件是否为空）；`merged_swimlane.json` 与 `machine_runtime_operator_trace*.json` 主要用于 IDE 可视化展示。建议优先联系 IDE 对应负责人咨询解决。
 
 <a id="IDE-参数含义解释"></a>
+
 #### IDE 参数含义解释
 
 在生成和查看泳道图时，IDE 工具中会显示多个性能参数和事件标签。以下是常见参数的含义说明：
@@ -878,7 +917,6 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 | **End-to-End time** | AICore 端到端实际执行时间 | 从最早开始执行 ExecCoreFunctionKernel 的 AICore 到最晚结束执行的 AICore 统计时间 |
 | **Total run time** | AICore 从被拉起到退出时的总时间 | 整个流程启动到退出 |
 
-
 #### 常见异常排查
 
 ##### 1. 未生成泳道图文件
@@ -887,20 +925,24 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 **原因与排查**：通常是因为未启动性能数据采集功能。请检查代码中是否已正确将 `runtime_debug_mode` 设置为 `1`。
 
 ##### 2. 泳道图文件为空（无任何数据）
+
 **现象**：成功生成了 `tilefwk_L1_prof_data_*.json` 文件，但文件内容为空。
 **原因与排查**：通常是 Profiling 功能未能成功使能。需要开启 DEBUG 日志打印进行进一步排查：
+
    - 按照上文说明打开 DEBUG 日志并指定日志落盘路径。
    - **Device 侧排查**：检查日志文件 `log/debug/device*/device*.log`。若包含 `aicore profiling is opened, level is %d.`，表示成功使能；若包含 `aicore profiling is closed..`，则表示未能成功使能，aicore没有开启泳道图性能数据采集。
 
 ##### 3. 泳道图中某些核首任务启动时间过长
+
 **现象**：从泳道图看，部分核并没有前序任务依赖，但第一个任务的启动时间却很长。
 **原因与排查**：这种情况通常是因为 AICPU 启动较慢，导致 AICore 接收任务的时间被整体延后。在泳道图中表现为首任务启动前存在等待 AICPU 启动的时间。
 
 ##### 4. ACL Graph 模式下采集不到泳道图数据
+
 **现象**：当算子运行在 ACL Graph 模式时，启动泳道图性能采集后，`output` 目录下没有生成泳道图文件。
 **原因与排查**：当前 PyPTO 尚未支持 ACL Graph 场景的泳道图性能数据采集。在 ACL Graph 模式中，执行流程分为 Capture 和 Replay 两个阶段，当前 Capture 阶段未开启 Profiling，而是在 Replay 阶段开启性能采集；但 Task 的下发实际发生在 Capture 阶段，由于此时 Profiling 开关是关闭的，所以不会上报 OP 相关信息。目前请暂时规避该场景，后续版本将支持 ACL Graph 模式下的泳道图性能数据采集。
 
 ##### 5. Profiling 泳道图数据与 msprof 采集的结果差距较大
+
 **现象**：`msprof` 采集到的 AICore 耗时远大于泳道图中的 AICore 端到端耗时，二者数据无法对齐。
 **原因与排查**：`msprof` 所采集到的 AICore 耗时不能真实代表 AICore 内部端到端的执行耗时，因为它实际上还包含了 **AICore 启动等待 AICPU 下发 devTask 的时间**，以及 **AICore 执行完任务后的退出时间**。为了获取更准确的时间，当前已实现对 AICore 端到端执行时间的打屏输出，可以在执行算子前设置环境变量 `export DUMP_DEVICE_PERF=true`，即可在终端中直接获取当前准确的性能统计数据。
-

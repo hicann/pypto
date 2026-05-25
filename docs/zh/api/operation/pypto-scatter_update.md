@@ -30,7 +30,6 @@ scatter_update(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 支持的维度：2维，4维 <br> 2维Shape[blockNum * blockSize, d]，4维Shape[blockNum, blockSize, 1, d] <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -71,7 +70,7 @@ pypto.set_vec_tile_shapes(16, 64)
 
 ### 接口调用示例
 
--   将2维 src 根据2维index更新到2维input上, 注意原地操作的写法, 即等号左边的输出应和输入input相同:
+- 将2维 src 根据2维index更新到2维input上, 注意原地操作的写法, 即等号左边的输出应和输入input相同:
 
     ```python
     x = pypto.tensor([8, 3], pypto.DT_INT32)
@@ -107,7 +106,7 @@ pypto.set_vec_tile_shapes(16, 64)
                [0 0 0]]
     ```
 
--   将4维src根据2维索引index更新到4维input上, 注意原地操作的写法, 即等号左边的输出应和输入input相同:
+- 将4维src根据2维索引index更新到4维input上, 注意原地操作的写法, 即等号左边的输出应和输入input相同:
 
     ```python
     x = pypto.tensor([2, 6, 1, 3], pypto.DT_INT32)

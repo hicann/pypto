@@ -22,7 +22,6 @@ $$
 
 其中 `negative_slope` 为负斜率参数，默认值为 `0.01`。
 
-
 ## 函数原型
 
 ```python
@@ -42,10 +41,10 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 
 ## 约束说明
 
-1.  input 数据类型必须为 DT_FP16、DT_BF16 或 DT_FP32。
-2.  negative_slope 必须为非负浮点数（≥ 0），且不能为 `nan` 或 `inf`。
-3.  negative_slope建议优先使用 Element，传入 float 标量，对于 fp16 场景，不保证正确性。
-4.  不支持 in-place 操作（即输出不能与输入共享内存）。
+1. input 数据类型必须为 DT_FP16、DT_BF16 或 DT_FP32。
+2. negative_slope 必须为非负浮点数（≥ 0），且不能为 `nan` 或 `inf`。
+3. negative_slope建议优先使用 Element，传入 float 标量，对于 fp16 场景，不保证正确性。
+4. 不支持 in-place 操作（即输出不能与输入共享内存）。
 
 ## 调用示例
 

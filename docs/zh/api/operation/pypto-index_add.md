@@ -1,4 +1,5 @@
 # pypto.index\_add
+
 ## 产品支持情况
 
 | 产品             | 是否支持 |
@@ -10,6 +11,7 @@
 ## 功能说明
 
 pypto.index_add_的non-inplace版本，可参考[pypto.index_add_](pypto-index_add_.md)。
+
 ## 函数原型
 
 ```python

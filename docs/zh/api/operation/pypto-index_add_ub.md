@@ -17,4 +17,3 @@ pypto.index_add__ub的non-inplace版本，可参考[pypto.index_add__ub](pypto-i
 ```python
 index_add_ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1) -> Tensor
 ```
-

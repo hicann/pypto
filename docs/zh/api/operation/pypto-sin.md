@@ -20,7 +20,6 @@ sin(input: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -31,9 +30,9 @@ sin(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  输入Tensor 和 输出Tensor 类型应该相同。
-2.  由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
-3.  input 支持的输入范围为[-65504.0,65504.0]。
+1. 输入Tensor 和 输出Tensor 类型应该相同。
+2. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
+3. input 支持的输入范围为[-65504.0,65504.0]。
 
 ## 调用示例
 
@@ -50,6 +49,7 @@ pypto.set_vec_tile_shapes(4, 16)
 ```
 
 ### 接口调用示例
+
 ```python
 x = pypto.tensor([4], pypto.DT_FP32)
 y = pypto.sin(x)

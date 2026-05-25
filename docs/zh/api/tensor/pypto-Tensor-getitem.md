@@ -16,7 +16,6 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 
 ## 参数说明
 
-
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
 | key         | 输入      | Tensor索引，用于获取Tensor对应位置的数据。<br> 支持类型：<br> - int 或 SymbolicScalar（符号标量）: 单个整数索引。<br> - slice: 切片对象。<br> - tuple: 多维索引的组合，类型包括：int 或 SymbolicScalar，slice，Ellipsis(...)。 |
@@ -175,7 +174,6 @@ def __setitem__(self, key, value)
 ```
 
 ## 参数说明
-
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|

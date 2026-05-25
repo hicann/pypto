@@ -87,7 +87,7 @@
 
 #### 0xA2000 WIN_SIZE_EXCEED_LIMIT
 
-1. **检查创建的shmem_tensor**： 确认创建的所有 shmem_tensor 的总元素大小小于 1024 * 1024 * 200字节。
+1. **检查创建的shmem_tensor**： 确认创建的所有 shmem_tensor 的总元素大小小于 1024 *1024* 200字节。
 
 #### 0xA2001 TILE_NUM_EXCEED_LIMIT
 

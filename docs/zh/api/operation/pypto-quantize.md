@@ -11,6 +11,7 @@
 ## 功能说明
 
 将高精度浮点数据转换为低精度格式， 当前支持
+
 - 输入DT_FP32的Tensor通过对称量化转换为DT_INT8的Tensor
   $$
   \text{dst} = round(\text{input} * \text{scale})
@@ -28,7 +29,6 @@ quantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points: 
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。<br> shape记为 [..., row, col] |
@@ -36,7 +36,6 @@ quantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points: 
 | otype  | 输入      | 返回值的数值类型 <br> 目前支持int8 和 uint8， 分别对应对称量化和非对称量化。|
 | axis  | 输入      | 指定量化压缩的轴 <br> 目前支持末尾两轴，即 -1/-2 或者input.shape.size() -1/input.shape.size()-2|
 | zero_points  | 输入      | 可选的非对称量化的偏移因子 <br> 支持的类型为：Tensor。 <br> Tensor数据类型与input一致，支持：DT_FP32; <br> 支持空Tensor；<br> Shape比input少一维，仅支持1-3维；<br>Shape Size不大于2147483647（即INT32_MAX）;<br> axis = -1 或 input.shape.size() -1 时， shape = [..., row] <br> axis = -2 或 input.shape.size() -2 时， shape = [..., col] |
-
 
 ## 返回值说明
 
@@ -78,4 +77,3 @@ Input zero_points:[-5.0, -5.0, -5.0]
 Output y1:[[1, -2, 3, -4], [1, -2, 3, -4], [1, -2, 3, -4]]
 Output y2:[[6, 3, 8, 1], [6, 3, 8, 1], [6, 3, 8, 1]]
 ```
-

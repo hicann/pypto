@@ -12,8 +12,8 @@
 
 实现input 、mat2矩阵的矩阵乘运算，计算公式为：out = input @ mat2
 
--   input 、mat2为源操作数，input 为左矩阵；mat2为右矩阵
--   out 为目的操作数，存放矩阵乘结果的矩阵
+- input 、mat2为源操作数，input 为左矩阵；mat2为右矩阵
+- out 为目的操作数，存放矩阵乘结果的矩阵
 
 ## 注意事项
 
@@ -77,12 +77,12 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 ### 约束说明
 
--   Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。
--   Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。
--   调用matmul接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小
--   当矩阵维度为3维或者4维时，需要调用pypto.set\_vec\_tile\_shapes接口设置vector的TileShape切分，如未设置，接口内部会设置2维的vec\_tile\_shape，其值为128，128。
--   调用matmul接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
--   调用matmul接口的输入矩阵维度为3维/4维并且数据格式为NZ格式时，需要调用pypto.set\_matrix\_size接口设置输入到matmul的原始Shape的m,k,n值。
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持DT_HF8，DT_FP8E5M2，DT_FP8E4M3，不支持extend_params中的trans_mode参数。
+- 调用matmul接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小
+- 当矩阵维度为3维或者4维时，需要调用pypto.set\_vec\_tile\_shapes接口设置vector的TileShape切分，如未设置，接口内部会设置2维的vec\_tile\_shape，其值为128，128。
+- 调用matmul接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
+- 调用matmul接口的输入矩阵维度为3维/4维并且数据格式为NZ格式时，需要调用pypto.set\_matrix\_size接口设置输入到matmul的原始Shape的m,k,n值。
 
 ## 调用示例
 

@@ -24,7 +24,6 @@ isfinite(self: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | self   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32，DT_UINT8，DT_INT8，DT_UINT16，DT_INT16，DT_UINT32，DT_INT32，DT_UINT64，DT_INT64。 <br> 不支持空Tensor；形状大小支持 1-4 维；形状大小中对应元素的个数不大于2147483647（即INT32_MAX）。 |

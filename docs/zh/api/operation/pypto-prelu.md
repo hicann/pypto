@@ -20,6 +20,7 @@ weight_i \times input_i & \text{if } input_i < 0
 $$
 
 其中 weight 为一维张量：
+
 - 当 input 为1维时，weight 长度为1，按元素共享权重
 - 当 input 为2-4维时，weight 长度与 input 的第二维（通道维）大小相同，按通道共享权重
 
@@ -42,10 +43,10 @@ prelu(input: Tensor, weight: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  input 和 weight 类型应该相同。
-2.  weight 的Shape必须为一维，当input为1维时长度为1；当input为2-4维时长度等于input的第二维大小。
-3.  input 和 weight 不支持 nan、inf 等特殊值。
-4.  由于存在临时内存使用，输入维度为二维时，TileShape大小有额外约束，假设TileShape为\[a,b\]，那么a*b*sizeof(self) + b/8 + 8KB < UB。
+1. input 和 weight 类型应该相同。
+2. weight 的Shape必须为一维，当input为1维时长度为1；当input为2-4维时长度等于input的第二维大小。
+3. input 和 weight 不支持 nan、inf 等特殊值。
+4. 由于存在临时内存使用，输入维度为二维时，TileShape大小有额外约束，假设TileShape为\[a,b\]，那么a*b*sizeof(self) + b/8 + 8KB < UB。
 
 ## 调用示例
 
@@ -66,6 +67,7 @@ pypto.set_vec_tile_shapes(4, 16)
 ### 接口调用示例
 
 示例1：1D输入
+
 ```python
 # 示例1：1D PReLU运算
 # input shape为[4]，weight shape为[1]
@@ -84,11 +86,13 @@ out = pypto.prelu(input_tensor, weight_tensor)
 ```
 
 计算过程说明：
+
 - 对于所有元素，共享权重0.25
 - -2.0 < 0，结果 = 0.25 × (-2.0) = -0.5；1.0 ≥ 0，结果 = 1.0
 - -3.0 < 0，结果 = 0.25 × (-3.0) = -0.75；0.5 ≥ 0，结果 = 0.5
 
 示例2：2D输入
+
 ```python
 # 示例2：2D PReLU运算
 # input shape为[2, 3]，weight shape为[3]
@@ -107,6 +111,7 @@ out = pypto.prelu(input_tensor, weight_tensor)
 ```
 
 计算过程说明：
+
 - 第0通道：-2.0 < 0，结果 = 0.25 × (-2.0) = -0.5；0.5 ≥ 0，结果 = 0.5
 - 第1通道：1.0 ≥ 0，结果 = 1.0；-1.0 < 0，结果 = 0.5 × (-1.0) = -0.5
 - 第2通道：-3.0 < 0，结果 = 0.1 × (-3.0) = -0.3；2.0 ≥ 0，结果 = 2.0

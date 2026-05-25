@@ -20,7 +20,6 @@ prod(input: Tensor,  dim: int, keepdim: bool = False) -> Tensor:
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_INT32，DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -41,7 +40,6 @@ prod(input: Tensor,  dim: int, keepdim: bool = False) -> Tensor:
 
 2. 尾轴要 32bytes 对齐;
 
-
 ## TileShape设置示例
 
 TileShape维度应和输入input一致。
@@ -61,7 +59,7 @@ y = pypto.prod(x, -1, True)
 
 结果示例如下：
 
-```
+```txt
 输入数据 x: [[1.0 2.0 3.0],
              [1.0 2.0 3.0]]
 输出数据 y: [[6.0],

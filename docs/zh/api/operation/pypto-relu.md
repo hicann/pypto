@@ -34,7 +34,7 @@ relu(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  input 不支持 nan、inf 等特殊值。
+1. input 不支持 nan、inf 等特殊值。
 
 ## 调用示例
 

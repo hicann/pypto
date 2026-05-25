@@ -22,19 +22,19 @@ $$
 
 condition 须为Tensor，input 和 other 可以为 Tensor、 float  以及 Element，广播规则如下（只支持单轴广播）：
 
-1.  input, other, condition 均为Tensor，result 的 Shape 由三者广播得到。
+1. input, other, condition 均为Tensor，result 的 Shape 由三者广播得到。
 
     例：input:\[1,20,20\], other:\[20,1,20\], condition:\[20,20,1\], result:\[20,20,20\]
 
-2.  只有 input, condition 为 Tensor时，result 的 Shape 由两者广播得到。
+2. 只有 input, condition 为 Tensor时，result 的 Shape 由两者广播得到。
 
     例：input:\[1,20,20\], condition:\[20,20,1\], result:\[20,20,20\]
 
-3.  只有 other, condition 为 Tensor时，result 的 Shape 由两者广播得到。
+3. 只有 other, condition 为 Tensor时，result 的 Shape 由两者广播得到。
 
     例：other:\[20,1,20\], condition:\[20,20,1\], result:\[20,20,20\]
 
-4.  只有 condition 为 Tensor时，result 的 Shape 与 condition 一致。
+4. 只有 condition 为 Tensor时，result 的 Shape 与 condition 一致。
 
 ## 函数原型
 
@@ -47,7 +47,6 @@ where(
 ```
 
 ## 参数说明
-
 
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|

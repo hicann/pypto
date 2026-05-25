@@ -24,7 +24,6 @@ mul(input: Tensor, other: Union[Tensor, float]) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor支持的数据类型为DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。 <br> Atlas A5系列产品：Tensor支持的数据类型为DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -36,9 +35,9 @@ mul(input: Tensor, other: Union[Tensor, float]) -> Tensor
 
 ## 约束说明
 
-1.  input 和 other 类型应该相同。
-2.  other 为数字的时候，不支持隐式转化。
-3.  other 不支持nan、inf等特殊值
+1. input 和 other 类型应该相同。
+2. other 为数字的时候，不支持隐式转化。
+3. other 不支持nan、inf等特殊值
 
 ## 调用示例
 

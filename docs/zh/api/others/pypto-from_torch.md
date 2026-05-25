@@ -20,7 +20,6 @@ from_torch(tensor: torch.Tensor, name: str="", *, dynamic_axis: Optional[List[in
 
 ## 参数说明
 
-
 | 参数名         | 输入/输出 | 说明                                                                 |
 |----------------|-----------|----------------------------------------------------------------------|
 | tensor         | 输入      | 需要转换为pypto.Tensor的torch.Tensor对象。 |
@@ -35,22 +34,22 @@ from_torch(tensor: torch.Tensor, name: str="", *, dynamic_axis: Optional[List[in
 
 ## 约束说明
 
--   入参tensor类型必须为torch.Tensor或其子类。
--   入参tensor在指定内存格式的顺序下是连续的（tensor.is\_contiguous\(\) == True）。
--   入参tensor支持如下数据类型（dtype）：
-    -   torch.float16
-    -   torch.bfloat16
-    -   torch.float32
-    -   torch.float64
-    -   torch.int8
-    -   torch.uint8
-    -   torch.int16
-    -   torch.uint16
-    -   torch.int32
-    -   torch.uint32
-    -   torch.int64
-    -   torch.uint64
-    -   torch.bool
+- 入参tensor类型必须为torch.Tensor或其子类。
+- 入参tensor在指定内存格式的顺序下是连续的（tensor.is\_contiguous\(\) == True）。
+- 入参tensor支持如下数据类型（dtype）：
+    - torch.float16
+    - torch.bfloat16
+    - torch.float32
+    - torch.float64
+    - torch.int8
+    - torch.uint8
+    - torch.int16
+    - torch.uint16
+    - torch.int32
+    - torch.uint32
+    - torch.int64
+    - torch.uint64
+    - torch.bool
 
 ## 调用示例
 
