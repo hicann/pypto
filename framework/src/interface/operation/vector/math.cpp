@@ -198,7 +198,7 @@ Tensor Sign(const Tensor& self)
 Tensor Signbit(const Tensor& self)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SIGNBIT");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "SIGNBIT");
     CheckTensorShapeSize(self.GetStorage(), "SIGNBIT");
