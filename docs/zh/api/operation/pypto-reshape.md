@@ -31,7 +31,7 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 | input       | 输入      | 源操作数。 <br> 支持的数据类型为：PyPTO支持的数据类型 <br> 不支持空Tensor，Shape Size不大于INT32_MAX。 |
 | shape       | 输入      | 目标Shape。 <br> Shape Size不大于INT32_MAX。<br> - **静态 shape**：支持使用 `-1` 自动推导一个维度。<br> - **动态 shape**：不支持 `-1`，必须显式指定所有维度值。维度值可以是具体整数或 SymbolicScalar（从动态轴获取）。 |
 | valid_shape | 输入      | 输出Tensor的有效数据的Shape，且valid_shape Size不大于INT32_MAX。 |
-| inplace     | 输入      | 是否为inplace；参数为True时，不会为输出申请新地址； |
+| inplace     | 输入      | 是否为inplace，默认为false；参数为True时，不会为输出申请新地址； |
 
 ## 返回值说明
 
@@ -39,7 +39,11 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 
 ## 约束说明
 
-inplace为True时，需要保证输入输出分别是当前loop的输入输出；输出不可作为整个Function的输出
+约束说明
+1. view 生成的张量执行 reshape，仅允许 inplace 为 false。
+2. inplace 为 true 时，reshape 通常需单独置于 loop (1) 中，无其他类型的operation并列时，可省略loop (1)，框架自动补齐，见示例2。
+3. inplace 为 true 的输出，不可作为函数最终输出。
+4. inplace=false 仅适配静态shape；inplace=true 兼容shape、动态shape。
 
 ## 调用示例
 
@@ -70,6 +74,7 @@ z = pypto.add(y, 1.0)
 
 ```python
 x = pypto.tensor([2, 2], pypto.DT_FP32)
+# reshape(..., inplace=True) 单独在loop(1)内。loop(1) 可省略
 for _ in pypto.loop(1, name="reshape_inplace", idx_name="tmp_loop"):
     x_1 = x.reshape(x, [4], inplace=True)
 for _ in pypto.loop(1, name="loop", idx_name="loop"):
