@@ -500,7 +500,6 @@ public:
 
 using WhileStmtPtr = std::shared_ptr<const WhileStmt>;
 
-
 class SectionStmt : public Stmt {
 public:
     SectionStmt(SectionKind sectionKind, StmtPtr body, Span span)
@@ -672,12 +671,12 @@ public:
     VarPtr result_token_;
     std::string opcode_;
     std::vector<ExprPtr> args_;
-    std::vector<ExprPtr> tokens_;
+    std::vector<VarPtr> tokens_;
     std::vector<std::pair<std::string, std::any>> attrs_;
 
     TensorOpStmt(
         std::vector<VarPtr> result, VarPtr result_token, std::string opcode, std::vector<ExprPtr> args,
-        std::vector<ExprPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
+        std::vector<VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, Span span)
         : Stmt(std::move(span)),
           result_(std::move(result)),
           result_token_(std::move(result_token)),

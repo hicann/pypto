@@ -403,7 +403,7 @@ void BindIRBuilder(py::module_& m)
         .def(
             "create_tensor_op_stmt",
             [](IRBuilder& self, std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode,
-               std::vector<ir::ExprPtr> args, std::vector<ir::ExprPtr> tokens, py::dict attrs, ir::Span span) {
+               std::vector<ir::ExprPtr> args, std::vector<ir::VarPtr> tokens, py::dict attrs, ir::Span span) {
                 auto attr_list = pypto::ir::ConvertAttrDict(attrs);
                 return self.CreateTensorOpStmt(result, result_token, opcode, args, tokens, attr_list, span);
             },

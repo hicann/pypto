@@ -1493,14 +1493,14 @@ class TensorOpStmt(Stmt):
     args: Final[list[Expr]]
     """Operands to the operation."""
 
-    tokens: Final[list[Expr]]
+    tokens: Final[list[Var]]
     """Tokens (can be empty)."""
 
     attrs: Final[dict[str, Any]]
     """Attributes (key-value metadata)."""
 
     def __init__(self, result: list[Var], result_token: Var, opcode: str, args: list[Expr],
-                 tokens: list[Expr], attrs: dict[str, Any], span: Span) -> None:
+                 tokens: list[Var], attrs: dict[str, Any], span: Span) -> None:
         """Create a tensor operation statement.
 
         Args:
@@ -1970,7 +1970,7 @@ class IRBuilder:
         result_token: Var,
         opcode: str,
         args: list[Expr],
-        tokens: list[Expr],
+        tokens: list[Var],
         attrs: dict[str, Any],
         span: Span,
     ) -> TensorOpStmt:

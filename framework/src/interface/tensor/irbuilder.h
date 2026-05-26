@@ -74,7 +74,7 @@ public:
 
     ir::TensorOpStmtPtr CreateTensorOpStmt(
         std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode, std::vector<ir::ExprPtr> args,
-        std::vector<ir::ExprPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span);
+        std::vector<ir::VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span);
 
     /* create function */
     std::shared_ptr<Function> CreateFunction(

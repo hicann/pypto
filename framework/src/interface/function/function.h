@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <set>
 #include <string>
 #include <memory>
 #include <stack>
@@ -96,7 +97,8 @@ class OperationsViewer {
     friend class VFFusionPass;
 
 public:
-    class IteratorDelimiter {};
+    class IteratorDelimiter {
+    };
     class Iterator {
     public:
         explicit Iterator(const std::vector<std::shared_ptr<Operation>>& operations) : operations_(operations) {}
@@ -495,6 +497,65 @@ struct FunctionParamInfo {
     LogicalTensorPtr endValue;   // End Function时Tensor指向的 LogicalTensor
 };
 
+struct Entry {
+    std::unordered_set<ir::StmtPtr> producers;
+    std::unordered_set<ir::StmtPtr> consumers;
+};
+
+class VarDependency {
+public:
+    void AddProducer(ir::VarPtr var, ir::StmtPtr producer) { dependencies_[var].producers.insert(producer); }
+    void AddConsumer(ir::VarPtr var, ir::StmtPtr consumer) { dependencies_[var].consumers.insert(consumer); }
+
+    void RemoveProducer(ir::VarPtr var, ir::StmtPtr producer)
+    {
+        auto it = dependencies_.find(var);
+        if (it != dependencies_.end()) {
+            it->second.producers.erase(producer);
+        }
+    }
+    void RemoveConsumer(ir::VarPtr var, ir::StmtPtr consumer)
+    {
+        auto it = dependencies_.find(var);
+        if (it != dependencies_.end()) {
+            it->second.consumers.erase(consumer);
+        }
+    }
+    void RemoveVar(ir::VarPtr var) { dependencies_.erase(var); }
+    void Clear() { dependencies_.clear(); }
+
+    const std::unordered_set<ir::StmtPtr>& GetProducers(ir::VarPtr var) const
+    {
+        static const std::unordered_set<ir::StmtPtr> empty;
+        auto it = dependencies_.find(var);
+        return it != dependencies_.end() ? it->second.producers : empty;
+    }
+    const std::unordered_set<ir::StmtPtr>& GetConsumers(ir::VarPtr var) const
+    {
+        static const std::unordered_set<ir::StmtPtr> empty;
+        auto it = dependencies_.find(var);
+        return it != dependencies_.end() ? it->second.consumers : empty;
+    }
+    bool HasDependency(ir::VarPtr var) const { return dependencies_.find(var) != dependencies_.end(); }
+    bool HasProducer(ir::VarPtr var, ir::StmtPtr producer) const
+    {
+        auto it = dependencies_.find(var);
+        return it != dependencies_.end() && it->second.producers.count(producer) > 0;
+    }
+    bool HasConsumer(ir::VarPtr var, ir::StmtPtr consumer) const
+    {
+        auto it = dependencies_.find(var);
+        return it != dependencies_.end() && it->second.consumers.count(consumer) > 0;
+    }
+    size_t Size() const { return dependencies_.size(); }
+    bool Empty() const { return dependencies_.empty(); }
+
+    const std::unordered_map<ir::VarPtr, Entry>& GetAllDependencies() const { return dependencies_; }
+
+private:
+    std::unordered_map<ir::VarPtr, Entry> dependencies_;
+};
+
 #ifndef INVALID_IOINDEX
 #define INVALID_IOINDEX (-1)
 #endif
@@ -890,6 +951,9 @@ public:
     void SetMaxCVCoreUsage(std::pair<uint32_t, uint32_t> maxCVCores) { maxCVCoreUsage_ = maxCVCores; }
     std::pair<uint32_t, uint32_t> GetMaxCVCoreUsage() { return maxCVCoreUsage_; }
 
+    VarDependency& GetVarDependency() { return varDependency_; }
+    const VarDependency& GetVarDependency() const { return varDependency_; }
+
 private:
     int functionMagic_{-1};
     std::string funcMagicName_; // Function name
@@ -926,7 +990,7 @@ private:
     std::vector<std::vector<Operation*>> operationGroups_;
     std::vector<std::shared_ptr<Operation>>
         operations_; // operation的获取必须要使用Operations函数，来获取到符合拓扑序的List
-    std::unordered_map<const Operation*, int> opPosition_;         // position of operation in Operation.operations_
+    std::unordered_map<const Operation*, int> opPosition_; // position of operation in Operation.operations_
     std::vector<std::shared_ptr<Operation>> operationsAfterOOO_;
     std::unordered_map<const Operation*, int> opPositionAfterOOO_; // position of operation sequence after OOO schedule
     const Program& belongTo_;
@@ -950,6 +1014,8 @@ private:
     std::shared_ptr<Tensor> getTensorDataOutcast_;
     ir::Span span_;
     bool hiddenFunction_{false};
+
+    VarDependency varDependency_;
 
 private:
     unsigned long ComputeHashOrderless() const;

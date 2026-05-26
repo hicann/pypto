@@ -385,9 +385,8 @@ TEST_F(IRPrinterTest, TestPrintWhileStmt)
         std::vector<ExprPtr>{
             std::make_shared<ConstInt>(1, DataType::INT32, Sp()), std::make_shared<ConstInt>(2, DataType::INT32, Sp())},
         Sp());
-    auto multiStr = Print(
-        std::make_shared<WhileStmt>(
-            cond, std::vector<IterArgPtr>{ia, ia2}, multiBody, std::vector<VarPtr>{rv, rv2}, Sp()));
+    auto multiStr = Print(std::make_shared<WhileStmt>(
+        cond, std::vector<IterArgPtr>{ia, ia2}, multiBody, std::vector<VarPtr>{rv, rv2}, Sp()));
     EXPECT_NE(multiStr.find("while_"), std::string::npos);
     EXPECT_NE(multiStr.find("b"), std::string::npos);
 }
@@ -439,16 +438,15 @@ TEST_F(IRPrinterTest, TestPrintFunctionBodies)
     auto a2 = std::make_shared<AssignStmt>(x, std::make_shared<ConstInt>(2, DataType::INT32, Sp()), Sp());
     auto yieldStmt =
         std::make_shared<YieldStmt>(std::vector<ExprPtr>{std::make_shared<ConstInt>(3, DataType::INT32, Sp())}, Sp());
-    auto seqFunc = Print(
-        std::make_shared<Function>(
-            "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
-            std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2, yieldStmt}, Sp()), Sp()));
+    auto seqFunc = Print(std::make_shared<Function>(
+        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)},
+        std::make_shared<SeqStmts>(std::vector<StmtPtr>{a1, a2, yieldStmt}, Sp()), Sp()));
     EXPECT_NE(seqFunc.find("return 3"), std::string::npos);
 
     // Empty SeqStmts body → pass
     auto emptyFunc = Print(std::make_shared<Function>(
-        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{},
-        std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp()), Sp()));
+        "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{}, std::make_shared<SeqStmts>(std::vector<StmtPtr>{}, Sp()),
+        Sp()));
     EXPECT_NE(emptyFunc.find("pass"), std::string::npos);
 }
 
@@ -598,7 +596,7 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmt)
     auto tok = Var_("tok");
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{},
+        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{},
         std::vector<std::pair<std::string, std::any>>{}, Sp());
     auto str = Print(stmt);
     EXPECT_EQ(str, "res, tok = matmul(1)");
@@ -611,7 +609,7 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmtMultiResult)
     auto tok = Var_("tok");
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{r1, r2}, tok, "split", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{},
+        std::vector<VarPtr>{r1, r2}, tok, "split", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{},
         std::vector<std::pair<std::string, std::any>>{}, Sp());
     auto str = Print(stmt);
     EXPECT_EQ(str, "[r1, r2], tok = split(1)");
@@ -624,7 +622,7 @@ TEST_F(IRPrinterTest, TestPrintTensorOpStmtWithTokensAndAttrs)
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto t1 = Var_("t1");
     auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{res}, tok, "op", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{t1},
+        std::vector<VarPtr>{res}, tok, "op", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{t1},
         std::vector<std::pair<std::string, std::any>>{{"axis", 0}}, Sp());
     auto str = Print(stmt);
     EXPECT_EQ(str, "res, tok = op(1, tokens=[t1], attrs=[axis=0])");

@@ -727,7 +727,7 @@ StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
         new_args.push_back(new_arg);
     }
 
-    std::vector<ExprPtr> new_tokens;
+    std::vector<VarPtr> new_tokens;
     for (size_t i = 0; i < op->tokens_.size(); ++i) {
         INTERNAL_CHECK_SPAN(op->tokens_[i], op->span_) << "TensorOpStmt has null token at index " << i;
         auto new_tok = ExprFunctor<ExprPtr>::VisitExpr(op->tokens_[i]);
@@ -735,7 +735,7 @@ StmtPtr IRMutator::VisitStmt_(const TensorOpStmtPtr& op)
             changed = true;
         }
         INTERNAL_CHECK_SPAN(new_tok, op->span_) << "TensorOpStmt token at index " << i << " mutated to null";
-        new_tokens.push_back(new_tok);
+        new_tokens.push_back(As<Var>(new_tok));
     }
 
     if (changed) {

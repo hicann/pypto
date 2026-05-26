@@ -438,7 +438,7 @@ void BindStmt(py::module& m)
     auto tensorop_stmt = py::class_<TensorOpStmt, Stmt, std::shared_ptr<TensorOpStmt>>(m, "TensorOpStmt",
             "Tensor operation statement: results, result_token = opcode(args, attrs, tokens)")
         .def(py::init([](std::vector<VarPtr> results, VarPtr result_token, std::string opcode,
-             std::vector<ExprPtr> args, const std::vector<ExprPtr>& tokens, py::dict attrs, Span span){
+             std::vector<ExprPtr> args, const std::vector<VarPtr>& tokens, py::dict attrs, Span span){
                 auto attr_list = ConvertAttrDict(attrs);
                 return std::make_shared<TensorOpStmt>(results, result_token, opcode, args, tokens, attr_list, span);
             }),

@@ -118,8 +118,8 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
     DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
 {
     auto tensorName = irContext_.GetVarName(name);
-    auto tensor = std::make_shared<LogicalTensor>(
-        DummyFunc(), t, std::move(shape), std::move(validShape), format, tensorName);
+    auto tensor =
+        std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), std::move(validShape), format, tensorName);
     return tensor;
 }
 
@@ -150,8 +150,7 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
     Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
 {
     auto tensorName = irContext_.GetVarName(name);
-    auto tensor =
-        std::make_shared<LogicalTensor>(f, t, std::move(shape), std::move(validShape), format, tensorName);
+    auto tensor = std::make_shared<LogicalTensor>(f, t, std::move(shape), std::move(validShape), format, tensorName);
     return tensor;
 }
 
@@ -195,7 +194,7 @@ std::shared_ptr<RawTensor> IRBuilder::CreateRawTensor(
 
 ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(
     std::vector<ir::VarPtr> result, ir::VarPtr result_token, std::string opcode, std::vector<ir::ExprPtr> args,
-    std::vector<ir::ExprPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span)
+    std::vector<ir::VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span)
 {
     return std::make_shared<ir::TensorOpStmt>(result, result_token, opcode, args, tokens, attrs, span);
 }

@@ -157,7 +157,7 @@ TEST_F(IRMutatorTest, TestIdentityAllStmts)
     auto tensorTok = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
     auto tensorArg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto tensorOp = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{tensorRes}, tensorTok, "matmul", std::vector<ExprPtr>{tensorArg}, std::vector<ExprPtr>{},
+        std::vector<VarPtr>{tensorRes}, tensorTok, "matmul", std::vector<ExprPtr>{tensorArg}, std::vector<VarPtr>{},
         std::vector<std::pair<std::string, std::any>>{}, Sp());
     EXPECT_EQ(m.VisitStmt(tensorOp).get(), tensorOp.get());
 }
@@ -286,7 +286,7 @@ TEST_F(IRMutatorTest, TestRewriteTensorOpStmt)
     auto tok = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
     auto val42 = std::make_shared<ConstInt>(42, DataType::INT32, Sp());
     auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{val42}, std::vector<ExprPtr>{},
+        std::vector<VarPtr>{res}, tok, "matmul", std::vector<ExprPtr>{val42}, std::vector<VarPtr>{},
         std::vector<std::pair<std::string, std::any>>{}, Sp());
     auto result = m.VisitStmt(stmt);
     EXPECT_NE(result.get(), stmt.get());

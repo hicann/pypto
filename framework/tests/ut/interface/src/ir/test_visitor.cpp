@@ -58,7 +58,8 @@ public:
 // Leaf expression visitors
 // ============================================================================
 
-class IRVisitorTest : public testing::Test {};
+class IRVisitorTest : public testing::Test {
+};
 
 TEST_F(IRVisitorTest, TestVisitConstInt)
 {
@@ -284,7 +285,7 @@ TEST_F(IRVisitorTest, TestVisitTensorOpStmt)
     auto token = std::make_shared<Var>("tok", Scalar(DataType::INT32), Sp());
     auto arg = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
     auto stmt = std::make_shared<TensorOpStmt>(
-        std::vector<VarPtr>{result}, token, "matmul", std::vector<ExprPtr>{arg}, std::vector<ExprPtr>{},
+        std::vector<VarPtr>{result}, token, "matmul", std::vector<ExprPtr>{arg}, std::vector<VarPtr>{},
         std::vector<std::pair<std::string, std::any>>{}, Sp());
     v.VisitStmt(stmt);
     ASSERT_EQ(v.visited.back(), "TensorOpStmt");
