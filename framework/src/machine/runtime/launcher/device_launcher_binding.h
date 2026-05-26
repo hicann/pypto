@@ -30,7 +30,7 @@ struct Evaluator {
     const std::vector<DeviceTensorData>& inputs;
     const std::vector<DeviceTensorData>& outputs;
 
-    int Evaluate(SymbolicScalar& ss) { return Evaluate(ss.Raw()); }
+    int64_t Evaluate(SymbolicScalar& ss) { return Evaluate(ss.Raw()); }
 
 private:
     int64_t GetinputShapeDim(int64_t argIdx, int64_t dim)
@@ -64,7 +64,7 @@ private:
         }
     }
 
-    int Evaluate(RawSymbolicScalarPtr ss)
+    int64_t Evaluate(RawSymbolicScalarPtr ss)
     {
         switch (ss->Kind()) {
             case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE: {

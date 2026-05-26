@@ -31,6 +31,7 @@ std::string ValidateDynamicFunctionAndIO(
 bool TryBuildDynamicCellMatchDesc(
     const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& launchMeta, Evaluator& eval,
     DevCellMatchTableDesc& patchedDesc);
+void ValidateDynamicCellMatchTableMemBudget(uint64_t maxDynamicCellMatchTableMem);
 
 static bool PrepareSingleDynamicCellMatchDescForCostModel(
     const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& meta, Evaluator& eval, DevAscendProgram* devProg)
@@ -148,6 +149,7 @@ std::string CostModelRunOnceDataFromHost(
             uint64_t totalDynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
             devProg->memBudget.metadata.dynamicCellMatch =
                 totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+            ValidateDynamicCellMatchTableMemBudget(devProg->memBudget.metadata.maxDynamicCellMatchTableMem);
         }
     }
     CostModelLauncher::CostModelRunOnce(func);

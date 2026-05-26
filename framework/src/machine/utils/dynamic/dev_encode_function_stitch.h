@@ -20,6 +20,8 @@
 #include "tilefwk/aicpu_common.h"
 
 namespace npu::tile_fwk::dynamic {
+// Max cell-match table entry count (desc stride[0]); checked at encode and in host GetWorkspaceSize.
+constexpr int64_t MAX_CELLMATCHSSTRIDE = 20000000;
 constexpr uint32_t DUPPED_STITCH_SIZE = 0x10 - (sizeof(void*) / sizeof(uint32_t)) - 0x1;
 struct DevAscendFunctionDuppedStitch {
     void InitWithNext(DevAscendFunctionDuppedStitch* next)

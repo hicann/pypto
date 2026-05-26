@@ -33,6 +33,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
+#include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/runtime/launcher/emulation_launcher.h"
 #include "machine/runtime/launcher/eslmodel_launcher.h"
@@ -119,6 +120,14 @@ bool TryBuildDynamicCellMatchDesc(
     }
     patchedDesc.SetStrideShape(strideShape);
     return true;
+}
+
+void ValidateDynamicCellMatchTableMemBudget(uint64_t maxDynamicCellMatchTableMem)
+{
+    uint64_t tableEntries = maxDynamicCellMatchTableMem / sizeof(uint64_t);
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, tableEntries < static_cast<uint64_t>(MAX_CELLMATCHSSTRIDE))
+        << " Dynamic cell match metadata pool per-slot table exceeds limit,"
+        << "Please appropriately configure the view shape and tile shape, and ensure aligned with the input shape.";
 }
 
 static bool IsUint8GoldenAndHf8InOut(const DeviceTensorData& inOutTensor, const DeviceTensorData& goldenTensor)
@@ -601,6 +610,7 @@ public:
                 uint64_t totalDynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
                 devProg->memBudget.metadata.dynamicCellMatch =
                     totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
+                ValidateDynamicCellMatchTableMemBudget(devProg->memBudget.metadata.maxDynamicCellMatchTableMem);
             }
             if (devProg->memBudget.metadata.dynamicCellMatch != lastPreparedDynamicCellMatchBytes_) {
                 RefreshRuntimeDynamicCellMatchMeta(devProg->memBudget.metadata.dynamicCellMatch);
@@ -609,7 +619,6 @@ public:
             PatchRuntimeDynamicCellMatchAddrToCfgData(
                 reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
             workspaceSize = devProg->memBudget.Total();
-            return workspaceSize;
         }
         return workspaceSize;
     }

@@ -447,6 +447,9 @@ struct DyndevFunctionAttribute {
     };
     std::vector<DynamicCellMatchLaunchMeta> dynamicCellMatchLaunchMetaList;
 
+    // Runtime slot ids that emit RUNTIME_SlotMarkNeedAlloc; filled in BuildControlFlow for dynamicCellMatch pool sizing.
+    std::unordered_set<int> constructAssembleNeedAllocRuntimeSlots;
+
     std::vector<uint8_t> devProgBinary;
 
     std::vector<uint8_t> kernelBinary;

@@ -14,6 +14,7 @@
  */
 #include "tilefwk/platform.h"
 #include "machine/utils/dynamic/dev_encode.h"
+#include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #include "machine/utils/dynamic/dev_workspace.h"
 #include "machine/host/main_block.h"
 #include "machine/host/dump_host_topo.h"
@@ -33,6 +34,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <queue>
 #include <sstream>
@@ -51,7 +53,6 @@ constexpr int32_t MAX_AICORE_NUM_3510 = 108;
 constexpr int32_t SLOTS_NEED_ALLOC_SIZE = 2;
 constexpr int64_t MAX_SHAPE_WARN_THRESHOLE = 512 * 512;
 constexpr int64_t DEFAULT_CACHE_DEVICE_TASK_NUM = 10000;
-constexpr int32_t MAX_CELLMATCHSSTRIDE = 20000000;
 static constexpr uint64_t GENERAL_METADATA_SIZE_MIN = 2 * MEBI;
 constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
 static uint32_t MAX_UNROLL_TIMES = 1;                 // the max num of unroll_list
@@ -2685,18 +2686,22 @@ static bool IsRuntimeDynamicPartialWithSlotRoot(
            dynAttr->slotRootOutcastDict.count(partial.slotIndex) != 0;
 }
 
-static SymbolicScalar ComputeDynamicCellMatchTableMem(
-    Function* func, DevAscendProgram& devProg, uint64_t dynamicCellMatchSlotNum)
+static bool IsRuntimeDynamicPartialNeedAlloc(
+    const DevAscendProgramPartialUpdate& partial, const std::shared_ptr<DyndevFunctionAttribute>& dynAttr,
+    const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
-    if (dynamicCellMatchSlotNum == 0) {
-        return SymbolicScalar(0);
-    }
+    return IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr) &&
+           constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0;
+}
 
+static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(
+    Function* func, DevAscendProgram& devProg, const std::unordered_set<int>& constructAssembleNeedAllocSlots)
+{
     auto dynAttr = func->GetDyndevAttribute();
     SymbolicScalar maxDynamicTableMem(0);
     for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
         auto& partial = devProg.At(devProg.partialUpdateList, i);
-        if (!IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr)) {
+        if (!IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr, constructAssembleNeedAllocSlots)) {
             continue;
         }
         int slotIndex = partial.slotIndex;
@@ -2753,7 +2758,8 @@ static void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& de
     }
 }
 
-static TensorWorkspaceResult CalcTensorWorkspace(Function* func, DevAscendProgram& devProg)
+static TensorWorkspaceResult CalcTensorWorkspace(
+    Function* func, DevAscendProgram& devProg, const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
     auto dynAttr = func->GetDyndevAttribute();
     std::vector<SlotInfo> slots = MarkInputOutputAssembleSlots(devProg);
@@ -2787,8 +2793,7 @@ static TensorWorkspaceResult CalcTensorWorkspace(Function* func, DevAscendProgra
     uint64_t dynamicCellMatchSlotNum = 0;
     for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
         auto& partial = devProg.At(devProg.partialUpdateList, i);
-        bool isRuntimeDynamicPartial = IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr);
-        if (isRuntimeDynamicPartial) {
+        if (IsRuntimeDynamicPartialNeedAlloc(partial, dynAttr, constructAssembleNeedAllocSlots)) {
             dynamicCellMatchSlotNum++;
         }
     }
@@ -2799,7 +2804,8 @@ static TensorWorkspaceResult CalcTensorWorkspace(Function* func, DevAscendProgra
         res.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE + res.totalAssembleOutcastSlot * boundaryOutcastRatio;
 
     res.perCoreSpilledMem = AlignUp(maxPerCoreSpilledMem, TENSOR_ADDR_ALIGNMENT);
-    res.maxDynamicCellMatchTableMem = ComputeDynamicCellMatchTableMem(func, devProg, res.dynamicCellMatchSlotNum);
+    res.maxDynamicCellMatchTableMem =
+        ComputeMaxDynamicCellMatchTableMemPerSlot(func, devProg, constructAssembleNeedAllocSlots);
 
     return res;
 }
@@ -2907,8 +2913,10 @@ void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* 
         encodeInfo.Init(base, true);
         offset = base->GetSize();
 
-        // Calc workspace size
-        TensorWorkspaceResult tensorWsRes = CalcTensorWorkspace(func, *base);
+        auto& constructAssembleNeedAllocSlots =
+            func->GetDyndevAttribute()->constructAssembleNeedAllocRuntimeSlots;
+        TensorWorkspaceResult tensorWsRes =
+            CalcTensorWorkspace(func, *base, constructAssembleNeedAllocSlots);
         base->slottableOutcastSlotSize = tensorWsRes.totalExclusiveOutcastSlot + tensorWsRes.totalAssembleOutcastSlot;
 
         base->memBudget.tensor.rootInner = tensorWsRes.rootInnerMem;

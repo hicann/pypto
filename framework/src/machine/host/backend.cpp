@@ -604,12 +604,15 @@ static void BuildControlFlow(
     } else if (func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC_LOOP_PATH, GraphType::TENSOR_GRAPH)) {
         controlFlowOss << BuildControlFlowCallee(func, indent * TABSIZE);
         auto scope = func->GetSlotScope();
+        auto dynAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
         for (auto slot : scope->constructAssembleSlotList) {
             if (!slotIdxMapping.count(slot)) {
                 slotIdxMapping.emplace(slot, slotIdxMapping.size());
             }
+            int runtimeSlot = slotIdxMapping.at(slot);
+            dynAttr->constructAssembleNeedAllocRuntimeSlots.insert(runtimeSlot);
             controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SlotMarkNeedAlloc("
-                           << slotIdxMapping.at(slot) << ");\n";
+                           << runtimeSlot << ");\n";
         }
         for (auto& callee : GetCalleeList(cache, func)) {
             BuildControlFlow(
@@ -981,6 +984,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::vector<std::string> exprSrcFiles;
     std::ostringstream exprHeaderOss;
     ValDependTensorMeta valDependTensorMeta;
+    attr->constructAssembleNeedAllocRuntimeSlots.clear();
     BuildControlFlow(
         cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict, controlFlowOss,
         expressionOss, exprHeaderOss, 0, expName, exprSrcFiles, valDependTensorMeta);
