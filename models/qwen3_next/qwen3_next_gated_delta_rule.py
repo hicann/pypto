@@ -16,23 +16,23 @@ attention mechanism. It includes both PyPTO implementation calls and PyTorch ref
 implementations for validation.
 
 Main Functions:
-    - gen_dims: Generate dimension parameters
-    - gen_inputs: Generate input tensors
-    - gen_data: Generate test data based on case name
-    - do_test_chunk_gated_delta_rule: Execute test case
-    - pypto_chunk_gated_delta_rule_dyn: Dynamic wrapper for PyPTO implementation
+- gen_dims: Generate dimension parameters
+- gen_inputs: Generate input tensors
+- gen_data: Generate test data based on case name
+- do_test_chunk_gated_delta_rule: Execute test case
+- pypto_chunk_gated_delta_rule_dyn: Dynamic wrapper for PyPTO implementation
 
 Example:
-    python qwen3_next_gated_delta_rule.py
+python qwen3_next_gated_delta_rule.py
 """
 
 import os
+import logging
 
 import pytest
 import torch
 import torch.nn.functional as F
 import torch_npu
-
 import pypto
 from gated_delta_rule_impl import chunk_gated_delta_rule, chunk_gated_delta_rule_unaligned
 
@@ -124,7 +124,7 @@ def golden_chunk_gated_delta_rule(inputs: dict, dims: dict):
 def gen_data(case_name):
     """Generate test data based on case name."""
     if case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k"):
-        params = {"T": 1024 * 2, "B": 2, "Nqk": 2, "Nv": 4, }
+        params = {"T": 1024 * 4, "B": 2, "Nqk": 8, "Nv": 8, }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk4_nv8_s4k"):
         params = {"T": 1024 * 8, "B": 2, "Nqk": 4, "Nv": 8, }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s8k"):
@@ -218,31 +218,111 @@ def do_test_chunk_gated_delta_rule(case_name):
     pypto_chunk_gated_delta_rule_dyn(dims, inputs, outputs)
 
     # Compare results
-    compare(actual=outputs["core_attn_out"].cpu(), expected=core_attn_out_golden, name="core_attn_out", rtol=1e-3,
-        atol_abs=0, atol_rel=1e-3)
-    compare(actual=outputs["final_state"].cpu(), expected=final_state_golden, name="final_state", rtol=1e-3,
-        atol_abs=0, atol_rel=1e-3)
+    compare(actual=outputs["core_attn_out"].cpu(), expected=core_attn_out_golden, name="core_attn_out",
+        atol_abs=1e-3, atol_rel=1e-3)
+
+    compare(actual=outputs["final_state"].cpu(), expected=final_state_golden, name="final_state",
+        atol_abs=1e-3, atol_rel=1e-3)
 
 
 def compare(**kwargs):
-    """Compare two tensors with tolerance."""
+    """Compare two FP32 tensors with explicit NaN/Inf checks."""
     actual = kwargs.get("actual")
     expected = kwargs.get("expected")
-    name = kwargs.get("name")
-    rtol = kwargs.get("rtol")
-    atol_abs = kwargs.get("atol_abs")
-    atol_rel = kwargs.get("atol_rel")
+    name = kwargs.get("name", "tensor")
 
-    diff = torch.abs(actual.float() - expected.float())
-    max_diff = torch.max(diff).item()
-    mean_diff = torch.mean(diff).item()
+    # FP32 场景下建议默认更严格
+    atol_abs = kwargs.get("atol_abs", 1e-5)
+    atol_rel = kwargs.get("atol_rel", 1e-5)
 
-    tolerance = atol_abs + atol_rel * torch.abs(expected.float())
-    out_of_tolerance = (diff > tolerance).sum().item()
-    total = actual.numel()
+    actual_f = actual.float()
+    expected_f = expected.float()
 
-    if out_of_tolerance > 0:
-        raise AssertionError(f"{name} comparison failed: {out_of_tolerance} elements out of tolerance")
+    # 1. shape 检查
+    if actual_f.shape != expected_f.shape:
+        raise AssertionError(
+            f"{name} comparison failed: shape mismatch, "
+            f"actual.shape={tuple(actual_f.shape)}, "
+            f"expected.shape={tuple(expected_f.shape)}"
+        )
+
+    # 2. NaN / Inf 检查
+    if not torch.isfinite(actual_f).all():
+        bad_mask = ~torch.isfinite(actual_f)
+        bad_idx = torch.nonzero(bad_mask, as_tuple=False)
+        first_bad_idx = bad_idx[0].tolist()
+
+        num_nan = torch.isnan(actual_f).sum().item()
+        num_posinf = torch.isposinf(actual_f).sum().item()
+        num_neginf = torch.isneginf(actual_f).sum().item()
+
+        raise AssertionError(
+            f"{name} comparison failed: actual contains non-finite values, "
+            f"nan={num_nan}, +inf={num_posinf}, -inf={num_neginf}, "
+            f"first_bad_idx={first_bad_idx}"
+        )
+
+    if not torch.isfinite(expected_f).all():
+        bad_mask = ~torch.isfinite(expected_f)
+        bad_idx = torch.nonzero(bad_mask, as_tuple=False)
+        first_bad_idx = bad_idx[0].tolist()
+
+        num_nan = torch.isnan(expected_f).sum().item()
+        num_posinf = torch.isposinf(expected_f).sum().item()
+        num_neginf = torch.isneginf(expected_f).sum().item()
+
+        raise AssertionError(
+            f"{name} comparison failed: expected contains non-finite values, "
+            f"nan={num_nan}, +inf={num_posinf}, -inf={num_neginf}, "
+            f"first_bad_idx={first_bad_idx}"
+        )
+
+    # 3. 误差计算
+    diff = torch.abs(actual_f - expected_f)
+    tolerance = atol_abs + atol_rel * torch.abs(expected_f)
+
+    out_mask = diff > tolerance
+    out_count = out_mask.sum().item()
+    total = actual_f.numel()
+
+    max_diff = diff.max().item()
+    mean_diff = diff.mean().item()
+
+    denom = torch.clamp(torch.abs(expected_f), min=1e-12)
+    rel_diff = diff / denom
+    max_rel_diff = rel_diff.max().item()
+    mean_rel_diff = rel_diff.mean().item()
+
+    # 4. 失败时给出最坏位置
+    if out_count > 0:
+        bad_idx = torch.nonzero(out_mask, as_tuple=False)
+        first_bad_idx = bad_idx[0].tolist()
+
+        idx = tuple(first_bad_idx)
+        actual_val = actual_f[idx].item()
+        expected_val = expected_f[idx].item()
+        diff_val = diff[idx].item()
+        tol_val = tolerance[idx].item()
+        rel_val = rel_diff[idx].item()
+
+        raise AssertionError(
+            f"{name} comparison failed: "
+            f"{out_count}/{total} elements out of tolerance, "
+            f"max_diff={max_diff:.6e}, mean_diff={mean_diff:.6e}, "
+            f"max_rel_diff={max_rel_diff:.6e}, mean_rel_diff={mean_rel_diff:.6e}, "
+            f"atol_abs={atol_abs}, atol_rel={atol_rel}, "
+            f"first_bad_idx={first_bad_idx}, "
+            f"actual={actual_val:.9e}, expected={expected_val:.9e}, "
+            f"diff={diff_val:.9e}, rel_diff={rel_val:.9e}, tolerance={tol_val:.9e}"
+        )
+
+    logging.info(
+        f"[PASS] {name}: "
+        f"shape={tuple(actual_f.shape)}, "
+        f"max_diff={max_diff:.6e}, mean_diff={mean_diff:.6e}, "
+        f"max_rel_diff={max_rel_diff:.6e}, mean_rel_diff={mean_rel_diff:.6e}, "
+        f"atol_abs={atol_abs}, atol_rel={atol_rel}"
+    )
 
 
 def segs_chunk_gated_delta_rule(**kwargs):
@@ -257,7 +337,6 @@ def segs_chunk_gated_delta_rule(**kwargs):
     initial_state = kwargs.get("initial_state")
     output_final_state = kwargs.get("output_final_state")
     use_qk_l2norm_in_kernel = kwargs.get("use_qk_l2norm_in_kernel")
-
 
     t, n1, d = query.shape
     t, n, d = value.shape
