@@ -667,6 +667,22 @@ void EncodeWaitUntilInfo(const Operation& op, std::vector<int32_t>& code)
         for (size_t i = 0; i < distAttr.tileShape.size(); ++i) {
             attrs.push_back(static_cast<int32_t>(distAttr.tileShape[i]));
         }
+
+        for (size_t i = 0; i < distAttr.viewshapes.size(); ++i) {
+            attrs.push_back(static_cast<int32_t>(distAttr.viewshapes[i]));
+        }
+
+        for (size_t i = 0; i < distAttr.viewTileStrides.size(); ++i) {
+            attrs.push_back(static_cast<int32_t>(distAttr.viewTileStrides[i]));
+        }
+
+        for (size_t i = 0; i < distAttr.viewIndexStrides.size(); ++i) {
+            attrs.push_back(static_cast<int32_t>(distAttr.viewIndexStrides[i]));
+        }
+
+        attrs.push_back(static_cast<int32_t>(distAttr.viewTileNum));
+        attrs.push_back(static_cast<int32_t>(distAttr.totalTileNum));
+
         code.push_back(static_cast<int32_t>(attrs.size()));
         code.insert(code.end(), attrs.begin(), attrs.end());
     }

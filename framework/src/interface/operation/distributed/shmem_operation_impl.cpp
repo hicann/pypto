@@ -372,10 +372,16 @@ Tensor ShmemLoad(const ShmemTensor& src, const SymbolicScalar& srcRank, const Te
     return out;
 }
 
-static void UpdataSignalMaxTile(const ShmemTensor& src)
+static void UpdataSignalMaxTile(const ShmemTensor& src, ShmemSignalAttr& distOpAttr)
 {
     const auto& vecTile = TileShape::Current().GetVecTile();
-    auto totalTileNum = GetTotalTileNum(vecTile, ((Operation*)src.signalOp)->GetOOperands()[0]->tensor->rawshape);
+    auto [totalTileNum, viewTileNum, viewshapes, viewTileStrides, viewIndexStrides] = GetTotalTileNum(vecTile, src);
+    (void)viewTileStrides;
+    (void)viewIndexStrides;
+    distOpAttr.viewshapes = viewshapes;
+    distOpAttr.viewTileNum = viewTileNum;
+    distOpAttr.totalTileNum = totalTileNum;
+
     int64_t cur = ((Operation*)src.signalOp)->GetIntAttribute(OpAttributeKey::maxTileNum);
     if (totalTileNum > cur) {
         auto hcclGroupIndex = static_cast<uint64_t>(CommGroupRecorder::GetInstance().Input(src.group));
@@ -411,9 +417,11 @@ static Tensor ShmemSignalImpl(
     distOpAttr.notifyAll = notifyAll;
     distOpAttr.worldSize = src.worldSize;
     distOpAttr.ownerRank = targetRank;
+
+    UpdataSignalMaxTile(src, distOpAttr);
+
     op.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
 
-    UpdataSignalMaxTile(src);
     return out;
 }
 
@@ -455,6 +463,15 @@ Tensor ShmemWaitUntil(
     distOpAttr.signalStride = SHMEM_SIGNAL_STRIDE;
     distOpAttr.resetSignal = clearSignal;
     distOpAttr.ownerRank = GetHcclRankId(src.group);
+
+    const auto& vecTile = TileShape::Current().GetVecTile();
+    auto [totalTileNum, viewTileNum, viewshapes, viewTileStrides, viewIndexStrides] = GetTotalTileNum(vecTile, src);
+    distOpAttr.viewshapes = viewshapes;
+    distOpAttr.viewTileStrides = viewTileStrides;
+    distOpAttr.viewIndexStrides = viewIndexStrides;
+    distOpAttr.viewTileNum = viewTileNum;
+    distOpAttr.totalTileNum = totalTileNum;
+
     op.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
     return out;
 }

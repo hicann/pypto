@@ -209,8 +209,7 @@ public:
         const bool resetSignal = info.resetSignal;
 
         uint32_t tileIndex = 0;
-        uint32_t multiplier = 1;
-        uint32_t totalTileNum = 1;
+        uint32_t viewIndexAccum = 0;
 
         uint32_t dataDim = paramInfo_.dim;
         uint32_t tileShapeDim = paramInfo_.tileShape.size();
@@ -218,27 +217,29 @@ public:
 
         for (uint32_t dimIdx = 0; dimIdx < tileShapeDim; ++dimIdx) {
             uint32_t curDim = startDim + dimIdx;
-            uint32_t rawShape = paramInfo_.rawShape[curDim];
-            uint32_t tileShapeVal = paramInfo_.tileShape[dimIdx];
+            uint32_t viewShape = paramInfo_.viewshapes[dimIdx];
             uint32_t offset = info.offset[curDim];
+            uint32_t tileShapeVal = paramInfo_.tileShape[dimIdx];
 
-            uint32_t tileNum = (rawShape + tileShapeVal - 1) / tileShapeVal;
-            uint32_t dimTileIdx = offset / tileShapeVal;
+            uint32_t viewIdx = offset / viewShape;
+            uint32_t viewOffset = offset % viewShape;
 
-            tileIndex += dimTileIdx * multiplier;
-            multiplier *= tileNum;
-            totalTileNum *= tileNum;
+            uint32_t viewTileIdx = viewOffset / tileShapeVal;
+
+            tileIndex += viewTileIdx * paramInfo_.viewTileStrides[dimIdx];
+            viewIndexAccum += viewIdx * paramInfo_.viewIndexStrides[dimIdx];
         }
+        tileIndex += viewIndexAccum * paramInfo_.viewTileNum;
 
-        int32_t* addr =
-            reinterpret_cast<int32_t*>(info.rawAddr) +
-            CalcLinearOffset(totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) * paramInfo_.bufferStride;
+        int32_t* addr = reinterpret_cast<int32_t*>(info.rawAddr) +
+                        CalcLinearOffset(paramInfo_.totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) *
+                            paramInfo_.bufferStride;
 
         DEV_DEBUG(
             "PrepareTask taskId=%lu, baseAddr=0x%lx, actualAddr=0x%lx, ownerRank=%u, actual rawShape=[%lu, %u],"
             "actual offset=[%u, %u], buffer maxTileNum=%lu, bufferStride=%u",
             taskId, info.rawAddr, reinterpret_cast<uint64_t>(addr), info.offset[OWNER_RANK_ID_INDEX],
-            GetRankNum(hcclContextAddr_, info.vaddr), totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex,
+            GetRankNum(hcclContextAddr_, info.vaddr), paramInfo_.totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex,
             TileOp::Distributed::DecodeShmemAddrMaxTileNum(info.vaddr), paramInfo_.bufferStride);
 
         return hashMap_.InsertTask(taskId, addr, expectedSum, resetSignal);

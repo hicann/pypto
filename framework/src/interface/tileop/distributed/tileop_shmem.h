@@ -64,6 +64,27 @@ TILEOP void AtomicStore(GlobalType& global, TileType& tile)
     }
 }
 
+template <typename T1>
+TILEOP void GetShapesFromLayout(T1 tileTensor, int32_t shapes[MAX_DIMS])
+{
+    const auto layout = tileTensor.GetLayout();
+    shapes[0] = static_cast<int32_t>(layout.template GetShapeDim<DIM_1ST, MAX_DIMS>());
+    shapes[1] = static_cast<int32_t>(layout.template GetShapeDim<DIM_2ND, MAX_DIMS>());
+    shapes[2] = static_cast<int32_t>(layout.template GetShapeDim<DIM_3RD, MAX_DIMS>());
+    shapes[3] = static_cast<int32_t>(layout.template GetShapeDim<DIM_4TH, MAX_DIMS>());
+    shapes[4] = static_cast<int32_t>(layout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
+}
+
+template <typename C1>
+TILEOP void GetCoordsFromCoordinate(C1 coordinate, int32_t coords[MAX_DIMS])
+{
+    coords[0] = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_1ST, MAX_DIMS, 0>(coordinate));
+    coords[1] = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_2ND, MAX_DIMS, 0>(coordinate));
+    coords[2] = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_3RD, MAX_DIMS, 0>(coordinate));
+    coords[3] = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_4TH, MAX_DIMS, 0>(coordinate));
+    coords[4] = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_5TH, MAX_DIMS, 0>(coordinate));
+}
+
 template <typename T>
 using ShmemGlobalTensor = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
 
@@ -436,54 +457,48 @@ TILEOP void ShmemStore(
 
 // Signal: write value to remote ranks; S→MTE3 sync so scalar write is visible to TSTORE.
 template <
-    int64_t value, int32_t stride, AtomicType atomicType, bool notifyAll, uint32_t worldSize, int32_t tileShape0,
-    int32_t tileShape1, int32_t tileShape2, int32_t tileShape3, int32_t tileShapeDim, typename T1, typename C1>
+    int64_t value, int32_t stride, AtomicType atomicType, bool notifyAll, uint32_t worldSize, uint32_t viewshape0,
+    uint32_t viewshape1, uint32_t viewshape2, uint32_t viewshape3, uint32_t viewTileNum, uint32_t totalTileNum,
+    int32_t tileShape0, int32_t tileShape1, int32_t tileShape2, int32_t tileShape3, int32_t tileShapeDim, typename T1,
+    typename C1>
 TILEOP void ShmemSignal(
     CoreFuncParam* param, __ubuf__ int32_t* buffer, T1 src, C1 srcCoordinate, uint32_t ownerRank,
     __gm__ int64_t* hcclContext)
 {
-    const auto srcLayout = src.GetLayout();
-    int32_t srcShape1 = static_cast<int32_t>(srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>());
-    int32_t srcShape2 = static_cast<int32_t>(srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>());
-    int32_t srcShape3 = static_cast<int32_t>(srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>());
-    int32_t srcShape4 = static_cast<int32_t>(srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
-    int32_t c0 = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_1ST, MAX_DIMS, 0>(srcCoordinate));
-    int32_t c1 = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_2ND, MAX_DIMS, 0>(srcCoordinate));
-    int32_t c2 = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_3RD, MAX_DIMS, 0>(srcCoordinate));
-    int32_t c3 = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_4TH, MAX_DIMS, 0>(srcCoordinate));
-    int32_t c4 = static_cast<int32_t>(TileOp::GetTupleElement<C1, DIM_5TH, MAX_DIMS, 0>(srcCoordinate));
-
-    uint32_t tileIndex = 0;
-    uint32_t multiplier = 1;
-    uint32_t totalTileNum = 1;
-
-    int32_t srcShapes[] = {0, srcShape1, srcShape2, srcShape3, srcShape4};
-    int32_t coords[] = {c0, c1, c2, c3, c4};
+    int32_t srcShapes[MAX_DIMS];
+    GetShapesFromLayout<T1>(src, srcShapes);
+    int32_t coords[MAX_DIMS];
+    GetCoordsFromCoordinate<C1>(srcCoordinate, coords);
 
     constexpr int32_t startDim = MAX_DIMS - tileShapeDim;
     constexpr int32_t tileShape[] = {tileShape0, tileShape1, tileShape2, tileShape3};
+    constexpr int32_t viewshapes[] = {viewshape0, viewshape1, viewshape2, viewshape3};
+    uint32_t tileIndex = 0;
+    uint32_t viewIndexAccum = 0;
+    uint32_t viewTileStride = 1;
+    uint32_t viewIndexStride = 1;
 
     for (uint32_t dimIdx = 0; dimIdx < tileShapeDim; ++dimIdx) {
         int32_t curDim = startDim + static_cast<int32_t>(dimIdx);
         int32_t rawShape = srcShapes[curDim];
-        int32_t tileShapeVal = tileShape[dimIdx];
+        int32_t viewShape = viewshapes[dimIdx];
         int32_t offset = coords[curDim];
-
-        int32_t tileNum = CeilDiv(rawShape, tileShapeVal);
-        int32_t dimTileIdx = offset / tileShapeVal;
-
-        tileIndex += static_cast<uint32_t>(dimTileIdx) * multiplier;
-        multiplier *= static_cast<uint32_t>(tileNum);
-        totalTileNum *= static_cast<uint32_t>(tileNum);
+        int32_t tileShapeVal = tileShape[dimIdx];
+        int32_t viewIdx = offset / viewShape;
+        int32_t viewOffset = offset % viewShape;
+        int32_t viewTileIdx = viewOffset / tileShapeVal;
+        tileIndex += static_cast<uint32_t>(viewTileIdx) * viewTileStride;
+        viewIndexAccum += static_cast<uint32_t>(viewIdx) * viewIndexStride;
+        viewTileStride *= static_cast<uint32_t>(CeilDiv(viewShape, tileShapeVal));
+        viewIndexStride *= static_cast<uint32_t>(rawShape / viewShape);
     }
+    tileIndex += viewIndexAccum * viewTileNum;
 
     buffer[0] = static_cast<int32_t>(value);
     constexpr uint32_t signalColShape = 8; // 8 * 4=32B alignment
     ShmemUbTile<int32_t, 1, signalColShape> signalTile(1, 1);
     pto::TASSIGN(signalTile, reinterpret_cast<uintptr_t>(buffer));
-
     PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE3, EVENT_ID0);
-
     ShapeDyn signalShape = MakeShape(1, 1);
     StrideDyn signalStride = MakeStride(1, 1);
 
@@ -496,6 +511,7 @@ TILEOP void ShmemSignal(
         ShmemGlobalTensor<int32_t> signalGlobal(shmemSignalAddr, signalShape, signalStride);
         AtomicStore<atomicType>(signalGlobal, signalTile);
     }
+    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
 }
 
 // Get: remote shmem GM → local GM.

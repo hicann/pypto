@@ -65,6 +65,12 @@ struct AicpuParamInfo {
     uint32_t tileShapeDim{0};
     uint32_t rankNum{0};
     uint32_t maxTileNum{0};
+
+    std::vector<uint32_t> viewshapes;
+    std::vector<uint32_t> viewTileStrides;
+    std::vector<uint32_t> viewIndexStrides;
+    uint32_t viewTileNum{0};
+    uint32_t totalTileNum{0};
 };
 
 inline uint64_t MapVirtualSignalAddr(int64_t* hcclContextAddr, uint64_t vaddr)
@@ -139,6 +145,26 @@ inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVect
     paramInfo.tileShape.assign(
         aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + 1,
         aicpuCode.begin() + paramInfo.attrIndex + ATTR_TILESHAPE_OFFSET + tileShapeDim + 1);
+
+    uint32_t baseOffset = ATTR_TILESHAPE_OFFSET + tileShapeDim + 1;
+    paramInfo.viewshapes.assign(
+        aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
+        aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
+
+    baseOffset += tileShapeDim;
+    paramInfo.viewTileStrides.assign(
+        aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
+        aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
+
+    baseOffset += tileShapeDim;
+    paramInfo.viewIndexStrides.assign(
+        aicpuCode.begin() + paramInfo.attrIndex + baseOffset,
+        aicpuCode.begin() + paramInfo.attrIndex + baseOffset + tileShapeDim);
+
+    baseOffset += tileShapeDim;
+    paramInfo.viewTileNum = aicpuCode[paramInfo.attrIndex + baseOffset];
+    paramInfo.totalTileNum = aicpuCode[paramInfo.attrIndex + baseOffset + 1];
+
     return paramInfo;
 }
 } // namespace npu::tile_fwk::Distributed

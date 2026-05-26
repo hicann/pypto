@@ -161,6 +161,9 @@ struct ShmemSignalAttr {
     AtomicType atomicType = AtomicType::SET;
     bool notifyAll{false};
     int64_t worldSize{0};
+    std::vector<int64_t> viewshapes;
+    int64_t viewTileNum{0};
+    int64_t totalTileNum{0};
     SymbolicScalar ownerRank;
     std::string group;
 };
@@ -170,6 +173,11 @@ struct ShmemWaitUntilAttr {
     int32_t signalStride = SHMEM_SIGNAL_STRIDE;
     bool resetSignal = false;
     std::vector<int64_t> tileShape;
+    std::vector<int64_t> viewshapes;
+    std::vector<int64_t> viewTileStrides;
+    std::vector<int64_t> viewIndexStrides;
+    int64_t viewTileNum{0};
+    int64_t totalTileNum{0};
     SymbolicScalar ownerRank;
     std::string group;
 };
@@ -202,8 +210,12 @@ inline int GetTotalTileNum(const std::array<int, MAX_DIST_DIM_SIZE>& tile)
            static_cast<int>(tile[static_cast<size_t>(TileIndex::TAIL_SHAPE)] != 0);
 }
 
-inline int64_t GetTotalTileNum(const VecTile& tileShape, const Shape& dataShape)
+inline std::tuple<int64_t, int64_t, std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>> GetTotalTileNum(
+    const VecTile& tileShape, const ShmemTensor& src)
 {
+    Shape rawShape = ((Operation*)src.signalOp)->GetOOperands()[0]->tensor->rawshape;
+    Shape dataShape = src.signal.GetShape();
+
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() >= 2)
         << "Invalid dimensional: "
         << " tileShape dim must >= 2, but got dimensional=" << tileShape.size();
@@ -215,17 +227,43 @@ inline int64_t GetTotalTileNum(const VecTile& tileShape, const Shape& dataShape)
     size_t vecTileDim = tileShape.size();
     size_t startDim = dataShape.size() - vecTileDim;
 
-    int64_t totalTileNum = 1;
+    for (size_t i = 0; i < vecTileDim; ++i) {
+        size_t curDim = startDim + i;
+        ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, rawShape[curDim] % dataShape[curDim] == 0)
+            << "rawShape[" << curDim << "]=" << rawShape[curDim] << " must be divisible by dataShape[" << curDim
+            << "]=" << dataShape[curDim];
+    }
+
+    std::vector<int64_t> viewshapes(vecTileDim);
+    std::vector<int64_t> dimTileNums(vecTileDim);
+    std::vector<int64_t> viewTileStrides(vecTileDim);
+    std::vector<int64_t> viewIndexStrides(vecTileDim);
+
+    int64_t viewTileNum = 1;
+    int64_t crossViewNum = 1;
+
+    viewTileStrides[0] = 1;
+    viewIndexStrides[0] = 1;
 
     for (size_t i = 0; i < vecTileDim; ++i) {
         size_t curDim = startDim + i;
+        viewshapes[i] = dataShape[curDim];
         int64_t totalShape = dataShape[curDim];
         int64_t tileShapeVal = tileShape[i];
-        int64_t tileNum = totalShape / tileShapeVal + (totalShape % tileShapeVal == 0 ? 0 : 1);
-        totalTileNum *= tileNum;
+
+        dimTileNums[i] = totalShape / tileShapeVal + (totalShape % tileShapeVal == 0 ? 0 : 1);
+        viewTileNum *= dimTileNums[i];
+        crossViewNum *= (rawShape[curDim] / dataShape[curDim]);
+
+        if (i > 0) {
+            viewTileStrides[i] = viewTileStrides[i - 1] * dimTileNums[i - 1];
+            viewIndexStrides[i] = viewIndexStrides[i - 1] * (rawShape[curDim - 1] / dataShape[curDim - 1]);
+        }
     }
 
-    return totalTileNum;
+    int64_t totalTileNum = viewTileNum * crossViewNum;
+
+    return {totalTileNum, viewTileNum, viewshapes, viewTileStrides, viewIndexStrides};
 }
 } // namespace Distributed
 } // namespace npu::tile_fwk

@@ -169,6 +169,14 @@ std::string CodeGenOpNPU::GenTemplateParamsForSignal() const
         << Distributed::ToString(distOpAttr.atomicType) << ", " << (distOpAttr.notifyAll ? "true" : "false") << ", "
         << distOpAttr.worldSize;
 
+    auto paddedViewshapes = distOpAttr.viewshapes;
+    paddedViewshapes.resize(SHAPE_DIM4, 0);
+    for (const auto& val : paddedViewshapes) {
+        oss << ", " << val;
+    }
+
+    oss << ", " << distOpAttr.viewTileNum << ", " << distOpAttr.totalTileNum;
+
     auto paddedShape = distOpAttr.tileShape;
     paddedShape.resize(SHAPE_DIM4, 0);
     for (const auto& val : paddedShape) {
