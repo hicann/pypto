@@ -316,6 +316,7 @@ TEST_F(FunctionMixParallelTest, BuildCallInOutDataPairWaitsUntilMixGlobalTensorR
     auto inoutDataPair = std::make_shared<FunctionIODataPair>();
     FunctionFrame frame(rootFunc.get(), &callOp, callAttr, inoutDataPair, 0);
     FunctionInterpreter interpreter;
+    interpreter.mixMultiThreadEnabled_ = true;
 
     auto waiter = std::async(std::launch::async, [&]() { return interpreter.BuildCallInOutDataPair(frame, &callOp); });
 

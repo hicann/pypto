@@ -644,6 +644,7 @@ struct FunctionInterpreter {
     std::mutex mixGlobalTensorMutex_;
     std::condition_variable mixGlobalTensorCv_;
     static constexpr int64_t MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS = 60000; // 60s timeout to detect dead waits
+    bool mixMultiThreadEnabled_{false};
     std::mutex dumpStateMutex_;
 
     bool CheckWaitUntilReady(Operation *op, LogicalTensorDataPtr shmData)
@@ -911,14 +912,18 @@ struct FunctionInterpreter {
         for (size_t index = 0; index < iOpDataList.size(); index++) {
             if (iOpDataList[index] == nullptr) {
                 auto iop = callop->GetIOperands()[index];
-                if (frame.callop != nullptr) {
+                if (mixMultiThreadEnabled_) {
                     VERIFY_LOGI("BuildCallInOutDataPair: iop %zu is null, try to find in mixGlobalTensorDict.", index);
-                    iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop);
-                    if (iOpDataList[index] != nullptr) {
-                        continue;
-                    }
+                    iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop, callop);
+                    ASSERT(ControlFlowScene::FUNC_IO_DATAVIEW_NULL, iOpDataList[index] != nullptr)
+                        << "BuildCallInOutDataPair: input data view not found in mixGlobalTensorDict, callop magic="
+                        << callop->GetOpMagic() << ", operandIdx=" << index << ", tensorMagic=" << iop->GetMagic();
+                    continue;
                 }
-                iOpDataList[index] = AllocateDataView(frame, iop);
+                ASSERT(ControlFlowScene::FUNC_IO_DATAVIEW_NULL, false)
+                    << "BuildCallInOutDataPair: input data view not found for callop magic=" << callop->GetOpMagic()
+                    << ", operandIdx=" << index << ", tensorMagic=" << iop->GetMagic()
+                    << " (mix multi-thread is disabled)";
             }
         }
 
@@ -940,6 +945,14 @@ struct FunctionInterpreter {
         ASSERT(ControlFlowScene::MIX_SPLIT_PARALLEL_LIMIT_EXCEEDED, groupedCallOps.size() <= kMixSplitParallelLimit)
             << "MixSplit grouped callops exceeds parallel limit, groupedSize=" << groupedCallOps.size()
             << ", limit=" << kMixSplitParallelLimit;
+        struct MixMultiThreadGuard {
+            FunctionInterpreter* interpreter;
+            explicit MixMultiThreadGuard(FunctionInterpreter* self) : interpreter(self)
+            {
+                interpreter->mixMultiThreadEnabled_ = true;
+            }
+            ~MixMultiThreadGuard() { interpreter->mixMultiThreadEnabled_ = false; }
+        } mixMultiThreadGuard(this);
         std::vector<std::shared_ptr<MixSplitCallTask>> taskList;
         taskList.reserve(groupedCallOps.size());
         for (auto* groupedCallOp : groupedCallOps) {
@@ -1144,10 +1157,11 @@ struct FunctionInterpreter {
     }
 
     std::shared_ptr<LogicalTensorData> WaitAndGetMixGlobalTensorDataView(
-        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& iop)
+        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& iop, Operation* mixCallop = nullptr)
     {
-        ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, frame.callop != nullptr);
-        auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+        Operation* callop = mixCallop != nullptr ? mixCallop : const_cast<Operation*>(frame.callop);
+        ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, callop != nullptr);
+        auto callopAttr = std::static_pointer_cast<CallOpAttribute>(callop->GetOpAttribute());
         const std::pair<std::shared_ptr<LogicalTensor>, int32_t> mixKey{iop, callopAttr->wrapId};
         std::unique_lock<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
         const auto waitDeadline =

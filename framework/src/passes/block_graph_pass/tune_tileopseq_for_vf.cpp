@@ -457,7 +457,7 @@ Status TuneTileOpSeqForVF::ProcessViewAssembleOrder(std::vector<Operation*>& opL
             continue;
         }
         if (opPtr->GetOpcode() != Opcode::OP_ASSEMBLE) {
-            break;
+            continue;
         }
         if (ProcessAssembleOrder(*opPtr, opLog, changeMap)) {
             APASS_LOG_ERROR_F(Elements::Operation, "ProcessAssembleOrder failed.");
@@ -505,7 +505,7 @@ Status TuneTileOpSeqForVF::RunOnFunction(Function& function)
         // AIV0和AIV1各调整一次
         ChangeOpSeq(ps, false);
         ChangeOpSeq(ps, true);
-        // 将view放在其producer后， assemble放在其consumer前
+        // 将view和assemble按照其producer和consumer的顺序进行排序
         std::vector<Operation*> opListNew;
         if (ProcessViewAssembleOrder(opList_, opListNew) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "RunOnFunction failed at ProcessViewAssembleOrder");
