@@ -22,10 +22,12 @@ struct CacheTaskInfo {
     uint64_t nodeId;
     uint64_t opType;
     uint64_t attrId{0};
+    uint64_t reserve{0};
     uint32_t opFlag;
     uint32_t tensorNum;
     MspfTensorData tensorData[0];
 };
+
 class HostProf {
 public:
     HostProf() = default;
