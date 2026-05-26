@@ -931,6 +931,38 @@ def cos(self: Tensor) -> Tensor:
 
 
 @op_wrapper
+def erf(self: Tensor) -> Tensor:
+    """Computes the element-wise error function of `self`.
+
+    This function calculates the error function for each element in the input tensor.
+    Mathematically, it computes: `out = erf(self)`.
+
+    Parameters
+    ----------
+    self : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise error function values.
+
+    See Also
+    -------
+    sqrt : Element-wise square-root
+
+    Examples
+    --------
+    x = pypto.tensor([0.0, 1.0, 2.0], pypto.DT_FP32)
+    y = pypto.erf(x)
+
+    Input x: [0.0000 1.0000 2.0000]
+    Output y:[0.0000 0.8427 0.9953]
+    """
+    return pypto_impl.Erf(self)
+
+
+@op_wrapper
 def sinh(input: Tensor) -> Tensor:
     """Computes the element-wise hyperbolic sine of `input`.
 

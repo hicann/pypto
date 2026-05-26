@@ -102,6 +102,7 @@ enum class Opcode {
     OP_BITWISENOT,
     OP_COPYSIGN,
     OP_ATAN,
+    OP_ERF,
     OP_SIN,
     OP_COS,
     OP_SINH,
@@ -630,7 +631,7 @@ const std::unordered_set<Opcode> UNARY_OPS{
     Opcode::OP_ROUND,  Opcode::OP_ROWSUMLINE, Opcode::OP_ABS,       Opcode::OP_LN,          Opcode::OP_ISFINITE,
     Opcode::OP_HUB,    Opcode::OP_BITWISENOT, Opcode::OP_SIGN,      Opcode::OP_ROWPRODLINE, Opcode::OP_SIGNBIT,
     Opcode::OP_SIN,    Opcode::OP_COS,        Opcode::OP_COSH,      Opcode::OP_ERFC,      Opcode::OP_ASIN,
-    Opcode::OP_ACOS
+    Opcode::OP_ACOS,   Opcode::OP_ERF
 };
 
 const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
@@ -644,6 +645,7 @@ const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_ROWARGMIN_SINGLE,
     Opcode::OP_ROWARGMINLINE,
     Opcode::OP_ROWPROD_SINGLE,
+    Opcode::OP_ERF,
     Opcode::OP_TAN,
     Opcode::OP_SIN,
     Opcode::OP_COS,
@@ -794,6 +796,7 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{
     Opcode::OP_SIN,
     Opcode::OP_COS,
     Opcode::OP_ERFC,
+    Opcode::OP_ERF,
     Opcode::OP_TILEDMRGSORT,
     Opcode::OP_ROWMAXLINE,
     Opcode::OP_PAIRMIN,

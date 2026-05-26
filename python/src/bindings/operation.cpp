@@ -117,6 +117,8 @@ void BindOperation(py::module& m)
     m.def(
         "Expm1", [](const Tensor& self) { return npu::tile_fwk::Expm1(self); }, "Tensor expm1.");
     m.def(
+        "Erf", [](const Tensor& self) { return npu::tile_fwk::Erf(self); }, "Tensor erf.");
+    m.def(
         "Sin", [](const Tensor& self) { return npu::tile_fwk::Sin(self); }, "Tensor sin.");
     m.def(
         "Cos", [](const Tensor& self) { return npu::tile_fwk::Cos(self); }, "Tensor cos.");

@@ -69,6 +69,7 @@ struct CalcOps {
     void (*Expm1)(const TensorData&, const TensorData&);
     void (*Sin)(const TensorData&, const TensorData&);
     void (*Cos)(const TensorData&, const TensorData&);
+    void (*Erf)(const TensorData&, const TensorData&);
     void (*Sinh)(const TensorData&, const TensorData&);
     void (*Cosh)(const TensorData&, const TensorData&);
     void (*Erfc)(const TensorData&, const TensorData&);

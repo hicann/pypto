@@ -49,6 +49,7 @@ enum class UnaryOpType {
     ERFC,
     ASIN,
     ACOS,
+    ERF,
 };
 
 template <UnaryOpType T>
@@ -105,6 +106,8 @@ std::string GetUnaryOpName()
             return "ASIN";
         case UnaryOpType::ACOS:
             return "ACOS";
+        case UnaryOpType::ERF:
+            return "ERF";
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
             return "";
@@ -135,6 +138,7 @@ Opcode GetUnaryOpNameCode()
         CASE(BITWISENOT);
         CASE(SIGN);
         CASE(SIGNBIT);
+        CASE(ERF);
         CASE(SINH);
         CASE(COSH);
         CASE(SIN);

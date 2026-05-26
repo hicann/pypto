@@ -1012,9 +1012,174 @@ TILEOP void SinCosCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src0)
     SyncV();
     return;
 }
+// P(x) = (((((0.053443748819x^2+0.75517016694e1)x^2+0.10162808918e3)x^2
+//          +0.13938061484e4)x^2+0.50637915060e4)x^2+0.29639384698e5)x 
+template <typename T0, typename T1, typename T2>
+TILEOP void ErfComputeP(T0 dst, T1 tmp0, T2 tmp1)
+{
+    constexpr float SCALAR_P0 = 0.29639384698e5;
+    constexpr float SCALAR_P1 = 0.50637915060e4;
+    constexpr float SCALAR_P2 = 0.13938061484e4;
+    constexpr float SCALAR_P3 = 0.10162808918e3;
+    constexpr float SCALAR_P4 = 0.75517016694e1;
+    constexpr float SCALAR_P5 = 0.053443748819;
+    // x^2
+    pto::TMUL(tmp0, dst, dst);
+    SyncV();
+    pto::TMULS(tmp1, tmp0, SCALAR_P5);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, SCALAR_P4);
+    SyncV();
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, SCALAR_P3);
+    SyncV();
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, SCALAR_P2);
+    SyncV();
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, SCALAR_P1);
+    SyncV();
+    pto::TMUL(tmp1, tmp0, tmp1);
+    SyncV();
+    pto::TADDS(tmp1, tmp1, SCALAR_P0);
+    SyncV();
+    pto::TMUL(tmp1, dst, tmp1);
+    SyncV();
+    return;
+}
+// Q(x) = ((((x^2+0.31212858877e2)x^2+0.39856963806e3)x^2+0.30231248150e4)x^2+0.13243365831e5)x^2+0.26267224157e5
+template <typename T0, typename T1>
+TILEOP void ErfComputeQ(T0 tmp0, T1 tmp2)
+{
+    constexpr float SCALAR_Q0 = 0.26267224157e5;
+    constexpr float SCALAR_Q1 = 0.13243365831e5;
+    constexpr float SCALAR_Q2 = 0.30231248150e4;
+    constexpr float SCALAR_Q3 = 0.39856963806e3;
+    constexpr float SCALAR_Q4 = 0.31212858877e2;
+
+    pto::TADDS(tmp2, tmp0, SCALAR_Q4);
+    SyncV();
+    pto::TMUL(tmp2, tmp0, tmp2);
+    SyncV();
+    pto::TADDS(tmp2, tmp2, SCALAR_Q3);
+    SyncV();
+    pto::TMUL(tmp2, tmp0, tmp2);
+    SyncV();
+    pto::TADDS(tmp2, tmp2, SCALAR_Q2);
+    SyncV();
+    pto::TMUL(tmp2, tmp0, tmp2);
+    SyncV();
+    pto::TADDS(tmp2, tmp2, SCALAR_Q1);
+    SyncV();
+    pto::TMUL(tmp2, tmp0, tmp2);
+    SyncV();
+    pto::TADDS(tmp2, tmp2, SCALAR_Q0);
+    SyncV();
+    return;
+}
+// Erf(x) = P(x) / Q(x)
+template <typename T0, typename T1, typename T2, typename T3, typename T4>
+TILEOP void ErfPadeCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src)
+{
+    constexpr float ERF_BOUNDARY_MAX = 3.92;
+
+    pto::TMINS(dst, src, ERF_BOUNDARY_MAX);
+    SyncV();
+    pto::TMAXS(dst, dst, -ERF_BOUNDARY_MAX);
+    SyncV();
+    // x^2
+    pto::TMUL(tmp0, dst, dst);
+    SyncV();
+    ErfComputeP(dst, tmp0, tmp1);
+    SyncV();
+    ErfComputeQ(tmp0, tmp2);
+    SyncV();
+    pto::TDIV(dst, tmp1, tmp2);
+    SyncV();
+    return;
+}
+
+template <typename T0, typename T1, typename T2>
+TILEOP void ErfSubsectionSmallCompute(T0 dst, T1 tmp2, T2 src)
+{
+    using FloatIntUnion = union { uint32_t i; float f; };
+    pto::TMUL(dst, src, src);
+    pto::TMULS(tmp2, dst, FloatIntUnion{.i = 0x38B1E96A}.f);
+    pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0xBA574D20}.f);
+    pto::TMUL(tmp2, dst, tmp2);
+    pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0x3BAAD5EA}.f);
+    pto::TMUL(tmp2, dst, tmp2);
+    pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0xBCDC1BE7}.f);
+    pto::TMUL(tmp2, dst, tmp2);
+    pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0x3DE718AF}.f);
+    pto::TMUL(tmp2, dst, tmp2);
+    pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0xBEC093AC}.f);
+    pto::TMUL(tmp2, dst, tmp2);
+    pto::TADDS(tmp2, tmp2, FloatIntUnion{.i = 0x3E0375D3}.f);
+    pto::TMUL(tmp2, src, tmp2);
+    pto::TADD(tmp2, tmp2, src);
+    return;
+}
+
+template <typename T0, typename T1, typename T2, typename T3>
+TILEOP void ErfSubsectionLargeCompute(T0 dst, T1 tmp0, T2 tmp1, T3 src)
+{
+    using FloatIntUnion = union { uint32_t i; float f; };
+    constexpr float LOG2_VALUE = 2.0f;
+    constexpr float ZERO_VALUE = 0.0f;
+
+    pto::TABS(tmp1, src);
+    pto::TMULS(dst, tmp1, FloatIntUnion{0x38EB4C3A}.f);
+    pto::TADDS(dst, dst, FloatIntUnion{0xBAAE005B}.f);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TADDS(dst, dst, FloatIntUnion{0x3C09919F}.f);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TADDS(dst, dst, FloatIntUnion{0xBD24D99A}.f);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TADDS(dst, dst, FloatIntUnion{0x3E235519}.f);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TADDS(dst, dst, FloatIntUnion{0x3F69B4F9}.f);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TADDS(dst, dst, FloatIntUnion{0x3F210A14}.f);
+    pto::TNEG(tmp1, tmp1);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TADD(dst, dst, tmp1);
+
+    pto::TEXPANDS(tmp1, LOG2_VALUE);
+    pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp1, tmp1);
+    pto::TMUL(dst, tmp1, dst);
+    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(dst, dst);
+    pto::TEXPANDS(tmp1, FloatIntUnion{0x3F800000}.f);
+    pto::TSUB(dst, tmp1, dst);
+    pto::TCMPS(tmp0, src, ZERO_VALUE, pto::CmpMode::GE);
+    pto::TNEG(tmp1, dst);
+    // tmp0=1取正值，tmp0=0取负值
+    pto::TSEL(dst, tmp0, dst, tmp1, tmp1);
+    return;
+}
+
+
+template <typename T0, typename T1, typename T2, typename T3, typename T4>
+TILEOP void ErfSubsectionCompute(T0 dst, T1 tmp0, T2 tmp1, T3 tmp2, T4 src)
+{
+    using FloatIntUnion = union { uint32_t i; float f; };
+    // tmp2
+    ErfSubsectionSmallCompute(dst, tmp2, src);
+    // dst
+    ErfSubsectionLargeCompute(dst, tmp0, tmp1, src);
+
+    pto::TABS(tmp1, src);
+    pto::TCMPS(tmp0, tmp1, FloatIntUnion{0x3F8060FE}.f, pto::CmpMode::GE);
+    // A5 TSEL的tmp未使用
+    pto::TSEL(dst, tmp0, dst, tmp2, tmp2);
+    return;
+}
 
 template <UnaryOp op, typename T0, typename T1, typename T2>
-TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
+TILEOP void TrigErfCompute(T0 dst, T1 tmp, T2 src)
 {
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
@@ -1027,11 +1192,13 @@ TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
 
     using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T2::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using TmpINT32Tile = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using TmpMaskTile = pto::Tile<pto::TileType::Vec, uint8_t, tileH, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
 
     TmpFP32Tile dstTile(shape3, shape4);
     TmpFP32Tile tmp0Tile(shape3, shape4);
     TmpINT32Tile tmp1Tile(shape3, shape4);
     TmpFP32Tile tmp2Tile(shape3, shape4);
+    TmpFP32Tile tmp3Tile(shape3, shape4);
     TmpFP32Tile src0Tile(shape3, shape4);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -1040,14 +1207,25 @@ TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(typename T2::Type)));
                 pto::TASSIGN(src0Tile, (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T2::Type)));
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(int32_t)));
                 pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * tileH * sizeof(float)));
+                if constexpr (op == UnaryOp::ERF) {
+                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
+#ifdef __DAV_V220
+                    ErfPadeCompute(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, src0Tile);
+#else
+                    TmpMaskTile tmpmaskTile(shape3, shape4);
+                    pto::TASSIGN(tmpmaskTile, (uint64_t)(tmp.GetAddr()));
+                    ErfSubsectionCompute(dstTile, tmpmaskTile, tmp3Tile, tmp2Tile, src0Tile);
+#endif
+                } else {
+                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
 
-                reduceKCompute<op>(dstTile, tmp0Tile, tmp1Tile, tmp2Tile, src0Tile);
-                SyncV();
-                TmpFP32Tile tmp3Tile(shape3, shape4);
-                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
-                SinCosCompute<op>(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, src0Tile);
+                    reduceKCompute<op>(dstTile, tmp0Tile, tmp1Tile, tmp2Tile, src0Tile);
+                    SyncV();
+                    TmpFP32Tile tmp3Tile(shape3, shape4);
+                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + tileW * tileH * sizeof(float)));
+                    SinCosCompute<op>(dstTile, tmp0Tile, tmp3Tile, tmp2Tile, src0Tile);
+                }
             }
         }
     }
@@ -1057,14 +1235,21 @@ TILEOP void TrigCompute(T0 dst, T1 tmp, T2 src)
 template <typename T0, typename T1, typename T2>
 TILEOP void TSin(T0 dst, T1 tmp, T2 src)
 {
-    TrigCompute<UnaryOp::SIN>(dst, tmp, src);
+    TrigErfCompute<UnaryOp::SIN>(dst, tmp, src);
 }
 
 #define OP_TILE_OP_COS TCos
 template <typename T0, typename T1, typename T2>
 TILEOP void TCos(T0 dst, T1 tmp, T2 src)
 {
-    TrigCompute<UnaryOp::COS>(dst, tmp, src);
+    TrigErfCompute<UnaryOp::COS>(dst, tmp, src);
+}
+
+#define OP_TILE_OP_ERF TErf
+template <typename T0, typename T1, typename T2>
+TILEOP void TErf(T0 dst, T1 tmp, T2 src)
+{
+    TrigErfCompute<UnaryOp::ERF>(dst, tmp, src);
 }
 
 constexpr float ERFC_FP32_MIN = 2.168404344971009e-19f;

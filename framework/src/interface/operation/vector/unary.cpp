@@ -47,7 +47,7 @@ void TiledUnaryOperation(
         if (T == UnaryOpType::EXP || T == UnaryOpType::SQRT || T == UnaryOpType::LN || T == UnaryOpType::RECIPROCAL) {
             op->SetAttribute(OpAttributeKey::precisionType, precisionType);
         }
-        if (T == UnaryOpType::ASIN || T == UnaryOpType::ACOS || T == UnaryOpType::SINH) {
+        if (T == UnaryOpType::ASIN || T == UnaryOpType::ACOS || T == UnaryOpType::SINH || T == UnaryOpType::ERF) {
             std::vector<bool> dimMap({true});
             op->SetAttr(OpAttributeKey::rowPad, dimMap);
         }
@@ -320,6 +320,20 @@ Tensor Cosh(const Tensor& self)
     return castResult;
 }
 
+Tensor Erf(const Tensor& self)
+{
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Erf");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "Erf");
+    CheckTensorShapeSize(self.GetStorage(), "Erf");
+
+    auto castSelf = Cast(self, DataType::DT_FP32);
+    auto result = CALL(UnaryOperation<UnaryOpType::ERF>, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage());
+    auto castResult = Cast(result, self.GetDataType());
+    return castResult;
+}
+
 Tensor Sin(const Tensor& self)
 {
     DECLARE_TRACER();
@@ -567,6 +581,23 @@ void CoshOperationTileFunc(
     return TiledUnaryOperation<UnaryOpType::COSH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
 }
 
+void ErfOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    std::vector<int64_t> tmpShape;
+    tmpShape.assign(shape.begin(), shape.end());
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
+    tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
+    // 3个中间变量
+    uint64_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP32)) * 3 *
+                                std::accumulate(tmpShape.begin(), tmpShape.end(), 1LL, std::multiplies<int64_t>());
+
+    return TiledUnaryOperation<UnaryOpType::ERF>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
+}
+
 void SinOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
@@ -648,6 +679,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, IsFiniteOperatio
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SINH, Opcode::OP_SINH, SinhOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_COSH, Opcode::OP_COSH, CoshOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ERF, Opcode::OP_ERF, ErfOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_SIN, Opcode::OP_SIN, SinOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_COS, Opcode::OP_COS, CosOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ERFC, Opcode::OP_ERFC, ErfcOperationTileFunc);

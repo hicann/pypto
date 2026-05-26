@@ -25,6 +25,7 @@ from typing import List
 import random
 import numpy as np
 import torch
+import torch_npu
 import torch.nn.functional as F
 import torch._prims as prims
 import copy
@@ -867,6 +868,26 @@ def gen_atan2_op_golden(case_name: str, output: Path, case_index: int = None) ->
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Atan2", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestErf/ErfOperationTest.TestErf",
+    ]
+)
+def gen_erf_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0]).npu()
+        result = torch.erf(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Erf", generate_wrapper, output, case_index)
 
 
 @GoldenRegister.reg_golden_func(

@@ -269,6 +269,7 @@ stest:
       - TestBitwiseXors/BitwiseXorsOperationTest.TestBitwiseXors/2
       - TestSin/SinOperationTest.TestSin/1
       - TestCos/CosOperationTest.TestCos/1
+      - TestErf/ErfOperationTest.TestErf/1
       - TestCopySign/CopySignOperationTest.TestCopySign/1
       - TestCopySign/CopySignOperationTest.TestCopySign/4
       - TestCopySign/CopySignOperationTest.TestCopySign/5

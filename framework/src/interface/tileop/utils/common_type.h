@@ -41,6 +41,7 @@ enum class UnaryOp : uint8_t {
     SIGN,
     ISFINITE,
     SIGNBIT,
+    ERF,
     SINH,
     COSH,
     SIN,

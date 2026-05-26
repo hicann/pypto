@@ -39,6 +39,7 @@ pypto-cumsum
 pypto-dequantize
 pypto-div
 pypto-eq
+pypto-erf
 pypto-erfc
 pypto-exp
 pypto-exp2
