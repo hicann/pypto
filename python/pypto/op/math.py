@@ -11,6 +11,7 @@
 """PyPTO"""
 from typing import Optional, Union, List, Tuple, overload
 
+import numpy as np
 import pypto
 from .. import pypto_impl
 from .._element import Element
@@ -21,6 +22,20 @@ from ..enum import (
     DataType, CastMode, PrecisionType
 )
 from ..symbolic_scalar import SymbolicScalar, SymInt
+
+
+_DTYPE_NP_MAP = {
+    DataType.DT_FP32: np.float32,
+    DataType.DT_FP16: np.float16,
+    DataType.DT_BF16: np.float32,
+}
+
+
+def _dtype_precision_product(dtype: DataType, a: float, b: float) -> float:
+    np_dtype = _DTYPE_NP_MAP.get(dtype)
+    if np_dtype is not None:
+        return float(np_dtype(a) * np_dtype(b))
+    return a * b
 
 
 @op_wrapper
@@ -81,7 +96,8 @@ def add(
                 raise PyptoError(0xF00001, TypeError(
                     f"alpha must be int or float, but got {type(other)}."
                     ))
-            return pypto_impl.Add(input, pypto_impl.Element(input.dtype, other * alpha))
+            effective_scalar = _dtype_precision_product(input.dtype, other, alpha)
+            return pypto_impl.Add(input, pypto_impl.Element(input.dtype, effective_scalar))
 
 
 @op_wrapper
@@ -201,7 +217,8 @@ def sub(
                 raise PyptoError(0xF00001, TypeError(
                     f"alpha must be int or float, but got {type(other)}."
                     ))
-            return pypto_impl.Sub(input, pypto_impl.Element(input.dtype, other * alpha))
+            effective_scalar = _dtype_precision_product(input.dtype, other, alpha)
+            return pypto_impl.Sub(input, pypto_impl.Element(input.dtype, effective_scalar))
 
 
 @op_wrapper
