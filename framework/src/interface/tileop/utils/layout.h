@@ -329,6 +329,15 @@ __aicore__ inline constexpr size_t GetOutterAxisMergeResult()
     return n0 * n1 * n2 * n3;
 }
 
+template <int... BrcOperands>
+__aicore__ inline constexpr bool HasBrcOperand()
+{
+    if constexpr (sizeof...(BrcOperands) == 0) {
+        return false;
+    }
+    return ((BrcOperands != 0) || ...);
+}
+
 template <typename T0>
 __aicore__ inline constexpr bool JudgeValidShapeEqualTileShape()
 {
