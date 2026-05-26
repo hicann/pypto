@@ -45,6 +45,8 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 6. TileShape的维度不超过values的维度，针对indices中的每个一维Tensor和values进行切分。indices和values的TileShape大小总和不能超过UB内存的大小。
 
+7. accumulate为True时，input和values的数据类型仅支持DT_BF16、DT_FP16、DT_FP32、DT_INT8、DT_INT16、DT_INT32。
+
 ## 调用示例
 
 ### TileShape设置示例
