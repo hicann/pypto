@@ -26,7 +26,7 @@ set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_split_k: b
 | m                      | 输入      | m维度在L0和L1上的TileShape（切片形状）的切分大小，分别对应mL0和mL1的切分大小 |
 | k                      | 输入      | k维度在L0和L1上的TileShape（切片形状）的切分大小，分别对应kL0和kL1的切分大小 |
 | n                      | 输入      | n维度在L0和L1上的TileShape（切片形状）的切分大小，分别对应nL0和nL1的切分大小 |
-| enable_split_k         | 输入      | 设置True表示使能matmul的多核切K功能，False表示未使能多核切K，默认为False |
+| enable_split_k         | 输入      | 设置True表示使能matmul的多核切K功能（便捷开关，**不保证性能最优**）；默认为False，表示未使能多核切K。性能调优推荐通过前端手动切K实现，详见[Matmul高性能编程](../../tutorials/debug/matmul_performance_guide.md) |
 
 ## 返回值说明
 
@@ -109,6 +109,6 @@ void
 # 基本配置
 pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 
-# 启用多核切K
+# 启用多核切K（便捷开关，不保证性能最优；性能调优见 Matmul高性能编程）
 pypto.set_cube_tile_shapes([128, 128], [64, 256], [128, 128], enable_split_k=True)
 ```
