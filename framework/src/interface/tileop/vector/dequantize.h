@@ -33,7 +33,9 @@ enum class DequantType {
 } // namespace pto
 
 /// 向上取整到对齐边界
+#ifndef PTO_CEIL
 #define PTO_CEIL(x, y) ((((x) + (y)-1) / (y)) * (y))
+#endif
 
 // =============================================================================
 // INT8 反量化 (INT8 -> FP32)

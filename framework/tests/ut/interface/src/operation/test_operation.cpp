@@ -99,3 +99,37 @@ TEST_F(OperationOpsTest, QuantMX_DefaultRoundDownFp8Output)
     }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
+
+TEST_F(OperationOpsTest, QuantMX_RoundUpFp8AndFp4Output)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    TileShape::Current().SetVecTile(8, 128);
+    Tensor fp16Input(DT_FP16, {8, 128});
+    Tensor fp32Input(DT_FP32, {8, 128});
+
+    FUNCTION("QuantMXRoundUp", {fp16Input, fp32Input})
+    {
+        auto fp8Res = QuantMX(fp32Input, DT_FP8E4M3, DequantScaleRoundingMode::ROUND_UP, -1, true);
+        EXPECT_EQ(std::get<0>(fp8Res).GetDataType(), DT_FP8E4M3);
+        EXPECT_EQ(std::get<1>(fp8Res).GetDataType(), DT_FP8E8M0);
+
+        auto fp4Res = QuantMX(fp16Input, DT_FP4_E2M1X2, DequantScaleRoundingMode::ROUND_UP, -1, true);
+        EXPECT_EQ(std::get<0>(fp4Res).GetDataType(), DT_FP4_E2M1X2);
+        EXPECT_EQ(std::get<1>(fp4Res).GetDataType(), DT_FP8E8M0);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
+TEST_F(OperationOpsTest, QuantMX_Fp32ToFp4Unsupported)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    TileShape::Current().SetVecTile(8, 64);
+    Tensor input(DT_FP32, {8, 64});
+
+    FUNCTION("QuantMXFp32ToFp4Unsupported", {input})
+    {
+        EXPECT_THROW(QuantMX(input, DT_FP4_E2M1X2, DequantScaleRoundingMode::ROUND_DOWN, -1, true), std::exception);
+        EXPECT_THROW(QuantMX(input, DT_FP4_E2M1X2, DequantScaleRoundingMode::ROUND_UP, -1, true), std::exception);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}

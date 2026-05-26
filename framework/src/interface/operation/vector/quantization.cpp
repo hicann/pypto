@@ -33,7 +33,8 @@ constexpr int64_t QUANT_MX_SCALE_PAIR_SIZE = 2;
 constexpr int64_t QUANT_MX_TILE_ALIGN_BYTES = 256;
 const std::unordered_set<DataType> QUANT_MX_SUPPORTED_INPUT_TYPES = {DataType::DT_FP16, DataType::DT_BF16,
                                                                      DataType::DT_FP32};
-const std::unordered_set<DataType> QUANT_MX_SUPPORTED_OUTPUT_TYPES = {DataType::DT_FP8E4M3};
+const std::unordered_set<DataType> QUANT_MX_SUPPORTED_OUTPUT_TYPES = {DataType::DT_FP8E4M3,
+                                                                      DataType::DT_FP4_E2M1X2};
 const std::vector<NPUArch> QUANT_MX_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510};
 
 int64_t CeilDiv(int64_t dividend, int64_t divisor)
@@ -47,13 +48,32 @@ void CheckQuantMXDtype(DataType quantDtype)
     ASSERT(
         VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
         QUANT_MX_SUPPORTED_OUTPUT_TYPES.find(quantDtype) != QUANT_MX_SUPPORTED_OUTPUT_TYPES.end())
-        << "QuantMX currently only supports DT_FP8E4M3 output. Current quant dtype: " << DataType2String(quantDtype);
+        << "QuantMX currently only supports DT_FP8E4M3 and DT_FP4_E2M1X2 output. Current quant dtype: "
+        << DataType2String(quantDtype);
+}
+
+void CheckQuantMXDtypeCombination(DataType inputDtype, DataType quantDtype)
+{
+    if (quantDtype == DataType::DT_FP8E4M3) {
+        ASSERT(
+            VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+            inputDtype == DataType::DT_FP32 || inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
+            << "QuantMX DT_FP8E4M3 output only supports DT_FP32, DT_FP16, and DT_BF16 input.";
+        return;
+    }
+    if (quantDtype == DataType::DT_FP4_E2M1X2) {
+        ASSERT(
+            VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+            inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
+            << "QuantMX DT_FP4_E2M1X2 output only supports DT_FP16 and DT_BF16 input.";
+    }
 }
 
 void CheckQuantMXMode(DequantScaleRoundingMode mode)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == DequantScaleRoundingMode::ROUND_DOWN)
-        << "QuantMX currently only supports ROUND_DOWN (OCP standard) mode.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        mode == DequantScaleRoundingMode::ROUND_DOWN || mode == DequantScaleRoundingMode::ROUND_UP)
+        << "QuantMX currently only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes.";
 }
 
 void CheckQuantMXPerformanceMode(int64_t performanceMode)
@@ -111,6 +131,7 @@ void CheckQuantMXInput(const Tensor& input, DataType quantDtype, DequantScaleRou
         QUANT_MX_SUPPORTED_INPUT_TYPES.find(inputDtype) != QUANT_MX_SUPPORTED_INPUT_TYPES.end())
         << "QuantMX currently only supports DT_FP16, DT_BF16, and DT_FP32 input.";
     CheckQuantMXDtype(quantDtype);
+    CheckQuantMXDtypeCombination(inputDtype, quantDtype);
     CheckQuantMXMode(mode);
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input.Format() == TileOpFormat::TILEOP_ND)
         << "QuantMX only supports TILEOP_ND input.";
@@ -160,6 +181,15 @@ std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(const std::vector<int64
     return groupedShape;
 }
 
+std::vector<int64_t> BuildQuantMXScalingShape(const std::vector<int64_t>& groupedShape, DataType inputDtype)
+{
+    auto scalingShape = groupedShape;
+    if (inputDtype == DataType::DT_FP32) {
+        scalingShape.back() *= QUANT_MX_SCALE_PAIR_SIZE;
+    }
+    return scalingShape;
+}
+
 std::vector<int64_t> BuildQuantMXPerformanceVecTile(const std::vector<int64_t>& inputVecTile)
 {
     if (inputVecTile.size() == 1) {
@@ -196,6 +226,15 @@ std::vector<int64_t> BuildQuantMXPerformanceGroupedOffset(
     return groupedOffset;
 }
 
+std::vector<int64_t> BuildQuantMXScalingOffset(const std::vector<int64_t>& groupedOffset, DataType inputDtype)
+{
+    auto scalingOffset = groupedOffset;
+    if (inputDtype == DataType::DT_FP32) {
+        scalingOffset.back() *= QUANT_MX_SCALE_PAIR_SIZE;
+    }
+    return scalingOffset;
+}
+
 std::vector<SymbolicScalar> BuildQuantMXGroupedValidShape(const std::vector<SymbolicScalar>& inputValidShape)
 {
     auto groupedValidShape = inputValidShape;
@@ -218,6 +257,16 @@ std::vector<SymbolicScalar> BuildQuantMXPerformanceGroupedValidShape(const std::
         inputValidShape[inputValidShape.size() - 2] *
         ((inputValidShape.back() + QUANT_MX_GROUP_COLS - 1) / QUANT_MX_GROUP_COLS));
     return groupedValidShape;
+}
+
+std::vector<SymbolicScalar> BuildQuantMXScalingValidShape(
+    const std::vector<SymbolicScalar>& groupedValidShape, DataType inputDtype)
+{
+    auto scalingValidShape = groupedValidShape;
+    if (inputDtype == DataType::DT_FP32) {
+        scalingValidShape.back() = scalingValidShape.back() * QUANT_MX_SCALE_PAIR_SIZE;
+    }
+    return scalingValidShape;
 }
 
 std::vector<int64_t> BuildQuantMXScaleShape(const std::vector<int64_t>& inputShape)
@@ -260,12 +309,14 @@ void TiledQuantMXOperation(
 
         auto addQuantMXTile = [&](const std::vector<int64_t>& quantTileShape, const std::vector<int64_t>& tileOffset,
                                   const std::vector<int64_t>& groupedTileShape,
-                                  const std::vector<int64_t>& groupedTileOffset) {
+                                  const std::vector<int64_t>& groupedTileOffset,
+                                  const std::vector<int64_t>& scalingTileShape,
+                                  const std::vector<int64_t>& scalingTileOffset) {
             auto srcTile = input.tensor.GetStorage()->View(function, quantTileShape, tileOffset);
             auto dstTile = dst->View(function, quantTileShape, tileOffset);
             auto expTile = exp->View(function, groupedTileShape, groupedTileOffset);
             auto maxTile = maxScratch->View(function, groupedTileShape, groupedTileOffset);
-            auto scalingTile = scalingScratch->View(function, quantTileShape, tileOffset);
+            auto scalingTile = scalingScratch->View(function, scalingTileShape, scalingTileOffset);
             auto& tiledOp =
                 function.AddOperation(Opcode::OP_QUANT_MX, {srcTile}, {dstTile, expTile, maxTile, scalingTile});
             tiledOp.SetAttribute(OpAttributeKey::mxQuantMode, static_cast<int64_t>(mode));
@@ -278,13 +329,18 @@ void TiledQuantMXOperation(
             groupedTileShape.back() = CeilDiv(groupedTileShape.back(), QUANT_MX_GROUP_COLS);
             auto groupedTileOffset = input.tileInfo.offset;
             groupedTileOffset.back() /= QUANT_MX_GROUP_COLS;
-            addQuantMXTile(input.tileInfo.shape, input.tileInfo.offset, groupedTileShape, groupedTileOffset);
+            addQuantMXTile(input.tileInfo.shape, input.tileInfo.offset, groupedTileShape, groupedTileOffset,
+                input.tileInfo.shape, input.tileInfo.offset);
             return;
         }
 
-        addQuantMXTile(
-            input.tileInfo.shape, input.tileInfo.offset, BuildQuantMXPerformanceGroupedShape(input.tileInfo.shape),
-            BuildQuantMXPerformanceGroupedOffset(input.tileInfo.offset, input.tensor.GetShape(), input.tileInfo.shape));
+        const auto groupedTileShape = BuildQuantMXPerformanceGroupedShape(input.tileInfo.shape);
+        const auto groupedTileOffset =
+            BuildQuantMXPerformanceGroupedOffset(input.tileInfo.offset, input.tensor.GetShape(), input.tileInfo.shape);
+        const auto scalingTileShape = BuildQuantMXScalingShape(groupedTileShape, input.tensor.GetDataType());
+        const auto scalingTileOffset = BuildQuantMXScalingOffset(groupedTileOffset, input.tensor.GetDataType());
+        addQuantMXTile(input.tileInfo.shape, input.tileInfo.offset, groupedTileShape, groupedTileOffset,
+            scalingTileShape, scalingTileOffset);
         return;
     }
 
@@ -798,10 +854,11 @@ std::tuple<Tensor, Tensor> QuantMX(
     const std::vector<int64_t> scaleShape = BuildQuantMXScaleShape(inputShape);
 
     const auto scratchDtype = input.GetDataType();
+    const auto scalingShape = performanceMode ? BuildQuantMXScalingShape(groupedShape, scratchDtype) : inputShape;
     auto quantized = Tensor(quantDtype, inputShape, "", TileOpFormat::TILEOP_ND);
     auto exp = Tensor(DataType::DT_FP8E8M0, groupedShape, "", TileOpFormat::TILEOP_ND);
     auto maxScratch = Tensor(scratchDtype, groupedShape, "", TileOpFormat::TILEOP_ND);
-    auto scalingScratch = Tensor(scratchDtype, inputShape, "", TileOpFormat::TILEOP_ND);
+    auto scalingScratch = Tensor(scratchDtype, scalingShape, "", TileOpFormat::TILEOP_ND);
 
     std::vector<SymbolicScalar> scaleValidShape;
     const auto& inputValidShape = input.GetStorage()->GetDynValidShape();
@@ -811,7 +868,9 @@ std::tuple<Tensor, Tensor> QuantMX(
                                                          BuildQuantMXGroupedValidShape(inputValidShape);
         exp.GetStorage()->UpdateDynValidShape(groupedValidShape);
         maxScratch.GetStorage()->UpdateDynValidShape(groupedValidShape);
-        scalingScratch.GetStorage()->UpdateDynValidShape(inputValidShape);
+        const auto scalingValidShape = performanceMode ? BuildQuantMXScalingValidShape(groupedValidShape, scratchDtype) :
+                                                         inputValidShape;
+        scalingScratch.GetStorage()->UpdateDynValidShape(scalingValidShape);
         scaleValidShape = BuildQuantMXScaleValidShape(inputValidShape);
     }
 

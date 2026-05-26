@@ -198,9 +198,9 @@ inline void LogicalAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logi
 }
 inline void QuantMX(
     LogicalTensorDataPtr out, LogicalTensorDataPtr exp, LogicalTensorDataPtr max, LogicalTensorDataPtr scaling,
-    LogicalTensorDataPtr self, bool performanceMode)
+    LogicalTensorDataPtr self, bool performanceMode, int64_t mode = 1)
 {
-    GetCalcOps()->QuantMX(Trans(out), Trans(exp), Trans(max), Trans(scaling), Trans(self), performanceMode);
+    GetCalcOps()->QuantMX(Trans(out), Trans(exp), Trans(max), Trans(scaling), Trans(self), performanceMode, mode);
 }
 
 inline void AddS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element& scalar, bool reverse = false)

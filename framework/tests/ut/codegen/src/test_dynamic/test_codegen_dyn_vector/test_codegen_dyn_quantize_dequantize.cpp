@@ -247,4 +247,38 @@ TEST_F(TestCodegenDynQuantize, QuantMXDefaultRoundDownFp8Output)
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
+TEST_F(TestCodegenDynQuantize, QuantMXRoundUpFp8Output)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
+    TileShape::Current().SetVecTile(8, 64);
+    Tensor input(DataType::DT_FP32, {8, 64}, "input");
+    Tensor quantOutput(DataType::DT_FP8E4M3, {8, 64}, "quantOutput");
+    Tensor scaleOutput(DataType::DT_FP8E8M0, {8, 1, 2}, "scaleOutput");
+
+    constexpr const char* funcName = "QUANT_MX_ROUND_UP";
+    FUNCTION(funcName, {input, quantOutput, scaleOutput})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            auto res = QuantMX(input, DT_FP8E4M3, DequantScaleRoundingMode::ROUND_UP, -1, true);
+            quantOutput = std::get<0>(res);
+            scaleOutput = std::get<1>(res);
+        }
+    }
+
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+
+    CheckStringExist(R"!!!(TQuantMX<0, 1, 1>)!!!", GetResultFromCpp(*function));
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
+
 } // namespace npu::tile_fwk

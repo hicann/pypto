@@ -768,9 +768,10 @@ void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
     int64_t mode = 0;
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ctx->op->GetAttr(OpAttributeKey::mxQuantMode, mode))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantMode;
+    constexpr int64_t kMxQuantModeRoundUp = 0;
     constexpr int64_t kMxQuantModeRoundDown = 1;
-    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, mode == kMxQuantModeRoundDown)
-        << "QuantMX interpreter currently only supports ROUND_DOWN (OCP standard) mode.";
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, mode == kMxQuantModeRoundDown || mode == kMxQuantModeRoundUp)
+        << "QuantMX interpreter currently only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes.";
     int64_t axis = 0;
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ctx->op->GetAttr(OpAttributeKey::mxQuantAxis, axis))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantAxis;
@@ -791,7 +792,7 @@ void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, normalizedAxis == srcRank - 1)
         << "QuantMX interpreter currently only supports the last axis. Current axis: " << axis
         << ", input rank: " << srcRank;
-    calc::QuantMX(out, exp, max, scaling, src, performanceMode != 0);
+    calc::QuantMX(out, exp, max, scaling, src, performanceMode != 0, mode);
 }
 REGISTER_CALC_OP(OP_QUANT_MX, Opcode::OP_QUANT_MX, ExecuteOpQuantMX);
 void ExecuteOpLog1p(ExecuteOperationContext* ctx)

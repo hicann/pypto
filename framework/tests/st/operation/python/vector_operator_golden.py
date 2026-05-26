@@ -20,7 +20,7 @@ import json
 import math
 import struct
 from pathlib import Path
-from typing import List
+from typing import List, NamedTuple
 
 import random
 import numpy as np
@@ -158,7 +158,7 @@ def _write_golden_outputs(res: list, output_path: Path, config: dict) -> None:
     for idx in range(len(config["output_tensors"])):
         output_dtype = config["output_tensors"][idx]["dtype"]
         output_file = Path(output_path, config["output_tensors"][idx]["name"] + ".bin")
-        if output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0"] and res[idx].dtype == np.uint8:
+        if output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0", "fp4_e2m1x2"] and res[idx].dtype == np.uint8:
             res[idx].tofile(output_file)
         else:
             res[idx].astype(get_dtype_by_name(output_dtype)).tofile(output_file)
@@ -3071,7 +3071,6 @@ def _decode_e4m3_fn(code: int) -> float:
 
 
 # MX quantization constants per target dtype (OCP Microscaling Formats MX v1.0).
-# Extensible for future fp4 support.
 _MX_DTYPE_PARAMS = {
     "fp8_e4m3": {
         "target_max_pow2": 8,
@@ -3080,6 +3079,18 @@ _MX_DTYPE_PARAMS = {
         "exp_bias": 7,
         "mbits": 3,
     },
+    "fp4_e2m1x2": {
+        "target_max_pow2": 2,
+        "max_pos": 6.0,
+        "min_normal": 1.0,
+        "exp_bias": 1,
+        "mbits": 1,
+    },
+}
+
+_QUANTMX_OUTPUT_TO_DTYPE = {
+    "fp8e4m3": "fp8_e4m3",
+    "fp4_e2m1x2": "fp4_e2m1x2",
 }
 
 _E8M0_EXPONENT_BIAS = 127
@@ -3087,7 +3098,7 @@ _F32_EXP_BIAS = 127
 _F32_MBITS = 23
 
 
-def _compute_shared_exponents(max_abs: np.ndarray, target_max_pow2: int) -> np.ndarray:
+def _compute_shared_exponents_floor(max_abs: np.ndarray, target_max_pow2: int) -> np.ndarray:
     """Vectorized OCP FLOOR-mode shared exponent computation.
 
     Returns an ndarray of E8M0 biased bytes (uint8).
@@ -3097,8 +3108,54 @@ def _compute_shared_exponents(max_abs: np.ndarray, target_max_pow2: int) -> np.n
     bits = max_abs.view(np.int32)
     fp_exponent = ((bits >> _F32_MBITS) & 0xFF).astype(np.int32)
     biased = np.clip(fp_exponent - target_max_pow2, 0, 254).astype(np.uint8)
+    # Match torchao FLOOR mode: Inf follows the exponent path, while NaN maps to E8M0 NaN.
     biased[nan_mask] = 0xFF
     return biased
+
+
+def _compute_shared_exponents_nv(max_abs: np.ndarray, max_pos: float) -> np.ndarray:
+    """NV MX shared exponent computation using high precision math."""
+    max_abs_ld = np.asarray(max_abs, dtype=np.longdouble)
+    result = np.zeros(max_abs.shape, dtype=np.uint8)
+    nan_mask = np.isnan(max_abs_ld)
+    result[nan_mask] = 0xFF
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        descale = max_abs_ld / np.longdouble(max_pos)
+    inf_mask = np.isinf(descale) & (~nan_mask)
+    result[inf_mask] = 0xFE
+
+    threshold = np.longdouble(2.0) ** np.longdouble(-_E8M0_EXPONENT_BIAS)
+    active_mask = (~nan_mask) & (~inf_mask) & (descale > threshold)
+    if np.any(active_mask):
+        exponents = np.ceil(np.log2(descale[active_mask])) + np.longdouble(_E8M0_EXPONENT_BIAS)
+        result[active_mask] = np.clip(exponents, 0, 254).astype(np.uint8)
+    return result
+
+
+def _compute_shared_exponents_ocp_math(max_abs: np.ndarray, target_max_pow2: int) -> np.ndarray:
+    """OCP shared exponent computation using high precision math for FP4 golden."""
+    max_abs_ld = np.asarray(max_abs, dtype=np.longdouble)
+    result = np.zeros(max_abs.shape, dtype=np.uint8)
+    nan_mask = np.isnan(max_abs_ld)
+    result[nan_mask] = 0xFF
+    inf_mask = np.isinf(max_abs_ld) & (~nan_mask)
+    # Match torchao FLOOR/OCP: Inf follows the exponent path instead of NV satfinite.
+    result[inf_mask] = np.uint8(max(0, min(0xFE, 0xFF - target_max_pow2)))
+
+    threshold = np.longdouble(2.0) ** np.longdouble(target_max_pow2 - _E8M0_EXPONENT_BIAS)
+    active_mask = (~nan_mask) & (~inf_mask) & (max_abs_ld > threshold)
+    if np.any(active_mask):
+        exponents = (
+            np.floor(np.log2(max_abs_ld[active_mask]))
+            - np.longdouble(target_max_pow2)
+            + np.longdouble(_E8M0_EXPONENT_BIAS)
+        )
+        result[active_mask] = np.clip(exponents, 0, 254).astype(np.uint8)
+    return result
+
+
+_QUANTMX_SUPPORTED_MODES = {"ROUND_DOWN", "ROUND_UP"}
 
 
 def _compute_scalings_from_exponents(e8m0: np.ndarray) -> np.ndarray:
@@ -3112,6 +3169,21 @@ def _compute_scalings_from_exponents(e8m0: np.ndarray) -> np.ndarray:
     result[scale_exp == 0] = np.float32(math.ldexp(1.0, -_E8M0_EXPONENT_BIAS))
     result[e8m0 == 0xFF] = np.float32(np.nan)
     return result
+
+
+def _compute_scalings_from_exponents_math(e8m0: np.ndarray) -> np.ndarray:
+    """Reciprocal scaling factor from E8M0 using math instead of bit construction."""
+    e8m0_i32 = e8m0.astype(np.int32)
+    result = np.ldexp(
+        np.ones(e8m0.shape, dtype=np.float64), _E8M0_EXPONENT_BIAS - e8m0_i32
+    ).astype(np.float32)
+    result[e8m0 == 0xFF] = np.float32(np.nan)
+    return result
+
+
+def _truncate_fp32_to_bf16_float32(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float32)
+    return (values.view(np.uint32) & np.uint32(0xFFFF0000)).view(np.float32)
 
 
 def _encode_e4m3_fn_vectorized(values: np.ndarray) -> np.ndarray:
@@ -3155,6 +3227,65 @@ def _encode_e4m3_fn_vectorized(values: np.ndarray) -> np.ndarray:
     result = np.where(nan_mask, np.uint8(0x7F), result)
     result = result | sign
     return result.astype(np.uint8)
+
+
+def _encode_e2m1_vectorized(values: np.ndarray) -> np.ndarray:
+    """Vectorized FP4 E2M1 encoding matching PTO MXFP4_E2M1 magic rounding."""
+    values = np.asarray(values, dtype=np.float32)
+    bits = values.view(np.int32)
+    sign = ((bits >> 28) & np.int32(0x8)).astype(np.uint8)
+    abs_val = np.abs(values).astype(np.float32)
+
+    nan_mask = np.isnan(values)
+    inf_mask = np.isinf(abs_val)
+    finite_mask = ~(nan_mask | inf_mask)
+
+    result = np.zeros(values.shape, dtype=np.uint8)
+    finite_abs = abs_val[finite_mask]
+    if finite_abs.size:
+        finite_bits = finite_abs.view(np.int32)
+        biased_exp = ((finite_bits >> _F32_MBITS) & np.int32(0xFF)).astype(np.int32)
+        biased_exp = np.clip(biased_exp, 127, 129).astype(np.int32)
+        magic_bits = ((biased_exp + np.int32(22)) << np.int32(_F32_MBITS)).astype(np.int32)
+        magic = magic_bits.view(np.float32)
+        q = (finite_abs + magic).view(np.int32) - magic_bits
+        base_code = (biased_exp - np.int32(127)) << np.int32(1)
+        mag_code = np.minimum(q + base_code, np.int32(7)).astype(np.uint8)
+        result[finite_mask] = mag_code
+
+    result[inf_mask] = np.uint8(0x7)
+    result[nan_mask] = np.uint8(0x7)
+    result = result | np.where(nan_mask, np.uint8(0), sign)
+    return result.astype(np.uint8)
+
+
+def _pack_fp4_e2m1x2_low_first(codes: np.ndarray) -> np.ndarray:
+    """Pack logical E2M1 nibbles as PTO MXFP4 output: even column in low nibble."""
+    codes = np.asarray(codes, dtype=np.uint8)
+    last_dim = codes.shape[-1]
+    packed_shape = list(codes.shape)
+    packed_shape[-1] = (last_dim + 1) // 2
+    packed = np.zeros(packed_shape, dtype=np.uint8)
+    packed[..., : (last_dim + 1) // 2] = codes[..., 0::2] & np.uint8(0x0F)
+    if last_dim > 1:
+        packed[..., : last_dim // 2] |= (codes[..., 1::2] & np.uint8(0x0F)) << np.uint8(4)
+    return packed
+
+
+def _pack_identity(codes: np.ndarray) -> np.ndarray:
+    return codes
+
+
+_MX_DTYPE_IMPLS = {
+    "fp8_e4m3": {
+        "encode": _encode_e4m3_fn_vectorized,
+        "pack": _pack_identity,
+    },
+    "fp4_e2m1x2": {
+        "encode": _encode_e2m1_vectorized,
+        "pack": _pack_fp4_e2m1x2_low_first,
+    },
+}
 
 
 def _float_to_bits(value: float) -> int:
@@ -3377,6 +3508,95 @@ def params_quantmx_func(params: dict):
     return params
 
 
+def _quantmx_parse_golden_config(config: dict):
+    params = config.get("params", {}) or {}
+    mode = params.get("mode", "ROUND_DOWN")
+    output_dtype = config.get("output_tensors", [{}])[0].get("dtype", "fp8e4m3")
+    if output_dtype not in _QUANTMX_OUTPUT_TO_DTYPE:
+        raise ValueError(f"QuantMX golden does not support output dtype: {output_dtype}.")
+    if mode not in _QUANTMX_SUPPORTED_MODES:
+        raise ValueError(f"QuantMX golden does not support scale mode: {mode}.")
+    quant_dtype = _QUANTMX_OUTPUT_TO_DTYPE[output_dtype]
+    return mode, quant_dtype, _MX_DTYPE_PARAMS[quant_dtype], _MX_DTYPE_IMPLS[quant_dtype]
+
+
+class _QuantMXGroupedInput(NamedTuple):
+    rows: int
+    cols: int
+    group_cols: int
+    scale_group_cols: int
+    padded_cols: int
+    x_grouped: np.ndarray
+
+
+def _quantmx_group_input(x: np.ndarray, group_size: int):
+    cols = x.shape[-1]
+    rows = x.size // cols
+    group_cols = (cols + group_size - 1) // group_size
+    scale_group_cols = (cols + 63) // 64
+    padded_cols = group_cols * group_size
+    x_flat = x.reshape(rows, cols)
+    x_padded = np.zeros((rows, padded_cols), dtype=np.float32)
+    x_padded[:, :cols] = x_flat
+    x_grouped = x_padded.reshape(rows, group_cols, group_size)
+    return _QuantMXGroupedInput(rows, cols, group_cols, scale_group_cols, padded_cols, x_grouped)
+
+
+def _quantmx_golden_max_source(
+    x_grouped: np.ndarray, src_dtype_name: str, is_fp4_e2m1: bool, is_nv: bool, use_plain_fp8_max_abs: bool
+):
+    max_source = np.abs(x_grouped).astype(np.float32)
+    if use_plain_fp8_max_abs:
+        return max_source
+    if is_nv and src_dtype_name == "fp16":
+        return np.abs(x_grouped.astype(np.float16)).astype(np.float32)
+    if is_nv and src_dtype_name == "bf16":
+        return np.abs(x_grouped.astype(bfloat16)).astype(np.float32)
+    if is_fp4_e2m1 and src_dtype_name == "fp16":
+        return np.abs(_truncate_fp32_to_bf16_float32(x_grouped)).astype(np.float32)
+    if is_fp4_e2m1 and src_dtype_name == "bf16":
+        return np.abs(x_grouped.astype(bfloat16)).astype(np.float32)
+    return max_source
+
+
+def _quantmx_compute_exp_scaling(max_abs: np.ndarray, dp: dict, is_fp4_e2m1: bool, is_nv: bool):
+    if is_nv:
+        e8m0 = _compute_shared_exponents_nv(max_abs, dp["max_pos"])
+        return e8m0, _compute_scalings_from_exponents_math(e8m0)
+    if is_fp4_e2m1:
+        e8m0 = _compute_shared_exponents_ocp_math(max_abs, dp["target_max_pow2"])
+        return e8m0, _compute_scalings_from_exponents_math(e8m0)
+    e8m0 = _compute_shared_exponents_floor(max_abs, dp["target_max_pow2"])
+    return e8m0, _compute_scalings_from_exponents(e8m0)
+
+
+def _quantmx_scale_grouped(
+    x_grouped: np.ndarray, group_scaling: np.ndarray, src_dtype_name: str, is_fp4_e2m1: bool, is_nv: bool
+):
+    group_scaling_broadcast = group_scaling[:, :, np.newaxis]
+    scaled = x_grouped * group_scaling_broadcast
+    if is_fp4_e2m1 and src_dtype_name == "bf16":
+        return (
+            x_grouped.astype(bfloat16).astype(np.float32) * group_scaling_broadcast.astype(np.float32)
+        ).astype(bfloat16).astype(np.float32)
+    if is_nv and src_dtype_name == "fp16":
+        return x_grouped * group_scaling_broadcast.astype(bfloat16).astype(np.float32)
+    if is_nv and src_dtype_name == "bf16":
+        return (
+            x_grouped.astype(bfloat16).astype(np.float32)
+            * group_scaling_broadcast.astype(bfloat16).astype(np.float32)
+        ).astype(bfloat16).astype(np.float32)
+    return scaled
+
+
+def _quantmx_build_exp(x_shape: tuple, rows: int, scale_group_cols: int, group_cols: int, e8m0: np.ndarray):
+    exp_shape = list(x_shape[:-1]) + [scale_group_cols, 2]
+    exp = np.zeros(exp_shape, dtype=np.uint8)
+    exp_flat = exp.reshape(rows, scale_group_cols * 2)
+    exp_flat[:, :group_cols] = e8m0.reshape(rows, group_cols)
+    return exp
+
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestQuantMX/QuantMXOperationTest.TestQuantMX",
@@ -3384,54 +3604,31 @@ def params_quantmx_func(params: dict):
 )
 def gen_quantmx_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(inputs: list, _config: dict):
-        params = _config.get("params", {}) or {}
-        mode = params.get("mode", "ROUND_DOWN")
-        if mode != "ROUND_DOWN":
-            raise ValueError("QuantMX golden currently only supports ROUND_DOWN (OCP standard) mode.")
-
-        quant_dtype = "fp8_e4m3"  # extensible for future fp4 support
-        dp = _MX_DTYPE_PARAMS[quant_dtype]
+        mode, quant_dtype, dp, impl = _quantmx_parse_golden_config(_config)
         group_size = 32
+        input_tensor_desc = _config.get("input_tensors", [{}])[0]
+        src_dtype_name = input_tensor_desc.get("dtype", "")
+        is_fp4_e2m1 = quant_dtype == "fp4_e2m1x2"
+        is_nv = mode == "ROUND_UP"
+        use_plain_fp8_max_abs = (not is_fp4_e2m1) and (not is_nv)
 
         x = inputs[0].astype(np.float32, copy=False)
         if x.ndim < 1 or x.ndim > 4:
             raise ValueError("QuantMX golden only supports 1D to 4D input.")
 
-        cols = x.shape[-1]
-        rows = x.size // cols
-        group_cols = (cols + group_size - 1) // group_size
-        scale_group_cols = (cols + 63) // 64
+        grouped = _quantmx_group_input(x, group_size)
+        max_source = _quantmx_golden_max_source(
+            grouped.x_grouped, src_dtype_name, is_fp4_e2m1, is_nv, use_plain_fp8_max_abs
+        )
+        max_abs = np.max(max_source, axis=2).astype(np.float32)
+        e8m0, group_scaling = _quantmx_compute_exp_scaling(max_abs, dp, is_fp4_e2m1, is_nv)
+        scaled = _quantmx_scale_grouped(grouped.x_grouped, group_scaling, src_dtype_name, is_fp4_e2m1, is_nv)
+        quant_grouped = impl["encode"](scaled)
 
-        # Pad last dim to multiple of group_size, reshape to [rows, group_cols, group_size]
-        x_flat = x.reshape(rows, cols)
-        padded_cols = group_cols * group_size
-        x_padded = np.zeros((rows, padded_cols), dtype=np.float32)
-        x_padded[:, :cols] = x_flat
-        x_grouped = x_padded.reshape(rows, group_cols, group_size)
-
-        # Vectorized max-abs per group → shared exponent → reciprocal scale
-        max_abs = np.max(np.abs(x_grouped), axis=2).astype(np.float32)
-        e8m0 = _compute_shared_exponents(max_abs, dp["target_max_pow2"])
-        group_scaling = _compute_scalings_from_exponents(e8m0)
-
-        # Scale each element: broadcast [rows, group_cols, 1] over group dim
-        scaled = x_grouped * group_scaling[:, :, np.newaxis]
-
-        # Encode to target dtype (vectorized)
-        quant_grouped = _encode_e4m3_fn_vectorized(scaled)
-
-        # Unpad and reshape back
-        quant_flat = quant_grouped.reshape(rows, padded_cols)[:, :cols]
+        quant_flat = quant_grouped.reshape(grouped.rows, grouped.padded_cols)[:, : grouped.cols]
         quant = quant_flat.reshape(x.shape)
-
-        # Build exp output: [*batch, scale_group_cols, 2]
-        exp_shape = list(x.shape[:-1]) + [scale_group_cols, 2]
-        exp = np.zeros(exp_shape, dtype=np.uint8)
-        exp_flat = exp.reshape(rows, scale_group_cols * 2)
-        e8m0_flat = e8m0.reshape(rows, group_cols)
-        exp_flat[:, :group_cols] = e8m0_flat
-
-        return [quant, exp]
+        quant = impl["pack"](quant)
+        return [quant, _quantmx_build_exp(x.shape, grouped.rows, grouped.scale_group_cols, grouped.group_cols, e8m0)]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("QuantMX", golden_func, output, case_index)

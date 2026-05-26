@@ -16,6 +16,7 @@
 #ifndef TILEOP_TILE_OPERATOR_PTO_TILE__H
 #define TILEOP_TILE_OPERATOR_PTO_TILE__H
 #include <cstddef>
+#include <type_traits>
 
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
@@ -37,6 +38,47 @@ __aicore__ inline constexpr size_t GetTupleElement(const Tuple& t)
         return Std::get<index + size - MAX_DIMS>(t);
     }
 }
+
+namespace TileOp {
+template <typename DType>
+inline constexpr bool IsPackedFp4Type =
+#if defined PTO_NPU_ARCH_A5
+    std::is_same_v<DType, float4_e1m2x2_t> || std::is_same_v<DType, float4_e2m1x2_t> ||
+    std::is_same_v<DType, __gm__ float4_e1m2x2_t> || std::is_same_v<DType, __gm__ float4_e2m1x2_t>;
+#else
+    false;
+#endif
+
+template <typename DType, typename Offset>
+__aicore__ inline constexpr auto GetPackedElementOffset(Offset offset)
+{
+    if constexpr (IsPackedFp4Type<DType>) {
+        return offset >> 1;
+    } else {
+        return offset;
+    }
+}
+
+template <typename DType, typename Offset>
+__aicore__ inline constexpr auto GetPackedByteOffset(Offset offset)
+{
+    if constexpr (IsPackedFp4Type<DType>) {
+        return offset >> 1;
+    } else {
+        return offset * sizeof(DType);
+    }
+}
+
+template <typename DType, typename Offset>
+__aicore__ inline __gm__ DType* GetPackedGmAddr(__gm__ DType* addr, Offset offset)
+{
+    if constexpr (IsPackedFp4Type<DType>) {
+        return (__gm__ DType*)((__gm__ uint8_t*)addr + (offset >> 1));
+    } else {
+        return addr + offset;
+    }
+}
+} // namespace TileOp
 
 template <typename T, typename Shape, typename Stride, bool need_mask = false>
 class PtoGlobal {
@@ -171,14 +213,15 @@ public:
 
     __aicore__ inline void Assign(uint64_t addr, uint64_t element_cnt)
     {
-        pto::TASSIGN(data_, addr + (element_cnt * sizeof(typename T::Type)));
+        pto::TASSIGN(data_, addr + TileOp::GetPackedByteOffset<typename T::Type>(element_cnt));
     }
 
     __aicore__ inline void Assign(T& tensor) { Assign((uint64_t)(tensor.GetAddr())); }
 
     __aicore__ inline void Assign(T& tensor, const TileOffset& offsets)
     {
-        pto::TASSIGN(data_, (uint64_t)(tensor.GetAddr() + GenTileOffset(tensor, offsets) * sizeof(typename T::Type)));
+        auto byteOffset = TileOp::GetPackedByteOffset<typename T::Type>(GenTileOffset(tensor, offsets));
+        pto::TASSIGN(data_, (uint64_t)(tensor.GetAddr() + byteOffset));
     }
 
 private:

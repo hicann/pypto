@@ -11,9 +11,9 @@
 将 1-4 维 ND 格式的高精度浮点 Tensor 量化为 MX（Microscaling）格式，返回量化结果和共享指数 scale。
 
 - 输入 Tensor 支持 DT_FP16、DT_BF16、DT_FP32。
-- 输出量化 Tensor 当前仅支持 DT_FP8E4M3。
+- 输出量化 Tensor 支持 DT_FP8E4M3、DT_FP4_E2M1X2。其中 DT_FP4_E2M1X2 仅支持 DT_FP16、DT_BF16 输入。
 - scale Tensor 的数据类型固定为 DT_FP8E8M0。
-- 当前仅支持对尾轴进行量化，且仅支持 ROUND_DOWN 模式。
+- 当前仅支持对尾轴进行量化，支持 ROUND_DOWN（OCP）和 ROUND_UP（NV）模式。
 
 若输入 shape 记为 $[d_0, d_1, ..., d_{n-1}]$，则：
 
@@ -28,7 +28,7 @@ quant_mx(
     quant_dtype: DataType = DataType.DT_FP8E4M3,
     mode: DequantScaleRoundingMode = DequantScaleRoundingMode.ROUND_DOWN,
     axis: int = -1,
-    performance_mode: bool = False,
+    performance_mode: bool = True,
 ) -> Tuple[Tensor, Tensor]
 ```
 
@@ -37,8 +37,8 @@ quant_mx(
 | 参数名 | 输入/输出 | 说明 |
 |--------|-----------|------|
 | input | 输入 | 源操作数。<br>支持的类型为：Tensor。<br>Tensor 支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>仅支持 TILEOP_ND 格式；Shape 仅支持 1-4 维。<br>当前仅支持最后一维参与量化，且最后一维按字节数需满足 256 字节对齐。对于 DT_FP32，通常要求最后一维长度是 64 的倍数；对于 DT_FP16/DT_BF16，通常要求最后一维长度是 128 的倍数。 |
-| quant_dtype | 输入 | 量化后输出 Tensor 的数据类型。<br>当前仅支持：DT_FP8E4M3。 |
-| mode | 输入 | 量化时共享指数的舍入模式。<br>当前仅支持：ROUND_DOWN。 |
+| quant_dtype | 输入 | 量化后输出 Tensor 的数据类型。<br>支持：DT_FP8E4M3、DT_FP4_E2M1X2。DT_FP4_E2M1X2 仅支持 DT_FP16、DT_BF16 输入。 |
+| mode | 输入 | 量化时共享指数的舍入模式。<br>支持：ROUND_DOWN（OCP）、ROUND_UP（NV）。 |
 | axis | 输入 | 指定量化轴。<br>当前仅支持最后一维，即 `-1` 或 `input.shape.size() - 1`。 |
 | performance_mode | 输入 | 是否启用性能模式。<br>默认值为 `True`。启用后可获得更好的性能，但仅改变内部 TQuant 的中间布局，不改变返回的公共 `scale` shape。<br>启用该模式时，不支持尾块场景，即运行时实际 shape 需要整除 view shape。除此之外，view shape 与 TileShape 的尾轴长度必须相同，且该尾轴长度需要与输入最后一维保持一致。<br> 当前只支持性能模式|
 
@@ -71,11 +71,20 @@ x = pypto.tensor([8, 64], pypto.DT_FP32)
 # 默认配置：DT_FP8E4M3 + ROUND_DOWN + 最后一维量化
 quantized, scale = pypto.quant_mx(x)
 
-# 显式指定参数
+# 显式指定 OCP 参数
 quantized_perf, scale_perf = pypto.quant_mx(
     x,
     pypto.DT_FP8E4M3,
     pypto.ROUND_DOWN,
+    -1,
+    True,
+)
+
+# 使用 NV scale 算法
+quantized_nv, scale_nv = pypto.quant_mx(
+    x,
+    pypto.DT_FP8E4M3,
+    pypto.ROUND_UP,
     -1,
     True,
 )

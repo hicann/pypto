@@ -250,6 +250,16 @@ static float BitsToFloat(uint32_t bits)
     return converter.floatValue;
 }
 
+static float RoundToBf16(float value) { return static_cast<float>(c10::BFloat16(value)); }
+
+static float RoundToFp16(float value)
+{
+    const uint16_t rounded = c10::detail::fp16_ieee_from_fp32_value(value);
+    return c10::detail::fp16_ieee_to_fp32_value(rounded);
+}
+
+static float TruncateToBf16(float value) { return BitsToFloat(FloatToBits(value) & 0xFFFF0000u); }
+
 // MX quantization constants (OCP Microscaling Formats MX v1.0)
 // These are parameterized per target dtype for future fp4 extensibility.
 struct MXQuantDtypeParams {
@@ -268,16 +278,25 @@ static constexpr MXQuantDtypeParams kFP8E4M3Params = {
     .mbits = 3,
 };
 
+static constexpr MXQuantDtypeParams kFP4E2M1Params = {
+    .targetMaxPow2 = 2,
+    .maxPos = 6.0f,
+    .minNormal = 1.0f,
+    .expBias = 1,
+    .mbits = 1,
+};
+
 static constexpr int kE8M0ExponentBias = 127;
 static constexpr int kF32ExpBias = 127;
 static constexpr int kF32Mbits = 23;
+static constexpr int64_t kMxQuantModeRoundUp = 0;
 
 // Compute OCP FLOOR-mode shared exponent (E8M0 biased byte) for a group.
 // Reference: OCP MX Spec 1.0 — scale = 2^floor(log2(max_abs)) / 2^target_max_pow2
 static uint8_t ComputeSharedExponent(float maxAbsValue, int targetMaxPow2)
 {
     if (std::isnan(maxAbsValue)) {
-        return 0xFFu; // NaN → E8M0 NaN; Inf goes through normal path (saturated by encoder)
+        return 0xFFu; // NaN -> E8M0 NaN. Inf follows the FLOOR exponent path.
     }
     const uint32_t bits = FloatToBits(maxAbsValue);
     const uint32_t fpExponent = (bits & 0x7F800000u) >> kF32Mbits;
@@ -289,6 +308,25 @@ static uint8_t ComputeSharedExponent(float maxAbsValue, int targetMaxPow2)
     }
     const uint32_t biased = fpExponent - static_cast<uint32_t>(targetMaxPow2);
     return static_cast<uint8_t>(std::min(biased, 254u));
+}
+
+static uint8_t ComputeSharedExponentNV(float maxAbsValue, float maxPos)
+{
+    if (std::isnan(maxAbsValue)) {
+        return 0xFFu;
+    }
+    const long double descale = static_cast<long double>(maxAbsValue) / static_cast<long double>(maxPos);
+    if (descale <= 0.0L) {
+        return 0u;
+    }
+    if (std::isinf(static_cast<double>(descale))) {
+        return 0xFEu;
+    }
+    if (descale <= std::ldexp(1.0L, -kE8M0ExponentBias)) {
+        return 0u;
+    }
+    const int e8m0 = static_cast<int>(std::ceil(std::log2(descale))) + kE8M0ExponentBias;
+    return static_cast<uint8_t>(std::clamp(e8m0, 0, 254));
 }
 
 // Compute the reciprocal scaling factor from an E8M0 biased exponent.
@@ -303,6 +341,35 @@ static float ComputeScalingFromExponent(uint8_t e8m0)
         return std::ldexp(1.0f, -kE8M0ExponentBias);
     }
     return BitsToFloat(scaleExp << kF32Mbits);
+}
+
+static float ComputeScalingFromExponentMath(uint8_t e8m0)
+{
+    if (e8m0 == 0xFFu) {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
+    return std::ldexp(1.0f, kE8M0ExponentBias - static_cast<int>(e8m0));
+}
+
+static std::pair<uint8_t, float> ComputeB16OcpExponentAndScaling(float maxAbsValue, bool isFp4E2M1)
+{
+    if (std::isnan(maxAbsValue)) {
+        return {0xFFu, std::numeric_limits<float>::quiet_NaN()};
+    }
+    const int targetMaxPow2 = isFp4E2M1 ? kFP4E2M1Params.targetMaxPow2 : kFP8E4M3Params.targetMaxPow2;
+    if (std::isinf(maxAbsValue)) {
+        const auto e8m0 =
+            static_cast<uint8_t>(std::clamp(0xFF - targetMaxPow2, 0, 0xFE));
+        return {e8m0, std::ldexp(1.0f, kE8M0ExponentBias - static_cast<int>(e8m0))};
+    }
+    if (maxAbsValue <= std::ldexp(1.0f, targetMaxPow2 - kE8M0ExponentBias)) {
+        return {0u, std::ldexp(1.0f, kE8M0ExponentBias)};
+    }
+    const int e8m0 =
+        static_cast<int>(std::floor(std::log2(static_cast<long double>(maxAbsValue)))) - targetMaxPow2 +
+        kE8M0ExponentBias;
+    const auto clamped = static_cast<uint8_t>(std::clamp(e8m0, 0, 254));
+    return {clamped, std::ldexp(1.0f, kE8M0ExponentBias - static_cast<int>(clamped))};
 }
 
 // Encode a float32 value to FP8 E4M3 (round-to-nearest-even) via bit manipulation.
@@ -348,6 +415,29 @@ static uint8_t EncodeE4M3Fn(float value)
         expBiasDelta * static_cast<int32_t>(uint32_t{1} << kF32Mbits) + static_cast<int32_t>(kMagicAdder);
     const uint32_t adjusted = absBits + static_cast<uint32_t>(valToAdd) + mantOdd;
     return sign | static_cast<uint8_t>((adjusted >> kShift) & 0x7Fu);
+}
+
+static uint8_t EncodeE2M1Magic(float value)
+{
+    if (std::isnan(value)) {
+        return 0x7u;
+    }
+    const uint32_t valueBits = FloatToBits(value);
+    const uint8_t sign = static_cast<uint8_t>((valueBits >> 28) & 0x8u);
+    const float absValue = std::fabs(value);
+    if (std::isinf(absValue)) {
+        return static_cast<uint8_t>(sign | 0x7u);
+    }
+
+    const uint32_t absBits = FloatToBits(absValue);
+    uint32_t biasedExp = (absBits & 0x7F800000u) >> kF32Mbits;
+    biasedExp = std::clamp<uint32_t>(biasedExp, 127u, 129u);
+
+    const uint32_t magicBits = (biasedExp + 22u) << kF32Mbits;
+    const uint32_t q = FloatToBits(absValue + BitsToFloat(magicBits)) - magicBits;
+    const uint32_t baseCode = (biasedExp - 127u) << 1u;
+    const uint32_t magCode = std::min<uint32_t>(q + baseCode, 7u);
+    return static_cast<uint8_t>(sign | magCode);
 }
 
 static torch::Tensor View(
@@ -2802,48 +2892,237 @@ static void Scatter(
     }
 }
 
-static void FillQuantMXRows(
-    const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr,
-    int64_t rows, int64_t cols, int64_t groupCols)
+struct QuantMXContext {
+    DataType srcDtype;
+    DataType quantDtype;
+    bool performanceMode;
+    bool isFp4E2M1;
+    bool isNv;
+    bool usePlainFp8MaxAbs;
+    int64_t scalingFactor;
+    const MXQuantDtypeParams* dtypeParams;
+};
+
+static QuantMXContext MakeQuantMXContext(DataType srcDtype, DataType quantDtype, bool performanceMode, int64_t mode)
 {
-    for (int64_t row = 0; row < rows; ++row) {
-        for (int64_t group = 0; group < groupCols; ++group) {
-            float maxAbsValue = 0.0f;
-            bool hasNaN = false;
-            for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
-                const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
-                if (col >= cols) {
-                    continue;
-                }
-                const float val = std::fabs(inputPtr[row * cols + col]);
-                if (std::isnan(val)) {
-                    hasNaN = true;
-                } else {
-                    maxAbsValue = std::max(maxAbsValue, val);
-                }
-            }
-            if (hasNaN) {
-                maxAbsValue = std::numeric_limits<float>::quiet_NaN();
-            }
-            const uint8_t e8m0 = ComputeSharedExponent(maxAbsValue, kFP8E4M3Params.targetMaxPow2);
-            const float groupScaling = ComputeScalingFromExponent(e8m0);
-            expPtr[row * groupCols + group] = e8m0;
-            maxPtr[row * groupCols + group] = maxAbsValue;
-            for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
-                const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
-                if (col >= cols) {
-                    continue;
-                }
-                scalingPtr[row * cols + col] = groupScaling;
-                quantPtr[row * cols + col] = EncodeE4M3Fn(inputPtr[row * cols + col] * groupScaling);
-            }
+    const bool isFp4E2M1 = quantDtype == DT_FP4_E2M1X2;
+    const bool isNv = mode == kMxQuantModeRoundUp;
+    return {
+        .srcDtype = srcDtype,
+        .quantDtype = quantDtype,
+        .performanceMode = performanceMode,
+        .isFp4E2M1 = isFp4E2M1,
+        .isNv = isNv,
+        .usePlainFp8MaxAbs = !isFp4E2M1 && !isNv,
+        .scalingFactor = srcDtype == DT_FP32 ? 2 : 1,
+        .dtypeParams = isFp4E2M1 ? &kFP4E2M1Params : &kFP8E4M3Params,
+    };
+}
+
+static float NormalizeQuantMXMaxValue(float srcValue, const QuantMXContext& ctx)
+{
+    const float absValue = std::fabs(srcValue);
+    if (ctx.usePlainFp8MaxAbs) {
+        return absValue;
+    }
+    if (ctx.isNv && ctx.srcDtype == DT_FP16) {
+        return RoundToFp16(absValue);
+    }
+    if (ctx.isNv && ctx.srcDtype == DT_BF16) {
+        return RoundToBf16(absValue);
+    }
+    if (ctx.isFp4E2M1 && ctx.srcDtype == DT_FP16) {
+        return std::fabs(TruncateToBf16(srcValue));
+    }
+    return ctx.isFp4E2M1 ? RoundToBf16(absValue) : absValue;
+}
+
+static float ComputeQuantMXGroupMax(
+    const float* inputPtr, int64_t row, int64_t cols, int64_t group, const QuantMXContext& ctx)
+{
+    float maxAbsValue = 0.0f;
+    bool hasNaN = false;
+    for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
+        const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
+        if (col >= cols) {
+            continue;
+        }
+        const float val = NormalizeQuantMXMaxValue(inputPtr[row * cols + col], ctx);
+        hasNaN = hasNaN || std::isnan(val);
+        maxAbsValue = std::isnan(val) ? maxAbsValue : std::max(maxAbsValue, val);
+    }
+    return hasNaN ? std::numeric_limits<float>::quiet_NaN() : maxAbsValue;
+}
+
+static std::pair<uint8_t, float> ComputeQuantMXExponentAndScaling(float maxAbsValue, const QuantMXContext& ctx)
+{
+    if (ctx.isNv) {
+        const uint8_t e8m0 = ComputeSharedExponentNV(maxAbsValue, ctx.dtypeParams->maxPos);
+        return {e8m0, ComputeScalingFromExponentMath(e8m0)};
+    }
+    if (ctx.isFp4E2M1) {
+        return ComputeB16OcpExponentAndScaling(maxAbsValue, true);
+    }
+    const uint8_t e8m0 = ComputeSharedExponent(maxAbsValue, ctx.dtypeParams->targetMaxPow2);
+    return {e8m0, ComputeScalingFromExponent(e8m0)};
+}
+
+static void StoreQuantMXScaling(float* scalingPtr, int64_t row, int64_t groupCols, int64_t group, float scaling,
+    const QuantMXContext& ctx)
+{
+    if (ctx.performanceMode) {
+        const int64_t offset = row * groupCols * ctx.scalingFactor + group * ctx.scalingFactor;
+        scalingPtr[offset] = scaling;
+        if (ctx.scalingFactor == 2) {
+            scalingPtr[offset + 1] = scaling;
+        }
+        return;
+    }
+    if (ctx.isFp4E2M1) {
+        scalingPtr[row * groupCols + group] = scaling;
+    }
+}
+
+static float ScaleQuantMXValue(float srcValue, float groupScaling, const QuantMXContext& ctx)
+{
+    if (ctx.isFp4E2M1 && ctx.srcDtype == DT_BF16) {
+        return RoundToBf16(srcValue * groupScaling);
+    }
+    if (ctx.isNv && ctx.srcDtype == DT_FP16) {
+        return srcValue * RoundToBf16(groupScaling);
+    }
+    if (ctx.isNv && ctx.srcDtype == DT_BF16) {
+        return RoundToBf16(srcValue * RoundToBf16(groupScaling));
+    }
+    return srcValue * groupScaling;
+}
+
+static void StoreQuantMXValue(
+    uint8_t* quantPtr, float* scalingPtr, int64_t row, int64_t cols, int64_t quantCols, int64_t col, float srcValue,
+    float groupScaling, const QuantMXContext& ctx)
+{
+    const float scaled = ScaleQuantMXValue(srcValue, groupScaling, ctx);
+    if (ctx.isFp4E2M1) {
+        const uint8_t encoded = EncodeE2M1Magic(scaled);
+        uint8_t& packed = quantPtr[row * quantCols + col / 2];
+        packed = (col & 1) == 0 ? static_cast<uint8_t>((packed & 0xF0u) | encoded) :
+                                  static_cast<uint8_t>((packed & 0x0Fu) | (encoded << 4));
+        return;
+    }
+    if (!ctx.performanceMode) {
+        scalingPtr[row * cols + col] = groupScaling;
+    }
+    quantPtr[row * cols + col] = EncodeE4M3Fn(scaled);
+}
+
+static void FillQuantMXGroup(
+    const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr, int64_t row,
+    int64_t group, int64_t cols, int64_t groupCols, int64_t quantCols, const QuantMXContext& ctx)
+{
+    const float maxAbsValue = ComputeQuantMXGroupMax(inputPtr, row, cols, group, ctx);
+    const auto exponentAndScaling = ComputeQuantMXExponentAndScaling(maxAbsValue, ctx);
+    expPtr[row * groupCols + group] = exponentAndScaling.first;
+    maxPtr[row * groupCols + group] = maxAbsValue;
+    StoreQuantMXScaling(scalingPtr, row, groupCols, group, exponentAndScaling.second, ctx);
+    for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
+        const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
+        if (col < cols) {
+            StoreQuantMXValue(quantPtr, scalingPtr, row, cols, quantCols, col, inputPtr[row * cols + col],
+                exponentAndScaling.second, ctx);
         }
     }
 }
 
+static void FillQuantMXRows(
+    const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr, int64_t rows,
+    int64_t cols, int64_t groupCols, int64_t quantCols, DataType srcDtype, DataType quantDtype, bool performanceMode,
+    int64_t mode)
+{
+    const QuantMXContext ctx = MakeQuantMXContext(srcDtype, quantDtype, performanceMode, mode);
+    for (int64_t row = 0; row < rows; ++row) {
+        for (int64_t group = 0; group < groupCols; ++group) {
+            FillQuantMXGroup(inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, row, group, cols, groupCols, quantCols,
+                ctx);
+        }
+    }
+}
+
+struct QuantMXShapes {
+    std::vector<int64_t> quantShape;
+    std::vector<int64_t> groupedShape;
+    std::vector<int64_t> performanceGroupedShape;
+    std::vector<int64_t> performanceScalingShape;
+    std::vector<int64_t> scalingShape;
+    int64_t rows;
+    int64_t cols;
+    int64_t groupCols;
+    int64_t quantCols;
+};
+
+static std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(
+    const std::vector<int64_t>& inputShape, int64_t groupCols)
+{
+    auto shape = inputShape;
+    if (shape.size() == 1) {
+        shape.back() = groupCols;
+    } else {
+        shape.pop_back();
+        shape.back() *= groupCols;
+    }
+    return shape;
+}
+
+static QuantMXShapes BuildQuantMXShapes(
+    const torch::Tensor& input, DataType srcDtype, DataType quantDtype, bool performanceMode)
+{
+    QuantMXShapes shapes;
+    shapes.quantShape = input.sizes().vec();
+    shapes.groupedShape = shapes.quantShape;
+    shapes.cols = shapes.groupedShape.back();
+    ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols != 0)
+        << "QuantMX input last dimension must not be zero.";
+    if (quantDtype == DT_FP4_E2M1X2) {
+        shapes.quantShape.back() = LastDimPackedCount(shapes.cols, quantDtype);
+    }
+    shapes.groupedShape.back() = (shapes.cols + MX_QUANT_TILE_BLOCK - 1) / MX_QUANT_TILE_BLOCK;
+    shapes.performanceGroupedShape = BuildQuantMXPerformanceGroupedShape(shapes.quantShape, shapes.groupedShape.back());
+    shapes.performanceScalingShape = shapes.performanceGroupedShape;
+    if (srcDtype == DT_FP32) {
+        shapes.performanceScalingShape.back() *= 2;
+    }
+    shapes.scalingShape = performanceMode ? shapes.performanceScalingShape : input.sizes().vec();
+    shapes.rows = input.numel() / shapes.cols;
+    shapes.groupCols = shapes.groupedShape.back();
+    shapes.quantCols = shapes.quantShape.back();
+    return shapes;
+}
+
+static torch::Tensor CreateQuantMXQuantRaw(const std::vector<int64_t>& quantShape, DataType quantDtype)
+{
+    auto options = torch::TensorOptions().dtype(torch::kUInt8);
+    return quantDtype == DT_FP4_E2M1X2 ? torch::zeros(quantShape, options) : torch::empty(quantShape, options);
+}
+
+static torch::Tensor CreateQuantMXScalingTemp(const std::vector<int64_t>& scalingShape, DataType quantDtype)
+{
+    auto options = torch::TensorOptions().dtype(torch::kFloat32);
+    return quantDtype == DT_FP4_E2M1X2 ? torch::zeros(scalingShape, options) : torch::empty(scalingShape, options);
+}
+
+static void CopyQuantMXOutputs(const std::pair<torch::Tensor, torch::Tensor>& tout,
+    const std::pair<torch::Tensor, torch::Tensor>& texp, const std::pair<torch::Tensor, torch::Tensor>& tmax,
+    const std::pair<torch::Tensor, torch::Tensor>& tscaling, const torch::Tensor& quantRaw, const torch::Tensor& expRaw,
+    const torch::Tensor& maxTemp, const torch::Tensor& scalingTemp, const QuantMXShapes& shapes, bool performanceMode)
+{
+    tout.first.copy_(quantRaw);
+    texp.first.copy_(performanceMode ? expRaw.reshape(shapes.performanceGroupedShape) : expRaw);
+    tmax.second.copy_(performanceMode ? maxTemp.reshape(shapes.performanceGroupedShape) : maxTemp);
+    tscaling.second.copy_(scalingTemp);
+}
+
 static void QuantMX(
     const TensorData& out, const TensorData& exp, const TensorData& max, const TensorData& scaling,
-    const TensorData& self, bool performanceMode)
+    const TensorData& self, bool performanceMode, int64_t mode)
 {
     auto tout = From(out);
     auto texp = From(exp);
@@ -2855,29 +3134,18 @@ static void QuantMX(
     ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, input.dim() >= 1 && input.dim() <= 4)
         << "QuantMX interpreter only supports 1D to 4D input.";
 
-    auto quantRaw = torch::empty(input.sizes(), torch::TensorOptions().dtype(torch::kUInt8));
-    auto groupedShape = input.sizes().vec();
-    const int64_t cols = groupedShape.back();
-    ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, cols != 0) << "QuantMX input last dimension must not be zero.";
-    groupedShape.back() = (cols + MX_QUANT_TILE_BLOCK - 1) / MX_QUANT_TILE_BLOCK;
-    auto performanceGroupedShape = input.sizes().vec();
-    if (performanceGroupedShape.size() == 1) {
-        performanceGroupedShape.back() = groupedShape.back();
-    } else {
-        performanceGroupedShape.pop_back();
-        performanceGroupedShape.back() *= groupedShape.back();
-    }
-    auto expRaw = torch::empty(groupedShape, torch::TensorOptions().dtype(torch::kUInt8));
-    auto scalingTemp = torch::empty(input.sizes(), torch::TensorOptions().dtype(torch::kFloat32));
-    auto maxTemp = torch::zeros(groupedShape, torch::TensorOptions().dtype(torch::kFloat32));
-
-    const int64_t rows = input.numel() / cols;
-    const int64_t groupCols = groupedShape.back();
-    auto inputFlat = input.view({rows, cols});
-    auto quantFlat = quantRaw.view({rows, cols});
-    auto expFlat = expRaw.view({rows, groupCols});
-    auto scalingFlat = scalingTemp.view({rows, cols});
-    auto maxFlat = maxTemp.view({rows, groupCols});
+    const QuantMXShapes shapes = BuildQuantMXShapes(input, self.dtype, out.dtype, performanceMode);
+    auto quantRaw = CreateQuantMXQuantRaw(shapes.quantShape, out.dtype);
+    auto expRaw = torch::empty(shapes.groupedShape, torch::TensorOptions().dtype(torch::kUInt8));
+    auto scalingTemp = CreateQuantMXScalingTemp(shapes.scalingShape, out.dtype);
+    auto maxTemp = torch::zeros(shapes.groupedShape, torch::TensorOptions().dtype(torch::kFloat32));
+    auto inputFlat = input.view({shapes.rows, shapes.cols});
+    auto quantFlat = quantRaw.view({shapes.rows, shapes.quantCols});
+    auto expFlat = expRaw.view({shapes.rows, shapes.groupCols});
+    auto scalingFlat = performanceMode ?
+        scalingTemp.view({shapes.rows, shapes.groupCols * (self.dtype == DT_FP32 ? 2 : 1)}) :
+        scalingTemp.view({shapes.rows, shapes.cols});
+    auto maxFlat = maxTemp.view({shapes.rows, shapes.groupCols});
 
     const auto* inputPtr = inputFlat.data_ptr<float>();
     auto* quantPtr = quantFlat.data_ptr<uint8_t>();
@@ -2885,12 +3153,10 @@ static void QuantMX(
     auto* scalingPtr = scalingFlat.data_ptr<float>();
     auto* maxPtr = maxFlat.data_ptr<float>();
 
-    FillQuantMXRows(inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, rows, cols, groupCols);
-
-    tout.first.copy_(quantRaw);
-    texp.first.copy_(performanceMode ? expRaw.reshape(performanceGroupedShape) : expRaw);
-    tmax.second.copy_(performanceMode ? maxTemp.reshape(performanceGroupedShape) : maxTemp);
-    tscaling.second.copy_(scalingTemp);
+    FillQuantMXRows(
+        inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, shapes.rows, shapes.cols, shapes.groupCols, shapes.quantCols,
+        self.dtype, out.dtype, performanceMode, mode);
+    CopyQuantMXOutputs(tout, texp, tmax, tscaling, quantRaw, expRaw, maxTemp, scalingTemp, shapes, performanceMode);
 }
 
 static struct CalcOps calcOps = {

@@ -127,6 +127,9 @@ def quant_mx(
 ) -> Tuple[Tensor, Tensor]:
     """Quantizes a 1D to 4D FP16/BF16/FP32 ND tensor to MX format.
 
+    `quant_dtype` supports `DT_FP8E4M3` for FP16/BF16/FP32 input and `DT_FP4_E2M1X2`
+    for FP16/BF16 input.
+
     Returns
     -------
     tuple

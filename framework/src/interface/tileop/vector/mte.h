@@ -43,7 +43,8 @@ __aicore__ inline void TLoad(T dst, U src, C coordinate)
         if constexpr (TileOp::IsConstContinous<T>() == true) {
             // 对于静态整块场景，将UB合成二维，GM保持五维
             auto srcGlobal = PtoGlobal<U, typename T::Shape, typename U::Stride>(
-                                 src.GetAddr() + gmOffset, dst.GetShape(), src.GetStride())
+                                 TileOp::GetPackedGmAddr<typename U::Type>(src.GetAddr(), gmOffset), dst.GetShape(),
+                                 src.GetStride())
                                  .Data();
             auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true>().Data();
             pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
@@ -56,8 +57,8 @@ __aicore__ inline void TLoad(T dst, U src, C coordinate)
         for (LoopVar index0 = 0; index0 < dstShape0; ++index0) {
             for (LoopVar index1 = 0; index1 < dstShape1; ++index1) {
                 for (LoopVar index2 = 0; index2 < dstShape2; ++index2) {
-                    srcGlobal.Assign(
-                        src.GetAddr() + gmOffset + index0 * srcStride0 + index1 * srcStride1 + index2 * srcStride2);
+                    auto srcOffset = gmOffset + index0 * srcStride0 + index1 * srcStride1 + index2 * srcStride2;
+                    srcGlobal.Assign(TileOp::GetPackedGmAddr<typename U::Type>(src.GetAddr(), srcOffset));
                     auto tileOffsets = TileOffset(index0, index1, index2);
                     dstTile.Assign(dst, tileOffsets);
                     pto::TLOAD(dstTile.Data(), srcGlobal.Data());
@@ -91,7 +92,8 @@ __aicore__ inline void TStoreVec(T dst, U src, C coordinate)
         if constexpr (TileOp::IsConstContinous<U>() == true) {
             // 对于静态整块场景，将UB合成二维，GM保持五维
             auto dstGlobal = PtoGlobal<T, typename U::Shape, typename T::Stride>(
-                                 dst.GetAddr() + gmOffset, src.GetShape(), dst.GetStride())
+                                 TileOp::GetPackedGmAddr<typename T::Type>(dst.GetAddr(), gmOffset), src.GetShape(),
+                                 dst.GetStride())
                                  .Data();
             auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
             pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
@@ -104,8 +106,8 @@ __aicore__ inline void TStoreVec(T dst, U src, C coordinate)
         for (LoopVar index0 = 0; index0 < srcShape0; ++index0) {
             for (LoopVar index1 = 0; index1 < srcShape1; ++index1) {
                 for (LoopVar index2 = 0; index2 < srcShape2; ++index2) {
-                    dstGlobal.Assign(
-                        dst.GetAddr() + gmOffset + index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2);
+                    auto dstOffset = gmOffset + index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2;
+                    dstGlobal.Assign(TileOp::GetPackedGmAddr<typename T::Type>(dst.GetAddr(), dstOffset));
                     auto tileOffsets = TileOffset(index0, index1, index2);
                     srcTile.Assign(src, tileOffsets);
                     CallStore<config>(dstGlobal.Data(), srcTile.Data());
@@ -158,9 +160,10 @@ __aicore__ inline void TReshapeLoad(
         auto reshapeStride2 = TileOp::GetTupleElement<Stride5Dim, DIM_3RD, MAX_DIMS, 0>(reshapeStride);
 
         if constexpr (TileOp::IsConstContinous<T>() == true) {
-            auto srcGlobal =
-                PtoGlobal<U, typename T::Shape, Stride5Dim>(src.GetAddr() + gmOffset, dst.GetShape(), reshapeStride)
-                    .Data();
+            auto srcGlobal = PtoGlobal<U, typename T::Shape, Stride5Dim>(
+                                 TileOp::GetPackedGmAddr<typename U::Type>(src.GetAddr(), gmOffset), dst.GetShape(),
+                                 reshapeStride)
+                                 .Data();
             auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true>().Data();
             pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
             pto::TLOAD(dstTile, srcGlobal);
@@ -172,9 +175,9 @@ __aicore__ inline void TReshapeLoad(
         for (LoopVar index0 = 0; index0 < dstShape0; ++index0) {
             for (LoopVar index1 = 0; index1 < dstShape1; ++index1) {
                 for (LoopVar index2 = 0; index2 < dstShape2; ++index2) {
-                    srcGlobal.Assign(
-                        src.GetAddr() + gmOffset + index0 * reshapeStride0 + index1 * reshapeStride1 +
-                        index2 * reshapeStride2);
+                    auto srcOffset = gmOffset + index0 * reshapeStride0 + index1 * reshapeStride1 +
+                                     index2 * reshapeStride2;
+                    srcGlobal.Assign(TileOp::GetPackedGmAddr<typename U::Type>(src.GetAddr(), srcOffset));
                     auto tileOffsets = TileOffset(index0, index1, index2);
                     dstTile.Assign(dst, tileOffsets);
                     pto::TLOAD(dstTile.Data(), srcGlobal.Data());
@@ -205,9 +208,10 @@ __aicore__ inline void TReshapeStore(
         auto reshapeStride2 = TileOp::GetTupleElement<Stride5Dim, DIM_3RD, MAX_DIMS, 0>(reshapeStride);
 
         if constexpr (TileOp::IsConstContinous<U>() == true) {
-            auto dstGlobal =
-                PtoGlobal<T, typename U::Shape, Stride5Dim>(dst.GetAddr() + gmOffset, src.GetShape(), reshapeStride)
-                    .Data();
+            auto dstGlobal = PtoGlobal<T, typename U::Shape, Stride5Dim>(
+                                 TileOp::GetPackedGmAddr<typename T::Type>(dst.GetAddr(), gmOffset), src.GetShape(),
+                                 reshapeStride)
+                                 .Data();
             auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
             pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
             pto::TSTORE(dstGlobal, srcTile);
@@ -219,9 +223,9 @@ __aicore__ inline void TReshapeStore(
         for (LoopVar index0 = 0; index0 < srcShape0; ++index0) {
             for (LoopVar index1 = 0; index1 < srcShape1; ++index1) {
                 for (LoopVar index2 = 0; index2 < srcShape2; ++index2) {
-                    dstGlobal.Assign(
-                        dst.GetAddr() + gmOffset + index0 * reshapeStride0 + index1 * reshapeStride1 +
-                        index2 * reshapeStride2);
+                    auto dstOffset = gmOffset + index0 * reshapeStride0 + index1 * reshapeStride1 +
+                                     index2 * reshapeStride2;
+                    dstGlobal.Assign(TileOp::GetPackedGmAddr<typename T::Type>(dst.GetAddr(), dstOffset));
                     auto tileOffsets = TileOffset(index0, index1, index2);
                     srcTile.Assign(src, tileOffsets);
                     pto::TSTORE(dstGlobal.Data(), srcTile.Data());

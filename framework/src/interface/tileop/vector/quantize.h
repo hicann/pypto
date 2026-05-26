@@ -30,7 +30,9 @@
 constexpr size_t TILE_ALIGNMENT_BYTES = 32;
 
 /// 向上取整到对齐边界
-#define PTO_CEIL(x, y) ((((x) + (y)-1) / (y)) * (y))
+#ifndef PTO_CEIL
+#define PTO_CEIL(x, y) ((((x) + (y) - 1) / (y)) * (y))
+#endif
 
 // =============================================================================
 // INT8 对称量化
@@ -257,7 +259,7 @@ TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 offset) {
     TQuantInt8Asym(dst, src, scale, offset);
 }
 
-#ifndef __DAV_V220
+#if defined PTO_NPU_ARCH_A5
 // =============================================================================
 // MX 量化
 // =============================================================================
@@ -265,6 +267,59 @@ TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 offset) {
 constexpr int kDequantScaleRoundingModeRoundUp = 0;
 constexpr int kDequantScaleRoundingModeRoundDown = 1;
 constexpr int kQuantMXPerformanceModeOn = 1;
+
+template <
+    int DEQUANT_SCALE_ROUNDING_MODE, typename DstTile, typename SrcTile, typename ExpTile, typename MaxTile,
+    typename ScalingTile>
+__aicore__ inline void QuantMXDispatch(
+    DstTile& dstTile, SrcTile& srcTile, ExpTile& expTile, MaxTile& maxTile, ScalingTile& scalingTile)
+{
+    if constexpr (std::is_same_v<typename DstTile::DType, float4_e2m1x2_t>) {
+        if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
+            pto::TQUANT<
+                pto::QuantType::MXFP4_E2M1,
+                DstTile,
+                SrcTile,
+                ExpTile,
+                MaxTile,
+                ScalingTile,
+                pto::QuantScaleAlg::NV>(
+                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+        } else {
+            pto::TQUANT<
+                pto::QuantType::MXFP4_E2M1,
+                DstTile,
+                SrcTile,
+                ExpTile,
+                MaxTile,
+                ScalingTile,
+                pto::QuantScaleAlg::OCP>(
+                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+        }
+    } else {
+        if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
+            pto::TQUANT<
+                pto::QuantType::MXFP8,
+                DstTile,
+                SrcTile,
+                ExpTile,
+                MaxTile,
+                ScalingTile,
+                pto::QuantScaleAlg::NV>(
+                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+        } else {
+            pto::TQUANT<
+                pto::QuantType::MXFP8,
+                DstTile,
+                SrcTile,
+                ExpTile,
+                MaxTile,
+                ScalingTile,
+                pto::QuantScaleAlg::OCP>(
+                dstTile, srcTile, &expTile, &maxTile, &scalingTile);
+        }
+    }
+}
 
 template <typename T, typename Layout>
 __aicore__ inline size_t GetQuantMXPerformanceGroupedOffset(
@@ -344,13 +399,16 @@ TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4
                         pto::TFILLPAD_INPLACE(srcPadTile, srcTile.Data());
                     }
                 }
-                if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown) {
-                    pto::TQUANT<pto::QuantType::MXFP8>(
-                        dstTile.Data(), srcTile.Data(), &expByteTile, &maxTile.Data(), &scalingTile.Data());
+                if constexpr (
+                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
+                    QuantMXDispatch<DEQUANT_SCALE_ROUNDING_MODE>(
+                        dstTile.Data(), srcTile.Data(), expByteTile, maxTile.Data(), scalingTile.Data());
                 } else {
                     static_assert(
-                        DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown,
-                        "TQuantMX only supports ROUND_DOWN (OCP standard) mode currently.");
+                        DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                            DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp,
+                        "TQuantMX only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes currently.");
                 }
             }
         }
@@ -387,7 +445,6 @@ TILEOP void TQuantMXPerformance(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch
     MaxTile maxTile(
         maxLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(), maxLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
-    (void)scalingLayout;
     (void)srcLayout;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -395,20 +452,26 @@ TILEOP void TQuantMXPerformance(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto expTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(expLayout, n0Index, n1Index, n2Index);
                 auto maxTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(maxLayout, n0Index, n1Index, n2Index);
+                auto scalingTileOffset =
+                    GetQuantMXPerformanceGroupedOffset<T4>(scalingLayout, n0Index, n1Index, n2Index);
                 auto srcTileAddr =
                     (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T4::Type));
                 dstTile.Assign(dst, tileOffsets);
-                scalingTile.Assign(scalingScratch, tileOffsets);
+                scalingTile.Assign(
+                    (uint64_t)(scalingScratch.GetAddr() + scalingTileOffset * sizeof(typename T3::Type)));
                 srcTile.Assign(srcTileAddr);
                 pto::TASSIGN(expByteTile, (uint64_t)(exp.GetAddr() + expTileOffset * sizeof(typename T1::Type)));
                 pto::TASSIGN(maxTile, (uint64_t)(maxScratch.GetAddr() + maxTileOffset * sizeof(typename T2::Type)));
-                if constexpr (DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown) {
-                    pto::TQUANT<pto::QuantType::MXFP8>(
-                        dstTile.Data(), srcTile.Data(), &expByteTile, &maxTile, &scalingTile.Data());
+                if constexpr (
+                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                    DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
+                    QuantMXDispatch<DEQUANT_SCALE_ROUNDING_MODE>(
+                        dstTile.Data(), srcTile.Data(), expByteTile, maxTile, scalingTile.Data());
                 } else {
                     static_assert(
-                        DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown,
-                        "TQuantMX only supports ROUND_DOWN (OCP standard) mode currently.");
+                        DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
+                            DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp,
+                        "TQuantMX only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes currently.");
                 }
             }
         }
@@ -426,5 +489,5 @@ TILEOP void TQuantMX(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
         TQuantMXGeneral<DEQUANT_SCALE_ROUNDING_MODE, AXIS>(dst, exp, maxScratch, scalingScratch, src);
     }
 }
-#endif 
+#endif // defined PTO_NPU_ARCH_A5
 #endif // TILEOP_TILE_OPERATOR_QUANTIZE__H
