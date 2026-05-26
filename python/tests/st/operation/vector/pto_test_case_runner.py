@@ -19,7 +19,7 @@ import torch
 import pypto
 
 helper_path: Path = Path(
-    Path(__file__).parent.parent.parent.parent.parent,
+    Path(__file__).parent.parent.parent.parent.parent.parent,
     "framework/tests/cmake/scripts/helper",
 ).resolve()
 if str(helper_path) not in sys.path:

@@ -225,26 +225,26 @@ def test_vector_operator_gatherinub():
     page_table = make_page_table(cfg, seed=42)
     topk_indices = make_topk_indices(cfg, seed=123)
     golden = gather_golden(topk_indices, page_table, buffer, cfg)
-    srcShapes = [cfg.num_buffer_tokens, cfg.hidden_dim]
-    offsetsShapes = [1, cfg.topk_count]
-    pageTableShapes = [1, cfg.num_logical_blocks]
-    dstShapes = [cfg.topk_count, cfg.hidden_dim]
-    src = pypto.tensor(srcShapes, pypto.DT_FP16, "src")
-    offsets = pypto.tensor(offsetsShapes, pypto.DT_INT32, "offsets")
-    pageTable = pypto.tensor(
-        pageTableShapes, pypto.DT_INT32, "pageTable")
-    dst = pypto.tensor(dstShapes, pypto.DT_FP16, "dst")
-    with pypto.function("MAIN", src, offsets, pageTable, dst):
+    src_shapes = [cfg.num_buffer_tokens, cfg.hidden_dim]
+    offsets_shapes = [1, cfg.topk_count]
+    page_table_shapes = [1, cfg.num_logical_blocks]
+    dst_shapes = [cfg.topk_count, cfg.hidden_dim]
+    src = pypto.tensor(src_shapes, pypto.DT_FP16, "src")
+    offsets = pypto.tensor(offsets_shapes, pypto.DT_INT32, "offsets")
+    pto_page_table = pypto.tensor(
+        page_table_shapes, pypto.DT_INT32, "page_table")
+    dst = pypto.tensor(dst_shapes, pypto.DT_FP16, "dst")
+    with pypto.function("MAIN", src, offsets, pto_page_table, dst):
         for _ in pypto.loop(1, name="b0", idx_name="bidx"):
             pypto.set_vec_tile_shapes(32, 64)
-            dynSrc = pypto.view(src, srcShapes, [0, 0], valid_shape=srcShapes)
-            dynOffsets = pypto.view(offsets, offsetsShapes, [
-                                    0, 0], valid_shape=offsetsShapes)
+            dyn_src = pypto.view(src, src_shapes, [0, 0], valid_shape=src_shapes)
+            dyn_offsets = pypto.view(offsets, offsets_shapes, [
+                                     0, 0], valid_shape=offsets_shapes)
             tmp = pypto.experimental.gather_in_ub(
-                dynSrc, dynOffsets, pageTable, cfg.block_size, -2)
+                dyn_src, dyn_offsets, pto_page_table, cfg.block_size, -2)
             pypto.assemble(tmp, [0, 0], dst)
-            del dynSrc, dynOffsets
-    result = torch.zeros(dstShapes, dtype=torch.float16)
+            del dyn_src, dyn_offsets
+    result = torch.zeros(dst_shapes, dtype=torch.float16)
     pto_a_tensor = pypto.from_torch(buffer, "buffer")
     pto_b_tensor = pypto.from_torch(topk_indices, "topk_indices")
     pto_c_tensor = pypto.from_torch(page_table, "page_table")

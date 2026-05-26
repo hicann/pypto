@@ -18,7 +18,7 @@ import torch
 from pto_test_case_runner import PTOTestCaseRunner, get_pto_dtype_by_name
 
 helper_path: Path = Path(
-    Path(__file__).parent.parent.parent.parent.parent,
+    Path(__file__).parent.parent.parent.parent.parent.parent,
     "framework/tests/cmake/scripts/helper",
 ).resolve()
 if str(helper_path) not in sys.path:
