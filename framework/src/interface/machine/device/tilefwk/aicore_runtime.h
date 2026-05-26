@@ -319,26 +319,31 @@ int64_t RuntimeGetViewValidShapeDim(int64_t validshape, int64_t viewOffset, int6
 #define GET_PARAM_SHAPE_1(param, n, base) GET_PARAM_ATTR_1(SHAPE, param, n, base)
 #define GET_PARAM_RAWSHAPE_1(param, n, base) GET_PARAM_ATTR_1(RAWSHAPE, param, n, base)
 #define GET_PARAM_STRIDE_1(param, n, base) 1
+#define GET_PARAM_STRIDE_DIM_1(s0) 1
 
 #define GET_PARAM_OFFSET_2(param, n, base) GET_PARAM_ATTR_2(OFFSET, param, n, base)
 #define GET_PARAM_SHAPE_2(param, n, base) GET_PARAM_ATTR_2(SHAPE, param, n, base)
 #define GET_PARAM_RAWSHAPE_2(param, n, base) GET_PARAM_ATTR_2(RAWSHAPE, param, n, base)
 #define GET_PARAM_STRIDE_2(param, n, base) GET_PARAM_ATTR_2_STRIDE(RAWSHAPE, param, n, base)
+#define GET_PARAM_STRIDE_DIM_2(s0, s1) (s1), 1
 
 #define GET_PARAM_OFFSET_3(param, n, base) GET_PARAM_ATTR_3(OFFSET, param, n, base)
 #define GET_PARAM_SHAPE_3(param, n, base) GET_PARAM_ATTR_3(SHAPE, param, n, base)
 #define GET_PARAM_RAWSHAPE_3(param, n, base) GET_PARAM_ATTR_3(RAWSHAPE, param, n, base)
 #define GET_PARAM_STRIDE_3(param, n, base) GET_PARAM_ATTR_3_STRIDE(RAWSHAPE, param, n, base)
+#define GET_PARAM_STRIDE_DIM_3(s0, s1, s2) (s1) * (s2), (s2), 1
 
 #define GET_PARAM_OFFSET_4(param, n, base) GET_PARAM_ATTR_4(OFFSET, param, n, base)
 #define GET_PARAM_SHAPE_4(param, n, base) GET_PARAM_ATTR_4(SHAPE, param, n, base)
 #define GET_PARAM_RAWSHAPE_4(param, n, base) GET_PARAM_ATTR_4(RAWSHAPE, param, n, base)
 #define GET_PARAM_STRIDE_4(param, n, base) GET_PARAM_ATTR_4_STRIDE(RAWSHAPE, param, n, base)
+#define GET_PARAM_STRIDE_DIM_4(s0, s1, s2, s3) (s1) * (s2) * (s3), (s2) * (s3), (s3), 1
 
 #define GET_PARAM_OFFSET_5(param, n, base) GET_PARAM_ATTR_5(OFFSET, param, n, base)
 #define GET_PARAM_SHAPE_5(param, n, base) GET_PARAM_ATTR_5(SHAPE, param, n, base)
 #define GET_PARAM_RAWSHAPE_5(param, n, base) GET_PARAM_ATTR_5(RAWSHAPE, param, n, base)
 #define GET_PARAM_STRIDE_5(param, n, base) GET_PARAM_ATTR_5_STRIDE(RAWSHAPE, param, n, base)
+#define GET_PARAM_STRIDE_DIM_5(s0, s1, s2, s3, s4) (s1) * (s2) * (s3) * (s4), (s2) * (s3) * (s4), (s3) * (s4), (s4), 1
 
 INLINE uint64_t RUNTIME_Min(uint64_t input1, uint64_t input2) { return input1 < input2 ? input1 : input2; }
 

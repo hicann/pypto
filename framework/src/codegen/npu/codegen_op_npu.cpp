@@ -527,6 +527,15 @@ std::vector<std::string> CodeGenOpNPU::GenDynRawShapePacked(unsigned paramIdx) c
         paramExpr.emplace_back(SymbolicExpressionTable::BuildExpression(s));
     }
     return paramExpr;
+}
+
+std::vector<std::string> CodeGenOpNPU::GenDynStridePacked(const std::vector<std::string>& dynRawShape) const
+{
+    std::ostringstream os;
+    std::vector<std::string> paramExpr;
+    os << "GET_PARAM_STRIDE_DIM_" << dynRawShape.size() << WrapParamByParentheses(dynRawShape);
+    paramExpr.emplace_back(os.str());
+    return paramExpr;
 };
 
 std::vector<std::string> CodeGenOpNPU::GenParamIdxExprByIndex(
@@ -602,7 +611,9 @@ void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
             tileTensor.shape = dynamicRawShape[paramIdx].empty() ?
                                    GenGetParamMacroPacked(paramIdx, tileTensor.dim, PREFIX_STR_RAW_SHAPE) :
                                    GenDynRawShapePacked(paramIdx);
-            tileTensor.stride = GenGetParamMacroPacked(paramIdx, tileTensor.dim, PREFIX_STR_STRIDE);
+            tileTensor.stride = dynamicRawShape[paramIdx].empty() ?
+                                    GenGetParamMacroPacked(paramIdx, tileTensor.dim, PREFIX_STR_STRIDE) :
+                                    GenDynStridePacked(tileTensor.shape);
         }
         return;
     }
