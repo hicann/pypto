@@ -10,7 +10,7 @@
 
 ## 功能说明
 
-计算输入Tensor中每个元素的互补误差函数值，逐元素运算。
+计算输入 Tensor 中每个元素的互补误差函数值，逐元素运算。
 
 互补误差函数定义：$$\text{erfc}(x) = \frac{2}{\sqrt{\pi}} \int_{x}^{\infty} e^{-t^2} dt$$
 
@@ -25,26 +25,26 @@ erfc(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空 Tensor；Shape 仅支持 1-4 维；Shape Size 不大于 2147483647（即 INT32_MAX）。 |
 
 ## 返回值说明
 
-返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的互补误差函数值。
+返回 Tensor 类型。其 Shape、数据类型与输入 Tensor 一致，其元素为输入 Tensor 对应元素的互补误差函数值。
 
 ## 约束说明
 
-1.  输入Tensor 和 输出Tensor 类型应该相同。
-2.  由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
+1.  输入 Tensor 和 输出 Tensor 类型应该相同。
+2.  由于存在临时内存使用，TileShape 大小有额外约束，假设 TileShape 为\[a,b,c,d\]，那么 5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
 
 ## 调用示例
 
-### TileShape设置示例
+### TileShape 设置示例
 
-调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
+调用该 operation 接口前，应通过 set_vec_tile_shapes 设置 TileShape。
 
-TileShape维度应和输出一致。
+TileShape 维度应和输出一致。
 
-如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+如输入 input shape 为 [m, n]，输出为 [m, n]，TileShape 设置为 [m1, n1]，则 m1, n1 分别用于切分 m, n 轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
@@ -60,6 +60,6 @@ y = pypto.erfc(x)
 结果示例如下：
 
 ```python
-输入数据x: [0.0, 1.0, 2.0, -1.0]
-输出数据y: [1.0000, 0.1573, 0.0047, 1.8427]
+输入数据 x: [0.0, 1.0, 2.0, -1.0]
+输出数据 y: [1.0000, 0.1573, 0.0047, 1.8427]
 ```
