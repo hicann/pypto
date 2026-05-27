@@ -27,9 +27,10 @@
 #include "interface/function/function.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
 #include "machine/device/dynamic/device_common.h"
+#include "machine/runtime/runner/runtime_agent.h"
 #include "machine/runtime/memory_utils/device_memory_utils.h"
 #include "machine/runtime/distributed/distributed_context.h"
-#include "machine/runtime/device_runner.h"
+#include "machine/runtime/runner/device_runner.h"
 #include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -180,7 +181,7 @@ public:
             devProg->devArgs.hostPid = GetProcessId();
         }
         if (isDevice) {
-            devProg->devArgs.validGetPgMask = DeviceRunner::Get().GetValidGetPgMask();
+            devProg->devArgs.validGetPgMask = RuntimeAgent::GetAgent()->GetValidGetPgMask();
         }
 
         MACHINE_LOGD("Set aicore blockdim=%d, aicpu blockdim=%d.", config.blockdim, config.aicpuNum);

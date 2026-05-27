@@ -18,8 +18,10 @@
 #include <iostream>
 #include <mutex>
 #include <sys/mman.h>
+#include "adapter/api/runtime_api.h"
 #include "interface/interpreter/raw_tensor_data.h"
-#include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
+#include "machine/runtime/runner/runtime_utils.h"
 
 namespace npu::tile_fwk::dynamic {
 struct MmapRecord {
@@ -69,7 +71,7 @@ struct EslModelMemoryUtils {
         const bool needAlloc = (cachedDevAddrHolder == nullptr) || (*cachedDevAddrHolder == nullptr);
         if (needAlloc) {
             if (isUseHugePage_) {
-                machine::GetRA()->AllocDevAddr(&devPtr, size);
+                DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
             } else {
                 RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, 0);
             }
@@ -118,7 +120,7 @@ struct EslModelMemoryUtils {
     {
         if (data.GetDevPtr() == nullptr) {
             uint8_t *devPtr = nullptr;
-            machine::GetRA()->AllocDevAddr(&devPtr, data.size());
+            DevMemoryPool::Instance().AllocDevAddr(&devPtr, data.size());
             if (devPtr == nullptr) {
                 return nullptr;
             }
@@ -143,7 +145,7 @@ struct EslModelMemoryUtils {
 
     void FreeTensor(uint8_t *devAddr)
     {
-        machine::GetRA()->FreeTensor(devAddr);
+        DevMemoryPool::Instance().FreeDevAddr(devAddr);
     }
 
     static uint64_t GetL2Offset() { return GetRuntimeL2Offset(); }

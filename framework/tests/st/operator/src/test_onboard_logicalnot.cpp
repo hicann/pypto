@@ -52,7 +52,7 @@ TEST_F(LogicalNotOnBoardTest, test_logicalnot_16_32_fp32)
 
     std::vector<float> golden(dstCapacity);
     std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/logicalnotdim2_golden.bin", golden);
 
     int ret = resultCmp(golden, res, 0.001f);
@@ -93,7 +93,7 @@ TEST_F(LogicalNotOnBoardTest, test_logicalnot_16_32_32_fp16)
     std::vector<npu::tile_fwk::float16> x(dstCapacity);
     std::vector<npu::tile_fwk::float16> golden(dstCapacity);
     std::vector<npu::tile_fwk::float16> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/logicalnotdim3_golden.bin", golden);
     readInput(GetGoldenDir() + "/logicalnotdim3_x.bin", x);
     int ret = resultCmpUnary(x, golden, res, 0.001f);

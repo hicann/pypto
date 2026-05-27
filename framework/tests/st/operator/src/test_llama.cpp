@@ -74,7 +74,7 @@ void RunLLamaLayer(const AttentionDims& dimsCfg, float threadhold = 0.001f)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::cout << std::hex << "addr----" << (uint64_t)out_ptr << std::endl;
     std::vector<float> res(size0);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     int ret = resultCmp(golden, res, threadhold);
     EXPECT_EQ(ret, true);
 }

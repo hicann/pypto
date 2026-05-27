@@ -53,7 +53,7 @@ TEST_F(AbsOnBoardTest, test_abs_8_4608)
     std::vector<npu::tile_fwk::float16> x(dstCapacity);
     std::vector<npu::tile_fwk::float16> golden(dstCapacity);
     std::vector<npu::tile_fwk::float16> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/abs_golden.bin", golden);
     readInput(GetGoldenDir() + "/abs_x.bin", x);
 
@@ -77,24 +77,23 @@ TEST_F(AbsOnBoardTest, test_abs_8_4609)
     int dstCapacity = dstShape[0] * dstShape[1];
 
     uint64_t outputSize = dstCapacity * sizeof(uint16_t);
-    uint8_t* out_ptr = allocDevAddr(outputSize);
-
+    uint8_t* outPtr = allocDevAddr(outputSize);
     PROGRAM("ABS")
     {
         void* x_ptr = readToDev(GetGoldenDir() + "/abs_x_not_align.bin", srcCapacity);
         TileShape::Current().SetVecTile({8, 128});
         Tensor input_a(DT_FP16, srcShape, (uint8_t*)x_ptr, "A");
-        Tensor output(DT_FP16, dstShape, out_ptr, "C");
+        Tensor output(DT_FP16, dstShape, outPtr, "C");
 
         config::SetBuildStatic(true);
         FUNCTION("ABS_T", {input_a, output}) { output = Abs(input_a); }
     }
-    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<npu::tile_fwk::float16> x(dstCapacity);
     std::vector<npu::tile_fwk::float16> golden(dstCapacity);
     std::vector<npu::tile_fwk::float16> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)outPtr, outputSize);
     readInput(GetGoldenDir() + "/abs_golden_not_align.bin", golden);
     readInput(GetGoldenDir() + "/abs_x_not_align.bin", x);
 
@@ -135,7 +134,7 @@ TEST_F(AbsOnBoardTest, test_abs_1_16384)
     std::vector<npu::tile_fwk::float16> x(dstCapacity);
     std::vector<npu::tile_fwk::float16> golden(dstCapacity);
     std::vector<npu::tile_fwk::float16> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/abs_golden_not_align.bin", golden);
     readInput(GetGoldenDir() + "/abs_x_not_align.bin", x);
 

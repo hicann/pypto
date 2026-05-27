@@ -26,7 +26,7 @@
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
-#include "machine/runtime/runtime_utils.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "cost_model/simulation/backend.h"
 
 using namespace npu::tile_fwk::dynamic;
@@ -80,7 +80,7 @@ struct MemoryHelper {
             devPtr = (uint8_t*)((((uint64_t)rawPtr) + alignSize - 1) / alignSize * alignSize);
             testAllocatePtrs_.push_back(ptr);
         } else {
-            machine::GetRA()->AllocDevAddr(&devPtr, size);
+            DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
         }
         return devPtr;
     }
@@ -135,7 +135,6 @@ public:
         ProgramData::GetInstance().AppendInputs(inputs);
         ProgramData::GetInstance().AppendOutputs(outputs);
         auto runner = DevFuncRunner(function, config);
-        DeviceRunner::Get().GetHostProfInstance().SetProfFunction(function);
         runner.RunDynamic(inputs, outputs);
     }
 
@@ -145,7 +144,6 @@ public:
         auto& inputs = ProgramData::GetInstance().GetInputDataList();
         auto& outputs = ProgramData::GetInstance().GetOutputDataList();
         auto runner = DevFuncRunner(function, config);
-        DeviceRunner::Get().GetHostProfInstance().SetProfFunction(function);
         runner.RunDynamic(inputs, outputs);
     }
 
@@ -195,15 +193,12 @@ private:
         }
     }
 
-    DevFuncRunner(Function* function, const DeviceLauncherConfig& config) : function_(function), config_(config)
-    {
-        if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
-            DeviceRunner::SetBinData(function->GetDyndevAttribute()->kernelBinary);
-        }
-    }
+    DevFuncRunner(Function* function, const DeviceLauncherConfig& config) : function_(function), config_(config) {}
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
         if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr) { return; }
+        DeviceRunner::Get().RegisterKernelBin(function_->GetDyndevAttribute()->kernelBinary);
+        DeviceRunner::Get().SetHostProfFunction(function_);
         KernelLaunchPrecheck(inputs, outputs);
         DevAscendProgram* functionDevProg =
             reinterpret_cast<DevAscendProgram*>(function_->GetDyndevAttribute()->devProgBinary.data());

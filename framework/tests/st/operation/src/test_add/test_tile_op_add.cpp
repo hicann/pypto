@@ -106,7 +106,7 @@ TEST_F(TestTileOpAdd, TestAddDim2)
     // Invoke a kernel
     std::vector<float> golden(capacity);
     std::vector<float> res(capacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, size);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, size);
     readInput(GetGoldenDir() + "/add_res.bin", golden);
     int ret = resultCmp(golden, res, 0.001f);
     EXPECT_EQ(ret, true);

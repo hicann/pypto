@@ -21,7 +21,8 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
-#include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "interface/tensor/logical_tensor.h"
 #include "cost_model/simulation/pv/PvData.h"
 #include "cost_model/simulation/emulator/SoftMemory.h"
@@ -53,39 +54,6 @@ static void writeInput(std::string filename, vector<T> outData)
     }
     ascendOutFile.write((char*)outData.data(), outData.size() * sizeof(T));
     ascendOutFile.close();
-}
-
-[[maybe_unused]] static void copyOutDataForGolden(
-    vector<float>& outData, vector<float>& outDataVal, std::vector<int>& shape, CpyMode mode)
-{
-    vector<float>::iterator itr = outData.begin();
-
-    if (mode == DIAG) {
-        for (int row = 0; row < shape[0]; row++) {
-            if (row == 16) {
-                if (shape[0] - 16 < 0) {
-                    break;
-                }
-                row = ((shape[0] - 16) <= row) ? row : (shape[0] - 16);
-            }
-            for (int col = 0; col < shape[1]; col++) {
-                if (col == 16) {
-                    if (shape[1] - 16 < 0) {
-                        break;
-                    }
-                    col = ((shape[1] - 16) <= col) ? col : (shape[1] - 16);
-                }
-
-                vector<float>::iterator itrTmp = itr + row * shape[1] + col;
-                if (itrTmp == outData.end()) {
-                    break;
-                }
-                outDataVal.push_back(*itrTmp);
-            }
-        }
-    } else {
-        outDataVal = outData;
-    }
 }
 
 template <typename T = float>
@@ -555,7 +523,7 @@ void* readToDev(const std::string& path, int size)
     readInput(path, data);
 
     uint8_t* devPtr = nullptr;
-    machine::GetRA()->AllocDevAddr(&devPtr, bytes);
+    DevMemoryPool::Instance().AllocDevAddr(&devPtr, bytes);
     if (devPtr == nullptr) {
         std::cout << "RuntimeMalloc failed" << std::endl;
         devPtr = reinterpret_cast<uint8_t*>(CostModel::SoftMemory::Instance().AllocateData(bytes, data));
@@ -578,7 +546,7 @@ void* readToDev(const std::string& path, int size)
 [[maybe_unused]] static uint8_t* allocDevAddr(uint64_t size)
 {
     uint8_t* devPtr = nullptr;
-    machine::GetRA()->AllocDevAddr(&devPtr, size);
+    DevMemoryPool::Instance().AllocDevAddr(&devPtr, size);
     if (devPtr == nullptr) {
         std::cout << "allocDevAddr RuntimeMalloc failed" << std::endl;
         std::vector<uint8_t> data(size);

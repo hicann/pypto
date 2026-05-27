@@ -20,8 +20,8 @@
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
-#include "machine/runtime/device_runner.h"
-#include "machine/runtime/pmu_common.h"
+#include "machine/runtime/runner/device_runner.h"
+#include "machine/runtime/runner/pmu_common.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/platform/platform_manager.h"
 #define private public
@@ -45,15 +45,6 @@ public:
 
     void TearDown() override {}
 };
-
-TEST_F(TestDeviceRunner, test_device_runner_get_task_time)
-{
-    // auto runner = npu::tile_fwk::DeviceRunner::Get();
-    npu::tile_fwk::DeviceRunner runner;
-    std::uint64_t tastWastTime = 0;
-    runner.args_.taskWastTime = (uint64_t)&tastWastTime;
-    runner.GetTasksTime();
-}
 
 TEST_F(TestDeviceRunner, test_set_pmu_event)
 {

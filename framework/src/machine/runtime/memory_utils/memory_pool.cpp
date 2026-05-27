@@ -23,6 +23,11 @@ inline constexpr size_t ONT_GB_SIZE = 1024 * 1024 * 1024;
 inline constexpr uint64_t SENTINEL_VALUE = 0xDEADBEEFDEADBEEF;
 inline constexpr uint32_t SENTINEL_NUM = 64;
 inline constexpr uint32_t SENTINEL_MEM_SIZE = 512;
+inline uint64_t MemSizeAlign(const uint64_t bytes, const uint32_t aligns = 512U)
+{
+    const uint64_t alignSize = (aligns == 0U) ? sizeof(uintptr_t) : aligns;
+    return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
+}
 }
 
 MemoryBlock::MemoryBlock(void* addr, size_t size, bool is_huge)
@@ -111,6 +116,12 @@ void MemoryBlock::Free(void* ptr, size_t size)
     }
 }
 
+DevMemoryPool& DevMemoryPool::Instance()
+{
+    static DevMemoryPool memoryPool;
+    return memoryPool;
+}
+
 DevMemoryPool::DevMemoryPool()
 {
     needMemCheck_ = (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL);
@@ -123,7 +134,17 @@ DevMemoryPool::~DevMemoryPool()
     DestroyPool();
 }
 
-bool DevMemoryPool::AllocDevAddrInPool(uint8_t** devAddr, uint64_t size)
+void DevMemoryPool::AllocDevAddr(uint8_t** devAddr, const uint64_t size)
+{
+    if (!AllocDevAddrInPool(devAddr, size)) {
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "RuntimeAgent::AllocDevAddrInPool failed for size %lu", size);
+        devAddr = nullptr;
+    } else {
+        MACHINE_LOGI("RuntimeAgentMemory: Alloc success %p", *devAddr);
+    }
+}
+
+bool DevMemoryPool::AllocDevAddrInPool(uint8_t** devAddr, const uint64_t size)
 {
     if (size == 0)
         return false;

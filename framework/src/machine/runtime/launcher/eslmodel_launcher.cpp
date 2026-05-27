@@ -19,7 +19,7 @@
 #include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
-#include "machine/runtime/runtime_utils.h"
+#include "machine/runtime/runner/runtime_utils.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
 namespace npu::tile_fwk::dynamic {

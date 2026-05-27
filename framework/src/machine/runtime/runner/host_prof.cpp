@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "machine/runtime/host_prof.h"
+#include "machine/runtime/runner/host_prof.h"
 
 #include <sys/syscall.h>
 #include "tilefwk/pypto_fwk_log.h"
@@ -22,7 +22,7 @@
 namespace npu::tile_fwk {
 namespace {
 const std::string kOpType = "PyPTO";
-const uint32_t kFormatNd = 2;
+constexpr uint32_t kFormatNd = 2;
 } // namespace
 
 HostProf::~HostProf() {}

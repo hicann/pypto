@@ -23,7 +23,6 @@
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
-using namespace npu::tile_fwk::machine;
 
 class DynamicOutcastTensorTest : public testing::Test {
 public:

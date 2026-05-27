@@ -106,7 +106,7 @@ void TransposePost(uint8_t* outputGmAddr, uint64_t outputSize)
     std::vector<float> golden(capacity);
     std::vector<float> res(capacity);
     std::vector<float> input(capacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)outputGmAddr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)outputGmAddr, outputSize);
     readInput("res.bin", golden);
     readInput("input.bin", input);
     int ret = resultCmp(golden, res, 0.001f, 64);

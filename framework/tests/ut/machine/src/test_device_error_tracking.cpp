@@ -23,7 +23,7 @@
 #include <fcntl.h>
 #include <functional>
 #include "securec.h"
-#include "machine/runtime/device_error_tracking.h"
+#include "machine/runtime/runner/device_error_tracking.h"
 
 using namespace npu::tile_fwk;
 

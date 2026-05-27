@@ -55,7 +55,7 @@ void TestMatmul(int m, int k, int n, string dataPath)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<OnputT> dev_res(capacity_c);
     std::vector<OnputT> golden(capacity_c);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
     readInput(dataPath + "/c_golden.bin", golden);
     std::cout << "====== output size:" << capacity_c << std::endl;
 
@@ -98,7 +98,7 @@ void TestMatmulTrans(int m, int k, int n, string dataPath)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<OnputT> dev_res(capacity_c);
     std::vector<OnputT> golden(capacity_c);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
     readInput(dataPath + "/c_golden.bin", golden);
     int ret = resultCmp(golden, dev_res, 0.001f);
     EXPECT_EQ(ret, true);
@@ -141,7 +141,7 @@ void TestMatmulACC(int m, int k, int n, string dataPath)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<OnputT> dev_res(capacity_c);
     std::vector<OnputT> golden(capacity_c);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), c_ptr, outputSize);
     readInput(dataPath + "/c_golden.bin", golden);
     int ret = resultCmp(golden, dev_res, 0.001f);
     std::cout << "golden = " << golden[0] << " result = " << dev_res[0] << std::endl;

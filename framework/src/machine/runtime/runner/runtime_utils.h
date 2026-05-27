@@ -20,6 +20,7 @@
 #include "tilefwk/error_code.h"
 #include "adapter/api/runtime_api.h"
 #include "adapter/api/acl_api.h"
+#include "machine/runtime/context/stream_context.h"
 
 namespace npu::tile_fwk {
 inline void CheckDeviceId()
@@ -75,6 +76,17 @@ inline void* DevMallocWithAlignSize(const uint64_t size, const RtMemType memType
     return devPtr;
 }
 
+inline void CopyFromTensor(uint8_t* hostDstAddr, const uint8_t* devSrcAddr, const uint64_t size)
+{
+#ifdef RUN_WITH_ASCEND_CAMODEL
+    RuntimeMemcpy(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST);
+#else
+    RuntimeMemcpyAsync(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST,
+        GetStreamContext().GetAiCoreStream());
+    RuntimeStreamSynchronize(GetStreamContext().GetAiCoreStream());
+#endif
+}
+
 inline void ExchangeCaptureMode(const bool& isCapture)
 {
     if (isCapture) {
@@ -82,6 +94,25 @@ inline void ExchangeCaptureMode(const bool& isCapture)
         AclMdlRICaptureThreadExchangeMode(&mode);
         MACHINE_LOGI("captureMode is: %d", static_cast<int>(mode));
     }
+}
+
+inline void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary)
+{
+    void* hdl = nullptr;
+    if (kernelBinary.empty()) {
+        MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Kernel binary is empty.");
+        return hdl;
+    }
+    RtDevBinary binary = {
+        .magic = RT_DEV_BINARY_MAGIC_ELF,
+        .version = 0,
+        .data = kernelBinary.data(),
+        .length = kernelBinary.size(),
+    };
+    if (RuntimeRegisterAllKernel(&binary, &hdl) != RT_SUCCESS) {
+        MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Failed to register kernel bin");
+    }
+    return hdl;
 }
 
 int GetCfgBlockdim();

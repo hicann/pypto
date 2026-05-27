@@ -47,7 +47,7 @@ TEST_F(ConcatOnBoardTest, test_concat_dim4_float32)
 
     std::vector<float> golden(resCap);
     std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/concat_2_2_64_64_res.bin", golden);
     std::cout << "====== output size:" << dev_res.size() << std::endl;
     int ret = resultCmp(golden, dev_res, 0.001f);
@@ -64,7 +64,7 @@ TEST_F(ConcatOnBoardTest, test_concat_exp_dim4_float32)
     int cap = shape[0] * shape[1] * shape[2] * shape[3];
     int resCap = cap * 2;
     uint64_t outputSize = resCap * sizeof(float);
-    uint8_t* out_ptr = allocDevAddr(outputSize);
+    uint8_t* outPtr = allocDevAddr(outputSize);
     PROGRAM("Concat")
     {
         void* x_ptr = readToDev(GetGoldenDir() + "/concat_exp_2_2_32_32_operand1.bin", cap);
@@ -73,7 +73,7 @@ TEST_F(ConcatOnBoardTest, test_concat_exp_dim4_float32)
         Tensor input_x(dtype, shape, (uint8_t*)x_ptr, "x");
         Tensor input_y(dtype, shape, (uint8_t*)y_ptr, "y");
         // Tensor output1(dtype, resShape, "z");
-        Tensor output2(dtype, resShape, out_ptr, "res");
+        Tensor output2(dtype, resShape, outPtr, "res");
 
         config::SetBuildStatic(true);
         FUNCTION("CONCAT_T", {input_x, input_y, output2})
@@ -82,13 +82,13 @@ TEST_F(ConcatOnBoardTest, test_concat_exp_dim4_float32)
             output2 = Exp(output1);
         }
     }
-    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<float> golden(resCap);
-    std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    std::vector<float> devRes(resCap);
+    CopyFromTensor((uint8_t*)devRes.data(), (uint8_t*)outPtr, outputSize);
     readInput(GetGoldenDir() + "/concat_exp_2_2_32_32_res.bin", golden);
-    int ret = resultCmp(golden, dev_res, 0.001f);
+    int ret = resultCmp(golden, devRes, 0.001f);
     EXPECT_EQ(ret, true);
 }
 
@@ -126,7 +126,7 @@ TEST_F(ConcatOnBoardTest, test_exp_concat_dim4_float32)
 
     std::vector<float> golden(resCap);
     std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/concat_exp_2_2_32_32_res.bin", golden);
     int ret = resultCmp(golden, dev_res, 0.001f);
     EXPECT_EQ(ret, true);
@@ -166,7 +166,7 @@ TEST_F(ConcatOnBoardTest, test_concat_sqrt_dim4_float32)
 
     std::vector<float> golden(resCap);
     std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/concat_sqrt_fp32_res.bin", golden);
     std::cout << "====== output size:" << dev_res.size() << std::endl;
 
@@ -204,7 +204,7 @@ TEST_F(ConcatOnBoardTest, test_concat_100_inputs_float32)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<float> golden(resCap);
     std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/concat_100_inputs_res_fp32.bin", golden);
     std::cout << "====== output size:" << dev_res.size() << std::endl;
 
@@ -242,7 +242,7 @@ TEST_F(ConcatOnBoardTest, test_concat_128_inputs_float32)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<float> golden(resCap);
     std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/concat_128_inputs_res_fp32.bin", golden);
     std::cout << "====== output size:" << dev_res.size() << std::endl;
 
@@ -279,7 +279,7 @@ TEST_F(ConcatOnBoardTest, test_concat_dim2_float32_moe)
 
     std::vector<float> golden(resCap);
     std::vector<float> dev_res(resCap);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/concat_67_7168_res.bin", golden);
     std::cout << "====== output size:" << dev_res.size() << std::endl;
 

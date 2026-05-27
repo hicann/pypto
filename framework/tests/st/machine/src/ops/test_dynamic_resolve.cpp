@@ -23,7 +23,6 @@
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
-using namespace npu::tile_fwk::machine;
 
 class DynamicResolveTest : public testing::Test {
 public:

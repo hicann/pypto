@@ -58,7 +58,7 @@ TEST_F(TensorIndexOnBoardTest, test_tensorindex_float_32_64_1_32)
 
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/y_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -104,7 +104,7 @@ TEST_F(TensorIndexOnBoardTest, test_tensorindex_float_64_256_1_64)
 
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/y_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -152,7 +152,7 @@ TEST_F(TensorIndexOnBoardTest, test_tensorindex_float_1_64_32_1)
 
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/y_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -197,7 +197,7 @@ TEST_F(TensorIndexOnBoardTest, test_tensorindex_float_64_512_16_64)
 
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/y_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -241,7 +241,7 @@ TEST_F(TensorIndexOnBoardTest, test_tensorindex_float_8_7168_64_moe)
 
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/y_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 

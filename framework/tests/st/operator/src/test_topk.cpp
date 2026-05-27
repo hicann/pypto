@@ -63,8 +63,8 @@ void TopKOnBoardFunc(TopKParams& params)
     std::vector<int32_t> golden_idx(shape0 * k);
     std::vector<float> dev_val(shape0 * k);
     std::vector<int32_t> dev_idx(shape0 * k);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_val.data(), (uint8_t*)out_ptr, outputSize);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_idx.data(), (uint8_t*)out_ptr1, outputSize);
+    CopyFromTensor((uint8_t*)dev_val.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_idx.data(), (uint8_t*)out_ptr1, outputSize);
 
     readInput(GetGoldenDir() + "/val.bin", golden_val);
     readInput(GetGoldenDir() + "/idx.bin", golden_idx);

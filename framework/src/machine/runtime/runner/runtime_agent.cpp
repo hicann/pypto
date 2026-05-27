@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/runner/runtime_agent.h"
 #include "tilefwk/platform.h"
 #include "adapter/api/hal_api.h"
 
@@ -31,7 +31,14 @@ namespace {
 constexpr int32_t MODULE_TYPE_AI_CORE = 4;
 constexpr int32_t INFO_TYPE_OCCUPY = 8;
 constexpr uint8_t AICORE_MAP_BUFF_LEN = 2;
+constexpr uint32_t SUB_CORE_PER_AICORE = 3;
+namespace DAV_2201 {
+constexpr uint32_t MAX_CORE = 25;
+}
 
+namespace DAV_3510 {
+constexpr uint32_t MAX_CORE = 36;
+}
 bool GetPgMask(uint64_t& valid, int32_t& deviceId)
 {
     deviceId = GetLogDeviceId();
@@ -48,17 +55,7 @@ bool GetPgMask(uint64_t& valid, int32_t& deviceId)
 }
 }
 
-constexpr uint32_t SUB_CORE_PER_AICORE = 3;
-
-namespace DAV_2201 {
-constexpr uint32_t MAX_CORE = 25;
-}
-
-namespace DAV_3510 {
-constexpr uint32_t MAX_CORE = 36;
-}
-
-int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_t>& aiv, const int& addrType)
+int RuntimeAgent::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_t>& aiv, const int addrType)
 {
     int32_t deviceId = 0;
     uint64_t valid = 0;
@@ -104,10 +101,10 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<
     return 0;
 }
 
-int RuntimeAgentMemory::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu) const
+void RuntimeAgent::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu)
 {
     if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
-        return 0;
+        return;
     }
     constexpr uint32_t AICORE_PER_DIE = 18;
     constexpr uint32_t AIV_BASE_OFFSET = 18;
@@ -149,7 +146,6 @@ int RuntimeAgentMemory::GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, s
         regs[aivSecondIndex] = mapAddr + AIV_SECOND_STRIDE;
         regsPmu[aivSecondIndex] = mapAddr + AIV_SECOND_STRIDE;
     }
-    return 0;
 }
 } // namespace npu::tile_fwk
 

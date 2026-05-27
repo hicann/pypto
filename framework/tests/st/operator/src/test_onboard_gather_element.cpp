@@ -58,7 +58,7 @@ TEST_F(GatherElementOnBoardTest, test_gather_element_float_16_70_8_40_1)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/res_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -104,7 +104,7 @@ TEST_F(GatherElementOnBoardTest, test_gather_element_float_16_64_8_32_1)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/res_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -152,7 +152,7 @@ TEST_F(GatherElementOnBoardTest, test_gather_element_float_16_64_7_32_1)
 
     std::vector<float> golden(capacity2);
     std::vector<float> dev_res(capacity2);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/res_golden.bin", golden);
     std::cout << "====== output size:" << capacity2 << std::endl;
 
@@ -198,7 +198,7 @@ TEST_F(GatherElementOnBoardTest, test_gather_element_float_16_64_7_32_0)
 
         std::vector<float> golden(capacity2);
         std::vector<float> dev_res(capacity2);
-        machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
+        CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_ptr, outputSize);
         readInput(GetGoldenDir() + "/res_golden.bin", golden);
         std::cout << "====== output size:" << capacity2 << std::endl;
 

@@ -14,6 +14,7 @@
  */
 
 #include "machine/runtime/launcher/device_launcher.h"
+
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
 #include "adapter/api/msprof_api.h"
@@ -138,12 +139,6 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     aicoreStream = aicoreStream == nullptr ? GetContextAiCoreStream() : aicoreStream;
     HOST_PERF_TRACE(TracePhase::RunDeviceInit);
 
-    if (cachedOperator == nullptr) { // st scene
-        if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
-            DeviceRunner::SetBinData(function->GetDyndevAttribute()->kernelBinary);
-        }
-    }
-
     // 1.Add stream to capture model
     int rc = SetCaptureStream(aicoreStream, aicpuStream, isCapture);
     if (rc < 0) {
@@ -158,7 +153,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     HOST_PERF_TRACE(TracePhase::RunDeviceSetCapture);
 
-    DeviceRunner::Get().GetHostProfInstance().SetProfFunction(function);
+    DeviceRunner::Get().SetHostProfFunction(function);
     rc = AclInit(nullptr);
     if (rc != 0 && rc != ACLRT_ERROR_REPEAT_INITIALIZE) {
         return rc;
@@ -172,6 +167,16 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
             cachedOperator = GetDevRunCacheOperator(function);
         }
     }
+    if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
+        rc = DeviceRunner::Get().RegisterKernelBin(
+            &(*reinterpret_cast<RtBinHandle*>(CachedOperator::GetBinHandleHolder(cachedOperator))),
+            function->GetDyndevAttribute()->kernelBinary);
+        if (rc < 0) {
+            MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Register kernel bin failed.");
+            return rc;
+        }
+    }
+    HOST_PERF_TRACE(TracePhase::RunDevRegistKernelBin);
 
     auto dynAttr = function->GetDyndevAttribute();
     CheckDeviceId();
@@ -189,16 +194,6 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     HOST_PERF_TRACE(TracePhase::RunDevInitInOutTensor);
 
-    rc = DeviceRunner::Get().RegisterKernelBin(
-        &(*reinterpret_cast<RtBinHandle*>(CachedOperator::GetBinHandleHolder(cachedOperator))),
-        cachedOperator == nullptr ? nullptr : &(function->GetDyndevAttribute()->kernelBinary));
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Register kernel bin failed.");
-        return rc;
-    }
-
-    HOST_PERF_TRACE(TracePhase::RunDevRegistKernelBin);
-
     DataDumpInit();
     rc = DeviceRunner::Get().DynamicLaunch(
         aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum);
@@ -211,7 +206,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     }
     if (streamSynchronize) {
         rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, ctrlStream, aicoreStream);
-        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, machine::GetRA()->CheckAllSentinels());
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     MACHINE_LOGI("finish Kernel Launch.");
 
@@ -422,19 +417,7 @@ bool DeviceLauncher::IsCaptureMode() { return DeviceLauncherContext::Get().IsCap
 
 void* DeviceLauncher::RegisterKernelBin(const std::vector<uint8_t>& kernelBinary)
 {
-    void* hdl = nullptr;
-    RtDevBinary binary = {
-        .magic = RT_DEV_BINARY_MAGIC_ELF,
-        .version = 0,
-        .data = kernelBinary.data(),
-        .length = kernelBinary.size(),
-    };
-
-    int ret = RuntimeRegisterAllKernel(&binary, &hdl);
-    if (ret != RT_SUCCESS) {
-        MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "register kernel failed, ret: %d", ret);
-    }
-    return hdl;
+    return RegisterKernelBinary(kernelBinary);
 }
 
 void DeviceLauncher::UnregisterKernelBin(void* hdl)
@@ -448,7 +431,7 @@ void DeviceLauncher::UnregisterKernelBin(void* hdl)
 void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode)
 {
     auto& devRunner = DeviceRunner::Get();
-    if (debugEnable || devRunner.GetEnableDumpDevPref() || devRunner.GetHostProfInstance().GetProfType() == 1) {
+    if (debugEnable || devRunner.GetEnableDumpDevPref() || devRunner.GetHostProfType() == 1) {
         if (isCaptureMode) {
             ChangeCaptureModeRelax();
         }
@@ -475,7 +458,7 @@ int DeviceLauncher::LaunchAicpuKernel(
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     auto schedStream = GetStreamContext().GetScheStream();
     auto& devRunner = DeviceRunner::Get();
-    devRunner.GetHostProfInstance().SetProfFunction(function);
+    devRunner.SetHostProfFunction(function);
     int ret = 0;
     auto args = (AiCpuArgs*)rtArgs.args;
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
@@ -520,7 +503,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             return rc;
         }
         devRunner.DumpAiCoreExecutionTimeData();
-        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, machine::GetRA()->CheckAllSentinels());
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {
         auto scheStream = GetStreamContext().GetScheStream();

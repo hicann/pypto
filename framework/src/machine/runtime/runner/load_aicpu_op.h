@@ -25,14 +25,9 @@
 
 namespace npu::tile_fwk {
 class LoadAicpuOp {
-private:
-    void* customBinHandle_ = nullptr;
-    std::string builtInOpJsonPath_;
-    std::unordered_map<std::string, RtFuncHandle> builtInFuncMap_;
-
 public:
     LoadAicpuOp() = default;
-    ~LoadAicpuOp(){};
+    ~LoadAicpuOp() {}
     static int AicpuKernelLaunch(
         [[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
         [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
@@ -47,6 +42,10 @@ public:
         static LoadAicpuOp loadCustomAicpuOp;
         return loadCustomAicpuOp;
     }
+private:
+    void* customBinHandle_ = nullptr;
+    std::string builtInOpJsonPath_;
+    std::unordered_map<std::string, RtFuncHandle> builtInFuncMap_;
 };
 } // namespace npu::tile_fwk
 #endif

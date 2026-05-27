@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "machine/runtime/runtime_utils.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include <unistd.h>
 #include "tilefwk/platform.h"
 #include "machine/runtime/context/stream_context.h"

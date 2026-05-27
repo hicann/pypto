@@ -68,8 +68,8 @@ TEST_F(MoEGatePart2OnBoardTest, test_operation_b_2)
     std::vector<int32_t> dev_mask(B * topkGroup);
     printf("out_group_idx_ptr is %p\n", out_group_idx_ptr);
     printf("out_group_mask_ptr is %p\n", out_group_mask_ptr);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_idx.data(), (uint8_t*)out_group_idx_ptr, outputSize);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_mask.data(), (uint8_t*)out_group_mask_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_idx.data(), (uint8_t*)out_group_idx_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_mask.data(), (uint8_t*)out_group_mask_ptr, outputSize);
 
     // 真值比对
     readInput(GetGoldenDir() + "/group_idx.bin", golden_idx);
@@ -137,8 +137,8 @@ TEST_F(MoEGatePart2OnBoardTest, test_operation_b_1024)
     std::vector<int32_t> dev_mask(B * topkGroup);
     printf("out_group_idx_ptr is %p\n", out_group_idx_ptr);
     printf("out_group_mask_ptr is %p\n", out_group_mask_ptr);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_idx.data(), (uint8_t*)out_group_idx_ptr, outputSize);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_mask.data(), (uint8_t*)out_group_mask_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_idx.data(), (uint8_t*)out_group_idx_ptr, outputSize);
+    CopyFromTensor((uint8_t*)dev_mask.data(), (uint8_t*)out_group_mask_ptr, outputSize);
 
     // 真值比对
     readInput(GetGoldenDir() + "/group_idx.bin", golden_idx);

@@ -26,10 +26,11 @@
 #include <utility>
 #include <vector>
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 #include "adapter/api/acl_define.h"
 #include "adapter/api/runtime_define.h"
 #include "interface/interpreter/raw_tensor_data.h"
-#include "tilefwk/error_code.h"
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
@@ -39,11 +40,10 @@
 #include "machine/runtime/launcher/eslmodel_launcher.h"
 #include "machine/runtime/launcher/aicore_model_launcher.h"
 #include "machine/runtime/launcher/device_launcher.h"
-#include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/utils/dynamic/dev_start_args.h"
-#include "machine/runtime/launcher_router.h"
+#include "machine/runtime/launcher/launcher_router.h"
 #include "machine/host/perf_analysis.h"
-#include "tilefwk/platform.h"
 #include "bindings/torch_tensor_converter.h"
 
 using namespace npu::tile_fwk;
@@ -807,7 +807,7 @@ public:
     ~KernelBinary()
     {
         if (runtimeDynamicCellMatchOwned_ && runtimeDynamicCellMatchAddr_ != 0) {
-            machine::GetRA()->FreeDevAddr(reinterpret_cast<uint8_t*>(runtimeDynamicCellMatchAddr_));
+            DevMemoryPool::Instance().FreeDevAddr(reinterpret_cast<uint8_t*>(runtimeDynamicCellMatchAddr_));
         }
         if (runtimeDynamicCellMatchHostOwned_ && runtimeDynamicCellMatchHostAddr_ != 0) {
             std::free(reinterpret_cast<void*>(runtimeDynamicCellMatchHostAddr_));
@@ -872,7 +872,7 @@ private:
     {
         if (needBytes == 0) {
             if (runtimeDynamicCellMatchOwned_ && runtimeDynamicCellMatchAddr_ != 0) {
-                machine::GetRA()->FreeDevAddr(reinterpret_cast<uint8_t*>(runtimeDynamicCellMatchAddr_));
+                DevMemoryPool::Instance().FreeDevAddr(reinterpret_cast<uint8_t*>(runtimeDynamicCellMatchAddr_));
             }
             if (runtimeDynamicCellMatchHostOwned_ && runtimeDynamicCellMatchHostAddr_ != 0) {
                 std::free(reinterpret_cast<void*>(runtimeDynamicCellMatchHostAddr_));
@@ -903,7 +903,7 @@ private:
         runtimeDynamicCellMatchOwned_ = true;
         runtimeDynamicCellMatchHostOwned_ = true;
         if (oldOwned && oldAddr != 0) {
-            machine::GetRA()->FreeDevAddr(reinterpret_cast<uint8_t*>(oldAddr));
+            DevMemoryPool::Instance().FreeDevAddr(reinterpret_cast<uint8_t*>(oldAddr));
         }
         if (oldHostOwned && oldHostAddr != 0) {
             std::free(reinterpret_cast<void*>(oldHostAddr));

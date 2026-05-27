@@ -60,7 +60,7 @@ TEST_F(MoEPart4OnBoardTest, test_operation_b_2)
 
     std::vector<float> golden_val(B * S * numExpertsPerTopk);
     std::vector<float> dev_res(B * S * numExpertsPerTopk);
-    machine::GetRA()->CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_topk_weight, outputSize);
+    CopyFromTensor((uint8_t*)dev_res.data(), (uint8_t*)out_topk_weight, outputSize);
     readInput(GetGoldenDir() + "/golden.bin", golden_val);
 
     resultCmp(golden_val, dev_res, 0.001f);

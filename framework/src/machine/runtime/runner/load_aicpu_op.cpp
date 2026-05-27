@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "load_aicpu_op.h"
+#include "machine/runtime/runner/load_aicpu_op.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -21,7 +21,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
-#include "machine/runtime/runtime_utils.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/utils/machine_utils.h"
 #include "tilefwk/error_code.h"
 using Json = nlohmann::json;

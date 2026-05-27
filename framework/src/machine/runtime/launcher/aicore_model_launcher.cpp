@@ -28,8 +28,6 @@
 #include "machine/simulation/host_core_context.h"
 #include "machine/simulation/aicore_hardware.h"
 #include "machine/simulation/aicore_model_kernel_meta_hook.h"
-
-#include "machine/runtime/dump_device_perf.h"
 #include "machine/runtime/launcher/device_launcher.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);

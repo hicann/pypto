@@ -26,7 +26,7 @@
 #include "test_dev_func_runner.h"
 #include "test_data_loader.h"
 #define private public
-#include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -96,13 +96,13 @@ TEST_F(TestGenAtten, test_mem_check_ok)
     tileConfig.tileS1Size = 1;
     const int dTileSize = NUM_512;
     const int nTileSize = NUM_128;
-    machine::GetRA()->memPool_.needMemCheck_ = true;
+    DevMemoryPool::Instance().needMemCheck_ = true;
     tileConfig.vec1TileShape = {1, 1, NUM_16, dTileSize};
     tileConfig.vec2TileShape = {1, 1, nTileSize, NUM_3};
     std::string configPath = GetGoldenDir() + "/config.json";
     TestDataLoader data(configPath);
     genAtten1<npu::tile_fwk::float16>(data, tileConfig);
-    auto ret = machine::GetRA()->CheckAllSentinels();
+    auto ret = DevMemoryPool::Instance().CheckAllSentinels();
     EXPECT_TRUE(ret);
 }
 
@@ -115,18 +115,18 @@ TEST_F(TestGenAtten, test_mem_check_fail)
     tileConfig.tileS1Size = 1;
     tileConfig.vec1TileShape = {1, 1, NUM_16, dTileSize};
     tileConfig.vec2TileShape = {1, 1, nTileSize, NUM_3};
-    machine::GetRA()->memPool_.needMemCheck_ = true;
+    DevMemoryPool::Instance().needMemCheck_ = true;
     std::string configPath = GetGoldenDir() + "/config.json";
     TestDataLoader data(configPath);
     genAtten1<npu::tile_fwk::float16>(data, tileConfig);
-    auto& sentinelValMap = machine::GetRA()->memPool_.sentinelValMap_;
+    auto& sentinelValMap = DevMemoryPool::Instance().sentinelValMap_;
     EXPECT_FALSE(sentinelValMap.empty());
     auto& firstPair = *sentinelValMap.begin();
     auto& firstVec = firstPair.second;
     EXPECT_FALSE(firstVec.empty());
     uint64_t faultVal = 0x232;
     RuntimeMemcpy(firstVec[0], sizeof(uint64_t), &faultVal, sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
-    auto ret = machine::GetRA()->CheckAllSentinels();
+    auto ret = DevMemoryPool::Instance().CheckAllSentinels();
     EXPECT_FALSE(ret);
 }
 #undef private

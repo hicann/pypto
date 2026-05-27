@@ -24,12 +24,6 @@ namespace npu::tile_fwk {
 inline constexpr uint32_t ONG_GB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POLICY_HUGE1G_PAGE_ONLY;
 inline constexpr uint32_t TWO_MB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POLICY_HUGE_PAGE_FIRST;
 
-inline uint64_t MemSizeAlign(const uint64_t bytes, const uint32_t aligns = 512U)
-{
-    const uint64_t alignSize = (aligns == 0U) ? sizeof(uintptr_t) : aligns;
-    return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
-}
-
 struct MemoryBlock {
     void* base_addr;
     size_t block_size;
@@ -46,15 +40,16 @@ struct MemoryBlock {
 
 class DevMemoryPool {
 public:
-    DevMemoryPool();
-    ~DevMemoryPool();
-
-    bool AllocDevAddrInPool(uint8_t** devAddr, uint64_t size);
+    static DevMemoryPool& Instance();
+    void AllocDevAddr(uint8_t** devAddr, const uint64_t size);
     void FreeDevAddr(void* ptr);
     bool CheckAllSentinels();
     void DestroyPool();
 
 private:
+    DevMemoryPool();
+    ~DevMemoryPool();
+    bool AllocDevAddrInPool(uint8_t** devAddr, uint64_t size);
     static void FreeMemBlock(MemoryBlock* block);
     static void PrintSentinelVal(std::vector<uint64_t>& sentinelVal, uint8_t* sentinelAddr);
     void PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize);

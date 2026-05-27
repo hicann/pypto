@@ -19,6 +19,8 @@
 #include "aicore_emulation.h"
 #include "test_machine_common.h"
 
+using namespace npu::tile_fwk::machine;
+
 struct AicoreTest : UnitTestBase {};
 
 TEST_F(AicoreTest, InitGoodbye)

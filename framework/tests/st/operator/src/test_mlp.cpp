@@ -98,7 +98,7 @@ TEST_F(MlpTest, test_16_7168_tileop)
 
     std::vector<float> golden(outputCapacity);
     std::vector<float> res(outputCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
 
     readInput(GetGoldenDir() + "/final_out.bin", golden);
 

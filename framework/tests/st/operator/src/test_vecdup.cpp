@@ -27,8 +27,8 @@ TEST_F(VecdupTest, TestVecDup)
 
     std::vector<int64_t> shape{32, 1, 32};
     Element src(DataType::DT_FP32, 2.0);
-    int outputCapacity = 32 * 32;
-    uint64_t outputSize = outputCapacity * sizeof(float);
+    int outputCap = 32 * 32;
+    uint64_t outputSize = outputCap * sizeof(float);
     uint8_t* out_ptr = allocDevAddr(outputSize);
     PROGRAM("VECDUP")
     {
@@ -37,13 +37,13 @@ TEST_F(VecdupTest, TestVecDup)
         Tensor output(DataType::DT_FP32, shape, out_ptr, "C");
 
         config::SetBuildStatic(true);
-        FUNCTION("VECDUP_T", {output}) { output = npu::tile_fwk::Full(src, DT_FP32, shape); }
+        FUNCTION("VECDUP_T", {output}) { output = Full(src, DT_FP32, shape); }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
-    std::vector<float> golden(outputCapacity);
-    std::vector<float> res(outputCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    std::vector<float> golden(outputCap);
+    std::vector<float> res(outputCap);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
 
     readInput(GetGoldenDir() + "/res.bin", golden);
 
@@ -74,7 +74,7 @@ TEST_F(VecdupTest, TestVecDupUnaligned)
 
     std::vector<float> golden(outputCapacity);
     std::vector<float> res(outputCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
 
     readInput(GetGoldenDir() + "/res.bin", golden);
 

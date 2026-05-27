@@ -70,12 +70,12 @@ bool DoCompare(
     std::vector<T> resGolden(outSize);
     // 统一处理指针或指针数组
     if constexpr (std::is_same_v<PtrType, uint8_t*>) {
-        machine::GetRA()->CopyFromTensor(reinterpret_cast<uint8_t*>(res.data()), outPtrs, outSize * dTypeSize);
+        CopyFromTensor(reinterpret_cast<uint8_t*>(res.data()), outPtrs, outSize * dTypeSize);
     } else {
         for (int32_t i = 0; i < testParam.rankSize; ++i) {
             const size_t chunkSize = outSize / testParam.rankSize;
             const size_t offset = i * chunkSize;
-            machine::GetRA()->CopyFromTensor(
+            CopyFromTensor(
                 reinterpret_cast<uint8_t*>(res.data() + offset), outPtrs[i], chunkSize * dTypeSize);
         }
     }

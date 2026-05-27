@@ -35,14 +35,14 @@ TEST_F(ExpandOnBoardTest, test_expand_32_1_to_32_32)
     int dstCapacity = dstShape[0] * dstShape[1];
 
     uint64_t outputSize = dstCapacity * sizeof(float);
-    uint8_t* out_ptr = allocDevAddr(outputSize);
+    uint8_t* outPtr = allocDevAddr(outputSize);
 
     PROGRAM("EXPAND")
     {
-        void* x_ptr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
+        void* inputXPtr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
         TileShape::Current().SetVecTile({16, 16});
-        Tensor input_a(DataType::DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
-        Tensor output(DataType::DT_FP32, dstShape, out_ptr, "C");
+        Tensor input_a(DataType::DT_FP32, srcShape, (uint8_t*)inputXPtr, "A");
+        Tensor output(DataType::DT_FP32, dstShape, outPtr, "C");
 
         config::SetBuildStatic(true);
         FUNCTION("EXPAND_T", {input_a, output}) { output = Expand(input_a, dstShape); }
@@ -51,7 +51,7 @@ TEST_F(ExpandOnBoardTest, test_expand_32_1_to_32_32)
 
     std::vector<float> golden(dstCapacity);
     std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)outPtr, outputSize);
     readInput(GetGoldenDir() + "/expand_res.bin", golden);
     for (size_t i = 0; i < res.size(); i++) {
         cout << "res[" << i << "]=" << res[i] << " golden[" << i << "]=" << golden[i] << endl;
@@ -84,17 +84,17 @@ TEST_F(ExpandOnBoardTest, test_expand_32_8_1_to_32_8_32)
     {
         void* x_ptr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
         TileShape::Current().SetVecTile({8, 8, 16});
-        Tensor input_a(DataType::DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
+        Tensor inputA(DataType::DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
         Tensor output(DataType::DT_FP32, dstShape, out_ptr, "C");
 
         config::SetBuildStatic(true);
-        FUNCTION("EXPAND_T", {input_a, output}) { output = Expand(input_a, dstShape); }
+        FUNCTION("EXPAND_T", {inputA, output}) { output = Expand(inputA, dstShape); }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
     std::vector<float> golden(dstCapacity);
     std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/expand_res.bin", golden);
 
     int ret = resultCmp(golden, res, 0.001f);
@@ -116,14 +116,14 @@ TEST_F(ExpandOnBoardTest, test_expand_32_1_to_32_23)
     int dstCapacity = dstShape[0] * dstShape[1];
 
     uint64_t outputSize = dstCapacity * sizeof(float);
-    uint8_t* out_ptr = allocDevAddr(outputSize);
+    uint8_t* outPtr = allocDevAddr(outputSize);
 
     PROGRAM("EXPAND")
     {
-        void* x_ptr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
+        void* xPtr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
         TileShape::Current().SetVecTile({16, 16});
-        Tensor input_a(DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
-        Tensor output(DT_FP32, dstShape, out_ptr, "C");
+        Tensor input_a(DT_FP32, srcShape, (uint8_t*)xPtr, "A");
+        Tensor output(DT_FP32, dstShape, outPtr, "C");
 
         config::SetBuildStatic(true);
         FUNCTION("EXPAND_T", {input_a, output}) { output = Expand(input_a, dstShape); }
@@ -131,11 +131,10 @@ TEST_F(ExpandOnBoardTest, test_expand_32_1_to_32_23)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
     std::vector<float> golden(dstCapacity);
-    std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    std::vector<float> result(dstCapacity);
+    CopyFromTensor((uint8_t*)result.data(), (uint8_t*)outPtr, outputSize);
     readInput(GetGoldenDir() + "/expand_res.bin", golden);
-    int ret = resultCmp(golden, res, 0.001f);
-    EXPECT_EQ(ret, true);
+    EXPECT_EQ(resultCmp(golden, result, 0.001f), true);
 }
 
 TEST_F(ExpandOnBoardTest, test_expand_32_8_1_to_32_8_23)
@@ -155,23 +154,23 @@ TEST_F(ExpandOnBoardTest, test_expand_32_8_1_to_32_8_23)
     int dstCapacity = dstShape[0] * dstShape[1] * dstShape[2];
 
     uint64_t outputSize = dstCapacity * sizeof(float);
-    uint8_t* out_ptr = allocDevAddr(outputSize);
+    uint8_t* outPtr = allocDevAddr(outputSize);
 
     PROGRAM("EXPAND")
     {
         void* x_ptr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
         TileShape::Current().SetVecTile({8, 8, 16});
-        Tensor input_a(DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
-        Tensor output(DT_FP32, dstShape, out_ptr, "C");
+        Tensor input(DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
+        Tensor output(DT_FP32, dstShape, outPtr, "C");
 
         config::SetBuildStatic(true);
-        FUNCTION("EXPAND_T", {input_a, output}) { output = Expand(input_a, dstShape); }
+        FUNCTION("EXPAND_T", {input, output}) { output = Expand(input, dstShape); }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
     std::vector<float> golden(dstCapacity);
     std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)outPtr, outputSize);
     readInput(GetGoldenDir() + "/expand_res.bin", golden);
 
     int ret = resultCmp(golden, res, 0.001f);
@@ -193,23 +192,21 @@ TEST_F(ExpandOnBoardTest, test_expand_for_4_dim)
 
     PROGRAM("EXPAND")
     {
-        void* x_ptr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
+        void* inputXPtr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
         TileShape::Current().SetVecTile({2, 2, 128, 16});
-        Tensor input_a(DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
+        Tensor input(DT_FP32, srcShape, (uint8_t*)inputXPtr, "A");
         Tensor output(DT_FP32, dstShape, out_ptr, "C");
 
         config::SetBuildStatic(true);
-        FUNCTION("EXPAND_T", {input_a, output}) { output = Expand(input_a, dstShape); }
+        FUNCTION("EXPAND_T", {input, output}) { output = Expand(input, dstShape); }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
     std::vector<float> golden(dstCapacity);
     std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/expand_res.bin", golden);
-
-    int ret = resultCmp(golden, res, 0.001f);
-    EXPECT_EQ(ret, true);
+    EXPECT_EQ(resultCmp(golden, res, 0.001f), true);
 }
 
 TEST_F(ExpandOnBoardTest, test_expand_1_1_to_1_16384)
@@ -227,14 +224,14 @@ TEST_F(ExpandOnBoardTest, test_expand_1_1_to_1_16384)
     int dstCapacity = dstShape[0] * dstShape[1];
 
     uint64_t outputSize = dstCapacity * sizeof(float);
-    uint8_t* out_ptr = allocDevAddr(outputSize);
+    uint8_t* outPtr = allocDevAddr(outputSize);
 
     PROGRAM("EXPAND")
     {
-        void* x_ptr = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
+        void* inputX = readToDev(GetGoldenDir() + "/expand_x.bin", srcCapacity);
         TileShape::Current().SetVecTile({1, 16384});
-        Tensor input_a(DT_FP32, srcShape, (uint8_t*)x_ptr, "A");
-        Tensor output(DT_FP32, dstShape, out_ptr, "C");
+        Tensor input_a(DT_FP32, srcShape, (uint8_t*)inputX, "A");
+        Tensor output(DT_FP32, dstShape, outPtr, "C");
 
         config::SetBuildStatic(true);
         FUNCTION("EXPAND_T", {input_a, output}) { output = Expand(input_a, dstShape); }
@@ -242,9 +239,9 @@ TEST_F(ExpandOnBoardTest, test_expand_1_1_to_1_16384)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
 
     std::vector<float> golden(dstCapacity);
-    std::vector<float> res(dstCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res.data(), (uint8_t*)out_ptr, outputSize);
+    std::vector<float> result(dstCapacity);
+    CopyFromTensor((uint8_t*)result.data(), (uint8_t*)outPtr, outputSize);
     readInput(GetGoldenDir() + "/expand_res.bin", golden);
-    int ret = resultCmp(golden, res, 0.001f);
+    int ret = resultCmp(golden, result, 0.001f);
     EXPECT_EQ(ret, true);
 }

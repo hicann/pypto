@@ -89,8 +89,8 @@ TEST_F(MoEGatePart1OnBoardTest, test_moe_gate_part1)
     std::vector<float> golden_scores(outputSize);
     std::vector<float> golden_scores4choice(outputSize);
 
-    machine::GetRA()->CopyFromTensor((uint8_t*)res_scores.data(), out_score_ptr, outputCapacity);
-    machine::GetRA()->CopyFromTensor((uint8_t*)res_scores4choice.data(), out_score4choice_ptr, outputCapacity);
+    CopyFromTensor((uint8_t*)res_scores.data(), out_score_ptr, outputCapacity);
+    CopyFromTensor((uint8_t*)res_scores4choice.data(), out_score4choice_ptr, outputCapacity);
 
     readInput(GetGoldenDir() + "/output_score.bin", golden_scores);
     readInput(GetGoldenDir() + "/output_score4choice.bin", golden_scores4choice);

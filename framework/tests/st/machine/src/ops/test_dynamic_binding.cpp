@@ -23,7 +23,6 @@
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
-using namespace npu::tile_fwk::machine;
 
 static constexpr int tiling32 = 32;
 
@@ -142,7 +141,6 @@ TEST_F(DynamicBindingTest, TestDeviceRunDataFromHost)
 TEST_F(DynamicBindingTest, TestDeviceCompute)
 {
     SetInterpreterConfig();
-    auto agent = RuntimeAgent::GetAgent();
     AclInit(nullptr);
     RuntimeSetDevice(GetDeviceIdByEnvVar());
 
@@ -154,9 +152,9 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
     uint8_t* inputADevAddr = nullptr;
     uint8_t* inputBDevAddr = nullptr;
     uint8_t* outputDevAddr = nullptr;
-    agent->AllocDevAddr(&inputADevAddr, n * m * sizeof(int32_t));
-    agent->AllocDevAddr(&inputBDevAddr, n * m * sizeof(int32_t));
-    agent->AllocDevAddr(&outputDevAddr, n * m * sizeof(int32_t));
+    DevMemoryPool::Instance().AllocDevAddr(&inputADevAddr, n * m * sizeof(int32_t));
+    DevMemoryPool::Instance().AllocDevAddr(&inputBDevAddr, n * m * sizeof(int32_t));
+    DevMemoryPool::Instance().AllocDevAddr(&outputDevAddr, n * m * sizeof(int32_t));
 
     std::vector<int32_t> inputAData(n * m, 0);
     std::vector<int32_t> inputBData(n * m, 0);
@@ -168,8 +166,10 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
         outputGolden[i] = i * 3;
     }
 
-    agent->CopyToDev(inputADevAddr, (uint8_t*)inputAData.data(), inputAData.size() * sizeof(int32_t));
-    agent->CopyToDev(inputBDevAddr, (uint8_t*)inputBData.data(), inputBData.size() * sizeof(int32_t));
+    RuntimeMemcpy(inputADevAddr, inputAData.size() * sizeof(int32_t), inputAData.data(),
+        inputAData.size() * sizeof(int32_t), RtMemcpyKind::HOST_TO_DEVICE);
+    RuntimeMemcpy(inputBDevAddr, inputBData.size() * sizeof(int32_t), inputBData.data(),
+        inputAData.size() * sizeof(int32_t), RtMemcpyKind::HOST_TO_DEVICE);
 
     Tensor inputA(DT_INT32, {n, m}, "inputA");
     Tensor inputB(DT_INT32, {n, m}, "inputB");
@@ -212,7 +212,8 @@ TEST_F(DynamicBindingTest, TestDeviceCompute)
     auto aicoreStream = reinterpret_cast<DeviceStream>(GetStreamContext().GetAiCoreStream());
     EXPECT_EQ(0, ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(op, inputList, outputList, aicoreStream, true));
 
-    agent->CopyFromDev((uint8_t*)outputData.data(), outputDevAddr, outputData.size() * sizeof(int32_t));
+    RuntimeMemcpy(outputData.data(), outputData.size() * sizeof(int32_t), outputDevAddr,
+        outputData.size() * sizeof(int32_t), RtMemcpyKind::DEVICE_TO_HOST);
 
     EXPECT_TRUE(resultCmp(outputGolden, (int32_t*)outputData.data(), 0.001f));
 }

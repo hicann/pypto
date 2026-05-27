@@ -13,6 +13,7 @@
  * \brief
  */
 
+#include "machine/runtime/runner/device_error_tracking.h"
 #include <iostream>
 #include "adapter/api/acl_api.h"
 

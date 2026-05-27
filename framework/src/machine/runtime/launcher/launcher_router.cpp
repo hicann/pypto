@@ -9,27 +9,30 @@
 */
  	 
 /*!
-* \file launcher_router.h
+* \file launcher_router.cpp
 * \brief runtime launch mode routing helpers
 */
- 	 
-#pragma once
 
-#include<cstdint>
-#include "interface/configs/config_manager.h"
+#include "machine/runtime/launcher/launcher_router.h"
 
 namespace npu::tile_fwk::dynamic {
+LaunchMode LauncherRouter::ResolveByDebugMode(int64_t debugMode)
+{
+    switch (debugMode) {
+        case CFG_DEBUG_ALL:
+        case CFG_DEBUG_VERIFY:
+            return LaunchMode::EMULATION;
+        case CFG_DEBUG_AICORE_MODEL:
+            return LaunchMode::AICORE_MODEL;
+        default:
+            return LaunchMode::DEVICE_RT;
+    }
+}
 
-enum class LaunchMode {
-    DEVICE_RT = 0,
-    EMULATION = 1,
-    AICORE_MODEL = 2,
-};
-
-class LauncherRouter {
-public:
-    static LaunchMode ResolveByDebugMode(int64_t debugMode);
- 	static LaunchMode ResolveCurrent();
-};
+LaunchMode LauncherRouter::ResolveCurrent()
+{
+    auto debugMode = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE);
+    return ResolveByDebugMode(debugMode);
+}
 
 } // namespace npu::tile_fwk::dynamic

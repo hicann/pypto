@@ -13,13 +13,25 @@
  * \brief
  */
 
-#include "machine/runtime/pmu_common.h"
+#include "machine/runtime/runner/pmu_common.h"
 #include <string>
-#include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "interface/utils/common.h"
 
 namespace npu::tile_fwk {
 namespace {
+// pmu event type
+constexpr int32_t ARITHMETIC_UTILIZATION = 1;
+constexpr int32_t PIPE_UTILIZATION = 2;
+constexpr int32_t MEMORY = 4;
+constexpr int32_t MEMORY_L0 = 5;
+constexpr int32_t RESOURCE_CONFLICT_RATION = 6;
+constexpr int32_t MEMORY_UB = 7;
+constexpr int32_t L2_CACHE = 8;
+
+constexpr int PMU_EVENT_TYPE_MAX_DAV2201 = 8;
+constexpr int PMU_EVENT_TYPE_MAX_DAV3510 = 10;
+
 void SetPmuEventTypeDAV2201(int32_t profPmuType, std::vector<int64_t>& pmuEvtType)
 {
     // 按照环境变量设置的数值，获取pmu事件类型
@@ -106,5 +118,4 @@ void PmuCommon::InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>&
         SetPmuEventTypeDAV3510(profPmuType, pmuEvtType);
     }
 }
-
 } // namespace npu::tile_fwk

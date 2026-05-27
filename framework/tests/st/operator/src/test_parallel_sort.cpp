@@ -80,13 +80,11 @@ void SortStaticTest(int tileSize)
     }
 
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
-    uint64_t taskTime = DeviceRunner::Get().GetTasksTime();
-    std::cout << "Sort Cost Time is: " << taskTime << std::endl;
 
     std::vector<float> yResult(Capacity(shape));
     std::vector<float> yIdxResult(Capacity(shape));
-    machine::GetRA()->CopyFromTensor((uint8_t*)yResult.data(), (uint8_t*)yPtr, Capacity(shape) * sizeof(float));
-    machine::GetRA()->CopyFromTensor((uint8_t*)yIdxResult.data(), (uint8_t*)yIdxPtr, Capacity(shape) * sizeof(float));
+    CopyFromTensor((uint8_t*)yResult.data(), (uint8_t*)yPtr, Capacity(shape) * sizeof(float));
+    CopyFromTensor((uint8_t*)yIdxResult.data(), (uint8_t*)yIdxPtr, Capacity(shape) * sizeof(float));
     std::cout << "y" << std::endl;
     bool cmp = resultCmp(yGolden, yResult, 0);
     std::cout << "yIdx" << std::endl;

@@ -15,9 +15,9 @@
 
 #include "gtest/gtest.h"
 #include <cstdlib>
-#include "machine/runtime/device_runner.h"
+#include "machine/runtime/runner/device_runner.h"
 #include "machine/runtime/launcher/device_launcher.h"
-#include "machine/runtime/host_prof.h"
+#include "machine/runtime/runner/host_prof.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -31,7 +31,7 @@
 #include "interface/utils/file_utils.h"
 #include "tilefwk/aicpu_common.h"
 #include "machine/device/dynamic/device_utils.h"
-#include "machine/runtime/dump_device_perf.h"
+#include "machine/runtime/runner/dump_device_perf.h"
 #define private public
 using namespace npu::tile_fwk;
 
@@ -75,7 +75,6 @@ TEST_F(TestDynamicDeviceRunner, TestInitArgs)
     args.nrAic = 2;
     args.nrAiv = 2;
     args.nrValidAic = args.nrAic;
-    runner.InitDynamicArgs(args);
     runner.DumpAiCoreExecutionTimeData();
     runner.DumpAiCorePmuData();
     runner.SynchronizeDeviceToHostProfData();
@@ -87,7 +86,6 @@ TEST_F(TestDynamicDeviceRunner, TestDynamicRun)
     [[maybe_unused]] DeviceArgs args;
     args.nrAic = 2;
     args.nrAiv = 2;
-    runner.InitDynamicArgs(args);
     [[maybe_unused]] npu::tile_fwk::DeviceKernelArgs taskArgs;
     std::vector<uint8_t> tensorInfo(sizeof(AiCpuArgs));
     taskArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo.data());
@@ -100,9 +98,10 @@ TEST_F(TestDynamicDeviceRunner, TestDynamicRun)
 
 TEST_F(TestDynamicDeviceRunner, TestRegisterDynamicKernel)
 {
-    [[maybe_unused]] RtBinHandle staticHdl_;
     npu::tile_fwk::DeviceRunner runner;
-    runner.RegisterKernelBin(&staticHdl_);
+    [[maybe_unused]] RtBinHandle staticHdl_;
+    std::vector<uint8_t> bin;
+    runner.RegisterKernelBin(&staticHdl_, bin);
 }
 
 TEST_F(TestDynamicDeviceRunner, test_pypto_kernel_server_null)

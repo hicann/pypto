@@ -12,7 +12,8 @@
  * \file dump_device_perf.cpp
  * \brief
  */
-#include "dump_device_perf.h"
+
+#include "machine/runtime/runner/dump_device_perf.h"
 
 #include <cstdlib>
 #include "tilefwk/pypto_fwk_log.h"
@@ -25,14 +26,17 @@
 #include "machine/utils/checkinject.h"
 
 namespace npu::tile_fwk::dynamic {
+namespace {
 constexpr int DUMP_LEVEL_FOUR = 4;
+constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
 uint32_t g_last_round_num = 0;
+}
+
 void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& perfData, bool isLast)
 {
     if (GetEnvVar("DUMP_DEVICE_PERF") == "true" && !perfData.empty()) {
-        uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ? npu::tile_fwk::dynamic::FREQ_DAV_2201 :
-                                                                npu::tile_fwk::dynamic::FREQ_DAV_3510;
-        npu::tile_fwk::dynamic::DumpAicpuPerfInfo(args, perfData, freq, isLast);
+        uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ? FREQ_DAV_2201 : FREQ_DAV_3510;
+        DumpAicpuPerfInfo(args, perfData, freq, isLast);
     }
 }
 
@@ -318,7 +322,7 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     DumpAicoreDevTask(args, aicpuPrefArray, perfData, freq, sumRoundNum);
 
     std::string aicpuPerfilePath =
-        npu::tile_fwk::config::LogTopFolder() + "/machine_trace_perf_data_" + std::to_string(g_last_round_num) + ".json";
+        config::LogTopFolder() + "/machine_trace_perf_data_" + std::to_string(g_last_round_num) + ".json";
     if (!DumpFile(aicpuPrefArray.dump(DUMP_LEVEL_FOUR), aicpuPerfilePath)) {
         MACHINE_LOGW("Contrust custom op json failed");
         return;

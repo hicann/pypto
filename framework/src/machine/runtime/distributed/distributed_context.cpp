@@ -21,7 +21,7 @@
 #include "adapter/api/acl_api.h"
 #include "interface/utils/common.h"
 #include "tilefwk/error_code.h"
-#include "machine/runtime/runtime_agent.h"
+#include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/device/dynamic/device_utils.h"
 
@@ -167,7 +167,7 @@ uint64_t AllocateAndSetupCommContext(
     }
 
     TileOp::CommContext* ctxDevice = nullptr;
-    machine::GetRA()->AllocDevAddr(reinterpret_cast<uint8_t**>(&ctxDevice), commCtxSize);
+    DevMemoryPool::Instance().AllocDevAddr(reinterpret_cast<uint8_t**>(&ctxDevice), commCtxSize);
     ASSERT(DistributedErrorCode::CONTEXT_CONFIGURE_FAILED, ctxDevice != nullptr) << "ctxDevice malloc failed";
 
     auto ret = AclRtMemcpy(ctxDevice, commCtxSize, ctxHost, commCtxSize, AclRtMemcpyKind::HOST_TO_DEVICE);
@@ -275,7 +275,7 @@ uint64_t DistributedContext::AllocCommContext<ResType::RING_A2>(
         FillCommCtxWinArr<npu::tile_fwk::HcclRankRelationResV2>(i, ctxHost, &remoteParam);
     }
     TileOp::CommContext* ctxDevice = nullptr;
-    machine::GetRA()->AllocDevAddr((uint8_t**)&ctxDevice, commCtxSize);
+    DevMemoryPool::Instance().AllocDevAddr((uint8_t**)&ctxDevice, commCtxSize);
     ASSERT(DistributedErrorCode::CONTEXT_CONFIGURE_FAILED, ctxDevice != nullptr) << "ctxDevice malloc failed";
     ret = AclRtMemcpy(
         ctxDevice, sizeof(TileOp::CommContext) + sizeof(uint64_t) * hcclParamhost->rankSize * WIN_TYPE_NUM, ctxHost,

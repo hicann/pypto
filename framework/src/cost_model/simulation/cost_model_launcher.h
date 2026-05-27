@@ -26,7 +26,6 @@
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "cost_model/simulation/backend.h"
-#include "machine/runtime/host_prof.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk::dynamic {
