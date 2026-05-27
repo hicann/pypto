@@ -72,6 +72,7 @@ void SimulationCommContext::Init(const std::string &groupName, int rank, int wor
     rank_ = rank;
     worldSize_ = worldSize;
     round_ = round;
+    INTERPRETER_LOGI("[IPC] RANK%d initialized.", rank_);
 }
 
 void SimulationCommContext::PreAlloc() {
@@ -79,7 +80,7 @@ void SimulationCommContext::PreAlloc() {
         return;
     }
     std::string handler = SimulationCommManager::GetHandler(groupName_, rank_, round_);
-    int fd = shm_open(handler.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    int fd = shm_open(handler.c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, fd != -1) << "shm_open data failed!";
     size_t size = WIN_IN_SIZE;
     auto ret = ftruncate(fd, size);
@@ -98,6 +99,7 @@ void SimulationCommContext::PreAlloc() {
     allocatedData_ = true;
     dataName_ = handler;
     memset_s(dataBase_, size, 0, size);
+    INTERPRETER_LOGI("[IPC] RANK%d pre-allocated %zuB for shared data. Its name is %s, ptr is %p.", rank_, size, handler.c_str(), dataBase_);
 }
 
 void SimulationCommContext::PreAllocSignal() {
@@ -105,7 +107,7 @@ void SimulationCommContext::PreAllocSignal() {
         return;
     }
     std::string handler = SimulationCommManager::GetSignalHandler(groupName_, rank_, round_);
-    int fd = shm_open(handler.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    int fd = shm_open(handler.c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd == -1) {
         ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, false) << "shmopen signal failed!";
     }
@@ -125,6 +127,7 @@ void SimulationCommContext::PreAllocSignal() {
     allocatedSignal_ = true;
     ctrlName_ = handler;
     memset_s(ctrlBase_, size, 0, size);
+    INTERPRETER_LOGI("[IPC] RANK%d pre-allocated %zuB for shared signal. Its name is %s, ptr is %p.", rank_, size, handler.c_str(), ctrlBase_);
 }
 
 RawTensorDataPtr SimulationCommContext::Alloc(DataType dataType, const Shape& shape) {
@@ -145,6 +148,7 @@ RawTensorDataPtr SimulationCommContext::Alloc(DataType dataType, const Shape& sh
     auto result = RawTensorData::CreateTensor(dataType, shape, dataBase_ + beforeSize);
     result->SetShmOffset(beforeSize);
     result->SetAsShmTensor();
+    INTERPRETER_LOGI("[IPC] RANK%d allocated %zuB for shared data, its ptr is (%p + %zu).", rank_, slotSize, dataBase_, beforeSize);
     return result;
 }
 
@@ -165,6 +169,7 @@ RawTensorDataPtr SimulationCommContext::AllocSignal(DataType dataType, const Sha
     auto result = RawTensorData::CreateTensor(dataType, shape, ctrlBase_ + beforeSize);
     result->SetShmOffset(beforeSize);
     result->SetAsShmTensor();
+    INTERPRETER_LOGI("[IPC] RANK%d allocated %zuB for shared signal, its ptr is (%p + %zu).", rank_, slotSize, ctrlBase_, beforeSize);
     return result;
 }
 
@@ -293,6 +298,7 @@ void SimulationCommContext::Put(LogicalTensorDataPtr data, int dstRank, uint64_t
                 ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, false) << "Unsupported atomic add data type!";
         }
     }
+    INTERPRETER_LOGI("[IPC] RANK%d put %zuB data to rank %d, data's ptr is %p, dst ptr is (%p + %lu), atomicadd: %d.", rank_, slotSize, dstRank, data->GetData()->data(), base, offset, atomicType);
 }
 
 void SimulationCommContext::Set(int dstRank, int value, size_t slotSize, uint64_t offset) {
@@ -302,6 +308,7 @@ void SimulationCommContext::Set(int dstRank, int value, size_t slotSize, uint64_
     }
     std::atomic_thread_fence(std::memory_order_release);
     memset_s(base + offset, slotSize, value, slotSize);
+    INTERPRETER_LOGI("[IPC] RANK%d set %zuB shared signal as %d for rank %d, its ptr is (%p + %lu).", rank_, slotSize, value, dstRank, base, offset);
 }
 
 void SimulationCommContext::SignalSingle(int dstRank, int value, size_t slotSize, uint64_t offset, int atomicType) {
@@ -321,6 +328,7 @@ void SimulationCommContext::SignalSingle(int dstRank, int value, size_t slotSize
             __sync_fetch_and_add(&ctrlBase[offset + i], value);
         }
     }
+    INTERPRETER_LOGI("[IPC] RANK%d signal %zuB to rank %d, its value is %d, its ptr is (%p + %lu), atomicadd: %d.", rank_, slotSize, dstRank, value, ctrlBase, offset, atomicType);
 }
 
 void SimulationCommContext::Signal(int dstRank, int value, size_t slotSize, uint64_t offset, int atomicType, bool notifyAll) {
@@ -353,6 +361,7 @@ void SimulationCommContext::Wait(int srcRank, int expect, size_t slotSize, uint6
         }
         std::atomic_thread_fence(std::memory_order_release);
     }
+    INTERPRETER_LOGI("[IPC] RANK%d has reached %d from (%p + %lu), slotSize is %zu, reset: %d.", srcRank, expect, ctrlBase, offset, slotSize, (int)reset);
 }
 
 bool SimulationCommContext::CheckWaitCondition(int srcRank, int expect, size_t slotSize, uint64_t offset) {
@@ -375,6 +384,7 @@ LogicalTensorDataPtr SimulationCommContext::Get(int srcRank, DataType datatype, 
         ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, false) << "Get operation would exceed shared memory bound!";
     }
     RawTensorDataPtr result = RawTensorData::CreateTensor(datatype, shape, base + offset);
+    INTERPRETER_LOGI("[IPC] RANK%d has got %zuB data from (%p + %lu).", srcRank, slotSize, base, offset);
     return std::make_shared<LogicalTensorData>(result);
 }
 
