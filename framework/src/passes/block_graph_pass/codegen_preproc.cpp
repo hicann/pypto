@@ -303,7 +303,8 @@ inline bool SkipInputCombineOps3510(Operation& op)
     }
     auto lhs = op.GetIOperands()[0];
     auto rhs = op.GetIOperands()[1];
-    if (lhs->GetShape() == rhs->GetShape()) {
+    if ((lhs->GetShape() == rhs->GetShape()) ||
+        (lhs->tensor->rawshape.back() == 1 && lhs->tensor->rawshape.back() == rhs->tensor->rawshape.back())) {
         return false;
     }
     return true;
