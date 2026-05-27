@@ -44,6 +44,13 @@ const std::unordered_set<Opcode> OP_SHAPE_FROM_ATTR{
     Opcode::OP_RESHAPE_COPY_OUT,
 };
 bool IsOpShapeFromAttr(Opcode opcode) { return OP_SHAPE_FROM_ATTR.find(opcode) != OP_SHAPE_FROM_ATTR.end(); }
+const std::unordered_set<Opcode> SHMEM_COPY_OPS{
+    Opcode::OP_SHMEM_GET,
+    Opcode::OP_SHMEM_LOAD,
+    Opcode::OP_SHMEM_PUT,
+    Opcode::OP_SHMEM_STORE
+};
+bool IsShmemCopyOp(Opcode opcode) { return SHMEM_COPY_OPS.find(opcode) != SHMEM_COPY_OPS.end(); }
 } // namespace
 
 template <typename T>
@@ -125,7 +132,22 @@ void CodeGenOp::UpdateShape(
         UpdateShapeFromAttr(attr->GetToDynValidShape(), operandIdx);
     }
 
+    UpdateValidShapeForShmemCopyOps(oper, operandIdx);
+
     CombineAxis(oper, operandIdx, isInput, ioIdx);
+}
+
+void CodeGenOp::UpdateValidShapeForShmemCopyOps(const Operation& oper, int operandIdx)
+{
+    Opcode opcode = oper.GetOpcode();
+    if ((!IsShmemCopyOp(opcode)) || (operandIdx != 0)) {
+        return;
+    }
+    std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+    ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
+    const auto &validShape = (attr->GetFromDynValidShape().size() != 0) ?
+        attr->GetFromDynValidShape() : attr->GetToDynValidShape();
+    UpdateShapeFromAttr(validShape, 0);
 }
 
 void CodeGenOp::UpdateOffsetValueFromAttr(const std::vector<OpImmediate>& offsets, int operandIdx)

@@ -152,6 +152,7 @@ private:
     void UpdateScalarValue(const Operation& ops);
     void UpdateOpAttribute(const Operation& ops);
     void CombineAxis(const Operation& oper, int operandIdx, bool isInput, size_t ioIdx);
+    void UpdateValidShapeForShmemCopyOps(const Operation& oper, int operandIdx);
 };
 } // namespace npu::tile_fwk
 
