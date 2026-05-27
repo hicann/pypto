@@ -128,18 +128,18 @@ bool OoOScheduler::IsBelongSpillBlackList(Operation* spillOp, Operation* op) {
 
 void OoOScheduler::FindFilterLtags(Operation* allocOp, std::set<Operation*> &filterLtags) {
     auto dstOpList = depManager_.GetSuccessors(allocOp);
-    auto dstOp = *dstOpList.begin();
-    if (COPY_IN_OPS.find(dstOp->GetOpcode()) != COPY_IN_OPS.end()) {
+    for (auto dstOp : dstOpList) {
+        if (COPY_IN_OPS.find(dstOp->GetOpcode()) == COPY_IN_OPS.end()) {
+            for (auto &inOp : depManager_.GetPredecessors(dstOp)) {
+                filterLtags.insert(inOp);
+            }
+            continue;
+        }
         for (auto &dstOpId : depManager_.GetSuccessors(dstOp)) {
             auto dstOp_level0 = dstOpId;
             for (auto &inOp : depManager_.GetPredecessors(dstOp_level0)) {
                 filterLtags.insert(inOp);
             }
-        }
-    }
-    for (auto &dstOp_level1 : dstOpList) {
-        for (auto &inOp : depManager_.GetPredecessors(dstOp_level1)) {
-            filterLtags.insert(inOp);
         }
     }
 }
@@ -543,6 +543,9 @@ Status OoOScheduler::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp
     }
 
     for (auto &op : spillTensor->GetProducers()) {
+        if (op->GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
         for (auto &producer : op->ProducerOps()) {
             if (opIsAllocMap[producer]) {
                 producer->UpdateOutputOperand(0, spillTensor);
