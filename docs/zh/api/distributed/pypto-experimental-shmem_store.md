@@ -1,4 +1,4 @@
-# pypto.distributed.shmem_store
+# pypto.experimental.shmem_store
 
 ## 产品支持情况
 
@@ -42,7 +42,7 @@ shmem_store(
 
 ## 约束说明
 
-1. pred 不能包含 src，即 src 不可出现在 pred 中。
+1. pred 是一个张量列表，表示控制依赖关系。src 不能放在这个列表中。
 2. src 的 dtype 必须和 dst 的 dtype 一致。
 
 ## 调用示例

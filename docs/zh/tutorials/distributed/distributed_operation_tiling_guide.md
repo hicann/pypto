@@ -1,5 +1,17 @@
 # PyPTO 通信算子切块设置指南
 
+## 前置说明
+
+本指南基于 PyPTO 通用切块机制，说明通信算子的特殊切块策略和约束。
+
+建议先阅读以下文档了解切块基础知识：
+- [Tiling配置](../development/tiling.md)：TileShape概念、设置方法、通用约束
+- [set_vec_tile_shapes API文档](../../api/config/pypto-set_vec_tile_shapes.md)：接口使用说明
+
+通信算子使用相同的 `set_vec_tile_shapes` 接口设置切块，但在**切分策略**和**约束条件**上有特殊处理，详见本指南第3节和第5节。
+
+---
+
 ## 1. 背景介绍
 
 在 PyPTO 分布式计算中，通信算子用于实现多卡间的数据传输与同步。由于硬件资源限制（如单次传输大小限制、内存带宽等）和性能优化需求，通信算子通常需要将大数据块划分为多个小块进行传输和操作，这种划分方式称为切块（Tiling）。
@@ -20,7 +32,7 @@
 | ------------------- | -------- | ------------------------ |
 | create_shmem_tensor | -        | -                        |
 | create_shmem_signal | -        | -                        |
-| shmem_view-         | -        | -                        |
+| shmem_view         | -        | -                        |
 | shmem_put           | 支持     | 设置分块发送的数据大小   |
 | shmem_get           | 支持     | 设置分块读取的数据大小   |
 | shmem_signal        | 支持     | 分块写入信号量           |
@@ -91,8 +103,6 @@ $$
 
 
 ### 3.2 控制边类型的tensor切分策略
-
-切块的主体对象是 data tensor。一个 op 会被切分为多少个 tile_op，由 data tensor 的 shape 和 TileShape 共同决定。
 
 对 dummy tensor 切分时，遵循以下核心原则：**检查每个维度是否足够切分，满足条件就切分，不满足就不切分**。
 
@@ -202,7 +212,7 @@ def allreduce_kernel(
     all_reduce_out = pypto.distributed.shmem_get(
         shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_dummy], valid_shape=shmem_shape
     )
-     output_tensor.move(all_reduce_out)
+    output_tensor.move(all_reduce_out)
 
 ```
 

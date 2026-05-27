@@ -118,7 +118,7 @@ shmem_signal(
     pypto.set_vec_tile_shapes(32, 64)
     signal_out = pypto.distributed.shmem_signal(
         src=shmem_tensor,
-        sec_pe=3,
+        src_pe=3,
         signal=4,
         shape=[64, 64],
         offsets=[0, 1],

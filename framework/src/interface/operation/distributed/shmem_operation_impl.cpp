@@ -49,12 +49,14 @@ void ValidateTiling(const Opcode& opCode, const Tensor& target, const std::strin
     }
 }
 
-void ValidateDataType(const Tensor& tensor, const std::string& desc, const std::unordered_set<DataType>& allowedTypes)
+void ValidateDataType(
+    const Tensor& tensor, const std::string& desc, const std::unordered_set<DataType>& allowedTypes,
+    const std::string& context = "")
 {
     auto dataType = tensor.GetDataType();
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DTYPE, allowedTypes.empty() || allowedTypes.count(dataType))
-        << "Invalid data type: " << desc << " data type only support " << ToString(allowedTypes)
-        << ", but got:" << ToString(dataType);
+        << "Invalid data type: " << desc << " data type must be " << ToString(allowedTypes)
+        << ", but got:" << ToString(dataType) << (context.empty() ? "" : ". " + context);
 }
 
 void ValidateDim(const Shape& shape, const std::string& desc, const std::set<size_t>& allowedDims)
@@ -86,10 +88,10 @@ void ValidateShape(const Tensor& tensor, const std::string& desc, const Shape& e
 void ValidateTensor(
     const Tensor& tensor, const std::string& desc, const std::set<size_t>& allowedDims = {},
     const std::unordered_set<DataType>& allowedTypes = {}, const std::unordered_set<TileOpFormat>& allowedFormats = {},
-    const Shape& expectShape = {})
+    const Shape& expectShape = {}, const std::string& dataTypeContext = "")
 {
     ValidateDim(tensor.GetShape(), desc, allowedDims);
-    ValidateDataType(tensor, desc, allowedTypes);
+    ValidateDataType(tensor, desc, allowedTypes, dataTypeContext);
     ValidateFormat(tensor, desc, allowedFormats);
     ValidateShape(tensor, desc, expectShape);
 }
@@ -275,7 +277,9 @@ static Tensor ShmemPutImpl(
     if ((putOp == AtomicType::ADD) && ((src.GetDataType() == DT_BF16) || (src.GetDataType() == DT_FP16))) {
         allowedShmemTypes.emplace(DT_FP32);
     }
-    ValidateTensor(dst.data, "data of shmem tensor", {}, allowedShmemTypes, {TileOpFormat::TILEOP_ND}, src.GetShape());
+    ValidateTensor(
+        dst.data, "data of shmem tensor", {}, allowedShmemTypes, {TileOpFormat::TILEOP_ND}, src.GetShape(),
+        "Shmem tensor dtype must match input tensor dtype");
     ValidateTensor(pred, "pred tensor", {2, 3, 4});
     ValidateTiling(isStore ? Opcode::OP_SHMEM_STORE : Opcode::OP_SHMEM_PUT, src, "src");
     auto& function = *Program::GetInstance().GetCurrentFunction();

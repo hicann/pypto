@@ -132,7 +132,7 @@ shmem_wait_until(
         src_pe=3,
         cmp_value=4,
         shape=[64, 64],
-        offstes=[0, 1],
+        offsets=[0, 1],
         clear_signal=True,
         pred=[signal_out],
     )

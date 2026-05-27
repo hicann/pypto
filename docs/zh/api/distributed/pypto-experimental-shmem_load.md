@@ -1,4 +1,4 @@
-# pypto.distributed.shmem_load
+# pypto.experimental.shmem_load
 
 ## 产品支持情况
 
@@ -48,7 +48,7 @@ shmem_load(
 
 ### TileShape 设置示例
 
-说明：调用该接口前，应通过 set_vec_tile_shapes 设置 TileShape。TileShape 维度应和输出一致。
+说明：调用该接口前，应通过 set_vec_tile_shapes 设置 TileShape。TileShape 维度应和 src 一致。
 
 - 示例 1：输入的 shape 为 [m, n]，输出的 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 
