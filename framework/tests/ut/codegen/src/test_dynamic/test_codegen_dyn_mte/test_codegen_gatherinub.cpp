@@ -25,6 +25,7 @@
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
+#include "test_codegen_utils.h"
 #include "test_codegen_common.h"
 
 namespace npu::tile_fwk {
@@ -52,7 +53,7 @@ struct PageAttentionTestConfig {
     int block_size;         // 每个块里有多少个 token
 };
 template <typename Config>
-void GatherInUBUT(Config& cfg)
+Function* GatherInUBUT(Config& cfg)
 {
     Shape srcShapes{cfg.num_buffer_tokens, cfg.hidden_dim}; // 网络中，kvcache对应的内存
     Shape offsetsShapes{1, cfg.topk_count};                 // topk的结果
@@ -86,9 +87,12 @@ void GatherInUBUT(Config& cfg)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    return function;
 }
+
 TEST_F(TestCodegenGatherInUB, gather_in_a_)
 {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
     using Config = PageAttentionTestConfig<int32_t, float16>;
     Config cfg;
     cfg.topk_count = 8;         // topk结果
@@ -96,8 +100,13 @@ TEST_F(TestCodegenGatherInUB, gather_in_a_)
     cfg.num_buffer_tokens = 32; // buffer token 维度（物理 token 容量）
     cfg.hidden_dim = 4;         // 隐藏维度大小
     cfg.block_size = 4;         // 每个块的 token 数
-    GatherInUBUT(cfg);
+    auto function = GatherInUBUT(cfg);
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::GatherInUB<half, int32_t, int32_t, 8, 16, 4>((__ubuf__ half*)UB_S0_E256, (__gm__ half*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 1)), (__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 10)), (__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 19)), sym_58_dim_1, GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 1, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 1, 2, 1), sym_58_dim_0, GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 10, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 10, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 10, 2, 1), GET_PARAM_RAWSHAPE_BY_IDX(param, 2, 19, 2, 1), GET_PARAM_OFFSET_BY_IDX(param, 2, 19, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 2, 19, 2, 1));)!!!";
+    CheckStringExist(expect, res);
 }
+
 TEST_F(TestCodegenGatherInUB, gather_in_a_tile_tensor)
 {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -108,6 +117,10 @@ TEST_F(TestCodegenGatherInUB, gather_in_a_tile_tensor)
     cfg.num_buffer_tokens = 32; // buffer token 维度（物理 token 容量）
     cfg.hidden_dim = 4;         // 隐藏维度大小
     cfg.block_size = 4;         // 每个块的 token 数
-    GatherInUBUT(cfg);
+    auto function = GatherInUBUT(cfg);
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TgatherInUB<4>(ubTensor_0, gmTensor_1, gmTensor_2, gmTensor_3, Coord2Dim(GET_PARAM_OFFSET_2(param, 2, 1)), Coord2Dim(GET_PARAM_OFFSET_2(param, 2, 10)), Coord2Dim(GET_PARAM_OFFSET_2(param, 2, 19)));)!!!";
+    CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

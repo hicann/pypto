@@ -31,16 +31,11 @@ namespace npu::tile_fwk {
 
 class TestCodegenDynCumSum : public CodegenTestBase {
 public:
-    TestCodegenDynCumSum()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
-    {}
-
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
+    TestCodegenDynCumSum() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 };
 
 void TestCodegenDynCumSumBody(int axis)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     std::vector<int64_t> vecTileShape = {5, 9};
     std::vector<int64_t> shape{12, 14};
 
@@ -50,6 +45,10 @@ void TestCodegenDynCumSumBody(int axis)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        axis == 0 ? "TCumOperation<3, 1>(ubTensor_2, ubTensor_0);" : "TCumOperation<3, 1>(ubTensor_7, ubTensor_2);";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynCumSum, test_CumSum_dim2_0) { TestCodegenDynCumSumBody(0); }

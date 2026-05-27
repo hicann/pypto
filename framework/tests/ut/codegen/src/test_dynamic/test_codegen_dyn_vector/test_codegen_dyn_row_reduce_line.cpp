@@ -33,11 +33,7 @@ namespace npu::tile_fwk {
 
 class TestCodegenDynRowReduceLine : public CodegenTestBase {
 public:
-    TestCodegenDynRowReduceLine()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
-    {}
-
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
+    TestCodegenDynRowReduceLine() : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION}) {}
 };
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumLine)
@@ -69,13 +65,13 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumLine)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TRowSumLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumSingleTileTensor)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 257;
     int shape1 = 128;
     std::vector<int64_t> shape = {shape0, shape1};
@@ -108,13 +104,14 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumSingleTileTensor)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+
+    std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_7, ubTensor_4, ubTensor_8);)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdLine)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 64;
     int shape1 = 32;
     std::vector<int64_t> shape = {shape0, shape1};
@@ -147,9 +144,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdLine)
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdSingleTileTensor)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 64;
     int shape1 = 32;
     std::vector<int64_t> shape = {shape0, shape1};
@@ -190,9 +184,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdSingleTileTensor)
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxLine)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 64;
     int shape1 = 32;
     std::vector<int64_t> shape = {shape0, shape1};
@@ -225,9 +216,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxLine)
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxSingleTileTensor)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 64;
     int shape1 = 32;
     std::vector<int64_t> shape = {shape0, shape1};
@@ -268,9 +256,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxSingleTileTensor)
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinLine)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 64;
     int shape1 = 32;
     std::vector<int64_t> shape = {shape0, shape1};
@@ -303,9 +288,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinLine)
 
 TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinSingleTileTensor)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-
     int shape0 = 64;
     int shape1 = 32;
     std::vector<int64_t> shape = {shape0, shape1};

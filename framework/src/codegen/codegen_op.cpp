@@ -233,7 +233,7 @@ void CodeGenOp::Init(const Operation& ops)
     UpdateTileOpInfo(ops);
     ASSERT(OperErr::OPERATION_INIT_FAILED, !tileOpName.empty()) << "empty tileOpName for ops: " << ops.Dump();
 
-    isSupportLayout = ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false) &&
+    isSupportLayout = ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true) &&
                       SUPPORT_TILETENSOR_OPS.find(opCode) != SUPPORT_TILETENSOR_OPS.end();
     CODEGEN_LOGI(
         "Init CodeGenOp from Operation, isDynamicFunction: %d, isSupportDynamicAligned: %d, isSupportLayout: %d",

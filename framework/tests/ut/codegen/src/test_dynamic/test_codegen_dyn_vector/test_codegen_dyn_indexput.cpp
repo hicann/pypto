@@ -35,7 +35,9 @@
 namespace npu::tile_fwk {
 class TestCodegenDynIndexPut : public CodegenTestBase {
 public:
-    TestCodegenDynIndexPut() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
+    TestCodegenDynIndexPut()
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true, .resetTileTensorOnTearDown = true})
+    {}
 };
 
 TEST_F(TestCodegenDynIndexPut, DynIndexPutTileTensor)

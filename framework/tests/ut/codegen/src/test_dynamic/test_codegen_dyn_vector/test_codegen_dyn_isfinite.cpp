@@ -31,16 +31,11 @@ namespace npu::tile_fwk {
 
 class TestCodegenDynIsFinite : public CodegenTestBase {
 public:
-    TestCodegenDynIsFinite()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
-    {}
-
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
+    TestCodegenDynIsFinite() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 };
 
 void TestCodegenIsFiniteBody()
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     std::vector<int64_t> vecTileShape = {5, 9};
     std::vector<int64_t> shape{12, 14};
 
@@ -50,6 +45,9 @@ void TestCodegenIsFiniteBody()
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TIsFinite(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynIsFinite, test_IsFinite_0) { TestCodegenIsFiniteBody(); }

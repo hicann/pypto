@@ -32,14 +32,14 @@ namespace npu::tile_fwk {
 class TestCodegenDynScalar : public CodegenTestBase {
 public:
     TestCodegenDynScalar()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
+        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .resetTileTensorOnTearDown = true})
     {}
-
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };
 
 TEST_F(TestCodegenDynScalar, TestScalarAdds)
 {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+
     std::vector<int64_t> vecTileShape = {128, 128};
     int b = 2; // 32
     int s = 1; // 1, optimize set_tile
@@ -65,10 +65,17 @@ TEST_F(TestCodegenDynScalar, TestScalarAdds)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127, sym_5_dim_0, sym_5_dim_1);)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynScalar, TestScalarDivs)
 {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+
     std::vector<int64_t> vecTileShape = {128, 128, 128};
     int b = 2; // 32
     int s = 1; // 1, optimize set_tile
@@ -93,12 +100,15 @@ TEST_F(TestCodegenDynScalar, TestScalarDivs)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::DynTSdivs<float, /*DstRawShape*/ 1, 2, 40, /*Src0RawShape*/ 1, 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127, sym_5_dim_0, sym_5_dim_1, sym_5_dim_2);)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynScalar, TestAddsTileTensor)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     int s = 32;
     Tensor t0(DT_FP32, {-1, s}, "t0"); // [32*8, 32]
     Tensor out(DT_FP32, {-1, s}, "out");

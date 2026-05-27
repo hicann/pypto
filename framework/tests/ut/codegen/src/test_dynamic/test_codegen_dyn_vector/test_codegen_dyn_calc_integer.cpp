@@ -34,10 +34,6 @@ public:
     TestCodegenDynCalcInteger()
         : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
     {}
-
-    static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
-
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };
 
 TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil)

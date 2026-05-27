@@ -32,12 +32,9 @@ namespace npu::tile_fwk {
 class TestCodegenDynExp2 : public CodegenTestBase {
 public:
     TestCodegenDynExp2()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
+        : CodegenTestBase(
+              {.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
     {}
-
-    static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
-
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };
 
 TEST_F(TestCodegenDynExp2, TestDynOpExp2)
@@ -54,5 +51,8 @@ TEST_F(TestCodegenDynExp2, TestDynOpExp2)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TExp2(ubTensor_0, ubTensor_3, ubTensor_4, ubTensor_0);)!!!";
+    CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

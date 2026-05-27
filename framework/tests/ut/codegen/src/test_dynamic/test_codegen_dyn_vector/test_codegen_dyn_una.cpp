@@ -33,12 +33,18 @@ constexpr const unsigned OP_MAGIC4 = 4;
 class TestCodegenDynUna : public CodegenTestBase {
 public:
     TestCodegenDynUna()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .resetTileTensorOnTearDown = true})
+        : CodegenTestBase(
+              {.compileStage = CS_EXECUTE_GRAPH,
+               .setTileTensor = true,
+               .tileTensorValue = true,
+               .resetTileTensorOnTearDown = true})
     {}
 };
 
 TEST_F(TestCodegenDynUna, TestAbsDynamic)
 {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+
     int S0 = 8;
     int S1 = 4608;
     int D0 = 8;
@@ -65,13 +71,19 @@ TEST_F(TestCodegenDynUna, TestAbsDynamic)
     function->SetUnderDynamicFunction(true);
 
     npu::tile_fwk::CodeGenCtx ctx;
-    ctx.isMainBlock = true;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::DynTabs_<half, /*DS*/ 1, 8, 128, /*SS*/ 1, 8, 128>((__ubuf__ half*)UB_S0_E2048, (__ubuf__ half*)UB_S0_E2048, 1, 1, sym_41_dim_0, sym_41_dim_1);)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynUna, TestDynExpand)
 {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+
     std::vector<int64_t> shape = {64, 64};
     std::vector<int64_t> shape1 = {1, 64};
     auto function = GenMockFuncDyn("TestDynExpand");
@@ -92,8 +104,6 @@ TEST_F(TestCodegenDynUna, TestDynExpand)
 
 TEST_F(TestCodegenDynUna, TestAtanFP32)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-
     std::vector<int64_t> shape = {32, 32};
     TileShape::Current().SetVecTile({32, 32});
     Tensor input(DataType::DT_FP32, shape, "input");
@@ -123,7 +133,6 @@ TEST_F(TestCodegenDynUna, TestAtanFP32)
 
 TEST_F(TestCodegenDynUna, TestPadDynamic)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     int S0 = 6;
     int S1 = 12;
     int D0 = 12;
@@ -159,7 +168,6 @@ TEST_F(TestCodegenDynUna, TestPadDynamic)
 
 TEST_F(TestCodegenDynUna, TestPadDynamicFP16)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     int S0 = 6;
     int S1 = 12;
     int D0 = 12;
@@ -195,7 +203,6 @@ TEST_F(TestCodegenDynUna, TestPadDynamicFP16)
 
 TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     int S0 = 12;
     int S1 = 20;
     int D0 = 12;
@@ -231,7 +238,6 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
 
 TEST_F(TestCodegenDynUna, TestFillPadDynamic)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     int S0 = 12;
     int S1 = 20;
     int D0 = 12;
