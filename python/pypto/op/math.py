@@ -258,16 +258,10 @@ def mul(input: Tensor, other: Union[Tensor, float]) -> Tensor:
     Output z:[[1.0 4.0 9.0],
               [1.0 4.0 9.0]]
     """
-    if input.dtype == DataType.DT_FP16 or input.dtype == DataType.DT_BF16:
-        input_fp32 = pypto_impl.Cast(input, DataType.DT_FP32, CastMode.CAST_NONE)
-        if isinstance(other, pypto_impl.Tensor):
-            other_fp32 = pypto_impl.Cast(other, DataType.DT_FP32, CastMode.CAST_NONE)
-        else:
-            other_fp32 = pypto_impl.Element(DataType.DT_FP32, other)
-        result_fp32 = pypto_impl.Mul(input_fp32, other_fp32)
-        return pypto_impl.Cast(result_fp32, input.dtype, CastMode.CAST_RINT)
-    other_op = other if isinstance(other, pypto_impl.Tensor) else pypto_impl.Element(input.dtype, other)
-    return pypto_impl.Mul(input, other_op)
+    if isinstance(other, pypto_impl.Tensor):	 
+        return pypto_impl.Mul(input, other)	 
+    else:	 
+        return pypto_impl.Mul(input, pypto_impl.Element(input.dtype, other))
 
 
 @op_wrapper
