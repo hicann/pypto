@@ -550,6 +550,14 @@ static void Acos(const TensorData& out, const TensorData& self)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void Atanh(const TensorData& out, const TensorData& self)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    torch::atanh_out(tout.second, tself.second);
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void Neg(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -3174,6 +3182,7 @@ static struct CalcOps calcOps = {
     .Erfc = Erfc,
     .Asin = Asin,
     .Acos = Acos,
+    .Atanh = Atanh,
     .Neg = Neg,
     .Rsqrt = Rsqrt,
     .Sign = Sign,

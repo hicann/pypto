@@ -449,6 +449,11 @@ void OpcodeManager::RegisterVectorUnary()
         Opcode::OP_ACOS, OpCoreType::AIV, "ACOS", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TAcos", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_ATANH, OpCoreType::AIV, "ATANH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TAtanh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorSort()
@@ -1433,6 +1438,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_COSH, "TCosh"},
     {Opcode::OP_ASIN, "TAsin"},
     {Opcode::OP_ACOS, "TAcos"},
+    {Opcode::OP_ATANH, "TAtanh"},
     {Opcode::OP_L1_TO_L0A, "TExtract"},
     {Opcode::OP_L1_TO_L0B, "TExtract"},
     {Opcode::OP_L1_TO_L0_AT, "TExtract"},

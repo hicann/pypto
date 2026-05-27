@@ -43,6 +43,7 @@
 #include "vector/signbit.h"
 #include "vector/tanh.h"
 #include "vector/tan.h"
+#include "vector/atanh.h"
 #include "vector/reduce.h"
 #include "vector/mte.h"
 #include "vector/atan.h"

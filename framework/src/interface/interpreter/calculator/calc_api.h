@@ -75,6 +75,7 @@ struct CalcOps {
     void (*Erfc)(const TensorData&, const TensorData&);
     void (*Asin)(const TensorData&, const TensorData&);
     void (*Acos)(const TensorData&, const TensorData&);
+    void (*Atanh)(const TensorData&, const TensorData&);
     void (*Neg)(const TensorData&, const TensorData&);
     void (*Rsqrt)(const TensorData&, const TensorData&);
     void (*Sign)(const TensorData&, const TensorData&);

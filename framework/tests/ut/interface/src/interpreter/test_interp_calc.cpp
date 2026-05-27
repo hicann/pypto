@@ -441,6 +441,14 @@ TEST_F(TorchAdaptorTest, UnaryOps)
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        // atanh
+        auto self = makeTensorData(DT_FP32, {16, 16}, 0.5f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, std::atanh(0.5f));
+        calc::Atanh(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // neg
         auto self = makeTensorData(DT_FP32, {16, 16}, 2.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);

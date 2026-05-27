@@ -90,6 +90,7 @@ inline void Cosh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcO
 inline void Erfc(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Erfc(Trans(out), Trans(self)); }
 inline void Asin(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Asin(Trans(out), Trans(self)); }
 inline void Acos(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Acos(Trans(out), Trans(self)); }
+inline void Atanh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Atanh(Trans(out), Trans(self)); }
 inline void Neg(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Neg(Trans(out), Trans(self)); }
 inline void Round(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int decimals)
 {

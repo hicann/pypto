@@ -15,6 +15,7 @@ pypto-argsort
 pypto-asin
 pypto-assemble
 pypto-atan
+pypto-atanh
 pypto-atan2
 pypto-axpy
 pypto-bitwise_and
@@ -116,6 +117,7 @@ pypto-sub
 pypto-sum
 pypto-tan
 pypto-tanh
+
 pypto-topk
 pypto-transpose
 pypto-tril

@@ -1140,6 +1140,38 @@ def acos(self: Tensor) -> Tensor:
 
 
 @op_wrapper
+def atanh(input: Tensor) -> Tensor:
+    """Computes the element-wise inverse hyperbolic tangent of `input`.
+
+    This function calculates the formula: `out = 0.5 * ln((1 + input) / (1 - input))`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor. Must be in the range (-1, 1) for real-valued output.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise inverse hyperbolic tangent results.
+
+    See Also
+    --------
+    tanh : Element-wise hyperbolic tangent function
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.atanh(x)
+
+    Input x: [0.0     0.5     -0.5]
+    Output y:[0.0     0.5493  -0.5493]
+    """
+
+    return pypto_impl.Atanh(input)
+
+
+@op_wrapper
 def sign(a: Tensor) -> Tensor:
     """Computes the element-wise exponential of `input`.
 

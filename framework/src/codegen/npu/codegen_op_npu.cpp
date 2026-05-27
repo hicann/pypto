@@ -151,6 +151,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_TANH, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_ASIN, [this]() { return GenUnaryOpWithTmpBuff(); }},
           {Opcode::OP_ACOS, [this]() { return GenUnaryOpWithTmpBuff(); }},
+          {Opcode::OP_ATANH, [this]() { return GenUnaryOpWithTmpBuff(); }},
       }),
       binaryOps_({
           // binary op: vector operations

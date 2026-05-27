@@ -179,6 +179,8 @@ void BindOperation(py::module& m)
         "Asin", [](const Tensor& self) { return npu::tile_fwk::Asin(self); }, "Tensor asin.");
     m.def(
         "Acos", [](const Tensor& self) { return npu::tile_fwk::Acos(self); }, "Tensor acos.");
+    m.def(
+        "Atanh", [](const Tensor& self) { return npu::tile_fwk::Atanh(self); }, "Tensor Atanh");
     m.def("FloorDiv", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::FloorDiv(self, other); });
     m.def("FloorDiv", [](const Tensor& self, const Element& other) { return npu::tile_fwk::FloorDiv(self, other); });
     m.def(

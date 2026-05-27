@@ -463,6 +463,45 @@ TEST_F(OperationImplTest, Test_Cosh_FP32)
     }
 }
 
+TEST_F(OperationImplTest, Test_Atanh_FP16)
+{
+    PROGRAM("Atanh")
+    {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP16, shape, "operand1");
+        auto output = Tensor(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Atanh_FP16") { output = Atanh(input_a); }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Atanh_FP32)
+{
+    PROGRAM("Atanh")
+    {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP32, shape, "operand1");
+        auto output = Tensor(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Atanh_FP32") { output = Atanh(input_a); }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Atanh_BF16)
+{
+    PROGRAM("Atanh")
+    {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_BF16, shape, "operand1");
+        auto output = Tensor(DT_BF16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Atanh_BF16") { output = Atanh(input_a); }
+    }
+}
+
 TEST_F(OperationImplTest, Test_Sign_FP16)
 {
     PROGRAM("Sign")

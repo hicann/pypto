@@ -4121,6 +4121,24 @@ def gen_acos_golden(case_name: str, output: Path, case_index: int = None) -> boo
     return gen_op_golden("Acos", generate_wrapper, output, case_index)
 
 
+@GoldenRegister.reg_golden_func(case_names=[
+    "TestAtanh/AtanhOperationTest.TestAtanh",
+])
+def gen_atanh_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0]).npu()
+        result = torch.atanh(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("Atanh", generate_wrapper, output, case_index)
+
+
 def main() -> bool:
     # 用例名称
     case_name_list: List[str] = [

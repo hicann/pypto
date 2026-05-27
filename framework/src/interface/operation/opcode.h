@@ -110,6 +110,7 @@ enum class Opcode {
     OP_ERFC,
     OP_ASIN,
     OP_ACOS,
+    OP_ATANH,
     // Binary Vector
     OP_ADD,
     OP_SUB,
@@ -653,7 +654,8 @@ const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_ERFC,
     Opcode::OP_TANH,
     Opcode::OP_ASIN,
-    Opcode::OP_ACOS
+    Opcode::OP_ACOS,
+    Opcode::OP_ATANH
 };
 
 const std::unordered_set<Opcode> VECTOR_SCALAR_OPS{

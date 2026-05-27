@@ -44,6 +44,7 @@ enum class UnaryOp : uint8_t {
     ERF,
     SINH,
     COSH,
+    ATANH,
     SIN,
     COS,
     ERFC,
