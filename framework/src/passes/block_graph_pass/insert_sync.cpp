@@ -1937,18 +1937,20 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
 {
     std::vector<Operation*> oriOpList(subGraphFunc->Operations(false).DuplicatedOpList());
     std::vector<Operation*> newOpList;
-    for (auto op : oriOpList) {
-        newOpList.push_back(op);
-        if (op->GetOpcode() == Opcode::OP_RESHAPE || op->GetOpcode() == Opcode::OP_VIEW ||
-            op->GetOpcode() == Opcode::OP_VIEW_TYPE || op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+    for (size_t i = 0; i < oriOpList.size(); i++) {
+        newOpList.push_back(oriOpList[i]);
+        if (oriOpList[i]->GetOpcode() == Opcode::OP_RESHAPE || oriOpList[i]->GetOpcode() == Opcode::OP_VIEW ||
+            oriOpList[i]->GetOpcode() == Opcode::OP_VIEW_TYPE || oriOpList[i]->GetOpcode() == Opcode::OP_ASSEMBLE) {
             continue;
         }
-        std::vector<std::shared_ptr<LogicalTensor>> input;
-        std::vector<std::shared_ptr<LogicalTensor>> output;
-        Operation& syncOp = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
-        syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
-                             AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
-        newOpList.push_back(&syncOp);
+        if (i != oriOpList.size() - 1) {
+            std::vector<std::shared_ptr<LogicalTensor>> input;
+            std::vector<std::shared_ptr<LogicalTensor>> output;
+            Operation& syncOp = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+            syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
+                                AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
+            newOpList.push_back(&syncOp);
+        }
     }
     subGraphFunc->ScheduleBy(newOpList, true);
     subGraphFunc->oriOpList = oriOpList;
