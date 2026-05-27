@@ -488,7 +488,7 @@ struct LogicalTensorData {
     }
 
     size_t GetShmStorageOffset() {
-        return GetStorageOffset() * data_->GetElementSize() + data_->GetShmOffset();
+        return data_->GetShmOffset();
     }
 
     bool IsShmTensor() {

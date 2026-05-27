@@ -1050,6 +1050,13 @@ struct FunctionInterpreter {
         auto iop = op.GetInputOperand(index);
         ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOpDataList[index] != nullptr);
         if (op.GetOpcode() == Opcode::OP_VIEW) {
+            if (iOpDataList[0]->IsShmTensor()) {
+                auto ret = AllocateDataView(frame, oop);
+                ret->GetData()->SetAsShmTensor();
+                ret->GetData()->SetShmOffset(iOpDataList[index]->GetData()->GetShmOffset());
+                oOpDataList.emplace_back(ret);
+                return;
+            }
             auto ret = AllocateDataView(frame, oop);
             oOpDataList.emplace_back(ret);
         } else {

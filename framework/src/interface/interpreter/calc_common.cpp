@@ -42,7 +42,8 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
     }
     if (iop->IsShmTensor()) {
         oop->GetData()->SetAsShmTensor();
-        oop->GetData()->SetShmOffset(iop->GetData()->GetShmOffset());
+        oop->GetData()->SetShmOffset(
+            iop->GetData()->GetShmOffset() + ret->GetStorageOffset() * ret->GetData()->GetElementSize());
     }
 }
 REGISTER_CALC_OP(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, ExecuteOpAssemble);
@@ -147,19 +148,23 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     if (oop->GetData() == iop->GetData()) {
         return;
     }
+    uint64_t shmOffset = 0;
+
     bool trans =
         (ctx->op->HasAttr(Matrix::L1_TO_L0_TRANSPOSE)) ? ctx->op->GetBoolAttribute(Matrix::L1_TO_L0_TRANSPOSE) : false;
     if (trans) {
         std::vector<int64_t> oop_trans = {oop->GetShape()[1], oop->GetShape()[0]};
         auto ret = iop->View(oop_trans, offset);
         calc::Copy(oop, ret, trans);
+        shmOffset = ret->GetStorageOffset() * ret->GetData()->GetElementSize();
     } else {
         auto ret = iop->View(oop->GetShape(), offset);
         calc::Copy(oop, ret);
+        shmOffset = ret->GetStorageOffset() * ret->GetData()->GetElementSize();
     }
     if (iop->IsShmTensor()) {
         oop->GetData()->SetAsShmTensor();
-        oop->GetData()->SetShmOffset(iop->GetData()->GetShmOffset());
+        oop->GetData()->SetShmOffset(iop->GetData()->GetShmOffset() + shmOffset);
     }
 }
 REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView);
