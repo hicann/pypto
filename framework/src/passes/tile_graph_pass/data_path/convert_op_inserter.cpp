@@ -507,7 +507,6 @@ std::shared_ptr<LogicalTensor> ConvertInserter::RecordInsertConvertOp(
     const Operation& op)
 {
     (void)function;
-    IRBuilder builder;
     std::shared_ptr<LogicalTensor> input = oOperand;
     for (size_t i = 0; i < paths.size() - 1; ++i) {
         std::shared_ptr<RawTensor> newRawTensor =
@@ -516,7 +515,7 @@ std::shared_ptr<LogicalTensor> ConvertInserter::RecordInsertConvertOp(
         input->SetMemoryTypeToBe(paths[i]); // 后续删除
         std::vector<int64_t> newoffset(input->offset.size(), 0);
         std::shared_ptr<LogicalTensor> output =
-            builder.CreateTensorVar(newRawTensor, newoffset, input->shape, std::vector<SymbolicScalar>{});
+            irBuilder_.CreateTensorVar(newRawTensor, newoffset, input->shape, std::vector<SymbolicScalar>{});
         output->SetMemoryTypeBoth(paths[i + 1]); // 后续只用设置original
         converts.emplace_back(ConvertOpInfo{paths[i], paths[i + 1], input, output});
         APASS_LOG_DEBUG_F(
@@ -643,8 +642,7 @@ void ConvertInserter::InsertConvertOps(Function& function)
     APASS_LOG_INFO_F(Elements::Operation, "--- Need to insert %zu convert operations ---", converts.size());
     for (const auto& c : converts) {
         GraphUtils::CopyDynStatus(c.output, c.input);
-        IRBuilder builder;
-        auto& convertOp = builder.CreateTensorOpStmt(function, Opcode::OP_CONVERT, {c.input}, {c.output});
+        auto& convertOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_CONVERT, {c.input}, {c.output});
         convertOp.SetOpAttribute(std::make_shared<ConvertOpAttribute>(c.from, c.to));
         if (!CreateMoveOpForConvert(convertOp)) {
             auto producerScopeInfo = (*(c.input->GetProducers().begin()))->GetScopeInfo();

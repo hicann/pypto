@@ -108,9 +108,8 @@ Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
             APASS_LOG_ERROR_F(Elements::Function, "Failed to create ViewOpAttribute.");
             return FAILED;
         }
-        IRBuilder builder;
         auto& mergedViewOp =
-            builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {viewOp.input}, {viewOp.output}, viewOp.span);
+            irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {viewOp.input}, {viewOp.output}, viewOp.span);
         mergedViewOp.SetScopeInfo(viewOp.scopeInfo);
         mergedViewOp.SetOpAttribute(attr);
         // 继承op_attr_copy_in_mode属性
@@ -130,8 +129,7 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
         if (!attr) {
             return FAILED;
         }
-        IRBuilder builder;
-        auto& mergedAssembleOp = builder.CreateTensorOpStmt(
+        auto& mergedAssembleOp = irBuilder_.CreateTensorOpStmt(
             function, Opcode::OP_ASSEMBLE, {assembleOp.input}, {assembleOp.output}, assembleOp.span);
         mergedAssembleOp.SetScopeInfo(assembleOp.scopeInfo);
         mergedAssembleOp.SetOpAttribute(attr);

@@ -27,6 +27,7 @@
 
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu {
@@ -46,6 +47,7 @@ private:
     std::unordered_set<LogicalTensorPtr> assembleOutSet_;
     std::unordered_set<LogicalTensorPtr> notProcessOut_;
     std::vector<std::pair<Operation*, Operation*>> recordOpPair_;
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

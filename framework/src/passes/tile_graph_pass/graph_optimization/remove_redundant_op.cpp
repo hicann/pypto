@@ -435,8 +435,7 @@ void RemoveRedundantOp::GenerateNewView(
         RemoveViewAssembleForOutcast(function, startTensor, endTensor);
     } else {
         std::vector<long> curOffset(endTensor->shape.size(), 0);
-        IRBuilder builder;
-        newViewTensor = builder.CreateTensorVar(
+        newViewTensor = irBuilder_.CreateTensorVar(
             endTensor->GetRawTensor(), curOffset, endTensor->shape, std::vector<SymbolicScalar>{});
         newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
         for (auto& assembleConsumer : endTensor->GetConsumers()) {

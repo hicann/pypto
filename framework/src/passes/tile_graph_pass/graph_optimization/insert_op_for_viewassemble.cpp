@@ -24,20 +24,19 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function& function, Operation* 
 {
     auto& moveOutTensorPtr = viewOp->GetOOperands()[0];
     auto shape = moveOutTensorPtr->GetShape();
-    IRBuilder builder;
     LogicalTensorPtr ddrTensorPtr =
-        builder.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
     ddrTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     LogicalTensorPtr moveInTensorPtr =
-        builder.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(moveOutTensorPtr->Datatype(), shape, std::vector<SymbolicScalar>{});
     moveInTensorPtr->SetMemoryTypeBoth(moveOutTensorPtr->GetMemoryTypeOriginal(), true);
     std::vector<int64_t> offset(moveOutTensorPtr->GetShape().size(), 0);
     std::vector<SymbolicScalar> dynOffset(moveOutTensorPtr->GetShape().size(), 0);
     Operation& assemble =
-        builder.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {moveOutTensorPtr}, {ddrTensorPtr});
+        irBuilder_.CreateTensorOpStmt(function, Opcode::OP_ASSEMBLE, {moveOutTensorPtr}, {ddrTensorPtr});
     assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
         moveOutTensorPtr->GetMemoryTypeOriginal(), offset, dynOffset, moveOutTensorPtr->GetDynValidShape()));
-    Operation& view = builder.CreateTensorOpStmt(function, Opcode::OP_VIEW, {ddrTensorPtr}, {moveInTensorPtr});
+    Operation& view = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_VIEW, {ddrTensorPtr}, {moveInTensorPtr});
     view.SetOpAttribute(std::make_shared<ViewOpAttribute>(
         offset, moveOutTensorPtr->GetMemoryTypeOriginal(), dynOffset, moveOutTensorPtr->GetDynValidShape()));
     assembleOp->ReplaceInput(moveInTensorPtr, moveOutTensorPtr);

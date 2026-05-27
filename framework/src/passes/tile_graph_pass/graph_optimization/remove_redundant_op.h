@@ -15,7 +15,7 @@
 
 #ifndef REMOVE_REDUNDANT_OP_H
 #define REMOVE_REDUNDANT_OP_H
-#include "interface/operation/opcode.h"
+
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk.h"
 
@@ -26,7 +26,9 @@
 #include "passes/pass_utils/pass_utils.h"
 
 #include "interface/function/function.h"
+#include "interface/operation/opcode.h"
 #include "interface/operation/operation.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu {
@@ -61,6 +63,7 @@ private:
     bool operationUpdated;
     uint32_t iterTime;
     std::vector<Operation*> newOps_;
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

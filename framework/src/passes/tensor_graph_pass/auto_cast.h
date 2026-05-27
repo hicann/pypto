@@ -18,6 +18,7 @@
 
 #include "passes/pass_interface/pass.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -52,6 +53,10 @@ public:
     std::unordered_set<int> inCastConnectedTensors_;
     std::unordered_set<int> outCastConnectedTensors_;
     std::unordered_set<Operation*> addedCast_;
+
+private:
+    LogicalTensorPtr CreateFp32TensorLike(const LogicalTensorPtr& tensor);
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

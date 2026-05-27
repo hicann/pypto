@@ -21,6 +21,7 @@
 
 #include "passes/pass_interface/pass.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu {
@@ -45,6 +46,7 @@ private:
     std::map<Operation*, size_t> opInputDegree_;
     std::map<LogicalTensorPtr, size_t> tensorProducers_;
     std::vector<Operation*> newOps;
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

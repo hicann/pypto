@@ -780,11 +780,10 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
         ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, iOperand->GetRawTensor() == srcTensor->GetRawTensor());
         ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, oOperand->GetRawTensor() == srcTensor->GetRawTensor());
         op->ReplaceIOperand(0, srcTensor);
-        IRBuilder builder;
-        auto nopOutput = builder.CreateTensorVar(
+        auto nopOutput = irBuilder_.CreateTensorVar(
             srcTensor->GetRawTensor(), Offset(srcTensor->GetOffset().size()), srcTensor->GetShape(), std::vector<SymbolicScalar>{});
         nopOutput->SetMemoryTypeBoth(oOperand->GetMemoryTypeOriginal());
-        auto& nop = IRBuilder().CreateTensorOpStmt(function, Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
+        auto& nop = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_NOP, {iOperand, oOperand}, {nopOutput});
         nop.SetAttribute(OpAttributeKey::inplaceIdx, 0); 
         nop.UpdateSubgraphID(op->GetSubgraphID());
         auto consumers = oOperand->GetConsumers(); 
@@ -909,10 +908,8 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
     auto copyRawShape = input->tensor->GetDynRawShape();
     auto copyDynShape = input->GetDynValidShape();
     Offset offset(copyShape.size(), 0);
-    IRBuilder builder;
-
     auto copyOutOutputPtr =
-        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     auto& copyOutOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
@@ -923,7 +920,7 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
     copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     auto copyInOutputPtr =
-        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto& copyInOp = PassOperationUtils::AddOperation(
         function, Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr});
@@ -951,10 +948,8 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
         auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(inOp->GetOpAttribute());
         inOffset = viewOpAttr->GetFrom();
     }
-    IRBuilder builder;
-
     auto copyInOutputPtr =
-        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
     auto memType = copyInOutputPtr->GetMemoryTypeOriginal();
@@ -974,7 +969,7 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     auto copyOutOutputPtr =
-        builder.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto& copyOutOp = PassOperationUtils::AddOperation(
         function, Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});

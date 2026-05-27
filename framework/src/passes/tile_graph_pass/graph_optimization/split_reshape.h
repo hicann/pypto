@@ -18,6 +18,7 @@
 
 #include "interface/function/function.h"
 #include "interface/interpreter/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/configs/config_manager.h"
 #include "passes/pass_utils/pass_common_defs.h"
@@ -217,6 +218,7 @@ private:
     std::unordered_set<Operation*> redundantViewops_;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs_;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs_;
+    IRBuilder irBuilder_;
     // 记录所有op_reshape的指针，键值为reshape的输出Operand的magic。
     std::unordered_map<int, const Operation*> reshapeOpPtrs_;
     // 记录满足后续op为reshape的op_assemble的指针，第一个map的键值为assemble输入Operand的magic,

@@ -17,6 +17,7 @@
 #define REMOVE_UNALIGNED_RESHAPE_OP_H_
 
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/tilefwk.h"
@@ -79,6 +80,7 @@ private:
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs;
     std::vector<Operation*> newOps;
+    IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_REMOVE_UNALIGNED_RESHAPE_OP_H_

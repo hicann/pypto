@@ -26,14 +26,12 @@
 
 namespace npu {
 namespace tile_fwk {
-namespace {
-LogicalTensorPtr CreateFp32TensorLike(const LogicalTensorPtr& tensor)
+
+LogicalTensorPtr AutoCast::CreateFp32TensorLike(const LogicalTensorPtr& tensor)
 {
-    IRBuilder builder;
-    return builder.CreateTensorVar(DataType::DT_FP32, tensor->GetShape(), tensor->GetDynValidShape(),
-        tensor->Format());
+    return irBuilder_.CreateTensorVar(
+        DataType::DT_FP32, tensor->GetShape(), tensor->GetDynValidShape(), tensor->Format());
 }
-} // namespace
 
 Status AutoCast::GetInOutConnectedTensor(Function& function)
 {
@@ -164,8 +162,7 @@ void AutoCast::InsertCastOp(
     Function& function, LogicalTensorPtr src, LogicalTensorPtr tgt, const TileShape& tileShape,
     const Operation::ScopeInfo& scopeInfo)
 {
-    IRBuilder builder;
-    Operation& newCast = builder.CreateTensorOpStmt(function, Opcode::OP_CAST, {src}, {tgt});
+    Operation& newCast = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_CAST, {src}, {tgt});
     newCast.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
     auto newTileShape = tileShape;
     auto vecTile = newTileShape.GetVecTile();

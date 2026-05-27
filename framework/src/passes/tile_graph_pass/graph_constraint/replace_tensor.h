@@ -24,6 +24,7 @@
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "interface/configs/config_manager.h"
 
@@ -194,6 +195,7 @@ private:
     std::unordered_set<int> processedOp;
     std::unordered_set<int> backwardOps;
     std::unordered_set<int> forwardOps;
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

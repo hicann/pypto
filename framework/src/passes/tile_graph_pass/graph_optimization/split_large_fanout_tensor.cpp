@@ -204,7 +204,6 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
     Function& function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset, LogicalTensors overlaps,
     LogicalTensors dualOverlaps)
 {
-    IRBuilder builder;
     for (const auto& dualOverlap : dualOverlaps) {
         auto viewOp = *dualOverlap->GetProducers().begin();
         if (viewOp->GetIOperands().front()->tensor->rawmagic != largeTensor->tensor->rawmagic) {
@@ -212,7 +211,7 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
                 Elements::Tensor, "ViewOp[%d]'s input has been replaced, don't deal with this ViewOp.",
                 viewOp->GetOpMagic());
         } else {
-            auto newTensor = builder.CreateTensorVar(
+            auto newTensor = irBuilder_.CreateTensorVar(
                 largeTensor->Datatype(), lcmTileShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
             auto overlap = overlaps[0];
             if (AddNewAssembleOp(function, overlap, largeTensor, lcmTileOffset, newTensor) != SUCCESS) {
@@ -246,7 +245,6 @@ void SplitLargeFanoutTensor::ExtractDualOverlapTiles(Function &function, Logical
     const LogicalTensors &dualOverlaps, LogicalTensors &dualOverlapTiles, LogicalTensors &filteredDualOverlaps)
 {
     (void)function;
-    IRBuilder builder;
     for (const auto &dualOverlap : dualOverlaps) {
         Offset dualOverlapOffset;
         for (const auto &producerOp : dualOverlap->GetProducers()) {
@@ -261,7 +259,7 @@ void SplitLargeFanoutTensor::ExtractDualOverlapTiles(Function &function, Logical
         if (dualOverlapOffset.size() == 0) {
             continue;
         }
-        auto dualOverlapTile = builder.CreateTensorVar(
+        auto dualOverlapTile = irBuilder_.CreateTensorVar(
             largeTensor->tensor, dualOverlapOffset, dualOverlap->shape, std::vector<SymbolicScalar>{});
         dualOverlapTiles.emplace_back(dualOverlapTile);
         filteredDualOverlaps.push_back(dualOverlap);
@@ -285,7 +283,6 @@ void SplitLargeFanoutTensor::FilterOverlaps(Function &function, LogicalTensorPtr
     LogicalTensors &overlaps, const LogicalTensors &dualOverlaps)
 {
     (void)function;
-    IRBuilder builder;
     LogicalTensors filteredOverlaps;
     LogicalTensors filteredDualOverlaps;
     LogicalTensors dualOverlapTiles;
@@ -304,7 +301,7 @@ void SplitLargeFanoutTensor::FilterOverlaps(Function &function, LogicalTensorPtr
         if (overlapOffset.size() == 0) {
             return;
         }
-        auto overlapTile = builder.CreateTensorVar(
+        auto overlapTile = irBuilder_.CreateTensorVar(
             largeTensor->tensor, overlapOffset, overlap->shape, std::vector<SymbolicScalar>{});
         if (HasIntersectionWithAnyDualOverlap(overlapTile, dualOverlapTiles)) {
             filteredOverlaps.push_back(overlap);
@@ -318,8 +315,7 @@ void SplitLargeFanoutTensor::CreateOpForMtoM(
     Function& function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset, LogicalTensors overlaps,
     LogicalTensors dualOverlaps)
 {
-    IRBuilder builder;
-    auto newTensor = builder.CreateTensorVar(
+    auto newTensor = irBuilder_.CreateTensorVar(
         largeTensor->Datatype(), lcmTileShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
     for (const auto& overlap : overlaps) {
         if (AddNewAssembleOp(function, overlap, largeTensor, lcmTileOffset, newTensor) != SUCCESS) {
@@ -403,9 +399,8 @@ void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(
     Function& function, LogicalTensorPtr largeTensor, const LogicalTensors& overlaps,
     LogicalTensorPtr newGcdTensor, const Shape& gcdTileOffsetForLarge, Shape& newViewOffset)
 {
-    IRBuilder builder;
     for (const auto& overlap : overlaps) {
-        auto gcdTile = builder.CreateTensorVar(
+        auto gcdTile = irBuilder_.CreateTensorVar(
             largeTensor->tensor, gcdTileOffsetForLarge, newGcdTensor->shape, std::vector<SymbolicScalar>{});
         auto oldAssembleOp = *overlap->GetConsumers().begin();
         auto oldopmagic = oldAssembleOp->opmagic;
@@ -430,7 +425,7 @@ void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(
             continue;
         }
         auto oldAssembleOffset = oldAssembleOpAttr->GetToOffset();
-        auto toTile = builder.CreateTensorVar(
+        auto toTile = irBuilder_.CreateTensorVar(
             largeTensor->tensor, oldAssembleOffset, overlap->shape, std::vector<SymbolicScalar>{});
         auto status = CalcOverlap(gcdTile, toTile, true);
         if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH) {
@@ -454,9 +449,8 @@ void SplitLargeFanoutTensor::CreateOpForMoreSplit(
     Function& function, LogicalTensorPtr largeTensor, LogicalTensors overlaps, Shape gcdShape,
     LogicalTensorPtr dualOverlap, std::vector<Shape> gcdTileOffsets, Offset viewOpOffset)
 {
-    IRBuilder builder;
     for (auto& gcdTileOffset : gcdTileOffsets) {
-        auto newGcdTensor = builder.CreateTensorVar(
+        auto newGcdTensor = irBuilder_.CreateTensorVar(
             largeTensor->Datatype(), gcdShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
         auto& newAssembleOp = PassOperationUtils::AddOperation(
             function, Opcode::OP_ASSEMBLE, {newGcdTensor}, {dualOverlap});
@@ -568,9 +562,8 @@ bool SplitLargeFanoutTensor::IsBeCovered(
     Function& function, LogicalTensorPtr largeTensor, std::vector<std::pair<LogicalTensorPtr, Offset>> toTensorInfos)
 {
     (void)function;
-    IRBuilder builder;
     for (const auto& toTensorInfo : toTensorInfos) {
-        auto toTile = builder.CreateTensorVar(
+        auto toTile = irBuilder_.CreateTensorVar(
             largeTensor->tensor, toTensorInfo.second, toTensorInfo.first->shape, std::vector<SymbolicScalar>{});
         auto status = CalcOverlap(toTile, largeTensor, true);
         if (!(status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH)) {

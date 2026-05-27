@@ -109,8 +109,7 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(
         originalIOperands, originalOOperands, originalIncasts, originalOutcasts, actualIncasts, actualOutcasts,
         newIOperands, newOOperands, processedIncasts, processedOutcasts);
     APASS_LOG_INFO_F(Elements::Tensor, "===> FindIOperandsAndOOperands end.");
-    IRBuilder builder;
-    auto& callOp = builder.CreateTensorOpStmt(rootFunc, Opcode::OP_CALL, newIOperands, newOOperands);
+    auto& callOp = irBuilder_.CreateTensorOpStmt(rootFunc, Opcode::OP_CALL, newIOperands, newOOperands);
     APASS_LOG_INFO_F(
         Elements::Tensor, "Created operands for new callOp %d: %zu inputs, %zu outputs", callOp.GetOpMagic(),
         newIOperands.size(), newOOperands.size());

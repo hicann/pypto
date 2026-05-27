@@ -18,6 +18,7 @@
 
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
@@ -167,6 +168,7 @@ public:
     std::vector<ViewOp> viewOpToAppend_;
     std::vector<AssembleOp> assembleOpToAppend_;
     std::vector<Operation*> newOps_;
+    IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_MERGE_VIEW_ASSEMBLE_IMPL_H_

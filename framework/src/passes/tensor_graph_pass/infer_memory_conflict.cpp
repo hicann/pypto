@@ -568,10 +568,9 @@ Status InferMemoryConflict::InsertPrecededCopys(Function& function)
         std::shared_ptr<RawTensor> newRawTensor =
             std::make_shared<RawTensor>(inputTensor->Datatype(), inputTensor->GetShape());
         Offset newOffset(inputTensor->GetShape().size(), 0);
-        IRBuilder builder;
         LogicalTensorPtr newTensor =
-            builder.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
-        auto& copyOp = IRBuilder().CreateTensorOpStmt(function, Opcode::OP_REGISTER_COPY, {inputTensor}, {newTensor});
+            irBuilder_.CreateTensorVar(newRawTensor, newOffset, inputTensor->GetShape(), inputTensor->GetDynValidShape());
+        auto& copyOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_REGISTER_COPY, {inputTensor}, {newTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d]", copyOp.GetOpMagic());
         Shape reshapeTile;
         if (op->GetOpcode() == Opcode::OP_RESHAPE) {
@@ -597,10 +596,9 @@ Status InferMemoryConflict::InsertPostCopys(Function& function)
         std::shared_ptr<RawTensor> newRawTensor =
             std::make_shared<RawTensor>(outputTensor->Datatype(), outputTensor->GetShape());
         Offset newOffset(outputTensor->GetShape().size(), 0);
-        IRBuilder builder;
         LogicalTensorPtr newTensor =
-            builder.CreateTensorVar(newRawTensor, newOffset, outputTensor->GetShape(), outputTensor->GetDynValidShape());
-        auto& copyOp = IRBuilder().CreateTensorOpStmt(function, Opcode::OP_REGISTER_COPY, {newTensor}, {outputTensor});
+            irBuilder_.CreateTensorVar(newRawTensor, newOffset, outputTensor->GetShape(), outputTensor->GetDynValidShape());
+        auto& copyOp = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_REGISTER_COPY, {newTensor}, {outputTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d]", copyOp.GetOpMagic());
         Shape reshapeTile;
         if (ObtainReshapeTile(*op, ObtainTileShape(op->ProducerOps()).GetVecTile().tile, reshapeTile) != SUCCESS) {

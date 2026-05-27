@@ -23,6 +23,7 @@
 #include "passes/pass_interface/pass.h"
 #include "passes/tensor_graph_pass/derivation_tile_shape.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 
 namespace npu {
@@ -66,6 +67,7 @@ private:
         {DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4},
         {DT_FP8E4M3, 1}, {DT_FP8E5M2, 1}, {DT_FP8E8M0, 1}
     };
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

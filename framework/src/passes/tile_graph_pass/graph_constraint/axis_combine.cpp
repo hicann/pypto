@@ -62,12 +62,10 @@ inline int GetExpandDim(const std::vector<int64_t>& lhsShape, const std::vector<
     return -1;
 }
 
-static LogicalTensorPtr CreateAlignedTensor(
-    Function& function, const LogicalTensorPtr& srcTensor, const std::vector<int64_t>& alignedShape)
+LogicalTensorPtr AxisCombine::CreateAlignedTensor(
+    const LogicalTensorPtr& srcTensor, const std::vector<int64_t>& alignedShape)
 {
-    (void)function;
-    IRBuilder builder;
-    auto alignedTensor = builder.CreateTensorVar(
+    auto alignedTensor = irBuilder_.CreateTensorVar(
         srcTensor->Datatype(), alignedShape, std::vector<SymbolicScalar>{}, srcTensor->Format());
     alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     return alignedTensor;
@@ -82,9 +80,8 @@ static void UpdateOperand(
     inputTensor[idx] = newTensor;
 }
 
-static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx, Shape& shape)
+void AxisCombine::SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx, Shape& shape)
 {
-    IRBuilder builder;
     int expandDim = inputTensor[idx]->GetShape().size() - 1;
     op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{expandDim});
     auto dynValidShape = CommonUtils::CreateConstIntVector(shape);
@@ -94,7 +91,7 @@ static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx
     if (!(inputTensor[idx ^ 1]->GetDynValidShape().empty())) {
         dynValidShape[expandDim] = inputTensor[idx ^ 1]->GetDynValidShape()[expandDim];
     } else {
-        dynValidShape[expandDim] = builder.CreateConstInt(inputTensor[idx ^ 1]->GetShape()[expandDim]);
+        dynValidShape[expandDim] = irBuilder_.CreateConstInt(inputTensor[idx ^ 1]->GetShape()[expandDim]);
     }
     op.SetAttribute(OP_ATTR_PREFIX + "validShape", dynValidShape);
 }
@@ -145,9 +142,8 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
                 return FAILED;
             }
-            auto alignedTensor = CreateAlignedTensor(function, srcTensor, alignedShape);
-            IRBuilder builder;
-            auto& expand = builder.CreateTensorOpStmt(function, Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
+            auto alignedTensor = CreateAlignedTensor(srcTensor, alignedShape);
+            auto& expand = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
             SetAttrForExpand(expand, inputTensor, idx, alignedShape);
             expand.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
@@ -157,9 +153,8 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, 
             if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
                 return FAILED;
             }
-            auto alignedTensor = CreateAlignedTensor(function, srcTensor, alignedShape);
-            IRBuilder builder;
-            auto& brcb = builder.CreateTensorOpStmt(function, Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
+            auto alignedTensor = CreateAlignedTensor(srcTensor, alignedShape);
+            auto& brcb = irBuilder_.CreateTensorOpStmt(function, Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
             brcb.UpdateSubgraphID(op.GetSubgraphID());
             UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
         }

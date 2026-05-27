@@ -678,7 +678,6 @@ Status SplitReshape::ObtainCopyOutTile(
     Function& function, const copyOutTilePara& copyOutTile, LogicalTensors& overlaps, LogicalTensors& newOverlaps)
 {
     (void)function;
-    IRBuilder builder;
     ReshapeTilePara CopyOutInfo;
     CopyOutInfo.shape = copyOutTile.reshapeSource->GetRawTensor()->GetRawShape();
     CopyOutInfo.newShape = copyOutTile.alignedShape;
@@ -699,7 +698,7 @@ Status SplitReshape::ObtainCopyOutTile(
             std::vector<int64_t> newCopyOutTileOffset;
             result.st = RawToAlign(CopyOutInfo, newCopyOutTileOffset, newCopyOutTileShape);
             if (result.st == SUCCESS) {
-                result.newCopyOutSource = builder.CreateTensorVar(
+                result.newCopyOutSource = irBuilder_.CreateTensorVar(
                     copyOutTile.reshapeSource->GetRawTensor(), newCopyOutTileOffset, newCopyOutTileShape,
                     std::vector<SymbolicScalar>{});
             }
@@ -732,14 +731,13 @@ Status SplitReshape::ObtainCopyOutTile(
 Status SplitReshape::ObtainReshapeSource(Function& function, const OpPara& para, LogicalTensorPtr& newReshapeSource)
 {
     (void)function;
-    IRBuilder builder;
     auto overlap = para.oldInput;
     auto reshapeSource = para.oldOutput;
     std::vector<int64_t> assembleOffset = ObtainMapOffset(overlap, reshapeSource);
     if (AddReshapeRawInputs(overlap->GetRawTensor()->GetRawMagic(), overlap) == FAILED) {
         return FAILED;
     }
-    newReshapeSource = builder.CreateTensorVar(
+    newReshapeSource = irBuilder_.CreateTensorVar(
         reshapeRawInputs_[overlap->GetRawTensor()->GetRawMagic()], assembleOffset, overlap->shape,
         std::vector<SymbolicScalar>{});
     if (newReshapeSource == nullptr) {
@@ -806,7 +804,6 @@ Status SplitReshape::ProcessPerfectlyMatch(Function& function, Operation& op, co
 
 Status SplitReshape::ProcessOnetoOne(Function& function, Operation& op, const CalcOverlapPara& para)
 {
-    IRBuilder builder;
     std::vector<int64_t> alignedShape = para.alignedShape;
     LogicalTensorPtr reshapeSource = para.reshapeSource;
     LogicalTensorPtr input = para.input;
@@ -837,7 +834,7 @@ Status SplitReshape::ProcessOnetoOne(Function& function, Operation& op, const Ca
         }
         reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
     }
-    auto reshapeOutput = builder.CreateTensorVar(
+    auto reshapeOutput = irBuilder_.CreateTensorVar(
         reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()], reshapeTileOffset, reshapeTileShape,
         std::vector<SymbolicScalar>{});
     reshapeOutput->SetMemoryTypeBoth(input->GetMemoryTypeOriginal());
@@ -936,7 +933,6 @@ Status SplitReshape::CalcTileInfo(
 
 Status SplitReshape::ProcessOnetoMulti(Function& function, Operation& op, const CalcOverlapPara& para)
 {
-    IRBuilder builder;
     auto input = para.input;
     auto output = para.output;
     auto inputView = para.inputView;
@@ -967,7 +963,7 @@ Status SplitReshape::ProcessOnetoMulti(Function& function, Operation& op, const 
         }
         reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
     }
-    auto reshapeOutput = builder.CreateTensorVar(
+    auto reshapeOutput = irBuilder_.CreateTensorVar(
         reshapeRawOutputs_[overlap->GetRawTensor()->GetRawMagic()], reshapeTileOffset, reshapeTileShape,
         std::vector<SymbolicScalar>{});
     reshapeOutput->SetMemoryTypeBoth(input->GetMemoryTypeOriginal());
@@ -1027,7 +1023,6 @@ Status SplitReshape::ProcessPerfectlyMatchWithAll(
 Status SplitReshape::UpdateForPerfectlyMatchWithAll(
     Function& function, Operation& op, const CalcOverlapPara& para, const ReshapeSourcePara& sourcePara)
 {
-    IRBuilder builder;
     LogicalTensors overlaps = para.overlaps;
     LogicalTensorPtr reshapeSource = para.reshapeSource;
     LogicalTensorPtr input = para.input;
@@ -1039,7 +1034,7 @@ Status SplitReshape::UpdateForPerfectlyMatchWithAll(
     if (AddReshapeRawInputs(tensor->GetRawTensor()->GetRawMagic(), tensor) == FAILED) {
         return FAILED;
     }
-    auto newReshapeSource = builder.CreateTensorVar(
+    auto newReshapeSource = irBuilder_.CreateTensorVar(
         reshapeRawInputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], newReshapeSourceTileOffset,
         newReshapeSourceTileShape, std::vector<SymbolicScalar>{});
     if (newReshapeSource == nullptr) {
@@ -1056,7 +1051,7 @@ Status SplitReshape::UpdateForPerfectlyMatchWithAll(
         }
         reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
     }
-    auto reshapeOutput = builder.CreateTensorVar(
+    auto reshapeOutput = irBuilder_.CreateTensorVar(
         reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], inputView->offset, inputView->shape,
         std::vector<SymbolicScalar>{});
     if (reshapeOutput == nullptr) {
@@ -1230,7 +1225,6 @@ Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& chec
 
 Status SplitReshape::CheckOp(Function& function, Operation& op)
 {
-    IRBuilder builder;
     LogicalTensors overlaps;
     LogicalTensors newOverlaps;
     auto input = op.GetIOperands().front();
@@ -1250,7 +1244,7 @@ Status SplitReshape::CheckOp(Function& function, Operation& op)
             GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    auto inputView = builder.CreateTensorVar(
+    auto inputView = irBuilder_.CreateTensorVar(
         input->GetRawTensor(), viewOpAttribute->GetFrom(), output->shape, std::vector<SymbolicScalar>{});
     CheckOutputParam checkOutputParam;
     CheckParam checkParam = {input, output, inputView};
@@ -1265,7 +1259,7 @@ Status SplitReshape::CheckOp(Function& function, Operation& op)
             GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    auto newInputView = builder.CreateTensorVar(
+    auto newInputView = irBuilder_.CreateTensorVar(
         inputView->GetRawTensor(), checkOutputParam.newInputViewTileOffset, checkOutputParam.newInputViewTileShape,
         std::vector<SymbolicScalar>{});
     auto reshapeOp = *input->GetProducers().begin();
@@ -1331,9 +1325,8 @@ Status SplitReshape::GetAssembleDynShape(
     }
     dynValidShape = output->GetDynValidShape();
     if (dynValidShape.empty()) {
-        IRBuilder builder;
         for (size_t i = 0; i < dynInputShape.size(); ++i) {
-            dynValidShape.push_back(builder.CreateConstInt(0));
+            dynValidShape.push_back(irBuilder_.CreateConstInt(0));
         }
     }
     for (size_t i = 0U; i < dynValidShape.size(); i++) {

@@ -20,6 +20,7 @@
 #include "interface/utils/common.h"
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -416,6 +417,7 @@ private:
     std::vector<Operation*> oriOpList_;
     std::unordered_map<int, TileRange> ubTensorRangeMap;
     std::unordered_map<CorePair, size_t, CorePairHash> coreIssueNumMap;
+    IRBuilder irBuilder_;
 };
 
 class InsertSync : public Pass {
@@ -431,6 +433,7 @@ private:
     Status CheckNewOpListSeq(const std::vector<Operation*>& oriOpList, const std::vector<Operation*>& opListNew);
     Status InsertSyncMainLoop(Function* subGraphFunc);
     bool enableDebug_{false};
+    IRBuilder irBuilder_;
 };
 } // namespace tile_fwk
 } // namespace npu

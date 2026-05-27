@@ -882,8 +882,7 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
         int eventId = setWaitPairMap_[{ele, idx}];
         std::vector<std::shared_ptr<LogicalTensor>> input;
         std::vector<std::shared_ptr<LogicalTensor>> output;
-        IRBuilder builder;
-        Operation& syncOp = builder.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_SYNC_DST, input, output);
+        Operation& syncOp = irBuilder_.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_SYNC_DST, input, output);
         bool res = GenSyncOp(setPipeRealEx, currPipeRealEx, eventId, false, syncOp);
         if (!res) {
             syncOp.SetAsDeleted();
@@ -923,8 +922,7 @@ Status PipeSync::InjectSetFlag(Function& function, size_t idx, std::vector<Index
         }
         std::vector<std::shared_ptr<LogicalTensor>> input;
         std::vector<std::shared_ptr<LogicalTensor>> output;
-        IRBuilder builder;
-        Operation& syncOp = builder.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_SYNC_SRC, input, output);
+        Operation& syncOp = irBuilder_.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_SYNC_SRC, input, output);
         bool res = GenSyncOp(currPipeRealEx, waitPipeRealEx, eventId, true, syncOp);
         if (res) {
             // insert set_flag
@@ -1901,9 +1899,8 @@ void PipeSync::AddPhaseOp1(
             if (prerun == 0) {
                 std::vector<std::shared_ptr<LogicalTensor>> input;
                 std::vector<std::shared_ptr<LogicalTensor>> output;
-                IRBuilder builder;
                 Operation& phaseOp =
-                    builder.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_PHASE1, input, output);
+                    irBuilder_.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_PHASE1, input, output);
                 Operation* phaseOpPtr = &phaseOp;
                 dstLog.emplace_back(phaseOpPtr);
             }
@@ -1918,8 +1915,7 @@ void PipeSync::AddPhaseOp2(Function& function, std::vector<Operation*>& dstLog, 
     if (prerun > 0) {
         std::vector<std::shared_ptr<LogicalTensor>> input;
         std::vector<std::shared_ptr<LogicalTensor>> output;
-        IRBuilder builder;
-        Operation& phaseOp = builder.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_PHASE2, input, output);
+        Operation& phaseOp = irBuilder_.CreateTensorOpStmt(function, npu::tile_fwk::Opcode::OP_PHASE2, input, output);
         Operation* phaseOpPtr = &phaseOp;
         dstLog.emplace_back(phaseOpPtr);
     }
@@ -1949,8 +1945,7 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
         }
         std::vector<std::shared_ptr<LogicalTensor>> input;
         std::vector<std::shared_ptr<LogicalTensor>> output;
-        IRBuilder builder;
-        Operation& syncOp = builder.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+        Operation& syncOp = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
         syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
                              AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
         newOpList.push_back(&syncOp);

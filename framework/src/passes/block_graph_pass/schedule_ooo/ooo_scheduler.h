@@ -17,6 +17,7 @@
 #define PASS_SCHEDULER_H
 
 #include <climits>
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/reschedule_utils.h"
@@ -153,6 +154,7 @@ private:
     std::vector<Operation*> newOperations_;
     std::vector<Operation*> operations_;
     std::vector<ScheduleObserver*> observers_;
+    IRBuilder irBuilder_;
 
     // Notification helpers — event construction lives in ooo_scheduler_notify.cpp
     // to keep scheduler main flows focused on scheduling logic.

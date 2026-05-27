@@ -17,6 +17,7 @@
 #define PASS_SPLIT_LARGE_FANOUT_TENSOR_H_
 
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/pass_common_defs.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
@@ -120,6 +121,7 @@ private:
     std::map<LogicalTensorPtr, std::set<Shape>> fromShapes_;
     bool enableMoreSplit_ = false;
     std::vector<Operation*> addedOps_;
+    IRBuilder irBuilder_;
 
     std::string idx;
 };

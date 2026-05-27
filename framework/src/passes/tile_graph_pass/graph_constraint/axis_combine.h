@@ -26,6 +26,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
+#include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "axis_combine_marker.h"
 
@@ -41,8 +42,11 @@ public:
 
 private:
     Status AlignBroadCastOpInputs(Function& function, Operation& op);
+    LogicalTensorPtr CreateAlignedTensor(const LogicalTensorPtr& srcTensor, const std::vector<int64_t>& alignedShape);
+    void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx, Shape& shape);
     bool enableBrcb_{true};
     AxisCombineMarker axisCombineMarker;
+    IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
 #endif // AXIS_COMBINE_H

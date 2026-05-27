@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include <vector>
 #include "interface/operation/opcode.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/data_type.h"
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/tilefwk.h"
@@ -52,6 +53,7 @@ private:
     std::set<int> SetIntersection(std::set<int>& a, std::set<int>& b);
     bool IsCrossCoreMoveOps(Operation* op);
     std::vector<Operation*> newOps;
+    IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_INTRA_SUBGRAPH_ADAPTER_H_

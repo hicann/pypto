@@ -21,6 +21,7 @@
 
 #include "interface/function/function.h"
 #include "interface/operation/opcode.h"
+#include "interface/tensor/irbuilder.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -160,6 +161,9 @@ public:
     Status ProcessConvertPath(
         const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, MemoryType requiredMemoryType,
         std::vector<MemoryType>& paths);
+
+private:
+    IRBuilder irBuilder_;
 };
 static constexpr int MATMUL_DIM_NUM = 2;
 static constexpr int L0C2L1_DIM1_SHAPE_RESTICT = 16; // l0c2l1要求输入的外轴（第一轴）元素数量必须是16的倍数

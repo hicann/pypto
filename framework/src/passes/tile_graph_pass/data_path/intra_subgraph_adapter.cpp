@@ -390,9 +390,8 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
                                              "IntraSubgraphAdapter::InsertOpBetween must be OP_ASSEMBLE.";
     auto newRawTensor =
         std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
-    IRBuilder builder;
     LogicalTensorPtr newTensor =
-        builder.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), std::vector<SymbolicScalar>{});
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
     function.GetTensorMap().Insert(newTensor, false);
@@ -401,7 +400,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     APASS_LOG_DEBUG_F(Elements::Tensor, "Compare New: %s", newTensor->Dump().c_str());
 
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
-    Operation* newOp = &builder.CreateTensorOpStmt(function, opcode, {newTensor}, {tensor});
+    Operation* newOp = &irBuilder_.CreateTensorOpStmt(function, opcode, {newTensor}, {tensor});
     newOps.push_back(newOp);
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
@@ -438,9 +437,8 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     ASSERT(opcode == Opcode::OP_VIEW || opcode == Opcode::OP_ASSEMBLE)
         << "[IntraSubgraphAdapter][Operation][ERROR]: Opcode for IntraSubgraphAdapter::InsertOpBetween must be OP_VIEW or OP_ASSEMBLE.";
     auto newRawTensor = std::make_shared<RawTensor>(tensor->Datatype(), tensor->GetRawTensor()->rawshape, tensor->Format());
-    IRBuilder builder;
     LogicalTensorPtr newTensor =
-        builder.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), tensor->GetDynValidShape());
+        irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), tensor->GetDynValidShape());
     newTensor->UpdateOffset(tensor->GetTensorOffset());
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
@@ -453,7 +451,7 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     }
 
     std::vector<int64_t> offset(tensor->GetShape().size(), 0);
-    Operation* newOp = &builder.CreateTensorOpStmt(function, opcode, {tensor}, {newTensor});
+    Operation* newOp = &irBuilder_.CreateTensorOpStmt(function, opcode, {tensor}, {newTensor});
     newOps.push_back(newOp);
     if (opcode == Opcode::OP_ASSEMBLE) {
         newOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(
