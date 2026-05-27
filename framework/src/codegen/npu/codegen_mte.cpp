@@ -1089,9 +1089,9 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBP
     std::ostringstream oss;
     oss << tileOpName;
     if (opCode == Opcode::OP_UB_COPY_OUT) {
-        bool isAcc{false};
+        int64_t isAcc{0};
         GetOpAttr(OpAttributeKey::atomicAdd, isAcc);
-        std::string att = isAcc ? "pto::AtomicType::AtomicAdd" : "pto::AtomicType::AtomicNone";
+        std::string att = isAcc == 0 ? "pto::AtomicType::AtomicNone" : "pto::AtomicType::AtomicAdd";
         std::string storeConfig = WrapParamByAngleBrackets({att});
         oss << "<" << TSTORE_CONF_VEC << storeConfig << ">";
     }
