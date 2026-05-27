@@ -25,7 +25,7 @@ except Exception:
         return fn
 
 from lightning_indexer_prolog_quant_mxfp8_impl import lightning_indexer_prolog_quant
-from utils.compare_2_1 import precision_compare_triple
+from compare_2_1 import precision_compare_triple
 
 
 pyptolib = torch.library.Library("pypto", "FRAGMENT")

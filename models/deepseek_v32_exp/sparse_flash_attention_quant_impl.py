@@ -173,7 +173,8 @@ def sparse_flash_attention_quant_compute(query_nope, query_rope, key_nope_2d, ke
 
                             sij = pypto.matmul(qi, kj_view, pypto.DT_FP32, a_trans=False, b_trans=True)
                         else:
-                            pypto.set_pass_options(sg_set_scope=20001)
+                            if pypto.platform.npuarch == 'DAV_3510':
+                                pypto.set_pass_options(sg_set_scope=20001)
                             pypto.set_semantic_label("Sa_V0")
                             pypto.set_vec_tile_shapes(gather_vec_tile[0], gather_vec_tile[1])
                             k_nope_2d_view = pypto.view(key_nope_2d, [key_nope_2d.shape[0], dn],
@@ -204,7 +205,8 @@ def sparse_flash_attention_quant_compute(query_nope, query_rope, key_nope_2d, ke
                             pypto.assemble(qr, [0, dn], qi)
 
                             sij = pypto.matmul(qi, kj_view, pypto.DT_FP32, a_trans=False, b_trans=True)
-                            pypto.set_pass_options(sg_set_scope=-1)
+                            if pypto.platform.npuarch == 'DAV_3510':
+                                pypto.set_pass_options(sg_set_scope=-1)
 
                         pypto.set_semantic_label("Sa_V1")
                         pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
