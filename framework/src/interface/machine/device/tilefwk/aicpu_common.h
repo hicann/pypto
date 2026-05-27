@@ -208,7 +208,7 @@ struct DevDfxArgs {
     uint32_t deviceId{0};
 };
 
-constexpr uint32_t PERF_TRACE_INST_MAX_NUM_EVERY_TYPE = 20;
+constexpr uint32_t PERF_TRACE_INST_MAX_NUM_EVERY_TYPE = 200;
 constexpr uint32_t INVALID_DEV_TASK_ID = 0xFFFFFFFF;
 enum AicorePerfTrace {
     PERF_TRACE_CORE_BEGIN = 0,

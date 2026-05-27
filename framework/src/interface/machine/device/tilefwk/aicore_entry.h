@@ -255,11 +255,6 @@ INLINE void FlushMetricStatistic(__gm__ volatile KernelArgs* args)
 
 INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
 {
-    if (ctx->lastTaskFinishCycle > 0) {
-        PerfTraceRecord(
-            INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_ALL_DEV_TASK_LEAF_TASK_EXEC_FINISH, args,
-            ctx->openDumpPerfTrace, ctx->lastTaskFinishCycle);
-    }
     PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY, args, ctx->openDumpPerfTrace);
     if (unlikely(
             args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||

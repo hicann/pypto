@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 #include <cstdlib>
 #include "machine/runtime/runner/device_runner.h"
+#include <memory>
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/runner/host_prof.h"
 #include "interface/tensor/logical_tensor.h"
@@ -118,32 +119,34 @@ TEST_F(TestDynamicDeviceRunner, test_dump_device_perf)
 {
     setenv("DUMP_DEVICE_PERF", "true", 1);
     DeviceArgs devKernelArgs;
+    config::SetOptionsNg<int64_t>("debug.runtime_debug_mode", 1);
+    npu::tile_fwk::DeviceRunner::Get().InitMetaData(devKernelArgs);
     devKernelArgs.nrAic = 1;
     devKernelArgs.nrAiv = 2;
     devKernelArgs.nrValidAic = 1;
     devKernelArgs.nrAicpu = 3;
-    config::SetOptionsNg<int64_t>("debug.runtime_debug_mode", 1);
-    npu::tile_fwk::DeviceRunner::Get().InitMetaData(devKernelArgs);
     std::vector<void*> perfData;
-    Metrics* metr = static_cast<Metrics*>(malloc(sizeof(Metrics) + sizeof(TaskStat)));
-    TaskStat taskStat;
+    constexpr uint64_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
+    const uint64_t perfDataNum = devKernelArgs.nrAic + devKernelArgs.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS;
+    std::vector<std::vector<uint8_t>> metricStorage(perfDataNum, std::vector<uint8_t>(PERF_DATA_TOTAL_SIZE, 0));
+    Metrics* metr = reinterpret_cast<Metrics*>(metricStorage[0].data());
+    TaskStat taskStat{};
     taskStat.execEnd = 1;
     metr->taskCount = 1;
     metr->tasks[0] = taskStat;
     metr->perfTrace[0][0][0] = 1;
     metr->turnNum = 1;
 
-    MetricPerf aicpuMetPer;
-    aicpuMetPer.perfAicpuTraceDevTask[0][0][0] = 1;
-    aicpuMetPer.perfAicpuTraceDevTask[1][0][0] = 2;
-    aicpuMetPer.perfAicpuTraceDevTask[2][0][0] = 3;
-    devKernelArgs.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(static_cast<void*>(&aicpuMetPer));
+    auto aicpuMetPer = std::make_unique<MetricPerf>();
+    aicpuMetPer->perfAicpuTraceDevTask[0][0][0] = 1;
+    aicpuMetPer->perfAicpuTraceDevTask[1][0][0] = 2;
+    aicpuMetPer->perfAicpuTraceDevTask[2][0][0] = 3;
+    devKernelArgs.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(static_cast<void*>(aicpuMetPer.get()));
 
-    for (uint64_t i = 0; i < devKernelArgs.nrAic + devKernelArgs.nrAiv; i++) {
-        perfData.push_back(static_cast<void*>(metr));
+    for (uint64_t i = 0; i < perfDataNum; i++) {
+        perfData.push_back(static_cast<void*>(metricStorage[i].data()));
     }
     npu::tile_fwk::dynamic::DumpAicoreTaskExectInfo(devKernelArgs, perfData);
-    free(metr);
     std::string jsonPath = npu::tile_fwk::config::LogTopFolder() + "/tilefwk_L1_prof_data.json";
     EXPECT_EQ(IsPathExist(jsonPath), true);
     setenv("DUMP_DEVICE_PERF", "true", 1);

@@ -126,7 +126,7 @@ struct SchDeviceTaskContext {
         }
     }
     bool IsCoreTaskSendFinish() { return (allSent >= CoreTaskCnt()); }
-    uint64_t TaskId() { return taskCtrl->taskId; }
+    uint64_t TaskId() { return taskCtrl != nullptr ? taskCtrl->taskId : 0; }
     void Dump()
     {
         DEV_ERROR(

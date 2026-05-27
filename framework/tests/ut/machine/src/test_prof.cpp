@@ -53,13 +53,9 @@ public:
 
     static void TearDownTestCase() {}
 
-    void SetUp() override
-    {
-    }
+    void SetUp() override {}
 
-    void TearDown() override
-    {
-    }
+    void TearDown() override {}
 
 protected:
     std::unique_ptr<AicpuTaskManager> CreateAicpuTaskManager() { return std::make_unique<AicpuTaskManager>(); }
@@ -206,9 +202,7 @@ TEST_F(TestPro, test_prof_start_pmu_dav2201)
     env.prof->ProfInit(devArgs.get());
     env.prof->ProfInitPmu(env.regAddrsArr, env.pmuEventAddrsArr);
     env.prof->ProfStartPmu();
-    TaskStat taskStat;
-    taskStat.seqNo = 1;
-    env.prof->ProfGetPmu(0, 0, 0, &taskStat);
+    env.prof->ProfGetPmu(0, 0, 0, 0);
     env.prof->ProfStop();
 }
 
@@ -225,10 +219,6 @@ TEST_F(TestPro, test_prof_start_pmu_dav3510)
     env.prof->ProfInit(devArgs.get());
     env.prof->ProfInitPmu(env.regAddrsArr, env.pmuEventAddrsArr);
     env.prof->ProfStartPmu();
-    TaskStat taskStat;
-    taskStat.seqNo = 1;
-    env.prof->ProfGetPmu(0, 0, 0, &taskStat);
+    env.prof->ProfGetPmu(0, 0, 0, 0);
     env.prof->ProfStop();
 }
-
-

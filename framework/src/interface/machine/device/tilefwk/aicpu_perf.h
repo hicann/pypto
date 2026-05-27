@@ -68,7 +68,7 @@ inline const char* PerfTraceName[] = {
 
 #define DEVTASK_PERF_ARRY_INDEX(type) (type - PERF_TRACE_DEV_TASK_BUILD)
 inline constexpr uint32_t DEVTASK_PERF_TYPE_NUM = (PERF_TRACE_DEV_TASK_RSP - PERF_TRACE_DEV_TASK_BUILD + 1);
-inline constexpr uint32_t PERF_TRACE_COUNT_DEVTASK_MAX_NUM = 20;
+inline constexpr uint32_t PERF_TRACE_COUNT_DEVTASK_MAX_NUM = 200;
 
 #undef PERF_TRACES
 } // namespace npu::tile_fwk::dynamic

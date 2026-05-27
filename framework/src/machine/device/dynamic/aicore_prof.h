@@ -291,8 +291,9 @@ public:
     void ProfInitPmu(int64_t* regAddrs, int64_t* pmuEventAddrs);
     void ProfStartPmu();
     void ProfStopPmu();
-    void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
+    void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, uint64_t taskCtrlTaskId);
     void ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat);
+
 private:
     struct PmuCtrlAddrs {
         uint32_t* ctrl0Addr{nullptr};
@@ -310,7 +311,8 @@ private:
     void ProgramPmuStartForCore(void* mapBase, int coreIdx, const PmuCtrlAddrs& addrs);
     void FillPmuData(
         MsprofAicpuPyPtoPmuData& data, int32_t& coreIdx, uint32_t& subGraphId, uint32_t& taskId,
-        const struct TaskStat* taskStat) const;
+        uint64_t taskCtrlTaskId) const;
+    void DebugPmuData(int32_t coreIdx, const MsprofAicpuPyPtoPmuData& data) const;
     uint64_t ProfGetCurCpuTimestamp();
 
 private:

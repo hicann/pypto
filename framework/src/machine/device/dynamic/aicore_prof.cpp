@@ -43,7 +43,6 @@ bool ProfCheckLevel(uint64_t feature)
     return AdprofCheckFeatureIsOn(feature) > 0;
 }
 
-
 #ifdef __DEVICE__
 uint64_t AiCoreProf::devProfSwitch_ = 0;
 uint32_t AiCoreProf::devProfType_ = 0;
@@ -121,7 +120,8 @@ void AiCoreProf::ProfInit(DeviceArgs *deviceArgs) {
         ProfInitLog();
 #if PMU_COLLECT
         ProfInitPmu(
-            reinterpret_cast<int64_t *>(deviceArgs->corePmuRegAddr), reinterpret_cast<int64_t *>(deviceArgs->pmuEventAddr));
+            reinterpret_cast<int64_t*>(deviceArgs->corePmuRegAddr),
+            reinterpret_cast<int64_t*>(deviceArgs->pmuEventAddr));
         profLevel_ = PROF_LEVEL_FUNC_LOG_PMU;
 #endif
     } else {
@@ -434,9 +434,9 @@ void AiCoreProf::ProfStopPmu()
 
 void AiCoreProf::FillPmuData(
     MsprofAicpuPyPtoPmuData& data, int32_t& coreIdx, uint32_t& subGraphId, uint32_t& taskId,
-    const struct TaskStat* taskStat) const
+    uint64_t taskCtrlTaskId) const
 {
-    data.seqNo = taskStat->seqNo;
+    data.seqNo = static_cast<uint32_t>(taskCtrlTaskId);
     data.taskId = taskId;
     data.totalCyc =
         *(pmuCntTotal0Plain_[coreIdx]) + (static_cast<uint64_t>(*(pmuCntTotal1Plain_[coreIdx])) << HIG_32BIT);
@@ -455,14 +455,8 @@ void AiCoreProf::FillPmuData(
     (void)subGraphId;
 }
 
-void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat* taskStat)
+void AiCoreProf::DebugPmuData(int32_t coreIdx, const MsprofAicpuPyPtoPmuData& data) const
 {
-    if (!ProfCheckLevel(PROF_TASK_TIME_L2)) {
-        return;
-    }
-
-    MsprofAicpuPyPtoPmuData data = {0};
-    FillPmuData(data, coreIdx, subGraphId, taskId, taskStat);
     DEV_DEBUG(
         "aicore profiling pmu info, core id: %d: (%u, %u | %lu | %p=%u, %p=%u, %p=%u, %p=%u, "
         "%p=%u, %p=%u, %p=%u, %p=%u, %p=%u, %p=%u).",
@@ -471,6 +465,17 @@ void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskI
         pmuCnt4Plain_[coreIdx], data.pmuCnt4, pmuCnt5Plain_[coreIdx], data.pmuCnt5, pmuCnt6Plain_[coreIdx],
         data.pmuCnt6, pmuCnt7Plain_[coreIdx], data.pmuCnt7, pmuCnt8Plain_[coreIdx], data.pmuCnt8,
         pmuCnt9Plain_[coreIdx], data.pmuCnt9);
+}
+
+void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, uint64_t taskCtrlTaskId)
+{
+    if (!ProfCheckLevel(PROF_TASK_TIME_L2)) {
+        return;
+    }
+
+    MsprofAicpuPyPtoPmuData data = {0};
+    FillPmuData(data, coreIdx, subGraphId, taskId, taskCtrlTaskId);
+    DebugPmuData(coreIdx, data);
 
     if (pmuHead_[coreIdx]->cnt == 0) {
         pmuMsg_[coreIdx].magicNumber = 0x5A5AU;

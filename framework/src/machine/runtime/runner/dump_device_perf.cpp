@@ -16,6 +16,7 @@
 #include "machine/runtime/runner/dump_device_perf.h"
 
 #include <cstdlib>
+#include <memory>
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/runtime_api.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
@@ -247,9 +248,9 @@ inline void DumpAicoreDevTask(
     }
 }
 
-inline MetricPerf GetAicpuPrefAddr(const DeviceArgs& args, const uint32_t& turnIdx)
+inline std::unique_ptr<MetricPerf> GetAicpuPrefAddr(const DeviceArgs& args, const uint32_t& turnIdx)
 {
-    MetricPerf aicpuMetric;
+    auto aicpuMetric = std::make_unique<MetricPerf>();
     auto aicpuPer = (ValueToPtr(args.aicpuPerfAddr + turnIdx * sizeof(MetricPerf)));
     if (aicpuPer == nullptr) {
         MACHINE_LOGW("Aicpu per ptr is null");
@@ -257,7 +258,7 @@ inline MetricPerf GetAicpuPrefAddr(const DeviceArgs& args, const uint32_t& turnI
     }
 
     auto ret = RuntimeMemcpy(
-        PtrToPtr<MetricPerf, void>(&aicpuMetric), sizeof(MetricPerf), aicpuPer, sizeof(MetricPerf),
+        PtrToPtr<MetricPerf, void>(aicpuMetric.get()), sizeof(MetricPerf), aicpuPer, sizeof(MetricPerf),
         RtMemcpyKind::DEVICE_TO_HOST);
     if (ret != 0) {
         MACHINE_LOGW("aicpu meter copy failed ret: %d", ret);
@@ -281,19 +282,19 @@ inline void DumpAicpuDevTask(
         aicpu["freq"] = freq;
         json aicpuDevTasks = json::array();
         for (uint32_t turnIdx = g_last_round_num; turnIdx < turnNum; turnIdx++) {
-            MetricPerf aicpuMetric = GetAicpuPrefAddr(args, turnIdx);
+            auto aicpuMetric = GetAicpuPrefAddr(args, turnIdx);
             for (uint32_t type = 0; type < PERF_TRACE_MAX; type++) {
                 if (PerfTraceIsDevTask[type]) {
-                    DevTaskPerfFormat(i, type, aicpuDevTasks, &aicpuMetric, turnIdx);
+                    DevTaskPerfFormat(i, type, aicpuDevTasks, aicpuMetric.get(), turnIdx);
                     continue;
                 }
-                if (aicpuMetric.perfAicpuTrace[i][type] == 0) {
+                if (aicpuMetric->perfAicpuTrace[i][type] == 0) {
                     continue;
                 }
                 json schCtrAicpu;
                 std::string name = PerfTraceName[type];
                 schCtrAicpu["name"] = name + "_" + std::to_string(turnIdx);
-                schCtrAicpu["end"] = aicpuMetric.perfAicpuTrace[i][type];
+                schCtrAicpu["end"] = aicpuMetric->perfAicpuTrace[i][type];
                 aicpuDevTasks.push_back(schCtrAicpu);
             }
         }
@@ -343,16 +344,6 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
         MACHINE_LOGW("Failed to execute machine_perf_trace.py, cannot get aicpu perfetto.json.");
     }
     g_last_round_num = sumRoundNum;
-    // Auto run analyze command once DUMP_DEVICE_PERF is enabled in runtime.
-    std::string analysisCmd = "python3 " + scriptPath + " analyze " + aicpuPerfilePath;
-    ret = Checkinject(analysisCmd.c_str(), analysisCmd.size());
-    if (ret != 0) {
-        MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "Draw swimlane cmd illegal char.");
-        return;
-    }
-    if (system(analysisCmd.c_str()) != 0) {
-        MACHINE_LOGW("Failed to execute machine_perf_trace.py analyze.");
-    }
     npu::tile_fwk::config::SetRunDataOption(
         KEY_AICPU_PERF_GRAPH_PATH, npu::tile_fwk::config::GetAbsoluteTopFolder() + "/machine_runtime_operator_trace_" +
                                        std::to_string(g_last_round_num) + ".json");

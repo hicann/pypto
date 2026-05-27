@@ -62,7 +62,11 @@
 
 3.  采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
 
-4.  终端可直接查看 AI CPU/AI Core 数据汇总表：
+4.  待数据全部落盘后，手动执行 analyze 命令查看 AI CPU/AI Core 数据汇总表：
+
+    ```bash
+    python tools/scripts/machine_perf_trace.py analyze output/output_<时间戳>/machine_trace_perf_data_0.json
+    ```
 
     ![](../figures/dump_device_perf.png "AI CPU/AI Core数据汇总表")
 
