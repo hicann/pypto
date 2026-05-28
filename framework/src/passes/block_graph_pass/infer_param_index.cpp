@@ -125,7 +125,6 @@ Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function &functi
                 }
             }
         }
-        
     }
     return SUCCESS;
 }
@@ -224,19 +223,28 @@ Status InferParamIndex::InferShape(Function& function)
     return SUCCESS;
 }
 
-Status InferParamIndex::UpdateValidShape(
-    Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
-    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+Status InferParamIndex::InsertAddr2ValidShapeSpecified(Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified) 
 {
-    for (auto& op : subFunc.Operations(false)) {
-        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
-        int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
+    bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+    // 暂不处理输入个数小于输出个数的copyIn，原因是coaIndex不够分
+    if (IsCopyIn(op.GetOpcode())) {
+        auto ioNum = op.GetIOperands().size();
+        auto ooNum = op.GetOOperands().size();
+        if (ioNum < ooNum) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Copyin[%d] does not support fewer inputs than outputs.", op.GetOpMagic());
+            return FAILED;
+        }
+    }
+    
+    for (size_t i = 0 ; i < op.GetOOperands().size(); i++) {
+        int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(i);
         tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(0) : tensorBaseAddrCoaIndex;
         if (tensorBaseAddrCoaIndex == -1) {
             continue;
         }
         if (addr2ValidShape.find(tensorBaseAddrCoaIndex) == addr2ValidShape.end()) {
-            addr2ValidShape[tensorBaseAddrCoaIndex] = op.GetOOperands()[0]->GetDynValidShape();
+            addr2ValidShape[tensorBaseAddrCoaIndex] = op.GetOOperands()[i]->GetDynValidShape();
             if (IsCopyIn(op.GetOpcode())) {
                 auto attr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
                 if (attr->GetToDynValidShape().size() != 0 && attr->GetToDynValidShape()[0].IsSpecified()) {
@@ -251,6 +259,19 @@ Status InferParamIndex::UpdateValidShape(
                         OpImmediate::ToSpecified(attr->GetFromDynValidShape());
                 }
             }
+        }
+    }
+    return SUCCESS;
+}
+
+Status InferParamIndex::UpdateValidShape(
+    Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+    std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified)
+{
+    for (auto& op : subFunc.Operations(false)) {
+        if (InsertAddr2ValidShapeSpecified(op, addr2ValidShape, addr2ValidShapeSpecified) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InsertAddr2ValidShapeSpecified failed");
+            return FAILED;
         }
     }
     return SUCCESS;

@@ -37,6 +37,8 @@ private:
     Status ResetViewDynValidShape(const Operation& op);
     Status ResetAssembleDynValidShape(const Operation& op);
     Status ResetDynValidShape(Function& function);
+    Status InsertAddr2ValidShapeSpecified(Operation& op, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
+        std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);
     Status UpdateValidShape(
         Function& subFunc, std::map<int, std::vector<SymbolicScalar>>& addr2ValidShape,
         std::map<int, std::vector<SymbolicScalar>>& addr2ValidShapeSpecified);

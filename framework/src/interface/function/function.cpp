@@ -2831,7 +2831,9 @@ void Function::NormalizeCoaForNormalOperands(
             if ((op->GetOOpAttrOffset(i) != -1) || (inOutCasts.count(oOperand) > 0)) {
                 continue;
             }
-            if (oOperand->GetConsumers().empty()) {
+            // 对于Copy类多输出Op，由于InferParamIndex对每个输出都需要通过专属的coaIndex传递Validshape给codegen，故需要给此类op所有输出都进行normalize
+            // 如 Opcode::OP_SHMEM_GET
+            if (oOperand->GetConsumers().empty() && !OpcodeManager::Inst().IsCopyInOrOut(op->GetOpcode())) {
                 continue;
             }
             auto it = processedOperands.find(oOperand);

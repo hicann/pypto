@@ -1020,10 +1020,14 @@ void ShmemPutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     } else {
         copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[2]->GetOffset()));
     }
-    std::vector<SymbolicScalar> fromValidShapeSym(copyOpAttribute->GetFromDynValidShape().size());
-    OpImmediate::NormalizeValue(fromValidShapeSym, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
-    for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(fromValidShapeSym);
+    std::vector<SymbolicScalar> shmemPutDynValidShape(copyOpAttribute->GetFromDynValidShape().size());
+    OpImmediate::NormalizeValue(shmemPutDynValidShape, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
+    for (size_t i = 0; i < op->GetOOperands().size(); i++) {
+        if (i == 0) {
+            outValidShapes.push_back(shmemPutDynValidShape);
+        } else {
+            outValidShapes.push_back(SymbolicScalar::FromConcrete(op->GetOOperands()[i]->GetShape()));
+        }
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT, ShmemPutInferFunc);
@@ -1031,10 +1035,14 @@ REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT, ShmemPutInferFunc)
 void ShmemGetInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
-    std::vector<SymbolicScalar> fromValidShapeSym(copyOpAttribute->GetFromDynValidShape().size());
-    OpImmediate::NormalizeValue(fromValidShapeSym, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
-    for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(fromValidShapeSym);
+    std::vector<SymbolicScalar> shmemGetDynValidShape(copyOpAttribute->GetFromDynValidShape().size());
+    OpImmediate::NormalizeValue(shmemGetDynValidShape, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
+    for (size_t i = 0; i < op->GetOOperands().size(); i++) {
+        if (i == 0) {
+            outValidShapes.push_back(shmemGetDynValidShape);
+        } else {
+            outValidShapes.push_back(SymbolicScalar::FromConcrete(op->GetOOperands()[i]->GetShape()));
+        }
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_GET, Opcode::OP_SHMEM_GET, ShmemGetInferFunc);
@@ -1047,10 +1055,10 @@ void ShmemStoreInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>
     } else {
         copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[1]->GetOffset()));
     }
-    std::vector<SymbolicScalar> fromValidShapeSym(copyOpAttribute->GetFromDynValidShape().size());
-    OpImmediate::NormalizeValue(fromValidShapeSym, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
+    std::vector<SymbolicScalar> shmemStoreDynValidShape(copyOpAttribute->GetFromDynValidShape().size());
+    OpImmediate::NormalizeValue(shmemStoreDynValidShape, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
     for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(fromValidShapeSym);
+        outValidShapes.push_back(shmemStoreDynValidShape);
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_STORE, Opcode::OP_SHMEM_STORE, ShmemStoreInferFunc);
@@ -1063,10 +1071,10 @@ void ShmemLoadInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>&
     } else {
         copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[1]->GetOffset()));
     }
-    std::vector<SymbolicScalar> toValidShapeSym(copyOpAttribute->GetToDynValidShape().size());
-    OpImmediate::NormalizeValue(toValidShapeSym, 0, copyOpAttribute->GetToDynValidShape(), 0, false);
+    std::vector<SymbolicScalar> shmemLoadDynValidShape(copyOpAttribute->GetToDynValidShape().size());
+    OpImmediate::NormalizeValue(shmemLoadDynValidShape, 0, copyOpAttribute->GetToDynValidShape(), 0, false);
     for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(toValidShapeSym);
+        outValidShapes.push_back(shmemLoadDynValidShape);
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_LOAD, Opcode::OP_SHMEM_LOAD, ShmemLoadInferFunc);
