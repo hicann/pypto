@@ -53,10 +53,14 @@ TILEOP void TExtractL0CToUB(
         }
     } else {
         if (subblockId == 0) {
-            pto::TEXTRACT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec0>(
+            pto::TEXTRACT<
+                ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec0,
+                config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
                 ubTile, l0cTile, l0cOffset0, l0cOffset1);
         } else {
-            pto::TEXTRACT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec1>(
+            pto::TEXTRACT<
+                ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec1,
+                config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
                 ubTile, l0cTile, l0cOffset0, l0cOffset1);
         }
     }
@@ -97,10 +101,14 @@ TILEOP void TInsertL0CToUB(
         }
     } else {
         if (subblockId == 0) {
-            pto::TINSERT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec0>(
+            pto::TINSERT<
+                ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec0,
+                config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
                 ubTile, l0cTile, ubOffset0, ubOffset1);
         } else {
-            pto::TINSERT<ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec1>(
+            pto::TINSERT<
+                ubTileData, l0cTileData, pto::AccToVecMode::SingleModeVec1,
+                config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
                 ubTile, l0cTile, ubOffset0, ubOffset1);
         }
     }
