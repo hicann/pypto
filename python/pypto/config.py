@@ -220,13 +220,10 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     rst = scope.get_pass_options()
     result = {}
     for base_key in ('vec_nbuffer_setting', 'cube_l1_reuse_setting', 'cube_nbuffer_setting'):
-        merged = _merge_split_settings(rst, base_key)
-        if merged:
-            result[base_key] = merged
+        result[base_key] = _merge_split_settings(rst, base_key)
     val = rst.get("sg_set_scope", (-1, False, False))
     result['sg_set_scope'] = (int(val[0]), bool(val[1]), bool(val[2]))
-    if 'auto_mix_partition' in rst:
-        result['auto_mix_partition'] = rst['auto_mix_partition']
+    result['auto_mix_partition'] = rst.get('auto_mix_partition', 0)
     return result
 
 

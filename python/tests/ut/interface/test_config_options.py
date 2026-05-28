@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
+import inspect
 import pypto
 from pypto.experimental import set_operation_options, get_operation_options
 
@@ -22,6 +23,13 @@ def test_print_options():
 
 
 def test_pass_option():
+    # 校验 get_pass_options 返回的 key 集合与 set_pass_options 参数集合一致
+    pypto.reset_options()
+    set_params = set(inspect.signature(pypto.set_pass_options).parameters)
+    pass_option = pypto.get_pass_options()
+    assert set(pass_option.keys()) == set_params, (
+        f"get_pass_options keys {set(pass_option.keys())} != set_pass_options params {set_params}"
+    )
     # tuple
     pypto.set_pass_options(sg_set_scope=48)
     pass_option = pypto.get_pass_options()
