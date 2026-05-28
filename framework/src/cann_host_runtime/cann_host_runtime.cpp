@@ -15,6 +15,8 @@
 
 #include "tilefwk/cann_host_runtime.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include <cstdlib>
+#include <cstring>
 
 namespace npu {
 namespace tile_fwk {
@@ -37,7 +39,12 @@ void* CannHostRuntime::GetSymbol(const std::string& sym)
 CannHostRuntime::CannHostRuntime()
 {
 #ifdef BUILD_WITH_CANN
-    std::string LibPathDir = std::string(ASCEND_CANN_PACKAGE_PATH) + "/lib64/";
+    const char* ascendCannPath = std::getenv("ASCEND_HOME_PATH");
+    if (ascendCannPath == nullptr || std::strlen(ascendCannPath) == 0) {
+        FE_LOGW("Environment variable ASCEND_HOME_PATH is not set or empty.");
+        return;
+    }
+    std::string LibPathDir = std::string(ascendCannPath) + "/lib64/";
     std::string soDepPath = RealPath(LibPathDir + "libprofapi.so");
     FE_LOGW("soDepPath = %s", soDepPath.c_str());
     handleDep_ = dlopen(soDepPath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
