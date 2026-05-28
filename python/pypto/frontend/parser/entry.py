@@ -515,46 +515,6 @@ class JitCallableWrapper:
         mgr = BuildOnlineManager()
         mgr.build_and_load_calculator()
 
-        # Prefer PyTorch D2H when we still have the original torch.Tensor objects (NPU launch path),
-        # and all PTO tensors are TILEOP_ND. NPU NZ tensors (get_npu_format == 29) must use CopyToHost:
-        # DeviceTensorData::GetDataSize() uses product(shape)*BytesOf(dtype) and can disagree with
-        # actual NPU storage Fractal-NZ / padding, so rtMemcpy in CopyToHost may overrun the host
-        # staging buffer and corrupt the heap (free(): invalid pointer).
-        has_npu_nz_source = (
-            source_torch_tensors is not None
-            and any(
-                isinstance(t, torch.Tensor)
-                and t.device.type == "npu"
-                and get_npu_tensor_format(t) == 29
-                for t in source_torch_tensors
-            )
-        )
-
-        if not has_npu_nz_source:
-            host_pto_tensors = []
-            staging: list[torch.Tensor] = []
-            for pt, th in zip(pto_tensors, source_torch_tensors):
-                if th.device.type == "npu":
-                    c = th.detach().cpu().contiguous()
-                else:
-                    c = th.detach().contiguous()
-                staging.append(c)
-                host_pto_tensors.append(
-                    from_torch(
-                        c,
-                        name=pt.name,
-                        tensor_format=pt.format,
-                        dtype=pt.dtype,
-                    )
-                )
-            self._verify_snapshot_keepalive = staging
-            pypto_impl.SetVerifyData(
-                _pto_to_tensor_data(host_pto_tensors),
-                [],
-                _pto_verify_datas.get_data(),
-            )
-            return
-
         # Fallback (e.g. SIM compile with PTO tensors only, source torch tensors unavailable/mismatched,
         # non-ND PTO formats, or NPU NZ source tensors): explicit staging + CopyToHost.
         host_pto_tensors, staging = _gen_pto_tensor(pto_tensors)
