@@ -144,6 +144,9 @@ static void PrepareRuntimeDynamicPartialUpdateTables(
                 partialUpdate->cellMatchTableDesc.GetDimensionSize() <= 0) {
                 continue;
             }
+            if (partialUpdate->cellMatchRuntimePartialUpdateTable.Data() == nullptr) {
+                continue;
+            }
             if (!preparedPartials.insert(partialUpdate).second) {
                 continue;
             }
