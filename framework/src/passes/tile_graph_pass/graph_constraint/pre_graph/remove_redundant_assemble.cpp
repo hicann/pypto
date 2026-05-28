@@ -19,9 +19,25 @@
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
 
+#include <sstream>
+
 #define MODULE_NAME "PreGraphProcess"
 
 namespace npu::tile_fwk {
+
+std::string OpImmediateVecToStr(const std::vector<OpImmediate>& values)
+{
+    std::stringstream ss;
+    ss << "[";
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i != 0) {
+            ss << ", ";
+        }
+        ss << values[i].Dump();
+    }
+    ss << "]";
+    return ss.str();
+}
 
 std::vector<OpImmediate> SumOffset(const std::vector<OpImmediate> offset1, const std::vector<OpImmediate> offset2)
 {
@@ -236,8 +252,8 @@ void GetDynOffsetBeforeReshape(
     // 根据线性索引计算新的偏移量
     newOffset.resize(newSize);
     for (size_t i = 0; i < newSize; ++i) {
-        newOffset[i] = linearIndex / newStrideScalar[i];
-        linearIndex = linearIndex % newStrideScalar[i];
+        newOffset[i] = (linearIndex / newStrideScalar[i]).Simplify();
+        linearIndex = (linearIndex % newStrideScalar[i]).Simplify();
     }
 }
 
@@ -271,8 +287,8 @@ void GetDynOffsetBeforeDynReshape(
 
     newOffset.resize(newSize);
     for (size_t i = 0; i < newSize; ++i) {
-        newOffset[i] = linearIndex / newStride[i];
-        linearIndex = linearIndex % newStride[i];
+        newOffset[i] = (linearIndex / newStride[i]).Simplify();
+        linearIndex = (linearIndex % newStride[i]).Simplify();
     }
 }
 
@@ -291,6 +307,15 @@ bool MatchReshapePattern(const LogicalTensorPtr& reshapeInput, const LogicalTens
         return false;
     }
     return removeAllOnes(inputShape) == removeAllOnes(outputShape);
+}
+
+Shape GetStaticShapeForDynAxes(Shape& rawShape) {
+    for (size_t idx = 0; idx < rawShape.size(); ++idx) {
+        if (rawShape[idx] < 0) {
+            rawShape[idx] = -1;
+        }
+    }
+    return rawShape;
 }
 
 void RemoveRedundantAssemble::UpdateReshapeShape(
@@ -382,6 +407,7 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
             Elements::Operation, "Process View[%d] Tensor[%d]: newRawshape: %s, newOffset: %s.",
             producerOp->GetOpMagic(), reshapeOp.GetOOperands().front()->GetMagic(), IntVecToStr(newRawShape).c_str(),
             IntVecToStr(newDynOffset).c_str());
+        Shape staticNewRawShape = GetStaticShapeForDynAxes(newRawShape);
         for (auto copyIn : reshapeOp.GetOOperands().front()->GetConsumers()) {
             auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
             if (copyAttr == nullptr) {
@@ -394,14 +420,15 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
                 newOffset[i] = newOffset[i] + oriCopyOffset[i];
             }
             copyAttr->SetFromOffset(newOffset);
-            copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
+            copyAttr->SetRawShape(OpImmediate::Specified(staticNewRawShape));
             auto copyDynValidShape = copyIn->GetOOperands().front()->GetDynValidShape();
             if (copyDynValidShape.empty()) {
                 copyDynValidShape = newDynValidShape;
             }
             copyAttr->SetToDynValidShape(OpImmediate::Specified(copyDynValidShape));
         }
-        UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), newRawShape, newDynRawShape, newDynValidShape);
+        UpdateReshapeShape(
+            reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, newDynRawShape, newDynValidShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
     }
@@ -631,17 +658,36 @@ Status RemoveRedundantAssemble::UpdateCopyOutBeforeReshape(
     LogicalTensorPtr reshapeInput, const std::vector<int64_t>& newRawShape,
     const std::vector<SymbolicScalar>& newDynOffset) const
 {
+    if (reshapeInput == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Failed to update CopyOut before Reshape because reshape input is nullptr.");
+        return FAILED;
+    }
     for (auto copyOut : reshapeInput->GetProducers()) {
+        if (copyOut->IsDeleted()) {
+            continue;
+        }
         if (!IsCopyOut(copyOut->GetOpcode())) {
             return SUCCESS;
         }
         const std::shared_ptr<OpAttribute>& attr = copyOut->GetOpAttribute();
         if (attr == nullptr) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation, "Failed to update CopyOut before Reshape because CopyOut op:%s[%d] attr is nullptr.",
+                copyOut->GetOpcodeStr().c_str(), copyOut->GetOpMagic());
             return FAILED;
         }
         std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
         auto oriCopyOffset = copyAttr->GetToOffset();
         std::vector<OpImmediate> newOffset = OpImmediate::Specified(newDynOffset);
+        if (newOffset.size() < oriCopyOffset.size()) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation,
+                "Failed to update CopyOut op:%s[%d] before Reshape because new offset size [%zu] is smaller than "
+                "original CopyOut offset size [%zu]. newDynOffset: %s, oriCopyOffset: %s.",
+                copyOut->GetOpcodeStr().c_str(), copyOut->GetOpMagic(), newOffset.size(), oriCopyOffset.size(),
+                IntVecToStr(newDynOffset).c_str(), OpImmediateVecToStr(oriCopyOffset).c_str());
+            return FAILED;
+        }
         for (size_t i = 0; i < oriCopyOffset.size(); i++) {
             newOffset[i] = newOffset[i] + oriCopyOffset[i];
         }
@@ -686,10 +732,11 @@ Status RemoveRedundantAssemble::HandleReshapeToAssemble(
     APASS_LOG_DEBUG_F(
         Elements::Operation, "Process Assemble %d Tensor[%d]: newRawshape: %s, newOffset: %s.", assembleOp.GetOpMagic(),
         producer->GetIOperands()[0]->GetMagic(), IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynOffset).c_str());
-    if (UpdateCopyOutBeforeReshape(producer->GetIOperands()[0], newRawShape, newDynOffset) != SUCCESS) {
+    Shape newShape = GetStaticShapeForDynAxes(newRawShape);
+    if (UpdateCopyOutBeforeReshape(producer->GetIOperands()[0], newShape, newDynOffset) != SUCCESS) {
         return FAILED;
     }
-    producer->GetIOperands()[0]->tensor->UpdateRawShape(newRawShape);
+    producer->GetIOperands()[0]->tensor->UpdateRawShape(newShape);
     producer->GetIOperands()[0]->tensor->UpdateDynRawShape(newDynRawShape);
     return SUCCESS;
 }

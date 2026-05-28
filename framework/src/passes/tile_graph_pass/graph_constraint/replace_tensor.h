@@ -180,7 +180,8 @@ private:
     Status InsertCopyUBOp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);
     Status InsertCopyDDROp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);
     Status FindNeedToCopyAssemble(
-        std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op);
+        std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op,
+        Function& function);
     Status FindNeedToCopyReshape(std::unordered_set<Operation*>& needInsertCopyAssOps, 
         std::unordered_set<int>& visitedReshapeOps, Operation& op, Function &function);
     Status InsertNeedCopy(Function& function);

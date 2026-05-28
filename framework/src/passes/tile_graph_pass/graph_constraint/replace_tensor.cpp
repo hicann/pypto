@@ -986,10 +986,12 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
  * @brief 递归查找需要插入拷贝的 ASSEMBLE 操作
  */
 Status ReplaceTensor::FindNeedToCopyAssemble(
-    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op)
+    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op,
+    Function& function)
 {
     visitedAssOps.insert(op.GetOpMagic());
     auto assembleIn = op.GetIOperands()[0];
+    auto assembleOut = op.GetOOperands()[0];
     auto producers = assembleIn->GetProducers();
     auto& inOp = *(assembleIn)->GetProducers().begin();
     if ((!producers.empty()) && (((*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) ||
@@ -998,17 +1000,17 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     }
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
     auto inProducerOps = inOp->ProducerOps();
-    bool allProducerCopyOut = !inProducerOps.empty();
     bool allProducerAssemble = !inProducerOps.empty();
     
-    // BMM优化场景：Reshape前驱全为CopyOut或全为Assemble时不插copy。
+    // BMM优化场景：Reshape前驱全为Assemble时不插copy。
     for (const auto& producer : inProducerOps) {
-        allProducerCopyOut = allProducerCopyOut && IsCopyOut(producer->GetOpcode());
         allProducerAssemble = allProducerAssemble && producer->GetOpcode() == Opcode::OP_ASSEMBLE;
     }
     
     if (inOp->GetOpcode() == Opcode::OP_RESHAPE &&
-        (!allProducerCopyOut && !allProducerAssemble) &&
+        !allProducerAssemble &&
+        !function.IsFromOutCast(assembleOut) &&
+        !isBoundTensor(assembleOut) &&
         op.GetIOperands()[0]->tensor->GetRawDataSize() <= UB_SIZE_THRESHOLD) {
         needInsertCopyAssOps.insert(&op);
         return SUCCESS;
@@ -1097,7 +1099,7 @@ Status ReplaceTensor::InsertNeedCopy(Function& function)
     std::unordered_set<Operation*> needInsertCopyAssOps;
     for (auto& op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE && (!visitedAssOps.count(op.GetOpMagic()))) {
-            FindNeedToCopyAssemble(needInsertCopyAssOps, visitedAssOps, op);
+            FindNeedToCopyAssemble(needInsertCopyAssOps, visitedAssOps, op, function);
         }
         if (op.GetOpcode() == Opcode::OP_RESHAPE && (!visitedReshapeOps.count(op.GetOpMagic()))) {
             FindNeedToCopyReshape(needInsertCopyAssOps, visitedReshapeOps, op, function);
