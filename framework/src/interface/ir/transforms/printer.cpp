@@ -85,7 +85,6 @@ Precedence GetPrecedence(const ExprPtr& expr)
         {std::type_index(typeid(Max)), Precedence::kCall},
         {std::type_index(typeid(Call)), Precedence::kCall},
         {std::type_index(typeid(Var)), Precedence::kAtom},
-        {std::type_index(typeid(IterArg)), Precedence::kAtom},
         {std::type_index(typeid(ConstInt)), Precedence::kAtom},
         {std::type_index(typeid(ConstFloat)), Precedence::kAtom},
         {std::type_index(typeid(ConstBool)), Precedence::kAtom},
@@ -215,7 +214,7 @@ void PrintIterArgNames(std::ostringstream& stream, const std::vector<IterArgPtr>
     for (size_t i = 0; i < iter_args.size(); ++i) {
         if (i > 0)
             stream << ", ";
-        stream << iter_args[i]->name_;
+        stream << iter_args[i]->iterVar_->name_;
     }
     if (iter_args.size() == 1) {
         stream << ",";
@@ -432,8 +431,6 @@ std::string IRPrinter::GetIndent() const { return std::string(static_cast<size_t
 
 // Expression visitors - reuse precedence logic from base printer
 void IRPrinter::VisitExpr_(const VarPtr& op) { stream_ << op->name_; }
-
-void IRPrinter::VisitExpr_(const IterArgPtr& op) { stream_ << op->name_; }
 
 void IRPrinter::VisitExpr_(const MemRefPtr& op) { stream_ << PrintMemRef(*op); }
 

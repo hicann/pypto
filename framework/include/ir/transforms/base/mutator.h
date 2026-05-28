@@ -46,7 +46,6 @@ public:
 protected:
     // Leaf nodes - return as-is by default
     ExprPtr VisitExpr_(const VarPtr& op) override;
-    ExprPtr VisitExpr_(const IterArgPtr& op) override;
     ExprPtr VisitExpr_(const MemRefPtr& op) override;
     ExprPtr VisitExpr_(const ConstIntPtr& op) override;
     ExprPtr VisitExpr_(const ConstFloatPtr& op) override;

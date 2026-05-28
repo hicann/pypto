@@ -260,8 +260,9 @@ using VarPtr = std::shared_ptr<const Var>;
  *     span
  * );
  */
-class IterArg : public Var {
+class IterArg {
 public:
+    VarPtr iterVar_;    // Variable reference for the iteration argument
     ExprPtr initValue_; // Initial value expression for first iteration
 
     /**
@@ -274,11 +275,16 @@ public:
      * \param span Source location
      */
     IterArg(std::string name, TypePtr type, ExprPtr initValue, Span span)
-        : Var(std::move(name), std::move(type), std::move(span)), initValue_(std::move(initValue))
+        : iterVar_(std::make_shared<Var>(name, std::move(type), std::move(span))), initValue_(std::move(initValue))
     {}
 
-    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::IterArg; }
-    [[nodiscard]] std::string TypeName() const override { return "IterArg"; }
+    /**
+     * \brief Create an iteration argument with existing variable reference
+     *
+     * \param var Variable reference for the iteration argument
+     * \param initValue Initial value expression for first iteration
+     */
+    IterArg(VarPtr var, ExprPtr initValue) : iterVar_(std::move(var)), initValue_(std::move(initValue)) {}
 
     /**
      * \brief Get field descriptors for reflection-based visitation
@@ -287,8 +293,9 @@ public:
      */
     static constexpr auto GetFieldDescriptors()
     {
-        return std::tuple_cat(
-            Var::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&IterArg::initValue_, "initValue")));
+        return std::make_tuple(
+            reflection::UsualField(&IterArg::initValue_, "initValue"),
+            reflection::UsualField(&IterArg::iterVar_, "iterVar"));
     }
 };
 

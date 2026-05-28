@@ -22,7 +22,7 @@
 
 namespace pypto {
 
-TEST(CoreAnyCastTest, TestAnyCastInt)
+TEST(IR_CoreAnyCastTest, TestAnyCastInt)
 {
     // Test casting to int
     std::any value = 42;

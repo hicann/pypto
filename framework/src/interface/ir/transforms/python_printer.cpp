@@ -109,7 +109,7 @@ void PrintPythonIterArgTuple(std::ostringstream& stream, const std::vector<IterA
         if (need_comma) {
             stream << ", ";
         }
-        stream << iter_arg->name_;
+        stream << iter_arg->iterVar_->name_;
         need_comma = true;
     }
     if (iter_args.size() == 1) {
@@ -382,8 +382,6 @@ void IRPythonPrinter::DecreaseIndent()
 
 // Expression visitors - reuse precedence logic from base printer
 void IRPythonPrinter::VisitExpr_(const VarPtr& op) { stream_ << op->name_; }
-
-void IRPythonPrinter::VisitExpr_(const IterArgPtr& op) { stream_ << op->name_; }
 
 void IRPythonPrinter::VisitExpr_(const MemRefPtr& op) { stream_ << op->name_; }
 

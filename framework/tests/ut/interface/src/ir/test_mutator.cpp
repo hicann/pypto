@@ -59,9 +59,6 @@ TEST_F(IRMutatorTest, TestIdentityAllExprs)
     auto mr = std::make_shared<MemRef>(MemorySpace::DDR, off, 1024, Sp());
     EXPECT_EQ(m.VisitExpr(mr).get(), mr.get());
 
-    auto ia = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), ci, Sp());
-    EXPECT_EQ(m.VisitExpr(ia).get(), ia.get());
-
     auto call = std::make_shared<Call>("op", std::vector<ExprPtr>{ci}, Sp());
     EXPECT_EQ(m.VisitExpr(call).get(), call.get());
 

@@ -143,16 +143,6 @@ TEST_F(IRExprStrTest, TestVarStr)
     ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(var)), "x");
 }
 
-TEST_F(IRExprStrTest, TestIterArgStr)
-{
-    auto init = std::make_shared<ConstInt>(0, DataType::INT32, sp);
-    auto ia = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init, sp);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(ia)), "acc");
-    auto iaInit = std::dynamic_pointer_cast<const ConstInt>(ia->initValue_);
-    ASSERT_NE(iaInit, nullptr);
-    ASSERT_EQ(iaInit->value_, 0);
-}
-
 TEST_F(IRExprStrTest, TestBinaryOpsStr)
 {
     auto a = std::make_shared<ConstInt>(1, DataType::INT32, sp);

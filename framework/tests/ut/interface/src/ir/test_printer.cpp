@@ -70,10 +70,6 @@ TEST_F(IRPrinterTest, TestPrintConstantsAndBasicExprs)
     // Var
     EXPECT_EQ(Print(Var_("x")), "x");
 
-    // IterArg
-    auto init = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
-    EXPECT_EQ(Print(std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init, Sp())), "acc");
-
     // MemRef
     auto off = std::make_shared<ConstInt>(0, DataType::INT64, Sp());
     EXPECT_FALSE(Print(std::make_shared<MemRef>(MemorySpace::DDR, off, 1024, Sp())).empty());

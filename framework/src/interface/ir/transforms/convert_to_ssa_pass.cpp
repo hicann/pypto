@@ -161,26 +161,6 @@ protected:
         return op;
     }
 
-    ExprPtr VisitExpr_(const IterArgPtr& op) override
-    {
-        // Visit the initValue first
-        auto new_init = VisitExpr(op->initValue_);
-
-        // IterArgs are handled specially - they become the current version within loop
-        std::string base_name = GetBaseName(op->name_);
-        auto it = current_version_.find(base_name);
-        if (it != current_version_.end()) {
-            // Return the current version (which should be the iter_arg itself)
-            return it->second;
-        }
-
-        // If no current version, create one
-        if (new_init != op->initValue_) {
-            return std::make_shared<IterArg>(op->name_, op->GetType(), new_init, op->span_);
-        }
-        return op;
-    }
-
     // Override assignment statement to create versioned variables
     StmtPtr VisitStmt_(const AssignStmtPtr& op) override
     {
@@ -494,8 +474,9 @@ private:
         std::vector<IterArgPtr> new_iter_args;
         for (const auto& iter_arg : iter_args) {
             auto new_init = VisitExpr(iter_arg->initValue_);
-            auto ia_type = SubstituteVarsInType(iter_arg->GetType());
-            new_iter_args.push_back(std::make_shared<IterArg>(iter_arg->name_, ia_type, new_init, iter_arg->span_));
+            auto ia_type = SubstituteVarsInType(iter_arg->iterVar_->GetType());
+            auto new_var = std::make_shared<Var>(iter_arg->iterVar_->name_, ia_type, iter_arg->iterVar_->span_);
+            new_iter_args.push_back(std::make_shared<IterArg>(new_var, new_init));
         }
         return new_iter_args;
     }
@@ -511,7 +492,7 @@ private:
 
             bool is_existing_iter_arg = false;
             for (const auto& iter_arg : iter_args) {
-                if (GetBaseName(iter_arg->name_) == assigned_name) {
+                if (GetBaseName(iter_arg->iterVar_->name_) == assigned_name) {
                     is_existing_iter_arg = true;
                     break;
                 }
@@ -549,12 +530,12 @@ private:
     void RegisterIterArgsInCurrentScope(const std::vector<IterArgPtr>& iter_args)
     {
         for (const auto& iter_arg : iter_args) {
-            std::string base_name = GetBaseName(iter_arg->name_);
+            std::string base_name = GetBaseName(iter_arg->iterVar_->name_);
             size_t iter_pos = base_name.find("_iter");
             if (iter_pos != std::string::npos) {
                 base_name = base_name.substr(0, iter_pos);
             }
-            current_version_[base_name] = iter_arg;
+            current_version_[base_name] = iter_arg->iterVar_;
         }
     }
 

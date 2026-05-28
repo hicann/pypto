@@ -34,7 +34,6 @@ namespace ir {
 
 // Expression types
 DEFINE_KIND_TRAIT(Var, ObjectKind::Var)
-DEFINE_KIND_TRAIT(IterArg, ObjectKind::IterArg)
 DEFINE_KIND_TRAIT(MemRef, ObjectKind::MemRef)
 DEFINE_KIND_TRAIT(Call, ObjectKind::Call)
 DEFINE_KIND_TRAIT(MakeTuple, ObjectKind::MakeTuple)
@@ -135,7 +134,6 @@ struct KindTrait<Expr> {
     static constexpr ObjectKind kinds[] = {
         // Direct expression types
         ObjectKind::Var,
-        ObjectKind::IterArg,
         ObjectKind::MemRef,
         ObjectKind::Call,
         ObjectKind::MakeTuple,
@@ -203,9 +201,9 @@ struct KindTrait<UnaryExpr> {
 template <>
 struct KindTrait<Type> {
     static constexpr ObjectKind kinds[] = {
-        ObjectKind::UnknownType, ObjectKind::ScalarType, ObjectKind::ShapedType, ObjectKind::TensorType,
-        ObjectKind::TileType,    ObjectKind::TupleType,  ObjectKind::TokenType,  ObjectKind::LogicalTensorType,
-        ObjectKind::PtrType};
+        ObjectKind::UnknownType, ObjectKind::ScalarType,        ObjectKind::ShapedType,
+        ObjectKind::TensorType,  ObjectKind::TileType,          ObjectKind::TupleType,
+        ObjectKind::TokenType,   ObjectKind::LogicalTensorType, ObjectKind::PtrType};
     static constexpr size_t count = sizeof(kinds) / sizeof(ObjectKind);
 };
 

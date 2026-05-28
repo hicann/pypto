@@ -67,16 +67,6 @@ TEST_F(IRStructEqExprTest, TestConstAndLeafExprsEqual)
     auto off3 = std::make_shared<ConstInt>(100, DataType::INT64, Sp());
     auto mr3 = std::make_shared<MemRef>(MemorySpace::DDR, off3, 1024, Sp());
     EXPECT_FALSE(structural_equal(Node(mr1), Node(mr3)));
-
-    // IterArg — same pointer
-    auto init = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
-    auto ia = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init, Sp());
-    EXPECT_TRUE(structural_equal(Node(ia), Node(ia)));
-
-    // IterArg — auto-mapping
-    auto init2 = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
-    auto ia2 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init2, Sp());
-    EXPECT_TRUE(structural_equal(Node(ia), Node(ia2), true));
 }
 
 TEST_F(IRStructEqExprTest, TestCallAndTupleExprsEqual)
@@ -472,12 +462,10 @@ TEST_F(IRStructEqExprTest, TestForStmtWithIterArgs)
     // Not equal with different init
     auto ia3 = std::make_shared<IterArg>("acc", Scalar(DataType::INT32), one, Sp());
     EXPECT_FALSE(structural_equal(
-        Node(
-            std::make_shared<ForStmt>(
-                i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1, std::vector<VarPtr>{rv1}, Sp())),
-        Node(
-            std::make_shared<ForStmt>(
-                i1, zero, ten, one, std::vector<IterArgPtr>{ia3}, body1, std::vector<VarPtr>{rv1}, Sp()))));
+        Node(std::make_shared<ForStmt>(
+            i1, zero, ten, one, std::vector<IterArgPtr>{ia1}, body1, std::vector<VarPtr>{rv1}, Sp())),
+        Node(std::make_shared<ForStmt>(
+            i1, zero, ten, one, std::vector<IterArgPtr>{ia3}, body1, std::vector<VarPtr>{rv1}, Sp()))));
 }
 
 } // namespace ir

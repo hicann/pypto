@@ -261,6 +261,17 @@ public:
         return 0;
     }
 
+    ResultType VisitLeafField(const std::vector<IterArgPtr>& fields)
+    {
+        ResultType h = 0;
+        for (const auto& ia : fields) {
+            INTERNAL_CHECK(ia) << "structural_hash encountered null IterArgPtr in vector";
+            h = hash_combine(h, HashNode(std::static_pointer_cast<const IRNode>(ia->iterVar_)));
+            h = hash_combine(h, HashNode(std::static_pointer_cast<const IRNode>(ia->initValue_)));
+        }
+        return h;
+    }
+
     template <typename Desc>
     void CombineResult(ResultType& accumulator, ResultType field_hash, [[maybe_unused]] const Desc& descriptor)
     {
@@ -417,7 +428,6 @@ StructuralHasher::ResultType StructuralHasher::HashNode(const IRNodePtr& node)
     // MemRef needs special handling: dispatch for fields, then add Var mapping
     HASH_DISPATCH(MemRef)
     // IterArg needs special handling: dispatch for fields, then add Var mapping
-    HASH_DISPATCH(IterArg)
     HASH_DISPATCH(Var)
     HASH_DISPATCH(ConstInt)
     HASH_DISPATCH(ConstFloat)
@@ -457,7 +467,7 @@ StructuralHasher::ResultType StructuralHasher::HashNode(const IRNodePtr& node)
     };
 
     auto kind = node->GetKind();
-    if (kind == ObjectKind::MemRef || kind == ObjectKind::IterArg || kind == ObjectKind::Var) {
+    if (kind == ObjectKind::MemRef || kind == ObjectKind::Var) {
         hash_var_identity(static_cast<const Var*>(node.get()));
     }
 

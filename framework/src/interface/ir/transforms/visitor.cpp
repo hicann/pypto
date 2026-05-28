@@ -58,13 +58,6 @@ void IRVisitor::VisitVarLike_(const VarPtr& op)
 
 void IRVisitor::VisitExpr_(const VarPtr& op) { VisitVarLike_(op); }
 
-void IRVisitor::VisitExpr_(const IterArgPtr& op)
-{
-    VisitVarLike_(op);
-    INTERNAL_CHECK_SPAN(op->initValue_, op->span_) << "IterArg has null initValue";
-    VisitExpr(op->initValue_);
-}
-
 void IRVisitor::VisitExpr_(const MemRefPtr& op)
 {
     INTERNAL_CHECK_SPAN(op->addr_, op->span_) << "MemRef has null offset";
@@ -208,8 +201,10 @@ void IRVisitor::VisitStmt_(const ForStmtPtr& op)
     VisitExpr(op->stop_);
     VisitExpr(op->step_);
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        INTERNAL_CHECK_SPAN(op->iterArgs_[i], op->span_) << "ForStmt has null iterArgs at index " << i;
-        VisitExpr(op->iterArgs_[i]);
+        INTERNAL_CHECK_SPAN(op->iterArgs_[i]->initValue_, op->span_)
+            << "ForStmt has null iterArgs initValue at index " << i;
+        VisitExpr(op->iterArgs_[i]->iterVar_);
+        VisitExpr(op->iterArgs_[i]->initValue_);
     }
     INTERNAL_CHECK_SPAN(op->body_, op->span_) << "ForStmt has null body";
     VisitStmt(op->body_);
@@ -224,8 +219,10 @@ void IRVisitor::VisitStmt_(const WhileStmtPtr& op)
     INTERNAL_CHECK_SPAN(op->condition_, op->span_) << "WhileStmt has null condition";
     VisitExpr(op->condition_);
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        INTERNAL_CHECK_SPAN(op->iterArgs_[i], op->span_) << "WhileStmt has null iterArgs at index " << i;
-        VisitExpr(op->iterArgs_[i]);
+        INTERNAL_CHECK_SPAN(op->iterArgs_[i]->initValue_, op->span_)
+            << "WhileStmt has null iterArgs initValue at index " << i;
+        VisitExpr(op->iterArgs_[i]->iterVar_);
+        VisitExpr(op->iterArgs_[i]->initValue_);
     }
     INTERNAL_CHECK_SPAN(op->body_, op->span_) << "WhileStmt has null body";
     VisitStmt(op->body_);

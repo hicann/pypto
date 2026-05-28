@@ -45,7 +45,8 @@ public:
     {
         auto var_name = GetVarName(name);
         type_map_[var_name] = type;
-        return std::make_shared<ir::IterArg>(var_name, type, initVal, span);
+        auto var = std::make_shared<ir::Var>(var_name, type, span);
+        return std::make_shared<ir::IterArg>(var, initVal);
     }
 
     ir::VarPtr MakeToken() { return MakeTempVar(ir::GetTokenType(), ir::Span::Unknown()); }

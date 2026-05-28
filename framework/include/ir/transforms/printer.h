@@ -29,7 +29,6 @@ class IRVisitor;
 
 #define PYPTO_IR_PRINTER_COMMON_VISITOR_OVERRIDES() \
     PYPTO_IR_PRINTER_VISIT_EXPR(VarPtr)             \
-    PYPTO_IR_PRINTER_VISIT_EXPR(IterArgPtr)         \
     PYPTO_IR_PRINTER_VISIT_EXPR(MemRefPtr)          \
     PYPTO_IR_PRINTER_VISIT_EXPR(ConstIntPtr)        \
     PYPTO_IR_PRINTER_VISIT_EXPR(ConstFloatPtr)      \

@@ -128,10 +128,14 @@ void BindExpr(py::module& m)
         );
     BindFields<Var>(var);
 
-    auto iterArg = py::class_<IterArg, Var, std::shared_ptr<IterArg>>(m, "IterArg", "Iteration argument variable")
+    auto iterArg = py::class_<IterArg, std::shared_ptr<IterArg>>(m, "IterArg", "Iteration argument variable")
         .def(py::init<const std::string&, const TypePtr&, const ExprPtr&, const Span&>(),
              py::arg("name"), py::arg("type"), py::arg("initValue"), py::arg("span"),
-             "Create an iteration argument with initial value");
+             "Create an iteration argument with initial value")
+        .def("__str__", [](const std::shared_ptr<const IterArg>& self) -> std::string { return self->iterVar_->name_; })
+        .def_property_readonly("name", [](const std::shared_ptr<const IterArg>& self) -> const std::string& {
+            return self->iterVar_->name_;
+        }, "Variable name");
     BindFields<IterArg>(iterArg);
 
     auto memref = py::class_<MemRef, Expr, std::shared_ptr<MemRef>>(m, "MemRef",

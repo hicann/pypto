@@ -58,8 +58,7 @@ public:
 // Leaf expression visitors
 // ============================================================================
 
-class IRVisitorTest : public testing::Test {
-};
+class IRVisitorTest : public testing::Test {};
 
 TEST_F(IRVisitorTest, TestVisitConstInt)
 {
@@ -157,14 +156,6 @@ TEST_F(IRVisitorTest, TestVisitUnaryExpr)
     ASSERT_FALSE(v.visited.empty());
     DEFINE_UNARY_EXPR_ALL()
 #undef DEFINE_UNARY_EXPR
-}
-
-TEST_F(IRVisitorTest, TestVisitIterArg)
-{
-    TestVisitor v;
-    auto init = std::make_shared<ConstInt>(0, DataType::INT32, Sp());
-    v.VisitExpr(std::make_shared<IterArg>("acc", Scalar(DataType::INT32), init, Sp()));
-    ASSERT_FALSE(v.visited.empty());
 }
 
 // ============================================================================

@@ -177,21 +177,6 @@ ExprPtr IRMutator::VisitExpr_(const VarPtr& op)
     return op;
 }
 
-ExprPtr IRMutator::VisitExpr_(const IterArgPtr& op)
-{
-    auto it = var_remap_.find(op.get());
-    if (it != var_remap_.end()) {
-        return it->second;
-    }
-    INTERNAL_CHECK_SPAN(op->initValue_, op->span_) << "IterArg has null initValue";
-    auto new_init_value = ExprFunctor<ExprPtr>::VisitExpr(op->initValue_);
-    INTERNAL_CHECK_SPAN(new_init_value, op->span_) << "IterArg initValue mutated to null";
-    if (new_init_value.get() != op->initValue_.get()) {
-        return std::make_shared<const IterArg>(op->name_, op->GetType(), std::move(new_init_value), op->span_);
-    }
-    return op;
-}
-
 ExprPtr IRMutator::VisitExpr_(const MemRefPtr& op) { return op; }
 
 ExprPtr IRMutator::VisitExpr_(const ConstIntPtr& op) { return op; }
@@ -467,22 +452,23 @@ StmtPtr IRMutator::VisitStmt_(const ForStmtPtr& op)
     bool iter_args_changed = false;
     new_iter_args.reserve(op->iterArgs_.size());
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        INTERNAL_CHECK_SPAN(op->iterArgs_[i], op->span_) << "ForStmt has null iter_args at index " << i;
-        auto new_iter_arg_expr = ExprFunctor<ExprPtr>::VisitExpr(op->iterArgs_[i]);
-        INTERNAL_CHECK_SPAN(new_iter_arg_expr, op->span_) << "ForStmt iter_args at index " << i << " mutated to null";
-        auto new_iter_arg = As<IterArg>(std::static_pointer_cast<const IRNode>(new_iter_arg_expr));
-        INTERNAL_CHECK_SPAN(new_iter_arg, op->span_)
-            << "ForStmt iter_args at index " << i << " is not an IterArg after mutation";
-        new_iter_args.push_back(new_iter_arg);
-        if (new_iter_arg.get() != op->iterArgs_[i].get()) {
+        INTERNAL_CHECK_SPAN(op->iterArgs_[i]->initValue_, op->span_)
+            << "ForStmt has null iter_args initValue at index " << i;
+        auto new_init_value = ExprFunctor<ExprPtr>::VisitExpr(op->iterArgs_[i]->initValue_);
+        INTERNAL_CHECK_SPAN(new_init_value, op->span_) << "ForStmt iter_args at index " << i << " mutated to null";
+        if (new_init_value.get() != op->iterArgs_[i]->initValue_.get()) {
+            new_iter_args.push_back(
+                std::make_shared<const IterArg>(op->iterArgs_[i]->iterVar_, std::move(new_init_value)));
             iter_args_changed = true;
+        } else {
+            new_iter_args.push_back(op->iterArgs_[i]);
         }
     }
 
-    // Register old→new IterArg mappings so body references are substituted
+    // Register old→new IterArg var mappings so body references are substituted
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
         if (new_iter_args[i].get() != op->iterArgs_[i].get()) {
-            var_remap_[op->iterArgs_[i].get()] = new_iter_args[i];
+            var_remap_[op->iterArgs_[i]->iterVar_.get()] = new_iter_args[i]->iterVar_;
         }
     }
 
@@ -491,11 +477,9 @@ StmtPtr IRMutator::VisitStmt_(const ForStmtPtr& op)
     INTERNAL_CHECK_SPAN(new_body, op->span_) << "ForStmt body mutated to null";
     bool body_changed = (new_body.get() != op->body_.get());
 
-    // Clean up IterArg remappings.
-    // Safe to clean before visiting return_vars: return_vars are separate Var objects,
-    // not references to IterArgs, so they don't need the remapping.
+    // Clean up IterArg var remappings.
     for (const auto& old_iter_arg : op->iterArgs_) {
-        var_remap_.erase(old_iter_arg.get());
+        var_remap_.erase(old_iter_arg->iterVar_.get());
     }
 
     std::vector<VarPtr> new_return_vars;
@@ -531,22 +515,23 @@ StmtPtr IRMutator::VisitStmt_(const WhileStmtPtr& op)
     bool iter_args_changed = false;
     new_iter_args.reserve(op->iterArgs_.size());
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
-        INTERNAL_CHECK_SPAN(op->iterArgs_[i], op->span_) << "WhileStmt has null iter_args at index " << i;
-        auto new_iter_arg_expr = ExprFunctor<ExprPtr>::VisitExpr(op->iterArgs_[i]);
-        INTERNAL_CHECK_SPAN(new_iter_arg_expr, op->span_) << "WhileStmt iter_args at index " << i << " mutated to null";
-        auto new_iter_arg = As<IterArg>(std::static_pointer_cast<const IRNode>(new_iter_arg_expr));
-        INTERNAL_CHECK_SPAN(new_iter_arg, op->span_)
-            << "WhileStmt iter_args at index " << i << " is not an IterArg after mutation";
-        new_iter_args.push_back(new_iter_arg);
-        if (new_iter_arg.get() != op->iterArgs_[i].get()) {
+        INTERNAL_CHECK_SPAN(op->iterArgs_[i]->initValue_, op->span_)
+            << "WhileStmt has null iter_args initValue at index " << i;
+        auto new_init_value = ExprFunctor<ExprPtr>::VisitExpr(op->iterArgs_[i]->initValue_);
+        INTERNAL_CHECK_SPAN(new_init_value, op->span_) << "WhileStmt iter_args at index " << i << " mutated to null";
+        if (new_init_value.get() != op->iterArgs_[i]->initValue_.get()) {
+            new_iter_args.push_back(
+                std::make_shared<const IterArg>(op->iterArgs_[i]->iterVar_, std::move(new_init_value)));
             iter_args_changed = true;
+        } else {
+            new_iter_args.push_back(op->iterArgs_[i]);
         }
     }
 
-    // Register old→new IterArg mappings so condition and body references are substituted
+    // Register old→new IterArg var mappings so condition and body references are substituted
     for (size_t i = 0; i < op->iterArgs_.size(); ++i) {
         if (new_iter_args[i].get() != op->iterArgs_[i].get()) {
-            var_remap_[op->iterArgs_[i].get()] = new_iter_args[i];
+            var_remap_[op->iterArgs_[i]->iterVar_.get()] = new_iter_args[i]->iterVar_;
         }
     }
 
@@ -560,11 +545,9 @@ StmtPtr IRMutator::VisitStmt_(const WhileStmtPtr& op)
     INTERNAL_CHECK_SPAN(new_body, op->span_) << "WhileStmt body mutated to null";
     bool body_changed = (new_body.get() != op->body_.get());
 
-    // Clean up IterArg remappings.
-    // Safe to clean before visiting return_vars: return_vars are separate Var objects,
-    // not references to IterArgs, so they don't need the remapping.
+    // Clean up IterArg var remappings.
     for (const auto& old_iter_arg : op->iterArgs_) {
-        var_remap_.erase(old_iter_arg.get());
+        var_remap_.erase(old_iter_arg->iterVar_.get());
     }
 
     std::vector<VarPtr> new_return_vars;

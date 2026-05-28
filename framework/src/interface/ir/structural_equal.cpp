@@ -471,6 +471,26 @@ public:
         return true; // Never reached
     }
 
+    ResultType VisitLeafField(const std::vector<IterArgPtr>& lhs, const std::vector<IterArgPtr>& rhs)
+    {
+        if (lhs.size() != rhs.size()) {
+            if constexpr (AssertMode) {
+                std::ostringstream msg;
+                msg << "IterArg vector size mismatch (" << lhs.size() << " != " << rhs.size() << ")";
+                ThrowMismatch(msg.str(), IRNodePtr(), IRNodePtr(), "", "");
+            }
+            return false;
+        }
+        for (size_t i = 0; i < lhs.size(); ++i) {
+            INTERNAL_CHECK(lhs[i]) << "structural_equal encountered null lhs IterArgPtr in vector at index " << i;
+            INTERNAL_CHECK(rhs[i]) << "structural_equal encountered null rhs IterArgPtr in vector at index " << i;
+            if (!EqualIterArg(lhs[i], rhs[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Field kind hooks
     template <typename FVisitOp>
     void VisitIgnoreField([[maybe_unused]] FVisitOp&& visit_op)
@@ -688,19 +708,11 @@ bool StructuralEqualImpl<AssertMode>::Equal(const IRNodePtr& lhs, const IRNodePt
         return false;
     }
 
-    // Check MemRef before IterArg and Var (MemRef inherits from Var)
+    // Check MemRef before Var (MemRef inherits from Var)
     if (auto lhs_memref = As<MemRef>(lhs)) {
         node_type_stack_.emplace_back("MemRef");
         auto rhs_memref = std::static_pointer_cast<const MemRef>(rhs);
         bool result = rhs_memref && EqualMemRef(lhs_memref, rhs_memref);
-        node_type_stack_.pop_back();
-        return result;
-    }
-
-    // Check IterArg before Var (IterArg inherits from Var)
-    if (auto lhs_iter = As<IterArg>(lhs)) {
-        node_type_stack_.emplace_back("IterArg");
-        bool result = EqualIterArg(lhs_iter, std::static_pointer_cast<const IterArg>(rhs));
         node_type_stack_.pop_back();
         return result;
     }
@@ -1041,17 +1053,17 @@ bool StructuralEqualImpl<AssertMode>::EqualMemRef(const MemRefPtr& lhs, const Me
 template <bool AssertMode>
 bool StructuralEqualImpl<AssertMode>::EqualIterArg(const IterArgPtr& lhs, const IterArgPtr& rhs)
 {
-    // 1. First, compare as Var (handles variable mapping)
-    if (!EqualVar(lhs, rhs)) {
+    // 1. Compare the variable (handles variable mapping)
+    if (!EqualVar(lhs->iterVar_, rhs->iterVar_)) {
         return false;
     }
 
-    // 2. Then, compare IterArg-specific field: initValue_
+    // 2. Compare the initial value
     if (!Equal(lhs->initValue_, rhs->initValue_)) {
         if constexpr (AssertMode) {
             ThrowMismatch(
-                "IterArg initValue mismatch", std::static_pointer_cast<const IRNode>(lhs),
-                std::static_pointer_cast<const IRNode>(rhs));
+                "IterArg initValue mismatch", std::static_pointer_cast<const IRNode>(lhs->initValue_),
+                std::static_pointer_cast<const IRNode>(rhs->initValue_));
         }
         return false;
     }

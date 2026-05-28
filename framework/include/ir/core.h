@@ -38,7 +38,6 @@ enum class ObjectKind {
 
     // Expression kinds
     Var,
-    IterArg,
     MemRef,
     Call,
     MakeTuple,
