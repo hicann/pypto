@@ -321,24 +321,14 @@ Status PipeSync::InsertSync(Function& function, std::vector<Operation*>& syncedO
 std::string PipeSync::DepOp::DumpDepOp(const std::vector<Operation*>& opLog)
 {
     std::stringstream ss;
-    ss << "idx: " << idx << " opmagic: " << opLog[idx]->GetOpMagic() << ", ";
-    if (!opLog.empty()) {
-        ss << opLog[idx]->GetOpcodeStr() << ", ";
-    }
+    ss << "idx: " << idx << " opmagic: " << opLog[idx]->GetOpMagic() << ", " 
+        << opLog[idx]->GetOpcodeStr() << ", ";
     ss << "setPipe: {";
     for (auto i : setPipe) {
-        if (opLog.empty()) {
-            ss << opLog[i]->GetOpMagic() << ", ";
-            continue;
-        }
         ss << opLog[i]->GetOpMagic() << " " << opLog[i]->GetOpcodeStr() << ", ";
     }
     ss << "}, waitPipe: {";
     for (auto i : waitPipe) {
-        if (opLog.empty()) {
-            ss << opLog[i]->GetOpMagic() << ", ";
-            continue;
-        }
         ss << opLog[i]->GetOpMagic() << " " << opLog[i]->GetOpcodeStr() << ", ";
     }
     ss << "}";

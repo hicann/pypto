@@ -264,7 +264,7 @@ private:
 
         std::vector<size_t> setPipe;  // this op will set_flag for op in setPipe; 后
         std::vector<size_t> waitPipe; // this op will wait_flag for op in waitPipe; 前
-        std::string DumpDepOp(const std::vector<Operation*>& opLog = {});
+        std::string DumpDepOp(const std::vector<Operation*>& opLog);
     };
 
     struct IssueQueue {
@@ -272,7 +272,7 @@ private:
         PipeCoreRealEx selfPipeCore;
         size_t currOp{0};
         std::vector<size_t> ops;
-        std::string DumpIssueQueue(const std::vector<Operation*>& opLogPtr = {});
+        std::string DumpIssueQueue(const std::vector<Operation*>& opLogPtr);
     };
 
     struct PipeDepInfo {
