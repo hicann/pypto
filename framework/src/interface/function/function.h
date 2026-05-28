@@ -509,13 +509,13 @@ struct FunctionParamInfo {
     LogicalTensorPtr endValue;   // End Function时Tensor指向的 LogicalTensor
 };
 
-struct Entry {
-    std::unordered_set<ir::StmtPtr> producers;
-    std::unordered_set<ir::StmtPtr> consumers;
-};
-
 class VarDependency {
 public:
+    struct Entry {
+        std::unordered_set<ir::StmtPtr> producers;
+        std::unordered_set<ir::StmtPtr> consumers;
+    };
+
     void AddProducer(ir::VarPtr var, ir::StmtPtr producer) { dependencies_[var].producers.insert(producer); }
     void AddConsumer(ir::VarPtr var, ir::StmtPtr consumer) { dependencies_[var].consumers.insert(consumer); }
 

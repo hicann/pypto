@@ -866,6 +866,30 @@ std::set<Operation*, Operation::OperationComparator> Operation::ProducerOpsOrder
     return producers;
 }
 
+std::unordered_set<Operation*> Operation::ConsumerOpsByToken() const
+{
+    std::unordered_set<Operation*> consumers;
+    if (result_token_ && function_) {
+        for (const auto& stmt : function_->GetVarDependency().GetConsumers(result_token_)) {
+            consumers.emplace(static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get())));
+        }
+    }
+    return consumers;
+}
+
+std::unordered_set<Operation*> Operation::ProducerOpsByToken() const
+{
+    std::unordered_set<Operation*> producers;
+    if (function_) {
+        for (const auto& token : tokens_) {
+            for (const auto& stmt : function_->GetVarDependency().GetProducers(token)) {
+                producers.emplace(static_cast<Operation*>(const_cast<ir::Stmt*>(stmt.get())));
+            }
+        }
+    }
+    return producers;
+}
+
 void Operation::UpdateInputOperand(const size_t index, const std::shared_ptr<LogicalTensor>& newInput)
 {
     if (newInput == nullptr || index >= iOperand.size()) {

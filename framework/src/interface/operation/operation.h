@@ -434,6 +434,9 @@ public:
     std::set<Operation*, OperationComparator> ConsumerOpsOrdered() const;
     std::set<Operation*, OperationComparator> ProducerOpsOrdered() const;
 
+    std::unordered_set<Operation*> ConsumerOpsByToken() const;
+    std::unordered_set<Operation*> ProducerOpsByToken() const;
+
     [[nodiscard]] const std::unordered_set<Operation*>& GetInCtrlOperations() const { return inputCtrlOps; }
 
     [[nodiscard]] const std::unordered_set<Operation*>& GetOutCtrlOperations() const { return outputCtrlOps; }
