@@ -59,11 +59,7 @@ TEST_F(TestCodegenDynPairProd, PairProdLayout)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TPairProd(ubTensor_4, ubTensor_0, ubTensor_2);)";
     CheckStringExist(expect, res);
 }

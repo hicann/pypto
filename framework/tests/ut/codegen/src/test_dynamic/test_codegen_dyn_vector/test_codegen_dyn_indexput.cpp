@@ -65,10 +65,7 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutTileTensor)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, true);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TIndexPut<0, 1>(gmTensor_4, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 24, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 24, 1))), ubTensor_0, ubTensor_2, ubTensor_2, ubTensor_2, ubTensor_2);
 )!!!";

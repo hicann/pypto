@@ -42,10 +42,7 @@ void TestCodegenIsFiniteBody()
     auto function = GenMockFuncDynUnary(
         "IsFinite", {shape, vecTileShape}, [](Tensor& input, Tensor& output) { output = IsFinite(input); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TIsFinite(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";
     CheckStringExist(expect, res);
 }

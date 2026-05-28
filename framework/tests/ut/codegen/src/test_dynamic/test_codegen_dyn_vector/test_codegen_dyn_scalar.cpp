@@ -62,11 +62,7 @@ TEST_F(TestCodegenDynScalar, TestScalarAdds)
 
     function->SetUnderDynamicFunction(true);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127, sym_5_dim_0, sym_5_dim_1);)!!!";
     CheckStringExist(expect, res);
@@ -97,11 +93,7 @@ TEST_F(TestCodegenDynScalar, TestScalarDivs)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::DynTSdivs<float, /*DstRawShape*/ 1, 2, 40, /*Src0RawShape*/ 1, 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127, sym_5_dim_0, sym_5_dim_1, sym_5_dim_2);)!!!";
     CheckStringExist(expect, res);
@@ -133,11 +125,7 @@ TEST_F(TestCodegenDynScalar, TestAddsTileTensor)
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TAddS<LastUse2Dim<0, 1>, float>(ubTensor_0, ubTensor_0, 3);
 )!!!";
     CheckStringExist(expect, res);

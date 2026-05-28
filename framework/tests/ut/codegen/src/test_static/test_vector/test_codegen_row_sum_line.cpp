@@ -53,10 +53,7 @@ TEST_F(TestCodegenRowSumLine, TestOperationRowSumLineTileTensor)
     FUNCTION(funcName, {input_a, output}) { output = Sum(input_a, 1, true); }
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TRowSumLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);
 )!!!";
     CheckStringExist(expect, res);

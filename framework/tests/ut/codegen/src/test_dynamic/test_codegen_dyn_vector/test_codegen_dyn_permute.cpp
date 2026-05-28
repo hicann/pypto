@@ -64,10 +64,7 @@ TEST_F(TestCodegenDynPermute, TestPermuteLayout)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 #endif
     function->SetUnderDynamicFunction(true);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = "TPermute<1, 0, 2, -1, -1, 3>";
     CheckStringExist(expect, res);
 }
@@ -102,10 +99,7 @@ TEST_F(TestCodegenDynPermute, TestPermuteElementLayout)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 #endif
     function->SetUnderDynamicFunction(true);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = "TPermuteElewise<0, 2, 1, -1, -1, 3>";
     CheckStringExist(expect, res);
 }

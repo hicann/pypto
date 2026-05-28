@@ -32,7 +32,8 @@ namespace npu::tile_fwk {
 class TestCodegenDynCalcInteger : public CodegenTestBase {
 public:
     TestCodegenDynCalcInteger()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
+        : CodegenTestBase(
+              {.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
     {}
 };
 
@@ -42,10 +43,7 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil)
     auto function =
         GenMockFuncDynUnary("TestDynOpCeil", config, [](Tensor& input, Tensor& output) { output = Ceil(input); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TCeil(ubTensor_0, ubTensor_0);
 )!!!";
@@ -58,10 +56,7 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor)
     auto function =
         GenMockFuncDynUnary("TestDynOpFloor", config, [](Tensor& input, Tensor& output) { output = Floor(input); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TFloor(ubTensor_0, ubTensor_0);
 )!!!";
@@ -74,10 +69,7 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpTrunc)
     auto function =
         GenMockFuncDynUnary("TestDynOpTrunc", config, [](Tensor& input, Tensor& output) { output = Trunc(input); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TTrunc(ubTensor_0, ubTensor_0);
 )!!!";

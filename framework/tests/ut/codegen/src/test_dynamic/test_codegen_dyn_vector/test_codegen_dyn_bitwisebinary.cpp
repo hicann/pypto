@@ -64,11 +64,7 @@ void TestBitwiseTensorDynBody(
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     CheckStringExist(expect, res);
 }
 
@@ -101,11 +97,7 @@ void TestBitwiseScalarDynBody(
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     CheckStringExist(expect, res);
 }
 

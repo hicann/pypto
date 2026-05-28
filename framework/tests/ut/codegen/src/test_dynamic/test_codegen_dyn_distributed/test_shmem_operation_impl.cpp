@@ -209,10 +209,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemDataSet)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TileOp::Distributed::ShmemSet<bfloat16_t, 8192>)!!!";
     CheckStringExist(expect, res);
 }
@@ -239,10 +236,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemSignalSet)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TileOp::Distributed::ShmemSet<int32_t, 4, 8, 128>)!!!";
     CheckStringExist(expect, res);
 }
@@ -270,10 +264,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TileOp::Distributed::ShmemSignal<1, 8, TileOp::Distributed::AtomicType::ADD)!!!";
     CheckStringExist(expect, res);
 }
@@ -295,10 +286,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemLoad)
     }
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TileOp::Distributed::ShmemLoad<bfloat16_t, bfloat16_t>)!!!";
     CheckStringExist(expect, res);
 }
@@ -321,10 +309,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemStore)
     }
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::Distributed::ShmemStore<float, 16, 32, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
     CheckStringExist(expect, res);

@@ -50,10 +50,7 @@ void TestAddDynBody(const std::string& name, bool isNeedCalcMinForBinaryOperands
             }
         }
     }
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::DynTadd_<float, /*DS*/ 1, 1, 64, 64, /*S0*/ 1, 1, 64, 64, /*S1*/ 1, 1, 64, 64>((__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S16384_E32768, 1, 1, sym_6_dim_0, sym_6_dim_1, 1, 1, sym_9_dim_0, sym_9_dim_1);)!!!";
     CheckStringExist(expect, res);
@@ -163,11 +160,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::DynTgatherElement<float, int32_t, 1, 2, 256, 1, 2, 8, 1, 2, 8, 3>((__ubuf__ float*)UB_S2112_E2176, (__ubuf__ float*)UB_S0_E2048, (__ubuf__ int32_t*)UB_S2048_E2112, 1, 1, sym_9_dim_0, sym_9_dim_1);)!!!";
     CheckStringExist(expect, res);
@@ -203,11 +196,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TgatherElement<4>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
 )!!!";
     CheckStringExist(expect, res);
@@ -293,11 +282,7 @@ TEST_F(TestCodegenDynBinary, AddUnalignTileTensor)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + loopName + SUB_FUNC_SUFFIX);
 #endif
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
 #if ENABLE_HIDDENLOOP
     std::string expect = R"!!!(#include "TileOpImpl.h"
 #include "tilefwk/aicpu_common.h"

@@ -32,7 +32,8 @@ namespace npu::tile_fwk {
 class TestCodegenDynRound : public CodegenTestBase {
 public:
     TestCodegenDynRound()
-        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
+        : CodegenTestBase(
+              {.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true})
     {}
 
     static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
@@ -51,10 +52,7 @@ TEST_F(TestCodegenDynRound, TestDynOpRound)
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TRound<float>(ubTensor_2, ubTensor_3, ubTensor_0, 10);
 )!!!";

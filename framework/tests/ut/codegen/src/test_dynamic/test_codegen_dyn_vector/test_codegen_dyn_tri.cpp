@@ -55,11 +55,7 @@ TEST_F(TestCodegenDynTri, TestTriU)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TTriUL<1>(ubTensor_2, ubTensor_0, (int)((RUNTIME_COA_GET_PARAM(37))));
 )!!!";
     CheckStringExist(expect, res);

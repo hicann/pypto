@@ -55,10 +55,7 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderS)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TRemainderS<int16_t, pto::RemSAlgorithm::DEFAULT>(ubTensor_4, ubTensor_2, 2, ubTensor_5);)!!!";
     CheckStringExist(expect, res);
@@ -87,10 +84,7 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderRS)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TRemainderRS<float, pto::RemAlgorithm::DEFAULT>(ubTensor_2, ubTensor_0, 10, ubTensor_3);)!!!";
     CheckStringExist(expect, res);

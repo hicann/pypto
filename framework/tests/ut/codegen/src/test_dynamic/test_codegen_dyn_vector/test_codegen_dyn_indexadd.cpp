@@ -134,10 +134,7 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddLayout)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TIndexAdd<3>(gmTensor_4, gmTensor_6, ubTensor_0, ubTensor_2, ubTensor_5, Coord2Dim(0, 0), (float)1);)!!!";
     CheckStringExist(expect, res);

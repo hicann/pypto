@@ -562,6 +562,8 @@ std::vector<std::string> CodeGenOpNPU::GenSymbolicArgument(const std::vector<Sym
         std::string exprStr = SymbolicExpressionTable::BuildExpression(expr);
         argList.push_back(exprStr);
     }
+
+    CODEGEN_LOGI("argList is %s", IntVecToStr(argList).c_str());
     return argList;
 }
 
@@ -726,15 +728,16 @@ std::vector<SymbolicScalar> CodeGenOpNPU::GetLoopAxes()
 {
     std::vector<SymbolicScalar> dynloopAxes;
     std::vector<int64_t> loopAxes;
-    GetOpAttr(OpAttributeKey::loopAxes, loopAxes);
-    CODEGEN_LOGI("loopAxes from attr is %s", IntVecToStr(loopAxes).c_str());
 
     if (!isMainBlock) {
         GetOpAttr(OpAttributeKey::dynloopAxes, dynloopAxes);
+        CODEGEN_LOGI("dynloopAxes from attr is %s", IntVecToStr(dynloopAxes).c_str());
         return dynloopAxes;
     } else {
         GetOpAttr(OpAttributeKey::loopAxes, loopAxes);
+        CODEGEN_LOGI("loopAxes from attr is %s", IntVecToStr(loopAxes).c_str());
     }
+
     // use dst shape as loop axes in main block
     std::vector<SymbolicScalar> newLoopAxes;
     for (size_t i = 0; i < loopAxes.size(); ++i) {

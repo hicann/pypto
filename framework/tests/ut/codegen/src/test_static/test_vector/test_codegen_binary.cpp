@@ -100,10 +100,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor)
     }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(#include "TileOpImpl.h"
 #include "tilefwk/aicpu_common.h"
 

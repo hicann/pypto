@@ -69,6 +69,8 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
 
 std::string GetResultFromCpp(const Function& function);
 
+std::string GenCodeByFunction(Function& function);
+
 void CheckStringExist(const std::string& expect, const std::string& result);
 
 Function* GenMockFuncDyn(const std::string& funcName, const std::vector<int64_t>& shape = {64, 64});

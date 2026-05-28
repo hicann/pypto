@@ -42,10 +42,7 @@ void TestCodegenDynCumSumBody(int axis)
     auto function = GenMockFuncDynUnary(
         "CumSum", {shape, vecTileShape}, [axis](Tensor& input, Tensor& output) { output = CumSum(input, axis); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         axis == 0 ? "TCumOperation<3, 1>(ubTensor_2, ubTensor_0);" : "TCumOperation<3, 1>(ubTensor_7, ubTensor_2);";
     CheckStringExist(expect, res);

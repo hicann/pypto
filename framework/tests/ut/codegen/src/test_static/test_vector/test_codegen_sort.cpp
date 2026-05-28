@@ -68,11 +68,7 @@ void TopKOnBoardFunc(TopKParams& params)
     }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "TOPK_T_TILETENSOR");
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
 
     std::string expect = R"(TBitSort<1, 0, 1>(ubTensor_2, ubTensor_0, ubTensor_3); // [opMagic:10005])";
     CheckStringExist(expect, res);

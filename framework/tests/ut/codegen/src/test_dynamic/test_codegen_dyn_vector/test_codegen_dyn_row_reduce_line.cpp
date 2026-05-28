@@ -62,10 +62,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumLine)
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TRowSumLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";
     CheckStringExist(expect, res);
 }
@@ -101,11 +98,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumSingleTileTensor)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_7, ubTensor_4, ubTensor_8);)!!!";
     CheckStringExist(expect, res);
 }
@@ -133,11 +126,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdLine)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowProdLine<3>(ubTensor_17, ubTensor_14);)";
     CheckStringExist(expect, res);
 }
@@ -173,11 +162,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdSingleTileTensor)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowProdSingle<LastUse3Dim<0, 0, 1>>(ubTensor_7, ubTensor_4, ubTensor_8);)";
     CheckStringExist(expect, res);
 }
@@ -205,11 +190,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxLine)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMaxLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)";
     CheckStringExist(expect, res);
 }
@@ -245,11 +226,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxSingleTileTensor)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMaxSingle(ubTensor_2, ubTensor_0, ubTensor_3);)";
     CheckStringExist(expect, res);
 }
@@ -277,11 +254,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinLine)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMinLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)";
     CheckStringExist(expect, res);
 }
@@ -317,11 +290,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinSingleTileTensor)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMinSingle(ubTensor_2, ubTensor_0, ubTensor_3);)";
     CheckStringExist(expect, res);
 }

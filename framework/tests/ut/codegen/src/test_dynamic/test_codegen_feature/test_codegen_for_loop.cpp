@@ -110,11 +110,7 @@ TEST_F(TestCodegenForLoop, TestForLoop)
     CodegenPreproc cpPass;
     cpPass.RunOnFunction(*function);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
 
     // 定义第一个待检查的目标代码片段
     const std::string expect1 = R"(

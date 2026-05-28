@@ -178,11 +178,7 @@ TEST_F(TestCodegenDynIndexOutCast, DynIndexOutUnaligned)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::DynTIndexoutcast<int32_t, int32_t, 1, 32, 32, 32, 0, 1>((__gm__ int32_t*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 2, 28)), (__ubuf__ int32_t*)UB_S0_E4096, (__ubuf__ int32_t*)UB_S4096_E8192, 1, 1, sym_6_dim_1, sym_9_dim_0, sym_9_dim_1, 1, 1, GET_PARAM_RAWSHAPE_2(param, 2, 28), 0, 0, (RUNTIME_COA_GET_PARAM_OFFSET(2, 28, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 28, 1)));
 )!!!";

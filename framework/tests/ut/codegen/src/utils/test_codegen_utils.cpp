@@ -70,6 +70,14 @@ void CheckStringExist(const std::string& target, const std::string& content)
     EXPECT_TRUE(res) << "target: \n" << target << "\n\n ---- not found in content ---- \n\n" << content << std::endl;
 }
 
+std::string GenCodeByFunction(Function& function)
+{
+    CodeGenCtx ctx;
+    CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(function, {});
+    return GetResultFromCpp(function);
+}
+
 Function* GenMockFuncDyn(const std::string& funcName, const std::vector<int64_t>& shape)
 {
     TileShape::Current().SetVecTile(shape);
