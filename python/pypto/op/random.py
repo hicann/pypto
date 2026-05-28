@@ -204,10 +204,8 @@ def normal(shape, key, counter, alg, dtype) -> Tensor:
 
     def box_muller(input: Tensor) -> Tensor:
         tensor_len = input.shape[0]
-        u1_index = pypto.arange(0, tensor_len, 2)
-        u2_index = pypto.add(u1_index, 1)
-        u1 = pypto.index_select(input, 0, u1_index)
-        u2 = pypto.index_select(input, 0, u2_index)
+        u1 = pypto.gathermask(input, 1)
+        u2 = pypto.gathermask(input, 2)
 
         eps = 1.0e-7
         m_pi = 3.14159265358979323846
@@ -219,6 +217,8 @@ def normal(shape, key, counter, alg, dtype) -> Tensor:
         f2 = pypto.mul(f0, v2)
         f3 = pypto.mul(f1, v2)
         f4 = pypto.zeros([tensor_len], dtype=pypto.DT_FP32)
+        u1_index = pypto.arange(0, tensor_len, 2)
+        u2_index = pypto.add(u1_index, 1)
         pypto.index_put_(f4, (u1_index,), f2)
         pypto.index_put_(f4, (u2_index,), f3)
         return f4
