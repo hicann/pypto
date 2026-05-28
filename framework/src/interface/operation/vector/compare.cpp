@@ -30,23 +30,8 @@ void TiledCompareOperationImpl(
         auto inputTile2 = input2.tensor.GetStorage()->View(function, input2.tileInfo.shape, input2.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
 
-        LogicalTensorPtr convertedTile1 = inputTile1;
-        LogicalTensorPtr convertedTile2 = inputTile2;
-
-        if (inputTile1->Datatype() == DT_BF16) {
-            convertedTile1 = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile1->GetShape(), inputTile1->GetDynValidShape());
-            Operation& castOp1 = function.AddOperation(Opcode::OP_CAST, {inputTile1}, {convertedTile1});
-            castOp1.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-            convertedTile2 = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile2->GetShape(), inputTile2->GetDynValidShape());
-            Operation& castOp2 = function.AddOperation(Opcode::OP_CAST, {inputTile2}, {convertedTile2});
-            castOp2.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        }
-
         const int64_t COUNT_MODE_SIZE = 4096;
         size_t element_size = BytesOf(input1.tensor.GetDataType());
-        if (inputTile1->Datatype() == DT_BF16) {
-            element_size = BytesOf(DT_FP32);
-        }
         ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
         int64_t vcmp_bits_size = (elements_per_chunk + 7) / 8;
@@ -61,7 +46,7 @@ void TiledCompareOperationImpl(
         std::vector<int64_t> tmp_shape({static_cast<int64_t>(total_bytes)});
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
-        auto& op = function.AddOperation(Opcode::OP_CMP, {convertedTile1, convertedTile2}, {resultTile, tmp_tensor});
+        auto& op = function.AddOperation(Opcode::OP_CMP, {inputTile1, inputTile2}, {resultTile, tmp_tensor});
         std::vector<bool> dimMap({true, true});
         op.SetAttr(OpAttributeKey::rowPad, dimMap);
 
@@ -233,10 +218,6 @@ LogicalTensorPtr TensorCompareOperationScalar(
             break;
     }
     Element converted_value = value;
-    if (value.GetDataType() == DataType::DT_BF16) {
-        double val = value.GetFloatData();
-        converted_value = Element(DataType::DT_FP32, val);
-    }
 
     return TensorCompareOperationScalar(function, operand1, converted_value, operation, mode);
 }
@@ -249,18 +230,8 @@ void TiledCmpsOperationImpl(
         auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
 
-        LogicalTensorPtr convertedTile = inputTile;
-        if (inputTile->Datatype() == DT_BF16) {
-            convertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, inputTile->GetShape(), inputTile->GetDynValidShape());
-            Operation& castOp = function.AddOperation(Opcode::OP_CAST, {inputTile}, {convertedTile});
-            castOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        }
-
         const int64_t COUNT_MODE_SIZE = 4096;
         size_t element_size = BytesOf(input.tensor.GetDataType());
-        if (inputTile->Datatype() == DT_BF16) {
-            element_size = BytesOf(DT_FP32);
-        }
         ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
         int64_t vcmp_bits_size = (elements_per_chunk + 8 - 1) / 8;
@@ -275,7 +246,7 @@ void TiledCmpsOperationImpl(
         std::vector<int64_t> tmp_shape({static_cast<int64_t>(total_bytes)});
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
-        auto& op = function.AddOperation(Opcode::OP_CMPS, {convertedTile}, {resultTile, tmp_tensor});
+        auto& op = function.AddOperation(Opcode::OP_CMPS, {inputTile}, {resultTile, tmp_tensor});
         std::vector<bool> dimMap({true});
         op.SetAttr(OpAttributeKey::rowPad, dimMap);
 
@@ -334,9 +305,9 @@ Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode)
 {
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "COMPARE");
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5Types = {DT_FP16, DT_FP32, DT_BF16, DT_INT16};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32};
+    static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COMPARE");
     CheckBinaryInputTensors(self.GetStorage(), other.GetStorage(), "COMPARE");
     RETURN_CALL(CompareOperation, *Program::GetInstance().GetCurrentFunction(), self, other, op, mode);
@@ -345,9 +316,9 @@ Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode)
 Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode)
 {
     DECLARE_TRACER();
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5Types = {DT_FP16, DT_FP32, DT_BF16, DT_INT16};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32};
+    static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "COMPARE");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "COMPARE");
     CheckTensorShapeSize(self.GetStorage(), "COMPARE");
@@ -357,9 +328,9 @@ Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode
 Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode)
 {
     DECLARE_TRACER();
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> a5Types = {DT_FP16, DT_FP32, DT_BF16, DT_INT16};
-    const auto& supportedTypes = GetSupportedDataTypesByArch(a2a3Types, a5Types);
+    static const std::unordered_set<DataType> CMP_A2A3_TYPES = {DT_FP16, DT_FP32};
+    static const std::unordered_set<DataType> CMP_A5_TYPES = {DT_FP16, DT_FP32, DT_INT16};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(CMP_A2A3_TYPES, CMP_A5_TYPES);
     CheckTensorDataType(other.GetStorage(), supportedTypes, "COMPARE");
     CheckTensorDimRange(other.GetStorage(), 1, 4, "COMPARE");
     CheckTensorShapeSize(other.GetStorage(), "COMPARE");

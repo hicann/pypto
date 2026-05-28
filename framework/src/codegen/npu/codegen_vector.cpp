@@ -1134,11 +1134,13 @@ std::string CodeGenOpNPU::PrintCmpTileTensor() const
         auto scalarType = scalarElement.GetDataType();
         if (scalarType == DataType::DT_FP16) {
             templateParamList.emplace_back("half");
+        } else if (scalarType == DataType::DT_BF16) {
+            templateParamList.emplace_back("bfloat16_t");
         } else {
             templateParamList.emplace_back("float");
         }
         tileOpParamList.erase(tileOpParamList.begin() + ID2);
-        tileOpParamList.emplace_back(FormatFloat(scalarElement.Cast<float>()));
+        tileOpParamList.emplace_back(FormatFloat(scalarElement.Cast<float>(), scalarType));
     }
     std::ostringstream oss;
     oss << tileOpName;
@@ -1230,7 +1232,7 @@ std::string CodeGenOpNPU::GenCmpOp() const
     if (isScalarMode) {
         auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
         auto scalarElement = AnyCast<Element>(scalarAttr);
-        paramList.emplace_back(FormatFloat(scalarElement.Cast<float>()));
+        paramList.emplace_back(FormatFloat(scalarElement.Cast<float>(), scalarElement.GetDataType()));
     }
 
     std::string tiloOpCallParam = JoinString(paramList, ", ");

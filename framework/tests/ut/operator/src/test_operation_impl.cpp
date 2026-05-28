@@ -151,23 +151,6 @@ TEST_F(OperationImplTest, test_Compare_BIT)
     FUNCTION("TestCompare") { result = Compare(operand1, operand2, OpType::EQ, OutType::BIT); }
 }
 
-TEST_F(OperationImplTest, Test_Compare_BF16)
-{
-    PROGRAM("Compare")
-    {
-        std::vector<int64_t> shape = {128, 32};
-        TileShape::Current().SetVecTile({128, 32});
-        Tensor input_a(DT_BF16, shape, "A");
-        Tensor input_b(DT_BF16, shape, "B");
-        auto output = Tensor(DT_BOOL, shape, "res");
-        config::SetBuildStatic(true);
-        FUNCTION("Compare_BF16")
-        {
-            output = Compare(input_a, input_b, npu::tile_fwk::OpType::EQ, npu::tile_fwk::OutType::BOOL);
-        }
-    }
-}
-
 TEST_F(OperationImplTest, test_Cmps_BOOL)
 {
     TileShape::Current().SetVecTile({4, 4});
@@ -188,17 +171,6 @@ TEST_F(OperationImplTest, test_Cmps_BIT)
     std::vector<int64_t> dstShape = {16, 2};
     Tensor result;
     FUNCTION("TestCompare") { result = Compare(operand1, operand2, OpType::EQ, OutType::BIT); }
-}
-
-TEST_F(OperationImplTest, test_Cmps_BF16)
-{
-    TileShape::Current().SetVecTile({4, 4});
-    Tensor operand1(DT_BF16, {8, 8}, "operand1");
-    float scalar = 10.0;
-    Element operand2(DT_BF16, scalar);
-    std::vector<int64_t> dstShape = {8, 8};
-    Tensor result;
-    FUNCTION("TestCompare") { result = Compare(operand1, operand2, OpType::EQ, OutType::BOOL); }
 }
 
 TEST_F(OperationImplTest, test_Hypot_FP32)
