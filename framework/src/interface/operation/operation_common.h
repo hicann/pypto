@@ -100,8 +100,7 @@ void CheckBinaryInputTensors(
     const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, const std::string& opName);
 
 const std::unordered_set<DataType>& GetSupportedDataTypesByArch(
-    const std::unordered_set<DataType>& a2a3Types,
-    const std::unordered_set<DataType>& a5Types);
+    const std::unordered_set<DataType>& a2a3Types, const std::unordered_set<DataType>& a5Types);
 
 using TiledFuncType = std::function<void(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,

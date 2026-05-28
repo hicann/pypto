@@ -2335,6 +2335,371 @@
                 "scalar_dtype": "fp32",
                 "func_id": -1
             }
+        },
+        {
+            "case_index": 32,
+            "case_name": "Where_test_32",
+            "operation": "Where",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bool",
+                    "data_range": {
+                        "min": 0,
+                        "max": 0
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int32",
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int32",
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int32",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                42,
+                14
+            ],
+            "tile_shape": [
+                7,
+                560
+            ],
+            "params": {
+                "flag": 0,
+                "flag_dtype": "int32",
+                "x_scalar": 64,
+                "y_scalar": 32,
+                "scalar_dtype": "fp32",
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 33,
+            "case_name": "Where_test_33",
+            "operation": "Where",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bool",
+                    "data_range": {
+                        "min": 0,
+                        "max": 0
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int16",
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int16",
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int16",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                42,
+                14
+            ],
+            "tile_shape": [
+                7,
+                560
+            ],
+            "params": {
+                "flag": 0,
+                "flag_dtype": "int32",
+                "x_scalar": 64,
+                "y_scalar": 32,
+                "scalar_dtype": "fp32",
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 34,
+            "case_name": "Where_test_34",
+            "operation": "Where",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bool",
+                    "data_range": {
+                        "min": 0,
+                        "max": 0
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bf16",
+                    "data_range": {
+                        "min": -1,
+                        "max": 1
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bf16",
+                    "data_range": {
+                        "min": -1,
+                        "max": 1
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bf16",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                42,
+                14
+            ],
+            "tile_shape": [
+                7,
+                560
+            ],
+            "params": {
+                "flag": 0,
+                "flag_dtype": "int32",
+                "x_scalar": 64,
+                "y_scalar": 32,
+                "scalar_dtype": "fp32",
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 35,
+            "case_name": "Where_test_35",
+            "operation": "Where",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bool",
+                    "data_range": {
+                        "min": 0,
+                        "max": 0
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "int8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                42,
+                14
+            ],
+            "tile_shape": [
+                7,
+                560
+            ],
+            "params": {
+                "flag": 0,
+                "flag_dtype": "int32",
+                "x_scalar": 64,
+                "y_scalar": 32,
+                "scalar_dtype": "fp32",
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 36,
+            "case_name": "Where_test_36",
+            "operation": "Where",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "bool",
+                    "data_range": {
+                        "min": 0,
+                        "max": 0
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "uint8",
+                    "data_range": {
+                        "min": 0,
+                        "max": 10
+                    },
+                    "format": "ND"
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "uint8",
+                    "data_range": {
+                        "min": 0,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        10,
+                        54
+                    ],
+                    "dtype": "uint8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                42,
+                14
+            ],
+            "tile_shape": [
+                7,
+                560
+            ],
+            "params": {
+                "flag": 0,
+                "flag_dtype": "int32",
+                "x_scalar": 64,
+                "y_scalar": 32,
+                "scalar_dtype": "fp32",
+                "func_id": -1
+            }
         }
     ]
 }

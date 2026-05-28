@@ -31,7 +31,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT16，DT_INT32。 <br> 不支持空 Tensor，Shape 支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：Atlas A2系列产品/Atlas A3系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0；Atlas A5系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_BOOL, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0。 <br> 不支持空 Tensor，Shape 支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 源操作数。 <br> 支持任意合法的维度索引 ，范围为：-input.dim 到 input.dim - 1。 |
 | index   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64。 <br> 不支持空 Tensor，Shape 支持1-4维，需保证 index 所有轴上的 Shape 大小不超过 input 的对应 Shape 大小，且值为合法索引，即不超过 input 在 dim 轴上的 Shape 大小。 |
 

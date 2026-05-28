@@ -135,8 +135,7 @@ void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opN
         if (value > INT32_MAX) {
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false)
                 << "The dim value of tensor must less than or equal to INT32_MAX(2,147,483,647), "
-                << "actual dim value: " << value
-                << " for op: " << opName;
+                << "actual dim value: " << value << " for op: " << opName;
         }
         if (value > 0) {
             shapeSize *= value;
@@ -144,8 +143,7 @@ void CheckTensorShapeSize(const LogicalTensorPtr& tensor, const std::string& opN
         if (shapeSize > INT32_MAX) {
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false)
                 << "The shape size of tensor must less than or equal to INT32_MAX(2,147,483,647), "
-                << "actual shape size: " << shapeSize
-                << " for op: " << opName;
+                << "actual shape size: " << shapeSize << " for op: " << opName;
         }
     }
 }
@@ -157,8 +155,7 @@ void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opN
         if (value > INT32_MAX) {
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false)
                 << "The dim value of dst shape must less than or equal to INT32_MAX(2,147,483,647), "
-                << "actual dim value: " << value
-                << " for op: " << opName;
+                << "actual dim value: " << value << " for op: " << opName;
         }
         if (value > 0) {
             shapeSize *= value;
@@ -166,8 +163,7 @@ void CheckDstShapeSize(const std::vector<int64_t>& shape, const std::string& opN
         if (shapeSize > INT32_MAX) {
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false)
                 << "The shape size of dst must less than or equal to INT32_MAX(2,147,483,647), "
-                << "actual shape size: " << shapeSize
-                << " for op: " << opName;
+                << "actual shape size: " << shapeSize << " for op: " << opName;
         }
     }
 }
@@ -317,10 +313,8 @@ void CheckBinaryInputTensors(
     CheckTensorsShapeConsistencyOrBroadcast({tensor1, tensor2}, opName);
     CheckTensorsFormatConsistency(tensor1, tensor2, opName);
 }
-
 const std::unordered_set<DataType>& GetSupportedDataTypesByArch(
-    const std::unordered_set<DataType>& a2a3Types,
-    const std::unordered_set<DataType>& a5Types)
+    const std::unordered_set<DataType>& a2a3Types, const std::unordered_set<DataType>& a5Types)
 {
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     return isA5Architecture ? a5Types : a2a3Types;

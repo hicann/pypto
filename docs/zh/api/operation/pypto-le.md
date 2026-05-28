@@ -22,8 +22,8 @@ le(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16, DT_BF16, DT_FP32，两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 源操作数。 <br> 支持的类型为：Tensor, float, Element。 <br> 当为float类型时会自动转换为 Element 类型，float 对应 DT_FP32。当需要使用其他数据类型时，可以通过 Element 构建。 <br> Tensor和Element支持的数据类型为：DT_FP16, DT_BF16, DT_FP32，两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：Atlas A2系列产品/Atlas A3系列产品：DT_FP16, DT_FP32, DT_BF16；Atlas A5系列产品：DT_FP16, DT_FP32, DT_BF16, DT_INT16，两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 源操作数。 <br> 支持的类型为：Tensor, float, Element。 <br> 当为float类型时会自动转换为 Element 类型，float 对应 DT_FP32。当需要使用其他数据类型时，可以通过 Element 构建。 <br> Tensor和Element支持的数据类型为：Atlas A2系列产品/Atlas A3系列产品：DT_FP16, DT_FP32, DT_BF16；Atlas A5系列产品：DT_FP16, DT_FP32, DT_BF16, DT_INT16，两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 

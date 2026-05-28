@@ -517,6 +517,98 @@
                 "func_id": -1
             },
             "index": 10
+        },
+        {
+            "case_index": 11,
+            "case_name": "ReLU_test_11",
+            "operation": "Relu",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        16,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                32
+            ],
+            "tile_shape": [
+                16,
+                32
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 0
+        },
+        {
+            "case_index": 12,
+            "case_name": "ReLU_test_12",
+            "operation": "Relu",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        16,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                32
+            ],
+            "tile_shape": [
+                16,
+                32
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 0
         }
     ]
 }
