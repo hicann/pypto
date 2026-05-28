@@ -49,29 +49,37 @@ logging.basicConfig(
 )
 
 
+_data_type_full_mapping = {
+    0: ("INT4", ml_dtypes.int4),
+    1: ("INT8", np.int8),
+    2: ("INT16", np.int16),
+    3: ("INT32", np.int32),
+    4: ("INT64", np.int64),
+    5: ("FP8", ml_dtypes.float8_e4m3fn),
+    6: ("FP16", np.float16),
+    7: ("FP32", np.float32),
+    8: ("BF16", ml_dtypes.bfloat16),
+    9: ("HF4", None),                    # 暂不支持解析
+    10: ("HF8", None),                   # 暂不支持解析
+    11: ("UINT8", np.uint8),
+    12: ("UINT16", np.uint16),
+    13: ("UINT32", np.uint32),
+    14: ("UINT64", np.uint64),
+    15: ("BOOL", np.bool_),
+    16: ("DOUBLE", np.float64),
+    17: ("BOTTOM", None)
+}
+
+
 def _get_data_type(data_type: int):
     """数据类型数值转可读字符串"""
-    _data_type_full_mapping = {
-        0: ("INT4", ml_dtypes.int4),
-        1: ("INT8", np.int8),
-        2: ("INT16", np.int16),
-        3: ("INT32", np.int32),
-        4: ("INT64", np.int64),
-        5: ("FP8", ml_dtypes.float8_e4m3fn),
-        6: ("FP16", np.float16),
-        7: ("FP32", np.float32),
-        8: ("BF16", ml_dtypes.bfloat16),
-        9: ("HF4", None),                    # 暂不支持解析
-        10: ("HF8", None),                   # 暂不支持解析
-        11: ("UINT8", np.uint8),
-        12: ("UINT16", np.uint16),
-        13: ("UINT32", np.uint32),
-        14: ("UINT64", np.uint64),
-        15: ("BOOL", np.bool_),
-        16: ("DOUBLE", np.float64),
-        17: ("BOTTOM", None)
-    }
     return _data_type_full_mapping.get(data_type, f"UNKNOWN({data_type})")
+
+
+def _get_dtype_from_str(dtype_str: str):
+    str_to_dtype = {v[0]: v[1] for k, v in _data_type_full_mapping.items()}
+    dtype_str = dtype_str.strip().upper()
+    return str_to_dtype.get(dtype_str, None)
 
 
 def _get_compare_config(dtype):
@@ -154,6 +162,11 @@ class VerifyRes:
         for i, tensor_info in enumerate(tensor_infos_new):
             dump_tshape = tensor_info.get("B>validshape")
             verify_tensor_info = tensor_info["verify_dup_tensor"]
+            if not verify_tensor_info:
+                tensor_infos[i]["AB>RESULT"] = "SKIP"
+                tensor_infos[i]["result_reason"] = "verify file not exist"
+                continue
+
             verify_tshape = tensor_info["valid_shape"]
             tensor_infos[i]["A>PHASE_NAME"] = tensor_info["PHASE_NAME"] 
             tensor_infos[i]["A>validshape"] = verify_tshape
@@ -163,6 +176,7 @@ class VerifyRes:
             if os.path.exists(verify_tensor_info) and len(verify_tshape) == len(dump_tshape):
                 dtype_result = _get_data_type(tensor_info["datatype"])
                 dtype = dtype_result[1]
+                verify_data_type = _get_dtype_from_str(tensor_info["A>datatype"])
                 
                 # 不支持的类型，跳过对比
                 if dtype is None:
@@ -170,7 +184,7 @@ class VerifyRes:
                     tensor_infos[i]["result_reason"] = f"unsupported dtype: {dtype_result[0]}"
                     continue
                 
-                verify_tensor_data = np.fromfile(verify_tensor_info, dtype)
+                verify_tensor_data = np.fromfile(verify_tensor_info, verify_data_type)
                 verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
                 
                 data = np.fromfile(tensor_info["B>FILENAME"], dtype)
@@ -206,7 +220,7 @@ class VerifyRes:
         df_clean = df.dropna(subset=[":rawmagic"]).copy()
         df_clean[":rawmagic"] = df_clean[":rawmagic"].astype(int)
 
-        codegen_filter = df_clean["PHASE_NAME"].str.contains("Pass_36_CodegenPreproc", na=False)
+        codegen_filter = df_clean["PHASE_NAME"].str.contains("_CodegenPreproc", na=False)
         df_codegen = df_clean[codegen_filter]
         df_codegen = df_codegen.dropna(subset=["ROOT_CALL:opmagic"]).copy()
         df_codegen["ROOT_CALL:opmagic"] = df_codegen["ROOT_CALL:opmagic"].astype(int)
@@ -240,6 +254,7 @@ class VerifyRes:
                 if not self.match_loop_info(tensor_loop_dict, verify_loop_dict):
                     continue
 
+            tensor_info["PHASE_NAME"] = op_info.get("PHASE_NAME")
             if "input" in ioflag and op_info.get(":opcode") in ["COPY_IN", "VIEW"]:
                 verify_op_offset = json.loads(op_info.get("OP_ATTR_SYM_OFFSET"))
                 verify_op_offset_str = '_'.join(str(item) for item in verify_op_offset)
@@ -256,7 +271,7 @@ class VerifyRes:
                     verify_dup_tensor = op_info.get("INPUT_FILENAMES")   # COPY_OUT的op只会有一个输入
                     valid_shape = json.loads(op_info.get(":inputValidShape"))
                     loop_info = op_info.get("LOOP_INFO")
-                    dtype = op_info.get(":datatype")
+                    dtype = next(i for i in op_info_list if i["FILENAME"] == verify_dup_tensor).get(":datatype")
                     break
 
         if verify_dup_tensor:
@@ -264,41 +279,16 @@ class VerifyRes:
         tensor_info["verify_dup_tensor"] = verify_dup_tensor
         tensor_info["valid_shape"] = valid_shape
         tensor_info["loop_info"] = loop_info
-        tensor_info["PHASE_NAME"] = op_info.get("PHASE_NAME")
         tensor_info["A>datatype"] = dtype
 
     def process_single_task(self, tensor_infos, op_info_list_callop):
         tensor_infos_new = copy.deepcopy(tensor_infos)
         op_info_list = op_info_list_callop.copy(deep=True)
-        all_match = False
-        update_op_info = op_info_list_callop
-        while not all_match:
-            self.get_verify_res_single(tensor_infos_new[0], op_info_list.to_dict(orient='records'))
-            cur_loop_info = tensor_infos_new[0].get("loop_info")
-            if not cur_loop_info:
-                break
-            op_info_list_with_loop = op_info_list[op_info_list["LOOP_INFO"] == cur_loop_info]
-            all_match = True
-            for i, tensor_info in enumerate(tensor_infos_new):
-                if i == 0:
-                    continue
-                tensor_info["verify_dup_tensor"] = ""   # 先清理上一次的结果
-                self.get_verify_res_single(tensor_info, op_info_list_with_loop.to_dict(orient='records'))
-                if not tensor_info["verify_dup_tensor"]:
-                    all_match = False
-                    break
-            if all_match:
-                update_op_info = op_info_list_callop[op_info_list_callop["LOOP_INFO"] != cur_loop_info]
-                break
-            op_info_list = op_info_list[op_info_list["LOOP_INFO"] != cur_loop_info]
-        if not all_match:
-            for _, tensor_info in enumerate(tensor_infos):
-                tensor_info["verify_tensor_file"] = ""
-                tensor_info["cmp_res"] = "SKIP"
-            return update_op_info
+
+        for tensor_info in tensor_infos_new:
+            self.get_verify_res_single(tensor_info, op_info_list.to_dict(orient='records'))
 
         self._compare_codegen_tensors(tensor_infos, tensor_infos_new)
-        return update_op_info
 
     def get_verify_codegen_res(self, callop_tensor_infos):
         res_tensor_infos = []
@@ -312,7 +302,7 @@ class VerifyRes:
         op_info_list_callop = self.verify_codegen_op_info_list.copy(deep=True)
         op_info_list_callop = op_info_list_callop[op_info_list_callop["ROOT_CALL:opmagic"] == callop_magic]
         for tensor_infos in callop_tensor_infos:
-            op_info_list_callop = self.process_single_task(tensor_infos, op_info_list_callop)
+            self.process_single_task(tensor_infos, op_info_list_callop)
             res_tensor_infos.extend(tensor_infos)
         return res_tensor_infos
 
