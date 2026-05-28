@@ -97,8 +97,7 @@ class OperationsViewer {
     friend class VFFusionPass;
 
 public:
-    class IteratorDelimiter {
-    };
+    class IteratorDelimiter {};
     class Iterator {
     public:
         explicit Iterator(const std::vector<std::shared_ptr<Operation>>& operations) : operations_(operations) {}
@@ -347,12 +346,21 @@ struct L2Info {
     L2Info(uint64_t size, uint64_t idx) : tensorSize(size), tensorIdx(idx) {}
 };
 
+enum class ParamDirection {
+    NONE = 0,
+    IN = 1,
+    OUT = 2,
+    INOUT = IN | OUT,
+};
+
 struct DyndevFunctionAttribute {
     std::vector<std::reference_wrapper<const Tensor>> startArgsInputTensorList;
     std::vector<std::reference_wrapper<const Tensor>> startArgsOutputTensorList;
 
     std::vector<std::shared_ptr<LogicalTensor>> startArgsInputLogicalTensorList;
     std::vector<std::shared_ptr<LogicalTensor>> startArgsOutputLogicalTensorList;
+
+    std::vector<ParamDirection> startArgsDirectionList;
 
     struct ValueDependDesc {
         uint64_t getInputDataCount{0};
@@ -447,7 +455,8 @@ struct DyndevFunctionAttribute {
     };
     std::vector<DynamicCellMatchLaunchMeta> dynamicCellMatchLaunchMetaList;
 
-    // Runtime slot ids that emit RUNTIME_SlotMarkNeedAlloc; filled in BuildControlFlow for dynamicCellMatch pool sizing.
+    // Runtime slot ids that emit RUNTIME_SlotMarkNeedAlloc; filled in BuildControlFlow for dynamicCellMatch pool
+    // sizing.
     std::unordered_set<int> constructAssembleNeedAllocRuntimeSlots;
 
     std::vector<uint8_t> devProgBinary;
@@ -945,6 +954,8 @@ public:
     ir::Span& GetSpan() { return span_; }
     void CleanRedundantOutCast();
 
+    void InferParamDirection();
+
     void SetHiddenFunction(bool hiddenFunction) { hiddenFunction_ = hiddenFunction; }
     bool IsHiddenFunction() const { return hiddenFunction_; }
 
@@ -993,7 +1004,7 @@ private:
     std::vector<std::vector<Operation*>> operationGroups_;
     std::vector<std::shared_ptr<Operation>>
         operations_; // operation的获取必须要使用Operations函数，来获取到符合拓扑序的List
-    std::unordered_map<const Operation*, int> opPosition_; // position of operation in Operation.operations_
+    std::unordered_map<const Operation*, int> opPosition_;         // position of operation in Operation.operations_
     std::vector<std::shared_ptr<Operation>> operationsAfterOOO_;
     std::unordered_map<const Operation*, int> opPositionAfterOOO_; // position of operation sequence after OOO schedule
     const Program& belongTo_;

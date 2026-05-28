@@ -659,6 +659,33 @@ void Function::CleanRedundantOutCast()
     CleanRedundantOutcast(removeRecord, getTensorDataRecord);
 }
 
+void Function::InferParamDirection()
+{
+    FE_ASSERT(FeError::INVALID_PTR, dyndevAttr_ != nullptr) << "dyndevAttr_ is empty";
+    FE_ASSERT(FeError::INVALID_PTR, slotScope_ != nullptr) << "slotscope is empty";
+
+    std::map<int, int> slotAttr;
+    for (size_t i = 0; i < slotScope_->ioslot.outcastSlot.size(); i++) {
+        for (auto k : slotScope_->ioslot.outcastSlot[i]) {
+            slotAttr[k] |= (int)ParamDirection::OUT;
+        }
+    }
+    for (size_t i = 0; i < slotScope_->ioslot.incastSlot.size(); i++) {
+        for (auto k : slotScope_->ioslot.incastSlot[i]) {
+            slotAttr[k] |= (int)ParamDirection::IN;
+        }
+    }
+
+    auto& startArgs = dyndevAttr_->startArgsInputTensorList;
+    auto& directionList = dyndevAttr_->startArgsDirectionList;
+    for (auto& t : startArgs) {
+        auto attr = slotAttr[t.get().Id()];
+        // if attr is 0, it maybe not used or used by getinputdata only, treat it as input
+        auto direction = attr ? (ParamDirection)attr : ParamDirection::IN;
+        directionList.push_back(direction);
+    }
+}
+
 void Function::FillOriginInOutCast(std::vector<Operation*>& operationList)
 {
     OrderedSet<LogicalTensorPtr> incasts;
@@ -2458,8 +2485,7 @@ static void NormalizeReshapeCopyDynValidShape(
     }
 
     bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT;
-    auto opImmList =
-        useToDynValidShape ? copyAttr->GetToDynValidShape() : copyAttr->GetFromDynValidShape();
+    auto opImmList = useToDynValidShape ? copyAttr->GetToDynValidShape() : copyAttr->GetFromDynValidShape();
     if (opImmList.empty()) {
         return;
     }
@@ -2846,8 +2872,7 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 coaLists.emplace_back(valueCoaList);
                 coaIndex += 1;
             }
-        } else if (op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT ||
-                   op->GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
+        } else if (op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op->GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
             NormalizeReshapeCopyDynValidShape(op.get(), coaLists, coaIndex, valueToIndex);
         }
     }

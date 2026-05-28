@@ -158,6 +158,7 @@ void RecordFunc::EndFunction()
         if (dynFunc_->IsDyndev()) {
             Program::GetInstance().ClearEmptyHiddenFunction();
             dynFunc_->CleanRedundantOutCast();
+            dynFunc_->InferParamDirection();
             // Destructor GetTensorData small Tensor
             auto attr = dynFunc_->GetDyndevAttribute();
             attr->getTensorDataDescDict.clear();
