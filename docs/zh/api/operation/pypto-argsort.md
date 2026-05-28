@@ -1,4 +1,4 @@
-﻿# pypto.argsort
+# pypto.argsort
 
 ## 产品支持情况
 

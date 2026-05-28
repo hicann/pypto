@@ -1,4 +1,4 @@
-﻿# pypto.copysign
+# pypto.copysign
 
 ## 产品支持情况
 

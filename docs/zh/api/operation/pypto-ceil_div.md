@@ -1,4 +1,4 @@
-﻿# pypto.ceil_div
+# pypto.ceil_div
 
 ## 产品支持情况
 

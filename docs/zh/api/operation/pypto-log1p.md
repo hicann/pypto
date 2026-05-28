@@ -1,4 +1,4 @@
-﻿# pypto.log1p
+# pypto.log1p
 
 ## 产品支持情况
 

@@ -1,4 +1,4 @@
-﻿# pypto.logical\_not
+# pypto.logical\_not
 
 ## 产品支持情况
 

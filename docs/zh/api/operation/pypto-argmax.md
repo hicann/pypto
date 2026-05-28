@@ -1,4 +1,4 @@
-﻿# pypto.argmax
+# pypto.argmax
 
 ## 产品支持情况
 

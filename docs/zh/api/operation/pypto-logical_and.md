@@ -1,4 +1,4 @@
-﻿# pypto.logical\_and
+# pypto.logical\_and
 
 ## 产品支持情况
 

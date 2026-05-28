@@ -1,4 +1,4 @@
-﻿# pypto.one\_hot
+# pypto.one\_hot
 
 ## 产品支持情况
 

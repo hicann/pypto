@@ -1,4 +1,4 @@
-﻿# pypto.scatter\_
+# pypto.scatter\_
 
 ## 产品支持情况
 
