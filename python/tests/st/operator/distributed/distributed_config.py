@@ -13,12 +13,38 @@ DistributedConfig
 """
 from __future__ import annotations
 
+import functools
+import inspect
 import multiprocessing as mp
 import os
+import traceback
+from typing import Callable, TypeVar
+from typing_extensions import ParamSpec
 
 import torch
 import torch.distributed as dist
 import torch_npu
+
+P = ParamSpec('P')
+R = TypeVar('R')
+
+
+def distributed_error_handler(func: Callable[P, R]) -> Callable[P, R]:
+    sig = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            error_queue = bound.arguments['error_queue']
+            logical_rank_id = bound.arguments['logical_rank_id']
+            error_queue.put((logical_rank_id, str(e), traceback.format_exc()))
+            raise
+
+    return wrapper
 
 
 def collect_process_errors(
