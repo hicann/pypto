@@ -63,6 +63,7 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
         APASS_LOG_INFO_F(Elements::Operation, "Platform not support CV mix graph, skip ReduceCopy Pass.");
         return SUCCESS;
     }
+    size_t subgraphNumBefore = function.GetTotalSubGraphCount();
     MergeInput mergeInput;
     mergeInput.maxLatency = 1e7;
     mergeInput.aivRatio = {1e-6, 1e6};
@@ -88,6 +89,10 @@ Status ReduceCopyMerge::RunOnFunction(Function& function)
     MergeInput mergeInputTmp;
     APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph Info after ReduceCopy Pass:");
     BuildGraph(function, mergeInputTmp);
+    if (enableAutoMix && function.GetTotalSubGraphCount() == subgraphNumBefore) {
+        APASS_LOG_WARN_F(Elements::Operation, 
+            "CV mix merging was not performed, since fusion would degrade performance or may cause loop on this computation graph.");
+    }
     return SUCCESS;
 }
 
@@ -486,7 +491,7 @@ bool MixGraphMerger::CanMergeWithoutCycle(const std::vector<int>& actualGroup)
     inGraph[root].erase(root);
     outGraph[root].erase(root);
     if (HasCycle(outGraph, inGraph)) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Merge failed: detect cycle.");
+        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: detect cycle.");
         return false;
     }
     return true;
@@ -506,19 +511,19 @@ bool MixGraphMerger::CheckLatencyConstraint(const std::vector<int>& actualGroup)
     }
     if (totalAIC == 0 || totalAIV == 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
-            "Merge failed: merged subgraph must be mixed (both AIC and AIV non-zero).");
+            "Merge skipped: merged subgraph must be mixed (both AIC and AIV non-zero).");
         return false;
     }
     int totalLatency = totalAIC + totalAIV;
     if (totalLatency > mInput.maxLatency) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Merge failed: total latency %d exceeds max latency %d.",
+        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: total latency %d exceeds max latency %d.",
             totalLatency, mInput.maxLatency);
         return false;
     }
     double ratio = (double)totalAIV / (double)totalAIC;
     if (ratio < mInput.aivRatio.first || ratio > mInput.aivRatio.second) {
         APASS_LOG_DEBUG_F(Elements::Operation,
-            "Merge failed: AIV/AIC ratio %.2f out of range [%.2f, %.2f]",
+            "Merge skipped: AIV/AIC ratio %.2f out of range [%.2f, %.2f]",
             ratio, mInput.aivRatio.first, mInput.aivRatio.second);
         return false;
     }
@@ -554,7 +559,7 @@ bool MixGraphMerger::CheckMergeBenefit(const std::vector<int>& actualGroup)
 
     if (mergedTime > originalTime) {
         APASS_LOG_DEBUG_F(Elements::Operation,
-            "Merge failed: estimate merged exec time > original exec time.");
+            "Merge skipped: estimate merged exec time > original exec time.");
         return false;
     }
     return true;
@@ -563,7 +568,7 @@ bool MixGraphMerger::CheckMergeBenefit(const std::vector<int>& actualGroup)
 bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup)
 {
     if (actualGroup.size() <= 1) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Merge failed: already merged.");
+        APASS_LOG_DEBUG_F(Elements::Operation, "Merge skipped: already merged.");
         return false;
     }
     if (!CanMergeWithoutCycle(actualGroup)) {
