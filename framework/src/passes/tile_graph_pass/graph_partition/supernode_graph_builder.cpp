@@ -71,6 +71,44 @@ std::vector<int32_t> OperationGraphInfo::GetSameLevelOpIdx(int32_t opIdx, Opcode
     return res;
 }
 
+inline bool IsValidOpIndex(size_t opSize, int32_t opIdx)
+{
+    return opIdx >= 0 && static_cast<size_t>(opIdx) < opSize;
+}
+
+inline bool IsL0CAccumMatmulEdge(
+    const std::shared_ptr<OperationGraphInfo>& operationInfo, int32_t consumerIdx, int32_t producerIdx)
+{
+    if (operationInfo == nullptr) {
+        return false;
+    }
+    if (!IsValidOpIndex(operationInfo->opList_.size(), consumerIdx) ||
+        !IsValidOpIndex(operationInfo->opList_.size(), producerIdx)) {
+        return false;
+    }
+    const Operation* consumerOp = operationInfo->opList_[consumerIdx];
+    const Operation* producerOp = operationInfo->opList_[producerIdx];
+    if (consumerOp == nullptr || producerOp == nullptr) {
+        return false;
+    }
+    if (OpcodeManager::Inst().GetOpCalcType(consumerOp->GetOpcode()) != OpCalcType::MATMUL ||
+        OpcodeManager::Inst().GetOpCalcType(producerOp->GetOpcode()) != OpCalcType::MATMUL) {
+        return false;
+    }
+    // A_MULACC_B 的第 3 个输入是 L0C 累加输入，用它判断 matmul 之间是否为真实累加依赖。
+    constexpr size_t kMatmulAccumInputIndex = 2;
+    auto accumTensor = consumerOp->GetInputOperand(kMatmulAccumInputIndex);
+    if (accumTensor == nullptr || accumTensor->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
+        return false;
+    }
+    for (const auto* accumProducer : accumTensor->GetProducers()) {
+        if (accumProducer == producerOp) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool OperationGraphInfo::CoreTypeMergeable(const std::set<OpCoreType>& coreTypes) const
 {
     if (coreTypes.size() == 1 && (*coreTypes.begin() == OpCoreType::AICPU || *coreTypes.begin() == OpCoreType::HUB)) {
@@ -553,6 +591,212 @@ inline bool IsL0cToL1MoveOp(Operation* op)
            op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1;
 }
 
+bool IsCubeLocalLoad(Operation* op)
+{
+    if (op == nullptr || op->GetOOperands().empty()) {
+        return false;
+    }
+    static const std::unordered_set<MemoryType> cubeLocalLoadMemoryTypes{
+        MemoryType::MEM_L0A,
+        MemoryType::MEM_L0B,
+        MemoryType::MEM_L0AMX,
+        MemoryType::MEM_L0BMX,
+        MemoryType::MEM_BT,
+        MemoryType::MEM_FIX_QUANT_PRE};
+    MemoryType outputMemType = op->GetOOperands()[0]->GetMemoryTypeOriginal();
+    return cubeLocalLoadMemoryTypes.count(outputMemType) > 0;
+}
+
+bool HasOnlyOneOutputConsumer(Operation* producerOp, Operation* consumerOp)
+{
+    if (producerOp == nullptr || consumerOp == nullptr || producerOp->GetOOperands().empty()) {
+        return false;
+    }
+    auto output = producerOp->GetOOperands()[0];
+    if (output == nullptr || output->GetConsumers().size() != 1) {
+        return false;
+    }
+    return *(output->GetConsumers().begin()) == consumerOp;
+}
+
+bool IsMatmulOperandLocalLoad(Operation* op)
+{
+    if (op == nullptr || op->GetOOperands().empty()) {
+        return false;
+    }
+    static const std::unordered_set<MemoryType> matmulOperandLoadMemoryTypes{
+        MemoryType::MEM_L0A,
+        MemoryType::MEM_L0B,
+        MemoryType::MEM_L0AMX,
+        MemoryType::MEM_L0BMX};
+    MemoryType outputMemType = op->GetOOperands()[0]->GetMemoryTypeOriginal();
+    if (matmulOperandLoadMemoryTypes.count(outputMemType) == 0) {
+        return false;
+    }
+    for (auto* consumer : op->GetOOperands()[0]->GetConsumers()) {
+        if (consumer != nullptr && OpcodeManager::Inst().GetOpCalcType(consumer->GetOpcode()) == OpCalcType::MATMUL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+struct L0cToL1BridgeCandidate {
+    int32_t l0cToL1Idx;
+    int32_t localLoadIdx;
+    int32_t producerComponent;
+    int32_t consumerComponent;
+    uint64_t l0cToL1Hash;
+    uint64_t localLoadHash;
+};
+
+struct L0cToL1BridgeGroup {
+    bool initialized{false};
+    bool mixedBridgeSignature{false};
+    uint64_t l0cToL1Hash{0};
+    uint64_t localLoadHash{0};
+    std::set<int32_t> producerComponents;
+    std::set<int32_t> consumerComponents;
+    std::map<int32_t, std::set<int32_t>> outComponents;
+    std::map<int32_t, std::set<int32_t>> inComponents;
+};
+
+void UnionForComponentBuild(std::vector<int32_t>& parent, int32_t src, int32_t dst)
+{
+    int32_t srcParent = FindParent(parent, src);
+    int32_t dstParent = FindParent(parent, dst);
+    if (srcParent < 0 || dstParent < 0 || srcParent == dstParent) {
+        return;
+    }
+    parent[srcParent] = dstParent;
+}
+
+void AddBridgeCandidateToGroup(L0cToL1BridgeGroup& group, const L0cToL1BridgeCandidate& candidate)
+{
+    if (!group.initialized) {
+        group.initialized = true;
+        group.l0cToL1Hash = candidate.l0cToL1Hash;
+        group.localLoadHash = candidate.localLoadHash;
+    } else if (group.l0cToL1Hash != candidate.l0cToL1Hash || group.localLoadHash != candidate.localLoadHash) {
+        group.mixedBridgeSignature = true;
+    }
+    group.producerComponents.insert(candidate.producerComponent);
+    group.consumerComponents.insert(candidate.consumerComponent);
+    group.outComponents[candidate.producerComponent].insert(candidate.consumerComponent);
+    group.inComponents[candidate.consumerComponent].insert(candidate.producerComponent);
+}
+
+bool IsCompleteBridgeGroup(const L0cToL1BridgeGroup& group)
+{
+    if (!group.initialized || group.mixedBridgeSignature) {
+        return false;
+    }
+    for (int32_t producerComponent : group.producerComponents) {
+        auto iter = group.outComponents.find(producerComponent);
+        if (iter == group.outComponents.end() || iter->second != group.consumerComponents) {
+            return false;
+        }
+    }
+    for (int32_t consumerComponent : group.consumerComponents) {
+        auto iter = group.inComponents.find(consumerComponent);
+        if (iter == group.inComponents.end() || iter->second != group.producerComponents) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsClosedBridgeGroupWithoutProducerFanIn(const L0cToL1BridgeGroup& group)
+{
+    return IsCompleteBridgeGroup(group) && group.producerComponents.size() <= group.consumerComponents.size();
+}
+
+std::vector<int32_t> BuildMergeComponents(size_t opSize, const std::vector<std::pair<int32_t, int32_t>>& mergePair)
+{
+    std::vector<int32_t> parent(opSize);
+    for (size_t i = 0; i < opSize; ++i) {
+        parent[i] = static_cast<int32_t>(i);
+    }
+    for (const auto& pair : mergePair) {
+        UnionForComponentBuild(parent, pair.first, pair.second);
+    }
+    return parent;
+}
+
+std::vector<L0cToL1BridgeCandidate> CollectL0cToL1LocalLoadCandidates(
+    const std::shared_ptr<OperationGraphInfo>& operationInfo, const std::vector<Operation*>& opList,
+    std::vector<int32_t>& parent)
+{
+    std::vector<L0cToL1BridgeCandidate> candidates;
+    for (int32_t i = 0; i < static_cast<int32_t>(opList.size()); ++i) {
+        if (!IsL0cToL1MoveOp(opList[i])) {
+            continue;
+        }
+        for (int32_t outNode : operationInfo->outGraph_[i]) {
+            if (!IsMatmulOperandLocalLoad(opList[outNode])) {
+                continue;
+            }
+            if (!HasOnlyOneOutputConsumer(opList[i], opList[outNode])) {
+                continue;
+            }
+            int32_t producerComponent = FindParent(parent, i);
+            int32_t consumerComponent = FindParent(parent, outNode);
+            if (producerComponent < 0 || consumerComponent < 0 || producerComponent == consumerComponent) {
+                continue;
+            }
+            candidates.push_back({i,
+                outNode,
+                producerComponent,
+                consumerComponent,
+                operationInfo->opHashList_[i],
+                operationInfo->opHashList_[outNode]});
+        }
+    }
+    return candidates;
+}
+
+std::map<int32_t, L0cToL1BridgeGroup> BuildL0cToL1BridgeGroups(
+    const std::vector<L0cToL1BridgeCandidate>& candidates, std::vector<int32_t>& bridgeParent)
+{
+    std::map<int32_t, L0cToL1BridgeGroup> bridgeGroups;
+    for (const auto& candidate : candidates) {
+        int32_t group = FindParent(bridgeParent, candidate.producerComponent);
+        if (group < 0) {
+            continue;
+        }
+        AddBridgeCandidateToGroup(bridgeGroups[group], candidate);
+    }
+    return bridgeGroups;
+}
+
+void AppendL0cToL1LocalLoadMerge(
+    const std::shared_ptr<OperationGraphInfo>& operationInfo, const std::vector<Operation*>& opList,
+    std::vector<std::pair<int32_t, int32_t>>& mergePair)
+{
+    std::vector<int32_t> parent = BuildMergeComponents(opList.size(), mergePair);
+    std::vector<L0cToL1BridgeCandidate> candidates =
+        CollectL0cToL1LocalLoadCandidates(operationInfo, opList, parent);
+    std::vector<int32_t> bridgeParent = BuildMergeComponents(opList.size(), {});
+    for (const auto& candidate : candidates) {
+        UnionForComponentBuild(bridgeParent, candidate.producerComponent, candidate.consumerComponent);
+    }
+    std::map<int32_t, L0cToL1BridgeGroup> bridgeGroups = BuildL0cToL1BridgeGroups(candidates, bridgeParent);
+    for (const auto& candidate : candidates) {
+        int32_t group = FindParent(bridgeParent, candidate.producerComponent);
+        auto iter = bridgeGroups.find(group);
+        if (group < 0 || iter == bridgeGroups.end() || !IsClosedBridgeGroupWithoutProducerFanIn(iter->second)) {
+            continue;
+        }
+        // 仅补回没有 producer fan-in 的闭合桥接块。多个 producer tile 链汇聚到少量 consumer component 时，
+        // 说明 L0C->L1 结果侧路径正在重新连通独立 tile 链，应保持切开。
+        mergePair.emplace_back(candidate.localLoadIdx, candidate.l0cToL1Idx);
+        APASS_LOG_DEBUG_F(Elements::Operation,
+            "Combine L0C->L1 bridge %d and local load %d in building SuperNode.",
+            opList[candidate.l0cToL1Idx]->GetOpMagic(),
+            opList[candidate.localLoadIdx]->GetOpMagic());
+    }
+}
+
 bool SuperNodeGraphBuilder::L1CopyInCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair)
@@ -562,6 +806,9 @@ bool SuperNodeGraphBuilder::L1CopyInCombine(
     }
     if (IsL0cToL1MoveOp(opList[i])) {
         for (auto outNode : operationInfo->outGraph_[i]) {
+            if (IsCubeLocalLoad(opList[outNode])) {
+                continue;
+            }
             mergePair.emplace_back(outNode, i);
             APASS_LOG_DEBUG_F(
                 Elements::Operation, "Combine %d and %d(outNode) for L1 CopyIn in building SuperNode.",
@@ -688,10 +935,14 @@ bool SuperNodeGraphBuilder::CopyInCombine(
     if ((OpcodeManager::Inst().GetOpCalcType(opList[i]->GetOpcode()) == OpCalcType::MOVE_IN ||
          OpcodeManager::Inst().GetOpCalcType(opList[i]->GetOpcode()) == OpCalcType::MOVE_LOCAL) &&
         operationInfo->outGraph_[i].size() > 0) {
-        mergePair.emplace_back(i, *(operationInfo->outGraph_[i].begin()));
+        int32_t outNode = *(operationInfo->outGraph_[i].begin());
+        if (IsL0cToL1MoveOp(opList[i]) && IsCubeLocalLoad(opList[outNode])) {
+            return false;
+        }
+        mergePair.emplace_back(i, outNode);
         APASS_LOG_DEBUG_F(
             Elements::Operation, "Combine %d and %d for CopyIn in building SuperNode.", opList[i]->GetOpMagic(),
-            opList[*(operationInfo->outGraph_[i].begin())]->GetOpMagic());
+            opList[outNode]->GetOpMagic());
         return true;
     }
     return false;
@@ -704,14 +955,19 @@ bool SuperNodeGraphBuilder::MulAccCombine(
     if (i < 0 || i >= static_cast<int32_t>(opList.size())) {
         return false;
     }
-    // MulAcc需要与其输入mul绑定
+    // 只要求 A_MULACC_B 的 L0C 累加依赖保持在同一个子图中。
+    // 其他 matmul-to-matmul 依赖由普通数据通路规则处理；在这里合并会把多个独立 tile 塌缩成过大的后端编译单元。
     if (OpcodeManager::Inst().GetOpCalcType(opList[i]->GetOpcode()) == OpCalcType::MATMUL) {
         for (auto inOp : operationInfo->inGraph_[i]) {
             if (OpcodeManager::Inst().GetOpCalcType(opList[inOp]->GetOpcode()) == OpCalcType::MATMUL) {
+                bool isAccumEdge = IsL0CAccumMatmulEdge(operationInfo, i, inOp);
+                if (!isAccumEdge) {
+                    continue;
+                }
                 mergePair.emplace_back(i, inOp);
                 APASS_LOG_DEBUG_F(
-                    Elements::Operation, "Combine %d and %d for MulAcc in building SuperNode.", opList[i]->GetOpMagic(),
-                    opList[inOp]->GetOpMagic());
+                    Elements::Operation, "Combine %d and %d for MulAcc accum edge in building SuperNode.",
+                    opList[i]->GetOpMagic(), opList[inOp]->GetOpMagic());
             }
         }
         for (auto outOp : operationInfo->outGraph_[i]) {
@@ -832,6 +1088,7 @@ Status SuperNodeGraphBuilder::BuildSuperNodeGraph()
             continue;
         }
     }
+    AppendL0cToL1LocalLoadMerge(operationInfo_, opList, mergePair);
     superNodeInfo_ = std::make_shared<NodeGraphInfo>();
     if (superNodeInfo_ == nullptr) {
         APASS_LOG_ERROR_F(Elements::Function, "Create SuperNodeInfo failed.");
