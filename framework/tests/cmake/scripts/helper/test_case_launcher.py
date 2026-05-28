@@ -179,7 +179,7 @@ class TestCaseLauncher:
             if not self.distributed_op:
                 test_case = f"Test{case_op}/{case_op}OperationTest.Test{case_op}/{index}"
             else:
-                test_case = f"TestDistributedOp/{case_op}"
+                test_case = f"TestDistributedOps/{case_op}"
             golden_path = f"{self.work_path}/build/output/bin/golden/{test_case}"
             if os.path.exists(golden_path + "/golden_desc.json"):
                 os.remove(golden_path + "/golden_desc.json")

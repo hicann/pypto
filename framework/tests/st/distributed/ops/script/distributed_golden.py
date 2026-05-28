@@ -576,7 +576,7 @@ def generate_all_gather_golden(config: dict, output: Path) -> bool:
             shape=case.shape,
             valid_shape=case.valid_shape,
             save_dir=output,
-            filename_prefix='gather_out'
+            filename_prefix='allgather_out'
         )
     )
     return True

@@ -59,7 +59,7 @@ void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
     RunTest();
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
     int32_t outSize = row * col * testParam.rankSize;
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_rank_", outSize, outPtr, testParam));
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/allgather_out_rank_", outSize, outPtr, testParam));
 }
 
 template void TestAllGather<int32_t>(OpTestParam& testParam, std::string& goldenDir);
