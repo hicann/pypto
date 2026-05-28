@@ -254,17 +254,24 @@ def your_kernel(...)
 ```
 恢复`tile_fwk_config.json`文件中pre_check，post_check配置
 
-### 情况三：Pass级别都Pass，精度仍有问题 → 检查同步问题
+### 情况三：Pass级别都Pass，精度仍有问题 → 检查同步/VF融合问题
 
-如果所有 Pass 校验都通过但算子精度仍有问题，可能是 pipeline 同步不及时导致的数据竞争。
+如果所有 Pass 校验都通过但算子精度仍有问题，可能是 pipeline 同步不及时导致的数据竞争或 VF 融合问题导致。
 
-**快速验证同步问题**：
+**快速验证同步/VF融合问题**：
 
 1. 修改 `framework/src/passes/block_graph_pass/insert_sync.h`，将 `bool enableDebug_{false}` 改为 `bool enableDebug_{true}`
 2. 重新编译安装 pypto：`python3 -m pip install . --verbose`
-3. 重新执行算子。若精度通过 → 说明数据同步不足导致精度失败，需定位具体缺少同步的位置
+3. 重新执行算子。若精度通过 → 说明是同步/VF融合问题，需进一步定位具体原因，恢复`bool enableDebug_{false}`参数
+4. 检查是否为 VF 融合问题（仅针对 A5）：
+   
+   **前置检查**：执行 `npu-smi info` 查看设备型号。若结果为 `Ascend950`，则继续以下步骤；否则跳过步骤4，默认为同步问题。
+   
+   - 修改 `framework/src/interface/configs/tile_fwk_config.json`，将 `"enable_vf": true` 改为 `"enable_vf": false`
+   - 重新编译安装 pypto：`python3 -m pip install . --verbose`
+   - 重新执行算子。若精度通过 → 说明是 VF 融合问题
 
-若确认数据同步导致精度失败，执行以下定位流程：
+若确认为同步问题导致精度失败，执行以下定位流程：
 
 详细步骤请参考：**[references/pipe_all.md](references/pipe_all.md)**
 
