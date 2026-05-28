@@ -1628,4 +1628,200 @@ TILEOP void TAcos(T0 dst, T1 src, T2 tmp)
 {
     TAsinAcosImpl<false>(dst, src, tmp);
 }
+
+#define OP_TILE_OP_ASINH TASinh
+template <typename T0, typename T1, typename T2>
+TILEOP void TASinh(T0 dst, T1 src, T2 tmp)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+
+    constexpr float CONST_BRANCH_CONDITION = 0.00024414063;
+    constexpr float CONST_ZERO = 0.0f;
+    constexpr float CONST_ONE = 1.0f;
+    constexpr float CONST_NEG_ONE = -1.0f;
+    constexpr float CONST_COMPARE_VALUE_MIN = 1e-45f;
+    constexpr float CONST_COMPARE_VALUE_MAX = 3.4028235e34f;
+    constexpr float CONST_LOG_TWO_VALUE = 6.93147180559945286227e-01f;
+    
+    constexpr auto tileShapeSize =
+        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+
+    using DataTileDefine = 
+        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using MaskTileDefine =
+        pto::Tile<pto::TileType::Vec, uint8_t, tileH, 4 * tileW, pto::BLayout::RowMajor, -1, -1>;
+    DataTileDefine srcTile(dstShape3, dstShape4);
+    DataTileDefine dstTile(dstShape3, dstShape4);
+    DataTileDefine tmp0Tile(dstShape3, dstShape4);
+    DataTileDefine tmp1Tile(dstShape3, dstShape4);
+    DataTileDefine tmp2Tile(dstShape3, dstShape4);
+    DataTileDefine tmp3Tile(dstShape3, dstShape4);
+    MaskTileDefine tmp2MaskTile(dstShape3, dstShape4);
+    
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
+                auto srcOffset = GenTileOffset(src, tileOffsets);
+                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 3 * tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp2MaskTile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
+
+                pto::TABS(tmp0Tile, srcTile); // |x|
+                SyncV();
+                pto::TDIVS<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, CONST_ONE, tmp0Tile); // 1/|x|
+                SyncV();
+                pto::TMUL(tmp2Tile, tmp1Tile, tmp1Tile); // 1/(|x|)^2
+                SyncV();
+
+                pto::TADDS(tmp3Tile, tmp2Tile, CONST_ONE); // 1 + 1/(|x|)^2
+                SyncV();
+                pto::TSQRT<pto::SqrtAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile); // sqrt(1 + 1/(|x|)^2)
+                SyncV();
+                pto::TADD(tmp1Tile, tmp3Tile, tmp1Tile); // sqrt(1 + 1/(|x|)^2) + 1/|x|
+                SyncV();
+                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp0Tile, tmp1Tile); // |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
+                SyncV();
+                pto::TADD(tmp1Tile, tmp0Tile, tmp1Tile); // r = |x| + |x| / (sqrt(1 + 1/(|x|)^2) + 1/|x|)
+                SyncV();
+                pto::TADDS(tmp3Tile, tmp1Tile, CONST_ONE); // r + 1
+                SyncV();
+
+                pto::TADDS(dstTile, tmp3Tile, CONST_NEG_ONE); // clamp(r, s_min, s_max)
+                SyncV();
+                pto::TMAXS(dstTile, dstTile, CONST_COMPARE_VALUE_MIN);
+                SyncV();
+                pto::TMINS(dstTile, dstTile, CONST_COMPARE_VALUE_MAX);
+                SyncV();
+                
+                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile); // log(r + 1)
+                SyncV();
+                pto::TMUL(tmp1Tile, tmp1Tile, tmp3Tile); // r * log(r + 1)
+                SyncV();
+                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile, dstTile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                SyncV();
+
+                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp0Tile); // log(|x|)
+                SyncV();
+                pto::TADDS(tmp3Tile, tmp3Tile, CONST_LOG_TWO_VALUE); // log(|x|) + log2
+                SyncV();
+                pto::TADD(tmp2Tile, tmp3Tile, tmp2Tile); // log(|x|) + log2 + 1/(|x|)^2
+                SyncV();
+                pto::TMIN(tmp1Tile, tmp1Tile, tmp2Tile); // min
+                SyncV();
+
+                pto::TCMPS(tmp2MaskTile, tmp0Tile, CONST_BRANCH_CONDITION, pto::CmpMode::LT);
+                SyncV();
+                pto::TSEL(tmp0Tile, tmp2MaskTile, tmp0Tile, tmp1Tile, tmp3Tile);
+                SyncV();
+                pto::TMULS(tmp1Tile, tmp0Tile, CONST_NEG_ONE);
+                SyncV();
+
+                pto::TCMPS(tmp2MaskTile, srcTile, CONST_ZERO, pto::CmpMode::GE);
+                SyncV();
+                pto::TSEL(dstTile, tmp2MaskTile, tmp0Tile, tmp1Tile, tmp3Tile);
+                SyncV();
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_ACOSH TACosh
+template <typename T0, typename T1, typename T2>
+TILEOP void TACosh(T0 dst, T1 src, T2 tmp)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+
+    constexpr float CONST_ONE = 1.0f;
+    constexpr float CONST_NEG_ONE = -1.0f;
+    constexpr float CONST_COMPARE_VALUE_MIN = 1e-45f;
+    constexpr float CONST_COMPARE_VALUE_MAX = 3.4028235e34f;
+    constexpr float CONST_LOG_TWO_VALUE = 6.93147180559945286227e-01f;
+
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+
+    constexpr auto tileShapeSize =
+        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
+    
+    using DataTileDefine =
+        pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    DataTileDefine srcTile(dstShape3, dstShape4);
+    DataTileDefine dstTile(dstShape3, dstShape4);
+    DataTileDefine tmp0Tile(dstShape3, dstShape4);
+    DataTileDefine tmp1Tile(dstShape3, dstShape4);
+    DataTileDefine tmp2Tile(dstShape3, dstShape4);
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                auto srcOffset = GenTileOffset(src, tileOffsets);
+                auto dstOffset = GenTileOffset(dst, tileOffsets);
+                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * dstTypeSize));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+
+                pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr() + dstOffset * dstTypeSize));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + tileShapeSize) * dstTypeSize));
+                pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + (dstOffset + 2 * tileShapeSize) * dstTypeSize));
+
+                pto::TADDS(tmp0Tile, srcTile, CONST_NEG_ONE); // t
+                SyncV();
+                pto::TADD(tmp1Tile, tmp0Tile, tmp0Tile); // 2t
+                SyncV();
+                pto::TMUL(tmp2Tile, tmp0Tile, tmp0Tile); // t^2
+                SyncV();
+                pto::TADD(tmp1Tile, tmp1Tile, tmp2Tile); // t^2 + 2t
+                SyncV();
+                pto::TSQRT<pto::SqrtAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile); // sqrt(t^2 + 2t)
+                SyncV();
+                pto::TADD(tmp1Tile, tmp1Tile, tmp0Tile); // t + sqrt(t^2 + 2t) = r
+                SyncV();
+                pto::TADDS(tmp2Tile, tmp1Tile, CONST_ONE); // r + 1
+                SyncV();
+
+                pto::TADDS(tmp0Tile, tmp2Tile, CONST_NEG_ONE); // clamp(r, s_min, s_max)
+                SyncV();
+                pto::TMAXS(tmp0Tile, tmp0Tile, CONST_COMPARE_VALUE_MIN);
+                SyncV();
+                pto::TMINS(tmp0Tile, tmp0Tile, CONST_COMPARE_VALUE_MAX);
+                SyncV();
+
+                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(dstTile, tmp2Tile); // log(r + 1)
+                SyncV();
+                pto::TMUL(dstTile, dstTile, tmp1Tile); // r * log(r + 1)
+                SyncV();
+                pto::TDIV<pto::DivAlgorithm::HIGH_PRECISION>(dstTile, dstTile, tmp0Tile); // r * log(r + 1) / clamp(r, s_min, s_max)
+                SyncV();
+                
+                pto::TLOG<pto::LogAlgorithm::HIGH_PRECISION>(tmp0Tile, srcTile); // log(x)
+                SyncV();
+                pto::TADDS(tmp0Tile, tmp0Tile, CONST_LOG_TWO_VALUE); // log(x) + log(2)
+                SyncV();
+                pto::TMIN(dstTile, dstTile, tmp0Tile);
+                SyncV();
+            }
+        }
+    }
+}
 #endif

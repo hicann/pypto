@@ -430,8 +430,15 @@ void OpcodeManager::RegisterVectorUnary()
     RegisterInfo(
         Opcode::OP_COSH, OpCoreType::AIV, "COSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TCosh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
-        TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_ASINH, OpCoreType::AIV, "ASINH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TASinh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_ACOSH, OpCoreType::AIV, "ACOSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TACosh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ERFC, OpCoreType::AIV, "ERFC", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TErfc", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
@@ -1438,6 +1445,8 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_COSH, "TCosh"},
     {Opcode::OP_ASIN, "TAsin"},
     {Opcode::OP_ACOS, "TAcos"},
+    {Opcode::OP_ASINH, "TASinh"},
+    {Opcode::OP_ACOSH, "TACosh"},
     {Opcode::OP_ATANH, "TAtanh"},
     {Opcode::OP_L1_TO_L0A, "TExtract"},
     {Opcode::OP_L1_TO_L0B, "TExtract"},

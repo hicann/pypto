@@ -194,6 +194,8 @@ Tensor Cosh(const Tensor& self);
 Tensor Tanh(const Tensor &operand);
 Tensor Asin(const Tensor& self);
 Tensor Acos(const Tensor& self);
+Tensor ASinh(const Tensor& self);
+Tensor ACosh(const Tensor& self);
 Tensor Atanh(const Tensor& self);
 
 Tensor Duplicate(const Tensor& operand);

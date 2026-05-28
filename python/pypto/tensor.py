@@ -730,6 +730,22 @@ class Tensor:
         return pypto.cos(self)
 
     @source_location
+    def sinh(self) -> 'Tensor':
+        return pypto.sinh(self)
+
+    @source_location
+    def cosh(self) -> 'Tensor':
+        return pypto.cosh(self)
+
+    @source_location
+    def asinh(self) -> 'Tensor':
+        return pypto.asinh(self)
+
+    @source_location
+    def acosh(self) -> 'Tensor':
+        return pypto.acosh(self)
+
+    @source_location
     def sigmoid(self) -> 'Tensor':
         return pypto.sigmoid(self)
 

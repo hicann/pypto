@@ -51,6 +51,8 @@ enum class UnaryOpType {
     ASIN,
     ACOS,
     ERF,
+    ASINH,
+    ACOSH,
 };
 
 template <UnaryOpType T>
@@ -103,6 +105,10 @@ std::string GetUnaryOpName()
             return "COS";
         case UnaryOpType::ERFC:
             return "ERFC";
+        case UnaryOpType::ASINH:
+            return "ASINH";
+        case UnaryOpType::ACOSH:
+            return "ACOSH";
         case UnaryOpType::TANH:
             return "TANH";
         case UnaryOpType::ASIN:
@@ -148,6 +154,8 @@ Opcode GetUnaryOpNameCode()
         CASE(SIN);
         CASE(COS);
         CASE(ERFC);
+        CASE(ASINH);
+        CASE(ACOSH);
         CASE(TANH);
         CASE(ASIN);
         CASE(ACOS);

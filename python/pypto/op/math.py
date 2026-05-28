@@ -1140,6 +1140,71 @@ def acos(self: Tensor) -> Tensor:
 
 
 @op_wrapper
+def asinh(input: Tensor) -> Tensor:
+    """Computes the element-wise inverse hyperbolic sine of `input`.
+
+    This function calculates the formula: `out = ln(input + sqrt(input ** 2 + 1))`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise inverse hyperbolic sine results.
+
+    See Also
+    -------
+    acosh : Element-wise inverse hyperbolic cosine function
+
+    Examples
+    --------
+    x = pypto.tensor([4], pypto.DT_FP32)
+    y = pypto.asinh(x)
+
+    Input x: [0.0      1.0      2.0      -1.0]
+    Output y:[0.0000   0.8814   1.4436   -0.8814]
+    """
+
+    return pypto_impl.ASinh(input)
+
+
+@op_wrapper
+def acosh(input: Tensor) -> Tensor:
+    """Computes the element-wise inverse hyperbolic cosine of `input`.
+
+    This function calculates the formula: `out = ln(input + sqrt(input ** 2 - 1))`.
+    The input must satisfy `input >= 1`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise inverse hyperbolic cosine results.
+
+    See Also
+    -------
+    asinh : Element-wise inverse hyperbolic sine function
+
+    Examples
+    --------
+    x = pypto.tensor([4], pypto.DT_FP32)
+    y = pypto.acosh(x)
+
+    Input x: [1.0      2.0      3.0      4.0]
+    Output y:[0.0000   1.3170   1.7627   2.0634]
+    """
+
+    return pypto_impl.ACosh(input)
+
+
+@op_wrapper
 def atanh(input: Tensor) -> Tensor:
     """Computes the element-wise inverse hyperbolic tangent of `input`.
 

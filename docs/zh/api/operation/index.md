@@ -10,9 +10,11 @@ pypto-amax
 pypto-amin
 pypto-argmax
 pypto-argmin
+pypto-acosh
 pypto-arange
 pypto-argsort
 pypto-asin
+pypto-asinh
 pypto-assemble
 pypto-atan
 pypto-atanh

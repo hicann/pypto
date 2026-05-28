@@ -310,12 +310,7 @@ __aicore__ inline constexpr size_t GetAnyAxisMergeResult()
 template <size_t shapeSize, typename Shape>
 __aicore__ inline constexpr size_t GetNonFirstAxisMergeResult()
 {
-    constexpr size_t expectSize = 5;
-    constexpr auto n1 = GetTupleElement<Shape, DIM_2ND, expectSize, 1>();
-    constexpr auto n2 = GetTupleElement<Shape, DIM_3RD, expectSize, 1>();
-    constexpr auto n3 = GetTupleElement<Shape, DIM_4TH, expectSize, 1>();
-    constexpr auto n4 = GetTupleElement<Shape, DIM_5TH, expectSize, 1>();
-    return n1 * n2 * n3 * n4;
+    return GetAnyAxisMergeResult<2, shapeSize, Shape>();
 }
 
 template <size_t shapeSize, typename Shape>

@@ -360,6 +360,12 @@ void ExecuteOpUnary(ExecuteOperationContext* ctx)
         case Opcode::OP_ACOS:
             calc::Acos(ret, iop);
             break;
+        case Opcode::OP_ASINH:
+            calc::ASinh(ret, iop);
+            break;
+        case Opcode::OP_ACOSH:
+            calc::ACosh(ret, iop);
+            break;
         case Opcode::OP_ATANH:
             calc::Atanh(ret, iop);
             break;
@@ -426,6 +432,8 @@ REGISTER_CALC_OP(OP_SINH, Opcode::OP_SINH, ExecuteOpUnary<Opcode::OP_SINH>);
 REGISTER_CALC_OP(OP_COSH, Opcode::OP_COSH, ExecuteOpUnary<Opcode::OP_COSH>);
 REGISTER_CALC_OP(OP_ASIN, Opcode::OP_ASIN, ExecuteOpUnary<Opcode::OP_ASIN>);
 REGISTER_CALC_OP(OP_ACOS, Opcode::OP_ACOS, ExecuteOpUnary<Opcode::OP_ACOS>);
+REGISTER_CALC_OP(OP_ASINH, Opcode::OP_ASINH, ExecuteOpUnary<Opcode::OP_ASINH>);
+REGISTER_CALC_OP(OP_ACOSH, Opcode::OP_ACOSH, ExecuteOpUnary<Opcode::OP_ACOSH>);
 REGISTER_CALC_OP(OP_ATANH, Opcode::OP_ATANH, ExecuteOpUnary<Opcode::OP_ATANH>);
 REGISTER_CALC_OP(OP_NEG, Opcode::OP_NEG, ExecuteOpUnary<Opcode::OP_NEG>);
 REGISTER_CALC_OP(OP_SIGN, Opcode::OP_SIGN, ExecuteOpUnary<Opcode::OP_SIGN>);

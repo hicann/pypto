@@ -18,7 +18,7 @@
 using namespace tile_fwk::test_operation;
 namespace {
 
-enum class HyperbolicTrigOp {Sinh, Cosh};
+enum class HyperbolicTrigOp {Sinh, Cosh, ASinh, ACosh};
 
 struct HyperbolicTrigOpFuncArgs : public OpFuncArgs {
     HyperbolicTrigOpFuncArgs(HyperbolicTrigOp op, const std::vector<int64_t>& viewShape, const std::vector<int64_t>& tileShape)
@@ -46,6 +46,10 @@ static inline Tensor ApplyHyperbolicTrigOp(HyperbolicTrigOp op, const Tensor& t0
             return Sinh(t0);
         case HyperbolicTrigOp::Cosh:
             return Cosh(t0);
+        case HyperbolicTrigOp::ASinh:
+            return ASinh(t0);
+        case HyperbolicTrigOp::ACosh:
+            return ACosh(t0);
         default:
             throw std::invalid_argument("Unsupported hyperbolic_trig operation");
     }
@@ -217,6 +221,38 @@ TEST_P(CoshOperationTest, TestCosh)
 {
     auto test_data = GetParam().test_data_;
     auto args = HyperbolicTrigOpFuncArgs(HyperbolicTrigOp::Cosh, GetViewShape(test_data), GetTileShape(test_data));
+    auto testCase = tile_fwk::test_operation::CreateTestCaseDesc<HyperbolicTrigOpMetaData>(GetParam(), &args);
+    tile_fwk::test_operation::TestExecutor::runTest(testCase);
+}
+
+class ASinhOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HyperbolicTrigOpMetaData> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    TestASinh, ASinhOperationTest,
+    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
+        {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims, HyperbolicTrigOpOperationExeFunc4Dims},
+        "ASinh")));
+
+TEST_P(ASinhOperationTest, TestASinh)
+{
+    auto test_data = GetParam().test_data_;
+    auto args = HyperbolicTrigOpFuncArgs(HyperbolicTrigOp::ASinh, GetViewShape(test_data), GetTileShape(test_data));
+    auto testCase = tile_fwk::test_operation::CreateTestCaseDesc<HyperbolicTrigOpMetaData>(GetParam(), &args);
+    tile_fwk::test_operation::TestExecutor::runTest(testCase);
+}
+
+class ACoshOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<HyperbolicTrigOpMetaData> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    TestACosh, ACoshOperationTest,
+    ::testing::ValuesIn(tile_fwk::test_operation::GetOpMetaData<HyperbolicTrigOpMetaData>(
+        {HyperbolicTrigOpOperationExeFunc2Dims, HyperbolicTrigOpOperationExeFunc3Dims, HyperbolicTrigOpOperationExeFunc4Dims},
+        "ACosh")));
+
+TEST_P(ACoshOperationTest, TestACosh)
+{
+    auto test_data = GetParam().test_data_;
+    auto args = HyperbolicTrigOpFuncArgs(HyperbolicTrigOp::ACosh, GetViewShape(test_data), GetTileShape(test_data));
     auto testCase = tile_fwk::test_operation::CreateTestCaseDesc<HyperbolicTrigOpMetaData>(GetParam(), &args);
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }

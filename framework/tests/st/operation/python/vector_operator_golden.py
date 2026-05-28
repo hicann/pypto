@@ -4122,6 +4122,42 @@ def gen_acos_golden(case_name: str, output: Path, case_index: int = None) -> boo
 
 
 @GoldenRegister.reg_golden_func(case_names=[
+    "TestASinh/ASinhOperationTest.TestASinh",
+])
+def gen_asinh_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0]).npu()
+        result = torch.asinh(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("ASinh", generate_wrapper, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(case_names=[
+    "TestACosh/ACoshOperationTest.TestACosh",
+])
+def gen_acosh_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0]).npu()
+        result = torch.acosh(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("ACosh", generate_wrapper, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(case_names=[
     "TestAtanh/AtanhOperationTest.TestAtanh",
 ])
 def gen_atanh_golden(case_name: str, output: Path, case_index: int = None) -> bool:
