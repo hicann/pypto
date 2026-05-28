@@ -16,6 +16,7 @@
 #include "auto_cast_checker.h"
 #include "passes/pass_log/pass_log.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 
 #define MODULE_NAME "AutoCast"
 
@@ -99,10 +100,10 @@ Status AutoCastChecker::DoPostCheck(Function& function)
 
 bool AutoCastChecker::SupportBF16(Operation* op)
 {
-    if (UNSUPPORT_BF16_OPS.count(op->GetOpcode()) > 0) {
-        return false;
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        return UNSUPPORT_BF16_ARCH35_OPS.count(op->GetOpcode()) == 0;
     }
-    return true;
+    return UNSUPPORT_BF16_OPS.count(op->GetOpcode()) == 0;
 }
 
 bool AutoCastChecker::SupportFP16(Operation* op)
