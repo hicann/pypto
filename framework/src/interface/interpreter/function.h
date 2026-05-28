@@ -1107,6 +1107,11 @@ struct FunctionInterpreter {
         for (size_t index = 0; index < iOpDataList.size(); index++) {
             if (iOpDataList[index] == nullptr) {
                 auto iop = op->GetIOperands()[index];
+                if (op->GetOpcode() == Opcode::OP_SHMEM_PUT || op->GetOpcode() == Opcode::OP_SHMEM_GET ||
+                    op->GetOpcode() == Opcode::OP_NOP) {
+                    iOpDataList[index] = AllocateDataView(frame, iop);
+                    continue;
+                }
                 if (frame.callop != nullptr) {
                     INTERPRETER_LOGI("ExecuteOperation: iop %zu is null, try to find in mixGlobalTensorDict.", index);
                     iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop);
