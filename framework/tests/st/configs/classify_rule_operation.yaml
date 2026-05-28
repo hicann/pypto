@@ -66,10 +66,6 @@ stest:
       - TestMatmul/MatmulOperationTest.TestMatmul/44
       - TestMatmul/MatmulOperationTest.TestMatmul/45
       - TestMatmul/MatmulOperationTest.TestMatmul/46
-      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/0
-      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/1
-      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/2
-      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/3
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
       # - MatmulOnBoardTest.test_mm_float32_32_512_576

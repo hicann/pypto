@@ -601,16 +601,14 @@ void CheckGmAccumulationParam(
 
     auto aMatrixValidShape = aMatrix.GetStorage()->GetDynValidShape();
     auto bMatrixValidShape = bMatrix.GetStorage()->GetDynValidShape();
-    ASSERT(
-        MatmulErrorCode::ERR_PARAM_INVALID, aMatrixValidShape.size() == SHAPE_DIM2 &&
-                                                bMatrixValidShape.size() == SHAPE_DIM2 &&
-                                                cubeTile.k.size() == MAX_K_DIM_SIZE)
-        << "The validShapes of aMatrix and bMatrix must be 2 Dim. Additionally, the K TileShape must be 3 Dim";
 
     ASSERT(
         MatmulErrorCode::ERR_PARAM_INVALID,
-        aMatrix.GetShape().size() == SHAPE_DIM2 && bMatrix.GetShape().size() == SHAPE_DIM2)
-        << "The shapes of aMatrix and bMatrix must be 2 Dim";
+        (aMatrixValidShape.size() >= SHAPE_DIM2 && aMatrixValidShape.size() <= SHAPE_DIM4) &&
+            (bMatrixValidShape.size() >= SHAPE_DIM2 && bMatrixValidShape.size() <= SHAPE_DIM4) &&
+            cubeTile.k.size() == MAX_K_DIM_SIZE)
+        << "The validShapes of aMatrix and bMatrix must be 2~4 Dim. Additionally, the K TileShape must be 3 Dim";
+
     int64_t kSizeA = attrParam.transA ? aMatrix.GetShape()[aMatrix.GetShape().size() - SHAPE_DIM2] :
                                         aMatrix.GetShape()[aMatrix.GetShape().size() - 1];
     int64_t kSizeB = attrParam.transB ? bMatrix.GetShape()[bMatrix.GetShape().size() - 1] :
@@ -1239,27 +1237,6 @@ static void SetVecTileBasedOnUbSize(DataType outType, const CubeTile& cubeTile)
     }
 }
 
-static Tensor AssembleGmAccumulationTensor(
-    DataType outType, const Tensor gmAccumulationTensor, std::vector<int64_t> outSize,
-    std::vector<SymbolicScalar> validShape, bool isCMatrixNZ)
-{
-    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, outSize.size() == SHAPE_DIM2 && validShape.size() == SHAPE_DIM2)
-        << "Both outSize and validShape must be 2-element vectors";
-
-    ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, outSize[0] != 0 && outSize[1] != 0) << "Matrix size cannot be 0";
-    Tensor assembleTensor(
-        outType, {outSize[0], outSize[1]}, "", isCMatrixNZ ? TileOpFormat::TILEOP_NZ : TileOpFormat::TILEOP_ND);
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, assembleTensor.GetStorage() != nullptr)
-        << "Can not get assembleTensor's storage";
-
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, gmAccumulationTensor.GetStorage() != nullptr)
-        << "Can not get gmAccumulationTensor's storage";
-    gmAccumulationTensor.GetStorage()->UpdateDynValidShape({validShape[0], validShape[1]});
-    assembleTensor.GetStorage()->UpdateDynValidShape({validShape[0], validShape[1]});
-    Assemble(gmAccumulationTensor, {0, 0}, assembleTensor);
-    return assembleTensor;
-}
-
 static Tensor GetGmDeterministicAccumulationTensor(std::vector<Tensor> gmPartialSums, int64_t kLoop)
 {
     ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, gmPartialSums.size() == static_cast<uint64_t>(kLoop))
@@ -1268,14 +1245,6 @@ static Tensor GetGmDeterministicAccumulationTensor(std::vector<Tensor> gmPartial
         gmPartialSums[0] = npu::tile_fwk::Add(gmPartialSums[0], gmPartialSums[kIdx]);
     }
     return gmPartialSums[0];
-}
-
-static Tensor GetGmAtomicAccumulationTensor(
-    DataType outType, Tensor gmAccumulationTensor, std::vector<Tensor> gmPartialSums, std::vector<int64_t> outSize,
-    std::vector<SymbolicScalar> validShape, bool isCMatrixNZ)
-{
-    gmAccumulationTensor = npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
-    return AssembleGmAccumulationTensor(outType, gmAccumulationTensor, outSize, validShape, isCMatrixNZ);
 }
 
 static Tensor ConstructGmAccumulationTensorGraph(
@@ -1323,9 +1292,7 @@ static Tensor ConstructGmAccumulationTensorGraph(
         gmPartialSums.emplace_back(gmPartialSum);
     }
     if (outType == DT_INT32) {
-        return GetGmAtomicAccumulationTensor(
-            outType, gmAccumulationTensor, gmPartialSums, {mSize, nSize}, {mValidShape, nValidShape},
-            attrParam.isCMatrixNZ);
+        return npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
     } else {
         return GetGmDeterministicAccumulationTensor(gmPartialSums, kLoop);
     }
@@ -1503,12 +1470,11 @@ Tensor ConstructBatchMatmulTensorGraph3D(
     Tensor result = Tensor(dataType, {batchSize, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
+    auto aValidShape3D = operand1.GetStorage()->GetDynValidShape();
+    auto bValidShape3D = operand2.GetStorage()->GetDynValidShape();
     for (int64_t bIdx = 0; bIdx < batchSize; bIdx++) {
         int64_t offsetBatchA = batchSizeA == 1 ? 0 : bIdx;
         int64_t offsetBatchB = batchSizeB == 1 ? 0 : bIdx;
-        auto aValidShape3D = operand1.GetStorage()->GetDynValidShape();
-        auto bValidShape3D = operand2.GetStorage()->GetDynValidShape();
-
         Tensor aTensorSingleBatch = View(
             operand1, {1, operand1.GetShape()[1], operand1.GetShape()[SHAPE_DIM2]},
             std::vector<SymbolicScalar>({1, aValidShape3D[1], aValidShape3D[SHAPE_DIM2]}), {offsetBatchA, 0, 0});
@@ -1557,15 +1523,14 @@ Tensor ConstructBatchMatmulTensorGraph4D(
     Tensor result = Tensor(dataType, {batchSize1, batchSize2, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, 1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
+    auto aValidShape4D = operand1.GetStorage()->GetDynValidShape();
+    auto bValidShape4D = operand2.GetStorage()->GetDynValidShape();
     for (int64_t bIdx1 = 0; bIdx1 < batchSize1; bIdx1++) {
         int64_t offsetBatchA1 = batchSizeA1 == 1 ? 0 : bIdx1;
         int64_t offsetBatchB1 = batchSizeB1 == 1 ? 0 : bIdx1;
         for (int64_t bIdx2 = 0; bIdx2 < batchSize2; bIdx2++) {
             int64_t offsetBatchA2 = batchSizeA2 == 1 ? 0 : bIdx2;
             int64_t offsetBatchB2 = batchSizeB2 == 1 ? 0 : bIdx2;
-            auto aValidShape4D = operand1.GetStorage()->GetDynValidShape();
-            auto bValidShape4D = operand2.GetStorage()->GetDynValidShape();
-
             Tensor aTensorSingleBatch = View(
                 operand1, {1, 1, operand1.GetShape()[SHAPE_DIM2], operand1.GetShape()[SHAPE_DIM3]},
                 std::vector<SymbolicScalar>({1, 1, aValidShape4D[SHAPE_DIM2], aValidShape4D[SHAPE_DIM3]}),
@@ -1603,13 +1568,206 @@ Tensor ConstructBatchMatmulTensorGraph4D(
     return result;
 }
 
-Tensor BatchMatmul(
-    DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix, const bool isTransA, const bool isTransB,
-    const bool isCMatrixNZ)
+static Tensor ConstructSingleBatchGmAccumulation(DataType outType, const Tensor& aTensor2D,
+                                                   const Tensor& bTensor2D, const MatmulAttrParam& attrParam,
+                                                   const MatmulExtendParam& extendParam, const CubeTile& cubeTile)
 {
+    auto aValidShape2D = aTensor2D.GetStorage()->GetDynValidShape();
+    auto bValidShape2D = bTensor2D.GetStorage()->GetDynValidShape();
+    
+    SymbolicScalar mValidShape = attrParam.transA ? aValidShape2D[1] : aValidShape2D[0];
+    SymbolicScalar nValidShape = attrParam.transB ? bValidShape2D[0] : bValidShape2D[1];
+    SymbolicScalar kL1TileShape = std::min(cubeTile.k[1], cubeTile.k[2]);
+    
+    int64_t mSize2D = attrParam.transA ? aTensor2D.GetShape()[1] : aTensor2D.GetShape()[0];
+    int64_t kSize2D = attrParam.transA ? aTensor2D.GetShape()[0] : aTensor2D.GetShape()[1];
+    int64_t nSize2D = attrParam.transB ? bTensor2D.GetShape()[0] : bTensor2D.GetShape()[1];
+    
+    ASSERT(MatmulErrorCode::ERR_CONFIG_TILE, kL1TileShape != 0) << "kL1TileShape can not be 0";
+    SetVecTileBasedOnUbSize(outType, cubeTile);
+    
+    Tensor gmAccumulationTensor = (outType == DT_INT32) ?
+        Full(Element(outType, static_cast<int64_t>(0)), outType, {mSize2D, nSize2D}, {mValidShape, nValidShape}) :
+        Tensor();
+    
+    std::vector<Tensor> gmPartialSums;
+    const int64_t kLoop = (kSize2D + kL1TileShape - 1) / kL1TileShape;
+    const int64_t kL1Size = std::min(kSize2D, kL1TileShape);
+    
+    for (int64_t kIdx = 0; kIdx < kLoop; ++kIdx) {
+        int64_t kValidshape = std::min(kSize2D - kL1Size * kIdx, kL1Size);
+        
+        Tensor tensorA = attrParam.transA ?
+            View(aTensor2D, {kL1Size, mSize2D}, {kValidshape, mValidShape}, {kL1Size * kIdx, 0}) :
+            View(aTensor2D, {mSize2D, kL1Size}, {mValidShape, kValidshape}, {0, kL1Size * kIdx});
+        
+        Tensor tensorB = attrParam.transB ?
+            View(bTensor2D, {nSize2D, kL1Size}, {nValidShape, kValidshape}, {0, kL1Size * kIdx}) :
+            View(bTensor2D, {kL1Size, nSize2D}, {kValidshape, nValidShape}, {kL1Size * kIdx, 0});
+        
+        MatmulGraphNodes tensorGraphNodes(tensorA.GetStorage(), tensorB.GetStorage(), gmAccumulationTensor.GetStorage());
+        Tensor gmPartialSum = ConstructTensorGraph(outType, tensorGraphNodes, attrParam, extendParam);
+        gmPartialSums.emplace_back(gmPartialSum);
+    }
+    
+    Tensor cTensor(outType, {mSize2D, nSize2D}, "batchResult2D");
+    cTensor.GetStorage()->UpdateDynValidShape({mValidShape, nValidShape});
+    
+    if (outType == DT_INT32) {
+        cTensor = npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
+    } else {
+        cTensor = GetGmDeterministicAccumulationTensor(gmPartialSums, kLoop);
+    }
+    
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, cTensor.GetStorage() != nullptr)
+        << "result cTensor must not be null";
+    
+    return cTensor;
+}
+
+static Tensor ConstructBatchGmAccumulationTensorGraph3D(
+    DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulAttrParam& attrParam,
+    const MatmulExtendParam& extendParam = {})
+{
+    auto& cubeTile = TileShape::Current().GetCubeTile();
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, aMatrix.GetStorage() != nullptr && bMatrix.GetStorage() != nullptr)
+        << "Matrix A and Matrix B must not be null";
+
+    const int64_t batchSizeA = aMatrix.GetShape()[0];
+    const int64_t batchSizeB = bMatrix.GetShape()[0];
+    const int64_t batchSize = std::max(batchSizeA, batchSizeB);
+    const int64_t mView = attrParam.transA ? aMatrix.GetShape()[SHAPE_DIM2] : aMatrix.GetShape()[1];
+    const int64_t nView = attrParam.transB ? bMatrix.GetShape()[1] : bMatrix.GetShape()[SHAPE_DIM2];
+    const int64_t kSizeA = attrParam.transA ? aMatrix.GetShape()[1] : aMatrix.GetShape()[SHAPE_DIM2];
+    const int64_t kSizeB = attrParam.transB ? bMatrix.GetShape()[SHAPE_DIM2] : bMatrix.GetShape()[1];
+
+    ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, kSizeA == kSizeB)
+        << "Matrix K dimension mismatch, kSizeA: " << kSizeA << ", kSizeB: " << kSizeB;
+
+    Tensor result = Tensor(outType, {batchSize, mView, nView});
+    auto oriVecTile = TileShape::Current().GetVecTile();
+    TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
+    auto aValidShape3D = aMatrix.GetStorage()->GetDynValidShape();
+    auto bValidShape3D = bMatrix.GetStorage()->GetDynValidShape();
+
+    for (int64_t bIdx = 0; bIdx < batchSize; ++bIdx) {
+        int64_t offsetBatchA = batchSizeA == 1 ? 0 : bIdx;
+        int64_t offsetBatchB = batchSizeB == 1 ? 0 : bIdx;
+
+        Tensor aTensorSingleBatch = View(
+            aMatrix, {1, aMatrix.GetShape()[1], aMatrix.GetShape()[SHAPE_DIM2]},
+            std::vector<SymbolicScalar>({1, aValidShape3D[1], aValidShape3D[SHAPE_DIM2]}), {offsetBatchA, 0, 0});
+        Tensor bTensorSingleBatch = View(
+            bMatrix, {1, bMatrix.GetShape()[1], bMatrix.GetShape()[SHAPE_DIM2]},
+            std::vector<SymbolicScalar>({1, bValidShape3D[1], bValidShape3D[SHAPE_DIM2]}), {offsetBatchB, 0, 0});
+
+        Tensor aTensor2D = Reshape(
+            aTensorSingleBatch, {aMatrix.GetShape()[1], aMatrix.GetShape()[SHAPE_DIM2]},
+            std::vector<SymbolicScalar>({aValidShape3D[1], aValidShape3D[SHAPE_DIM2]}));
+        Tensor bTensor2D = Reshape(
+            bTensorSingleBatch, {bMatrix.GetShape()[1], bMatrix.GetShape()[SHAPE_DIM2]},
+            std::vector<SymbolicScalar>({bValidShape3D[1], bValidShape3D[SHAPE_DIM2]}));
+
+        Tensor cTensor =
+            ConstructSingleBatchGmAccumulation(outType, aTensor2D, bTensor2D, attrParam, extendParam, cubeTile);
+
+        auto batchResultValidShape2D = cTensor.GetStorage()->GetDynValidShape();
+        Tensor batchResult3D = Reshape(
+            cTensor, {1, cTensor.GetShape()[0], cTensor.GetShape()[1]},
+            std::vector<SymbolicScalar>({1, batchResultValidShape2D[0], batchResultValidShape2D[1]}));
+        Assemble(batchResult3D, {bIdx, 0, 0}, result);
+        result.GetStorage()->UpdateDynValidShape(
+            {std::max(aValidShape3D[0], bValidShape3D[0]), batchResultValidShape2D[0], batchResultValidShape2D[1]});
+    }
+
+    TileShape::Current().SetVecTile(oriVecTile);
+    return result;
+}
+
+static Tensor ConstructBatchGmAccumulationTensorGraph4D(
+    DataType outType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulAttrParam& attrParam,
+    const MatmulExtendParam& extendParam = {})
+{
+    auto& cubeTile = TileShape::Current().GetCubeTile();
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, aMatrix.GetStorage() != nullptr && bMatrix.GetStorage() != nullptr)
+        << "Both aMatrix and bMatrix cannot get storage";
+
+    const int64_t batchSizeA1 = aMatrix.GetShape()[0];
+    const int64_t batchSizeA2 = aMatrix.GetShape()[1];
+    const int64_t batchSizeB1 = bMatrix.GetShape()[0];
+    const int64_t batchSizeB2 = bMatrix.GetShape()[1];
+    const int64_t batchSize1 = std::max(batchSizeA1, batchSizeB1);
+    const int64_t batchSize2 = std::max(batchSizeA2, batchSizeB2);
+    const int64_t mView = attrParam.transA ? aMatrix.GetShape()[SHAPE_DIM3] : aMatrix.GetShape()[SHAPE_DIM2];
+    const int64_t nView = attrParam.transB ? bMatrix.GetShape()[SHAPE_DIM2] : bMatrix.GetShape()[SHAPE_DIM3];
+    const int64_t kSizeA = attrParam.transA ? aMatrix.GetShape()[SHAPE_DIM2] : aMatrix.GetShape()[SHAPE_DIM3];
+    const int64_t kSizeB = attrParam.transB ? bMatrix.GetShape()[SHAPE_DIM3] : bMatrix.GetShape()[SHAPE_DIM2];
+
+    ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, kSizeA == kSizeB)
+        << "Matrix K dimension mismatch, kSizeA: " << kSizeA << ", kSizeB: " << kSizeB;
+
+    Tensor result = Tensor(outType, {batchSize1, batchSize2, mView, nView});
+    auto oriVecTile = TileShape::Current().GetVecTile();
+    TileShape::Current().SetVecTile({1, 1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
+    auto aValidShape4D = aMatrix.GetStorage()->GetDynValidShape();
+    auto bValidShape4D = bMatrix.GetStorage()->GetDynValidShape();
+
+    for (int64_t bIdx1 = 0; bIdx1 < batchSize1; ++bIdx1) {
+        int64_t offsetBatchA1 = batchSizeA1 == 1 ? 0 : bIdx1;
+        int64_t offsetBatchB1 = batchSizeB1 == 1 ? 0 : bIdx1;
+
+        for (int64_t bIdx2 = 0; bIdx2 < batchSize2; ++bIdx2) {
+            int64_t offsetBatchA2 = batchSizeA2 == 1 ? 0 : bIdx2;
+            int64_t offsetBatchB2 = batchSizeB2 == 1 ? 0 : bIdx2;
+
+            Tensor aTensorSingleBatch = View(
+                aMatrix, {1, 1, aMatrix.GetShape()[SHAPE_DIM2], aMatrix.GetShape()[SHAPE_DIM3]},
+                std::vector<SymbolicScalar>({1, 1, aValidShape4D[SHAPE_DIM2], aValidShape4D[SHAPE_DIM3]}),
+                {offsetBatchA1, offsetBatchA2, 0, 0});
+            Tensor bTensorSingleBatch = View(
+                bMatrix, {1, 1, bMatrix.GetShape()[SHAPE_DIM2], bMatrix.GetShape()[SHAPE_DIM3]},
+                std::vector<SymbolicScalar>({1, 1, bValidShape4D[SHAPE_DIM2], bValidShape4D[SHAPE_DIM3]}),
+                {offsetBatchB1, offsetBatchB2, 0, 0});
+
+            Tensor aTensor2D = Reshape(
+                aTensorSingleBatch, {aMatrix.GetShape()[SHAPE_DIM2], aMatrix.GetShape()[SHAPE_DIM3]},
+                std::vector<SymbolicScalar>({aValidShape4D[SHAPE_DIM2], aValidShape4D[SHAPE_DIM3]}));
+            Tensor bTensor2D = Reshape(
+                bTensorSingleBatch, {bMatrix.GetShape()[SHAPE_DIM2], bMatrix.GetShape()[SHAPE_DIM3]},
+                std::vector<SymbolicScalar>({bValidShape4D[SHAPE_DIM2], bValidShape4D[SHAPE_DIM3]}));
+
+            Tensor batchResult2D =
+                ConstructSingleBatchGmAccumulation(outType, aTensor2D, bTensor2D, attrParam, extendParam, cubeTile);
+
+            auto batchResultValidShape2D = batchResult2D.GetStorage()->GetDynValidShape();
+            Tensor batchResult4D = Reshape(
+                batchResult2D, {1, 1, batchResult2D.GetShape()[0], batchResult2D.GetShape()[1]},
+                std::vector<SymbolicScalar>({1, 1, batchResultValidShape2D[0], batchResultValidShape2D[1]}));
+            Assemble(batchResult4D, {bIdx1, bIdx2, 0, 0}, result);
+            result.GetStorage()->UpdateDynValidShape(
+                {std::max(aValidShape4D[0], bValidShape4D[0]), std::max(aValidShape4D[1], bValidShape4D[1]),
+                 batchResultValidShape2D[0], batchResultValidShape2D[1]});
+        }
+    }
+
+    TileShape::Current().SetVecTile(oriVecTile);
+    return result;
+}
+
+Tensor BatchMatmul(DataType dataType, const Tensor &aMatrix, const Tensor &bMatrix, const bool isTransA,
+    const bool isTransB, const bool isCMatrixNZ) {
     MatmulAttrParam attrParam(isTransA, isTransB, isCMatrixNZ);
     CheckMatmulOperands(dataType, aMatrix, bMatrix, attrParam);
     CheckABatchMulB(aMatrix, bMatrix);
+    auto& cubeTile = TileShape::Current().GetCubeTile();
+    if (cubeTile.enableSplitK) {
+        MATMUL_LOGD("BatchMatmul: Using GM accumulation mode.");
+        if (aMatrix.GetShape().size() == SHAPE_DIM4) {
+            return ConstructBatchGmAccumulationTensorGraph4D(dataType, aMatrix, bMatrix, attrParam);
+        } else {
+            return ConstructBatchGmAccumulationTensorGraph3D(dataType, aMatrix, bMatrix, attrParam);
+        }
+    }
     if (aMatrix.GetShape().size() == SHAPE_DIM4) {
         return ConstructBatchMatmulTensorGraph4D(dataType, aMatrix, bMatrix, attrParam);
     } else {
