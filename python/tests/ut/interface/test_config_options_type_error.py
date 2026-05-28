@@ -45,7 +45,7 @@ def assert_option_type_error(setter, pattern):
         (
             lambda: pypto.set_host_options(compile_monitor_enable="true"),
             "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
-            "Option 'host.compile_monitor_enable' has invalid type. Expected bool, but got string",
+            "Option 'host.compile_monitor_enable' has invalid type. Expected int64, but got string",
         ),
         (
             lambda: pypto.set_host_options(compile_timeout="100"),

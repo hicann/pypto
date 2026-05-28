@@ -479,7 +479,7 @@ def moe_fusion_pto(gate_layer, hidden_states, share_layer, top_k, renormalize, t
 
 
 def main():
-    pypto.set_host_options(compile_monitor_enable=True,
+    pypto.set_host_options(compile_monitor_enable=1,
         compile_timeout=10,
         compile_timeout_stage=5,
         compile_monitor_print_interval=2)

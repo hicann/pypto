@@ -44,9 +44,9 @@ def test_host_option():
     pypto.set_host_options(compile_stage=pypto.CompStage.EXECUTE_GRAPH)
     host_option = pypto.get_host_options()
     assert host_option["compile_stage"] == pypto.CompStage.EXECUTE_GRAPH.value
-    pypto.set_host_options(compile_monitor_enable=False)
+    pypto.set_host_options(compile_monitor_enable=0)
     host_option = pypto.get_host_options()
-    assert host_option["compile_monitor_enable"] == False
+    assert host_option["compile_monitor_enable"] == 0
     pypto.set_host_options(compile_monitor_print_interval=123)
     host_option = pypto.get_host_options()
     assert host_option["compile_monitor_print_interval"] == 123

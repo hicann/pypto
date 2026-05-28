@@ -229,8 +229,7 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
 
 
 def set_host_options(*, compile_stage: Optional[CompStage] = None,
-                     compile_monitor_enable: Optional[bool] = None,
-                     compile_monitor_pass_detail_enable: Optional[bool] = None,
+                     compile_monitor_enable: Optional[int] = None,
                      compile_timeout: Optional[int] = None,
                      compile_timeout_stage: Optional[int] = None,
                      compile_monitor_print_interval: Optional[int] = None) -> None:
@@ -242,11 +241,9 @@ def set_host_options(*, compile_stage: Optional[CompStage] = None,
     compile_stage : CompStage
         Control the compilation phase.
 
-    compile_monitor_enable : bool
-        Control whether to enable compilation progress printing during the compilation phase.
-
-    compile_monitor_pass_detail_enable : bool
-        Control whether to print per-pass timing details during the compilation phase.
+    compile_monitor_enable : int
+        Control compiler monitor mode. 0 disables monitor, 1 enables monitor without pass details,
+        2 enables monitor with pass details.
 
     compile_timeout : int
         Control the timeout duration for the entire compilation process.

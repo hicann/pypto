@@ -1170,10 +1170,9 @@ private:
                 compileStageAllComplete = (stageValue == CS_ALL_COMPLETE);
             }
             if (host_options.contains("compile_monitor_enable")) {
-                compileMonitorEnable = host_options["compile_monitor_enable"].cast<bool>();
-            }
-            if (host_options.contains("compile_monitor_pass_detail_enable")) {
-                compileMonitorPassDetailEnable = host_options["compile_monitor_pass_detail_enable"].cast<bool>();
+                int compileMonitorMode = host_options["compile_monitor_enable"].cast<int>();
+                compileMonitorEnable = compileMonitorMode > 0;
+                compileMonitorPassDetailEnable = compileMonitorMode == 2;
             }
             if (host_options.contains("compile_monitor_print_interval")) {
                 intervalSec = host_options["compile_monitor_print_interval"].cast<int>();
@@ -1264,7 +1263,7 @@ private:
     bool isDebugMode{false};
     bool compileStageAllComplete{true};
     LaunchMode launchMode_{LaunchMode::DEVICE_RT};
-    bool compileMonitorEnable{true};
+    bool compileMonitorEnable{false};
     bool compileMonitorPassDetailEnable{false};
     int intervalSec{60};
     double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};

@@ -337,19 +337,13 @@
                     }
                 },
                 "compile_monitor_enable": {
-                    "type": "boolean",
-                    "default": false,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2,
+                    "default": 0,
                     "label": {
-                        "zh": "控制编译阶段是否开启编译过程进度打印",
-                        "en": "Control whether to enable compilation progress printing during the compilation phase."
-                    }
-                },
-                "compile_monitor_pass_detail_enable": {
-                    "type": "boolean",
-                    "default": false,
-                    "label": {
-                        "zh": "控制编译阶段是否打印单个Pass耗时明细",
-                        "en": "Control whether to print per-pass timing details during compilation."
+                        "zh": "控制编译阶段监控模式，0表示关闭，1表示开启编译监控但关闭Pass明细，2表示开启编译监控和Pass明细",
+                        "en": "Control compiler monitor mode: 0 disables monitor, 1 enables monitor without pass details, 2 enables monitor with pass details."
                     }
                 },
                 "compile_monitor_print_interval": {
