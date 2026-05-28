@@ -123,10 +123,9 @@ void HostProf::HostProfReportTensorInfo(const uint64_t& endTime) const
         MACHINE_LOGW("Op [%s] is null", opName_.c_str());
         return;
     }
-    uint32_t iONums = profFunction_->inCasts_.size() + profFunction_->outCasts_.size();
+    uint32_t iONums = inputsSize_ + oDeviceTensorData_.size();
     MACHINE_LOGD(
-        "Op [%s] with inputs[%zu], outputs[%zu]", opName_.c_str(), profFunction_->inCasts_.size(),
-        profFunction_->outCasts_.size());
+        "Op [%s] with inputs[%u], outputs[%zu]", opName_.c_str(), inputsSize_, oDeviceTensorData_.size());
     uint32_t groupNums = iONums / MSPF_GE_TENSOR_DATA_NUM;
     uint32_t modulus = iONums % MSPF_GE_TENSOR_DATA_NUM;
     for (uint32_t i = 0; i < groupNums; i++) {
@@ -160,26 +159,24 @@ void HostProf::ReportTensoInfo(const uint32_t& groupId, const uint32_t mods, con
 void HostProf::PackTensorInfo(MspfTensorInfo* profTensorData, const uint32_t groupId, const uint32_t modId) const
 {
     uint32_t iOIdx = groupId * MSPF_GE_TENSOR_DATA_NUM + modId;
-    std::shared_ptr<LogicalTensor> iOTensor;
+    const npu::tile_fwk::dynamic::DeviceTensorData* iOTensor;
     std::stringstream iOtensorInfo;
     if (inputsSize_ > iOIdx) {
+        iOTensor = &iDeviceTensorData_[iOIdx];
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_INPUT;
-        profTensorData->tensorData[modId].format = static_cast<uint32_t>(profFunction_->inCasts_[iOIdx]->Format());
-        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(FunctionUtils::GetNodeType(
-            *(profFunction_->inCasts_[iOIdx]), profFunction_->inCasts_[iOIdx]->BelongFunction()));
-        iOTensor = profFunction_->inCasts_[iOIdx];
+        profTensorData->tensorData[modId].format = kFormatNd;
+        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(DataType2CannType(iOTensor->GetDataType()));
         iOtensorInfo << "Input " << iOIdx << " shape: ";
     } else {
         auto outputIdx = iOIdx - inputsSize_;
+        iOTensor = &oDeviceTensorData_[outputIdx];
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_OUTPUT;
-        profTensorData->tensorData[modId].format = static_cast<uint32_t>(profFunction_->outCasts_[outputIdx]->Format());
-        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(FunctionUtils::GetNodeType(
-            *(profFunction_->outCasts_[outputIdx]), profFunction_->outCasts_[outputIdx]->BelongFunction()));
-        iOTensor = profFunction_->outCasts_[outputIdx];
+        profTensorData->tensorData[modId].format = kFormatNd;
+        profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(DataType2CannType(iOTensor->GetDataType()));
         iOtensorInfo << "output " << outputIdx << " shape: ";
     }
-    size_t shapeLen = iOTensor->shape.size();
-    if (iOTensor->shape.size() > MSPF_GE_TENSOR_DATA_SHAPE_LEN) {
+    size_t shapeLen = iOTensor->GetShape().size();
+    if (shapeLen > MSPF_GE_TENSOR_DATA_SHAPE_LEN) {
         MACHINE_LOGW(
             "Op [%s] tensor[%u] size[%zu] len over [%d]", opName_.c_str(), iOIdx, shapeLen,
             MSPF_GE_TENSOR_DATA_SHAPE_LEN);
@@ -187,8 +184,8 @@ void HostProf::PackTensorInfo(MspfTensorInfo* profTensorData, const uint32_t gro
     }
 
     for (size_t j = 0; j < shapeLen; j++) {
-        profTensorData->tensorData[modId].shape[j] = iOTensor->shape[j];
-        iOtensorInfo << iOTensor->shape[j] << " ";
+        profTensorData->tensorData[modId].shape[j] = iOTensor->GetShape()[j];
+        iOtensorInfo << iOTensor->GetShape()[j] << " ";
     }
     for (size_t j = shapeLen; j < MSPF_GE_TENSOR_DATA_SHAPE_LEN; j++) {
         profTensorData->tensorData[modId].shape[j] = 0;
@@ -286,7 +283,25 @@ void HostProf::HostProfReportCacheTaskInfo(
     free(buffer);
 }
 
-void HostProf::SetProfFunction(Function* function)
+void HostProf::GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors) {
+    auto directions = profFunction_->GetDyndevAttribute()->startArgsDirectionList;
+    iDeviceTensorData_.clear();
+    oDeviceTensorData_.clear();
+    if (tensors.size() != directions.size()) {
+        MACHINE_LOGW("Direction size != tensorData size not support to msprof");
+        return;
+    }
+    for (size_t idx = 0; idx < directions.size(); idx++) {
+        if (directions[idx] == ParamDirection ::IN || directions[idx] == ParamDirection ::INOUT) {
+            iDeviceTensorData_.emplace_back(tensors[idx]);
+        } else if (directions[idx] == ParamDirection ::OUT) {
+            oDeviceTensorData_.emplace_back(tensors[idx]);
+        }
+    }  
+}
+
+
+void HostProf::SetProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors)
 {
     if (function == nullptr) {
         MACHINE_LOGW("Function is invalid, please check function");
@@ -295,6 +310,7 @@ void HostProf::SetProfFunction(Function* function)
     // current using functionHashId as opName;
     opName_ = PROFILING_PREFIX + function->GetOriginalRawName();
     profFunction_ = function;
-    inputsSize_ = profFunction_->inCasts_.size();
+    GetIOTensor(tensors);
+    inputsSize_ = iDeviceTensorData_.size();
 }
 } // namespace npu::tile_fwk

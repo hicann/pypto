@@ -14,6 +14,7 @@
 #include "adapter/api/acl_define.h"
 #include "interface/function/function.h"
 #include "interface/interpreter/raw_tensor_data.h"
+#include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk {
 struct CacheTaskInfo {
@@ -36,7 +37,7 @@ public:
     void HostProfReportNodeInfo(const uint64_t& endTime, const uint32_t blockDim, const uint16_t taskType) const;
     void HostProfReportContextInfo(const uint64_t& endTime) const;
     void HostProfReportCacheTaskInfo(const AclRtStream stream, const uint32_t numBlocks, const uint32_t taskType) const;
-    void SetProfFunction(Function* function);
+    void SetProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors = {});
     static uint64_t GetProfSwitch();
     static uint32_t GetProfType();
     static void RegHostProf();
@@ -50,10 +51,13 @@ private:
     static bool IsCacheOpInfoEnable(const AclRtStream stream);
     static void BuildCacheTensorInfo(CacheTaskInfo* taskInfo);
     static void BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& tensorInfo, MspfTensorData& tensorData);
+    void GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors);
     std::string opName_;
     Function* profFunction_{nullptr};
     uint32_t inputsSize_;
     static uint64_t profSwitch_; // prof level
     static uint32_t profType_;   // prof open/close
+    std::vector<npu::tile_fwk::dynamic::DeviceTensorData> iDeviceTensorData_;
+    std::vector<npu::tile_fwk::dynamic::DeviceTensorData> oDeviceTensorData_;
 };
 } // namespace npu::tile_fwk

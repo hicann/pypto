@@ -93,9 +93,9 @@ DeviceRunner& DeviceRunner::Get()
     return runner;
 }
 
-void DeviceRunner::SetHostProfFunction(Function* function)
+void DeviceRunner::SetHostProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors)
 {
-    hostProf_.SetProfFunction(function);
+    hostProf_.SetProfFunction(function, tensors);
 }
 
 uint32_t DeviceRunner::GetHostProfType() const

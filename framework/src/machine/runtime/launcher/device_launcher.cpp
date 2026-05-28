@@ -453,12 +453,13 @@ int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode)
 }
 
 int DeviceLauncher::LaunchAicpuKernel(
-    RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function)
+    RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function,
+    const std::vector<DeviceTensorData>& tensors)
 {
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     auto schedStream = GetStreamContext().GetScheStream();
     auto& devRunner = DeviceRunner::Get();
-    devRunner.SetHostProfFunction(function);
+    devRunner.SetHostProfFunction(function, tensors);
     int ret = 0;
     auto args = (AiCpuArgs*)rtArgs.args;
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);

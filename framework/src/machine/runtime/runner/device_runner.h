@@ -35,7 +35,7 @@ public:
     int RegisterKernelBin(void** hdl, const std::vector<uint8_t>& binBuffer);
     int RegisterKernelBin(const std::vector<uint8_t>& binBuffer);
 
-    void SetHostProfFunction(Function* function);
+    void SetHostProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors = {});
     uint32_t GetHostProfType() const;
     void SetCaptureFlag(bool isCapture) { isCapture_ = isCapture; }
 

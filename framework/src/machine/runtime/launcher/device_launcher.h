@@ -434,7 +434,8 @@ public:
     static void GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel);
     static void AddAicpuStream(AclMdlRI& rtModel);
     static int LaunchAicpuKernel(
-        RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function);
+        RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function,
+        const std::vector<DeviceTensorData>& tensors = {});
     static int LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode);
     static int LaunchAicoreKernel(
         AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg,
