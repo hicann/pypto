@@ -35,8 +35,7 @@ TILEOP void SendToRoutingExpert(
     int32_t expertTblSize = static_cast<int32_t>(tableRawShape0) * static_cast<int32_t>(tableRawShape1);
     int32_t lenBurst = AlignUp<int32_t>(expertTblSize * sizeof(int32_t), 32) / 32;
     copy_gm_to_ubuf(expertTableUb, expertTable, 0, 1, lenBurst, 0, 0);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_S, EVENT_ID0);
     __gm__ CommContext* winContext = (__gm__ CommContext*)(hcclContext[groupIndex]);
     uint64_t localUsrRankId = static_cast<uint64_t>(winContext->rankId);
     const int32_t hOutSize = axisH * sizeof(T);                   // 如有量化，需要量化后通信
@@ -46,8 +45,7 @@ TILEOP void SendToRoutingExpert(
     int32_t combineInfoOffset = 32;
     for (int32_t row = tRowOffset; row < tRowOffset + tRowShape; ++row) {
         copy_gm_to_ubuf(tokenBuffer, token + row * axisH, 0, 1, hOutSize / 32, 0, 0);
-        set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_S, EVENT_ID0);
         for (int32_t col = tColOffset; col < tColOffset + tColShape; ++col) {
             tmpTokenBuffer[tokenQuantAlign32 + combineInfoOffset] = static_cast<int32_t>(localUsrRankId);
             tmpTokenBuffer[tokenQuantAlign32 + (combineInfoOffset + 1)] = row;
@@ -66,14 +64,11 @@ TILEOP void SendToRoutingExpert(
                         static_cast<uint64_t>(shmemDataRawShape3) +
                     static_cast<uint64_t>(remoteExpertOffset) * static_cast<uint64_t>(shmemDataRawShape3) +
                     static_cast<uint64_t>(tokenOffset) * static_cast<uint64_t>(shmemDataLength));
-            set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE3, EVENT_ID0);
             copy_ubuf_to_gm(remoteShmemDataAddr, tokenBuffer, 0, 1, shmemDataLength * sizeof(T) / 32, 0, 0);
-            set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
         }
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
     }
 }
 
@@ -98,8 +93,7 @@ TILEOP void SendToSharedExpert(
     __ubuf__ int32_t* tmpTokenBuffer = reinterpret_cast<__ubuf__ int32_t*>(tokenBuffer); // 类型转换使用
     for (int32_t row = tokenOffset0; row < tokenOffset0 + tileRowShape; ++row) {
         copy_gm_to_ubuf(tokenBuffer, token + row * axisH, 0, 1, hOutSize / 32, 0, 0);
-        set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_S, EVENT_ID0);
         tmpTokenBuffer[tokenQuantAlign32] =
             localUsrRankId; // 暂时先不考虑 A3 数组，前端大小可以暂时用 token[1],暂不修改
         tmpTokenBuffer[tokenQuantAlign32 + 1] = row;
@@ -110,13 +104,10 @@ TILEOP void SendToSharedExpert(
         GM_ADDR remoteShmemDataAddr = remoteShmemBaseAddr +
                                       localUsrRankId * shmemDataRawShape2 * shmemDataRawShape3 * sizeof(T) +
                                       row * shmemDataRawShape3 * sizeof(T);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE3, EVENT_ID0);
         copy_ubuf_to_gm(remoteShmemDataAddr, tokenBuffer, 0, 1, shmemDataRawShape3 * sizeof(T) / 32, 0, 0);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
     }
 }
 
@@ -131,11 +122,9 @@ TILEOP void CopyToLocalExpert(
 
     for (int32_t row = tokenOffset0; row < tokenOffset0 + tileRowShape; ++row) {
         copy_gm_to_ubuf(tokenBuffer, token + row * axisH, 0, 1, hOutSize / 32, 0, 0);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
         copy_ubuf_to_gm(expandX + row * axisH, tokenBuffer, 0, 1, hOutSize / 32, 0, 0);
-        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
     }
 }
 
@@ -155,8 +144,7 @@ TILEOP void DispatchSetFlag(
     constexpr int32_t expertTblSize = bs * topK;
     constexpr int32_t lenBurst = AlignUp<int32_t>(expertTblSize * sizeof(int32_t), 32) / 32;
     copy_gm_to_ubuf(expertTableUb, expertTable, 0, 1, lenBurst, 0, 0);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_S, EVENT_ID0);
     for (int32_t rankId = shmemFlagOffset0; rankId < shmemFlagOffset0 + rankShape; ++rankId) {
         for (int32_t dstExpertId = shmemFlagOffset1; dstExpertId < shmemFlagOffset1 + expertShape; ++dstExpertId) {
             __gm__ int32_t* remoteFlagBaseAddr = MapVirtualAddr<T>(hcclContext, shmemFlagBaseAddr, rankId);
@@ -168,11 +156,9 @@ TILEOP void DispatchSetFlag(
             statusTensor[dstExpertId * 8] = 1;
             statusTensor[dstExpertId * 8 + 1] =
                 CalcOccurrencesVector(expertTableUb, remoteExpertId, expertTblSize, expertBuffer);
-            set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_V, PIPE_MTE3, EVENT_ID0);
             copy_ubuf_to_gm(shmemFlagWriteAddr, statusTensor + dstExpertId * 8, 0, 1, 1, 0, 0);
-            set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
         }
     }
 }
@@ -180,19 +166,13 @@ TILEOP void DispatchSetFlag(
 TILEOP void CopyOutRecvTokenCnt(
     GM_ADDR outRecvTokenCntAddr, UB_ADDR recvTokenCntAddr, uint32_t tileIndex, uint32_t totalTileNum)
 {
-    DataCopyParams dataCopyParams;
-    dataCopyParams.sid = 0;
-    dataCopyParams.nBurst = 1; // 搬运次数
-    dataCopyParams.lenBurst = 1;
-    dataCopyParams.srcStride = 0;
-    dataCopyParams.dstStride = 0;
+    DataCopyParams dataCopyParams = {0, 1, 1, 0, 0};
 
     GM_ADDR outRecvTokenCntStartAddr = outRecvTokenCntAddr + tileIndex * 512; // 本 op 偏移地址, 间隔512B
     copy_ubuf_to_gm(
         outRecvTokenCntStartAddr, recvTokenCntAddr, dataCopyParams.sid, dataCopyParams.nBurst, dataCopyParams.lenBurst,
         dataCopyParams.srcStride, dataCopyParams.dstStride);
-    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
 }
 
 template <typename T>
@@ -263,22 +243,8 @@ TILEOP void FFNSched(
     uint32_t flagShmemShape3, __gm__ int64_t* hcclContext)
 {
     __gm__ CommContext* winContext = (__gm__ CommContext*)(hcclContext[groupIndex]);
-    DispatchInfo dispatchInfo = {
-        tileIndex,
-        groupIndex,
-        0,
-        0,
-        rankShape,
-        static_cast<int32_t>(flagShmemOffset2),
-        0,
-        0,
-        0,
-        0,
-        totalTileNum,
-        shareRankCnt,
-        expertNum,
-        static_cast<int32_t>(winContext->rankNum),
-        static_cast<int32_t>(flagShmemOffset1)};
+    DispatchInfo dispatchInfo = {tileIndex, groupIndex, 0, 0, rankShape, static_cast<int32_t>(flagShmemOffset2), 0, 0, 0, 0,
+    totalTileNum, shareRankCnt, expertNum, static_cast<int32_t>(winContext->rankNum), static_cast<int32_t>(flagShmemOffset1)};
 
     __ubuf__ uint8_t* tmpUb = reinterpret_cast<__ubuf__ uint8_t*>(buffer);
     uint32_t offset = 0;
@@ -302,21 +268,15 @@ TILEOP void ReadRecvTokenCnt(
     __ubuf__ uint32_t* recvTokenCnt, __gm__ uint32_t* src, DispatchInfo& dispatchInfo, __gm__ int64_t* hcclContext,
     uint32_t tileCnt)
 {
-    DataCopyParams gmToUbParams;
-    gmToUbParams.sid = 0;
-    gmToUbParams.nBurst = dispatchInfo.tileIndex;
-    gmToUbParams.lenBurst = 1;
-    gmToUbParams.srcStride = 512 / 32 - 1; // 每个tileOp间隔512B
-    gmToUbParams.dstStride = 0;
+    uint16_t srcStride = 512 / 32 - 1; // 每个tileOp间隔512B
+    DataCopyParams gmToUbParams = {0,static_cast<uint16_t>(dispatchInfo.tileIndex),1,static_cast<uint16_t>(srcStride),0};
 
     GM_ADDR thisTileStartSrcAddr = reinterpret_cast<GM_ADDR>(src);
-    set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE2, EVENT_ID0);
     copy_gm_to_ubuf(
         recvTokenCnt, thisTileStartSrcAddr, gmToUbParams.sid, gmToUbParams.nBurst, gmToUbParams.lenBurst,
         gmToUbParams.srcStride, gmToUbParams.dstStride);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_S, EVENT_ID0);
 }
 
 template <typename T, int32_t expertShape>
@@ -337,29 +297,20 @@ TILEOP void FFNValidCnt(
         for (int32_t rankId = 0; rankId < shmemFlagRawShape0; ++rankId) {
             uint32_t thisRankFlagOffset = expertId * shmemFlagRawShape0 * 512 + rankId * 512;
             GM_ADDR winFlagReadStartAddr = (GM_ADDR)winFlagBaseAddr + thisRankFlagOffset;
-            DataCopyParams dataCopyParams;
-            dataCopyParams.sid = 0;
-            dataCopyParams.nBurst = 1;
-            dataCopyParams.lenBurst = 1;
-            dataCopyParams.srcStride = 15;
-            dataCopyParams.dstStride = 0;
-            set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+            DataCopyParams dataCopyParams = {0, 1, 1, 15, 0};
+            PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE2, EVENT_ID0);
             copy_gm_to_ubuf(
                 flag, winFlagReadStartAddr, dataCopyParams.sid, dataCopyParams.nBurst, dataCopyParams.lenBurst,
                 dataCopyParams.srcStride, dataCopyParams.dstStride);
-            set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-            wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_S, EVENT_ID0);
             receiveToken += flag[1];
         }
         pipe_barrier(PIPE_ALL);
         receiveCnt[offsetResult++] = receiveToken;
     }
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE3, EVENT_ID0);
     TileOp::UBCopyOut<int32_t, 1, expertShape, expertShape, expertShape>(validCnt + shmemFlagOffset1, receiveCnt);
-    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
 }
 
 template <typename T>
@@ -397,19 +348,15 @@ TILEOP void CombineInfoCopyOut(
         uint32_t shmemColBurst = shmemLength * sizeof(T) / sizeof(int32_t);
         __gm__ int32_t* combineExpertAddr = reinterpret_cast<__gm__ int32_t*>(thisRankExpertCombineAddr);
         for (int i = 0; i < thisRankSendTokenCnt; i++) {
-            set_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE2, EVENT_ID0);
             TileOp::UBCopyIn<int32_t, 1, MOE_COMBINE_INFO_NUM, 8, MOE_COMBINE_INFO_NUM>(
                 buffer, combineExpertAddr + i * shmemColBurst);
-            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
             TileOp::UBCopyOut<int32_t, 1, MOE_COMBINE_INFO_NUM, MOE_COMBINE_INFO_NUM, 8>(
                 thisExpertCombineAddr + i * MOE_COMBINE_INFO_NUM, buffer);
-            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
         }
-        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+        PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
         tokenCnt += thisRankSendTokenCnt;
     }
 }
@@ -593,22 +540,9 @@ TILEOP void FFNBatching(
     uint32_t shmemDataShape0, uint32_t shmemDataShape1, uint32_t shmemDataShape2, uint32_t shmemDataShape3,
     __gm__ int64_t* hcclContext)
 {
-    DispatchInfo dispatchInfo = {
-        tileIndex,
-        groupIndex,
-        0,
-        0,
-        rankShape,
-        static_cast<int32_t>(shmemDataOffset1),
-        bs,
-        0,
-        axisH,
-        0,
-        totalTileNum,
-        shareRankCnt,
-        static_cast<int32_t>(shmemDataShape2),
-        static_cast<int32_t>(shmemDataShape0),
-        static_cast<int32_t>(shmemDataOffset2)};
+    DispatchInfo dispatchInfo = { tileIndex, groupIndex, 0, 0, rankShape, static_cast<int32_t>(shmemDataOffset1),
+    bs, 0, axisH, 0, totalTileNum, shareRankCnt, static_cast<int32_t>(shmemDataShape2),
+    static_cast<int32_t>(shmemDataShape0), static_cast<int32_t>(shmemDataOffset2)};
     int32_t shmemLength = AlignUp<int32_t>(axisH, 512) + 512;
 
     MoeRankCopyOut<T, T>(
@@ -626,22 +560,9 @@ TILEOP void FFNCombineInfo(
     uint32_t shmemDataOffset1, uint32_t shmemDataOffset2, uint32_t shmemDataOffset3, uint32_t shmemDataShape0,
     uint32_t shmemDataShape1, uint32_t shmemDataShape2, uint32_t shmemDataShape3, __gm__ int64_t* hcclContext)
 {
-    DispatchInfo dispatchInfo = {
-        tileIndex,
-        groupIndex,
-        0,
-        0,
-        rankShape,
-        static_cast<int32_t>(shmemDataOffset1),
-        bs,
-        0,
-        axisH,
-        0,
-        totalTileNum,
-        shareRankCnt,
-        static_cast<int32_t>(shmemDataShape2),
-        static_cast<int32_t>(shmemDataShape0),
-        static_cast<int32_t>(shmemDataOffset2)};
+    DispatchInfo dispatchInfo = {tileIndex, groupIndex, 0, 0, rankShape, static_cast<int32_t>(shmemDataOffset1),
+    bs, 0, axisH, 0, totalTileNum, shareRankCnt, static_cast<int32_t>(shmemDataShape2), 
+    static_cast<int32_t>(shmemDataShape0), static_cast<int32_t>(shmemDataOffset2)};
     int32_t shmemLength = AlignUp<int32_t>(axisH, 512) + 512;
 
     MoeRankCopyOut<int32_t, T>(

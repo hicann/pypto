@@ -28,16 +28,16 @@
 
 namespace TileOp::Distributed {
 
-// ---------------------------------------------------------------------------
-// Helper macro for getting GM layout info (stride and offset)
-// ---------------------------------------------------------------------------
-#define GET_LAYOUT_INFO(tensor, layoutName, s0, s1, s2, offset, coordType, coord) \
-    const auto layoutName = tensor.GetLayout();                                   \
-    auto s0 = layoutName.template GetStrideDim<DIM_1ST, MAX_DIMS>();              \
-    auto s1 = layoutName.template GetStrideDim<DIM_2ND, MAX_DIMS>();              \
-    auto s2 = layoutName.template GetStrideDim<DIM_3RD, MAX_DIMS>();              \
-    auto offset = layoutName.template GetGmOffset<coordType, MAX_DIMS>(coord)
-
+template <typename TensorType>
+TILEOP void GetStrideInfo(const TensorType& tensor, uint64_t strides[MAX_DIMS])
+{
+    const auto layout = tensor.GetLayout();
+    strides[0] = layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    strides[1] = layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    strides[2] = layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    strides[4] = layout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    strides[5] = layout.template GetStrideDim<DIM_5TH, MAX_DIMS>();
+}
 // ---------------------------------------------------------------------------
 // Shmem tensor/tile type aliases
 // ---------------------------------------------------------------------------
@@ -349,8 +349,13 @@ TILEOP void ShmemPut(
     uint32_t srcValidShape4, uint32_t ownerRank, __gm__ int64_t* hcclContext)
 {
     static_assert(T1::FORMAT == Hardware::GM && T2::FORMAT == Hardware::GM);
-    GET_LAYOUT_INFO(src, srcLayout, srcStride0, srcStride1, srcStride2, srcGmOffset, C1, srcCoordinate);
-    GET_LAYOUT_INFO(dst, dstLayout, dstStride0, dstStride1, dstStride2, dstGmOffset, C2, dstCoordinate);
+    uint64_t srcStrides[MAX_DIMS];
+    GetStrideInfo(src, srcStrides);
+    auto srcGmOffset = src.GetLayout().template GetGmOffset<C1, MAX_DIMS>(srcCoordinate);
+
+    uint64_t dstStrides[MAX_DIMS];
+    GetStrideInfo(dst, dstStrides);
+    auto dstGmOffset = dst.GetLayout().template GetGmOffset<C2, MAX_DIMS>(dstCoordinate);
 
     if constexpr (atomicType == AtomicType::ADD) {
         SetAttomicType<ShmemType>();
@@ -360,8 +365,8 @@ TILEOP void ShmemPut(
     for (LoopVar index0 = 0; index0 < srcValidShape0; ++index0) {
         for (LoopVar index1 = 0; index1 < srcValidShape1; ++index1) {
             for (LoopVar index2 = 0; index2 < srcValidShape2; ++index2) {
-                auto srcOffset = index0 * srcStride0 + index1 * srcStride1 + index2 * srcStride2;
-                auto dstOffset = index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2;
+                auto srcOffset = index0 * srcStrides[0] + index1 * srcStrides[1] + index2 * srcStrides[2];
+                auto dstOffset = index0 * dstStrides[0] + index1 * dstStrides[1] + index2 * dstStrides[2];
                 __gm__ NonShmemType* srcAddr = src.GetAddr() + srcGmOffset + srcOffset;
                 __gm__ ShmemType* dstAddr =
                     MapVirtualAddr<ShmemType>(hcclContext, dst.GetAddr(), ownerRank) + dstGmOffset + dstOffset;
@@ -426,12 +431,14 @@ TILEOP void ShmemStore(
     uint32_t ownerRank, __gm__ int64_t* hcclContext)
 {
     static_assert(T1::FORMAT == Hardware::UB && T2::FORMAT == Hardware::GM);
-    GET_LAYOUT_INFO(dst, dstLayout, dstStride0, dstStride1, dstStride2, dstGmOffset, C2, dstCoordinate);
+    uint64_t dstStrides[MAX_DIMS];
+    GetStrideInfo(dst, dstStrides);
+    auto dstGmOffset = dst.GetLayout().template GetGmOffset<C2, MAX_DIMS>(dstCoordinate);
 
     for (LoopVar index0 = 0; index0 < outValidShape0; ++index0) {
         for (LoopVar index1 = 0; index1 < outValidShape1; ++index1) {
             for (LoopVar index2 = 0; index2 < outValidShape2; ++index2) {
-                auto dstOffset = index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2;
+                auto dstOffset = index0 * dstStrides[0] + index1 * dstStrides[1] + index2 * dstStrides[2];
                 __gm__ Type* dstAddr =
                     MapVirtualAddr<Type>(hcclContext, dst.GetAddr(), ownerRank) + dstGmOffset + dstOffset;
 
@@ -525,14 +532,19 @@ TILEOP void ShmemGet(
     uint32_t dstValidShape4, uint32_t ownerRank, __gm__ int64_t* hcclContext)
 {
     static_assert(T1::FORMAT == Hardware::GM && T2::FORMAT == Hardware::GM);
-    GET_LAYOUT_INFO(src, srcLayout, srcStride0, srcStride1, srcStride2, srcGmOffset, C2, srcCoordinate);
-    GET_LAYOUT_INFO(dst, dstLayout, dstStride0, dstStride1, dstStride2, dstGmOffset, C1, dstCoordinate);
+    uint64_t srcStrides[MAX_DIMS];
+    GetStrideInfo(src, srcStrides);
+    auto srcGmOffset = src.GetLayout().template GetGmOffset<C2, MAX_DIMS>(srcCoordinate);
+
+    uint64_t dstStrides[MAX_DIMS];
+    GetStrideInfo(dst, dstStrides);
+    auto dstGmOffset = dst.GetLayout().template GetGmOffset<C1, MAX_DIMS>(dstCoordinate);
 
     for (LoopVar index0 = 0; index0 < dstValidShape0; ++index0) {
         for (LoopVar index1 = 0; index1 < dstValidShape1; ++index1) {
             for (LoopVar index2 = 0; index2 < dstValidShape2; ++index2) {
-                auto srcOffset = index0 * srcStride0 + index1 * srcStride1 + index2 * srcStride2;
-                auto dstOffset = index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2;
+                auto srcOffset = index0 * srcStrides[0] + index1 * srcStrides[1] + index2 * srcStrides[2];
+                auto dstOffset = index0 * dstStrides[0] + index1 * dstStrides[1] + index2 * dstStrides[2];
                 __gm__ ShmemType* srcAddr =
                     MapVirtualAddr<ShmemType>(hcclContext, src.GetAddr(), ownerRank) + srcGmOffset + srcOffset;
                 __gm__ NonShmemType* dstAddr = dst.GetAddr() + dstGmOffset + dstOffset;
