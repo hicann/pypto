@@ -59,7 +59,7 @@ std::string TestL0COutBody(const std::string& funcName, bool isDynamicAligned = 
     auto& op = function->AddOperation(Opcode::OP_COPY_OUT, {localTensor}, {ddrTensor});
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L0C, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
-    op.SetOOpAttrOffset(0, 0);
+    op.SetOOpAtt(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     if (!isDynamicAligned) {
         op.SetAttribute(OpAttributeKey::copyIsNZ, 1);
@@ -131,7 +131,7 @@ std::string TestL1CopyInBody(
     auto& op = function->AddOperation(Opcode::OP_COPY_IN, {ddrTensor}, {localTensor});
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
-    op.SetIOpAttrOffset(0, 0);
+    op.SetIOpAtt(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     if (isNz) {
@@ -220,7 +220,7 @@ TEST_F(TestCodegenDynCopy, TestGatherInL1TileTensor)
     int64_t blocksize{0};
     gatherL1Op.SetAttribute("op_attr_blocksize", blocksize);
     gatherL1Op.SetAttribute(OpAttributeKey::startOffset, blocksize);
-    gatherL1Op.SetOOpAttrOffset(0, 0);
+    gatherL1Op.SetOOpAtt(0, 0);
     std::string res = GenOpCodeFromOp(*function, gatherL1Op, {.isMainBlk = true});
     std::string expect =
         R"!!!(TGatherInL1<0>(l1Tensor_0, gmTensor_1, gmTensor_1, gmTensor_1, Coord1Dim(0), Coord2Dim(GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 1)), Coord2Dim(GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_OFFSET_BY_IDX(param, 0, -1, 2, 1)));
@@ -466,7 +466,7 @@ void TestUBCopyInBody(const std::string funcName, const std::string& expect)
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
-    op.SetIOpAttrOffset(0, 0);
+    op.SetIOpAtt(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     std::string res = GenOpCodeFromOp(*function, op);

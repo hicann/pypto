@@ -31,6 +31,7 @@ ReLuType = pypto_impl.ReLuType
 TransMode = pypto_impl.TransMode
 ScatterMode = pypto_impl.ScatterMode
 SaturationMode = pypto_impl.SaturationMode
+AtomicRMWMode = pypto_impl.AtomicRMWMode
 AtomicType = pypto_impl.AtomicType
 DequantScaleRoundingMode = pypto_impl.DequantScaleRoundingMode
 PrecisionType = pypto_impl.PrecisionType

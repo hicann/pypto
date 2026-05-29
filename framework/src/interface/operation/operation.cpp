@@ -131,6 +131,7 @@ const std::string OpAttributeKey::repeatTime = "REPEAT_TIME";
 const std::string OpAttributeKey::wStride = "W_STRIDE";
 const std::string OpAttributeKey::srcGmConvValidShape = "SRC_CONV_GM_VALID_SHAPE";
 const std::string OpAttributeKey::l0cValidMN = "L0C_VALID_MN";
+const std::string OpAttributeKey::rmwMode = "op_attr_rmw_mode";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";
@@ -190,6 +191,9 @@ Operation::Operation(
     if (opcode != Opcode::OP_CALL) {
         FE_ASSERT(FeError::INVALID_TYPE, cur.GetFunctionType() != FunctionType::EAGER);
     }
+
+    iOpAttr_.resize(iOperands.size());
+    oOpAttr_.resize(oOperands.size());
 
     auto opCoreType = OpcodeManager::Inst().GetCoreType(opcode);
     tileShape_.Reset();
@@ -1134,7 +1138,9 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
             }
         } break;
-        case Opcode::OP_ASSEMBLE: {
+        case Opcode::OP_ASSEMBLE:
+            [[fallthrough]];
+        case Opcode::OP_ATOMIC_RMW: {
             auto assembleAttr = std::static_pointer_cast<AssembleOpAttribute>(GetOpAttribute());
             if (assembleAttr != nullptr) {
                 std::vector<SymbolicScalar>& assembleToDynOffset = assembleAttr->GetToDynOffset();

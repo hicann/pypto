@@ -410,18 +410,21 @@ void OpcodeManager::RegisterVectorUnary()
         Opcode::OP_TAN, OpCoreType::AIV, "TAN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Ttan", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
-     RegisterInfo(
+    RegisterInfo(
         Opcode::OP_ERF, OpCoreType::AIV, "ERF", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TErf", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_SIN, OpCoreType::AIV, "SIN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TSin", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_COS, OpCoreType::AIV, "COS", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TCos", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_SINH, OpCoreType::AIV, "SINH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TSinh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
@@ -430,15 +433,18 @@ void OpcodeManager::RegisterVectorUnary()
     RegisterInfo(
         Opcode::OP_COSH, OpCoreType::AIV, "COSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TCosh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ASINH, OpCoreType::AIV, "ASINH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TASinh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ACOSH, OpCoreType::AIV, "ACOSH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TACosh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ERFC, OpCoreType::AIV, "ERFC", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TErfc", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
@@ -447,15 +453,18 @@ void OpcodeManager::RegisterVectorUnary()
     RegisterInfo(
         Opcode::OP_TANH, OpCoreType::AIV, "TANH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Ttanh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ASIN, OpCoreType::AIV, "ASIN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TAsin", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ACOS, OpCoreType::AIV, "ACOS", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TAcos", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
-        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_ATANH, OpCoreType::AIV, "ATANH", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TAtanh", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
@@ -650,12 +659,14 @@ void OpcodeManager::RegisterVectorQuant()
     RegisterInfo(
         Opcode::OP_QUANTIZE_SYM, OpCoreType::AIV, "QUANTIZE_SYM", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB}, {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
+        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_QUANTIZE_ASYM, OpCoreType::AIV, "QUANTIZE_ASYM",
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
+        {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"},
+        TileShapeVerifier::Verify);
     // Dequantization: INT8/INT16 -> FP32
     // Always 4 params: dst, src, scale, offset (symmetric: offset=0)
     RegisterInfo(
@@ -705,8 +716,8 @@ void OpcodeManager::RegisterVector()
         TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_PERMUTE, OpCoreType::AIV, "PERMUTE", {MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_UB},
-        {"TileOp::TPermute", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER,
-        {OpAttributeKey::perm}, TileShapeVerifier::Verify);
+        {"TileOp::TPermute", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER, {OpAttributeKey::perm},
+        TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_PERMUTE_ELEMENT, OpCoreType::AIV, "PERMUTE_ELEMENT", {MemoryType::MEM_DEVICE_DDR},
         {MemoryType::MEM_UB}, {"TileOp::TPermuteElewise", PIPE_S, PIPE_MTE2, CoreType::AIV}, OpCalcType::OTHER,
@@ -968,9 +979,9 @@ void OpcodeManager::RegisterCube()
         {"TileOp::TLoad3D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
         {OpAttributeKey::postK, OpAttributeKey::postM, OpAttributeKey::filterH, OpAttributeKey::filterW,
          OpAttributeKey::strideH, OpAttributeKey::strideW, OpAttributeKey::dilationH, OpAttributeKey::dilationW,
-         OpAttributeKey::paddingLeft,OpAttributeKey::paddingRight,
-         OpAttributeKey::paddingTop, OpAttributeKey::paddingBottom,OpAttributeKey::padValue,
-         OpAttributeKey::repeatStride, OpAttributeKey::repeatTime, OpAttributeKey::wStride});
+         OpAttributeKey::paddingLeft, OpAttributeKey::paddingRight, OpAttributeKey::paddingTop,
+         OpAttributeKey::paddingBottom, OpAttributeKey::padValue, OpAttributeKey::repeatStride,
+         OpAttributeKey::repeatTime, OpAttributeKey::wStride});
     RegisterInfo(
         Opcode::OP_LOAD2D_CONV, OpCoreType::AIC, "LOAD2D", {MemoryType::MEM_L1}, {MemoryType::MEM_L0B},
         {"TileOp::TLoad2D", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL,
@@ -1213,6 +1224,10 @@ void OpcodeManager::RegisterCommon()
         Opcode::OP_ASSEMBLE_SSA, OpCoreType::ANY, "ASSEMBLE_SSA", {MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR},
         {MemoryType::MEM_DEVICE_DDR}, {"ASSEMBLE_SSA", PIPE_MTE3, PIPE_MTE3, CoreType::AIV},
         OpCalcType::MOVE_OUT); // 输出输出支持其他类型
+    RegisterInfo(
+        Opcode::OP_ATOMIC_RMW, OpCoreType::ANY, "ATOMIC_RMW", {MemoryType::MEM_DEVICE_DDR},
+        {MemoryType::MEM_DEVICE_DDR}, {"AtomicRMW", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
+        {OpAttributeKey::rmwMode});
     RegisterInfo(
         Opcode::OP_VIEW, OpCoreType::ANY, "VIEW", {}, {}, {"VIEW", PIPE_S, PIPE_S, CoreType::AIV},
         OpCalcType::MOVE_LOCAL);

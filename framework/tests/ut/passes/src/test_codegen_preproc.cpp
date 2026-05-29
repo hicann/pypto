@@ -87,9 +87,9 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
     for (auto op : opLogPtr) {
         if (OpcodeManager::Inst().IsCopyInOrOut(op->GetOpcode())) {
             if (IsCopyIn(op->GetOpcode()))
-                op->SetIOpAttrOffset(0, index++);
+                op->SetIOpAtt(0, index++);
             else
-                op->SetOOpAttrOffset(0, index++);
+                op->SetOOpAtt(0, index++);
         }
     }
 
@@ -368,11 +368,11 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermute)
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& copyin = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
-    copyin.SetIOpAttrOffset(0, 0);
+    copyin.SetIOpAtt(0, 0);
     auto& permute_op = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_PERMUTE, {tensor3}, {tensor2});
-    permute_op.SetIOpAttrOffset(0, 0);
+    permute_op.SetIOpAtt(0, 0);
     auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
-    copyout.SetOOpAttrOffset(0, 1);
+    copyout.SetOOpAtt(0, 1);
 
     CodegenPreproc codegenPreprocPass;
     codegenPreprocPass.SaveGmTensorParamIdxToOp(*rootFuncPtr);
@@ -401,12 +401,12 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
     auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
     auto& copyin = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
-    copyin.SetIOpAttrOffset(0, 0);
+    copyin.SetIOpAtt(0, 0);
     auto& permute_elem_op =
         IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_PERMUTE_ELEMENT, {tensor3}, {tensor2});
-    permute_elem_op.SetIOpAttrOffset(0, 0);
+    permute_elem_op.SetIOpAtt(0, 0);
     auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
-    copyout.SetOOpAttrOffset(0, 1);
+    copyout.SetOOpAtt(0, 1);
 
     CodegenPreproc codegenPreprocPass;
     codegenPreprocPass.SaveGmTensorParamIdxToOp(*rootFuncPtr);

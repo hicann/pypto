@@ -52,24 +52,23 @@ void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTe
 }
 
 void CheckViewValidShapesConstraint(
-    const std::vector<SymbolicScalar>& newValidShapes,
-    const std::vector<int64_t>& shapes,
+    const std::vector<SymbolicScalar>& newValidShapes, const std::vector<int64_t>& shapes,
     const std::vector<int64_t>& operandShape)
 {
     CHECK_OP(newValidShapes.size() == operandShape.size())
         << "View operation failed: newValidShapes dimension count must match original tensor's dimension count. "
         << "newValidShapes has " << newValidShapes.size() << " dimensions, "
         << "but original tensor has " << operandShape.size() << " dimensions.";
-    
+
     auto validShapesConcrete = SymbolicScalar::Concrete(newValidShapes, 0);
-    
+
     for (size_t i = 0; i < shapes.size(); i++) {
         CHECK_OP(operandShape[i] == -1 || validShapesConcrete[i] <= operandShape[i])
             << "View operation failed: newValidShapes cannot exceed original tensor's shape at dimension " << i << ". "
-        << "newValidShapes[" << i << "] = " << validShapesConcrete[i] << ", "
-        << "but original tensor shape[" << i << "] = " << operandShape[i]
-        << (operandShape[i] == -1 ? " (dynamic dimension)" : "") << ". "
-        << "Note: -1 indicates a dynamic dimension that can be any size.";
+            << "newValidShapes[" << i << "] = " << validShapesConcrete[i] << ", "
+            << "but original tensor shape[" << i << "] = " << operandShape[i]
+            << (operandShape[i] == -1 ? " (dynamic dimension)" : "") << ". "
+            << "Note: -1 indicates a dynamic dimension that can be any size.";
     }
 }
 
@@ -1025,10 +1024,10 @@ Tensor View(
     const std::vector<SymbolicScalar>& newOffsets)
 {
     DECLARE_TRACER();
-    
+
     const auto& operandShape = operand.GetShape();
     CheckViewValidShapesConstraint(newValidShapes, shapes, operandShape);
-    
+
     Tensor result(
         operand.GetStorage()->Datatype(), shapes, "View_" + operand.GetStorage()->GetRawTensor()->GetSymbol(),
         operand.Format());
@@ -1136,6 +1135,27 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
     CHECK_OP(dest.GetShape().size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
     DInnerAssemble(*Program::GetInstance().GetCurrentFunction(), tensor.GetStorage(), dest.GetStorage(), dynOffset);
+
+    Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
+}
+
+void AtomicRMW(const Tensor& t, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest, AtomicRMWMode mode)
+{
+    DECLARE_TRACER();
+    CHECK_OP(dest.Format() == t.Format()) << "AtomicRMW: src and dest requires same format";
+    CHECK_OP(dest.GetShape().size() == t.GetShape().size()) << "AtomicRMW: src and dest requires same shape";
+    CHECK_OP(dest.GetShape().size() == dynOffset.size()) << "AtomicRMW: dynOffset and dest requires same shape";
+    CHECK_OP(dest.GetDataType() == t.GetDataType()) << "AtomicRMW: src and dest requires same dtype";
+
+    auto& func = *Program::GetInstance().GetCurrentFunction();
+    auto offset = SymbolicScalar::Concrete(dynOffset, 0);
+
+    Tensor res(t.GetDataType(), t.GetShape(), "", t.Format());
+    auto& op = func.AddOperation(Opcode::OP_ATOMIC_RMW, {t.GetStorage()}, {dest.GetStorage()});
+    op.SetAssembleOpAttribute(offset, dynOffset);
+    op.SetAttribute(OpAttributeKey::rmwMode, (int)mode);
+    op.SetAttribute(OpAttributeKey::inplaceIdx, 1);
+    func.UpdateTensorDataUsage(op);
 
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
@@ -1773,14 +1793,12 @@ void ExpandOperationInto(
             auto& newOp = function.AddRawOperation(Opcode::OP_BLOCK_CALL, iOperand, oOperand, true);
             newOp.SetOpAttribute(op.GetOpAttribute());
             newOp.SetAttr(OpAttributeKey::dontTouch, true);
-            newOp.SetOpOffset(op.GetIOpAttrOffsets(), op.GetOOpAttrOffsets());
             break;
         }
         default: {
             FE_LOGE(
                 FeError::NOT_EXIST, "Unsupported opcode %d, opmagic is %d", static_cast<int>(opCode), op.GetOpMagic());
-            FE_ASSERT(false) << "Unsupported opcode " << static_cast<int>(opCode) << ", opmagic is "
-                                   << op.GetOpMagic();
+            FE_ASSERT(false) << "Unsupported opcode " << static_cast<int>(opCode) << ", opmagic is " << op.GetOpMagic();
         }
     }
 }

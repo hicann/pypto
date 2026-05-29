@@ -78,8 +78,8 @@ enum class MixResourceType {
 struct FunctionCallArgs {
     LogicalTensors iOperands;
     LogicalTensors oOperands;
-    std::vector<int> iOpAttrOffset;
-    std::vector<int> oOpAttrOffset;
+    std::vector<OperandAttribute> iOpAttr;
+    std::vector<OperandAttribute> oOpAttr;
     std::map<int, SymbolicScalar> outIndexToExpr;
     std::vector<std::vector<SymbolicScalar>> argList;
 };
@@ -677,13 +677,14 @@ public:
     Json DumpJson(bool useTable = true);
     static std::shared_ptr<Function> LoadJson(Program& belongTo, const Json& funcJson);
 
-    std::vector<std::vector<SymbolicScalar>> NormalizeCoa(std::vector<int>& iOffset, std::vector<int>& oOffset);
+    std::vector<std::vector<SymbolicScalar>> NormalizeCoa(
+        std::vector<OperandAttribute>& iOpAttr, std::vector<OperandAttribute>& oOpAttr);
     void NormalizeCoaForInCasts(
-        std::vector<int>& iOffset, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+        std::vector<OperandAttribute>& iOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
         std::unordered_map<LogicalTensorPtr, int>& processedOperands,
         const std::unordered_map<int, Operation*>& opmagicToOp);
     void NormalizeCoaForOutCasts(
-        std::vector<int>& oOffset, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+        std::vector<OperandAttribute>& oOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
         std::unordered_map<LogicalTensorPtr, int>& processedOperands,
         const std::unordered_map<int, Operation*>& opmagicToOp);
     void NormalizeCoaForNormalOperands(

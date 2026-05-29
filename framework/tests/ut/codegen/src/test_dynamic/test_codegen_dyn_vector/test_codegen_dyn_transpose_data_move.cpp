@@ -57,7 +57,7 @@ void TestTransposeDataMoveBody(int dim = 3)
     }
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, to_offset, shapeImme, shapeImme));
-    op.SetOOpAttrOffset(0, 0);
+    op.SetOOpAtt(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     GenOpCodeFromOp(*function, op);

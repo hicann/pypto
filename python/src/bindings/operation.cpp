@@ -160,7 +160,7 @@ void BindOperation(py::module& m)
     m.def(
         "Signbit", [](const Tensor& self) { return npu::tile_fwk::Signbit(self); }, "Tensor signbit.");
     m.def(
-        "Tanh", [](const Tensor &self) { return npu::tile_fwk::Tanh(self); }, "Tensor tanh.");
+        "Tanh", [](const Tensor& self) { return npu::tile_fwk::Tanh(self); }, "Tensor tanh.");
     m.def(
         "Ceil", [](const Tensor& self) { return npu::tile_fwk::Ceil(self); }, "Tensor ceil.");
     m.def(
@@ -726,6 +726,12 @@ void BindOperation(py::module& m)
             npu::tile_fwk::Assemble(tensor, dynOffset, dest);
         },
         "Tensor dassemble");
+    m.def(
+        "AtomicRMW",
+        [](const Tensor& src, const std::vector<SymbolicScalar>& offsets, Tensor& dst, AtomicRMWMode mode) {
+            npu::tile_fwk::AtomicRMW(src, offsets, dst, mode);
+        },
+        py::arg("src"), py::arg("offsets"), py::arg("dst"), py::arg("mode"), "Tensor atomic rmw");
     m.def("Maximum", [](const Tensor& operand1, const Element& operand2) {
         return npu::tile_fwk::Maximum(operand1, operand2);
     });

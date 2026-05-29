@@ -739,7 +739,7 @@ Operation* OoOScheduler::CreateAllocOp(LogicalTensorPtr oOperand) {
 
 Operation* OoOScheduler::CloneCopyinOp(Operation* spillOp, LogicalTensorPtr iOperand, LogicalTensorPtr oOperand) {
     Operation& copyinOp = spillOp->CloneOperation(function_, {iOperand}, {oOperand});
-    copyinOp.SetIOpAttrOffset(0, spillOp->GetIOpAttrOffset(0));
+    copyinOp.SetIOpAtt(0, spillOp->GetIOpAttrOffset(0));
     copyinOp.SetOpAttribute(spillOp->GetOpAttribute()->Clone());
     copyinOp.inParamLocation_ = spillOp->inParamLocation_;
     copyinOp.UpdateLatency(DEFAULT_LATENCY);

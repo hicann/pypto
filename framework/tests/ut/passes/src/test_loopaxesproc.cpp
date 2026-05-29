@@ -136,9 +136,9 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     std::vector<std::vector<SymbolicScalar>> argList;
     std::map<int, SymbolicScalar> outIndexToExpr;
     callOp.SetOpAttribute(currFunctionPtr->CreateCallOpAttribute(argList, outIndexToExpr));
-    callOp.SetIOpAttrOffset(0, 0);
-    callOp.SetIOpAttrOffset(1, 0);
-    callOp.SetOOpAttrOffset(0, 0);
+    callOp.SetIOpAtt(0, 0);
+    callOp.SetIOpAtt(1, 0);
+    callOp.SetOOpAtt(0, 0);
 
     LoopaxesProc loopaxesprocpass;
     EXPECT_EQ(loopaxesprocpass.RunOnFunction(*rootFuncPtr), SUCCESS);

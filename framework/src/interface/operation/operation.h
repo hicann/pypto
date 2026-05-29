@@ -149,6 +149,7 @@ public:
     static const std::string wStride;
     static const std::string srcGmConvValidShape;
     static const std::string l0cValidMN;
+    static const std::string rmwMode;
 };
 
 class ConvOpAttributeKey {
@@ -220,6 +221,15 @@ inline const BiMap<AIVCore>& GetAIVCoreDict()
     }};
     return dict;
 }
+
+struct OperandAttribute {
+    OperandAttribute() : offset(-1), attr(0) {}
+    OperandAttribute(int off_in, int attr_in = 0) : offset(off_in), attr(attr_in) {}
+    bool isAtomic() const { return attr & 0x1; }
+
+    int offset;
+    int attr;
+};
 
 class Function;
 // Class to represent an operation (opcode) and its operands
@@ -543,6 +553,7 @@ public:
                 break;
             }
             case Opcode::OP_ASSEMBLE_SSA:
+            case Opcode::OP_ATOMIC_RMW:
                 FE_ASSERT(
                     std::dynamic_pointer_cast<AssembleOpAttribute>(opAttribute_) != nullptr ||
                     std::dynamic_pointer_cast<CopyOpAttribute>(opAttribute_) != nullptr);
@@ -564,7 +575,8 @@ public:
     void SetAssembleOpAttribute(
         const std::vector<int64_t>& toOffset, const std::vector<SymbolicScalar>& toDynOffset = {})
     {
-        FE_ASSERT(opcode_ == Opcode::OP_ASSEMBLE || opcode_ == Opcode::OP_ASSEMBLE_SSA);
+        FE_ASSERT(
+            opcode_ == Opcode::OP_ASSEMBLE || opcode_ == Opcode::OP_ASSEMBLE_SSA || opcode_ == Opcode::OP_ATOMIC_RMW);
         SetOpAttribute(std::make_shared<AssembleOpAttribute>(toOffset, toDynOffset));
     }
 
@@ -677,29 +689,33 @@ public:
 
     bool IsNeedStackGM() const;
 
-    int GetIOpAttrOffset(int pos) const { return iOpAttrOffset.empty() ? -1 : iOpAttrOffset[pos]; }
-    int GetOOpAttrOffset(int pos) const { return oOpAttrOffset.empty() ? -1 : oOpAttrOffset[pos]; }
-    void SetIOpAttrOffset(int pos, int offset)
+    int GetIOpAttrOffset(int pos) const { return iOpAttr_.empty() ? -1 : iOpAttr_[pos].offset; }
+    int GetOOpAttrOffset(int pos) const { return oOpAttr_.empty() ? -1 : oOpAttr_[pos].offset; }
+    OperandAttribute GetIOpAttr(int pos) const { return iOpAttr_.empty() ? OperandAttribute() : iOpAttr_[pos]; }
+    OperandAttribute GetOOpAttr(int pos) const { return oOpAttr_.empty() ? OperandAttribute() : oOpAttr_[pos]; }
+    void SetIOpAtt(int pos, int offset)
     {
-        if (iOpAttrOffset.empty())
-            iOpAttrOffset.resize(iOperand.size(), -1);
-        iOpAttrOffset[pos] = offset;
+        if (iOpAttr_.empty()) {
+            iOpAttr_.resize(iOperand.size());
+        }
+        iOpAttr_[pos].offset = offset;
     }
-    void SetOOpAttrOffset(int pos, int offset)
+    void SetOOpAtt(int pos, int offset, int attr = 0)
     {
-        if (oOpAttrOffset.empty())
-            oOpAttrOffset.resize(oOperand.size(), -1);
-        oOpAttrOffset[pos] = offset;
+        if (oOpAttr_.empty()) {
+            oOpAttr_.resize(oOperand.size());
+        }
+        if (pos < (int)oOpAttr_.size()) {
+            oOpAttr_[pos] = {offset, attr};
+        }
     }
-    void SetOpOffset(const std::vector<int>& iOffset, const std::vector<int>& oOffset)
+    const std::vector<OperandAttribute>& GetIOpAttr() const { return iOpAttr_; }
+    const std::vector<OperandAttribute>& GetOOpAttr() const { return oOpAttr_; }
+    void SetOperandAttr(const std::vector<OperandAttribute>& iAttr, const std::vector<OperandAttribute>& oAttr)
     {
-        iOpAttrOffset = iOffset;
-        oOpAttrOffset = oOffset;
+        iOpAttr_ = iAttr;
+        oOpAttr_ = oAttr;
     }
-    std::vector<int>& GetIOpAttrOffsets() { return iOpAttrOffset; }
-    std::vector<int>& GetOOpAttrOffsets() { return oOpAttrOffset; }
-    const std::vector<int>& GetIOpAttrOffsets() const { return iOpAttrOffset; }
-    const std::vector<int>& GetOOpAttrOffsets() const { return oOpAttrOffset; }
 
     std::vector<std::reference_wrapper<SymbolicScalar>> GetDynamicAttributeList();
     const ir::Span& GetSpan() const { return span_; }
@@ -716,8 +732,8 @@ private:
     unsigned long operationHash_{0};
     int latency_{1};
 
-    std::vector<int> iOpAttrOffset;
-    std::vector<int> oOpAttrOffset;
+    std::vector<OperandAttribute> iOpAttr_;
+    std::vector<OperandAttribute> oOpAttr_;
     int remainingTime_{INVALID_TIME};
     CoreType coreType_{CoreType::MIX};
     std::unordered_set<Operation*> inputCtrlOps;

@@ -135,3 +135,15 @@ def test_tensor_starred():
             pypto.set_vec_tile_shapes(32, 32)
             c = a - 3
             c1, *c2 = c
+
+
+@pytest.mark.skip(reason="atomic rmw not supported")
+def test_tensor_atomic():
+    dtype = pypto.DT_FP32
+    shape = [64, 64]
+    a = pypto.tensor(shape, dtype, "a")
+    b = pypto.tensor(shape, dtype, "c1")
+
+    with pypto.function("AtomicRMW", a, b):
+        pypto.set_vec_tile_shapes(32, 32)
+        pypto.atomic_add(a, [0, 0], b)

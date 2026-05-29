@@ -72,7 +72,7 @@ TEST_F(GetParamIdxTest, TestAdd)
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate::Parameter(3), OpImmediate::Parameter(4)};
     copyin1Attr->SetToDynValidShape(toValidShape);
-    copy_op1.SetIOpAttrOffset(0, 0);
+    copy_op1.SetIOpAtt(0, 0);
     copy_op1.SetOpAttribute(copyin1Attr);
 
     auto& copy_op2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
@@ -80,13 +80,13 @@ TEST_F(GetParamIdxTest, TestAdd)
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {OpImmediate::Parameter(8), OpImmediate::Parameter(9)};
     copyin2Attr->SetToDynValidShape(toValidShape1);
-    copy_op2.SetIOpAttrOffset(0, 5);
+    copy_op2.SetIOpAtt(0, 5);
     copy_op2.SetOpAttribute(copyin2Attr);
 
     auto& add_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
     (void)add_op;
     auto& copy_out_op = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor3}, {outCast});
-    copy_out_op.SetOOpAttrOffset(0, 11);
+    copy_out_op.SetOOpAtt(0, 11);
 
     currFunctionPtr->inCasts_.push_back(incast1);
     currFunctionPtr->inCasts_.push_back(incast2);
@@ -126,7 +126,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     auto copyin1Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape = {OpImmediate::Parameter(3), OpImmediate::Parameter(4)};
     copyin1Attr->SetToDynValidShape(toValidShape);
-    copy_op1.SetIOpAttrOffset(0, 0);
+    copy_op1.SetIOpAtt(0, 0);
     copy_op1.SetOpAttribute(copyin1Attr);
 
     auto& copy_op2 = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_COPY_IN, {incast2}, {ubTensor2});
@@ -134,7 +134,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     auto copyin2Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape1 = {OpImmediate::Parameter(8), OpImmediate::Parameter(9)};
     copyin2Attr->SetToDynValidShape(toValidShape1);
-    copy_op2.SetIOpAttrOffset(0, 5);
+    copy_op2.SetIOpAtt(0, 5);
     copy_op2.SetOpAttribute(copyin2Attr);
 
     auto& add_op = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_ADD, {ubTensor1, ubTensor2}, {ubTensor3});
@@ -143,7 +143,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     auto& copy_out_op = PassOperationUtils::AddOperation(*subGraphPtr0, Opcode::OP_COPY_OUT, {ubTensor3}, {tmpCast});
     auto copyout1Attr = std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme);
     copy_out_op.SetOpAttribute(copyout1Attr);
-    copy_out_op.SetOOpAttrOffset(0, 10);
+    copy_out_op.SetOOpAtt(0, 10);
 
     auto ubTensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor4->UpdateDynValidShape({CreateTestScalarVar("X0"), CreateTestScalarVar("X1")});
@@ -152,7 +152,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     auto copyin3Attr = std::make_shared<CopyOpAttribute>(fromOffset, MEM_UB, shapeImme, shapeImme);
     std::vector<npu::tile_fwk::OpImmediate> toValidShape2 = {OpImmediate::Parameter(18), OpImmediate::Parameter(19)};
     copyin3Attr->SetToDynValidShape(toValidShape2);
-    copy_op3.SetIOpAttrOffset(0, 15);
+    copy_op3.SetIOpAtt(0, 15);
     copy_op3.SetOpAttribute(copyin3Attr);
 
     auto ubTensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
@@ -160,7 +160,7 @@ TEST_F(GetParamIdxTest, TestAddExp)
     (void)exp;
 
     auto& copy_out_op1 = PassOperationUtils::AddOperation(*subGraphPtr1, Opcode::OP_COPY_OUT, {ubTensor5}, {outCast});
-    copy_out_op1.SetOOpAttrOffset(0, 11);
+    copy_out_op1.SetOOpAtt(0, 11);
 
     subGraphPtr0->inCasts_.push_back(incast1);
     subGraphPtr0->inCasts_.push_back(incast2);

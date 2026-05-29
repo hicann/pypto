@@ -385,17 +385,17 @@ protected:
 
         auto& copyIn1 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input1}, {internal1});
         copyIn1.opmagic = OP_MAGIC_BASE + 1;
-        copyIn1.SetIOpAttrOffset(0, 100);
+        copyIn1.SetIOpAtt(0, 100);
 
         auto& copyIn2 = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input2}, {internal2});
         copyIn2.opmagic = OP_MAGIC_BASE + 2;
-        copyIn2.SetIOpAttrOffset(0, 101);
+        copyIn2.SetIOpAtt(0, 101);
 
         auto& addOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADD, {internal1, internal2}, {output});
         addOp.opmagic = OP_MAGIC_BASE + 3;
-        addOp.SetIOpAttrOffset(0, 200);
-        addOp.SetIOpAttrOffset(1, 201);
-        addOp.SetOOpAttrOffset(0, 300);
+        addOp.SetIOpAtt(0, 200);
+        addOp.SetIOpAtt(1, 201);
+        addOp.SetOOpAtt(0, 300);
 
         return func;
     }
@@ -462,7 +462,7 @@ private:
         auto& copyIn = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_IN, {input}, {output});
         copyIn.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
-        copyIn.SetIOpAttrOffset(TENSOR_INDEX_0, offset);
+        copyIn.SetIOpAtt(TENSOR_INDEX_0, offset);
         copyIn.UpdateInternalSubgraphID(internalSubgraphId);
         copyIn.SetAttr(OpAttributeKey::isCube, true);
         copyIn.opmagic = opMagic;
@@ -473,9 +473,9 @@ private:
         const std::shared_ptr<LogicalTensor>& input2, const std::shared_ptr<LogicalTensor>& output)
     {
         auto& addOp = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_ADD, {input1, input2}, {output});
-        addOp.SetIOpAttrOffset(TENSOR_INDEX_0, OFFSET_ADD_INPUT1);
-        addOp.SetIOpAttrOffset(TENSOR_INDEX_1, OFFSET_ADD_INPUT2);
-        addOp.SetOOpAttrOffset(TENSOR_INDEX_0, OFFSET_ADD_OUTPUT);
+        addOp.SetIOpAtt(TENSOR_INDEX_0, OFFSET_ADD_INPUT1);
+        addOp.SetIOpAtt(TENSOR_INDEX_1, OFFSET_ADD_INPUT2);
+        addOp.SetOOpAtt(TENSOR_INDEX_0, OFFSET_ADD_OUTPUT);
         addOp.UpdateInternalSubgraphID(internalSubgraphId);
         addOp.SetAttr(OpAttributeKey::isCube, true);
     }
@@ -496,7 +496,7 @@ private:
         auto& copyOut = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_OUT, {input}, {output});
         copyOut.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
-        copyOut.SetOOpAttrOffset(TENSOR_INDEX_0, offset);
+        copyOut.SetOOpAtt(TENSOR_INDEX_0, offset);
         copyOut.UpdateInternalSubgraphID(internalSubgraphId);
         copyOut.SetAttr(OpAttributeKey::isCube, true);
         copyOut.opmagic = opMagic;
@@ -548,18 +548,18 @@ private:
         auto& copyOut = IRBuilder().CreateTensorOpStmt(*func, Opcode::OP_COPY_OUT, {internal3}, {output});
         copyOut.opmagic = opMagicCounter++;
 
-        copyIn1.SetIOpAttrOffset(TENSOR_INDEX_0, OFFSET_INPUT1);
+        copyIn1.SetIOpAtt(TENSOR_INDEX_0, OFFSET_INPUT1);
         copyIn1.UpdateInternalSubgraphID(internalSubgraphId);
 
-        copyIn2.SetIOpAttrOffset(TENSOR_INDEX_0, OFFSET_INPUT2);
+        copyIn2.SetIOpAtt(TENSOR_INDEX_0, OFFSET_INPUT2);
         copyIn2.UpdateInternalSubgraphID(internalSubgraphId);
 
-        addOp.SetIOpAttrOffset(TENSOR_INDEX_0, OFFSET_ADD_INPUT1);
-        addOp.SetIOpAttrOffset(TENSOR_INDEX_1, OFFSET_ADD_INPUT2);
-        addOp.SetOOpAttrOffset(TENSOR_INDEX_0, OFFSET_ADD_OUTPUT);
+        addOp.SetIOpAtt(TENSOR_INDEX_0, OFFSET_ADD_INPUT1);
+        addOp.SetIOpAtt(TENSOR_INDEX_1, OFFSET_ADD_INPUT2);
+        addOp.SetOOpAtt(TENSOR_INDEX_0, OFFSET_ADD_OUTPUT);
         addOp.UpdateInternalSubgraphID(internalSubgraphId);
 
-        copyOut.SetOOpAttrOffset(TENSOR_INDEX_0, OFFSET_OUTPUT);
+        copyOut.SetOOpAtt(TENSOR_INDEX_0, OFFSET_OUTPUT);
         copyOut.UpdateInternalSubgraphID(internalSubgraphId);
 
         return func;
@@ -653,7 +653,7 @@ private:
         const TestScenario& scenario, const PropagatedTensors& propagatedTensors,
         const std::shared_ptr<LogicalTensor>& propagatedInput2, const std::shared_ptr<LogicalTensor>& propagatedOutput2)
     {
-        auto& originalCallOp = IRBuilder().CreateTensorOpStmt(*rootFunc, 
+        auto& originalCallOp = IRBuilder().CreateTensorOpStmt(*rootFunc,
             Opcode::OP_CALL, {scenario.inputTensor1, scenario.inputTensor2, propagatedTensors.input, propagatedInput2},
             {scenario.outputTensor, propagatedTensors.output, propagatedOutput2});
 
@@ -980,15 +980,6 @@ TEST_F(MixCallOperationBuilderTest, TestCreateCallOpWithNullCallAttribute)
     EXPECT_EQ(status, FAILED) << "CreateCallOps should fail with null CallOpAttribute";
 }
 
-TEST_F(MixCallOperationBuilderTest, TestGetOffsetFromOpWithInvalidOpMagic)
-{
-    auto leafFunc = createFunctionWithInvokeInfo("leaf_func");
-
-    int offset = builder->GetOffsetFromOp(99999, 0, *leafFunc, false);
-
-    EXPECT_EQ(offset, -1) << "GetOffsetFromOp should return -1 for invalid op magic";
-}
-
 TEST_F(MixCallOperationBuilderTest, TestFindIOpAttrOffsetFromActualIncastsWithInvalidTensor)
 {
     auto leafFunc = createFunctionWithInvokeInfo("leaf_func");
@@ -999,8 +990,8 @@ TEST_F(MixCallOperationBuilderTest, TestFindIOpAttrOffsetFromActualIncastsWithIn
 
     std::vector<std::shared_ptr<LogicalTensor>> actualIncasts = {invalidTensor};
 
-    std::vector<int> iOffsets;
-    std::vector<int> oOffsets;
+    std::vector<OperandAttribute> iOffsets;
+    std::vector<OperandAttribute> oOffsets;
     std::set<LogicalTensorPtr> processedIncasts;
     std::set<LogicalTensorPtr> processedOutcasts;
     ExtractInfo extractInfo{iOffsets, oOffsets, processedIncasts, processedOutcasts};
@@ -1020,8 +1011,8 @@ TEST_F(MixCallOperationBuilderTest, TestFindOOpAttrOffsetFromActualOutcastsWithE
 
     std::vector<std::shared_ptr<LogicalTensor>> actualOutcasts = {tensorWithEmptyShape};
 
-    std::vector<int> iOffsets;
-    std::vector<int> oOffsets;
+    std::vector<OperandAttribute> iOffsets;
+    std::vector<OperandAttribute> oOffsets;
     std::set<LogicalTensorPtr> processedIncasts;
     std::set<LogicalTensorPtr> processedOutcasts;
     ExtractInfo extractInfo{iOffsets, oOffsets, processedIncasts, processedOutcasts};
@@ -1041,8 +1032,8 @@ TEST_F(MixCallOperationBuilderTest, TestFindOOpAttrOffsetFromActualOutcastsWithI
 
     std::vector<std::shared_ptr<LogicalTensor>> actualOutcasts = {invalidTensor};
 
-    std::vector<int> iOffsets;
-    std::vector<int> oOffsets;
+    std::vector<OperandAttribute> iOffsets;
+    std::vector<OperandAttribute> oOffsets;
     std::set<LogicalTensorPtr> processedIncasts;
     std::set<LogicalTensorPtr> processedOutcasts;
     ExtractInfo extractInfo{iOffsets, oOffsets, processedIncasts, processedOutcasts};
@@ -1050,15 +1041,6 @@ TEST_F(MixCallOperationBuilderTest, TestFindOOpAttrOffsetFromActualOutcastsWithI
     bool result = builder->FindOOpAttrOffsetFromActualOutcasts(actualOutcasts, extractInfo, originalMixFunc.get());
 
     EXPECT_FALSE(result) << "FindOOpAttrOffsetFromActualOutcasts should return false for invalid tensor";
-}
-
-TEST_F(MixCallOperationBuilderTest, TestFindOriginalOffsetInMixFunctionWithNullTensor)
-{
-    auto originalMixFunc = createFunctionWithOps("original_mix");
-
-    int offset = builder->FindOriginalOffsetInMixFunction(nullptr, originalMixFunc.get());
-
-    EXPECT_EQ(offset, -1) << "FindOriginalOffsetInMixFunction should return -1 for null tensor";
 }
 
 } // namespace tile_fwk

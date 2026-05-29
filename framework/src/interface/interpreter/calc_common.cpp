@@ -49,6 +49,27 @@ void ExecuteOpAssemble(ExecuteOperationContext* ctx)
 REGISTER_CALC_OP(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, ExecuteOpAssemble);
 REGISTER_CALC_OP(OP_ASSEMBLE_SSA, Opcode::OP_ASSEMBLE_SSA, ExecuteOpAssemble);
 
+void ExecuteOpAtomicRMW(ExecuteOperationContext* ctx)
+{
+    auto& oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto& iop = ctx->ioperandDataViewList->at(0);
+
+    auto assemble = std::static_pointer_cast<AssembleOpAttribute>(ctx->op->GetOpAttribute());
+    std::vector<int64_t> offset = ctx->opInter->EvaluateOffset(assemble->GetToOffset(), assemble->GetToDynOffset());
+    auto ret = oop->View(iop->GetShape(), offset);
+    auto mode = (AtomicRMWMode)ctx->op->GetIntAttribute(OpAttributeKey::rmwMode);
+    if (mode == AtomicRMWMode::ADD) {
+        calc::Add(ret, iop, ret);
+    } else if (mode == AtomicRMWMode::MAX) {
+        calc::Max(ret, iop, ret);
+    } else if (mode == AtomicRMWMode::MIN) {
+        calc::Min(ret, iop, ret);
+    } else {
+        ASSERT(false) << "AtomicRMWMode not supported";
+    }
+}
+REGISTER_CALC_OP(OP_ATOMIC_RMW, Opcode::OP_ATOMIC_RMW, ExecuteOpAtomicRMW);
+
 void ExecuteOpNone(ExecuteOperationContext* ctx) { (void)ctx; }
 
 void ExecuteOpInterpreterCvSyncSet(ExecuteOperationContext* ctx)

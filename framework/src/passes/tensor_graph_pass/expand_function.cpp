@@ -39,7 +39,7 @@ namespace npu::tile_fwk {
 // 不需要展开的操作码集合
 // 这些操作在展开过程中保持原样，不进行 tile-level 展开
 const std::unordered_set<Opcode> ExpandFunction::kNotNeedExpandOps = {
-    Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_NOP};
+    Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_NOP, Opcode::OP_ATOMIC_RMW};
 
 Status ExpandFunction::ClearIOOperand(const std::vector<OperationPtr>& tensorOperations) const
 {
@@ -77,6 +77,9 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
     newOp.CopyAttrFrom(op, OP_EMUOP_PREFIX);
     if (op.HasAttribute(OpAttributeKey::inplaceIdx)) {
         newOp.SetAttribute(OpAttributeKey::inplaceIdx, op.GetIntAttribute(OpAttributeKey::inplaceIdx));
+    }
+    if (op.HasAttribute(OpAttributeKey::rmwMode)) {
+        newOp.SetAttribute(OpAttributeKey::rmwMode, op.GetIntAttribute(OpAttributeKey::rmwMode));
     }
 }
 

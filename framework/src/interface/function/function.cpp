@@ -537,7 +537,7 @@ void Function::EraseCallOpOpnd(const FunctionHash& calleeHash, size_t index)
         }
         FE_ASSERT(FeError::INVALID_VAL, index < callop->oOperand.size())
             << "Index " << index << " out of bounds for oOperand size " << callop->oOperand.size();
-        FE_ASSERT(callop->oOpAttrOffset.empty()) << "oOpAttrOffset is not empty for CallOp:" << callop->Dump();
+        FE_ASSERT(callop->GetOOpAttr().empty()) << "oOpAttrOffset is not empty for CallOp:" << callop->Dump();
         FE_ASSERT(callopAttr->GetArgList().empty()) << "ArgList is not empty for CallOp:" << callop->Dump();
         FE_ASSERT(callopAttr->GetOutCastIndexToExpr().empty())
             << "OutCastIndexToExpr is not empty for CallOp:" << callop->Dump();
@@ -761,17 +761,17 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
     } else {
         FE_ASSERT(FeError::INVALID_TYPE, false) << "Not support connecting other type of function currently";
     }
-    std::vector<int> iOffset;
-    std::vector<int> oOffset;
+    std::vector<OperandAttribute> iOpAttr;
+    std::vector<OperandAttribute> oOpAttr;
     std::map<int, SymbolicScalar> outIndexToExpr;
     std::vector<std::vector<SymbolicScalar>> argList;
     if (graphType_ == GraphType::BLOCK_GRAPH) {
-        argList = NormalizeCoa(iOffset, oOffset);
+        argList = NormalizeCoa(iOpAttr, oOpAttr);
         GetOutcastSymbolicExpr(outIndexToExpr);
     }
     ComputeHash();
-    return {std::move(inArgumentList), std::move(outArgumentList), std::move(iOffset),
-            std::move(oOffset),        std::move(outIndexToExpr),  std::move(argList)};
+    return {std::move(inArgumentList), std::move(outArgumentList), std::move(iOpAttr),
+            std::move(oOpAttr),        std::move(outIndexToExpr),  std::move(argList)};
 }
 
 void Function::AddWhenNotExistOrAssert(
@@ -1893,7 +1893,7 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         auto& producers = origin->GetProducers();
         bool isAssembleOut = std::any_of(producers.begin(), producers.end(), [](auto& op) -> bool {
             return (op->GetOpcode() == Opcode::OP_ASSEMBLE && op->HasAttribute("dassemble")) ||
-                   op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA;
+                   op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op->GetOpcode() == Opcode::OP_ATOMIC_RMW;
         });
         if (isAssembleOut) {
             Substitute(origin, outSymbol);
@@ -2682,7 +2682,10 @@ void Function::GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel)
     }
 }
 
-std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<int>& iOffset, std::vector<int>& oOffset)
+static bool isAtomicOp(Operation* op) { return op->HasAttr("op_attr_atomic_add"); }
+
+std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(
+    std::vector<OperandAttribute>& iOpAttr, std::vector<OperandAttribute>& oOpAttr)
 {
     std::unordered_map<int, Operation*> opmagicToOp;
     std::unordered_map<LogicalTensorPtr, int> processedOperands;
@@ -2695,8 +2698,8 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(std::vector<int>
     int coaIndex = COA_INDEX_BASE;
     std::vector<std::vector<SymbolicScalar>> coaLists;
     coaLists.reserve(incastPosition.size() + outcastPosition.size());
-    NormalizeCoaForInCasts(iOffset, coaLists, coaIndex, processedOperands, opmagicToOp);
-    NormalizeCoaForOutCasts(oOffset, coaLists, coaIndex, processedOperands, opmagicToOp);
+    NormalizeCoaForInCasts(iOpAttr, coaLists, coaIndex, processedOperands, opmagicToOp);
+    NormalizeCoaForOutCasts(oOpAttr, coaLists, coaIndex, processedOperands, opmagicToOp);
     NormalizeCoaForNormalOperands(coaLists, coaIndex, processedOperands);
     NormalizeCoaForSpecialInfo(coaLists, coaIndex);
 
@@ -2722,13 +2725,12 @@ static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
 }
 
 void Function::NormalizeCoaForInCasts(
-    std::vector<int>& iOffset, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+    std::vector<OperandAttribute>& iOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
     std::unordered_map<LogicalTensorPtr, int>& processedOperands,
     const std::unordered_map<int, Operation*>& opmagicToOp)
 {
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
-    iOffset.clear();
-    iOffset.reserve(incastPosition.size());
+    iOpAttr.reserve(incastPosition.size());
     for (auto [opmagic, k] : incastPosition) {
         auto op = opmagicToOp.at(opmagic);
         if (op->GetIOpAttrOffset(k) != -1) {
@@ -2747,8 +2749,8 @@ void Function::NormalizeCoaForInCasts(
                 IsInplaceIncast(op, copyInList)) {
                 for (auto copyIn : copyInList) {
                     operandCoaList = NormalizeCopyIn(copyIn, coaIndex, valueToIndex);
-                    copyIn->SetIOpAttrOffset(k, coaIndex);
-                    iOffset.emplace_back(coaIndex);
+                    copyIn->SetIOpAtt(k, coaIndex);
+                    iOpAttr.emplace_back(coaIndex);
                     coaIndex += operandCoaList.size();
                     coaLists.emplace_back(std::move(operandCoaList));
                 }
@@ -2757,32 +2759,33 @@ void Function::NormalizeCoaForInCasts(
             auto iOperand = op->GetInputOperand(k);
             auto it = processedOperands.find(iOperand);
             if (it != processedOperands.end()) {
-                op->SetIOpAttrOffset(k, it->second);
-                iOffset.emplace_back(it->second);
+                op->SetIOpAtt(k, it->second);
+                iOpAttr.emplace_back(it->second);
                 continue;
             }
             operandCoaList = NormalizeTensor(iOperand, coaIndex, false, op->GetOpcode() == Opcode::OP_NOP);
             processedOperands.emplace(iOperand, coaIndex);
         }
-        op->SetIOpAttrOffset(k, coaIndex);
-        iOffset.emplace_back(coaIndex);
+        op->SetIOpAtt(k, coaIndex);
+        iOpAttr.emplace_back(coaIndex);
         coaIndex += operandCoaList.size();
         coaLists.emplace_back(std::move(operandCoaList));
     }
 }
 
 void Function::NormalizeCoaForOutCasts(
-    std::vector<int>& oOffset, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
+    std::vector<OperandAttribute>& oOpAttr, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex,
     std::unordered_map<LogicalTensorPtr, int>& processedOperands,
     const std::unordered_map<int, Operation*>& opmagicToOp)
 {
     bool valueToIndex = parent_->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH;
-    oOffset.reserve(outcastPosition.size());
+    oOpAttr.reserve(outcastPosition.size());
     for (auto [opmagic, k] : outcastPosition) {
         auto op = opmagicToOp.at(opmagic);
         if (op->GetOOpAttrOffset(k) != -1) {
             continue;
         }
+        bool isAtomic = isAtomicOp(op);
         std::vector<SymbolicScalar> operandCoaList;
         if (IsCopyOut(op->GetOpcode()) && k == 0) {
             operandCoaList = NormalizeCopyOut(op, coaIndex, valueToIndex);
@@ -2790,15 +2793,15 @@ void Function::NormalizeCoaForOutCasts(
             auto oOperand = op->GetOutputOperand(k);
             auto it = processedOperands.find(oOperand);
             if (it != processedOperands.end()) {
-                op->SetOOpAttrOffset(k, it->second);
-                oOffset.emplace_back(it->second);
+                op->SetOOpAtt(k, it->second, isAtomic);
+                oOpAttr.emplace_back(it->second, isAtomic);
                 continue;
             }
             operandCoaList = NormalizeTensor(oOperand, coaIndex, false);
             processedOperands.emplace(oOperand, coaIndex);
         }
-        op->SetOOpAttrOffset(k, coaIndex);
-        oOffset.emplace_back(coaIndex);
+        op->SetOOpAtt(k, coaIndex, isAtomic);
+        oOpAttr.emplace_back(coaIndex, isAtomic);
         coaIndex += operandCoaList.size();
         coaLists.emplace_back(std::move(operandCoaList));
     }
@@ -2823,7 +2826,7 @@ void Function::NormalizeCoaForNormalOperands(
             }
             auto it = processedOperands.find(iOperand);
             if (it != processedOperands.end()) {
-                op->SetIOpAttrOffset(i, it->second);
+                op->SetIOpAtt(i, it->second);
                 continue;
             }
             if (!iOperand->GetDynOffset().empty() || !iOperand->GetDynValidShape().empty()) {
@@ -2845,13 +2848,13 @@ void Function::NormalizeCoaForNormalOperands(
             }
             auto it = processedOperands.find(oOperand);
             if (it != processedOperands.end()) {
-                op->SetOOpAttrOffset(i, it->second);
+                op->SetOOpAtt(i, it->second, isAtomicOp(op.get()));
                 continue;
             }
             if (!oOperand->GetDynOffset().empty() || !oOperand->GetDynValidShape().empty()) {
                 auto operandCoaList = NormalizeTensor(oOperand, coaIndex, valueToIndex);
                 processedOperands.emplace(oOperand, coaIndex);
-                op->SetOOpAttrOffset(i, coaIndex);
+                op->SetOOpAtt(i, coaIndex, isAtomicOp(op.get()));
                 coaIndex += operandCoaList.size();
                 coaLists.emplace_back(std::move(operandCoaList));
             }

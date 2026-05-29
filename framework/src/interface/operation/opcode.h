@@ -217,6 +217,7 @@ enum class Opcode {
     OP_ASSEMBLE_SSA,
     OP_VIEW,
     OP_VIEW_TYPE,
+    OP_ATOMIC_RMW,
     // Move
     OP_INDEX_OUTCAST,
     OP_REGISTER_COPY,
@@ -314,8 +315,8 @@ enum class Opcode {
     OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
 
     // Quantization
-    OP_QUANTIZE_SYM,   // Symmetric quantization: FP32 -> INT8
-    OP_QUANTIZE_ASYM,  // Asymmetric quantization: FP32 -> UINT8
+    OP_QUANTIZE_SYM,  // Symmetric quantization: FP32 -> INT8
+    OP_QUANTIZE_ASYM, // Asymmetric quantization: FP32 -> UINT8
     OP_DEQUANTIZE,
 
     // Begin: add for TOPK and ArgSort
@@ -378,7 +379,9 @@ enum class AIVCore;
 class TileOpCfg {
 public:
     TileOpCfg(){};
-    TileOpCfg(std ::string code, PipeType pipeIdStart, PipeType pipeIdEnd, CoreType coreType, AIVCore aivCore = static_cast<AIVCore>(-1))
+    TileOpCfg(
+        std ::string code, PipeType pipeIdStart, PipeType pipeIdEnd, CoreType coreType,
+        AIVCore aivCore = static_cast<AIVCore>(-1))
         : tileOpCode_(code), pipeIdStart_(pipeIdStart), pipeIdEnd_(pipeIdEnd), coreType_(coreType), aivCore_(aivCore)
     {}
     std::string tileOpCode_;
@@ -587,8 +590,8 @@ inline Opcode FindOpcode(const std::string& op)
     }
 
     if (!OpcodeManager::Inst().HasOpcode(originOp)) {
-        ASSERT(OperationErr::OP_INVALID_OPCODE, 0)
-            << "Can't find op " << originOp << "\n" << OpcodeManager::Inst().PrintSupportOpcodes();
+        ASSERT(OperationErr::OP_INVALID_OPCODE, 0) << "Can't find op " << originOp << "\n"
+                                                   << OpcodeManager::Inst().PrintSupportOpcodes();
     }
 
     return OpcodeManager::Inst().GetOpcode(originOp);
@@ -623,13 +626,10 @@ const std::unordered_set<Opcode> BINARY_OPS{
     Opcode::OP_EXPANDEXPDIF,
     Opcode::OP_COPYSIGN,
     Opcode::OP_FLOORDIV,
-    Opcode::OP_FLOORDIVS
-};
+    Opcode::OP_FLOORDIVS};
 
-const std::unordered_set<Opcode> BINARY_WITH_BRC_OPS{
-    Opcode::OP_ADD_BRC, Opcode::OP_SUB_BRC, Opcode::OP_MUL_BRC,
-    Opcode::OP_DIV_BRC, Opcode::OP_MAX_BRC, Opcode::OP_MIN_BRC
-};
+const std::unordered_set<Opcode> BINARY_WITH_BRC_OPS{Opcode::OP_ADD_BRC, Opcode::OP_SUB_BRC, Opcode::OP_MUL_BRC,
+                                                     Opcode::OP_DIV_BRC, Opcode::OP_MAX_BRC, Opcode::OP_MIN_BRC};
 
 const std::unordered_set<Opcode> UNARY_OPS{
     Opcode::OP_EXP,    Opcode::OP_EXP2,       Opcode::OP_EXPM1,     Opcode::OP_NEG,         Opcode::OP_RSQRT,
@@ -638,9 +638,8 @@ const std::unordered_set<Opcode> UNARY_OPS{
     Opcode::OP_ROWMAX, Opcode::OP_ROWEXPSUM,  Opcode::OP_ROWEXPMAX, Opcode::OP_L1_TO_L1,    Opcode::OP_COPY_UB_TO_UB,
     Opcode::OP_ROUND,  Opcode::OP_ROWSUMLINE, Opcode::OP_ABS,       Opcode::OP_LN,          Opcode::OP_ISFINITE,
     Opcode::OP_HUB,    Opcode::OP_BITWISENOT, Opcode::OP_SIGN,      Opcode::OP_ROWPRODLINE, Opcode::OP_SIGNBIT,
-    Opcode::OP_SIN,    Opcode::OP_COS,      Opcode::OP_ERFC,      Opcode::OP_ASIN,
-    Opcode::OP_ACOS,   Opcode::OP_ERF
-};
+    Opcode::OP_SIN,    Opcode::OP_COS,        Opcode::OP_ERFC,      Opcode::OP_ASIN,        Opcode::OP_ACOS,
+    Opcode::OP_ERF};
 
 const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_COMPACT,
@@ -665,8 +664,7 @@ const std::unordered_set<Opcode> UNARY_OPS_WITH_TMP{
     Opcode::OP_TANH,
     Opcode::OP_ASIN,
     Opcode::OP_ACOS,
-    Opcode::OP_ATANH
-};
+    Opcode::OP_ATANH};
 
 const std::unordered_set<Opcode> VECTOR_SCALAR_OPS{
     Opcode::OP_ADDS,

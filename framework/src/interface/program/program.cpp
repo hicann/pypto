@@ -129,8 +129,8 @@ void Program::CreateCallerCalleeLink(Function* caller, Function* callee)
     FunctionCallArgs args = {
         .iOperands = caller->inCasts_,
         .oOperands = caller->outCasts_,
-        .iOpAttrOffset = {},
-        .oOpAttrOffset = {},
+        .iOpAttr = {},
+        .oOpAttr = {},
         .outIndexToExpr = {},
         .argList = {},
     };
@@ -309,7 +309,7 @@ Operation& Program::ConnectCallerGusket(Function& caller, FunctionCallArgs& args
     //  2. Draw graph
     auto& callFunc = caller.AddRawOperation(Opcode::OP_CALL, args.iOperands, args.oOperands, false);
     callFunc.SetOpAttribute(currentFunctionPtr_->CreateCallOpAttribute(args.argList, args.outIndexToExpr));
-    callFunc.SetOpOffset(args.iOpAttrOffset, args.oOpAttrOffset);
+    callFunc.SetOperandAttr(args.iOpAttr, args.oOpAttr);
     return callFunc;
 }
 

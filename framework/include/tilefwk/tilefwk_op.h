@@ -44,6 +44,8 @@ enum class TopKAlgo {
     RADIX_SELECT,
 };
 
+enum class AtomicRMWMode { ADD, MAX, MIN };
+
 enum class DequantScaleRoundingMode : int64_t {
     ROUND_UP = 0,
     ROUND_DOWN = 1,
@@ -138,6 +140,8 @@ struct AssembleItem {
 
 void Assemble(const std::vector<AssembleItem>& items, Tensor& src, bool parallelInAssemble = false);
 
+void AtomicRMW(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest, AtomicRMWMode mode);
+
 Tensor Reshape(
     const Tensor& operand, const std::vector<int64_t>& dstshape, const std::vector<SymbolicScalar>& validShape = {},
     const bool inplace = false);
@@ -171,7 +175,9 @@ Tensor Neg(const Tensor& self);
 Tensor Round(const Tensor& self, const int& decimals = 0);
 Tensor Rsqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Relu(const Tensor& self);
-Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string mode = "constant", const Element& value = Element(DT_FP32, 0.0));
+Tensor Pad(
+    const Tensor& self, const std::vector<int64_t>& padding, std::string mode = "constant",
+    const Element& value = Element(DT_FP32, 0.0));
 Tensor FillPad(const Tensor& self, std::string mode = "constant", const Element& value = Element(DT_FP32, 0.0));
 Tensor BitwiseNot(const Tensor& self);
 Tensor Sqrt(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
@@ -191,7 +197,7 @@ Tensor Tan(const Tensor& operand);
 Tensor Signbit(const Tensor& operand);
 Tensor Sinh(const Tensor& self);
 Tensor Cosh(const Tensor& self);
-Tensor Tanh(const Tensor &operand);
+Tensor Tanh(const Tensor& operand);
 Tensor Asin(const Tensor& self);
 Tensor Acos(const Tensor& self);
 Tensor ASinh(const Tensor& self);

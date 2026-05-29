@@ -80,6 +80,12 @@ void BindEnum(py::module& m)
         .value("ON", SaturationMode::ON)
         .finalize();
 
+    py::native_enum<AtomicRMWMode>(m, "AtomicRMWMode", "enum.IntEnum")
+        .value("ADD", AtomicRMWMode::ADD)
+        .value("MIN", AtomicRMWMode::MIN)
+        .value("MAX", AtomicRMWMode::MAX)
+        .finalize();
+
     py::native_enum<PrecisionType>(m, "PrecisionType", "enum.IntEnum")
         .value("INTRINSIC", PrecisionType::INTRINSIC)
         .value("HIGH_PRECISION", PrecisionType::HIGH_PRECISION)

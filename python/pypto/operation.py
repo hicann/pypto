@@ -12,7 +12,7 @@
 from typing import Optional, Union, List, overload, Sequence, Tuple
 
 from . import pypto_impl
-from .enum import DataType
+from .enum import DataType, AtomicRMWMode
 from ._op_wrapper import op_wrapper
 from ._utils import to_syms
 from .symbolic_scalar import SymbolicScalar
@@ -122,6 +122,24 @@ def max(a: "SymbolicScalar | int", b: "SymbolicScalar | int") -> "SymbolicScalar
     if isinstance(a, int):
         a = SymbolicScalar(a)
     return a.max(b)
+
+
+def atomic_add(src: Tensor, offsets: List[Union[int, SymbolicScalar]], dst: Tensor):
+    """
+    Atomic add operation on the input tensor.
+
+    Parameters
+    ---------
+    src: Tensor
+        The input tensor to be added.
+
+    offsets : List[int | SymbolicScalar]
+        List of offset values to be added to the input tensor.
+
+    dst: Tensor
+        The output tensor that will contain the atomic add result.
+    """
+    pypto_impl.AtomicRMW(src.base(), to_syms(offsets), dst.base(), AtomicRMWMode.ADD)
 
 
 @op_wrapper

@@ -22,8 +22,8 @@
 namespace npu {
 namespace tile_fwk {
 struct ExtractInfo {
-    std::vector<int>& iOffsets;
-    std::vector<int>& oOffsets;
+    std::vector<OperandAttribute>& iOffsets;
+    std::vector<OperandAttribute>& oOffsets;
     std::set<LogicalTensorPtr>& processedIncasts;
     std::set<LogicalTensorPtr>& processedOutcasts;
 };
@@ -34,8 +34,8 @@ struct CallOpCreationInfo {
     size_t componentIndex;
     Operation* originalCallOp;
     uint64_t wrapId;
-    std::vector<int> iOffsets;
-    std::vector<int> oOffsets;
+    std::vector<OperandAttribute> iOffsets;
+    std::vector<OperandAttribute> oOffsets;
     Operation* createdCallOp = nullptr;
 };
 
@@ -72,8 +72,8 @@ private:
     int FindTensorIndexInList(int tensorMagic, const std::vector<LogicalTensorPtr>& tensorList) const;
     // 参数提取函数
     void FindIOpAttrOffsetAndOOpAttrOffset(
-        Function& leafFunc, const SubfuncInvokeInfoTy& invokeInfo, std::vector<int>& iOffsets,
-        std::vector<int>& oOffsets, Function* originalMixFunc) const;
+        Function& leafFunc, const SubfuncInvokeInfoTy& invokeInfo, std::vector<OperandAttribute>& iOffsets,
+        std::vector<OperandAttribute>& oOffsets, Function* originalMixFunc) const;
     bool FindIOpAttrOffsetFromIncast(
         const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const;
     bool FindOOpAttrOffsetFromOutcast(
@@ -87,8 +87,8 @@ private:
         const std::vector<std::shared_ptr<LogicalTensor>>& actualOutcasts, ExtractInfo& extractInfo,
         Function* originalMixFunc) const;
 
-    int GetOffsetFromOp(int opMagic, int operandIdx, Function& leafFunc, bool isOutput) const;
-    int FindOriginalOffsetInMixFunction(LogicalTensorPtr tensor, Function* originalMixFunc) const;
+    OperandAttribute GetOperandAttr(int opMagic, int operandIdx, Function& leafFunc, bool isOutput) const;
+    OperandAttribute FindOriginalAttrInMixFunction(LogicalTensorPtr tensor, Function* originalMixFunc) const;
     void SetCallOpAttribute(
         Function& leafFunc, Operation& callOp, Operation* originalCallOp, CallOpAttribute* originalCallAttr,
         uint64_t newProgramID, uint64_t componentIndex, SubgraphToFunction& subgraphToFunction,

@@ -84,14 +84,14 @@ protected:
         auto& copyout1 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_OUT, {inputTensor}, {tensor1});
         copyout1.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
-        copyout1.SetOOpAttrOffset(0, 0);
+        copyout1.SetOOpAtt(0, 0);
         copyout1.UpdateInternalSubgraphID(1);
         copyout1.SetAttr(OpAttributeKey::isCube, true);
 
         auto& copyin3 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {tensor2}, {outputTensor});
         copyin3.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
-        copyin3.SetIOpAttrOffset(0, 0);
+        copyin3.SetIOpAtt(0, 0);
         copyin3.UpdateInternalSubgraphID(1);
         copyin3.SetAttr(OpAttributeKey::isCube, true);
 
@@ -99,7 +99,7 @@ protected:
         auto& copyin2 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor2});
         copyin2.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
-        copyin2.SetIOpAttrOffset(0, 0);
+        copyin2.SetIOpAtt(0, 0);
         copyin2.UpdateInternalSubgraphID(0);
         copyin2.SetAIVCore(AIVCore::AIV0);
 
@@ -301,7 +301,7 @@ void CreateVectorScope(
 
     // Vector scope op（internalSubgraphID=1）
     auto& vectorAdd = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_ADD, {cubeTensor3, incast3}, {vectorTensor1});
-    vectorAdd.SetIOpAttrOffset(1, 5);
+    vectorAdd.SetIOpAtt(1, 5);
     vectorAdd.UpdateInternalSubgraphID(1);
     vectorAdd.SetAIVCore(AIVCore::AIV0);
 
@@ -312,7 +312,7 @@ void CreateVectorScope(
     auto& vectorCopyOut = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_OUT, {vectorTensor2}, {outcast1});
     vectorCopyOut.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
-    vectorCopyOut.SetOOpAttrOffset(0, 0);
+    vectorCopyOut.SetOOpAtt(0, 0);
     vectorCopyOut.UpdateInternalSubgraphID(1);
     vectorCopyOut.SetAIVCore(AIVCore::AIV0);
 }
@@ -336,14 +336,14 @@ void CreateCubeScope(
     auto& cubeCopyIn1 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {incast1}, {cubeTensor1});
     cubeCopyIn1.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
-    cubeCopyIn1.SetIOpAttrOffset(0, 0);
+    cubeCopyIn1.SetIOpAtt(0, 0);
     cubeCopyIn1.UpdateInternalSubgraphID(0);
     cubeCopyIn1.SetAttr(OpAttributeKey::isCube, true);
 
     auto& cubeCopyIn2 = IRBuilder().CreateTensorOpStmt(*mixFuncPtr, Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
     cubeCopyIn2.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
-    cubeCopyIn2.SetIOpAttrOffset(0, 0);
+    cubeCopyIn2.SetIOpAtt(0, 0);
     cubeCopyIn2.UpdateInternalSubgraphID(0);
     cubeCopyIn2.SetAttr(OpAttributeKey::isCube, true);
 
@@ -472,7 +472,7 @@ void CreateNonMixFunctions(
 
         auto internalTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
         auto& copyInOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_IN, {incastTensor}, {internalTensor1});
-        copyInOp.SetIOpAttrOffset(0, 0);
+        copyInOp.SetIOpAtt(0, 0);
 
         auto shapeImme = OpImmediate::Specified(shape);
         std::vector<int64_t> offsetVec = {0, 0};
@@ -486,7 +486,7 @@ void CreateNonMixFunctions(
         auto& expOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_EXP, {internalTensor1}, {internalTensor2});
         (void)expOp;
         auto& copyOutOp = IRBuilder().CreateTensorOpStmt(*nonMixFunc, Opcode::OP_COPY_OUT, {internalTensor2}, {outcastTensor});
-        copyOutOp.SetOOpAttrOffset(0, 0);
+        copyOutOp.SetOOpAtt(0, 0);
 
         auto copyOutAttr =
             std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec);
@@ -560,7 +560,7 @@ void CreateAdditionalScopes(std::shared_ptr<Function>& mixFunc, int componentCou
     // 创建COPY_OUT op
     auto& copyOut = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_OUT, {lastTensor}, {mixFunc->outCasts_[0]});
     copyOut.UpdateInternalSubgraphID(componentCount - 1);
-    copyOut.SetOOpAttrOffset(0, 0);
+    copyOut.SetOOpAtt(0, 0);
 
     auto shapeImme = OpImmediate::Specified(shape);
     std::vector<int64_t> offsetVec = {0, 0};
@@ -610,7 +610,7 @@ void CreateMixFunctions(
 
         auto& copyIn1 = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_IN, {incast1}, {cubeTensor1});
         copyIn1.UpdateInternalSubgraphID(0);
-        copyIn1.SetIOpAttrOffset(0, 0);
+        copyIn1.SetIOpAtt(0, 0);
         copyIn1.SetAttr(OpAttributeKey::isCube, true);
         auto copyIn1Attr =
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
@@ -618,7 +618,7 @@ void CreateMixFunctions(
 
         auto& copyIn2 = IRBuilder().CreateTensorOpStmt(*mixFunc, Opcode::OP_COPY_IN, {incast2}, {cubeTensor2});
         copyIn2.UpdateInternalSubgraphID(0);
-        copyIn2.SetIOpAttrOffset(0, 0);
+        copyIn2.SetIOpAtt(0, 0);
         copyIn2.SetAttr(OpAttributeKey::isCube, true);
         auto copyIn2Attr =
             std::make_shared<CopyOpAttribute>(offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec);
