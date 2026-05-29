@@ -31,8 +31,8 @@ Vector op默认对尾轴做32B对齐
 */
 class PadLocalBuffer : public Pass {
 public:
-    explicit PadLocalBuffer(std::string name = "PadLocalBuffer", bool processTranspose = false)
-        : Pass(name), processTranspose_(processTranspose)
+    explicit PadLocalBuffer(std::string name = "PadLocalBuffer")
+        : Pass(name)
     {}
     ~PadLocalBuffer() override = default;
 
@@ -41,35 +41,30 @@ private:
     void PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex);
     void PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum);
     void PadMatmul(Operation& op, LogicalTensorPtr& in);
-    void PadVector(
-        Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw,
-        bool noPadding);
+    bool TryPadMatmulMXScene(Operation& op, LogicalTensorPtr& in);
+    int64_t GetMatmulPaddingValue(Operation& op, LogicalTensorPtr& in) const;
+    void PadMatmulHighLow(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex, int64_t padValue);
+    void PadVector(Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
     void PadVector256(Operation& op, LogicalTensorPtr& in, bool needRowPad);
-    bool IsExpandLastDim(const Operation& op);
-    void TraverseCopyInConsumers(
-        Function& function, Operation& consumer, std::unordered_set<LogicalTensorPtr>& visitedTensors);
-    void TraverseBroadcast(
-        Function& function, Operation& consumer, LogicalTensorPtr output,
-        std::unordered_set<LogicalTensorPtr>& visitedTensors);
-    void TraverseAndSetAttr(
-        LogicalTensorPtr& output, Function& function, std::unordered_set<LogicalTensorPtr>& visitedTensors);
-    void ProcessBroadcast(Operation& op, size_t blockPadding);
-    Status ProcessTranspose(Function& function);
+    void ProcessBroadcast(Operation& op, int64_t blockPadding);
+    void PrepareBroadcast(Function& function);
     void PadVectorForAxisCombine(
         Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
     bool IsUb2L1CopyOp(const Operation& op);
     bool HandleUb2L1CopyOp(Operation& op, LogicalTensorPtr& in);
+    bool ShouldSkipVectorPad(Operation& op, LogicalTensorPtr& in);
     int64_t ProcessBroadcastForAxisCombine(LogicalTensorPtr& inTensor);
     bool IsElementwiseLikeOp(OpCalcType calcType, const Operation& op, Operation* producerOp) const;
     void DoBrcbOpPadding(
-        Operation& op, LogicalTensorPtr& in, size_t lastIdx, size_t paddingValue,
+        Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue,
         std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);
-    void DoElementwiseLikePadding(const Operation& op, LogicalTensorPtr& in, size_t lastIdx, size_t paddingValue);
+    void DoElementwiseLikePadding(const Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue);
     bool IsMatmul(const LogicalTensorPtr& tensor) const;
-    bool IsVector(const LogicalTensorPtr& tensor);
+    bool IsVector(const LogicalTensorPtr& tensor) const;
+    void PadSingleTensor(Operation& op, LogicalTensorPtr& tensor,
+        std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw, bool needRowPad = false);
     void DoPadding(Function& function);
-    void DoPadding256(Function& function);
-    void ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, size_t paddingValue);
+    void ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, int64_t paddingValue);
     int64_t AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base);
     bool IsInputDataType(
         const Operation& op, const LogicalTensorPtr& in, const std::unordered_set<DataType>& targetTypes) const;
@@ -77,11 +72,9 @@ private:
     Shape& SetOriRawshape(LogicalTensorPtr& in);
     // 获取已保存的原始 rawshape
     Shape& GetOriRawshape(LogicalTensorPtr& in);
-    bool processTranspose_;
     std::unordered_map<int64_t, int64_t> broadcastLastAxis_;
-    bool combineAxis{false};
-
-    AxisCombineMarker axisCombineMarker;
+    bool combineAxis_ = false;
+    AxisCombineMarker axisCombineMarker_;
     std::unordered_map<int, Shape> oriRawshapeMap_; // 存储原始 rawshape，替代 RawTensor::oriRawshape
 };
 } // namespace npu::tile_fwk

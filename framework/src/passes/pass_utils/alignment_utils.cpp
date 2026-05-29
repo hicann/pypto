@@ -60,7 +60,7 @@ bool AlignmentUtils::IsLastDim32BAligned(const LogicalTensorPtr& tensor)
     return ((lastDim * bytes) % 32) == 0;
 }
 
-inline int64_t AlignmentUtils::Pad(int64_t dim, int64_t padValue)
+int64_t AlignmentUtils::Pad(int64_t dim, int64_t padValue)
 {
     if (padValue == 0) {
         return dim;
@@ -86,5 +86,19 @@ void AlignmentUtils::ProcessLastDim32BAlignedOnUB(LogicalTensorPtr tensor)
         tensor->tensor->rawshape[lastIdx] = Pad(oriRawshapeValue, rawShapePadded);
     }
 }
+
+size_t AlignmentUtils::GetLastDimBytes(const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr || tensor->GetRawTensor() == nullptr) {
+        return 0;
+    }
+    auto& rawshape = tensor->GetRawTensor()->GetRawShape();
+    if (rawshape.empty()) {
+        return 0;
+    }
+    return rawshape.back() * BytesOf(tensor->GetRawTensor()->GetDataType());
+}
+
+int64_t AlignmentUtils::PadRowDim(int64_t dim, int64_t padValue) { return dim + padValue - 1; }
 
 } // namespace npu::tile_fwk

@@ -27,12 +27,10 @@ void AxisCombineMarker::Run(Function& function)
     ResolveGroupStatus();
 }
 
-bool AxisCombineMarker::IsTensorEnableAxisCombine(LogicalTensorPtr tensor)
+bool AxisCombineMarker::IsTensorEnableAxisCombine(LogicalTensorPtr tensor) const
 {
-    if (tensorStatus_.find(tensor) != tensorStatus_.end() && tensorStatus_[tensor] == AxisReorderStatus::ENABLE) {
-        return true;
-    }
-    return false;
+    auto it = tensorStatus_.find(tensor);
+    return it != tensorStatus_.end() && it->second == AxisReorderStatus::ENABLE;
 }
 
 void AxisCombineMarker::Init(Function& function)

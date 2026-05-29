@@ -155,97 +155,6 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
     return SUCCESS;
 }
 
-void CodegenPreproc::CombineTailAxis(std::vector<int64_t>& shape, size_t shapeSize) const
-{
-    shape[shapeSize - 1] = shape[shapeSize - 1] * shape[shapeSize - NUM2];
-    shape[shapeSize - NUM2] = 1;
-}
-
-void CodegenPreproc::CombineLastAxis(std::vector<SymbolicScalar>& shape, size_t shapeSize) const
-{
-    IRBuilder builder;
-    shape[shapeSize - 1] = shape[shapeSize - 1] * shape[shapeSize - NUM2];
-    shape[shapeSize - NUM2] = builder.CreateConstInt(1);
-}
-
-void CodegenPreproc::CombineTailOffset(LogicalTensor& tensor, const std::vector<int64_t>& rawShape) const
-{
-    size_t shapeSize = rawShape.size();
-    auto offset = tensor.GetOffset();
-    auto dynOffset = tensor.GetDynOffset();
-    CombineLastTwoAxisOffset(offset, rawShape, shapeSize);
-    CombineLastTwoAxisOffset(dynOffset, rawShape, shapeSize);
-    tensor.UpdateOffset(TensorOffset(offset, dynOffset));
-}
-
-Status CodegenPreproc::ProcessAxis(Operation& op, std::vector<bool> attr, bool isInput) const
-{
-    LogicalTensors operands = isInput ? op.GetIOperands() : op.GetOOperands();
-    if (attr.size() < operands.size()) {
-        for (size_t i = 0; i < operands.size() - attr.size(); ++i) {
-            attr.emplace_back(false);
-        }
-    }
-    if (attr.size() != operands.size()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "%d %s attr size(%zu) is not equal to operands size(%zu), ProcessAxis failed.",
-            op.GetOpMagic(), op.GetOpcodeStr().c_str(), attr.size(), operands.size());
-        return FAILED;
-    }
-    for (size_t i = 0; i < operands.size(); ++i) {
-        if (attr[i]) {
-            size_t shapeSize = operands[i]->shape.size();
-            auto oldRawShape = operands[i]->tensor->rawshape;
-            CombineTailOffset(*operands[i], oldRawShape);
-            CombineTailAxis(operands[i]->shape, shapeSize);
-            CombineTailAxis(operands[i]->tensor->rawshape, shapeSize);
-        }
-    }
-    return SUCCESS;
-}
-
-Status CodegenPreproc::ForceCombineAxis(Function& func) const
-{
-    for (auto& subProgram : func.rootFunc_->programs_) {
-        for (auto& op : subProgram.second->Operations(false)) {
-            if (op.HasAttr(OP_ATTR_PREFIX + "input_combine_axis")) {
-                std::vector<bool> attrIn;
-                op.GetAttr(OP_ATTR_PREFIX + "input_combine_axis", attrIn);
-                op.SetAttribute(OpAttributeKey::inputCombineAxisDone, true);
-                if (ProcessAxis(op, attrIn, true) != SUCCESS) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation,
-                        "ForceCombineAxis failed at function ProcessAxis(input) for subProgram(%lu).",
-                        subProgram.first);
-                    return FAILED;
-                }
-                if (op.GetOpcode() == Opcode::OP_COPY_OUT) {
-                    op.SetAttribute(OpAttributeKey::outputCombineAxisDone, true);
-                    auto output = op.GetOOperands()[0];
-                    CombineTailAxis(output->tensor->rawshape, output->tensor->rawshape.size());
-                }
-            }
-            if (op.HasAttr(OP_ATTR_PREFIX + "output_combine_axis")) {
-                std::vector<bool> attrOut;
-                op.GetAttr(OP_ATTR_PREFIX + "output_combine_axis", attrOut);
-                op.SetAttribute(OpAttributeKey::outputCombineAxisDone, true);
-                if (ProcessAxis(op, attrOut, false) != SUCCESS) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation,
-                        "ForceCombineAxis failed at function ProcessAxis(out) for subProgram(%lu).", subProgram.first);
-                    return FAILED;
-                }
-                if (op.GetOpcode() == Opcode::OP_COPY_IN) {
-                    op.SetAttribute(OpAttributeKey::inputCombineAxisDone, true);
-                    auto input = op.GetIOperands()[0];
-                    CombineTailAxis(input->tensor->rawshape, input->tensor->rawshape.size());
-                }
-            }
-        }
-    }
-    return SUCCESS;
-}
-
 inline bool IsUBCopy(Operation& op)
 {
     if (IsCopyIn(op.GetOpcode())) {
@@ -573,11 +482,6 @@ Status CodegenPreproc::RunOnFunction(Function &function)
         if (ForceCombineAxisForAxisCombine(function) != SUCCESS) {
             APASS_LOG_ERROR_F(
                 Elements::Operation, "CodegenPreproc RunOnFunction failed at function ForceCombineAxisForAxisCombine.");
-            return FAILED;
-        }
-    } else {
-        if (ForceCombineAxis(function) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "CodegenPreproc RunOnFunction failed at function ForceCombineAxis.");
             return FAILED;
         }
     }

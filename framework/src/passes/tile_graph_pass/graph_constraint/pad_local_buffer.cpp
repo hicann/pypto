@@ -17,41 +17,26 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/alignment_utils.h"
 #include "passes/pass_utils/reschedule_utils.h"
+#include <numeric>
 
 #define MODULE_NAME "PadLocalBuffer"
 
 namespace npu::tile_fwk {
 constexpr size_t MATMUL_MIN_SHAPE_SIZE = 2;
-constexpr size_t VECTOR_MIN_SHAPE_SIZE = 1;
-constexpr size_t AXIS_COMBINE_MIN_SHAPE_SIZE = 2;
-constexpr size_t TRANSPOSE_MIN_SHAPE_SIZE = 2;
-constexpr size_t BROADCAST_OP_INPUT_SIZE = 2;
-/* 记录不同matmul的padding值的index */
-constexpr size_t CUBE_INPUT_SIZE = 4;
-constexpr size_t MATMUL_AXIS_NUM = 2;
-constexpr size_t MATRIX_AND_INDEX_NUM = 2;
-constexpr size_t HIGH_INDEX = 0;
-constexpr size_t LOW_INDEX = 1;
-constexpr uint32_t LEFT_SHIFT32 = 32;
 constexpr int64_t CUBE_PAD_VALUE = 16;
 constexpr int64_t CUBE_PAD_B8_VALUE = 32;
 constexpr int64_t CUBE_PAD_B4_VALUE = 64;
 constexpr int64_t BT_PAD_BASE = 64;
 constexpr int64_t mxHighAxis = 0;
 constexpr int64_t mxLowAxis = 1;
-const std::vector<bool> AXIS_COMBINED = {true};
-const std::vector<bool> BROADCAST_AXIS_COMBINED = {true, true};
 const std::unordered_set<DataType> b8DataSupport = {
     DataType::DT_INT8, DataType::DT_FP8E5M2, DataType::DT_FP8E4M3, DataType::DT_HF8};
 const std::unordered_set<DataType> b4DataSupport = {DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2};
 // combine_axis
 const int64_t BRCB_SECOND_LAST_BASE = 8;
 const size_t LAST_SECOND_AXIS = 2;
-const std::string REDUCE_AXIS = OP_ATTR_PREFIX + "AXIS";
 const std::unordered_set<OpCalcType> ELEMENTWISE_LIKE_TYPES{
     OpCalcType::CAST, OpCalcType::ELMWISE, OpCalcType::MOVE_IN, OpCalcType::MOVE_OUT};
-int64_t Pad(int64_t dim, int64_t padValue) { return (dim + padValue - 1) / padValue * padValue; }
-
 // 设置原始 rawshape（替代 RawTensor::oriRawshape = rawshape）
 // 原始代码中 oriRawshape 是每次进入函数时都设置为当前 rawshape 值
 Shape& PadLocalBuffer::SetOriRawshape(LogicalTensorPtr& in)
@@ -76,7 +61,7 @@ Shape& PadLocalBuffer::GetOriRawshape(LogicalTensorPtr& in)
 bool PadLocalBuffer::IsInputDataType(
     const Operation& op, const LogicalTensorPtr& in, const std::unordered_set<DataType>& targetTypes) const
 {
-    std::vector<Opcode> cubeOps = {
+    static const std::unordered_set<Opcode> cubeOps = {
         Opcode::OP_A_MUL_B, Opcode::OP_AT_MUL_B, Opcode::OP_A_MUL_BT, Opcode::OP_AT_MUL_BT, Opcode::OP_A_MULACC_B};
 
     if (in == nullptr || in->tensor == nullptr) {
@@ -93,7 +78,7 @@ bool PadLocalBuffer::IsInputDataType(
         Elements::Tensor, "####### %d data type is %s\n", in->magic,
         DataType2VectorRegStr(in->tensor->GetDataType()).c_str());
 
-    bool matmulOp = std::find(cubeOps.begin(), cubeOps.end(), op.GetOpcode()) != cubeOps.end();
+    bool matmulOp = cubeOps.count(op.GetOpcode()) != 0;
     bool opsInputDtype = false;
     if (op.GetIOperands().size() > 0 && op.GetIOperands()[0] != nullptr && op.GetIOperands()[0]->tensor != nullptr) {
         opsInputDtype = targetTypes.find(op.GetIOperands()[0]->tensor->GetDataType()) != targetTypes.end();
@@ -127,7 +112,7 @@ void PadLocalBuffer::PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in
     auto& padShape = in->tensor->rawshape;
     Shape& oriRawshape = GetOriRawshape(in);                        // 获取已保存的 oriRawshape
     if ((*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_BT) { // Opcode::OP_L1_TO_BT input 和 output shape 一致
-        auto preInput = (*producers.begin())->GetIOperands().front();
+        const auto& preInput = (*producers.begin())->GetIOperands().front();
         padShape = preInput->tensor->rawshape;
         return;
     }
@@ -138,17 +123,53 @@ void PadLocalBuffer::PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in
                 in->magic);
             return;
         }
-        padShape[lowIndex] = Pad(oriRawshape[lowIndex], BT_PAD_BASE / bytes);
+        padShape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], BT_PAD_BASE / bytes);
     } else if ((*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE ||
             (*consumers.begin())->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE) { // Opcode::OP_L1_TO_FIX_QUANT_PRE
-        padShape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_VALUE);
+        padShape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], CUBE_PAD_VALUE);
     }
 }
 
 void PadLocalBuffer::PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum)
 {
     Shape& oriRawshape = SetOriRawshape(in); // 先设置，再使用
-    in->tensor->rawshape[axisNum] = Pad(oriRawshape[axisNum], CUBE_PAD_B8_VALUE);
+    in->tensor->rawshape[axisNum] = AlignmentUtils::Pad(oriRawshape[axisNum], CUBE_PAD_B8_VALUE);
+}
+
+bool PadLocalBuffer::TryPadMatmulMXScene(Operation& op, LogicalTensorPtr& in)
+{
+    const auto& producers = in->GetProducers();
+    if (producers.empty()) {
+        return false;
+    }
+    auto producerOpcode = (*producers.begin())->GetOpcode();
+    if (op.GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE || producerOpcode == Opcode::OP_L1_TO_L0A_SCALE) {
+        PadForMatMulMX(in, mxHighAxis);
+        return true;
+    }
+    if (op.GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE || producerOpcode == Opcode::OP_L1_TO_L0B_SCALE) {
+        PadForMatMulMX(in, mxLowAxis);
+        return true;
+    }
+    return false;
+}
+
+int64_t PadLocalBuffer::GetMatmulPaddingValue(Operation& op, LogicalTensorPtr& in) const
+{
+    if (IsInputDataType(op, in, b8DataSupport)) {
+        return CUBE_PAD_B8_VALUE;
+    }
+    if (IsInputDataType(op, in, b4DataSupport)) {
+        return CUBE_PAD_B4_VALUE;
+    }
+    return CUBE_PAD_VALUE;
+}
+
+void PadLocalBuffer::PadMatmulHighLow(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex, int64_t padValue)
+{
+    Shape& oriRawshape = GetOriRawshape(in); // 获取已保存的 oriRawshape
+    in->tensor->rawshape[highIndex] = AlignmentUtils::Pad(oriRawshape[highIndex], padValue);
+    in->tensor->rawshape[lowIndex] = AlignmentUtils::Pad(oriRawshape[lowIndex], padValue);
 }
 
 void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
@@ -175,8 +196,6 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
                                    (*consumers.begin())->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE);
     const bool isUB2L1Scene = !consumers.empty() && *consumers.begin() != nullptr &&
                               (*consumers.begin())->GetOpcode() == Opcode::OP_UB_COPY_L1;
-    const bool IsInputB8 = IsInputDataType(op, in, b8DataSupport);
-    const bool IsInputB4 = IsInputDataType(op, in, b4DataSupport);
     /*
     首先，可以通过in的数据类型是否为int8来判断是否要做32B对齐。
     再者，存在两种情况
@@ -186,14 +205,7 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
     (dtype:fp16/int32) -> iOperands (dtype:fp16/int32) -> COPY_OUT
     这种情况是COPY_OUT需要根据in的producer的iOperands来进行判断，所以会需要获取到in的producer的iOperands的数据类型。
     */
-    if (op.GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE ||
-        (*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE) {
-        PadForMatMulMX(in, mxHighAxis);
-        return;
-    } else if (
-        op.GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE ||
-        (*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE) {
-        PadForMatMulMX(in, mxLowAxis);
+    if (TryPadMatmulMXScene(op, in)) {
         return;
     }
     if (in->tensor->rawshape.size() < MATMUL_MIN_SHAPE_SIZE) {
@@ -202,7 +214,7 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
             op.opmagic, op.GetOpcodeStr().c_str(), in->magic);
         return;
     }
-    Shape& oriRawshape = SetOriRawshape(in); // 先设置，再使用
+    SetOriRawshape(in); // 先设置，再使用
     if (isL1ConvertScene) {
         /*
         输入带bias或fixpipe场景，切分tileShape为[1, N]，在L1_TO_BT和L1_TO_FIX_QUANT_PRE时，BT统一为FP32，BT
@@ -220,15 +232,8 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
         L1_TO_L0B --> L0B (shape:[400, 16])  -->   /
         */
         PadMatmulL1ConvertScene(op, in, lowIndex);
-    } else if (IsInputB8) {
-        in->tensor->rawshape[highIndex] = Pad(oriRawshape[highIndex], CUBE_PAD_B8_VALUE);
-        in->tensor->rawshape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_B8_VALUE);
-    } else if (IsInputB4) {
-        in->tensor->rawshape[highIndex] = Pad(oriRawshape[highIndex], CUBE_PAD_B4_VALUE);
-        in->tensor->rawshape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_B4_VALUE);
     } else {
-        in->tensor->rawshape[highIndex] = Pad(oriRawshape[highIndex], CUBE_PAD_VALUE);
-        in->tensor->rawshape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_VALUE);
+        PadMatmulHighLow(in, highIndex, lowIndex, GetMatmulPaddingValue(op, in));
     }
     if (isUB2L1Scene) {
         // 针对UB2L1场景下，做vec2vecND2NZ操作时，通过在外轴增加一行，来解决bank冲突，提高搬运性能
@@ -238,23 +243,6 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
         Elements::Tensor, "####### %d %d set rawshape as %s\n", in->tensor->rawmagic, in->magic,
         IntVecToStr(in->tensor->rawshape).c_str());
 }
-
-size_t GetLastDimBytes(const LogicalTensorPtr& tensor)
-{
-    auto& rawshape = tensor->GetRawTensor()->GetRawShape();
-    if (rawshape.empty()) {
-        return 0;
-    }
-
-    size_t lastIdx = rawshape.size() - 1;
-    size_t lastDim = rawshape[lastIdx];
-    size_t bytes = BytesOf(tensor->GetRawTensor()->GetDataType());
-    size_t totalByte = lastDim * bytes;
-
-    return totalByte;
-}
-
-int64_t PadRowDim(int64_t dim, int64_t padValue) { return dim + padValue - 1; }
 
 bool PadLocalBuffer::IsUb2L1CopyOp(const Operation& op)
 {
@@ -280,10 +268,24 @@ bool PadLocalBuffer::HandleUb2L1CopyOp(Operation& op, LogicalTensorPtr& in)
     return true;
 }
 
+bool PadLocalBuffer::ShouldSkipVectorPad(Operation& op, LogicalTensorPtr& in)
+{
+    if (HandleUb2L1CopyOp(op, in)) {
+        return true;
+    }
+    if (in->shape.empty()) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "Vector Op %d %s input %d shape is empty; Please check the input size. %s",
+            op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
+        return true;
+    }
+    return false;
+}
+
 // 针对OP_CMP OP_CMPS OP_PRELU特殊OP做倒数第二轴的256B扩充
 void PadLocalBuffer::PadVector256(Operation& op, LogicalTensorPtr& in, bool needRowPad)
 {
-    size_t lastDimBytes = GetLastDimBytes(in);
+    size_t lastDimBytes = AlignmentUtils::GetLastDimBytes(in);
     if (needRowPad && lastDimBytes != 0 && (lastDimBytes % 32 == 0)) {
         if (in->shape.size() < 2 || in->tensor->rawshape.size() < 2) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor %d shape or rawshape less than 2D\n", in->GetMagic());
@@ -296,7 +298,7 @@ void PadLocalBuffer::PadVector256(Operation& op, LogicalTensorPtr& in, bool need
         size_t lastIdx = in->shape.size() - 1;
         int64_t padValue = (8 + dim32Count - 1) / dim32Count;
         Shape& oriRawshape = GetOriRawshape(in); // 获取 DoPadding 中已设置的值
-        in->tensor->rawshape[lastIdx - 1] = PadRowDim(oriRawshape[lastIdx - 1], padValue);
+        in->tensor->rawshape[lastIdx - 1] = AlignmentUtils::PadRowDim(oriRawshape[lastIdx - 1], padValue);
         APASS_LOG_INFO_F(
             Elements::Operation, "Op %d %s input shape and rawshape has been changed\n", op.opmagic,
             op.GetOpcodeStr().c_str());
@@ -307,164 +309,30 @@ void PadLocalBuffer::PadVector256(Operation& op, LogicalTensorPtr& in, bool need
    2. 如果已经对齐到Block粒度，不做对齐---这里存在一个问题就是f16和fp32混用场景，可能对齐到一个block是不够的
    3. 对于broadcast op，如果shape小于一个Block的大小对齐到Block，否则做到两个输入之间的较大者的Block对齐。 */
 void PadLocalBuffer::PadVector(
-    Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw, bool noPadding)
+    Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw)
 {
-    if (HandleUb2L1CopyOp(op, in)) {
-        return;
-    }
-    if (in->shape.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Vector Op %d %s input %d shape size is less than 2; Please check the input size. %s",
-            op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
+    if (ShouldSkipVectorPad(op, in)) {
         return;
     }
     OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(op.GetOpcode());
-    size_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in); // 根据数据类型，判断需要pad到几个元素
+    int64_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in); // 根据数据类型，判断需要pad到几个元素
     size_t lastIdx = in->shape.size() - 1;
-    if (noPadding) {
-        in->tensor->UpdateRawShape(in->shape);
-        // noPadding 分支中，oriRawshapeMap_ 应保存 shape（与原始代码行为一致）
-        int rawmagic = in->tensor->rawmagic;
-        oriRawshapeMap_[rawmagic] = in->tensor->rawshape; // 此时 rawshape = shape
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "Vector Op %d %s input %d, not handle unalign.", op.opmagic, op.GetOpcodeStr().c_str(),
-            in->magic);
-        return;
-    }
     // 先设置 oriRawshape 为当前 rawshape 值，再使用
     Shape& oriRawshape = SetOriRawshape(in);
     int64_t lastDim = static_cast<int64_t>(oriRawshape[lastIdx]);
     if (calcType == OpCalcType::BROADCAST && broadcastLastAxis_.find(op.opmagic) != broadcastLastAxis_.end()) {
         lastDim = broadcastLastAxis_[op.opmagic];
     }
-    int64_t shapeAfterPad = Pad(lastDim, paddingValue);
+    int64_t shapeAfterPad = AlignmentUtils::Pad(lastDim, paddingValue);
     if (visitedRaw.count(in->tensor) == 0) {
         // shape已经对齐过，直接将rawShape对齐到shape；如果broadcast的输入是来自于view，那么整个链路上的非对齐shape都要按照
         // BROADCAST_LAST_AXIS来对齐，当前这样处理是有问题的
-        in->tensor->rawshape[lastIdx] = Pad(oriRawshape[lastIdx], shapeAfterPad);
+        in->tensor->rawshape[lastIdx] = AlignmentUtils::Pad(oriRawshape[lastIdx], shapeAfterPad);
         visitedRaw.emplace(in->tensor);
     }
 }
 
-bool PadLocalBuffer::IsExpandLastDim(const Operation& op)
-{
-    auto axes = op.GetVectorIntAttribute(OpAttributeKey::expandDims);
-    int lastDim = static_cast<int>(op.GetOOperands()[0]->shape.size() - 1);
-    for (auto axis : axes) {
-        if (axis == lastDim) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void PadLocalBuffer::TraverseCopyInConsumers(
-    Function& function, Operation& consumer, std::unordered_set<LogicalTensorPtr>& visitedTensors)
-{
-    bool allBrodOrElem = true;
-    for (const auto& nextConsumer : function.FindConsumers(consumer)) {
-        auto nextCalcType = OpcodeManager::Inst().GetOpCalcType(nextConsumer->GetOpcode());
-        if (nextCalcType != OpCalcType::ELMWISE && nextCalcType != OpCalcType::BROADCAST) {
-            allBrodOrElem = false;
-            break;
-        }
-    }
-    if (allBrodOrElem) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation,
-            "op %d %s consumers are all broadcast or elmwise op, output's last dim should not be padded.",
-            consumer.opmagic, consumer.GetOpcodeStr().c_str());
-        consumer.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-        TraverseAndSetAttr(consumer.GetOOperands()[0], function, visitedTensors);
-    }
-}
-
-void PadLocalBuffer::TraverseBroadcast(
-    Function& function, Operation& consumer, LogicalTensorPtr output,
-    std::unordered_set<LogicalTensorPtr>& visitedTensors)
-{
-    std::vector<bool> broadcastInputCombined(consumer.GetIOperands().size(), false);
-    consumer.GetAttr(OpAttributeKey::inputCombineAxis, broadcastInputCombined);
-    for (size_t index = 0; index < consumer.GetIOperands().size(); ++index) {
-        if (consumer.GetIOperands()[index] == output) {
-            broadcastInputCombined[index] = true;
-        }
-    }
-    if (broadcastInputCombined.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor, "cannot find tensor %d in input of op %d %s; Please check the input tensor.",
-            output->magic, consumer.opmagic, consumer.GetOpcodeStr().c_str());
-        return;
-    }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "op %d %s input's last dim should not be padded.", consumer.opmagic,
-        consumer.GetOpcodeStr().c_str());
-    consumer.SetAttr(OpAttributeKey::inputCombineAxis, std::move(broadcastInputCombined));
-    if (broadcastInputCombined == BROADCAST_AXIS_COMBINED) {
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor, "op %d %s output's last dim should not be padded.", consumer.opmagic,
-            consumer.GetOpcodeStr().c_str());
-        consumer.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-        TraverseAndSetAttr(consumer.GetOOperands()[0], function, visitedTensors);
-    }
-}
-
-void PadLocalBuffer::TraverseAndSetAttr(
-    LogicalTensorPtr& output, Function& function, std::unordered_set<LogicalTensorPtr>& visitedTensors)
-{
-    if (visitedTensors.count(output) != 0) {
-        return;
-    }
-    visitedTensors.emplace(output);
-    for (auto& consumer : output->GetConsumers()) {
-        auto consCalcType = OpcodeManager::Inst().GetOpCalcType(consumer->GetOpcode());
-        auto opcode = consumer->GetOpcode();
-        // expandop为不padding的终止节点
-        if ((opcode == Opcode::OP_EXPAND) && IsExpandLastDim(*consumer)) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "expand op %d %s input's last dim should not be padded.", consumer->opmagic,
-                consumer->GetOpcodeStr().c_str());
-            consumer->SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
-            continue;
-        }
-        if ((consCalcType == OpCalcType::ELMWISE) || (opcode == Opcode::OP_ASSEMBLE)) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation,
-                "op %d %s is elmwise or assemble op, input's and output's last dim should not be padded.",
-                consumer->opmagic, consumer->GetOpcodeStr().c_str());
-            consumer->SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
-            consumer->SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-            TraverseAndSetAttr(consumer->GetOOperands()[0], function, visitedTensors);
-            continue;
-        }
-        if (opcode == Opcode::OP_COPY_OUT) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "op %d %s is copy out, input's last dim should not be padded.", consumer->opmagic,
-                consumer->GetOpcodeStr().c_str());
-            consumer->SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
-            TraverseAndSetAttr(consumer->GetOOperands()[0], function, visitedTensors);
-            continue;
-        }
-        if (opcode == Opcode::OP_COPY_IN) {
-            // CopyIn只有在CopyIn的后续算子仍然是VectorOp的情况下才做合轴
-            TraverseCopyInConsumers(function, *consumer, visitedTensors);
-            continue;
-        }
-        if (consCalcType == OpCalcType::BROADCAST) {
-            TraverseBroadcast(function, *consumer, output, visitedTensors);
-            continue;
-        }
-        if (consCalcType == OpCalcType::MOVE_OUT) {
-            // 剩下来的move out，直接中断，仅在输入的地方支持尾轴非对齐
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "op %d %s is move out, input's last dim should not be padded.", consumer->opmagic,
-                consumer->GetOpcodeStr().c_str());
-            consumer->SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
-        }
-    }
-}
-
-void PadLocalBuffer::ProcessBroadcast(Operation& op, size_t blockPadding)
+void PadLocalBuffer::ProcessBroadcast(Operation& op, int64_t blockPadding)
 {
     int64_t maxLastAxis = 0;
     bool existLessBlock = false;
@@ -479,27 +347,57 @@ void PadLocalBuffer::ProcessBroadcast(Operation& op, size_t blockPadding)
     }
 }
 
-bool PadLocalBuffer::IsMatmul(const LogicalTensorPtr& tensor) const
+void PadLocalBuffer::PrepareBroadcast(Function& function)
 {
-    if ((tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_FIX_QUANT_PRE) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_BT) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0AMX) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0BMX)) {
-        return true;
+    for (auto& op : function.Operations()) {
+        auto calcType = OpcodeManager::Inst().GetOpCalcType(op.GetOpcode());
+        if (calcType != OpCalcType::BROADCAST) {
+            continue;
+        }
+        int64_t blockPadding = AlignmentUtils::GetLastDimAlignBase(op.iOperand[0]);
+        if (blockPadding == 1) {
+            APASS_LOG_DEBUG_F(
+                Elements::Operation, "broadcast op %d %s's datatype is not supported.", op.opmagic,
+                op.GetOpcodeStr().c_str());
+            continue;
+        }
+        if (blockPadding <= 0) {
+            continue;
+        }
+        ProcessBroadcast(op, blockPadding);
     }
-    return false;
 }
 
-bool PadLocalBuffer::IsVector(const LogicalTensorPtr& tensor)
+bool PadLocalBuffer::IsMatmul(const LogicalTensorPtr& tensor) const
 {
-    if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-        return true;
+    auto mt = tensor->GetMemoryTypeOriginal();
+    return mt == MemoryType::MEM_L1 || mt == MemoryType::MEM_L0A || mt == MemoryType::MEM_L0B ||
+           mt == MemoryType::MEM_L0C || mt == MemoryType::MEM_FIX_QUANT_PRE || mt == MemoryType::MEM_BT ||
+           mt == MemoryType::MEM_L0AMX || mt == MemoryType::MEM_L0BMX;
+}
+
+bool PadLocalBuffer::IsVector(const LogicalTensorPtr& tensor) const
+{
+    return tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UB;
+}
+
+void PadLocalBuffer::PadSingleTensor(
+    Operation& op, LogicalTensorPtr& tensor, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw,
+    bool needRowPad)
+{
+    if (IsMatmul(tensor)) {
+        PadMatmul(op, tensor);
+        return;
     }
-    return false;
+    if (!IsVector(tensor) || tensor->tensor->GetRawDataSize() == 0) {
+        return;
+    }
+    if (combineAxis_) {
+        PadVectorForAxisCombine(op, tensor, visitedRaw);
+    } else {
+        PadVector(op, tensor, visitedRaw);
+    }
+    PadVector256(op, tensor, needRowPad);
 }
 
 void PadLocalBuffer::DoPadding(Function& function)
@@ -507,61 +405,8 @@ void PadLocalBuffer::DoPadding(Function& function)
     std::unordered_set<LogicalTensorPtr> visited;
     std::unordered_set<std::shared_ptr<RawTensor>> visitedRaw;
     for (auto& op : function.Operations()) {
-        std::vector<bool> inputAxis;
-        op.GetAttr(OpAttributeKey::inputCombineAxis, inputAxis);
         if (op.GetBoolAttribute("isConv"))
             continue;
-        for (size_t i = 0; i < op.iOperand.size(); i++) {
-            auto& in = op.iOperand[i];
-            if (visited.count(in) != 0)
-                continue;
-            visited.emplace(in);
-            if (IsMatmul(in)) {
-                PadMatmul(op, in);
-                continue;
-            }
-            if (!IsVector(in) || in->tensor->GetRawDataSize() == 0)
-                continue;
-            if (function.paramConfigs_.combineAxis) {
-                PadVectorForAxisCombine(op, in, visitedRaw);
-            } else {
-                bool noPadding = ((inputAxis.size() > i) && inputAxis[i]);
-                PadVector(op, in, visitedRaw, noPadding);
-            }
-        }
-    }
-    for (auto& op : function.Operations()) {
-        std::vector<bool> outputAxis;
-        op.GetAttr(OpAttributeKey::outputCombineAxis, outputAxis);
-        if (op.GetBoolAttribute("isConv"))
-            continue;
-        for (size_t i = 0; i < op.oOperand.size(); i++) {
-            auto& out = op.oOperand[i];
-            if (visited.count(out) != 0)
-                continue;
-            visited.emplace(out);
-            if (IsMatmul(out)) {
-                PadMatmul(op, out);
-                continue;
-            }
-            if (!IsVector(out) || out->tensor->GetRawDataSize() == 0)
-                continue;
-            if (function.paramConfigs_.combineAxis) {
-                PadVectorForAxisCombine(op, out, visitedRaw);
-            } else {
-                bool noPadding =
-                    (out->GetMemoryTypeOriginal() == MEM_DEVICE_DDR || ((outputAxis.size() > i) && outputAxis[i]));
-                PadVector(op, out, visitedRaw, noPadding);
-            }
-        }
-    }
-}
-
-void PadLocalBuffer::DoPadding256(Function& function)
-{
-    std::unordered_set<LogicalTensorPtr> visited;
-    // pad256
-    for (auto& op : function.Operations()) {
         std::vector<bool> inputRowPad;
         op.GetAttr(OpAttributeKey::rowPad, inputRowPad);
         for (size_t i = 0; i < op.iOperand.size(); i++) {
@@ -570,120 +415,50 @@ void PadLocalBuffer::DoPadding256(Function& function)
                 continue;
             visited.emplace(in);
             bool needRowPad = ((inputRowPad.size() > i) && inputRowPad[i]);
-            PadVector256(op, in, needRowPad);
+            PadSingleTensor(op, in, visitedRaw, needRowPad);
         }
     }
-}
-
-// 对ub上transpose的特殊处理,其他类型的transpose不做处理
-Status PadLocalBuffer::ProcessTranspose(Function& function)
-{
-    for (const auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_TRANSPOSE_VNCHWCONV ||
-            op.GetIOperands()[0]->shape.size() < TRANSPOSE_MIN_SHAPE_SIZE) {
+    for (auto& op : function.Operations()) {
+        if (op.GetBoolAttribute("isConv"))
             continue;
-        }
-        auto transposeAxis = op.GetVectorIntAttribute<int>(OP_ATTR_PREFIX + "shape");
-        if (transposeAxis.size() != TRANSPOSE_MIN_SHAPE_SIZE) {
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor, "transpose op %d %s's shape size %zu is not two, skip.", op.opmagic,
-                op.GetOpcodeStr().c_str(), transposeAxis.size());
-            continue;
-        }
-        if (op.iOperand.size() <= 0 || op.oOperand.size() <= 0) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "transpose op %d %s's input or output is empty. %s", op.opmagic,
-                op.GetOpcodeStr().c_str(), GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
-        auto& inTensor = op.iOperand[0];
-        auto& outTensor = op.oOperand[0];
-        if (transposeAxis[0] == transposeAxis[1]) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "transpose op has the same transpose dims, not supported");
-            return FAILED;
-        }
-        if ((transposeAxis[0] != static_cast<int32_t>(inTensor->shape.size() - 1)) &&
-            (transposeAxis[1] != static_cast<int32_t>(inTensor->shape.size() - 1))) {
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor, "transpose op %d %s's transpose axis %d %d, not last dim transpose, skip.",
-                op.opmagic, op.GetOpcodeStr().c_str(), transposeAxis[0], transposeAxis[1]);
-            continue;
-        }
-        int32_t nonLastDimIdx = -1;
-        int32_t lastDimIdx = inTensor->shape.size() - 1;
-        if (transposeAxis[0] != static_cast<int32_t>(inTensor->shape.size() - 1)) {
-            nonLastDimIdx = transposeAxis[0];
-        } else {
-            nonLastDimIdx = transposeAxis[1];
-        }
-        auto& inLastDim = inTensor->tensor->rawshape[lastDimIdx];
-        auto& outFirstDim = outTensor->tensor->rawshape[nonLastDimIdx];
-        if (inLastDim != outFirstDim) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "tune transpose output dim %ld to %ld.", static_cast<long>(inLastDim),
-                static_cast<long>(outFirstDim));
-            outTensor->tensor->rawshape[nonLastDimIdx] = inLastDim;
+        for (size_t i = 0; i < op.oOperand.size(); i++) {
+            auto& out = op.oOperand[i];
+            if (visited.count(out) != 0)
+                continue;
+            visited.emplace(out);
+            if (out->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+                continue;
+            }
+            PadSingleTensor(op, out, visitedRaw);
         }
     }
-    return SUCCESS;
-}
-
-inline bool IsCopyIn(Operation& op)
-{
-    if (op.GetOpcode() != Opcode::OP_COPY_IN) {
-        return false;
-    }
-    auto& outputTensor = op.GetOOperands()[0];
-    if (outputTensor->GetMemoryTypeOriginal() != MemoryType::MEM_UB) {
-        return false;
-    }
-    auto shape = outputTensor->GetShape();
-    if ((shape.size() < AXIS_COMBINE_MIN_SHAPE_SIZE) || shape.back() != 1) {
-        return false;
-    }
-    return true;
 }
 
 int64_t PadLocalBuffer::ProcessBroadcastForAxisCombine(LogicalTensorPtr& inTensor)
 {
     int dimSize = inTensor->GetShape().size();
-    if (inTensor->shape.back() != 1) {
-        return (dimSize - 1);
+    // shape 尾轴为 1 且 dimSize > 1 时返回倒数第二轴索引；否则返回最后一轴索引
+    if (inTensor->shape.back() == 1 && dimSize > 1) {
+        return dimSize - LAST_SECOND_AXIS;
     }
-    if (dimSize > 1) {
-        return (dimSize - LAST_SECOND_AXIS);
-    }
-    return (dimSize - 1);
+    return dimSize - 1;
 }
-
-// 当前不支持UB上的shape不可能为负数。
-int64_t Gcd(int64_t a, int64_t b)
-{
-    while (b != 0) {
-        int64_t temp = b;
-        b = a % b;
-        a = temp;
-    }
-    return a;
-}
-
-int64_t Lcm(int64_t a, int64_t b) { return (a / Gcd(a, b)) * b; }
 
 int64_t PadLocalBuffer::AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base)
 {
     if (in == nullptr || pos < 0 || pos >= static_cast<int64_t>(in->tensor->rawshape.size())) {
         return -1;
     }
-    int64_t padDim = Pad(in->tensor->rawshape[pos], base); // 原始代码使用 rawshape，不是 oriRawshape
+    int64_t padDim = AlignmentUtils::Pad(in->tensor->rawshape[pos], base); // 原始代码使用 rawshape，不是 oriRawshape
     int64_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in);
     if (paddingValue != 0 && padDim % paddingValue != 0) {
-        padDim = Lcm(padDim, paddingValue);
+        padDim = std::lcm(padDim, paddingValue);
     }
     in->tensor->rawshape[pos] = padDim;
     return padDim;
 }
 
-void PadLocalBuffer::ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, size_t paddingValue)
+void PadLocalBuffer::ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, int64_t paddingValue)
 {
     int64_t shapeSize = static_cast<int64_t>(in->shape.size());
     int64_t lastIdx = shapeSize - 1;
@@ -700,7 +475,7 @@ void PadLocalBuffer::ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr
     }
     int64_t padDim = AlignedRawTensorIfNeed(in, idx, paddingValue);
     if (op.GetOpcode() == Opcode::OP_ROWSUMLINE) {
-        auto tempBuffer = op.GetOOperands()[1];
+        const auto& tempBuffer = op.GetOOperands()[1];
         size_t tempBufferLastIdx = tempBuffer->shape.size() - 1;
         tempBuffer->shape[tempBufferLastIdx] = padDim;
         tempBuffer->GetRawTensor()->rawshape[tempBufferLastIdx] = padDim;
@@ -723,7 +498,7 @@ bool PadLocalBuffer::IsElementwiseLikeOp(OpCalcType calcType, const Operation& o
 }
 
 void PadLocalBuffer::DoBrcbOpPadding(
-    Operation& op, LogicalTensorPtr& in, size_t lastIdx, size_t paddingValue,
+    Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue,
     std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw)
 {
     AlignedRawTensorIfNeed(in, lastIdx - 1, BRCB_SECOND_LAST_BASE);
@@ -735,7 +510,7 @@ void PadLocalBuffer::DoBrcbOpPadding(
 }
 
 void PadLocalBuffer::DoElementwiseLikePadding(
-    const Operation& op, LogicalTensorPtr& in, size_t lastIdx, size_t paddingValue)
+    const Operation& op, LogicalTensorPtr& in, size_t lastIdx, int64_t paddingValue)
 {
     if (op.GetOpcode() == Opcode::OP_INDEX_OUTCAST && op.GetIOperandIndex(in) == 0) {
         AlignedRawTensorIfNeed(in, lastIdx, paddingValue);
@@ -747,25 +522,19 @@ void PadLocalBuffer::DoElementwiseLikePadding(
 void PadLocalBuffer::PadVectorForAxisCombine(
     Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw)
 {
-    if (HandleUb2L1CopyOp(op, in)) {
-        return;
-    }
-    if (in->shape.empty()) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Vector Op %d %s input %d shape size is less than 2; Please check the input size. %s",
-            op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
+    if (ShouldSkipVectorPad(op, in)) {
         return;
     }
     if (visitedRaw.count(in->tensor))
         return;
     visitedRaw.emplace(in->tensor);
     OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(op.GetOpcode());
-    size_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in);
+    int64_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in);
     size_t lastIdx = in->shape.size() - 1;
     // 设置 oriRawshape（原始代码：in->tensor->oriRawshape = in->tensor->rawshape;）
     SetOriRawshape(in);
     auto producerOp = *(in->GetProducers().begin());
-    bool enableAxisCombine = axisCombineMarker.IsTensorEnableAxisCombine(in);
+    bool enableAxisCombine = axisCombineMarker_.IsTensorEnableAxisCombine(in);
     bool padSecondLast = enableAxisCombine && lastIdx > 0 && in->tensor->rawshape[lastIdx] == 1;
     bool producerIsBrcb = producerOp != nullptr && producerOp->GetOpcode() == Opcode::OP_BRCB;
     if (producerIsBrcb) {
@@ -804,40 +573,17 @@ void PadLocalBuffer::PadVectorForAxisCombine(
 
 Status PadLocalBuffer::RunOnFunction(Function& function)
 {
-    combineAxis = function.paramConfigs_.combineAxis;
+    combineAxis_ = function.paramConfigs_.combineAxis;
+    APASS_LOG_INFO_F(Elements::Operation, "======> Start PadLocalBuffer in COMBINE_AXIS=%d mode.", combineAxis_);
     oriRawshapeMap_.clear(); // 清空原始 rawshape 存储映射
-    if (combineAxis) {
-        axisCombineMarker.Run(function);
-        APASS_LOG_INFO_F(Elements::Operation, "======> Start PadLocalBuffer in COMBINE_AXIS mode.");
-        DoPadding(function);
-        DoPadding256(function);
-        APASS_LOG_INFO_F(Elements::Operation, "======> End PadLocalBuffer in COMBINE_AXIS mode.");
-        return SUCCESS;
-    }
-    for (auto& op : function.Operations()) {
-        auto calcType = OpcodeManager::Inst().GetOpCalcType(op.GetOpcode());
-
-        // Broadcast op设置最后一根轴的padding值
-        if (calcType == OpCalcType::BROADCAST) {
-            auto bytes = BytesOf(op.iOperand[0]->Datatype());
-            auto paddingIter = BLOCK_PADDING_DIM.find(bytes);
-            if (paddingIter == BLOCK_PADDING_DIM.end()) {
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "broadcast op %d %s's datatype is not supported.", op.opmagic,
-                    op.GetOpcodeStr().c_str());
-                continue;
-            }
-            ProcessBroadcast(op, paddingIter->second);
-        }
+    broadcastLastAxis_.clear();
+    if (combineAxis_) {
+        axisCombineMarker_.Run(function);
+    } else {
+        PrepareBroadcast(function);
     }
     DoPadding(function);
-    DoPadding256(function);
-    if (processTranspose_) {
-        if (ProcessTranspose(function) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Function, "ProcessTranspose failed.");
-            return FAILED;
-        }
-    }
+    APASS_LOG_INFO_F(Elements::Operation, "======> End PadLocalBuffer.");
     return SUCCESS;
 }
 } // namespace npu::tile_fwk

@@ -35,8 +35,6 @@ constexpr int CP_NUM1 = 1;
 constexpr int CP_NUM16 = 16;
 constexpr int CP_NUM64 = 64;
 constexpr int CP_NUM256 = 256;
-constexpr int CP_NUM320 = 320;
-const std::vector<bool> AXIS_COMBINED = {true};
 const std::string REDUCE_AXIS = OP_ATTR_PREFIX + "AXIS";
 
 class CodegenPreprocTest : public testing::Test {
@@ -102,128 +100,6 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
         if (OpcodeManager::Inst().IsCopyInOrOut(op->GetOpcode())) {
             EXPECT_TRUE(op->HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
         }
-    }
-}
-
-TEST_F(CodegenPreprocTest, TestForceCombineAxis)
-{
-    auto rootFuncPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestForceCombineAxis", "TestForceCombineAxis", nullptr);
-    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestForceCombineAxisLeaf", "TestForceCombineAxisLeaf", rootFuncPtr.get());
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
-    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
-    rootFuncPtr->SetUnderDynamicFunction(true);
-
-    std::vector<int64_t> shape = {CP_NUM16, CP_NUM16, CP_NUM16};
-    auto tensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    tensor1->tensor->rawshape = shape;
-    auto tensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    tensor2->tensor->rawshape = shape;
-    auto tensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    tensor3->tensor->rawshape = shape;
-    auto tensor4 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    auto tensor5 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    tensor5->tensor->rawshape = shape;
-    auto tensor6 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
-    tensor6->tensor->rawshape = shape;
-    std::vector<Operation*> opLogPtr;
-    auto& copyin1 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor1}, {tensor3});
-    copyin1.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-    opLogPtr.emplace_back(&copyin1);
-    auto& copyin2 = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {tensor2}, {tensor4});
-    copyin2.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-    opLogPtr.emplace_back(&copyin2);
-    auto& add = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_ADD, {tensor3, tensor4}, {tensor5});
-    add.SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
-    add.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-    opLogPtr.emplace_back(&add);
-    auto& copyout = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_OUT, {tensor5}, {tensor6});
-    copyout.SetAttr(OpAttributeKey::inputCombineAxis, AXIS_COMBINED);
-    opLogPtr.emplace_back(&copyout);
-
-    CodegenPreproc codegenPreprocPass;
-    codegenPreprocPass.ForceCombineAxis(*rootFuncPtr);
-    bool inputRes{false};
-    add.GetAttr(OpAttributeKey::inputCombineAxisDone, inputRes);
-    EXPECT_EQ(inputRes, true);
-    bool outputRes{false};
-    add.GetAttr(OpAttributeKey::outputCombineAxisDone, outputRes);
-    EXPECT_EQ(outputRes, true);
-    std::vector<int64_t> combinedShape = {CP_NUM16, CP_NUM1, CP_NUM256};
-    EXPECT_EQ(tensor3->shape, combinedShape);
-    EXPECT_EQ(tensor3->tensor->rawshape, combinedShape);
-    EXPECT_EQ(tensor5->shape, combinedShape);
-    EXPECT_EQ(tensor5->tensor->rawshape, combinedShape);
-
-    bool copyoutRes{false};
-    copyout.GetAttr(OpAttributeKey::outputCombineAxisDone, copyoutRes);
-    EXPECT_EQ(copyoutRes, true);
-    EXPECT_EQ(tensor6->tensor->rawshape, combinedShape);
-    bool copyin1Res{false};
-    copyin1.GetAttr(OpAttributeKey::inputCombineAxisDone, copyin1Res);
-    EXPECT_EQ(copyin1Res, true);
-    EXPECT_EQ(tensor1->tensor->rawshape, combinedShape);
-    bool copyin2Res{false};
-    copyin2.GetAttr(OpAttributeKey::inputCombineAxisDone, copyin2Res);
-    EXPECT_EQ(copyin2Res, true);
-    EXPECT_EQ(tensor2->tensor->rawshape, combinedShape);
-}
-
-TEST_F(CodegenPreprocTest, TestForceCombineAxisLocalOffset)
-{
-    auto expectDynOffsetEq = [](const std::vector<SymbolicScalar>& dynOffset, const std::vector<int64_t>& expected) {
-        ASSERT_EQ(dynOffset.size(), expected.size());
-        for (size_t i = 0; i < expected.size(); ++i) {
-            EXPECT_EQ(SymbolicExpressionTable::BuildExpression(dynOffset[i]), std::to_string(expected[i]));
-        }
-    };
-
-    auto rootFuncPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestForceCombineAxisLocalOffset", "TestForceCombineAxisLocalOffset", nullptr);
-    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestForceCombineAxisLocalOffsetLeaf", "TestForceCombineAxisLocalOffsetLeaf",
-        rootFuncPtr.get());
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
-    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
-    rootFuncPtr->SetUnderDynamicFunction(true);
-
-    std::vector<std::shared_ptr<LogicalTensor>> inputs;
-    std::vector<std::shared_ptr<LogicalTensor>> outputs;
-    std::vector<Operation*> copyins;
-    std::vector<int64_t> localOffsets = {CP_NUM64, CP_NUM64 * 2, CP_NUM64 * 3, CP_NUM64 * 4};
-    for (auto localOffset : localOffsets) {
-        auto input =
-            IRBuilder().CreateTensorVar(DT_FP32, {CP_NUM64, CP_NUM1}, CreateTestConstIntVector({CP_NUM64, CP_NUM1}));
-        input->SetMemoryTypeBoth(MEM_DEVICE_DDR);
-        auto output =
-            IRBuilder().CreateTensorVar(DT_FP32, {CP_NUM64, CP_NUM1}, CreateTestConstIntVector({CP_NUM64, CP_NUM1}));
-        output->SetMemoryTypeBoth(MEM_UB);
-        output->tensor->rawshape = {CP_NUM320, CP_NUM1};
-        output->UpdateOffset(TensorOffset({localOffset, 0}, CreateTestConstIntVector({localOffset, 0})));
-
-        auto& copyin = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_COPY_IN, {input}, {output});
-        copyin.SetAttr(OpAttributeKey::outputCombineAxis, AXIS_COMBINED);
-        inputs.emplace_back(input);
-        outputs.emplace_back(output);
-        copyins.emplace_back(&copyin);
-    }
-
-    CodegenPreproc codegenPreprocPass;
-    EXPECT_EQ(codegenPreprocPass.ForceCombineAxis(*rootFuncPtr), SUCCESS);
-
-    for (size_t i = 0; i < localOffsets.size(); ++i) {
-        EXPECT_EQ(outputs[i]->shape, (std::vector<int64_t>{CP_NUM1, CP_NUM64}));
-        EXPECT_EQ(outputs[i]->tensor->rawshape, (std::vector<int64_t>{CP_NUM1, CP_NUM320}));
-        EXPECT_EQ(outputs[i]->GetOffset(), (std::vector<int64_t>{0, localOffsets[i]}));
-        expectDynOffsetEq(outputs[i]->GetDynOffset(), {0, localOffsets[i]});
-        EXPECT_EQ(inputs[i]->tensor->rawshape, (std::vector<int64_t>{CP_NUM1, CP_NUM64}));
-        EXPECT_EQ(copyins[i]->GetBoolAttribute(OpAttributeKey::inputCombineAxisDone), true);
-        EXPECT_EQ(copyins[i]->GetBoolAttribute(OpAttributeKey::outputCombineAxisDone), true);
     }
 }
 

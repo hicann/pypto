@@ -37,7 +37,7 @@ class AxisCombineMarker {
 public:
     AxisCombineMarker() = default;
     ~AxisCombineMarker() = default;
-    bool IsTensorEnableAxisCombine(LogicalTensorPtr tensor);
+    bool IsTensorEnableAxisCombine(LogicalTensorPtr tensor) const;
     void Run(Function& function);
 
 private:

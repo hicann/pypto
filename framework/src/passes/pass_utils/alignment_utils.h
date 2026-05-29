@@ -48,6 +48,23 @@ public:
     static int64_t Pad(int64_t dim, int64_t padValue);
 
     /**
+     * @brief Round dim up using a row-pad base (dim + padValue - 1).
+     *
+     * @param dim input dimension value.
+     * @param padValue padding base.
+     * @return padded dimension.
+     */
+    static int64_t PadRowDim(int64_t dim, int64_t padValue);
+
+    /**
+     * @brief Get the byte size of the last raw-shape dimension.
+     *
+     * @param tensor input logical tensor.
+     * @return last-dim element count multiplied by element size; 0 when rawshape is empty.
+     */
+    static size_t GetLastDimBytes(const LogicalTensorPtr& tensor);
+
+    /**
      * @brief Pad last dimension to 32-byte aligned on UB memory.
      *
      * If tensor is on UB memory and last dimension is not 32-byte aligned,
