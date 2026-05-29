@@ -139,7 +139,9 @@ bool CalculateNewDynRawShapeExpand(
         APASS_LOG_ERROR_F(Elements::Function, "Cannot calculate NewDynRawShape as the dimension is zero.");
         return false;
     }
-    newDynRawShape[0] = oriShapeSize / newShapeSize;
+    // Max(1) only avoids building a symbolic division-by-zero expression; runtime size >= 1 is guaranteed upstream.
+    SymbolicScalar safeNewShapeSize = newShapeSize.Max(IRBuilder().CreateConstInt(1));
+    newDynRawShape[0] = oriShapeSize / safeNewShapeSize;
     return true;
 }
 
@@ -167,7 +169,9 @@ bool CalculateNewDynRawShapeReduce(
         APASS_LOG_ERROR_F(Elements::Function, "Cannot calculate NewDynRawShape as the dimension is zero.");
         return false;
     }
-    SymbolicScalar remainShapeSize = oriShapeSize / newShapeSize;
+    // Max(1) only avoids building a symbolic division-by-zero expression; runtime size >= 1 is guaranteed upstream.
+    SymbolicScalar safeNewShapeSize = newShapeSize.Max(IRBuilder().CreateConstInt(1));
+    SymbolicScalar remainShapeSize = oriShapeSize / safeNewShapeSize;
     newDynRawShape.back() = newDynRawShape.back() * remainShapeSize;
     return true;
 }
@@ -309,13 +313,48 @@ bool MatchReshapePattern(const LogicalTensorPtr& reshapeInput, const LogicalTens
     return removeAllOnes(inputShape) == removeAllOnes(outputShape);
 }
 
-Shape GetStaticShapeForDynAxes(Shape& rawShape) {
-    for (size_t idx = 0; idx < rawShape.size(); ++idx) {
-        if (rawShape[idx] < 0) {
-            rawShape[idx] = -1;
+Shape GetStaticShapeForDynAxes(const Shape& rawShape)
+{
+    Shape staticShape = rawShape;
+    for (size_t idx = 0; idx < staticShape.size(); ++idx) {
+        if (staticShape[idx] < 0) {
+            staticShape[idx] = -1;
         }
     }
-    return rawShape;
+    return staticShape;
+}
+
+void UpdateCopyInAttrAfterRemoveView(
+    Operation& reshapeOp, const Shape& newRawShape,
+    const std::vector<SymbolicScalar>& newDynOffset,
+    const std::vector<SymbolicScalar>& oriReshapeDynValidShape)
+{
+    for (const auto& copyIn : reshapeOp.GetOOperands().front()->GetConsumers()) {
+        auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+        if (copyAttr == nullptr) {
+            APASS_LOG_INFO_F(Elements::Operation, "CopyIn Op %d Attribute is nullptr.", copyIn->GetOpMagic());
+            continue;
+        }
+        auto oriCopyOffset = copyAttr->GetFromOffset();
+        std::vector<OpImmediate> newOffset = OpImmediate::Specified(newDynOffset);
+        if (newOffset.size() < oriCopyOffset.size()) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation,
+                "Cannot update CopyIn Op %d offset as newOffset size [%zu] is smaller than oriCopyOffset size [%zu].",
+                copyIn->GetOpMagic(), newOffset.size(), oriCopyOffset.size());
+            continue;
+        }
+        for (size_t i = 0; i < oriCopyOffset.size(); i++) {
+            newOffset[i] = newOffset[i] + oriCopyOffset[i];
+        }
+        copyAttr->SetFromOffset(newOffset);
+        copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
+        auto copyDynValidShape = copyIn->GetOOperands().front()->GetDynValidShape();
+        if (copyDynValidShape.empty()) {
+            copyDynValidShape = oriReshapeDynValidShape;
+        }
+        copyAttr->SetToDynValidShape(OpImmediate::Specified(copyDynValidShape));
+    }
 }
 
 void RemoveRedundantAssemble::UpdateReshapeShape(
@@ -397,36 +436,31 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
                 newDynRawShape)) {
             return SUCCESS;
         }
-        auto newDynValidShape = reshapeOp.GetOOperands().front()->GetDynValidShape();
-        if (newDynValidShape.empty()) {
-            newDynValidShape = CommonUtils::CreateConstIntVector(reshapeOp.GetOOperands().front()->shape);
+        // After removing the VIEW, the RESHAPE output represents the whole reshaped source tensor.
+        // Its valid shape must be recomputed from the pre-view tensor, rather than keeping the
+        // single-slice valid shape from the original VIEW->RESHAPE result.
+        std::vector<SymbolicScalar> newDynValidShape;
+        if (!CalculateNewDynRawShapeExpand(
+                reshapeOp.GetOOperands().front()->shape, viewInput->GetDynValidShape(), newRawShape,
+                newDynValidShape)) {
+            return SUCCESS;
+        }
+        auto oriReshapeDynValidShape = reshapeOp.GetOOperands().front()->GetDynValidShape();
+        if (oriReshapeDynValidShape.empty()) {
+            oriReshapeDynValidShape = CommonUtils::CreateConstIntVector(reshapeOp.GetOOperands().front()->shape);
         }
         std::vector<SymbolicScalar> newDynOffset;
-        GetDynOffsetBeforeReshape(offset, viewInput->shape, newRawShape, newDynOffset);
+        // Offset remapping must follow the physical reshape layout rather than the valid shape.
+        auto dynViewPhysicalShape = viewInput->tensor->GetDynRawShape().empty() ?
+                                        CommonUtils::CreateConstIntVector(viewInput->shape) :
+                                        viewInput->tensor->GetDynRawShape();
+        GetDynOffsetBeforeDynReshape(offset, dynViewPhysicalShape, newDynRawShape, newDynOffset);
         APASS_LOG_DEBUG_F(
             Elements::Operation, "Process View[%d] Tensor[%d]: newRawshape: %s, newOffset: %s.",
             producerOp->GetOpMagic(), reshapeOp.GetOOperands().front()->GetMagic(), IntVecToStr(newRawShape).c_str(),
             IntVecToStr(newDynOffset).c_str());
         Shape staticNewRawShape = GetStaticShapeForDynAxes(newRawShape);
-        for (auto copyIn : reshapeOp.GetOOperands().front()->GetConsumers()) {
-            auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
-            if (copyAttr == nullptr) {
-                APASS_LOG_INFO_F(Elements::Operation, "CopyIn Op %d Attribute is nullptr.", copyIn->GetOpMagic());
-                continue;
-            }
-            auto oriCopyOffset = copyAttr->GetFromOffset();
-            std::vector<OpImmediate> newOffset = OpImmediate::Specified(newDynOffset);
-            for (size_t i = 0; i < oriCopyOffset.size(); i++) {
-                newOffset[i] = newOffset[i] + oriCopyOffset[i];
-            }
-            copyAttr->SetFromOffset(newOffset);
-            copyAttr->SetRawShape(OpImmediate::Specified(staticNewRawShape));
-            auto copyDynValidShape = copyIn->GetOOperands().front()->GetDynValidShape();
-            if (copyDynValidShape.empty()) {
-                copyDynValidShape = newDynValidShape;
-            }
-            copyAttr->SetToDynValidShape(OpImmediate::Specified(copyDynValidShape));
-        }
+        UpdateCopyInAttrAfterRemoveView(reshapeOp, staticNewRawShape, newDynOffset, oriReshapeDynValidShape);
         UpdateReshapeShape(
             reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, newDynRawShape, newDynValidShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
@@ -649,7 +683,7 @@ bool RemoveRedundantAssemble::CalculateReshapeToAssembleInfo(
         return false;
     }
     auto dynAssembleOutShape =
-        assembleOutDynShape.empty() ? SymbolicScalar::FromConcrete(assembleOutShape) : assembleOutDynShape;
+        assembleOutDynShape.empty() ? CommonUtils::CreateConstIntVector(assembleOutShape) : assembleOutDynShape;
     GetDynOffsetBeforeDynReshape(dynOffset, dynAssembleOutShape, newDynRawShape, newDynOffset);
     return true;
 }

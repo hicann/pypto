@@ -780,6 +780,93 @@ TEST_F(PreGraphTest, TestRemoveRedundantViewMultiCopyIn)
     EXPECT_EQ(newDynOffset[0].Dump(), "160");
 }
 
+void ConstructDynamicValidShapeReshapeCopyInGraph(ComputationalGraphBuilder& G, int64_t l, int64_t lMax)
+{
+    G.AddTensor(DataType::DT_FP32, {NUM2, 1, l}, MemoryType::MEM_DEVICE_DDR, "input");
+    G.AddTensor(DataType::DT_FP32, {1, lMax}, "view_out");
+    G.AddTensor(DataType::DT_FP32, {1, 1, lMax}, "reshape_out");
+    G.AddTensor(DataType::DT_FP32, {1, 1, lMax}, MemoryType::MEM_UB, "copy_in_out");
+
+    auto input = G.GetTensor("input");
+    input->tensor->UpdateRawShape({NUM2, 1, lMax});
+    input->tensor->UpdateDynRawShape(CreateTestConstIntVector({NUM2, 1, lMax}));
+    input->UpdateDynValidShape(CreateTestConstIntVector({NUM2, 1, l}));
+    G.GetTensor("view_out")->UpdateDynValidShape(CreateTestConstIntVector({1, l}));
+    G.GetTensor("reshape_out")->UpdateDynValidShape(CreateTestConstIntVector({1, 1, l}));
+    G.GetTensor("copy_in_out")->UpdateDynValidShape({});
+
+    G.AddOp(Opcode::OP_VIEW, {"input"}, {"view_out"}, "VIEW");
+    auto view = G.GetOp("VIEW");
+    std::vector<int64_t> viewOffset{1, 0, 0};
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        viewOffset, MemoryType::MEM_UNKNOWN,
+        OpImmediate::ToSpecified(OpImmediate::Specified(viewOffset)));
+    view->SetOpAttribute(viewAttr);
+    G.AddOp(Opcode::OP_RESHAPE, {"view_out"}, {"reshape_out"}, "RESHAPE");
+    G.AddOp(Opcode::OP_COPY_IN, {"reshape_out"}, {"copy_in_out"}, "COPYIN");
+    auto copyIn = G.GetOp("COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+    copyAttr->SetFromOffset(OpImmediate::Specified(std::vector<int64_t>{0, 0, 0}));
+}
+
+void VerifyDynamicValidShapeReshapeCopyInGraph(ComputationalGraphBuilder& G, int64_t l, int64_t lMax)
+{
+    auto input = G.GetTensor("input");
+    auto view = G.GetOp("VIEW");
+    auto reshape = G.GetOp("RESHAPE");
+    auto copyIn = G.GetOp("COPYIN");
+    EXPECT_TRUE(view->IsDeleted());
+    EXPECT_EQ(reshape->GetIOperands().front(), input);
+
+    auto reshapeOut = G.GetTensor("reshape_out");
+    EXPECT_EQ(reshapeOut->GetShape(), (std::vector<int64_t>{NUM2, 1, lMax}));
+    auto reshapeDynValidShape = reshapeOut->GetDynValidShape();
+    ASSERT_EQ(reshapeDynValidShape.size(), 3);
+    EXPECT_EQ(reshapeDynValidShape[0].Dump(), std::to_string(NUM2));
+    EXPECT_EQ(reshapeDynValidShape[1].Dump(), "1");
+    EXPECT_EQ(reshapeDynValidShape[2].Dump(), std::to_string(l));
+
+    auto reshapeDynRawShape = reshapeOut->tensor->GetDynRawShape();
+    ASSERT_EQ(reshapeDynRawShape.size(), 3);
+    EXPECT_EQ(reshapeDynRawShape[0].Dump(), std::to_string(NUM2));
+    EXPECT_EQ(reshapeDynRawShape[1].Dump(), "1");
+    EXPECT_EQ(reshapeDynRawShape[2].Dump(), std::to_string(lMax));
+
+    auto newCopyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+    auto fromOffset = newCopyAttr->GetFromOffset();
+    ASSERT_EQ(fromOffset.size(), 3);
+    EXPECT_EQ(fromOffset[0].Dump(), std::to_string(1));
+    EXPECT_EQ(fromOffset[1].Dump(), "0");
+    EXPECT_EQ(fromOffset[2].Dump(), "0");
+
+    auto rawShape = newCopyAttr->GetRawShape();
+    ASSERT_EQ(rawShape.size(), 3);
+    EXPECT_EQ(rawShape[0].Dump(), std::to_string(NUM2));
+    EXPECT_EQ(rawShape[1].Dump(), "1");
+    EXPECT_EQ(rawShape[2].Dump(), std::to_string(lMax));
+
+    auto toDynValidShape = newCopyAttr->GetToDynValidShape();
+    ASSERT_EQ(toDynValidShape.size(), 3);
+    EXPECT_EQ(toDynValidShape[0].Dump(), "1");
+    EXPECT_EQ(toDynValidShape[1].Dump(), "1");
+    EXPECT_EQ(toDynValidShape[2].Dump(), std::to_string(l));
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantViewDynamicValidShapeReshapeCopyIn)
+{
+    constexpr int64_t l = 26;
+    constexpr int64_t lMax = 32;
+    ComputationalGraphBuilder G;
+    ConstructDynamicValidShapeReshapeCopyInGraph(G, l, lMax);
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    RemoveRedundantAssemble pass;
+    EXPECT_EQ(pass.ProcessView(*function), SUCCESS);
+
+    VerifyDynamicValidShapeReshapeCopyInGraph(G, l, lMax);
+}
+
 TEST_F(PreGraphTest, TestRemoveRedundantViewMultiReshape)
 {
     ComputationalGraphBuilder G;
