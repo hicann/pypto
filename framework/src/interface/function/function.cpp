@@ -688,25 +688,32 @@ void Function::InferParamDirection()
 
 void Function::FillOriginInOutCast(std::vector<Operation*>& operationList)
 {
-    OrderedSet<LogicalTensorPtr> incasts;
-    OrderedSet<LogicalTensorPtr> outcasts;
-
-    for (auto& op : operationList) {
-        for (auto& iOperand : op->iOperand) {
-            bool shouldAddIncast = op->IsCall() || (tensorMap_.tensorMap_.count(iOperand->tensor->rawmagic) == 0 &&
-                                                    (&iOperand->BelongFunction() != this));
-            if (shouldAddIncast && incasts.Insert(iOperand)) {
-                AddOriginIncast(iOperand);
+    std::unordered_set<LogicalTensorPtr> visited;
+    auto addOrigin = [](auto& t, auto& list) {
+        for (auto& ele : list) {
+            if (ele == t) {
+                return;
             }
         }
-
-        for (auto& oOperand : op->oOperand) {
-            bool shouldAddOutcast = op->IsCall() || oOperand->tensor->GetRefCount() > 0;
-            if (shouldAddOutcast && outcasts.Insert(oOperand)) {
-                AddOriginOutcast(oOperand);
-                FE_ASSERT(incasts.count(oOperand) == 0) << "Error: Output operand " << oOperand->tensor->rawmagic
-                                                        << " is found in incasts. Operation: " << op->Dump();
+        list.push_back(t);
+    };
+    for (auto& op : operationList) {
+        for (auto& iOperand : op->iOperand) {
+            if (op->IsCall()) {
+                addOrigin(iOperand, originInCasts_);
             }
+            else if (visited.count(iOperand) == 0) {
+                visited.insert(iOperand);
+                if (&iOperand->BelongFunction() != this) {
+                    addOrigin(iOperand, originInCasts_);
+                }
+            }
+        }
+        for (auto& oOperand : op->oOperand) {
+            if (op->IsCall() || oOperand->tensor->GetRefCount()) {
+                addOrigin(oOperand, originOutCasts_);
+            }
+            visited.insert(oOperand);
         }
     }
 }
