@@ -220,9 +220,9 @@ void SetTensorGraphNodes(
                       (static_cast<size_t>(param.gmAccumulationFlag) << 2) |
                       (static_cast<size_t>(param.hasMXScale) << 3); // 2、3含义：编码偏移
     switch (extraDim) {
-        case 0:                                                     // 无bias，无scale, 无gmTensor
+        case 0: // 无bias，无scale, 无gmTensor
             break;
-        case 1:                                                     // 有scale
+        case 1: // 有scale
             tensorGraphNodes.scaleTensorPtr = operandVec[SHAPE_DIM2];
             break;
         case 2: // 2含义：有bias
@@ -239,10 +239,21 @@ void SetTensorGraphNodes(
             tensorGraphNodes.aScaleTensorPtr = operandVec[SHAPE_DIM2];
             tensorGraphNodes.bScaleTensorPtr = operandVec[SHAPE_DIM3];
             break;
-        case 10: // 10含义: mxmatmul场景，有bias
+        case 9: // 9含义: mxmatmul场景,有scale
+            tensorGraphNodes.aScaleTensorPtr = operandVec[SHAPE_DIM2];
+            tensorGraphNodes.bScaleTensorPtr = operandVec[SHAPE_DIM3];
+            tensorGraphNodes.scaleTensorPtr = operandVec[SHAPE_DIM4];
+            break;
+        case 10: // 10含义: mxmatmul场景,有bias
             tensorGraphNodes.aScaleTensorPtr = operandVec[SHAPE_DIM2];
             tensorGraphNodes.bScaleTensorPtr = operandVec[SHAPE_DIM3];
             tensorGraphNodes.biasTensorPtr = operandVec[SHAPE_DIM4];
+            break;
+        case 11: // 11含义: mxmatmul场景,有bias,有scale
+            tensorGraphNodes.aScaleTensorPtr = operandVec[SHAPE_DIM2];
+            tensorGraphNodes.bScaleTensorPtr = operandVec[SHAPE_DIM3];
+            tensorGraphNodes.biasTensorPtr = operandVec[SHAPE_DIM4];
+            tensorGraphNodes.scaleTensorPtr = operandVec[SHAPE_DIM5];
             break;
         default:
             ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, false) << "Invalid tensor graph";
@@ -539,6 +550,8 @@ void CheckA5BiasParam(DataType inDtype, const MatmulExtendParam& param = {})
 
 void CheckFixpipeParam(DataType inDtype, DataType outDtype, const MatmulExtendParam& param = {})
 {
+    bool isFixpipeSupport = (outDtype == DataType::DT_FP16 && inDtype == DataType::DT_INT8) ||
+                            outDtype == DataType::DT_INT8;
     if (param.scaleTensor.GetStorage() != nullptr) {
         ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, param.scaleTensor.Format() == TileOpFormat::TILEOP_ND)
             << "Only support TILEOP_ND.";
@@ -549,22 +562,25 @@ void CheckFixpipeParam(DataType inDtype, DataType outDtype, const MatmulExtendPa
             << "scaleTensor dataType: " << DataType2String(param.scaleTensor.GetDataType())
             << ". scaleTensor only support int64 and uint64 dtype currently.";
 
-        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, outDtype == DataType::DT_FP16 && inDtype == DataType::DT_INT8)
-            << "Data type mismatch in fixpipe scenario. Expected inDtype to be DT_INT8 and outDtype to be DT_FP16.";
+        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, isFixpipeSupport)
+            << "Data type mismatch in fixpipe scenario. Expected inDtype to be DT_INT8 with outDtype to be DT_FP16, or "
+               "outDtype to be DT_INT8.";
 
         ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, param.scaleTensor.GetShape()[0] == 1)
             << "Scale tensor first dimension mismatch. Expected first dimension to be 1, got "
             << param.scaleTensor.GetShape()[0];
     }
     if (fabs(param.scaleValue - 0) > EPSILON) {
-        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, outDtype == DataType::DT_FP16 && inDtype == DataType::DT_INT8)
-            << "Data type mismatch in pertensor scenario. Expected inDtype to be DT_INT8 and outDtype to be DT_FP16.";
+        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, isFixpipeSupport)
+            << "Data type mismatch in pertensor scenario. Expected inDtype to be DT_INT8 with outDtype to be DT_FP16, "
+               "or outDtype to be DT_INT8.";
     }
-    if (inDtype == DataType::DT_INT8 && outDtype == DataType::DT_FP16) {
+    if (isFixpipeSupport) {
         ASSERT(
             MatmulErrorCode::ERR_PARAM_INVALID,
             fabs(param.scaleValue - 0) > EPSILON || param.scaleTensor.GetStorage() != nullptr)
-            << "Quantization error in INT8→FP16 path: scaleValue must not be 0.0f, OR scaleTensor must not be null.";
+            << "Quantization error in INT8→FP16 or ANY→INT8 path: scaleValue must not be 0.0f, OR scaleTensor must not "
+               "be null.";
     }
 }
 
@@ -621,8 +637,9 @@ void CheckOperandDtype(DataType outType, const Tensor& operand1, const Tensor& o
 {
     ASSERT(
         MatmulErrorCode::ERR_PARAM_UNSUPPORTED, outType == DataType::DT_FP32 || outType == DataType::DT_FP16 ||
-                                                    outType == DataType::DT_BF16 || outType == DataType::DT_INT32)
-        << "Unsupported output data type. Only DT_FP32, DT_FP16, DT_BF16, DT_INT32 are supported.";
+                                                    outType == DataType::DT_BF16 || outType == DataType::DT_INT32 ||
+                                                    outType == DataType::DT_INT8)
+        << "Unsupported output data type. Only DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT8 are supported.";
     const DataType operand1Dtype = operand1.GetDataType();
     const DataType operand2Dtype = operand2.GetDataType();
     const bool isOperand1Fp8 = (operand1Dtype == DataType::DT_FP8E5M2 || operand1Dtype == DataType::DT_FP8E4M3);
@@ -1180,6 +1197,10 @@ void AddAMulBNode(
         operandVec.push_back(extendParam.biasTensor.GetStorage());
     }
     if (extendParam.scaleTensor.GetStorage() != nullptr) {
+        auto scaleTensorDType = extendParam.scaleTensor.GetStorage()->Datatype();
+        ASSERT(MatmulErrorCode::ERR_PARAM_UNSUPPORTED, scaleTensorDType == DataType::DT_UINT64 ||
+            scaleTensorDType == DataType::DT_INT64)
+            << "Unsupported scaleTensor data type. Only support DT_UINT64 and DT_INT64";
         operandVec.push_back(extendParam.scaleTensor.GetStorage());
     }
     Function* functionPtr = Program::GetInstance().GetCurrentFunction();
@@ -1545,7 +1566,7 @@ Tensor ConstructBatchMatmulTensorGraph4D(
             Tensor bTensor = Reshape(
                 bTensorSingleBatch, {operand2.GetShape()[SHAPE_DIM2], operand2.GetShape()[SHAPE_DIM3]},
                 std::vector<SymbolicScalar>({bValidShape4D[SHAPE_DIM2], bValidShape4D[SHAPE_DIM3]}));
-            
+
             const auto mValid = attrParam.transA ? aValidShape4D[SHAPE_DIM3] : aValidShape4D[SHAPE_DIM2];
             const auto nValid = attrParam.transB ? bValidShape4D[SHAPE_DIM2] : bValidShape4D[SHAPE_DIM3];
             Tensor cTensor(dataType, {mView, nView}, "cTensorSingleBatch");

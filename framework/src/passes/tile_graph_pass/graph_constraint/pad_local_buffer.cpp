@@ -83,6 +83,11 @@ bool PadLocalBuffer::IsInputDataType(
         return false;
     }
 
+    auto inputMemType = in->GetMemoryTypeOriginal();
+    if (inputMemType == MemoryType::MEM_L0C) {
+        // L0C上只需要对齐到(16, 16)
+        return false;
+    }
     APASS_LOG_DEBUG_F(Elements::Tensor, "Matmul Op %d is %s\n", op.opmagic, op.GetOpcodeStr().c_str());
     APASS_LOG_DEBUG_F(
         Elements::Tensor, "####### %d data type is %s\n", in->magic,
@@ -117,6 +122,7 @@ bool PadLocalBuffer::IsInputDataType(
 void PadLocalBuffer::PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex)
 {
     const auto& producers = in->GetProducers();
+    const auto& consumers = in->GetConsumers();
     auto bytes = BytesOf(in->Datatype());
     auto& padShape = in->tensor->rawshape;
     Shape& oriRawshape = GetOriRawshape(in);                        // 获取已保存的 oriRawshape
@@ -125,7 +131,7 @@ void PadLocalBuffer::PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in
         padShape = preInput->tensor->rawshape;
         return;
     }
-    if (in->Datatype() != DataType::DT_UINT64) { // Opcode::OP_L1_TO_BT
+    if ((*consumers.begin())->GetOpcode() == Opcode::OP_L1_TO_BT) { // Opcode::OP_L1_TO_BT
         if (bytes == 0 || BT_PAD_BASE % bytes != 0) {
             APASS_LOG_ERROR_F(
                 Elements::Tensor, "Matmul Op %d %s input %d type is not valid.", op.opmagic, op.GetOpcodeStr().c_str(),
@@ -133,7 +139,8 @@ void PadLocalBuffer::PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in
             return;
         }
         padShape[lowIndex] = Pad(oriRawshape[lowIndex], BT_PAD_BASE / bytes);
-    } else { // Opcode::OP_L1_TO_FIX_QUANT_PRE
+    } else if ((*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE ||
+            (*consumers.begin())->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE) { // Opcode::OP_L1_TO_FIX_QUANT_PRE
         padShape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_VALUE);
     }
 }

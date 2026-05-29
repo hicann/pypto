@@ -489,8 +489,9 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0
         GetOpAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
     }
 
-    if ((!scaleValue.GetUnsignedData()) &&
-        ((operandDtype[param.localIdx] == DT_INT32) && (operandDtype[param.gmIdx] == DT_FP16))) {
+    bool isFixBuf = (((operandDtype[param.localIdx] == DT_INT32) && (operandDtype[param.gmIdx] == DT_FP16)) ||
+                    (operandDtype[param.gmIdx] == DT_INT8));
+    if ((!scaleValue.GetUnsignedData()) && isFixBuf) {
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
 

@@ -41,14 +41,14 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 | a_trans           | 输入      | 参数a_trans表示输入左矩阵是否转置，默认为False。 |
 | b_trans           | 输入      | 参数b_trans表示输入右矩阵是否转置，默认为False。 |
 | c_matrix_nz       | 输入      | 参数c_matrix_nz表示输出矩阵的Format是否采用NZ格式，默认为False，当前仅支持设置False，即输出矩阵仅支持ND格式。 |
-| extend_params     | 输入      | 支持bias、fixpipe反量化及TF32舍入模式功能，详见表2。<br> bias、fixpipe反量化输入输出数据类型支持情况详见表3，表4。 <br> - 数据类型为字典格式。 <br>  - 此参数与其内部参数均为可选参数。|
+| extend_params     | 输入      | 支持bias、fixpipe量化和反量化及TF32舍入模式功能，详见表2。<br> bias、fixpipe量化和反量化输入输出数据类型支持情况详见表3，表4，表5。 <br> - 数据类型为字典格式。 <br>  - 此参数与其内部参数均为可选参数。|
 
 表2：extend_params参数说明
 
 | 参数名            | 说明                                                                 |
 |-------------------|----------------------------------------------------------------------|
-| scale             | 表示pertensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵反量化的参数。 <br> 输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> 不支持叠加多核切k功能。|
-| scale_tensor      | 表示perchannel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵反量化的矩阵。 <br> scale_tensor输入固定为uint64_t 的Tensor。计算时会转换uint64_t为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> scale_tensor的第一维度必须置1，且N维度需要与mat2矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 仅支持矩阵维度为2维场景。 <br> 不支持叠加多核切k功能。 |
+| scale             | 表示pertensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵反量化的参数。 <br> 输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4,表5。 <br> 不支持叠加多核切k功能。|
+| scale_tensor      | 表示perchannel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵反量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t 的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4、表5。 <br> scale_tensor的第一维度必须置1，且N维度需要与mat2矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 仅支持矩阵维度为2维场景。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
 | bias_tensor       | 表示偏置矩阵。<br> 输入为Tensor类型。<br> 输入输出数据类型支持情况详见表3。<br> bias_tensor只支持ND格式。<br> bias_tensor的第一维度应置1，且N维度需要与mat2矩阵的N维度相等。<br> 仅支持矩阵维度为2维场景。<br> 不支持叠加多核切k功能。 |
 | relu_type         | 表示输出矩阵是否进行ReLu操作。 <br> 输入为[ReLuType](../datatype/ReLuType.md)类型。 <br> 支持RELU和NO_RELU两种模式。 <br> 仅支持矩阵维度为2维场景。 |
 | trans_mode        | 表示是否使能TF32计算及TF32舍入模式。 <br> 输入为[TransMode](../datatype/TransMode.md)类型，支持以下三种模式：<br>     • CAST_NONE：不使能float数据类型转换为TF32数据类型。<br>     • CAST_RINT：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时舍入到偶数。<br>     • CAST_ROUND：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时远离零舍入。<br> 仅支持输入左右矩阵和输出矩阵数据类型均为DT_FP32时设置。 <br> 仅支持矩阵维度为2维场景。 |
@@ -57,10 +57,10 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 | input | mat2 | out_dtype | bias_tensor | 产品支持 |
 |:------|:-----|:----------|:------------|:---------|
-| DT_FP16 | DT_FP16 | DT_FP16，DT_FP32 | DT_FP16，DT_FP32 | 全系列 |
-| DT_BF16 | DT_BF16 | DT_BF16，DT_FP32 | DT_FP32，DT_BF16（DT_BF16仅950PR/DT支持） | 全系列 |
-| DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 | 全系列 |
-| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | 全系列 |
+| DT_FP16 | DT_FP16 | DT_FP16，DT_FP32 | DT_FP16，DT_FP32 | A2、A3、950PR/DT |
+| DT_BF16 | DT_BF16 | DT_BF16，DT_FP32 | DT_FP32，DT_BF16（DT_BF16仅950PR/DT支持） | A2、A3、950PR/DT |
+| DT_FP32 | DT_FP32 | DT_FP32 | DT_FP32 | A2、A3、950PR/DT |
+| DT_INT8 | DT_INT8 | DT_INT32 | DT_INT32 | A2、A3、950PR/DT |
 | DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_FP16，DT_BF16，DT_FP32 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
 | DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_FP16，DT_BF16，DT_FP32 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
 | DT_HF8 | DT_HF8 | DT_FP16，DT_BF16，DT_FP32 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
@@ -69,7 +69,19 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 | input | mat2 | out_dtype | 产品支持 |
 |:------|:-----|:----------|:----------|
-| DT_INT8 | DT_INT8 | DT_FP16 | 全系列 |
+| DT_INT8 | DT_INT8 | DT_FP16 | A2、A3、950PR/DT |
+
+表5： 量化支持的数据类型
+
+| input | mat2 | out_dtype | 产品支持 |
+|:------|:-----|:----------|:----------|
+| DT_BF16 | DT_BF16 | DT_INT8 | A2、A3、950PR/DT |
+| DT_FP16 | DT_FP16 | DT_INT8 | A2、A3、950PR/DT |
+| DT_FP32 | DT_FP32 | DT_INT8 | A2、A3、950PR/DT |
+| DT_INT8 | DT_INT8 | DT_INT8 | A2、A3、950PR/DT |
+| DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 | 仅950PR/DT |
+| DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 | 仅950PR/DT |
+| DT_HF8 | DT_HF8 | DT_INT8 | 仅950PR/DT |
 
 ## 返回值说明
 
@@ -123,6 +135,19 @@ pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
 scale_tensor = pypto.tensor((1, 64), pypto.DT_UINT64, "tensor_scale")
 extend_params = {'scale_tensor': scale_tensor, 'relu_type': pypto.ReLuType.RELU}
 pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
+
+# 量化
+a = pypto.tensor((16, 32), pypto.DT_FP16, "tensor_a")
+b = pypto.tensor((32, 64), pypto.DT_FP16, "tensor_b")
+extend_params = {'scale': 0.2}
+pypto.matmul(a, b, pypto.DT_INT8, extend_params=extend_params)
+
+# 量化叠加RELU
+scale_tensor = torch_npu.npu_trans_quant_param(scale_cpu.npu()) # 生成scale_tensor
+a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")
+b = pypto.tensor((32, 64), pypto.DT_FP32, "tensor_b")
+extend_params = {'scale_tensor': scale_tensor, 'relu_type': pypto.ReLuType.RELU}
+pypto.matmul(a, b, pypto.DT_INT8, extend_params=extend_params)
 
 # TF32计算模式（仅950PR/DT）
 a = pypto.tensor((16, 32), pypto.DT_FP32, "tensor_a")

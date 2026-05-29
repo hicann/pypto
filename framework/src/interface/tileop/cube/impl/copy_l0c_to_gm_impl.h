@@ -21,8 +21,9 @@
 template <typename config, typename globalData, typename tileData, typename FpTileData>
 INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, FpTileData& fixbuf, uint64_t scaleValue)
 {
-    constexpr bool supportedQuantMode = std::is_same<typename tileData::DType, int32_t>::value &&
-                                        std::is_same<typename globalData::DType, __gm__ half>::value;
+    constexpr bool supportedQuantMode = (std::is_same<typename tileData::DType, int32_t>::value &&
+                                        std::is_same<typename globalData::DType, __gm__ half>::value) ||
+                                        std::is_same<typename globalData::DType, __gm__ int8_t>::value;
 #ifdef __LITE_NPU
     constexpr bool supportedBasicMode = (std::is_same<typename tileData::DType, int32_t>::value &&
                                          std::is_same<typename globalData::DType, __gm__ int32_t>::value) ||
@@ -41,10 +42,13 @@ INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, FpTileData& fix
     if constexpr (supportedQuantMode) {
         // L0C->GM反量化场景
         if (scaleValue != 0) {
+            constexpr bool sign = (std::is_same<typename globalData::DType, __gm__ int8_t>::value) ? true : false;
+            uint64_t preQuantScalar = (scaleValue & ~(static_cast<uint64_t>(1) << 46)) |
+                                    (static_cast<uint64_t>(sign) << 46);
             pto::TSTORE<
                 tileData, globalData, config::kIsAcc ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone,
                 config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
-                dstGlobal, srcL0C, scaleValue);
+                dstGlobal, srcL0C, preQuantScalar);
         } else {
             constexpr uint64_t shapeSize = Std::tuple_size<typename FpTileData::Shape>::value;
             constexpr auto tileH =
