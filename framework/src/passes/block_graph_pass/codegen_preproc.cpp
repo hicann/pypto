@@ -168,6 +168,16 @@ void CodegenPreproc::CombineLastAxis(std::vector<SymbolicScalar>& shape, size_t 
     shape[shapeSize - NUM2] = builder.CreateConstInt(1);
 }
 
+void CodegenPreproc::CombineTailOffset(LogicalTensor& tensor, const std::vector<int64_t>& rawShape) const
+{
+    size_t shapeSize = rawShape.size();
+    auto offset = tensor.GetOffset();
+    auto dynOffset = tensor.GetDynOffset();
+    CombineLastTwoAxisOffset(offset, rawShape, shapeSize);
+    CombineLastTwoAxisOffset(dynOffset, rawShape, shapeSize);
+    tensor.UpdateOffset(TensorOffset(offset, dynOffset));
+}
+
 Status CodegenPreproc::ProcessAxis(Operation& op, std::vector<bool> attr, bool isInput) const
 {
     LogicalTensors operands = isInput ? op.GetIOperands() : op.GetOOperands();
@@ -185,6 +195,8 @@ Status CodegenPreproc::ProcessAxis(Operation& op, std::vector<bool> attr, bool i
     for (size_t i = 0; i < operands.size(); ++i) {
         if (attr[i]) {
             size_t shapeSize = operands[i]->shape.size();
+            auto oldRawShape = operands[i]->tensor->rawshape;
+            CombineTailOffset(*operands[i], oldRawShape);
             CombineTailAxis(operands[i]->shape, shapeSize);
             CombineTailAxis(operands[i]->tensor->rawshape, shapeSize);
         }

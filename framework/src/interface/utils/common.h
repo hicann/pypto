@@ -209,6 +209,21 @@ inline std::string IntVecToStr(const std::vector<T>& shape)
     return ss.str();
 }
 
+template <typename T>
+void CombineLastTwoAxisOffset(std::vector<T>& offset, const std::vector<int64_t>& rawShape, size_t shapeSize)
+{
+    if (offset.empty()) {
+        return;
+    }
+    ASSERT(
+        TensorErr::TENSOR_SHAPE_MISMATCH,
+        shapeSize >= NUM2 && offset.size() == shapeSize && rawShape.size() == shapeSize)
+        << "offset " << IntVecToStr(offset) << ", size " << offset.size() << " vs rawShape " << IntVecToStr(rawShape)
+        << ", size " << rawShape.size();
+    offset[shapeSize - 1] = offset[shapeSize - NUM2] * rawShape[shapeSize - 1] + offset[shapeSize - 1];
+    offset[shapeSize - NUM2] = 0;
+}
+
 std::string SymbolicVecToStr(const std::vector<SymbolicScalar>& a);
 
 constexpr int ParamLocOffset = 28;

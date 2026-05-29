@@ -45,11 +45,7 @@ const std::unordered_set<Opcode> OP_SHAPE_FROM_ATTR{
 };
 bool IsOpShapeFromAttr(Opcode opcode) { return OP_SHAPE_FROM_ATTR.find(opcode) != OP_SHAPE_FROM_ATTR.end(); }
 const std::unordered_set<Opcode> SHMEM_COPY_OPS{
-    Opcode::OP_SHMEM_GET,
-    Opcode::OP_SHMEM_LOAD,
-    Opcode::OP_SHMEM_PUT,
-    Opcode::OP_SHMEM_STORE
-};
+    Opcode::OP_SHMEM_GET, Opcode::OP_SHMEM_LOAD, Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_STORE};
 bool IsShmemCopyOp(Opcode opcode) { return SHMEM_COPY_OPS.find(opcode) != SHMEM_COPY_OPS.end(); }
 } // namespace
 
@@ -63,7 +59,18 @@ void CombineLastTwoAxis(std::vector<T>& shape, size_t shapeSize)
     shape[shapeSize - NUM2] = 1;
 }
 
-void CodeGenOp::CombineAxis(const Operation& oper, int operandIdx, bool isInput, size_t ioIdx)
+bool CodeGenOp::NeedCombineAxis(const Operation& oper, bool isInput, size_t ioIdx) const
+{
+    std::vector<bool> needCombineIOIdx;
+    if (!((isInput && oper.GetAttr(OpAttributeKey::inputCombineAxis, needCombineIOIdx)) ||
+          (!isInput && oper.GetAttr(OpAttributeKey::outputCombineAxis, needCombineIOIdx)))) {
+        return false;
+    }
+    CODEGEN_LOGI("needCombineIOIdx is %s", IntVecToStr(needCombineIOIdx).c_str());
+    return ioIdx < needCombineIOIdx.size() && needCombineIOIdx[ioIdx];
+}
+
+void CodeGenOp::CombineAxisShape(const Operation& oper, int operandIdx)
 {
     size_t dim = rawShape[operandIdx].size();
     if (dim <= 1) {
@@ -71,28 +78,34 @@ void CodeGenOp::CombineAxis(const Operation& oper, int operandIdx, bool isInput,
         return;
     }
 
-    CODEGEN_LOGI("operandIdx %d, isInput: %d, ioIdx is %zu ", operandIdx, isInput, ioIdx);
-
-    std::vector<bool> needCombineIOIdx;
-    if (((isInput && oper.GetAttr(OpAttributeKey::inputCombineAxis, needCombineIOIdx)) ||
-         (!isInput && oper.GetAttr(OpAttributeKey::outputCombineAxis, needCombineIOIdx))) &&
-        needCombineIOIdx[ioIdx]) {
-        CODEGEN_LOGI("needCombineIOIdx is %s", IntVecToStr(needCombineIOIdx).c_str());
-        CombineLastTwoAxis(shape[operandIdx], dim);
-        CombineLastTwoAxis(rawShape[operandIdx], dim);
-        CombineLastTwoAxis(dynamicValidShape[operandIdx], dim);
-        CombineLastTwoAxis(dynamicRawShape[operandIdx], dim);
-        CODEGEN_LOGI(
-            "op code %s, operandIdx: %d, after CombineAxis shape is %s, raw shape is %s, "
-            "dynamicValidShape is %s, dynamicRawShape is %s",
-            oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]).c_str(),
-            IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(dynamicValidShape[operandIdx]).c_str(),
-            IntVecToStr(dynamicRawShape[operandIdx]).c_str());
-    }
+    CombineLastTwoAxis(shape[operandIdx], dim);
+    CombineLastTwoAxis(rawShape[operandIdx], dim);
+    CombineLastTwoAxis(dynamicValidShape[operandIdx], dim);
+    CombineLastTwoAxis(dynamicRawShape[operandIdx], dim);
+    CODEGEN_LOGI(
+        "op code %s, operandIdx: %d, after CombineAxis shape is %s, raw shape is %s, "
+        "dynamicValidShape is %s, dynamicRawShape is %s",
+        oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]).c_str(),
+        IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(dynamicValidShape[operandIdx]).c_str(),
+        IntVecToStr(dynamicRawShape[operandIdx]).c_str());
 }
 
-void CodeGenOp::UpdateShape(
-    const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx, bool isInput, size_t ioIdx)
+void CodeGenOp::CombineAxisOffset(const Operation& oper, int operandIdx)
+{
+    auto originalRawShape = rawShape[operandIdx];
+    size_t dim = originalRawShape.size();
+    if (dim <= 1) {
+        return;
+    }
+
+    CombineLastTwoAxisOffset(offset[operandIdx], originalRawShape, dim);
+    CombineLastTwoAxisOffset(dynamicOffset[operandIdx], originalRawShape, dim);
+    CODEGEN_LOGI(
+        "op code %s, operandIdx: %d, after CombineAxis offset is %s, dynamicOffset is %s", oper.GetOpcodeStr().c_str(),
+        operandIdx, IntVecToStr(offset[operandIdx]).c_str(), IntVecToStr(dynamicOffset[operandIdx]).c_str());
+}
+
+void CodeGenOp::UpdateShape(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
 {
     CODEGEN_LOGI(
         "op code %s, operandIdx: %d, shape is %s, raw shape is %s, dynamicValidShape is %s, "
@@ -133,8 +146,6 @@ void CodeGenOp::UpdateShape(
     }
 
     UpdateValidShapeForShmemCopyOps(oper, operandIdx);
-
-    CombineAxis(oper, operandIdx, isInput, ioIdx);
 }
 
 void CodeGenOp::UpdateValidShapeForShmemCopyOps(const Operation& oper, int operandIdx)
@@ -145,8 +156,8 @@ void CodeGenOp::UpdateValidShapeForShmemCopyOps(const Operation& oper, int opera
     }
     std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
     ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
-    const auto &validShape = (attr->GetFromDynValidShape().size() != 0) ?
-        attr->GetFromDynValidShape() : attr->GetToDynValidShape();
+    const auto& validShape =
+        (attr->GetFromDynValidShape().size() != 0) ? attr->GetFromDynValidShape() : attr->GetToDynValidShape();
     UpdateShapeFromAttr(validShape, 0);
 }
 
@@ -216,6 +227,22 @@ void CodeGenOp::UpdateOffsetForOutput(const Operation& oper, const LogicalTensor
 
     offset[operandIdx] = logicalTensor.offset; // Local Tensor offset just use offset from LogicalTensor
     CODEGEN_LOGI("UpdateOffsetForOutput logicalTensor offset is %s", IntVecToStr(offset[operandIdx]).c_str());
+}
+
+void CodeGenOp::UpdateShapeAndOffset(
+    const Operation& ops, const LogicalTensor& logicalTensor, bool isInput, int operandIdx, size_t ioIdx)
+{
+    UpdateShape(ops, logicalTensor, operandIdx);
+    if (isInput) {
+        UpdateOffsetForInput(ops, logicalTensor, operandIdx);
+    } else {
+        UpdateOffsetForOutput(ops, logicalTensor, operandIdx);
+    }
+    bool needCombineAxis = NeedCombineAxis(ops, isInput, ioIdx);
+    if (needCombineAxis) {
+        CombineAxisOffset(ops, operandIdx);
+        CombineAxisShape(ops, operandIdx);
+    }
 }
 
 void CodeGenOp::UpdateScalarValue(const Operation& ops)
@@ -301,12 +328,7 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
-    UpdateShape(ops, *tensor, operandIdx, isInput, ioIdx);
-    if (isInput) {
-        UpdateOffsetForInput(ops, *tensor, operandIdx);
-    } else {
-        UpdateOffsetForOutput(ops, *tensor, operandIdx);
-    }
+    UpdateShapeAndOffset(ops, *tensor, isInput, operandIdx, ioIdx);
     operandDtype[operandIdx] = tensor->tensor->datatype;
     auto it = OPERAND_TYPE_TO_MEMORY_TYPE.find(tensor->GetMemoryTypeOriginal());
     ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, it != OPERAND_TYPE_TO_MEMORY_TYPE.end())

@@ -86,7 +86,7 @@ protected:
     const FunctionType functionType;
     std::string opCodeStr;
     Opcode opCode{Opcode::OP_UNKNOWN};
-    std::string aliasOp;            // alias op name
+    std::string aliasOp; // alias op name
 
     int operand[MAX_OPERANDS] = {}; // buffer id
     int operandWithMagic[MAX_OPERANDS] = {};
@@ -105,8 +105,8 @@ protected:
     std::vector<SymbolicScalar> dynamicOffset[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicValidShape[MAX_OPERANDS] = {}; // valid shape
 
-    std::vector<int64_t> shapeFromAttr[MAX_OPERANDS] = {};            // 1.for spilling to GM scene 2.for conv
-    std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {};    // for spilling to GM scene
+    std::vector<int64_t> shapeFromAttr[MAX_OPERANDS] = {};         // 1.for spilling to GM scene 2.for conv
+    std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {}; // for spilling to GM scene
     std::vector<SymbolicScalar> dynValidShapeFromOpAttr[MAX_OPERANDS] = {};
     // if operand is an variable, record its related argument location
     // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.
@@ -143,16 +143,19 @@ private:
 
     void ConvertPoolAttribute(const Operation& operation);
     void ConvertAttribute(const Operation& operation);
-    void UpdateShape(
-        const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx, bool isInput, size_t ioIdx);
+    void UpdateShape(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
+    void UpdateShapeAndOffset(
+        const Operation& ops, const LogicalTensor& logicalTensor, bool isInput, int operandIdx, size_t ioIdx);
     void UpdateOffsetForInput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
     void UpdateOffsetForOutput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
     void UpdateShapeFromAttr(const std::vector<OpImmediate>& toValidShape, int operandIdx);
     void UpdateOffsetValueFromAttr(const std::vector<OpImmediate>& offsets, int operandIdx);
     void UpdateScalarValue(const Operation& ops);
     void UpdateOpAttribute(const Operation& ops);
-    void CombineAxis(const Operation& oper, int operandIdx, bool isInput, size_t ioIdx);
     void UpdateValidShapeForShmemCopyOps(const Operation& oper, int operandIdx);
+    bool NeedCombineAxis(const Operation& oper, bool isInput, size_t ioIdx) const;
+    void CombineAxisShape(const Operation& oper, int operandIdx);
+    void CombineAxisOffset(const Operation& oper, int operandIdx);
 };
 } // namespace npu::tile_fwk
 

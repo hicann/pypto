@@ -133,7 +133,8 @@ Status CommonOperationEliminateUtils::Process(Function& function)
     std::unordered_set<Operation*> cacheProducers;
     for (auto& orderedTensor : sequence) {
         auto& producerGroup = tensorProducerMap[orderedTensor];
-        if (producerGroup.empty() || !TensorProducersMerge(function, orderedTensor, cacheProducers, tensorProducerMap)) {
+        if (producerGroup.empty() ||
+            !TensorProducersMerge(function, orderedTensor, cacheProducers, tensorProducerMap)) {
             continue;
         }
         for (auto op : producerGroup) {

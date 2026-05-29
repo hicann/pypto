@@ -45,6 +45,7 @@ private:
         LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar, int opMagic) const;
     void CombineTailAxis(std::vector<int64_t>& shape, size_t shapeSize) const;
     void CombineLastAxis(std::vector<SymbolicScalar>& shape, size_t shapeSize) const;
+    void CombineTailOffset(LogicalTensor& tensor, const std::vector<int64_t>& rawShape) const;
     Status ProcessAxis(Operation& op, std::vector<bool> attr, bool isInput) const;
     void SetNeedAllocAttr(Function& function);
     void FixExpandDimForAxisCombine(Operation& op, int dimSize) const;
