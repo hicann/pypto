@@ -579,7 +579,7 @@ void IsFiniteOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile().tile;
     // tileShape 对应的中间变量结果，类型为 FP16
     uint32_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP16)) *
                                  std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<int64_t>());
@@ -631,7 +631,7 @@ void ErfOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile().tile;
     std::vector<int64_t> tmpShape;
     tmpShape.assign(shape.begin(), shape.end());
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
@@ -648,7 +648,7 @@ void SinOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile().tile;
     std::vector<int64_t> tmpShape;
     tmpShape.assign(shape.begin(), shape.end());
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
@@ -665,7 +665,7 @@ void CosOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile().tile;
     std::vector<int64_t> tmpShape;
     tmpShape.assign(shape.begin(), shape.end());
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
@@ -682,7 +682,7 @@ void ErfcOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile().tile;
     std::vector<int64_t> tmpShape;
     tmpShape.assign(shape.begin(), shape.end());
     auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
@@ -698,7 +698,7 @@ void AsinAcosOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    Shape& shape = TileShape::Current().GetVecTile().tile;
+    auto shape = tileShape.GetVecTile().tile;
     int dim = static_cast<int>(shape.size());
     auto repeatElems = REPEAT_BYTE / BytesOf(DT_FP32);
     int64_t tmpW = (shape[dim - 1] + repeatElems - 1) / repeatElems * repeatElems;
