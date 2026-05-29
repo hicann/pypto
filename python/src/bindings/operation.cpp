@@ -611,6 +611,14 @@ void BindOperation(py::module& m)
         py::arg("out_type"), py::arg("a"), py::arg("b"), py::arg("a_trans") = false, py::arg("b_trans") = false,
         py::arg("c_matrix_nz") = false, "Batch matrix multiply.");
     m.def(
+        "BatchMatmul",
+        [](DataType out_type, const Tensor& tensor_a, const Tensor& tensor_b, bool a_trans, bool b_trans,
+           bool c_matrix_nz, const Matrix::MatmulExtendParam &extend_param) {
+            return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, extend_param, a_trans, b_trans, c_matrix_nz);
+        },
+        py::arg("out_type"), py::arg("a"), py::arg("b"), py::arg("a_trans") = false, py::arg("b_trans") = false,
+        py::arg("c_matrix_nz") = false, py::arg("extend_params"), "Batch matrix multiply with extend params.");
+    m.def(
         "gather_in_l1",
         [](const Tensor& src, const Tensor& indices, const Tensor& blockTable, int blockSize, int size,
            bool is_b_matrix, bool is_trans) {

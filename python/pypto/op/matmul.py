@@ -152,9 +152,17 @@ def matmul(
                 out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
             )
     else:
-        return pypto_impl.BatchMatmul(
-            out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
-        )
+        if extend_params is not None:
+            extend_params = pypto_impl.MatmulExtendParam(
+                **__convert_matmul_extend_params(extend_params)
+            )
+            return pypto_impl.BatchMatmul(
+                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz, extend_params
+            )
+        else:
+            return pypto_impl.BatchMatmul(
+                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
+            )
 
 
 @op_wrapper
@@ -297,6 +305,23 @@ def __validate_shape(input_tensor1: Tensor, input_tensor2: Tensor, a_trans: bool
         ))
 
 
+def __validate_bias(input_tensor, extend_params) -> None:
+    if extend_params is not None and "bias_tensor" in extend_params \
+        and isinstance(extend_params["bias_tensor"], Tensor):
+        input_dim = input_tensor.Dim()
+        bias_dim = extend_params["bias_tensor"].Dim()
+        if input_dim == 3 and bias_dim not in {2, 3}:
+            raise PyptoError(0xF00003, RuntimeError(
+                "Bias tensor dimension mismatch for 3D. Expect bias_dim in [2, 3], "
+                f"got input_dim: {input_dim}, bias_dim: {bias_dim}."
+            ))
+        elif input_dim == 4 and bias_dim != 2:
+            raise PyptoError(0xF00003, RuntimeError(
+                "Bias tensor dimension mismatch for 4D. Expect bias_dim equals to 2, "
+                f"got input_dim: {input_dim}, bias_dim: {bias_dim}."
+            ))
+
+
 def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -> None:
     a_trans, b_trans, is_out_nz, extend_params = optional_param
     __validate_type(out_dtype, DataType, "out_dtype")
@@ -306,6 +331,7 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
     __validate_type(extend_params, dict, "extend_params")
     __validate_shape(input_tensor1, input_tensor2, a_trans, b_trans)
     __validate_trans_mode(input_tensor1, input_tensor2, extend_params)
+    __validate_bias(input_tensor1, extend_params)
 
     input1_dtype = input_tensor1.GetDataType()
     input2_dtype = input_tensor2.GetDataType()
@@ -330,10 +356,6 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
             "Input tensor with DT_FP8E5M2 must use ND format, NZ format is not support currently."))
     if not ((input1_dtype in fp8_dtype and input2_dtype in fp8_dtype) or (input1_dtype == input2_dtype)):
         raise PyptoError(0xF00002, ValueError("Non-FP8 inputs require identical dtypes."))
-    if input_tensor1.Dim() != 2 and extend_params is not None:
-        raise PyptoError(0xF00003, RuntimeError(
-            "extend_params is not supported for batched matrix multiplication."
-        ))
 
 
 def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_scale2) -> None:

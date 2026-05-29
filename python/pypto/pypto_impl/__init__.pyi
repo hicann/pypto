@@ -692,8 +692,14 @@ def MatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tens
              c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
 
 
-def Batch_matmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False,
+@overload
+def BatchMatmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False,
                  b_trans: bool = False, c_matrix_nz: bool = False) -> Tensor: ...
+
+
+@overload
+def BatchMatmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False, b_trans: bool = False,
+                 c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
 
 
 @overload
