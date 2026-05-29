@@ -2487,15 +2487,16 @@ static void NormalizeReshapeCopyDynValidShape(
     Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex, bool valueToIndex)
 {
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
-    if (copyAttr == nullptr) {
-        return;
-    }
+    FE_ASSERT(FeError::INVALID_PTR, copyAttr != nullptr)
+        << "Normalize reshape copy dyn valid shape failed: copyAttr is null.\n"
+        << "Operation: " << op->Dump();
 
     bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT;
+    const char* dynValidShapeName = useToDynValidShape ? "toDynValidShape" : "fromDynValidShape";
     auto opImmList = useToDynValidShape ? copyAttr->GetToDynValidShape() : copyAttr->GetFromDynValidShape();
-    if (opImmList.empty()) {
-        return;
-    }
+    FE_ASSERT(FeError::INVALID_PTR, !opImmList.empty())
+        << "Normalize reshape copy dyn valid shape failed: " << dynValidShapeName << " is empty.\n"
+        << "Operation: " << op->Dump();
 
     std::vector<SymbolicScalar> dynValidShape = OpImmediate::ToSpecified(opImmList);
     std::vector<SymbolicScalar> valueCoaList;

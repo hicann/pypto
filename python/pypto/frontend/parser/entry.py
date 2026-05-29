@@ -363,9 +363,6 @@ class JitCallableWrapper:
         return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
 
 
-
-
-
     @staticmethod
     def _get_func_nonlocals(func: Callable) -> dict[str, Any]:
         """Extract nonlocal (closure) variables from a function.
