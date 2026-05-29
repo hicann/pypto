@@ -1202,7 +1202,9 @@ int OoOScheduler::GetBufNextUseTime(Operation* op, int curMemId) {
             if (!a) return false;
             // 条件2: 操作的执行顺序必须大于当前操作（向后查找）
             if (opExecOrderMap[a] <= execOrder) return false;
-            // 条件3: 该操作需要使用 curMemId 对应的 Buffer
+            // 条件3: 该操作需未执行
+            if (opIsRetiredMap[a]) return false;
+            // 条件4: 该操作需要使用 curMemId 对应的 Buffer
             auto& reqMemIds = opReqMemIdsMap[a];
             return std::find(reqMemIds.begin(), reqMemIds.end(), curMemId) != reqMemIds.end();
         }
