@@ -63,16 +63,8 @@ std::string CodeGenOpNPU::PrintCastDynamicUnaligned(const PrintUnaryParam& param
 std::string CodeGenOpNPU::PrintCastTileTensor() const
 {
     bool hasTmpBuffer = (operandCnt == NUM3);
-    std::string dstTensor;
-    std::string srcTensor;
-    std::string tmpTensor;
-    dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    if (hasTmpBuffer) {
-        srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-        tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    } else {
-        srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    }
+    std::vector<std::string> tileOpParamList =
+        hasTmpBuffer ? GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)}) : GetTileOpParamsByOrder();
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "mode");
     int64_t modeEnum{0};
     if (mode.HasValue()) {
@@ -92,11 +84,7 @@ std::string CodeGenOpNPU::PrintCastTileTensor() const
     templateParamList.emplace_back(satModeStr);
     oss << WrapParamByAngleBrackets(templateParamList);
 
-    if (hasTmpBuffer) {
-        oss << WrapParamByParentheses({dstTensor, srcTensor, tmpTensor});
-    } else {
-        oss << WrapParamByParentheses({dstTensor, srcTensor});
-    }
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << ";\n";
     return oss.str();
 }
@@ -187,8 +175,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineDynamicUnaligned(const PrintUnaryParam&
 
 std::string CodeGenOpNPU::PrintRowMaxlineTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
@@ -201,7 +188,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineTileTensor() const
     std::ostringstream oss;
     oss << tileOpName;
     oss << WrapParamByAngleBrackets({std::to_string(reduceAxis)});
-    oss << WrapParamByParentheses({dstTensor, src0Tensor});
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
 }
@@ -358,8 +345,7 @@ std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& par
 
 std::string CodeGenOpNPU::PrintExpandLayout(std::vector<int> expandAxes) const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
     std::string lastUse = GetLastUse();
@@ -371,7 +357,7 @@ std::string CodeGenOpNPU::PrintExpandLayout(std::vector<int> expandAxes) const
         templateParamList.emplace_back(std::to_string(axis));
     }
     oss << WrapParamByAngleBrackets(templateParamList);
-    oss << WrapParamByParentheses({dstTensor, srcTensor});
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << ";\n";
     return oss.str();
 }
@@ -413,14 +399,7 @@ std::string CodeGenOpNPU::PrintExpand(
     return oss.str();
 }
 
-std::string CodeGenOpNPU::PrintOneHotLayout() const
-{
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::ostringstream oss;
-    oss << tileOpName << WrapParamByParentheses({dstTensor, srcTensor}) << STMT_END;
-    return oss.str();
-}
+std::string CodeGenOpNPU::PrintOneHotLayout() const { return PrintTileOpWithFullParamsInOrder(); }
 
 std::string CodeGenOpNPU::PrintOneHot(const PrintUnaryParam& param) const
 {
@@ -548,15 +527,7 @@ std::string CodeGenOpNPU::PrintUnaryStatic(const PrintUnaryParam& param) const
     return os.str();
 }
 
-std::string CodeGenOpNPU::PrintBitwiseNot() const
-{
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-
-    std::ostringstream oss;
-    oss << tileOpName << "(" << dstTensor << ", " << srcTensor << ");\n";
-    return oss.str();
-}
+std::string CodeGenOpNPU::PrintBitwiseNot() const { return PrintTileOpWithFullParamsInOrder(); }
 
 void CodeGenOpNPU::AddUnaryPrecisionTypeParm(std::vector<std::string>& templateParamList) const
 {
@@ -584,8 +555,7 @@ void CodeGenOpNPU::AddUnaryPrecisionTypeParm(std::vector<std::string>& templateP
 
 std::string CodeGenOpNPU::PrintUnaryTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
 
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
@@ -600,7 +570,7 @@ std::string CodeGenOpNPU::PrintUnaryTileTensor() const
     if (!templateParamList.empty()) {
         oss << WrapParamByAngleBrackets(templateParamList);
     }
-    oss << WrapParamByParentheses({dstTensor, srcTensor});
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << ";\n";
     return oss.str();
 }

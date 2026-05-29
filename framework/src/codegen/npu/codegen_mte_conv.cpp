@@ -23,8 +23,9 @@
 
 namespace npu::tile_fwk {
 
-void CodeGenOpNPU::GetDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D,
-    std::vector<std::string>& gmOffsetExpr, std::vector<int64_t>& staticOffsets) const
+void CodeGenOpNPU::GetDynamicOffsetExpr(
+    const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, std::vector<std::string>& gmOffsetExpr,
+    std::vector<int64_t>& staticOffsets) const
 {
     // 统一输出为 SHAPE_DIM5 维，conv2d 的第 5 维(d)初始化为 0
     size_t inputDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
@@ -117,8 +118,7 @@ std::string CodeGenOpNPU::GetConvCopyInMode() const
 
 std::string CodeGenOpNPU::GenMemL1CopyInConv() const
 {
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::vector<std::string> tileOpParams = GetTileOpParamsByOrder();
     std::string copyInModeStr = GetConvCopyInMode();
 
     bool isFmap = true, isConv3D = false;
@@ -152,8 +152,9 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
     std::vector<std::string> gmOffsetExpr;
     GetDynamicOffsetExpr(dynOffset, isConv3D, gmOffsetExpr, staticOffsets);
 
-    std::vector<std::string> tileOpParamList =
-        BuildCopyInParamList(dstTensor, srcTensor, gmOffsetExpr, staticOffsets, srcShape, isConv3D);
+    std::vector<std::string> tileOpParamList = BuildCopyInParamList(
+        tileOpParams[ToUnderlying(MISOIdx::DST_IDX)], tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], gmOffsetExpr,
+        staticOffsets, srcShape, isConv3D);
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyInModeStr, std::to_string(isConv3D), std::to_string(isFmap)});
@@ -176,8 +177,7 @@ std::string CodeGenOpNPU::GetConvCopyOutMode() const
 
 std::string CodeGenOpNPU::GenMemL1CopyOutConv() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpParams = GetTileOpParamsByOrder();
     std::string copyOutModeStr = GetConvCopyOutMode();
 
     bool isConv3D = false;
@@ -186,8 +186,7 @@ std::string CodeGenOpNPU::GenMemL1CopyOutConv() const
     // 获取cutW参数，默认值为0
     int64_t cutW = 0;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::cutW, cutW);
-    ASSERT(ConvCodenGenError::CODEGEN_CHECK_ATTR_INVALID, cutW != 0)
-        << "GenMemL1CopyOutConv cutW should not be 0!";
+    ASSERT(ConvCodenGenError::CODEGEN_CHECK_ATTR_INVALID, cutW != 0) << "GenMemL1CopyOutConv cutW should not be 0!";
 
     std::vector<SymbolicScalar> srcShapeVec;
     GetOpAttr(OpAttributeKey::l0cValidMN, srcShapeVec);
@@ -205,8 +204,9 @@ std::string CodeGenOpNPU::GenMemL1CopyOutConv() const
     std::vector<std::string> gmOffsetExpr;
     GetDynamicOffsetExpr(dynOffset, isConv3D, gmOffsetExpr, staticOffsets);
 
-    std::vector<std::string> tileOpParamList =
-        BuildCopyOutParamList(dstTensor, srcTensor, gmOffsetExpr, staticOffsets, realM, realN, cutW);
+    std::vector<std::string> tileOpParamList = BuildCopyOutParamList(
+        tileOpParams[ToUnderlying(MISOIdx::DST_IDX)], tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], gmOffsetExpr,
+        staticOffsets, realM, realN, cutW);
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyOutModeStr, std::to_string(isConv3D)});
@@ -218,10 +218,8 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load3D() const
 {
     std::vector<std::variant<std::string, uint8_t, uint16_t, int, int64_t>> paramList;
 
-    std::string dstVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    paramList.emplace_back(dstVar);
-    paramList.emplace_back(srcVar);
+    auto tileOpParams = GetTileOpParamsByOrder();
+    paramList.insert(paramList.end(), tileOpParams.begin(), tileOpParams.end());
 
     auto loadParams = [this](auto& list, auto key, auto& value) {
         GetOpAttr(key, value);
@@ -266,10 +264,8 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load2D() const
 {
     std::vector<std::variant<std::string, uint16_t, int, int64_t>> paramList;
 
-    std::string dstVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    paramList.emplace_back(dstVar);
-    paramList.emplace_back(srcVar);
+    auto tileOpParams = GetTileOpParamsByOrder();
+    paramList.insert(paramList.end(), tileOpParams.begin(), tileOpParams.end());
 
     int64_t kPos = 0, nPos = 0;
     GetOpAttr(OpAttributeKey::postK, kPos);

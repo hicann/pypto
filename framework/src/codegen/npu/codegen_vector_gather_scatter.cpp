@@ -237,17 +237,13 @@ std::string CodeGenOpNPU::PrintGatherElementDynamicUnaligned(const PrintGatherEl
 
 std::string CodeGenOpNPU::PrintGatherElementTileTensor(const PrintGatherEleParam& param) const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
-    std::string src0Tensor = QueryTileTensorNameByIdx(ID2);
-    std::string src1Tensor = QueryTileTensorNameByIdx(ID3);
+    std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     std::vector<std::string> paramList;
     int axis = param.axis + SHAPE_DIM5 - param.src1RawShape.size();
     paramList.emplace_back(std::to_string(axis));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     std::ostringstream oss;
-    oss << tileOpName << "<" << templateParam << ">"
-        << "(" << dstTensor << ", " << src0Tensor << ", " << src1Tensor << ", " << tmpTensor << ");\n";
+    oss << tileOpName << "<" << templateParam << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 

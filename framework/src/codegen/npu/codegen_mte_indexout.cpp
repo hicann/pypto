@@ -40,16 +40,15 @@ std::string CodeGenOpNPU::PrintIndexOutCastTileTensor() const
     auto cacheMode = AnyCast<std::string>(opAttrs.at(OpAttributeKey::cacheMode));
     auto blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::panzBlockSize));
     int cacheModeFlag = GetCacheModeFlag(cacheMode);
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
 
     int dim = rawShape[ID0].size();
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID0);
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = PrintCoord(dim, coordCp);
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord};
+    const int usedOperandCnt = 3;
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder(usedOperandCnt);
+    tileOpParamList.emplace_back(coord);
 
     std::ostringstream oss;
     oss << tileOpName;

@@ -268,18 +268,16 @@ std::string CodeGenOpNPU::PrintGatherLayout() const
     std::string coord4Param = PrintCoord(paramDim, coordCpparamOffset);
     std::string coord4Indices = PrintCoord(indicesDim, coordCpindicesOffset);
 
-    std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string paramTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string indicesTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+    auto tileOpParams = GetTileOpParamsByOrder();
+    tileOpParams.insert(tileOpParams.end(), {coord4Param, coord4Indices});
+
     std::vector<std::string> paramList;
     paramList.emplace_back(std::to_string(NormalizeAxis(axis, paramDim)));
     std::transform(
         helpIndex.begin(), helpIndex.end(), back_inserter(paramList), [](size_t x) { return std::to_string(x); });
-    std::string templateParam = JoinString(paramList, CONN_COMMA);
 
-    std::vector<std::string> tileOpParamList = {outputTensor, paramTensor, indicesTensor, coord4Param, coord4Indices};
     std::ostringstream oss;
-    oss << tileOpName << "<" << templateParam << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    oss << tileOpName << WrapParamByAngleBrackets(paramList) << WrapParamByParentheses(tileOpParams) << STMT_END;
     return oss.str();
 }
 
@@ -314,10 +312,6 @@ std::string CodeGenOpNPU::PrintGatherInUBLayout() const
     std::string coord4Param = PrintCoord(paramDim, coordCpparamOffset);
     std::string coord4Indices = PrintCoord(indicesDim, coordCpindicesOffset);
     std::string coord4BlockTable = PrintCoord(blockTableDim, coordCpblockTableOffset);
-    std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string paramTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string indicesTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
-    std::string pageTableTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC2_IDX));
     std::vector<std::string> paramList;
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end())
         << "GenGatherOp: There is nop blockSize attribute here";
@@ -325,8 +319,8 @@ std::string CodeGenOpNPU::PrintGatherInUBLayout() const
     paramList.emplace_back(std::to_string(blockSize));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
 
-    std::vector<std::string> tileOpParamList = {outputTensor, paramTensor,   indicesTensor,   pageTableTensor,
-                                                coord4Param,  coord4Indices, coord4BlockTable};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.insert(tileOpParamList.end(), {coord4Param, coord4Indices, coord4BlockTable});
     std::ostringstream oss;
     oss << tileOpName << "<" << templateParam << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();

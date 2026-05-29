@@ -186,10 +186,7 @@ void CodeGenOpNPU::AddBinaryPrecisionTypeParm(std::vector<std::string>& template
 
 std::string CodeGenOpNPU::PrintBinaryTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
-    std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor};
+    std::vector<std::string> tileOpCallParamList = GetTileOpParamsByOrder();
 
     std::vector<std::string> templateParamList;
     AddBinaryPrecisionTypeParm(templateParamList);
@@ -264,11 +261,7 @@ std::string CodeGenOpNPU::GenBinaryOp() const
 
 std::string CodeGenOpNPU::GenBinaryOpWithTmp() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
-    std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
+    std::vector<std::string> tileOpCallParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     std::vector<std::string> templateParamList;
     AddBinaryPrecisionTypeParm(templateParamList);
     std::ostringstream oss;
@@ -599,10 +592,9 @@ std::string CodeGenOpNPU::PrintBinaryScalarDynamicUnaligned(const PrintBinarySca
 std::string CodeGenOpNPU::PrintVectorScalarTileTensor(const PrintUnaryParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, scalarTmpBuffer};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.emplace_back(scalarTmpBuffer);
 
     std::vector<std::string> templateParamList;
     AddBinaryPrecisionTypeParm(templateParamList);

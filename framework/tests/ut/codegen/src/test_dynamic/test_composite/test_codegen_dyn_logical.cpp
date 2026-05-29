@@ -88,14 +88,17 @@ std::string TestLogicalBody(Opcode opcode)
 
     std::vector<int64_t> shape = {64, 64};
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto logicalInTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
-    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
-    logicalInTensor->UpdateDynValidShape(dynValidShape);
-    localOutTensor->UpdateDynValidShape(dynValidShape);
+    auto logicalInTensor =
+        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     std::vector<int64_t> offset = {0, 0};
     std::vector<SymbolicScalar> dynoffset = {0, 0};
 
-    auto& op = function->AddOperation(opcode, {logicalInTensor, logicalInTensor}, {localOutTensor, localOutTensor});
+    std::vector<LogicalTensorPtr> input = {logicalInTensor};
+    if (opcode == Opcode::OP_LOGICALAND) {
+        input.emplace_back(logicalInTensor);
+    }
+    auto& op = function->AddOperation(opcode, input, {localOutTensor, localOutTensor});
 
     return GenOpCodeFromOp(*function, op);
 }

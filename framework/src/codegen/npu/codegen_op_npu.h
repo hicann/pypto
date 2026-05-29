@@ -187,6 +187,11 @@ public:
 
 protected:
     virtual TileTensor QueryTileTensorByIdx(int paramIdx) const;
+    std::vector<std::string> GetTileOpParamsByOrder(int paramCnt = 0) const;
+    std::vector<std::string> GetTileOpParamsWithTmpBuf(const std::vector<unsigned>& tmpBufIdx) const;
+    std::string PrintTileOpWithFullParamsInOrder() const;
+    std::string PrintTileOpWithFullParamsTmpBuf(const std::vector<unsigned>& tmpBufIdx) const;
+
     std::string InsertOpComment(std::string& tileOpSourceCode) const;
 
     void GetDynamicOffsetExpr(
@@ -455,8 +460,6 @@ protected:
     std::string PrintRowSumlineTileTensor() const;
     std::string PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuffParam& param) const;
     std::string PrintRowSumlineStatic(const PrintUnaryTmpBuffParam& param) const;
-
-    std::string PrintIsFinite([[maybe_unused]] const PrintUnaryTmpBuffParam& param) const;
 
     std::string PrintExtractStatic() const;
     std::string PrintExtractDynamicUnaligned() const;

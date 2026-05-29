@@ -166,12 +166,10 @@ std::string CodeGenOpNPU::PrintBitSortStatic(const SortParam& param) const { ret
 
 std::string CodeGenOpNPU::PrintSortTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+    std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({GenOpAttr(false)});
-    oss << WrapParamByParentheses({dstTensor, srcTensor, tmpTensor}) << STMT_END;
+    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 
@@ -324,12 +322,9 @@ std::string CodeGenOpNPU::PrintExtractDynamicUnaligned() const
 
 std::string CodeGenOpNPU::PrintExtractTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({GenOpAttr(false)});
-    oss << WrapParamByParentheses({dstTensor, src0Tensor}) << STMT_END;
+    oss << WrapParamByParentheses(GetTileOpParamsByOrder()) << STMT_END;
     return oss.str();
 }
 
@@ -381,15 +376,10 @@ TiledSortParam CodeGenOpNPU::PrepareTiledSortParam() const
 
 std::string CodeGenOpNPU::PrintTileSortTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
-    std::string src1Tensor = QueryTileTensorNameByIdx(ID2);
-    std::string src2Tensor = QueryTileTensorNameByIdx(ID3);
-    std::string src3Tensor = QueryTileTensorNameByIdx(ID4);
-    std::string src4Tensor = QueryTileTensorNameByIdx(ID5);
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({GenOpAttr(false)});
-    oss << WrapParamByParentheses({dstTensor, src1Tensor, src2Tensor, src3Tensor, src4Tensor, tmpTensor}) << STMT_END;
+    auto tileOpParams = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
+    oss << WrapParamByParentheses(tileOpParams) << STMT_END;
     return oss.str();
 }
 
@@ -404,11 +394,6 @@ std::string CodeGenOpNPU::GenTiledMrgSortOp() const
 
 std::string CodeGenOpNPU::GenRadixSelectOp() const
 {
-    std::string valueTensor = QueryTileTensorNameByIdx(ID0);
-    std::string indexTensor = QueryTileTensorNameByIdx(ID1);
-    std::string tempTensor = QueryTileTensorNameByIdx(ID2);
-    std::string srcTensor = QueryTileTensorNameByIdx(ID3);
-    std::vector<std::string> paramList = {valueTensor, indexTensor, tempTensor, srcTensor};
     int64_t isLargest = -1;
     bool hasLargest = GetOpAttr(OP_ATTR_PREFIX + "order", isLargest);
     ASSERT(OperErr::ATTRIBUTE_INVALID, hasLargest) << "Radix Select has no isLargest attribute.";
@@ -416,7 +401,8 @@ std::string CodeGenOpNPU::GenRadixSelectOp() const
     bool hasK = GetOpAttr(OP_ATTR_PREFIX + "kvalue", k);
     ASSERT(OperErr::ATTRIBUTE_INVALID, hasK) << "Radix Select has no k attribute.";
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByAngleBrackets<int64_t>({k, isLargest}) << WrapParamByParentheses(paramList)
+    auto tileOpParams = GetTileOpParamsByOrder();
+    oss << tileOpName << WrapParamByAngleBrackets<int64_t>({k, isLargest}) << WrapParamByParentheses(tileOpParams)
         << STMT_END;
     return oss.str();
 }

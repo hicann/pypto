@@ -919,4 +919,52 @@ std::string CodeGenOpNPU::GetLastUse() const
     return oss.str();
 }
 
+std::vector<std::string> CodeGenOpNPU::GetTileOpParamsByOrder(int paramCnt) const
+{
+    int tileOpParamCnt = paramCnt == 0 ? operandCnt : paramCnt;
+    ASSERT(OperErr::OPERAND_COUNT_EXCEEDED, tileOpParamCnt > 0 && tileOpParamCnt <= operandCnt)
+        << "paramCnt: " << paramCnt << " should be greater than 0 and not exceed operandCnt";
+
+    std::vector<std::string> params;
+    for (int i = 0; i < tileOpParamCnt; ++i) {
+        params.emplace_back(QueryTileTensorNameByIdx(i));
+    }
+
+    CODEGEN_LOGI("TileOp params is %s", IntVecToStr(params).c_str());
+    return params;
+}
+
+std::vector<std::string> CodeGenOpNPU::GetTileOpParamsWithTmpBuf(const std::vector<unsigned>& tmpBufIdx) const
+{
+    std::vector<std::string> params;
+    for (int i = 0; i < operandCnt; ++i) {
+        if (std::find(tmpBufIdx.begin(), tmpBufIdx.end(), i) == tmpBufIdx.end()) {
+            params.emplace_back(QueryTileTensorNameByIdx(i));
+        }
+    }
+
+    for (auto& ti : tmpBufIdx) {
+        params.emplace_back(QueryTileTensorNameByIdx(ti));
+    }
+
+    CODEGEN_LOGI("TileOp params is %s", IntVecToStr(params).c_str());
+    return params;
+}
+
+std::string CodeGenOpNPU::PrintTileOpWithFullParamsInOrder() const
+{
+    std::vector<std::string> params = GetTileOpParamsByOrder();
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByParentheses(params) << STMT_END;
+    return oss.str();
+}
+
+std::string CodeGenOpNPU::PrintTileOpWithFullParamsTmpBuf(const std::vector<unsigned>& tmpBufIdx) const
+{
+    std::vector<std::string> params = GetTileOpParamsWithTmpBuf(tmpBufIdx);
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByParentheses(params) << STMT_END;
+    return oss.str();
+}
+
 } // namespace npu::tile_fwk

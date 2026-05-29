@@ -154,9 +154,6 @@ std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
     if ((opCode == Opcode::OP_L1_TO_L0_BT) || (opCode == Opcode::OP_L1_TO_L0_AT)) {
         isTrans = true;
     }
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-
     auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
     size_t coordSize = rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size();
     std::vector<std::string> l0Offset;
@@ -175,12 +172,14 @@ std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
     std::string coordCp = WrapParamByParentheses(l0Offset);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = PrintCoord(coordSize, coordCp);
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.emplace_back(coord);
     std::ostringstream oss;
     oss << tileOpName;
     if (opCode != Opcode::OP_L1_TO_L0A_SCALE && opCode != Opcode::OP_L1_TO_L0B_SCALE) {
         oss << WrapParamByAngleBrackets({std::to_string(isTrans)});
     }
-    oss << WrapParamByParentheses({dstTensor, src0Tensor, coord});
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
 }
@@ -241,11 +240,11 @@ std::string CodeGenOpNPU::PrintTmove() const
     std::string coordCp = WrapParamByParentheses(tmpoffset);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = PrintCoord(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), coordCp);
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.emplace_back(coord);
     oss << tileOpName;
     oss << WrapParamByAngleBrackets({"0"});
-    oss << WrapParamByParentheses({dstTensor, src0Tensor, coord});
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
 }
@@ -397,10 +396,9 @@ std::string CodeGenOpNPU::GenMemL0CToL1() const
 std::string CodeGenOpNPU::GenUBToL1TileTensor() const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "UB to L1 only support tile tensor";
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr();
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coordDst, coordSrc};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.insert(tileOpParamList.end(), {coordDst, coordSrc});
 
     int64_t copyMode = 0;
     if (opAttrs.count(OpAttributeKey::localCopyLocalMode)) {
@@ -420,12 +418,8 @@ std::string CodeGenOpNPU::GenUBToUBND2NZTileTensor() const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "UB to UB ND2NZ only support tile tensor";
 
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor};
-
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    oss << tileOpName << WrapParamByParentheses(GetTileOpParamsByOrder()) << STMT_END;
     return oss.str();
 }
 
@@ -522,9 +516,9 @@ std::vector<std::string> CodeGenOpNPU::GenTileOpParamForNormalCopyTileTensor(uns
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = PrintCoord(rawShape[gmIdx].size(), coordCp);
 
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord};
+    const int usedOperandCnt = 2; // Use default operandCnt after fix by PASS in some scene
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder(usedOperandCnt);
+    tileOpParamList.emplace_back(coord);
     return tileOpParamList;
 }
 

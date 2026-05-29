@@ -198,9 +198,6 @@ std::string CodeGenOpNPU::PrintPermuteLayout() const
     std::string coordCpSrc = WrapParamByParentheses(srcOffsetSymbol);
     std::string coord4Src = PrintCoord(srcDim, coordCpSrc);
 
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-
     auto permAttr = opAttrs.at(OpAttributeKey::perm);
     const auto& permVec = AnyCast<std::vector<int64_t>>(permAttr);
     std::vector<int> axes(MAX_DIM + 1, -1);
@@ -208,7 +205,8 @@ std::string CodeGenOpNPU::PrintPermuteLayout() const
         axes[i] = static_cast<int>(permVec[i]);
     }
     axes[MAX_DIM] = permVec.size();
-    std::vector<std::string> tileOpParamList = {outputTensor, srcTensor, coord4Src};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.emplace_back(coord4Src);
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(axes) << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
@@ -253,8 +251,6 @@ std::string CodeGenOpNPU::PrintTransposeDataMove(const PrintTransposeDataMovePar
 std::string CodeGenOpNPU::PrintTransposeDataMoveLayout(const PrintTransposeDataMoveParam& param) const
 {
     std::string gmVarName = GenGmParamVar(param.gmIdx);
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM5 - shape[param.localIdx].size();
     std::vector<std::string> uselessVector0;
@@ -265,9 +261,11 @@ std::string CodeGenOpNPU::PrintTransposeDataMoveLayout(const PrintTransposeDataM
     int dim = static_cast<int>(rawShape[param.gmIdx].size());
     std::string coord = "Coord" + std::to_string(dim) + DIM + coordCp;
 
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
+    tileOpParamList.emplace_back(coord);
     std::ostringstream oss;
     oss << tileOpName << "<" << (transposeAxis[0] + correctionAxis) << ", " << (transposeAxis[1] + correctionAxis)
-        << ">" << WrapParamByParentheses({dstTensor, srcTensor, coord}) << STMT_END;
+        << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 
@@ -563,13 +561,10 @@ std::string CodeGenOpNPU::GenUniformOp() const
     std::string counter1Str = std::to_string(counter1) + "ULL";
     std::string roundsStr = std::to_string(rounds);
 
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    std::vector<std::string> paramList = {dstTensor, tmpTensor, keyStr, counter0Str, counter1Str, roundsStr};
+    std::vector<std::string> paramList = GetTileOpParamsByOrder();
+    paramList.insert(paramList.end(), {keyStr, counter0Str, counter1Str, roundsStr});
     std::ostringstream oss;
-    oss << tileOpName;
-    oss << PrintParams({"(", ")"}, paramList, ", ");
-    oss << STMT_END;
+    oss << tileOpName << WrapParamByParentheses(paramList) << STMT_END;
     return oss.str();
 }
 
@@ -680,11 +675,6 @@ std::string CodeGenOpNPU::PrintIndexAddUBDynamicUnaligned(const PrintIndexAddPar
 
 std::string CodeGenOpNPU::PrintIndexAddUBTileTensor(const PrintIndexAddParam& param) const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
-    std::string src0Tensor = QueryTileTensorNameByIdx(ID2);
-    std::string src1Tensor = QueryTileTensorNameByIdx(ID3);
-    std::string idxTensor = QueryTileTensorNameByIdx(ID4);
     std::vector<std::string> paramList;
     int axis = param.axis + SHAPE_DIM5 - param.srcRawShape.size();
     paramList.emplace_back(std::to_string(axis));
@@ -692,7 +682,7 @@ std::string CodeGenOpNPU::PrintIndexAddUBTileTensor(const PrintIndexAddParam& pa
 
     paramList.clear();
 
-    paramList.insert(paramList.end(), {dstTensor, src0Tensor, src1Tensor, idxTensor, tmpTensor});
+    paramList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     const Element& alpha = extOperandVal;
     std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
     paramList.emplace_back("(" + std::string(DataType2CCEStr(alpha.GetDataType())) + ")" + scalarTmpBuffer);
@@ -734,16 +724,12 @@ std::string CodeGenOpNPU::GenIndexAddOp() const
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "IndexAdd operation only support TileTensor mode";
     int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
     axis += SHAPE_DIM5 - rawShape[ID0].size();
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
-    std::string src0Tensor = QueryTileTensorNameByIdx(ID2);
-    std::string src1Tensor = QueryTileTensorNameByIdx(ID3);
-    std::string idxTensor = QueryTileTensorNameByIdx(ID4);
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID0);
     std::string coord = PrintCoord(rawShape[ID0].size(), WrapParamByParentheses(gmOffsetExpr));
 
     std::vector<std::string> templateParamList{std::to_string(axis)};
-    std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, idxTensor, tmpTensor, coord};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
+    tileOpParamList.emplace_back(coord);
     const Element& alpha = extOperandVal;
     std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
     tileOpParamList.emplace_back("(" + std::string(DataType2CCEStr(alpha.GetDataType())) + ")" + scalarTmpBuffer);
@@ -797,9 +783,7 @@ std::string CodeGenOpNPU::PrintCumSumDynamicUnaligned(const PrintCumSumParam& pa
 std::string CodeGenOpNPU::PrintCumOperationTileTensor(int axis, bool is_sum) const
 {
     axis = axis + 1;
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::vector<std::string> paramList = {dstTensor, srcTensor};
+    std::vector<std::string> paramList = GetTileOpParamsByOrder();
     std::vector<std::string> templateParam = {std::to_string(axis), std::to_string(is_sum)};
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(templateParam) << WrapParamByParentheses(paramList) << STMT_END;
@@ -836,9 +820,8 @@ std::string CodeGenOpNPU::GenCumOperationOp() const
 
 std::string CodeGenOpNPU::PrintTriULTileTensor(const std::string& diagonal, bool isUpper) const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::vector<std::string> paramList = {dstTensor, srcTensor, diagonal};
+    std::vector<std::string> paramList = GetTileOpParamsByOrder();
+    paramList.emplace_back(diagonal);
 
     std::ostringstream oss;
     oss << tileOpName << "<" << isUpper << ">" << WrapParamByParentheses(paramList) << ";\n";
@@ -1112,21 +1095,12 @@ std::string CodeGenOpNPU::GenLogicalNotOp() const
 
 std::string CodeGenOpNPU::PrintCmpTileTensor() const
 {
-    enum class TensorIdx : int { dstIdx = 0, tmpIdx, src0Idx, src1Idx };
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::dstIdx));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::tmpIdx));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::src0Idx));
-    std::string src1Tensor = "";
-    if (opCode == Opcode::OP_CMP) {
-        src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::src1Idx));
-    }
-
     auto cmpOp = opAttrs.at(OP_ATTR_PREFIX + "cmp_operation");
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "cmp_mode");
     std::string cmpOpVal = std::to_string(AnyCast<int64_t>(cmpOp));
     std::string modeVal = std::to_string(AnyCast<int64_t>(mode));
 
-    std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     std::vector<std::string> templateParamList = {cmpOpVal, modeVal};
     if (opCode == Opcode::OP_CMPS) {
         auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
@@ -1139,7 +1113,6 @@ std::string CodeGenOpNPU::PrintCmpTileTensor() const
         } else {
             templateParamList.emplace_back("float");
         }
-        tileOpParamList.erase(tileOpParamList.begin() + ID2);
         tileOpParamList.emplace_back(FormatFloat(scalarElement.Cast<float>(), scalarType));
     }
     std::ostringstream oss;
@@ -1243,19 +1216,7 @@ std::string CodeGenOpNPU::GenCmpOp() const
 
 std::string CodeGenOpNPU::PrintHypotTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
-
-    std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
-
-    std::ostringstream oss;
-    oss << tileOpName;
-    oss << WrapParamByParentheses(tileOpParamList);
-    oss << STMT_END;
-
-    return oss.str();
+    return PrintTileOpWithFullParamsTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
 }
 
 std::string CodeGenOpNPU::GenHypotOp() const
@@ -1266,15 +1227,10 @@ std::string CodeGenOpNPU::GenHypotOp() const
 
 std::string CodeGenOpNPU::PrintPreluTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
-
     int64_t axis = 1;
     GetOpAttr(OP_ATTR_PREFIX + "axis", axis);
 
-    std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
 
     std::ostringstream oss;
     oss << tileOpName << "<" << axis << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
@@ -1284,10 +1240,8 @@ std::string CodeGenOpNPU::PrintPreluTileTensor() const
 
 std::string CodeGenOpNPU::PrintPadTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor};
+    std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     std::ostringstream oss;
 
     bool isFloatType = (dstDtype == DT_FP32 || dstDtype == DT_FP16 || dstDtype == DT_BF16);
@@ -1328,29 +1282,12 @@ std::string CodeGenOpNPU::GenPreluOp() const
 
 std::string CodeGenOpNPU::PrintLogicalAndTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
-    std::vector<std::string> paramList = {dstTensor, srcTensor, src1Tensor, tmpTensor};
-    std::ostringstream oss;
-    oss << tileOpName;
-    oss << PrintParams({"(", ")"}, paramList, ", ");
-    oss << STMT_END;
-    return oss.str();
+    return PrintTileOpWithFullParamsTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
 }
 
 std::string CodeGenOpNPU::PrintLogicalNotTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::vector<std::string> paramList = {dstTensor, srcTensor, tmpTensor};
-    std::ostringstream oss;
-    oss << tileOpName;
-    oss << PrintParams({"(", ")"}, paramList, ", ");
-    oss << STMT_END;
-    return oss.str();
+    return PrintTileOpWithFullParamsTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
 }
 
 std::string CodeGenOpNPU::GenLogicalAndOp() const
@@ -1423,13 +1360,6 @@ std::string CodeGenOpNPU::GenQuantizeOp() const
 
 std::string CodeGenOpNPU::PrintQuantizeTileTensor() const
 {
-    // Get tensor names
-    // For QUANTIZE_SYM: dst(ID0), src(ID1), scale(ID2)
-    // For QUANTIZE_ASYM: dst(ID0), src(ID1), scale(ID2), offset(ID3)
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    std::string srcTensor = QueryTileTensorNameByIdx(ID1);
-    std::string scaleTensor = QueryTileTensorNameByIdx(ID2);
-
     // Note: axis parameter is handled at Operation layer via Transpose
     // TileOp layer only supports axis=-1 (per-row quantization)
 
@@ -1445,16 +1375,7 @@ std::string CodeGenOpNPU::PrintQuantizeTileTensor() const
     std::vector<std::string> templateParamList;
     templateParamList.emplace_back(quantType);
 
-    std::vector<std::string> paramList;
-    paramList.emplace_back(dstTensor);
-    paramList.emplace_back(srcTensor);
-    paramList.emplace_back(scaleTensor);
-
-    // For asymmetric quantization, add offset tensor
-    if (opCode == Opcode::OP_QUANTIZE_ASYM) {
-        std::string offsetTensor = QueryTileTensorNameByIdx(ID3);
-        paramList.emplace_back(offsetTensor);
-    }
+    std::vector<std::string> paramList = GetTileOpParamsByOrder();
 
     oss << tileOpName;
     oss << WrapParamByAngleBrackets(templateParamList);
@@ -1478,11 +1399,6 @@ std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
     // symmetric: offset is all zeros
     // asymmetric: offset is actual zero_points
 
-    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    std::string srcTensor = QueryTileTensorNameByIdx(ID1);
-    std::string scaleTensor = QueryTileTensorNameByIdx(ID2);
-    std::string offsetTensor = QueryTileTensorNameByIdx(ID3);
-
     // Determine dequant type based on input tensor dtype
     std::string dequantType;
     auto srcDtype = operandDtype[ID1];
@@ -1499,11 +1415,7 @@ std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
     std::vector<std::string> templateParamList;
     templateParamList.emplace_back(dequantType);
 
-    std::vector<std::string> paramList;
-    paramList.emplace_back(dstTensor);
-    paramList.emplace_back(srcTensor);
-    paramList.emplace_back(scaleTensor);
-    paramList.emplace_back(offsetTensor); // Always 4 params
+    std::vector<std::string> paramList = GetTileOpParamsByOrder();
 
     oss << tileOpName;
     oss << WrapParamByAngleBrackets(templateParamList);
@@ -1516,12 +1428,6 @@ std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
 std::string CodeGenOpNPU::GenQuantMXOp() const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "QuantMX only supports tile tensor codegen.";
-
-    const std::string dstTensor = QueryTileTensorNameByIdx(ID0);
-    const std::string expTensor = QueryTileTensorNameByIdx(ID1);
-    const std::string maxTensor = QueryTileTensorNameByIdx(ID2);
-    const std::string scalingTensor = QueryTileTensorNameByIdx(ID3);
-    const std::string srcTensor = QueryTileTensorNameByIdx(ID4);
 
     int64_t mode = 0;
     ASSERT(OperErr::ATTRIBUTE_INVALID, GetOpAttr(OpAttributeKey::mxQuantMode, mode))
@@ -1538,7 +1444,7 @@ std::string CodeGenOpNPU::GenQuantMXOp() const
     std::ostringstream oss;
     oss << tileOpName;
     oss << WrapParamByAngleBrackets(templateParams);
-    oss << WrapParamByParentheses({dstTensor, expTensor, maxTensor, scalingTensor, srcTensor});
+    oss << WrapParamByParentheses(GetTileOpParamsByOrder());
     oss << STMT_END;
     return oss.str();
 }
