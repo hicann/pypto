@@ -24,13 +24,14 @@ struct DevAscendOperationOperandInfo {
     int staticOffsetAttrBeginIndex{0};
     int staticShapeAttrBeginIndex{0};
     int staticRawShapeAttrBeginIndex{0};
-
+    int staticValidShapeAttrBeginIndex{0};
     DevAscendOperationOperandInfo() {}
     DevAscendOperationOperandInfo(int tTensorIndex, int tStaticAttrBeginIndex, int tStaticDim)
         : tensorIndex(tTensorIndex),
           staticOffsetAttrBeginIndex(tStaticAttrBeginIndex),
           staticShapeAttrBeginIndex(tStaticAttrBeginIndex + tStaticDim),
-          staticRawShapeAttrBeginIndex(staticShapeAttrBeginIndex + tStaticDim)
+          staticRawShapeAttrBeginIndex(staticShapeAttrBeginIndex + tStaticDim),
+          staticValidShapeAttrBeginIndex(staticRawShapeAttrBeginIndex + tStaticDim)
     {}
     int GetDim() const { return staticShapeAttrBeginIndex - staticOffsetAttrBeginIndex; }
 };

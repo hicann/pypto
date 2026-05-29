@@ -59,13 +59,7 @@ def test_gather_onboard():
                                            )
                 view_tensor_index = pypto.view(index_tensor, view_shape,
                                              [b_idx * view_shape[0],
-                                              s_idx * view_shape[1]],
-                                             valid_shape=[
-                                                 pypto.min(pypto.symbolic_scalar(src_shape[0]) - b_idx * view_shape[0],
-                                                         pypto.symbolic_scalar(view_shape[0])),
-
-                                                 pypto.min(pypto.symbolic_scalar(src_shape[1]) - s_idx * view_shape[1],
-                                                         pypto.symbolic_scalar(view_shape[1]))]
+                                              s_idx * view_shape[1]]
                                              )
                 tmp_dst_tensor = pypto.tensor()
                 tmp_dst_tensor.move(pypto.gather(

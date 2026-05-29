@@ -77,12 +77,12 @@ bool CollectCellIdxForUse(
     const DevCellMatchTableDesc& cellMatchTableDesc, std::vector<int>* cellIdxListOut)
 {
     uint64_t offset[DEV_SHAPE_DIM_MAX];
-    uint64_t shape[DEV_SHAPE_DIM_MAX];
-    bool paramConcrete = GetTensorOffsetAndShape<false>(
-        devFunc, offset, shape, runtimeExpressionList, cellMatchTableDesc.GetDimensionSize(),
+    uint64_t validShape[DEV_SHAPE_DIM_MAX];
+    bool paramConcrete = GetTensorOffsetAndValidShape<false>(
+        devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc, cellMatchTableDesc.GetDimensionSize(),
         use.operationIdx, use.operandIdx, isIOperand);
     if (paramConcrete) {
-        CellMatchHandle<CellMatchHandleCollect>(offset, shape, cellMatchTableDesc, cellIdxListOut);
+        CellMatchHandle<CellMatchHandleCollect>(offset, validShape, cellMatchTableDesc, cellIdxListOut);
     }
     return paramConcrete;
 }

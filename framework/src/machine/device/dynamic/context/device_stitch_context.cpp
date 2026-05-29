@@ -312,28 +312,26 @@ uint64_t DeviceStitchContext::PartialUpdateStitch(
     auto expressionList = &nextDup.GetExpression(0);
     auto& cellMatchTableDesc = slot.partialUpdate->cellMatchTableDesc;
     auto partialUpdateTableData = &slot.partialUpdate->cellMatchRuntimePartialUpdateTable[0];
+    size_t tableSize = slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size();
+
+    DEV_VERBOSE_DEBUG(
+        "[PartialUpdateStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu consumerFuncKey=%d consumerCount=%zu "
+        "tableSize=%zu descDimSize=%d",
+        slotIdx, (uint64_t)devTaskId, (uint64_t)devNextIdx, nextSrc->GetFuncKey(),
+        incast.consumerList.size(), tableSize, cellMatchTableDesc.GetDimensionSize());
+
     for (size_t n = 0; n < incast.consumerList.size(); n++) {
         auto& consumer = nextSrc->At(incast.consumerList, n);
         uint64_t consumerOffset[DEV_SHAPE_DIM_MAX];
-        uint64_t consumerShape[DEV_SHAPE_DIM_MAX];
-        GetTensorOffsetAndShape<false>(
-            nextSrc, consumerOffset, consumerShape, expressionList, incast.dim, consumer.operationIdx,
-            consumer.operandIdx, true);
-
-        DEV_IF_VERBOSE_DEBUG
-        {
-            for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
-                DEV_VERBOSE_DEBUG(
-                    "PartialUpdateStitch cell match, operation[%d] -> dimension[%d] = (offset:%lu ,shape:%lu, "
-                    "cellshape:%d)",
-                    consumer.operationIdx, j, consumerOffset[j], consumerShape[j], cellMatchTableDesc.cellShape.dim[j]);
-            }
-        }
+        uint64_t consumerValidShape[DEV_SHAPE_DIM_MAX];
+        GetTensorOffsetAndValidShape<false>(
+            nextSrc, consumerOffset, consumerValidShape, expressionList, cellMatchTableDesc, incast.dim,
+            consumer.operationIdx, consumer.operandIdx, true);
         topo_dump::DumpConsumerCellAccess(
             static_cast<uint32_t>(devTaskId), slotIdx, static_cast<uint32_t>(devNextIdx),
             *nextSrc, consumer, cellMatchTableDesc, expressionList);
         CellMatchHandle<HandleCellMatchPartial>(
-            consumerOffset, consumerShape, cellMatchTableDesc, partialUpdateTableData, &matchCount,
+            consumerOffset, consumerValidShape, cellMatchTableDesc, partialUpdateTableData, &matchCount,
             stitchedList_.data(), stitchedList_.size(), &nextDup, devTaskId, devNextIdx, consumer.operationIdx,
             workspace_, slotIdx);
     }
@@ -352,19 +350,28 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(
     auto expressionList = &nextDup.GetExpression(0);
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
     auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
+    size_t tableSize = outcast.cellMatchRuntimeFullUpdateTable.size();
+
+    DEV_VERBOSE_DEBUG(
+        "[FullCoverDefaultStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu producerFuncKey=%d "
+        "consumerFuncKey=%d stitchDupIdx=%u stitchOutcastIdx=%u consumerCount=%zu tableSize=%zu descDimSize=%d",
+        slotIdx, (uint64_t)devTaskId, (uint64_t)devNextIdx, prevSrc->GetFuncKey(), nextSrc->GetFuncKey(),
+        slot.stitchDupIdx, slot.stitchOutcastIdx, incast.consumerList.size(), tableSize,
+        cellMatchTableDesc.GetDimensionSize());
+
     for (size_t n = 0; n < incast.consumerList.size(); n++) {
         auto& consumer = nextSrc->At(incast.consumerList, n);
-        uint64_t consumerOffset[DEV_SHAPE_DIM_MAX];
-        uint64_t consumerShape[DEV_SHAPE_DIM_MAX];
-        GetTensorOffsetAndShape<false>(
-            nextSrc, consumerOffset, consumerShape, expressionList, incast.dim, consumer.operationIdx,
-            consumer.operandIdx, true);
+        uint64_t fullCoverOffset[DEV_SHAPE_DIM_MAX];
+        uint64_t fullCoverValidShape[DEV_SHAPE_DIM_MAX];
+        GetTensorOffsetAndValidShape<false>(
+            nextSrc, fullCoverOffset, fullCoverValidShape, expressionList, cellMatchTableDesc, incast.dim,
+            consumer.operationIdx, consumer.operandIdx, true);
         topo_dump::DumpConsumerCellAccess(
             static_cast<uint32_t>(devTaskId), slotIdx, static_cast<uint32_t>(devNextIdx),
             *nextSrc, consumer, cellMatchTableDesc, expressionList);
         CellMatchHandle<HandleCellMatchFull>(
-            consumerOffset, consumerShape, cellMatchTableDesc, fullUpdateTableData, &matchCount, &prevDup, &nextDup,
-            devNextIdx, consumer.operationIdx, workspace_, slotIdx);
+            fullCoverOffset, fullCoverValidShape, cellMatchTableDesc, fullUpdateTableData, &matchCount, &prevDup,
+            &nextDup, devNextIdx, consumer.operationIdx, workspace_, slotIdx);
         DeviceStitchContext::CheckStitch(stitchedList_.data(), stitchedList_.size(), &nextDup);
     }
     return matchCount;
@@ -379,8 +386,8 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(
     auto& outcast = prevSrc->GetOutcast(slot.stitchOutcastIdx);
     auto* nextSrc = nextDup.GetSource();
     DEV_VERBOSE_DEBUG(
-        "outcast %lu is %d, cellMatchStaticOutcastTable is %s\n", (unsigned long)slot.stitchOutcastIdx,
-        outcast.stitchByAllFullMatch, IntVecToStr(prevDup, outcast.cellMatchStaticOutcastTable).c_str());
+        "outcast %lu is %d, slotidx is %d, cellMatchStaticOutcastTable is %s\n", (unsigned long)slot.stitchOutcastIdx,
+        outcast.stitchByAllFullMatch, slotIdx, IntVecToStr(prevDup, outcast.cellMatchStaticOutcastTable).c_str());
     DEV_VERBOSE_DEBUG(
         "=================FullCoverUpdateStitch %zu %zu %zu %zu %d %d===========================\n",
         outcast.producerList.size(), incast.consumerList.size(), outcast.cellMatchStaticOutcastTable.size(),

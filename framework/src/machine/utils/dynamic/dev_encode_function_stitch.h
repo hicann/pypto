@@ -18,7 +18,7 @@
 #include "machine/utils/dynamic/dev_encode_types.h"
 #include "machine/utils/dynamic/dev_encode_function.h"
 #include "tilefwk/aicpu_common.h"
-
+#include "machine/utils/dynamic/dev_callop_attribute.h"
 namespace npu::tile_fwk::dynamic {
 // Max cell-match table entry count (desc stride[0]); checked at encode and in host GetWorkspaceSize.
 constexpr int64_t MAX_CELLMATCHSSTRIDE = 20000000;
@@ -182,24 +182,9 @@ static void CellMatch4Dimension(
 }
 
 template <typename HandleType, typename... TyArgs>
-static void CellMatchHandle(
-    const uint64_t offset[DEV_SHAPE_DIM_MAX], const uint64_t shape[DEV_SHAPE_DIM_MAX],
-    const DevCellMatchTableDesc& cellMatchTableDesc, TyArgs... args)
+static void CellMatchProcessByDim(
+    const DevCellMatchTableDesc& cellMatchTableDesc, uint64_t* rangeBegin, uint64_t* rangeEnd, TyArgs... args)
 {
-    uint64_t rangeBegin[DEV_SHAPE_DIM_MAX];
-    uint64_t rangeEnd[DEV_SHAPE_DIM_MAX];
-    for (int i = 0; i < cellMatchTableDesc.GetDimensionSize(); ++i) {
-        auto cellMatchShapeDim = cellMatchTableDesc.GetCellShape(i);
-        if (cellMatchShapeDim != 0) {
-            rangeBegin[i] = offset[i] / cellMatchShapeDim;
-            rangeEnd[i] = (offset[i] + shape[i] - 1) / cellMatchShapeDim;
-        } else {
-            DEV_ERROR(
-                ProgEncodeErr::CELL_MATCH_DIM_ZERO,
-                "#ctrl.encode.cell_match: CellMatchGetIndexRange: cellMatchShapeDim is zero for dimension=%d", i);
-            DEV_ASSERT(ProgEncodeErr::CELL_MATCH_DIM_ZERO, 0);
-        }
-    }
     switch (cellMatchTableDesc.cellShape.dimSize) {
         case 1: {
             int s0 = 1;
@@ -235,6 +220,31 @@ static void CellMatchHandle(
                 (int)cellMatchTableDesc.GetDimensionSize());
             break;
     }
+}
+
+template <typename HandleType, typename... TyArgs>
+static void CellMatchHandle(
+    const uint64_t offset[DEV_SHAPE_DIM_MAX], const uint64_t shape[DEV_SHAPE_DIM_MAX],
+    const DevCellMatchTableDesc& cellMatchTableDesc, TyArgs... args)
+{
+    uint64_t rangeBegin[DEV_SHAPE_DIM_MAX];
+    uint64_t rangeEnd[DEV_SHAPE_DIM_MAX];
+    for (int i = 0; i < cellMatchTableDesc.GetDimensionSize(); ++i) {
+        auto cellMatchShapeDim = cellMatchTableDesc.GetCellShape(i);
+        if (cellMatchShapeDim != 0) {
+            rangeBegin[i] = offset[i] / cellMatchShapeDim;
+            if (shape[i] == 0) {
+                return;
+            }
+            rangeEnd[i] = (offset[i] + shape[i] - 1) / cellMatchShapeDim;
+        } else {
+            DEV_ERROR(
+                ProgEncodeErr::CELL_MATCH_DIM_ZERO,
+                "#ctrl.encode.cell_match: CellMatchGetIndexRange: cellMatchShapeDim is zero for dimension=%d", i);
+            DEV_ASSERT(ProgEncodeErr::CELL_MATCH_DIM_ZERO, 0);
+        }
+    }
+    CellMatchProcessByDim<HandleType>(cellMatchTableDesc, rangeBegin, rangeEnd, args...);
 }
 
 template <typename... TyArgs>
@@ -277,78 +287,6 @@ static void CellMatchFill(
     }
 }
 
-template <bool skipExpression>
-static bool GetTensorOffsetAndShape(
-    const DevAscendFunction* devFunc, uint64_t offset[DEV_SHAPE_DIM_MAX], uint64_t shape[DEV_SHAPE_DIM_MAX],
-    const uint64_t* runtimeExpressionList, int dims, int operationIndex, int operandIndex, bool isIOperand = true)
-{
-    auto [offsetSymList, shapeSymList] = devFunc->GetTensorOffsetShapeSymList(operationIndex, operandIndex, isIOperand);
-
-    bool paramConcrete = true;
-    for (int i = 0; i < dims; i++) {
-        auto value = offsetSymList[i].Value();
-        if (offsetSymList[i].IsExpression()) {
-            if (skipExpression) {
-                paramConcrete = false;
-            } else {
-                offset[i] = runtimeExpressionList[value];
-            }
-        } else {
-            offset[i] = value;
-        }
-    }
-    for (int i = 0; i < dims; i++) {
-        auto value = shapeSymList[i].Value();
-        if (shapeSymList[i].IsExpression()) {
-            if (skipExpression) {
-                paramConcrete = false;
-            } else {
-                shape[i] = runtimeExpressionList[value];
-            }
-        } else {
-            shape[i] = value;
-        }
-    }
-    return paramConcrete;
-}
-
-template <bool skipExpression>
-static bool GetTensorRawShape(
-    DevAscendFunction* devFunc, uint64_t rawShape[DEV_SHAPE_DIM_MAX], const uint64_t* runtimeExpressionList, int dims,
-    int operationIndex, int operandIndex, bool isIOperand = true)
-{
-    auto& operandInfo = devFunc->GetOperationOperandInfo(operationIndex, operandIndex, isIOperand);
-    const SymInt* rawShapeSymList =
-        &(devFunc->GetOperationAttr(operationIndex, operandInfo.staticRawShapeAttrBeginIndex));
-    bool paramConcrete = true;
-    for (int i = 0; i < dims; i++) {
-        auto value = rawShapeSymList[i].Value();
-        if (rawShapeSymList[i].IsExpression()) {
-            if (skipExpression) {
-                paramConcrete = false;
-            } else {
-                rawShape[i] = runtimeExpressionList[value];
-            }
-        } else {
-            rawShape[i] = value;
-        }
-    }
-    return paramConcrete;
-}
-
-[[maybe_unused]] inline bool IsCellMatchDescFillReady(const DevCellMatchTableDesc& cellMatchTableDesc)
-{
-    int dim = cellMatchTableDesc.GetDimensionSize();
-    if (dim <= 0) {
-        return false;
-    }
-    for (int d = 0; d < dim; ++d) {
-        if (cellMatchTableDesc.GetCellShape(d) <= 0 || cellMatchTableDesc.GetStrideShape(d) <= 0) {
-            return false;
-        }
-    }
-    return true;
-}
 
 template <bool skipExpression, typename... TyArgs>
 static bool CellMatchFillIncastOutcast(
@@ -360,46 +298,22 @@ static bool CellMatchFillIncastOutcast(
         return false;
     }
 
-    bool allConcrete = true;
-    auto validateAndRefreshOffsetShape = [&devFunc, &runtimeExpressionList, &cellMatchTableDesc, &isIOperand](
-                                             const uint64_t offset[DEV_SHAPE_DIM_MAX],
-                                             uint64_t shape[DEV_SHAPE_DIM_MAX], int operationIndex, int operandIndex) {
-        uint64_t rawShape[DEV_SHAPE_DIM_MAX];
-        bool paramConcrete = GetTensorRawShape<skipExpression>(
-            devFunc, rawShape, runtimeExpressionList, cellMatchTableDesc.GetDimensionSize(), operationIndex,
-            operandIndex, isIOperand);
-        if (paramConcrete) {
-            for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
-                DEV_VERBOSE_DEBUG(
-                    "cell match fill, operation[%d] -> dimension[%d] = (offset:%lu ,shape:%lu, rawshape:%lu, "
-                    "cellshape:%d)",
-                    operationIndex, j, offset[j], shape[j], rawShape[j], cellMatchTableDesc.cellShape.dim[j]);
-                if (offset[j] >= rawShape[j]) {
-                    DEV_VERBOSE_DEBUG("cell match fill failed, exceed invalid cell");
-                    return false;
-                } else if (offset[j] + shape[j] > rawShape[j]) {
-                    shape[j] = rawShape[j] - offset[j];
-                }
-            }
-        }
-        return true;
-    };
 
+    bool allConcrete = true;
     for (size_t i = 0; i < useSize; i++) {
         auto& use = operandUseList[i];
         uint64_t offset[DEV_SHAPE_DIM_MAX];
-        uint64_t shape[DEV_SHAPE_DIM_MAX];
-        bool paramConcrete = GetTensorOffsetAndShape<skipExpression>(
-            devFunc, offset, shape, runtimeExpressionList, cellMatchTableDesc.GetDimensionSize(), use.operationIdx,
-            use.operandIdx, isIOperand);
+        uint64_t validShape[DEV_SHAPE_DIM_MAX];
+
+        bool paramConcrete = GetTensorOffsetAndValidShape<skipExpression>(
+            devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc,
+            cellMatchTableDesc.GetDimensionSize(), use.operationIdx, use.operandIdx, isIOperand);
         if (paramConcrete) {
-            if (!validateAndRefreshOffsetShape(offset, shape, use.operationIdx, use.operandIdx)) {
-                continue; // dassemble offset of outoperand maybe exceed the rawshape dimension
-            }
-            CellMatchFill(offset, shape, use.operationIdx, cellMatchTableDesc, args...);
+            CellMatchFill(offset, validShape, use.operationIdx, cellMatchTableDesc, args...);
         }
         allConcrete &= paramConcrete;
     }
+
     return allConcrete;
 }
 } // namespace npu::tile_fwk::dynamic
