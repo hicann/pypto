@@ -24,6 +24,7 @@
 #include "allocator/allocators.h"
 #include "machine/device/dynamic/device_perf.h"
 #include "machine/utils/dynamic/runtime_outcast_tensor.h"
+#include "machine/device/distributed/shmem_wait_until.h"
 
 namespace npu::tile_fwk::dynamic {
 inline constexpr int64_t TENSOR_ADDR_ALIGNMENT = 512;
@@ -785,10 +786,10 @@ public:
         void* ptr = nullptr;
         DEV_VERBOSE_DEBUG("SlabAlloc type = %u, size = %u.", ToUnderlying(type), objSize);
         SlabTryDynAddCache(type, objSize);
-        
+
         TIMEOUT_CHECK_INIT(devProg_->devArgs.archInfo, TIMEOUT_20MIN);
         uint64_t inner_start = GetCycles();
-        
+
         do {
             if (type < WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT) {
                 ptr = metadataAllocators_.generalSlab.Alloc(ToUnderlying(type));
@@ -809,7 +810,7 @@ public:
                     WsErr::SLAB_ADD_CACHE_FAILED, false, "Slab alloc null,type=%u,objsize=%u.", ToUnderlying(type),
                     objSize);
             }
-            
+
             while (!DeviceTaskMemTryRecycle()) {
                 if ((GetCycles() - inner_start) > timeout_cycles) {
                     DEV_ERROR(WsErr::SLAB_ADD_CACHE_FAILED,
@@ -822,7 +823,7 @@ public:
                         ToUnderlying(type), objSize);
                 }
             };
-        
+
             __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED,
                 { WsAllocation emptyAlloc; emptyAlloc.ptr = 0; return emptyAlloc; },
                 "#workspace.alloc: SlabAlloc, type=%u, objSize=%u.",
@@ -856,7 +857,7 @@ public:
         TIMEOUT_CHECK_INIT(devProg_->devArgs.archInfo, TIMEOUT_20MIN);
         while (!submmitTaskQueue_.TryEnqueue(devTask)) {
             DeviceTaskMemTryRecycle();
-            
+
             __PYPTO_TIMEOUT_CHECK(WsErr::SLAB_ADD_CACHE_FAILED,
                 return,
                 "#workspace.submit: SlabStageAllocMemSubmmit.");
@@ -1016,6 +1017,14 @@ private:
 
     uint32_t DynDevTaskSlabMemObjSize() { return sizeof(struct DynDeviceTask); }
 
+    uint32_t ShmemWaitUntilCacheSlabMemObjSize()
+    {
+        if (devProg_->devArgs.hasAicpuTask) {
+            return sizeof(npu::tile_fwk::Distributed::ShmemWaitUntilCache);
+        }
+        return 0;
+    }
+
     uint32_t DuppedStitchSlabMemObjSize() { return sizeof(struct DevAscendFunctionDuppedStitch); }
 
     uint32_t ReadyQueSlabMemObjSize()
@@ -1070,6 +1079,7 @@ private:
         &DeviceWorkspaceAllocator::DynFuncDataSlabMemObjSize,
         &DeviceWorkspaceAllocator::VecStitchListSLabMemObjSize,
         &DeviceWorkspaceAllocator::DynDevTaskSlabMemObjSize,
+        &DeviceWorkspaceAllocator::ShmemWaitUntilCacheSlabMemObjSize,
         nullptr, // invalid type
         &DeviceWorkspaceAllocator::ReadyQueSlabMemObjSize,
         &DeviceWorkspaceAllocator::DieReadyQueSlabMemObjSize,

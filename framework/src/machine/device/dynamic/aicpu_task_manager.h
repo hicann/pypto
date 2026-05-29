@@ -43,13 +43,13 @@ public:
     ~AicpuTaskManager() {};
 
     // 每个AICPU都会调用
-    inline void TaskEnqueue(uint64_t taskId)
+    inline void TaskEnqueue(uint64_t taskId, DynDeviceTask* deviceTask)
     {
-        bool res = readyQueue_->TryEnqueue(taskId);
-        DEV_ASSERT(SchedErr::READY_QUEUE_OVERFLOW, res); // fail on queue overflow
+        auto readyQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(deviceTask->devTask.readyAicpuFunctionQue);
+        bool res = readyQueue->TryEnqueue(taskId);
+        DEV_ASSERT(SchedErr::READY_QUEUE_OVERFLOW, res);
     }
 
-    // 仅AICPU_0会调用
     inline void InitDeviceArgs(DeviceArgs* deviceArgs)
     {
         sharedBuffer_ = deviceArgs->sharedBuffer;
@@ -58,30 +58,37 @@ public:
         archInfo_ = deviceArgs->archInfo;
     }
 
-    // 仅AICPU_0会调用
-    inline int32_t Init(DynDeviceTask* deviceTask, bool profSwitch)
+    inline int32_t Init(DynDeviceTask* deviceTask, bool profSwitch, uint32_t parallelIdx = 0)
     {
-        curDevTask_ = deviceTask;
-        funcDataList_ = reinterpret_cast<DynFuncData*>(&deviceTask->GetDynFuncDataList()->At(0));
-        readyQueue_ = reinterpret_cast<ReadyCoreFunctionQueue*>(deviceTask->devTask.readyAicpuFunctionQue);
-        shmemWaitUntil_.Init(deviceTask);
-        if (profSwitch) {
-            KernelArgs* args = (KernelArgs*)(sharedBuffer_ + (aicNum_ + aivNum_) * SHARED_BUFFER_SIZE);
-            aicpuTaskStat_ = (Metrics*)(args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
-        }
-        return PrepareAicpuTask();
-    }
+        auto cache =
+            reinterpret_cast<npu::tile_fwk::Distributed::ShmemWaitUntilCache*>(deviceTask->shmemWaitUntilCacheBackup);
+        if (cache != nullptr) {
+            DEV_INFO(
+                "MachineFlow: loading cache with pre-built hashTable, taskCount=%u, parallelIdx=%u", cache->taskCount,
+                parallelIdx);
+            shmemWaitUntil_.LoadCache(cache, parallelIdx);
+            DEV_INFO("MachineFlow: cache loaded successfully for parallelIdx=%u", parallelIdx);
 
-    // 仅AICPU_0会调用
-    inline int32_t TaskProcess(uint64_t& taskCount)
-    {
-        if (readyQueue_->UnsafeAtomicSize() == 0) {
+            if (profSwitch) {
+                KernelArgs* args = (KernelArgs*)(sharedBuffer_ + (aicNum_ + aivNum_) * SHARED_BUFFER_SIZE);
+                aicpuTaskStat_ = (Metrics*)(args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+            }
             return DEVICE_MACHINE_OK;
         }
-        auto tasksRange = readyQueue_->DequeueAll();
+        DEV_ERROR(DevCommonErr::PARAM_INVALID, "MachineFlow: no cache prepared, shmemWaitUntil not initialized");
+        return DEVICE_MACHINE_ERROR;
+    }
+
+    inline int32_t TaskProcess(uint64_t& taskCount, DynDeviceTask* deviceTask, uint32_t parallelIdx = 0)
+    {
+        auto readyQueue = reinterpret_cast<ReadyCoreFunctionQueue*>(deviceTask->devTask.readyAicpuFunctionQue);
+        if (readyQueue->UnsafeAtomicSize() == 0) {
+            return DEVICE_MACHINE_OK;
+        }
+        auto tasksRange = readyQueue->DequeueAll();
         taskCount = tasksRange.second - tasksRange.first;
         for (auto it = tasksRange.first; it != tasksRange.second; ++it) {
-            auto ret = TaskDispatch(*it);
+            auto ret = TaskDispatch(*it, deviceTask, parallelIdx);
             if (ret != DEVICE_MACHINE_OK) {
                 return ret;
             }
@@ -89,15 +96,18 @@ public:
         return DEVICE_MACHINE_OK;
     }
 
-    inline int32_t TaskPoll(AiCoreManager* aiCoreManager) { return shmemWaitUntil_.PollCompleted(aiCoreManager); }
+    inline int32_t TaskPoll(AiCoreManager* aiCoreManager, uint32_t parallelIdx = 0)
+    {
+        return shmemWaitUntil_.PollCompleted(aiCoreManager, parallelIdx);
+    }
 
-    inline bool Finished() { return shmemWaitUntil_.runingTaskQueue_.IsEmpty(); }
+    inline bool Finished(uint32_t parallelIdx = 0) { return shmemWaitUntil_.runingTaskQueue_[parallelIdx].IsEmpty(); }
 
-    inline int32_t SyncAicpuTaskFinish(AiCoreManager* aiCoreManager)
+    inline int32_t SyncAicpuTaskFinish(AiCoreManager* aiCoreManager, uint32_t parallelIdx = 0)
     {
         TIMEOUT_CHECK_INIT(archInfo_, TIMEOUT_10SEC);
-        while (!Finished()) {
-            auto ret = TaskPoll(aiCoreManager);
+        while (!Finished(parallelIdx)) {
+            auto ret = TaskPoll(aiCoreManager, parallelIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
@@ -109,12 +119,12 @@ public:
     }
 
 private:
-    inline TaskType GetTaskType(uint64_t taskId)
+    inline TaskType GetTaskType(uint64_t taskId, DynDeviceTask* deviceTask)
     {
         auto funcId = FuncID(taskId);
         auto opIndex = TaskID(taskId);
-        auto callList = curDevTask_->dynFuncDataCacheList[funcId].calleeList;
-        auto& code = curDevTask_->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
+        auto callList = deviceTask->dynFuncDataCacheList[funcId].calleeList;
+        auto& code = deviceTask->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
         auto taskType = TaskType::TASK_TYPE_NUM;
         switch (code[0]) {
             case static_cast<uint32_t>(Opcode::OP_SHMEM_WAIT_UNTIL):
@@ -126,10 +136,10 @@ private:
         return taskType;
     }
 
-    inline int32_t TaskDispatch(uint64_t taskId)
+    inline int32_t TaskDispatch(uint64_t taskId, DynDeviceTask* deviceTask, uint32_t parallelIdx = 0)
     {
         int32_t ret = DEVICE_MACHINE_OK;
-        auto taskType = GetTaskType(taskId);
+        auto taskType = GetTaskType(taskId, deviceTask);
         DEV_VERBOSE_DEBUG("Dispatch aicpu task %lu.", taskId);
         if (taskType < TaskType::TASK_TYPE_NUM) {
             TaskStat* taskStat = nullptr;
@@ -137,41 +147,16 @@ private:
                 taskStat = &(aicpuTaskStat_->tasks[aicpuTaskStat_->taskCount]);
                 ++aicpuTaskStat_->taskCount;
             }
-            ret = shmemWaitUntil_.EnqueueOp(taskId, taskStat);
+            ret = shmemWaitUntil_.EnqueueOp(taskId, parallelIdx, taskStat);
         }
         return ret;
     }
 
-    inline int32_t PrepareAicpuTask()
-    {
-        for (uint64_t funcId = 0; funcId < curDevTask_->dynFuncDataCacheListSize; ++funcId) {
-            auto callList = curDevTask_->dynFuncDataCacheList[funcId].calleeList;
-            for (size_t opIndex = 0; opIndex < curDevTask_->dynFuncDataCacheList[funcId].devFunc->GetOperationSize();
-                 ++opIndex) {
-                auto coreType = curDevTask_->cceBinary[callList[opIndex]].coreType;
-                if (unlikely(coreType != static_cast<int>(MachineType::AICPU))) {
-                    continue;
-                }
-                uint32_t taskId = MakeTaskID(funcId, opIndex);
-                auto& code = curDevTask_->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
-                auto ret = shmemWaitUntil_.PrepareTask(taskId, code);
-                if (ret != DEVICE_MACHINE_OK) {
-                    return ret;
-                }
-            }
-        }
-        return DEVICE_MACHINE_OK;
-    }
-
-    ReadyCoreFunctionQueue* readyQueue_{nullptr};
-
     ArchInfo archInfo_{ArchInfo::DAV_2201};
     npu::tile_fwk::Distributed::ShmemWaitUntilImpl shmemWaitUntil_;
-    DynDeviceTask* curDevTask_;
-    DynFuncData* funcDataList_;
-    Metrics* aicpuTaskStat_;
-    uint64_t sharedBuffer_;
-    uint32_t aicNum_;
-    uint32_t aivNum_;
+    Metrics* aicpuTaskStat_{nullptr};
+    uint64_t sharedBuffer_{0};
+    uint32_t aicNum_{0};
+    uint32_t aivNum_{0};
 };
 } // namespace npu::tile_fwk::dynamic

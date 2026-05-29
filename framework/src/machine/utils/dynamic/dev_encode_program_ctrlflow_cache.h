@@ -105,6 +105,7 @@ struct DynDeviceTaskBase {
     DieReadyQueueCache* dieReadyQueueBackup{nullptr};
     MixTaskDataCache* mixTaskDataBackup{nullptr};
     DynFuncDataBackup dynFuncDataBackupList[MAX_STITCH_FUNC_NUM];
+    void* shmemWaitUntilCacheBackup{nullptr};
     bool isLastTask{false};
     bool isParallelSameIterLastTask{false};
     ParallelInfo parallelInfo;
@@ -1153,6 +1154,8 @@ struct DevControlFlowCache {
             DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
             MixTaskDataReloc(relocCtrlCache, relocProgram, dynTaskBase, dynFuncDataList);
             DieReadyQueueReloc(relocCtrlCache, dynTaskBase);
+            void*& shmemWaitUntilCacheBackupRef = dynTaskBase->shmemWaitUntilCacheBackup;
+ 	        RelocControlFlowCachePointer(shmemWaitUntilCacheBackupRef, relocCtrlCache);
             for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
                 DynFuncData* dynData = &dynFuncDataList->At(dupIndex);
                 DynFuncDataCache* dynDataCache = &dynFuncDataCacheList->At(dupIndex);

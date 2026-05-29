@@ -58,12 +58,10 @@ public:
     void TearDown() override {}
 
 protected:
-    std::unique_ptr<AicpuTaskManager> CreateAicpuTaskManager() { return std::make_unique<AicpuTaskManager>(); }
-
-    std::unique_ptr<AiCoreManager> CreateAiCoreManager(AicpuTaskManager* aicpuTaskPtr)
+    std::unique_ptr<AiCoreManager> CreateAiCoreManager()
     {
         npu::tile_fwk::dynamic::SchThreadStatus status;
-        auto aicoreMng = std::make_unique<AiCoreManager>(status, *aicpuTaskPtr);
+        auto aicoreMng = std::make_unique<AiCoreManager>(status);
         aicoreMng->aicNum_ = 1;
         aicoreMng->aivNum_ = 0;
         aicoreMng->aicStart_ = 0;
@@ -81,7 +79,6 @@ protected:
     }
 
     struct PmuTestEnv {
-        std::unique_ptr<AicpuTaskManager> aicpuTaskPtr;
         std::unique_ptr<AiCoreManager> aicoreMng;
         std::unique_ptr<AiCoreProf> prof;
         uint8_t* regBuf;
@@ -92,8 +89,7 @@ protected:
         PmuTestEnv(size_t regBufSize)
         {
             npu::tile_fwk::dynamic::SchThreadStatus status;
-            aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
-            aicoreMng = std::make_unique<AiCoreManager>(status, *aicpuTaskPtr);
+            aicoreMng = std::make_unique<AiCoreManager>(status);
             aicoreMng->aicNum_ = 1;
             aicoreMng->aivNum_ = 0;
             aicoreMng->aicStart_ = 0;
@@ -128,7 +124,6 @@ protected:
     };
 
     struct BasicProfTestEnv {
-        std::unique_ptr<AicpuTaskManager> aicpuTaskPtr;
         std::unique_ptr<AiCoreManager> aicoreMng;
         std::unique_ptr<AiCoreProf> prof;
         int64_t* oriRegAddrs;
@@ -137,8 +132,7 @@ protected:
         BasicProfTestEnv()
         {
             npu::tile_fwk::dynamic::SchThreadStatus status;
-            aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
-            aicoreMng = std::make_unique<AiCoreManager>(status, *aicpuTaskPtr);
+            aicoreMng = std::make_unique<AiCoreManager>(status);
             aicoreMng->aicNum_ = 0;
             aicoreMng->aivNum_ = 1;
             aicoreMng->aivEnd_ = 1;

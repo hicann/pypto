@@ -69,10 +69,8 @@ TEST_F(TestDeviceRunner, test_ini_device_runner)
 TEST_F(TestDeviceRunner, test_ini_proflevel)
 {
     npu::tile_fwk::dynamic::SchThreadStatus status;
-    std::unique_ptr<npu::tile_fwk::dynamic::AicpuTaskManager> aicpuTaskPtr =
-        std::make_unique<npu::tile_fwk::dynamic::AicpuTaskManager>();
     std::unique_ptr<npu::tile_fwk::dynamic::AiCoreManager> AiCoreManagerPtr =
-        std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status, *aicpuTaskPtr);
+        std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status);
     AiCoreManagerPtr->aicNum_ = 0;
     AiCoreManagerPtr->aivNum_ = 1;
     AiCoreManagerPtr->aivStart_ = 0;
@@ -129,10 +127,8 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
 TEST_F(TestDeviceRunner, test_create_proflevel)
 {
     npu::tile_fwk::dynamic::SchThreadStatus status;
-    std::unique_ptr<npu::tile_fwk::dynamic::AicpuTaskManager> aicpuTaskPtr =
-        std::make_unique<npu::tile_fwk::dynamic::AicpuTaskManager>();
     std::unique_ptr<npu::tile_fwk::dynamic::AiCoreManager> AiCoreManagerPtr =
-        std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status, *aicpuTaskPtr);
+        std::make_unique<npu::tile_fwk::dynamic::AiCoreManager>(status);
     npu::tile_fwk::dynamic::AiCoreProf prof(*AiCoreManagerPtr);
 
     ProfConfig config0;

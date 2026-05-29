@@ -251,13 +251,19 @@ auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr)
     funcData->rawTensorDesc = rawTensorDescHolder.get();
     funcData->startArgs->commContexts[0] = reinterpret_cast<int64_t>(hcclParam.get());
     funcData->startArgs->commGroupNum = 1;
+
     constexpr size_t opAttrsLength = 17;
     auto opAttrs = std::make_unique<uint64_t[]>(opAttrsLength);
     std::fill_n(opAttrs.get(), opAttrsLength, 0);
+    funcData->opAttrs = opAttrs.get();
+
+    auto opAtrrOffsets = std::make_unique<int32_t[]>(1);
+    opAtrrOffsets[0] = 0;
+    funcData->opAtrrOffsets = opAtrrOffsets.get();
 
     return std::make_tuple(
         std::move(exprTbl), std::move(hcclParam), std::move(rawTensorAddrHolder), std::move(rawTensorDescHolder),
-        std::move(opAttrs));
+        std::move(opAttrs), std::move(opAtrrOffsets));
 }
 
 auto InitializeTestEnvironment()
@@ -282,62 +288,56 @@ auto InitializeTestEnvironment()
     auto allocator = std::make_unique<npu::tile_fwk::dynamic::DeviceWorkspaceAllocator>();
     auto task = std::make_unique<npu::tile_fwk::dynamic::DynDeviceTask>(*allocator);
     auto shmemWaitUntil = std::make_unique<npu::tile_fwk::Distributed::ShmemWaitUntilImpl>();
+    auto cache = std::make_unique<npu::tile_fwk::Distributed::ShmemWaitUntilCache>();
 
     auto [buffer, funcData] = InitializeTaskData(task.get());
 
-    auto [exprTbl, hcclParam, rawTensorAddrHolder, rawTensorDescHolder, opAttrs] =
+    auto [exprTbl, hcclParam, rawTensorAddrHolder, rawTensorDescHolder, opAttrs, opAtrrOffsets] =
         ConfigureFuncData(funcData, reinterpret_cast<uint64_t>(rawAddr.data()));
-    shmemWaitUntil->Init(task.get());
+
+    task->shmemWaitUntilCacheBackup = cache.get();
+
     return std::make_tuple(
         std::move(rawAddr), std::move(data), std::move(allocator), std::move(task), std::move(shmemWaitUntil),
-        std::move(buffer), std::move(exprTbl), std::move(hcclParam), std::move(rawTensorAddrHolder),
-        std::move(rawTensorDescHolder), std::move(opAttrs), std::move(aicpuCode), funcData);
+        std::move(cache), std::move(buffer), std::move(exprTbl), std::move(hcclParam), std::move(rawTensorAddrHolder),
+        std::move(rawTensorDescHolder), std::move(opAttrs), std::move(opAtrrOffsets), std::move(aicpuCode), funcData);
 }
 
 void PrepareTasks(
-    uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntilImpl* shmemWaitUntil,
+    uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntilCache* cache,
     const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode, npu::tile_fwk::DynFuncData* funcData,
-    uint64_t* opAttrsPtr)
+    int64_t* hcclContextAddr)
 {
-    constexpr size_t opAttrsLength = 17;
-    std::vector<std::unique_ptr<int32_t[]>> opAtrrOffsetsHolder;
-    std::vector<std::unique_ptr<uint64_t[]>> opAttrsCopyHolder;
     for (uint32_t taskId = 0; taskId < tileOpCount; ++taskId) {
-        auto opAtrrOffsets = std::make_unique<int32_t[]>(taskId + 1);
-        opAtrrOffsets[taskId] = 0;
-
-        int opAttrsSize = 1 + opAtrrOffsets[taskId] + opAttrsLength;
-        auto opAttrsCopy = std::make_unique<uint64_t[]>(opAttrsSize);
-        std::copy(opAttrsPtr, opAttrsPtr + opAttrsLength, opAttrsCopy.get() + opAtrrOffsets[taskId]);
-
-        opAtrrOffsetsHolder.push_back(std::move(opAtrrOffsets));
-        opAttrsCopyHolder.push_back(std::move(opAttrsCopy));
-
-        funcData->opAtrrOffsets = opAtrrOffsetsHolder.back().get();
-        funcData->opAttrs = opAttrsCopyHolder.back().get();
-
-        shmemWaitUntil->PrepareTask(taskId, aicpuCode);
+        npu::tile_fwk::Distributed::ShmemWaitUntilImpl::PrepareTask(
+            taskId, aicpuCode, cache->taskArray, taskId, funcData, hcclContextAddr);
     }
+    cache->taskCount = tileOpCount;
+    npu::tile_fwk::Distributed::ShmemWaitUntilImpl::BuildHashTable(cache, tileOpCount);
 }
 
-void RunTests(uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntilImpl* shmemWaitUntil)
+void RunTests(
+    uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntilImpl* shmemWaitUntil, uint32_t parallelIdx = 0)
 {
     TaskStat* taskStat{nullptr};
     for (uint32_t taskId = 0; taskId < tileOpCount; ++taskId) {
-        shmemWaitUntil->EnqueueOp(taskId, taskStat);
-        shmemWaitUntil->PollCompleted(nullptr);
+        shmemWaitUntil->EnqueueOp(taskId, parallelIdx, taskStat);
+        shmemWaitUntil->PollCompleted(nullptr, parallelIdx);
     }
 }
 
 void TestShmemWaitUntil(const uint32_t tileOpCount)
 {
     auto
-        [rawAddr, data, allocator, task, shmemWaitUntil, buffer, exprTbl, hcclParam, rawTensorAddrHolder,
-         rawTensorDescHolder, opAttrs, aicpuCode, funcData] = InitializeTestEnvironment();
+        [rawAddr, data, allocator, task, shmemWaitUntil, cache, buffer, exprTbl, hcclParam, rawTensorAddrHolder,
+         rawTensorDescHolder, opAttrs, opAtrrOffsets, aicpuCode, funcData] = InitializeTestEnvironment();
 
-    PrepareTasks(tileOpCount, shmemWaitUntil.get(), aicpuCode, funcData, opAttrs.get());
+    PrepareTasks(tileOpCount, cache.get(), aicpuCode, funcData, funcData->startArgs->commContexts);
 
-    RunTests(tileOpCount, shmemWaitUntil.get());
+    constexpr uint32_t parallelIdx = 0;
+    shmemWaitUntil->LoadCache(cache.get(), parallelIdx);
+
+    RunTests(tileOpCount, shmemWaitUntil.get(), parallelIdx);
 }
 
 TEST(ShmemWaitUntilTest, BasicFunctionality)

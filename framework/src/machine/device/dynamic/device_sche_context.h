@@ -234,6 +234,9 @@ struct SchduleContext {
     void UpdateParallelVersion() { schParallelDevTaskCtx.UpdateVersion(); }
     uint32_t PrallelVersion() { return schParallelDevTaskCtx.Version(); }
 
+    SchDeviceTaskContext* GetCurSchDevTaskCtx() { return curSchDevTaskCtx; }
+    void SetCurSchDevTaskCtx(SchDeviceTaskContext* ctx) { curSchDevTaskCtx = ctx; }
+
     bool CurSupportParallel()
     { 
         if (schParallelDevTaskCtx.Empty()) {

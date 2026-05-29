@@ -31,8 +31,8 @@
 #include "machine/device/dynamic/device_utils.h"
 
 namespace npu::tile_fwk::Distributed {
-// constexpr int32_t AICPU_ATTR_DIM_INDEX = 2;
 constexpr int32_t AICPU_ATTR_RAW_INDEX = 3;
+
 inline bool SignalTileOp::PollCompleted() const
 {
     if constexpr (!npu::tile_fwk::dynamic::IsDeviceMode()) {
@@ -48,9 +48,9 @@ inline bool SignalTileOp::PollCompleted() const
     return true;
 }
 
-int32_t ShmemWaitUntilImpl::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager* aicoreManager)
+int32_t ShmemWaitUntilImpl::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager* aicoreManager, uint32_t parallelIdx)
 {
-    return runingTaskQueue_.PollCompleted([&](SignalTileOp* task) {
+    return runingTaskQueue_[parallelIdx].PollCompleted([&](SignalTileOp* task) {
         if (aicoreManager == nullptr) {
             DEV_ERROR(DistributedErrorCode::NULLPTR, "sche.task.pre.task.poll#: AicoreManager is nullptr");
             return dynamic::DEVICE_MACHINE_ERROR;
@@ -60,28 +60,27 @@ int32_t ShmemWaitUntilImpl::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager*
 }
 
 TensorInfo ShmemWaitUntilImpl::GetTensorInfo(
-    uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode)
+    uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode,
+    npu::tile_fwk::DynFuncData* funcDataList, int64_t* hcclContextAddr, const AicpuParamInfo& paramInfo)
 {
     const uint32_t funcId = npu::tile_fwk::FuncID(taskId);
     const uint32_t opIndex = npu::tile_fwk::TaskID(taskId);
-    auto& funcData = funcDataList_[funcId];
+    auto& funcData = funcDataList[funcId];
     auto opAttrs = &funcData.opAttrs[funcData.opAtrrOffsets[opIndex]];
     auto expressionTable = funcData.exprTbl;
 
-    int32_t index = aicpuCode
-        [paramInfo_.inIndex +
-         AICPU_ATTR_RAW_INDEX]; // ShmemWaitUntil注册registerInfo中ShmemTensor位于第2个输入位，因此dim、offset位于2和3号位
+    int32_t index = aicpuCode[paramInfo.inIndex + AICPU_ATTR_RAW_INDEX];
     TensorInfo info;
     info.rawIndex = GetCoa(index, opAttrs, expressionTable);
-    ++index; // 跳过 rawIndex
-    info.dim = aicpuCode[paramInfo_.inIndex + AICPU_ATTR_DIM_INDEX];
+    ++index;
+    info.dim = aicpuCode[paramInfo.inIndex + AICPU_ATTR_DIM_INDEX];
     info.offset = GetCoaVector(index, info.dim, opAttrs, expressionTable);
 
-    info.expectedSum = aicpuCode[paramInfo_.attrIndex];
-    info.resetSignal = aicpuCode[paramInfo_.attrIndex + AICPU_ATTR_DIM_INDEX];
+    info.expectedSum = aicpuCode[paramInfo.attrIndex];
+    info.resetSignal = aicpuCode[paramInfo.attrIndex + AICPU_ATTR_DIM_INDEX];
     auto desc = &funcData.rawTensorDesc[info.rawIndex];
     info.vaddr = funcData.rawTensorAddr[desc->offsetOrIndex];
-    info.rawAddr = MapVirtualSignalAddr(hcclContextAddr_, info.vaddr);
+    info.rawAddr = MapVirtualSignalAddr(hcclContextAddr, info.vaddr);
     return info;
 }
 } // namespace npu::tile_fwk::Distributed

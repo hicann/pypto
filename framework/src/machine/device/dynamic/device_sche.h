@@ -54,7 +54,7 @@ public:
     DeviceSchedMachine()
     {
         for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; ++i) {
-            aicoreManager_[i] = std::make_unique<AiCoreManager>(schThreadStatus, aicpuTaskManager_);
+            aicoreManager_[i] = std::make_unique<AiCoreManager>(schThreadStatus);
         }
     }
 
@@ -139,7 +139,6 @@ public:
 
 private:
     SchThreadStatus schThreadStatus;
-    AicpuTaskManager aicpuTaskManager_;
     uint32_t schAicpuNum_{MAX_SCHEDULE_AICPU_NUM};
     std::unique_ptr<AiCoreManager> aicoreManager_[MAX_SCHEDULE_AICPU_NUM];
 #if ENABLE_AICORE_PRINT

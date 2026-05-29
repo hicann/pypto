@@ -14,6 +14,7 @@
  */
 
 #include "machine/device/dynamic/context/device_execute_context.h"
+#include "machine/device/distributed/shmem_wait_until.h"
 #include "tileop/distributed/comm_context.h"
 
 #include <cinttypes>
@@ -321,6 +322,56 @@ void DeviceExecuteContext::CalcControlMaxAicore()
  	    static_cast<uint32_t>(stitchedList.size()), currentMaxC_, currentMaxV_);
 }
 
+int DeviceExecuteContext::PrepareShmemWaitUntilTasks(DynDeviceTask* dynTask)
+{
+    auto funcDataList = reinterpret_cast<npu::tile_fwk::DynFuncData*>(&dynTask->GetDynFuncDataList()->At(0));
+    auto hcclContextAddr = funcDataList->startArgs->commContexts;
+    size_t cacheSize = sizeof(npu::tile_fwk::Distributed::ShmemWaitUntilCache);
+    WsAllocation alloc = ControlFlowAllocateSlab(
+        devProg, cacheSize, workspace.SlabAlloc(cacheSize, WsAicpuSlabMemType::SHMEM_WAIT_UNTIL_CACHE));
+    auto cache = alloc.As<npu::tile_fwk::Distributed::ShmemWaitUntilCache>();
+    if (cache == nullptr) {
+        DEV_ERROR(CtrlErr::CTRL_FLOW_EXEC_FAILED, "AllocateCache failed for ShmemWaitUntilCache");
+        return DEVICE_MACHINE_ERROR;
+    }
+
+    uint32_t taskCount = 0;
+
+    for (uint64_t funcId = 0; funcId < dynTask->dynFuncDataCacheListSize; ++funcId) {
+        auto callList = dynTask->dynFuncDataCacheList[funcId].calleeList;
+        for (size_t opIndex = 0; opIndex < dynTask->dynFuncDataCacheList[funcId].devFunc->GetOperationSize();
+             ++opIndex) {
+            auto coreType = dynTask->cceBinary[callList[opIndex]].coreType;
+            if (coreType == static_cast<int>(MachineType::AICPU)) {
+                if (taskCount >= npu::tile_fwk::Distributed::AICPU_TASK_ARRAY_SIZE) {
+                    DEV_ERROR(
+                        CtrlErr::CTRL_FLOW_EXEC_FAILED,
+                        "PrepareShmemWaitUntilTasks: taskCount=%u exceeds AICPU_TASK_ARRAY_SIZE=%lu", taskCount,
+                        npu::tile_fwk::Distributed::AICPU_TASK_ARRAY_SIZE);
+                    return DEVICE_MACHINE_ERROR;
+                }
+                uint32_t aicpuTaskId =
+                    (static_cast<uint32_t>(funcId) << TASKID_TASK_BITS) | static_cast<uint32_t>(opIndex);
+                auto& code = dynTask->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
+                auto prepareRet = npu::tile_fwk::Distributed::ShmemWaitUntilImpl::PrepareTask(
+                    aicpuTaskId, code, cache->taskArray, taskCount, funcDataList, hcclContextAddr);
+                if (prepareRet != DEVICE_MACHINE_OK) {
+                    DEV_ERROR(
+                        CtrlErr::CTRL_FLOW_EXEC_FAILED, "PrepareTask failed: aicpuTaskId=%u ret=%d", aicpuTaskId,
+                        prepareRet);
+                    return DEVICE_MACHINE_ERROR;
+                }
+                ++taskCount;
+            }
+        }
+    }
+    cache->taskCount = taskCount;
+    npu::tile_fwk::Distributed::ShmemWaitUntilImpl::BuildHashTable(cache, taskCount);
+    dynTask->shmemWaitUntilCacheBackup = cache;
+    DEV_INFO("[ControlFlow] PrepareShmemWaitUntilTasks END: prepared %u tasks, cache=%p", taskCount, cache);
+    return DEVICE_MACHINE_OK;
+}
+
 int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask, bool isParallelIterLastTask)
 {
     int ret = DEVICE_MACHINE_OK;
@@ -376,8 +427,11 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
         dynTask->SetLastTask(isLastTask);
         dynTask->SetParallelSameIterLastDevTask(isParallelIterLastTask);
     }
-
+    DEV_INFO("devProg->ctrlFlowCacheAnchor->isActivated : %d", devProg->ctrlFlowCacheAnchor->isActivated);
     PROF_STAGE_END(PERF_EVT_STAGE_BUILD_TASK, "BuildDeviceTaskData.after\n");
+    if (!devProg->ctrlFlowCacheAnchor->isActivated && devProg->devArgs.hasAicpuTask) {
+        PrepareShmemWaitUntilTasks(dynTask);
+    }
 
     PROF_STAGE_BEGIN(PERF_EVT_DEALLOCATE_WORKSPACE, "RecycleTensorWorkspace.before\n");
     // Memory recycling

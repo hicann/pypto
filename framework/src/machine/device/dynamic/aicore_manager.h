@@ -70,8 +70,7 @@ struct ResolveTaskContext {
 };
 class AiCoreManager {
 public:
-    explicit AiCoreManager(SchThreadStatus& schThreadStatus, AicpuTaskManager& aicpuTaskManager)
-        : threadStatus(schThreadStatus), aicpuTaskManager_(aicpuTaskManager), aicoreProf_(*this) {};
+    explicit AiCoreManager(SchThreadStatus& schThreadStatus) : threadStatus(schThreadStatus), aicoreProf_(*this) {};
     ~AiCoreManager() {};
 
     void InitLogger(AicoreLogger* logger) { logger_ = logger; }
@@ -326,7 +325,9 @@ public:
 
         if (IsNeedProcAicpuTask()) {
             const bool profSwitch = aicoreProf_.ProfIsEnable();
-            ret = aicpuTaskManager_.Init(reinterpret_cast<DynDeviceTask*>(deviceTaskCtx->GetDeviceTask()), profSwitch);
+            uint32_t parallelIdx = deviceTaskCtx->parallelIdx;
+            ret = aicpuTaskManager_.Init(
+                reinterpret_cast<DynDeviceTask*>(deviceTaskCtx->GetDeviceTask()), profSwitch, parallelIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
@@ -530,11 +531,11 @@ public:
 
     int32_t ProcessCompletedAicpuTask(uint64_t taskId)
     {
-        int32_t ret = ResolveDepDyn(context_->curSchDevTaskCtx, taskId);
+        int32_t ret = ResolveDepDyn(context_->GetCurSchDevTaskCtx(), taskId);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return ret;
         }
-        return BatchPushReadyQueue(context_->curSchDevTaskCtx);
+        return BatchPushReadyQueue(context_->GetCurSchDevTaskCtx());
     }
 
     inline void DumpAicorePerfTrace(std::ostringstream& oss)
@@ -861,15 +862,16 @@ private:
 
         if (devTaskCtx->coreFinishedNum == mngCoreNum) {
             isFinish = true;
-            return SyncAicpuTaskFinish();
+            return SyncAicpuTaskFinish(devTaskCtx);
         }
         return DEVICE_MACHINE_OK;
     }
 
-    inline int32_t SyncAicpuTaskFinish()
+    inline int32_t SyncAicpuTaskFinish(SchDeviceTaskContext* devTaskCtx)
     {
         if (IsNeedProcAicpuTask()) {
-            auto ret = aicpuTaskManager_.SyncAicpuTaskFinish(this);
+            uint32_t parallelIdx = devTaskCtx->parallelIdx;
+            auto ret = aicpuTaskManager_.SyncAicpuTaskFinish(this, parallelIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
@@ -1305,11 +1307,14 @@ private:
 
     inline int32_t ResolveDepForAicpuTask(uint64_t& taskCount)
     {
-        int32_t ret = aicpuTaskManager_.TaskProcess(taskCount);
+        auto curSchDevTaskCtx = context_->GetCurSchDevTaskCtx();
+        uint32_t parallelIdx = curSchDevTaskCtx->parallelIdx;
+        auto deviceTask = reinterpret_cast<DynDeviceTask*>(curSchDevTaskCtx->GetDeviceTask());
+        int32_t ret = aicpuTaskManager_.TaskProcess(taskCount, deviceTask, parallelIdx);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return ret;
         }
-        return aicpuTaskManager_.TaskPoll(this);
+        return aicpuTaskManager_.TaskPoll(this, parallelIdx);
     }
 
     [[gnu::hot]] inline int32_t ResolveWhenSyncMode(
@@ -1546,7 +1551,7 @@ private:
 
     inline uint64_t GetCostModelTaskTime(uint64_t coreIdx, uint64_t taskId, uint64_t currentTime)
     {
-        DeviceTask* curDevTask = context_->curSchDevTaskCtx->GetDeviceTask();
+        DeviceTask* curDevTask = context_->GetCurSchDevTaskCtx()->GetDeviceTask();
         auto funcId = FuncID(taskId);
         auto dyntask = reinterpret_cast<DynDeviceTask *>(curDevTask);
         auto costModelData = reinterpret_cast<CostModel::ModelData*>(curDevTask->costModelData);
@@ -1561,7 +1566,7 @@ private:
         auto opAttrs = &dyndata->opAttrs[dyndata->opAtrrOffsets[TaskID(taskId)]];
         auto psgId = opAttrs[0];
         // devTaskId - funcId - leaf function Id - psgId
-        std::string name = std::to_string(context_->curSchDevTaskCtx->TaskId()) + '-' + std::to_string(funcId) +
+        std::string name = std::to_string(context_->GetCurSchDevTaskCtx()->TaskId()) + '-' + std::to_string(funcId) +
                            '-' + std::to_string(opIndex) + '-' + std::to_string(psgId);
         PerfMtEvent(PERF_EVT_TASK, coreIdx + PERF_AICORE_THREAD_START, currentTime, currentTime + timeCost, name);
         return timeCost;
@@ -2186,7 +2191,7 @@ private:
         DEV_IF_VERBOSE_DEBUG { recvFinTask_[coreIdx].push_back(TaskInfo(coreIdx, taskId, deviceTaskCtx->TaskId())); }
     }
 
-    inline bool IsNeedProcAicpuTask() { return hasAicpuTask_ && aicpuIdx_ == 2; }
+    inline bool IsNeedProcAicpuTask() { return hasAicpuTask_;}
 
 private:
     void ReuseUpdateDeviceCtx(SchDeviceTaskContext* devTaskCtx, DeviceTaskCtrl* newDevTask) {
@@ -2351,7 +2356,7 @@ private:
                 DEV_VERBOSE_DEBUG("Device task ctx(%u) wait recycle.", devTaskCtx->parallelIdx);
                 continue; // maybe have some non-consecutiv free ctx wait recycle
             }
-            context_->curSchDevTaskCtx = devTaskCtx;
+            context_->SetCurSchDevTaskCtx(devTaskCtx);
             PerfMtBegin(PERF_EVT_RUN_TASK, aicpuIdx_);
             if (!disableControlCore_) {
                 CalcAdjAicoreEnd(devTaskCtx);
@@ -2408,7 +2413,7 @@ private:
 
     bool taskCtrlDequeFinish{false};
     SPSCQueue<DeviceTaskCtrl *, DEFAULT_QUEUE_SIZE> *taskQueue_{nullptr};
-    AicpuTaskManager &aicpuTaskManager_;
+    AicpuTaskManager aicpuTaskManager_;
 
     AiCoreProf aicoreProf_;
     AicoreDump aicoreDump_;

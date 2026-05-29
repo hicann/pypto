@@ -28,6 +28,7 @@ enum class WsAicpuSlabMemType : uint8_t {
     DYN_FUNC_DATA,
     VEC_STITCHED_LIST,
     DEV_DYN_TASK,
+    SHMEM_WAIT_UNTIL_CACHE,
     COHERENT_SLAB_MEM_TYPE_BUTT, // add new slabmemtype should be above this type
     READY_QUE,
     DIE_READY_QUE,

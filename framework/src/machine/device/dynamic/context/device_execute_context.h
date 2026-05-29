@@ -129,6 +129,8 @@ struct DeviceExecuteContext {
 
     void CalcControlMaxAicore();
 
+    int PrepareShmemWaitUntilTasks(DynDeviceTask* dynTask);
+
     int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false, bool isParallelIterLast = false);
 
     void ProcessControlFlowCacheRecord(DynDeviceTask* dynTask);
