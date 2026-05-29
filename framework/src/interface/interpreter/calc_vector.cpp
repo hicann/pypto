@@ -285,12 +285,6 @@ void ExecuteOpReduce(ExecuteOperationContext* ctx)
         case Opcode::OP_ROWPROD_SINGLE:
             calc::RowProdSingle(oop, iop, axis);
             break;
-        case Opcode::OP_ROWARGMAX_SINGLE:
-            calc::RowArgMaxSingle(oop, iop, axis);
-            break;
-        case Opcode::OP_ROWARGMIN_SINGLE:
-            calc::RowArgMinSingle(oop, iop, axis);
-            break;
         case Opcode::OP_ROWSUMLINE:
             calc::RowSumExpand(oop, iop, axis);
             break;
@@ -302,12 +296,6 @@ void ExecuteOpReduce(ExecuteOperationContext* ctx)
             break;
         case Opcode::OP_ROWPRODLINE:
             calc::RowProdLine(oop, iop, axis);
-            break;
-        case Opcode::OP_ROWARGMAXLINE:
-            calc::RowArgMaxLine(oop, iop, axis);
-            break;
-        case Opcode::OP_ROWARGMINLINE:
-            calc::RowArgMinLine(oop, iop, axis);
             break;
         default:
             ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false) << "opcode not support" << ctx->op->GetOpcodeStr();
@@ -321,10 +309,6 @@ REGISTER_CALC_OP(OP_ROWMIN_SINGLE, Opcode::OP_ROWMIN_SINGLE, ExecuteOpReduce<Opc
 REGISTER_CALC_OP(OP_ROWMINLINE, Opcode::OP_ROWMINLINE, ExecuteOpReduce<Opcode::OP_ROWMINLINE>);
 REGISTER_CALC_OP(OP_ROWPROD_SINGLE, Opcode::OP_ROWPROD_SINGLE, ExecuteOpReduce<Opcode::OP_ROWPROD_SINGLE>);
 REGISTER_CALC_OP(OP_ROWPRODLINE, Opcode::OP_ROWPRODLINE, ExecuteOpReduce<Opcode::OP_ROWPRODLINE>);
-REGISTER_CALC_OP(OP_ROWARGMAX_SINGLE, Opcode::OP_ROWARGMAX_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMAX_SINGLE>);
-REGISTER_CALC_OP(OP_ROWARGMIN_SINGLE, Opcode::OP_ROWARGMIN_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMIN_SINGLE>);
-REGISTER_CALC_OP(OP_ROWARGMAXLINE, Opcode::OP_ROWARGMAXLINE, ExecuteOpReduce<Opcode::OP_ROWARGMAXLINE>);
-REGISTER_CALC_OP(OP_ROWARGMINLINE, Opcode::OP_ROWARGMINLINE, ExecuteOpReduce<Opcode::OP_ROWARGMINLINE>);
 
 void ExecuteOpCast(ExecuteOperationContext* ctx)
 {

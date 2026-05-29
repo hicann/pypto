@@ -79,6 +79,24 @@ enum class MISOIdx : unsigned {
 };
 
 // multi input multi output
+enum class ArgReduceIdx : unsigned {
+    DST0_IDX = 0,
+    DST1_IDX = 1,
+    SRC0_IDX = 2,
+    SRC1_IDX = 3,
+    SRC2_IDX = 4,
+    SRC3_IDX = 5,
+};
+
+// single input multi output
+enum class SIMOIdx : unsigned {
+    DST0_IDX = 0,
+    DST1_IDX = 1,
+    TMP_IDX = 2,
+    SRC0_IDX = 3,
+};
+
+// multi input multi output
 enum class MIMOIdx : unsigned {
     DST_IDX = 0,
     TMP_IDX = 1,

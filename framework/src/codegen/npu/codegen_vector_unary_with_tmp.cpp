@@ -166,6 +166,28 @@ std::string CodeGenOpNPU::PrintReduceLastAxisTileTensor() const
     return oss.str();
 }
 
+std::string CodeGenOpNPU::PrintArgReduceTileTensor() const
+{
+    std::string dstValueTensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::DST0_IDX));
+    std::string dstIndexTensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::DST1_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::TMP_IDX));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::SRC0_IDX));
+    int reduceAxis{-1};
+    auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
+    if (axis.HasValue()) {
+        reduceAxis = AnyCast<int64_t>(axis);
+    }
+    reduceAxis += SHAPE_DIM5 - rawShape[0].size();
+    std::ostringstream oss;
+    oss << tileOpName;
+    if (opCode == Opcode::OP_ROWARGMAXWITHVALUE_LINE || opCode == Opcode::OP_ROWARGMINWITHVALUE_LINE) {
+        oss << WrapParamByAngleBrackets({std::to_string(reduceAxis)});
+    }
+    oss << WrapParamByParentheses({dstValueTensor, dstIndexTensor, src0Tensor, tmpTensor});
+    oss << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
@@ -438,17 +460,29 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         return PrintUnaryOpWithTmpBuff();
     }
 
-    if (opCode == Opcode::OP_ROWSUMLINE || opCode == Opcode::OP_ROWARGMAXLINE || opCode == Opcode::OP_ROWARGMINLINE) {
+    if (opCode == Opcode::OP_ROWSUMLINE) {
         return PrintRowSumline({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
     if (opCode == Opcode::OP_ROWSUM_SINGLE || opCode == Opcode::OP_ROWMAX_SINGLE ||
-        opCode == Opcode::OP_ROWMIN_SINGLE || opCode == Opcode::OP_ROWPROD_SINGLE ||
-        opCode == Opcode::OP_ROWARGMAX_SINGLE || opCode == Opcode::OP_ROWARGMIN_SINGLE) {
+        opCode == Opcode::OP_ROWMIN_SINGLE || opCode == Opcode::OP_ROWPROD_SINGLE) {
         return PrintReduceLastAxis({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
     if (opCode == Opcode::OP_COMPACT) {
         return PrintCompact({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
+    }
+
+    std::string ostring(buffer);
+    return ostring;
+}
+
+std::string CodeGenOpNPU::GenArgReduceWithValue() const
+{
+    char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
+
+    if (opCode == Opcode::OP_ROWARGMAXWITHVALUE_SINGLE || opCode == Opcode::OP_ROWARGMINWITHVALUE_SINGLE ||
+        opCode == Opcode::OP_ROWARGMAXWITHVALUE_LINE || opCode == Opcode::OP_ROWARGMINWITHVALUE_LINE) {
+        return PrintArgReduceTileTensor();
     }
 
     std::string ostring(buffer);

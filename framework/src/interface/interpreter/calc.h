@@ -413,22 +413,6 @@ inline void RowProdLine(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int
 {
     GetCalcOps()->RowProdLine(Trans(out), Trans(self), dim);
 }
-inline void RowArgMaxSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim)
-{
-    GetCalcOps()->RowArgMaxSingle(Trans(out), Trans(self), dim);
-}
-inline void RowArgMinSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim)
-{
-    GetCalcOps()->RowArgMinSingle(Trans(out), Trans(self), dim);
-}
-inline void RowArgMaxLine(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim)
-{
-    GetCalcOps()->RowArgMaxLine(Trans(out), Trans(self), dim);
-}
-inline void RowArgMinLine(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim)
-{
-    GetCalcOps()->RowArgMinLine(Trans(out), Trans(self), dim);
-}
 inline void OneHot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int numClasses)
 {
     GetCalcOps()->OneHot(Trans(out), Trans(self), numClasses);

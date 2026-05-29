@@ -794,3 +794,45 @@ TEST_F(TestAxisCombineMarker, var_tail_block)
     // out: ROWSUM_SINGLE axis=2 reduce last axis → ENABLE
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("out")), true);
 }
+
+TEST_F(TestAxisCombineMarker, multi_output_elewise)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "gm0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "ub0"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm0"}, {"ub0"}, "copy_in0", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "ub1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"ub1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "ub2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"ub2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "gm3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "ub3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm3"}, {"ub3"}, "copy_in3", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "pair_val"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "pair_idx"), true);
+    EXPECT_EQ(
+        graph.AddOp(Opcode::OP_PAIRARGMAX, {"ub0", "ub1", "ub2", "ub3"}, {"pair_val", "pair_idx"}, "pairargmax", true),
+        true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "cast_out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"pair_idx"}, {"cast_out"}, "cast", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"cast_out"}, {"out"}, "copy_out", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("ub0")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("ub1")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("ub2")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("ub3")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("pair_val")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("pair_idx")), false);
+}

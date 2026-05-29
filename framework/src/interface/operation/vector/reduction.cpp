@@ -18,6 +18,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/tilefwk_op.h"
 
 namespace npu::tile_fwk {
 
@@ -164,13 +165,10 @@ void TileReduceNew(
         }
         case npu::tile_fwk::ReduceType::SINGLE: {
             std::vector<int64_t> tmpShape = {1, static_cast<int>(BLOCK_SIZE / BytesOf(in->Datatype()))};
-            if (op == "SUM" || op == "ARGMAX" || op == "ARGMIN" ||
-                (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
+            if (op == "SUM" || (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
                 if (static_cast<size_t>(axis) == (in->shape.size() - 1)) {
                     tmpShape[0] = sourceReg->shape[std::max(0, axis - 1)];
-                    if (op == "ARGMAX" || op == "ARGMIN") {
-                        tmpShape[1] = sourceReg->shape[axis];
-                    } else if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {
+                    if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {
                         tmpShape[0] = 1;
                     } else if (
                         static_cast<size_t>(sourceReg->shape[axis]) <= NUM2 * REPEAT_BYTE / BytesOf(in->Datatype())) {
@@ -187,10 +185,8 @@ void TileReduceNew(
                     auto& newOp = function.AddOperation("TILE_ROW" + op + "_SINGLE", {sourceReg}, {result, tempTensor});
                     newOp.SetAttribute(OP_ATTR_PREFIX + "AXIS", axis);
                 } else {
-                    tmpShape[0] = (op == "ARGMAX" || op == "ARGMIN") ? 1 : (sourceReg->shape[axis] + 1) / NUM2;
-                    tmpShape[1] = (op == "ARGMAX" || op == "ARGMIN") ?
-                                      REPEAT_BYTE / BytesOf(in->Datatype()) * NUM3 :
-                                      (sourceReg->shape[in->shape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM;
+                    tmpShape[0] = (sourceReg->shape[axis] + 1) / NUM2;
+                    tmpShape[1] = (sourceReg->shape[in->shape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM;
                     auto tempTensor = std::make_shared<LogicalTensor>(function, in->Datatype(), tmpShape);
                     tempTensor->dynValidShape_ = SymbolicScalar::FromConcrete(tmpShape);
                     auto& newOp = function.AddOperation("TILE_ROW" + op + "LINE", {sourceReg}, {result, tempTensor});
@@ -207,6 +203,98 @@ void TileReduceNew(
     }
 }
 
+void TileArgReduce(
+    Function& function, const TileShape& tileShape, const std::string& op,
+    const LogicalTensorPtr& in, const LogicalTensorPtr& result, int axis = -1)
+{
+    auto indexDtype = in->Datatype() == DataType::DT_FP32 ? DataType::DT_INT32 : DataType::DT_INT16;
+    axis = axis < 0 ? in->shape.size() + axis : axis;
+    auto& vecTile = tileShape.GetVecTile();
+    
+    std::vector<int64_t> tileValueShape = result->shape;
+    std::vector<int64_t> tileSourceShape = in->shape;
+    std::vector<int64_t> tileSourceOffset(tileSourceShape.size(), 0);
+    std::vector<LogicalTensorPtr> valueList;
+    std::vector<LogicalTensorPtr> indexList;
+    std::vector<SymbolicScalar> inValidShape = in->GetDynValidShape();
+    std::vector<SymbolicScalar> argReudceValidShape;
+    if (!inValidShape.empty()) {
+        argReudceValidShape = inValidShape;
+        argReudceValidShape[axis] = SymbolicScalar(1);
+    }
+    for (int i = 0; i < in->shape[axis]; i += vecTile[axis]) {
+        tileSourceShape[axis] = std::min(vecTile[axis], in->shape[axis] - i);
+        tileSourceOffset[axis] = i;
+        auto inputTile = in->View(function, tileSourceShape, tileSourceOffset);
+        auto valueTile = std::make_shared<LogicalTensor>(function, in->Datatype(), tileValueShape, argReudceValidShape);
+        auto indexTile = std::make_shared<LogicalTensor>(function, indexDtype, tileValueShape, argReudceValidShape);
+        std::vector<int64_t> tmpShape;
+        if (inputTile->shape.size() == 1) {
+            tmpShape = {tileSourceShape[axis]};
+        } else {
+            tmpShape = (static_cast<size_t>(axis) == (inputTile->shape.size() - 1)) ? std::vector<int64_t>{tileSourceShape[axis - 1], tileSourceShape[axis]} :
+                        std::vector<int64_t>{1, static_cast<int64_t>(REPEAT_BYTE / BytesOf(in->Datatype()) * NUM3)};
+        }
+        auto argreduceTempTensor = std::make_shared<LogicalTensor>(function, in->Datatype(), tmpShape, argReudceValidShape);
+        if (static_cast<size_t>(axis) == (inputTile->shape.size() - 1)) {
+            auto& argreduceOp = function.AddOperation("TILE_ROW" + op + "WITHVALUE_SINGLE", {inputTile}, {valueTile, indexTile, argreduceTempTensor});
+            argreduceOp.SetAttribute(OP_ATTR_PREFIX + "AXIS", axis);
+        } else {
+            auto& argreduceOp = function.AddOperation("TILE_ROW" + op + "WITHVALUE_LINE", {inputTile}, {valueTile, indexTile, argreduceTempTensor});
+            argreduceOp.SetAttribute(OP_ATTR_PREFIX + "AXIS", axis);
+        }
+        auto addsTile = std::make_shared<LogicalTensor>(function, indexDtype, tileValueShape, argReudceValidShape);
+        auto& indexUpdateOp = function.AddOperation(Opcode::OP_ADDS, {indexTile}, {addsTile});
+        indexUpdateOp.SetAttribute(OpAttributeKey::scalar, Element(indexDtype, i));
+        indexUpdateOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", false);
+        valueList.push_back(valueTile);
+        indexList.push_back(addsTile);
+    }
+
+    auto axisTileNum = (in->shape[axis] + vecTile[axis] - 1) / vecTile[axis];
+    std::vector<LogicalTensorPtr> workValueList = valueList;
+    std::vector<LogicalTensorPtr> workIndexList = indexList;
+    int currentSize = axisTileNum;
+    while (currentSize > 1) {
+        int halfSize = (currentSize + 1) / NUM_VALUE_2;
+        std::vector<LogicalTensorPtr> nextValueList;
+        std::vector<LogicalTensorPtr> nextIndexList;
+        for (int i = 0; i < currentSize; i += NUM_VALUE_2) {
+            if ((currentSize - i) == 1) {
+                nextValueList.push_back(workValueList[i]);
+                nextIndexList.push_back(workIndexList[i]);
+            } else {
+                auto pairValue = std::make_shared<LogicalTensor>(function, in->Datatype(), workValueList[0]->shape, workValueList[0]->GetDynValidShape());
+                auto pairIndex = std::make_shared<LogicalTensor>(function, indexDtype, workIndexList[0]->shape, workIndexList[0]->GetDynValidShape());
+                auto pairOpcode = op == "ARGMAX" ? Opcode::OP_PAIRARGMAX : Opcode::OP_PAIRARGMIN;
+                function.AddOperation(
+                        pairOpcode,
+                        {workValueList[i], workIndexList[i], workValueList[i + 1], workIndexList[i + 1]},
+                        {pairValue, pairIndex});
+                nextValueList.push_back(pairValue);
+                nextIndexList.push_back(pairIndex);
+            }
+        }
+        workValueList = std::move(nextValueList);
+        workIndexList = std::move(nextIndexList);
+        currentSize = halfSize;
+    }
+    if (indexDtype == DataType::DT_INT16 && result->Datatype() == DataType::DT_INT32) {
+        auto fp32Index = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, result->shape, workIndexList[0]->GetDynValidShape());
+        auto& castToFp32 = function.AddOperation(Opcode::OP_CAST, {workIndexList[0]}, {fp32Index});
+        castToFp32.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        castToFp32.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(SaturationMode::OFF));
+        auto& castOp = function.AddOperation(Opcode::OP_CAST, {fp32Index}, {result});
+        castOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        castOp.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(SaturationMode::OFF));
+    } else {
+        auto& indexUpdateOp = function.AddOperation(Opcode::OP_ADDS, {workIndexList[0]}, {result});
+        indexUpdateOp.SetAttribute(OpAttributeKey::scalar, Element(indexDtype, 0));
+        indexUpdateOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", false);
+    }
+    return;
+}
+
 void ReduceSingle(
     size_t cur, const std::string& op, Input& input, const LogicalTensorPtr result, TileInfo& resultTileInfo, int axis,
     Function& function, const TileShape& tileShape, std::vector<int> order)
@@ -217,7 +305,11 @@ void ReduceSingle(
     if (order[cur] == axis) {
         auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
-        TileReduceNew(function, tileShape, op, npu::tile_fwk::ReduceType::SINGLE, inputTile, resultTile, axis);
+        if (op == "ARGMAX" || op == "ARGMIN") {
+            TileArgReduce(function, tileShape, op, inputTile, resultTile, axis);
+        } else {
+            TileReduceNew(function, tileShape, op, npu::tile_fwk::ReduceType::SINGLE, inputTile, resultTile, axis);
+        }
         return;
     }
     auto vecTile = tileShape.GetVecTile();
@@ -369,8 +461,6 @@ Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
 
     auto resultShape = self.GetShape();
     auto vecTile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, vecTile[axis] >= resultShape[axis])
-        << "ArgMax Op does not support reduce axis splitting!";
     resultShape[axis] = 1;
 
     Tensor result(DataType::DT_INT32, resultShape);
@@ -391,8 +481,6 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
 
     auto resultShape = self.GetShape();
     auto vecTile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, vecTile[axis] >= resultShape[axis])
-        << "ArgMin Op does not support reduce axis splitting!";
     resultShape[axis] = 1;
 
     Tensor result(DataType::DT_INT32, resultShape);

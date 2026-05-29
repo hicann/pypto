@@ -87,6 +87,7 @@ public:
 
     std::string GenUnaryOp() const;
     std::string GenUnaryOpWithTmpBuff() const;
+    std::string GenArgReduceWithValue() const;
     std::string GenQuantMXOp() const;
 
     std::string GenLogicalNotOp() const;
@@ -96,6 +97,7 @@ public:
     std::string GenVectorScalarOp() const;
     std::string GenBinaryOpWithTmp() const;
     std::string GenVectorScalarOpWithTmp() const;
+    std::string GenPairArgReduce() const;
 
     std::string GenCubeOpMatmul() const;
     std::string GenCubeOpMatmulAcc() const;
@@ -417,6 +419,7 @@ protected:
     std::string PrintBinaryDynamicUnaligned(const PrintBinaryParam& param) const;
     std::string PrintBinaryTileTensor() const;
     std::string PrintBinary(const PrintBinaryParam& param) const;
+    std::string PrintArgReduceTileTensor() const;
 
     std::string PrintBinaryBrcStatic(const PrintBinaryBrcParam& param) const;
     std::string PrintBinaryBrcDynamicUnaligned(const PrintBinaryBrcParam& param) const;

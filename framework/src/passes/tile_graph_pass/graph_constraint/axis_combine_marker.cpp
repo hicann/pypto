@@ -37,6 +37,9 @@ bool AxisCombineMarker::IsTensorEnableAxisCombine(LogicalTensorPtr tensor)
 
 void AxisCombineMarker::Init(Function& function)
 {
+    tensorStatus_.clear();
+ 	parent_.clear();
+ 	rank_.clear();
     size_t i = 0U;
     std::map<int, size_t> opMagic2Idx;
     opList_ = function.Operations().DuplicatedOpList();
@@ -44,8 +47,8 @@ void AxisCombineMarker::Init(Function& function)
         opMagic2Idx[op->GetOpMagic()] = i;
         i++;
     }
-    opInGraph_.resize(opList_.size());
-    opOutGraph_.resize(opList_.size());
+    opInGraph_.assign(opList_.size(), {});
+ 	opOutGraph_.assign(opList_.size(), {});
     for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
         const auto& op = opList_[opIdx];
         for (const auto producer : op->ProducerOpsOrdered()) {
@@ -214,7 +217,9 @@ void UpdateElewiseStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axi
         }
     }
     if (hasDisable || multiOutput) {
-        tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
+        for (auto out : op->GetOOperands()) {
+            tensorStatus[out] = AxisReorderStatus::DISABLE;
+        }
     } else if (outputTensor->GetShape().back() == 1) {
         tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
     } else {

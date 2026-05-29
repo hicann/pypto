@@ -1416,42 +1416,6 @@ TEST_F(TorchAdaptorTest, Reduce)
         calc::ReduceAcc(out, {self, self, self, self});
         ASSERT_ALLCLOSE(out, golden);
     }
-    {
-        // argmax single
-        std::vector<float> sdata = {1.0, 2.0, 5.0, 4.0};
-        std::vector<int> gdata = {1, 0};
-        auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
-        auto out = makeTensorData(DT_INT32, {2, 1}, 0);
-        auto golden = makeTensorData(DT_INT32, {2, 1}, gdata);
-        calc::RowArgMaxSingle(out, self, -1);
-        ASSERT_ALLCLOSE(out, golden);
-    }
-    {
-        // argmax line
-        auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
-        auto out = makeTensorData(DT_INT32, {1, 16}, 0);
-        auto golden = makeTensorData(DT_INT32, {1, 16}, 0);
-        calc::RowArgMaxLine(out, self, 0);
-        ASSERT_ALLCLOSE(out, golden);
-    }
-    {
-        // argmin single
-        std::vector<float> sdata = {1.0, 2.0, 5.0, 4.0};
-        std::vector<int> gdata = {0, 1};
-        auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
-        auto out = makeTensorData(DT_INT32, {2, 1}, 0);
-        auto golden = makeTensorData(DT_INT32, {2, 1}, gdata);
-        calc::RowArgMinSingle(out, self, -1);
-        ASSERT_ALLCLOSE(out, golden);
-    }
-    {
-        // argmin line
-        auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
-        auto out = makeTensorData(DT_INT32, {1, 16}, 0);
-        auto golden = makeTensorData(DT_INT32, {1, 16}, 0);
-        calc::RowArgMinLine(out, self, 0);
-        ASSERT_ALLCLOSE(out, golden);
-    }
 }
 
 TEST_F(TorchAdaptorTest, Permute3D)

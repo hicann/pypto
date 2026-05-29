@@ -2272,38 +2272,6 @@ static void RowProdLine(const TensorData& out, const TensorData& self, int dim)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void RowArgMaxSingle(const TensorData& out, const TensorData& self, int dim)
-{
-    auto tself = From(self);
-    auto ret = torch::argmax(tself.second, dim, true);
-    auto tout = From(out);
-    ToOperand(ret.to(tout.second.scalar_type()), tout.first, out.dtype);
-}
-
-static void RowArgMinSingle(const TensorData& out, const TensorData& self, int dim)
-{
-    auto tself = From(self);
-    auto ret = torch::argmin(tself.second, dim, true);
-    auto tout = From(out);
-    ToOperand(ret.to(tout.second.scalar_type()), tout.first, out.dtype);
-}
-
-static void RowArgMaxLine(const TensorData& out, const TensorData& self, int dim)
-{
-    auto tself = From(self);
-    auto ret = torch::argmax(tself.second, dim, true);
-    auto tout = From(out);
-    ToOperand(ret.to(tout.second.scalar_type()), tout.first, out.dtype);
-}
-
-static void RowArgMinLine(const TensorData& out, const TensorData& self, int dim)
-{
-    auto tself = From(self);
-    auto ret = torch::argmin(tself.second, dim, true);
-    auto tout = From(out);
-    ToOperand(ret.to(tout.second.scalar_type()), tout.first, out.dtype);
-}
-
 static void Reshape(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -3280,10 +3248,6 @@ static struct CalcOps calcOps = {
     .RowMinLine = RowMinLine,
     .RowMaxLine = RowMaxLine,
     .RowProdLine = RowProdLine,
-    .RowArgMaxSingle = RowArgMaxSingle,
-    .RowArgMinSingle = RowArgMinSingle,
-    .RowArgMaxLine = RowArgMaxLine,
-    .RowArgMinLine = RowArgMinLine,
     .OneHot = OneHot,
     .ExpandS = ExpandS,
     .Expand = Expand,

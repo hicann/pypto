@@ -167,19 +167,83 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdSingleTileTensor)
     CheckStringExist(expect, res);
 }
 
-TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxLine)
+TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMaxReduceAxisTile)
 {
-    int shape0 = 64;
-    int shape1 = 32;
-    std::vector<int64_t> shape = {shape0, shape1};
-    std::vector<int64_t> outshape = {1, shape1};
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
 
-    TileShape::Current().SetVecTile({64, 16});
+    int shape0 = 4;
+    int shape1 = 128;
+    std::vector<int64_t> shape = {shape0, shape1};
+    std::vector<int64_t> outshape = {shape0, 1};
+    TileShape::Current().SetVecTile({4, 32});
 
     Tensor input_a(DataType::DT_FP32, shape, "A");
-    Tensor output(DataType::DT_FP32, outshape, "B");
+    Tensor output(DataType::DT_INT32, outshape, "C");
 
-    std::string funcName = "RowArgMaxLine";
+    std::string funcName = "ArgMaxReduceAxisTile";
+    FUNCTION(funcName, {input_a, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = ArgMax(input_a, -1, true);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    std::string res = GenCodeByFunction(*function);
+    const std::string expect = R"(TRowArgMaxWithValueSingle(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMinReduceAxisTile)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
+
+    int shape0 = 4;
+    int shape1 = 128;
+    std::vector<int64_t> shape = {shape0, shape1};
+    std::vector<int64_t> outshape = {shape0, 1};
+    TileShape::Current().SetVecTile({4, 32});
+
+    Tensor input_a(DataType::DT_FP32, shape, "A");
+    Tensor output(DataType::DT_INT32, outshape, "C");
+
+    std::string funcName = "ArgMinReduceAxisTile";
+    FUNCTION(funcName, {input_a, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = ArgMin(input_a, -1, true);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    std::string res = GenCodeByFunction(*function);
+    const std::string expect = R"(TRowArgMinWithValueSingle(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMaxReduceAxisTileLine)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
+
+    int shape0 = 4;
+    int shape1 = 128;
+    std::vector<int64_t> shape = {shape0, shape1};
+    std::vector<int64_t> outshape = {shape0, 1};
+    TileShape::Current().SetVecTile({4, 32});
+
+    Tensor input_a(DataType::DT_FP32, shape, "A");
+    Tensor output(DataType::DT_INT32, outshape, "C");
+
+    std::string funcName = "ArgMaxReduceAxisTileLine";
     FUNCTION(funcName, {input_a, output})
     {
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
@@ -191,59 +255,25 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxLine)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     std::string res = GenCodeByFunction(*function);
-    const std::string expect = R"(TRowArgMaxLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)";
+    const std::string expect = R"(TRowArgMaxWithValueLine<3>(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
     CheckStringExist(expect, res);
 }
 
-TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMaxSingleTileTensor)
+TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMinReduceAxisTileLine)
 {
-    int shape0 = 64;
-    int shape1 = 32;
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
+
+    int shape0 = 4;
+    int shape1 = 128;
     std::vector<int64_t> shape = {shape0, shape1};
     std::vector<int64_t> outshape = {shape0, 1};
-
-    TileShape::Current().SetVecTile({16, 32});
-
-    Tensor input_a(DataType::DT_FP32, shape, "A");
-    Tensor output(DataType::DT_FP32, outshape, "B");
-
-    std::string funcName = "RowArgMaxSingle_TILETENSOR";
-    FUNCTION(funcName, {input_a, output})
-    {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
-        {
-            (void)i;
-            output = ArgMax(input_a, -1, true);
-        }
-    }
-    ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateConstantTensor<float>(input_a, 1.0),
-    });
-
-    ProgramData::GetInstance().AppendOutputs({
-        RawTensorData::CreateConstantTensor<float>(output, 0.001f),
-    });
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-
-    std::string res = GenCodeByFunction(*function);
-    const std::string expect = R"(TRowArgMaxSingle(ubTensor_2, ubTensor_0, ubTensor_3);)";
-    CheckStringExist(expect, res);
-}
-
-TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinLine)
-{
-    int shape0 = 64;
-    int shape1 = 32;
-    std::vector<int64_t> shape = {shape0, shape1};
-    std::vector<int64_t> outshape = {1, shape1};
-
-    TileShape::Current().SetVecTile({64, 16});
+    TileShape::Current().SetVecTile({4, 32});
 
     Tensor input_a(DataType::DT_FP32, shape, "A");
-    Tensor output(DataType::DT_FP32, outshape, "B");
+    Tensor output(DataType::DT_INT32, outshape, "C");
 
-    std::string funcName = "RowArgMinLine";
+    std::string funcName = "ArgMinReduceAxisTileLine";
     FUNCTION(funcName, {input_a, output})
     {
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
@@ -254,44 +284,10 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinLine)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    std::string res = GenCodeByFunction(*function);
-    const std::string expect = R"(TRowArgMinLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)";
-    CheckStringExist(expect, res);
-}
-
-TEST_F(TestCodegenDynRowReduceLine, TestOperationRowArgMinSingleTileTensor)
-{
-    int shape0 = 64;
-    int shape1 = 32;
-    std::vector<int64_t> shape = {shape0, shape1};
-    std::vector<int64_t> outshape = {shape0, 1};
-
-    TileShape::Current().SetVecTile({16, 32});
-
-    Tensor input_a(DataType::DT_FP32, shape, "A");
-    Tensor output(DataType::DT_FP32, outshape, "B");
-
-    std::string funcName = "RowArgMinSingle_TILETENSOR";
-    FUNCTION(funcName, {input_a, output})
-    {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
-        {
-            (void)i;
-            output = ArgMin(input_a, -1, true);
-        }
-    }
-    ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateConstantTensor<float>(input_a, 1.0),
-    });
-
-    ProgramData::GetInstance().AppendOutputs({
-        RawTensorData::CreateConstantTensor<float>(output, 0.001f),
-    });
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
 
     std::string res = GenCodeByFunction(*function);
-    const std::string expect = R"(TRowArgMinSingle(ubTensor_2, ubTensor_0, ubTensor_3);)";
+    const std::string expect = R"(TRowArgMinWithValueLine<3>(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

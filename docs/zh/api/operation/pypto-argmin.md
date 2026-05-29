@@ -43,8 +43,6 @@ argmin(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 2. 尾轴要 32bytes 对齐；
 
-3. 当前仅支持非reduce轴切分.
-
 ## 调用示例
 
 ### TileShape设置示例

@@ -165,10 +165,6 @@ struct CalcOps {
     void (*RowMinLine)(const TensorData&, const TensorData&, int);
     void (*RowMaxLine)(const TensorData&, const TensorData&, int);
     void (*RowProdLine)(const TensorData&, const TensorData&, int);
-    void (*RowArgMaxSingle)(const TensorData&, const TensorData&, int);
-    void (*RowArgMinSingle)(const TensorData&, const TensorData&, int);
-    void (*RowArgMaxLine)(const TensorData&, const TensorData&, int);
-    void (*RowArgMinLine)(const TensorData&, const TensorData&, int);
 
     void (*OneHot)(const TensorData&, const TensorData&, int);
     void (*ExpandS)(const TensorData&, const Element&);

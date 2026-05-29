@@ -259,6 +259,33 @@ std::string CodeGenOpNPU::GenBinaryOp() const
     return PrintBinary({s0Var, s1Var, dVar, src0DtypeStr, src1DtypeStr, dstDtypeStr});
 }
 
+std::string CodeGenOpNPU::GenPairArgReduce() const
+{
+    std::string dstValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::DST0_IDX));
+    std::string dstIndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::DST1_IDX));
+    std::string src0ValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC0_IDX));
+    std::string src0IndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC1_IDX));
+    std::string src1ValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC2_IDX));
+    std::string src1IndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC3_IDX));
+    std::vector<std::string> tileOpCallParamList = {dstValueTensor, dstIndexTensor, src0ValueTensor, src0IndexTensor, src1ValueTensor, src1IndexTensor};
+
+    std::vector<std::string> templateParamList;
+    AddBinaryPrecisionTypeParm(templateParamList);
+
+    std::string lastUse = GetLastUse();
+    if (!lastUse.empty()) {
+        templateParamList.emplace_back(lastUse);
+    }
+
+    std::ostringstream oss;
+    oss << tileOpName;
+    if (!templateParamList.empty()) {
+        oss << WrapParamByAngleBrackets(templateParamList);
+    }
+    oss << WrapParamByParentheses(tileOpCallParamList) << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::GenBinaryOpWithTmp() const
 {
     std::vector<std::string> tileOpCallParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
