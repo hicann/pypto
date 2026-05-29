@@ -173,8 +173,7 @@ public:
             context_->corePendReadyCnt_, pendingIds_.data(), runningIds_.data(), aicValidNum_,
             context_->coreIdxPosition_, context_->wrapCoreAvail_,
             [&](SchDeviceTaskContext* devTaskCtx, CoreType coreType, int arg1, uint64_t arg2)
-            { SendTaskToAiCore(devTaskCtx, coreType, arg1, arg2); },
-            [&](int coreIdx, int type) { AddReadyCoreIdx(coreIdx, type); });
+            { SendTaskToAiCore(devTaskCtx, coreType, arg1, arg2); });
 
         context_->lastPendReadyCoreIdx_[static_cast<int>(CoreType::AIV)] = static_cast<uint32_t>(aivStart_);
         context_->lastPendReadyCoreIdx_[static_cast<int>(CoreType::AIC)] = static_cast<uint32_t>(aicStart_);
@@ -997,14 +996,13 @@ private:
         int coreIdxStart, int coreIdxEnd)
     {
         int32_t ret = DEVICE_MACHINE_OK;
-        auto& wrapManager = devTaskCtx->GetWrapManager();
         if (context_->waitTaskCnt[static_cast<int>(type)] > 0) {
             ret = ResolveDepForAllAiCore(devTaskCtx, type, coreIdxStart, coreIdxEnd);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
-            wrapManager.DispatchMixCoreTask();
         }
+        auto& wrapManager = devTaskCtx->GetWrapManager();
         if (wrapManager.GetIsMixarch()) {
             ReadyCoreFunctionQueue* dieReadyQue =
                 (type == CoreType::AIC) ? wrapManager.GetDieReadyAicQue() : wrapManager.GetDieReadyAivQue();
@@ -1197,6 +1195,9 @@ private:
             }
         }
 
+        auto& wrapManager = devTaskCtx->GetWrapManager();
+        wrapManager.DispatchMixCoreTask();
+
         if (!enableL2CacheSch_ && !devTaskCtx->IsParallel()) {
             // send task to available core
             ReadyCoreFunctionQueue* readyQue =
@@ -1332,10 +1333,8 @@ private:
             }
             pendingIds_[coreIdx] = AICORE_TASK_INIT;
             pendingResolveIndexList_[coreIdx] = 0;
-            if (context_->wrapCoreAvail_[coreIdx]) {
-                context_->corePendReadyCnt_[static_cast<int>(type)]++;
-                AddReadyCoreIdx(coreIdx, static_cast<int>(type));
-            }
+            context_->corePendReadyCnt_[static_cast<int>(type)]++;
+            AddReadyCoreIdx(coreIdx, static_cast<int>(type));
 
             SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(finTaskId));
             deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(finTaskId, type, coreIdx);
@@ -1384,10 +1383,8 @@ private:
             runningResolveIndexBaseRef = 0;
             pendingIdRef = AICORE_TASK_INIT; // ResolveDepWithDfx depend this line
             pendingResolveIndexBaseRef = 0;
-            if (context_->wrapCoreAvail_[coreIdx]) { // wrapcore doesnt support pending & running yet
-                AddReadyCoreIdx(coreIdx, static_cast<int>(type));
-                context_->corePendReadyCnt_[static_cast<int>(type)]++;
-            }
+            AddReadyCoreIdx(coreIdx, static_cast<int>(type));
+            context_->corePendReadyCnt_[static_cast<int>(type)]++;
             if (runningIdValue != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
             }

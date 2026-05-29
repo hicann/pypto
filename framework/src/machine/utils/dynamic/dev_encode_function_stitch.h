@@ -42,11 +42,9 @@ struct DevAscendFunctionDuppedStitch {
     DevAscendFunctionDuppedStitch* const& Next() const { return next_; }
     DevAscendFunctionDuppedStitch*& Next() { return next_; }
 
+    // 函数在核心流程，已在Size()内循环，校验会影响性能
     uint32_t At(uint32_t idx) const
     {
-        DEV_ASSERT_MSG(
-            ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, idx < size_, "Index %u exceeds stitch size %u.", idx,
-            size_);
         return taskList_[idx];
     }
 
