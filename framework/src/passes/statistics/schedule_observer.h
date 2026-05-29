@@ -11,58 +11,134 @@
 /*!
  * \file schedule_observer.h
  * \brief Observer interface and event structs for OoO schedule instrumentation.
- *
- * Design:
- *   - Scheduler holds vector<ScheduleObserver*>, dispatches events via Notify().
- *   - When no observers are registered, the for-loop body is never entered — zero overhead.
- *   - Each event is a lightweight POD struct filled at the call site.
- *   - Adding new fields to a struct does NOT change the virtual interface signature.
- *   - Concrete observers (HealthCheck, MemoryTracer, ...) override only the callbacks they need.
+ *        Consumers (HealthCheck, MemoryTracer) aggregate what they need.
+ *        See docs/passes/memory_visualization_design.md.
  */
 
 #ifndef SCHEDULE_OBSERVER_H
 #define SCHEDULE_OBSERVER_H
 
 #include <cstdint>
+#include <string>
 #include <vector>
 #include "interface/utils/common.h"
-#include "interface/operation/opcode.h"
+#include "tilefwk/data_type.h"   // MemoryType
+#include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"   // BufferAddrChange
 
 namespace npu::tile_fwk {
 
-// ─────────────────────────────────────────────────────────────
-//  Event structs — one per instrumentation point
-// ─────────────────────────────────────────────────────────────
+// Mapped from CoreLocationType at the Notify site: AIC→{AIC,0}, AIV0→{AIV,0}, AIV1→{AIV,1}.
+enum class CoreClass : int { AIC = 0, AIV = 1, UNKNOWN = 2 };
 
-struct PipeIssuedEvent {
+struct CoreLocation {
+    CoreClass coreType{CoreClass::UNKNOWN};
+    int coreIdx{0};
+};
+
+struct LogicalTensorBrief {
+    int magic{0};
+    uint64_t validSize{0};
+};
+
+enum class DDRBufferKind : int {
+    FUNCTION_TEMP = 0,   // workspace alloc for function I/O / intermediate DDR
+    SPILL_TEMP    = 1,   // CreateGMTensor spill destination
+    INCAST        = 2,   // cross-device input, machine layer owns the buffer
+    OUTCAST       = 3,   // cross-device output
+};
+
+// INCAST/OUTCAST have no OoO-side address, so addr/size stay 0.
+struct DDRRef {
+    int memId{0};
+    DDRBufferKind kind{DDRBufferKind::FUNCTION_TEMP};
+    MemoryType memType{MemoryType::MEM_DEVICE_DDR};
+    uint64_t addrStart{0};
+    uint64_t addrEnd{0};
+    uint64_t size{0};
+};
+
+struct OpLaunchEvent {
+    int clock;
+    int cycleEnd;
+    int opMagic;
     PipeType pipeType;
-    int latency;
-    int clock;
+    CoreLocation coreLocation;
+    std::vector<int> inputMemIds;     // memId snapshot at launch time
+    std::vector<int> outputMemIds;
+    std::vector<DDRRef> ddrRefs;
 };
 
-struct BufferAllocEvent {
-    MemoryType memType;
-    int memId;
-    uint64_t size;
+struct OpRetireEvent {
     int clock;
+    int opMagic;
+    std::vector<int> freedMemIds;     // memIds whose refcount dropped to 0
 };
 
-struct BufferFreeEvent {
-    MemoryType memType;
-    int memId;
-    uint64_t size;
+struct AllocExecEvent {
     int clock;
+    int memId;
+    MemoryType memType;
+    CoreLocation coreLocation;
+    uint64_t addrStart;
+    uint64_t addrEnd;
+    std::vector<LogicalTensorBrief> logicalTensors;
 };
 
 struct SpillEvent {
-    MemoryType memType;
-    int spillMemId;
-    uint64_t spillTensorSize;
-    int64_t triggerTensorSize;
-    int spillTensorMagic;
-    uint64_t allocOccupiedSize;
-    uint64_t spillCopyoutSize;
     int clock;
+    int beginClock;
+    int endClock;
+    int spillMemId;
+    MemoryType memType;
+    CoreLocation coreLocation;
+    uint64_t addrStart;
+    uint64_t addrEnd;
+    int triggerOpMagic;
+    int64_t triggerTensorSize;
+    int spillCopyoutOpMagic;          // -1 = COPY_IN reuse path, no copyout
+    int reloadAllocOpMagic;
+    int reloadCopyInOpMagic;
+    int spillTensorMagic;
+    uint64_t spillCopyoutSize;
+    uint64_t allocOccupiedSize{0};   // buffer held by owners still being alloc ops (not yet consumed)
+    // DDR landing buffer, valid when spillCopyoutOpMagic != -1.
+    int spillDdrMemId{-1};            // >= 0x3f000000
+    DDRBufferKind ddrKind{DDRBufferKind::SPILL_TEMP};
+    MemoryType ddrMemType{MemoryType::MEM_DEVICE_DDR};
+    uint64_t ddrAddrStart{0};
+    uint64_t ddrAddrEnd{0};
+    uint64_t ddrSize{0};
+};
+
+struct BufferRearrangeEvent {
+    using Change = BufferAddrChange;
+    int clock;
+    MemoryType memType;
+    CoreLocation coreLocation;
+    int triggerOpMagic;
+    std::vector<Change> changes;
+};
+
+struct AllocFailEvent {
+    struct OccupiedSlice {
+        int memId;
+        uint64_t addrStart;
+        uint64_t addrEnd;
+        uint64_t size;
+        int ownerOpMagic;
+    };
+    struct FreeInterval {
+        uint64_t start;
+        uint64_t size;
+    };
+    int clock;
+    int triggerOpMagic;
+    MemoryType memType;
+    CoreLocation coreLocation;
+    uint64_t requestSize;
+    uint64_t capacity;
+    std::vector<OccupiedSlice> occupiedSlices;
+    std::vector<FreeInterval> freeIntervals;
 };
 
 struct ScheduleEndEvent {
@@ -71,19 +147,32 @@ struct ScheduleEndEvent {
     bool success;
 };
 
-// ─────────────────────────────────────────────────────────────
-//  Observer interface — all callbacks have empty default bodies
-// ─────────────────────────────────────────────────────────────
+// incast/outcast registration: machine layer owns the buffers, so only magic +
+// shape are surfaced (no OoO address) for IDE placeholders and graph lookup.
+struct InitDDRBufferEvent {
+    int clock;                        // always -1, predates the timeline
+    int memId;
+    DDRBufferKind kind;
+    int magic;
+    DataType dtype;
+    std::vector<std::string> shape;   // dynamic axes carry SymbolicScalar names
+};
 
 class ScheduleObserver {
 public:
     virtual ~ScheduleObserver() = default;
 
-    virtual void OnPipeIssued(const PipeIssuedEvent&) {}
-    virtual void OnBufferAllocated(const BufferAllocEvent&) {}
-    virtual void OnBufferFreed(const BufferFreeEvent&) {}
+    virtual void OnOpLaunch(const OpLaunchEvent&) {}
+    virtual void OnOpRetire(const OpRetireEvent&) {}
+    virtual void OnAllocExec(const AllocExecEvent&) {}
     virtual void OnSpill(const SpillEvent&) {}
+    virtual void OnBufferRearrange(const BufferRearrangeEvent&) {}
+    virtual void OnAllocFail(const AllocFailEvent&) {}
     virtual void OnScheduleEnd(const ScheduleEndEvent&) {}
+    virtual void OnInitDDRBuffer(const InitDDRBufferEvent&) {}
+    // Fired from ScheduleMainLoopBase::PreMainLoop / PostMainLoop.
+    virtual void OnMainLoopBegin() {}
+    virtual void OnMainLoopEnd()   {}
 };
 
 } // namespace npu::tile_fwk

@@ -339,29 +339,37 @@ Status BufferPool::ModifyBufferRange(LocalBufferPtr localBuffer, size_t offset)
     return SUCCESS;
 }
 
-Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& localBufferMap)
+std::pair<Status, std::vector<BufferAddrChange>> BufferPool::CompactBufferSlices(
+    std::unordered_map<int, LocalBufferPtr>& localBufferMap)
 {
+    std::vector<BufferAddrChange> changes;
     if (bufferSlices.empty()) {
-        return SUCCESS;
+        return {SUCCESS, changes};
     }
-    // 收集并按原 size 从大到小排序
+    // 收集并按原 size 从大到小排序；同时记录每个 memId 的旧 offset
     std::vector<std::pair<int, BufferSlice>> items(bufferSlices.begin(), bufferSlices.end());
+    std::unordered_map<int, uint64_t> oldOffsets;
+    for (const auto& it : items) {
+        oldOffsets[it.first] = it.second.offset;
+    }
     std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) { return a.second.size > b.second.size; });
 
     // 紧凑重排
     uint64_t cursor = 0;
     for (auto& it : items) {
         if (cursor + it.second.size > memSize_) {
-            return FAILED;
+            return {FAILED, {}};
         }
         it.second.offset = cursor;
         cursor += it.second.size;
     }
 
-    // 写回
+    // 写回 + 收集 changes（只记录实际移动了的 slice）
     for (const auto& it : items) {
         auto memId = it.first;
         auto newOff = it.second.offset;
+        auto sliceSize = it.second.size;
+        auto oldOff = oldOffsets[memId];
         bufferSlices[memId].offset = newOff;
 
         auto localBufferIt = localBufferMap.find(memId);
@@ -374,11 +382,14 @@ Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& 
                 Elements::Tensor,
                 "CompactBufferSlices: missing LocalBufferPtr for memId=%d, only updated bufferSlices offset", memId);
         }
+        if (oldOff != newOff) {
+            changes.push_back({memId, oldOff, oldOff + sliceSize, newOff, newOff + sliceSize});
+        }
     }
     if (CheckBufferSlicesOverlap()) {
-        return FAILED;
+        return {FAILED, {}};
     }
-    return SUCCESS;
+    return {SUCCESS, changes};
 }
 
 void BufferPool::PrintStatus()

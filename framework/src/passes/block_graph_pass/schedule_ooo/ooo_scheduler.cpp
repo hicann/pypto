@@ -313,7 +313,8 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
 {
     // issue from all pipes
     for (auto coreLocation : CORE_INIT_CONFIGS) {
-        for (auto& [pipeType, pipe] : issueQueues[coreLocation]) {
+        for (auto& pipeEntry : issueQueues[coreLocation]) {
+            auto& pipe = pipeEntry.second;
             if (pipe.Empty() || pipe.busy) {
                 continue;
             }
@@ -324,7 +325,7 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
             pipe.busy = true;
             pipe.curIssue = op;
             pipe.curOpRetireCycle = clock + op->GetLatency();
-            NotifyPipeIssued(pipeType, op->GetLatency());
+            NotifyOpLaunch(op, op->cycleEnd);
             HandleViewOp(op);
             newOperations_.emplace_back(op);
             if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
@@ -358,7 +359,7 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
                 APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", reqMemIds[0]);
                 return FAILED;
             }
-            NotifyBufferAllocated(memType, reqMemIds[0]);
+            NotifyAllocExec(op, reqMemIds[0]);
             tensorOccupyMap[reqMemIds[0]] = op;
             localBufferMap_[reqMemIds[0]]->startCycle = clock;
             if (op->GetOutputOperand(0) == nullptr) {
@@ -401,7 +402,7 @@ Status OoOScheduler::BufferAllocStage(uint64_t& commitCnt)
     return SUCCESS;
 }
 
-Status OoOScheduler::FreeBuffer(Operation* op)
+Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
 {
     auto& reqMemIds = GetOpMemIds(op);
     for (auto memId : reqMemIds) {
@@ -417,7 +418,7 @@ Status OoOScheduler::FreeBuffer(Operation* op)
                 APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor [%d] failed.", memId);
                 return FAILED;
             }
-            NotifyBufferFreed(memType, memId);
+            freedMemIds.push_back(memId);
             localBufferMap_[memId]->retireCycle = clock;
             if (tensorOccupyMap.erase(memId) == 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", memId);
@@ -432,10 +433,12 @@ Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
 {
     commitCnt++;
     opIsRetiredMap[op] = true;
-    if (FreeBuffer(op) != SUCCESS) {
+    std::vector<int> freedMemIds;
+    if (FreeBuffer(op, freedMemIds) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "FreeBufferOp failed. %s", GetFormatBacktrace(*op).c_str());
         return FAILED;
     }
+    NotifyOpRetire(op, freedMemIds);
 
     auto& successors = depManager_.GetSuccessors(op);
     auto& coreLocation = opCoreLocationMap[op];
@@ -538,11 +541,13 @@ Status OoOScheduler::PreMainLoop()
     UpdateIssueExecOrder();
     LaunchReadyIssue();
     numTotalIssues = orderedOps.size();
+    NotifyMainLoopBegin();
     return SUCCESS;
 }
 
 Status OoOScheduler::PostMainLoop()
 {
+    NotifyMainLoopEnd();
     return SUCCESS;
 }
 
@@ -886,15 +891,24 @@ Status OoOScheduler::Schedule(
     const std::unordered_map<Operation*, CoreLocationType>& opCoreMap,
     const std::unordered_set<CoreLocationType> fixCoreConfig)
 {
+    struct EndGuard {
+        OoOScheduler* self;
+        bool success{false};
+        ~EndGuard() { self->NotifyScheduleEnd(success); }
+    } guard{this};
     if (opList.empty()) {
+        guard.success = true;
         return SUCCESS;
     }
+
     PrintOpList(opList);
     if (Init(opList, opCoreMap, fixCoreConfig) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Init failed!");
         return FAILED;
     }
     AllocWorkspaceGM(opList);
+    // Must run after AllocWorkspaceGM and before any OP_LAUNCH (ddrKindMap_ classifies ddrRefs).
+    NotifyInitDDRBuffers();
     // 生成spill指令（顺序模拟阶段）
     if (SeqSchedule() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "GenSpillSchedule failed!");
@@ -921,7 +935,7 @@ Status OoOScheduler::Schedule(
     PrintOpList(newOperations_);
     function_.SetStackWorkespaceSize(workspaceOffset);
     function_.pipeEndTime = pipeEndTime;
-    NotifyScheduleEnd(true);
+    guard.success = true;
     return SUCCESS;
 }
 
@@ -940,7 +954,7 @@ void OoOScheduler::AllocWorkspaceGM(const std::vector<Operation *> &opList) {
             if (allocedRawmagic.count(iOperand->tensor->GetRawMagic()) && rawMagicRange.count(iOperand->tensor->GetRawMagic())) {
                 iOperand->memoryrange = rawMagicRange[iOperand->tensor->GetRawMagic()];
                 iOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, rawMagicOffset[iOperand->tensor->GetRawMagic()]);
-            } else if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && 
+            } else if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
                 !allocedRawmagic.count(iOperand->tensor->GetRawMagic())) {
                 allocedRawmagic.insert(iOperand->tensor->GetRawMagic());
                 iOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, workspaceOffset);
@@ -949,13 +963,14 @@ void OoOScheduler::AllocWorkspaceGM(const std::vector<Operation *> &opList) {
                 rawMagicOffset[iOperand->tensor->GetRawMagic()] = workspaceOffset;
                 workspaceOffset += iOperand->tensor->GetRawDataSize();
                 rawMagicRange[iOperand->tensor->GetRawMagic()] = iOperand->memoryrange;
+                ddrKindMap_[iOperand->memoryrange.memId] = DDRBufferKind::FUNCTION_TEMP;
             }
         }
         for (auto &oOperand : op->GetOOperands()) {
             if (allocedRawmagic.count(oOperand->tensor->GetRawMagic()) && rawMagicRange.count(oOperand->tensor->GetRawMagic())) {
                 oOperand->memoryrange = rawMagicRange[oOperand->tensor->GetRawMagic()];
                 oOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, rawMagicOffset[oOperand->tensor->GetRawMagic()]);
-            } else if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && 
+            } else if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
                 !allocedRawmagic.count(oOperand->tensor->GetRawMagic())) {
                 allocedRawmagic.insert(oOperand->tensor->GetRawMagic());
                 oOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, workspaceOffset);
@@ -964,6 +979,7 @@ void OoOScheduler::AllocWorkspaceGM(const std::vector<Operation *> &opList) {
                 rawMagicOffset[oOperand->tensor->GetRawMagic()] = workspaceOffset;
                 workspaceOffset += oOperand->tensor->GetRawDataSize();
                 rawMagicRange[oOperand->tensor->GetRawMagic()] = oOperand->memoryrange;
+                ddrKindMap_[oOperand->memoryrange.memId] = DDRBufferKind::FUNCTION_TEMP;
             }
         }
     }

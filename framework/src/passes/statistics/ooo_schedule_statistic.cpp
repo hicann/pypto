@@ -27,37 +27,56 @@ constexpr float decimal = 10000.f; // 保留四位小数
 
 // === ScheduleObserver callback implementations ===
 
-void OoOScheduleStatistic::OnPipeIssued(const PipeIssuedEvent& e)
+void OoOScheduleStatistic::OnOpLaunch(const OpLaunchEvent& e)
 {
-    pipeUsageCount[e.pipeType] += e.latency;
+    pipeUsageCount[e.pipeType] += (e.cycleEnd - e.clock);
 }
 
-void OoOScheduleStatistic::OnBufferAllocated(const BufferAllocEvent& e)
+void OoOScheduleStatistic::OnAllocExec(const AllocExecEvent& e)
 {
+    uint64_t size = e.addrEnd - e.addrStart;
+    bufferMeta_[e.memId] = {e.memType, size};
     bufferTotalUsage[e.memType] += bufferLastUsage[e.memType] * (e.clock - lastClock[e.memType]);
-    bufferLastUsage[e.memType] += e.size;
+    bufferLastUsage[e.memType] += size;
     lastClock[e.memType] = e.clock;
     bufferMaxUsage[e.memType] = std::max(bufferMaxUsage[e.memType], bufferLastUsage[e.memType]);
 }
 
-void OoOScheduleStatistic::OnBufferFreed(const BufferFreeEvent& e)
+void OoOScheduleStatistic::OnOpRetire(const OpRetireEvent& e)
 {
-    bufferTotalUsage[e.memType] += bufferLastUsage[e.memType] * (e.clock - lastClock[e.memType]);
-    bufferLastUsage[e.memType] -= e.size;
-    lastClock[e.memType] = e.clock;
+    for (int memId : e.freedMemIds) {
+        auto it = bufferMeta_.find(memId);
+        if (it == bufferMeta_.end()) continue;
+        auto memType = it->second.memType;
+        auto size = it->second.size;
+        bufferTotalUsage[memType] += bufferLastUsage[memType] * (e.clock - lastClock[memType]);
+        bufferLastUsage[memType] -= size;
+        lastClock[memType] = e.clock;
+        bufferMeta_.erase(it);
+    }
 }
 
 void OoOScheduleStatistic::OnSpill(const SpillEvent& e)
 {
+    uint64_t spillTensorSize = e.addrEnd - e.addrStart;
     SpillInfo info;
     info.spillType = e.memType;
     info.bufferCurrUsage = bufferLastUsage[e.memType];
-    info.spillTensorSize = e.spillTensorSize;
+    info.spillTensorSize = spillTensorSize;
     info.triggerTensorSize = e.triggerTensorSize;
     info.allocOccupiedSize = e.allocOccupiedSize;
     info.spillCopyoutSize = e.spillCopyoutSize;
     info.spillTensorMagic = e.spillTensorMagic;
     spillInfoVec.emplace_back(info);
+
+    // No OpRetire follows for spillMemId; account for the free here.
+    auto it = bufferMeta_.find(e.spillMemId);
+    if (it != bufferMeta_.end()) {
+        bufferTotalUsage[e.memType] += bufferLastUsage[e.memType] * (e.clock - lastClock[e.memType]);
+        bufferLastUsage[e.memType] -= it->second.size;
+        lastClock[e.memType] = e.clock;
+        bufferMeta_.erase(it);
+    }
 }
 
 void OoOScheduleStatistic::OnScheduleEnd(const ScheduleEndEvent& e)

@@ -78,11 +78,18 @@ Status OoOSchedule::NonMixSchedule(
     APASS_LOG_INFO_F(Elements::Operation, "=============== START NonMixSchedule ===============");
     OoOScheduler oooSchedule(*program.second);
     OoOScheduleStatistic oooHealthCheck;
+    MemoryTracer oooMemoryTrace;
     if (passDfxconfigs_.healthCheck) {
         oooSchedule.AddObserver(&oooHealthCheck);
     }
+    if constexpr (ENABLE_MEMORY_TRACE) {
+        oooSchedule.AddObserver(&oooMemoryTrace);
+    }
     if (oooSchedule.Schedule(opList) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
+        if constexpr (ENABLE_MEMORY_TRACE) {
+            FlushMemoryTraceOnFailure(oooMemoryTrace, function, program);
+        }
         return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
@@ -92,6 +99,9 @@ Status OoOSchedule::NonMixSchedule(
     maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
     function.SetStackWorkespaceSize(maxWorkeSpaceSize);
     CollectStatistic(oooHealthCheck, function, program);
+    if constexpr (ENABLE_MEMORY_TRACE) {
+        CollectMemoryTrace(oooMemoryTrace, function, program);
+    }
     return SUCCESS;
 }
 
@@ -206,14 +216,24 @@ Status OoOSchedule::MixSchedule(
     }
     OoOScheduler oooSchedule(*program.second);
     OoOScheduleStatistic oooHealthCheck;
+    MemoryTracer oooMemoryTrace;
     if (passDfxconfigs_.healthCheck) {
         oooSchedule.AddObserver(&oooHealthCheck);
     }
+    if constexpr (ENABLE_MEMORY_TRACE) {
+        oooSchedule.AddObserver(&oooMemoryTrace);
+    }
     if (oooSchedule.Schedule(opList, opCoreMap, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Schedule failed.");
+        if constexpr (ENABLE_MEMORY_TRACE) {
+            FlushMemoryTraceOnFailure(oooMemoryTrace, function, program);
+        }
         return FAILED;
     }
     CollectStatistic(oooHealthCheck, function, program);
+    if constexpr (ENABLE_MEMORY_TRACE) {
+        CollectMemoryTrace(oooMemoryTrace, function, program);
+    }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
@@ -393,6 +413,12 @@ Status OoOSchedule::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Run RecordLastUseMemory Failed.");
         return FAILED;
     }
+    if constexpr (ENABLE_MEMORY_TRACE) {
+        for (auto& [programId, tracer] : tracerMap_) {
+            (void)programId;
+            tracer.Flush(GetPassFolder());
+        }
+    }
     APASS_LOG_INFO_F(Elements::Operation, "=============== END 2CoreSplit ===============");
     return SUCCESS;
 }
@@ -414,5 +440,24 @@ Status OoOSchedule::PostCheck(Function& function)
 {
     checker.SetOriFunctions(oriFunctions);
     return checker.DoPostCheck(function);
+}
+
+void OoOSchedule::CollectMemoryTrace(MemoryTracer& tracer,
+    Function& function, std::pair<uint64_t, Function*>& program)
+{
+    tracer.SetOutputPrefix(GetDumpFilePrefix(function, false, program.second, program.first));
+    tracerMap_.emplace(program.first, std::move(tracer));
+}
+
+// PostRun is skipped on FAILED — flush trace inline; mirror dump if dumpGraph is on.
+void OoOSchedule::FlushMemoryTraceOnFailure(MemoryTracer& tracer,
+    Function& function, std::pair<uint64_t, Function*>& program)
+{
+    auto prefix = GetDumpFilePrefix(function, false, program.second, program.first);
+    tracer.SetOutputPrefix(prefix);
+    tracer.Flush(GetPassFolder());
+    if (passDfxconfigs_.dumpGraph) {
+        program.second->DumpJsonFile(GetPassFolder() + "/" + prefix + ".json");
+    }
 }
 } // namespace npu::tile_fwk

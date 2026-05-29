@@ -32,6 +32,7 @@ namespace npu::tile_fwk {
 
 inline int BytesPerElement(DataType dataType) { return BytesOf(dataType); }
 
+// AIV0/AIV1 split: each has its own BufferPool. Observer collapses via ToCoreLocation.
 enum class CoreLocationType { AIC = 0, AIV0 = 1, AIV1 = 2, UNKNOWN = 3 };
 
 const std::unordered_set<Opcode> USE_LESS_OPS = {
@@ -106,6 +107,23 @@ struct SpillContext {
     int deleteNotRetiredOpSize{0};      // 删除 op 中 未被执行的 op 数量
 };
 
+struct SingleSpillCreatedOps {
+    Operation* copyoutOp{nullptr};
+    Operation* allocOp{nullptr};
+    Operation* copyinOp{nullptr};
+    LogicalTensorPtr gmTensor{nullptr};
+
+    void Record(Operation* copyout = nullptr,
+                Operation* alloc = nullptr,
+                Operation* copyin = nullptr,
+                LogicalTensorPtr gm = nullptr) {
+        if (copyout) copyoutOp = copyout;
+        if (alloc)   allocOp   = alloc;
+        if (copyin)  copyinOp  = copyin;
+        if (gm)      gmTensor  = gm;
+    }
+};
+
 class OoOScheduler : public ScheduleBase, public ScheduleMainLoopBase {
 public:
     Status Schedule(
@@ -155,14 +173,26 @@ private:
     std::vector<Operation*> operations_;
     std::vector<ScheduleObserver*> observers_;
     IRBuilder irBuilder_;
+    // memId → DDRBufferKind. Populated by NotifyInitDDRBuffers / AllocWorkspaceGM / CreateGMTensor.
+    std::unordered_map<int, DDRBufferKind> ddrKindMap_;
 
-    // Notification helpers — event construction lives in ooo_scheduler_notify.cpp
-    // to keep scheduler main flows focused on scheduling logic.
-    void NotifyPipeIssued(PipeType pipeType, int latency);
-    void NotifyBufferAllocated(MemoryType memType, int memId);
-    void NotifyBufferFreed(MemoryType memType, int memId);
-    void NotifySpill(LogicalTensorPtr spillTensor, int spillMemId, Operation* spillAllocOp, Operation* spillOp);
+    // Notification helpers — bodies live in ooo_scheduler_notify.cpp.
+    void NotifyOpLaunch(Operation* op, int cycleEnd);
+    void NotifyOpRetire(Operation* op, const std::vector<int>& freedMemIds);
+    void NotifyAllocExec(Operation* op, int memId);
+    void NotifySpill(LogicalTensorPtr spillTensor, int spillMemId, Operation* spillAllocOp,
+        const SingleSpillCreatedOps& created);
+    void NotifyBufferRearrange(Operation* triggerOp, MemoryType memType,
+        std::vector<BufferRearrangeEvent::Change> changes);
+    void NotifyAllocFail(Operation* triggerOp, MemoryType memType, uint64_t requestSize);
     void NotifyScheduleEnd(bool success);
+    void NotifyInitDDRBuffers();
+    void NotifyMainLoopBegin();
+    void NotifyMainLoopEnd();
+
+    static CoreLocation ToCoreLocation(CoreLocationType c);
+
+    std::vector<DDRRef> BuildDDRRefs(Operation* op) const;
 
     // scheduler
     Status Init(
@@ -193,7 +223,7 @@ private:
     Status PostMainLoop() override;
     Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle) override;
     Status RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt);
-    Status FreeBuffer(Operation* op);
+    Status FreeBuffer(Operation* op, std::vector<int>& freedMemIds);
     Status BufferAllocStage(uint64_t& commitCnt) override;
     Status ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memType,
         IssueQueue &pipe);
@@ -218,16 +248,17 @@ private:
     bool CheckMachineAndL1(Operation* spillOp, Operation* allocOp);
 
     Status SpillBuffer(int memId, Operation* spillAllocOp, SpillContext &ctx);
-    Status HandleSpillMode(int memId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillBufferFromDDR(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillGeneralBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillL1BufferFor3510(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillReshapeFromDDRFor3510(int spillMemId, Operation* actualSpillOp, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillReshapeL1BufferFor3510(int memId, Operation* actualSpillOp, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillMultiProducerBuffer(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
-    Status SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx);
+    Status HandleSpillMode(int memId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillBufferFromDDR(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillGeneralBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillL1BufferFor3510(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillReshapeFromDDRFor3510(int spillMemId, Operation* actualSpillOp, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillReshapeL1BufferFor3510(int memId, Operation* actualSpillOp, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    Status SpillMultiProducerBuffer(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
+    void RewireAssembleAllocProducers(LogicalTensorPtr spillTensor);
+    Status SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
     Status CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext &ctx);
     Status CreateParticalBuffer(int spillMemid, Operation* producerOp, LogicalTensorPtr assembleOOperand, Operation* copyoutOp, Operation* spillAllocOp);
     LogicalTensorPtr CreateLocalTensor(LogicalTensorPtr spillTensor);

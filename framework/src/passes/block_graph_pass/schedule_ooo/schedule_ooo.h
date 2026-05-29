@@ -19,6 +19,7 @@
 #include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
 #include "passes/block_graph_pass/schedule_ooo/ooo_scheduler.h"
 #include "passes/statistics/ooo_schedule_statistic.h"
+#include "passes/statistics/memory_tracer.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/block_graph_pass/schedule_ooo/optimize_sort.h"
 #include "passes/block_graph_pass/schedule_ooo/latency_estimator.h"
@@ -72,6 +73,12 @@ private:
         const std::vector<std::pair<int, int>> &cyclePairs, std::vector<Operation*> &opList);
     std::vector<Function*> oriFunctions;
     std::map<uint64_t, OoOScheduleStatistic> statisticMap_;
+    // Per-program tracers, populated on SUCCESS only; failure path flushes inline.
+    std::map<uint64_t, MemoryTracer> tracerMap_;
+    void CollectMemoryTrace(MemoryTracer& tracer,
+        Function& function, std::pair<uint64_t, Function*>& program);
+    void FlushMemoryTraceOnFailure(MemoryTracer& tracer,
+        Function& function, std::pair<uint64_t, Function*>& program);
     std::unordered_map<LogicalTensorPtr, Operation*> lastUseMap_;
     OoOScheduleChecker checker;
 };

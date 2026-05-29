@@ -21,6 +21,15 @@
 #include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
+
+struct BufferAddrChange {
+    int memId;
+    uint64_t oldStart;
+    uint64_t oldEnd;
+    uint64_t newStart;
+    uint64_t newEnd;
+};
+
 struct LocalBuffer {
     int id{0};
     uint64_t retireCycle{0};
@@ -91,7 +100,9 @@ public:
     Status MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice);
     void SelectHeadAndTail(
         LocalBufferPtr tensor, bool& head, bool& tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals);
-    Status CompactBufferSlices(std::unordered_map<int, LocalBufferPtr>& localBufferMap);
+    // Returns the address changes (one per moved memId) for NotifyBufferRearrange.
+    std::pair<Status, std::vector<BufferAddrChange>> CompactBufferSlices(
+        std::unordered_map<int, LocalBufferPtr>& localBufferMap);
 
 private:
     MemoryType memType_{MemoryType::MEM_UNKNOWN};

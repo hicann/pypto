@@ -28,11 +28,12 @@ namespace tile_fwk {
 class OoOScheduleStatistic : public ScheduleObserver {
 public:
     // ScheduleObserver overrides
-    void OnPipeIssued(const PipeIssuedEvent& e) override;
-    void OnBufferAllocated(const BufferAllocEvent& e) override;
-    void OnBufferFreed(const BufferFreeEvent& e) override;
+    void OnOpLaunch(const OpLaunchEvent& e) override;
+    void OnOpRetire(const OpRetireEvent& e) override;
+    void OnAllocExec(const AllocExecEvent& e) override;
     void OnSpill(const SpillEvent& e) override;
     void OnScheduleEnd(const ScheduleEndEvent& e) override;
+    // OnBufferRearrange / OnAllocFail intentionally use inherited no-op defaults.
 
     void SetOutputPrefix(const std::string& prefix) { jsonFileName = prefix; }
 
@@ -84,6 +85,10 @@ public:
     };
     std::vector<SpillInfo> spillInfoVec;               // size为spill的次数
     Json report;
+private:
+    // memId → (memType, size); OnOpRetire/OnSpill only get memIds, look up here.
+    struct BufferMeta { MemoryType memType; uint64_t size; };
+    std::unordered_map<int, BufferMeta> bufferMeta_;
 };
 
 } // namespace tile_fwk
