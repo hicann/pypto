@@ -267,7 +267,8 @@ std::string CodeGenOpNPU::GenPairArgReduce() const
     std::string src0IndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC1_IDX));
     std::string src1ValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC2_IDX));
     std::string src1IndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC3_IDX));
-    std::vector<std::string> tileOpCallParamList = {dstValueTensor, dstIndexTensor, src0ValueTensor, src0IndexTensor, src1ValueTensor, src1IndexTensor};
+    std::vector<std::string> tileOpCallParamList = {dstValueTensor,  dstIndexTensor,  src0ValueTensor,
+                                                    src0IndexTensor, src1ValueTensor, src1IndexTensor};
 
     std::vector<std::string> templateParamList;
     AddBinaryPrecisionTypeParm(templateParamList);
@@ -499,7 +500,6 @@ std::string CodeGenOpNPU::GenBinaryWithBrc() const
     std::vector src1RawShape = rawShape[ID3];
     CODEGEN_LOGI("GenBinaryWithBrc %s, src0RawShape is %s", tileOpName.c_str(), IntVecToStr(src0RawShape).c_str());
 
-    char buffer[256] = "CG_ERROR";
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
     std::string src0DtypeStr = DataType2CCEStr(operandDtype[ID2]);
     std::string src1DtypeStr = DataType2CCEStr(operandDtype[ID3]);
@@ -515,7 +515,7 @@ std::string CodeGenOpNPU::GenBinaryWithBrc() const
         return PrintBinaryBrc({s0Var, s1Var, dVar, tmpVar, src0DtypeStr, src1DtypeStr, dstDtypeStr, tmpDtypeStr});
     }
     ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "GenBinaryWithBrc sprintf_s failed ";
-    return buffer;
+    return CG_ERROR;
 }
 
 std::string CodeGenOpNPU::GenVectorScalarOp() const { return GenVectorScalarOpByMode(VecScalMode::VEC_MODE); }

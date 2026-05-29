@@ -36,6 +36,8 @@ const std::string GET_PARAM_OFFSET_BY_IDX = "GET_PARAM_OFFSET_BY_IDX";
 const std::string GM_PARAM_TYPE_FOR_DYN = "CoreFuncParam";
 const std::string GM_STACK_BASE = "GMStackBase";
 
+const std::string CG_ERROR = "CG_ERROR";
+
 const std::pair<std::string, std::string> DELIMITER_PARENTHESES("(", ")");
 const std::pair<std::string, std::string> DELIMITER_ANGLE_BRACKETS("<", ">");
 const std::string CONN_COMMA = ", ";

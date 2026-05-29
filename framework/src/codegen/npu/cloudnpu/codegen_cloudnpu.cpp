@@ -114,7 +114,7 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
         CodeGenOpCloudNPU cop(
             {symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
         std::string tileOpSourceCode = cop.GenOpCode();
-        ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find("CG_ERROR") == tileOpSourceCode.npos)
+        ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find(CG_ERROR) == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();
 
         allocSourceRegion.append(allocSourceCode);

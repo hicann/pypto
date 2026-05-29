@@ -532,6 +532,8 @@ protected:
         FillParamWithInput(paramList, input, 1, input.size());
     }
 
+    std::string PrintSyncInSingleKernel(bool isWait = false) const;
+
     const std::unordered_map<Opcode, std::function<std::string()>> mteFixPipeOps_;
 
     const std::unordered_map<Opcode, std::function<std::string()>> unaryOps_;

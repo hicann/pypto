@@ -434,13 +434,11 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
 
     AppendLocalBufVarOffsetInOrder(dVar, tmpVar, s0Var);
 
-    char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
     if (opCode == Opcode::OP_TRANSPOSE_VNCHWCONV) {
         return PrintVnchwconv({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
     if (opCode == Opcode::OP_SIGN || opCode == Opcode::OP_SIGNBIT || opCode == Opcode::OP_SINH ||
-
         opCode == Opcode::OP_COSH || opCode == Opcode::OP_TANH || opCode == Opcode::OP_ASIN ||
         opCode == Opcode::OP_ACOS || opCode == Opcode::OP_TAN || opCode == Opcode::OP_ASINH ||
         opCode == Opcode::OP_ACOSH || opCode == Opcode::OP_ATANH || opCode == Opcode::OP_ISFINITE) {
@@ -472,21 +470,9 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
         return PrintCompact({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
-    std::string ostring(buffer);
-    return ostring;
+    return CG_ERROR;
 }
 
-std::string CodeGenOpNPU::GenArgReduceWithValue() const
-{
-    char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
-
-    if (opCode == Opcode::OP_ROWARGMAXWITHVALUE_SINGLE || opCode == Opcode::OP_ROWARGMINWITHVALUE_SINGLE ||
-        opCode == Opcode::OP_ROWARGMAXWITHVALUE_LINE || opCode == Opcode::OP_ROWARGMINWITHVALUE_LINE) {
-        return PrintArgReduceTileTensor();
-    }
-
-    std::string ostring(buffer);
-    return ostring;
-}
+std::string CodeGenOpNPU::GenArgReduceWithValue() const { return PrintArgReduceTileTensor(); }
 
 } // namespace npu::tile_fwk

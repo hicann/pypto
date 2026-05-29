@@ -22,47 +22,33 @@
 namespace npu::tile_fwk {
 std::string CodeGenOpNPU::GenBarrier() const
 {
-    char buffer[256] = "CG_ERROR";
     auto pipeId1 = GetPipeId(syncQueue.pipeId_);
-    int ret = snprintf_s(buffer, sizeof(buffer), sizeof(buffer) - 1, "pipe_barrier(%s);\n", pipeId1.c_str());
-    if (ret < 0) {
-        CODEGEN_LOGI("genBarrier snprintf_s failed %d", ret);
-    }
-    return buffer;
+    std::ostringstream oss;
+    oss << "pipe_barrier(" << pipeId1 << ")" << STMT_END;
+    return oss.str();
 }
 
-std::string CodeGenOpNPU::GenSyncSetOp() const
+std::string CodeGenOpNPU::PrintSyncInSingleKernel(bool isWait) const
 {
-    char buffer[256] = "CG_ERROR";
+    std::string syncOp = isWait ? "wait_flag" : "set_flag";
     auto pipeId1 = GetPipeId(syncQueue.pipeId_);
     auto pipeId2 = GetPipeId(syncQueue.trigPipeId_);
-    int ret = snprintf_s(
-        buffer, sizeof(buffer), sizeof(buffer) - 1, "set_flag(%s, %s, EVENT_ID%d);\n", pipeId1.c_str(), pipeId2.c_str(),
-        syncQueue.eventId_);
-    if (ret < 0) {
-        CODEGEN_LOGI("genSyncSetOp snprintf_s failed %d", ret);
-    }
-    return buffer;
+    std::ostringstream oss;
+    std::vector<std::string> tileOpParams = {pipeId1, pipeId2, "EVENT_ID" + std::to_string(syncQueue.eventId_)};
+    oss << syncOp << WrapParamByParentheses(tileOpParams) << STMT_END;
+    return oss.str();
 }
 
-std::string CodeGenOpNPU::GenSyncWaitOp() const
+std::string CodeGenOpNPU::GenSyncSetOp() const { return PrintSyncInSingleKernel(); }
+
+std::string CodeGenOpNPU::GenSyncWaitOp() const { return PrintSyncInSingleKernel(true); }
+
+void InsertSetSysCnt(std::ostringstream& oss)
 {
-    char buffer[256] = "CG_ERROR";
-    auto pipeId1 = GetPipeId(syncQueue.pipeId_);
-    auto pipeId2 = GetPipeId(syncQueue.trigPipeId_);
-    int ret = snprintf_s(
-        buffer, sizeof(buffer), sizeof(buffer) - 1, "wait_flag(%s, %s, EVENT_ID%d);\n", pipeId1.c_str(),
-        pipeId2.c_str(), syncQueue.eventId_);
-    if (ret < 0) {
-        CODEGEN_LOGI("genSyncWaitOp snprintf_s failed %d", ret);
-    }
-    return buffer;
-}
-
-void InsertSetSysCnt(std::ostringstream& oss){
     oss << "#ifdef OPEN_MIX_PERF\n";
     oss << "{\n";
-    oss << "    __gm__ uint64_t* setEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + taskStat->setEventAddr);\n";
+    oss << "    __gm__ uint64_t* setEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + "
+           "taskStat->setEventAddr);\n";
     oss << "    setEventBase[taskStat->setEventNum++] = get_sys_cnt();\n";
     oss << "}\n";
     oss << "#endif\n";
@@ -77,10 +63,12 @@ std::string CodeGenOpNPU::GenCVSyncSetOp() const
     return oss.str();
 }
 
-void InsertWaitSysCnt(std::ostringstream& oss){
+void InsertWaitSysCnt(std::ostringstream& oss)
+{
     oss << "#ifdef OPEN_MIX_PERF\n";
     oss << "{\n";
-    oss << "    __gm__ uint64_t* waitEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + taskStat->waitEventAddr);\n";
+    oss << "    __gm__ uint64_t* waitEventBase = reinterpret_cast<__gm__ uint64_t*>(taskStat->perfDataBaseAddr + "
+           "taskStat->waitEventAddr);\n";
     oss << "    waitEventBase[taskStat->waitEventNum++] = get_sys_cnt();\n";
     oss << "}\n";
     oss << "#endif\n";

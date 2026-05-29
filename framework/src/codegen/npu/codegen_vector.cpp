@@ -592,7 +592,7 @@ std::string CodeGenOpNPU::GenRangeOp() const
             CODEGEN_LOGE(
                 GenCodeErr::DATA_TYPE_UNSUPPORTED, "RangeOp from PASS occured unsupport DataType: %d",
                 operandDtype[ID0]);
-            return "CG_ERROR";
+            return CG_ERROR;
     }
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
