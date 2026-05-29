@@ -314,6 +314,123 @@ def _syntax_error_finding(ctx: CheckContext, rule_id: str, filename: str) -> Opt
     )
 
 
+PENDING_STUB_MARKER = "PYPTO_PENDING_STUB"
+
+
+def _is_pending_stub(ctx: CheckContext, file_rel: str) -> bool:
+    """True iff the file is marked as a "pending stub" by the designer.
+
+    Convention: a stub created by :mod:`pypto-op-designer` for a not-yet-active
+    phase contains a single comment line near the top:
+
+        # PYPTO_PENDING_STUB: phase=M_k — implementation pending
+
+    When the responsible coder fills the stub during Phase M_k dispatch, they
+    remove this marker (or simply overwrite the file with the real
+    implementation). Lint excludes any file still carrying the marker so:
+
+    - post-edit hook on M1 won't complain about M2/M3 stubs
+    - phase gate at complete_phase(M1) won't complain about M2/M3 stubs
+    - complete_stage(5) won't complain if cleanup ran prematurely (the marker
+      should be gone by then; if it's not, that's a real issue worth surfacing)
+
+    We deliberately scan only the first 512 bytes so massive files don't pay a
+    parse cost just for this check.
+    """
+    full = os.path.join(ctx.op_dir, file_rel)
+    try:
+        with open(full, "r", encoding="utf-8") as f:
+            head = f.read(512)
+    except (OSError, UnicodeDecodeError):
+        return False
+    return PENDING_STUB_MARKER in head
+
+
+def _phase_to_module_suffix(phase: str) -> str:
+    """``Mk`` → ``"1...k"`` (累积模块文件后缀)。
+
+    例:
+        ``M1`` → ``"1"``                (modules/<op>_module1_impl.py)
+        ``M2`` → ``"12"``               (modules/<op>_module12_impl.py)
+        ``M3`` → ``"123"``              (modules/<op>_module123_impl.py)
+        ``M10`` → ``"12345678910"``    (单纯连接, 不分隔)
+
+    ``ValueError`` 当 phase 不是 ``M`` 加正整数时抛出。
+    """
+    if not phase.startswith("M"):
+        raise ValueError(f"unexpected phase format: {phase!r} (expected 'M<int>')")
+    try:
+        n = int(phase[1:])
+    except ValueError as e:
+        raise ValueError(f"unexpected phase format: {phase!r}") from e
+    if n < 1:
+        raise ValueError(f"phase index must be >= 1, got {phase!r}")
+    return "".join(str(i) for i in range(1, n + 1))
+
+
+def _impl_files_to_scan(ctx: CheckContext) -> list[str]:
+    """返回当前算子所有 impl 文件的相对路径列表（用于 module-level lint 覆盖）。
+
+    模式 A — file-scoped (``ctx.file_scope`` 非 None)：
+        仅返回 ``ctx.file_scope`` 指定的单一文件。post-edit hook 在
+        Coder Write/Edit 单文件后调用, 此时只想对刚写入的文件运行 lint,
+        不应让其他 module 的 stub 文件触发误判 (例如 ``modules/<op>_module12_impl.py``
+        的空 stub 会让 OL01/OL07 等 FAIL, 即使本次只写了 module1)。
+        跨模块的整合性检查留给 phase / stage 网关。
+        优先级最高: 与 phase_scope 同时设置时, file_scope 胜出。
+
+    模式 B — phase-scoped (``ctx.phase_scope`` 非 None, ``file_scope`` 为 None)：
+        仅返回 ``modules/<op>_module<suffix>_impl.py``,
+        其中 ``suffix`` 由 :func:`_phase_to_module_suffix` 解析自
+        ``ctx.phase_scope`` (如 ``M1``→``"1"``)。
+        顶层 ``<op>_impl.py`` 与其他 phase 的 module impl 都排除在外。
+        该模式由 ``--check-phase-gate`` 触发, 让 orchestrator 在
+        ``complete_phase(M_k)`` 边界只验证当前 phase 的产出, 不要求
+        Stage 5 cleanup 才会产生的整合 impl 已就绪。
+
+    模式 C — 默认 (两个 scope 都为 None)：
+        - 顶层集成 impl: ``<op>_impl.py``（如果存在）
+        - 分阶段模块 impl: ``modules/<op>_module<k>_impl.py``（按文件名排序）
+
+        Stage 1-4 阶段尚未生成任何 impl 时返回空列表。
+        这是 D1/D3/D5 lint 规则的共享 helper, 使每条规则都能在模块开发
+        阶段 (Stage 5 Phase M_k) 即时发现违规, 而不是等到 Stage 6
+        集成时才暴露。
+    """
+    op = ctx.op_name
+    # ── 模式 A: file-scoped (post-edit) ──
+    if ctx.file_scope:
+        if not ctx.file_exists(ctx.file_scope):
+            return []
+        if _is_pending_stub(ctx, ctx.file_scope):
+            return []
+        return [ctx.file_scope]
+    # ── 模式 B: phase-scoped (complete_phase gate) ──
+    if ctx.phase_scope:
+        suffix = _phase_to_module_suffix(ctx.phase_scope)
+        path = f"modules/{op}_module{suffix}_impl.py"
+        if not ctx.file_exists(path):
+            return []
+        if _is_pending_stub(ctx, path):
+            # 当前 phase 的自身文件仍是 pending stub = phase 尚未开始。
+            # 返回空列表, 让 D1 impl 规则 SKIP。
+            return []
+        return [path]
+    # ── 模式 C: 默认 (complete_stage gate, --lint-impl 等) ──
+    paths: list[str] = []
+    if ctx.file_exists(f"{op}_impl.py") and not _is_pending_stub(ctx, f"{op}_impl.py"):
+        paths.append(f"{op}_impl.py")
+    modules_dir = ctx.file_path("modules")
+    if os.path.isdir(modules_dir):
+        for entry in sorted(os.listdir(modules_dir)):
+            if entry.startswith(f"{op}_module") and entry.endswith("_impl.py"):
+                rel = f"modules/{entry}"
+                if _is_pending_stub(ctx, rel):
+                    continue
+                paths.append(rel)
+    return paths
+
+
 def _extract_design_identifiers(content: str) -> set[str]:
     # 仅从“代码相关上下文”提取变量名，减少自然语言文本噪声：
     # 1) markdown fenced code block

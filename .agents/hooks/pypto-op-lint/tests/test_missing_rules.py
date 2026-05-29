@@ -37,6 +37,31 @@ def demo_wrapper(x, y):
     assert finding.status == "WARN"
 
 
+def test_ol28_warn_on_module_file_with_sigmoid_and_fp16(tmp_path: Path):
+    """模块开发阶段（Stage 5 Phase M_k）即捕获 FP32-only API 与 dtype 不一致。"""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    integrated = op_dir / "demo_impl.py"
+    if integrated.exists():
+        integrated.unlink()
+    module_impl = """\
+import pypto
+@pypto.frontend.jit
+def demo_module1_kernel(x: pypto.Tensor([1024], pypto.DT_FP16),
+                        y: pypto.Tensor([1024], pypto.DT_FP16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    tmp = pypto.sigmoid(x)
+    y[:] = tmp
+
+def demo_module1_wrapper(x, y):
+    return None
+"""
+    write_file(op_dir / "modules" / "demo_module1_impl.py", module_impl)
+    finding = run_rule(mod, op_dir, "OL28", stage=5)
+    assert finding.status == "WARN"
+    assert "modules/demo_module1_impl.py" in finding.message
+
+
 # ─── OL29: Tensor 注解应包含 DYNAMIC 维度 ───
 
 def test_ol29_pass_with_dynamic(tmp_path: Path):
@@ -64,6 +89,30 @@ def demo_wrapper(x, y):
     write_file(op_dir / "demo_impl.py", impl)
     finding = run_rule(mod, op_dir, "OL29")
     assert finding.status == "WARN"
+
+
+def test_ol29_warn_on_module_file_with_all_static_dims(tmp_path: Path):
+    """模块开发阶段（Stage 5 Phase M_k）即捕获 impl 注解全部为常量维度的违规。"""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    integrated = op_dir / "demo_impl.py"
+    if integrated.exists():
+        integrated.unlink()
+    module_impl = """\
+import pypto
+@pypto.frontend.jit
+def demo_module1_kernel(x: pypto.Tensor([1024, 512], pypto.DT_FP32),
+                        y: pypto.Tensor([1024, 512], pypto.DT_FP32)):
+    pypto.set_vec_tile_shapes(32, 128)
+    y[:] = x
+
+def demo_module1_wrapper(x, y):
+    demo_module1_kernel(x, y)
+"""
+    write_file(op_dir / "modules" / "demo_module1_impl.py", module_impl)
+    finding = run_rule(mod, op_dir, "OL29")
+    assert finding.status == "WARN"
+    assert "modules/demo_module1_impl.py" in finding.message
 
 
 # ── OL37: design 与 impl 命名一致性 ──
@@ -110,3 +159,27 @@ verify
     write_file(op_dir / "DESIGN.md", design)
     finding = run_rule(mod, op_dir, "OL43", stage=5)
     assert finding.status in ("SKIP", "PASS")
+
+
+def test_ol43_fail_on_module_file_without_loop_when_dynamic_axes_declared(tmp_path: Path):
+    """DESIGN 声明动态轴 → 每个 module impl 都必须含 pypto.loop。"""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    integrated = op_dir / "demo_impl.py"
+    if integrated.exists():
+        integrated.unlink()
+    # module impl 无 pypto.loop（DESIGN 仍声明动态轴）
+    module_impl = """import pypto
+@pypto.frontend.jit
+def demo_module1_kernel(x: pypto.Tensor([pypto.DYNAMIC], pypto.DT_FP32),
+                        y: pypto.Tensor([pypto.DYNAMIC], pypto.DT_FP32)):
+    pypto.set_vec_tile_shapes(32, 128)
+    y[:] = x
+
+def demo_module1_wrapper(x, y):
+    return None
+"""
+    write_file(op_dir / "modules" / "demo_module1_impl.py", module_impl)
+    finding = run_rule(mod, op_dir, "OL43", stage=5)
+    assert finding.status == "FAIL"
+    assert "modules/demo_module1_impl.py" in finding.message

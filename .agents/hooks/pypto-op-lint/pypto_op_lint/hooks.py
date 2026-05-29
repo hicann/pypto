@@ -27,7 +27,10 @@ from .infer import (
     _load_hook_input,
     _rule_ids_for_filename,
 )
-from .observability import _emit_gate_event, _output_hook_json
+from .observability import (
+    _emit_gate_event,
+    _output_hook_json,
+)
 
 
 def hook_post_edit() -> int:
@@ -51,14 +54,17 @@ def hook_post_edit() -> int:
             return 0
     ctx = _build_context(op_dir, stage)
 
-    # ── SPEC.md 冻结：Stage 2 完成后禁止修改 ──
-    if basename == SPEC_FILE and ctx.stage is not None and ctx.stage >= 3:
+    # ── SPEC.md 冻结：Stage 1（需求规划）完成后锁定。──
+    # 在 Stage 1-7 模型中，SPEC.md 在 Stage 1 产出后便不可修改。
+    # 如需合法修订规格，应由 orchestrator 调用
+    #   state_transition(action=rollback_to_stage, target_stage=1, reason=...)
+    if basename == SPEC_FILE and ctx.stage is not None and ctx.stage >= 2:
         _output_hook_json(
             "PostToolUse",
             decision="block",
             reason=(
-                f"[pypto-op-lint] {SPEC_FILE} 在 Stage 2 完成后已冻结，不允许修改。"
-                "如需变更需求规格，应通过 state_transition 回退到 Stage 2 重新审核。"
+                f"[pypto-op-lint] {SPEC_FILE} 在 Stage 1 完成后已冻结。"
+                "如需修订规格，请通过 state_transition 回退到 target_stage=1。"
             ),
         )
         return 0
@@ -66,6 +72,16 @@ def hook_post_edit() -> int:
     rule_ids = _rule_ids_for_filename(basename)
     if not rule_ids:
         return 0
+
+    # ── post-edit 是「单文件触发」事件: 只对刚写入的文件运行 lint。
+    # 跨文件 / 跨模块的一致性检查留给 phase / stage 网关。
+    # 这样避免 modules/<op>_module*_impl.py 中其他模块的 stub 在 Coder
+    # 正在编辑某一个 module 时被误判 FAIL (空 stub 会触发 OL01/OL07 等)。
+    if basename.endswith("_impl.py"):
+        try:
+            ctx.file_scope = os.path.relpath(os.path.abspath(file_path), op_dir)
+        except ValueError:
+            ctx.file_scope = basename
 
     findings = _run_checks(ctx, rule_ids)
     fails = [f for f in findings if f.status == "FAIL"]
@@ -77,34 +93,48 @@ def hook_post_edit() -> int:
 
     sections = []
     if fails:
-        lines = [f"  [{f.rule_id}][{f.severity}] {f.message}" for f in fails]
+        lines = [_format_finding(f) for f in fails]
         sections.append(
             "[pypto-op-lint] 以下规则违规，请立即修正后重新写入文件：\n"
             + "\n".join(lines)
             + "\n\n参考 .agents/skills/pypto-op-develop/references/execution-constraints.md"
         )
     if warns:
-        lines = [f"  [{f.rule_id}][{f.severity}] {f.message}" for f in warns]
+        lines = [_format_finding(f) for f in warns]
         sections.append(
             "[pypto-op-lint] 以下提醒建议确认：\n"
             + "\n".join(lines)
             + "\n\n请确认以上提醒项是否需要处理。"
         )
     if infos:
-        lines = [f"  [{f.rule_id}][{f.severity}] {f.message}" for f in infos]
+        lines = [_format_finding(f) for f in infos]
         sections.append(
-            "[pypto-op-lint] 以下信息提示（不影响门禁）：\n"
-            + "\n".join(lines)
+            "[pypto-op-lint] 以下信息提示（不影响门禁）：\n" + "\n".join(lines)
         )
     context_msg = "\n\n".join(sections)
 
     strict_block = os.environ.get(POST_EDIT_BLOCK_ENV, "1") == "1"
     if strict_block and error_fails:
-        lines = [f"  [{f.rule_id}][{f.severity}] {f.message}" for f in error_fails]
+        lines = [_format_finding(f) for f in error_fails]
+        hint_lines = [f"  - {f.rule_id}: {_rule_fix_hint(f.rule_id)}" for f in error_fails]
+        blocking_rules = sorted({f.rule_id for f in error_fails})
+        # In-band block: the violation details ride back to the caller in the
+        # PostToolUse `decision: block` payload, so the Coder LLM sees them in
+        # the tool result and can retry the same file. No sidecar persistence
+        # needed — if Coder gives up, the next phase/stage gate catches it.
+        footer_normal = (
+            "\n\n**⛔ 修正流程：阅读上方 fix_hints → 修复 file:line 指出的违规 → "
+            "对【同一文件】重新执行 Write/Edit。不可使用 bash 绕过 lint，"
+            "不可移动文件到其他路径。**"
+        )
         reason = (
             "[pypto-op-lint] 产物写入后即时门禁未通过（S0/S1）：\n"
             + "\n".join(lines)
-            + "\n\n请先修复后再继续。"
+            + "\n\nblocking_rules: "
+            + ", ".join(blocking_rules)
+            + "\nfix_hints:\n"
+            + "\n".join(hint_lines)
+            + footer_normal
         )
         _output_hook_json(
             "PostToolUse",
@@ -115,7 +145,9 @@ def hook_post_edit() -> int:
         # 不返回非零，避免插件侧拿不到结构化结果；实际阻断由插件根据 decision 实施。
         return 0
 
-    _output_hook_json("PostToolUse", decision="allow", reason="", additionalContext=context_msg)
+    _output_hook_json(
+        "PostToolUse", decision="allow", reason="", additionalContext=context_msg
+    )
     return 0
 
 
@@ -127,20 +159,9 @@ def hook_post_bash() -> int:
     if not TEST_COMMAND_PATTERN.search(command):
         return 0
 
-    tr = data.get("tool_response") or data.get("tool_result")
-    if tr is None:
-        _output_hook_json(
-            "PostToolUse",
-            additionalContext=(
-                "[pypto-op-lint] 无法解析工具返回结果：payload 中未找到 "
-                "tool_response 或 tool_result 字段。"
-                "请检查 Claude Code / OpenCode 版本是否兼容。"
-            ),
-        )
-        return 0
-    stdout = tr.get("stdout", "")
-    stderr = tr.get("stderr", "")
-    exit_code = tr.get("exit_code") if "exit_code" in tr else tr.get("exitCode", 0)
+    stdout = data.get("tool_result", {}).get("stdout", "")
+    stderr = data.get("tool_result", {}).get("stderr", "")
+    exit_code = data.get("tool_result", {}).get("exit_code", 0)
 
     verdict = _parse_verdict(stdout, stderr, exit_code)
     detail = _verdict_detail(verdict)
@@ -153,7 +174,7 @@ def hook_post_bash() -> int:
 
 
 def hook_pre_edit_backup() -> int:
-    """PreToolUse[Write|Edit] — 状态文件保护 + Stage 6 编辑 impl 前 git auto-commit"""
+    """PreToolUse[Write|Edit] — 状态文件保护 + Stage 5 cleanup 编辑 impl 前 git auto-commit"""
     data = _load_hook_input()
     file_path = data.get("tool_input", {}).get("file_path", "")
 
@@ -163,7 +184,7 @@ def hook_pre_edit_backup() -> int:
             "PreToolUse",
             decision="block",
             reason="禁止直接修改 .orchestrator_state.json，"
-                   "请通过 state_transition 工具操作阶段状态。",
+            "请通过 state_transition 工具操作阶段状态。",
         )
         return 0
 
@@ -180,13 +201,21 @@ def hook_pre_edit_backup() -> int:
         _ensure_git_init(op_dir)
         subprocess.run(
             [_git_executable(), "add", impl_file],
-            cwd=op_dir, check=True, capture_output=True,
+            cwd=op_dir,
+            check=True,
+            capture_output=True,
         )
-        attempt = _get_stage6_attempt(op_dir)
+        attempt = _get_stage5_cleanup_attempt(op_dir)
         subprocess.run(
-            [_git_executable(), "commit", "-m",
-             f"backup: {impl_file} before stage6 attempt {attempt}"],
-            cwd=op_dir, check=True, capture_output=True,
+            [
+                _git_executable(),
+                "commit",
+                "-m",
+                f"backup: {impl_file} before stage6 attempt {attempt}",
+            ],
+            cwd=op_dir,
+            check=True,
+            capture_output=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass  # git commit 失败（可能无变更），不拦截
@@ -210,21 +239,30 @@ def _ensure_git_init(op_dir: str):
 
     git_dir = current if os.path.basename(current) == OP_WORKSPACE_DIR else op_dir
     if not os.path.isdir(os.path.join(git_dir, ".git")):
-        subprocess.run([_git_executable(), "init"], cwd=git_dir,
-                       check=True, capture_output=True)
-        subprocess.run([_git_executable(), "add", "."], cwd=git_dir,
-                       check=True, capture_output=True)
-        subprocess.run([_git_executable(), "commit", "-m", "init: operator workspace"],
-                       cwd=git_dir, check=True, capture_output=True)
+        subprocess.run(
+            [_git_executable(), "init"], cwd=git_dir, check=True, capture_output=True
+        )
+        subprocess.run(
+            [_git_executable(), "add", "."],
+            cwd=git_dir,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [_git_executable(), "commit", "-m", "init: operator workspace"],
+            cwd=git_dir,
+            check=True,
+            capture_output=True,
+        )
 
 
-def _get_stage6_attempt(op_dir: str) -> int:
-    """从 .orchestrator_state.json 获取 Stage 6 重试次数"""
+def _get_stage5_cleanup_attempt(op_dir: str) -> int:
+    """从 .orchestrator_state.json 获取 Stage 5 重试次数（cleanup 使用）"""
     state_path = os.path.join(op_dir, ".orchestrator_state.json")
     try:
         with open(state_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return int(data.get("stage_retry_count", {}).get("6", 0)) + 1
+        return int(data.get("stage_retry_count", {}).get("5", 0)) + 1
     except (ValueError, FileNotFoundError):
         return 1
 
@@ -254,25 +292,76 @@ def hook_stop() -> int:
 
     if error_fails:
         blocking_rules = [f.rule_id for f in error_fails]
-        lines = [f"  [{f.rule_id}][{f.severity}] {f.message}" for f in error_fails]
+        lines = [_format_finding(f) for f in error_fails]
         hint_lines = [f"  - {f.rule_id}: {_rule_fix_hint(f.rule_id)}" for f in error_fails]
         _emit_gate_event(ctx, blocked=True, blocking_rules=blocking_rules)
-        _output_hook_json("Stop",
+        _output_hook_json(
+            "Stop",
             decision="block",
             reason="[pypto-op-lint] 交付门禁未通过，存在 ERROR（S0/S1）级违规：\n"
-                   + "\n".join(lines)
-                   + "\n\nblocking_rules: " + ", ".join(blocking_rules)
-                   + "\nfix_hints:\n" + "\n".join(hint_lines)
-                   + "\n\ndocs_ref: .agents/hooks/pypto-op-lint/rules.json"
-                   + "\n\n**⛔ 门禁已阻断：请先修复上述 ERROR 级违规，再继续后续操作。"
-                     "修复后重新运行即可。**")
+            + "\n".join(lines)
+            + "\n\nblocking_rules: "
+            + ", ".join(blocking_rules)
+            + "\nfix_hints:\n"
+            + "\n".join(hint_lines)
+            + "\n\ndocs_ref: .agents/hooks/pypto-op-lint/rules.json"
+            + "\n\n**⛔ 门禁已阻断：请先修复上述 ERROR 级违规，再继续后续操作。"
+            "修复后重新运行即可。**",
+        )
         return 2
     _emit_gate_event(ctx, blocked=False, blocking_rules=[])
     return 0
 
 
+def _format_finding(finding) -> str:
+    """统一格式化单条 finding 输出：``  [OLxx][Sx] file:line message``。
+
+    ``finding.file`` / ``finding.line`` 为可选字段；缺失时退化为
+    ``  [OLxx][Sx] message``。
+    """
+    loc = ""
+    f_path = getattr(finding, "file", None)
+    f_line = getattr(finding, "line", None)
+    if f_path:
+        loc = f" {f_path}"
+        if f_line:
+            loc += f":{f_line}"
+    return f"  [{finding.rule_id}][{finding.severity}]{loc} {finding.message}"
+
+
 def _rule_fix_hint(rule_id: str) -> str:
     hints = {
+        # D1 框架约束（impl 文件最常触发）
+        "OL01": (
+            "kernel 装饰器必须字面写成 @pypto.frontend.jit（或带参数 @pypto.frontend.jit(...)），"
+            "每个 impl 文件须有且仅有 1 个（Layer J）；任何别名形式均被拒绝——包括 "
+            "@pt.frontend.jit、@F.jit、@frontend.jit、@jit 等。"
+            "import 必须用 `import pypto`，不要用 as 子句或 from-import"
+        ),
+        "OL02": "输出写回须用 y[:] = expr / pypto.move() / pypto.assemble()，不可写成 y = expr",
+        "OL03": "kernel 内禁止使用 Python 原生 for/while 控制流，请改用 pypto.loop()",
+        "OL04": (
+            "JIT 入口及其同文件可达的 Layer I/H helper 内必须调用 "
+            "pypto.set_vec_tile_shapes 或 pypto.set_cube_tile_shapes；"
+            "允许 thin @pypto.frontend.jit 只委托 helper"
+        ),
+        "OL05": "kernel 的张量参数必须带 pypto.Tensor([...], pypto.DT_xxx) 类型注解",
+        "OL06": "kernel 内禁用 Python 原生 min()/max()，请改用 pypto.minimum/maximum",
+        "OL07": (
+            "impl 文件顶层只能使用正规 `import pypto`；"
+            "禁止 `import pypto as ...`、`import pypto.frontend as ...` "
+            "和 `from pypto... import ...`"
+        ),
+        "OL08": "kernel 内不可调用 print/logging 等宿主侧函数",
+        "OL25": "pypto.Tensor() 不可为空参数，须填写 shape 与 dtype，如 pypto.Tensor([N, M], pypto.DT_FP32)",
+        "OL26": "kernel 参数必须张量在前、标量在后",
+        "OL28": "使用 sigmoid/softmax/sin/cos 等仅支持 FP32 的 API 时，输入 dtype 必须是 FP32",
+        "OL29": "Tensor 注解至少含一维 pypto.DYNAMIC，避免全静态导致泛化能力下降",
+        # D3 三文件分离
+        "OL16": "impl 文件禁止 import golden 模块；如需对照，请在 test 文件中导入",
+        "OL17": "test 文件中禁止定义 @pypto.frontend.jit 函数",
+        "OL18": "test 文件须同时 import impl wrapper 与 golden 函数",
+        # D5 一致性
         "OL30": "在 SPEC.md front matter 中填写 supported_dtypes，并在 test 中覆盖对应 dtype",
         "OL31": "在 DESIGN.md front matter 设置 dynamic_axes，并在 impl Tensor 注解使用 pypto.DYNAMIC",
         "OL32": "在 SPEC.md front matter 的 tolerance 中填写 atol/rtol，并校准 test 断言阈值",
@@ -280,6 +369,13 @@ def _rule_fix_hint(rule_id: str) -> str:
         "OL39": "为 SPEC.md/DESIGN.md/API_REPORT.md 添加 front matter 块（--- 包裹）",
         "OL40": "补齐 front matter 必填字段并修正字段类型（list/dict）",
         "OL41": "删除代码文件中的 lint 门禁输出文本，确保仅保留可执行源码/文档内容",
+        "OL43": "DESIGN.md 声明 dynamic_axes 时，所有 impl 文件的 kernel 内必须存在 pypto.loop()",
+        "OL50": (
+            "生产 wrapper 的显式参数必须严格等于 module_interfaces.yaml 的 "
+            "primary_inputs 顺序；调试扩展走 **kwargs 或 _debug/ 产物，"
+            "不进入生产 ABI"
+        ),
+        "OL51": "每个 YAML 输出至少要有一个真实写回点：pypto.assemble(..., out)、out.move(...) 或 out[:] = ...；不要只重新绑定局部变量",
     }
     return hints.get(rule_id, "参考 rules.json 中该规则说明修复")
 

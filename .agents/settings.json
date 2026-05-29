@@ -1,107 +1,113 @@
 {
     "permissions": {
-      "allow": [
-        "Skill(pypto-op-workflow)",
-        "Skill(pypto-op-perf-tune)",
-        "Skill(pypto-skill-reviewer)",
-        "Skill(pypto-intent-understand)",
-        "Skill(pypto-api-explore)",
-        "Skill(pypto-golden-generate)",
-        "Skill(pypto-op-design)",
-        "Skill(pypto-op-develop)",
-        "Skill(pypto-precision-debug)",
-        "Skill(pypto-precision-compare)",
-        "Skill(pypto-aicore-error-locator)",
-        "Skill(pypto-environment-setup)",
-        "Skill(gitcode-mcp-install)",
-        "Skill(pypto-pr-creator)",
-        "Skill(pypto-pr-fixer)",
-        "Skill(pypto-issue-creator)",
-        "Skill(pypto-fracture-point-detector)",
-        "Skill(pypto-pass-error-locator)",
-        "Skill(pypto-pass-module-analyzer)",
-        "Skill(pypto-pass-perf-optimizer)",
-        "Skill(pypto-pass-ut-generate)",
-        "Skill(pypto-pass-workflow-analyzer)",
-        "Task(subagent_type=Explore)",
-        "Task(subagent_type=Plan)",
-        "WebSearch",
-        "WebFetch(domain:support.huawei.com)",
-        "WebFetch(domain:www.huawei.com)",
-        "WebFetch(domain:github.com)",
-        "WebFetch(domain:www.hiascend.com)",
-        "WebFetch(domain:gitee.com)",
-        "WebFetch(domain:gitcode.com)",
-        "Edit",
-        "Write",
-        "Read",
-        "Glob",
-        "Grep",
-        "LSP",
-        "NotebookEdit",
-        "MultiEdit",
-        "AskUserQuestion",
-        "TodoWrite",
-        "EnterPlanMode",
-        "ExitPlanMode",
-        "Bash",
-        "KillShell",
-        "TaskOutput"
-      ],
-      "deny": [],
-      "ask": []
+        "allow": [
+            "Skill(pypto-op-perf-tune)",
+            "Skill(pypto-skill-reviewer)",
+            "Skill(pypto-intent-understand)",
+            "Skill(pypto-api-explore)",
+            "Skill(pypto-golden-generate)",
+            "Skill(pypto-op-plan)",
+            "Skill(pypto-op-construct)",
+            "Skill(pypto-op-verify)",
+            "Skill(pypto-op-review)",
+            "Skill(pypto-orchestration-manual)",
+            "Skill(pypto-memory-template)",
+            "Skill(pypto-general-debug)",
+            "Skill(pypto-op-design)",
+            "Skill(pypto-op-develop)",
+            "Skill(pypto-precision-debug)",
+            "Skill(pypto-precision-compare)",
+            "Skill(pypto-aicore-error-locator)",
+            "Skill(pypto-environment-setup)",
+            "Skill(gitcode-mcp-install)",
+            "Skill(pypto-pr-creator)",
+            "Skill(pypto-pr-fixer)",
+            "Skill(pypto-issue-creator)",
+            "Skill(pypto-fracture-point-detector)",
+            "Skill(pypto-pass-error-locator)",
+            "Skill(pypto-pass-module-analyzer)",
+            "Skill(pypto-pass-perf-optimizer)",
+            "Skill(pypto-pass-ut-generate)",
+            "Skill(pypto-pass-workflow-analyzer)",
+            "Task(subagent_type=Explore)",
+            "Task(subagent_type=Plan)",
+            "WebSearch",
+            "WebFetch(domain:support.huawei.com)",
+            "WebFetch(domain:www.huawei.com)",
+            "WebFetch(domain:github.com)",
+            "WebFetch(domain:www.hiascend.com)",
+            "WebFetch(domain:gitee.com)",
+            "WebFetch(domain:gitcode.com)",
+            "Edit",
+            "Write",
+            "Read",
+            "Glob",
+            "Grep",
+            "LSP",
+            "NotebookEdit",
+            "MultiEdit",
+            "AskUserQuestion",
+            "TodoWrite",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "Bash",
+            "KillShell",
+            "TaskOutput"
+        ],
+        "deny": [],
+        "ask": []
     },
     "hooks": {
-      "PostToolUse": [
-        {
-          "matcher": "Write|Edit|MultiEdit",
-          "hooks": [
+        "PostToolUse": [
             {
-              "type": "command",
-              "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook post-edit",
-              "timeout": 20
-            }
-          ]
-        },
-        {
-          "matcher": "Bash",
-          "hooks": [
+                "matcher": "Write|Edit|MultiEdit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook post-edit",
+                        "timeout": 20
+                    }
+                ]
+            },
             {
-              "type": "command",
-              "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook post-bash",
-              "timeout": 10
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook post-bash",
+                        "timeout": 10
+                    }
+                ]
             }
-          ]
-        }
-      ],
-      "PreToolUse": [
-        {
-          "matcher": "Write|Edit|MultiEdit",
-          "hooks": [
+        ],
+        "PreToolUse": [
             {
-              "type": "command",
-              "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook pre-edit-backup",
-              "timeout": 15
+                "matcher": "Write|Edit|MultiEdit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook pre-edit-backup",
+                        "timeout": 15
+                    }
+                ]
             }
-          ]
-        }
-      ],
-      "Stop": [
-        {
-          "matcher": "",
-          "hooks": [
+        ],
+        "Stop": [
             {
-              "type": "command",
-              "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook stop",
-              "timeout": 30
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.agents/hooks/pypto-op-lint/pypto_op_lint.py --hook stop",
+                        "timeout": 30
+                    }
+                ]
             }
-          ]
-        }
-      ]
+        ]
     },
     "sandbox": {
-      "enabled": false,
-      "autoAllowBashIfSandboxed": false
+        "enabled": false,
+        "autoAllowBashIfSandboxed": false
     },
     "enabledPlugins": {}
-  }
+}

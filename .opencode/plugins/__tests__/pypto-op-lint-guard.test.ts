@@ -83,6 +83,108 @@ test("allows readonly bash commands mentioning state file", async () => {
   }
 });
 
+// ── bash bypass of post-edit hook on operator artifact files ──
+
+test("blocks bash heredoc/redirect writing to *_impl.py", async () => {
+  const plugin = await PyptoOpLintPlugin({
+    $, client: { app: { log: async () => {} } },
+    directory: process.cwd(), worktree: process.cwd(), project: {},
+  } as never);
+  const before = plugin["tool.execute.before"];
+
+  const blockedWrites = [
+    "cat > custom/foo/foo_impl.py <<EOF\nimport pypto\nEOF",
+    "echo 'x' > foo_impl.py",
+    "printf 'x' >> custom/foo/modules/foo_module1_impl.py",
+    "tee custom/foo/foo_impl.py < src.py",
+    "cp /tmp/draft.py custom/foo/foo_impl.py",
+    "mv tmp.py foo_module12_impl.py",
+    "rm foo_impl.py",
+    "sed -i 's/old/new/' foo_impl.py",
+    "cat > test_foo.py <<EOF\nEOF",
+    "echo x > custom/foo/foo_golden.py",
+    // python -c with explicit write indicators
+    "python3 -c \"open('foo_impl.py','w').write(SRC)\"",
+    "python3 -c \"with open('foo_golden.py','w') as f: f.write('x')\"",
+    "python3 -c \"from pathlib import Path; Path('foo_impl.py').write_text(x)\"",
+    "python3 -c \"open('foo_impl.py','a').write('x')\"",                // append
+    "python3 -c \"open('foo_impl.py','wb').write(b'x')\"",              // wb
+    "python3 -c \"import shutil; shutil.copy('src', 'foo_impl.py')\"",
+    "python3 -c \"import os; os.remove('foo_impl.py')\"",
+  ];
+
+  for (const cmd of blockedWrites) {
+    await expect(
+      before?.(
+        { tool: "bash" } as never,
+        { args: { command: cmd } } as never,
+      ),
+    ).rejects.toThrow("禁止通过 bash/shell 写入算子产物文件");
+  }
+});
+
+test("allows readonly bash commands on operator artifacts", async () => {
+  const plugin = await PyptoOpLintPlugin({
+    $, client: { app: { log: async () => {} } },
+    directory: process.cwd(), worktree: process.cwd(), project: {},
+  } as never);
+  const before = plugin["tool.execute.before"];
+
+  const readonlyCommands = [
+    "cat custom/foo/foo_impl.py",
+    "ls -la custom/foo/modules/foo_module1_impl.py",
+    "stat foo_impl.py",
+    "grep '@pypto.frontend.jit' foo_impl.py",
+    "diff foo_impl.py bar_impl.py",
+    "wc -l test_foo.py",
+    "head -20 foo_golden.py",
+    "find custom/foo -name 'foo_*.py'",
+    "python3 foo_impl.py",                     // running, not writing
+    "python3 -m pytest test_foo.py",           // running tests, not writing
+    // python -c reading / importing / exec — must NOT be blocked
+    "python3 -c \"exec(open('foo_golden.py').read())\"",
+    "python3 -c \"print(open('foo_impl.py').read())\"",
+    "python3 -c \"import importlib.util; spec = importlib.util.spec_from_file_location('g', 'foo_golden.py'); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\"",
+    "python3 -c \"from pathlib import Path; print(Path('foo_impl.py').read_text())\"",
+    "python3 -c \"with open('foo_golden.py') as f: print(f.read())\"",   // default 'r'
+    "python3 -c \"with open('foo_golden.py', 'r') as f: print(f.read())\"",  // explicit 'r'
+  ];
+
+  for (const cmd of readonlyCommands) {
+    await expect(
+      before?.(
+        { tool: "bash" } as never,
+        { args: { command: cmd } } as never,
+      ),
+    ).resolves.toBeUndefined();
+  }
+});
+
+test("bash write blocker does not affect non-artifact files", async () => {
+  const plugin = await PyptoOpLintPlugin({
+    $, client: { app: { log: async () => {} } },
+    directory: process.cwd(), worktree: process.cwd(), project: {},
+  } as never);
+  const before = plugin["tool.execute.before"];
+
+  const allowed = [
+    "echo x > /tmp/notes.txt",
+    "cat > README.md <<EOF\nhi\nEOF",
+    "cp DESIGN.md DESIGN.md.bak",
+    "sed -i 's/foo/bar/' SPEC.md",
+    "rm /tmp/scratch.py",
+  ];
+
+  for (const cmd of allowed) {
+    await expect(
+      before?.(
+        { tool: "bash" } as never,
+        { args: { command: cmd } } as never,
+      ),
+    ).resolves.toBeUndefined();
+  }
+});
+
 // ── tool.execute.after (post-edit / post-bash) ──
 
 function createPlugin(shellMock: unknown) {

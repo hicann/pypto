@@ -92,3 +92,4 @@ def _emit_gate_event(ctx: CheckContext, blocked: bool, blocking_rules: list[str]
         _append_jsonl(LOGS_EVENTS_FILE, event)
     except OSError:
         pass
+

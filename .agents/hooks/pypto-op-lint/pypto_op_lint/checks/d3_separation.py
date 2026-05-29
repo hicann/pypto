@@ -6,6 +6,7 @@ import ast
 
 from ..ast_helpers import _get_jit_functions
 from ..core import CheckContext, Finding, register
+from ..utils import _impl_files_to_scan
 
 
 @register("OL15")
@@ -33,25 +34,44 @@ def check_ol15(ctx: CheckContext) -> Finding:
 
 @register("OL16")
 def check_ol16(ctx: CheckContext) -> Finding:
-    """impl 文件不应导入 golden 模块"""
-    impl_file = f"{ctx.op_name}_impl.py"
-    tree = ctx.parse_file(impl_file)
-    if tree is None:
-        return ctx.make_finding("OL16", "SKIP", f"{impl_file} 不存在或无法解析")
+    """impl 文件不应导入 golden 模块。
+
+    覆盖范围：顶层集成 impl + modules/<op>_module*_impl.py。
+    """
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL16", "SKIP", "无 impl 文件可供检查")
     golden_module = f"{ctx.op_name}_golden"
-    for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == golden_module:
-            return ctx.make_finding("OL16", "FAIL",
-                f"impl 文件不应导入 {golden_module}",
-                file=impl_file, line=node.lineno)
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name == golden_module:
-                    return ctx.make_finding("OL16", "FAIL",
-                        f"impl 文件不应导入 {golden_module}",
-                        file=impl_file, line=node.lineno)
-    return ctx.make_finding("OL16", "PASS",
-        "impl 文件未导入 golden", file=impl_file)
+    parsed_any = False
+    for impl_file in impl_files:
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        parsed_any = True
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == golden_module:
+                return ctx.make_finding(
+                    "OL16",
+                    "FAIL",
+                    f"{impl_file} 不应导入 {golden_module}",
+                    file=impl_file,
+                    line=node.lineno,
+                )
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == golden_module:
+                        return ctx.make_finding(
+                            "OL16",
+                            "FAIL",
+                            f"{impl_file} 不应导入 {golden_module}",
+                            file=impl_file,
+                            line=node.lineno,
+                        )
+    if not parsed_any:
+        return ctx.make_finding("OL16", "SKIP", "无 impl 文件可解析")
+    return ctx.make_finding(
+        "OL16", "PASS", f"所有 impl 文件均未导入 golden（共 {len(impl_files)} 个）"
+    )
 
 
 @register("OL17")

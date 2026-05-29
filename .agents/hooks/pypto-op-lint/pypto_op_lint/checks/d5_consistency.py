@@ -24,6 +24,7 @@ from ..utils import (
     _extract_spec_dtypes_from_meta,
     _extract_test_dtypes,
     _extract_tolerance,
+    _impl_files_to_scan,
     _load_doc_meta,
     _load_tolerance_schema,
     _parse_front_matter,
@@ -69,7 +70,13 @@ def check_ol30(ctx: CheckContext) -> Finding:
 
 @register("OL31")
 def check_ol31(ctx: CheckContext) -> Finding:
-    """DESIGN.md front matter dynamic_axes 与 impl 动态注解一致。"""
+    """DESIGN.md front matter dynamic_axes 与 impl 动态注解一致。
+
+    覆盖范围：顶层集成 impl + modules/<op>_module*_impl.py。每个文件
+    单独评估，任一文件均未使用 pypto.DYNAMIC literal 时返回 FAIL。
+    这样在模块开发阶段（Stage 5 Phase M_k）即可发现违规，避免下沉
+    到 Stage 6 集成阶段才暴露。
+    """
     if not ctx.file_exists(DESIGN_FILE):
         return ctx.make_finding("OL31", "SKIP", f"{DESIGN_FILE} 不存在")
     design_meta = _load_doc_meta(ctx, DESIGN_FILE)
@@ -79,53 +86,71 @@ def check_ol31(ctx: CheckContext) -> Finding:
             f"{DESIGN_FILE} front matter schema 非法: {'; '.join(schema_errors)}",
             file=DESIGN_FILE)
 
-    impl_file = f"{ctx.op_name}_impl.py"
-    if not ctx.read_file(impl_file):
-        return ctx.make_finding("OL31", "SKIP", f"{impl_file} 不存在")
-    syntax_error = _syntax_error_finding(ctx, "OL31", impl_file)
-    if syntax_error:
-        return syntax_error
-    tree = ctx.parse_file(impl_file)
-    if tree is None:
-        return ctx.make_finding("OL31", "SKIP", f"{impl_file} 无法解析")
-    aliases = ctx.pypto_aliases(impl_file)
-    jit_funcs = _get_primary_jit_functions(tree, aliases)
-    if not jit_funcs:
-        return ctx.make_finding("OL31", "SKIP", "无 jit 函数")
-
     dynamic_axes = design_meta.get("dynamic_axes", [])
     if not isinstance(dynamic_axes, list) or not dynamic_axes:
         return ctx.make_finding("OL31", "PASS",
             f"{DESIGN_FILE} front matter 未声明动态轴，无需检查")
 
-    dynamic_aliases = _extract_symbolic_dynamic_aliases(tree, aliases)
-    has_dynamic_in_impl = False
-    for func in jit_funcs:
-        for arg in func.args.args:
-            ann = arg.annotation
-            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann, aliases):
-                continue
-            # pypto.Tensor() / pypto.Tensor([]) 空注解由 OL25 统一拦截，此处不重复处理。
-            if not ann.args:
-                continue
-            if _shape_has_dynamic(ann.args[0], dynamic_aliases, aliases):
-                has_dynamic_in_impl = True
-                break
-        if has_dynamic_in_impl:
-            break
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL31", "SKIP", "无 impl 文件可供检查")
 
-    if not has_dynamic_in_impl:
+    files_without_dynamic: list[str] = []
+    saw_jit = False
+    last_file_seen = ""
+    for impl_file in impl_files:
+        syntax_error = _syntax_error_finding(ctx, "OL31", impl_file)
+        if syntax_error:
+            return syntax_error
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        aliases = ctx.pypto_aliases(impl_file)
+        jit_funcs = _get_primary_jit_functions(tree, aliases)
+        if not jit_funcs:
+            continue
+        saw_jit = True
+        last_file_seen = impl_file
+        dynamic_aliases = _extract_symbolic_dynamic_aliases(tree, aliases)
+        has_dynamic_in_impl = False
+        for func in jit_funcs:
+            for arg in func.args.args:
+                ann = arg.annotation
+                if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann, aliases):
+                    continue
+                # pypto.Tensor() / pypto.Tensor([]) 空注解由 OL25 统一拦截，此处不重复处理。
+                if not ann.args:
+                    continue
+                if _shape_has_dynamic(ann.args[0], dynamic_aliases, aliases):
+                    has_dynamic_in_impl = True
+                    break
+            if has_dynamic_in_impl:
+                break
+        if not has_dynamic_in_impl:
+            files_without_dynamic.append(impl_file)
+
+    if not saw_jit:
+        return ctx.make_finding("OL31", "SKIP", "无 jit 函数")
+    if files_without_dynamic:
         return ctx.make_finding("OL31", "FAIL",
-            f"{DESIGN_FILE} front matter 声明了动态轴，但 impl 的 Tensor 注解中未使用 "
-            "pypto.DYNAMIC/pypto.DYN，动态轴必须在类型注解中显式标记",
-            file=impl_file)
+            f"{DESIGN_FILE} front matter 声明了动态轴，但以下 impl 文件的 "
+            f"Tensor 注解中均未使用 pypto.DYNAMIC/pypto.DYN: "
+            f"{', '.join(files_without_dynamic)}。"
+            "动态轴必须在类型注解中显式标记。",
+            file=files_without_dynamic[0])
     return ctx.make_finding("OL31", "PASS",
-        "design 动态轴声明与 impl 注解一致", file=impl_file)
+        "design 动态轴声明与 impl 注解一致", file=last_file_seen)
 
 
 @register("OL43")
 def check_ol43(ctx: CheckContext) -> Finding:
-    """DESIGN 声明动态轴时 impl 必须包含 pypto.loop 调用"""
+    """DESIGN 声明动态轴时 impl 必须包含 pypto.loop 调用。
+
+    覆盖范围：顶层集成 impl + modules/<op>_module*_impl.py。
+    DESIGN 一旦声明动态轴，每个 module impl 都必须自带 pypto.loop——这是
+    "production kernel 4 要素" 的核心一环。module 漏写 loop 会在 Stage 5
+    集成 / Stage 6 production shape 上 workspace estimator INT32 溢出。
+    """
     if not ctx.file_exists(DESIGN_FILE):
         return ctx.make_finding("OL43", "SKIP", f"{DESIGN_FILE} 不存在")
 
@@ -142,31 +167,51 @@ def check_ol43(ctx: CheckContext) -> Finding:
             return ctx.make_finding("OL43", "SKIP",
                 "DESIGN.md 未声明动态轴，无需检查 pypto.loop")
 
-    impl_file = f"{ctx.op_name}_impl.py"
-    tree = ctx.parse_file(impl_file)
-    if tree is None:
-        return ctx.make_finding("OL43", "SKIP", f"{impl_file} 不存在或无法解析")
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL43", "SKIP", "无 impl 文件可供检查")
 
-    aliases = ctx.pypto_aliases(impl_file)
-    jit_funcs = _get_jit_functions(tree, aliases)
-    if not jit_funcs:
+    saw_jit = False
+    files_without_loop: list[str] = []
+    last_pass_file = None
+    for impl_file in impl_files:
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        aliases = ctx.pypto_aliases(impl_file)
+        jit_funcs = _get_jit_functions(tree, aliases)
+        if not jit_funcs:
+            continue
+        saw_jit = True
+        impl_source = ctx.read_file(impl_file) or ""
+        has_pypto_loop = bool(re.search(r'pypto\.loop\s*\(', impl_source))
+        if not has_pypto_loop:
+            has_pypto_loop = _has_loop_structure(jit_funcs[0])
+        if has_pypto_loop:
+            last_pass_file = impl_file
+        else:
+            files_without_loop.append(impl_file)
+
+    if not saw_jit:
         return ctx.make_finding("OL43", "SKIP", "未找到 JIT 函数")
 
-    # 在 impl 中搜索 pypto.loop 调用
-    impl_source = ctx.read_file(impl_file) or ""
-    has_pypto_loop = bool(re.search(r'pypto\.loop\s*\(', impl_source))
-    if not has_pypto_loop:
-        has_pypto_loop = _has_loop_structure(jit_funcs[0])
-
-    if has_pypto_loop:
-        return ctx.make_finding("OL43", "PASS",
-            "DESIGN 声明动态轴，impl 中存在 loop 结构", file=f"{ctx.op_name}_impl.py")
-
-    return ctx.make_finding("OL43", "FAIL",
-        f"DESIGN.md 声明了动态轴，但 {ctx.op_name}_impl.py 中未找到 "
-        f"pypto.loop / pypto.lang.loop 调用。建议补充 pypto.loop 以覆盖动态轴，"
-        f"可对现有 impl 做局部修补。",
-        file=f"{ctx.op_name}_impl.py")
+    if files_without_loop:
+        return ctx.make_finding(
+            "OL43",
+            "FAIL",
+            "DESIGN.md 声明了动态轴，但以下 impl 文件中未找到 "
+            "pypto.loop / pypto.lang.loop 调用：" + ", ".join(files_without_loop) +
+            "。OL43 是硬性门禁；NPU 运行通过不能替代动态轴 loop。"
+            "请在对应 JIT kernel 中补齐遍历动态轴的真实 pypto.loop，"
+            "并结合 NPU 错误码与 traceback 继续修复。",
+            file=files_without_loop[0],
+        )
+    return ctx.make_finding(
+        "OL43",
+        "PASS",
+        "DESIGN 声明动态轴，所有 impl 文件均含 loop 结构",
+        file=last_pass_file,
+    )
 
 
 @register("OL32")
@@ -391,6 +436,13 @@ def check_ol41(ctx: CheckContext) -> Finding:
         f"test_{ctx.op_name}.py",
         "README.md",
     ]
+    modules_dir = os.path.join(ctx.op_dir, "modules")
+    if os.path.isdir(modules_dir):
+        for entry in sorted(os.listdir(modules_dir)):
+            is_module_file = entry.endswith(("_impl.py", "_golden.py"))
+            is_test_file = entry.startswith("test_") and entry.endswith(".py")
+            if is_module_file or is_test_file:
+                targets.append(os.path.join("modules", entry))
     for filename in targets:
         source = ctx.read_file(filename)
         if not source:
@@ -409,23 +461,38 @@ def check_ol41(ctx: CheckContext) -> Finding:
 
 @register("OL37")
 def check_ol37(ctx: CheckContext) -> Finding:
-    """design 与 impl 的关键命名可追溯性检查（信息提示）"""
+    """design 与 impl 的关键命名可追溯性检查（信息提示）。
+
+    覆盖范围：顶层集成 impl + modules/<op>_module*_impl.py。
+    各 impl 文件中的 JIT 内局部变量名取并集后再与 DESIGN 关键命名求交集。
+    在 Stage 5 仅有 module 文件的状态下也能给出可追溯性反馈。
+    """
     design_content = ctx.read_file(DESIGN_FILE)
     if not design_content:
         return ctx.make_finding("OL37", "SKIP", f"{DESIGN_FILE} 不存在")
-    impl_file = f"{ctx.op_name}_impl.py"
-    tree = ctx.parse_file(impl_file)
-    if tree is None:
-        return ctx.make_finding("OL37", "SKIP", f"{impl_file} 不存在或无法解析")
+
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL37", "SKIP", "无 impl 文件可供检查")
 
     design_names = _extract_design_identifiers(design_content)
-    aliases = ctx.pypto_aliases(impl_file)
-    impl_names = _extract_jit_assigned_names(tree, aliases)
     impl_blacklist = {
         "i", "j", "k", "n", "m", "x", "y", "z", "tmp", "temp", "result", "out",
         "input", "output",
     }
-    impl_names = {n for n in impl_names if n not in impl_blacklist}
+    impl_names: set[str] = set()
+    last_impl_file = None
+    for impl_file in impl_files:
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        last_impl_file = impl_file
+        aliases = ctx.pypto_aliases(impl_file)
+        names = _extract_jit_assigned_names(tree, aliases)
+        impl_names |= {n for n in names if n not in impl_blacklist}
+
+    if last_impl_file is None:
+        return ctx.make_finding("OL37", "SKIP", "无 impl 文件可解析")
 
     # design 中缺少可对齐变量名时直接跳过，避免误报
     if len(design_names) < 3:
@@ -440,13 +507,13 @@ def check_ol37(ctx: CheckContext) -> Finding:
 
     overlap = sorted(design_names & impl_names)
     # 命中 >=2 视为具备可追溯性；该规则为 S3 信息提示，避免因 design 关键名
-    # 抽取范围较大导致“有重合却仍提示不重合”的假阳性。
+    # 抽取范围较大导致"有重合却仍提示不重合"的假阳性。
     if len(overlap) >= 2:
         return ctx.make_finding(
             "OL37",
             "PASS",
             f"design/impl 命名可追溯性良好（命中 {len(overlap)} 个：{', '.join(overlap[:5])}）",
-            file=impl_file,
+            file=last_impl_file,
         )
 
     sample_impl = ", ".join(sorted(list(impl_names))[:5])
@@ -455,5 +522,499 @@ def check_ol37(ctx: CheckContext) -> Finding:
         "INFO",
         "design 与 impl 的关键命名重合较少，建议对齐中间变量命名以提升可追溯性；"
         f"当前 impl 示例变量：{sample_impl}",
-        file=impl_file,
+        file=last_impl_file,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OL50/OL51 — module_interfaces.yaml 契约与 impl 的一致性
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _load_module_interfaces(ctx: CheckContext) -> dict | None:
+    """Load `<op_dir>/eval/module_interfaces.yaml`. Return None if absent / invalid."""
+    yaml_path = os.path.join(ctx.op_dir, "eval", "module_interfaces.yaml")
+    if not os.path.isfile(yaml_path):
+        return None
+    try:
+        import yaml  # PyYAML
+    except ImportError:
+        return None
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _suffix_to_module_ids(suffix: str) -> list[int]:
+    """Convert cumulative suffix string ('1', '12', '123', ..., '12345678910')
+    to list of module ids. Handles two-digit ids by interpreting the suffix as
+    decimal concatenation: '12' = [1, 2], '12345678910' = [1..10].
+    """
+    out: list[int] = []
+    i = 0
+    n = 1
+    while i < len(suffix):
+        # Greedy: assume single digit unless that would skip beyond range
+        # Simple model: digits 1..9 are single-char, 10+ uses two chars.
+        # Heuristic: try single digit first; ids are emitted in order so the
+        # next id should always equal previous+1.
+        if i + 1 < len(suffix) and suffix[i:i + 2].isdigit():
+            two = int(suffix[i:i + 2])
+            if two == n:
+                out.append(two)
+                i += 2
+                n += 1
+                continue
+        if suffix[i].isdigit():
+            one = int(suffix[i])
+            if one == n:
+                out.append(one)
+                i += 1
+                n += 1
+                continue
+        # Inconsistent — give up
+        return []
+    return out
+
+
+def _impl_file_to_module_suffix(impl_file: str, op_name: str) -> str | None:
+    """Extract the cumulative suffix from a module impl filename.
+
+    `modules/<op>_module<suffix>_impl.py` → '<suffix>'.
+    Top-level `<op>_impl.py` → None (covers ALL modules).
+    """
+    basename = os.path.basename(impl_file)
+    m = re.match(rf"^{re.escape(op_name)}_module(\d+)_impl\.py$", basename)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _primary_inputs_for_modules(
+    interfaces: dict, module_ids: list[int]
+) -> list[str]:
+    """Return the ordered list of primary-input names referenced by the given
+    module ids. Order is determined by the `primary_inputs` declaration order.
+    """
+    primary_decl = interfaces.get("primary_inputs", [])
+    if not isinstance(primary_decl, list):
+        return []
+    declared_order = [
+        p.get("name")
+        for p in primary_decl
+        if isinstance(p, dict) and isinstance(p.get("name"), str)
+    ]
+    modules = interfaces.get("modules", [])
+    if not isinstance(modules, list):
+        return []
+    referenced: set[str] = set()
+    id_filter = set(module_ids) if module_ids else None
+    for mod in modules:
+        if not isinstance(mod, dict):
+            continue
+        mid = mod.get("id")
+        if id_filter is not None and mid not in id_filter:
+            continue
+        for inp in mod.get("inputs", []) or []:
+            if not isinstance(inp, dict):
+                continue
+            if inp.get("source") == "primary" and isinstance(inp.get("name"), str):
+                referenced.add(inp["name"])
+    return [n for n in declared_order if n in referenced]
+
+
+def _outputs_for_modules(
+    interfaces: dict, module_ids: list[int]
+) -> list[str]:
+    """Return the names of outputs declared by the given module ids.
+    For cumulative modules, the final output(s) of the last module
+    are the externally-visible outputs (others are intermediate).
+    """
+    modules = interfaces.get("modules", [])
+    if not isinstance(modules, list) or not module_ids:
+        return []
+    final_id = max(module_ids)
+    for mod in modules:
+        if isinstance(mod, dict) and mod.get("id") == final_id:
+            outs = mod.get("outputs", []) or []
+            return [
+                out_entry["name"]
+                for out_entry in outs
+                if isinstance(out_entry, dict) and isinstance(out_entry.get("name"), str)
+            ]
+    return []
+
+
+def _final_outputs_for_top_level(interfaces: dict) -> list[str]:
+    """For top-level <op>_impl.py: use `final_outputs` (which lists every
+    return tensor of the user golden) to enumerate the externally-visible
+    output names."""
+    fos = interfaces.get("final_outputs", [])
+    if not isinstance(fos, list):
+        return []
+    return [
+        fo["name"] for fo in fos
+        if isinstance(fo, dict) and isinstance(fo.get("name"), str)
+    ]
+
+
+def _find_wrapper_function(
+    tree: ast.Module, op_name: str, suffix: str | None
+) -> ast.FunctionDef | None:
+    """Find the Layer K wrapper function in `tree`.
+
+    For module impl: prefer `<op>_module<suffix>_wrapper`.
+    For top-level impl: prefer `host_wrapper`, then `<op>_wrapper`,
+    then any function named `launch_*` / `run_*`.
+    """
+    candidates: list[str] = []
+    if suffix is not None:
+        candidates.append(f"{op_name}_module{suffix}_wrapper")
+    else:
+        candidates.extend(["host_wrapper", f"{op_name}_wrapper"])
+
+    def_by_name: dict[str, ast.FunctionDef] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            def_by_name[node.name] = node  # type: ignore[assignment]
+    for cand in candidates:
+        if cand in def_by_name:
+            return def_by_name[cand]
+    # Fallback: launch_* / run_* only for top-level
+    if suffix is None:
+        for name, fn in def_by_name.items():
+            if name.startswith("launch_") or name.startswith("run_"):
+                return fn
+    return None
+
+
+def _func_arg_names(func: ast.FunctionDef) -> list[str]:
+    """Positional + keyword-only arg names (skip *args / **kwargs)."""
+    args = func.args
+    names: list[str] = []
+    for a in list(args.posonlyargs) + list(args.args):
+        names.append(a.arg)
+    for a in args.kwonlyargs:
+        names.append(a.arg)
+    return names
+
+
+@register("OL50")
+def check_ol50(ctx: CheckContext) -> Finding:
+    """host wrapper 的签名（参数名与顺序）必须与
+    `eval/module_interfaces.yaml` 的 `primary_inputs` 一致。
+
+    适用对象:
+      - `modules/<op>_module<suffix>_impl.py`: 当前 phase 引用的 primary inputs
+      - 顶层 `<op>_impl.py`: 全部 primary inputs
+
+    YAML 不存在、PyYAML 未安装、wrapper 函数未发现时 SKIP。
+    """
+    interfaces = _load_module_interfaces(ctx)
+    if interfaces is None:
+        return ctx.make_finding(
+            "OL50", "SKIP",
+            "eval/module_interfaces.yaml 不存在或 PyYAML 未安装 — 无法核对契约",
+        )
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL50", "SKIP", "无 impl 文件可供检查")
+
+    for impl_file in impl_files:
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        suffix = _impl_file_to_module_suffix(impl_file, ctx.op_name)
+        if suffix is None:
+            # Top-level <op>_impl.py: expect all primary inputs in declared order
+            primary_decl = interfaces.get("primary_inputs", [])
+            if not isinstance(primary_decl, list):
+                continue
+            expected = [
+                p["name"]
+                for p in primary_decl
+                if isinstance(p, dict) and isinstance(p.get("name"), str)
+            ]
+        else:
+            module_ids = _suffix_to_module_ids(suffix)
+            if not module_ids:
+                return ctx.make_finding(
+                    "OL50", "FAIL",
+                    f"{impl_file}: 模块 suffix '{suffix}' "
+                    f"不满足 `primary_inputs` 的累积命名规约 (1, 12, 123, ...)",
+                    file=impl_file,
+                )
+            expected = _primary_inputs_for_modules(interfaces, module_ids)
+
+        wrapper = _find_wrapper_function(tree, ctx.op_name, suffix)
+        if wrapper is None:
+            return ctx.make_finding(
+                "OL50", "FAIL",
+                f"{impl_file}: 未发现 Layer K wrapper 函数 "
+                f"(期望 `{ctx.op_name}_module{suffix}_wrapper` "
+                f"或 `host_wrapper`)。",
+                file=impl_file,
+            )
+        actual = _func_arg_names(wrapper)
+        if actual != expected:
+            return ctx.make_finding(
+                "OL50", "FAIL",
+                f"[S1] {impl_file} 第 {wrapper.lineno} 行: wrapper `{wrapper.name}` 的 "
+                f"参数顺序与 module_interfaces.yaml 不一致。\n"
+                f"  expected (primary_inputs 顺序): {expected}\n"
+                f"  actual:                         {actual}\n"
+                f"修正方针: 按 YAML 的 `primary_inputs` 声明顺序以及 "
+                f"当前 module 的 `inputs[*].name (source=primary)` 重新排序。"
+                f"生产 wrapper 的显式参数列表只承载 primary_inputs；"
+                f"调试扩展请放入 `**kwargs` 或 `_debug/` 生成产物，"
+                f"`runtime_options` / `debug_options` 应放在 @pypto.frontend.jit 配置或调试工具内部。",
+                file=impl_file,
+                line=wrapper.lineno,
+            )
+    return ctx.make_finding(
+        "OL50", "PASS", "wrapper 参数顺序与 module_interfaces.yaml 一致",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OL51 — 输出张量写回漏检
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _collected_writeback_targets(tree: ast.Module) -> set[str]:
+    """收集 impl 中"被写回到输出张量的 identifier 名"。
+
+    识别模式:
+      - `pypto.assemble(src, offsets, <name>)`
+      - `pypto.assemble([(src, offsets), ...], <name>)`
+      - `<name>[:] = expr` (Subscript Slice)
+      - `pypto.move(src, <name>)`
+      - `<name>.move(src)` / `<name>.assemble(src, offsets)`
+      - `<name>[idx] = expr` 一般写法 (Subscript any)
+    """
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            f = node.func
+            if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+                receiver = f.value.id
+                if receiver == "pypto" and f.attr == "assemble":
+                    # 支持两种调用形态：单段 (src, offsets, target) 与
+                    # 批量 ([(src, offsets), ...], target, parallel=True)
+                    target = None
+                    if len(node.args) >= 3:
+                        target = node.args[2]
+                    elif len(node.args) >= 2 and isinstance(node.args[0], (ast.List, ast.Tuple)):
+                        target = node.args[1]
+                    if isinstance(target, ast.Name):
+                        out.add(target.id)
+                    for kw in node.keywords:
+                        if kw.arg in ("target", "dst", "out") and isinstance(kw.value, ast.Name):
+                            out.add(kw.value.id)
+                elif receiver == "pypto" and f.attr == "move":
+                    # Kept for compatibility with existing rule wording; OL55 will
+                    # still reject pypto.move if the active PyPTO build lacks it.
+                    target = node.args[1] if len(node.args) >= 2 else None
+                    if isinstance(target, ast.Name):
+                        out.add(target.id)
+                    for kw in node.keywords:
+                        if kw.arg in ("target", "dst", "out") and isinstance(kw.value, ast.Name):
+                            out.add(kw.value.id)
+                elif f.attr in ("move", "assemble"):
+                    out.add(receiver)
+        # `<name>[...] = expr` augmented or simple
+        if isinstance(node, (ast.Assign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for t in targets:
+                if isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                    out.add(t.value.id)
+    return out
+
+
+@register("OL51")
+def check_ol51(ctx: CheckContext) -> Finding:
+    """对 `eval/module_interfaces.yaml` 声明的 N 个输出, impl 内必须至少有
+    N 个写回点 (`pypto.assemble(..., t)` / `t[:] = ...` / `pypto.move(..., t)`)。
+
+    背景: 代码中 output buffer 不必沿用 YAML 同名 identifier, 经常使用
+    `y0`, `out`, `C_npu` 等本地名。本规则不强制名称一致, 只检查"写回点的数量"。
+    可以及早捕获"完全漏写 assemble → 全零输出 → Verify FAIL"这类典型 bug。
+
+    适用对象:
+      - `modules/<op>_module<suffix>_impl.py`: 当前 module 的 outputs[*]
+      - 顶层 `<op>_impl.py`: final_outputs[*]
+
+    YAML 不存在 / PyYAML 未安装 / 无输出声明时 SKIP。
+    """
+    interfaces = _load_module_interfaces(ctx)
+    if interfaces is None:
+        return ctx.make_finding(
+            "OL51", "SKIP",
+            "eval/module_interfaces.yaml 不存在或 PyYAML 未安装 — 无法核对写回",
+        )
+    impl_files = _impl_files_to_scan(ctx)
+    if not impl_files:
+        return ctx.make_finding("OL51", "SKIP", "无 impl 文件可供检查")
+
+    for impl_file in impl_files:
+        tree = ctx.parse_file(impl_file)
+        if tree is None:
+            continue
+        suffix = _impl_file_to_module_suffix(impl_file, ctx.op_name)
+        if suffix is None:
+            expected_outputs = _final_outputs_for_top_level(interfaces)
+        else:
+            module_ids = _suffix_to_module_ids(suffix)
+            if not module_ids:
+                continue
+            expected_outputs = _outputs_for_modules(interfaces, module_ids)
+        if not expected_outputs:
+            continue
+        writebacks = _collected_writeback_targets(tree)
+        if len(writebacks) < len(expected_outputs):
+            return ctx.make_finding(
+                "OL51", "FAIL",
+                f"[S1] {impl_file}: YAML 声明了 {len(expected_outputs)} 个输出 "
+                f"{expected_outputs}, 但 impl 中只检测到 "
+                f"{len(writebacks)} 个写回点 (writebacks={sorted(writebacks)})。\n"
+                f"修正方针: 对每个输出, 在 JIT 函数内 / 任意 Layer I-J 中执行 "
+                f"`pypto.assemble(src, offsets, <buffer>)`、`<buffer>.move(src)` "
+                f"或 `<buffer>[:] = expr`。"
+                f"漏写回 = Verify 阶段「全零输出」型精度 FAIL 的典型原因。",
+                file=impl_file,
+            )
+    return ctx.make_finding(
+        "OL51", "PASS",
+        "impl 写回点数 ≥ YAML 输出数",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OL53 — MEMORY.md → Golden function inventory: 全行均 ✅ 校验
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+_INVENTORY_HEADING_RE = re.compile(
+    r"^\s*##\s+Golden\s+function\s+inventory.*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_INVENTORY_NEXT_HEADING_RE = re.compile(r"^\s*##\s+")
+# Match a markdown table row that ends with a Status cell containing ✅ or ❌
+# (Verify last `|`-cell of the row contains one of the markers; ignore separator rows.)
+_TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+
+
+def _extract_inventory_rows(memory_text: str) -> list[tuple[int, str]]:
+    """Return [(line_no, row_text), …] of rows inside the
+    "Golden function inventory" section of MEMORY.md. Excludes:
+      - header row (the column titles)
+      - separator row (`|---|---|…`)
+      - the comment / how-to lines around the table
+    Only data rows are returned.
+    """
+    lines = memory_text.splitlines()
+    in_section = False
+    rows: list[tuple[int, str]] = []
+    seen_header = False
+    seen_sep = False
+    for idx, line in enumerate(lines, start=1):
+        if not in_section:
+            if _INVENTORY_HEADING_RE.match(line):
+                in_section = True
+                seen_header = False
+                seen_sep = False
+            continue
+        if _INVENTORY_NEXT_HEADING_RE.match(line):
+            break
+        if not _TABLE_ROW_RE.match(line):
+            continue
+        # First table row is header, second is separator
+        if not seen_header:
+            seen_header = True
+            continue
+        if not seen_sep:
+            # Heuristic: separator row has only `|`, `-`, `:`, spaces
+            content = line.replace("|", "").replace("-", "").replace(":", "").strip()
+            if content == "":
+                seen_sep = True
+                continue
+        rows.append((idx, line))
+    return rows
+
+
+def _row_status(row_text: str) -> str:
+    """Pick the status cell (✅ / ❌ / other) from the row's last non-empty cell."""
+    cells = [c.strip() for c in row_text.strip().strip("|").split("|")]
+    if not cells:
+        return ""
+    # Walk from right, skip empty trailing cells
+    for c in reversed(cells):
+        if c:
+            return c
+    return ""
+
+
+@register("OL53")
+def check_ol53(ctx: CheckContext) -> Finding:
+    """`custom/<op>/MEMORY.md` 中 "Golden function inventory" 必须每行在
+    Status 列均标记为 ✅, 否则 FAIL (残留 ❌ 是实现遗漏的典型信号)。
+
+    执行时机:
+      - Stage 5 / 6 的 complete_stage 门禁
+      - 任意 stage 的 complete_phase 时该规则 SKIP
+        (phase 范围外的行保留 ❌ 属正常)
+
+    MEMORY.md 或该章节不存在时 SKIP (由 OL09 等其他规则覆盖)。
+    """
+    memory_file = "MEMORY.md"
+    if not ctx.file_exists(memory_file):
+        return ctx.make_finding("OL53", "SKIP", f"{memory_file} 不存在")
+    text = ctx.read_file(memory_file)
+    if not _INVENTORY_HEADING_RE.search(text):
+        return ctx.make_finding(
+            "OL53", "SKIP",
+            f"{memory_file}: 缺少 'Golden function inventory' 章节",
+            file=memory_file,
+        )
+    # phase_scope 已设置时, 未启动 module 的 ❌ 残留属正常情况
+    if getattr(ctx, "phase_scope", None):
+        return ctx.make_finding(
+            "OL53", "SKIP",
+            f"phase_scope={ctx.phase_scope}: 允许未启动 module 的 ❌",
+            file=memory_file,
+        )
+    rows = _extract_inventory_rows(text)
+    if not rows:
+        return ctx.make_finding(
+            "OL53", "SKIP",
+            f"{memory_file}: Golden function inventory 无数据行",
+            file=memory_file,
+        )
+    unresolved = [(ln, _row_status(r)) for ln, r in rows]
+    bad = [
+        (ln, st)
+        for ln, st in unresolved
+        if "❌" in st or st in {"", "❌", "TODO", "todo", "未实现", "WIP"}
+    ]
+    if bad:
+        n_rows = len(rows)
+        bad_lines = ", ".join(f"L{ln}" for ln, _ in bad[:8])
+        more = f" 等共 {len(bad)} 行" if len(bad) > 8 else ""
+        return ctx.make_finding(
+            "OL53", "FAIL",
+            f"[S2] {memory_file}: Golden function inventory 共 {n_rows} 行中 "
+            f"{len(bad)} 行带 ❌/未解决标记 ({bad_lines}{more})。\n"
+            f"修正方针: 将每行更新为 ✅ 并附 impl 中对应 PyPTO 调用的行号; "
+            f"如果有意省略, 请在另一行注明理由。残留 ❌ 时 complete_stage 不通过。",
+            file=memory_file,
+        )
+    return ctx.make_finding(
+        "OL53", "PASS",
+        f"Golden function inventory 全 {len(rows)} 行均已 ✅",
+        file=memory_file,
     )

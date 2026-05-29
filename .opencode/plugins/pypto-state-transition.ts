@@ -2,7 +2,12 @@ import { type Plugin, tool } from "@opencode-ai/plugin";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { applyTransition, type OrchestratorState, type TransitionAction } from "./lib/state-transition-core";
+import {
+  applyTransition,
+  type OrchestratorState,
+  type TransitionAction,
+  type TransitionInput,
+} from "./lib/state-transition-core";
 
 type GateFinding = {
   rule_id: string;
@@ -24,12 +29,21 @@ const ALLOWED_ACTIONS = new Set<TransitionAction>([
   "start_stage",
   "complete_stage",
   "fail_stage",
+  "submit_design",
+  "start_phase",
+  "submit_for_verify",
+  "complete_phase",
+  "fail_phase",
+  "record_artifact_hash",
+  "rollback_to_stage",
 ]);
 
-/** 仅允许以下 agent 调用 state_transition 工具 */
+/** Only the orchestrator agent may call state_transition. */
 const ALLOWED_AGENTS = new Set<string>([
   "pypto-op-orchestrator",
 ]);
+
+const DEFAULT_MAX_STAGE = 7;
 
 function parseState(content: string): OrchestratorState {
   const parsed = JSON.parse(content);
@@ -76,29 +90,23 @@ function parseGateSummary(raw: string): GateSummary {
   }
 }
 
-function buildInitialState(opDir: string): OrchestratorState {
+function buildInitialState(opDir: string, maxStage: number): OrchestratorState {
+  const stageStatus: Record<string, string> = {};
+  const stageRetry: Record<string, number> = {};
+  for (let i = 1; i <= maxStage; i++) {
+    stageStatus[String(i)] = "pending";
+    stageRetry[String(i)] = 0;
+  }
   return {
     operator_name: path.basename(opDir),
+    schema_version: "2.0",
+    max_stage: maxStage,
     current_stage: 1,
-    stage_status: {
-      "1": "pending",
-      "2": "pending",
-      "3": "pending",
-      "4": "pending",
-      "5": "pending",
-      "6": "pending",
-      "7": "pending",
-    },
-    stage_retry_count: {
-      "1": 0,
-      "2": 0,
-      "3": 0,
-      "4": 0,
-      "5": 0,
-      "6": 0,
-      "7": 0,
-    },
-    perf_iteration: {
+    stage_status: stageStatus,
+    stage_retry_count: stageRetry,
+    artifact_hashes: {},
+    rollback_history: [],
+    stage8_iteration: {
       count: 0,
       last_improvement: 0,
       consecutive_no_improvement: 0,
@@ -107,9 +115,9 @@ function buildInitialState(opDir: string): OrchestratorState {
   };
 }
 
-function readStateOrInit(statePath: string): OrchestratorState {
+function readStateOrInit(statePath: string, maxStage: number): OrchestratorState {
   if (!fs.existsSync(statePath)) {
-    return buildInitialState(path.dirname(statePath));
+    return buildInitialState(path.dirname(statePath), maxStage);
   }
   const raw = fs.readFileSync(statePath, "utf8");
   return parseState(raw);
@@ -121,13 +129,65 @@ function writeStateAtomically(statePath: string, state: OrchestratorState): void
   fs.renameSync(tmpPath, statePath);
 }
 
-/** Stage 1 完成时记录 SPEC.md 内容 hash，后续阶段用于冻结校验。 */
-const SPEC_HASH_KEY = "spec_md_hash";
-
 function computeFileHash(filePath: string): string | null {
   if (!fs.existsSync(filePath)) return null;
   const content = fs.readFileSync(filePath, "utf8");
   return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+/**
+ * Build the TransitionInput payload for applyTransition() based on the
+ * tool args. Only fields relevant to each action are forwarded.
+ */
+function buildTransitionInput(action: TransitionAction, args: Record<string, unknown>): TransitionInput {
+  switch (action) {
+    case "init":
+      return {
+        action,
+        stage: args.stage !== undefined ? Number(args.stage) : 1,
+        max_stage: args.max_stage !== undefined ? Number(args.max_stage) : undefined,
+      };
+    case "start_stage":
+      return { action, stage: Number(args.stage), reason: args.reason as string | undefined };
+    case "complete_stage":
+      return { action, stage: Number(args.stage) };
+    case "fail_stage":
+      return { action, stage: Number(args.stage), reason: args.reason as string | undefined };
+    case "submit_design":
+      return { action, stage: 4 };
+    case "start_phase":
+      return { action, stage: 5, phase: String(args.phase ?? "") };
+    case "submit_for_verify":
+      return { action, stage: 5, phase: String(args.phase ?? "") };
+    case "complete_phase":
+      return { action, stage: 5, phase: String(args.phase ?? "") };
+    case "fail_phase":
+      return {
+        action,
+        stage: 5,
+        phase: String(args.phase ?? ""),
+        failure_category: String(args.failure_category ?? ""),
+        failing_module_boundary: (args.failing_module_boundary as string | null | undefined) ?? null,
+        last_error: args.last_error as string | undefined,
+      };
+    case "record_artifact_hash":
+      return {
+        action,
+        name: String(args.name ?? ""),
+        hash: String(args.hash ?? ""),
+      };
+    case "rollback_to_stage":
+      return {
+        action,
+        target_stage: Number(args.target_stage),
+        reason: String(args.reason ?? ""),
+        failure_category: args.failure_category as string | undefined,
+        failed_phase: args.failed_phase as string | undefined,
+      };
+    default: {
+      throw new Error(`unsupported action: ${action}`);
+    }
+  }
 }
 
 export const PyptoStateTransitionPlugin: Plugin = async (input) => {
@@ -139,25 +199,91 @@ export const PyptoStateTransitionPlugin: Plugin = async (input) => {
     import.meta.url,
   ).pathname;
 
-  async function runGateIfNeeded(opDir: string, action: TransitionAction, stage: number): Promise<GateSummary> {
-    if (action !== "complete_stage") return { warnCount: 0, infoCount: 0, failFindings: [] };
+  /**
+   * Run the lint gate when:
+   * - `complete_stage` is invoked — full Stage delivery gate
+   *   (`--check-gate --stage <N>`, covers all impl/test/golden/gate rules for
+   *   the stage including integrated artifacts).
+   * - `submit_design` is invoked — Stage 4 design gate
+   *   (`--check-design-gate`, covers ONLY OL12 + OL55 over DESIGN.md so the
+   *   Designer's pseudo-code is lint-clean BEFORE the Verifier is dispatched
+   *   for Stage 4 scaffolding; module_interfaces.yaml is intentionally NOT
+   *   in scope because it is a structural YAML, not executable code).
+   * - `complete_phase` / `submit_for_verify` is invoked — per-Phase M_k
+   *   phase-scoped gate (`--check-phase-gate --phase M_k`, covers ONLY the
+   *   phase's cumulative module impl file `modules/<op>_module<suffix>_impl.py`;
+   *   integrated `<op>_impl.py` and `test_<op>.py` are excluded because they
+   *   are Stage 5 cleanup artifacts produced after the inner loop finishes).
+   *
+   * Rationale (phase gate): invoking the full `--check-gate --stage 5` at
+   * `complete_phase` surfaces OL01/OL07/OL08/OL18/etc. against placeholder
+   * integrated artifacts and falsely blocks a phase that did its job.
+   * Phase-scoping eliminates the false positive while still enforcing
+   * impl-target rules on the new module file.
+   *
+   * Rationale (design gate): catching `pypto.empty`-style typos at Designer
+   * exit (rather than at `complete_stage(4)` after the Verifier already
+   * produced the adversarial harness) avoids wasting the Verifier's work
+   * on a DESIGN.md whose pseudo-code references nonexistent PyPTO APIs.
+   *
+   * On block the orchestrator should re-dispatch the upstream agent
+   * (Designer for submit_design, Coder for submit_for_verify/complete_phase)
+   * with the failure details listed in fix_hints.
+   */
+  async function runGateIfNeeded(
+    opDir: string,
+    action: TransitionAction,
+    stage: number | undefined,
+    phase: string | undefined,
+  ): Promise<GateSummary> {
+    let lintCmd;
+    if (action === "complete_stage" && stage !== undefined) {
+      lintCmd = $`python3 ${lintScript} --check-gate --op-dir ${opDir} --stage ${stage}`;
+    } else if (action === "submit_design") {
+      // Stage 4 design gate: OL12 + OL55 on DESIGN.md only. Designer → Verifier
+      // handoff; refuse if pseudo-code references nonexistent pypto.<attr>.
+      lintCmd = $`python3 ${lintScript} --check-design-gate --op-dir ${opDir}`;
+    } else if (
+      (action === "complete_phase" || action === "submit_for_verify") &&
+      phase !== undefined
+    ) {
+      // Phase-scoped gate: only the phase's cumulative module impl file is scanned.
+      // Same command for both actions; the state machine layer decides which
+      // status transition (awaiting_verify / verified) happens on success.
+      lintCmd = $`python3 ${lintScript} --check-phase-gate --op-dir ${opDir} --phase ${phase}`;
+    } else {
+      return { warnCount: 0, infoCount: 0, failFindings: [] };
+    }
 
-    // Use nothrow() so stdout is available even when exit code is non-zero.
-    // The lint script writes findings JSON to stdout and exits 2 on S1 FAIL.
-    const result = await $`python3 ${lintScript} --check-gate --op-dir ${opDir} --stage ${stage}`
-      .cwd(baseDir).quiet().nothrow();
+    const result = await lintCmd.cwd(baseDir).quiet().nothrow();
     const raw = result.stdout.toString();
     const summary = parseGateSummary(raw);
 
     if (result.exitCode !== 0) {
-      // Build detailed error lines from FAIL findings
       const details = summary.failFindings
         .map((f) => `  [${f.rule_id}][${f.severity}] ${f.message}${f.file ? ` (${f.file})` : ""}`)
         .join("\n");
+      const scope = action === "complete_phase"
+        ? `Phase ${phase ?? "?"} completion`
+        : action === "submit_for_verify"
+          ? `Phase ${phase ?? "?"} verify-handoff`
+          : action === "submit_design"
+            ? "Stage 4 design-handoff"
+            : "Stage completion";
+      const guidance = action === "complete_phase" || action === "submit_for_verify"
+        ? "\n\nRecommended next step: re-dispatch pypto-op-coder for the same phase, " +
+          "instruct it to fix the violations listed above, and call complete_phase (or " +
+          "submit_for_verify) again."
+        : action === "submit_design"
+          ? "\n\nRecommended next step: re-dispatch pypto-op-designer with the violations " +
+            "listed above (typically a `pypto.<attr>` typo in DESIGN.md pseudo-code). " +
+            "After Designer fixes DESIGN.md, call submit_design again to re-gate before " +
+            "the Verifier (Stage 4 scaffolding) is dispatched."
+          : "";
       throw new Error(
         details
-          ? `以下规则违规导致门禁阻断：\n${details}`
-          : `lint 脚本返回 exit code ${result.exitCode}，但未解析到具体违规项`,
+          ? `${scope} blocked by lint rule violations:\n${details}${guidance}`
+          : `lint script returned exit code ${result.exitCode} with no parsable findings`,
       );
     }
 
@@ -167,15 +293,35 @@ export const PyptoStateTransitionPlugin: Plugin = async (input) => {
   return {
     tool: {
       state_transition: tool({
-        description: "Safely transition .orchestrator_state.json with stage gate enforcement. Actions: init (stage=1 only, first call), start_stage (set stage to in_progress — for init or retry after failure), complete_stage (gate check + mark done + auto-advance to next stage), fail_stage (mark failed + increment retry).",
+        description:
+          "Safely transition .orchestrator_state.json (schema v2.0). " +
+          "Stage actions: init (stage=1 only, first call), start_stage (set stage to in_progress for retry), " +
+          "complete_stage (lint gate check + mark done + auto-advance), fail_stage (mark failed + increment retry). " +
+          "Stage 4 design action: submit_design (Designer→Verifier handoff — runs design-scoped lint OL12+OL55 on DESIGN.md only, throws on FAIL so the Designer is re-dispatched BEFORE the Verifier wastes a cycle on a typo-bearing DESIGN.md; module_interfaces.yaml is intentionally not in scope). " +
+          "Stage 5 phase actions (per-Phase M_k loop): start_phase, submit_for_verify (Coder→Verifier handoff — runs phase-scoped lint, moves status to awaiting_verify on success), complete_phase, fail_phase. " +
+          "Other actions: record_artifact_hash (snapshot SPEC.md/DESIGN.md/etc. hashes), " +
+          "rollback_to_stage (return to an earlier stage with reason and optional failure_category — wipes downstream stages and stage5_phases when target<5).",
         args: {
           opDir: tool.schema.string(),
           action: tool.schema.string(),
-          stage: tool.schema.number(),
+          // Stage actions
+          stage: tool.schema.number().optional(),
+          max_stage: tool.schema.number().optional(),
           reason: tool.schema.string().optional(),
+          // Phase actions (stage=5 only)
+          phase: tool.schema.string().optional(),
+          failure_category: tool.schema.string().optional(),
+          failing_module_boundary: tool.schema.string().optional(),
+          last_error: tool.schema.string().optional(),
+          // Artifact hash
+          name: tool.schema.string().optional(),
+          hash: tool.schema.string().optional(),
+          // Rollback
+          target_stage: tool.schema.number().optional(),
+          failed_phase: tool.schema.string().optional(),
         },
         execute: async (args, context) => {
-          // ── Agent 权限校验：仅 pypto-op-orchestrator 可调用 ──
+          // ── Permission check: orchestrator only ──
           const callerAgent = context?.agent ?? "";
           if (!ALLOWED_AGENTS.has(callerAgent)) {
             throw new Error(
@@ -194,80 +340,115 @@ export const PyptoStateTransitionPlugin: Plugin = async (input) => {
             ? args.opDir
             : path.resolve(baseDir, args.opDir);
           const statePath = path.join(opDir, ".orchestrator_state.json");
-          const prevState = readStateOrInit(statePath);
+          const desiredMaxStage = args.max_stage !== undefined ? Number(args.max_stage) : DEFAULT_MAX_STAGE;
+          const prevState = readStateOrInit(statePath, desiredMaxStage);
 
+          // Lint gate fires on:
+          // - complete_stage  — full stage delivery rules.
+          // - submit_design   — Stage 4 design gate (OL12 + OL55 on DESIGN.md).
+          //   Designer → Verifier handoff; catches `pypto.empty`-style typos
+          //   before Verifier wastes a cycle producing the adversarial harness.
+          // - complete_phase  — phase-scoped final gate (Coder + Verifier done).
+          // - submit_for_verify — phase-scoped gate at Coder→Verifier handoff.
+          //   Same lint as complete_phase; the state transition that follows
+          //   is in_progress → awaiting_verify (not → verified). This catches
+          //   Coder's simple mistakes BEFORE Verifier runs and wastes a cycle.
+          // Artifact / rollback / start_* / fail_* actions still skip the gate.
           let gateSummary: GateSummary = { warnCount: 0, infoCount: 0, failFindings: [] };
-          try {
-            gateSummary = await runGateIfNeeded(opDir, action, args.stage);
-          } catch (error) {
-            const detail = error instanceof Error ? error.message : String(error);
-            throw new Error(
-              `[pypto-op-lint] 交付门禁阻断（ERROR 级违规）：action=${action}, stage=${args.stage}, op_dir=${opDir}\n${detail}`,
-            );
-          }
-
-          // ── SPEC.md 冻结校验 ──
-          // complete_stage(1) 时记录 SPEC.md hash；
-          // complete_stage(N>=3) 时校验 hash 不变，防止 subagent 绕过 hook 修改 SPEC。
-          const specPath = path.join(opDir, "SPEC.md");
-          if (action === "complete_stage" && args.stage === 1) {
-            const hash = computeFileHash(specPath);
-            if (hash) {
-              prevState[SPEC_HASH_KEY] = hash;
+          if (
+            action === "complete_stage" ||
+            action === "submit_design" ||
+            action === "complete_phase" ||
+            action === "submit_for_verify"
+          ) {
+            try {
+              gateSummary = await runGateIfNeeded(
+                opDir,
+                action,
+                args.stage as number | undefined,
+                args.phase as string | undefined,
+              );
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error);
+              const scope =
+                action === "complete_phase"
+                  ? `Phase ${args.phase ?? "?"} completion`
+                  : action === "submit_for_verify"
+                  ? `Phase ${args.phase ?? "?"} verify-handoff`
+                  : action === "submit_design"
+                  ? `Stage 4 design-handoff`
+                  : `Stage completion`;
+              throw new Error(
+                `[pypto-op-lint] ${scope} blocked: action=${action}, ` +
+                `stage=${args.stage ?? "-"}, phase=${args.phase ?? "-"}, op_dir=${opDir}\n${detail}`,
+              );
             }
           }
-          if (action === "complete_stage" && args.stage >= 3) {
-            const savedHash = prevState[SPEC_HASH_KEY];
+
+          // ── SPEC.md freeze enforcement ──
+          // complete_stage(1) auto-records the SPEC.md hash into artifact_hashes.spec_md.
+          // From stage 3 onward, every complete_stage rejects if SPEC.md changed.
+          // To legitimately re-edit SPEC.md, the orchestrator must call
+          // rollback_to_stage(target_stage=1, reason=...).
+          const specPath = path.join(opDir, "SPEC.md");
+          if (action === "complete_stage" && Number(args.stage) === 1) {
+            const hash = computeFileHash(specPath);
+            if (hash) {
+              prevState.artifact_hashes = prevState.artifact_hashes ?? {};
+              prevState.artifact_hashes.spec_md = hash;
+            }
+          }
+          if (action === "complete_stage" && Number(args.stage) >= 3) {
+            const savedHash = prevState.artifact_hashes?.spec_md;
             if (typeof savedHash === "string") {
               const currentHash = computeFileHash(specPath);
               if (currentHash && currentHash !== savedHash) {
                 throw new Error(
-                  `[pypto-op-lint] SPEC.md 冻结违规：SPEC.md 在 Stage 2 完成后被修改。` +
-                  `当前 hash=${currentHash.slice(0, 12)}… 与记录 hash=${savedHash.slice(0, 12)}… 不一致。` +
-                  `如需变更需求规格，应通过 fail_stage 回退到 Stage 1 重新审核。`,
+                  `SPEC.md freeze violation: SPEC.md was modified after Stage 1 completion. ` +
+                  `current hash=${currentHash.slice(0, 12)}… recorded hash=${savedHash.slice(0, 12)}…. ` +
+                  `To legitimately revise the spec, call rollback_to_stage(target_stage=1, reason=...).`,
                 );
               }
             }
           }
 
-          const nextState = applyTransition(prevState, {
-            action,
-            stage: args.stage,
-          });
-
-          // 将 SPEC hash 持久化到 state（init/complete_stage(1) 时写入）
-          if (prevState[SPEC_HASH_KEY]) {
-            nextState[SPEC_HASH_KEY] = prevState[SPEC_HASH_KEY];
-          }
+          // Build and apply the transition
+          const transitionInput = buildTransitionInput(action, args as Record<string, unknown>);
+          const nextState = applyTransition(prevState, transitionInput);
 
           writeStateAtomically(statePath, nextState);
 
-          if (gateSummary.warnCount > 0 || gateSummary.infoCount > 0) {
-            // 记录日志失败不应影响状态迁移结果（避免“落盘成功但工具返回异常”）。
-            try {
-              await client.app.log({
-                body: {
-                  service: "pypto-state-transition",
-                  level: "info",
-                  message: `[state_transition] ${action} stage=${args.stage} completed`,
-                  extra: {
-                    opDir,
-                    reason: args.reason ?? "",
-                    warnCount: gateSummary.warnCount,
-                    infoCount: gateSummary.infoCount,
-                  },
+          // Audit log (non-fatal)
+          try {
+            await client.app.log({
+              body: {
+                service: "pypto-state-transition",
+                level: "info",
+                message: `[state_transition] ${action} completed`,
+                extra: {
+                  opDir,
+                  action,
+                  stage: args.stage,
+                  phase: args.phase,
+                  target_stage: args.target_stage,
+                  reason: args.reason ?? "",
+                  warnCount: gateSummary.warnCount,
+                  infoCount: gateSummary.infoCount,
                 },
-              });
-            } catch {
-              // no-op
-            }
+              },
+            });
+          } catch {
+            // no-op
           }
 
           return JSON.stringify({
             ok: true,
             action,
             stage: args.stage,
-            next_stage: nextState.current_stage,
+            phase: args.phase,
+            target_stage: args.target_stage,
+            current_stage: nextState.current_stage,
+            stage5_active_phase: nextState.stage5_phases?.active_phase ?? null,
             statePath,
             warnCount: gateSummary.warnCount,
             infoCount: gateSummary.infoCount,

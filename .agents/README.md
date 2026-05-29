@@ -1,219 +1,291 @@
-# PyPTO OpenCode 工作流
+# PyPTO Agent Team
 
-通过 AI 代理与专家技能，自动完成昇腾 NPU 算子开发全流程：
+预配置的 9 智能体团队，覆盖昇腾 NPU 算子从零到一的端到端开发，由显式的 Stage 1–7 状态机驱动，并由自动化 lint 门禁守护。
 
 ```
-需求分析 → API 探索 → Golden 生成 → 设计方案 → 代码实现 → 精度验证 → 性能调优 → PR 提交
+Stage 1 规划 → 2 算法 → 3 架构 → 4 设计
+        → 5 构造 → 6 验证 → 7 调优
 ```
 
-本仓库为 [OpenCode](https://opencode.ai) 预配置了项目规范（AGENTS.md）、专家技能（Skills）和协作代理（Agents），开箱即用。
+本仓库提供：
+
+- **`AGENTS.md`** — 项目入口，stage、agent、规约的权威说明
+- **`.opencode/agents/`** — 9 个 agent 定义（1 个 primary 编排者 + 8 个专职 sub-agent）
+- **`.opencode/plugins/`** — 状态机插件与 OL lint 守卫（TypeScript）
+- **`.agents/skills/`** — 43 个专家技能（编排、规划、golden、设计、构造、验证、调优、调试、Pass 分析、PR 流程、环境）
+- **`.agents/hooks/pypto-op-lint/`** — Python lint 引擎：43 条规则、5 个维度，在每次文件写入与每次测试执行后自动运行
+
+同时支持 [opencode](https://opencode.ai) 与 [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)。
+
+> **使用 Claude Code 的用户请先参考 [Claude Code 配置](#claude-code-配置)** 完成一次性迁移。opencode 用户无需任何额外配置。
+
+---
+
+## 快速上手 — 实际怎么跑起来
+
+> **最关键的一步**：会话开始时，切换到 `pypto-op-orchestrator` agent。如果跳过这一步，默认 agent 不会调度 9 智能体团队，会自己包揽所有工作。
+
+| 工具 | 切换到编排者的方法 |
+|:---|:---|
+| **opencode** | 仓库根目录启动 `opencode`，按 **`Tab`**，选 `pypto-op-orchestrator`。无需任何安装 — agent / skill / plugin / lint 全部自动发现。 |
+| **Claude Code** | 需要一次性配置（见下方 [Claude Code 配置](#claude-code-配置)）。然后在仓库根目录运行 `claude --agent pypto-op-orchestrator`。 |
+
+接着用自然语言描述算子（数学公式、规格文档或论文链接）。编排者会读取 `AGENTS.md`，加载操作手册（[`pypto-orchestration-manual`](skills/pypto-orchestration-manual/SKILL.md)），按 Stage 1–7 推进 — 在每个 stage 调度对应专职 agent，并在每次 Stage Stop 时跑 OL lint 引擎。
+
+如果你跳过这一步，对默认 agent 直接说「帮我做一个 PyPTO 算子」，得到的是单 agent 答复，会绕过门禁、lint 引擎和状态机。**永远先切换到编排者。**
 
 ---
 
 ## 快速开始
 
-在本仓库目录下启动 OpenCode，通过以下任一方式描述你的目标：
+切换到编排者之后，用以下任一方式描述目标。
 
-### 方式一：数学公式描述
-
-```
-我需要开发一个名为 sinh 的算子，数学公式是 (e^x - e^(-x)) / 2。
-输入是 shape 为 [b, s, n, d] 的 float32 tensor，输出 shape 相同。
-精度要求：atol=0.000025, rtol=0.005。
-```
-
-### 方式二：提供算子方案文档
+**方式 1 — 数学公式**
 
 ```
-请根据 ./docs/my_operator_spec.md 中的方案文档，开发对应的 PyPTO 算子。
+我要开发一个名为 sinh 的算子。公式：(e^x - e^(-x)) / 2。
+输入：shape 为 [b, s, n, d] 的 float32 tensor。输出 shape 相同。
+精度：atol=2.5e-5, rtol=5e-3。
 ```
 
-### 方式三：提供算子论文链接
+**方式 2 — 算子规格文档**
 
 ```
-请根据 https://arxiv.org/abs/2205.14135 这篇 Flash Attention 论文，实现对应的 PyPTO 算子。
+请根据 ./docs/my_operator_spec.md 中的方案文档开发对应的 PyPTO 算子。
 ```
 
-OpenCode 会自动加载项目规范，选择合适的技能，按标准流程执行开发任务。无需手动配置。
+**方式 3 — 算子论文**
+
+```
+请将 https://arxiv.org/abs/2205.14135 (Flash Attention) 中描述的算子实现为 PyPTO kernel。
+```
+
+编排者将自动按 Stage 1–7 推进。
 
 ---
 
-## 使用方式
+## 9 智能体团队
 
-本节介绍如何在 OpenCode 和 Claude Code 中使用本项目的 Skills 和 Agents 进行算子开发。
+| Agent | Mode | Stage | 职责 |
+|:---|:---:|:---:|:---|
+| [`pypto-op-orchestrator`](../.opencode/agents/pypto-op-orchestrator.md) | primary | 1–8 | 入口。推进 stage、强制门禁、调度 sub-agent。本身不直接做领域工作。 |
+| [`pypto-op-planner`](../.opencode/agents/pypto-op-planner.md) | subagent | 1 | 将用户需求翻译为 `SPEC.md` + `API_REPORT.md`；初始化 `MEMORY.md`。 |
+| [`pypto-op-mathematician`](../.opencode/agents/pypto-op-mathematician.md) | subagent | 2 | 产出 PyPTO 友好的 `<op>_golden.py` 参考实现与 Golden 函数清单。 |
+| [`pypto-op-architect`](../.opencode/agents/pypto-op-architect.md) | subagent | 3 | 产出 `DESIGN.md`：tiling 策略、loop 结构、性能目标表。 |
+| [`pypto-op-designer`](../.opencode/agents/pypto-op-designer.md) | subagent | 4 | 将 kernel 拆分为语义模块，定义 `module_interfaces.yaml`。 |
+| [`pypto-op-coder`](../.opencode/agents/pypto-op-coder.md) | subagent | 5 | 每次调度只写一个 impl 文件。先 per-module 累计构建 (`modules/<op>_module<k>_impl.py`)，最后一个模块通过 verify 后做 cleanup 把累计 impl 整理成 `<op>_impl.py` 并写 `README.md`。从不写测试，从不调试。 |
+| [`pypto-op-verifier`](../.opencode/agents/pypto-op-verifier.md) | subagent | 4–7 | 仅评判。运行 `detailed_tensor_compare`、布局检查、prefix-eval、回归检查。分类失败原因。从不调查、从不修复。 |
+| [`pypto-op-debugger`](../.opencode/agents/pypto-op-debugger.md) | subagent | 5（按需） | 一次加载一个调试子技能，定位根因，给出补丁建议。补丁由 coder 应用。 |
+| [`pypto-op-optimizer`](../.opencode/agents/pypto-op-optimizer.md) | subagent | 7 | 在精度冻结后做三阶段性能调优（frontend → swimlane → incore）。 |
 
-### OpenCode
+Agent 之间通过两个产物交换信息：
+- `custom/<op>/MEMORY.md` — 共享叙事（所有 agent 读写）
+- `custom/<op>/.orchestrator_state.json` — 机器可读状态（仅编排者写入；由 lint 插件强制保护）
 
-在 PyPTO 仓库主目录启动 OpenCode，通过以下方式开始算子开发：
-
-#### 方式一：直接调用 Skill
-
-在对话中描述开发任务，自动触发 `pypto-op-workflow`：
-
-```
-开发一个 sinh 算子，数学公式是 (e^x - e^(-x)) / 2
-```
-
-或使用斜杠命令明确指定：
-
-```
-/pypto-op-workflow 开发一个 sinh 算子
-```
-
-#### 方式二：切换到 Orchestrator Agent
-
-按 `Tab` 键切换到 `pypto-op-orchestrator` 代理，然后输入开发任务：
-
-```
-开发一个 sinh 算子，数学公式是 (e^x - e^(-x)) / 2
-```
-
-> **提示**：Orchestrator 会自动编排 7 阶段状态机：需求理解 → API 探索 → Golden 生成 → 设计方案 → 代码实现 → 精度修复 → 性能调优
+更多细节（职责边界、完成判据、信息隔离）见 [`AGENTS.md`](../AGENTS.md) 与操作手册 [skill `pypto-orchestration-manual` (SKILL.md auto-loads)](skills/pypto-orchestration-manual/SKILL.md)。
 
 ---
 
-### Claude Code
+## Stage 1–7 工作流
 
-#### 前置准备
+| Stage | 名称 | Agent | 输入 | 产出 |
+|:---:|:---|:---|:---|:---|
+| 1 | Planning | planner | 用户需求 | `SPEC.md`, `API_REPORT.md` |
+| 2 | Algorithm | mathematician | `SPEC.md` | `<op>_golden.py` |
+| 3 | Architecture | architect | `<op>_golden.py` | `DESIGN.md` |
+| 4 | Design | designer（+ verifier 搭脚手架） | `DESIGN.md` | `module_interfaces.yaml`、scaffolding |
+| 5 | Construction | coder ↔ verifier ↔ debugger | `module_interfaces.yaml` | 每次 Phase M_k 产出一个 `_module<k>_impl.py`；最后 cleanup 阶段产出 `<op>_impl.py`、`test_<op>.py`、`README.md` |
+| 6 | Verification | verifier | `<op>_impl.py` | 布局 / 结构 / 端到端 PASS/FAIL 裁决 |
+| 7 | Optimization | optimizer + verifier | Stage 6 已通过 | 优化后的 impl |
 
-Claude Code 使用不同的目录结构，需要先迁移项目配置：
-
-```bash
-# 1. 创建 Claude Code 目录结构
-mkdir -p .claude/skills .claude/agents
-
-# 2. 复制项目指令文件
-cp AGENTS.md CLAUDE.md
-
-# 3. 复制 Skills 到 Claude Code 目录
-cp -r .agents/skills/* .claude/skills/
-
-# 4. 复制 Agents 到 Claude Code 目录
-cp -r .opencode/agents/* .claude/agents/
-
-# 5. 复制 Hook 配置（权限、lint hooks 等）
-cp .agents/settings.json .claude/settings.json
-```
-
-#### 方式一：直接调用 Skill
-
-启动 Claude Code 后，直接在对话中调用 skill：
-
-```bash
-# 启动 Claude Code
-claude
-```
-
-然后在对话中使用斜杠命令：
+### Stage 5 内部循环（per-module M_k）
 
 ```
-/pypto-op-workflow 开发一个 sinh 算子
+coder 写模块 M_k
+        │
+        ▼
+verifier 评判（detailed_tensor_compare + prefix-eval --up-to-module k + 布局检查）
+        │
+        ├── PASS ──► 下一个模块 M_{k+1}
+        │
+        └── FAIL ──► debugger 调查
+                          │
+                          ▼
+                     在 MEMORY.md 中给出补丁建议
+                          │
+                          ▼
+                     coder 应用补丁 ──► 回到 verifier
 ```
 
-或自然语言描述：
-
-```
-请使用 pypto-op-workflow 技能开发一个 sinh 算子
-```
-
-#### 方式二：指定 Agent 启动
-
-使用 `--agent` 参数直接指定代理启动 Claude Code：
-
-```bash
-claude --agent pypto-op-orchestrator
-```
-
-启动后，在对话中输入算子开发任务即可。
+M_{k+1} 不能在 M_k 通过之前启动。
 
 ---
 
-### 使用建议
+## Agent 跑出来的产物
 
-| 场景 | 推荐方式 |
+每个算子在 `custom/<op>/` 目录下生成。下方是 Stage 1–7 完整跑通后的文件结构，已标注每个文件由哪个 stage 产出。
+
+```
+custom/<op>/
+├─ MEMORY.md                              ← 共享叙事；所有 agent 读写（编排者在 S1 初始化）
+├─ .orchestrator_state.json               ← 机器可读状态机（仅编排者写入）
+│
+├─ SPEC.md                                ← S1：结构化算子规格（公式、shape、dtype、容差）
+├─ API_REPORT.md                          ← S1：PyPTO API 映射、不支持算子、规避方案
+│
+├─ <op>_golden.py                         ← S2：纯 PyTorch fp32 参考实现 + Golden 函数清单
+│
+├─ DESIGN.md                              ← S3：tiling 策略、loop 结构、数值稳定性档案、
+│                                              Layers A–L、性能目标表
+│
+├─ module_interfaces.yaml                 ← S4：语义模块分解 + 每模块契约
+│
+├─ modules/
+│  ├─ <op>_module<k>_golden.py            ← S4：每模块 torch golden（verifier 搭脚手架时建立）
+│  ├─ <op>_module<k>_impl.py              ← S5：每模块 PyPTO impl（每次 Phase M_k 调度产一个）
+│  └─ test_<op>_module<k>.py              ← S4：每模块测试（adversarial harness，verifier 编写）
+│
+├─ <op>_impl.py                           ← S5（cleanup）：集成 PyPTO impl（最终 kernel）
+├─ test_<op>.py                           ← S5（cleanup）：端到端测试
+├─ README.md                              ← S5（cleanup）：算子级 README（用法、配置、已知约束）
+│
+└─ eval/
+   ├─ module_interfaces.yaml              ← S4：机器可读契约（lint OL49 交叉验证）
+   ├─ adversarial_cases.json              ← S4：verifier 生成的边界用例
+   ├─ evaluation_report.json              ← S5/S6：verifier 裁决（PASS/FAIL + failure_category）
+   └─ prefix_eval_results.json            ← S5：prefix 评测（<op>_impl.py 至 module k）
+```
+
+**Stage 7 不会新增文件** — 它原地修改 `<op>_impl.py`。优化报告追加到 `MEMORY.md`；中间产物（swimlane / leafhash dump）按需生成在同级的 `<op>_perf/` 目录下。
+
+| Stage | 新增文件 | 一句话说明 |
+|:---:|:---|:---|
+| 1 | `MEMORY.md`, `SPEC.md`, `API_REPORT.md` | 框定问题与 API 表面 |
+| 2 | `<op>_golden.py` | kernel 必须匹配的位级精度参考 |
+| 3 | `DESIGN.md` | 实现方案（tiling、loop、稳定性） |
+| 4 | `module_interfaces.yaml`、`modules/<op>_module<k>_golden.py`、`modules/test_<op>_module<k>.py`、`eval/adversarial_cases.json` | 契约 + 脚手架，使每个模块能独立构造与评判 |
+| 5 | `modules/<op>_module<k>_impl.py`、`eval/prefix_eval_results.json`；最后一个 M_k 通过后 cleanup：`<op>_impl.py`, `test_<op>.py`, `README.md` | 每模块 impl 累计构建；最后整理出最终 kernel + 端到端测试 |
+| 6 | （无 — 仅做门禁） | 布局、结构性、端到端精度门禁 |
+| 7 | （修改 `<op>_impl.py`） | 调优后的 kernel；性能报告写入 `MEMORY.md` |
+
+Lint 引擎会把 `module_interfaces.yaml` 中的契约与 impl 做交叉验证（OL49）、强制 `_golden.py` / `_impl.py` / `test_*.py` 三文件分离（D3 规则）、并对每个 impl 强制 Layer A–L 结构（D1 规则）。任一不通过，对应的 Write/Edit 在工具边界即被拦截 — 详见下方 [Lint 与状态机](#lint-与状态机--自动门禁)。
+
+---
+
+## Skills（共 43 项）
+
+每个 skill 是 `.agents/skills/<name>/` 下的一个目录，包含入口 `SKILL.md`，可选子目录 `references/`、`scripts/`、`templates/`。点击 skill 名跳转到对应 `SKILL.md`。
+
+### 编排与共享状态
+
+| Skill | 用途 |
 |:---|:---|
-| 完整算子开发流程 | 方式二（Orchestrator Agent） |
-| 单步任务（如只需生成 Golden） | 方式一（直接调用对应 Skill） |
-| 调试修复类任务 | 方式一（直接调用 `pypto-precision-debug` 等） |
+| [`pypto-orchestration-manual`](skills/pypto-orchestration-manual/SKILL.md) | 编排者启动手册：principles / stage 计划 / 团队名册 / 强制规则 / 路由目录 |
+| [`pypto-memory-template`](skills/pypto-memory-template/SKILL.md) | `custom/<op>/MEMORY.md` 的必填结构（章节、机器可读字段、更新节奏） |
+
+### Stage 1–4 — 规划、算法、架构、设计
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-intent-understand`](skills/pypto-intent-understand/SKILL.md) | Stage 1：将自然语言算子需求转为结构化规格 |
+| [`pypto-api-explore`](skills/pypto-api-explore/SKILL.md) | Stage 1：PyPTO API 映射、约束检查、tiling 可行性 |
+| [`pypto-op-plan`](skills/pypto-op-plan/SKILL.md) | Stage 1：triage、API 可用性检查、规划文件初始化 |
+| [`pypto-golden-generate`](skills/pypto-golden-generate/SKILL.md) | Stage 2：产出纯 PyTorch `<op>_golden.py` 与必备函数清单；§13 涵盖既有参考的规范化、`.T` 禁用、shape 注释、Golden function inventory、freeze |
+| [`pypto-op-design`](skills/pypto-op-design/SKILL.md) | Stage 3：产出 `DESIGN.md`（API 映射、精度路由、tiling 推导、loop 排布） |
+
+### Stage 5–6 — 构造、集成、验证
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-op-construct`](skills/pypto-op-construct/SKILL.md) | Stage 4 模块分解 + Stage 5 单模块构造循环 |
+| [`pypto-op-develop`](skills/pypto-op-develop/SKILL.md) | coder 编码手册：实现模式、错误码表、空闲 chip 选择 |
+| [`pypto-op-verify`](skills/pypto-op-verify/SKILL.md) | 验证 runner 规格、`detailed_tensor_compare` 用法、成功判据、交付物 |
+| [`pypto-op-review`](skills/pypto-op-review/SKILL.md) | `custom/<op>/` 布局检查（CI、pre-commit、agent 可运行） |
+| [`pypto-fused-op-integration`](skills/pypto-fused-op-integration/SKILL.md) | 整网集成：tensor 打点 → golden 验证 → 算子替换 → 端到端验证 |
+
+### Stage 7 — 性能调优
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-op-optimization`](skills/pypto-op-optimization/SKILL.md) | Stage 7 入口：配置级 + 算法级优化；只在精度冻结后启动 |
+| [`pypto-op-perf-tune`](skills/pypto-op-perf-tune/SKILL.md) | 调优总流程：用例执行 + 性能采集 + 分步调优 + 报告 |
+| [`tune-frontend`](skills/pypto-op-perf-tune/tune-frontend/SKILL.md) | 开箱调优：loop 写法、TileShape、数据搬运 |
+
+| [`tune-swimlane`](skills/pypto-op-perf-tune/tune-swimlane/SKILL.md) | 泳道图深度调优：Stitch、TileShape 深度调优、合图、调度策略；含自动调优脚本（泳道图提取、AIV 依赖链、leafhash → code 映射） |
+
+| [`tune-incore`](skills/pypto-op-perf-tune/tune-incore/SKILL.md) | 核内调优：指令级、核内流水、特殊 shape 处理 |
+| [`perf-analyzer`](skills/pypto-op-perf-tune/perf-analyzer/SKILL.md) | 性能数据提取、评级、瓶颈分析、优化建议 |
+
+### 调试与精度
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-general-debug`](skills/pypto-general-debug/SKILL.md) | 调试路由：失败历史、策略切换、逐算子协议、按主题的参考索引 |
+| [`pypto-precision-compare`](skills/pypto-precision-compare/SKILL.md) | 两种精度对比：文件保存（`pypto.pass_verify_save` + `torch.save`）与检查点 tensor 二分对比 |
+| [`pypto-precision-debug`](skills/pypto-precision-debug/SKILL.md) | 用户代码层面精度排查：语法/逻辑检查、规避方法尝试 |
+| [`pypto-aicore-error-locator`](skills/pypto-aicore-error-locator/SKILL.md) | aicore error 时定位 CCE 文件与源代码行 |
+| [`pypto-host-stacktrace-analyzer`](skills/pypto-host-stacktrace-analyzer/SKILL.md) | host 端 Python/C++ 堆栈的地址—源码映射与符号解析 |
+| [`pypto-memory-overlap-detector`](skills/pypto-memory-overlap-detector/SKILL.md) | MACHINE workspace 内存重叠与管理问题的检测与修复 |
+| [`pypto-machine-workspace`](skills/pypto-machine-workspace/SKILL.md) | workspace 内存异常偏大的诊断；逐层拆解内存预算 |
+| [`pypto-fracture-point-detector`](skills/pypto-fracture-point-detector/SKILL.md) | 识别当前会话的框架/文档断裂点，产出可转化为 Issue 的报告 |
+
+### Pass 模块（编译期）
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-pass-error-locator`](skills/pypto-pass-error-locator/SKILL.md) | Pass 模块错误诊断：定位、根因分析、修复建议 |
+| [`pypto-pass-module-analyzer`](skills/pypto-pass-module-analyzer/SKILL.md) | Pass 模块代码分析；产出结构化 Pass 模块文档 |
+| [`pypto-pass-workflow-analyzer`](skills/pypto-pass-workflow-analyzer/SKILL.md) | Pass 业务流分析：职责、执行顺序、数据依赖 |
+| [`pypto-pass-perf-optimizer`](skills/pypto-pass-perf-optimizer/SKILL.md) | Pass 编译期性能优化 |
+| [`pypto-pass-ut-generate`](skills/pypto-pass-ut-generate/SKILL.md) | 根据业务描述生成 Pass UT 用例 |
+
+### PR / Issue / 代码质量
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-pr-creator`](skills/pypto-pr-creator/SKILL.md) | 创建/更新 `cann/pypto` PR：fork 校验、Git 认证、upstream 同步、commit 检查、CLA |
+| [`pypto-pr-fixer`](skills/pypto-pr-fixer/SKILL.md) | 修复 PyPTO PR 的 CodeCheck CI 失败与 review 评论 |
+| [`pypto-issue-creator`](skills/pypto-issue-creator/SKILL.md) | 创建结构化 GitCode Issue：Bug、Feature、Doc、Question 等 |
+| [`pypto-skill-reviewer`](skills/pypto-skill-reviewer/SKILL.md) | 审计 skill 目录的质量与最佳实践合规性，并打分 |
+| [`pypto-skill-validation-prompt`](skills/pypto-skill-validation-prompt/SKILL.md) | 为任意 skill 生成校验提示词，验证产物是否匹配自身声明 |
+
+### 环境与安装
+
+| Skill | 用途 |
+|:---|:---|
+| [`pypto-environment-setup`](skills/pypto-environment-setup/SKILL.md) | PyPTO 环境安装与修复：CANN、torch_npu、工具链、第三方依赖 |
+| [`gitcode-mcp-install`](skills/gitcode-mcp-install/SKILL.md) | 安装与配置 GitCode MCP Server，使 AI 客户端可与 GitCode 平台交互 |
+| [`migrate-huggingface-to-npu`](skills/migrate-huggingface-to-npu/SKILL.md) | 将 Hugging Face 大模型迁移到昇腾 NPU；解决 torch / torch-npu 版本问题 |
 
 ---
 
-## 核心架构
-
-### AGENTS.md — 项目规范
-
-AGENTS.md 是 OpenCode 的项目级自定义指令文件。当你在本仓库中使用 OpenCode 时，它会自动加载并生效——无需手动操作。
-
-该文件定义了：
-
-- **Skills 索引**：按场景分类的技能清单（算子开发、精度调试、性能分析、环境工具、PR 质量）
-- **通用原则**：如实报告、先验证再下结论、区分事实与推断、最小必要改动
-- **核心算子开发原则**：理解原理后实现、遇问题先定位、工件职责分离、以官方资料为准、优先 NPU 真机验证
-
-> 进一步了解：[OpenCode 自定义规则文档](https://opencode.ai/docs/zh-cn/rules/)
-
----
-
-### Agents — 协作代理
-
-代理是定义在 `.opencode/agents/` 目录下的协作实体，负责编排和隔离执行复杂任务。
-
-| 代理 | 模式 | 职责 |
-|:---|:---|:---|
-| `pypto-op-orchestrator` | Primary | 算子端到端开发编排，管理 7 阶段状态机 |
-| `pypto-op-analyst` | Subagent | Golden 生成与 Design 设计分析（上下文隔离） |
-| `pypto-op-developer` | Subagent | 代码实现与精度修复（上下文隔离） |
-| `pypto-op-perf-tuner` | Subagent | 性能分析与调优（上下文隔离） |
-| `pypto-code-merge-agent` | Subagent | 代码变更到 PR 提交的自动化流程 |
-
-**Orchestrator 状态机**：
-
-```
-Stage 1: 需求理解 (pypto-intent-understand)
-    ↓
-Stage 2: API 探索 (pypto-api-explore)
-    ↓
-Stage 3: Golden 生成 → Analyst Subagent
-    ↓
-Stage 4: Design 设计 → Analyst Subagent
-    ↓
-Stage 5: 代码实现 → Developer Subagent
-    ↓
-Stage 6: 精度修复 → Developer Subagent (可选)
-    ↓
-Stage 7: 性能调优 → PerfTuner Subagent
-```
-
----
-
-### Skills（专家技能）
+##　Skills 技能详解
 
 技能是定义在 `.agents/skills/` 目录下的可复用行为模块。每个 skill 包含一个 `SKILL.md` 文件，描述完整的执行流程。
 
 **调用方式**：
 
 **自动匹配** — 描述目标，OpenCode 自动选择：
+
 ```
 我需要开发一个 PyPTO 算子，请帮我完成环境检查和开发流程。
 ```
 
 **斜杠命令** — 明确指定技能：
+
 ```
 /pypto-op-workflow
 ```
 
 **自然语言点名** — 在对话中提及：
+
 ```
 请使用 pypto-op-workflow 技能帮我开发一个算子。
 ```
 
 > 进一步了解：[OpenCode Skills 文档](https://opencode.ai/docs/zh-cn/skills/)
 
----
-
-## 技能详解
-
-按场景快速定位：[算子开发](#算子开发与编排) · [精度调试](#精度验证与调试) · [性能分析](#性能分析) · [环境配置](#环境与工具) · [PR提交](#pr-与代码质量)
+按场景快速定位：[算子开发](#算子开发与编排) · [精度调试](#精度验证与调试) · [性能分析](#性能分析-1) · [环境配置](#环境与工具) · [PR提交](#pr-与代码质量)
 
 ### 算子开发与编排
 
@@ -387,6 +459,116 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 ---
 
+## Lint 与状态机 — 自动门禁
+
+两个 opencode 插件在每次 tool 调用时自动运行。**任何 agent 都不需要手动调用它们。**
+
+### `pypto-op-lint.ts`
+
+在每次相关的 tool 事件后运行 OL lint 引擎（`.agents/hooks/pypto-op-lint/`）：
+
+| 事件 | 触发条件 | 执行内容 |
+|:---|:---|:---|
+| `tool.execute.after`（Write/Edit） | 文件名匹配 `*_impl.py`、`*_golden.py` 或 `test_*.py` | `post-edit` hook — 用 43 条 OL 规则校验；命中 S0/S1 规则时**拦截**本次 tool 调用 |
+| `tool.execute.after`（Bash） | 命令匹配 `python test_*.py` | `post-bash` hook — 解析 stdout/stderr/exit code 并产出裁决 |
+| `tool.execute.before`（Bash） | 命令尝试写入 `.orchestrator_state.json` | **拦截** — 该文件仅允许编排者通过状态机插件修改 |
+
+规则定义在 [`.agents/hooks/pypto-op-lint/rules.json`](hooks/pypto-op-lint/rules.json)（v2.0，43 条）。五个维度：
+
+| 维度 | 覆盖范围 |
+|:---|:---|
+| **D1** | 框架约束合规 — 装饰器、签名 shape、JIT 要求 |
+| **D2** | 工件完整性 — 每个 stage 的必备文件 |
+| **D3** | 三文件分离 — golden / impl / test 的边界（impl 中无 torch、golden 中无 pypto） |
+| **D4** | 测试规范 — adversarial 覆盖、tolerance 模式（`atol/rtol` 或 `mare/mere/rmse` 矩阵） |
+| **D5** | 跨文件一致性 — 模块契约与 impl 一致 |
+
+严重级别：S0（致命）→ S1（必修）→ S2（警告）→ S3（信息）。
+
+### `pypto-state-transition.ts`
+
+守护 stage 间转移，发出 Phase M_k 循环事件。支持 `rollback_to_stage`，让单个失控模块不会污染其余流水线。核心逻辑放在 `lib/state-transition-core.ts`，与 opencode 解耦，可独立单测。
+
+两个插件都在 `.opencode/plugins/__tests__/` 下提供单元测试。
+
+---
+
+## Claude Code 配置
+
+opencode 自动发现 `.opencode/agents/`、`.agents/skills/`、`.opencode/plugins/`。Claude Code 使用不同的目录结构（`.claude/agents/`、`.claude/skills/`、`CLAUDE.md`、`.claude/settings.json`），需要一次性迁移配置。lint 插件（`.opencode/plugins/pypto-op-lint.ts`）属于 opencode 专用，不会自动迁移 — 但同一份 Python lint 引擎可以通过 Claude Code 的 hooks API 接入（见步骤 3）。
+
+> **一次性配置**，在仓库根目录运行。仅在新增 agent/skill 或刷新 hook 配置时需要重跑。
+
+### 1. 创建 `.claude/` 目录结构
+
+Claude Code 使用不同的目录结构，需要先迁移项目配置：
+
+```bash
+# 1. 创建 Claude Code 目录结构
+mkdir -p .claude/skills .claude/agents
+
+# 2. 复制项目指令文件
+cp AGENTS.md CLAUDE.md
+
+# 3. 复制 Skills 到 Claude Code 目录
+cp -r .agents/skills/* .claude/skills/
+
+# 4. 复制 Agents 到 Claude Code 目录
+cp -r .opencode/agents/* .claude/agents/
+
+# 5. 复制 Hook 配置（权限、lint hooks 等）
+cp .agents/settings.json .claude/settings.json
+```
+
+### 2. 指定 Agent 启动 Claude Code
+
+使用 `--agent` 参数让 Claude Code 启动时直接进入编排者：
+
+```bash
+claude --agent pypto-op-orchestrator
+```
+
+启动后，在对话中描述算子开发任务即可。
+
+### 3. 验证配置
+
+启动后，确认编排者已激活：
+- 它的开场白会提到 Stage 1–7 与 9 智能体团队
+- 输入 `/agents`，确认列表里能看到全部 9 个 `pypto-op-*` agent
+- 编辑任意 `*_impl.py` 写一些违规内容；OL lint hook 应触发并（如果是 S0/S1 违规）拦截本次编辑
+
+如果上述任一项失败，最常见原因：
+- 工作目录不在仓库根（Claude Code 从 `cwd` 向上检索 `.claude/`）
+- agent 的 `mode:` frontmatter 行让 Claude Code 报警告（这是 opencode 专用字段）。如果遇到，按下行去掉 `mode:`：`for f in .opencode/agents/*.md; do sed '/^mode:/d' "$f" > ".claude/agents/$(basename "$f")"; done`
+
+---
+
+## 单技能模式（不走编排者）
+
+如果只想用某一项能力 — 比如对已有 kernel 跑一次 `pypto-precision-compare`，或让 `pypto-pr-creator` 把本地修改提成 PR — 可以不通过编排者，直接调用单个 skill。它读取的是同一份 `SKILL.md`，但不会推进 Stage 1–7，也不会触发 lint 门禁。
+
+这种模式适合诊断、orchestrated run 之后的补丁修复，以及一次性的 PR/Issue 工作。
+
+---
+
+## 仓库布局
+
+```
+pypto/
+├─ AGENTS.md                          ← 项目入口（权威规约）
+├─ .opencode/
+│  ├─ agents/                         ← 9 个 agent 定义（markdown frontmatter + body）
+│  └─ plugins/                        ← 状态机 + OL lint 插件（TypeScript + 单测）
+└─ .agents/
+   ├─ README.md                       ← 当前文件
+   ├─ skills/                         ← 43 个专家技能，每个含 SKILL.md
+   ├─ hooks/pypto-op-lint/            ← Python lint 引擎（43 规则、11 单测、JSON 事件日志）
+   ├─ settings.json                   ← agent 运行时设置
+   └─ user_in.md                      ← 用户提示词模板
+```
+
+---
+
 ## 常见问题
 
 <details>
@@ -433,6 +615,19 @@ Stage 7: 性能调优 → PerfTuner Subagent
 </details>
 
 <details>
+<summary><b>Claude Code 启动后 settings.json 报错怎么办？</b></summary>
+
+`.claude/settings.json` JSON 格式错误时，可用 `jq` 校验语法：
+
+```bash
+jq . .claude/settings.json
+```
+
+如果输出报错信息（如 `parse error`），按提示定位行号并修正。校验通过则会回显完整 JSON。
+
+</details>
+
+<details>
 <summary><b>OpenCode 和 Claude Code 的 Hook/Lint 机制有什么区别？</b></summary>
 
 两种工具共享同一份 Python lint 脚本（`.agents/hooks/pypto-op-lint/pypto_op_lint.py`），但触发方式不同：
@@ -447,3 +642,11 @@ Stage 7: 性能调优 → PerfTuner Subagent
   - `Stop` → 交付门禁
 
 </details>
+
+---
+
+## 进一步阅读
+
+- [`AGENTS.md`](../AGENTS.md) — 完整的项目规约、Stage 1–7 详解、lint/状态机规格、核心算子开发原则
+- [skill `pypto-orchestration-manual` (SKILL.md auto-loads)](skills/pypto-orchestration-manual/SKILL.md) — 编排者启动手册（调试编排逻辑时先读它）
+- [`hooks/pypto-op-lint/rules.json`](hooks/pypto-op-lint/rules.json) — 权威 OL 规则集（v2.0，43 条）

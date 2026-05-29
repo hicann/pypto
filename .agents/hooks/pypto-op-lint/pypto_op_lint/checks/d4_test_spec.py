@@ -12,7 +12,7 @@ from ..utils import _check_npu_available
 
 @register("OL19")
 def check_ol19(ctx: CheckContext) -> Finding:
-    """test 必须使用 assert_allclose"""
+    """test 必须使用 assert_allclose 或 detailed_tensor_compare 做精度比对。"""
     test_file = f"test_{ctx.op_name}.py"
     source = ctx.read_file(test_file)
     if not source:
@@ -20,19 +20,21 @@ def check_ol19(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(test_file)
     if tree is None:
         return ctx.make_finding("OL19", "SKIP", f"{test_file} 无法解析")
-    has_allclose = False
+    # 接受任一标准比对工具: numpy assert_allclose 或 verifier 的 detailed_tensor_compare
+    _compare_helpers = ("assert_allclose", "detailed_tensor_compare")
+    has_compare = False
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             call_str = ast.dump(node.func)
-            if "assert_allclose" in call_str:
-                has_allclose = True
+            if any(h in call_str for h in _compare_helpers):
+                has_compare = True
                 break
-    if not has_allclose:
+    if not has_compare:
         return ctx.make_finding("OL19", "FAIL",
-            "未找到 assert_allclose 调用，禁止手写 assert max_diff",
+            "未找到 assert_allclose / detailed_tensor_compare 调用，禁止手写 assert max_diff",
             file=test_file)
     return ctx.make_finding("OL19", "PASS",
-        "使用了 assert_allclose", file=test_file)
+        "使用了 assert_allclose / detailed_tensor_compare", file=test_file)
 
 
 @register("OL20")

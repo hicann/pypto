@@ -29,8 +29,18 @@ OP_WORKSPACE_DIR = "custom"
 
 IMPL_RULE_IDS = [
     "OL01", "OL02", "OL03", "OL04", "OL05", "OL06", "OL07", "OL08",
-    "OL16", "OL23", "OL25", "OL26", "OL28", "OL29", "OL37",
+    "OL16", "OL23", "OL25", "OL26", "OL28", "OL29", "OL37", "OL48", "OL49",
+    "OL55",  # PyPTO API 存在性 (typo 防止: pypto.empty 等)
+    "OL56",  # Stage 6 之前 unroll_list 只能含单一值 (默认 [1])
+    "OL57",  # JIT 图代码内只允许 pypto.loop 循环 (禁止 Python for/while)
+    "OL58",  # Layer K wrapper output buffer 必须 torch.* 预分配 (禁止 host pypto.zeros)
 ]
+
+# DESIGN.md post-edit 适用规则 (在 Stage 4 Designer 编辑 DESIGN.md 时即时校验)。
+# OL55 (PyPTO API 存在性) + OL56 (unroll_list 单一值) 进入此列表; OL12 等 DESIGN
+# 结构性检查在 stop / complete_stage gate 中校验, 不在 post-edit 阶段触发,
+# 避免半成品 block。
+DESIGN_RULE_IDS = ["OL55", "OL56"]
 
 GOLDEN_RULE_IDS = ["OL15"]
 
@@ -69,6 +79,22 @@ class CheckContext:
     op_name: str
     stage: int
     rules: list[dict[str, Any]]
+    # ── file-scope filter (post-edit hook) ──
+    # 设置后, ``_impl_files_to_scan`` 仅返回这一个 impl 文件; 其他 module
+    # impl 与顶层 ``<op>_impl.py`` 都排除在外。post-edit hook 在 Coder
+    # Write/Edit 单文件后调用 lint 时启用此字段, 避免对其他 module 的
+    # stub 文件触发跨文件级规则 (OL01/OL07 等会在空 stub 上 FAIL)。
+    # phase_scope 与同时设置时, file_scope 优先级更高 (post-edit 一般
+    # 比 complete_phase 更具体)。``None`` 表示无文件限制。
+    file_scope: Optional[str] = None
+    # ── phase-scope filter (complete_phase gate) ──
+    # 设置后, ``_impl_files_to_scan`` 仅返回当前 Phase 对应的累积模块
+    # impl 文件 (如 ``M1`` → ``modules/<op>_module1_impl.py``, ``M2`` →
+    # ``modules/<op>_module12_impl.py``); 顶层 ``<op>_impl.py`` 与其他
+    # module impl 都排除在外。``--check-phase-gate`` CLI / orchestrator 的
+    # ``complete_phase`` 网关使用此字段, 避免在 phase 边界检查 Stage 5
+    # cleanup 才产出的整合 artifact。``None`` 表示无 phase 限制 (默认)。
+    phase_scope: Optional[str] = None
     _ast_cache: dict[str, ast.Module] = field(default_factory=dict, repr=False)
     _parse_errors: dict[str, str] = field(default_factory=dict, repr=False)
     _pypto_aliases_cache: dict[str, set[str]] = field(default_factory=dict, repr=False)

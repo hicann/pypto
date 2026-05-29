@@ -29,7 +29,7 @@ shape: [N, M], dtype: bfloat16
 atol: 0.001, rtol: 0.001
 """
     write_file(op_dir / "SPEC.md", spec)
-    finding = run_rule(mod, op_dir, "OL09", stage=2)
+    finding = run_rule(mod, op_dir, "OL09", stage=1)
     assert finding.status == "PASS"
 
 
@@ -37,7 +37,7 @@ def test_ol09_fail_when_spec_missing(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     (op_dir / "SPEC.md").unlink()
-    finding = run_rule(mod, op_dir, "OL09", stage=2)
+    finding = run_rule(mod, op_dir, "OL09", stage=1)
     assert finding.status == "FAIL"
 
 
@@ -59,7 +59,7 @@ constraints here
 tiling here
 """
     write_file(op_dir / "API_REPORT.md", api)
-    finding = run_rule(mod, op_dir, "OL10", stage=3)
+    finding = run_rule(mod, op_dir, "OL10", stage=1)
     assert finding.status == "PASS"
 
 
@@ -67,7 +67,7 @@ def test_ol10_fail_when_missing_sections(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     write_file(op_dir / "API_REPORT.md", "# API REPORT\nsome text\n")
-    finding = run_rule(mod, op_dir, "OL10", stage=3)
+    finding = run_rule(mod, op_dir, "OL10", stage=1)
     assert finding.status == "FAIL"
 
 
@@ -76,7 +76,7 @@ def test_ol10_fail_when_missing_sections(tmp_path: Path):
 def test_ol11_pass_when_golden_importable(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
-    finding = run_rule(mod, op_dir, "OL11", stage=4)
+    finding = run_rule(mod, op_dir, "OL11", stage=2)
     assert finding.status == "PASS"
 
 
@@ -84,7 +84,7 @@ def test_ol11_fail_when_golden_has_syntax_error(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     write_file(op_dir / "demo_golden.py", "def broken(\n")
-    finding = run_rule(mod, op_dir, "OL11", stage=4)
+    finding = run_rule(mod, op_dir, "OL11", stage=2)
     assert finding.status == "FAIL"
 
 
@@ -107,7 +107,7 @@ tiling here
 validation here
 """
     write_file(op_dir / "DESIGN.md", design)
-    finding = run_rule(mod, op_dir, "OL12", stage=5)
+    finding = run_rule(mod, op_dir, "OL12", stage=4)
     assert finding.status == "PASS"
 
 
@@ -115,7 +115,7 @@ def test_ol12_fail_when_design_missing(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     (op_dir / "DESIGN.md").unlink()
-    finding = run_rule(mod, op_dir, "OL12", stage=5)
+    finding = run_rule(mod, op_dir, "OL12", stage=4)
     assert finding.status == "FAIL"
 
 
@@ -139,28 +139,55 @@ def test_ol13_fail_when_impl_missing(tmp_path: Path):
 # ── OL14: 精度通过 ──
 
 def test_ol14_pass_when_stage5_completed(tmp_path: Path):
+    """Stage 6 (Verification) entry needs Stage 5 completed in the new model."""
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     state = {
         "operator_name": "demo",
-        "current_stage": 7,
+        "max_stage": 7,
+        "current_stage": 6,
         "stage_status": {"5": "completed", "6": "in_progress"},
     }
     write_file(op_dir / ".orchestrator_state.json", json.dumps(state))
-    finding = run_rule(mod, op_dir, "OL14", stage=7)
+    finding = run_rule(mod, op_dir, "OL14", stage=6)
     assert finding.status == "PASS"
 
 
 def test_ol14_fail_when_no_state_file(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
-    finding = run_rule(mod, op_dir, "OL14", stage=7)
+    finding = run_rule(mod, op_dir, "OL14", stage=6)
     assert finding.status == "FAIL"
 
 
 # ── OL24: 状态文件结构合法 ──
 
 def test_ol24_pass_when_state_valid(tmp_path: Path):
+    """Schema v2.0 with max_stage, optional stage5_phases, etc. — PASS."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    state = {
+        "operator_name": "demo",
+        "schema_version": "2.0",
+        "max_stage": 8,
+        "current_stage": 5,
+        "stage_status": {"5": "in_progress"},
+        "stage_retry_count": {},
+        "stage5_phases": {
+            "active_phase": "M1",
+            "phase_status": {"M1": {"status": "in_progress", "cycles": 0}},
+            "max_cycles_per_phase": 10,
+        },
+        "artifact_hashes": {"spec_md": "abc"},
+        "rollback_history": [],
+    }
+    write_file(op_dir / ".orchestrator_state.json", json.dumps(state))
+    finding = run_rule(mod, op_dir, "OL24", stage=5)
+    assert finding.status == "PASS"
+
+
+def test_ol24_warn_on_legacy_schema_without_max_stage(tmp_path: Path):
+    """Legacy state.json (v1, no max_stage) is accepted with a WARN."""
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     state = {
@@ -170,7 +197,39 @@ def test_ol24_pass_when_state_valid(tmp_path: Path):
     }
     write_file(op_dir / ".orchestrator_state.json", json.dumps(state))
     finding = run_rule(mod, op_dir, "OL24", stage=5)
-    assert finding.status == "PASS"
+    assert finding.status == "WARN"
+
+
+def test_ol24_fail_on_malformed_stage5_phases(tmp_path: Path):
+    """stage5_phases must be a dict with phase_status."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    state = {
+        "operator_name": "demo",
+        "max_stage": 8,
+        "current_stage": 5,
+        "stage_status": {"5": "in_progress"},
+        "stage5_phases": "not a dict",
+    }
+    write_file(op_dir / ".orchestrator_state.json", json.dumps(state))
+    finding = run_rule(mod, op_dir, "OL24", stage=5)
+    assert finding.status == "FAIL"
+
+
+def test_ol24_fail_on_malformed_rollback_history(tmp_path: Path):
+    """rollback_history must be a list."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    state = {
+        "operator_name": "demo",
+        "max_stage": 8,
+        "current_stage": 5,
+        "stage_status": {"5": "in_progress"},
+        "rollback_history": "not a list",
+    }
+    write_file(op_dir / ".orchestrator_state.json", json.dumps(state))
+    finding = run_rule(mod, op_dir, "OL24", stage=5)
+    assert finding.status == "FAIL"
 
 
 def test_ol24_fail_when_state_missing(tmp_path: Path):

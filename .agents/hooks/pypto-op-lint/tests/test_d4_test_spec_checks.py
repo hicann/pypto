@@ -28,6 +28,23 @@ def test_ol19_pass_when_assert_allclose_present(tmp_path: Path):
     assert finding.status == "PASS"
 
 
+def test_ol19_pass_when_detailed_tensor_compare_present(tmp_path: Path):
+    """detailed_tensor_compare alone (no assert_allclose) should still PASS."""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    test = """import torch
+from detailed_tensor_compare import detailed_tensor_compare
+
+def test_level0_basic():
+    x = torch.randn(1024, dtype=torch.bfloat16)
+    y = torch.randn(1024, dtype=torch.bfloat16)
+    detailed_tensor_compare(x, y, atol=0.001, rtol=0.001, tensor_name="out0")
+"""
+    write_file(op_dir / "test_demo.py", test)
+    finding = run_rule(mod, op_dir, "OL19")
+    assert finding.status == "PASS", finding.message
+
+
 def test_ol20_fail_when_no_device_id_and_no_set_device(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")

@@ -1,7 +1,41 @@
 # PyPTO 算子设计速查
 
 > 本文档聚焦**约束和决策点**，用于设计阶段的快速检查。
-> API 用法细节请查阅 `docs/zh/` 目录。
+> API 用法细节请查阅 `docs/` 目录。
+
+---
+
+## 0. 术语澄清：tile shape vs view shape
+
+PyPTO 里有两个独立但常被混淆的概念，进入 §2 Tiling 之前先钉清：
+
+| 概念 | 主体 | 形态 | 决定的事 |
+|---|---|---|---|
+| **view shape** | 用户写 `pypto.view(t, view_shape, offsets)` 第二参数 | concrete Python int list | 每次 loop 迭代处理的子张量大小；用户级数据切片 |
+| **tile shape** | 用户写 `pypto.set_vec_tile_shapes(...)` / `pypto.set_cube_tile_shapes(...)` | concrete Python int(s) | pass 阶段每个 operation 拆出的 tile operation 颗粒 |
+
+**Subgraph 是 tile shape 决定的，不是反过来**。pass 阶段流程：
+
+1. 用户写完整个 pypto kernel
+2. 框架根据 tile shape 把每个 operation 拆成多条 tile operation（每条处理一个 tile 大小的数据）
+3. 框架尝试把多条 tile operation 组合成 **subgraph**：`GM → UB/L1 → 计算 → UB/L1 → GM` 一个完整往返；组合的硬约束是 subgraph 总 UB 占用 ≤ UB 容量
+4. 不同 subgraph 实例并行分发到不同核
+
+**关键**：在写 kernel 时无法预知一个 subgraph 包含多少 operation。因此 UB 估算只能按**单个 operation 的 UB 占用**估，让 tile 足够小，框架自然能把多条 tile op 组进同一个 subgraph。
+
+**UB 估算公式（per operation）**：
+
+```
+tile_size × dtype_bytes × tensor_count ≤ UB 容量
+```
+
+`tensor_count` 取决于 operation 类型：
+
+| Op 类型 | tensor_count | 说明 |
+|---|---|---|
+| unary | 2 | 1 输入 + 1 输出 |
+| binary | 3 | 2 输入 + 1 输出 |
+| reduce / expand | 4（保守值） | 涉及形状变换，活 buffer 较多 |
 
 ---
 
@@ -20,27 +54,90 @@
 
 ## 2. Tiling 约束
 
-### 硬约束
+### 硬约束 (PyPTO syntax — 违反则 compile/runtime fail)
 
 | 约束 | 说明 |
 |------|------|
 | 尾轴 32B 对齐 | FP32: 8 元素, BF16/FP16: 16 元素, 当尾轴实际长度小于32B时可以按32B配置 |
 | TileShape 维度数 = 输出 tensor 维度数 | 最多 4 维 |
-| TileSize × 驻留 tile 数 × dtype_bytes ≤ UB 容量 | 超出导致 spill |
+| 单 op UB：`TileSize × dtype_bytes × tensor_count ≤ UB 容量`（unary=2, binary=3, reduce/expand 保守 4） | 超出导致 spill |
 | (TensorShape / TileShape) × (1 + input_count) ≤ 18000 | 超出导致编译失败 |
 | cube 配置独立于 vec | matmul 前必须单独调用 set_cube_tile_shapes |
+| `matmul` ND 输入最后一维 ≤ 65535 | A、B 两个输入都会检查；检查的是传入 `pypto.matmul` 时的实际 shape 最后一维（`shape[-1]`），不是公式里的 K。若 K 很大，先通过 A/B 布局、`pypto.view` shape 或 `a_trans` / `b_trans`，避免 K 落在任一输入的最后一维上 |
+| **cube tile dim 关系**: `mL0 ≤ mL1`, `kL0 ≤ kL1`, `nL0 ≤ nL1` | 违反则编译失败 |
+| **cube tile 16 元素 alignment** (BF16/FP16 场合) | 违反则编译失败 |
+| **broadcast 1-轴 rule** | PyTorch 中允许多轴同时 expand，但 PyPTO 仅支持单轴 |
+| **vec tile per-stage rule** | 若有多个不同 shape class 的 vec op，需在每个 stage 前**重新 set** `set_vec_tile_shapes`. 单一 tile 仅适用于 shape class 仅 1 种的情况. (与 cube OL47 per-matmul rule 对称) |
 
-### Tiling 推导步骤
+### Vec tile shape 数值范围（默认规则）
+
+> **只针对 vec tile**。Cube tile 用下面「设计参考: Cube tile 推荐」的 M-based 表，不受此范围约束。
+
+| 范围 | 数值 | 理由 |
+|---|---|---|
+| **下限** | 16 | FP32 满足 32B 对齐（multiple of 8）；BF16/FP16 恰好 32B 对齐（= 16 elements）；小张量 shape < 16 时仍按 16 取（pad，subgraph 不受影响） |
+| **上限** | 64 | 单 tile × dtype 较小，subgraph 易满足 UB 容量；性能优化（调高）由 Stage 7 optimizer 负责 |
+| 例外 | < 16 | 仅当 [16, 64] 范围撑爆 UB（高 rank + 大 dtype + 多 tensor）时下调，在 DESIGN.md §3.2.2 rationale 中说明 |
+| 禁止 | > 64 | architect 阶段不要尝试性能优化；上限交由 Stage 7 optimizer |
+
+### Tiling 推导步骤（最小可行）
 
 1. 确定尾轴对齐值：`align = 32 / dtype_bytes`（fp16/bf16=16, fp32=8）
-2. 尾轴 tile = min(尾轴长度, 最大对齐倍数 ≤ UB 容量允许范围)
-3. 其余维度从高维开始，在 UB 容量内尽量取大值
-4. 验证展开约束 `(shape / tile) × tensor_count ≤ 18000`
-5. 如果有 matmul，额外推导 cube tile：`[M, K], [K, N], [M, N]`
+2. **Vec tile**：每个 axis 取值在 [16, 64] 范围（首选偏小，如 16 或 32；下限 16 自动满足 alignment）
+3. 验证 **per op** UB 容量：`tile_size × dtype × tensor_count ≤ UB 容量`，其中 tensor_count 按 op 类型取（unary=2, binary=3, reduce/expand 保守 4）；对算子内最重的 op 验证即可
+4. 验证展开约束：`(shape / tile) × tensor_count ≤ 18000`
+5. **Cube tile**（如果有 matmul）：查下方「设计参考: Cube tile 推荐」表按 M 维选值；cube tile 不受 [16, 64] 约束，遵循 well-tested 推荐
+6. 若以上任何约束不满足 → 下调部分轴（vec 可 < 16；cube 按表降一档），rationale 说明
+
+### Tile shape anti-patterns (避免)
+
+| Anti-pattern | 为什么坏 | 正确做法 |
+|--------------|---------|---------|
+| **尾轴 tile 不是 alignment 倍数** (e.g. FP32 last dim = 7 / 10 / 17) | 编译报错或运行时性能极差 | round up 到对齐倍数 (FP32: 8/16/24/32...; BF16: 16/32/48/64...) |
+| **vec tile 单轴 > 64** | architect 阶段不要做性能优化；大 tile 单 op UB 占用大，subgraph 易撑爆 UB | 默认 [16, 64] 范围；Stage 7 optimizer 在 profiling 后再上调（cube tile 不在此条约束内，按下方 M-based 推荐表） |
+| **vec tile 全部按 tensor.shape 取（单 op UB 占用 = 整 tensor 字节数）** | 单 op UB 占用 = 整 tensor 字节数，撑爆 UB | vec tile 各轴 ∈ [16, 64]；single-op UB 自然 fit |
+| **多个 shape class 的 vec op 用单一 tile 处理** (e.g. `(1,1,BT,K)` setting 同时处理 `[1,1,BT,BT]` 和 `[1,1,K,V]` 的 op) | 大部分 op 的 partitioning 错位，UB / 并行度恶化 | 按 shape class per-stage 重新 set `set_vec_tile_shapes` |
+
+### 设计参考: Cube tile 推荐 (按 matmul M 维分类)
+
+经验上 well-tested 的值. **该表为 reference**，非 mandate.
+若不遵循该表，DESIGN.md §3.2.2 中需要 rationale.
+
+| M_actual | 推荐 `[mL0, mL1], [kL0, kL1], [nL0, nL1]` | 适用 |
+|---|---|---|
+| M ≥ 64 (training class) | `[128, 128], [64, 256], [256, 256]` | 大 M 充分利用 cube 算力 |
+| 32 ≤ M < 64 | `[64, 64], [64, 256], [128, 128]` | 中等 M, 平衡并行度 |
+| 16 ≤ M < 32 | `[16, 16], [16, K_actual], [128, 128]` | 小 M, K 轴整体驻留 L1 |
+| M = 1 (decode) | `[16, 16], [16, K_actual, 256], [256, 256]` | M=1 用 K 轴 split + A 矩阵 L1 驻留 |
+
+**注**: `[16, 16], [16, 16], [16, 16]` 是 **Decode (M=1) 专用**. M ≥ 32 时使用会导致 cube 利用率降至 5-10%, 性能下降 3-10×. 若有意在 Decode 以外使用，DESIGN.md §3.2.2 rationale 必须明确说明**「why M ≥ 32 use `[16,16]`」**.
+
+### 设计参考: Vec tile 推荐 (architect 默认值，按 op 类型分类)
+
+| Op 类型 | 推荐 vec tile | 注意 |
+|---|---|---|
+| Pointwise (4D, 单 tensor) | `(1, 16, 16, 64)` 或 `(1, 16, 32, 32)` | 每轴 ∈ [16, 64]；batch 维度因 view 切分为 1 |
+| Pointwise (2D, 单 tensor) | `(32, 32)` 或 `(16, 64)` | 每轴 ∈ [16, 64] |
+| Reduction (sum/max along last) | `(16, 32)` 或 `(16, 64)` | reduce 轴用 tile 切分，编译器自动累加 |
+| Broadcast multiply | broadcast 轴用 size-1 明示 (e.g. `(1, 1, 16, 1)` for K-side broadcast) | broadcast 轴用 size-1 明示，禁止隐式 expand |
+| Mixed cube + vec | 两者都 set (cube 在 matmul 前，按 M-based 表；vec 在 vec op 前，按 [16, 64] 范围) | 应用 per-stage tile 策略 |
 
 ### 2.4 动态轴模式
 
 **触发场景**：有Agent开发的PyPTO算子必须支持动态轴，但部分计算 API在编译期需要 concrete shape，不接受含 `DYNAMIC` 维度的 tensor（报错特征：`dim = -1`、`Cannot convert symbols to int`、`has invalid shape value: -1`）。
+
+**Production kernel 必须同时具备 4 要素**（缺一就 production unusable，参见 `pypto-general-debug/references/jit-signature.md` §9.13）：
+
+| # | 要素 | 示例 |
+|---|------|------|
+| 1 | Annotation 标 `pypto.DYNAMIC` literal | `pypto.Tensor([pypto.DYNAMIC, 16, 64], dtype)` |
+| 2 | Tile config | `pypto.set_vec_tile_shapes(1, 16, 64)` |
+| 3 | 沿动态轴 loop | `for b in pypto.loop(B, name=..., unroll_list=[1])`（Stage 6 之前单一值，默认 `[1]`；OL56） |
+| 4 | loop 内 `pypto.view` 切 concrete tile（**单次 view 4 KB 量级即可，不要 view 大块**） | `pypto.view(x, [1, 16, 64], [b, 0, 0])` |
+
+**反模式（必须避免）**：
+- ❌ 空 `pypto.Tensor()` / `pypto.Tensor([])` 注解 → 表面 lint pass 但 production crash
+- ❌ DYNAMIC tensor 直接喂 compute API（无 `pypto.view`）→ workspace estimator INT32 overflow
 
 **通用策略 —— "loop 切 tile，API 只吃静态"**：
 1. **选合适的轴做动态轴**：优先 batch / 序列长度等语义上天然变化的轴；所选轴**不能是 API 直接计算依赖的维度**（matmul 不选 K/N，归约不选归约 dim）。
@@ -48,7 +145,7 @@
 3. **`pypto.loop` 沿动态轴迭代**，trip count 取 `tensor.shape[i]` 或符号表达式。
 4. **`pypto.view` 切出固定整数 tile**（shape 参数全是 Python int）。
 5. **受限 API 只操作静态 tile**，永不看到动态维度。
-6. **`pypto.assemble` 写回**，offset 可用 SymbolicScalar，尾块用 `valid_shape`。
+6. **`pypto.assemble` 写回**，offset 可用 SymbolicScalar。
 
 **多动态轴特例**（Batch + SeqLen 同时动态，不能在高维 tensor 上直接调受限 API）：
 
@@ -69,7 +166,7 @@
 
 ```python
 acc = pypto.tensor([TILE, D], pypto.DT_FP32, "acc")
-for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
+for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[1]):  # Stage 6 之前单一值 (OL56)
     tile = compute(...)
     if pypto.is_loop_begin(idx):
         acc[:] = tile          # 首次：初始化
@@ -90,7 +187,7 @@ for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
 ├── 否 → 不需要 loop，compiler 自动 tile
 └── 是 → 需要 pypto.loop
          ├── 跨迭代有依赖？ → submit_before_loop=True
-         ├── 轴范围大且变化？ → 使用 loop_unroll + unroll_list
+         ├── 轴范围大且变化？ → 在**最内层** pypto.loop 用 loop_unroll + unroll_list（外层 loop 禁止加 unroll_list，OL49 门禁）；**Stage 6 之前 unroll_list 只写单一值（默认 `[1]`），多值调优留到 Stage 7，OL56 门禁**
          └── 尾块不对齐？ → view 中使用 valid_shape
 ```
 
@@ -102,7 +199,9 @@ for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
 | 动态轴用 pypto.loop | 编译器需要知道这是运行时循环 |
 | loop 索引是符号值 | 不能用于 Python list 索引或 if 判断 |
 | 跨迭代依赖 → submit_before_loop=True | 否则迭代间数据不可见 |
-| unroll_list 必须覆盖所有可能迭代数 | 否则运行时 assert |
+| unroll_list 仅放在**最内层 pypto.loop** | 外层 loop 加 unroll_list 会触发编译路径爆炸或寄存器拷贝 pass 引起的精度异常；OL49 门禁强制 FAIL |
+| unroll_list 在 **Stage 6 之前只含单一值**（默认 `[1]`） | 多值会触发编译路径爆炸、拖慢编译并使开发超时；多值展开调优仅允许在 Stage 7 optimization；OL56 门禁强制 FAIL（S0）。有依据时可用其它单一值并在 §4 记录理由 |
+| unroll_list 必须覆盖所有可能迭代数 | 否则运行时 assert（此约束在 Stage 7 多值调优时才需考虑；Stage 6 之前固定单值 `[1]` 不受影响） |
 
 ---
 

@@ -30,20 +30,36 @@ def _resolve_pypto_aliases(tree: ast.Module) -> set[str]:
 
 
 def _is_jit_decorator(dec: ast.AST, pypto_aliases: set[str]) -> bool:
-    """精确判断装饰器是否为 pypto.frontend.jit（含别名）。
+    """精确判断装饰器是否为字面 ``@pypto.frontend.jit``（**严格模式，唯一正规形**）。
 
-    匹配的合法模式（以 pypto_aliases={"pypto", "pt"} 为例）:
-    - @pypto.frontend.jit
-    - @pt.frontend.jit
-    - @pypto.frontend.jit(...)   (带参数调用)
-    - @pt.frontend.jit(...)
+    唯一接受的写法:
+
+    - ``@pypto.frontend.jit``
+    - ``@pypto.frontend.jit(...)``     （带参数调用语法）
+
+    **明确拒绝**的写法（这些会触发 OL01 [S0] FAIL）:
+
+    - ``import pypto as pt`` 后 ``@pt.frontend.jit``
+        → 顶层包别名也不接受，根名必须是字面 ``pypto``
+    - ``import pypto.frontend as F`` 后 ``@F.jit``
+        → 子模块别名不接受
+    - ``from pypto import frontend`` 后 ``@frontend.jit``
+        → 子模块直接绑定也不接受
+    - ``from pypto.frontend import jit`` 后 ``@jit``
+        → 函数级 from-import 不接受
+
+    背景: 项目约定统一为字面三段属性 ``pypto.frontend.jit``——这是 AST
+    静态分析最稳健的形式，也使 grep/IDE 跳转一致。OL01 强制此唯一形式。
+
+    ``pypto_aliases`` 参数保留以维持函数签名稳定，但不再参与 JIT 装饰器
+    判定（其他规则仍可使用别名集合，如 ``pypto.Tensor`` 注解）。
     """
-    # 若装饰器是一个调用（如 @xxx.jit(...)），剥离到被调用对象
+    # 若装饰器是一个调用（如 @pypto.frontend.jit(...)），剥离到被调用对象
     target = dec
     if isinstance(target, ast.Call):
         target = target.func
 
-    # 预期结构: Attribute(value=Attribute(value=Name(id=alias), attr='frontend'), attr='jit')
+    # 严格期望结构: Attribute(value=Attribute(value=Name(id='pypto'), attr='frontend'), attr='jit')
     if not isinstance(target, ast.Attribute) or target.attr != "jit":
         return False
     mid = target.value
@@ -52,7 +68,7 @@ def _is_jit_decorator(dec: ast.AST, pypto_aliases: set[str]) -> bool:
     root = mid.value
     if not isinstance(root, ast.Name):
         return False
-    return root.id in pypto_aliases
+    return root.id == "pypto"  # 字面匹配，不接受任何别名
 
 
 def _get_jit_functions(tree: ast.Module,

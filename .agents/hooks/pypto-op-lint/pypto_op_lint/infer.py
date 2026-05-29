@@ -12,6 +12,7 @@ from typing import Any, Optional
 from .core import (
     API_REPORT_FILE,
     DESIGN_FILE,
+    DESIGN_RULE_IDS,
     GOLDEN_RULE_IDS,
     HOOK_INPUT_ENV,
     IMPL_RULE_IDS,
@@ -24,11 +25,34 @@ from .core import (
 
 
 def _infer_op_dir(file_path: str) -> Optional[str]:
+    """Resolve the operator directory that owns ``file_path``.
+
+    覆盖三类布局:
+
+    * 标准布局：``<op_dir>/<op>_impl.py`` 等顶层产物 → ``<op_dir>``
+    * 模块开发布局 (Stage 5 Phase M_k)：
+      ``<op_dir>/modules/<op>_module*_impl.py`` 等子目录产物 → 仍返回 ``<op_dir>``。
+      若不向上解析，``modules/`` 自身会被误判为算子目录，使得
+      ``_impl_files_to_scan`` 拿不到 ``operator_name``，所有 module 级
+      lint 规则因 "无 impl 文件可供检查" 而 SKIP。
+    * 无状态布局 (尚未生成 ``.orchestrator_state.json``)：
+      通过 ``_looks_like_stateless_op_dir`` 启发式匹配。
+    """
     if not file_path:
         return None
     op_dir = os.path.dirname(os.path.abspath(file_path))
     if os.path.isfile(os.path.join(op_dir, ".orchestrator_state.json")):
         return op_dir
+    # ── modules/ 子目录 → 向上解析到算子主目录 ──
+    # 模块开发阶段写入的 modules/<op>_module*_impl.py 须挂到正确的 op_dir,
+    # 才能触发 _impl_files_to_scan 的模块级 lint 覆盖。
+    if os.path.basename(op_dir) == "modules":
+        parent = os.path.dirname(op_dir)
+        if parent and os.path.isfile(os.path.join(parent, ".orchestrator_state.json")):
+            return parent
+        parent_basename = os.path.basename(parent)
+        if parent_basename and _looks_like_stateless_op_dir(parent, parent_basename):
+            return parent
     basename = os.path.basename(file_path)
     inferred_op_name = _infer_op_name_from_filename(basename)
     if inferred_op_name and _looks_like_stateless_op_dir(op_dir, inferred_op_name):
@@ -172,6 +196,10 @@ def _rule_ids_for_filename(filename: str) -> list[str]:
         return TEST_RULE_IDS + POST_EDIT_CONSISTENCY_RULE_IDS
     if filename == SPEC_FILE:
         return SPEC_RULE_IDS
+    if filename == DESIGN_FILE:
+        # DESIGN.md 编辑后即时校验 PyPTO API 存在性 (OL55), 阻止 Designer
+        # 在伪代码块写出不存在的 pypto.<attr> (如 `pypto.empty`)。
+        return DESIGN_RULE_IDS
     return []
 
 

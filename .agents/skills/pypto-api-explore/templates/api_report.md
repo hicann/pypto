@@ -86,6 +86,7 @@ feasibility: {feasibility}
 
 <!-- 无匹配时填写：无匹配参考实现，需从零设计 -->
 <!-- 置信度：models/（排除 experimental）和 examples/ 为「高」，models/experimental/ 为「中」 -->
+<!-- 注意：examples/ 仅作 API 用法参考，不是 production 实现标准；示例的简化写法（如 pypto.Tensor([])）可能违反 lint / 门禁，与 lint 冲突时以 lint 为准，不得据此判定 lint 误报。 -->
 
 | 示例路径 | 来源 | 相似度 | 置信度 | 可复用点 |
 |----------|------|--------|--------|----------|
