@@ -22,6 +22,7 @@
 namespace npu::tile_fwk {
 const std::string STAGE_PASS = "Pass";
 const std::string STAGE_FUNC_TO_BIN = "FuncToBin";
+const std::string STAGE_HOST_MACHINE = "HostMachine";
 
 class MonitorImpl;
 
@@ -64,7 +65,7 @@ public:
     static MonitorManager& Instance();
 
     void Initialize(
-        bool enable, int interval_sec, double timeout_sec, int total_timeout_sec, bool pass_detail_enable = false);
+        bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec, bool passDetailEnable = false);
     void Shutdown();
 
     void StartStage(const std::string& name, int rootFuncIndex = -1, const std::string& rootFuncName = "",
@@ -85,12 +86,20 @@ public:
     int GetRootFuncCount() const;
     int GetCurrentRootFuncIndex() const;
 
+    // HostMachine sub-stage progress for CompileDyndevFunction:
+    // 1) Call BeginHostMachineCompileGroup once with the number of monitored sub-steps (3 or 4).
+    // 2) Call AllocHostMachineStepIndex() once before each MonitorStageScope(STAGE_HOST_MACHINE, step, ...).
+    // step is 1-based while monitor is enabled, or -1 when disabled.
+    void BeginHostMachineCompileGroup(int totalSteps);
+    int AllocHostMachineStepIndex();
+    int GetHostMachineTotalSteps() const;
+
     void TryEndPrepareStage();
 
     void NotifyCompilationFinished();
 
     void SetCompilerMonitorOptions(
-        bool enable, int interval_sec, double timeout_sec, int total_timeout_sec, bool pass_detail_enable = false);
+        bool enable, int intervalSec, double timeoutSec, int totalTimeoutSec, bool passDetailEnable = false);
     bool IsEnabled() const;
     bool IsPassDetailEnabled() const;
     int GetIntervalSec() const;
@@ -110,18 +119,18 @@ public:
     std::string GetCurrentFunctionName() const;
     void SetCurrentFunctionName(const std::string& name);
     int GetCurrentFuncOpSize() const;
-    void SetCurrentFuncOpSize(int op_size, bool update_active_stage = false);
+    void SetCurrentFuncOpSize(int opSize, bool updateActiveStage = false);
     int GetFuncSumOpSize() const;
-    void SetFuncSumOpSize(size_t op_size, bool reset = false);
+    void SetFuncSumOpSize(size_t opSize, bool reset = false);
     double GetTotalElapsed() const;
-    void PrintCurrentTotalElapsed(std::string str_temp = "");
+    void PrintCurrentTotalElapsed(std::string strTemp = "");
 
     std::vector<ActiveStageInfo> GetActiveStages() const;
 
     int GetProcessingThresholdSec() const;
     void SetProcessingThresholdSec(int sec);
     int GetProgressWidth() const;
-    static double CalcPassStageTimeoutSec(int op_size);
+    static double CalcPassStageTimeoutSec(int opSize);
     static std::string FormatPassDurationForLog(double seconds);
     void StartPassCompile(
         const std::string& strategy, const std::string& passIdentifier, size_t passIndex,
@@ -156,44 +165,47 @@ private:
         double elapsedSec, bool success) const;
 
     mutable std::mutex mutex_;
-    mutable std::mutex pass_detail_print_mutex_;
+    mutable std::mutex passDetailPrintMutex_;
     MonitorImpl* impl_{nullptr};
     bool initialized_{false};
-    bool python_stage_ended_{false};
+    bool pythonStageEnded_{false};
 
     bool enable_{false};
-    bool pass_detail_enable_{false};
-    bool stage_doing_{false};
-    std::atomic<int> interval_sec_{60};
-    std::atomic<double> timeout_sec_{-1.0};
-    std::atomic<int> total_timeout_sec_{600};
+    bool passDetailEnable_{false};
+    bool stageDoing_{false};
+    std::atomic<int> intervalSec_{60};
+    std::atomic<double> timeoutSec_{-1.0};
+    std::atomic<int> totalTimeoutSec_{600};
 
-    std::string current_function_;
-    std::string current_stage_;
-    std::chrono::steady_clock::time_point total_start_;
-    std::chrono::steady_clock::time_point stage_start_;
-    std::unordered_map<std::string, double> stage_elapsed_totals_;
-    std::map<std::string, bool> stage_timeout_flag_;
-    std::vector<PassCompileTiming> pass_compile_timings_;
-    std::map<std::string, double> pass_elapsed_totals_;
-    CurrentPassInfo current_pass_;
-    int last_pass_detail_function_index_{-1};
-    std::string last_pass_detail_function_name_;
-    std::string last_pass_detail_strategy_;
+    std::string currentFunction_;
+    std::string currentStage_;
+    std::chrono::steady_clock::time_point totalStart_;
+    std::chrono::steady_clock::time_point stageStart_;
+    std::unordered_map<std::string, double> stageElapsedTotals_;
+    std::map<std::string, bool> stageTimeoutFlag_;
+    std::vector<PassCompileTiming> passCompileTimings_;
+    std::map<std::string, double> passElapsedTotals_;
+    CurrentPassInfo currentPass_;
+    int lastPassDetailFunctionIndex_{-1};
+    std::string lastPassDetailFunctionName_;
+    std::string lastPassDetailStrategy_;
 
-    std::vector<ActiveStageInfo> active_stages_;
+    std::vector<ActiveStageInfo> activeStages_;
 
-    int current_func_opsize_{0};
-    int func_sum_opsize_{0};
-    int total_function_count_{0};
-    int current_function_index_{0};
-    int next_function_index_{1};
-    int root_func_count_{0};
-    int current_root_func_index_{0};
-    int next_root_func_index_{1};
-    std::string current_root_func_;
-    double last_total_elapsed_{0.0};
-    int processing_threshold_sec_{60};
+    int currentFuncOpsize_{0};
+    int funcSumOpsize_{0};
+    int totalFunctionCount_{0};
+    int currentFunctionIndex_{0};
+    int nextFunctionIndex_{1};
+    int rootFuncCount_{0};
+    int currentRootFuncIndex_{0};
+    int nextRootFuncIndex_{1};
+    std::string currentRootFunc_;
+    double lastTotalElapsed_{0.0};
+    int processingThresholdSec_{60};
+
+    int hostMachineTotalSteps_{0};
+    int hostMachineNextStep_{1};
 };
 
 } // namespace npu::tile_fwk

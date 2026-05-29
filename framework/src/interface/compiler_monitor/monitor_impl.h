@@ -32,14 +32,14 @@ public:
 
 private:
     void MonitorLoop();
-    void PrintTotalTimeOut(double total_elapsed, int total_timeout_sec);
+    void PrintTotalTimeOut(double totalElapsed, int totalTimeoutSec);
 
     MonitorManager* manager_;
     std::unique_ptr<std::thread> thread_;
     std::mutex mutex_;
     std::condition_variable cv_;
     std::atomic<bool> stop_{false};
-    std::atomic<bool> stage_start_flag_{false};
+    std::atomic<bool> stageStartFlag_{false};
 };
 
 } // namespace npu::tile_fwk

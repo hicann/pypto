@@ -53,6 +53,10 @@ void ForceLinkLibraryCompiler() {}
 
 constexpr int ALIGN_SIZE_8 = 8;
 constexpr uint32_t STITCH_FUNCTION_MAX_SIZE = 65535;
+constexpr const char* STAGE_DYNDEV_BUILD_CONTROL_FLOW = "DynDev:BuildControlFlow";
+constexpr const char* STAGE_DYNDEV_CONTROL_FLOW_COMPILE = "DynDev:ControlFlowCompile";
+constexpr const char* STAGE_DYNDEV_AICORE_KERNEL_COMPILE = "DynDev:AICoreKernelCompile";
+constexpr const char* STAGE_DYNDEV_ENCODE = "DynDev:Encode";
 extern "C" int32_t Initialize()
 {
     CacheManager::Instance().Initialize();
@@ -935,18 +939,14 @@ int GetRootFuncNum(std::shared_ptr<DyndevFunctionAttribute> attr)
     return rootFuncNum;
 }
 
-static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[maybe_unused]] const std::string& ccePath)
+static void RunBuildControlFlowStage(
+    FunctionCache& cache, Linker& linker, Function* function,
+    const std::shared_ptr<DyndevFunctionAttribute>& attr, const std::string& expName,
+    std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
+    std::string& controlFlowSource, std::string& expressionSource)
 {
-    ASSERT(
-        HostBackEndErr::RUN_PASS_FAILED,
-        (PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph") == SUCCESS));
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
-        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
-        mix_info::DumpMixInfo(function);
-    }
-    std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();
-    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, attr != nullptr) << "DyndevFunctionAttribute is nullptr\n";
-    Linker linker(attr->symbolTable, attr->funcGroup, attr->exprTableDictGroup);
+    const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
+    MonitorStageScope buildControlFlowScope(STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_BUILD_CONTROL_FLOW, 0);
     FindAllExpression(cache, linker, function);
 
     FillL2PrefetchInfo(attr);
@@ -976,22 +976,16 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
         exprTable->NormalizeForSymbolTable(*linker.GetSymbolTable());
         expressionOss << exprTable->BuildExpressionList();
     }
-    uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
-    const std::string expName = "expression_" + std::to_string(tilingKey) + ".h";
     std::unordered_map<int, int> slotIdxMapping;
-    std::string aicpuDirPath = GetEmitPath("kernel_aicpu");
-    npu::tile_fwk::CreateMultiLevelDir(aicpuDirPath);
-    std::vector<std::string> exprSrcFiles;
     std::ostringstream exprHeaderOss;
-    ValDependTensorMeta valDependTensorMeta;
     attr->constructAssembleNeedAllocRuntimeSlots.clear();
     BuildControlFlow(
         cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict, controlFlowOss,
         expressionOss, exprHeaderOss, 0, expName, exprSrcFiles, valDependTensorMeta);
     expressionOss << "#endif/*TILE_FWK_EXPRESSION_H*/"
                   << "\n";
-    std::string controlFlowSource = controlFlowOss.str();
-    std::string expressionSource = expressionOss.str();
+    controlFlowSource = controlFlowOss.str();
+    expressionSource = expressionOss.str();
     SimplifySlots(attr.get(), slotIdxMapping);
     for (auto slot : slotIdxMapping) {
         MACHINE_LOGD("slotIdx: %d, runtime slotIdx: %d", slot.first, slot.second);
@@ -999,104 +993,82 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     topo_dump::DumpSlotMapping(*slotManager, slotIdxMapping, attr->inoutLink);
     BuildSlotRootIncastOutcastDict(attr.get());
     BuildRootFuncKeyDict(attr.get());
+}
 
+static void RunCompileControlFlowStage(
+    Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr,
+    const std::string& aicpuDirPath, const std::string& controlFlowSource,
+    const std::string& expressionSource, std::vector<std::string>& exprSrcFiles)
+{
 #ifdef __x86_64__
     std::string cflags = "-mno-sse2 -mno-sse";
 #else
     std::string cflags = "-mgeneral-regs-only";
 #endif
 
-    std::string expressionFilePath = aicpuDirPath + "/" + expName;
-    if (IsNeedDumpAicpuKernel(expressionFilePath)) {
-        DumpFile(expressionSource, expressionFilePath);
-    }
+    const std::string funcHash = function->GetFunctionHash().Data();
+    const std::string arm64TargetToolPath = Arm64TargetTool("g++");
+    const bool hasArm64DevCompile = FileExist(arm64TargetToolPath);
+    const std::string controlFlowHostFilePath = aicpuDirPath + "/controlFlow_host_" + funcHash + ".cpp";
 
-    std::string funcHash = function->GetFunctionHash().Data();
-    std::string controlFlowHostFilePath = aicpuDirPath + "/controlFlow_host_" + funcHash + ".cpp";
+    const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
+    const int srcCount = static_cast<int>(exprSrcFiles.size() + 1) * (hasArm64DevCompile ? 2 : 1);
+    const std::string hmLabel = std::string(STAGE_DYNDEV_CONTROL_FLOW_COMPILE) + funcHash;
+    MonitorStageScope aicpuHostCompileScope(STAGE_HOST_MACHINE, hmStep, hmLabel, srcCount);
+
     attr->hostControlFlowBinary = CompileAndLoadSection(
         controlFlowSource, controlFlowHostFilePath, aicpuDirPath, exprSrcFiles, "g++", "ld", "objcopy", ".pypto",
         IsNeedDumpAicpuKernel(controlFlowHostFilePath), cflags);
     AlignUpTo(attr->hostControlFlowBinary, 0x8, 0);
     std::string funcName = function->GetMagicName() + function->GetFunctionHash().Data();
     CompileControlFlow(aicpuDirPath, funcName, controlFlowSource, expressionSource);
-    std::string arm64TargetToolPath = Arm64TargetTool("g++");
-    if (FileExist(arm64TargetToolPath)) {
+    if (hasArm64DevCompile) {
         static const std::string BISHENG_LD_CMD = "ld.lld";
         std::string controlFlowDevFilePath = aicpuDirPath + "/controlFlow_dev_" + funcHash + ".cpp";
         MACHINE_LOGI(
             "Compile control flow src file[%s] with arm64 target tool[%s].", controlFlowDevFilePath.c_str(),
             arm64TargetToolPath.c_str());
         attr->devControlFlowBinary = CompileAndLoadSection(
-            controlFlowSource, controlFlowDevFilePath, aicpuDirPath, exprSrcFiles, arm64TargetToolPath, BISHENG_LD_CMD,
-            Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
+            controlFlowSource, controlFlowDevFilePath, aicpuDirPath, exprSrcFiles, arm64TargetToolPath,
+            BISHENG_LD_CMD, Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
     } else {
         // brk #0
         MACHINE_LOGW("Arm64 target tool is not found.");
         attr->devControlFlowBinary = std::vector<uint8_t>{0xd4, 0x20, 0x00, 0x00};
     }
     AlignUpTo(attr->devControlFlowBinary, 0x8, 0);
-    std::map<uint64_t, Function*> leafDict;
-    std::mutex leafDictMutex;
+}
 
-    MonitorManager::Instance().SetRootFuncCount(GetRootFuncNum(attr));
-
-    std::deque<std::function<void(void)>> tasks;
-    for (auto& devRoot : attr->funcGroup.devRootList) {
-        std::function task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
-            Function* devTile = attr->rootTileDict[devRoot];
-            bool isDynamicAligned = devTile->paramConfigs_.dynamicAlignedOps;
-            npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"), false, isDynamicAligned);
-            npu::tile_fwk::CodeGen codeGen(codeGenCtx);
-            COMPILER_LOGI(
-                "Function :[%s] starts executing codegen and binary compilation", devTile->GetMagicName().c_str());
-            codeGen.GenCode(*devTile, {});
-            MainBlockCondBulider::Gencode(devTile);
-
-            std::lock_guard<std::mutex> lock(leafDictMutex);
-            for (auto& [psgId, leaf] : devRoot->programs_) {
-                (void)psgId;
-                auto hash = leaf->GetFunctionHash().GetHash();
-                if (!leafDict.count(hash)) {
-                    leafDict[hash] = leaf;
-                    MACHINE_LOGI("Dyndev.codegen: %s", leaf->GetRawName().c_str());
-                } else {
-                    MACHINE_LOGE(
-                        HostBackEndErr::DUPLICATE_LEAF_FUNC_HASH, " Duplicate func hash %lu name %s", hash,
-                        leaf->GetRawName().c_str());
-                }
-            }
-        };
-        tasks.push_back(task);
-    }
-
-    MonitorManager::Instance().PrintCurrentTotalElapsed("Stage CodeGen cce code generation completed");
-    unsigned threadNum = GetCGThreadNum();
-    ParallelExecuteAndWait(threadNum, tasks);
-
-    struct EncodeDevAscendFunctionParam encodeDevAscendFunctionParam = {};
-    ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, attr);
-
-    encodeDevAscendFunctionParam.inoutLink = &attr->inoutLink;
-
-    std::string kernelPath;
 #ifdef BUILD_WITH_CANN
-    if (config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION && std::getenv("ASCEND_HOME_PATH") != nullptr) {
-        if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
-            FindLiteNPUKernel(leafDict, kernelPath);
-        } else {
-            int ret = CompileAICoreKernel(
-                leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), kernelPath);
-            if (ret != 0) {
-                MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile dynamic aicore.o failed.");
-                return;
-            }
-        }
+static bool RunCompileAicoreKernelStage(
+    Function* function, std::map<uint64_t, Function*>& leafDict,
+    EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam,
+    const std::string& ccePath, std::string& kernelPath)
+{
+    const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
+    MonitorStageScope aicoreKernelCompileScope(
+        STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_AICORE_KERNEL_COMPILE, static_cast<int>(leafDict.size()));
+    if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
+        FindLiteNPUKernel(leafDict, kernelPath);
+        return true;
     }
+    int ret = CompileAICoreKernel(
+        leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), kernelPath);
+    if (ret != 0) {
+        MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile dynamic aicore.o failed.");
+        return false;
+    }
+    return true;
+}
 #endif
 
-    attr->kernelBinary = LoadFile(kernelPath);
-    MACHINE_LOGD("KernelBinary size[%zu].", attr->kernelBinary.size());
-
+static void RunEncodeStage(
+    Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr, Linker& linker,
+    EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam, bool disableCtrlFlowCache)
+{
+    const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
+    MonitorStageScope encodeScope(
+        STAGE_HOST_MACHINE, hmStep, STAGE_DYNDEV_ENCODE, static_cast<int>(attr->funcGroup.devRootList.size()));
     attr->devEncodeList.resize(attr->funcGroup.devRootList.size());
     topo_dump::StaticTopoCsvWriter staticTopo;
     for (auto& devRoot : attr->funcGroup.devRootList) {
@@ -1137,8 +1109,116 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
             OverCallOpMaxNum(devRoot, funcBin);
         }
     }
+    SetDyndevProgBinary(function, disableCtrlFlowCache);
+}
 
-    return SetDyndevProgBinary(function, valDependTensorMeta.disableCtrlFlowCache);
+static void RunCodeGenStage(
+    const std::shared_ptr<DyndevFunctionAttribute>& attr, std::map<uint64_t, Function*>& leafDict)
+{
+    std::mutex leafDictMutex;
+
+    MonitorManager::Instance().SetRootFuncCount(GetRootFuncNum(attr));
+
+    std::deque<std::function<void(void)>> tasks;
+    for (auto& devRoot : attr->funcGroup.devRootList) {
+        std::function<void(void)> task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
+            Function* devTile = attr->rootTileDict[devRoot];
+            bool isDynamicAligned = devTile->paramConfigs_.dynamicAlignedOps;
+            npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"), false, isDynamicAligned);
+            npu::tile_fwk::CodeGen codeGen(codeGenCtx);
+            COMPILER_LOGI(
+                "Function :[%s] starts executing codegen and binary compilation", devTile->GetMagicName().c_str());
+            codeGen.GenCode(*devTile, {});
+            MainBlockCondBulider::Gencode(devTile);
+
+            std::lock_guard<std::mutex> lock(leafDictMutex);
+            for (auto& [psgId, leaf] : devRoot->programs_) {
+                (void)psgId;
+                auto hash = leaf->GetFunctionHash().GetHash();
+                if (!leafDict.count(hash)) {
+                    leafDict[hash] = leaf;
+                    MACHINE_LOGI("Dyndev.codegen: %s", leaf->GetRawName().c_str());
+                } else {
+                    MACHINE_LOGE(
+                        HostBackEndErr::DUPLICATE_LEAF_FUNC_HASH, " Duplicate func hash %lu name %s", hash,
+                        leaf->GetRawName().c_str());
+                }
+            }
+        };
+        tasks.push_back(task);
+    }
+
+    MonitorManager::Instance().PrintCurrentTotalElapsed("Stage CodeGen cce code generation completed");
+    unsigned threadNum = GetCGThreadNum();
+    ParallelExecuteAndWait(threadNum, tasks);
+}
+
+static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[maybe_unused]] const std::string& ccePath)
+{
+    ASSERT(
+        HostBackEndErr::RUN_PASS_FAILED,
+        (PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph") == SUCCESS));
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
+        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+        mix_info::DumpMixInfo(function);
+    }
+    std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();
+    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, attr != nullptr) << "DyndevFunctionAttribute is nullptr\n";
+    Linker linker(attr->symbolTable, attr->funcGroup, attr->exprTableDictGroup);
+    bool hasAicoreKernelLink = false;
+#ifdef BUILD_WITH_CANN
+    hasAicoreKernelLink = config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION &&
+                          std::getenv("ASCEND_HOME_PATH") != nullptr;
+#endif
+    // Each *StepCount is the number of HostMachine sub-stages (always 1 here), not op/workload.
+    // Must match Run*Stage order and AllocHostMachineStepIndex() call count (3 without AICore link, 4 with).
+    constexpr int buildControlFlowStepCount = 1;    // DynDev:BuildControlFlow
+    constexpr int controlFlowCompileStepCount = 1;  // DynDev:ControlFlowCompile
+    constexpr int aicoreKernelStepCount = 1;      // DynDev:AICoreKernelCompile (when hasAicoreKernelLink)
+    constexpr int encodeStepCount = 1;              // DynDev:Encode (MonitorStageScope opSize = devRoot count)
+    MonitorManager::Instance().BeginHostMachineCompileGroup(
+        buildControlFlowStepCount + controlFlowCompileStepCount +
+        (hasAicoreKernelLink ? aicoreKernelStepCount : 0) + encodeStepCount);
+    uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
+    std::string aicpuDirPath = GetEmitPath("kernel_aicpu");
+    npu::tile_fwk::CreateMultiLevelDir(aicpuDirPath);
+    const std::string expName = "expression_" + std::to_string(tilingKey) + ".h";
+    std::vector<std::string> exprSrcFiles;
+    ValDependTensorMeta valDependTensorMeta;
+    std::string controlFlowSource;
+    std::string expressionSource;
+
+    RunBuildControlFlowStage(
+        cache, linker, function, attr, expName, exprSrcFiles, valDependTensorMeta,
+        controlFlowSource, expressionSource);
+
+    std::string expressionFilePath = aicpuDirPath + "/" + expName;
+    if (IsNeedDumpAicpuKernel(expressionFilePath)) {
+        DumpFile(expressionSource, expressionFilePath);
+    }
+
+    RunCompileControlFlowStage(function, attr, aicpuDirPath, controlFlowSource, expressionSource, exprSrcFiles);
+
+    std::map<uint64_t, Function*> leafDict;
+    RunCodeGenStage(attr, leafDict);
+
+    struct EncodeDevAscendFunctionParam encodeDevAscendFunctionParam = {};
+    ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, attr);
+    encodeDevAscendFunctionParam.inoutLink = &attr->inoutLink;
+
+    std::string kernelPath;
+#ifdef BUILD_WITH_CANN
+    if (hasAicoreKernelLink) {
+        if (!RunCompileAicoreKernelStage(function, leafDict, encodeDevAscendFunctionParam, ccePath, kernelPath)) {
+            return;
+        }
+    }
+#endif
+
+    attr->kernelBinary = LoadFile(kernelPath);
+    MACHINE_LOGD("KernelBinary size[%zu].", attr->kernelBinary.size());
+
+    RunEncodeStage(function, attr, linker, encodeDevAscendFunctionParam, valDependTensorMeta.disableCtrlFlowCache);
 }
 
 MachineTask* GenCode(MachineTask* task, FunctionCache& cache)

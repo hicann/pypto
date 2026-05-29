@@ -212,4 +212,18 @@ TEST_F(CompilerMonitor, CompilerMonitorTimeoutSecZero)
     MonitorManager::Instance().EndStage(STAGE_FUNC_TO_BIN, idx, "root_func_1");
 }
 
+TEST_F(CompilerMonitor, CompilerMonitorHostMachineStepGroup)
+{
+    MonitorManager::Instance().Initialize(true, 2, 4, 5);
+    MonitorManager::Instance().BeginHostMachineCompileGroup(4);
+    EXPECT_EQ(MonitorManager::Instance().GetHostMachineTotalSteps(), 4);
+    EXPECT_EQ(MonitorManager::Instance().AllocHostMachineStepIndex(), 1);
+    EXPECT_EQ(MonitorManager::Instance().AllocHostMachineStepIndex(), 2);
+    EXPECT_EQ(MonitorManager::Instance().AllocHostMachineStepIndex(), 3);
+    EXPECT_EQ(MonitorManager::Instance().AllocHostMachineStepIndex(), 4);
+
+    MonitorManager::Instance().SetCompilerMonitorOptions(false, 2, 4, 5);
+    EXPECT_EQ(MonitorManager::Instance().AllocHostMachineStepIndex(), -1);
+}
+
 } // namespace npu::tile_fwk
