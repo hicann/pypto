@@ -1355,8 +1355,8 @@ struct EncodeDevAscendFunctionInfo {
                         incastOpAttr.useList.emplace_back(j, k, coaIndex, coaIndex + dimSize);
                         UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
                         MACHINE_LOGD(
-                            "Minimal shape for incast %d rawtensor magic %d op %zu %d is %s.\n", index->magic,
-                            index->GetRawMagic(), j, op.GetOpMagic(),
+                            "Minimal shape for incast %d rawtensor magic %d coaIndex %d op %zu %d is %s.\n", index->magic,
+                            index->GetRawMagic(), coaIndex, j, op.GetOpMagic(),
                             IntVecToStr(ShapeToVector(incastOpAttr.cellMatchTableDesc.cellShape)).c_str());
                         incastUseOpSet.insert(j);
                     }
