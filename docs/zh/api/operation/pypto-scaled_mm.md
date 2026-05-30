@@ -41,7 +41,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 |-------------------|----------------------------------------------------------------------|
 | scale             | 表示pertensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵量化的参数。 <br> 输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> 不支持叠加多核切k功能。|
 | scale_tensor      | 表示perchannel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t 的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> scale_tensor的第一维度必须置1，且N维度需要与mat_b矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 仅支持矩阵维度为2维场景。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要在function外提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
-| bias_tensor       | 表示偏置矩阵。 <br> 输入为Tensor类型。 <br> Bias矩阵数据类型可选DT_FP16、DT_BF16和DT_FP32。 <br> bias_tensor只支持ND格式。 <br> bias_tensor的第一维度应置1，且N维度需要与mat_b矩阵的N维度相等。<br> 仅支持矩阵维度为2维场景。<br> 不支持叠加多核切K功能。|
+| bias_tensor       | 表示偏置矩阵。 <br> 输入为Tensor类型。 <br> Bias矩阵数据类型可选DT_FP16、DT_BF16和DT_FP32。 <br> bias_tensor只支持ND格式。<br> 仅支持矩阵维度为2/3/4维场景。 <br> 当输入矩阵为3维时，Bias维度可以为[B, 1, N]或[1, N]，且N维度需要与mat_b矩阵的N维度相等。<br> 当输入矩阵为4维时，Bias维度只能为[1, N]，且N维度需要与mat_b矩阵的N维度相等。<br> 不支持叠加多核切K功能。|
 
 表3： scaled_mm支持的数据类型
 
@@ -64,6 +64,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 
 ## 约束说明
 
+- 当前只支持左右矩阵为2/3/4维输入，且scale_a/scale_b均为3维。
 - 调用scaled_mm接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小。
 - 调用scaled_mm接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
 

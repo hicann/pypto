@@ -708,6 +708,17 @@ def BatchMatmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False, b_
                  c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
 
 
+def BatchMatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tensor, a_trans: bool = False,
+             a_scale_trans: bool = False, b_trans: bool = False, b_scale_trans: bool = False,
+             c_matrix_nz: bool = False) -> Tensor: ...
+
+
+@overload
+def BatchMatmulMX(dtype: DataType, a: Tensor, aScale: Tensor, b: Tensor, bScale: Tensor, a_trans: bool = False,
+             a_scale_trans: bool = False, b_trans: bool = False, b_scale_trans: bool = False,
+             c_matrix_nz: bool = False, extend_params: MatmulExtendParam = None) -> Tensor: ...
+
+
 @overload
 def Assemble(a: List[Tuple[Tensor, List[SymbolicScalar]]], dst: Tensor,
              parallel: bool = False) -> None: ...

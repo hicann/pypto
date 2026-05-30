@@ -243,7 +243,7 @@ def scaled_mm(
     b_scale = pypto.tensor((2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
     pypto.scaled_mm(a, b, pypto.DT_BF16, a_scale, b_scale)
 
-    # With bias addition
+    # Standard matrix with bias addition
     a = pypto.tensor((16, 128), pypto.DT_FP8E4M3, "tensor_a")
     b = pypto.tensor((128, 64), pypto.DT_FP8E4M3, "tensor_b")
     a_scale = pypto.tensor((16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
@@ -251,22 +251,53 @@ def scaled_mm(
     bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
     extend_params = {'bias_tensor': bias}
     pypto.scaled_mm(a, b, pypto.DT_FP16, extend_params=extend_params)
+
+    # Standard batch matrix multiplication
+    a = pypto.tensor((3, 16, 128), pypto.DT_FP8E4M3, "tensor_a")
+    b = pypto.tensor((3, 128, 64), pypto.DT_FP8E4M3, "tensor_b")
+    a_scale = pypto.tensor((16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
+    b_scale = pypto.tensor((2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
+    pypto.scaled_mm(a, b, pypto.DT_BF16, a_scale, b_scale)
+
+    # Standard batch matrix with bias addition
+    a = pypto.tensor((3, 16, 128), pypto.DT_FP8E4M3, "tensor_a")
+    b = pypto.tensor((3, 128, 64), pypto.DT_FP8E4M3, "tensor_b")
+    a_scale = pypto.tensor((16, 2, 2), pypto.DT_FP8E8M0, "scale_a")
+    b_scale = pypto.tensor((2, 64, 2), pypto.DT_FP8E8M0, "scale_b")
+    bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
+    extend_params = {'bias_tensor': bias}
+    pypto.scaled_mm(a, b, pypto.DT_FP16, extend_params=extend_params)
     """
     __validate_inputs(mat_a, mat_b, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params])
-    __validate_scaled_inputs(mat_a, mat_b, scale_a, scale_b)
+    __validate_scaled_inputs(mat_a, mat_b, scale_a, scale_b, extend_params)
     __validate_scaled_shape(mat_a, mat_b, scale_a, scale_b, [a_trans, b_trans, scale_a_trans, scale_b_trans])
-    if extend_params is not None:
-        extend_params = pypto_impl.MatmulExtendParam(
-            **__convert_matmul_extend_params(extend_params)
-        )
-        return pypto_impl.MatmulMX(
-            out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans,
-            c_matrix_nz, extend_params
-        )
+
+    if mat_a.Dim() == 2:
+        if extend_params is not None:
+            extend_params = pypto_impl.MatmulExtendParam(
+                **__convert_matmul_extend_params(extend_params)
+            )
+            return pypto_impl.MatmulMX(
+                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans,
+                c_matrix_nz, extend_params
+            )
+        else:
+            return pypto_impl.MatmulMX(
+                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz
+            )
     else:
-        return pypto_impl.MatmulMX(
-            out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz
-        )
+        if extend_params is not None:
+            extend_params = pypto_impl.MatmulExtendParam(
+                **__convert_matmul_extend_params(extend_params)
+            )
+            return pypto_impl.BatchMatmulMX(
+                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz, 
+                extend_params
+            )
+        else:
+            return pypto_impl.BatchMatmulMX(
+                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz
+            )
 
 
 def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> None:
@@ -358,17 +389,38 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
         raise PyptoError(0xF00002, ValueError("Non-FP8 inputs require identical dtypes."))
 
 
-def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_scale2) -> None:
+def __validate_bias_dimension(input_dim, bias_tensor):
+    if bias_tensor is None:
+        return
+    bias_dim = bias_tensor.Dim()
+    if input_dim in (2, 4):
+        if bias_dim != 2:
+            raise PyptoError(0xF00003, RuntimeError(
+                f"{input_dim}D BatchMatmulMX only supports 2D bias tensor, but got {bias_dim}D bias."
+            ))
+    elif input_dim == 3:
+        if bias_dim not in (2, 3):
+            raise PyptoError(0xF00003, RuntimeError(
+                f"3D BatchMatmulMX only supports 2D or 3D bias tensor, but got {bias_dim}D bias."
+            ))
+
+
+def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_scale2, extend_params) -> None:
     input_dim = input_tensor1.Dim()
     other_dim = input_tensor2.Dim()
     scale_a_dim = input_scale1.Dim()
     scale_b_dim = input_scale2.Dim()
-    shape_dim_2 = 2
+    supported_dims = (2, 3, 4)
     shape_dim_3 = 3
 
-    if input_dim != other_dim or input_dim != shape_dim_2:
+    if input_dim not in supported_dims:
         raise PyptoError(0xF00003, RuntimeError(
-            "Tensor dimension mismatch. Expect input_dim == other_dim and both equal to 2, "
+            f"Unsupported tensor dimension for MX Matmul: {input_dim}, "
+            f"only support 2D, 3D or 4D tensor."
+        ))
+    if input_dim != other_dim:
+        raise PyptoError(0xF00003, RuntimeError(
+            "Tensor dimension mismatch. Expect input_dim == other_dim, "
             f"got input_dim: {input_dim}, other_dim: {other_dim}."
         ))
     if scale_a_dim != scale_b_dim or scale_a_dim != shape_dim_3:
@@ -376,6 +428,9 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
             "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to 3, "
             f"got scale_a_dim: {scale_a_dim}, scale_b_dim: {scale_b_dim}."
         ))
+    
+    if extend_params is not None:
+        __validate_bias_dimension(input_dim, extend_params.get('bias_tensor'))
 
 
 def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_scale2, optional_param) -> None:
