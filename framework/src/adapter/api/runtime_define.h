@@ -312,6 +312,11 @@ enum class RtFusionExType {
     AICORE_AICPU
 };
 
+enum class RtCoreType {
+    RT_CORE_TYPE_AIC = 0,
+    RT_CORE_TYPE_AIV,
+};
+
 struct RtFusionAICoreCCUExDetailInfo {
     RtExceptionArgsInfo exceptionArgs;
     RtMultiCCUExDetailInfo ccuDetailMsg;
@@ -342,5 +347,18 @@ struct RtExceptionInfo {
     uint32_t deviceid;
     uint32_t retcode;
     RtExceptionExpandInfo expandInfo;
+};
+
+struct RtExceptionErrRegInfo {
+    uint32_t coreId;
+    RtCoreType coreType;
+    uint64_t startPc;
+    uint64_t currentPc;
+    uint32_t errReg[64];
+};
+
+struct RtExceptionRegInfo {
+    uint32_t coreNum;
+    RtExceptionErrRegInfo *errRegInfo;
 };
 }

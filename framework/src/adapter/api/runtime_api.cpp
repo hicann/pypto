@@ -363,6 +363,21 @@ RtError RuntimeAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char
 #endif
     return StubAicpuKernelLaunchExWithArgs(kernelType, opName, numBlocks, argsInfo, smDesc, stm, flags);
 }
+
+RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionRegInfo* execptionReg) {
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetExceptionRegInfo);
+    if (func != nullptr) {
+        rtError_t(*runtimeFunc)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*) =
+            reinterpret_cast<rtError_t(*)(RtExceptionInfo*, RtExceptionErrRegInfo**, uint32_t*)>(func);
+        runtimeFunc(exceptionInfo, &(execptionReg->errRegInfo), &execptionReg->coreNum);
+    }
+#endif
+    (void)exceptionInfo;
+    (void)execptionReg;
+    return 0;
+}
+
 #ifdef BUILD_WITH_CANN
 static_assert(std::is_same<RtError, rtError_t>::value);
 static_assert(std::is_same<RtMemType, rtMemType_t>::value);

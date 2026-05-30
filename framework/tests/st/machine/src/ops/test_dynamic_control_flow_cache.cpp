@@ -165,9 +165,9 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape)
     {
         // check success
         DevTensorData devTensorList[] = {
-            {0, {2, {n1, n1}}},
-            {0, {2, {n1, n1}}},
-            {0, {2, {n1, n1}}},
+            {0, {2, {n1, n1}}, DT_INT32},
+            {0, {2, {n1, n1}}, DT_INT32},
+            {0, {2, {n1, n1}}, DT_INT32},
         };
         DevStartArgsBase arg = {devTensorList, 2, 1, nullptr, 0};
         EXPECT_TRUE(ctrlFlowCache->MatchInputOutput(&arg));
@@ -180,9 +180,9 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape)
     {
         // check failed for dimension
         DevTensorData devTensorList[] = {
-            {0, {2, {n1, n1}}},
-            {0, {2, {n1, n1}}},
-            {0, {3, {n1, n1, n1}}},
+            {0, {2, {n1, n1}}, DT_INT32},
+            {0, {2, {n1, n1}}, DT_INT32},
+            {0, {3, {n1, n1, n1}}, DT_INT32},
         };
         DevStartArgsBase arg = {devTensorList, 2, 1, nullptr, 0};
         EXPECT_FALSE(ctrlFlowCache->MatchInputOutput(&arg));
@@ -190,9 +190,9 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape)
     {
         // check failed for shape
         DevTensorData devTensorList[] = {
-            {0, {2, {n1, n1}}},
-            {0, {2, {n1, n1}}},
-            {0, {2, {n1, n1 + n1}}},
+            {0, {2, {n1, n1}}, DT_INT32},
+            {0, {2, {n1, n1}}, DT_INT32},
+            {0, {2, {n1, n1 + n1}}, DT_INT32},
         };
         DevStartArgsBase arg = {devTensorList, 2, 1, nullptr, 0};
         EXPECT_FALSE(ctrlFlowCache->MatchInputOutput(&arg));

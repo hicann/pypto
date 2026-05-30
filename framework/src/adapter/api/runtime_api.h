@@ -16,6 +16,7 @@
 #pragma once
 
 #include "adapter/api/runtime_define.h"
+#include "adapter/api/acl_define.h"
 
 namespace npu::tile_fwk {
 RtError RuntimeMalloc(void **devPtr, uint64_t size, RtMemType type, const uint16_t moduleId);
@@ -61,4 +62,5 @@ RtError RuntimeFunctionRegister(void *binHandle, const void *stubFunc, const cha
                                 const void *kernelInfoExt, uint32_t funcMode);
 RtError RuntimeKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args, uint32_t argsSize,
                             RtSmDesc *smDesc, RtStream stm);
+RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionRegInfo* execptionReg);
 }

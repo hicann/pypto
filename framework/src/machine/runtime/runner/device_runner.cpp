@@ -41,6 +41,7 @@
 #include "machine/utils/device_switch.h"
 #include "securec.h"
 #include "nlohmann/json.hpp"
+#include "device_exception_dump.h"
 
 using json = nlohmann::json;
 
@@ -169,7 +170,7 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs& args)
     }
 
     // core reg
-    size_t regSize = nrCore * sizeof(uint64_t);
+    size_t regSize = regs.size() * sizeof(uint64_t);
     args.coreRegAddr = reinterpret_cast<uint64_t>(CopyDataToDevice(regs.data(), regSize));
     if (args.coreRegAddr == 0) {
         MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Fail to copy aicore reg data from host to device.");
@@ -690,6 +691,7 @@ int DeviceRunner::Init()
     InitPerfData();
 
     StartMachinePerfTraceDumpThread();
+    npu::tile_fwk::dynamic::AdumpRegExceptionDump();
     return 0;
 }
 

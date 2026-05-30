@@ -34,6 +34,20 @@ uint64_t AdxDumpGetDumpSwitch(const AdxDumpType dumpType) {
     return StubDumpGetDumpSwitch(dumpType);
 }
 
+int32_t AdumpRegExceptionDumpCallBack(AdumpExceptionDumpCallback callback)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAdumpAdapter().GetFunction(AdumpFunc::DumpFailTaskExceptionCallBack);
+    if (func != nullptr) {
+        int32_t(*adumpFailRegFunc)(AdumpExceptionDumpCallback) =
+            reinterpret_cast<int32_t(*)(AdumpExceptionDumpCallback)>(func);
+        return adumpFailRegFunc(callback);
+    }
+#endif
+    (void)callback;
+    return 0;
+}
+
 #ifdef BUILD_WITH_CANN
 void ConvertTensorInfos(const std::vector<AdxTensorInfoV2> &tensors, std::vector<Adx::TensorInfoV2> &adxTensors)
 {

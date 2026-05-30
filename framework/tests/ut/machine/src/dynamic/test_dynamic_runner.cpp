@@ -76,7 +76,6 @@ TEST_F(TestDynamicDeviceRunner, TestInitArgs)
     args.nrAic = 2;
     args.nrAiv = 2;
     args.nrValidAic = args.nrAic;
-    runner.DumpAiCoreExecutionTimeData();
     runner.DumpAiCorePmuData();
     runner.SynchronizeDeviceToHostProfData();
 }

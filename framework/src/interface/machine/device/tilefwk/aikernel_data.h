@@ -61,6 +61,7 @@ struct DevShape {
 struct DevTensorData {
     uint64_t address{0};
     DevShape shape;
+    int32_t dataType;
 };
 
 struct DevStartArgsBase {

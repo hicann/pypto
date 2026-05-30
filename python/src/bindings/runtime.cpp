@@ -535,6 +535,7 @@ public:
         runtimeDynamicCellMatchAddr_ = devProg->devArgs.dynamicCellMatchAddr;
         runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
         lastPreparedDynamicCellMatchBytes_ = runtimeDynamicCellMatchCapacity_;
+        kernelName_ = "PyPTO_" + dynFunc->GetOriginalRawName();
     }
 
     uint8_t* FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape)
@@ -638,6 +639,7 @@ public:
                 addr += l2Offset;
             }
             tensorData->address = addr;
+            tensorData->dataType = tensors[i].GetDataType();
             auto& shape = t.GetShape();
             tensorData->shape.dimSize = shape.size();
             for (int j = 0; j < tensorData->shape.dimSize; ++j) {
@@ -680,6 +682,7 @@ public:
     void* GetKernelBin() { return kernelBin; }
     auto& GetArgTypes() { return argTypes; }
     Function* GetFunction() { return dynFunc.get(); }
+    const std::string& GetKernelname() const {return kernelName_;};
     bool DisableHostCtrlFlowCacheBuild() const
     {
         return devProg != nullptr && devProg->disableCtrlFlowCache != 0;
@@ -867,6 +870,7 @@ private:
     uint64_t runtimeDynamicCellMatchCapacity_{0};
     bool runtimeDynamicCellMatchOwned_{false};
     bool runtimeDynamicCellMatchHostOwned_{false};
+    std::string kernelName_; 
 
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     {
@@ -1060,6 +1064,10 @@ public:
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
 
         kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
+        // copy tensor to aicore args
+        kernelArgs[0] = const_cast<char*>(kernel->GetKernelname().c_str());
+        kernelArgs[4] = (int64_t*)(args + 1);
+        kernelArgs[6] = (DevTensorData*)((int64_t*)(args + 1) + 2);
         ret = DeviceLauncher::LaunchAicoreKernel(
             aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable, kernel->GetFunction());
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;

@@ -46,6 +46,7 @@ enum class RuntimeFunc {
     DevBinaryRegister,
     FunctionRegister,
     KernelLaunch,
+    GetExceptionRegInfo,
     Bottom
 };
 #if defined(BUILD_WITH_CANN_MOBILE)
@@ -79,6 +80,7 @@ const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap {
     {RuntimeFunc::AicpuKernelLaunchExWithArgs, "rtAicpuKernelLaunchExWithArgs"},
     {RuntimeFunc::DevBinaryRegister, "rtDevBinaryRegister"},
     {RuntimeFunc::FunctionRegister, "rtFunctionRegister"},
-    {RuntimeFunc::KernelLaunch, "rtKernelLaunch"}
+    {RuntimeFunc::KernelLaunch, "rtKernelLaunch"},
+    {RuntimeFunc::GetExceptionRegInfo, "rtGetExceptionRegInfo"},
 };
 }

@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -15,19 +15,28 @@
 
 #include "adapter/stubs/runtime_stubs.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "securec.h"
 
 namespace npu::tile_fwk {
-RtError StubMalloc(void **devPtr, uint64_t size, RtMemType type, const uint16_t moduleId)
+constexpr uint64_t MAX_MALLOC_SIZE = 1024 * 1024 *1024;
+RtError StubMalloc(void** devPtr, uint64_t size, RtMemType type, const uint16_t moduleId)
 {
     ADAPTER_LOGD("Enter stub function of Malloc.");
-    (void)devPtr;
-    (void)size;
     (void)type;
     (void)moduleId;
+    if (devPtr == nullptr || size == 0 ||size > MAX_MALLOC_SIZE) {
+        ADAPTER_LOGW("devPtr is null or size can not be support");
+        return RT_SUCCESS;
+    }
+    *devPtr = malloc(size);
+    if (*devPtr == nullptr) {
+        ADAPTER_LOGW("StubMalloc failed: malloc returned nullptr");
+        return static_cast<RtError>(-1);
+    }
     return RT_SUCCESS;
 }
 
-RtError StubMemset(void *devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
+RtError StubMemset(void* devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
 {
     ADAPTER_LOGD("Enter stub function of Memset.");
     (void)devPtr;
@@ -40,16 +49,18 @@ RtError StubMemset(void *devPtr, uint64_t destMax, uint32_t val, uint64_t cnt)
 RtError StubMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
 {
     ADAPTER_LOGD("Enter stub function of Memcpy.");
-    (void)dst;
-    (void)destMax;
-    (void)src;
-    (void)cnt;
     (void)kind;
+    if (dst != nullptr && src != nullptr && cnt <= destMax) {
+        errno_t ret = memcpy_s(dst, destMax, src, cnt);
+        if (ret != 0) {
+            ADAPTER_LOGW("StubMemcpy failed: memcpy_s returned %d", ret);
+            return static_cast<RtError>(-1);
+        }
+    }
     return RT_SUCCESS;
 }
 
-RtError StubMemcpyAsync(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
-                        RtStream stm)
+RtError StubMemcpyAsync(void* dst, uint64_t destMax, const void* src, uint64_t cnt, RtMemcpyKind kind, RtStream stm)
 {
     ADAPTER_LOGD("Enter stub function of MemcpyAsync.");
     (void)dst;
@@ -61,10 +72,12 @@ RtError StubMemcpyAsync(void *dst, uint64_t destMax, const void *src, uint64_t c
     return RT_SUCCESS;
 }
 
-RtError StubFree(void *devPtr)
+RtError StubFree(void* devPtr)
 {
     ADAPTER_LOGD("Enter stub function of Free.");
-    (void)devPtr;
+    if (devPtr != nullptr) {
+        free(devPtr);
+    }
     return RT_SUCCESS;
 }
 
@@ -75,7 +88,7 @@ RtError StubSetDevice(int32_t devId)
     return RT_SUCCESS;
 }
 
-RtError StubGetDevice(int32_t *devId)
+RtError StubGetDevice(int32_t* devId)
 {
     ADAPTER_LOGD("Enter stub function of GetDevice.");
     (void)devId;
@@ -92,7 +105,7 @@ RtError StubGetSocSpec(const char* label, const char* key, char* val, const uint
     return RT_SUCCESS;
 }
 
-RtError StubGetSocVersion(char_t *ver, const uint32_t maxLen)
+RtError StubGetSocVersion(char_t* ver, const uint32_t maxLen)
 {
     ADAPTER_LOGD("Enter stub function of GetSocVersion.");
     (void)ver;
@@ -100,14 +113,14 @@ RtError StubGetSocVersion(char_t *ver, const uint32_t maxLen)
     return RT_SUCCESS;
 }
 
-RtError StubGetAiCpuCount(uint32_t *aiCpuCnt)
+RtError StubGetAiCpuCount(uint32_t* aiCpuCnt)
 {
     ADAPTER_LOGD("Enter stub function of GetAiCpuCount.");
     (void)aiCpuCnt;
     return RT_SUCCESS;
 }
 
-RtError StubGetL2CacheOffset(uint32_t deviceId, uint64_t *offset)
+RtError StubGetL2CacheOffset(uint32_t deviceId, uint64_t* offset)
 {
     ADAPTER_LOGD("Enter stub function of GetL2CacheOffset.");
     (void)deviceId;
@@ -115,7 +128,7 @@ RtError StubGetL2CacheOffset(uint32_t deviceId, uint64_t *offset)
     return RT_SUCCESS;
 }
 
-RtError StubGetLogicDevIdByUserDevId(const int32_t userDevId, int32_t * const logicDevId)
+RtError StubGetLogicDevIdByUserDevId(const int32_t userDevId, int32_t* const logicDevId)
 {
     ADAPTER_LOGD("Enter stub function of GetLogicDevIdByUserDevId.");
     (void)userDevId;
@@ -123,7 +136,7 @@ RtError StubGetLogicDevIdByUserDevId(const int32_t userDevId, int32_t * const lo
     return RT_SUCCESS;
 }
 
-RtError StubFuncGetByName(const RtBinHandle binHandle, const char_t *kernelName, RtFuncHandle *funcHandle)
+RtError StubFuncGetByName(const RtBinHandle binHandle, const char_t* kernelName, RtFuncHandle* funcHandle)
 {
     (void)binHandle;
     (void)kernelName;
@@ -131,8 +144,8 @@ RtError StubFuncGetByName(const RtBinHandle binHandle, const char_t *kernelName,
     return RT_SUCCESS;
 }
 
-RtError StubBinaryLoadFromFile(const char_t * const binPath, const RtLoadBinaryConfig * const optionalCfg,
-                               RtBinHandle *handle)
+RtError StubBinaryLoadFromFile(
+    const char_t* const binPath, const RtLoadBinaryConfig* const optionalCfg, RtBinHandle* handle)
 {
     (void)binPath;
     (void)optionalCfg;
@@ -140,7 +153,7 @@ RtError StubBinaryLoadFromFile(const char_t * const binPath, const RtLoadBinaryC
     return RT_SUCCESS;
 }
 
-RtError StubStreamCreate(RtStream *stm, int32_t priority)
+RtError StubStreamCreate(RtStream* stm, int32_t priority)
 {
     ADAPTER_LOGD("Enter stub function of StreamCreate.");
     (void)stm;
@@ -170,14 +183,14 @@ RtError StubStreamSynchronize(RtStream stm)
     return RT_SUCCESS;
 }
 
-RtError StubDevBinaryUnRegister(void *handle)
+RtError StubDevBinaryUnRegister(void* handle)
 {
     ADAPTER_LOGD("Enter stub function of DevBinaryUnRegister.");
     (void)handle;
     return RT_SUCCESS;
 }
 
-RtError StubRegisterAllKernel(const RtDevBinary *bin, void **hdl)
+RtError StubRegisterAllKernel(const RtDevBinary* bin, void** hdl)
 {
     ADAPTER_LOGD("Enter stub function of RegisterAllKernel.");
     (void)bin;
@@ -185,7 +198,7 @@ RtError StubRegisterAllKernel(const RtDevBinary *bin, void **hdl)
     return RT_SUCCESS;
 }
 
-RtError StubDevBinaryRegister(const RtDevBinary *bin, void **hdl)
+RtError StubDevBinaryRegister(const RtDevBinary* bin, void** hdl)
 {
     ADAPTER_LOGD("Enter stub function of DevBinaryRegister.");
     (void)bin;
@@ -193,8 +206,8 @@ RtError StubDevBinaryRegister(const RtDevBinary *bin, void **hdl)
     return RT_SUCCESS;
 }
 
-RtError StubFunctionRegister(void *binHandle, const void *stubFunc, const char_t *stubName,
-    const void *kernelInfoExt, uint32_t funcMode)
+RtError StubFunctionRegister(
+    void* binHandle, const void* stubFunc, const char_t* stubName, const void* kernelInfoExt, uint32_t funcMode)
 {
     ADAPTER_LOGD("Enter stub function of FunctionRegister.");
     (void)binHandle;
@@ -205,8 +218,8 @@ RtError StubFunctionRegister(void *binHandle, const void *stubFunc, const char_t
     return RT_SUCCESS;
 }
 
-RtError StubKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args, uint32_t argsSize,
-    RtSmDesc *smDesc, RtStream stm)
+RtError StubKernelLaunch(
+    const void* stubFunc, uint32_t blockDim, void* args, uint32_t argsSize, RtSmDesc* smDesc, RtStream stm)
 {
     ADAPTER_LOGD("Enter stub function of KernelLaunch.");
     (void)stubFunc;
@@ -218,8 +231,9 @@ RtError StubKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args, ui
     return RT_SUCCESS;
 }
 
-RtError StubLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
-    const RtKernelLaunchCfg *cfg, RtCpuKernelArgs *argsInfo)
+RtError StubLaunchCpuKernel(
+    const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm, const RtKernelLaunchCfg* cfg,
+    RtCpuKernelArgs* argsInfo)
 {
     ADAPTER_LOGD("Enter stub function of LaunchCpuKernel.");
     (void)funcHandle;
@@ -230,9 +244,9 @@ RtError StubLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks, R
     return RT_SUCCESS;
 }
 
-RtError StubKernelLaunchWithHandleV2(void *hdl, const uint64_t tilingKey, uint32_t numBlocks,
-                                     RtArgsEx *argsInfo, RtSmDesc *smDesc, RtStream stm,
-                                     const RtTaskCfgInfo *cfgInfo)
+RtError StubKernelLaunchWithHandleV2(
+    void* hdl, const uint64_t tilingKey, uint32_t numBlocks, RtArgsEx* argsInfo, RtSmDesc* smDesc, RtStream stm,
+    const RtTaskCfgInfo* cfgInfo)
 {
     ADAPTER_LOGD("Enter stub function of KernelLaunchWithHandleV2.");
     (void)hdl;
@@ -245,9 +259,9 @@ RtError StubKernelLaunchWithHandleV2(void *hdl, const uint64_t tilingKey, uint32
     return RT_SUCCESS;
 }
 
-RtError StubAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t * const opName,
-                                        const uint32_t numBlocks, const RtAicpuArgsEx *argsInfo,
-                                        RtSmDesc * const smDesc, const RtStream stm, const uint32_t flags)
+RtError StubAicpuKernelLaunchExWithArgs(
+    const uint32_t kernelType, const char_t* const opName, const uint32_t numBlocks, const RtAicpuArgsEx* argsInfo,
+    RtSmDesc* const smDesc, const RtStream stm, const uint32_t flags)
 {
     ADAPTER_LOGD("Enter stub function of AicpuKernelLaunchExWithArgs.");
     (void)kernelType;
@@ -259,4 +273,4 @@ RtError StubAicpuKernelLaunchExWithArgs(const uint32_t kernelType, const char_t 
     (void)flags;
     return RT_SUCCESS;
 }
-}
+} // namespace npu::tile_fwk

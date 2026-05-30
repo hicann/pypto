@@ -22,12 +22,14 @@ namespace npu::tile_fwk {
 enum class AdumpFunc {
     GetDumpSwitch = 0,
     DumpTensorV2,
+    DumpFailTaskExceptionCallBack,
     Bottom
 };
 
 const std::string kAdumpLibName = "libascend_dump.so";
 const std::map<AdumpFunc, std::string> kAdumpFuncStrMap {
     {AdumpFunc::GetDumpSwitch, "_ZN3Adx18AdumpGetDumpSwitchENS_8DumpTypeE"},
-    {AdumpFunc::DumpTensorV2, "_ZN3Adx17AdumpDumpTensorV2ERKSsS1_RKSt6vectorINS_12TensorInfoV2ESaIS3_EEPv"}
+    {AdumpFunc::DumpTensorV2, "_ZN3Adx17AdumpDumpTensorV2ERKSsS1_RKSt6vectorINS_12TensorInfoV2ESaIS3_EEPv"},
+    {AdumpFunc::DumpFailTaskExceptionCallBack, "_ZN3Adx29AdumpRegExceptionDumpCallbackEPFjPvPNS_17ExceptionDumpInfoEjPjPNS_17ExceptionDumpModeEE"},
 };
 }
