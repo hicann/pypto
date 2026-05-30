@@ -216,7 +216,7 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs& args)
 void DeviceRunner::InitAicpuPerfAddr(DeviceArgs& args)
 {
     if (GetEnvVar("DUMP_DEVICE_PERF") == "true") {
-        auto aicpuDevPtr = DevMallocWithAlignSize(MAX_ROUND_NUM * sizeof(MetricPerf), TWO_MB_HUGE_PAGE_FLAGS);
+        auto aicpuDevPtr = MachinePerfTraceDevMalloc(MAX_ROUND_NUM * sizeof(MetricPerf), TWO_MB_HUGE_PAGE_FLAGS);
         if (aicpuDevPtr == nullptr) {
             MACHINE_LOGW("Aicpu per addr malloc failed");
         } else {
@@ -699,7 +699,7 @@ void DeviceRunner::InitPerfData()
 {
     // init perf data
     for (uint64_t i = 0; i < args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS; i++) {
-        perfData_.push_back(DevMallocWithAlignSize(PERF_DATA_TOTAL_SIZE, TWO_MB_HUGE_PAGE_FLAGS));
+        perfData_.push_back(MachinePerfTraceDevMalloc(PERF_DATA_TOTAL_SIZE, TWO_MB_HUGE_PAGE_FLAGS));
     }
 }
 

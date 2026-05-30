@@ -537,25 +537,6 @@ public:
         return BatchPushReadyQueue(context_->GetCurSchDevTaskCtx());
     }
 
-    inline void DumpAicorePerfTrace(std::ostringstream& oss)
-    {
-        (void)oss;
-#if ENABLE_PERF_TRACE
-        for (int i = aicStart_; i < aicEnd_; ++i) {
-            int ret = aicoreHal_.DumpAicorePerfTrace(aicpuIdx_, i, CoreType::AIC, oss);
-            if (ret == DEVICE_MACHINE_OK) {
-                oss << ",";
-            }
-        }
-        for (int i = aivStart_; i < aivEnd_; ++i) {
-            int ret = aicoreHal_.DumpAicorePerfTrace(aicpuIdx_, i, CoreType::AIV, oss);
-            if (ret == DEVICE_MACHINE_OK) {
-                oss << ((i == aivEnd_ - 1) ? "" : ",");
-            }
-        }
-#endif
-    }
-
 private:
     inline void DumpTaskProf()
     {

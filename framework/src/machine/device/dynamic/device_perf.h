@@ -162,7 +162,6 @@ struct PerfEvtMgr {
             DEV_WARN("Aicpu perf info more than maxTurnNum=%u, some info would be lost", MAX_ROUND_NUM);
             return;
         }
-        ResetPerfTrace();
         isOpenProf_ = isOpenProf;
         aicpuPerf_ = aicpuPerf;
     }
@@ -227,12 +226,9 @@ struct PerfEvtMgr {
             aicpuMetrics = (MetricPerf*)(aicpuPerf_ + (tid == 0 ? ctrlTurn_ : schTurn_) * sizeof(MetricPerf));
         }
         if (PerfTraceIsDevTask[type] && DEVTASK_PERF_ARRY_INDEX(type) < DEVTASK_PERF_TYPE_NUM) {
-            auto& cnt = perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
-            if (cnt < PERF_TRACE_COUNT_DEVTASK_MAX_NUM) {
-                perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt++] =
-                    cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
+            uint8_t devCnt = aicpuMetrics->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
+            if (devCnt < PERF_TRACE_COUNT_DEVTASK_MAX_NUM) {
                 if (aicpuMetrics != nullptr) {
-                    uint8_t devCnt = aicpuMetrics->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
                     aicpuMetrics->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)] += 1;
                     aicpuMetrics->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][devCnt] =
                         cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
@@ -243,77 +239,9 @@ struct PerfEvtMgr {
             }
             return;
         }
-        perfTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
         if (aicpuMetrics != nullptr) {
-            aicpuMetrics->perfAicpuTrace[tid][type] = perfTrace[tid][type];
+            aicpuMetrics->perfAicpuTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
         }
-    }
-
-    void DumpPerfTraceCore(std::ostringstream& oss, uint32_t scheCpuNum)
-    {
-        auto devTaskPerfFormatFunc = [this](std::ostringstream& osStr, uint32_t tid, uint32_t type) -> void {
-            for (uint32_t i = 0; i < perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)]; i++) {
-                if (type == PERF_TRACE_DEV_TASK_SEND_FIRST_LEAF_TASK) {
-                    osStr << "{\"name\":\"" << PerfTraceName[type] << "\",";
-                } else {
-                    osStr << "{\"name\":\"" << PerfTraceName[type] << "(" << i << ")\",";
-                }
-                osStr << "\"end\":" << perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][i] << "},";
-            }
-        };
-
-        uint64_t freq = GetFreq() / (NSEC_PER_SEC / NSEC_PER_USEC);
-        uint32_t usedAicpuNum = scheCpuNum + MAX_CONTROL_FLOW_AICPU_NUM;
-        for (uint32_t tid = 0; tid < usedAicpuNum; tid++) {
-            std::string coreType = "\"AICPU\"";
-            if (tid == 0) {
-                coreType = "\"AICPU-CTRL\"";
-            } else if (tid <= scheCpuNum) {
-                coreType = "\"AICPU-SCHED\"";
-            }
-            oss << "{\"blockIdx\":" << tid << ",\"coreType\":" << coreType << ",\"freq\":" << freq << ",\"tasks\":[";
-            for (uint32_t type = 0; type < PERF_TRACE_MAX; type++) {
-                if (PerfTraceIsDevTask[type]) {
-                    devTaskPerfFormatFunc(oss, tid, type);
-                    continue;
-                }
-                if (perfTrace[tid][type] == 0) {
-                    continue;
-                }
-                oss << "{\"name\":\"" << PerfTraceName[type] << "\",\"end\":" << perfTrace[tid][type] << "}"
-                    << (type == PERF_TRACE_MAX - 1 ? "" : ",");
-            }
-            oss << "]}" << (tid == usedAicpuNum - 1 ? "" : ",");
-        }
-    }
-
-    void DumpPerfTrace(uint32_t scheCpuNum, std::string file = "")
-    {
-        (void)file;
-        (void)scheCpuNum;
-#if ENABLE_PERF_TRACE
-        std::ostringstream oss;
-        DumpPerfTraceCore(oss, scheCpuNum);
-        const std::string& str = oss.str();
-        uint32_t totalLength = str.length();
-        uint32_t startPos = 0;
-        uint32_t batchSize = 600;
-        while (startPos < totalLength) {
-            uint32_t endPos = std::min(startPos + batchSize, totalLength);
-            std::string batch = str.substr(startPos, endPos - startPos);
-            DEV_INFO("tile_fwk aicpu prof:%s", batch.c_str());
-            startPos = endPos;
-        }
-
-        if (file != "") {
-            std::ofstream os(file);
-            os << "[";
-            os << oss.str();
-            os << "]";
-        }
-        ResetPerfTrace();
-#endif
-        return;
     }
 
 private:
@@ -322,23 +250,10 @@ private:
 #if ENABLE_PERF_EVT
         memset_s(counters, sizeof(counters), 0, sizeof(counters));
 #endif
-#if ENABLE_PERF_TRACE
-        ResetPerfTrace();
-#endif
     };
-
-    void ResetPerfTrace()
-    {
-        memset_s(perfTrace, sizeof(perfTrace), 0, sizeof(perfTrace));
-        memset_s(perfTraceDevTask, sizeof(perfTraceDevTask), 0, sizeof(perfTraceDevTask));
-        memset_s(perfTraceDevTaskCnt, sizeof(perfTraceDevTaskCnt), 0, sizeof(perfTraceDevTaskCnt));
-    }
 
 private:
     Counter counters[PERF_EVT_MAX];
-    uint64_t perfTrace[MAX_USED_AICPU_NUM][PERF_TRACE_MAX] = {{0}};
-    uint64_t perfTraceDevTask[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM][PERF_TRACE_COUNT_DEVTASK_MAX_NUM] = {{{0}}};
-    uint8_t perfTraceDevTaskCnt[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM] = {{0}};
     bool isOpenProf_{false};
     uint64_t aicpuPerf_{0};
     uint32_t ctrlTurn_{0};

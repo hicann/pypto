@@ -107,36 +107,6 @@ public:
         DEV_INFO("Exception reset reg finish.");
     }
 
-    inline void DumpAicorePerfTrace(std::string file = "")
-    {
-        (void)file;
-#if ENABLE_PERF_TRACE
-        std::ostringstream oss;
-        for (uint32_t i = 0; i < schAicpuNum_; ++i) {
-            aicoreManager_[i]->DumpAicorePerfTrace(oss);
-            oss << (i == schAicpuNum_ - 1 ? "" : ",");
-        }
-
-        const std::string& str = oss.str();
-        uint32_t totalLength = str.length();
-        uint32_t startPos = 0;
-        uint32_t batchSize = 600;
-        while (startPos < totalLength) {
-            uint32_t endPos = std::min(startPos + batchSize, totalLength);
-            std::string batch = str.substr(startPos, endPos - startPos);
-            DEV_INFO("tile_fwk aicore prof:%s", batch.c_str());
-            startPos = endPos;
-        }
-
-        if (file != "") {
-            std::ofstream os(file);
-            os << "[";
-            os << oss.str();
-            os << "]";
-        }
-#endif
-    }
-
 private:
     SchThreadStatus schThreadStatus;
     uint32_t schAicpuNum_{MAX_SCHEDULE_AICPU_NUM};

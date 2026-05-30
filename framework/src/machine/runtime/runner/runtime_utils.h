@@ -66,11 +66,16 @@ inline uint64_t AlignSize(const uint64_t bytes, const uint32_t aligns = 512U)
     return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
 }
 
-inline void* DevMallocWithAlignSize(const uint64_t size, const RtMemType memType)
+inline void* MachinePerfTraceDevMalloc(const uint64_t size, const RtMemType memType)
 {
     uint8_t* devPtr = nullptr;
     if (RuntimeMalloc(reinterpret_cast<void**>(&devPtr), AlignSize(size), memType, 0) != 0) {
         MACHINE_LOGW("Fail to malloc dev memory with size[%lu] and mem type[%u].", size, memType);
+        return nullptr;
+    }
+    if (RuntimeMemset(devPtr, AlignSize(size), 0, AlignSize(size)) != 0) {
+        MACHINE_LOGW("reset perf device addr failed");
+        RuntimeFree(devPtr);
         return nullptr;
     }
     return devPtr;
