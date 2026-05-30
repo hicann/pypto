@@ -134,27 +134,33 @@ export TILE_FWK_DEVICE_ID=<空闲 chip id>
 
 **步骤 4.3.2：设置并验证 PTO-ISA 路径**
 
-> ⚠️ **高频断裂点**：CANN 内置 PTO-ISA 版本可能与 PyPTO 源码不兼容（缺少 `pto::ExpAlgorithm`/`DivAlgorithm` 等枚举），导致运行时 kernel 编译失败（`no member named 'XXX' in namespace 'pto'`）。**必须执行下方兼容性检查，不可跳过**。
+> ⚠️ **高频断裂点**：CANN 内置 PTO-ISA 版本可能与 PyPTO 源码不兼容（缺少 `pto::FmodSAlgorithm`/`RemSAlgorithm`/`ExpAlgorithm`/`DivAlgorithm` 等枚举），导致运行时 kernel 编译失败（`no member named 'XXX' in namespace 'pto'`）。**必须执行下方兼容性检查，不可跳过**。
 
 ```bash
 # 1. 先使用 CANN 内置路径（默认）
 arch=$(uname -m)   # 常见值：x86_64 或 aarch64
 export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
 
-# 2. 验证 PTO-ISA 兼容性：检查是否包含所需算法枚举
-if ! grep -rq "DivAlgorithm" "${PTO_TILE_LIB_CODE_PATH}/include/pto/" 2>/dev/null; then
-    echo "⚠️ CANN 内置 PTO-ISA 缺少 DivAlgorithm 等枚举，版本不兼容，切换到源码方式"
-    PTO_ISA_SRC="${PTO_ISA_SRC:-${PYPTO_REPO}/pto-isa}"
+# 2. 验证兼容性：检查关键枚举是否存在，任一缺失即需切换到源码方式
+check_items=("FmodSAlgorithm" "RemSAlgorithm" "DivAlgorithm" "ExpAlgorithm" "SqrtAlgorithm")
+missing_items=""
+for item in "${check_items[@]}"; do
+    if ! grep -rq "${item}" "${PTO_TILE_LIB_CODE_PATH}/include/pto/" 2>/dev/null; then
+        missing_items="${missing_items} ${item}"
+    fi
+done
 
-    # 本地已有 pto-isa 源码则复用，否则从 gitcode 克隆
-    if [ ! -d "${PTO_ISA_SRC}/include/pto" ]; then
+if [ -n "${missing_items}" ]; then
+    echo "⚠️ PTO-ISA 不兼容，缺少枚举: ${missing_items}，切换到源码方式"
+    PTO_ISA_SRC="${PTO_ISA_SRC:-${PYPTO_REPO}/pto-isa}"
+    if [ -d "${PTO_ISA_SRC}/include/pto" ]; then
+        cd "${PTO_ISA_SRC}" && git pull origin master
+    else
         git clone https://gitcode.com/cann/pto-isa.git "${PTO_ISA_SRC}"
     fi
-
     export PTO_TILE_LIB_CODE_PATH="${PTO_ISA_SRC}"
-    echo "✓ PTO_TILE_LIB_CODE_PATH 已切换到源码: ${PTO_TILE_LIB_CODE_PATH}"
 else
-    echo "✓ CANN 内置 PTO-ISA 兼容"
+    echo "✓ PTO-ISA 兼容"
 fi
 ```
 
@@ -223,7 +229,7 @@ python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode npu
 
 | 错误信息 | 原因 | 修复 |
 |---------|------|------|
-| `no member named 'XXX' in namespace 'pto'`（如 `ExpAlgorithm`、`DivAlgorithm`） | PTO-ISA 版本过旧，CANN 内置头文件缺少枚举定义 | 按步骤 4.3.2 克隆 pto-isa 源码并设置 `PTO_TILE_LIB_CODE_PATH`，然后 `source env_setup.sh` 重跑 softmax |
+| `no member named 'XXX' in namespace 'pto'`（如 `FmodSAlgorithm`、`RemSAlgorithm`、`ExpAlgorithm`、`DivAlgorithm`） | PTO-ISA 版本过旧，CANN 内置头文件缺少枚举定义 | 按步骤 4.3.2 克隆 pto-isa 源码并设置 `PTO_TILE_LIB_CODE_PATH`，然后 `source env_setup.sh` 重跑 softmax |
 | `COMPILE_CODE_FAILED` / kernel 编译失败 | 多种可能，先看具体编译错误信息 | 检查上方具体错误类型 |
 | 其他错误 | 重新运行步骤 1 诊断 | 对照 [🔧 troubleshooting.md](references/troubleshooting.md) 排查 |
 

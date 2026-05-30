@@ -103,10 +103,15 @@ ls include/pto/comm/pto_comm_inst.hpp
 export PTO_TILE_LIB_CODE_PATH=/path/to/pto-isa
 ```
 
-### PTO-ISA 枚举缺失：`no member named 'XXX' in namespace 'pto'`
+### ⛔ PTO-ISA 不兼容：`no member named 'XXX' in namespace 'pto'`（最高频错误）
 
-**典型错误**：
+> **这是 PyPTO 环境配置中最常见的失败原因。任何运行时 kernel 编译阶段的 `no member named` 错误都必须首先判定为 PTO-ISA 不兼容问题，不能当作普通编译错误处理。**
+
+#### 典型报错
+
 ```
+error: no member named 'FmodSAlgorithm' in namespace 'pto';
+error: no member named 'RemSAlgorithm' in namespace 'pto';
 error: no member named 'ExpAlgorithm' in namespace 'pto'
 error: no member named 'DivAlgorithm' in namespace 'pto'
 error: no member named 'SqrtAlgorithm' in namespace 'pto'
@@ -114,7 +119,12 @@ error: no member named 'LogAlgorithm' in namespace 'pto'
 error: no member named 'RecipAlgorithm' in namespace 'pto'
 ```
 
-**原因**：pypto 源码使用了 PTO-ISA 新增的高精度算法枚举（`ExpAlgorithm` 等，定义在 `pto/common/type.hpp` 中），但 CANN 内置的 PTO-ISA 头文件是旧版本，不包含这些定义。
+**识别要点**：错误信息中包含 `no member named 'XXX' in namespace 'pto'`，指向 CANN 内置 PTO-ISA 头文件。
+
+#### 报错发生场景
+
+- **触发时机**：运行 softmax 或任何 PyPTO 算子时，kernel 编译阶段（运行时）失败
+- **触发位置**：C++ 编译器编译 device kernel 源码时，使用 `PTO_TILE_LIB_CODE_PATH` 下的 PTO-ISA 头文件
 
 **为什么 pip install 成功但运行失败**：PyPTO 有两层编译：
 1. **Host 侧**（`pip install`）：编译 C++ binding 库 → 这些枚举只是模板默认参数，host 编译不展开模板，所以安装成功
@@ -130,7 +140,17 @@ grep -q "ExpAlgorithm" "${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linu
 **修复**：从源码获取最新 PTO-ISA：
 ```bash
 cd ${PYPTO_REPO:-$PWD}
-git clone https://gitcode.com/cann/pto-isa.git pto-isa
+
+# 本地已有则更新，否则克隆
+if [ -d "pto-isa/include/pto" ]; then
+    cd pto-isa && git pull origin master && cd ..
+else
+    git clone https://gitcode.com/cann/pto-isa.git pto-isa
+fi
+```
+
+**步骤 2：设置 PTO_TILE_LIB_CODE_PATH**
+```bash
 export PTO_TILE_LIB_CODE_PATH="$PWD/pto-isa"
 
 # 验证
