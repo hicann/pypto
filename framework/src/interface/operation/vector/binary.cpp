@@ -114,7 +114,7 @@ void TiledBinaryOperation(
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         auto opName = GetBinaryOpName<T>();
         Operation* op = nullptr;
-        if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW" || opName == "REM") {
+        if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW") {
             std::vector<int64_t> tmpShape(resultTileInfo.shape);
             auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
             tmpShape[resultTileInfo.shape.size() - 1] =
@@ -122,6 +122,14 @@ void TiledBinaryOperation(
             auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
             op = &function.AddOperation(
                 GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
+        } else if (opName == "REM") {
+            auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
+            std::vector<int64_t> tmpShape;
+            tmpShape.push_back(2);
+            tmpShape.push_back(AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize));
+            auto tmpTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
+            op = &function.AddOperation(
+                GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tmpTensor});
         } else if (opName == "ATAN2") {
             std::vector<int64_t> tmpShape(resultTileInfo.shape);
             auto lastDim = tmpShape[resultTileInfo.shape.size() - 1];
@@ -791,13 +799,10 @@ void TiledRemainderSOperation(
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         int64_t shapeSize = resultTileInfo.shape.size();
         auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
-        std::vector<int64_t> tmpShape;
-        if (shapeSize > 1) {
-            tmpShape.push_back(resultTileInfo.shape[shapeSize - 2]);
-        }
-        tmpShape.push_back(AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize));
+        std::vector<int64_t> tmpShape{2, 1};
+        tmpShape[1] = AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize);
         if (opNameCode == Opcode::OP_REMRS) {
-            tmpShape[0] = 2 * tmpShape[0];
+            tmpShape[0] = shapeSize > 1 ? resultTileInfo.shape[shapeSize - 2] + 2 : 3;
         }
         auto tmpTensor = std::make_shared<LogicalTensor>(function, input1.tensor->Datatype(), tmpShape);
         auto& tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tmpTensor});

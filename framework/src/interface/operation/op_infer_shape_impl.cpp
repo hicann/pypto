@@ -190,9 +190,6 @@ REGISTER_INFER_SHAPE_FUNC(OP_CMPS, Opcode::OP_CMPS, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_HYPOT, Opcode::OP_HYPOT, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_MOD, Opcode::OP_MOD, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_MODS, Opcode::OP_MODS, ElewiseInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_REM, Opcode::OP_REM, ElewiseInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_REMS, Opcode::OP_REMS, ElewiseInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_REMRS, Opcode::OP_REMRS, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISERIGHTSHIFT, Opcode::OP_BITWISERIGHTSHIFT, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISELEFTSHIFT, Opcode::OP_BITWISELEFTSHIFT, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISERIGHTSHIFTS, Opcode::OP_BITWISERIGHTSHIFTS, ElewiseInferFunc);
@@ -204,6 +201,19 @@ REGISTER_INFER_SHAPE_FUNC(OP_BITWISEOR, Opcode::OP_BITWISEOR, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_EXPANDEXPDIF, Opcode::OP_EXPANDEXPDIF, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, ElewiseInferFunc);
+
+void RemInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    ElewiseInferFunc(op, outValidShapes);
+    outValidShapes.erase(outValidShapes.begin() + 1, outValidShapes.end());
+    std::vector<SymbolicScalar> tmpValidShape;
+    tmpValidShape.push_back(SymbolicScalar(op->GetOOperands()[1]->GetShape()[0]));
+    tmpValidShape.push_back(SymbolicScalar(op->GetOOperands()[1]->GetShape()[1]));
+    outValidShapes.push_back(tmpValidShape);
+}
+REGISTER_INFER_SHAPE_FUNC(OP_REM, Opcode::OP_REM, RemInferShapeFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_REMS, Opcode::OP_REMS, RemInferShapeFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_REMRS, Opcode::OP_REMRS, RemInferShapeFunc);
 
 template <int64_t TailScale>
 void InferShapeWithTailScaleFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)

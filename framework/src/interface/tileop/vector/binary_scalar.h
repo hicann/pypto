@@ -17,9 +17,7 @@
 #define TILEOP_TILE_OPERATOR_BINARY_SCALAR__H
 #include "binary.h"
 
-template <
-    BinaryScalarOp op, auto PrecisionType = 0, typename LastUse, typename T0,
-    typename T1, typename Scalar>
+template <BinaryScalarOp op, auto PrecisionType = 0, typename LastUse, typename T0, typename T1, typename Scalar>
 TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
@@ -80,9 +78,7 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1)
     }
 }
 
-template <
-    BinaryScalarOp op, auto PrecisionType = 0, typename LastUse, typename T0,
-    typename T1, typename Scalar>
+template <BinaryScalarOp op, auto PrecisionType = 0, typename LastUse, typename T0, typename T1, typename Scalar>
 TILEOP void BinaryScalarCompute(T0 dst, T1 src0, Scalar src1)
 {
     const auto dstLayout = dst.GetLayout();
@@ -305,12 +301,14 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto dstTile = PtoTile<T0>(dst);
     auto src0Tile = PtoTile<T1>(src0);
-    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
-    using tmpTileDefine =
+    using tmp0TileDefine =
         pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
-    tmpTileDefine tmp0Tile(shape3, shape4);
-    tmpTileDefine tmp1Tile(shape3, shape4);
+    using tmp1TileDefine =
+        pto::Tile<pto::TileType::Vec, typename T2::Type, 2, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    tmp0TileDefine tmp0Tile(shape3, shape4);
+    tmp1TileDefine tmp1Tile(2, shape4);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -319,7 +317,7 @@ TILEOP void TRemainderRS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                 dstTile.Assign(dst, tileOffsets);
                 src0Tile.Assign(src0, tileOffsets);
                 pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
-                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tmpTileH * tmpTileW / 2 * sizeof(typename T2::Type)));
+                pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + shape3 * tmpTileW * sizeof(typename T2::Type)));
                 pto::TEXPANDS(tmp0Tile, src1);
 #ifdef __DAV_V220
                 pipe_barrier(PIPE_V);
