@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstddef>
+#include <algorithm>
 #include <iostream>
 #include <ostream>
 #include <sstream>
@@ -862,8 +863,19 @@ struct SymbolicExpressionTable {
             }
             primaryExpressionSet.Insert(symbol);
         }
+        // 按结构而非字符串排序，使等差家族在表中相邻，便于后续循环折叠。
+        std::vector<RawSymbolicScalarPtr> sortedPrimaryExprs;
+        sortedPrimaryExprs.reserve(primaryExpressionDict_.size());
         for (auto& [str, expr] : primaryExpressionDict_) {
             (void)str;
+            sortedPrimaryExprs.emplace_back(expr);
+        }
+        std::sort(
+            sortedPrimaryExprs.begin(), sortedPrimaryExprs.end(),
+            [](const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs) {
+                return CompareRaw(lhs, rhs) < 0;
+            });
+        for (auto& expr : sortedPrimaryExprs) {
             primaryExpressionSet.Insert(expr);
         }
     }
@@ -928,6 +940,27 @@ struct SymbolicExpressionTable {
         const RawSymbolicScalarPtr& raw, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict);
     static std::string BuildExpression(const SymbolicScalar& ss);
     static std::string BuildExpression(const RawSymbolicScalarPtr& ss);
+
+    // 结构化三路比较，strcmp 语义。
+    static int CompareRaw(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs);
+
+    // 差异叶子：路径 + 两侧 Immediate 值。
+    struct ImmediateDiff {
+        std::vector<int> path;
+        int64_t immLhs;
+        int64_t immRhs;
+    };
+
+    // 在 raw 上按一组 (path, placeholderNode) 替换 Immediate 叶子并渲染整个表达式。
+    static std::string BuildExpressionWithPlaceholders(
+        const RawSymbolicScalarPtr& raw,
+        const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements);
+
+    // 找出 lhs / rhs 之间所有结构对齐、仅在 Immediate 叶子上数值不同的位置。
+    // 结构不同（Kind / Opcode / Operand 数 / Symbol 名）返回 false。
+    static bool FindAllImmediateDifferences(
+        const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs, std::vector<ImmediateDiff>& diffs);
+
     static bool CheckExprDependCore(
         const RawSymbolicScalarPtr& ss, const std::unordered_map<std::string, bool>& tensorNameToDependCore,
         std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap);
@@ -939,6 +972,11 @@ private:
         std::ostringstream& oss);
     static std::string BuildExpressionCode(
         const RawSymbolicExpPtr& expr, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict);
+
+    // FindAllImmediateDifferences 的递归实现。
+    static bool CollectImmediateDifferences(
+        const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs, std::vector<int>& currentPath,
+        std::vector<ImmediateDiff>& diffs);
 
     void AddExpression(const RawSymbolicScalarPtr& raw)
     {

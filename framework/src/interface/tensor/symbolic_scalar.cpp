@@ -18,6 +18,7 @@
 #include <thread>
 #include <sstream>
 #include <numeric>
+#include <functional>
 #include "interface/utils/file_utils.h"
 #include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
@@ -204,6 +205,162 @@ std::string SymbolicExpressionTable::BuildExpression(const RawSymbolicScalarPtr&
     return expr;
 }
 
+int SymbolicExpressionTable::CompareRaw(const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs)
+{
+    if (lhs.get() == rhs.get()) {return 0;}
+    auto kindLhs = static_cast<int>(lhs->Kind());
+    auto kindRhs = static_cast<int>(rhs->Kind());
+    if (kindLhs != kindRhs) {return kindLhs - kindRhs;}
+    switch (lhs->Kind()) {
+        case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE: {
+            auto immLhs = std::static_pointer_cast<RawSymbolicImmediate>(lhs)->Immediate();
+            auto immRhs = std::static_pointer_cast<RawSymbolicImmediate>(rhs)->Immediate();
+            if (immLhs < immRhs) {
+                return -1;
+            }
+            if (immLhs > immRhs) {
+                return 1;
+            }
+            return 0;
+        }
+        case SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL: {
+            const auto& nameLhs = std::static_pointer_cast<RawSymbolicSymbol>(lhs)->Name();
+            const auto& nameRhs = std::static_pointer_cast<RawSymbolicSymbol>(rhs)->Name();
+            return nameLhs.compare(nameRhs);
+        }
+        case SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION: {
+            auto exprLhs = std::static_pointer_cast<RawSymbolicExpression>(lhs);
+            auto exprRhs = std::static_pointer_cast<RawSymbolicExpression>(rhs);
+            auto opLhs = static_cast<int>(exprLhs->Opcode());
+            auto opRhs = static_cast<int>(exprRhs->Opcode());
+            if (opLhs != opRhs) {
+                return opLhs - opRhs;
+            }
+            const auto& operandsLhs = exprLhs->OperandList();
+            const auto& operandsRhs = exprRhs->OperandList();
+            if (operandsLhs.size() != operandsRhs.size()) {
+                return static_cast<int>(operandsLhs.size()) - static_cast<int>(operandsRhs.size());
+            }
+            for (size_t operandIdx = 0; operandIdx < operandsLhs.size(); operandIdx++) {
+                int sub = CompareRaw(operandsLhs[operandIdx], operandsRhs[operandIdx]);
+                if (sub != 0) {
+                    return sub;
+                }
+            }
+            return 0;
+        }
+        default:
+            FE_ASSERT(false) << SymbolicScalarKind2Name(lhs->Kind()) << " undefined behavior";
+            return 0;
+    }
+}
+
+namespace {
+// 沿一组 path 同时克隆原表达式：路径经过的节点新建副本，旁路子树共享 shared_ptr。
+RawSymbolicScalarPtr CloneAlongPathsWithReplacements(
+    const RawSymbolicScalarPtr& raw, size_t depth,
+    const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements)
+{
+    for (const auto& r : replacements) {
+        if (r.first.size() == depth) {
+            FE_ASSERT(replacements.size() == 1) << "path collision: multiple replacements target the same leaf";
+            FE_ASSERT(raw->Kind() == SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE)
+                << "placeholder path must land on an immediate";
+            return r.second;
+        }
+    }
+    FE_ASSERT(raw->Kind() == SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION);
+    auto expr = std::static_pointer_cast<RawSymbolicExpression>(raw);
+    const auto& originalOperands = expr->OperandList();
+
+    std::vector<RawSymbolicScalarPtr> patchedOperands(originalOperands);
+    for (size_t opIdx = 0; opIdx < originalOperands.size(); opIdx++) {
+        std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>> sub;
+        for (const auto& r : replacements) {
+            FE_ASSERT(depth < r.first.size());
+            if (r.first[depth] == static_cast<int>(opIdx)) {
+                sub.push_back(r);
+            }
+        }
+        if (!sub.empty()) {
+            patchedOperands[opIdx] = CloneAlongPathsWithReplacements(originalOperands[opIdx], depth + 1, sub);
+        }
+    }
+    return std::make_shared<RawSymbolicExpression>(expr->Opcode(), patchedOperands);
+}
+
+} // namespace
+
+std::string SymbolicExpressionTable::BuildExpressionWithPlaceholders(
+    const RawSymbolicScalarPtr& raw,
+    const std::vector<std::pair<std::vector<int>, RawSymbolicScalarPtr>>& replacements)
+{
+    FE_ASSERT(!replacements.empty()) << "BuildExpressionWithPlaceholders requires at least one replacement";
+    auto patched = CloneAlongPathsWithReplacements(raw, 0, replacements);
+    return BuildExpressionByRaw(patched, {});
+}
+
+bool SymbolicExpressionTable::FindAllImmediateDifferences(
+    const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs,
+    std::vector<SymbolicExpressionTable::ImmediateDiff>& diffs)
+{
+    diffs.clear();
+    std::vector<int> currentPath;
+    return CollectImmediateDifferences(lhs, rhs, currentPath, diffs);
+}
+
+bool SymbolicExpressionTable::CollectImmediateDifferences(
+    const RawSymbolicScalarPtr& lhs, const RawSymbolicScalarPtr& rhs, std::vector<int>& currentPath,
+    std::vector<SymbolicExpressionTable::ImmediateDiff>& diffs)
+{
+    if (lhs.get() == rhs.get()) {
+        return true;
+    }
+    if (lhs->Kind() != rhs->Kind()) {
+        return false;
+    }
+    switch (lhs->Kind()) {
+        case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE: {
+            auto immLhs = std::static_pointer_cast<RawSymbolicImmediate>(lhs)->Immediate();
+            auto immRhs = std::static_pointer_cast<RawSymbolicImmediate>(rhs)->Immediate();
+            if (immLhs != immRhs) {
+                diffs.push_back({currentPath, immLhs, immRhs});
+            }
+            return true;
+        }
+        case SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL: {
+            // 符号名不同则无法折叠（语义会变）。
+            const auto& nameLhs = std::static_pointer_cast<RawSymbolicSymbol>(lhs)->Name();
+            const auto& nameRhs = std::static_pointer_cast<RawSymbolicSymbol>(rhs)->Name();
+            return nameLhs == nameRhs;
+        }
+        case SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION: {
+            auto exprLhs = std::static_pointer_cast<RawSymbolicExpression>(lhs);
+            auto exprRhs = std::static_pointer_cast<RawSymbolicExpression>(rhs);
+            if (exprLhs->Opcode() != exprRhs->Opcode()) {
+                return false;
+            }
+            const auto& operandsLhs = exprLhs->OperandList();
+            const auto& operandsRhs = exprRhs->OperandList();
+            if (operandsLhs.size() != operandsRhs.size()) {
+                return false;
+            }
+            for (size_t operandIdx = 0; operandIdx < operandsLhs.size(); operandIdx++) {
+                currentPath.push_back(static_cast<int>(operandIdx));
+                bool ok =
+                    CollectImmediateDifferences(operandsLhs[operandIdx], operandsRhs[operandIdx], currentPath, diffs);
+                currentPath.pop_back();
+                if (!ok) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 std::string SymbolicExpressionTable::BuildSymbolName(const std::string& name)
 {
     if (CheckRuntimePrefix(name) || CheckArgPrefix(name) || name.rfind("sym_", 0) == 0) {
@@ -309,8 +466,6 @@ std::string SymbolicExpressionTable::BuildExpressionList() const
     oss << "/* Function info " << elementKey_ << ": " << title_ << " */\n";
     for (auto& expr : expressionSet) {
         int index = expressionSet.GetIndex(expr);
-        std::string exprNameTempVarFlag = GetExprNameTempVarFlag(elementKey_, index);
-        std::string exprNameTempVar = GetExprNameTempVar(elementKey_, index);
         std::string exprNameTempVarInit = GetExprNameTempVarInit(elementKey_, index);
         std::string exprNameCalc = GetExprNameCalc(elementKey_, index);
         std::string exprNameGet = GetExprNameUse(elementKey_, index);
@@ -322,18 +477,9 @@ std::string SymbolicExpressionTable::BuildExpressionList() const
                 << "\n";
         }
 
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameTempVarFlag << 0 << "\n";
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameTempVar << "tempVar_" << elementKey_ << "_"
-            << index << "\n";
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameCalc << calc << "\n";
-        oss << "#if     " << exprNameTempVarFlag << "\n";
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameTempVarInit << "int64_t " << exprNameTempVar
-            << " = " << exprNameCalc << "\n";
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameGet << exprNameTempVar << "\n";
-        oss << "#else /*" << exprNameTempVarFlag << " */\n";
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameTempVarInit << "\n";
-        oss << "#define " << std::left << std::setw(INDENT) << exprNameGet << exprNameCalc << "\n";
-        oss << "#endif/*" << exprNameTempVarFlag << " */\n";
+        oss << "#define " << std::left << std::setw(INDENT) << (exprNameCalc + " ") << calc << "\n";
+        oss << "#define " << std::left << std::setw(INDENT) << (exprNameTempVarInit + " ") << "\n";
+        oss << "#define " << std::left << std::setw(INDENT) << (exprNameGet + " ") << exprNameCalc << "\n";
         exprDict[expr] = exprNameGet;
     }
     return oss.str();

@@ -173,5 +173,118 @@ TEST_F(TestExprBatchGenerator, BatchFileGeneration)
     ASSERT_TRUE(headerContent.find("SetExprBatch_1_1") != std::string::npos);
 }
 
+// ============================================================================
+// End-to-end folding tests
+// ============================================================================
+namespace {
+RawSymbolicScalarPtr ImmNode(int64_t v) { return RawSymbolicImmediate::Create(v); }
+RawSymbolicScalarPtr SymNode(const std::string& n) { return RawSymbolicSymbol::Create(n); }
+RawSymbolicScalarPtr AddNode(const RawSymbolicScalarPtr& a, const RawSymbolicScalarPtr& b)
+{
+    return std::make_shared<RawSymbolicExpression>(
+        SymbolicOpcode::T_BOP_ADD, std::vector<RawSymbolicScalarPtr>{a, b});
+}
+RawSymbolicScalarPtr MulNode(const RawSymbolicScalarPtr& a, const RawSymbolicScalarPtr& b)
+{
+    return std::make_shared<RawSymbolicExpression>(
+        SymbolicOpcode::T_BOP_MUL, std::vector<RawSymbolicScalarPtr>{a, b});
+}
+std::string ReadFile(const std::string& path)
+{
+    std::ifstream f(path);
+    return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+std::string RunGen(const std::string& dir, int devRootKey, const std::vector<RawSymbolicScalarPtr>& exprs)
+{
+    SymbolicExpressionTable table;
+    OrderedSet<RawSymbolicScalarPtr> set;
+    for (auto& e : exprs) {
+        set.Insert(e);
+    }
+    // OrderedSet 按 shared_ptr 去重；totalExprs 必须与最终 set 大小一致。
+    ExprBatchGenerator gen(dir, devRootKey, set.size());
+    std::ostringstream cfOss;
+    std::ostringstream headerOss;
+    std::vector<std::string> srcFiles;
+    gen.GenerateBatchFile(&table, cfOss, headerOss, "test_exp.h", set, srcFiles, 1, devRootKey);
+    return srcFiles.empty() ? std::string{} : ReadFile(srcFiles.front());
+}
+size_t Count(const std::string& text, const std::string& pat)
+{
+    size_t cnt = 0;
+    size_t pos = 0;
+    while ((pos = text.find(pat, pos)) != std::string::npos) {
+        cnt++;
+        pos += pat.size();
+    }
+    return cnt;
+}
+} // namespace
+
+// 单差异等差段（含 step==1）→ 紧凑 for 头。
+TEST_F(TestExprBatchGenerator, FoldSingleDiff)
+{
+    std::vector<RawSymbolicScalarPtr> exprs;
+    for (int64_t i = 0; i < 5; i++) {
+        exprs.push_back(AddNode(SymNode("a"), ImmNode(i)));
+    }
+    std::string body = RunGen(testDir_, 10, exprs);
+    EXPECT_EQ(Count(body, "for (int64_t sym_expr_loop_k_"), 1u);
+    EXPECT_NE(body.find("<= 4"), std::string::npos);
+    EXPECT_NE(body.find("+= 1"), std::string::npos);
+    EXPECT_EQ(Count(body, "RUNTIME_SetExpr"), 1u);
+}
+
+// 多差异同步等差段 → 计数头 for (k=0; k<N; k++)。
+TEST_F(TestExprBatchGenerator, FoldMultiDiffLockstep)
+{
+    std::vector<RawSymbolicScalarPtr> exprs;
+    for (int64_t i = 0; i < 4; i++) {
+        exprs.push_back(MulNode(AddNode(SymNode("a"), ImmNode(4 + i * 4)),
+                                AddNode(SymNode("b"), ImmNode(100 + i * 100))));
+    }
+    std::string body = RunGen(testDir_, 11, exprs);
+    EXPECT_EQ(Count(body, "for (int64_t sym_expr_loop_k_"), 1u);
+    EXPECT_NE(body.find("< 4"), std::string::npos);
+    EXPECT_NE(body.find("k_0++"), std::string::npos);
+    EXPECT_EQ(Count(body, "RUNTIME_SetExpr"), 1u);
+}
+
+// 不折叠的两种主因：段长 < MIN_LOOP_LEN；连续表达式内容相等（差异数为 0）。
+TEST_F(TestExprBatchGenerator, NoFoldBelowMinLenOrEqualExprs)
+{
+    std::vector<RawSymbolicScalarPtr> short_run = {
+        AddNode(SymNode("a"), ImmNode(4)),
+        AddNode(SymNode("a"), ImmNode(8)),
+    };
+    std::string body1 = RunGen(testDir_, 12, short_run);
+    EXPECT_EQ(Count(body1, "for (int64_t sym_expr_loop_k_"), 0u);
+    EXPECT_EQ(Count(body1, "RUNTIME_SetExpr"), 2u);
+
+    std::vector<RawSymbolicScalarPtr> equal_exprs;
+    for (int i = 0; i < 4; i++) {
+        equal_exprs.push_back(AddNode(SymNode("a"), ImmNode(4)));
+    }
+    std::string body2 = RunGen(testDir_, 13, equal_exprs);
+    EXPECT_EQ(Count(body2, "for (int64_t sym_expr_loop_k_"), 0u);
+    EXPECT_EQ(Count(body2, "RUNTIME_SetExpr"), 4u);
+}
+
+// 段分割：Symbol 名差异 / 步长变化 / 异模板孤立表达式三种断点交织，期望两段折叠 + 单行夹击。
+TEST_F(TestExprBatchGenerator, RunBreaksAndMixed)
+{
+    std::vector<RawSymbolicScalarPtr> exprs;
+    for (int64_t i = 0; i < 3; i++) {
+        exprs.push_back(AddNode(SymNode("a"), ImmNode(4 + i * 4)));
+    }
+    exprs.push_back(MulNode(SymNode("zzz"), ImmNode(7)));
+    for (int64_t i = 0; i < 3; i++) {
+        exprs.push_back(AddNode(SymNode("b"), ImmNode(1 + i)));
+    }
+    std::string body = RunGen(testDir_, 14, exprs);
+    EXPECT_EQ(Count(body, "for (int64_t sym_expr_loop_k_"), 2u);
+    EXPECT_EQ(Count(body, "RUNTIME_SetExpr"), 3u);
+}
+
 } // namespace test
 } // namespace npu::tile_fwk
