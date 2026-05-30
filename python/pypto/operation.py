@@ -179,7 +179,7 @@ def reshape(
     Examples
     ---------
     x = pypto.tensor([2, 2], pypto.DT_FP32)
-    y = pypto.reshape(x, [4, 1], [2, 1])
+    y = pypto.reshape(x, [4, 1], valid_shape=[2, 1])
     z = pypto.add(y, 1.0)
 
     input x: [[1, 2],
@@ -206,19 +206,16 @@ def reshape(
     y = pypto.reshape(x, [-1])
     # output y shape: [48]
     """
-    if inplace:
-        out = pypto_impl.Reshape(input, to_syms(shape), inplace)
+    if valid_shape is None and inplace:
+        out = pypto_impl.Reshape(input, shape, inplace)
     else:
         if not all(isinstance(s, int) for s in shape):
             raise FeError(TypeError(
-                f"reshape() requires integer shape when 'inplace=False', "
+                f"reshape() requires integer shape when using non-inplace reshape, "
                 f"but got [{', '.join(type(s).__name__ for s in shape)}]. "
                 f"Use 'inplace=True' for dynamic shapes."
             ))
-        if valid_shape is None:
-            out = pypto_impl.Reshape(input, shape)
-        else:
-            out = pypto_impl.Reshape(input, shape, valid_shape)
+        out = pypto_impl.Reshape(input, shape, [] if valid_shape is None else valid_shape, inplace)
     return out
 
 

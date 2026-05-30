@@ -1476,7 +1476,9 @@ Tensor Reshape(
     const bool inplace, const void* lr)
 {
     DECLARE_TRACERX(lr);
-    CHECK_OP(!inplace) << "The 'inplace' parameter must be false !!!";
+    CHECK_OP(!inplace)
+        << "Reshape(Inplace=true) is not supported for tensors derived from dynamic view. Please set inplace=false "
+           "or do not pass valid_shape.";
     std::vector<SymbolicScalar> validShapeDefault = validShape;
     auto newShape = CheckAndInferShape(operand.GetShape(), dstshape);
     if (validShape.empty()) {

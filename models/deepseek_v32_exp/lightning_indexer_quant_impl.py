@@ -148,13 +148,11 @@ def lightning_indexer_decode_compute(
                 pypto.set_vec_tile_shapes(pypto.min(s1_tile * idx_n_heads, block_size), block_size)
                 valid_cat_shape = (unroll_loop - 1) * block_size + last_seq
                 qk_3d = pypto.reshape(first_mm_collect, [s1_tile, idx_n_heads, unroll_loop * block_size],
-                    valid_shape=[s1_tile, idx_n_heads, pypto.min(unroll_loop * block_size, valid_cat_shape)],
                                         inplace=True)
                 pypto.set_cube_tile_shapes(
                     [c2_tile[0], c2_tile[1]], [c2_tile[2], c2_tile[3]], [c2_tile[4], c2_tile[5]])
                 w_qk = pypto.matmul(w_scale, qk_3d, pypto.DT_FP32, a_trans=False, b_trans=False)
-                second_mm = pypto.reshape(w_qk, [s1_tile, unroll_loop * block_size],
-                    valid_shape=[s1_tile, pypto.min(unroll_loop * block_size, valid_cat_shape)], inplace=True)
+                second_mm = pypto.reshape(w_qk, [s1_tile, unroll_loop * block_size], inplace=True)
 
                 ks_assemble = pypto.tensor([1, unroll_loop * block_size], pypto.DT_FP16, "ks_assemble")
                 pypto.set_vec_tile_shapes(1, block_size)

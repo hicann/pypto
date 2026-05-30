@@ -397,8 +397,7 @@ def quant_attention_pre_kernel(
         mm_bf16 = pypto.cast(mm_deq_scale, input_dtype) # fp32 -> bf16
 
         pypto.set_vec_tile_shapes(bs_tile, head_size)
-        mm_3d = pypto.reshape(mm_bf16, [bs_tile, total_head_size // head_size, head_size],
-            valid_shape=[act_bs_tile, total_head_size // head_size, head_size], inplace=True)
+        mm_3d = pypto.reshape(mm_bf16, [bs_tile, total_head_size // head_size, head_size], inplace=True)
         pypto.set_vec_tile_shapes(bs_tile, tiling_value, head_size)
 
         # split

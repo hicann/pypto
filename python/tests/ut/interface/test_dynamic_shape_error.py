@@ -100,8 +100,36 @@ def test_dynamic_reshape_error():
     q = torch.ones(1, 128, 64, dtype=torch.float32)
     out = torch.zeros(128, 64, dtype=torch.float32)
 
-    with pytest.raises(Exception, match="reshape\\(\\) requires integer shape when 'inplace=False'"):
+    with pytest.raises(Exception, match="reshape\\(\\) requires integer shape when using non-inplace reshape"):
         kernel_dynamic_reshape(q, out)
+
+
+@pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
+def kernel_view_valid_shape_reshape_inplace_error(
+    q: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
+):
+    sq = 128
+    d = 64
+    b = q.shape[0]
+
+    pypto.set_vec_tile_shapes(64, 64)
+    for idx in pypto.loop(b):
+        q_view = pypto.view(q, [1, sq, d], [idx, 0, 0], valid_shape=[1, sq, d])
+        q_reshaped = pypto.reshape(q_view, [sq, d], valid_shape=[sq, d], inplace=True)
+        pypto.assemble(q_reshaped, [idx * sq, 0], out)
+
+
+def test_view_valid_shape_reshape_inplace_error():
+    """Test that reshape with valid_shape and inplace=True after dynamic view causes an error."""
+    q = torch.ones(1, 128, 64, dtype=torch.float32)
+    out = torch.zeros(128, 64, dtype=torch.float32)
+
+    with pytest.raises(
+        Exception,
+        match="Reshape\\(Inplace=true\\) is not supported for tensors derived from dynamic view",
+    ):
+        kernel_view_valid_shape_reshape_inplace_error(q, out)
 
 
 # ------------------------------------------------------------------------------
@@ -113,5 +141,6 @@ if __name__ == "__main__":
     test_matmul_dynamic_shape_error()
     test_one_hot_dynamic_shape_error()
     test_dynamic_reshape_error()
+    test_view_valid_shape_reshape_inplace_error()
 
     logging.info("All dynamic shape error tests passed.")
