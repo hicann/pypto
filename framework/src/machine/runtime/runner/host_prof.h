@@ -49,8 +49,10 @@ private:
     void HostProfReportBasicInfo(const uint64_t& endTime, const uint32_t blockDim, const uint16_t taskType) const;
     void HostProfReportTensorInfo(const uint64_t& endTime) const;
     static bool IsCacheOpInfoEnable(const AclRtStream stream);
-    static void BuildCacheTensorInfo(CacheTaskInfo* taskInfo);
+    void BuildCacheTensorInfo(CacheTaskInfo* taskInfo) const;
     static void BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& tensorInfo, MspfTensorData& tensorData);
+    static void BuildTensor(const uint32_t tensorType, const dynamic::DeviceTensorData &tensorInfo,
+                            MspfTensorData& tensorData);
     void GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors);
     std::string opName_;
     Function* profFunction_{nullptr};

@@ -23,6 +23,7 @@ namespace npu::tile_fwk {
 namespace {
 const std::string kOpType = "PyPTO";
 constexpr uint32_t kFormatNd = 2;
+constexpr uint32_t kFormatNz = 29;
 } // namespace
 
 HostProf::~HostProf() {}
@@ -164,14 +165,14 @@ void HostProf::PackTensorInfo(MspfTensorInfo* profTensorData, const uint32_t gro
     if (inputsSize_ > iOIdx) {
         iOTensor = &iDeviceTensorData_[iOIdx];
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_INPUT;
-        profTensorData->tensorData[modId].format = kFormatNd;
+        profTensorData->tensorData[modId].format = iOTensor->Format() == TileOpFormat::TILEOP_NZ ? kFormatNz : kFormatNd;
         profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(DataType2CannType(iOTensor->GetDataType()));
         iOtensorInfo << "Input " << iOIdx << " shape: ";
     } else {
         auto outputIdx = iOIdx - inputsSize_;
         iOTensor = &oDeviceTensorData_[outputIdx];
         profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_OUTPUT;
-        profTensorData->tensorData[modId].format = kFormatNd;
+        profTensorData->tensorData[modId].format = iOTensor->Format() == TileOpFormat::TILEOP_NZ ? kFormatNz : kFormatNd;
         profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(DataType2CannType(iOTensor->GetDataType()));
         iOtensorInfo << "output " << outputIdx << " shape: ";
     }
@@ -210,18 +211,50 @@ void HostProf::BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& te
     }
 }
 
-void HostProf::BuildCacheTensorInfo(CacheTaskInfo* taskInfo)
+void HostProf::BuildTensor(const uint32_t tensorType, const dynamic::DeviceTensorData &tensorInfo,
+                           MspfTensorData& tensorData)
+{
+    tensorData.tensorType = tensorType;
+    tensorData.format = tensorInfo.Format() == TileOpFormat::TILEOP_NZ ? kFormatNz : kFormatNd;
+    tensorData.dataType = DataType2CannType(tensorInfo.GetDataType());
+    size_t dimIdx = 0;
+    for (const int64_t dim : tensorInfo.GetShape()) {
+        tensorData.shape[dimIdx++] = static_cast<uint32_t>(dim);
+    }
+}
+
+void HostProf::BuildCacheTensorInfo(CacheTaskInfo* taskInfo) const
 {
     if (taskInfo == nullptr) {
         return;
     }
-    const std::vector<RawTensorDataPtr>& input_tensors = ProgramData::GetInstance().GetInputDataList();
-    for (size_t i = 0; i < input_tensors.size(); ++i) {
-        BuildTensor(MSPF_GE_TENSOR_TYPE_INPUT, input_tensors.at(i), taskInfo->tensorData[i]);
+    size_t inputSize = 0;
+    const std::vector<RawTensorDataPtr>& inputTensorList = ProgramData::GetInstance().GetInputDataList();
+    if (!inputTensorList.empty()) {
+        for (size_t i = 0; i < inputTensorList.size(); ++i) {
+            BuildTensor(MSPF_GE_TENSOR_TYPE_INPUT, inputTensorList.at(i), taskInfo->tensorData[i]);
+        }
+        inputSize = inputTensorList.size();
+        MACHINE_LOGD("Assemble input tensor from program data, input tensor size is [%zu].", inputTensorList.size());
+    } else {
+        for (size_t i = 0; i < iDeviceTensorData_.size(); ++i) {
+            BuildTensor(MSPF_GE_TENSOR_TYPE_INPUT, iDeviceTensorData_.at(i), taskInfo->tensorData[i]);
+        }
+        inputSize = iDeviceTensorData_.size();
+        MACHINE_LOGD("Assemble input tensor from device data, input tensor size is [%zu].", iDeviceTensorData_.size());
     }
-    const std::vector<RawTensorDataPtr>& output_tensors = ProgramData::GetInstance().GetOutputDataList();
-    for (size_t i = 0; i < output_tensors.size(); ++i) {
-        BuildTensor(MSPF_GE_TENSOR_TYPE_OUTPUT, output_tensors.at(i), taskInfo->tensorData[i + input_tensors.size()]);
+
+    const std::vector<RawTensorDataPtr>& outputTensorList = ProgramData::GetInstance().GetOutputDataList();
+    if (!outputTensorList.empty()) {
+        for (size_t i = 0; i < outputTensorList.size(); ++i) {
+            BuildTensor(MSPF_GE_TENSOR_TYPE_OUTPUT, outputTensorList.at(i), taskInfo->tensorData[i + inputSize]);
+        }
+        MACHINE_LOGD("Assemble output tensor from program data, output tensor size is [%zu].", outputTensorList.size());
+    } else {
+        for (size_t i = 0; i < oDeviceTensorData_.size(); ++i) {
+            BuildTensor(MSPF_GE_TENSOR_TYPE_OUTPUT, oDeviceTensorData_.at(i), taskInfo->tensorData[i + inputSize]);
+        }
+        MACHINE_LOGD("Assemble output tensor from device data, output tensor size is [%zu].", oDeviceTensorData_.size());
     }
 }
 
@@ -247,12 +280,16 @@ void HostProf::HostProfReportCacheTaskInfo(
         MACHINE_LOGD("Op cache for AclGraph is disabled.");
         return;
     }
-    MACHINE_LOGD("Begin to report op cache [%s].", opName_.c_str());
+    MACHINE_LOGD("Begin to report op cache [%s], block num[%u], task type [%u].", opName_.c_str(), numBlocks, taskType);
     uint32_t tensorSize = 0;
     if (taskType != MSPF_GE_TASK_TYPE_AI_CPU) {
         tensorSize = ProgramData::GetInstance().GetInputDataList().size() +
                      ProgramData::GetInstance().GetOutputDataList().size();
+        if (tensorSize == 0) {
+            tensorSize = iDeviceTensorData_.size() + oDeviceTensorData_.size();
+        }
     }
+    MACHINE_LOGD("Tensor size of op[%s] is [%u].", opName_.c_str(), tensorSize);
     size_t bufferSize = sizeof(CacheTaskInfo) + sizeof(MspfTensorData) * tensorSize;
     void* buffer = malloc(bufferSize);
     if (buffer == nullptr) {
@@ -299,7 +336,6 @@ void HostProf::GetIOTensor(const std::vector<npu::tile_fwk::dynamic::DeviceTenso
         }
     }  
 }
-
 
 void HostProf::SetProfFunction(Function* function, const std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors)
 {
