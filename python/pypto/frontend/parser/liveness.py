@@ -563,27 +563,66 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
     def _set_delete_point_for_independent_defs(self, var_info: VarInfo) -> None:
         """Set deletion point for independent definitions.
 
-        For each def_scope_id, find last use within that scope.
-        Add ALL delete points to delete_points dict for correct execution.
+        For independent definitions in mutually exclusive scopes (e.g., if/else branches),
+        set a single unified deletion point at the common ancestor scope exit.
         
-        For for loop scopes, use conservative deletion strategy:
-        NO explicit deletion, rely on Python garbage collection.
-        This ensures safety for nested loop scenarios.
+        For for loop scopes, use conservative deletion strategy with no explicit deletion.
         """
+        if self._all_def_scopes_are_for_loops(var_info):
+            return
 
-        # Conservative strategy: do not delete for loop independent definitions
-        # Check if all def scopes are for loops
-        all_def_scopes_are_for = all(
+        def_scopes = self._get_valid_def_scopes(var_info)
+        if not def_scopes:
+            return
+
+        if self._handle_brother_scope_deletion(var_info, def_scopes):
+            return
+
+        delete_points_list = self._build_delete_points_for_each_def_scope(var_info)
+        if not delete_points_list:
+            return
+
+        self._finalize_delete_points_selection(var_info, delete_points_list)
+
+    def _all_def_scopes_are_for_loops(self, var_info: VarInfo) -> bool:
+        """Check if all definition scopes are for loop scopes."""
+        return all(
             (scope := self.result.scope_map.get(sid)) and scope.scope_type == 'for'
             for sid in var_info.def_scope_ids
         )
 
-        if all_def_scopes_are_for:
-            # No delete points for for loop independent definitions
-            # Python GC will release tensors when scopes exit
-            return
+    def _get_valid_def_scopes(self, var_info: VarInfo) -> List[Scope]:
+        """Get list of valid scope objects from def_scope_ids."""
+        def_scopes = [
+            self.result.scope_map.get(sid) for sid in var_info.def_scope_ids
+        ]
+        return [s for s in def_scopes if s]
 
-        # Original logic for other scope types (if_body, else_body, etc.)
+    def _handle_brother_scope_deletion(self, var_info: VarInfo, def_scopes: List[Scope]) -> bool:
+        """Handle deletion for brother scopes (mutually exclusive execution paths).
+        
+        Returns True if handled, False otherwise.
+        """
+        if not self._are_scopes_brothers(def_scopes):
+            return False
+
+        common_ancestor = Scope.find_common_ancestor_of_multiple(def_scopes)
+        if not common_ancestor:
+            return False
+
+        var_info.delete_after_stmt_id = common_ancestor.exit_stmt_id
+        var_info.delete_scope_id = common_ancestor.scope_id
+        var_info.delete_after_scope_exit = True
+
+        if common_ancestor.exit_stmt_id:
+            self.result.delete_points.setdefault(
+                common_ancestor.exit_stmt_id, set()
+            ).add(var_info.var_name)
+
+        return True
+
+    def _build_delete_points_for_each_def_scope(self, var_info: VarInfo) -> list:
+        """Build delete point candidates for each definition scope."""
         delete_points_list = []
 
         for def_scope_id in var_info.def_scope_ids:
@@ -591,34 +630,41 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             if not def_scope:
                 continue
 
-            # Conservative deletion for for loop scopes
             if def_scope.scope_type == 'for':
-                # For loop: delete at scope exit (after all nested loops complete)
-                if def_scope.exit_stmt_id:
-                    delete_points_list.append((def_scope.exit_stmt_id, def_scope_id, True))
-                elif def_scope.entry_stmt_id:
-                    # Fallback to entry_stmt_id if exit_stmt_id not available
-                    delete_points_list.append((def_scope.entry_stmt_id, def_scope_id, True))
-                continue
-
-            # For other scope types, calculate last use normally
-            uses_in_scope = [
-                stmt_id for sid, stmt_id in var_info.use_points
-                if sid == def_scope_id
-            ]
-
-            if uses_in_scope:
-                last_use = self._find_last_use_in_scope(def_scope, uses_in_scope)
-                if last_use:
-                    delete_points_list.append((last_use, def_scope_id, False))
+                delete_point = self._get_for_loop_delete_point(def_scope, def_scope_id)
+                if delete_point:
+                    delete_points_list.append(delete_point)
             else:
-                delete_points_list.append(
-                    (var_info.def_stmt_id, def_scope_id, False)
-                )
+                delete_point = self._get_normal_scope_delete_point(var_info, def_scope, def_scope_id)
+                delete_points_list.append(delete_point)
 
-        if not delete_points_list:
-            return
+        return delete_points_list
 
+    def _get_for_loop_delete_point(self, def_scope: Scope, def_scope_id: int) -> Optional[tuple]:
+        """Get delete point for for loop scope."""
+        if def_scope.exit_stmt_id:
+            return (def_scope.exit_stmt_id, def_scope_id, True)
+        elif def_scope.entry_stmt_id:
+            return (def_scope.entry_stmt_id, def_scope_id, True)
+        return None
+
+    def _get_normal_scope_delete_point(self, var_info: VarInfo, def_scope: Scope, def_scope_id: int) -> tuple:
+        """Get delete point for normal scope (non-for-loop)."""
+        uses_in_scope = [
+            stmt_id for sid, stmt_id in var_info.use_points
+            if sid == def_scope_id
+        ]
+
+        if uses_in_scope:
+            last_use = self._find_last_use_in_scope(def_scope, uses_in_scope)
+            stmt_id = last_use if last_use else var_info.def_stmt_id
+        else:
+            stmt_id = var_info.def_stmt_id
+
+        return (stmt_id, def_scope_id, False)
+
+    def _finalize_delete_points_selection(self, var_info: VarInfo, delete_points_list: list) -> None:
+        """Select and apply the deepest delete point."""
         selected_point = self._select_deepest_delete_point(delete_points_list)
         if selected_point:
             var_info.delete_after_stmt_id = selected_point[0]
@@ -626,9 +672,31 @@ class ScopeLivenessAnalyzer(ast.NodeVisitor):
             var_info.delete_after_scope_exit = selected_point[2]
 
         for stmt_id, _, _ in delete_points_list:
-            self.result.delete_points.setdefault(
-                stmt_id, set()
-            ).add(var_info.var_name)
+            self.result.delete_points.setdefault(stmt_id, set()).add(var_info.var_name)
+
+    def _are_scopes_brothers(self, scopes: List[Scope]) -> bool:
+        """Check if all scopes are brothers (mutually exclusive, same parent).
+        
+        Returns True if all scopes share the same parent and are not nested
+        within each other, False otherwise.
+        """
+        if len(scopes) <= 1:
+            return False
+        
+        parents = [s.parent for s in scopes if s.parent]
+        if not parents or len(parents) != len(scopes):
+            return False
+        
+        first_parent = parents[0]
+        if not all(p.scope_id == first_parent.scope_id for p in parents):
+            return False
+        
+        for i, scope_i in enumerate(scopes):
+            for scope_j in scopes[i + 1:]:
+                if scope_i.is_nested_in(scope_j) or scope_j.is_nested_in(scope_i):
+                    return False
+        
+        return True
 
     def _compute_delete_point_unified(self, var_info: VarInfo) -> None:
         """Compute deletion point using unified rules."""

@@ -1373,7 +1373,7 @@ static void Uniform(
             uint32_t exp = 127;
             uint32_t val = (exp << 23) | man;
             float f;
-            std::memcpy(&f, &val, sizeof(val));
+            memcpy_s(&f, sizeof(f), &val, sizeof(val));
             resultFloat[i] = f - 1.0f;
         }
         auto options = torch::TensorOptions().dtype(torch::kFloat32);
@@ -1417,7 +1417,7 @@ static void Uniform(
             uint32_t exp = 127;
             uint32_t val = (exp << 23) | man;
             float f;
-            std::memcpy(&f, &val, sizeof(val));
+            memcpy_s(&f, sizeof(f), &val, sizeof(val));
             resultFloat[i] = f - 1.0f;
         }
         auto options = torch::TensorOptions().dtype(torch::kFloat32);

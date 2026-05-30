@@ -35,10 +35,11 @@ using namespace npu::tile_fwk;
 
 namespace {
 
-void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTensor>& tensor)
+void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTensor>& tensor, const std::string& fwkOpName)
 {
     const auto& tensorShape = tensor->GetShape();
     CHECK_OP(vecTile.size() >= tensorShape.size()) << "FwkOp tile shape dimension mismatch! "
+                                                   << "Creating FwkOp: " << fwkOpName << ", "
                                                    << "Tile dims: " << vecTile.size() << ", "
                                                    << "Tensor dims: " << tensorShape.size() << ", "
                                                    << "Dump tensor: " << tensor->Dump();
@@ -46,6 +47,7 @@ void CheckFwkOpTileShape(const VecTile& vecTile, const std::shared_ptr<LogicalTe
     DataType dataType = tensor->Datatype();
     size_t lastDimBytes = vecTile[vecTile.size() - 1] * BytesOf(dataType);
     CHECK_OP(lastDimBytes % BLOCK_SIZE == 0) << "FwkOp tile shape's last dim is not aligned. "
+                                             << "Creating FwkOp: " << fwkOpName << ", "
                                              << "Last dim bytes: " << lastDimBytes << ", "
                                              << "BLOCK_SIZE: " << BLOCK_SIZE << ", "
                                              << "Dump tensor: " << tensor->Dump();
@@ -93,7 +95,7 @@ void TiledAssemble(
     }
 
     auto& vecTile = tileShape.GetVecTile();
-    CheckFwkOpTileShape(vecTile, input.tensor.GetStorage());
+    CheckFwkOpTileShape(vecTile, input.tensor.GetStorage(), "OP_ASSEMBLE");
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
@@ -406,7 +408,7 @@ void TiledInnerRegisterCopy(
         return;
     }
     auto& vecTile = tileShape.GetVecTile();
-    CheckFwkOpTileShape(vecTile, result);
+    CheckFwkOpTileShape(vecTile, result, "TILE_REGISTER_COPY");
 
     for (auto i = 0; i < result->GetShape()[dimIdx]; i += vecTile[dimIdx]) {
         actTileShape[dimIdx] = std::min(result->GetShape()[dimIdx] - i, vecTile[dimIdx]);
@@ -961,7 +963,7 @@ void TiledViewTypeOperation(
         return;
     }
     auto& vecTile = tileShape.GetVecTile();
-    CheckFwkOpTileShape(vecTile, input.tensor.GetStorage());
+    CheckFwkOpTileShape(vecTile, input.tensor.GetStorage(), "OP_VIEW_TYPE");
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
@@ -1179,7 +1181,7 @@ void TiledInnerAssemble(
     }
     const auto& vecTile = tileShape.GetVecTile();
     CHECK_OP(vecTile.size() >= src->shape.size());
-    CheckFwkOpTileShape(vecTile, src);
+    CheckFwkOpTileShape(vecTile, src, "OP_ASSEMBLE_SSA");
 
     for (auto i = 0; i < src->shape[cur]; i += vecTile[cur]) {
         tileInfo.offset[cur] = i;
