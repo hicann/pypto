@@ -111,7 +111,7 @@ def _matmul_allreduce_add_rmsnorm(
         reduce_asum = pypto.sum(mean_res, -1, True)
         reduce_sum = pypto.add(reduce_asum, eps)
         reduce_sqrt = pypto.sqrt(reduce_sum)
-        res_div = pypto.div(add_out, reduce_sqrt)
+        res_div = pypto.div(add_out, reduce_sqrt, pypto.PrecisionType.INTRINSIC)
 
         hidden_bf16 = pypto.tensor([view_row_shape, hidden_size], pypto.DT_BF16, "hidden_bf16")
         residual_bf16_tmp = pypto.cast(add_out, in_tensor.dtype)
@@ -250,7 +250,7 @@ def matmul_allreduce_add_rmsnorm_worker(
         out_tensor = torch.empty(residual.shape, dtype=torch.bfloat16, device=device)
         residual_out = torch.empty(residual.shape, dtype=torch.bfloat16, device=device)
 
-        inputs = [in_tensor.to(device), matmul_weight.to(device), residual.to(device), 
+        inputs = [in_tensor.to(device), matmul_weight.to(device), residual.to(device),
                     gamma.to(device), bias.to(device), out_tensor, residual_out]
 
         kernel(*inputs, eps, groups[0], config.world_size)

@@ -45,7 +45,8 @@ constexpr int32_t UB_BLOCK_SIZE = 32;
 
 const std::unordered_set<Opcode> USE_LESS_OPS2 = {
     Opcode::OP_NOP,      Opcode::OP_RESHAPE,     Opcode::OP_SHMEM_WAIT_UNTIL, Opcode::OP_VIEW,
-    Opcode::OP_ASSEMBLE, Opcode::OP_BIND_TENSOR, Opcode::OP_VIEW_TYPE,        Opcode::OP_HUB};
+    Opcode::OP_ASSEMBLE, Opcode::OP_BIND_TENSOR, Opcode::OP_VIEW_TYPE,        Opcode::OP_HUB,
+    Opcode::OP_SHMEM_STORE};
 
 inline int BytesPerElement2(DataType dataType) { return BytesOf(dataType); }
 

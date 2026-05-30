@@ -41,7 +41,7 @@ void PreGraphProcess::UpdateCopyOpIsCube(Operation& op) const
     copy_in for consumer
     producerOp(isCube?) --> input --> op(copy_out)
     */
-    if (IsCopyOut(op.GetOpcode())) {
+    if ((IsCopyOut(op.GetOpcode())) && (!OpcodeManager::Inst().IsSharedMemory(op.GetOpcode()))) {
         for (const auto& producerOps : op.ProducerOps()) {
             if ((producerOps->HasAttr(OpAttributeKey::isCube)) &&
                 (producerOps->GetSubgraphID() == op.GetSubgraphID())) {
