@@ -99,6 +99,16 @@ def get_case_config(case_name: str):
     m_tile = 128
     cube_tile = 128
     test_case_config = {
+        "ifa_b16_s1_1_s2_8k": {
+            "b": 16, "s1": 1, "s2": 8192, "nq": 12, "nkv": 2, "qd": 128, "block_size": 128,
+            "tile_config": IfaTileShapeConfig(
+                g_tile=6, s2_tile=512,
+                c1_tile_shape=[[m_tile, m_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
+                v1_tile_shape=[m_tile, 512],
+                c2_tile_shape=[[m_tile, m_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
+                v2_tile_shape=[m_tile, cube_tile],
+            ),
+        },
         "ifa_b8_s1_1_s2_16k": {
             "b": 8, "s1": 1, "s2": 16384, "nq": 12, "nkv": 1, "qd": 128, "block_size": 128,
             "tile_config": IfaTileShapeConfig(
@@ -115,6 +125,16 @@ def get_case_config(case_name: str):
                 g_tile=12, s2_tile=512,
                 c1_tile_shape=[[m_tile, m_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
                 v1_tile_shape=[m_tile, 512],
+                c2_tile_shape=[[m_tile, m_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
+                v2_tile_shape=[m_tile, cube_tile],
+            ),
+        },
+        "ifa_950_b16_s1_1_s2_8k_nkv_2": {
+            "b": 16, "s1": 1, "s2": 8192, "nq": 12, "nkv": 2, "qd": 128, "block_size": 128,
+            "tile_config": IfaTileShapeConfig(
+                g_tile=6, s2_tile=1024,
+                c1_tile_shape=[[m_tile, m_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
+                v1_tile_shape=[m_tile, 1024],
                 c2_tile_shape=[[m_tile, m_tile], [cube_tile, cube_tile], [cube_tile, cube_tile]],
                 v2_tile_shape=[m_tile, cube_tile],
             ),
@@ -374,7 +394,7 @@ def ifa_func_kernel(
                             block_idx = block_table[b_idx, idx + i]
                             block_idx_valid = block_idx.max(0)
                             kj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                pypto.view(k_2d, [block_size, dn], [block_idx_valid * block_size, 0])
+                                pypto.view(k_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn])
                         kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0], valid_shape=[s2_tile, dn])
 
                         pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
@@ -398,7 +418,7 @@ def ifa_func_kernel(
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
                                 vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, 0])
+                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn])
                             vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
                                                         [0, 0], valid_shape=[actual_s2_tile, dn])
                             pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
@@ -429,7 +449,7 @@ def ifa_func_kernel(
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
                                 vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, 0])
+                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, n2_idx * dn])
                             vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
                                                         [0, 0], valid_shape=[actual_s2_tile, dn])
                             pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
@@ -524,7 +544,7 @@ def ifa_func_kernel_for_950(
                             block_idx = block_table[b_idx, idx + i]
                             block_idx_vaild = block_idx.max(0)
                             kj_assemble[i * block_size: (i + 1) * block_size, 0:] = pypto.view(k_2d,
-                                [block_size, dn], [block_idx_vaild * block_size, 0])
+                                [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn])
                         kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0],
                                                 valid_shape=[s2_tile, dn])
 
@@ -546,7 +566,7 @@ def ifa_func_kernel_for_950(
                             block_idx = block_table[b_idx, idx + i]
                             block_idx_vaild = block_idx.max(0)
                             vj_assemble[i * block_size: (i + 1) * block_size, 0:] = pypto.view(v_2d,
-                                [block_size, dn], [block_idx_vaild * block_size, 0])
+                                [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn])
                         vj_assemble = pypto.view(vj_assemble, [s2_tile, dn], [0, 0],
                                         valid_shape=[actual_s2_tile, dn])
                         pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
@@ -635,21 +655,20 @@ def ifa(atten_cfg, tile_config, is_950=False, is_high_precision=True):
     out_torch = torch.zeros(q_shape, dtype=torch_dtype).to(device=device)
 
     if is_high_precision:
+        group = nq // nkv
         for i in range(b):
             for j in range(s1):
                 for n2_idx in range(nkv):
                     kv_seq_len = kv_cache_actual_seq[i].item()
                     seq_len = kv_seq_len - s1 + 1 + j
-                    q_bs = q[i * s1 + j]
+                    q_group = q[i * s1 + j, n2_idx * group:(n2_idx + 1) * group]
                     k_bs = k_cache_bsnd[i, :seq_len, n2_idx:n2_idx + 1].reshape(seq_len, d)
                     v_bs = v_cache_bsnd[i, :seq_len, n2_idx:n2_idx + 1].reshape(seq_len, d)
-                    qk_bmm_res = torch.matmul(q_bs, k_bs.transpose(1, 0))
+                    qk_bmm_res = torch.matmul(q_group, k_bs.transpose(1, 0))
                     qk_ele_res = qk_bmm_res * atten_cfg.softmax_scale
                     softmax_res, _, _ = softmax(qk_ele_res, True)
-
                     bmm2_res = torch.matmul(softmax_res, v_bs)
-
-                    attention_output[i * s1 + j] = bmm2_res
+                    attention_output[i * s1 + j, n2_idx * group:(n2_idx + 1) * group] = bmm2_res
     else:
         ifa_flash_torch(q=q, k=k, v=v, block_table=block_table_torch, kv_act_seqs=act_seq_torch, out=attention_output)
 
@@ -702,8 +721,8 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
     g = n1 // n2
     g_tile = g
 
-    k_2d = k.reshape(-1, d)
-    v_2d = v.reshape(-1, d)
+    k_2d = k.reshape(block_num * block_size, n2 * d)
+    v_2d = v.reshape(block_num * block_size, n2 * d)
     q_2d = q.reshape(-1, d)
 
     for b_idx in range(b):
@@ -733,9 +752,9 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
 
                         kj_start = block_idx * block_size
                         kj_end = kj_start + actual_s2_tile
-                        kj = k_2d[kj_start:kj_end, :]
+                        kj = k_2d[kj_start:kj_end, n2_idx * d:(n2_idx + 1) * d]
 
-                        vj = v_2d[kj_start:kj_end, :]
+                        vj = v_2d[kj_start:kj_end, n2_idx * d:(n2_idx + 1) * d]
 
                         mm1 = matmul_proxy(qi, kj.t()).to(torch_fp32)
                         muls_res = mm1 * (d ** -0.5)
@@ -791,6 +810,7 @@ def ifa_flash_torch(q, k, v, block_table, kv_act_seqs, out, is_fp32=False):
 @pytest.mark.soc("950")
 def test_ifa_for_950():
     case_names = [
+        "ifa_950_b16_s1_1_s2_8k_nkv_2",
         "ifa_950_b16_s1_1_s2_8k",
         "ifa_950_b64_s1_1_s2_8k",
         "ifa_950_b64_s1_2_s2_8k",
@@ -815,6 +835,7 @@ def test_ifa_for_950():
 @pytest.mark.soc("950", "910")
 def test_ifa():
     case_names = [
+        "ifa_b16_s1_1_s2_8k",
         "ifa_b8_s1_1_s2_16k",
         "ifa_b16_s1_1_s2_16k",
     ]
