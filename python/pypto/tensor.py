@@ -884,7 +884,7 @@ class Tensor:
         return pypto.trunc(self)
 
     @source_location
-    def reciprocal(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor':
+    def reciprocal(self, precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> 'Tensor':
         return pypto.reciprocal(self, precision_type)
 
     @source_location

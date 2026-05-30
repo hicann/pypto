@@ -1343,7 +1343,7 @@ def abs(a: Tensor) -> Tensor:
 
 
 @op_wrapper
-def reciprocal(a: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> Tensor:
+def reciprocal(a: Tensor, precision_type: PrecisionType = PrecisionType.HIGH_PRECISION) -> Tensor:
     """
     Returns a new tensor with the reciprocal of the elements of input
 
@@ -1352,9 +1352,9 @@ def reciprocal(a: Tensor, precision_type: PrecisionType = PrecisionType.INTRINSI
     input : Tensor
         The input tensor.
     precision_type : PrecisionType, optional
-        The precision type for reciprocal. Default is PrecisionType.INTRINSIC.
-        INTRINSIC directly uses chip instructions for faster computation.
-        Use PrecisionType.HIGH_PRECISION to use higher precision calculation to reduce precision loss.
+        The precision type for reciprocal. Default is PrecisionType.HIGH_PRECISION.
+        HIGH_PRECISION uses higher precision calculation to reduce precision loss.
+        Use PrecisionType.INTRINSIC to directly use chip instructions for faster computation.
 
     Returns
     -------

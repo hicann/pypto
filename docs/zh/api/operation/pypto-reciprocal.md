@@ -7,7 +7,7 @@
 ## 接口原型
 
 ```python
-pypto.reciprocal(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
+pypto.reciprocal(input, precision_type=pypto.PrecisionType.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
@@ -15,7 +15,7 @@ pypto.reciprocal(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | input | Tensor | 输入张量。<br>支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>不支持空Tensor；支持的维度：1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | PrecisionType, 可选 | 倒数操作的精度模式。默认值为 `PrecisionType.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
+| precision_type | PrecisionType, 可选 | 倒数操作的精度模式。默认值为 `PrecisionType.HIGH_PRECISION`。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。 |
 
 ## 返回值
 
