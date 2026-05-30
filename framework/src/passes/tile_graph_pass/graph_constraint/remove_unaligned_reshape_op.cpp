@@ -316,7 +316,7 @@ LogicalTensorPtr RemoveUnalignedReshape::HandleNoCopyOutInProducer(
     Offset offset(copyShape.size(), 0);
 
     auto copyInOutputPtr =
-        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, copyDynShape);
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     // 为copy到Ub的Tensor进行32B对齐
     AlignmentUtils::ProcessLastDim32BAlignedOnUB(copyInOutputPtr);
@@ -339,7 +339,7 @@ LogicalTensorPtr RemoveUnalignedReshape::HandleNoCopyOutInProducer(
     copyInOp.UpdateSubgraphID(op.GetSubgraphID());
 
     auto copyOutOutputPtr =
-        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
+        irBuilder_.CreateTensorVar(input->Datatype(), copyShape, copyDynShape);
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto& copyOutOp = PassOperationUtils::AddOperation(
         function, Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});
@@ -482,7 +482,7 @@ void RemoveUnalignedReshape::HandleNoCopyInConsumer(
     Function& function, Operation& op, LogicalTensorPtr output, std::vector<Operation*>& copyInOps,
     bool& checkOverUbSize)
 {
-    auto newCopyinTensorPtr = irBuilder_.CreateTensorVar(output->Datatype(), output->GetShape(), std::vector<SymbolicScalar>{});
+    auto newCopyinTensorPtr = irBuilder_.CreateTensorVar(output->Datatype(), output->GetShape(), output->GetDynValidShape());
     newCopyinTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     AlignmentUtils::ProcessLastDim32BAlignedOnUB(newCopyinTensorPtr);
 
@@ -507,7 +507,7 @@ void RemoveUnalignedReshape::HandleNoCopyInConsumer(
             OpImmediate::Specified(output->GetDynValidShape())));
 
     auto newCopyoutTensorPtr = irBuilder_.CreateTensorVar(
-        output->Datatype(), output->GetShape(), std::vector<SymbolicScalar>{});
+        output->Datatype(), output->GetShape(), output->GetDynValidShape());
     newCopyoutTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto& newCopyOutOp = PassOperationUtils::AddOperation(
         function, Opcode::OP_COPY_OUT, {newCopyinTensorPtr}, {newCopyoutTensorPtr});
@@ -579,7 +579,7 @@ bool RemoveUnalignedReshape::ProcessCopyOutOfDDRReshape(Function& function, Oper
         // copyOutInput(NOTUB) -- COPYOUT -- copyOutOutput(DDR) -- COPYIN -- newTensor(UB) -- RESHAPECOPYOUT --
         // newTensor2(DDR) -- reshape
         auto newTensorPtr = irBuilder_.CreateTensorVar(
-            copyOutOutput->Datatype(), copyOutOutput->GetShape(), std::vector<SymbolicScalar>{});
+            copyOutOutput->Datatype(), copyOutOutput->GetShape(), copyOutOutput->GetDynValidShape());
         newTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
         AlignmentUtils::ProcessLastDim32BAlignedOnUB(newTensorPtr);
         // 要copy到UB的Tensor，在copy之前，进行32B对齐之后判断超UB
@@ -604,7 +604,7 @@ bool RemoveUnalignedReshape::ProcessCopyOutOfDDRReshape(Function& function, Oper
             OpImmediate::Specified(copyOutOutput->GetDynValidShape())));
 
         auto newTensor2Ptr = irBuilder_.CreateTensorVar(
-            copyOutOutput->Datatype(), copyOutOutput->GetShape(), std::vector<SymbolicScalar>{});
+            copyOutOutput->Datatype(), copyOutOutput->GetShape(), copyOutOutput->GetDynValidShape());
         newTensor2Ptr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
         auto& newCopyOutOp = PassOperationUtils::AddOperation(
             function, Opcode::OP_RESHAPE_COPY_OUT, {newTensorPtr}, {newTensor2Ptr});
@@ -651,7 +651,7 @@ void RemoveUnalignedReshape::ProcessCopyInOfDDRReshape(
                 // reshape -- copyInInput(DDR) -- RESHAPECOPYIN -- newTensor(UB) -- COPYOUT -- newTensor2(DDR) -- COPYIN
                 // --copyInOutout(NOTUB)
                 auto newTensorPtr = irBuilder_.CreateTensorVar(
-                    copyInInput->Datatype(), copyInInput->GetShape(), std::vector<SymbolicScalar>{});
+                    copyInInput->Datatype(), copyInInput->GetShape(), copyInInput->GetDynValidShape());
                 newTensorPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
                 AlignmentUtils::ProcessLastDim32BAlignedOnUB(newTensorPtr);
 
@@ -680,7 +680,7 @@ void RemoveUnalignedReshape::ProcessCopyInOfDDRReshape(
                         OpImmediate::Specified(copyInInput->GetDynValidShape())));
                 SetReshapeCopyInValidShapeAttr(reshapeCopyInOp);
                 auto newTensor2Ptr = irBuilder_.CreateTensorVar(
-                    copyInInput->Datatype(), copyInInput->GetShape(), std::vector<SymbolicScalar>{});
+                    copyInInput->Datatype(), copyInInput->GetShape(), copyInInput->GetDynValidShape());
                 newTensor2Ptr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
                 auto& newCopyOutOp = PassOperationUtils::AddOperation(
                     function, Opcode::OP_COPY_OUT, {newTensorPtr}, {newTensor2Ptr});
