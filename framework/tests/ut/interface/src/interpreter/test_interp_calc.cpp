@@ -1418,6 +1418,126 @@ TEST_F(TorchAdaptorTest, Reduce)
     }
 }
 
+TEST_F(TorchAdaptorTest, ArgReduce)
+{
+    {
+        std::vector<float> sdata = {1.0f, 5.0f, 3.0f, 2.0f, 8.0f, 4.0f, 7.0f, 6.0f};
+        std::vector<int32_t> gdata = {1, 0};
+        auto self = makeTensorData(DT_FP32, {2, 4}, sdata);
+        auto out = makeTensorData(DT_INT32, {2, 1}, 0);
+        auto golden = makeTensorData(DT_INT32, {2, 1}, gdata);
+        calc::RowArgMaxSingle(out, self, -1);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        std::vector<float> sdata = {1.0f, 5.0f, 3.0f, 2.0f, 8.0f, 4.0f, 7.0f, 6.0f};
+        std::vector<int32_t> gdata = {0, 1};
+        auto self = makeTensorData(DT_FP32, {2, 4}, sdata);
+        auto out = makeTensorData(DT_INT32, {2, 1}, 0);
+        auto golden = makeTensorData(DT_INT32, {2, 1}, gdata);
+        calc::RowArgMinSingle(out, self, -1);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        std::vector<float> sdata = {3.0f, 1.0f, 4.0f, 2.0f};
+        std::vector<float> gvdata = {3.0f, 4.0f};
+        std::vector<int32_t> gidata = {0, 0};
+        auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
+        auto outValue = makeTensorData(DT_FP32, {2, 1}, 0.0f);
+        auto outIndex = makeTensorData(DT_INT32, {2, 1}, 0);
+        auto outTemp = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+        auto goldenValue = makeTensorData(DT_FP32, {2, 1}, gvdata);
+        auto goldenIndex = makeTensorData(DT_INT32, {2, 1}, gidata);
+        calc::RowArgMaxWithValueSingle(outValue, outIndex, outTemp, self, -1);
+        ASSERT_ALLCLOSE(outValue, goldenValue);
+        ASSERT_ALLCLOSE(outIndex, goldenIndex);
+    }
+    {
+        std::vector<float> sdata = {3.0f, 1.0f, 4.0f, 2.0f};
+        std::vector<float> gvdata = {1.0f, 2.0f};
+        std::vector<int32_t> gidata = {1, 1};
+        auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
+        auto outValue = makeTensorData(DT_FP32, {2, 1}, 0.0f);
+        auto outIndex = makeTensorData(DT_INT32, {2, 1}, 0);
+        auto outTemp = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+        auto goldenValue = makeTensorData(DT_FP32, {2, 1}, gvdata);
+        auto goldenIndex = makeTensorData(DT_INT32, {2, 1}, gidata);
+        calc::RowArgMinWithValueSingle(outValue, outIndex, outTemp, self, -1);
+        ASSERT_ALLCLOSE(outValue, goldenValue);
+        ASSERT_ALLCLOSE(outIndex, goldenIndex);
+    }
+    {
+        std::vector<float> sdata = {3.0f, 1.0f, 4.0f, 2.0f};
+        std::vector<float> gvdata = {3.0f, 4.0f};
+        std::vector<int32_t> gidata = {0, 0};
+        auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
+        auto outValue = makeTensorData(DT_FP32, {2, 1}, 0.0f);
+        auto outIndex = makeTensorData(DT_INT32, {2, 1}, 0);
+        auto outTemp = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+        auto goldenValue = makeTensorData(DT_FP32, {2, 1}, gvdata);
+        auto goldenIndex = makeTensorData(DT_INT32, {2, 1}, gidata);
+        calc::RowArgMaxWithValueLine(outValue, outIndex, outTemp, self, -1);
+        ASSERT_ALLCLOSE(outValue, goldenValue);
+        ASSERT_ALLCLOSE(outIndex, goldenIndex);
+    }
+    {
+        std::vector<float> sdata = {3.0f, 1.0f, 4.0f, 2.0f};
+        std::vector<float> gvdata = {1.0f, 2.0f};
+        std::vector<int32_t> gidata = {1, 1};
+        auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
+        auto outValue = makeTensorData(DT_FP32, {2, 1}, 0.0f);
+        auto outIndex = makeTensorData(DT_INT32, {2, 1}, 0);
+        auto outTemp = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+        auto goldenValue = makeTensorData(DT_FP32, {2, 1}, gvdata);
+        auto goldenIndex = makeTensorData(DT_INT32, {2, 1}, gidata);
+        calc::RowArgMinWithValueLine(outValue, outIndex, outTemp, self, -1);
+        ASSERT_ALLCLOSE(outValue, goldenValue);
+        ASSERT_ALLCLOSE(outIndex, goldenIndex);
+    }
+}
+
+TEST_F(TorchAdaptorTest, PairArgReduce)
+{
+    {
+        std::vector<float> v1data = {5.0f, 2.0f};
+        std::vector<int32_t> i1data = {10, 20};
+        std::vector<float> v2data = {3.0f, 8.0f};
+        std::vector<int32_t> i2data = {30, 40};
+        std::vector<float> gvdata = {5.0f, 8.0f};
+        std::vector<int32_t> gidata = {10, 40};
+        auto value1 = makeTensorData(DT_FP32, {2, 1}, v1data);
+        auto index1 = makeTensorData(DT_INT32, {2, 1}, i1data);
+        auto value2 = makeTensorData(DT_FP32, {2, 1}, v2data);
+        auto index2 = makeTensorData(DT_INT32, {2, 1}, i2data);
+        auto outValue = makeTensorData(DT_FP32, {2, 1}, 0.0f);
+        auto outIndex = makeTensorData(DT_INT32, {2, 1}, std::vector<int32_t>{0,0});
+        auto goldenValue = makeTensorData(DT_FP32, {2, 1}, gvdata);
+        auto goldenIndex = makeTensorData(DT_INT32, {2, 1}, gidata);
+        calc::PairArgMax(outValue, outIndex, value1, index1, value2, index2);
+        ASSERT_ALLCLOSE(outValue, goldenValue);
+        ASSERT_ALLCLOSE(outIndex, goldenIndex);
+    }
+    {
+        std::vector<float> v1data = {5.0f, 2.0f};
+        std::vector<int32_t> i1data = {10, 20};
+        std::vector<float> v2data = {3.0f, 8.0f};
+        std::vector<int32_t> i2data = {30, 40};
+        std::vector<float> gvdata = {3.0f, 2.0f};
+        std::vector<int32_t> gidata = {30, 20};
+        auto value1 = makeTensorData(DT_FP32, {2, 1}, v1data);
+        auto index1 = makeTensorData(DT_INT32, {2, 1}, i1data);
+        auto value2 = makeTensorData(DT_FP32, {2, 1}, v2data);
+        auto index2 = makeTensorData(DT_INT32, {2, 1}, i2data);
+        auto outValue = makeTensorData(DT_FP32, {2, 1}, 0.0f);
+        auto outIndex = makeTensorData(DT_INT32, {2, 1}, std::vector<int32_t>{0,0});
+        auto goldenValue = makeTensorData(DT_FP32, {2, 1}, gvdata);
+        auto goldenIndex = makeTensorData(DT_INT32, {2, 1}, gidata);
+        calc::PairArgMin(outValue, outIndex, value1, index1, value2, index2);
+        ASSERT_ALLCLOSE(outValue, goldenValue);
+        ASSERT_ALLCLOSE(outIndex, goldenIndex);
+    }
+}
+
 TEST_F(TorchAdaptorTest, Permute3D)
 {
     {

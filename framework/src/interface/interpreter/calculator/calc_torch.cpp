@@ -2272,6 +2272,99 @@ static void RowProdLine(const TensorData& out, const TensorData& self, int dim)
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void RowArgMaxSingle(const TensorData& out, const TensorData& self, int dim)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    auto ret = torch::max(tself.second, dim, true);
+    auto idxResult = std::get<1>(ret).to(torch::kInt32);
+    ToOperand(idxResult, tout.first, out.dtype);
+}
+
+static void RowArgMinSingle(const TensorData& out, const TensorData& self, int dim)
+{
+    auto tout = From(out);
+    auto tself = From(self);
+    auto ret = torch::min(tself.second, dim, true);
+    auto idxResult = std::get<1>(ret).to(torch::kInt32);
+    ToOperand(idxResult, tout.first, out.dtype);
+}
+
+static void RowArgMaxWithValueSingle(
+    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+{
+    auto toutValue = From(outValue);
+    auto toutIndex = From(outIndex);
+    auto tself = From(self);
+    (void)outTemp;
+    auto ret = torch::max(tself.second, dim, true);
+    ToOperand(std::get<0>(ret), toutValue.first, outValue.dtype);
+    auto idxResult = std::get<1>(ret).to(torch::kInt32);
+    ToOperand(idxResult, toutIndex.first, outIndex.dtype);
+}
+
+static void RowArgMinWithValueSingle(
+    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+{
+    auto toutValue = From(outValue);
+    auto toutIndex = From(outIndex);
+    auto tself = From(self);
+    (void)outTemp;
+    auto ret = torch::min(tself.second, dim, true);
+    ToOperand(std::get<0>(ret), toutValue.first, outValue.dtype);
+    auto idxResult = std::get<1>(ret).to(torch::kInt32);
+    ToOperand(idxResult, toutIndex.first, outIndex.dtype);
+}
+
+static void RowArgMaxWithValueLine(
+    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+{
+    RowArgMaxWithValueSingle(outValue, outIndex, outTemp, self, dim);
+}
+
+static void RowArgMinWithValueLine(
+    const TensorData& outValue, const TensorData& outIndex, const TensorData& outTemp, const TensorData& self, int dim)
+{
+    RowArgMinWithValueSingle(outValue, outIndex, outTemp, self, dim);
+}
+
+static void PairArgMax(
+    const TensorData& outValue, const TensorData& outIndex,
+    const TensorData& value1, const TensorData& index1,
+    const TensorData& value2, const TensorData& index2)
+{
+    auto toutValue = From(outValue);
+    auto toutIndex = From(outIndex);
+    auto tvalue1 = From(value1);
+    auto tindex1 = From(index1);
+    auto tvalue2 = From(value2);
+    auto tindex2 = From(index2);
+    auto cmpResult = tvalue1.second >= tvalue2.second;
+    auto selectdValue = torch::where(cmpResult, tvalue1.second, tvalue2.second);
+    auto selectdIndex = torch::where(cmpResult, tindex1.second.to(torch::kInt32), tindex2.second.to(torch::kInt32));
+    ToOperand(selectdValue, toutValue.first, outValue.dtype);
+    ToOperand(selectdIndex, toutIndex.first, outIndex.dtype);
+}
+
+static void PairArgMin(
+    const TensorData& outValue, const TensorData& outIndex,
+    const TensorData& value1, const TensorData& index1,
+    const TensorData& value2, const TensorData& index2)
+{
+    auto toutValue = From(outValue);
+    auto toutIndex = From(outIndex);
+    auto tvalue1 = From(value1);
+    auto tindex1 = From(index1);
+    auto tvalue2 = From(value2);
+    auto tindex2 = From(index2);
+    auto cmpResult = tvalue1.second <= tvalue2.second;
+    auto selectdValue = torch::where(cmpResult, tvalue1.second, tvalue2.second);
+    auto selectdIndex = torch::where(cmpResult, tindex1.second.to(torch::kInt32), tindex2.second.to(torch::kInt32));
+    ToOperand(selectdValue, toutValue.first, outValue.dtype);
+    ToOperand(selectdIndex, toutIndex.first, outIndex.dtype);
+}
+
+
 static void Reshape(const TensorData& out, const TensorData& self)
 {
     auto tout = From(out);
@@ -3248,6 +3341,14 @@ static struct CalcOps calcOps = {
     .RowMinLine = RowMinLine,
     .RowMaxLine = RowMaxLine,
     .RowProdLine = RowProdLine,
+    .RowArgMaxSingle = RowArgMaxSingle,
+    .RowArgMinSingle = RowArgMinSingle,
+    .RowArgMaxWithValueSingle = RowArgMaxWithValueSingle,
+    .RowArgMinWithValueSingle = RowArgMinWithValueSingle,
+    .RowArgMaxWithValueLine = RowArgMaxWithValueLine,
+    .RowArgMinWithValueLine = RowArgMinWithValueLine,
+    .PairArgMax = PairArgMax,
+    .PairArgMin = PairArgMin,
     .OneHot = OneHot,
     .ExpandS = ExpandS,
     .Expand = Expand,

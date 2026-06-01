@@ -261,14 +261,7 @@ std::string CodeGenOpNPU::GenBinaryOp() const
 
 std::string CodeGenOpNPU::GenPairArgReduce() const
 {
-    std::string dstValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::DST0_IDX));
-    std::string dstIndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::DST1_IDX));
-    std::string src0ValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC0_IDX));
-    std::string src0IndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC1_IDX));
-    std::string src1ValueTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC2_IDX));
-    std::string src1IndexTensor = QueryTileTensorNameByIdx(ToUnderlying(ArgReduceIdx::SRC3_IDX));
-    std::vector<std::string> tileOpCallParamList = {dstValueTensor,  dstIndexTensor,  src0ValueTensor,
-                                                    src0IndexTensor, src1ValueTensor, src1IndexTensor};
+    std::vector<std::string> tileOpCallParamList = GetTileOpParamsByOrder();
 
     std::vector<std::string> templateParamList;
     AddBinaryPrecisionTypeParm(templateParamList);

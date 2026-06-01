@@ -168,10 +168,7 @@ std::string CodeGenOpNPU::PrintReduceLastAxisTileTensor() const
 
 std::string CodeGenOpNPU::PrintArgReduceTileTensor() const
 {
-    std::string dstValueTensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::DST0_IDX));
-    std::string dstIndexTensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::DST1_IDX));
-    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::TMP_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(SIMOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MILOIdx::TMP2_IDX)});
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
@@ -183,7 +180,7 @@ std::string CodeGenOpNPU::PrintArgReduceTileTensor() const
     if (opCode == Opcode::OP_ROWARGMAXWITHVALUE_LINE || opCode == Opcode::OP_ROWARGMINWITHVALUE_LINE) {
         oss << WrapParamByAngleBrackets({std::to_string(reduceAxis)});
     }
-    oss << WrapParamByParentheses({dstValueTensor, dstIndexTensor, src0Tensor, tmpTensor});
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
 }
@@ -473,6 +470,9 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
     return CG_ERROR;
 }
 
-std::string CodeGenOpNPU::GenArgReduceWithValue() const { return PrintArgReduceTileTensor(); }
+std::string CodeGenOpNPU::GenArgReduceWithValue() const
+{
+    return PrintArgReduceTileTensor();
+}
 
 } // namespace npu::tile_fwk

@@ -310,6 +310,88 @@ REGISTER_CALC_OP(OP_ROWMINLINE, Opcode::OP_ROWMINLINE, ExecuteOpReduce<Opcode::O
 REGISTER_CALC_OP(OP_ROWPROD_SINGLE, Opcode::OP_ROWPROD_SINGLE, ExecuteOpReduce<Opcode::OP_ROWPROD_SINGLE>);
 REGISTER_CALC_OP(OP_ROWPRODLINE, Opcode::OP_ROWPRODLINE, ExecuteOpReduce<Opcode::OP_ROWPRODLINE>);
 
+template <Opcode opcode>
+void ExecuteOpArgReduceSingle(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
+    auto oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto iop = ctx->ioperandDataViewList->at(0);
+    int axis = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
+    if (oop->GetShape()[axis] != 1) {
+        std::vector<int64_t> oopShape = oop->GetShape();
+        oopShape[axis] = 1;
+        oop = oop->View(oopShape, std::vector<int64_t>(oopShape.size(), 0));
+    }
+
+    switch (opcode) {
+        case Opcode::OP_ROWARGMAX_SINGLE:
+            calc::RowArgMaxSingle(oop, iop, axis);
+            break;
+        case Opcode::OP_ROWARGMIN_SINGLE:
+            calc::RowArgMinSingle(oop, iop, axis);
+            break;
+        default:
+            ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false) << "opcode not support" << ctx->op->GetOpcodeStr();
+    }
+}
+REGISTER_CALC_OP(OP_ROWARGMAX_SINGLE, Opcode::OP_ROWARGMAX_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMAX_SINGLE>);
+REGISTER_CALC_OP(OP_ROWARGMIN_SINGLE, Opcode::OP_ROWARGMIN_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMIN_SINGLE>);
+
+template <Opcode opcode>
+void ExecuteOpArgReduceWithValue(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
+    auto outValue = ctx->ooperandInplaceDataViewList->at(0);
+    auto outIndex = ctx->ooperandInplaceDataViewList->at(1);
+    auto outTemp = ctx->ooperandInplaceDataViewList->at(2);
+    auto iop = ctx->ioperandDataViewList->at(0);
+    int axis = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
+    switch (opcode) {
+        case Opcode::OP_ROWARGMAXWITHVALUE_SINGLE:
+            calc::RowArgMaxWithValueSingle(outValue, outIndex, outTemp, iop, axis);
+            break;
+        case Opcode::OP_ROWARGMINWITHVALUE_SINGLE:
+            calc::RowArgMinWithValueSingle(outValue, outIndex, outTemp, iop, axis);
+            break;
+        case Opcode::OP_ROWARGMAXWITHVALUE_LINE:
+            calc::RowArgMaxWithValueLine(outValue, outIndex, outTemp, iop, axis);
+            break;
+        case Opcode::OP_ROWARGMINWITHVALUE_LINE:
+            calc::RowArgMinWithValueLine(outValue, outIndex, outTemp, iop, axis);
+            break;
+        default:
+            ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false) << "opcode not support" << ctx->op->GetOpcodeStr();
+    }
+}
+REGISTER_CALC_OP(OP_ROWARGMAXWITHVALUE_SINGLE, Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMAXWITHVALUE_SINGLE>);
+REGISTER_CALC_OP(OP_ROWARGMAXWITHVALUE_LINE, Opcode::OP_ROWARGMAXWITHVALUE_LINE, ExecuteOpReduce<Opcode::OP_ROWARGMAXWITHVALUE_LINE>);
+REGISTER_CALC_OP(OP_ROWARGMINWITHVALUE_SINGLE, Opcode::OP_ROWARGMINWITHVALUE_SINGLE, ExecuteOpReduce<Opcode::OP_ROWARGMINWITHVALUE_SINGLE>);
+REGISTER_CALC_OP(OP_ROWARGMINWITHVALUE_LINE, Opcode::OP_ROWARGMINWITHVALUE_LINE, ExecuteOpReduce<Opcode::OP_ROWARGMINWITHVALUE_LINE>);
+
+template <Opcode opcode>
+void ExecuteOpPairArgRedyce(ExecuteOperationContext* ctx)
+{
+    auto outValue = ctx->ooperandInplaceDataViewList->at(0);
+    auto outIndex = ctx->ooperandInplaceDataViewList->at(1);
+    auto value1 = ctx->ioperandDataViewList->at(0);
+    auto index1 = ctx->ioperandDataViewList->at(1);
+    auto value2 = ctx->ioperandDataViewList->at(2);
+    auto index2 = ctx->ioperandDataViewList->at(3);
+    int axis = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
+    switch (opcode) {
+        case Opcode::OP_PAIRARGMAX:
+            calc::PairArgMax(outValue, outIndex, value1, index1, value2, index2);
+            break;
+        case Opcode::OP_PAIRARGMIN:
+            calc::PairArgMin(outValue, outIndex, value1, index1, value2, index2);
+            break;
+        default:
+            ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false) << "opcode not support" << ctx->op->GetOpcodeStr();
+    }
+}
+REGISTER_CALC_OP(OP_PAIRARGMAX, Opcode::OP_PAIRARGMAX, ExecuteOpReduce<Opcode::OP_PAIRARGMAX>);
+REGISTER_CALC_OP(OP_PAIRARGMIN, Opcode::OP_PAIRARGMIN, ExecuteOpReduce<Opcode::OP_PAIRARGMIN>);
+
 void ExecuteOpCast(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= 2);

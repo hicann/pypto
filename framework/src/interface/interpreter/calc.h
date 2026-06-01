@@ -413,6 +413,40 @@ inline void RowProdLine(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int
 {
     GetCalcOps()->RowProdLine(Trans(out), Trans(self), dim);
 }
+inline void RowArgMaxSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim)
+{
+    GetCalcOps()->RowArgMaxSingle(Trans(out), Trans(self), dim);
+}
+inline void RowArgMinSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim)
+{
+    GetCalcOps()->RowArgMinSingle(Trans(out), Trans(self), dim);
+}
+inline void RowArgMaxWithValueSingle(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex, LogicalTensorDataPtr outTemp, LogicalTensorDataPtr self, int dim)
+{
+    GetCalcOps()->RowArgMaxWithValueSingle(Trans(outValue), Trans(outIndex), Trans(outTemp), Trans(self), dim);
+}
+inline void RowArgMinWithValueSingle(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex, LogicalTensorDataPtr outTemp, LogicalTensorDataPtr self, int dim)
+{
+    GetCalcOps()->RowArgMinWithValueSingle(Trans(outValue), Trans(outIndex), Trans(outTemp), Trans(self), dim);
+}
+inline void RowArgMaxWithValueLine(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex, LogicalTensorDataPtr outTemp, LogicalTensorDataPtr self, int dim)
+{
+    GetCalcOps()->RowArgMaxWithValueLine(Trans(outValue), Trans(outIndex), Trans(outTemp), Trans(self), dim);
+}
+inline void RowArgMinWithValueLine(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex, LogicalTensorDataPtr outTemp, LogicalTensorDataPtr self, int dim)
+{
+    GetCalcOps()->RowArgMinWithValueLine(Trans(outValue), Trans(outIndex), Trans(outTemp), Trans(self), dim);
+}
+inline void PairArgMax(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex,
+    LogicalTensorDataPtr value1, LogicalTensorDataPtr index1, LogicalTensorDataPtr value2, LogicalTensorDataPtr index2)
+{
+    GetCalcOps()->PairArgMax(Trans(outValue), Trans(outIndex), Trans(value1), Trans(index1), Trans(value2), Trans(index2));
+}
+inline void PairArgMin(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex,
+    LogicalTensorDataPtr value1, LogicalTensorDataPtr index1, LogicalTensorDataPtr value2, LogicalTensorDataPtr index2)
+{
+    GetCalcOps()->PairArgMin(Trans(outValue), Trans(outIndex), Trans(value1), Trans(index1), Trans(value2), Trans(index2));
+}
 inline void OneHot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int numClasses)
 {
     GetCalcOps()->OneHot(Trans(out), Trans(self), numClasses);
