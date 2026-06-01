@@ -16,6 +16,7 @@
 #pragma once
 
 #include "machine/utils/dynamic/dev_workspace.h"
+#include "machine/utils/dynamic/dev_encode_program_ctrlflow_cache.h"
 
 namespace npu::tile_fwk::dynamic {
 using StitchedList = Vector<DevAscendFunctionDupped, WsMemCategory::VECTOR_STITCHED_LIST, DeviceWorkspaceAllocator>;
@@ -24,7 +25,7 @@ struct DeviceSlotContext {
 
     void FillInputOutputSlot(DevAscendProgram* devProg, DevStartArgs* args);
 
-    void UpdateSlots(DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx);
+    uint32_t UpdateSlots(DevAscendFunctionDupped& devRootDup, uint32_t devTaskId, uint32_t devNextIdx);
 
     DeviceExecuteSlot* GetSlotList() { return slotList_.data(); }
     size_t GetSlotSize() { return slotList_.size(); }

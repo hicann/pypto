@@ -76,6 +76,12 @@ struct DevCellMatchTableDesc {
     DevShape cellShape;
     DevAscendStride stride;
 
+    // Index corresponds to CellMatchOpType enum: NORMAL_WRITE=0, ATOMIC_WRITE=1, READ=2
+    static constexpr uint32_t CELL_MATCH_OP_TYPE_MAX_NUM = 3;
+    uint32_t cacheOpMaxCount[CELL_MATCH_OP_TYPE_MAX_NUM]{1, 0, 0};
+    uint32_t opMemLayOutIndex[CELL_MATCH_OP_TYPE_MAX_NUM]{};
+    uint32_t cellUint64Size{2};
+
     int GetDimensionSize() const { return cellShape.dimSize; }
 
     const int& GetCellShape(int index) const { return cellShape.dim[index]; }
@@ -91,8 +97,27 @@ struct DevCellMatchTableDesc {
         }
     }
     void SetStrideShape(const std::vector<int>& shape) { stride.SetShape(shape); }
-};
 
+    uint32_t GetCacheOpMaxCount(uint32_t opType) const { return cacheOpMaxCount[opType]; }
+
+    void SetCacheOpMaxCount(const std::vector<uint32_t>& counts)
+    {
+        for (uint32_t i = 0; i < CELL_MATCH_OP_TYPE_MAX_NUM; i++) {
+            cacheOpMaxCount[i] = counts[i];
+        }
+        UpdateCellMemLayOut();
+    }
+
+    void UpdateCellMemLayOut()
+    {
+        uint32_t offset = 1;
+        for (uint32_t i = 0; i < CELL_MATCH_OP_TYPE_MAX_NUM; i++) {
+            opMemLayOutIndex[i] = offset;
+            offset += cacheOpMaxCount[i];
+        }
+        cellUint64Size = offset;
+    }
+};
 static inline std::string DumpCellMatchTableDesc(const DevCellMatchTableDesc& desc)
 {
     return DumpShape(desc.cellShape) + " x " + DumpStride(desc.stride);

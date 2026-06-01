@@ -287,9 +287,10 @@ public:
             dumpTensorInfo.execEnd = execEnd_;
             dumpTensorInfo.rootHash = func->rootHash;
             dumpTensorInfo.funcHash = dyntask->cceBinary[func->GetOperationAttrCalleeIndex(opIdx)].funcHash;
+            auto& operandInfo = func->GetOperationOperandInfo(opIdx, idx, isIOperand);
             GetTensorOffsetAndShape<false>(
-                func, dumpTensorInfo.offset, dumpTensorInfo.shape, &(dupData->GetExpression(0)), dimSize, opIdx, idx,
-                isIOperand);
+                func, dumpTensorInfo.offset, dumpTensorInfo.shape, &(dupData->GetExpression(0)), dimSize, opIdx,
+                operandInfo.staticOffsetAttrBeginIndex, operandInfo.staticShapeAttrBeginIndex);
             dumpTensorInfo.tensorAddr = GetRawTensorAddr(rawTensor, dupData);
             for (uint32_t i = 0; i < dimSize; i++) {
                 dumpTensorInfo.rawShape[i] = rawTensor->shape.At(i, dupData->GetExpressionAddr());

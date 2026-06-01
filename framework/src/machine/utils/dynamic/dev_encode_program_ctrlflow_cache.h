@@ -143,14 +143,20 @@ struct DeviceExecuteSlot {
     bool isAssembleSlot{false};
     bool isAssembleSlotNeedAlloc{false};
     bool isPartialUpdateStitch{false};
-    bool isPartialUpdateDirty{false};
     uint32_t stitchDupIdx{INVALID_STITCH_IDX};
     uint32_t stitchOutcastIdx;
+    uint32_t slotAllocIterId{0}; // when alloc new tensor memory ,change it for cell match tag check
 
     DevAscendProgramPartialUpdate* partialUpdate{nullptr};
 
     bool IsOutputAddress() const { return isOutputSlot; }
     bool IsAssembleAddress() const { return isAssembleSlot; }
+    void ChangeSlotAllocIterId() {
+        slotAllocIterId++;
+        if (slotAllocIterId == MAX_STITCH_FUNC_NUM -1) {
+            slotAllocIterId = 0;
+        }
+    }
 };
 
 struct DevControlFlowCacheRuntime {

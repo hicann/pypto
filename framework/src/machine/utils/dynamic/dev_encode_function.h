@@ -126,8 +126,7 @@ private:
     DevLocalVector<uint32_t> stitchPolicyFullCoverOpList_;
 
     DevLocalVector<uint32_t> cellMatchRuntimeFullUpdateTableList;
-    DevLocalVector<uint32_t> cellMatchStaticOutcastTableList;
-    DevLocalVector<uint32_t> cellMatchStaticIncastTableList;
+
     DevLocalVector<char> rawName_;
 #define sharedLastField rawName_
     uint32_t maxC_{0};
@@ -500,11 +499,10 @@ public:
         const SymInt* offsetSymList;
         const SymInt* shapeSymList;
     };
-    inline SymIntPair GetTensorOffsetShapeSymList(int operationIndex, int operandIndex, bool isIOperand = true) const
+    inline SymIntPair GetTensorOffsetShapeSymList(int operationIndex, int offsetAttrIndex, int shapeAttrIndex) const
     {
-        auto& operandInfo = GetOperationOperandInfo(operationIndex, operandIndex, isIOperand);
-        const SymInt* offsetSymList = &GetOperationAttr(operationIndex, operandInfo.staticOffsetAttrBeginIndex);
-        const SymInt* shapeSymList = &GetOperationAttr(operationIndex, operandInfo.staticShapeAttrBeginIndex);
+        const SymInt* offsetSymList = &GetOperationAttr(operationIndex, offsetAttrIndex);
+        const SymInt* shapeSymList = &GetOperationAttr(operationIndex, shapeAttrIndex);
         return SymIntPair{offsetSymList, shapeSymList};
     }
 

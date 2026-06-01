@@ -321,8 +321,10 @@ struct DevAscendFunctionDupped {
         int operandIndex, bool isIOperand = true) const
     {
         auto func = GetSource();
+        auto& operandInfo = func->GetOperationOperandInfo(operationIndex, operandIndex, isIOperand);
         GetTensorOffsetAndShape<false>(
-            func, offset, shape, &GetExpression(0), dims, operationIndex, operandIndex, isIOperand);
+            func, offset, shape, &GetExpression(0), dims, operationIndex,
+            operandInfo.staticOffsetAttrBeginIndex, operandInfo.staticShapeAttrBeginIndex);
     }
 
     std::string Dump(int indent = 0) const { return DupData()->Dump(indent); }

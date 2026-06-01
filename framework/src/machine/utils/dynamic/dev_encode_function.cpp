@@ -132,7 +132,6 @@ std::string DevAscendFunction::DumpIncast(
     oss << "\n";
     oss << indent;
     oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(incast.cellMatchTableDesc);
-    oss << " | #cellMatchStaticTable:" << incast.cellMatchStaticIncastTable.size();
     oss << "\n";
 
     oss << indent << " | #stitchPolicyFullCoverConsumerAllOpIdxList:[";
@@ -144,12 +143,10 @@ std::string DevAscendFunction::DumpIncast(
     for (size_t j = 0; j < incast.consumerList.size(); j++) {
         auto& consumer = At(incast.consumerList, j);
         int consumerIdx = consumer.operationIdx;
-        int operandIdx = consumer.operandIdx;
         int offsetAttrIdx = consumer.offsetAttrIdx;
         int shapeAttrIdx = consumer.shapeAttrIdx;
         oss << indent;
         oss << " | #consumerIdx:!" << consumerIdx;
-        oss << " | #operandIdx:" << operandIdx;
         oss << " | #offsetAttrIdx:" << offsetAttrIdx;
         oss << " | #shapeAttrIdx:" << shapeAttrIdx;
         oss << " | #offsetAttr:"
@@ -172,12 +169,10 @@ std::string DevAscendFunction::DumpOutcast(
         for (size_t j = 0; j < producerList.size(); j++) {
             auto& producer = At(producerList, j);
             int producerIdx = producer.operationIdx;
-            int operandIdx = producer.operandIdx;
             int offsetAttrIdx = producer.offsetAttrIdx;
             int shapeAttrIdx = producer.shapeAttrIdx;
             oss << indent;
             oss << " | #producerIdx:!" << producerIdx;
-            oss << " | #operandIdx:" << operandIdx;
             oss << " | #offsetAttrIdx:" << offsetAttrIdx;
             oss << " | #shapeAttrIdx:" << shapeAttrIdx;
             oss << " | #offsetAttr:"
@@ -199,7 +194,6 @@ std::string DevAscendFunction::DumpOutcast(
     oss << "\n";
     oss << indent;
     oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(outcast.cellMatchTableDesc);
-    oss << " | #cellMatchStaticTable:" << outcast.cellMatchStaticOutcastTable.size();
     oss << " | #cellMatchFullUpdateTable:" << outcast.cellMatchRuntimeFullUpdateTable.size();
     oss << "\n";
 

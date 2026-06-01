@@ -65,22 +65,23 @@ inline bool DumpEnabled()
 }
 
 struct CellMatchHandleCollect {
-    static inline void Process(int index, std::vector<int>* cellIdxListOut)
+    static inline uint32_t Process(int index, std::vector<int>* cellIdxListOut)
     {
         cellIdxListOut->push_back(index);
+        return 0;
     }
 };
 
 bool CollectCellIdxForUse(
     DevAscendFunction* devFunc, const DevAscendFunctionCallOperandUse& use,
-    const uint64_t* runtimeExpressionList, bool isIOperand,
-    const DevCellMatchTableDesc& cellMatchTableDesc, std::vector<int>* cellIdxListOut)
+    const uint64_t* runtimeExpressionList, const DevCellMatchTableDesc& cellMatchTableDesc,
+    std::vector<int>* cellIdxListOut)
 {
     uint64_t offset[DEV_SHAPE_DIM_MAX];
     uint64_t validShape[DEV_SHAPE_DIM_MAX];
     bool paramConcrete = GetTensorOffsetAndValidShape<false>(
         devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc, cellMatchTableDesc.GetDimensionSize(),
-        use.operationIdx, use.operandIdx, isIOperand);
+        use.operationIdx, use.offsetAttrIdx);
     if (paramConcrete) {
         CellMatchHandle<CellMatchHandleCollect>(offset, validShape, cellMatchTableDesc, cellIdxListOut);
     }
@@ -137,7 +138,7 @@ void DumpProducerCellAccess(
     for (size_t i = 0; i < useSize; ++i) {
         std::vector<int> cellIdxList;
         bool allConcrete =
-            CollectCellIdxForUse(&devRootSrc, useList[i], expressionList, false, desc, &cellIdxList);
+            CollectCellIdxForUse(&devRootSrc, useList[i], expressionList, desc, &cellIdxList);
         AppendSlotAccessRow(
             devTaskId, slotIdx, devNextIdx, static_cast<uint32_t>(useList[i].operationIdx),
             'W', cellIdxList, allConcrete);
@@ -154,7 +155,7 @@ void DumpConsumerCellAccess(
     }
     std::vector<int> cellIdxList;
     bool allConcrete =
-        CollectCellIdxForUse(&nextSrc, consumer, expressionList, true, cellMatchTableDesc, &cellIdxList);
+        CollectCellIdxForUse(&nextSrc, consumer, expressionList, cellMatchTableDesc, &cellIdxList);
     AppendSlotAccessRow(
         devTaskId, slotIdx, devNextIdx, static_cast<uint32_t>(consumer.operationIdx),
         'R', cellIdxList, allConcrete);

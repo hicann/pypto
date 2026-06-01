@@ -297,6 +297,7 @@ private:
                     AllocateSlot(devRootSrc->GetRawName()), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
                 slotList[assembleSlotIndex].isAssembleSlotNeedAlloc = false;
                 TryAllocateDynamicCellMatchForAssembleSlot(slotList[assembleSlotIndex]);
+                slotList[assembleSlotIndex].ChangeSlotAllocIterId(); // mark tensor memory changed for stitch dependency cell match
             } else {
                 DEV_ASSERT_MSG(
                     WsErr::WORKSPACE_ITER_INVALID,

@@ -589,7 +589,14 @@ void* DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey)
     size_t devNextIdx = stitchContext.Size();
     stitchContext.Stitch(slotContext, currDevRootDup, taskId, devNextIdx);
 
-    slotContext.UpdateSlots(currDevRootDup, taskId, devNextIdx);
+    uint32_t updateErrCode = slotContext.UpdateSlots(currDevRootDup, taskId, devNextIdx);
+    if (updateErrCode == static_cast<uint32_t>(CtrlErr::CELL_MATCH_FILL_OP_NOT_ENOUGH)) {
+        DEV_INFO("UpdateSlots stitch cell failed with error code %u, force submit devtask", updateErrCode);
+        ret = SubmitToAicoreAndRecycleMemory(false);
+        if (unlikely(ret != DEVICE_MACHINE_OK)) {
+            return RUNTIME_FUNCKEY_ERROR;
+        }
+    }
     PROF_STAGE_END(PERF_EVT_STAGE_STITCH, "stitch.after\n");
     DEV_TRACE_DEBUG(DEvent(taskId, DActStitchFinish(GetRuid(rootKey, true))));
     return nullptr;

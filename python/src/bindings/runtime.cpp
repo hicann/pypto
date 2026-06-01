@@ -76,6 +76,7 @@ bool TryBuildDynamicCellMatchDesc(
     DevCellMatchTableDesc& patchedDesc)
 {
     patchedDesc.SetCellShape(launchMeta.cellShape);
+    patchedDesc.SetCacheOpMaxCount(launchMeta.opMaxCount);
     const int dim = patchedDesc.GetDimensionSize();
     if (launchMeta.candidateRawDims.empty() || dim > DEV_SHAPE_DIM_MAX) {
         return false;

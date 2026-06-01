@@ -16,6 +16,7 @@
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #include "machine/utils/dynamic/dev_workspace.h"
+#include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 #include "machine/host/main_block.h"
 #include "machine/host/dump_host_topo.h"
 
@@ -980,50 +981,6 @@ void DevAscendFunction::InitIncastOutcast(
         }
         stitchPolicyFullCoverOpList_.HostInitDataSizeOffset(initOffset, fullCoverOpTotal);
     }
-    {
-        // Fill incast & outcast all full update table
-        uint64_t cellMatchSizeIncastTotal = 0;
-        cellMatchStaticIncastTableList.HostInitDataSizeOffset(initOffset, 0);
-        for (size_t index = 0; index < incastTensorList.size(); index++) {
-            auto& inAttr = incastOpAttrDict.at(incastTensorList[index]);
-            auto& incast = At(incastList, index);
-            ONFILLCONTENT
-            {
-                incast.cellMatchStaticIncastTable.AssignRangeOffsetSize(
-                    cellMatchStaticIncastTableList, cellMatchSizeIncastTotal, inAttr.cellMatchSize);
-
-                auto consumerList = &At(incast.consumerList, 0);
-                auto tableData = &At(incast.cellMatchStaticIncastTable, 0);
-                bool stitchByAllFullMatch = CellMatchFillIncastOutcast<true>(
-                    this, consumerList, incast.consumerList.size(), nullptr, true, incast.cellMatchTableDesc,
-                    tableData);
-                incast.stitchByAllFullMatch = stitchByAllFullMatch;
-            };
-            cellMatchSizeIncastTotal += inAttr.cellMatchSize;
-        }
-        cellMatchStaticIncastTableList.HostInitDataSizeOffset(initOffset, cellMatchSizeIncastTotal);
-
-        uint64_t cellMatchSizeOutcastTotal = 0;
-        cellMatchStaticOutcastTableList.HostInitDataSizeOffset(initOffset, 0);
-        for (size_t index = 0; index < outcastTensorList.size(); index++) {
-            auto& outAttr = outcastOpAttrDict.at(outcastTensorList[index]);
-            auto& outcast = At(outcastList, index);
-            ONFILLCONTENT
-            {
-                outcast.cellMatchStaticOutcastTable.AssignRangeOffsetSize(
-                    cellMatchStaticOutcastTableList, cellMatchSizeOutcastTotal, outAttr.cellMatchSize);
-
-                auto producerList = &At(outcast.producerList, 0);
-                auto tableData = &At(outcast.cellMatchStaticOutcastTable, 0);
-                bool stitchByAllFullMatch = CellMatchFillIncastOutcast<true>(
-                    this, producerList, outcast.producerList.size(), nullptr, false, outcast.cellMatchTableDesc,
-                    tableData);
-                outcast.stitchByAllFullMatch = stitchByAllFullMatch;
-            }
-            cellMatchSizeOutcastTotal += outAttr.cellMatchSize;
-        }
-        cellMatchStaticOutcastTableList.HostInitDataSizeOffset(initOffset, cellMatchSizeOutcastTotal);
-    }
 
     rawName_.HostInitDataSizeOffset(initOffset, (initRawName.size() / 8 + 1) * 8); // 8 byte align
     ONFILLCONTENT
@@ -1206,8 +1163,8 @@ struct EncodeDevAscendFunctionInfo {
     }
 
     void EncodeAnalysisOpUseOutCasts(
-        const std::shared_ptr<LogicalTensor>& o, std::set<uint32_t>& allOutcastUseOpSet,
-        InoutOperationAttr& outcastOpAttr)
+         const std::shared_ptr<LogicalTensor>& o, std::set<uint32_t>& allOutcastUseOpSet,
+         InoutOperationAttr& outcastOpAttr)
     {
         std::set<uint32_t> outcastUseOpSet;
         int dimSize = outcastOpAttr.dim;
@@ -1223,13 +1180,14 @@ struct EncodeDevAscendFunctionInfo {
                 }
 
                 auto coaIndex = op.GetOOpAttrOffset(j) + COA_INDEX_DIM_BASE;
+                CellMatchOpType producerOpType = op.GetOOpAttr(j).isAtomic() ? CellMatchOpType::ATOMIC_WRITE : CellMatchOpType::NORMAL_WRITE;
                 std::vector<int64_t> offset = callAttr->GetLinearImmediateArgList(coaIndex, coaIndex + dimSize, true);
                 std::vector<int64_t> shape =
                     callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
                 if (offset == std::vector<int64_t>(dimSize, 0) && shape == oOperand->GetShape()) {
-                    stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(i, j, coaIndex, coaIndex + dimSize);
+                    stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(i, coaIndex, coaIndex + dimSize, producerOpType);
                 } else {
-                    useList.emplace_back(i, j, coaIndex, coaIndex + dimSize);
+                    useList.emplace_back(i, coaIndex, coaIndex + dimSize, producerOpType);
                 }
                 MACHINE_LOGD(
                     "Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(), j);
@@ -1245,11 +1203,10 @@ struct EncodeDevAscendFunctionInfo {
                 outcastOpAttr.stitchPolicyFullCoverProducerList.push_back(stitchPolicyFullCoverProducer);
             } else {
                 outcastOpAttr.useList.insert(outcastOpAttr.useList.end(), useList.begin(), useList.end());
-                for (auto& [operationIdx, operandIdx, offsetAttrIdx, shapeAttrIdx] : useList) {
-                    UNUSED(operationIdx);
-                    UNUSED(operandIdx);
-                    UNUSED(offsetAttrIdx);
-                    auto shape = callAttr->GetLinearImmediateArgList(shapeAttrIdx, shapeAttrIdx + dimSize, false);
+                for (auto& use : useList) {
+                    UNUSED(use.operationIdx);
+                    UNUSED(use.opType);
+                    auto shape = callAttr->GetLinearImmediateArgList(use.shapeAttrIdx, use.shapeAttrIdx + dimSize, false);
                     UpdateCellMatchShape(outcastOpAttr.cellMatchTableDesc, shape);
                     MACHINE_LOGD(
                         "Minimal shape for outcast %d rawtensor magic %d op %zu %d is %s.\n", o->magic,
@@ -1284,10 +1241,8 @@ struct EncodeDevAscendFunctionInfo {
             auto& outcastOpAttr = outcastOpAttrDict[i];
             if (outcastOpAttr.stitchPolicyFullCoverProducerList.size() > hubEntryLeast) {
                 outcastOpAttr.stitchPolicyFullCoverProducerHubOpIdx = callList.size();
-
                 auto dummyOp = MakeDummyCall();
                 callList.Insert(dummyOp);
-
                 callOpPredDict[dummyOp] = outcastOpAttr.stitchPolicyFullCoverProducerList.size();
                 for (auto& producer : outcastOpAttr.stitchPolicyFullCoverProducerList) {
                     auto callOp = callList[producer.operationIdx];
@@ -1309,9 +1264,9 @@ struct EncodeDevAscendFunctionInfo {
         }
 
         /*
-         * As we need a reference of null, we use the 0-th element for the reference of null for
-         * DevAscendFunctionDuppedData So outcastStitchCount starts from 1, as the 0-th is for the reference of null.
-         */
+        * As we need a reference of null, we use the 0-th element for the reference of null for
+        * DevAscendFunctionDuppedData So outcastStitchCount starts from 1, as the 0-th is for the reference of null.
+        */
         outcastStitchCount = 1;
         for (size_t index = 0; index < callList.size(); index++) {
             if (allOutcastUseOpSet.count(index) || noSuccOpSet.count(index)) {
@@ -1334,7 +1289,6 @@ struct EncodeDevAscendFunctionInfo {
             incastOpAttr.dim = dimSize;
             incastOpAttr.cellMatchTableDesc =
                 InitCellMatchTableDesc(index->GetShape(), std::vector<int64_t>(dimSize, 1));
-
             std::set<uint32_t> incastUseOpSet;
             for (size_t j = 0; j < callList.size(); j++) {
                 auto& op = *callList[j];
@@ -1352,7 +1306,7 @@ struct EncodeDevAscendFunctionInfo {
                         if (shape == Shape(shape.size())) { // 跳过全0
                             continue;
                         }
-                        incastOpAttr.useList.emplace_back(j, k, coaIndex, coaIndex + dimSize);
+                        incastOpAttr.useList.emplace_back(j, coaIndex, coaIndex + dimSize, CellMatchOpType::READ);
                         UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
                         MACHINE_LOGD(
                             "Minimal shape for incast %d rawtensor magic %d coaIndex %d op %zu %d is %s.\n", index->magic,
@@ -1362,10 +1316,8 @@ struct EncodeDevAscendFunctionInfo {
                     }
                 }
             }
-
             UpdateCellMatchStrideAndSize(incastOpAttr.cellMatchSize, incastOpAttr.cellMatchTableDesc, index, dimSize);
             incastOpAttr.useOpList.insert(incastOpAttr.useOpList.end(), incastUseOpSet.begin(), incastUseOpSet.end());
-
             incastOpAttrDict.insert({index, incastOpAttr});
         }
 
@@ -1376,6 +1328,7 @@ struct EncodeDevAscendFunctionInfo {
             }
         }
     }
+
 
     struct Hasher {
         template <typename T>
@@ -2201,25 +2154,59 @@ static void FillPartialUpdateSlotContent(
     auto& partialUpdate = prog->At(prog->partialUpdateList, slotIndex);
     partialUpdate.slotIndex = slotIndex;
     partialUpdate.cellMatchTableDesc = partialUpdateCellMatchTableDesc;
+
     if (hasDynamicShape) {
         partialUpdate.cellMatchRuntimePartialUpdateTable.HostAssignDataSize(0, 0);
         return;
     }
+
     partialUpdate.cellMatchRuntimePartialUpdateTable.HostAssignRangeOffsetSize(
         prog->cellMatchRuntimePartialUpdateTableList, totalCellMatchSize, tableSize);
     auto tableData = partialUpdate.cellMatchRuntimePartialUpdateTable.Data();
+
     for (size_t j = 0; j < tableSize; j++) {
         tableData[j] = AICORE_TASK_INIT;
     }
 }
 
+static uint32_t CalculateSlotMaxReadCount(
+    int slotIndex,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict)
+{
+    uint32_t incastCount = 0;
+    
+    if (slotRootIncastDict.count(slotIndex) != 0) {
+        incastCount = static_cast<uint32_t>(slotRootIncastDict.at(slotIndex).size());
+    }
+    
+    return std::min(incastCount, static_cast<uint32_t>(CELL_MATCH_MAX_READ_COUNT));
+}
+
+static bool HasAtomicWriteInOutcast(DevAscendFunction* devFunc, const DevAscendFunctionOutcast& outcast)
+{
+    auto* producerList = &devFunc->At(outcast.producerList, 0);
+    for (size_t i = 0; i < outcast.producerList.size(); i++) {
+        if (producerList[i].opType == CellMatchOpType::ATOMIC_WRITE)
+            return true;
+    }
+    auto* fullCoverProducerList = &devFunc->At(outcast.stitchPolicyFullCoverProducerList, 0);
+    for (size_t i = 0; i < outcast.stitchPolicyFullCoverProducerList.size(); i++) {
+        if (fullCoverProducerList[i].opType == CellMatchOpType::ATOMIC_WRITE)
+            return true;
+    }
+    return false;
+}
+
 static int InitSinglePartialUpdateSlot(
     DevAscendProgram* prog, int slotIndex, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
     const std::unordered_map<Function*, int>& rootFuncKeyDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict, int totalCellMatchSize,
     bool fillContent, topo_dump::SlotCellTableCsvWriter* slotCellTable)
 {
     std::vector<const DevAscendFunctionOutcast*> outcastList;
+    bool hasAtomicWrite = false;
+    
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotRootOutcastDict.count(slotIndex))
         << "slotIndex: " << slotIndex << " not found in slotRootOutcastDict";
     for (auto& [root, outcastIndex] : slotRootOutcastDict.find(slotIndex)->second) {
@@ -2228,8 +2215,14 @@ static int InitSinglePartialUpdateSlot(
         int funcKey = rootFuncKeyDict.find(root)->second;
         DevAscendFunction* devFunc =
             reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(devEncodeListInput[funcKey].data()));
-        outcastList.push_back(&devFunc->GetOutcast(outcastIndex));
+        auto& outcast = devFunc->GetOutcast(outcastIndex);
+        outcastList.push_back(&outcast);
+        
+        if (!hasAtomicWrite) {
+            hasAtomicWrite = HasAtomicWriteInOutcast(devFunc, outcast);
+        }
     }
+
     bool hasProducer = std::any_of(outcastList.begin(), outcastList.end(), [](const DevAscendFunctionOutcast* outcast) {
         return outcast->producerList.size() != 0 || outcast->stitchPolicyFullCoverProducerList.size() != 0;
     });
@@ -2237,6 +2230,7 @@ static int InitSinglePartialUpdateSlot(
         if (fillContent) {
             auto& partialUpdate = prog->At(prog->partialUpdateList, slotIndex);
             partialUpdate.slotIndex = slotIndex;
+            partialUpdate.cellMatchTableDesc.SetCacheOpMaxCount({CELL_MATCH_MAX_NORMAL_WRITE_COUNT, 0, 0});
             partialUpdate.cellMatchRuntimePartialUpdateTable.HostAssignDataSize(0, 0);
         }
         return 0;
@@ -2244,16 +2238,23 @@ static int InitSinglePartialUpdateSlot(
 
     DevCellMatchTableDesc partialUpdateCellMatchTableDesc;
     InitPartialUpdateCellMatch(outcastList, &partialUpdateCellMatchTableDesc);
-    size_t tableSize = partialUpdateCellMatchTableDesc.GetStride(0);
+    
+    partialUpdateCellMatchTableDesc.SetCacheOpMaxCount(
+        {CELL_MATCH_MAX_NORMAL_WRITE_COUNT, hasAtomicWrite ? CELL_MATCH_MAX_ATOMIC_WRITE_COUNT : 0U,
+         outcastList.size() > 1 ? CalculateSlotMaxReadCount(slotIndex, slotRootIncastDict) : 0u});
+    
+    size_t cellNum = partialUpdateCellMatchTableDesc.GetStride(0);
     bool hasDynamicShape = HasDynamicShape(partialUpdateCellMatchTableDesc);
+    size_t actualTableSize = hasDynamicShape ? 0 : cellNum * partialUpdateCellMatchTableDesc.cellUint64Size;
+
     if (fillContent) {
         FillPartialUpdateSlotContent(
-            prog, slotIndex, partialUpdateCellMatchTableDesc, totalCellMatchSize, tableSize, hasDynamicShape);
+            prog, slotIndex, partialUpdateCellMatchTableDesc, totalCellMatchSize, actualTableSize, hasDynamicShape);
         if (slotCellTable != nullptr && hasProducer && !hasDynamicShape) {
             slotCellTable->WritePartial(slotIndex, partialUpdateCellMatchTableDesc, outcastList.size());
         }
     }
-    return hasDynamicShape ? 0 : static_cast<int>(tableSize);
+    return static_cast<int>(actualTableSize);
 }
 
 void DevAscendProgram::InitPartialUpdateSlot(
@@ -2263,8 +2264,6 @@ void DevAscendProgram::InitPartialUpdateSlot(
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
     const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent)
 {
-    (void)slotRootIncastDict;
-    (void)slotRootOutcastDict;
     this->partialUpdateList.HostInitDataSizeOffset(initOffset, slotSize);
 
     this->cellMatchRuntimePartialUpdateTableList.HostInitDataSizeOffset(initOffset, 0);
@@ -2277,8 +2276,8 @@ void DevAscendProgram::InitPartialUpdateSlot(
     for (size_t index = 0; index < tPartialUpdateSlotIndexList.size(); index++) {
         auto slotIndex = tPartialUpdateSlotIndexList[index];
         totalCellMatchSize += InitSinglePartialUpdateSlot(
-            this, slotIndex, devEncodeListInput, rootFuncKeyDict, slotRootOutcastDict, totalCellMatchSize, fillContent,
-            &slotCellTable);
+            this, slotIndex, devEncodeListInput, rootFuncKeyDict, slotRootIncastDict, slotRootOutcastDict, 
+            totalCellMatchSize, fillContent, &slotCellTable);
     }
     DumpFullCoverCellTableForNonPartialSlots(
         devEncodeListInput, rootFuncKeyDict, slotRootOutcastDict, partialSlotSet, slotCellTable);
@@ -2659,7 +2658,7 @@ static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::
 static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(
     const DevAscendProgramPartialUpdate& partial, const std::shared_ptr<RawTensor>& rawTensor)
 {
-    SymbolicScalar tableEntries(1);
+    SymbolicScalar cellCount(1);
     auto dynShape = rawTensor->GetDynRawShape();
     int dimSize = partial.cellMatchTableDesc.GetDimensionSize();
     for (int d = 0; d < dimSize; ++d) {
@@ -2673,9 +2672,11 @@ static SymbolicScalar ComputeDynamicCellMatchTableBytesForOutcast(
                 tensorDim = SymbolicScalar(rawShape[d]);
             }
         }
-        tableEntries = tableEntries * ((tensorDim + SymbolicScalar(cellDim - 1)) / SymbolicScalar(cellDim));
+        cellCount = cellCount * ((tensorDim + SymbolicScalar(cellDim - 1)) / SymbolicScalar(cellDim));
     }
-    return tableEntries * SymbolicScalar(static_cast<int64_t>(sizeof(uint64_t)));
+
+    return cellCount * SymbolicScalar(static_cast<int64_t>(partial.cellMatchTableDesc.cellUint64Size)) *
+        SymbolicScalar(static_cast<int64_t>(sizeof(uint64_t)));
 }
 
 static bool IsRuntimeDynamicPartialWithSlotRoot(
@@ -2739,6 +2740,10 @@ static void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& de
         meta.cellShape.resize(dim);
         for (int d = 0; d < dim; ++d) {
             meta.cellShape[d] = partial.cellMatchTableDesc.GetCellShape(d);
+        }
+        meta.opMaxCount.resize(DevCellMatchTableDesc::CELL_MATCH_OP_TYPE_MAX_NUM);
+        for (size_t opIdx = 0; opIdx < DevCellMatchTableDesc::CELL_MATCH_OP_TYPE_MAX_NUM; opIdx++) {
+            meta.opMaxCount[opIdx] = partial.cellMatchTableDesc.GetCacheOpMaxCount(static_cast<uint32_t>(opIdx));
         }
         for (const auto& [root, outcastIndex] : dynAttr->slotRootOutcastDict.at(slotIndex)) {
             auto rawTensor = root->GetOutcast()[outcastIndex]->GetRawTensor();

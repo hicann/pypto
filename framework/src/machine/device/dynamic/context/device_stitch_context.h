@@ -134,7 +134,7 @@ public:
         return ss.str();
     }
 
-    uint64_t PartialUpdateStitch(
+    uint64_t PartialUpdateStitchConsumer(
         DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
         DevAscendFunctionIncast& incast);
 
@@ -146,7 +146,19 @@ public:
         DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
         DevAscendFunctionIncast& incast);
 
+    uint64_t PartialUpdateStitchProducer(
+        DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
+        DevAscendFunctionOutcast& outcast);
+
     void ReuseStitch(DevAscendFunctionDupped& nextDup, size_t devNextIdx);
+
+    uint64_t FastStitchConsumer(
+        DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup, size_t devTaskId,
+        size_t devNextIdx);
+
+    uint64_t FastStitchProducer(
+        DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup, size_t devTaskId,
+        size_t devNextIdx);
 
     uint64_t FastStitch(
         DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup, size_t devTaskId,

@@ -17,6 +17,7 @@
 
 #include "machine/utils/dynamic/dev_encode_types.h"
 #include "interface/tensor/runtime_slot.h"
+#include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 
 namespace npu::tile_fwk::dynamic {
 struct DevAscendOperationOperandInfo {
@@ -49,16 +50,17 @@ struct DevAscendOperation {
 
 struct DevAscendFunctionCallOperandUse {
     int operationIdx{-1};
-    int operandIdx{-1};
     int offsetAttrIdx{-1};
     int shapeAttrIdx{-1};
+    CellMatchOpType opType{CellMatchOpType::READ};
 
     DevAscendFunctionCallOperandUse() = default;
-    DevAscendFunctionCallOperandUse(int operationIdx_, int operandIdx_, int offsetAttrIdx_, int shapeAttrIdx_)
+    DevAscendFunctionCallOperandUse(int operationIdx_, int offsetAttrIdx_, int shapeAttrIdx_,
+                                     CellMatchOpType opType_ = CellMatchOpType::READ)
         : operationIdx(operationIdx_),
-          operandIdx(operandIdx_),
           offsetAttrIdx(offsetAttrIdx_),
-          shapeAttrIdx(shapeAttrIdx_)
+          shapeAttrIdx(shapeAttrIdx_),
+          opType(opType_)
     {}
 };
 
@@ -67,11 +69,9 @@ struct DevAscendFunctionIncast {
     DevLocalVector<int> fromSlotList;
 
     int dim;
-    int stitchByAllFullMatch;
     DevLocalVector<DevAscendFunctionCallOperandUse> consumerList;
 
     DevCellMatchTableDesc cellMatchTableDesc;
-    DevLocalVector<uint32_t> cellMatchStaticIncastTable;
 
     DevLocalVector<uint32_t> stitchPolicyFullCoverConsumerAllOpIdxList;
 };
@@ -81,13 +81,11 @@ struct DevAscendFunctionOutcast {
     DevLocalVector<int> toSlotList;
 
     int dim;
-    int stitchByAllFullMatch;
     RuntimeSlotDesc desc;
 
     DevLocalVector<DevAscendFunctionCallOperandUse> producerList;
 
     DevCellMatchTableDesc cellMatchTableDesc;
-    DevLocalVector<uint32_t> cellMatchStaticOutcastTable;
     DevLocalVector<uint32_t> cellMatchRuntimeFullUpdateTable;
 
     int stitchPolicyFullCoverProducerHubOpIdx;

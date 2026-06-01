@@ -266,6 +266,9 @@ enum class CtrlErr : uint32_t {
     CTRL_INIT_FAILED,
     CTRL_SIM_FAILED,
     CTRL_ALLOC_TIMEOUT,
+    CELL_MATCH_FILL_OP_NOT_ENOUGH,
+    CELL_MATCH_OP_TYPE_NOT_SUPPORTED,
+    CELL_MATCH_OP_ID_INVALID,
 };
 
 enum class WsErr : uint32_t {

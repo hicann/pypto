@@ -479,6 +479,7 @@ TEST_F(GraphPartitionTest, TestOspCVGraph)
         }
         EXPECT_EQ(subgraphIDs2IsCube.size(), subGraphNum);
         EXPECT_EQ(gpp.PostCheck(*function), SUCCESS);
+        Program::GetInstance().Reset();
     }
 }
 

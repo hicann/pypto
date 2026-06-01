@@ -175,6 +175,13 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
         }                                                           \
     } while(0)
 
+#define DEV_VERBOSE_DEBUG_SPLIT(fmt, ...)                                 \
+    do {                                                            \
+        DEV_IF_VERBOSE_LOG {                                        \
+            DEV_DEBUG_SPLIT(fmt, ##__VA_ARGS__);                          \
+        }                                                           \
+    } while(0)
+
 #define DEV_VERBOSE_INFO(fmt, ...)                                  \
     do {                                                            \
         DEV_IF_VERBOSE_LOG {                                        \
@@ -203,6 +210,7 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
 #else // none device
 #define DEV_IF_DEBUG if (true)
 
+#define DEV_VERBOSE_DEBUG_SPLIT(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
 #define DEV_VERBOSE_DEBUG(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
 #define DEV_VERBOSE_INFO(fmt, args...)    PYPTO_SIM_LOG(DLOG_INFO, MACHINE, fmt, ##args)
 #define DEV_DEBUG_SPLIT(fmt, args...)     PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)

@@ -452,6 +452,7 @@ struct DyndevFunctionAttribute {
         uint64_t descOffset{0};
         std::vector<int> cellShape;
         std::vector<std::vector<SymbolicScalar>> candidateRawDims;
+        std::vector<uint32_t> opMaxCount;
     };
     std::vector<DynamicCellMatchLaunchMeta> dynamicCellMatchLaunchMetaList;
 
