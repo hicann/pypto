@@ -20,6 +20,7 @@
 #include <string>
 #include <cstdint>
 #include "tilefwk/file.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -32,6 +33,7 @@ public:
 
 private:
     static std::string GetCurrentSharedLibPath();
+    static std::string GetDevicePlatform();
 };
 } // namespace tile_fwk
 } // namespace npu

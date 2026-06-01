@@ -303,7 +303,7 @@ void Platform::ObtainPlatformInfo()
         PLATFORM_LOGD("Obtain platform through cann package(socVersion:%s), use runtime function.", socVersion.c_str());
         parser = std::make_unique<CmdParser>();
     } else {
-        PLATFORM_LOGD("Cannot obtain platform through cann package, use default A2A3 simulation info.");
+        PLATFORM_LOGD("Cannot obtain platform through cann package, use simulation info.");
         parser = std::make_unique<INIParser>();
     }
     PLATFORM_LOGD("Try to load platform info.");

@@ -22,6 +22,7 @@ target_link_libraries(tile_fwk_platform
 			dl
 			c_sec
 			tile_fwk_cann_host_runtime
+			json
 )
 
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_platform)

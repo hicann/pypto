@@ -25,6 +25,7 @@
 #include "interface/configs/config_manager_ng.h"
 #include "tilefwk/config.h"
 #include "tilefwk/function.h"
+#include "tilefwk/platform.h"
 #include "interface/utils/common.h"
 #include "tilefwk/error_code.h"
 
@@ -90,30 +91,6 @@ const std::string KEY_FIXED_OUTPUT_PATH = "fixed_output_path"; // if true, dump 
 const std::string KEY_FORCE_OVERWRITE = "force_overwrite";     // if true, don't dump cce when file exists
 const std::string KEY_CODEGEN_SUPPORT_TILE_TENSOR = "codegen_support_tile_tensor"; // if true, gen code with layout mode
 const std::string KEY_ENABLE_PMU_TRACE = "enable_pmu_trace";                       // if true, enable pmu trace
-
-enum class DPlatform {
-    ASCEND_910B1,
-    ASCEND_910B2,
-    ASCEND_910B3,
-    ASCEND_910B4,
-    ASCEND_950PR_9579,
-    KIRIN_9030,
-    UNKNOWN_DEVICE,
-};
-
-inline DPlatform StringToDpaltform(std::string platform)
-{
-    std::unordered_map<std::string, DPlatform> mappings = {
-        {"ASCEND_910B1", DPlatform::ASCEND_910B1},           {"ASCEND_910B2", DPlatform::ASCEND_910B2},
-        {"ASCEND_910B3", DPlatform::ASCEND_910B3},           {"ASCEND_910B4", DPlatform::ASCEND_910B4},
-        {"ASCEND_950PR_9579", DPlatform::ASCEND_950PR_9579}, {"KIRIN_9030", DPlatform::KIRIN_9030}};
-
-    if (mappings.count(platform)) {
-        return mappings[platform];
-    }
-
-    return DPlatform::UNKNOWN_DEVICE;
-}
 
 struct PassConfigs {
     bool printGraph{false};
