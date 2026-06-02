@@ -389,6 +389,41 @@ TEST_F(ReplaceTensorTest, TestProcessHubAssembleOp_Success)
     EXPECT_EQ(hubOutput->GetRawTensor(), assembleOutput->GetRawTensor());
 }
 
+TEST_F(ReplaceTensorTest, TestProcessHubOpUpdateCopyOutRawShape)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestProcessHubOpUpdateCopyOutRawShape", "TestProcessHubOpUpdateCopyOutRawShape",
+        nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> fullShape = {kNumEight, kNumEight};
+    std::vector<int64_t> partShape = {kNumFour, kNumEight};
+    std::vector<int64_t> copyToOffset = {kNumOne, kNumZero};
+    std::vector<int64_t> hubOffset = {kNumTwo, kNumZero};
+
+    auto fullRawTensor = std::make_shared<RawTensor>(DT_FP32, fullShape);
+    auto copyIn = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    copyIn->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto hubInput =
+        npu::tile_fwk::IRBuilder().CreateTensorVar(fullRawTensor, hubOffset, partShape, CreateTestConstIntVector(partShape));
+    hubInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto hubOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, partShape, CreateTestConstIntVector(partShape));
+    hubOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {copyIn}, {hubInput});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_HUB, {hubInput}, {hubOutput});
+
+    auto copyOutAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_UB, OpImmediate::Specified(copyToOffset), OpImmediate::Specified(partShape),
+        OpImmediate::Specified(partShape));
+    copyOutOp.SetOpAttribute(copyOutAttr);
+
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.ProcessHubOp(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(OpImmediate::ToSpecified(copyOutAttr->GetToOffset()), CreateTestConstIntVector({kNumThree, kNumZero}));
+    EXPECT_EQ(OpImmediate::ToSpecified(copyOutAttr->GetRawShape()), CreateTestConstIntVector(fullShape));
+}
+
 TEST_F(ReplaceTensorTest, TestA_MULACC_B)
 {
     auto currFunctionPtr = std::make_shared<Function>(

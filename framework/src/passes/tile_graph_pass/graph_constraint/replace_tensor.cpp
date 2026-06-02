@@ -875,6 +875,7 @@ Status ReplaceTensor::ProcessHubOp(Function& function)
                 newOffset.push_back(attrOffset[i] + tensorOffset[i]);
             }
             copyAttr->SetToOffset(newOffset);
+            copyAttr->SetRawShape(OpImmediate::Specified(hubInput->tensor->GetDynRawShape()));
         }
     }
     return SUCCESS;
