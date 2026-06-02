@@ -697,41 +697,17 @@ private:
         return false;
     }
 
-    void SendStopToCore(SchDeviceTaskContext* devTaskCtx, int coreIdx, bool isLastDevTask)
+    inline void MarkCoreStoped(SchDeviceTaskContext* devTaskCtx, int coreIdx)
     {
-        if (isLastDevTask) {
-            DEV_IF_DEVICE {
-                NormalStopSingleCore(coreIdx);
-            } else {
-                if (enableEslModel_ || aicoreHal_.IsHostSimMode()) {
-                    NormalStopSingleCore(coreIdx);
-                }
-            }
-            DEV_VERBOSE_DEBUG("Last devtask ,core %d send AICORE_TASK_STOP.", coreIdx);
-        }
-
         devTaskCtx->coreTaskFinished[coreIdx] = 1;
         devTaskCtx->coreFinishedNum++;
         DEV_VERBOSE_DEBUG("Core %d finished, finishnum = %u. ", coreIdx, devTaskCtx->coreFinishedNum);
     }
 
-    inline void SendStopToIdleCore(SchDeviceTaskContext* devTaskCtx, bool isLastDevTask) {
-        uint32_t aicIdleNum = context_->coreRunReadyCnt_[static_cast<int>(CoreType::AIC)];
-        uint32_t aivIdleNum = context_->coreRunReadyCnt_[static_cast<int>(CoreType::AIV)];
-
-        for (uint32_t i = 0; i < aicIdleNum; i++) {
-            SendStopToCore(devTaskCtx, context_->runReadyCoreIdx_[static_cast<int>(CoreType::AIC)][i], isLastDevTask);
-        }
-
-        for (uint32_t i = 0; i < aivIdleNum; i++) {
-            SendStopToCore(devTaskCtx, context_->runReadyCoreIdx_[static_cast<int>(CoreType::AIV)][i], isLastDevTask);
-        }
-    }
-
     inline void AicoreDevTaskFinishProc(
         SchDeviceTaskContext* devTaskCtx, int coreIdx, bool isLastDevTask, uint32_t& resloveParallelIdx) {
         if (CheckStopTaskCanBeSent(devTaskCtx, coreIdx, isLastDevTask, resloveParallelIdx)) {
-            SendStopToCore(devTaskCtx, coreIdx, isLastDevTask);
+            MarkCoreStoped(devTaskCtx, coreIdx);
         }
         return;
     }
@@ -762,16 +738,10 @@ private:
 
     void SendAllCoreStop()
     {
-        ForEachManageAicore([this](int coreIdx) {
-            DEV_IF_DEVICE {
-                NormalStopSingleCore(coreIdx);
-            } else {
-                if (enableEslModel_ || aicoreHal_.IsHostSimMode()) {
-                    NormalStopSingleCore(coreIdx);
-                }
-            }
-            DEV_VERBOSE_DEBUG("core %d send AICORE_TASK_STOP.", coreIdx);
-        });
+        if (!NeedsHwStopOnLastDevTask()) {
+            return;
+        }
+        BatchStopAllManagedCores();
     }
 
     inline int SyncTaskFinish(SchDeviceTaskContext* devTaskCtx, bool& isFinish, bool forceStop = false)
@@ -838,6 +808,10 @@ private:
                         mngCoreNum - devTaskCtx->coreFinishedNum);
                 }
             }
+        }
+
+        if (isSendStop && NeedsHwStopOnLastDevTask() && devTaskCtx->coreFinishedNum == mngCoreNum) {
+            BatchStopAllManagedCores();
         }
 
         if (devTaskCtx->coreFinishedNum == mngCoreNum) {
@@ -2109,6 +2083,29 @@ private:
         return ret;
     }
 
+    inline bool NeedsHwStopOnLastDevTask() const
+    {
+        DEV_IF_DEVICE {
+            return true;
+        }
+        return enableEslModel_ || aicoreHal_.IsHostSimMode();
+    }
+
+    void BatchStopAllManagedCores()
+    {
+        aicoreHal_.SetReadyQueue(aicStart_, aicEnd_, AICORE_TASK_STOP + 1);
+        aicoreHal_.SetReadyQueue(aivStart_, aivEnd_, AICORE_TASK_STOP + 1);
+        /* write to MAINBASE reg must be done before close 0x18 */
+        __sync_synchronize();
+        if (aicoreHal_.NeedsFastPathRegClose()) {
+            aicoreHal_.CloseFastPathReg(aicStart_, aicEnd_);
+            aicoreHal_.CloseFastPathReg(aivStart_, aivEnd_);
+            __sync_synchronize();
+        }
+        aicoreHal_.ResetShakeBuf(aicStart_, aicEnd_);
+        aicoreHal_.ResetShakeBuf(aivStart_, aivEnd_);
+    }
+
     inline void AbnormalStop()
     {
         ResetRegAll();
@@ -2119,18 +2116,8 @@ private:
     inline void NormalStop()
     {
         DEV_INFO("aicore manager[%d] try normal stop.", aicpuIdx_);
-        ForEachManageAicore([this](auto coreIdx) { aicoreHal_.SetReadyQueue(coreIdx, AICORE_TASK_STOP + 1); });
-        /* write to MAINBASE reg must be done before close 0x18 */
-        __sync_synchronize();
-        ForEachManageAicore([this](auto coreIdx) { aicoreHal_.ResetShakeBuf(coreIdx); });
+        BatchStopAllManagedCores();
         DEV_INFO("aicore manager[%d] normal stopped.", aicpuIdx_);
-    }
-
-    inline void NormalStopSingleCore(int coreIdx)
-    {
-        aicoreHal_.SetReadyQueue(coreIdx, AICORE_TASK_STOP + 1);
-        __sync_synchronize();
-        aicoreHal_.ResetShakeBuf(coreIdx);
     }
 
     inline int GetAllAiCoreNum() { return aicNum_ + aivNum_; }

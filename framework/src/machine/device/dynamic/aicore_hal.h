@@ -136,6 +136,13 @@ public:
         return ReadReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE);
     }
 
+    inline bool NeedsFastPathRegClose() const { return isNeedWriteRegForFastPath_; }
+
+    inline void CloseFastPathReg(int coreStart, int coreEnd)
+    {
+        WriteReg32(coreStart, coreEnd, REG_SPR_FAST_PATH_ENABLE, static_cast<uint32_t>(REG_SPR_FAST_PATH_CLOSE));
+    }
+
     inline void WriteReg32(int coreIdx, int offset, uint32_t val)
     {
         auto idx = GetPhyIdByBlockId(coreIdx);
@@ -143,6 +150,53 @@ public:
             *(reinterpret_cast<volatile uint32_t*>(regAddrs_[idx] + offset)) = val;
         }
         return;
+    }
+
+    inline void WriteReg32(int coreStart, int coreEnd, int offset, uint32_t val)
+    {
+        if constexpr (IsDeviceMode()) {
+            int i, idx = coreStart;
+            int n = coreEnd - coreStart;
+            for (i = 0; i < (n & (~CORE_QUEUE_MODE_NUM_7)); i += CORE_QUEUE_MODE_NUM_8) {
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+            }
+            switch (n & CORE_QUEUE_MODE_NUM_7) {
+                case CORE_QUEUE_MODE_NUM_7:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_6:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_5:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_4:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_3:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_2:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_1:
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs_[GetPhyIdByBlockId(idx++)] + offset)) = val;
+                    [[fallthrough]];
+                default:
+                    break;
+            }
+        } else {
+            for (int i = coreStart; i < coreEnd; ++i) {
+                WriteReg32(i, offset, val);
+            }
+        }
     }
 
     inline void WriteReg32All(int aicNum, int aivNum, int offset, uint32_t val)
@@ -207,6 +261,10 @@ public:
                     [[fallthrough]];
                 default:
                     break;
+            }
+        } else {
+            for (int i = coreStart; i < coreEnd; ++i) {
+                SetReadyQueue(i, static_cast<uint64_t>(val));
             }
         }
     }
@@ -428,20 +486,61 @@ public:
     }
 
     // We must makesure close 0x18 before aicore exit.
-    void ResetShakeBuf(int coreIdx) {
+    void ResetShakeBuf(int coreIdx)
+    {
         if constexpr (IsDeviceMode()) {
-            if (isNeedWriteRegForFastPath_) {
-                WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_CLOSE);
-                __sync_synchronize();
-            }
-            args_[coreIdx]->shakeBuffer[0] = 0;
-            args_[coreIdx]->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
-            args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
+            ResetShakeBufDeviceOne(coreIdx);
         } else {
-            GetActiveModel()->ResetShakeBuf(args_[coreIdx], GetHostSimPhyId(coreIdx));
+            GetActiveModel()->ResetShakeBuf(args_[coreIdx]);
+            ResetParallelDevTask(coreIdx);
         }
-        ResetParallelDevTask(coreIdx);
-        return;
+    }
+
+    void ResetShakeBuf(int coreStart, int coreEnd)
+    {
+        if constexpr (IsDeviceMode()) {
+            int i, idx = coreStart;
+            int n = coreEnd - coreStart;
+            for (i = 0; i < (n & (~CORE_QUEUE_MODE_NUM_7)); i += CORE_QUEUE_MODE_NUM_8) {
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+                ResetShakeBufDeviceOne(idx++);
+            }
+            switch (n & CORE_QUEUE_MODE_NUM_7) {
+                case CORE_QUEUE_MODE_NUM_7:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_6:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_5:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_4:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_3:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_2:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                case CORE_QUEUE_MODE_NUM_1:
+                    ResetShakeBufDeviceOne(idx++);
+                    [[fallthrough]];
+                default:
+                    break;
+            }
+        } else {
+            for (int i = coreStart; i < coreEnd; ++i) {
+                ResetShakeBuf(i);
+            }
+        }
     }
 
     inline void InitKernelArgs(int coreIdx, int64_t buffer) {
@@ -531,6 +630,14 @@ public:
     }
 
 private:
+    void ResetShakeBufDeviceOne(int coreIdx)
+    {
+        args_[coreIdx]->shakeBuffer[0] = 0;
+        args_[coreIdx]->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
+        args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
+        ResetParallelDevTask(coreIdx);
+    }
+
     inline ModelBase* GetActiveModel()
     {
         if constexpr (IsDeviceMode()) {

@@ -35,7 +35,7 @@ public:
 
     virtual uint64_t GetFinishedTask(int coreIdx, int phyId) = 0;
 
-    virtual void ResetShakeBuf(volatile KernelArgs* arg, int phyId) = 0;
+    virtual void ResetShakeBuf(volatile KernelArgs* arg) = 0;
 
     virtual void InitKernelArgs(volatile KernelArgs*& arg, int coreIdx, int64_t sharedBuffer, int64_t buffer)
     {
@@ -75,7 +75,7 @@ public:
         return AicoreHardware::Global().ReadCond(static_cast<size_t>(phyId));
     }
 
-    void ResetShakeBuf(volatile KernelArgs* arg, int phyId) override
+    void ResetShakeBuf(volatile KernelArgs* arg) override
     {
         if (arg == nullptr) {
             return;
@@ -83,8 +83,6 @@ public:
         arg->shakeBuffer[0] = 0;
         arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
         arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
-        AicoreHardware::Global().WriteMainBase(static_cast<size_t>(phyId), 0);
-        AicoreHardware::Global().WriteCond(static_cast<size_t>(phyId), 0);
     }
 
     void SetParallelDevTask(
@@ -142,9 +140,8 @@ public:
         return eslModel_.ReadEslReg(coreIdx);
     }
 
-    void ResetShakeBuf(volatile KernelArgs* arg, int phyId) override
+    void ResetShakeBuf(volatile KernelArgs* arg) override
     {
-        (void)phyId;
         if (arg == nullptr) {
             return;
         }
@@ -241,10 +238,9 @@ public:
         return getTask_ ? getTask_(coreIdx) : 0;
     }
 
-    void ResetShakeBuf(volatile KernelArgs* arg, int phyId) override
+    void ResetShakeBuf(volatile KernelArgs* arg) override
     {
         (void)arg;
-        (void)phyId;
     }
 
     void InitKernelArgs(volatile KernelArgs*& arg, int coreIdx, int64_t sharedBuffer, int64_t buffer) override
