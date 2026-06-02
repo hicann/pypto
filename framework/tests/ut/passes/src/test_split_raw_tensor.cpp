@@ -88,3 +88,42 @@ TEST_F(SplitLargeLocalRawTest, TestSplitRawTensorCheceker)
     EXPECT_EQ(splitLargeLocalRawPass.RunOnFunction(*function), SUCCESS);
     EXPECT_EQ(splitLargeLocalRawPass.PostCheck(*function), SUCCESS);
 }
+
+TEST_F(SplitLargeLocalRawTest, TestSplitRawTensorUpdateShmemGetToOffset)
+{
+    constexpr int64_t num64 = 64;
+    constexpr int64_t num128 = 128;
+    constexpr int64_t num256 = 256;
+    constexpr int64_t num512 = 512;
+    Shape shape{num128, num128};
+    Shape rawShape{num512, num512};
+    Offset tensorOffset{num64, num64};
+    Offset shmemGetToOffset{num256, num256};
+    Offset expectedToOffset{num256 - num64, num256 - num64};
+    ComputationalGraphBuilder G;
+
+    AddTensor(G, "pred", {1}, {1}, {0}, MemoryType::MEM_UB);
+    AddTensor(G, "shmem_data", shape, shape, {0, 0}, MemoryType::MEM_DEVICE_DDR);
+    AddTensor(G, "output", shape, rawShape, tensorOffset, MemoryType::MEM_DEVICE_DDR);
+    AddTensor(G, "ub_buffer", shape, shape, {0, 0}, MemoryType::MEM_UB);
+
+    G.AddOp(Opcode::OP_SHMEM_GET, {"pred", "shmem_data"}, {"output", "ub_buffer"}, "shmem_get");
+    auto opAttr = std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified(shmemGetToOffset), OpImmediate::Specified(shape),
+        OpImmediate::Specified(rawShape), OpImmediate::Specified(shape));
+    G.GetOp("shmem_get")->SetOpAttribute(opAttr);
+
+    Function* function = G.GetFunction();
+    npu::tile_fwk::SplitRawTensor splitLargeLocalRawPass;
+    EXPECT_EQ(splitLargeLocalRawPass.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(splitLargeLocalRawPass.PostCheck(*function), SUCCESS);
+
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(G.GetOp("shmem_get")->GetOpAttribute());
+    const auto& toOffset = copyAttr->GetToOffset();
+    ASSERT_EQ(toOffset.size(), expectedToOffset.size());
+    for (size_t i = 0; i < expectedToOffset.size(); i++) {
+        ASSERT_TRUE(toOffset[i].IsSpecified());
+        ASSERT_TRUE(toOffset[i].GetSpecifiedValue().ConcreteValid());
+        EXPECT_EQ(toOffset[i].GetSpecifiedValue().Concrete(), expectedToOffset[i]);
+    }
+}

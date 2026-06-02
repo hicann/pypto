@@ -38,13 +38,20 @@ public:
     Status RunOnFunction(Function& function) override;
 
 private:
+    using TensorSet = std::set<std::shared_ptr<LogicalTensor>, TensorPtrComparator>;
+    using NewRawVec = std::vector<std::pair<int, TensorSet>>;
+
     void UpdateConsumerView(Function& function, const LogicalTensorPtr& logicalTensor) const;
     void UpdateProducerAssemble(Function& function, const LogicalTensorPtr& logicalTensor) const;
+    void UpdateProducerShmemGet(Function& function, const LogicalTensorPtr& logicalTensor) const;
+    bool SplitLogicalTensor(Function& function, const LogicalTensorPtr& logicalTensor, NewRawVec& newRawVec) const;
     void SplitRaw(Function& function) const;
     bool ShouldProcessTensor(Function& function, const LogicalTensorPtr& singleTensor) const;
     std::vector<int64_t> UpdateOffset(std::vector<int64_t>& offset, const std::vector<int64_t>& diff) const;
     std::vector<SymbolicScalar> UpdateDynOffset(
         std::vector<SymbolicScalar>& offset, const std::vector<SymbolicScalar>& diff) const;
+    std::vector<OpImmediate> UpdateImmediateOffset(
+        std::vector<OpImmediate>& offset, const TensorOffset& tensorOffset) const;
 
     Status PostCheck(Function& function) override;
     SplitRawTensorChecker checker;
