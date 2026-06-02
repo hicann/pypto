@@ -898,9 +898,15 @@ private:
         bool oldHostOwned = runtimeDynamicCellMatchHostOwned_;
         DeviceMemoryUtils deviceMemoryUtils;
         auto* newPtr = deviceMemoryUtils.AllocDev(needBytes, nullptr);
-        ASSERT(newPtr != nullptr) << "alloc dynamic cell match meta failed, needBytes=" << needBytes;
+        if (newPtr == nullptr) {
+            ASSERT(false) << "alloc dynamic cell match meta failed, needBytes=" << needBytes;
+            return;
+        }
         auto* newHostPtr = static_cast<uint8_t*>(std::malloc(static_cast<size_t>(needBytes)));
-        ASSERT(newHostPtr != nullptr) << "alloc host dynamic cell match meta failed, needBytes=" << needBytes;
+        if (newHostPtr == nullptr) {
+            ASSERT(false) << "alloc host dynamic cell match meta failed, needBytes=" << needBytes;
+            return;
+        }
         runtimeDynamicCellMatchAddr_ = reinterpret_cast<uint64_t>(newPtr);
         runtimeDynamicCellMatchHostAddr_ = reinterpret_cast<uint64_t>(newHostPtr);
         runtimeDynamicCellMatchCapacity_ = needBytes;
