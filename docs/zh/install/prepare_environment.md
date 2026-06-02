@@ -40,21 +40,19 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
 单击"`云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
-<p>
-  <img src="../tutorials/figures/webide1.png" alt="创建云开发环境" width="750px" height="90px">
-</p>
+ ![创建云开发环境](../tutorials/figures/webide1.png)
 
 #### 2-连接WebIDE
 
-根据页面提示创建并启动云开发环境，单击"`连接 > WebIDE`"进入算子一站式开发平台，开源项目的源码资源默认在`/mnt/workspace`目录下。
+根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入算子一站式开发平台，开源项目的源码资源默认在`/mnt/workspace`目录下。
 
-<p>
-  <img src="../tutorials/figures/webide2.png" alt="启动并连接 WebIDE" width="1000px" height="150px">
-</p>
+ ![启动并连接 WebIDE](../tutorials/figures/webide2.png)
 
 #### 3-安装pto-isa
 
 **方法一：基于run包安装**
+
+> **说明**：若后续考虑通过PyPI方式安装PyPTO，不需要单独安装`pto-isa`。`pto-isa`版本已与CANN包版本匹配，并在安装CANN包时完成安装，可跳过本章节。
 
 根据实际环境下载对应的安装包，下载链接如下（如果浏览器不支持自动下载，请选择右键，"链接另存为..."）：
 
