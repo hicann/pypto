@@ -836,3 +836,63 @@ TEST_F(TestAxisCombineMarker, multi_output_elewise)
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("pair_val")), false);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("pair_idx")), false);
 }
+
+/*
+Test var mean 阶段的 PadLocalBuffer 行为
+输入 [16,2,1], DIVS(64) -> COPY_OUT -> COPY_IN -> PAIRSUM
+  -> ROWSUMLINE(axis=0) -> ROWSUMLINE(axis=1) -> ROWSUM_SINGLE(axis=2) -> mean([1,1,1])
+验证 reduce 链DISABLE属性正确传递
+*/
+TEST_F(TestAxisCombineMarker, axiscombineVarReduceChain)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_DEVICE_DDR, "input"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "ci0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "ci1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "div0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "div1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_DEVICE_DDR, "sum_gm0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_DEVICE_DDR, "sum_gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "sum_ci0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "sum_ci1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {16, 2, 1}, MemoryType::MEM_UB, "pairsum0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 1}, MemoryType::MEM_UB, "rsl0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 8}, MemoryType::MEM_UB, "rsl0_tmp"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1, 1}, MemoryType::MEM_UB, "rsl1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 8}, MemoryType::MEM_UB, "rsl1_tmp"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1, 1}, MemoryType::MEM_UB, "rss0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 8}, MemoryType::MEM_UB, "rss0_tmp"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1, 1}, MemoryType::MEM_DEVICE_DDR, "mean_gm"), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"input"}, {"ci0"}, "ci0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"input"}, {"ci1"}, "ci1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_DIVS, {"ci0"}, {"div0"}, "div0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_DIVS, {"ci1"}, {"div1"}, "div1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"div0"}, {"sum_gm0"}, "co0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"div1"}, {"sum_gm1"}, "co1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"sum_gm0"}, {"sum_ci0"}, "sci0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"sum_gm1"}, {"sum_ci1"}, "sci1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRSUM, {"sum_ci0", "sum_ci1"}, {"pairsum0"}, "ps0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUMLINE, {"pairsum0"}, {"rsl0", "rsl0_tmp"}, "rsl0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUMLINE, {"rsl0"}, {"rsl1", "rsl1_tmp"}, "rsl1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_SINGLE, {"rsl1"}, {"rss0", "rss0_tmp"}, "rss0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"rss0"}, {"mean_gm"}, "mean_co", true), true);
+
+    graph.GetOp("div0")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 64.0));
+    graph.GetOp("div1")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 64.0));
+    graph.GetOp("rsl0")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 0);
+    graph.GetOp("rsl1")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
+    graph.GetOp("rss0")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2);
+
+    auto* functionPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*functionPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("pairsum0")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rsl0")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rsl0_tmp")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rsl1")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rsl1_tmp")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rss0")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rss0_tmp")), false);
+}

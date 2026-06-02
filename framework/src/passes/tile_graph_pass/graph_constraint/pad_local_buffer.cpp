@@ -434,16 +434,6 @@ void PadLocalBuffer::DoPadding(Function& function)
     }
 }
 
-int64_t PadLocalBuffer::ProcessBroadcastForAxisCombine(LogicalTensorPtr& inTensor)
-{
-    int dimSize = inTensor->GetShape().size();
-    // shape 尾轴为 1 且 dimSize > 1 时返回倒数第二轴索引；否则返回最后一轴索引
-    if (inTensor->shape.back() == 1 && dimSize > 1) {
-        return dimSize - LAST_SECOND_AXIS;
-    }
-    return dimSize - 1;
-}
-
 int64_t PadLocalBuffer::AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base)
 {
     if (in == nullptr || pos < 0 || pos >= static_cast<int64_t>(in->tensor->rawshape.size())) {
@@ -462,18 +452,7 @@ void PadLocalBuffer::ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr
 {
     int64_t shapeSize = static_cast<int64_t>(in->shape.size());
     int64_t lastIdx = shapeSize - 1;
-    int64_t idx = lastIdx;
-    bool isFound = false;
-    for (; idx >= 0; --idx) {
-        if (in->shape[idx] != 1) {
-            isFound = true;
-            break;
-        }
-    }
-    if (!isFound) {
-        idx = lastIdx;
-    }
-    int64_t padDim = AlignedRawTensorIfNeed(in, idx, paddingValue);
+    int64_t padDim = AlignedRawTensorIfNeed(in, lastIdx - 1, paddingValue);
     if (op.GetOpcode() == Opcode::OP_ROWSUMLINE) {
         const auto& tempBuffer = op.GetOOperands()[1];
         size_t tempBufferLastIdx = tempBuffer->shape.size() - 1;
@@ -556,8 +535,7 @@ void PadLocalBuffer::PadVectorForAxisCombine(
         return;
     }
     if (calcType == OpCalcType::BROADCAST) {
-        auto dimIdx = ProcessBroadcastForAxisCombine(in);
-        AlignedRawTensorIfNeed(in, dimIdx, paddingValue);
+        AlignedRawTensorIfNeed(in, lastIdx - 1, paddingValue);
         return;
     }
     if (op.GetOpcode() == Opcode::OP_RESHAPE) {

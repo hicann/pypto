@@ -17,7 +17,12 @@
 namespace npu {
 namespace tile_fwk {
 const std::unordered_set<Opcode> whiteList{Opcode::OP_RESHAPE, Opcode::OP_VEC_DUP};
-const std::unordered_set<OpCalcType> propagationCalcType{OpCalcType::ELMWISE, OpCalcType::BROADCAST, OpCalcType::CAST};
+const std::unordered_set<OpCalcType> propagationCalcType{
+    OpCalcType::ELMWISE,
+    OpCalcType::BROADCAST,
+    OpCalcType::CAST,
+    OpCalcType::REDUCE,
+};
 
 void AxisCombineMarker::Run(Function& function)
 {

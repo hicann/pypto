@@ -943,6 +943,88 @@ TEST_F(TestPadLocalBuffer, axiscombineCastCase)
     EXPECT_EQ(graph.GetTensor("t3")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8, 1}));
 }
 
+/*
+before:
+  copyin0[8,1,224] -> rowargmaxwithvalue_single -> value0[8,1,1]
+                                                -> index0[8,1,1] -> adds0[8,1,1] -> cast0_fp32[8,1,1]
+                                                                  -> cast0_i32[8,1,1] -> copyout0
+                                                -> tmp0[1,224]
+  copyin1[6,1,224] -> rowargmaxwithvalue_single -> value1[6,1,1]
+                                                -> index1[6,1,1] -> adds1[6,1,1] -> cast1_fp32[6,1,1]
+                                                                  -> cast1_i32[6,1,1] -> copyout1
+                                                -> tmp1[1,224]
+
+after rawshape:
+  value{0,1}      : [*,16,1]
+  index/adds      : [*,16,1]
+  cast/copyout in : [*,8,1]
+*/
+TEST_F(TestPadLocalBuffer, axiscombineRowArgMaxWithValueSingle)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {8, 1, 224}, MemoryType::MEM_DEVICE_DDR, "in0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {6, 1, 224}, MemoryType::MEM_DEVICE_DDR, "in1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {8, 1, 224}, MemoryType::MEM_UB, "copyin0_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {6, 1, 224}, MemoryType::MEM_UB, "copyin1_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {8, 1, 1}, MemoryType::MEM_UB, "value0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT16, {8, 1, 1}, MemoryType::MEM_UB, "index0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 224}, MemoryType::MEM_UB, "tmp0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {6, 1, 1}, MemoryType::MEM_UB, "value1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT16, {6, 1, 1}, MemoryType::MEM_UB, "index1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 224}, MemoryType::MEM_UB, "tmp1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT16, {8, 1, 1}, MemoryType::MEM_UB, "adds0_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT16, {6, 1, 1}, MemoryType::MEM_UB, "adds1_out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 1}, MemoryType::MEM_UB, "cast0_fp32"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {6, 1, 1}, MemoryType::MEM_UB, "cast1_fp32"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT32, {8, 1, 1}, MemoryType::MEM_UB, "cast0_i32"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT32, {6, 1, 1}, MemoryType::MEM_UB, "cast1_i32"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT32, {8, 1, 1}, MemoryType::MEM_DEVICE_DDR, "out0"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT32, {6, 1, 1}, MemoryType::MEM_DEVICE_DDR, "out1"), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"in0"}, {"copyin0_out"}, "copyin0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"in1"}, {"copyin1_out"}, "copyin1", true), true);
+    EXPECT_EQ(
+        graph.AddOp(
+            Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"copyin0_out"}, {"value0", "index0", "tmp0"}, "reduce0", true),
+        true);
+    EXPECT_EQ(
+        graph.AddOp(
+            Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"copyin1_out"}, {"value1", "index1", "tmp1"}, "reduce1", true),
+        true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADDS, {"index0"}, {"adds0_out"}, "adds0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADDS, {"index1"}, {"adds1_out"}, "adds1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"adds0_out"}, {"cast0_fp32"}, "cast0_fp32_op", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"adds1_out"}, {"cast1_fp32"}, "cast1_fp32_op", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"cast0_fp32"}, {"cast0_i32"}, "cast0_i32_op", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"cast1_fp32"}, {"cast1_i32"}, "cast1_i32_op", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"cast0_i32"}, {"out0"}, "copyout0", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"cast1_i32"}, {"out1"}, "copyout1", true), true);
+
+    graph.GetOp("reduce0")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2);
+    graph.GetOp("reduce1")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2);
+    graph.GetOp("adds0")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_INT16, static_cast<int16_t>(0)));
+    graph.GetOp("adds1")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_INT16, static_cast<int16_t>(0)));
+
+    auto* functionPtr = graph.GetFunction();
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    functionPtr->paramConfigs_.combineAxis = true;
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*functionPtr), SUCCESS);
+
+    EXPECT_EQ(graph.GetTensor("value0")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8, 16, 1}));
+    EXPECT_EQ(graph.GetTensor("value1")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{6, 16, 1}));
+    EXPECT_EQ(graph.GetTensor("index0")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8, 16, 1}));
+    EXPECT_EQ(graph.GetTensor("index1")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{6, 16, 1}));
+    EXPECT_EQ(graph.GetTensor("adds0_out")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8, 16, 1}));
+    EXPECT_EQ(graph.GetTensor("adds1_out")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{6, 16, 1}));
+    EXPECT_EQ(graph.GetTensor("cast0_fp32")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8, 8, 1}));
+    EXPECT_EQ(graph.GetTensor("cast1_fp32")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{6, 8, 1}));
+    EXPECT_EQ(graph.GetTensor("cast0_i32")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{8, 8, 1}));
+    EXPECT_EQ(graph.GetTensor("cast1_i32")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{6, 8, 1}));
+    EXPECT_EQ(graph.GetTensor("tmp0")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{1, 224}));
+    EXPECT_EQ(graph.GetTensor("tmp1")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>{1, 224}));
+}
+
 TEST_F(TestPadLocalBuffer, padCmpInputTo256)
 {
     ComputationalGraphBuilder graphBuilder;
