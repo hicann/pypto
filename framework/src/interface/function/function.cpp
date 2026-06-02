@@ -1866,6 +1866,41 @@ void Function::CreateFromOutcast(
     newOutcast->GetRawTensor()->UpdateDynRawShape(symbol->GetDynValidShape());
 }
 
+namespace {
+
+// Result of scanning all producers of an original outcast tensor in MakeOutcasts.
+// The two flags are independent and may both be true (e.g. full write then assemble).
+struct OutcastProducerTraits {
+    bool isAssembleOut{false};
+    bool needRuntimeAlloc{false};
+};
+
+bool IsAssembleLikeProducer(const Operation* op)
+{
+    return (op->GetOpcode() == Opcode::OP_ASSEMBLE && op->HasAttribute("dassemble")) ||
+           op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op->GetOpcode() == Opcode::OP_ATOMIC_RMW;
+}
+
+// Inspects @p origin's producer set once and fills OutcastProducerTraits:
+//   isAssembleOut     — at least one assemble-like producer → partial-update rewrite path.
+//   needRuntimeAlloc  — at least one other producer → backend marks slot for RUNTIME_SlotMarkNeedAlloc.
+OutcastProducerTraits ClassifyOutcastByProducers(const LogicalTensor& origin)
+{
+    OutcastProducerTraits traits;
+    for (Operation* op : origin.GetProducers()) {
+        // Per-producer classification is exclusive, but traits are accumulated across all producers,
+        // so the final result may have both flags set (mixed assemble + compute producers).
+        if (IsAssembleLikeProducer(op)) {
+            traits.isAssembleOut = true;
+        } else {
+            traits.needRuntimeAlloc = true;
+        }
+    }
+    return traits;
+}
+
+} // namespace
+
 LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& scope)
 {
     LogicalTensors outArgumentList;
@@ -1888,12 +1923,9 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
             slotScope_->ioslot.outcastSlot.push_back(slotScope_->originalIocastsSlot.outcastSlot[idx]);
         }
 
-        auto& producers = origin->GetProducers();
-        bool isAssembleOut = std::any_of(producers.begin(), producers.end(), [](auto& op) -> bool {
-            return (op->GetOpcode() == Opcode::OP_ASSEMBLE && op->HasAttribute("dassemble")) ||
-                   op->GetOpcode() == Opcode::OP_ASSEMBLE_SSA || op->GetOpcode() == Opcode::OP_ATOMIC_RMW;
-        });
-        if (isAssembleOut) {
+        const OutcastProducerTraits traits = ClassifyOutcastByProducers(*origin);
+        SetOutcastNeedAlloc(outCasts_.back(), traits.needRuntimeAlloc);
+        if (traits.isAssembleOut) {
             Substitute(origin, outSymbol);
             originOutCasts_[idx] = outSymbol;
             if (scope) {

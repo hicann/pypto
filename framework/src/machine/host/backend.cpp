@@ -366,6 +366,100 @@ static void BuildRootFuncKeyDict(DyndevFunctionAttribute* attr)
     }
 }
 
+static int GetOrCreateRuntimeSlot(int slot, std::unordered_map<int, int>& slotIdxMapping)
+{
+    if (!slotIdxMapping.count(slot)) {
+        slotIdxMapping.emplace(slot, slotIdxMapping.size());
+    }
+    return slotIdxMapping.at(slot);
+}
+
+static bool TryGetRuntimeSlot(int slot, const std::unordered_map<int, int>& slotIdxMapping, int& runtimeSlot)
+{
+    auto iter = slotIdxMapping.find(slot);
+    if (iter == slotIdxMapping.end()) {
+        return false;
+    }
+    runtimeSlot = iter->second;
+    return true;
+}
+
+static void CollectRootTileDict(
+    FunctionCache& cache, Function* func, std::unordered_map<Function*, Function*>& rootTileDict)
+{
+    if (func->GetGraphType() == GraphType::TILE_GRAPH) {
+        rootTileDict[func->GetRootFunction()] = func;
+    }
+    for (auto& callee : GetCalleeList(cache, func)) {
+        CollectRootTileDict(cache, callee, rootTileDict);
+    }
+}
+
+template <typename HandleSlot>
+static void ForEachNeedAllocAssembleOutcastSlot(
+    Function* tile, const IncastOutcastSlot& ioslot, const std::unordered_set<int>& assembleSlotIndexSet,
+    HandleSlot handleSlot)
+{
+    const auto& tileOutcasts = tile->GetOutcast();
+    size_t outcastCount = std::min(ioslot.outcastSlot.size(), tileOutcasts.size());
+    for (size_t outcastIdx = 0; outcastIdx < outcastCount; ++outcastIdx) {
+        if (!tile->IsOutcastNeedAlloc(tileOutcasts[outcastIdx])) {
+            continue;
+        }
+        for (int slot : ioslot.outcastSlot[outcastIdx]) {
+            if (assembleSlotIndexSet.count(slot) == 0) {
+                continue;
+            }
+            handleSlot(slot);
+        }
+    }
+}
+
+static void AddConstructAssembleNeedAllocRuntimeSlot(
+    DyndevFunctionAttribute* attr, int slot, std::unordered_map<int, int>& slotIdxMapping)
+{
+    int runtimeSlot = GetOrCreateRuntimeSlot(slot, slotIdxMapping);
+    attr->constructAssembleNeedAllocRuntimeSlots.insert(runtimeSlot);
+}
+
+static void CollectConstructAssembleRuntimeSlotsFromFunction(
+    FunctionCache& cache, Function* func, DyndevFunctionAttribute* attr, std::unordered_map<int, int>& slotIdxMapping)
+{
+    if (func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC_LOOP_PATH, GraphType::TENSOR_GRAPH)) {
+        auto scope = func->GetSlotScope();
+        if (scope != nullptr) {
+            for (auto slot : scope->constructAssembleSlotList) {
+                AddConstructAssembleNeedAllocRuntimeSlot(attr, slot, slotIdxMapping);
+            }
+        }
+    }
+    for (auto& callee : GetCalleeList(cache, func)) {
+        CollectConstructAssembleRuntimeSlotsFromFunction(cache, callee, attr, slotIdxMapping);
+    }
+}
+
+static void BuildConstructAssembleNeedAllocRuntimeSlots(
+    FunctionCache& cache, Function* func, DyndevFunctionAttribute* attr, std::unordered_map<int, int>& slotIdxMapping)
+{
+    attr->constructAssembleNeedAllocRuntimeSlots.clear();
+    CollectConstructAssembleRuntimeSlotsFromFunction(cache, func, attr, slotIdxMapping);
+
+    const std::unordered_set<int> assembleSlotIndexSet(
+        attr->inoutLink.assembleSlotIndexList.begin(), attr->inoutLink.assembleSlotIndexList.end());
+    for (Function* devRoot : attr->funcGroup.devRootList) {
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, attr->rootTileDict.count(devRoot))
+            << "Function not found in rootTileDict";
+        Function* tile = attr->rootTileDict[devRoot];
+        if (!attr->inoutLink.ioslotDict.count(tile)) {
+            continue;
+        }
+        const IncastOutcastSlot& ioslot = attr->inoutLink.ioslotDict.at(tile);
+        ForEachNeedAllocAssembleOutcastSlot(tile, ioslot, assembleSlotIndexSet, [&](int slot) {
+            AddConstructAssembleNeedAllocRuntimeSlot(attr, slot, slotIdxMapping);
+        });
+    }
+}
+
 static std::string BuildControlFlowCallee(Function* func, int ident)
 {
     std::ostringstream oss;
@@ -610,11 +704,13 @@ static void BuildControlFlow(
         auto scope = func->GetSlotScope();
         auto dynAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
         for (auto slot : scope->constructAssembleSlotList) {
-            if (!slotIdxMapping.count(slot)) {
-                slotIdxMapping.emplace(slot, slotIdxMapping.size());
+            int runtimeSlot = -1;
+            if (!TryGetRuntimeSlot(slot, slotIdxMapping, runtimeSlot)) {
+                continue;
             }
-            int runtimeSlot = slotIdxMapping.at(slot);
-            dynAttr->constructAssembleNeedAllocRuntimeSlots.insert(runtimeSlot);
+            if (dynAttr->constructAssembleNeedAllocRuntimeSlots.count(runtimeSlot) == 0) {
+                continue;
+            }
             controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SlotMarkNeedAlloc("
                            << runtimeSlot << ");\n";
         }
@@ -650,6 +746,26 @@ static void BuildControlFlow(
 
         int devRootKey = group.devRootList.GetIndex(func);
         controlFlowOss << BuildControlFlowCallee(func, indent * TABSIZE);
+
+        // Emit RUNTIME_SlotMarkNeedAlloc for assemble dst slots that were pre-collected as needing allocation.
+        if (currDynFuncAttr->inoutLink.ioslotDict.count(tile)) {
+            const IncastOutcastSlot& ioslot = currDynFuncAttr->inoutLink.ioslotDict.at(tile);
+            const std::unordered_set<int> assembleSlotIndexSet(
+                currDynFuncAttr->inoutLink.assembleSlotIndexList.begin(),
+                currDynFuncAttr->inoutLink.assembleSlotIndexList.end());
+            ForEachNeedAllocAssembleOutcastSlot(tile, ioslot, assembleSlotIndexSet, [&](int slot) {
+                int runtimeSlot = -1;
+                if (!TryGetRuntimeSlot(slot, slotIdxMapping, runtimeSlot)) {
+                    return;
+                }
+                if (currDynFuncAttr->constructAssembleNeedAllocRuntimeSlots.count(runtimeSlot) == 0) {
+                    return;
+                }
+                controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SlotMarkNeedAlloc(" << runtimeSlot
+                               << ");\n";
+            });
+        }
+
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "uint64_t *exprList" << devRootKey
                        << " = (uint64_t *)RUNTIME_RootAlloc(" << devRootKey << "ULL);\n";
 
@@ -978,7 +1094,9 @@ static void RunBuildControlFlowStage(
     }
     std::unordered_map<int, int> slotIdxMapping;
     std::ostringstream exprHeaderOss;
-    attr->constructAssembleNeedAllocRuntimeSlots.clear();
+    attr->rootTileDict.clear();
+    CollectRootTileDict(cache, function, attr->rootTileDict);
+    BuildConstructAssembleNeedAllocRuntimeSlots(cache, function, attr.get(), slotIdxMapping);
     BuildControlFlow(
         cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict, controlFlowOss,
         expressionOss, exprHeaderOss, 0, expName, exprSrcFiles, valDependTensorMeta);

@@ -456,8 +456,7 @@ struct DyndevFunctionAttribute {
     };
     std::vector<DynamicCellMatchLaunchMeta> dynamicCellMatchLaunchMetaList;
 
-    // Runtime slot ids that emit RUNTIME_SlotMarkNeedAlloc; filled in BuildControlFlow for dynamicCellMatch pool
-    // sizing.
+    // Runtime slot ids that emit RUNTIME_SlotMarkNeedAlloc; prepared before BuildControlFlow for pool sizing.
     std::unordered_set<int> constructAssembleNeedAllocRuntimeSlots;
 
     std::vector<uint8_t> devProgBinary;
@@ -970,6 +969,16 @@ public:
     VarDependency& GetVarDependency() { return varDependency_; }
     const VarDependency& GetVarDependency() const { return varDependency_; }
 
+    void SetOutcastNeedAlloc(const std::shared_ptr<LogicalTensor>& outcast, bool needAlloc)
+    {
+        outcastNeedAllocMap_[outcast] = needAlloc;
+    }
+    bool IsOutcastNeedAlloc(const std::shared_ptr<LogicalTensor>& outcast) const
+    {
+        auto it = outcastNeedAllocMap_.find(outcast);
+        return it != outcastNeedAllocMap_.end() && it->second;
+    }
+
 private:
     int functionMagic_{-1};
     std::string funcMagicName_; // Function name
@@ -1030,8 +1039,8 @@ private:
     std::shared_ptr<Tensor> getTensorDataOutcast_;
     ir::Span span_;
     bool hiddenFunction_{false};
-
     VarDependency varDependency_;
+    std::unordered_map<LogicalTensorPtr, bool>  outcastNeedAllocMap_;
 
 private:
     unsigned long ComputeHashOrderless() const;
