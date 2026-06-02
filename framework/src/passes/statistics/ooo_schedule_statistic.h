@@ -76,7 +76,8 @@ public:
         {MemoryType::MEM_L0C, 0}};
     struct SpillInfo {
         MemoryType spillType{MemoryType::MEM_UNKNOWN}; // spill buffer类型
-        uint64_t bufferCurrUsage{0};                   // 当前buffer的总使用量
+        uint64_t bufferCurrUsage{0};                   // spill时该pool的实时占用量(现场采自buffer pool)
+        uint64_t bufferCapacity{0};                    // spill时该pool的容量
         uint64_t spillTensorSize{0};                   // spill的tensor的大小
         int64_t triggerTensorSize{0};                 // 触发当前spill的tensor的大小
         uint64_t allocOccupiedSize{0};                 // 当前被alloc占用的buffer大小

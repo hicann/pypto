@@ -82,12 +82,12 @@ Status OoOSchedule::NonMixSchedule(
     if (passDfxconfigs_.healthCheck) {
         oooSchedule.AddObserver(&oooHealthCheck);
     }
-    if constexpr (ENABLE_MEMORY_TRACE) {
+    if (passDfxconfigs_.dumpGraph) {
         oooSchedule.AddObserver(&oooMemoryTrace);
     }
     if (oooSchedule.Schedule(opList) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
-        if constexpr (ENABLE_MEMORY_TRACE) {
+        if (passDfxconfigs_.dumpGraph) {
             FlushMemoryTraceOnFailure(oooMemoryTrace, function, program);
         }
         return FAILED;
@@ -99,7 +99,7 @@ Status OoOSchedule::NonMixSchedule(
     maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
     function.SetStackWorkespaceSize(maxWorkeSpaceSize);
     CollectStatistic(oooHealthCheck, function, program);
-    if constexpr (ENABLE_MEMORY_TRACE) {
+    if (passDfxconfigs_.dumpGraph) {
         CollectMemoryTrace(oooMemoryTrace, function, program);
     }
     return SUCCESS;
@@ -220,18 +220,18 @@ Status OoOSchedule::MixSchedule(
     if (passDfxconfigs_.healthCheck) {
         oooSchedule.AddObserver(&oooHealthCheck);
     }
-    if constexpr (ENABLE_MEMORY_TRACE) {
+    if (passDfxconfigs_.dumpGraph) {
         oooSchedule.AddObserver(&oooMemoryTrace);
     }
     if (oooSchedule.Schedule(opList, opCoreMap, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Schedule failed.");
-        if constexpr (ENABLE_MEMORY_TRACE) {
+        if (passDfxconfigs_.dumpGraph) {
             FlushMemoryTraceOnFailure(oooMemoryTrace, function, program);
         }
         return FAILED;
     }
     CollectStatistic(oooHealthCheck, function, program);
-    if constexpr (ENABLE_MEMORY_TRACE) {
+    if (passDfxconfigs_.dumpGraph) {
         CollectMemoryTrace(oooMemoryTrace, function, program);
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
@@ -413,11 +413,9 @@ Status OoOSchedule::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Run RecordLastUseMemory Failed.");
         return FAILED;
     }
-    if constexpr (ENABLE_MEMORY_TRACE) {
-        for (auto& [programId, tracer] : tracerMap_) {
-            (void)programId;
-            tracer.Flush(GetPassFolder());
-        }
+    for (auto& [programId, tracer] : tracerMap_) {
+        (void)programId;
+        tracer.Flush(GetPassFolder());
     }
     APASS_LOG_INFO_F(Elements::Operation, "=============== END 2CoreSplit ===============");
     return SUCCESS;

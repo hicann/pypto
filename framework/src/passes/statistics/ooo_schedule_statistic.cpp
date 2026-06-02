@@ -61,7 +61,8 @@ void OoOScheduleStatistic::OnSpill(const SpillEvent& e)
     uint64_t spillTensorSize = e.addrEnd - e.addrStart;
     SpillInfo info;
     info.spillType = e.memType;
-    info.bufferCurrUsage = bufferLastUsage[e.memType];
+    info.bufferCurrUsage = e.bufferCurrentUsage;
+    info.bufferCapacity = e.bufferCapacity;
     info.spillTensorSize = spillTensorSize;
     info.triggerTensorSize = e.triggerTensorSize;
     info.allocOccupiedSize = e.allocOccupiedSize;
@@ -94,8 +95,8 @@ void OoOScheduleStatistic::HealthCheckSpillInfo()
         spillDetails["spillEventIdx"] = spillIdx++;
         spillDetails["spillBufferType"] = MemoryTypeToString(spillInfo.spillType);
         spillDetails["bufferCurrentUsage"] = spillInfo.bufferCurrUsage;
-        spillDetails["bufferCurrentUsageRate"] = static_cast<float>(spillInfo.bufferCurrUsage) /
-                                                 Platform::Instance().GetDie().GetMemoryLimit(spillInfo.spillType);
+        spillDetails["bufferCurrentUsageRate"] = spillInfo.bufferCapacity == 0 ? 0.0f
+            : static_cast<float>(spillInfo.bufferCurrUsage) / spillInfo.bufferCapacity;
         spillDetails["bufferOccupiedByAllocSize"] = spillInfo.allocOccupiedSize;
         spillDetails["spillTensorSize"] = spillInfo.spillTensorSize;
         spillDetails["spillTensorMagic"] = spillInfo.spillTensorMagic;

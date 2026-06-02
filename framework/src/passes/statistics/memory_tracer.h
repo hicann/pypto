@@ -24,9 +24,6 @@
 
 namespace npu::tile_fwk {
 
-// Compile-time switch; false makes the `if constexpr` integration sites no-ops.
-inline constexpr bool ENABLE_MEMORY_TRACE = false;
-
 class MemoryTracer : public ScheduleObserver {
 public:
     // ordered_json preserves insertion order to match design-doc field order.

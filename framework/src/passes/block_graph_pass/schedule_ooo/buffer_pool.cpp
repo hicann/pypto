@@ -339,12 +339,11 @@ Status BufferPool::ModifyBufferRange(LocalBufferPtr localBuffer, size_t offset)
     return SUCCESS;
 }
 
-std::pair<Status, std::vector<BufferAddrChange>> BufferPool::CompactBufferSlices(
-    std::unordered_map<int, LocalBufferPtr>& localBufferMap)
+Status BufferPool::CompactBufferSlices(
+    std::unordered_map<int, LocalBufferPtr>& localBufferMap, std::vector<BufferAddrChange>& changes)
 {
-    std::vector<BufferAddrChange> changes;
     if (bufferSlices.empty()) {
-        return {SUCCESS, changes};
+        return SUCCESS;
     }
     // 收集并按原 size 从大到小排序；同时记录每个 memId 的旧 offset
     std::vector<std::pair<int, BufferSlice>> items(bufferSlices.begin(), bufferSlices.end());
@@ -358,7 +357,7 @@ std::pair<Status, std::vector<BufferAddrChange>> BufferPool::CompactBufferSlices
     uint64_t cursor = 0;
     for (auto& it : items) {
         if (cursor + it.second.size > memSize_) {
-            return {FAILED, {}};
+            return FAILED;
         }
         it.second.offset = cursor;
         cursor += it.second.size;
@@ -387,9 +386,9 @@ std::pair<Status, std::vector<BufferAddrChange>> BufferPool::CompactBufferSlices
         }
     }
     if (CheckBufferSlicesOverlap()) {
-        return {FAILED, {}};
+        return FAILED;
     }
-    return {SUCCESS, changes};
+    return SUCCESS;
 }
 
 void BufferPool::PrintStatus()

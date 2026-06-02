@@ -100,9 +100,9 @@ public:
     Status MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice);
     void SelectHeadAndTail(
         LocalBufferPtr tensor, bool& head, bool& tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals);
-    // Returns the address changes (one per moved memId) for NotifyBufferRearrange.
-    std::pair<Status, std::vector<BufferAddrChange>> CompactBufferSlices(
-        std::unordered_map<int, LocalBufferPtr>& localBufferMap);
+    // Fills `changes` with one entry per moved memId for NotifyBufferRearrange.
+    Status CompactBufferSlices(
+        std::unordered_map<int, LocalBufferPtr>& localBufferMap, std::vector<BufferAddrChange>& changes);
 
 private:
     MemoryType memType_{MemoryType::MEM_UNKNOWN};

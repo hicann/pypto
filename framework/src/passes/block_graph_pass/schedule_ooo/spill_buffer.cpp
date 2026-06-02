@@ -556,7 +556,12 @@ Status OoOScheduler::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp
         return FAILED;
     }
 
-    RewireAssembleAllocProducers(spillTensor);
+    for (auto &op : spillTensor->GetProducers()) {
+        if (op->GetOpcode() != Opcode::OP_ASSEMBLE) continue;
+        for (auto &producer : op->ProducerOps()) {
+            if (opIsAllocMap[producer]) producer->UpdateOutputOperand(0, spillTensor);
+        }
+    }
     Operation* allocOp = CreateAllocOp(assembleTensor);
     UpdateOpScheduleInfo(allocOp, {assembleTensor->memoryrange.memId}, spillAllocOp);
     if (InsertOps({{allocOp, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid) != SUCCESS) {
@@ -586,16 +591,6 @@ Status OoOScheduler::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp
     ctx.newAllocOps.push_back(allocOp);
     created.Record(copyoutOp, allocOp, nullptr, gmTensor);
     return SUCCESS;
-}
-
-void OoOScheduler::RewireAssembleAllocProducers(LogicalTensorPtr spillTensor)
-{
-    for (auto &op : spillTensor->GetProducers()) {
-        if (op->GetOpcode() != Opcode::OP_ASSEMBLE) continue;
-        for (auto &producer : op->ProducerOps()) {
-            if (opIsAllocMap[producer]) producer->UpdateOutputOperand(0, spillTensor);
-        }
-    }
 }
 
 Status OoOScheduler::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext &ctx)
@@ -706,7 +701,7 @@ LogicalTensorPtr OoOScheduler::CreateGMTensor(LogicalTensorPtr spillTensor, Logi
     gmTensor->memoryrange =
         TileRange(workspaceOffset, workspaceOffset + gmRawTensor->GetRawDataSize(), workspaceMemId++);
     workspaceOffset += gmRawTensor->GetRawDataSize();
-    ddrKindMap_[gmTensor->memoryrange.memId] = DDRBufferKind::SPILL_TEMP;
+    EmitInitDDRBuffer(gmTensor, DDRBufferKind::SPILL_TEMP);
     APASS_LOG_DEBUG_F(Elements::Operation, "Spill: Create gm tensor[%d].", gmTensor->memoryrange.memId);
     return gmTensor;
 }
@@ -1199,8 +1194,9 @@ Status OoOScheduler::RearrangeBuffer(Operation* allocOp, MemoryType memType) {
             return SUCCESS;
         }
     }
-    auto [status, changes] =
-        bufferManagerMap[opCoreLocationMap[allocOp]][memType].CompactBufferSlices(localBufferMap_);
+    std::vector<BufferAddrChange> changes;
+    auto status =
+        bufferManagerMap[opCoreLocationMap[allocOp]][memType].CompactBufferSlices(localBufferMap_, changes);
     if (status == SUCCESS) {
         NotifyBufferRearrange(allocOp, memType, std::move(changes));
     }

@@ -173,7 +173,7 @@ private:
     std::vector<Operation*> operations_;
     std::vector<ScheduleObserver*> observers_;
     IRBuilder irBuilder_;
-    // memId → DDRBufferKind. Populated by NotifyInitDDRBuffers / AllocWorkspaceGM / CreateGMTensor.
+    // memId → DDRBufferKind. Doubles as the seen-set for EmitInitDDRBuffer.
     std::unordered_map<int, DDRBufferKind> ddrKindMap_;
 
     // Notification helpers — bodies live in ooo_scheduler_notify.cpp.
@@ -189,6 +189,8 @@ private:
     void NotifyInitDDRBuffers();
     void NotifyMainLoopBegin();
     void NotifyMainLoopEnd();
+    // Emit a single INIT_DDR_BUFFER event for `t` if its memId hasn't been registered yet.
+    void EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind);
 
     static CoreLocation ToCoreLocation(CoreLocationType c);
 
@@ -257,7 +259,6 @@ private:
     Status SpillReshapeL1BufferFor3510(int memId, Operation* actualSpillOp, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
     Status SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
     Status SpillMultiProducerBuffer(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
-    void RewireAssembleAllocProducers(LogicalTensorPtr spillTensor);
     Status SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
     Status CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext &ctx);
     Status CreateParticalBuffer(int spillMemid, Operation* producerOp, LogicalTensorPtr assembleOOperand, Operation* copyoutOp, Operation* spillAllocOp);

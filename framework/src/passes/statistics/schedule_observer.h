@@ -101,6 +101,8 @@ struct SpillEvent {
     int spillTensorMagic;
     uint64_t spillCopyoutSize;
     uint64_t allocOccupiedSize{0};   // buffer held by owners still being alloc ops (not yet consumed)
+    uint64_t bufferCurrentUsage{0};   // pool occupancy sampled at spill (valid in both phases)
+    uint64_t bufferCapacity{0};
     // DDR landing buffer, valid when spillCopyoutOpMagic != -1.
     int spillDdrMemId{-1};            // >= 0x3f000000
     DDRBufferKind ddrKind{DDRBufferKind::SPILL_TEMP};

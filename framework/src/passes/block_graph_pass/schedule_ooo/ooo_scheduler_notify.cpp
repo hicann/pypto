@@ -20,7 +20,6 @@ namespace npu::tile_fwk {
 
 namespace {
 
-// dynValidShape symbolic names if available, else static numeric shape.
 std::vector<std::string> FormatShape(const LogicalTensorPtr& tensor)
 {
     std::vector<std::string> result;
@@ -91,9 +90,6 @@ void OoOScheduler::NotifyAllocExec(Operation* op, int memId)
     event.coreLocation = ToCoreLocation(opCoreLocationMap[op]);
     event.addrStart = buf->start;
     event.addrEnd = buf->end;
-
-    // LogicalTensor(s) initially on this memId: alloc op outputs only.
-    // Magic is stable across spill remaps.
     uint64_t validSize = buf->size;
     for (auto& oOp : op->GetOOperands()) {
         if (oOp == nullptr) continue;
@@ -135,7 +131,9 @@ void OoOScheduler::NotifySpill(LogicalTensorPtr spillTensor, int spillMemId,
             event.allocOccupiedSize += localBufferMap_.at(memId)->size;
         }
     }
-    // DDR landing buffer — only filled when an actual copyout happened.
+    auto& pool = bufferManagerMap[opCoreLocationMap[spillAllocOp]][buf->memType];
+    event.bufferCurrentUsage = pool.GetAllocatedSize();
+    event.bufferCapacity = pool.GetMemSize();
     if (created.gmTensor != nullptr) {
         event.spillDdrMemId = created.gmTensor->memoryrange.memId;
         event.ddrKind = DDRBufferKind::SPILL_TEMP;
@@ -227,32 +225,32 @@ void OoOScheduler::NotifyMainLoopEnd()
     }
 }
 
+void OoOScheduler::EmitInitDDRBuffer(const LogicalTensorPtr& t, DDRBufferKind kind)
+{
+    if (t == nullptr) return;
+    int memId = t->memoryrange.memId;
+    if (ddrKindMap_.count(memId) != 0) return;
+    ddrKindMap_[memId] = kind;
+    if (observers_.empty()) return;
+    InitDDRBufferEvent event;
+    event.clock = -1;
+    event.memId = memId;
+    event.kind = kind;
+    event.magic = t->GetMagic();
+    event.dtype = t->Datatype();
+    event.shape = FormatShape(t);
+    for (auto* obs : observers_) {
+        obs->OnInitDDRBuffer(event);
+    }
+}
+
 void OoOScheduler::NotifyInitDDRBuffers()
 {
-    if (observers_.empty()) return;
-    auto emit = [this](const LogicalTensorPtr& t, DDRBufferKind kind) {
-        if (t == nullptr) return;
-        int memId = t->memoryrange.memId;
-        // incast/outcast vectors may list the same tensor more than once; emit at
-        // most one INIT_DDR_BUFFER per memId. ddrKindMap_ doubles as the seen-set.
-        if (ddrKindMap_.count(memId) != 0) return;
-        InitDDRBufferEvent event;
-        event.clock = -1;  // incast/outcast predate the schedule timeline (clock 0 = first MainLoop cycle)
-        event.memId = memId;
-        event.kind = kind;
-        event.magic = t->GetMagic();
-        event.dtype = t->Datatype();
-        event.shape = FormatShape(t);
-        ddrKindMap_[memId] = kind;   // remember for later ddrRefs classification + dedupe
-        for (auto* obs : observers_) {
-            obs->OnInitDDRBuffer(event);
-        }
-    };
     for (const auto& t : function_.GetIncast()) {
-        emit(t, DDRBufferKind::INCAST);
+        EmitInitDDRBuffer(t, DDRBufferKind::INCAST);
     }
     for (const auto& t : function_.GetOutcast()) {
-        emit(t, DDRBufferKind::OUTCAST);
+        EmitInitDDRBuffer(t, DDRBufferKind::OUTCAST);
     }
 }
 
