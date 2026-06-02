@@ -101,7 +101,7 @@ class PassComparator:
             "InferDiscontinuousInput": 11,
             "RemoveRedundantOp": 12,
             "InsertOpForViewAssemble": 13,
-            "SplitK": 14,
+            "ProcessAtomic": 14,
             "GraphPartition": 15,
             "NBufferMerge": 16,
             "L1CopyInReuseMerge": 17,

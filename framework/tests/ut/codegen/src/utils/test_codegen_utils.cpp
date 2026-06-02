@@ -53,15 +53,22 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
 
 std::string GetResultFromCpp(const Function& function)
 {
-    const auto& subFunc = function.rootFunc_->programs_[0];
-    auto leafFuncAttr = subFunc->GetLeafFuncAttribute();
-    ASSERT(FwkErr::INVALID_FUNCTION, leafFuncAttr != nullptr) << "can not find leaf func attribute";
-    std::string binPath = leafFuncAttr->binPath;
-    std::string cppFile = binPath.substr(0, binPath.rfind('.')) + ".cpp";
-    std::ifstream ifs(cppFile);
-    std::string res((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
-    ifs.close();
-    return res;
+    std::string binPath;
+    for (const auto& subFunc: function.rootFunc_->programs_){
+        auto leafFuncAttr = subFunc.second->GetLeafFuncAttribute();
+        ASSERT(FwkErr::INVALID_FUNCTION, leafFuncAttr != nullptr) << "can not find leaf func attribute";
+        binPath = leafFuncAttr->binPath;
+        if (binPath.empty()){
+            continue;
+        }
+        std::string cppFile = binPath.substr(0, binPath.rfind('.')) + ".cpp";
+        std::ifstream ifs(cppFile);
+        std::string res((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
+        ifs.close();
+        return res;
+    }
+    ASSERT(FwkErr::INVALID_FUNCTION, !binPath.empty()) << "can not find binPath";
+    return binPath;
 }
 
 void CheckStringExist(const std::string& target, const std::string& content)

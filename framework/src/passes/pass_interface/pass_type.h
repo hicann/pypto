@@ -43,7 +43,7 @@ enum class PassName {
     INFER_DISCONTINUOUS_INPUT,
     REMOVE_REDUNDANT_OP,
     INSERT_OP_FOR_VIEWASSEMBLE,
-    SPLIT_K,
+    PROCESS_ATOMIC,
     GRAPH_PARTITION,
     REDUCE_COPY_MERGE,
     N_BUFFER_MERGE,
@@ -108,8 +108,8 @@ inline constexpr const char* PassNameStr(PassName name)
             return "RemoveRedundantOp";
         case PassName::INSERT_OP_FOR_VIEWASSEMBLE:
             return "InsertOpForViewAssemble";
-        case PassName::SPLIT_K:
-            return "SplitK";
+        case PassName::PROCESS_ATOMIC:
+            return "ProcessAtomic";
         case PassName::GRAPH_PARTITION:
             return "GraphPartition";
         case PassName::REDUCE_COPY_MERGE:

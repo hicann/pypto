@@ -148,7 +148,7 @@ python3 your_test_case.py
 
 错误码定义：`framework/src/interface/interpreter/verify_error.h`
 
-> **判断标准**：只看 CodegenPreproc Pass（最后一个 Pass）是否通过。中间 Pass 报错（如 ReplaceTensor、SplitK 等出现 `VERIFY_RESULT_MISMATCH`）忽略，只要 CodegenPreproc PASS 即表示精度正确。只有 CodegenPreproc FAIL 时才需要用 `pass_compare.py` 进一步定位。
+> **判断标准**：只看 CodegenPreproc Pass（最后一个 Pass）是否通过。中间 Pass 报错（如 ReplaceTensor、ProcessAtomic 等出现 `VERIFY_RESULT_MISMATCH`）忽略，只要 CodegenPreproc PASS 即表示精度正确。只有 CodegenPreproc FAIL 时才需要用 `pass_compare.py` 进一步定位。
 
 ---
 

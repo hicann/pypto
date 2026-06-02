@@ -19,7 +19,7 @@
 #include "passes/tile_graph_pass/graph_optimization/remove_redundant_op.h"
 #include "passes/tile_graph_pass/graph_optimization/split_raw.h"
 #include "passes/tile_graph_pass/graph_optimization/split_large_fanout_tensor.h"
-#include "passes/tile_graph_pass/graph_optimization/split_k.h"
+#include "passes/tile_graph_pass/graph_optimization/process_atomic.h"
 #include "passes/tile_graph_pass/graph_optimization/infer_discontinuous_input.h"
 #include "passes/tile_graph_pass/graph_optimization/split_reshape.h"
 #include "passes/tile_graph_pass/graph_optimization/duplicate_op.h"

@@ -264,8 +264,8 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TileOp::Distributed::ShmemSignal<1, 8, TileOp::Distributed::AtomicType::ADD)!!!";
+    std::string res = GenCodeByFunction(*function);	 
+    std::string expect = R"!!!(TileOp::Distributed::ShmemSignal<1, 8, TileOp::Distributed::AtomicType::ADD)!!!"; 
     CheckStringExist(expect, res);
 }
 

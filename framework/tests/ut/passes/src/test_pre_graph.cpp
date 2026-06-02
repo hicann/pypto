@@ -97,7 +97,7 @@ void SetUpPassStrategy()
                                     {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
                                     {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
                                     {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                                    {"SplitK", PassName::SPLIT_K},
+                                    {"ProcessAtomic", PassName::PROCESS_ATOMIC},
                                     {"GraphPartition", PassName::GRAPH_PARTITION},
                                     {"NBufferMerge", PassName::N_BUFFER_MERGE},
                                     {"IntraSubgraphAdapter", PassName::INTRA_SUBGRAPH_ADAPTER},
@@ -920,7 +920,8 @@ TEST_F(PreGraphTest, TestRemoveRedundantViewMultiReshape)
     EXPECT_EQ(viewCnt, 0);
 }
 
-inline void CheckProcessReshape(Function* function) {
+inline void CheckProcessReshape(Function* function)
+{
     PreGraphProcess passLocal;
     EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
     // check after pass
@@ -956,7 +957,8 @@ TEST_F(PreGraphTest, TestProcessReshape)
     // add op
     G.AddOp(Opcode::OP_RESHAPE, {"t1"}, {"t2"}, "RESHAPE1");
     G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "VIEW");
-    auto viewAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0, 0, 0}, MemoryType::MEM_UNKNOWN,
+    auto viewAttr = std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0, 0, 0}, MemoryType::MEM_UNKNOWN,
         OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{0, 0, 0, 0})));
     G.GetOp("VIEW")->SetOpAttribute(viewAttr);
     G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "RESHAPE2");
@@ -979,7 +981,8 @@ TEST_F(PreGraphTest, TestProcessReshape)
     auto* reshape2Op = G.GetOp("RESHAPE2");
     EXPECT_NE(reshape2Op, nullptr) << "RESHAPE2 should exist";
     auto reshape2Input = reshape2Op->GetIOperands().front();
-    EXPECT_EQ(reshape2Input->GetShape(), (std::vector<int64_t>{16, 1, 128, 128})) << "RESHAPE2 input shape should be {16, 1, 128, 128}";
+    EXPECT_EQ(reshape2Input->GetShape(), (std::vector<int64_t>{16, 1, 128, 128}))
+        << "RESHAPE2 input shape should be {16, 1, 128, 128}";
 
     // Verify RESHAPE1 : connect to copyin
     auto* reshape1Op = G.GetOp("RESHAPE1");
@@ -1308,9 +1311,9 @@ void RunSetTensorBoundary(ComputationalGraphBuilder& G)
     auto reshape_out = G.GetTensor("reshape_out");
     auto vec_out = G.GetTensor("vec_out");
     EXPECT_TRUE(SubgraphUtils::IsBoundary(vec_in));
- 	EXPECT_TRUE(SubgraphUtils::IsBoundary(copy_out));
- 	EXPECT_TRUE(SubgraphUtils::IsBoundary(reshape_out));
- 	EXPECT_TRUE(SubgraphUtils::IsBoundary(vec_out));
+    EXPECT_TRUE(SubgraphUtils::IsBoundary(copy_out));
+    EXPECT_TRUE(SubgraphUtils::IsBoundary(reshape_out));
+    EXPECT_TRUE(SubgraphUtils::IsBoundary(vec_out));
 }
 
 //        CopyIn[0] - copy_in1 - Exp[0] - e1 - CopyOut[0]
@@ -1718,13 +1721,13 @@ TEST_F(PreGraphTest, maybeCycle)
     G.AddTensor(dataType, {4, 4}, "copyInOut2");
     auto copyInOut2 = G.GetTensor("copyInOut2");
     copyInOut2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-     G.AddTensor(dataType, {4, 8}, "copyInOut3");
+    G.AddTensor(dataType, {4, 8}, "copyInOut3");
     auto copyInOut3 = G.GetTensor("copyInOut3");
     copyInOut3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     G.AddTensor(dataType, {4, 8}, "outCast");
     auto outCast = G.GetTensor("outCast");
     outCast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    
+
     // add op
     G.AddOp(Opcode::OP_COPY_IN, {"inCast"}, {"copyInOut1"}, "COPYIN1");
     G.AddOp(Opcode::OP_COPY_OUT, {"copyInOut1"}, {"copyOutOut"}, "COPYOUT1");

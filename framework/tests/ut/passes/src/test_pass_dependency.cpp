@@ -38,22 +38,22 @@ TEST_F(TestPassDependency, TestCheckStrategyDependency)
 
     std::vector<PassName> normalPasses = {
         PassName::DUPLICATE_OP,     PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,
-        PassName::SPLIT_K,          PassName::GRAPH_PARTITION,           PassName::REDUCE_COPY_MERGE,
+        PassName::PROCESS_ATOMIC,          PassName::GRAPH_PARTITION,           PassName::REDUCE_COPY_MERGE,
         PassName::N_BUFFER_MERGE,   PassName::L1_COPY_IN_REUSE_MERGE,    PassName::INTRA_SUBGRAPH_ADAPTER,
         PassName::GENERATE_MOVE_OP, PassName::PRE_GRAPH_PROCESS,         PassName::REPLACE_TENSOR,
         PassName::INFER_DYN_SHAPE,  PassName::SUBGRAPH_TO_FUNCTION};
     // GraphPartition缺少前置DuplicateOp
     std::vector<PassName> passesLessPreDependency = {
-        PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,          PassName::SPLIT_K,
+        PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,          PassName::PROCESS_ATOMIC,
         PassName::GRAPH_PARTITION,           PassName::REDUCE_COPY_MERGE,      PassName::N_BUFFER_MERGE,
         PassName::L1_COPY_IN_REUSE_MERGE,    PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP};
-    // SplitK重复
+    // ProcessAtomic重复
     std::vector<PassName> passesConsecutiveDup = {
         PassName::DUPLICATE_OP,
         PassName::SPLIT_LARGE_FANOUT_TENSOR,
         PassName::SPLIT_RESHAPE,
-        PassName::SPLIT_K,
-        PassName::SPLIT_K,
+        PassName::PROCESS_ATOMIC,
+        PassName::PROCESS_ATOMIC,
         PassName::GRAPH_PARTITION,
         PassName::REDUCE_COPY_MERGE,
         PassName::N_BUFFER_MERGE,
@@ -63,7 +63,7 @@ TEST_F(TestPassDependency, TestCheckStrategyDependency)
     // GraphPartition前调用L1CopyInReuseMerge
     std::vector<PassName> passesL1CopyBeforeGraphPartition = {
         PassName::DUPLICATE_OP,           PassName::SPLIT_LARGE_FANOUT_TENSOR,
-        PassName::SPLIT_RESHAPE,          PassName::SPLIT_K,
+        PassName::SPLIT_RESHAPE,          PassName::PROCESS_ATOMIC,
         PassName::L1_COPY_IN_REUSE_MERGE, PassName::GRAPH_PARTITION,
         PassName::REDUCE_COPY_MERGE,      PassName::N_BUFFER_MERGE,
         PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER,
@@ -85,7 +85,7 @@ TEST_F(TestPassDependency, TestStrategySequenceDependency)
         PassName::DUPLICATE_OP,
         PassName::SPLIT_LARGE_FANOUT_TENSOR,
         PassName::SPLIT_RESHAPE,
-        PassName::SPLIT_K,
+        PassName::PROCESS_ATOMIC,
         PassName::GRAPH_PARTITION,
         PassName::N_BUFFER_MERGE,
         PassName::L1_COPY_IN_REUSE_MERGE,

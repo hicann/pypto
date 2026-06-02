@@ -148,9 +148,9 @@ python3 scripts/ut_coverage.py --diff pr.diff --report ut_cov.tar.gz --json
 ### 步骤 1：分析业务
 
     根据用户描述的业务情况，分析相关业务：
-        （1）当描述为具体 Pass 的具体业务时，根据 pypto-pass-module-analyzer，分析业务场景，根据当前业务设计相应的 UT 用例，例如：设计 Splitk 这个 Pass 消除 RedunceAcc 功能的 UT；
+        （1）当描述为具体 Pass 的具体业务时，根据 pypto-pass-module-analyzer，分析业务场景，根据当前业务设计相应的 UT 用例，例如：设计 ProcessAtomic 这个 Pass 消除 RedunceAcc 功能的 UT；
         （2）当描述为模糊 Pass 业务时，根据 pypto-pass-module-analyzer，进行相关 Pass 业务总结，挑选出符合业务的 Pass，分析业务场景，设计对应的 UT 用例，例如：请针对 Pass 中对于视图类 Op，view、assemble 处理的 Pass 设计对应的 UT，验证功能实现；
-        （3）当描述为设计 Pass 的 UT 时，根据 pypto-pass-module-analyzer，进行相关 Pass 业务总结，分析业务场景，设计该 Pass 业务的 UT 用例，例如：针对 Splitk 这个 Pass 设计相关 UT 用例;
+        （3）当描述为设计 Pass 的 UT 时，根据 pypto-pass-module-analyzer，进行相关 Pass 业务总结，分析业务场景，设计该 Pass 业务的 UT 用例，例如：针对 ProcessAtomic 这个 Pass 设计相关 UT 用例;
          (4) 当描述为设计 PR xxxx 的 UT 或者提供 diff 文件、ut 覆盖率报告时，解析变更变更代码或者未覆盖到的代码行，进行相关 Pass 业务总结，分析业务场景，设计该 Pass 业务的 UT 用例，例如：针对 PR01 设计相关 UT 用例或者针对 01.diff 文件生成 UT 用例或者针对 ut-report.tar.gz 生成 UT 用例;
 
 ### 步骤 2：环境配置

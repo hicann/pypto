@@ -74,7 +74,7 @@ Block Graph Pass 阶段处理 Block Graph 层面的优化，主要关注：
 | InferDiscontinuousInput | 推断非连续输入 | 从 InCast 前向传播，检测冲突并插入 Copy |
 | InsertOpForViewAssemble | 插入 Copy 操作 | 在 View 和 Assemble 间处理内存类型差异 |
 | RemoveRedundantOp | 消除冗余操作 | 识别并删除冗余的 View/Assemble/Register Copy |
-| SplitK | 消除 ReduceAcc | 优化 K 轴归约，将多个 A_MUL_B 的 CopyOut 直连到 GM |
+| ProcessAtomic | 消除 ReduceAcc及OP_ATOMIC_RMW | 优化 K 轴归约，将多个 A_MUL_B 的 CopyOut 直连到 GM，并消除OP_ATOMIC_RMW，把相关模式属性刷新到Copyout上 |
 | GraphPartition | 图划分 | 通过同构子图分组和合并算法进行图划分 |
 | ReduceCopyMerge | 合并 Reduce Copy | 将连续的 Reduce Acc 合并为一个 |
 | NBufferMerge | NBuffer 合并 | 通过着色算法将同构子图分组合并，减少切换开销 |

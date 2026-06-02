@@ -9,8 +9,8 @@
  */
 
 /*!
- * \file test_split_k.cpp
- * \brief Unit test for SplitK pass.
+ * \file test_process_atomic.cpp
+ * \brief Unit test for ProcessAtomic pass.
  */
 
 #include <fstream>
@@ -24,7 +24,7 @@
 #include "interface/program/program.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
-#include "passes/tile_graph_pass/graph_optimization/split_k.h"
+#include "passes/tile_graph_pass/graph_optimization/process_atomic.h"
 #include "passes/tile_graph_pass/graph_constraint/pre_graph/pre_graph.h"
 #include "computational_graph_builder.h"
 #include "ut_json/ut_json_tool.h"
@@ -33,7 +33,7 @@ using namespace npu::tile_fwk;
 
 namespace npu {
 namespace tile_fwk {
-class SplitKTest : public testing::Test {
+class ProcessAtomicTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
 
@@ -56,9 +56,9 @@ public:
             return;
         }
         if (isAtomic) {
-            op->SetAttribute(ACC_A_MUL_B, 1);
+            op->SetAttribute(RMW_MODE_ATTR_ADD, 1);
         } else {
-            op->SetAttribute(ACC_A_MUL_B, 0);
+            op->SetAttribute(RMW_MODE_ATTR_ADD, 0);
         }
         op->SetAttribute(MATMUL_NZ_ATTR, nzFormat);
         op->SetAttribute(A_MUL_B_ACT_M, 0L);
@@ -120,7 +120,7 @@ public:
         // run pass
         Function* function = G.GetFunction();
         EXPECT_NE(function, nullptr);
-        SplitK passLocal;
+        ProcessAtomic passLocal;
         passLocal.Run(*function, "", "", 0);
         CubeProcess cubeProcess;
         cubeProcess.UpdateCubeOp(*function);
@@ -131,19 +131,14 @@ public:
     void TearDown() override {}
 };
 
-TEST_F(SplitKTest, Test_MM_FP16) { CheckL0cType(DataType::DT_FP16, DataType::DT_FP16, DataType::DT_FP32); }
+TEST_F(ProcessAtomicTest, TestMMFP16) { CheckL0cType(DataType::DT_FP16, DataType::DT_FP16, DataType::DT_FP32); }
+TEST_F(ProcessAtomicTest, TestMMBF16) { CheckL0cType(DataType::DT_BF16, DataType::DT_BF16, DataType::DT_FP32); }
+TEST_F(ProcessAtomicTest, TestMMFP32) { CheckL0cType(DataType::DT_FP32, DataType::DT_FP32, DataType::DT_FP32); }
+TEST_F(ProcessAtomicTest, TestMMINT8) { CheckL0cType(DataType::DT_INT8, DataType::DT_INT8, DataType::DT_INT32); }
+TEST_F(ProcessAtomicTest, TestMMINT16) { CheckL0cType(DataType::DT_INT16, DataType::DT_INT16, DataType::DT_INT32); }
+TEST_F(ProcessAtomicTest, TestMMINT32) { CheckL0cType(DataType::DT_INT32, DataType::DT_INT32, DataType::DT_INT32); }
 
-TEST_F(SplitKTest, Test_MM_BF16) { CheckL0cType(DataType::DT_BF16, DataType::DT_BF16, DataType::DT_FP32); }
-
-TEST_F(SplitKTest, Test_MM_FP32) { CheckL0cType(DataType::DT_FP32, DataType::DT_FP32, DataType::DT_FP32); }
-
-TEST_F(SplitKTest, Test_MM_INT8) { CheckL0cType(DataType::DT_INT8, DataType::DT_INT8, DataType::DT_INT32); }
-
-TEST_F(SplitKTest, Test_MM_INT16) { CheckL0cType(DataType::DT_INT16, DataType::DT_INT16, DataType::DT_INT32); }
-
-TEST_F(SplitKTest, Test_MM_INT32) { CheckL0cType(DataType::DT_INT32, DataType::DT_INT32, DataType::DT_INT32); }
-
-TEST_F(SplitKTest, TestReducAccSplitKOn)
+TEST_F(ProcessAtomicTest, TestReducAccProcessAtomicOn)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -263,7 +258,7 @@ TEST_F(SplitKTest, TestReducAccSplitKOn)
     }
     EXPECT_NE(opReduceAccCount, 0);
     // run pass
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     passLocal.Run(*function, "", "", 0);
     // check after pass
     opReduceAccCount = 0;
@@ -275,7 +270,7 @@ TEST_F(SplitKTest, TestReducAccSplitKOn)
     EXPECT_EQ(opReduceAccCount, 0);
 }
 
-TEST_F(SplitKTest, TestReducAccSplitKOff)
+TEST_F(ProcessAtomicTest, TestReducAccProcessAtomicOff)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -391,7 +386,7 @@ TEST_F(SplitKTest, TestReducAccSplitKOff)
     }
     EXPECT_EQ(opReduceAccCount, 0);
     // run pass
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     passLocal.Run(*function, "", "", 0);
     // check after pass
     opReduceAccCount = 0;
@@ -406,7 +401,7 @@ TEST_F(SplitKTest, TestReducAccSplitKOff)
     EXPECT_EQ(opCountBefore, opCountAfter);
 }
 
-TEST_F(SplitKTest, TestReducAccInputLess)
+TEST_F(ProcessAtomicTest, TestReducAccInputLess)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -462,7 +457,7 @@ TEST_F(SplitKTest, TestReducAccInputLess)
     }
     EXPECT_NE(opReduceAccCount, 0);
     // run pass
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     Status preCheckResult = passLocal.PreCheck(*function);
     EXPECT_EQ(preCheckResult, SUCCESS);
     passLocal.Run(*function, "", "", 0);
@@ -476,7 +471,7 @@ TEST_F(SplitKTest, TestReducAccInputLess)
     EXPECT_EQ(opReduceAccCount, 0);
 }
 
-TEST_F(SplitKTest, TestReducAccOutPutMore)
+TEST_F(ProcessAtomicTest, TestReducAccOutPutMore)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -599,12 +594,12 @@ TEST_F(SplitKTest, TestReducAccOutPutMore)
     }
     EXPECT_NE(opReduceAccCount, 0);
     // run pass
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     Status preCheckResult = passLocal.PreCheck(*function);
     EXPECT_NE(preCheckResult, SUCCESS);
 }
 
-TEST_F(SplitKTest, Test_MM_FP16_Atomic_On)
+TEST_F(ProcessAtomicTest, TestMMFP16AtomicOn)
 {
     int m = 32;
     int n = 512;
@@ -632,7 +627,7 @@ TEST_F(SplitKTest, Test_MM_FP16_Atomic_On)
     }
 }
 
-TEST_F(SplitKTest, TestAnzBnd)
+TEST_F(ProcessAtomicTest, TestAnzBnd)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -676,7 +671,7 @@ TEST_F(SplitKTest, TestAnzBnd)
     // run pass
     Function* function = G.GetFunction();
     EXPECT_NE(function, nullptr);
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     passLocal.Run(*function, "", "", 0);
     CubeProcess cubeProcess;
     cubeProcess.UpdateCubeOp(*function);
@@ -689,7 +684,7 @@ TEST_F(SplitKTest, TestAnzBnd)
     EXPECT_EQ(opL1CopyInB->GetIntAttribute(COPY_IS_NZ), 0);
 }
 
-TEST_F(SplitKTest, TestAnzBndL1)
+TEST_F(ProcessAtomicTest, TestAnzBndL1)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -764,7 +759,7 @@ TEST_F(SplitKTest, TestAnzBndL1)
     // run pass
     Function* function = G.GetFunction();
     EXPECT_NE(function, nullptr);
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     passLocal.Run(*function, "", "", 0);
     CubeProcess cubeProcess;
     cubeProcess.UpdateCubeOp(*function);
@@ -777,7 +772,7 @@ TEST_F(SplitKTest, TestAnzBndL1)
     EXPECT_EQ(opL1CopyInB->GetIntAttribute(COPY_IS_NZ), 0);
 }
 
-TEST_F(SplitKTest, TestAndBndCnz)
+TEST_F(ProcessAtomicTest, TestAndBndCnz)
 {
     ComputationalGraphBuilder G;
     // add tensor
@@ -854,7 +849,7 @@ TEST_F(SplitKTest, TestAndBndCnz)
     // run pass
     Function* function = G.GetFunction();
     EXPECT_NE(function, nullptr);
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     passLocal.Run(*function, "", "", 0);
     CubeProcess cubeProcess;
     cubeProcess.UpdateCubeOp(*function);
@@ -877,7 +872,7 @@ TEST_F(SplitKTest, TestAndBndCnz)
     EXPECT_EQ(opL0cCopyOut1->GetIntAttribute(L0C_COPY_OUT_INNER), 128);
 }
 
-TEST_F(SplitKTest, TestGatherOnL1)
+TEST_F(ProcessAtomicTest, TestGatherOnL1)
 {
     ComputationalGraphBuilder G;
     // INCAST mat_a, mat_b, OUTCAST mat_c
@@ -994,7 +989,7 @@ TEST_F(SplitKTest, TestGatherOnL1)
     EXPECT_NE(function, nullptr);
 
     // run pass
-    SplitK passLocal;
+    ProcessAtomic passLocal;
     Status res = passLocal.Run(*function, "", "", 0);
     CubeProcess cubeProcess;
     cubeProcess.UpdateCubeOp(*function);
@@ -1002,6 +997,363 @@ TEST_F(SplitKTest, TestGatherOnL1)
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(mat_c->Datatype(), outputAstDtype);
     EXPECT_EQ(mat_c_L0->Datatype(), DataType::DT_FP32);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "assembleInput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
+    auto assembleOp = G.GetOp("assembleOp");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
+
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    int atomicRmwCount = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            atomicRmwCount++;
+        }
+    }
+    EXPECT_EQ(atomicRmwCount, 1);
+
+    ProcessAtomic passLocal;
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_EQ(preCheckResult, SUCCESS);
+    passLocal.Run(*function, "", "", 0);
+
+    atomicRmwCount = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            atomicRmwCount++;
+        }
+    }
+    EXPECT_EQ(atomicRmwCount, 0);
+
+    auto updatedAssembleOp = G.GetOp("assembleOp");
+    EXPECT_NE(updatedAssembleOp, nullptr);
+    EXPECT_EQ(updatedAssembleOp->HasAttr(RMW_MODE_ATTR_ADD), true);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWMaxModeUnsupported)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "assembleInput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
+    auto assembleOp = G.GetOp("assembleOp");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::MAX);
+
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_EQ(preCheckResult, SUCCESS);
+    Status runResult = passLocal.Run(*function, "", "", 0);
+    EXPECT_NE(runResult, SUCCESS);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWMinModeUnsupported)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "assembleInput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
+    auto assembleOp = G.GetOp("assembleOp");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::MIN);
+
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_EQ(preCheckResult, SUCCESS);
+    Status runResult = passLocal.Run(*function, "", "", 0);
+    EXPECT_NE(runResult, SUCCESS);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWInvalidInputMemory)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "inputUb");
+    auto inputUb = G.GetTensor("inputUb");
+    inputUb->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputUb"}, {"outputDdr"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
+
+    G.SetInCast({"inputUb"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_NE(preCheckResult, SUCCESS);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWInvalidOutputMemory)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputUb");
+    auto outputUb = G.GetTensor("outputUb");
+    outputUb->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputUb"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
+
+    G.SetInCast({"inputDdr"});
+    G.SetOutCast({"outputUb"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_NE(preCheckResult, SUCCESS);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "matCBeforeReduce0");
+    auto matCBeforeReduce0 = G.GetTensor("matCBeforeReduce0");
+    matCBeforeReduce0->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "matCBeforeReduce1");
+    auto matCBeforeReduce1 = G.GetTensor("matCBeforeReduce1");
+    matCBeforeReduce1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "matCAfterReduce");
+    auto matCAfterReduce = G.GetTensor("matCAfterReduce");
+    matCAfterReduce->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "assembleInput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "atomicOutput");
+    auto atomicOutput = G.GetTensor("atomicOutput");
+    atomicOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_REDUCE_ACC, {"matCBeforeReduce0", "matCBeforeReduce1"}, {"matCAfterReduce"}, "ReduceAcc");
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"matCAfterReduce"}, "assembleOp");
+    auto assembleOp = G.GetOp("assembleOp");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp->SetOpAttribute(assembleAttr);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"matCAfterReduce"}, {"atomicOutput"}, "atomicRmwOp");
+    auto atomicRmwOp = G.GetOp("atomicRmwOp");
+    auto atomicRmwAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwOp->SetOpAttribute(atomicRmwAttr);
+    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
+
+    G.SetInCast({"matCBeforeReduce0", "matCBeforeReduce1", "assembleInput"});
+    G.SetOutCast({"atomicOutput"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_EQ(preCheckResult, SUCCESS);
+    passLocal.Run(*function, "", "", 0);
+
+    int reduceAccCount = 0;
+    int atomicRmwCount = 0;
+    for (const auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_REDUCE_ACC) {
+            reduceAccCount++;
+        }
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            atomicRmwCount++;
+        }
+    }
+    EXPECT_EQ(reduceAccCount, 0);
+    EXPECT_EQ(atomicRmwCount, 0);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWModeConflict)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "assembleInput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
+    auto assembleOp = G.GetOp("assembleOp");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp->SetOpAttribute(assembleAttr);
+    assembleOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwMax");
+    auto atomicRmwMaxOp = G.GetOp("atomicRmwMax");
+    auto atomicRmwMaxAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwMaxOp->SetOpAttribute(atomicRmwMaxAttr);
+    atomicRmwMaxOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::MAX);
+
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status result = passLocal.Run(*function, "", "", 0);
+    EXPECT_NE(result, SUCCESS);
+}
+
+TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
+{
+    ComputationalGraphBuilder G;
+    DataType dtype = DataType::DT_FP16;
+
+    G.AddTensor(dtype, {64, 128}, "assembleInput");
+    auto assembleInput = G.GetTensor("assembleInput");
+    assembleInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {64, 128}, "inputDdr");
+    auto inputDdr = G.GetTensor("inputDdr");
+    inputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddTensor(dtype, {128, 128}, "outputDdr");
+    auto outputDdr = G.GetTensor("outputDdr");
+    outputDdr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
+    auto assembleOp = G.GetOp("assembleOp");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp->SetOpAttribute(assembleAttr);
+    assembleOp->SetAttribute(RMW_MODE_ATTR_ADD, 1);
+
+    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwAdd");
+    auto atomicRmwAddOp = G.GetOp("atomicRmwAdd");
+    auto atomicRmwAddAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0});
+    atomicRmwAddOp->SetOpAttribute(atomicRmwAddAttr);
+    atomicRmwAddOp->SetAttribute(OpAttributeKey::rmwMode, (int)AtomicRMWMode::ADD);
+
+    G.SetInCast({"assembleInput"});
+    G.SetOutCast({"outputDdr"});
+
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    ProcessAtomic passLocal;
+    Status result = passLocal.Run(*function, "", "", 0);
+    EXPECT_EQ(result, SUCCESS);
+
+    int atomicRmwCount = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            atomicRmwCount++;
+        }
+    }
+    EXPECT_EQ(atomicRmwCount, 0);
+
+    auto updatedAssembleOp = G.GetOp("assembleOp");
+    EXPECT_NE(updatedAssembleOp, nullptr);
+    EXPECT_EQ(updatedAssembleOp->HasAttr(RMW_MODE_ATTR_ADD), true);
 }
 
 } // namespace tile_fwk

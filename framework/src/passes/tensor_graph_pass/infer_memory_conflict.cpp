@@ -259,9 +259,9 @@ bool InferMemoryConflict::CheckTransmit(Operation& curOp)
 {
     LogicalTensorPtr curTensor;
     std::set<Opcode> NonCalcNode = {
-        Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST, Opcode::OP_VIEW_TYPE};
+        Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST, Opcode::OP_VIEW_TYPE, Opcode::OP_ATOMIC_RMW};
     bool transmit = (NonCalcNode.find(curOp.GetOpcode()) != NonCalcNode.end());
-    if (curOp.GetOpcode() == Opcode::OP_ASSEMBLE) {
+    if (curOp.GetOpcode() == Opcode::OP_ASSEMBLE || curOp.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
         curTensor = *(curOp.GetIOperands().begin());
         for (const auto& producer : curTensor->GetProducers()) {
             if (producer->GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
@@ -327,7 +327,8 @@ bool InferMemoryConflict::CheckReshapeContext(const LogicalTensorPtr& reshapeIn,
         }
         return std::all_of(reshapeOut->GetConsumers().begin(), reshapeOut->GetConsumers().end(),
             [](const auto& consumer) {
-                return consumer != nullptr && consumer->GetOpcode() == Opcode::OP_ASSEMBLE;
+                return consumer != nullptr &&
+                    (consumer->GetOpcode() == Opcode::OP_ASSEMBLE || consumer->GetOpcode() == Opcode::OP_ATOMIC_RMW);
             });
     }
 

@@ -93,7 +93,7 @@ void RegPass()
     REG_PASS(RemoveUnalignedReshape);
     REG_PASS(CodegenPreproc);
     REG_PASS(SplitLargeFanoutTensor);
-    REG_PASS(SplitK);
+    REG_PASS(ProcessAtomic);
     REG_PASS(InferDynShape);
     REG_PASS(InferParamIndex);
     REG_PASS(AddAlloc);
@@ -130,7 +130,7 @@ void PassManager::RegDefaultStrategy()
                         {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
                         {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
                         {"InsertOpForViewAssemble", PassName::INSERT_OP_FOR_VIEWASSEMBLE},
-                        {"SplitK", PassName::SPLIT_K},
+                        {"ProcessAtomic", PassName::PROCESS_ATOMIC},
                         {"GraphPartition", PassName::GRAPH_PARTITION},
                         {"NBufferMerge", PassName::N_BUFFER_MERGE},
                         {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
