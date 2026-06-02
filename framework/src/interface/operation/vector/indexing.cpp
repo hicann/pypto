@@ -551,9 +551,8 @@ void TensorGatherMask(
 
 void CheckGatherParamsInvalid(const Tensor& params, const Tensor& indices, int axis, const std::string& opName)
 {
-    static const std::unordered_set<DataType> a2a3Types = {DT_FP32,  DT_FP16,    DT_BF16,    DT_INT32,
-                                                           DT_INT16, DT_INT8,    DT_UINT32,  DT_UINT16,
-                                                           DT_UINT8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
+    static const std::unordered_set<DataType> a2a3Types = {DT_FP32, DT_FP16,   DT_BF16,   DT_INT32, DT_INT16,
+                                                           DT_INT8, DT_UINT32, DT_UINT16, DT_UINT8};
     static const std::unordered_set<DataType> a5Types = {DT_FP32,    DT_FP16,    DT_BF16,   DT_INT32, DT_INT16,
                                                          DT_INT8,    DT_UINT32,  DT_UINT16, DT_UINT8, DT_BOOL,
                                                          DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
@@ -801,6 +800,8 @@ void TensorScatterElementS(Function& function, const ScatterElementSPara& scatte
 static void CheckScatterElementSParamsInvalid(
     const Tensor& self, const Tensor& indices, int axis, const ScatterMode reduce)
 {
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_INT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
     std::vector<LogicalTensorPtr> tensors = {self.GetStorage(), indices.GetStorage()};
@@ -824,6 +825,7 @@ static void CheckScatterElementSParamsInvalid(
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, int axis, ScatterMode reduce)
 {
     DECLARE_TRACER();
+    CheckScatterElementSParamsInvalid(self, indices, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
     DataType orgDtype = self.GetDataType();
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
     if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
@@ -835,7 +837,6 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, in
         operandCast = self;
     }
     axis = axis < 0 ? operandCast.GetShape().size() + axis : axis;
-    CheckScatterElementSParamsInvalid(operandCast, indices, axis, reduce);
     Tensor result(operandCast.GetStorage()->Datatype(), operandCast.GetShape());
     CALL(
         ScatterElementS, *Program::GetInstance().GetCurrentFunction(),
@@ -968,6 +969,8 @@ void TensorScatter(Function& function, const ScatterPara& scatterPara)
 static void CheckScatterParamsInvalid(
     const Tensor& self, const Tensor& indices, const Tensor& src, int axis, const ScatterMode reduce)
 {
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_INT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SCATTER");
     CheckTensorsDataTypeConsistency(self.GetStorage(), src.GetStorage(), "SCATTER");
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
@@ -997,6 +1000,7 @@ static void CheckScatterParamsInvalid(
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce)
 {
     DECLARE_TRACER();
+    CheckScatterParamsInvalid(self, indices, src, axis < 0 ? self.GetShape().size() + axis : axis, reduce);
     DataType orgDtype = self.GetDataType();
     auto operandSelfCast = Tensor(DataType::DT_FP32, self.GetShape());
     auto operandSrcCast = Tensor(DataType::DT_FP32, src.GetShape());
@@ -1013,7 +1017,6 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int
         operandSrcCast = src;
     }
     axis = axis < 0 ? operandSelfCast.GetShape().size() + axis : axis;
-    CheckScatterParamsInvalid(operandSelfCast, indices, operandSrcCast, axis, reduce);
     Tensor result(operandSelfCast.GetStorage()->Datatype(), operandSelfCast.GetShape());
     CALL(
         Scatter, *Program::GetInstance().GetCurrentFunction(),

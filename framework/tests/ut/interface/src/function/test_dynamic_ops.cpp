@@ -508,8 +508,8 @@ TEST_F(DynamicOpsTest, IndexAdd_)
         TileShape::Current().SetVecTile(1, 16);
         ProgramData::GetInstance().AppendInputs(
             {RawTensorData::CreateConstantTensor<float>(self, 1.0),
-            RawTensorData::CreateConstantTensor<float>(source, 1.0),
-            RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
+             RawTensorData::CreateConstantTensor<float>(source, 1.0),
+             RawTensorData::CreateConstantTensor<int32_t>(index, 0)});
         ProgramData::GetInstance().AppendOutputs({
             RawTensorData::CreateConstantTensor<float>(out, 1.0),
         });
@@ -758,7 +758,7 @@ TEST_F(DynamicOpsTest, OpsElementWise)
             if (i == 0) {
                 r0Data = t0Data + t1Data;
             } else {
-                r0Data = r0Data + t1Data;     // +t0, +t1
+                r0Data = r0Data + t1Data; // +t0, +t1
                 if (i < condThreshold) {
                     r0Data = r0Data + t2Data; // +t2 * 5
                 } else {
@@ -768,7 +768,7 @@ TEST_F(DynamicOpsTest, OpsElementWise)
             }
         }
         for (int i = 0; i < loopCount; i++) {
-            r0Data = r0Data + t1Data;     // +t1
+            r0Data = r0Data + t1Data; // +t1
             if (i < condThreshold) {
                 r0Data = r0Data + t2Data; // +t2 * 5
             } else {
@@ -2015,95 +2015,6 @@ TEST_F(DynamicOpsTest, ScatterINT16)
         });
         ProgramData::GetInstance().AppendGoldens({
             RawTensorData::CreateConstantTensor<int16_t>(out, 2),
-        });
-        Scatter(self, idx, src, out, b, s);
-    });
-    EXPECT_NO_VERIFY_FAILED(logOutput);
-}
-
-TEST_F(DynamicOpsTest, ScatterUINT16)
-{
-    std::string logOutput = CaptureLogFileAndEcho([]() {
-        config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
-        config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
-
-        int64_t b = 1;
-        int64_t s = 8;
-        Tensor self(DT_UINT16, {b, s}, "self");
-        Tensor idx(DT_INT64, {b, s}, "idx");
-        Tensor src(DT_UINT16, {b, s}, "src");
-        Tensor out(DT_UINT16, {b, s}, "out");
-
-        ProgramData::GetInstance().AppendInputs({
-            RawTensorData::CreateConstantTensor<uint16_t>(self, 1),
-            RawTensorData::CreateConstantTensor<int64_t>(idx, 0),
-            RawTensorData::CreateConstantTensor<uint16_t>(src, 2),
-        });
-        ProgramData::GetInstance().AppendOutputs({
-            RawTensorData::CreateConstantTensor<uint16_t>(out, 2),
-        });
-        ProgramData::GetInstance().AppendGoldens({
-            RawTensorData::CreateConstantTensor<uint16_t>(out, 2),
-        });
-        Scatter(self, idx, src, out, b, s);
-    });
-    EXPECT_NO_VERIFY_FAILED(logOutput);
-}
-
-TEST_F(DynamicOpsTest, ScatterUINT32)
-{
-    std::string logOutput = CaptureLogFileAndEcho([]() {
-        config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
-        config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
-        std::vector<std::string> passList = {"all"};
-        config::SetVerifyOption(KEY_PASS_VERIFY_FILTER, passList);
-
-        int64_t b = 1;
-        int64_t s = 8;
-        Tensor self(DT_UINT32, {b, s}, "self");
-        Tensor idx(DT_INT64, {b, s}, "idx");
-        Tensor src(DT_UINT32, {b, s}, "src");
-        Tensor out(DT_UINT32, {b, s}, "out");
-
-        ProgramData::GetInstance().AppendInputs({
-            RawTensorData::CreateConstantTensor<uint32_t>(self, 1),
-            RawTensorData::CreateConstantTensor<int64_t>(idx, 0),
-            RawTensorData::CreateConstantTensor<uint32_t>(src, 2),
-        });
-        ProgramData::GetInstance().AppendOutputs({
-            RawTensorData::CreateConstantTensor<uint32_t>(out, 2),
-        });
-        ProgramData::GetInstance().AppendGoldens({
-            RawTensorData::CreateConstantTensor<uint32_t>(out, 2),
-        });
-        Scatter(self, idx, src, out, b, s);
-    });
-    EXPECT_NO_VERIFY_FAILED(logOutput);
-}
-
-TEST_F(DynamicOpsTest, ScatterUINT64)
-{
-    std::string logOutput = CaptureLogFileAndEcho([]() {
-        config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
-        config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
-
-        int64_t b = 1;
-        int64_t s = 8;
-        Tensor self(DT_UINT64, {b, s}, "self");
-        Tensor idx(DT_INT64, {b, s}, "idx");
-        Tensor src(DT_UINT64, {b, s}, "src");
-        Tensor out(DT_UINT64, {b, s}, "out");
-
-        ProgramData::GetInstance().AppendInputs({
-            RawTensorData::CreateConstantTensor<uint64_t>(self, 1),
-            RawTensorData::CreateConstantTensor<int64_t>(idx, 0),
-            RawTensorData::CreateConstantTensor<uint64_t>(src, 2),
-        });
-        ProgramData::GetInstance().AppendOutputs({
-            RawTensorData::CreateConstantTensor<uint64_t>(out, 2),
-        });
-        ProgramData::GetInstance().AppendGoldens({
-            RawTensorData::CreateConstantTensor<uint64_t>(out, 2),
         });
         Scatter(self, idx, src, out, b, s);
     });
