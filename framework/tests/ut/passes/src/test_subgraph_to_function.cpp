@@ -552,6 +552,54 @@ TEST_F(SubgraphToFunctionTest, TestBasicSubgraphConversion)
     EXPECT_EQ(leafFunc->Operations().size(), 4);
 }
 
+static Function* BuildIsomorphicSubgraphsWithDifferentVecHashOrder(ComputationalGraphBuilder& G)
+{
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {16, 16}, {"input", "out0", "out1"}));
+    EXPECT_TRUE(G.AddOps(
+        {Opcode::OP_ABS, Opcode::OP_ABS}, {{"input"}, {"input"}}, {{"out0"}, {"out1"}}, {"abs0", "abs1"}, true));
+
+    G.GetTensor("input")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    G.GetTensor("out0")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    G.GetTensor("out1")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR);
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"out0", "out1"}));
+
+    G.GetOp("abs0")->UpdateSubgraphID(0);
+    G.GetOp("abs1")->UpdateSubgraphID(1);
+    G.GetOp("abs0")->SetHashOrderInfo(
+        OpAttributeKey::vecMergeHashOrder, OpAttributeKey::vecMergeSubgraphCount, "func8_0", 4);
+    G.GetOp("abs1")->SetHashOrderInfo(
+        OpAttributeKey::vecMergeHashOrder, OpAttributeKey::vecMergeSubgraphCount, "func9_0", 1);
+
+    auto* function = G.GetFunction();
+    function->SetTotalSubGraphCount(2);
+    return function;
+}
+
+TEST_F(SubgraphToFunctionTest, PreservesHashOrderInfoOnIsomorphicCallOps)
+{
+    ComputationalGraphBuilder G;
+    Function* function = BuildIsomorphicSubgraphsWithDifferentVecHashOrder(G);
+
+    SubgraphToFunction pass;
+    EXPECT_EQ(pass.RunOnFunction(*function), SUCCESS);
+
+    Function* rootFunc = function->rootFunc_;
+    ASSERT_NE(rootFunc, nullptr);
+    EXPECT_EQ(rootFunc->programs_.size(), 1);
+    const auto& callOps = rootFunc->Operations();
+    ASSERT_EQ(callOps.size(), 2);
+
+    auto firstInfo = callOps[0].GetHashOrderInfo(OpAttributeKey::vecMergeHashOrder,
+        OpAttributeKey::vecMergeSubgraphCount);
+    auto secondInfo = callOps[1].GetHashOrderInfo(OpAttributeKey::vecMergeHashOrder,
+        OpAttributeKey::vecMergeSubgraphCount);
+    EXPECT_EQ(firstInfo.first, "func8_0");
+    EXPECT_EQ(firstInfo.second, 4);
+    EXPECT_EQ(secondInfo.first, "func9_0");
+    EXPECT_EQ(secondInfo.second, 1);
+}
+
 static void BuildMultiSubgraphDependencyGraph(ComputationalGraphBuilder& G)
 {
     std::vector<std::string> tensorNames = {"input", "aic_out", "aiv_out", "final_out"};

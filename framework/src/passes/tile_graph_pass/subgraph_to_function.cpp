@@ -548,6 +548,7 @@ Status SubgraphToFunction::ProcessSubgraph(
     callOp->SetSubFuncInvokeInfo(subFuncInvokeInfos[i]);
 
     SetSemanticLabel(subgraph, *callOp);
+    SetHashOrderInfoOnCallOp(subgraph, *callOp);
 
     return ProcessCacheResult(result, i, programIdx, outputFuncList, *callOp);
 }
@@ -628,6 +629,31 @@ void SubgraphToFunction::SetSemanticLabel(const std::vector<std::shared_ptr<Oper
         }
     }
     callOp.SetSemanticLabel(label);
+}
+
+void SubgraphToFunction::CopyHashOrderInfoToCallOp(
+    const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp, const std::string& hashOrderKey,
+    const std::string& countKey) const
+{
+    for (const auto& op : subgraph) {
+        if (op == nullptr || !op->HasAttribute(hashOrderKey) || !op->HasAttribute(countKey)) {
+            continue;
+        }
+        auto [hashOrder, subgraphCount] = op->GetHashOrderInfo(hashOrderKey, countKey);
+        callOp.SetHashOrderInfo(hashOrderKey, countKey, hashOrder, subgraphCount);
+        return;
+    }
+}
+
+void SubgraphToFunction::SetHashOrderInfoOnCallOp(
+    const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp) const
+{
+    CopyHashOrderInfoToCallOp(
+        subgraph, callOp, OpAttributeKey::l1ReuseHashOrder, OpAttributeKey::l1ReuseSubgraphCount);
+    CopyHashOrderInfoToCallOp(
+        subgraph, callOp, OpAttributeKey::cubeMergeHashOrder, OpAttributeKey::cubeMergeSubgraphCount);
+    CopyHashOrderInfoToCallOp(
+        subgraph, callOp, OpAttributeKey::vecMergeHashOrder, OpAttributeKey::vecMergeSubgraphCount);
 }
 
 Status SubgraphToFunction::IslandToFunction(Function& function)

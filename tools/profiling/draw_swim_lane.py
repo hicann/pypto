@@ -850,7 +850,8 @@ def load_dyn_topo(file_path, func_data):
             root_index = get_func_index(root_hash, func_data)
             leaf_index = get_func_index(func_hash, func_data)
             succs = fields[11:]
-            l1_info, cube_info, vec_info = fcvt.get_hash_order_info(leaf_index, func_data)
+            l1_info, cube_info, vec_info = fcvt.get_hash_order_info_for_task(
+                root_index, opmagic, leaf_index, func_data)
             topo.append(
                 {
                     "taskId": seq_no << 32 | task_id,

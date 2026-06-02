@@ -14,6 +14,13 @@ import json
 from enum import Enum
 
 
+_HASH_ORDER_KEYS = {
+    "l1_reuse": ("l1_reuse_hashOrder", "l1_reuse_subgraphCount"),
+    "cube_merge": ("cube_merge_hashOrder", "cube_merge_subgraphCount"),
+    "vec_merge": ("vec_merge_hashOrder", "vec_merge_subgraphCount"),
+}
+
+
 def get_sematic(func_index, opmagic, func_data):
     if func_index >= len(func_data):
         return ""
@@ -24,6 +31,21 @@ def get_sematic(func_index, opmagic, func_data):
             else:
                 return ""
     return ""
+
+
+def _extract_hash_order_info_from_op(op):
+    op_attr = op.get("op_attr", {})
+    infos = []
+
+    for _, (hash_key, count_key) in _HASH_ORDER_KEYS.items():
+        hash_order = op_attr.get(hash_key)
+        count = op_attr.get(count_key)
+        if hash_order is not None and count is not None:
+            infos.append({"hashOrder": hash_order, "subgraphCount": count})
+        else:
+            infos.append(None)
+
+    return tuple(infos)
 
 
 def get_hash_order_info(func_index, func_data):
@@ -43,32 +65,37 @@ def get_hash_order_info(func_index, func_data):
     if func_index >= len(func_data):
         return None, None, None
 
-    # Attribute key names for hashOrder info
-    _hash_order_keys = {
-        "l1_reuse": ("l1_reuse_hashOrder", "l1_reuse_subgraphCount"),
-        "cube_merge": ("cube_merge_hashOrder", "cube_merge_subgraphCount"),
-        "vec_merge": ("vec_merge_hashOrder", "vec_merge_subgraphCount"),
-    }
-
     func = func_data[func_index]
 
     for op in func["operations"]:
-        op_attr = op.get("op_attr", {})
-        infos = []
-
-        for _, (hash_key, count_key) in _hash_order_keys.items():
-            hash_order = op_attr.get(hash_key)
-            count = op_attr.get(count_key)
-            if hash_order is not None and count is not None:
-                infos.append({"hashOrder": hash_order, "subgraphCount": count})
-            else:
-                infos.append(None)
+        infos = _extract_hash_order_info_from_op(op)
 
         # Return if any valid info found
         if any(infos):
             return tuple(infos)
 
     return None, None, None
+
+
+def get_hash_order_info_by_opmagic(func_index, opmagic, func_data):
+    """Get HashOrderInfo from a specific operation in program.json."""
+    if func_index >= len(func_data):
+        return None, None, None
+
+    for op in func_data[func_index]["operations"]:
+        if op.get("opmagic") != opmagic:
+            continue
+        return _extract_hash_order_info_from_op(op)
+
+    return None, None, None
+
+
+def get_hash_order_info_for_task(root_index, opmagic, leaf_index, func_data):
+    """Get task HashOrderInfo, preferring root CALL op metadata over shared leaf metadata."""
+    infos = get_hash_order_info_by_opmagic(root_index, opmagic, func_data)
+    if any(infos):
+        return infos
+    return get_hash_order_info(leaf_index, func_data)
 
 
 # Keep old functions for backward compatibility

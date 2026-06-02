@@ -60,6 +60,10 @@ private:
         const std::tuple<Function*, Operation*, bool>& result, size_t i, size_t& programIdx,
         std::vector<Function*>& outputFuncList, Operation& callOp);
     void SetSemanticLabel(const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp);
+    void CopyHashOrderInfoToCallOp(
+        const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp, const std::string& hashOrderKey,
+        const std::string& countKey) const;
+    void SetHashOrderInfoOnCallOp(const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp) const;
     void InitializeRootFunction(Function& function, Function& rootFunc);
     Status IslandToFunction(Function& function);
     void ConstructnList(Function& function);
