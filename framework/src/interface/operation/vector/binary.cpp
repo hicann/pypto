@@ -1538,7 +1538,7 @@ Tensor Axpy(const Tensor& self, const Tensor& other, float alpha)
     auto selfDtype = self.GetDataType();
     auto otherDtype = other.GetDataType();
     if (selfDtype == otherDtype) {
-        std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
+        std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "AXPY");
     } else {
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, selfDtype == DT_FP32 && otherDtype == DT_FP16)

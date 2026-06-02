@@ -30,8 +30,8 @@ axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor
 
 | 参数名 | 输入/输出 | 说明                                                                                                                                                                                                                           |
 | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| y      | 输入/输出 | 目标张量，将被原地更新。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16。<br> **不支持广播**：y 的形状必须能容纳 x 的广播结果，即 y 的任意维度不能为 1（除非 x 对应维度也为 1）。<br> 不支持空Tensor；Shape支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| x      | 输入      | 源张量，可广播到 y 的形状。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16。<br> 支持广播：x 可以广播到 y 的形状（如 x 形状为 `[m, 1]`，y 形状为 `[m, n]`）。<br> 不支持空Tensor；Shape支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。                                                 |
+| y      | 输入/输出 | 目标张量，将被原地更新。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16。<br> **不支持广播**：y 的形状必须能容纳 x 的广播结果，即 y 的任意维度不能为 1（除非 x 对应维度也为 1）。<br> 不支持空Tensor；Shape支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| x      | 输入      | 源张量，可广播到 y 的形状。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16。<br> 支持广播：x 可以广播到 y 的形状（如 x 形状为 `[m, 1]`，y 形状为 `[m, n]`）。<br> 不支持空Tensor；Shape支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。                                                 |
 | alpha  | 输入      | 缩放因子，用于对 x 进行缩放。<br> 支持的类型为：int、float，默认值为 1.0。<br> alpha 的数据类型会自动转换为与 y 一致。                                                                                                            |
 
 ## 返回值说明
@@ -41,9 +41,8 @@ axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor
 ## 约束说明
 
 1. **dtype 约束**：
-   - 相同 dtype：支持 DT_FP32 + DT_FP32、DT_FP16 + DT_FP16、DT_BF16 + DT_BF16。
+   - 相同 dtype：支持 DT_FP32 + DT_FP32、DT_FP16 + DT_FP16。
    - 混合 dtype：仅支持 DT_FP32 (y) + DT_FP16 (x)，其他组合不支持。
-   - DT_BF16 在内部会转换为 DT_FP32 进行计算。
 2. **广播约束**：
    - y 张量**不支持广播**。如果 y 的某个维度为 1 而 x 对应维度不为 1，将报错。
    - x 张量**支持广播**到 y 的形状。
@@ -120,14 +119,6 @@ diff = pypto.sub(y, y_backup)  # 计算 y 与原始值的差值
 y = pypto.tensor([32, 32], pypto.DT_FP32)  # y 为 FP32
 x = pypto.tensor([32, 32], pypto.DT_FP16)  # x 为 FP16
 y.axpy_(x, alpha=1.0)  # 支持 FP32(y) + FP16(x)
-```
-
-#### BF16 dtype
-
-```python
-y = pypto.tensor([32, 32], pypto.DT_BF16)
-x = pypto.tensor([32, 32], pypto.DT_BF16)
-y.axpy_(x, alpha=2.0)  # BF16 在内部转换为 FP32 计算
 ```
 
 #### 一维场景

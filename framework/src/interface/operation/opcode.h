@@ -873,7 +873,6 @@ const std::unordered_set<Opcode> UNSUPPORT_BF16_OPS{
     Opcode::OP_RELU,
     Opcode::OP_RECIPROCAL,
     Opcode::OP_ABS,
-    Opcode::OP_AXPY,
     Opcode::OP_LN,
     Opcode::OP_LOGICALNOT,
     Opcode::OP_TRIUL,
