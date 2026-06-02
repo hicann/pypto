@@ -13,6 +13,7 @@
  * \brief
  */
 
+#include "tilefwk/data_type.h"
 #include "unary.h"
 #include "binary.h"
 #include "tensor_transformation.h"
@@ -1050,6 +1051,13 @@ Tensor CeilDiv(const Tensor& self, const Tensor& other)
     Tensor resultFp32 = Div(selfFp32, otherFp32);
     resultFp32 = Ceil(resultFp32);
     Tensor result = Cast(resultFp32, DT_INT32);
+    Tensor target = Mul(result, other);
+    Tensor diff = Sub(self, target);
+    Tensor sgn_diff = Sign(diff);
+    Tensor sgn_other = Sign(other);
+    Tensor product_sgn = Mul(sgn_diff, sgn_other);
+    Tensor inc = Clip(product_sgn, Element(DT_INT32, 0), Element(DT_INT32, 1));
+    result = Add(result, inc);
     return result;
 }
 
@@ -1064,6 +1072,18 @@ Tensor CeilDiv(const Tensor& self, const Element& other)
     Tensor resultFp32 = Div(selfFp32, otherFp32);
     resultFp32 = Ceil(resultFp32);
     Tensor result = Cast(resultFp32, DT_INT32);
+    Tensor target = Mul(result, other);
+    Tensor diff = Sub(self, target);
+    Tensor sgn_diff = Sign(diff);
+    Element sgn_other;
+    if (other.GetSignedData() > 0) {
+        sgn_other = Element(DT_INT32, 1);
+    } else {
+        sgn_other = Element(DT_INT32, -1);
+    }
+    Tensor product_sgn = Mul(sgn_diff, sgn_other);
+    Tensor inc = Clip(product_sgn, Element(DT_INT32, 0), Element(DT_INT32, 1));
+    result = Add(result, inc);
     return result;
 }
 
