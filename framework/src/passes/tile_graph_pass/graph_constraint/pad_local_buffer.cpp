@@ -411,10 +411,14 @@ void PadLocalBuffer::DoPadding(Function& function)
         op.GetAttr(OpAttributeKey::rowPad, inputRowPad);
         for (size_t i = 0; i < op.iOperand.size(); i++) {
             auto& in = op.iOperand[i];
-            if (visited.count(in) != 0)
-                continue;
-            visited.emplace(in);
             bool needRowPad = ((inputRowPad.size() > i) && inputRowPad[i]);
+            if (visited.count(in) != 0) {
+                if (needRowPad && IsVector(in) && in->tensor->GetRawDataSize() != 0) {
+                    PadVector256(op, in, needRowPad);
+                }
+                continue;
+            }
+            visited.emplace(in);
             PadSingleTensor(op, in, visitedRaw, needRowPad);
         }
     }

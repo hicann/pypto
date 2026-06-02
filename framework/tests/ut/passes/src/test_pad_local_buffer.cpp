@@ -1055,6 +1055,33 @@ TEST_F(TestPadLocalBuffer, padCmpInputTo256)
     EXPECT_EQ(graphBuilder.GetTensor("t2")->GetRawTensor()->GetRawShape()[0], 3);
 }
 
+TEST_F(TestPadLocalBuffer, padCmpInputSharedWithVnchwconvTo256)
+{
+    ComputationalGraphBuilder graphBuilder;
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {3, 3}, MemoryType::MEM_DEVICE_DDR, "in1"), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {3, 3}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_COPY_IN, {"in1"}, {"t1"}, "copyin1", true), true);
+
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_FP32, {3, 3}, MemoryType::MEM_UB, "transOut"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_TRANSPOSE_VNCHWCONV, {"t1"}, {"transOut"}, "transpose1", true), true);
+    graphBuilder.GetOp("transpose1")->SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{1, 0});
+
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_BOOL, {3, 3}, MemoryType::MEM_UB, "cmpOut"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_CMP, {"t1", "transOut"}, {"cmpOut"}, "cmp1", true), true);
+    EXPECT_EQ(graphBuilder.AddTensor(DataType::DT_BOOL, {3, 3}, MemoryType::MEM_DEVICE_DDR, "out1"), true);
+    EXPECT_EQ(graphBuilder.AddOp(Opcode::OP_COPY_OUT, {"cmpOut"}, {"out1"}, "copyout1", true), true);
+
+    std::vector<bool> dimMap({true, true});
+    graphBuilder.GetOp("cmp1")->SetAttr(OpAttributeKey::rowPad, dimMap);
+    auto* functionPtr = graphBuilder.GetFunction();
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*functionPtr), SUCCESS);
+    EXPECT_EQ(graphBuilder.GetTensor("t1")->GetRawTensor()->GetRawShape()[0], 10);
+    EXPECT_EQ(graphBuilder.GetTensor("transOut")->GetRawTensor()->GetRawShape()[0], 10);
+    EXPECT_EQ(graphBuilder.GetTensor("t1")->GetRawTensor()->GetRawShape()[1], 8);
+    EXPECT_EQ(graphBuilder.GetTensor("transOut")->GetRawTensor()->GetRawShape()[1], 8);
+}
+
 TEST_F(TestPadLocalBuffer, padCmpsInputTo256)
 {
     ComputationalGraphBuilder graphBuilder;
