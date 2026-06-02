@@ -105,7 +105,7 @@ TypePtr DeduceDebugDumpTensorType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 3) << "debug.dump_tensor requires exactly 3 arguments (tensor, offsets, shapes), but got "
+    CHECK(args.size() == 0x3) << "debug.dump_tensor requires exactly 3 arguments (tensor, offsets, shapes), but got "
                             << args.size();
 
     auto tensor_type = As<TensorType>(args[0]->GetType());
@@ -174,14 +174,14 @@ TypePtr DeduceDebugDumpTileType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    CHECK(args.size() == 1 || args.size() == 3)
+    CHECK(args.size() == 1 || args.size() == 0x3)
         << "debug.dump_tile requires 1 argument (tile) or 3 arguments (tile, offsets, shapes), but got " << args.size();
 
     auto tile_type = As<TileType>(args[0]->GetType());
     CHECK(tile_type) << "debug.dump_tile requires first argument to be a TileType, but got "
                      << args[0]->GetType()->TypeName();
 
-    if (args.size() == 3) {
+    if (args.size() == 0x3) {
         auto offsets = As<MakeTuple>(args[1]);
         CHECK(offsets) << "debug.dump_tile requires second argument to be a MakeTuple (offsets)";
 
@@ -189,7 +189,7 @@ TypePtr DeduceDebugDumpTileType(
         CHECK(shapes) << "debug.dump_tile requires third argument to be a MakeTuple (shapes)";
 
         const size_t rank = tile_type->shape_.size();
-        CHECK(rank == 2) << "debug.dump_tile currently only supports 2D tile windows, but got rank " << rank;
+        CHECK(rank == 0x2) << "debug.dump_tile currently only supports 2D tile windows, but got rank " << rank;
         CHECK(offsets->elements_.size() == rank) << "debug.dump_tile offsets count (" << offsets->elements_.size()
                                                  << ") must match tile rank (" << rank << ")";
         CHECK(shapes->elements_.size() == rank) << "debug.dump_tile shapes count (" << shapes->elements_.size()

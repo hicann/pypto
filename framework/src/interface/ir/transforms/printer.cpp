@@ -768,7 +768,7 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
         } else if (value.type() == typeid(std::string)) {
             stream_ << std::quoted(AnyCast<std::string>(value));
         } else if (value.type() == typeid(SymbolicScalar)) {
-            stream_ << AnyCast<SymbolicScalar>(value).Dump();
+            stream_ << (AnyCast<SymbolicScalar>(value).Dump());
         } else if (value.type() == typeid(std::vector<int>)) {
             auto values = AnyCast<std::vector<int>>(value);
             stream_ << "[";

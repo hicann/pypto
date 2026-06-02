@@ -57,7 +57,7 @@ DataType CanonicalizeForSyntaxScalarDtype(const DataType& dtype)
  */
 inline uint64_t hash_combine(uint64_t seed, uint64_t value)
 {
-    return seed ^ (value + 0x9e3779b9 + (seed << 6) + (seed >> 2));
+    return seed ^ (value + 0x9e3779b9 + (seed << 0x6) + (seed >> 0x2));
 }
 
 /**

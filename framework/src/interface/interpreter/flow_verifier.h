@@ -277,11 +277,13 @@ public:
             compareResultDetail.failNum = failNum_;
             compareResultDetail.mre = totalAbsDiff / size_;
             compareResultDetail.mae = totalRelDiff / size_;
-            compareResultDetail.mreTop8 = GetMeanTopN(8, false);
-            compareResultDetail.mreTop1Permil = GetMeanTopN(1000, false);
+            constexpr size_t topNCount = 8;
+            constexpr size_t top1PermilCount = 1000;
+            compareResultDetail.mreTop8 = GetMeanTopN(topNCount, false);
+            compareResultDetail.mreTop1Permil = GetMeanTopN(top1PermilCount, false);
             sortByAbsAdesc();
-            compareResultDetail.maeTop1Permil = GetMeanTopN(1000, true);
-            compareResultDetail.maeTop8 = GetMeanTopN(8, true);
+            compareResultDetail.maeTop1Permil = GetMeanTopN(top1PermilCount, true);
+            compareResultDetail.maeTop8 = GetMeanTopN(topNCount, true);
             compareResultDetail.aMax = goldenMax_;
             compareResultDetail.aMin = goldenMin_;
             compareResultDetail.aAvg = goldenSum_ / size_;

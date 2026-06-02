@@ -63,7 +63,7 @@ private:
 };
 } // namespace npu::tile_fwk
 
-#define _PYPTO_HOST_LOG_INNER(level, module, has_module, fmt, ...)                                                    \
+#define PYPTO_HOST_LOG_INNER(level, module, has_module, fmt, ...)                                                    \
     do {                                                                                                              \
         if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                              \
             npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                    \
@@ -83,14 +83,14 @@ private:
     } while (0)
 
 #define PYPTO_HOST_LOG(level, module, fmt, ...) \
-    _PYPTO_HOST_LOG_INNER(level, module, true, fmt, ##__VA_ARGS__)
+    PYPTO_HOST_LOG_INNER(level, module, true, fmt, ##__VA_ARGS__)
 
 #define PYPTO_HOST_LOG_WITHOUT_MODULE(level, fmt, ...) \
-    _PYPTO_HOST_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
+    PYPTO_HOST_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
 
 #define MAX_LOG_LENGTH 880
 
-#define _PYPTO_HOST_SPLIT_LOG_INNER(level, module, has_module, fmt, ...)                                             \
+#define PYPTO_HOST_SPLIT_LOG_INNER(level, module, has_module, fmt, ...)                                             \
     do {                                                                                                              \
         if (npu::tile_fwk::LogFuncInfo::Instance().setAttr != nullptr) {                                              \
             npu::tile_fwk::LogFuncInfo::Instance().setAttr(false);                                                    \
@@ -133,10 +133,10 @@ private:
     } while (0)
 
 #define PYPTO_HOST_SPLIT_LOG(level, module, fmt, ...) \
-    _PYPTO_HOST_SPLIT_LOG_INNER(level, module, true, fmt, ##__VA_ARGS__)
+    PYPTO_HOST_SPLIT_LOG_INNER(level, module, true, fmt, ##__VA_ARGS__)
 
 #define PYPTO_HOST_SPLIT_LOG_WITHOUT_MODULE(level, fmt, ...) \
-    _PYPTO_HOST_SPLIT_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
+    PYPTO_HOST_SPLIT_LOG_INNER(level, BOTTOM, false, fmt, ##__VA_ARGS__)
 
 #define PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(level, module, fmt, ...)                                 \
     do {                                                                                            \

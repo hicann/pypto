@@ -303,7 +303,6 @@ std::string Function::GetOriginalRawName() const
 {
     const std::string& OriginalRawName = funcRawName_;
     size_t prefixLen = FUNCTION_PREFIX.length();
-
     if (OriginalRawName.substr(0, prefixLen) == FUNCTION_PREFIX) {
         return OriginalRawName.substr(prefixLen);
     }
@@ -701,8 +700,7 @@ void Function::FillOriginInOutCast(std::vector<Operation*>& operationList)
         for (auto& iOperand : op->iOperand) {
             if (op->IsCall()) {
                 addOrigin(iOperand, originInCasts_);
-            }
-            else if (visited.count(iOperand) == 0) {
+            } else if (visited.count(iOperand) == 0) {
                 visited.insert(iOperand);
                 if (&iOperand->BelongFunction() != this) {
                     addOrigin(iOperand, originInCasts_);
@@ -1576,7 +1574,7 @@ Operation& Function::AddRawOperation(
         operations_.emplace_back(std::make_shared<Operation>(*this, opCode, iOperands, oOperands, updateTensorMap));
     opPosition_.emplace(op.get(), operations_.size() - 1);
     auto scopeConfig = config::GetPassOption<std::vector<int64_t>>(SG_SET_SCOPE);
-    if (scopeConfig.size() == 3) {
+    if (scopeConfig.size() == 0x3) {
         operations_.back()->SetScopeInfo(Operation::ScopeInfo::FromConfig(scopeConfig));
     } else if (scopeConfig.size() == 1) {
         operations_.back()->SetScopeId(static_cast<int>(scopeConfig[0]));
@@ -2453,7 +2451,7 @@ static const SymbolicScalar RUNTIME_COA_GetValidShape = AddRuntimeCoaPrefix("GET
 static const SymbolicScalar RUNTIME_COA_GetRawShape = AddRuntimeCoaPrefix("GET_PARAM_RAW_SHAPE");
 static const SymbolicScalar RUNTIME_COA_GetParam = AddRuntimeCoaPrefix("GET_PARAM");
 
-static int64_t MakeTensorIndex(int64_t magic) { return magic | (1UL << 62); }
+static int64_t MakeTensorIndex(int64_t magic) { return magic | (1UL << 62); } // Create tensor index by setting bit 62 of magic number
 
 static void MaybeNormalizeValue(
     const SymbolicScalar& coaFunc, std::vector<SymbolicScalar>& operandCoaList, int operandCoaIndex,

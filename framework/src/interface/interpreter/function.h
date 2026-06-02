@@ -155,7 +155,7 @@ struct FunctionFrame {
             opIndexMap[&ops[static_cast<size_t>(i)]] = i;
         }
 
-        ProcessInplaceOpIndices(ops, opIndexMap, indexOutcastOpIndices, 2);
+        ProcessInplaceOpIndices(ops, opIndexMap, indexOutcastOpIndices, 0x2);
         ProcessInplaceOpIndices(ops, opIndexMap, indexAddOpIndices, 0);
     }
 
@@ -177,7 +177,7 @@ struct FunctionFrame {
             Operation& op = ops[static_cast<size_t>(index)];
             auto iOps = op.GetIOperands();
             auto oOps = op.GetOOperands();
-            ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOps.size() > 2);
+            ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, iOps.size() > 0x2);
             ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, !oOps.empty());
 
             LogicalTensorPtr startTensor = iOps[startTensorIdx];
@@ -991,7 +991,8 @@ struct FunctionInterpreter {
         return -1;
     }
 
-    std::vector<uint64_t> UnBind(SymbolicScalar attr) {
+    std::vector<uint64_t> UnBind(SymbolicScalar attr)
+    {
         std::shared_ptr<RawSymbolicExpression> expr = std::static_pointer_cast<RawSymbolicExpression>(attr.Raw());
         ASSERT(expr->Opcode() == SymbolicOpcode::T_MOP_CALL);
         std::vector<uint64_t> parameters;
@@ -1019,7 +1020,6 @@ struct FunctionInterpreter {
         const std::string &groupName = groupNames[groupIndex];
         LogicalTensorDataPtr out;
         RawTensorDataPtr tmp;
-        
         auto outOp = op.GetOOperands()[0];
         if (frame.GetDataView(outOp) != nullptr) {
             out = frame.GetDataView(outOp);
@@ -1291,7 +1291,8 @@ struct FunctionInterpreter {
                         inDegree[consumer]--;
                     }
                 } else {
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
+                    constexpr int64_t retrySleepMicroseconds = 10;
+                    std::this_thread::sleep_for(std::chrono::microseconds(retrySleepMicroseconds));
                     queue.push(op);
                 }
             } else {
@@ -1394,7 +1395,7 @@ struct FunctionInterpreter {
         auto& outcastList = func->GetOutcast();
 
         for (const auto& tensorGroup : frame->inplaceTensorSetList) {
-            if (tensorGroup.size() < 2) {
+            if (tensorGroup.size() < 0x2) {
                 continue;
             }
 
@@ -1784,7 +1785,7 @@ public:
                 textLine += "," + row[i];
             }
         }
-        fprintf(file, "%s\n", textLine.c_str());
+        (void)fprintf(file, "%s\n", textLine.c_str());
     }
 
     std::string DumpStatistics() const

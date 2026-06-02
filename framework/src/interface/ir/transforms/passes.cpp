@@ -196,7 +196,6 @@ Pass RunVerifier(const std::vector<std::string>& disabled_rules)
 
             // Run verification and collect diagnostics
             auto diagnostics = verifier.Verify(program);
-
             // Log diagnostics
             if (!diagnostics.empty()) {
                 std::string report = IRVerifier::GenerateReport(diagnostics);

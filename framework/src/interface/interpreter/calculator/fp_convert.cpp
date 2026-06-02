@@ -39,7 +39,7 @@ static inline int RoundToNearestEvenFloatPos(float x)
     if (frac < 0.5f) {
         return base;
     }
-    return (base % 2 == 0) ? base : (base + 1);
+    return (base % 0x2 == 0) ? base : (base + 1);
 }
 
 // abs_times_512 = |value| / (1/512); OCP E4M3fn subnormal mantissa encoding (exp=0).
@@ -50,12 +50,12 @@ static uint8_t EncodeE4M3SubnormalFromAbsTimes512(float abs_times_512, int sign)
     }
     const int mant = RoundToNearestEvenFloatPos(abs_times_512);
     if (mant <= 0) {
-        return static_cast<uint8_t>(sign << 7);
+        return static_cast<uint8_t>(sign << 0x7);
     }
-    if (mant >= 8) {
-        return static_cast<uint8_t>((sign << 7) | (1 << 3));
+    if (mant >= 0x8) {
+        return static_cast<uint8_t>((sign << 0x7) | (1 << 0x3));
     }
-    return static_cast<uint8_t>((sign << 7) | mant);
+    return static_cast<uint8_t>((sign << 0x7) | mant);
 }
 
 // |v| in [1/64, 448); frexp path with exp=15 / overflow / renorm-to-subnormal.
@@ -72,15 +72,19 @@ static uint8_t EncodeE4M3NormalMagnitude(float absv, int sign)
         mant_scaled = 0.0f;
     }
     int mant = RoundToNearestEvenFloatPos(mant_scaled);
-    if (mant >= 8) {
+    if (mant >= 0x8) {
         mant = 0;
         stored_exp += 1;
     }
-    if (stored_exp > 15 || (stored_exp == 15 && mant >= 7)) {
-        return static_cast<uint8_t>((sign << 7) | 0x7E);
+    if (stored_exp > 0xf ||
+        (stored_exp == 0xf && mant >= 0x7)) {
+        return static_cast<uint8_t>((sign << 0x7) | 0x7E);
     }
-    if (stored_exp == 15) {
-        return static_cast<uint8_t>((sign << 7) | (15u << 3) | static_cast<uint8_t>(mant & 0x7));
+    if (stored_exp == 0xf) {
+        return static_cast<uint8_t>(
+            (sign << 0x7) |
+            (static_cast<uint8_t>(0xf) << 0x3) |
+            static_cast<uint8_t>(mant & 0x7));
     }
     if (stored_exp <= 0) {
         return EncodeE4M3SubnormalFromAbsTimes512(absv / kE4M3EncodeMinSubnormal, sign);
@@ -88,7 +92,7 @@ static uint8_t EncodeE4M3NormalMagnitude(float absv, int sign)
 
     const uint8_t exp_bits = static_cast<uint8_t>(stored_exp & 0xF);
     const uint8_t mant_bits = static_cast<uint8_t>(mant & 0x7);
-    return static_cast<uint8_t>((sign << 7) | (exp_bits << 3) | mant_bits);
+    return static_cast<uint8_t>((sign << 0x7) | (exp_bits << 0x3) | mant_bits);
 }
 
 static torch::Tensor Fp8E4M3ToFloat32(const torch::Tensor& self)
@@ -103,14 +107,14 @@ static torch::Tensor Fp8E4M3ToFloat32(const torch::Tensor& self)
     auto is_subnormal = (exp_bits == 0);
     auto subnormal_val = mant_bits.to(torch::kFloat32) * (1.0f / 8.0f) * (1.0f / 64.0f);
 
-    auto is_normal = (exp_bits >= 1) & (exp_bits <= 14);
+    auto is_normal = (exp_bits >= 1) & (exp_bits <= 0xe);
     auto exp_val = (exp_bits.to(torch::kFloat32) - 7.0f);
     auto mant_val = 1.0f + mant_bits.to(torch::kFloat32) / 8.0f;
     auto normal_val = torch::pow(2.0f, exp_val) * mant_val;
 
-    auto is_e15 = (exp_bits == 15);
-    auto is_e15_nan = is_e15 & (mant_bits == 7);
-    auto is_e15_fin = is_e15 & (mant_bits < 7);
+    auto is_e15 = (exp_bits == 0xf);
+    auto is_e15_nan = is_e15 & (mant_bits == 0x7);
+    auto is_e15_fin = is_e15 & (mant_bits < 0x7);
     auto e15_fin_val = 256.0f * (1.0f + mant_bits.to(torch::kFloat32) / 8.0f);
     auto nan_val = std::numeric_limits<float>::quiet_NaN();
 
@@ -134,12 +138,12 @@ static torch::Tensor Fp8E5M2ToFloat32(const torch::Tensor& self)
     auto is_subnormal = (exp_bits == 0);
     auto subnormal_val = mant_bits.to(torch::kFloat32) * (1.0f / 4.0f) * (1.0f / 16384.0f);
 
-    auto is_normal = (exp_bits >= 1) & (exp_bits <= 30);
+    auto is_normal = (exp_bits >= 1) & (exp_bits <= 0x1e);
     auto exp_val = (exp_bits.to(torch::kFloat32) - 15.0f);
     auto mant_val = 1.0f + mant_bits.to(torch::kFloat32) / 4.0f;
     auto normal_val = torch::pow(2.0f, exp_val) * mant_val;
 
-    auto is_special = (exp_bits == 31);
+    auto is_special = (exp_bits == 0x1f);
     auto is_inf = is_special & (mant_bits == 0);
     auto is_nan = is_special & (mant_bits != 0);
     auto inf_val = std::numeric_limits<float>::infinity();
@@ -209,7 +213,7 @@ static torch::Tensor Hf8ToFloat32(const torch::Tensor& self)
     out = torch::where(isN3, n3Val, out);
 
     // N4: D=10, E=3bits (|E_v| in [4,7]), M=bits[1:0]
-    auto isN4 = (top2 == 2);
+    auto isN4 = (top2 == 0x2);
     auto n4ExpBits = torch::bitwise_and(torch::bitwise_right_shift(lower7, at::Scalar(2)), at::Scalar(0x7));
     auto n4Sign = torch::bitwise_right_shift(n4ExpBits, at::Scalar(2));
     auto n4Mag = torch::bitwise_and(n4ExpBits, at::Scalar(0x3));
@@ -219,7 +223,7 @@ static torch::Tensor Hf8ToFloat32(const torch::Tensor& self)
     out = torch::where(isN4, n4Val, out);
 
     // N5: D=11, E=4bits (|E_v| in [8,15]), M=bits[0]
-    auto isN5 = (top2 == 3);
+    auto isN5 = (top2 == 0x3);
     auto n5ExpBits = torch::bitwise_and(torch::bitwise_right_shift(lower7, at::Scalar(1)), at::Scalar(0xF));
     auto n5Sign = torch::bitwise_right_shift(n5ExpBits, at::Scalar(3));
     auto n5Mag = torch::bitwise_and(n5ExpBits, at::Scalar(0x7));
@@ -254,11 +258,11 @@ static inline uint8_t EncodeFloatToFp8E4M3(float v)
 {
     if (std::isnan(v)) {
         const int sign = std::signbit(v) ? 1 : 0;
-        return static_cast<uint8_t>((sign << 7) | 0x7F);
+        return static_cast<uint8_t>((sign << 0x7) | 0x7F);
     }
     if (std::isinf(v)) {
         const int sign = std::signbit(v) ? 1 : 0;
-        return static_cast<uint8_t>((sign << 7) | 0x7E);
+        return static_cast<uint8_t>((sign << 0x7) | 0x7E);
     }
     if (std::fpclassify(v) == FP_ZERO) {
         return static_cast<uint8_t>(std::signbit(v) ? 0x80 : 0x00);
@@ -267,10 +271,10 @@ static inline uint8_t EncodeFloatToFp8E4M3(float v)
     const float absv = std::fabs(v);
     const int sign = std::signbit(v) ? 1 : 0;
     if (absv < kE4M3EncodeMinSubnormal) {
-        return static_cast<uint8_t>(sign << 7);
+        return static_cast<uint8_t>(sign << 0x7);
     }
     if (absv >= kE4M3EncodeMaxFinite) {
-        return static_cast<uint8_t>((sign << 7) | 0x7E);
+        return static_cast<uint8_t>((sign << 0x7) | 0x7E);
     }
     if (absv < kE4M3EncodeMinNormal) {
         return EncodeE4M3SubnormalFromAbsTimes512(absv / kE4M3EncodeMinSubnormal, sign);
@@ -301,7 +305,7 @@ static inline uint8_t EncodeFloatToHf8(float v)
     const float absv = std::fabs(v);
     if (std::isinf(v)) {
         // Saturate to the largest representable normal branch.
-        return static_cast<uint8_t>((sign << 7) | 0b11'0111'1);
+        return static_cast<uint8_t>((sign << 0x7) | 0b11'0111'1);
     }
     int expRaw;
     float frac = std::frexp(absv, &expRaw); // absv = frac * 2^expRaw, frac in [0.5,1)
@@ -310,53 +314,61 @@ static inline uint8_t EncodeFloatToHf8(float v)
     float mant = normalized - 1.0f;
 
     auto clampInt = [](int x, int lo, int hi) { return std::max(lo, std::min(hi, x)); };
-    if (exponent <= -16) {
+    if (exponent <= -0x10) {
         // Subnormal branch: value=S_v*2^(M_v-23), M_v in [0,7]
-        int mv = clampInt(static_cast<int>(std::round(std::log2(absv) + 23.0f)), 0, 7);
-        return static_cast<uint8_t>((sign << 7) | mv);
+        int mv = clampInt(static_cast<int>(std::round(std::log2(absv) + 23.0f)), 0, 0x7);
+        return static_cast<uint8_t>((sign << 0x7) | mv);
     }
     if (exponent == 0) {
-        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 7);
-        return static_cast<uint8_t>((sign << 7) | (0b0001 << 3) | mv);
+        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 0x7);
+        return static_cast<uint8_t>((sign << 0x7) | (0b0001 << 0x3) | mv);
     }
     if (std::abs(exponent) == 1) {
         int mvRaw = static_cast<int>(std::round(mant * 8.0f));
-        if (mvRaw >= 8) {
+        if (mvRaw >= 0x8) {
             const float carried = std::ldexp(1.0f, exponent + 1);
             return EncodeFloatToHf8(sign ? -carried : carried);
         }
-        int mv = clampInt(mvRaw, 0, 7);
+        int mv = clampInt(mvRaw, 0, 0x7);
         uint8_t e = EncodeHf8Exponent(exponent, 1);
-        return static_cast<uint8_t>((sign << 7) | (0b001 << 4) | ((e & 0x1) << 3) | mv);
+        return static_cast<uint8_t>(
+            (sign << 0x7) | (0b001 << 0x4) |
+            ((e & 0x1) << 0x3) | mv);
     }
-    if (std::abs(exponent) <= 3) {
+    if (std::abs(exponent) <= 0x3) {
         int mvRaw = static_cast<int>(std::round(mant * 8.0f));
-        if (mvRaw >= 8) {
+        if (mvRaw >= 0x8) {
             const float carried = std::ldexp(1.0f, exponent + 1);
             return EncodeFloatToHf8(sign ? -carried : carried);
         }
-        int mv = clampInt(mvRaw, 0, 7);
+        int mv = clampInt(mvRaw, 0, 0x7);
         uint8_t e = EncodeHf8Exponent(exponent, 2);
-        return static_cast<uint8_t>((sign << 7) | (0b01 << 5) | ((e & 0x3) << 3) | mv);
+        return static_cast<uint8_t>(
+            (sign << 0x7) | (0b01 << 0x5) |
+            ((e & 0x3) << 0x3) | mv);
     }
-    if (std::abs(exponent) <= 7) {
+    if (std::abs(exponent) <= 0x7) {
         int mvRaw = static_cast<int>(std::round(mant * 4.0f));
-        if (mvRaw >= 4) {
+        if (mvRaw >= 0x4) {
             const float carried = std::ldexp(1.0f, exponent + 1);
             return EncodeFloatToHf8(sign ? -carried : carried);
         }
-        int mv = clampInt(mvRaw, 0, 3);
+        int mv = clampInt(mvRaw, 0, 0x3);
         uint8_t e = EncodeHf8Exponent(exponent, 3);
-        return static_cast<uint8_t>((sign << 7) | (0b10 << 5) | ((e & 0x7) << 2) | mv);
+        return static_cast<uint8_t>(
+            (sign << 0x7) | (0b10 << 0x5) |
+            ((e & 0x7) << 0x2) | mv);
     }
     int mvRaw = static_cast<int>(std::round(mant * 2.0f));
-    if (mvRaw >= 2) {
+    if (mvRaw >= 0x2) {
         const float carried = std::ldexp(1.0f, exponent + 1);
         return EncodeFloatToHf8(sign ? -carried : carried);
     }
     int mv = clampInt(mvRaw, 0, 1);
     uint8_t e = EncodeHf8Exponent(exponent, 4);
-    return static_cast<uint8_t>((sign << 7) | (0b11 << 5) | ((e & 0xF) << 1) | mv);
+    return static_cast<uint8_t>(
+        (sign << 0x7) | (0b11 << 0x5) |
+        ((e & 0xF) << 0x1) | mv);
 }
 
 static torch::Tensor Float32ToFp8E4M3(const torch::Tensor& self)
@@ -402,24 +414,24 @@ static inline uint8_t EncodeFloatToFp8E5M2(float v)
     float absv = std::fabs(v);
     int sign = std::signbit(v) ? 1 : 0;
     if (absv < kMinSubnormal) {
-        return static_cast<uint8_t>(sign << 7);
+        return static_cast<uint8_t>(sign << 0x7);
     }
     if (absv > kMaxVal) {
-        return static_cast<uint8_t>((sign << 7) | 0x7C);
+        return static_cast<uint8_t>((sign << 0x7) | 0x7C);
     }
     if (absv < kMinNormal) {
         int mant = static_cast<int>(std::round(absv / kMinSubnormal));
-        mant = std::clamp(mant, 1, 3);
-        return static_cast<uint8_t>((sign << 7) | mant);
+        mant = std::clamp(mant, 1, 0x3);
+        return static_cast<uint8_t>((sign << 0x7) | mant);
     }
     float log2v = std::log2(absv);
     int exp = static_cast<int>(std::round(log2v + 15.0f));
-    exp = std::clamp(exp, 1, 30);
+    exp = std::clamp(exp, 1, 0x1e);
     float scale = std::exp2(static_cast<float>(exp - 15));
     float scale_safe = (scale > 0.0f) ? scale : 1.0f;
     int mant = static_cast<int>(std::round((absv / scale_safe - 1.0f) * 4.0f));
-    mant = std::clamp(mant, 0, 3);
-    return static_cast<uint8_t>((sign << 7) | (exp << 2) | mant);
+    mant = std::clamp(mant, 0, 0x3);
+    return static_cast<uint8_t>((sign << 0x7) | (exp << 0x2) | mant);
 }
 
 static torch::Tensor Float32ToFp8E5M2(const torch::Tensor& self)
@@ -450,11 +462,11 @@ static torch::Tensor Float32ToFp8E8M0(const torch::Tensor& self)
         if (std::isnan(v) || std::fpclassify(v) == FP_ZERO || v < 0.0f) {
             enc = 0;
         } else if (std::isinf(v)) {
-            enc = 254;
+            enc = 0xfe;
         } else {
             float clamped = std::clamp(v, kMinVal, kMaxVal);
             int exp = static_cast<int>(std::round(std::log2(clamped) + 127.0f));
-            exp = std::clamp(exp, 1, 254);
+            exp = std::clamp(exp, 1, 0xfe);
             enc = static_cast<uint8_t>(exp);
         }
         out_ptr[i] = enc;
@@ -489,14 +501,14 @@ static uint8_t EncodeFp4NibbleNearest(float v, float (*decodeFn)(uint8_t))
 {
     if (std::isnan(v) || std::isinf(v)) {
         int sign = std::signbit(v) ? 1 : 0;
-        return static_cast<uint8_t>((sign << 3) | 0x7);
+        return static_cast<uint8_t>((sign << 0x3) | 0x7);
     }
     if (std::fpclassify(v) == FP_ZERO) {
         return static_cast<uint8_t>(std::signbit(v) ? 0x8 : 0x0);
     }
     uint8_t best = 0;
     float bestErr = std::numeric_limits<float>::infinity();
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < 0x10; ++i) {
         float d = decodeFn(static_cast<uint8_t>(i));
         float err = std::fabs(d - v);
         if (err < bestErr) {
@@ -551,7 +563,7 @@ torch::Tensor Fp4PackedToFloat32(const torch::Tensor& packed, DataType actualTyp
     }
     int64_t lastPacked = sizes.back();
     std::vector<int64_t> outSizes = sizes;
-    outSizes.back() = lastPacked * 2;
+    outSizes.back() = lastPacked * 0x2;
 
     auto out = torch::empty(outSizes, torch::TensorOptions().dtype(torch::kFloat32));
     if (lastPacked == 0) {
@@ -564,7 +576,7 @@ torch::Tensor Fp4PackedToFloat32(const torch::Tensor& packed, DataType actualTyp
     for (int64_t i = 0; i < outer; ++i) {
         for (int64_t j = 0; j < lastPacked; ++j) {
             uint8_t b = inPtr[i * lastPacked + j];
-            uint8_t hi = static_cast<uint8_t>((b >> 4) & 0x0F);
+            uint8_t hi = static_cast<uint8_t>((b >> 0x4) & 0x0F);
             uint8_t lo = static_cast<uint8_t>(b & 0x0F);
             // High nibble first: [e0, e1] -> byte = (e0 << 4) | e1
             outPtr[i * (lastPacked * 2) + j * 2] = DecodeNibble(hi, actualType);
@@ -582,9 +594,9 @@ torch::Tensor Float32ToFp4Packed(const torch::Tensor& self, DataType actualType)
         return torch::empty(sizes, torch::TensorOptions().dtype(torch::kUInt8));
     }
     int64_t lastFloat = sizes.back();
-    ASSERT(CalculatorErrorScene::FP4_PACKED_LAST_DIM_INVALID, lastFloat % 2 == 0)
+    ASSERT(CalculatorErrorScene::FP4_PACKED_LAST_DIM_INVALID, lastFloat % 0x2 == 0)
         << "FP4 packed conversion requires an even last dimension";
-    int64_t lastPacked = lastFloat / 2;
+    int64_t lastPacked = lastFloat / 0x2;
     std::vector<int64_t> outSizes = sizes;
     outSizes.back() = lastPacked;
 
@@ -603,7 +615,7 @@ torch::Tensor Float32ToFp4Packed(const torch::Tensor& self, DataType actualType)
             uint8_t n0 = EncodeNibble(f0, actualType);
             uint8_t n1 = EncodeNibble(f1, actualType);
             // High nibble first: [e0, e1] -> byte = (e0 << 4) | e1
-            outPtr[i * lastPacked + j] = static_cast<uint8_t>((n0 << 4) | (n1 & 0x0F));
+            outPtr[i * lastPacked + j] = static_cast<uint8_t>((n0 << 0x4) | (n1 & 0x0F));
         }
     }
     return out;

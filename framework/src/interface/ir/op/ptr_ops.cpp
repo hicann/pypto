@@ -40,7 +40,7 @@ TypePtr DeduceAddPtrType(
     // ptr.addptr: Advance a pointer by an integer offset
     // Args: (ptr, offset)
     // Returns: same PtrType as input (pointer bumped but same element dtype)
-    CHECK(args.size() == 2) << "ptr.addptr requires exactly 2 arguments (ptr, offset), but got " << args.size();
+    CHECK(args.size() == 0x2) << "ptr.addptr requires exactly 2 arguments (ptr, offset), but got " << args.size();
 
     // First argument must be PtrType
     auto ptr_type = As<PtrType>(args[0]->GetType());
@@ -98,7 +98,7 @@ TypePtr DeduceMakeTensorType(
 {
     // ptr.make_tensor: Create a tensor view from a pointer with explicit shape and strides
     // Args: (ptr, shape_tuple, stride_tuple)
-    CHECK(args.size() == 3) << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got "
+    CHECK(args.size() == 0x3) << "ptr.make_tensor requires exactly 3 arguments (ptr, shape, stride), but got "
                             << args.size();
 
     // First argument must be PtrType (a raw pointer to typed global memory)

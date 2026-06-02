@@ -27,7 +27,6 @@
 #include "tilefwk/comm_group_recorder.h"
 #include "communication.h"
 
-
 namespace npu::tile_fwk {
 
 namespace {
@@ -42,13 +41,13 @@ float DecodeFp8E4M3(uint8_t x)
     if (expBits == 0) {
         return sign * (static_cast<float>(mantBits) / 8.0f) * (1.0f / 64.0f);
     }
-    if (expBits >= 1 && expBits <= 14) {
+    if (expBits >= 0x1 && expBits <= 0xe) {
         const float expVal = static_cast<float>(expBits) - 7.0f;
         const float mantVal = 1.0f + static_cast<float>(mantBits) / 8.0f;
         return sign * std::pow(2.0f, expVal) * mantVal;
     }
     // expBits == 15: OCP float8_e4m3fn — mant==111 is NaN; else finite (1+m/8)*2^8, max 448 at mant=110.
-    if (mantBits == 7) {
+    if (mantBits == 0x7) {
         return std::numeric_limits<float>::quiet_NaN();
     }
     const float mantVal = 1.0f + static_cast<float>(mantBits) / 8.0f;
@@ -64,7 +63,7 @@ float DecodeFp8E5M2(uint8_t x)
     if (expBits == 0) {
         return sign * (static_cast<float>(mantBits) / 4.0f) * (1.0f / 16384.0f);
     }
-    if (expBits >= 1 && expBits <= 30) {
+    if (expBits >= 0x1 && expBits <= 0x1e) {
         const float expVal = static_cast<float>(expBits) - 15.0f;
         const float mantVal = 1.0f + static_cast<float>(mantBits) / 4.0f;
         return sign * std::pow(2.0f, expVal) * mantVal;
@@ -92,7 +91,7 @@ float DecodeHf8(uint8_t x)
     const int top4 = lower7 >> 3;
     if (top4 == 0) { // Subnormal: D=0000, M in [0,7]
         const int mv = lower7 & 0x7;
-        return sign * std::pow(2.0f, static_cast<float>(mv - 23));
+        return sign * std::pow(2.0f, static_cast<float>(mv - 0x17));
     }
     if (top4 == 1) { // Normal: D=0001, E_v=0
         const int mv = lower7 & 0x7;
@@ -114,7 +113,7 @@ float DecodeHf8(uint8_t x)
         const int mv = lower7 & 0x7;
         return sign * std::pow(2.0f, static_cast<float>(ev)) * (1.0f + static_cast<float>(mv) / 8.0f);
     }
-    if (top2 == 2) { // D=10, E bit count = 3, |E_v| in [4,7]
+    if (top2 == 0x2) { // D=10, E bit count = 3, |E_v| in [4,7]
         const int eb = (lower7 >> 2) & 0x7;
         const int evSign = (eb >> 2) & 0x1;
         const int evAbs = 4 + (eb & 0x3);
@@ -363,7 +362,7 @@ std::string FlowVerifier::ParseErrorMsg(std::string errorMsg)
                       functionInterpreter_->GetLoopSymbolString();
     auto pos = errorMsg.find("OpError");
     if (pos != std::string::npos) {
-        return "[VERIFY:EXCEPTION:OP] " + msg + ", " + errorMsg.substr(0, pos) + errorMsg.substr(pos + 7);
+        return "[VERIFY:EXCEPTION:OP] " + msg + ", " + errorMsg.substr(0, pos) + errorMsg.substr(pos + 0x7);
     } else {
         return "[VERIFY:EXCEPTION:PATH] " + msg + "\n" + errorMsg;
     }
@@ -414,7 +413,7 @@ void FlowVerifier::VerifyTensorGraph(
 {
     const std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
     if (!groupNames.empty()) {
-        for (const std::string &groupName: groupNames) {
+        for (const std::string& groupName : groupNames) {
             SimulationCommManager::Instance().CreateSimulationCommContext(groupName, 0);
         }
     }
@@ -537,7 +536,7 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
 {
     functionInterpreter_->verifyType = VerifyType::PASS;
     functionInterpreter_->passIndex = passIndex;
-    functionInterpreter_->execDumpPassName = "Pass_" + ToString(passIndex, 2) + "_" + passIdentifier;
+    functionInterpreter_->execDumpPassName = "Pass_" + ToString(passIndex, 0x2) + "_" + passIdentifier;
     functionInterpreter_->execDumpFunPath = func->GetMagicName();
     functionInterpreter_->pathFuncMagic = func->GetFuncMagic();
     functionInterpreter_->pathFuncHash = func->GetFunctionHash().GetHash();
@@ -560,13 +559,14 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
 
     const std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
     if (!groupNames.empty()) {
-        for (const std::string &groupName: groupNames) {
+        for (const std::string& groupName : groupNames) {
             SimulationCommManager::Instance().CreateSimulationCommContext(groupName, passIndex + 1);
         }
     }
 
     std::vector<double> tolerance = config::GetVerifyOption<std::vector<double>>(KEY_PASS_VERIFY_ERROR_TOL);
-    ASSERT(VerifyEnableScene::TOLERANCE_MISMATCH, tolerance.size() == 2) << "Expected tolerance size: 2, actual tolerance size: " << tolerance.size();
+    ASSERT(VerifyEnableScene::TOLERANCE_MISMATCH, tolerance.size() == 0x2)
+        << "Expected tolerance size: " << 0x2 << ", actual tolerance size: " << tolerance.size();
     float rtol = static_cast<float>(tolerance[0]);
     float atol = static_cast<float>(tolerance[1]);
 

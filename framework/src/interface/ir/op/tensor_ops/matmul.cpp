@@ -58,7 +58,7 @@ TypePtr DeduceTensorMatMulType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.matmul requires exactly 2 Expr arguments (lhs, rhs)
-    CHECK(args.size() == 2) << "tensor.matmul requires exactly 2 arguments (lhs, rhs), but got " << args.size();
+    CHECK(args.size() == 0x2) << "tensor.matmul requires exactly 2 arguments (lhs, rhs), but got " << args.size();
 
     // First two arguments must be TensorType
     auto lhs_type = As<TensorType>(args[0]->GetType());
@@ -101,13 +101,13 @@ TypePtr DeduceTensorMatMulType(
     if (lhs_shape.size() == 1 && rhs_shape.size() == 1) {
         // Vector x vector (dot product): [K] x [K] -> scalar (0D tensor)
         output_shape = {};
-    } else if (lhs_shape.size() == 2 && rhs_shape.size() == 1) {
+    } else if (lhs_shape.size() == 0x2 && rhs_shape.size() == 1) {
         // Matrix x vector: [M, K] x [K] -> [M]
         output_shape = {lhs_shape[0]};
-    } else if (lhs_shape.size() == 1 && rhs_shape.size() == 2) {
+    } else if (lhs_shape.size() == 1 && rhs_shape.size() == 0x2) {
         // Vector x matrix: [K] x [K, N] -> [N]
         output_shape = {rhs_shape[1]};
-    } else if (lhs_shape.size() == 2 && rhs_shape.size() == 2) {
+    } else if (lhs_shape.size() == 0x2 && rhs_shape.size() == 0x2) {
         // 2D x 2D matrix multiplication
         ExprPtr m_dim = a_trans ? lhs_shape[1] : lhs_shape[0];
         ExprPtr n_dim = b_trans ? rhs_shape[0] : rhs_shape[1];
@@ -119,13 +119,13 @@ TypePtr DeduceTensorMatMulType(
         size_t rhs_ndim = rhs_shape.size();
 
         // Ensure both tensors have at least 2 dimensions for batched matmul
-        CHECK(lhs_ndim >= 2 && rhs_ndim >= 2)
+        CHECK(lhs_ndim >= 0x2 && rhs_ndim >= 0x2)
             << "tensor.matmul requires both tensors to have at least 2 dimensions "
             << "for batched matmul, but got lhs shape size " << lhs_ndim << " and rhs shape size " << rhs_ndim;
 
         // Extract batch dimensions (all except last 2)
-        std::vector<ExprPtr> lhs_batch(lhs_shape.begin(), lhs_shape.end() - 2);
-        std::vector<ExprPtr> rhs_batch(rhs_shape.begin(), rhs_shape.end() - 2);
+        std::vector<ExprPtr> lhs_batch(lhs_shape.begin(), lhs_shape.end() - 0x2);
+        std::vector<ExprPtr> rhs_batch(rhs_shape.begin(), rhs_shape.end() - 0x2);
 
         // Broadcast batch dimensions
         auto broadcast_result = BroadcastShapes(lhs_batch, rhs_batch);

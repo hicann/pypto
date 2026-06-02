@@ -67,7 +67,7 @@ TypePtr DeduceVFFromSecondArg(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    if (args.size() >= 2) {
+    if (args.size() >= 0x2) {
         return args[1]->GetType();
     }
     return std::make_shared<ScalarType>(DataType::FP32);
@@ -77,7 +77,7 @@ TypePtr DeduceVFFromDstArg(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
-    if (args.size() >= 3) {
+    if (args.size() >= 0x3) {
         return args[2]->GetType();
     }
     return std::make_shared<ScalarType>(DataType::FP32);

@@ -39,7 +39,7 @@ TypePtr DeduceBlockOpElementwiseBinaryType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name,
     bool require_int = false)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Both arguments must be TileType
     auto tile_type1 = As<TileType>(args[0]->GetType());
@@ -75,7 +75,7 @@ TypePtr DeduceBlockOpShiftBinaryType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     auto tile_type1 = As<TileType>(args[0]->GetType());
     auto tile_type2 = As<TileType>(args[1]->GetType());
@@ -142,7 +142,7 @@ TypePtr DeduceBlockOpTernaryType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name,
     bool require_int = false)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     auto tile_type1 = As<TileType>(args[0]->GetType());
     auto tile_type2 = As<TileType>(args[1]->GetType());
@@ -174,7 +174,7 @@ TypePtr DeduceBlockOpTriTileType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     auto tile_type1 = As<TileType>(args[0]->GetType());
     auto tile_type2 = As<TileType>(args[1]->GetType());
@@ -204,7 +204,7 @@ TypePtr DeduceBlockOpTileScalarTileType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     auto tile_type1 = As<TileType>(args[0]->GetType());
     CHECK(tile_type1) << "The operator " << op_name << " requires first argument to be a TileType, but got "
@@ -275,7 +275,7 @@ TypePtr DeduceBlockSelType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     CHECK(As<TileType>(args[0]->GetType()))
         << "The operator " << op_name << " requires first argument (mask) to be a TileType, but got "
@@ -296,7 +296,7 @@ TypePtr DeduceBlockSelScalarType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     auto tile_type1 = As<TileType>(args[0]->GetType());
     auto tile_type2 = As<TileType>(args[1]->GetType());
@@ -318,7 +318,7 @@ TypePtr DeduceBlockCmpType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name,
     bool is_scalar_rhs = false)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Validate cmp_type attribute exists
     bool has_cmp_type = false;

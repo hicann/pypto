@@ -204,32 +204,32 @@ void BindExpr(py::module& m)
     py::class_<OpName, BinaryExpr, std::shared_ptr<OpName>>(m, #OpName, Description)                              \
         .def(py::init<const ExprPtr&, const ExprPtr&, DataType, const Span&>(),                                   \
              py::arg("left"), py::arg("right"), py::arg("dtype"), py::arg("span"),                                \
-             "Create " Description);
+             "Create " Description)
 
     // Bind all binary expression nodes
-    BIND_BINARY_EXPR(Add, "Addition expression (left + right)")
-    BIND_BINARY_EXPR(Sub, "Subtraction expression (left - right)")
-    BIND_BINARY_EXPR(Mul, "Multiplication expression (left * right)")
-    BIND_BINARY_EXPR(FloorDiv, "Floor division expression (left // right)")
-    BIND_BINARY_EXPR(FloorMod, "Floor modulo expression (left % right)")
-    BIND_BINARY_EXPR(FloatDiv, "Float division expression (left / right)")
-    BIND_BINARY_EXPR(Min, "Minimum expression (min(left, right))")
-    BIND_BINARY_EXPR(Max, "Maximum expression (max(left, right))")
-    BIND_BINARY_EXPR(Pow, "Power expression (left ** right)")
-    BIND_BINARY_EXPR(Eq, "Equality expression (left == right)")
-    BIND_BINARY_EXPR(Ne, "Inequality expression (left != right)")
-    BIND_BINARY_EXPR(Lt, "Less than expression (left < right)")
-    BIND_BINARY_EXPR(Le, "Less than or equal to expression (left <= right)")
-    BIND_BINARY_EXPR(Gt, "Greater than expression (left > right)")
-    BIND_BINARY_EXPR(Ge, "Greater than or equal to expression (left >= right)")
-    BIND_BINARY_EXPR(And, "Logical and expression (left and right)")
-    BIND_BINARY_EXPR(Or, "Logical or expression (left or right)")
-    BIND_BINARY_EXPR(Xor, "Logical xor expression (left xor right)")
-    BIND_BINARY_EXPR(BitAnd, "Bitwise and expression (left & right)")
-    BIND_BINARY_EXPR(BitOr, "Bitwise or expression (left | right)")
-    BIND_BINARY_EXPR(BitXor, "Bitwise xor expression (left ^ right)")
-    BIND_BINARY_EXPR(BitShiftLeft, "Bitwise left shift expression (left << right)")
-    BIND_BINARY_EXPR(BitShiftRight, "Bitwise right shift expression (left >> right)")
+    BIND_BINARY_EXPR(Add, "Addition expression (left + right)");
+    BIND_BINARY_EXPR(Sub, "Subtraction expression (left - right)");
+    BIND_BINARY_EXPR(Mul, "Multiplication expression (left * right)");
+    BIND_BINARY_EXPR(FloorDiv, "Floor division expression (left // right)");
+    BIND_BINARY_EXPR(FloorMod, "Floor modulo expression (left % right)");
+    BIND_BINARY_EXPR(FloatDiv, "Float division expression (left / right)");
+    BIND_BINARY_EXPR(Min, "Minimum expression (min(left, right))");
+    BIND_BINARY_EXPR(Max, "Maximum expression (max(left, right))");
+    BIND_BINARY_EXPR(Pow, "Power expression (left ** right)");
+    BIND_BINARY_EXPR(Eq, "Equality expression (left == right)");
+    BIND_BINARY_EXPR(Ne, "Inequality expression (left != right)");
+    BIND_BINARY_EXPR(Lt, "Less than expression (left < right)");
+    BIND_BINARY_EXPR(Le, "Less than or equal to expression (left <= right)");
+    BIND_BINARY_EXPR(Gt, "Greater than expression (left > right)");
+    BIND_BINARY_EXPR(Ge, "Greater than or equal to expression (left >= right)");
+    BIND_BINARY_EXPR(And, "Logical and expression (left and right)");
+    BIND_BINARY_EXPR(Or, "Logical or expression (left or right)");
+    BIND_BINARY_EXPR(Xor, "Logical xor expression (left xor right)");
+    BIND_BINARY_EXPR(BitAnd, "Bitwise and expression (left & right)");
+    BIND_BINARY_EXPR(BitOr, "Bitwise or expression (left | right)");
+    BIND_BINARY_EXPR(BitXor, "Bitwise xor expression (left ^ right)");
+    BIND_BINARY_EXPR(BitShiftLeft, "Bitwise left shift expression (left << right)");
+    BIND_BINARY_EXPR(BitShiftRight, "Bitwise right shift expression (left >> right)");
 
 #undef BIND_BINARY_EXPR
 
@@ -237,13 +237,13 @@ void BindExpr(py::module& m)
     py::class_<OpName, UnaryExpr, std::shared_ptr<OpName>>(m, #OpName, Description)                              \
         .def(py::init<const ExprPtr&, DataType, const Span&>(),                                     \
              py::arg("operand"), py::arg("dtype"), py::arg("span"),                                 \
-             "Create " Description);
+             "Create " Description)
 
-    BIND_UNARY_EXPR(Abs, "Absolute value expression (abs(operand))")
-    BIND_UNARY_EXPR(Neg, "Negation expression (-operand)")
-    BIND_UNARY_EXPR(Not, "Logical not expression (not operand)")
-    BIND_UNARY_EXPR(BitNot, "Bitwise not expression (~operand)")
-    BIND_UNARY_EXPR(Cast, "Cast expression (cast operand to dtype)")
+    BIND_UNARY_EXPR(Abs, "Absolute value expression (abs(operand))");
+    BIND_UNARY_EXPR(Neg, "Negation expression (-operand)");
+    BIND_UNARY_EXPR(Not, "Logical not expression (not operand)");
+    BIND_UNARY_EXPR(BitNot, "Bitwise not expression (~operand)");
+    BIND_UNARY_EXPR(Cast, "Cast expression (cast operand to dtype)");
 
 #undef BIND_UNARY_EXPR
     // clang-format on

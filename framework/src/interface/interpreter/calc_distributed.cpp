@@ -24,7 +24,6 @@
 #include "communication.h"
 #include "interface/operation/distributed/distributed_common.h"
 
-
 namespace npu::tile_fwk {
 void ExecuteOpBindTensor(ExecuteOperationContext *ctx) {
     (void) ctx;
@@ -32,8 +31,8 @@ void ExecuteOpBindTensor(ExecuteOperationContext *ctx) {
 REGISTER_CALC_OP(OP_BIND_TENSOR, Opcode::OP_BIND_TENSOR, ExecuteOpBindTensor);
 
 void ExecuteOpShmemSet(ExecuteOperationContext *ctx) {
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 2);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 2);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 0x2);
     auto &shm = ctx->ioperandDataViewList->at(1);
 
     Distributed::ShmemSetAttr attr;
@@ -50,10 +49,10 @@ void ExecuteOpShmemSet(ExecuteOperationContext *ctx) {
 REGISTER_CALC_OP(OP_SHMEM_SET, Opcode::OP_SHMEM_SET, ExecuteOpShmemSet);
 
 void ExecuteOpShmemPut(ExecuteOperationContext *ctx) {
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 3);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 2);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x3);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1 || ctx->ooperandInplaceDataViewList->size() == 0x2);
     auto &in = ctx->ioperandDataViewList->at(1);
-    auto &shm = ctx->ioperandDataViewList->at(2);
+    auto &shm = ctx->ioperandDataViewList->at(0x2);
 
     Distributed::ShmemPutAttr attr;
     ctx->op->GetAttr(OpAttributeKey::distOpAttr, attr);
@@ -75,13 +74,12 @@ void ExecuteOpShmemPut(ExecuteOperationContext *ctx) {
     } else {
         context->Put(in, dstRank, shm->GetShmStorageOffset(), atomicType);
     }
-
 }
 REGISTER_CALC_OP(OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT, ExecuteOpShmemPut);
 
 void ExecuteOpShmemSignal(ExecuteOperationContext *ctx) {
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 2);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 2 || ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 0x2 || ctx->ooperandInplaceDataViewList->size() == 1);
     auto &shm = ctx->ioperandDataViewList->at(1);
 
     Distributed::ShmemSignalAttr attr;
@@ -104,7 +102,7 @@ void ExecuteOpShmemSignal(ExecuteOperationContext *ctx) {
 REGISTER_CALC_OP(OP_SHMEM_SIGNAL, Opcode::OP_SHMEM_SIGNAL, ExecuteOpShmemSignal);
 
 void ExecuteOpShmemWaitUntil(ExecuteOperationContext *ctx) {
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 2);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
     auto &shm = ctx->ioperandDataViewList->at(1);
 
@@ -122,8 +120,8 @@ void ExecuteOpShmemWaitUntil(ExecuteOperationContext *ctx) {
 REGISTER_CALC_OP(OP_SHMEM_WAIT_UNTIL, Opcode::OP_SHMEM_WAIT_UNTIL, ExecuteOpShmemWaitUntil);
 
 void ExecuteOpShmemGet(ExecuteOperationContext *ctx) {
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 2);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 2 || ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 0x2);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 0x2 || ctx->ooperandInplaceDataViewList->size() == 1);
     auto &shm = ctx->ioperandDataViewList->at(1);
     auto out = ctx->ooperandInplaceDataViewList->at(0);
 

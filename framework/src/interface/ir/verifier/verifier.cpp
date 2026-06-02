@@ -35,7 +35,6 @@ void IRVerifier::AddRule(PropertyVerifierPtr rule)
     auto it = std::find_if(rules_.begin(), rules_.end(), [&rule](const PropertyVerifierPtr& r) {
         return r->GetName() == rule->GetName();
     });
-
     if (it == rules_.end()) {
         rules_.push_back(rule);
     }
@@ -82,7 +81,6 @@ void IRVerifier::VerifyOrThrow(const ProgramPtr& program) const
     bool has_errors = std::any_of(diagnostics.begin(), diagnostics.end(), [](const Diagnostic& d) {
         return d.severity == DiagnosticSeverity::ERROR;
     });
-
     if (has_errors) {
         std::string report = GenerateReport(diagnostics);
         throw VerificationError(report, std::move(diagnostics));

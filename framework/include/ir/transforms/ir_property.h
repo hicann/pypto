@@ -72,7 +72,7 @@ public:
     std::vector<IRProperty> ToVector() const
     {
         std::vector<IRProperty> result;
-        for (uint32_t i = 0; i <= 8; ++i) {
+        for (uint32_t i = 0; i <= 0x8; ++i) {
             if (bits_ & (1u << i)) {
                 result.push_back(static_cast<IRProperty>(i));
             }

@@ -702,7 +702,6 @@ public:
         for (const auto& launchMeta : dynAttr->dynamicCellMatchLaunchMetaList) {
             DevCellMatchTableDesc patchedDesc;
             bool ready = TryBuildDynamicCellMatchDesc(launchMeta, eval, patchedDesc);
-
             if (!ready) {
                 unpreparedCount++;
                 if (firstUnpreparedSlot < 0) {
@@ -831,8 +830,8 @@ private:
         auto argNum =
             dynAttr->startArgsInputLogicalTensorList.size() + dynAttr->startArgsOutputLogicalTensorList.size();
         auto argSize = sizeof(AiCpuArgs) + 2 * sizeof(int64_t) + argNum * sizeof(DevTensorData);
-        MACHINE_ASSERT(argSize % 8 == 0);
-        aicpuArgBuf.resize(argSize / 8);
+        MACHINE_ASSERT(argSize % 0x8 == 0);
+        aicpuArgBuf.resize(argSize / 0x8);
 
         auto aicpuArgs = new (aicpuArgBuf.data()) AiCpuArgs();
         aicpuArgs->kArgs.inputs = nullptr;
@@ -871,7 +870,7 @@ private:
     uint64_t runtimeDynamicCellMatchCapacity_{0};
     bool runtimeDynamicCellMatchOwned_{false};
     bool runtimeDynamicCellMatchHostOwned_{false};
-    std::string kernelName_; 
+    std::string kernelName_;
 
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     {
@@ -914,7 +913,6 @@ private:
             std::free(reinterpret_cast<void*>(oldHostAddr));
         }
     }
-
 };
 
 class KernelModule {
@@ -1147,7 +1145,7 @@ private:
         rtAicpuArgs.hostInputInfoPtr = &hostInfo;
         rtAicpuArgs.timeout = AICPU_EXECUTE_TIMEOUT;
         memset_s(&rtAicoreArgs, sizeof(RtArgsEx), 0, sizeof(RtArgsEx));
-        kernelArgs.resize(7, nullptr); // see aicore.ascpp
+        kernelArgs.resize(0x7, nullptr); // see aicore.ascpp
         rtAicoreArgs.args = kernelArgs.data();
         rtAicoreArgs.argsSize = kernelArgs.size() * sizeof(void*);
 
@@ -1181,7 +1179,7 @@ private:
             if (host_options.contains("compile_monitor_enable")) {
                 int compileMonitorMode = host_options["compile_monitor_enable"].cast<int>();
                 compileMonitorEnable = compileMonitorMode > 0;
-                compileMonitorPassDetailEnable = compileMonitorMode == 2;
+                compileMonitorPassDetailEnable = compileMonitorMode == 0x2;
             }
             if (host_options.contains("compile_monitor_print_interval")) {
                 intervalSec = host_options["compile_monitor_print_interval"].cast<int>();

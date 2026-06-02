@@ -52,7 +52,6 @@ TypePtr DeduceTensorReductionType(
 
     // Extract axis from kwargs (default: -1, meaning last axis)
     int axis = GetOpKwarg<int>(kwargs, "axis", -1);
-
     // Normalize negative axis
     if (axis < 0) {
         axis = static_cast<int>(input_ndim) + axis;

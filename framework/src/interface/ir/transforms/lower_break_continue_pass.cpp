@@ -81,7 +81,6 @@ bool ContainsContinue(const StmtPtr& stmt)
 }
 
 /// Negate a boolean condition, folding into the inverted comparison when possible.
-///
 /// Comparison inversion avoids emitting an extra NOT op in codegen:
 ///   NOT (a < b)  →  a >= b       (arith.cmpi slt → arith.cmpi sge)
 ///   NOT (a <= b) →  a > b
@@ -200,7 +199,6 @@ StmtPtr LowerContinueInStmt(const StmtPtr& stmt, const std::vector<IterArgPtr>& 
     if (auto if_stmt = As<IfStmt>(stmt)) {
         auto then_stmts = FlattenToStmtList(if_stmt->thenBody_);
         bool then_ends_with_continue = !then_stmts.empty() && As<ContinueStmt>(then_stmts.back()) != nullptr;
-
         if (then_ends_with_continue && !if_stmt->elseBody_.has_value()) {
             if (then_stmts.size() == 1) {
                 // `if (cond) { continue }` — handled at the SeqStmts level when there are
@@ -657,7 +655,6 @@ protected:
 
         bool has_break = ContainsBreak(new_body);
         bool has_continue = ContainsContinue(new_body);
-
         if (!has_break && !has_continue) {
             if (new_body == op->body_)
                 return op;
@@ -741,7 +738,6 @@ FunctionPtr LowerBreakContinueImpl(const FunctionPtr& func)
     //  be used here to pre-check the function body which may itself be a loop.)
     LowerBreakContinueMutator mutator;
     StmtPtr new_body = mutator.VisitStmt(func->body_);
-
     if (new_body == func->body_)
         return func;
 

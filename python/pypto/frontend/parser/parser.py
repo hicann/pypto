@@ -1454,13 +1454,11 @@ class Parser(ast.NodeVisitor):
                         ),
                     )
 
-            # Simple assignment: a = expr
             # Set the tensor name if expr is a tensor
             if isinstance(expr, pypto.Tensor):
                 expr.name = target.id
             self.context.add(target.id, expr)
         elif isinstance(target, (ast.Tuple, ast.List)):
-            # Unpacking assignment: a, b = expr
             if not isinstance(expr, (list, tuple)):
                 raise ParserError(
                     target,
@@ -1477,7 +1475,6 @@ class Parser(ast.NodeVisitor):
                 self._assign_target(t, e)
         elif isinstance(target, ast.Subscript):
             set_source_location(filename=self.source_name(), lineno=target.lineno)
-            # Subscript assignment: b[:] = expr or b[0] = expr
             # This handles in-place tensor updates using Python's subscript syntax.
             # Evaluate the value (e.g., b) to get the tensor being assigned to
             tensor = self._eval_expr(target.value)
@@ -1746,12 +1743,12 @@ class Parser(ast.NodeVisitor):
 
     def _is_tensor_var(self, var_name: str) -> bool:
         """Check if a variable is a pypto.Tensor type.
-        
+
         Parameters
         ----------
         var_name : str
             Variable name to check.
-        
+
         Returns
         -------
         bool
@@ -1767,7 +1764,7 @@ class Parser(ast.NodeVisitor):
         """Filter variables that are pypto.Tensor type.
 
         Only pypto.Tensor variables need memory cleanup through liveness analysis.
-        Other Python objects (int, str, list, dict, etc.) are managed by 
+        Other Python objects (int, str, list, dict, etc.) are managed by
         Python's garbage collector and do not require explicit cleanup.
 
         Parameters

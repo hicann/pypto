@@ -110,7 +110,6 @@ TypePtr DeduceTensorReshapeType(
     // For static shapes, verify that the total number of elements matches
     int64_t old_product = ComputeStaticShapeProduct(tensor_type->shape_);
     int64_t new_product = ComputeStaticShapeProduct(new_shape);
-
     if (old_product > 0 && new_product > 0) {
         CHECK(old_product == new_product) << "tensor.reshape: cannot reshape tensor of size " << old_product
                                           << " into shape with size " << new_product;
@@ -125,7 +124,7 @@ TypePtr DeduceTensorTransposeType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs)
 {
     // tensor.transpose requires exactly 3 arguments: input tensor, axis1, axis2
-    CHECK(args.size() == 3) << "tensor.transpose requires exactly 3 arguments (input, axis1, axis2), but got "
+    CHECK(args.size() == 0x3) << "tensor.transpose requires exactly 3 arguments (input, axis1, axis2), but got "
                             << args.size();
 
     // First argument must be TensorType
@@ -135,8 +134,7 @@ TypePtr DeduceTensorTransposeType(
 
     const auto& input_shape = tensor_type->shape_;
     size_t ndim = input_shape.size();
-
-    CHECK(ndim >= 2) << "tensor.transpose requires at least 2 dimensions, but got " << ndim;
+    CHECK(ndim >= 0x2) << "tensor.transpose requires at least 2 dimensions, but got " << ndim;
 
     // Second argument is axis1 (ConstInt)
     auto axis1_const = As<ConstInt>(args[1]);

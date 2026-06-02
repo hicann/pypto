@@ -229,21 +229,21 @@ void DumpValue(std::stringstream& os, const std::string& key, const Any& val, co
     const auto& type = val.Type();
 
     if (type == typeid(int64_t)) {
-        os << AnyCast<int64_t>(val);
+        os << (AnyCast<int64_t>(val));
     } else if (type == typeid(bool)) {
         os << AnyCast<bool>(val);
     } else if (type == typeid(std::string)) {
-        os << AnyCast<std::string>(val);
+        os << (AnyCast<std::string>(val));
     } else if (type == typeid(std::vector<int64_t>)) {
-        os << AnyCast<std::vector<int64_t>>(val);
+        os << (AnyCast<std::vector<int64_t>>(val));
     } else if (type == typeid(std::vector<std::string>)) {
-        os << AnyCast<std::vector<std::string>>(val);
+        os << (AnyCast<std::vector<std::string>>(val));
     } else if (type == typeid(std::map<int64_t, int64_t>)) {
         DumpMap(os, AnyCast<std::map<int64_t, int64_t>>(val));
     } else if (type == typeid(CubeTile)) {
-        os << AnyCast<CubeTile>(val).ToString();
+        os << (AnyCast<CubeTile>(val).ToString());
     } else if (type == typeid(DistTile)) {
-        os << AnyCast<DistTile>(val).ToString();
+        os << (AnyCast<DistTile>(val).ToString());
     } else {
         os << "unknow type: " << type.name();
     }
@@ -491,7 +491,7 @@ private:
             std::map<int64_t, int64_t> mapJson;
             for (const auto& pair : jData) {
                 auto arr = pair.get<std::vector<int64_t>>();
-                if (arr.size() >= 2) {
+                if (arr.size() >= 0x2) {
                     mapJson[arr[0]] = arr[1];
                 }
             }

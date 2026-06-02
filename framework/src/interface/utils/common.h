@@ -32,9 +32,9 @@
 namespace npu::tile_fwk {
 
 #ifdef __clang__
-#define __NO_UBSAN __attribute__((no_sanitize("unsigned-integer-overflow")))
+#define NO_UBSAN __attribute__((no_sanitize("unsigned-integer-overflow")))
 #else
-#define __NO_UBSAN
+#define NO_UBSAN
 #endif
 
 enum Status : uint32_t {
@@ -107,7 +107,7 @@ inline int64_t AlignUp(int64_t value, int64_t alignment)
 }
 
 template <typename T>
-inline void HashCombine(std::size_t& seed, const T& val) __NO_UBSAN
+inline void HashCombine(std::size_t& seed, const T& val) NO_UBSAN
 {
     seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 0x6) + (seed >> 0x2);
 }
@@ -215,11 +215,12 @@ void CombineLastTwoAxisOffset(std::vector<T>& offset, const std::vector<int64_t>
     if (offset.empty()) {
         return;
     }
-    ASSERT(
-        TensorErr::TENSOR_SHAPE_MISMATCH,
-        shapeSize >= NUM2 && offset.size() == shapeSize && rawShape.size() == shapeSize)
-        << "offset " << IntVecToStr(offset) << ", size " << offset.size() << " vs rawShape " << IntVecToStr(rawShape)
-        << ", size " << rawShape.size();
+    ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, shapeSize >= NUM2)
+         << "shapeSize " << shapeSize << " must be greater than " << NUM2;
+    ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, offset.size() == shapeSize)
+         << "offset size " << offset.size() << "must be equal to shapeSize " << shapeSize << ", offset " << IntVecToStr(offset);
+    ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, rawShape.size() == shapeSize)
+         << "rawShape size " << rawShape.size() << "must be equal to shapeSize " << shapeSize << ", rawShape " << IntVecToStr(rawShape);
     offset[shapeSize - 1] = offset[shapeSize - NUM2] * rawShape[shapeSize - 1] + offset[shapeSize - 1];
     offset[shapeSize - NUM2] = 0;
 }

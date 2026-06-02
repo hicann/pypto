@@ -169,7 +169,6 @@ void TypeChecker::CheckTypeEquality(
     if (type1->GetKind() == ObjectKind::TensorType || type1->GetKind() == ObjectKind::TileType) {
         auto shaped1 = std::dynamic_pointer_cast<const ShapedType>(type1);
         auto shaped2 = std::dynamic_pointer_cast<const ShapedType>(type2);
-
         if (!shaped1 || !shaped2)
             return;
 
@@ -288,7 +287,6 @@ void TypeChecker::CheckLoopIterArgYieldTypes(
     const size_t num_iter_args = iter_args.size();
     const size_t num_yield_values = yield_stmt->value_.size();
     const size_t num_return_vars = return_vars.size();
-
     if (num_iter_args != num_yield_values || num_iter_args != num_return_vars) {
         std::ostringstream msg;
         msg << context << " size mismatch: iter_args=" << num_iter_args << ", yield values=" << num_yield_values
@@ -316,7 +314,6 @@ void TypeChecker::CheckLoopIterArgYieldTypeAt(
     auto init_type = iter_arg->initValue_->GetType();
     auto yield_type = yield_value->GetType();
     auto return_type = return_var->GetType();
-
     if (!init_type || !yield_type || !return_type)
         return;
 
@@ -386,7 +383,6 @@ void TypeChecker::CheckIfReturnYieldTypes(
     size_t num_then_values = then_yield->value_.size();
     size_t num_else_values = else_yield->value_.size();
     size_t num_return_vars = op->returnVars_.size();
-
     if (num_then_values != num_else_values || num_then_values != num_return_vars) {
         std::ostringstream msg;
         msg << "IfStmt size mismatch: then yield=" << num_then_values << ", else yield=" << num_else_values
@@ -411,7 +407,6 @@ void TypeChecker::CheckIfReturnYieldTypeAt(
 
     auto then_type = then_value->GetType();
     auto else_type = else_value->GetType();
-
     if (!then_type || !else_type)
         return;
 

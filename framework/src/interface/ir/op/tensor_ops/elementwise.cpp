@@ -35,7 +35,7 @@ TypePtr DeduceTensorOpElementwiseBinaryType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Try TensorType first
     auto tensor_type1 = As<TensorType>(args[0]->GetType());
@@ -62,7 +62,7 @@ TypePtr DeduceTensorOpElementwiseScalarType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     auto tensor_type1 = As<TensorType>(args[0]->GetType());
     auto scalar_type2 = As<ScalarType>(args[1]->GetType());

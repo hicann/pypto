@@ -32,11 +32,10 @@ std::string MakeVerifyRunTimestampTag()
 {
     const auto now = std::chrono::high_resolution_clock::now();
     const std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    const auto us =
-        std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+    const auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
     std::stringstream timestamp;
     timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
-    timestamp << "_" << std::setw(6) << std::setfill('0') << us;
+    timestamp << "_" << std::setw(0x6) << std::setfill('0') << us;
     return timestamp.str();
 }
 

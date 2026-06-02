@@ -261,8 +261,10 @@ static TraceMemoryRange LoadTraceMemoryRange(const std::shared_ptr<SchemaNode>& 
 {
     std::string beginStr = node->at(0)->GetName();
     std::string endStr = node->at(1)->GetName();
-    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, beginStr.substr(0, 2) == SCHEMA_ADDRESS_PREFIX);
-    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, endStr.substr(0, 2) == SCHEMA_ADDRESS_PREFIX);
+    ASSERT(
+        ControlFlowScene::INVALID_FUNC_IO_SPEC, beginStr.substr(0, 0x2) == SCHEMA_ADDRESS_PREFIX);
+    ASSERT(
+        ControlFlowScene::INVALID_FUNC_IO_SPEC, endStr.substr(0, 0x2) == SCHEMA_ADDRESS_PREFIX);
     uintptr_t begin = std::stoull(beginStr, nullptr, 16);
     uintptr_t end = std::stoull(endStr, nullptr, 16);
     return TraceMemoryRange(begin, end);

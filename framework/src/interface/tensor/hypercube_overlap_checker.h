@@ -111,7 +111,7 @@ int HypercubeOverlapCheckerBlock<T>::CalOverlap(const std::vector<int>& hypercub
 // 将hypercube转换成一个或多个哈希值
 template <typename T>
 void HypercubeOverlapCheckerBlock<T>::Shape2Keys(
-    const std::vector<int>& hypercube, std::vector<uint64_t>& result, int dimIdx, uint64_t currValue) __NO_UBSAN
+    const std::vector<int>& hypercube, std::vector<uint64_t>& result, int dimIdx, uint64_t currValue) NO_UBSAN
 {
     if ((dimIdx * elementOfDim + 1) >= static_cast<int>(hypercube.size())) {
         result.push_back(currValue);

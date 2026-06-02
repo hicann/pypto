@@ -182,7 +182,7 @@ int openWithRetry(const std::string &handler) {
         if (fd != -1) {
             return fd;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Retry sleep time is 10ms
     }
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, false) << "GetRemoteRank shm_open " + handler + " error!";
     return fd;

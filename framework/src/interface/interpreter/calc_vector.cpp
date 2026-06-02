@@ -19,6 +19,8 @@
 
 namespace npu::tile_fwk {
 
+constexpr int GATHER_IGNORE_AXIS = -2;
+
 template <Opcode opcode>
 void ExecuteOpBinary(ExecuteOperationContext* ctx)
 {
@@ -394,7 +396,7 @@ REGISTER_CALC_OP(OP_PAIRARGMIN, Opcode::OP_PAIRARGMIN, ExecuteOpReduce<Opcode::O
 
 void ExecuteOpCast(ExecuteOperationContext* ctx)
 {
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= 2);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= 0x2);
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
     auto& ret = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);
@@ -842,7 +844,7 @@ REGISTER_CALC_OP(OP_UNIFORM, Opcode::OP_UNIFORM, ExecuteOpUniform);
 void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
-    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 4);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 0x4);
     int64_t mode = 0;
     ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ctx->op->GetAttr(OpAttributeKey::mxQuantMode, mode))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantMode;
@@ -954,7 +956,7 @@ void ExecuteOpGatherINUB(ExecuteOperationContext* ctx)
     auto indices = ctx->ioperandDataViewList->at(1);
     auto pageTable = ctx->ioperandDataViewList->at(2);
     int blocksize = ctx->op->GetIntAttribute(OpAttributeKey::blockSize);
-    calc::GatherINUB(output, parmas, indices, pageTable, blocksize, -2);
+    calc::GatherINUB(output, parmas, indices, pageTable, blocksize, GATHER_IGNORE_AXIS);
 }
 REGISTER_CALC_OP(OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_UB, ExecuteOpGatherINUB);
 
@@ -1140,7 +1142,7 @@ void ExecuteOpTopkSort(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
     ASSERT(
         ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
-        ctx->ooperandInplaceDataViewList->size() == 2); // value + temp
+        ctx->ooperandInplaceDataViewList->size() == 0x2); // value + temp
 
     auto iop = ctx->ioperandDataViewList->at(0);
     auto oop_value = ctx->ooperandInplaceDataViewList->at(0);

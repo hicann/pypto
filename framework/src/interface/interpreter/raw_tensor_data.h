@@ -59,7 +59,7 @@ public:
     void deallocate(T* p, std::size_t) noexcept { std::free(p); }
 };
 
-using StorageData = std::vector<uint8_t, AlignedAllocator<uint8_t, 64>>;
+using StorageData = std::vector<uint8_t, AlignedAllocator<uint8_t, 0x40>>;
 
 struct RawTensorData {
     static int64_t Numel(const std::vector<int64_t>& shape)
@@ -81,7 +81,7 @@ struct RawTensorData {
         }
         auto packed = logicalShape;
         // One uint8 stores two FP4 elements.
-        packed.back() = (packed.back() + 1) / 2;
+        packed.back() = (packed.back() + 1) / 0x2;
         return packed;
     }
 
@@ -97,10 +97,10 @@ struct RawTensorData {
         if (bits <= 0) {
             return 0;
         }
-        if (bits < 8) {
+        if (bits < 0x8) {
             return DATA_SIZE_SUB_BYTE;
         }
-        return static_cast<int>(bits / 8);
+        return static_cast<int>(bits / 0x8);
     }
 
     static std::vector<int64_t> ShapeToStride(const std::vector<int64_t>& shape)
@@ -129,7 +129,7 @@ struct RawTensorData {
             auto packedShape = PackedShapeFromLogical(shape_, dataType_);
             bytes = static_cast<size_t>(Numel(packedShape));
         } else {
-            bytes = static_cast<size_t>((nelem + 1) / 2);
+            bytes = static_cast<size_t>((nelem + 1) / 0x2);
         }
         data_ = std::make_shared<StorageData>();
         data_->resize(bytes);
@@ -390,7 +390,7 @@ template <typename T>
             auto packedShape = PackedShapeFromLogical(shape_, GetDataType());
             return static_cast<size_t>(Numel(packedShape));
         }
-        return static_cast<size_t>((nelem + 1) / 2);
+        return static_cast<size_t>((nelem + 1) / 0x2);
     }
 
     size_t GetShmOffset() const {

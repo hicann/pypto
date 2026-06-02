@@ -75,10 +75,10 @@ static TypePtr DeduceBlockOutBinaryTile(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << op_name << " requires 3 arguments (lhs, rhs, out)";
+    CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (lhs, rhs, out)";
     CheckTileArg(args, 0, op_name);
     CheckTileArg(args, 1, op_name);
-    return DeduceBlockOutType(args, kwargs, op_name, 3);
+    return DeduceBlockOutType(args, kwargs, op_name, 0x3);
 }
 
 // Type deduction for (TileType, ScalarType, out:TileType) -> out.
@@ -86,10 +86,10 @@ static TypePtr DeduceBlockOutBinaryScalar(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << op_name << " requires 3 arguments (tile, scalar, out)";
+    CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (tile, scalar, out)";
     CheckTileArg(args, 0, op_name);
     CheckScalarArg(args, 1, op_name);
-    return DeduceBlockOutType(args, kwargs, op_name, 3);
+    return DeduceBlockOutType(args, kwargs, op_name, 0x3);
 }
 
 // Type deduction for (TileType, out:TileType) -> out  (unary).
@@ -97,9 +97,9 @@ static TypePtr DeduceBlockOutUnary(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << op_name << " requires 2 arguments (src, out)";
+    CHECK(args.size() == 0x2) << op_name << " requires 2 arguments (src, out)";
     CheckTileArg(args, 0, op_name);
-    return DeduceBlockOutType(args, kwargs, op_name, 2);
+    return DeduceBlockOutType(args, kwargs, op_name, 0x2);
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +283,7 @@ REGISTER_BLOCK_OUT_UNARY(recip);
 REGISTER_BLOCK_OUT_UNARY(log);
 REGISTER_BLOCK_OUT_UNARY(abs);
 REGISTER_BLOCK_OUT_UNARY(relu);
-REGISTER_BLOCK_OUT_UNARY(not);
+REGISTER_BLOCK_OUT_UNARY(not );
 
 #undef REGISTER_BLOCK_OUT_UNARY
 

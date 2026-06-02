@@ -38,7 +38,7 @@ bool IsMxScaleTensor(const LogicalTensorDataPtr& tensor)
         return false;
     }
     const auto& shape = tensor->GetShape();
-    return shape.size() == 3 && shape[2] == 2;
+    return shape.size() == 0x3 && shape[0x3 - 1] == 0x2;
 }
 
 bool HasMxScaleByInputs(const ExecuteOperationContext* ctx, bool isAccOp)
@@ -260,7 +260,6 @@ void ExecuteL0CToL1(ExecuteOperationContext* ctx)
 REGISTER_CALC_OP(OP_L0C_TO_L1, Opcode::OP_L0C_TO_L1, ExecuteL0CToL1);
 REGISTER_CALC_OP(OP_L0C_COPY_UB, Opcode::OP_L0C_COPY_UB, ExecuteL0CToL1);
 REGISTER_CALC_OP(OP_UB_COPY_L1, Opcode::OP_UB_COPY_L1, ExecuteL0CToL1);
-
 
 void ExecuteDuplicate(ExecuteOperationContext* ctx)
 {

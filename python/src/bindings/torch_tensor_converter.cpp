@@ -67,7 +67,7 @@ TileOpFormat ResolveFormat(py::object& tensorDef, Tensor& baseTensor, py::object
             torch_npu = py::module::import("torch_npu");
         }
         int npu_format = py::cast<int>(torch_npu.attr("get_npu_format")(torchTensor));
-        if (npu_format == 29) {
+        if (npu_format == 29) { // NZ in CANN format is 29
             return TileOpFormat::TILEOP_NZ;
         }
     }
@@ -84,16 +84,14 @@ py::object ConvertSingleTensor(
 
     ParseTensorData(torchTensor, tensorDef, toDlpack, dataPtr, shape, dtype);
     if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
-        shape.back() *= 2;
+        shape.back() *= 0x2;
     }
 
     auto base = py::getattr(tensorDef, "_base", py::none());
     FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(base))
         << "the '_base' attribute must be a Tensor type";
     auto& t = base.cast<Tensor&>();
-
     TileOpFormat format = ResolveFormat(tensorDef, t, torchTensor, torch_npu);
-        
     out = npu::tile_fwk::dynamic::DeviceTensorData(dtype, dataPtr, shape, format);
 
     return torchTensor.attr("device");

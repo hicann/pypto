@@ -91,16 +91,16 @@ inline bool DlpackDtypeToDataType(uint8_t code, uint8_t bits, uint16_t lanes, Da
     switch (code) {
         case kDLInt:
             switch (bits) {
-                case 8:
+                case 8:   // 8-bit signed integer
                     *out = DT_INT8;
                     return true;
-                case 16:
+                case 16:  // 16-bit signed integer
                     *out = DT_INT16;
                     return true;
-                case 32:
+                case 32:  // 32-bit signed integer
                     *out = DT_INT32;
                     return true;
-                case 64:
+                case 64:  // 64-bit signed integer
                     *out = DT_INT64;
                     return true;
                 default:
@@ -108,16 +108,16 @@ inline bool DlpackDtypeToDataType(uint8_t code, uint8_t bits, uint16_t lanes, Da
             }
         case kDLUInt:
             switch (bits) {
-                case 8:
+                case 8:   // 8-bit unsigned integer
                     *out = DT_UINT8;
                     return true;
-                case 16:
+                case 16:  // 16-bit unsigned integer
                     *out = DT_UINT16;
                     return true;
-                case 32:
+                case 32:  // 32-bit unsigned integer
                     *out = DT_UINT32;
                     return true;
-                case 64:
+                case 64:  // 64-bit unsigned integer
                     *out = DT_UINT64;
                     return true;
                 default:
@@ -125,38 +125,38 @@ inline bool DlpackDtypeToDataType(uint8_t code, uint8_t bits, uint16_t lanes, Da
             }
         case kDLFloat:
             switch (bits) {
-                case 16:
+                case 16:  // 16-bit floating point (FP16)
                     *out = DT_FP16;
                     return true;
-                case 32:
+                case 32:  // 32-bit floating point (FP32)
                     *out = DT_FP32;
                     return true;
-                case 64:
+                case 64:  // 64-bit floating point (FP64)
                     *out = DT_DOUBLE;
                     return true;
                 default:
                     return false;
             }
         case kDLBfloat:
-            if (bits == 16) {
+            if (bits == 16) {  // 16-bit brain floating point (BF16)
                 *out = DT_BF16;
                 return true;
             }
             return false;
         case kDLBool:
-            if (bits == 8) {
+            if (bits == 8) {  // 8-bit boolean
                 *out = DT_BOOL;
                 return true;
             }
             return false;
         case kDLFloat8_e5m2:
-            if (bits == 8) {
+            if (bits == 8) {  // 8-bit floating point E5M2
                 *out = DT_FP8E5M2;
                 return true;
             }
             return false;
         case kDLFloat8_e4m3:
-            if (bits == 8) {
+            if (bits == 8) {  // 8-bit floating point E4M3
                 *out = DT_FP8E4M3;
                 return true;
             }

@@ -53,7 +53,7 @@ int ParseEnvIntOrDefault(const char* value, int defaultValue)
     if (end == value || (end != nullptr && *end != '\0')) {
         return defaultValue;
     }
-    if (parsed < 0 || parsed > 5) {
+    if (parsed < 0 || parsed > 0x5) {
         return defaultValue;
     }
     return static_cast<int>(parsed);

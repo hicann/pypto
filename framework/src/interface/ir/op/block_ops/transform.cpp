@@ -198,7 +198,6 @@ TypePtr DeduceTileReshapeType(
     // For static shapes, verify that the total number of elements matches
     int64_t old_product = ComputeShapeProduct(tile_type->shape_);
     int64_t new_product = ComputeShapeProduct(new_shape);
-
     if (old_product > 0 && new_product > 0) {
         CHECK(old_product == new_product)
             << "tile.reshape: cannot reshape tile of size " << old_product << " into shape with size " << new_product;
@@ -224,7 +223,7 @@ TypePtr DeduceTileTransposeType(
     const auto& input_shape = tile_type->shape_;
     size_t ndim = input_shape.size();
 
-    CHECK(ndim >= 2) << "tile.transpose requires at least 2 dimensions, but got " << ndim;
+    CHECK(ndim >= 0x2) << "tile.transpose requires at least 2 dimensions, but got " << ndim;
 
     // Second argument is axis1 (ConstInt)
     auto axis1_const = As<ConstInt>(args[1]);

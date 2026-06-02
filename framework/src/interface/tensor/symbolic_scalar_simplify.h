@@ -194,7 +194,7 @@ public:
         // For min/max: match both T_BOP and T_MOP variants
         bool opcodeMatch = (op == Opcode) || (Opcode == SymbolicOpcode::T_MOP_MIN && op == SymbolicOpcode::T_MOP_MIN) ||
                            (Opcode == SymbolicOpcode::T_MOP_MAX && op == SymbolicOpcode::T_MOP_MAX);
-        if (!opcodeMatch || e->OperandList().size() != 2) {
+        if (!opcodeMatch || e->OperandList().size() != 0x2) {
             return false;
         }
         if (!a_.Match_(e->OperandList()[0])) {
@@ -445,7 +445,6 @@ private:
         }
 
         SymbolicOpcode opcode = e->Opcode();
-
         // Unary ops
         if (opcode == SymbolicOpcode::T_UOP_NEG) {
             return VisitNeg(newOps[0]);
@@ -502,10 +501,10 @@ private:
         }
 
         // MOP min/max with 2 operands — delegate to binary min/max visitors
-        if (opcode == SymbolicOpcode::T_MOP_MIN && newOps.size() == 2) {
+        if (opcode == SymbolicOpcode::T_MOP_MIN && newOps.size() == 0x2) {
             return VisitMin(newOps[0], newOps[1]);
         }
-        if (opcode == SymbolicOpcode::T_MOP_MAX && newOps.size() == 2) {
+        if (opcode == SymbolicOpcode::T_MOP_MAX && newOps.size() == 0x2) {
             return VisitMax(newOps[0], newOps[1]);
         }
 

@@ -70,7 +70,6 @@ TypePtr DeduceBlockReductionType(
 
     // Extract keepdim from kwargs (optional, default to false)
     bool keepdim = GetOpKwarg<bool>(kwargs, "keepdim", false);
-
     // If all axes are reduced and keepdim is false, return ScalarType
     if (static_cast<int64_t>(reduce_axes.size()) == input_ndim && !keepdim) {
         return std::make_shared<ScalarType>(tile_type->dtype_);

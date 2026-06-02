@@ -130,7 +130,7 @@ private:
         }
     }
 
-    void ConnectVirtualTopo(std::vector<CoreFunctionTopo*>& oldTopoVec, uint64_t& virtualTopoId, bool isPure) __NO_UBSAN
+    void ConnectVirtualTopo(std::vector<CoreFunctionTopo*>& oldTopoVec, uint64_t& virtualTopoId, bool isPure) NO_UBSAN
     {
         CoreFunctionTopo* oldTopo = oldTopoVec.front();
 
@@ -301,7 +301,7 @@ private:
         };
     }
 
-    uint64_t IdListHash(const void* key, int len, unsigned int seed) __NO_UBSAN
+    uint64_t IdListHash(const void* key, int len, unsigned int seed) NO_UBSAN
     {
         const uint64_t m = 0xc6a4a7935bd1e995;
         const int r = 47;

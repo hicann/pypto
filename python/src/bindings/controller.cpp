@@ -239,15 +239,15 @@ static bool IsFuncHashOrderFormat(const std::string& key)
 {
     // Pattern: func{magic}_{order} where magic is digits and order is digits
     // Regex equivalent: ^func\d+_\d+$
-    if (key.size() < 6 || key.substr(0, 4) != "func") {
+    if (key.size() < 0x6 || key.substr(0, 0x4) != "func") {
         return false;
     }
     size_t underscore_pos = key.find('_');
-    if (underscore_pos == std::string::npos || underscore_pos == 4) {
+    if (underscore_pos == std::string::npos || underscore_pos == 0x4) {
         return false; // No underscore or underscore right after "func"
     }
     // Check that magic part (between "func" and "_") is all digits
-    for (size_t i = 4; i < underscore_pos; ++i) {
+    for (size_t i = 0x4; i < underscore_pos; ++i) {
         if (!std::isdigit(key[i])) {
             return false;
         }

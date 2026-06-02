@@ -55,10 +55,6 @@ def _capture_call_span() -> _ir.Span:
     Returns:
         Span: Source location of the caller
     """
-    # Go back through frames to find user code:
-    # frame 0 = _capture_call_span
-    # frame 1 = our wrapper (e.g., __add__)
-    # frame 2 = user's code (what we want)
     frame = inspect.currentframe()
     if frame is not None and frame.f_back is not None:
         frame = frame.f_back.f_back

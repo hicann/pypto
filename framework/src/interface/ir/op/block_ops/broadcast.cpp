@@ -36,7 +36,7 @@ TypePtr DeduceBlockRowExpandType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // First argument must be TileType (the main tile)
     auto tile_type = As<TileType>(args[0]->GetType());
@@ -53,10 +53,10 @@ TypePtr DeduceBlockRowExpandType(
     const auto& row_shape = row_type->shape_;
 
     // Both must have at least 2D (last 2 dimensions are used for broadcasting)
-    CHECK(tile_shape.size() >= 2) << "The operator " << op_name
+    CHECK(tile_shape.size() >= 0x2) << "The operator " << op_name
                                   << " requires first argument to have at least 2 dimensions, but got "
                                   << tile_shape.size() << " dimensions";
-    CHECK(row_shape.size() >= 2) << "The operator " << op_name
+    CHECK(row_shape.size() >= 0x2) << "The operator " << op_name
                                  << " requires second argument to have at least 2 dimensions, but got "
                                  << row_shape.size() << " dimensions";
 
@@ -69,7 +69,6 @@ TypePtr DeduceBlockRowExpandType(
     // Second-to-last dimension (rows) must match
     auto tile_rows_const = As<ConstInt>(tile_shape[tile_shape.size() - 2]);
     auto row_rows_const = As<ConstInt>(row_shape[row_shape.size() - 2]);
-
     if (tile_rows_const && row_rows_const) {
         CHECK(tile_rows_const->value_ == row_rows_const->value_)
             << "The operator " << op_name
@@ -91,7 +90,7 @@ TypePtr DeduceBlockColExpandType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // First argument is the target tile (shape to expand to)
     auto target_type = As<TileType>(args[0]->GetType());
@@ -115,7 +114,7 @@ TypePtr DeduceBlockExpandScalarType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // First argument is the target tile
     auto tile_type = As<TileType>(args[0]->GetType());

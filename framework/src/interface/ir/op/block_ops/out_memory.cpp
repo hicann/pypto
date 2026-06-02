@@ -71,7 +71,7 @@ static TypePtr DeduceBlockOutFillPadType(
             structural_equal(src_memref->addr_, out_memref->addr_))
             << op_name << ": src and out must share backing storage";
 
-        CHECK(src_type->shape_.size() == 2 && out_type->shape_.size() == 2)
+        CHECK(src_type->shape_.size() == 0x2 && out_type->shape_.size() == 0x2)
             << op_name << ": src/out tile shapes must be rank-2";
         auto src_rows = As<ConstInt>(src_type->shape_[0]);
         auto src_cols = As<ConstInt>(src_type->shape_[1]);
@@ -83,7 +83,7 @@ static TypePtr DeduceBlockOutFillPadType(
     }
 
     if (allow_expand) {
-        CHECK(src_type->shape_.size() == 2 && out_type->shape_.size() == 2)
+        CHECK(src_type->shape_.size() == 0x2 && out_type->shape_.size() == 0x2)
             << op_name << ": src/out tile shapes must be rank-2";
 
         auto src_rows = As<ConstInt>(src_type->shape_[0]);

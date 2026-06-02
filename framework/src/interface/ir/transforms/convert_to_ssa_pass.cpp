@@ -190,7 +190,6 @@ protected:
         VersionMap versions_after_else;
         auto new_else = VisitElseBranch(op->elseBody_, versions_before, versions_after_else);
         auto phi_vars = CollectIfPhiVars(versions_before, versions_after_then, versions_after_else);
-
         // If no variables diverged, just return the updated if statement
         if (phi_vars.empty() && op->returnVars_.empty()) {
             current_version_ = versions_after_then; // Use then branch versions as default

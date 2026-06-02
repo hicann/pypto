@@ -141,7 +141,7 @@ static std::string GetIpContext()
             tmpAddrPtr = &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr;
             uint32_t ipInt = ntohl(*((uint32_t*)tmpAddrPtr));
             std::ostringstream oss;
-            oss << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << ipInt;
+            oss << std::uppercase << std::hex << std::setw(0x8) << std::setfill('0') << ipInt;
             hexIp = oss.str();
             break;
         }

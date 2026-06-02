@@ -50,7 +50,7 @@ TypePtr DeduceBlockBatchMatMulType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Both arguments must be TileType
     auto lhs_type = As<TileType>(args[0]->GetType());
@@ -66,10 +66,10 @@ TypePtr DeduceBlockBatchMatMulType(
     const auto& rhs_shape = rhs_type->shape_;
 
     // For batch matmul, we require at least 2D tiles
-    CHECK(lhs_shape.size() >= 2) << "The operator " << op_name
+    CHECK(lhs_shape.size() >= 0x2) << "The operator " << op_name
                                  << " requires lhs to have at least 2 dimensions, but got " << lhs_shape.size()
                                  << " dimensions";
-    CHECK(rhs_shape.size() >= 2) << "The operator " << op_name
+    CHECK(rhs_shape.size() >= 0x2) << "The operator " << op_name
                                  << " requires rhs to have at least 2 dimensions, but got " << rhs_shape.size()
                                  << " dimensions";
 
@@ -96,14 +96,14 @@ TypePtr DeduceBlockBatchMatMulType(
     // Handle batch dimensions
     std::vector<ExprPtr> output_shape;
 
-    if (lhs_ndim == 2 && rhs_ndim == 2) {
+    if (lhs_ndim == 0x2 && rhs_ndim == 0x2) {
         // Simple 2D x 2D matrix multiplication: [M, K] @ [K, N] -> [M, N]
         output_shape = {m_dim, n_dim};
     } else {
         // Batch matrix multiplication
         // Extract batch dimensions (all except last 2)
-        std::vector<ExprPtr> lhs_batch(lhs_shape.begin(), lhs_shape.end() - 2);
-        std::vector<ExprPtr> rhs_batch(rhs_shape.begin(), rhs_shape.end() - 2);
+        std::vector<ExprPtr> lhs_batch(lhs_shape.begin(), lhs_shape.end() - 0x2);
+        std::vector<ExprPtr> rhs_batch(rhs_shape.begin(), rhs_shape.end() - 0x2);
 
         // Broadcast batch dimensions
         auto broadcast_result = BroadcastShapes(lhs_batch, rhs_batch);

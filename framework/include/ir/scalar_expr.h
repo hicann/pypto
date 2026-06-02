@@ -207,31 +207,31 @@ using BinaryExprPtr = std::shared_ptr<const BinaryExpr>;
         [[nodiscard]] std::string TypeName() const override { return #OpName; }                \
     };                                                                                         \
                                                                                                \
-    using OpName##Ptr = std::shared_ptr<const OpName>;
+    using OpName##Ptr = std::shared_ptr<const OpName>
 
 DEFINE_BINARY_EXPR_NODE(Add, "Addition expression (left + right)");
-DEFINE_BINARY_EXPR_NODE(Sub, "Subtraction expression (left - right)")
-DEFINE_BINARY_EXPR_NODE(Mul, "Multiplication expression (left * right)")
-DEFINE_BINARY_EXPR_NODE(FloorDiv, "Floor division expression (left // right)")
-DEFINE_BINARY_EXPR_NODE(FloorMod, "Floor modulo expression (left % right)")
-DEFINE_BINARY_EXPR_NODE(FloatDiv, "Float division expression (left / right)")
-DEFINE_BINARY_EXPR_NODE(Min, "Minimum expression (min(left, right)")
-DEFINE_BINARY_EXPR_NODE(Max, "Maximum expression (max(left, right)")
-DEFINE_BINARY_EXPR_NODE(Pow, "Power expression (left ** right)")
-DEFINE_BINARY_EXPR_NODE(Eq, "Equality expression (left == right)")
-DEFINE_BINARY_EXPR_NODE(Ne, "Inequality expression (left != right)")
-DEFINE_BINARY_EXPR_NODE(Lt, "Less than expression (left < right)")
-DEFINE_BINARY_EXPR_NODE(Le, "Less than or equal to expression (left <= right)")
-DEFINE_BINARY_EXPR_NODE(Gt, "Greater than expression (left > right)")
-DEFINE_BINARY_EXPR_NODE(Ge, "Greater than or equal to expression (left >= right)")
-DEFINE_BINARY_EXPR_NODE(And, "Logical and expression (left and right)")
-DEFINE_BINARY_EXPR_NODE(Or, "Logical or expression (left or right)")
-DEFINE_BINARY_EXPR_NODE(Xor, "Logical xor expression (left xor right)")
-DEFINE_BINARY_EXPR_NODE(BitAnd, "Bitwise and expression (left & right)")
-DEFINE_BINARY_EXPR_NODE(BitOr, "Bitwise or expression (left | right)")
-DEFINE_BINARY_EXPR_NODE(BitXor, "Bitwise xor expression (left ^ right)")
-DEFINE_BINARY_EXPR_NODE(BitShiftLeft, "Bitwise left shift expression (left << right)")
-DEFINE_BINARY_EXPR_NODE(BitShiftRight, "Bitwise right shift expression (left >> right)")
+DEFINE_BINARY_EXPR_NODE(Sub, "Subtraction expression (left - right)");
+DEFINE_BINARY_EXPR_NODE(Mul, "Multiplication expression (left * right)");
+DEFINE_BINARY_EXPR_NODE(FloorDiv, "Floor division expression (left // right)");
+DEFINE_BINARY_EXPR_NODE(FloorMod, "Floor modulo expression (left % right)");
+DEFINE_BINARY_EXPR_NODE(FloatDiv, "Float division expression (left / right)");
+DEFINE_BINARY_EXPR_NODE(Min, "Minimum expression (min(left, right)");
+DEFINE_BINARY_EXPR_NODE(Max, "Maximum expression (max(left, right)");
+DEFINE_BINARY_EXPR_NODE(Pow, "Power expression (left ** right)");
+DEFINE_BINARY_EXPR_NODE(Eq, "Equality expression (left == right)");
+DEFINE_BINARY_EXPR_NODE(Ne, "Inequality expression (left != right)");
+DEFINE_BINARY_EXPR_NODE(Lt, "Less than expression (left < right)");
+DEFINE_BINARY_EXPR_NODE(Le, "Less than or equal to expression (left <= right)");
+DEFINE_BINARY_EXPR_NODE(Gt, "Greater than expression (left > right)");
+DEFINE_BINARY_EXPR_NODE(Ge, "Greater than or equal to expression (left >= right)");
+DEFINE_BINARY_EXPR_NODE(And, "Logical and expression (left and right)");
+DEFINE_BINARY_EXPR_NODE(Or, "Logical or expression (left or right)");
+DEFINE_BINARY_EXPR_NODE(Xor, "Logical xor expression (left xor right)");
+DEFINE_BINARY_EXPR_NODE(BitAnd, "Bitwise and expression (left & right)");
+DEFINE_BINARY_EXPR_NODE(BitOr, "Bitwise or expression (left | right)");
+DEFINE_BINARY_EXPR_NODE(BitXor, "Bitwise xor expression (left ^ right)");
+DEFINE_BINARY_EXPR_NODE(BitShiftLeft, "Bitwise left shift expression (left << right)");
+DEFINE_BINARY_EXPR_NODE(BitShiftRight, "Bitwise right shift expression (left >> right)");
 
 #undef DEFINE_BINARY_EXPR_NODE
 

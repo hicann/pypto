@@ -103,7 +103,6 @@ std::optional<DataType> PromoteDataTypes(DataType dtype1, DataType dtype2)
     // Float types take precedence
     bool is_float1 = dtype1.IsFloat();
     bool is_float2 = dtype2.IsFloat();
-
     if (is_float1 && !is_float2) {
         return dtype1;
     }
@@ -261,7 +260,6 @@ bool DimensionsEqual(const ExprPtr& dim1, const ExprPtr& dim2)
     // Try constant comparison
     auto const1 = GetConstantDimension(dim1);
     auto const2 = GetConstantDimension(dim2);
-
     if (const1 && const2) {
         return *const1 == *const2;
     }

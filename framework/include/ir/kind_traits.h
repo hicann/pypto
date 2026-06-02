@@ -27,90 +27,90 @@ namespace ir {
     template <>                                       \
     struct KindTrait<TypeName> {                      \
         static constexpr ObjectKind kind = KindValue; \
-    };
+    }
 
 // KindTrait specializations for all concrete IR node types
 // These enable compile-time type-to-Kind mapping for IsA<T>() and As<T>()
 
 // Expression types
-DEFINE_KIND_TRAIT(Var, ObjectKind::Var)
-DEFINE_KIND_TRAIT(MemRef, ObjectKind::MemRef)
-DEFINE_KIND_TRAIT(Call, ObjectKind::Call)
-DEFINE_KIND_TRAIT(MakeTuple, ObjectKind::MakeTuple)
-DEFINE_KIND_TRAIT(GetItemExpr, ObjectKind::GetItemExpr)
-DEFINE_KIND_TRAIT(ConstInt, ObjectKind::ConstInt)
-DEFINE_KIND_TRAIT(ConstFloat, ObjectKind::ConstFloat)
-DEFINE_KIND_TRAIT(ConstBool, ObjectKind::ConstBool)
+DEFINE_KIND_TRAIT(Var, ObjectKind::Var);
+DEFINE_KIND_TRAIT(MemRef, ObjectKind::MemRef);
+DEFINE_KIND_TRAIT(Call, ObjectKind::Call);
+DEFINE_KIND_TRAIT(MakeTuple, ObjectKind::MakeTuple);
+DEFINE_KIND_TRAIT(GetItemExpr, ObjectKind::GetItemExpr);
+DEFINE_KIND_TRAIT(ConstInt, ObjectKind::ConstInt);
+DEFINE_KIND_TRAIT(ConstFloat, ObjectKind::ConstFloat);
+DEFINE_KIND_TRAIT(ConstBool, ObjectKind::ConstBool);
 
 // Binary expression types
-DEFINE_KIND_TRAIT(Add, ObjectKind::Add)
-DEFINE_KIND_TRAIT(Sub, ObjectKind::Sub)
-DEFINE_KIND_TRAIT(Mul, ObjectKind::Mul)
-DEFINE_KIND_TRAIT(FloorDiv, ObjectKind::FloorDiv)
-DEFINE_KIND_TRAIT(FloorMod, ObjectKind::FloorMod)
-DEFINE_KIND_TRAIT(FloatDiv, ObjectKind::FloatDiv)
-DEFINE_KIND_TRAIT(Min, ObjectKind::Min)
-DEFINE_KIND_TRAIT(Max, ObjectKind::Max)
-DEFINE_KIND_TRAIT(Pow, ObjectKind::Pow)
-DEFINE_KIND_TRAIT(Eq, ObjectKind::Eq)
-DEFINE_KIND_TRAIT(Ne, ObjectKind::Ne)
-DEFINE_KIND_TRAIT(Lt, ObjectKind::Lt)
-DEFINE_KIND_TRAIT(Le, ObjectKind::Le)
-DEFINE_KIND_TRAIT(Gt, ObjectKind::Gt)
-DEFINE_KIND_TRAIT(Ge, ObjectKind::Ge)
-DEFINE_KIND_TRAIT(And, ObjectKind::And)
-DEFINE_KIND_TRAIT(Or, ObjectKind::Or)
-DEFINE_KIND_TRAIT(Xor, ObjectKind::Xor)
-DEFINE_KIND_TRAIT(BitAnd, ObjectKind::BitAnd)
-DEFINE_KIND_TRAIT(BitOr, ObjectKind::BitOr)
-DEFINE_KIND_TRAIT(BitXor, ObjectKind::BitXor)
-DEFINE_KIND_TRAIT(BitShiftLeft, ObjectKind::BitShiftLeft)
-DEFINE_KIND_TRAIT(BitShiftRight, ObjectKind::BitShiftRight)
+DEFINE_KIND_TRAIT(Add, ObjectKind::Add);
+DEFINE_KIND_TRAIT(Sub, ObjectKind::Sub);
+DEFINE_KIND_TRAIT(Mul, ObjectKind::Mul);
+DEFINE_KIND_TRAIT(FloorDiv, ObjectKind::FloorDiv);
+DEFINE_KIND_TRAIT(FloorMod, ObjectKind::FloorMod);
+DEFINE_KIND_TRAIT(FloatDiv, ObjectKind::FloatDiv);
+DEFINE_KIND_TRAIT(Min, ObjectKind::Min);
+DEFINE_KIND_TRAIT(Max, ObjectKind::Max);
+DEFINE_KIND_TRAIT(Pow, ObjectKind::Pow);
+DEFINE_KIND_TRAIT(Eq, ObjectKind::Eq);
+DEFINE_KIND_TRAIT(Ne, ObjectKind::Ne);
+DEFINE_KIND_TRAIT(Lt, ObjectKind::Lt);
+DEFINE_KIND_TRAIT(Le, ObjectKind::Le);
+DEFINE_KIND_TRAIT(Gt, ObjectKind::Gt);
+DEFINE_KIND_TRAIT(Ge, ObjectKind::Ge);
+DEFINE_KIND_TRAIT(And, ObjectKind::And);
+DEFINE_KIND_TRAIT(Or, ObjectKind::Or);
+DEFINE_KIND_TRAIT(Xor, ObjectKind::Xor);
+DEFINE_KIND_TRAIT(BitAnd, ObjectKind::BitAnd);
+DEFINE_KIND_TRAIT(BitOr, ObjectKind::BitOr);
+DEFINE_KIND_TRAIT(BitXor, ObjectKind::BitXor);
+DEFINE_KIND_TRAIT(BitShiftLeft, ObjectKind::BitShiftLeft);
+DEFINE_KIND_TRAIT(BitShiftRight, ObjectKind::BitShiftRight);
 
 // Unary expression types
-DEFINE_KIND_TRAIT(Abs, ObjectKind::Abs)
-DEFINE_KIND_TRAIT(Neg, ObjectKind::Neg)
-DEFINE_KIND_TRAIT(Not, ObjectKind::Not)
-DEFINE_KIND_TRAIT(BitNot, ObjectKind::BitNot)
-DEFINE_KIND_TRAIT(Cast, ObjectKind::Cast)
+DEFINE_KIND_TRAIT(Abs, ObjectKind::Abs);
+DEFINE_KIND_TRAIT(Neg, ObjectKind::Neg);
+DEFINE_KIND_TRAIT(Not, ObjectKind::Not);
+DEFINE_KIND_TRAIT(BitNot, ObjectKind::BitNot);
+DEFINE_KIND_TRAIT(Cast, ObjectKind::Cast);
 
 // Symbolic expression types
-DEFINE_KIND_TRAIT(ScalarExpr, ObjectKind::ScalarExpr)
+DEFINE_KIND_TRAIT(ScalarExpr, ObjectKind::ScalarExpr);
 
 // Statement types
-DEFINE_KIND_TRAIT(AssignStmt, ObjectKind::AssignStmt)
-DEFINE_KIND_TRAIT(IfStmt, ObjectKind::IfStmt)
-DEFINE_KIND_TRAIT(YieldStmt, ObjectKind::YieldStmt)
-DEFINE_KIND_TRAIT(ReturnStmt, ObjectKind::ReturnStmt)
-DEFINE_KIND_TRAIT(ForStmt, ObjectKind::ForStmt)
-DEFINE_KIND_TRAIT(SeqStmts, ObjectKind::SeqStmts)
-DEFINE_KIND_TRAIT(EvalStmt, ObjectKind::EvalStmt)
-DEFINE_KIND_TRAIT(WhileStmt, ObjectKind::WhileStmt)
-DEFINE_KIND_TRAIT(SectionStmt, ObjectKind::SectionStmt)
-DEFINE_KIND_TRAIT(OpStmts, ObjectKind::OpStmts)
-DEFINE_KIND_TRAIT(BreakStmt, ObjectKind::BreakStmt)
-DEFINE_KIND_TRAIT(ContinueStmt, ObjectKind::ContinueStmt)
-DEFINE_KIND_TRAIT(ScalarOpStmt, ObjectKind::ScalarOpStmt)
-DEFINE_KIND_TRAIT(TensorOpStmt, ObjectKind::TensorOpStmt)
+DEFINE_KIND_TRAIT(AssignStmt, ObjectKind::AssignStmt);
+DEFINE_KIND_TRAIT(IfStmt, ObjectKind::IfStmt);
+DEFINE_KIND_TRAIT(YieldStmt, ObjectKind::YieldStmt);
+DEFINE_KIND_TRAIT(ReturnStmt, ObjectKind::ReturnStmt);
+DEFINE_KIND_TRAIT(ForStmt, ObjectKind::ForStmt);
+DEFINE_KIND_TRAIT(SeqStmts, ObjectKind::SeqStmts);
+DEFINE_KIND_TRAIT(EvalStmt, ObjectKind::EvalStmt);
+DEFINE_KIND_TRAIT(WhileStmt, ObjectKind::WhileStmt);
+DEFINE_KIND_TRAIT(SectionStmt, ObjectKind::SectionStmt);
+DEFINE_KIND_TRAIT(OpStmts, ObjectKind::OpStmts);
+DEFINE_KIND_TRAIT(BreakStmt, ObjectKind::BreakStmt);
+DEFINE_KIND_TRAIT(ContinueStmt, ObjectKind::ContinueStmt);
+DEFINE_KIND_TRAIT(ScalarOpStmt, ObjectKind::ScalarOpStmt);
+DEFINE_KIND_TRAIT(TensorOpStmt, ObjectKind::TensorOpStmt);
 
 // Type types
-DEFINE_KIND_TRAIT(UnknownType, ObjectKind::UnknownType)
-DEFINE_KIND_TRAIT(ScalarType, ObjectKind::ScalarType)
+DEFINE_KIND_TRAIT(UnknownType, ObjectKind::UnknownType);
+DEFINE_KIND_TRAIT(ScalarType, ObjectKind::ScalarType);
 // ShapedType is both a concrete type and a base class - handled separately below
-DEFINE_KIND_TRAIT(TensorType, ObjectKind::TensorType)
-DEFINE_KIND_TRAIT(TileType, ObjectKind::TileType)
-DEFINE_KIND_TRAIT(TupleType, ObjectKind::TupleType)
-DEFINE_KIND_TRAIT(MemRefType, ObjectKind::MemRefType)
-DEFINE_KIND_TRAIT(PtrType, ObjectKind::PtrType)
-DEFINE_KIND_TRAIT(TokenType, ObjectKind::TokenType)
-DEFINE_KIND_TRAIT(LogicalTensorType, ObjectKind::LogicalTensorType)
+DEFINE_KIND_TRAIT(TensorType, ObjectKind::TensorType);
+DEFINE_KIND_TRAIT(TileType, ObjectKind::TileType);
+DEFINE_KIND_TRAIT(TupleType, ObjectKind::TupleType);
+DEFINE_KIND_TRAIT(MemRefType, ObjectKind::MemRefType);
+DEFINE_KIND_TRAIT(PtrType, ObjectKind::PtrType);
+DEFINE_KIND_TRAIT(TokenType, ObjectKind::TokenType);
+DEFINE_KIND_TRAIT(LogicalTensorType, ObjectKind::LogicalTensorType);
 
 // Other IR node types
-DEFINE_KIND_TRAIT(Function, ObjectKind::Function)
-DEFINE_KIND_TRAIT(Program, ObjectKind::Program)
+DEFINE_KIND_TRAIT(Function, ObjectKind::Function);
+DEFINE_KIND_TRAIT(Program, ObjectKind::Program);
 
 // Op kinds
-DEFINE_KIND_TRAIT(Op, ObjectKind::Op)
+DEFINE_KIND_TRAIT(Op, ObjectKind::Op);
 
 #undef DEFINE_KIND_TRAIT
 

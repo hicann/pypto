@@ -416,7 +416,7 @@ void SymbolicExpressionTable::BuildExtremaExpressionCode(
         << BuildExpressionByRaw(operands[operandSize - 1], exprDict) << ")";
 
     // 补齐右括号
-    for (size_t i = 0; i < operandSize - 2; ++i) {
+    for (size_t i = 0; i < operandSize - 0x2; ++i) {
         oss << ")";
     }
 }
@@ -508,7 +508,7 @@ bool SymbolicExpressionTable::CheckExprDependCore(
             auto expr = std::dynamic_pointer_cast<RawSymbolicExpression>(raw);
             if (expr->Opcode() == SymbolicOpcode::T_MOP_CALL) {
                 auto operandList = expr->OperandList();
-                if (operandList.size() < 2) {
+                if (operandList.size() < 0x2) {
                     return false;
                 }
                 const auto& calleeExpr = operandList[0];
@@ -914,19 +914,19 @@ void RawSymbolicExpression::DumpRuntimeExtrema(std::ostream& out) const
     const char* funcName = (opcode_ == SymbolicOpcode::T_MOP_MAX) ? "RUNTIME_Max" : "RUNTIME_Min";
 
     const size_t n = operandList_.size();
-    for (size_t i = 0; i < n - 2; ++i) {
+    for (size_t i = 0; i < n - 0x2; ++i) {
         out << funcName << "(";
         operandList_[i]->DumpBuffer(out);
         out << ", ";
     }
 
     out << funcName << "(";
-    operandList_[n - 2]->DumpBuffer(out);
+    operandList_[n - 0x2]->DumpBuffer(out);
     out << ", ";
     operandList_[n - 1]->DumpBuffer(out);
     out << ")";
 
-    for (size_t i = 0; i < n - 2; ++i) {
+    for (size_t i = 0; i < n - 0x2; ++i) {
         out << ")";
     }
 }

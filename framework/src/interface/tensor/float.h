@@ -78,7 +78,7 @@ class Float {
         return ret;
     }
 
-    static constexpr TBase BaseFromFp32(uint32_t v32) __NO_UBSAN
+    static constexpr TBase BaseFromFp32(uint32_t v32) NO_UBSAN
     {
         if (expBit == EXP_BIT_EIGHT) {
             /*  Converts a float point to bfloat16, with round-nearest-to-even as rounding method.

@@ -119,7 +119,6 @@ void ExecuteOpViewType(ExecuteOperationContext* ctx)
 
     auto inData = iop->GetData();
     auto outData = oop->GetData();
-
     if (inData->GetRawData() == outData->GetRawData()) {
         return;
     }

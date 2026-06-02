@@ -21,6 +21,7 @@ using namespace npu::tile_fwk;
 
 namespace pypto {
 constexpr const int SCATTER_UPDATE_DIM = -2;
+constexpr uint16_t DEFAULT_UNIFORM_ROUNDS = 10;
 void BindOperation(py::module& m)
 {
     m.def(
@@ -315,8 +316,8 @@ void BindOperation(py::module& m)
            const std::vector<int64_t>& shape, const Element& rounds,
            DataType dtype) { return npu::tile_fwk::Uniform(key, counter0, counter1, shape, rounds, dtype); },
         py::arg("key"), py::arg("counter0"), py::arg("counter1"), py::arg("shape"),
-        py::arg("rounds") = Element(DT_UINT16, static_cast<uint16_t>(10)), py::arg("dtype") = DT_FP32,
-        "Uniform random number generator.");
+        py::arg("rounds") = Element(DT_UINT16, static_cast<uint16_t>(DEFAULT_UNIFORM_ROUNDS)),
+        py::arg("dtype") = DT_FP32, "Uniform random number generator.");
     m.def(
         "Amax",
         [](const Tensor& operand, int axis, bool keepDim) { return npu::tile_fwk::Amax(operand, axis, keepDim); },

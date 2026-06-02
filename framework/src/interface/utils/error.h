@@ -44,7 +44,7 @@ struct TerminateHandler {
                 ErrorManager::Instance().OutputErrorMessage();
                 std::cerr << "Caught exception: '" << e.what() << "'\n";
             }
-            fflush(nullptr);
+            (void)fflush(nullptr);
             _Exit(1);
         });
     }
@@ -62,7 +62,7 @@ struct TerminateHandler {
         PYPTO_LOGE_FULL("%s\n%s", msg, backtrace.c_str());
         ErrorManager::Instance().OutputErrorMessage();
         std::cerr << msg << "\n" << backtrace << std::endl;
-        fflush(nullptr);
+        (void)fflush(nullptr);
         _Exit(1);
     }
 

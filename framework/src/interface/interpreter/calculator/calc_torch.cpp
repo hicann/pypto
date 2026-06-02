@@ -34,7 +34,7 @@ static std::vector<int64_t> ShapePackedView(const std::vector<int64_t>& logicalS
     }
     std::vector<int64_t> s = logicalShape;
     if (s.back() >= 0) {
-        s.back() = (s.back() + 1) / 2;
+        s.back() = (s.back() + 1) / 0x2;
     }
     return s;
 }
@@ -44,7 +44,7 @@ static int64_t LastDimPackedCount(int64_t logicalLast, DataType dtype)
     if (logicalLast < 0) {
         return logicalLast;
     }
-    return IsFp4PackedDtype(dtype) ? ((logicalLast + 1) / 2) : logicalLast;
+    return IsFp4PackedDtype(dtype) ? ((logicalLast + 1) / 0x2) : logicalLast;
 }
 
 static int64_t StorageOffsetFloatToPacked(int64_t logicalOffset, DataType dtype)
@@ -52,7 +52,7 @@ static int64_t StorageOffsetFloatToPacked(int64_t logicalOffset, DataType dtype)
     if (!IsFp4PackedDtype(dtype)) {
         return logicalOffset;
     }
-    return logicalOffset / 2;
+    return logicalOffset / 0x2;
 }
 
 static std::vector<int64_t> StrideFloatToPacked(const std::vector<int64_t>& logicalStride, DataType dtype)
@@ -87,7 +87,7 @@ static int64_t LastDimFloatCount(int64_t packedLast, DataType dtype)
     if (packedLast < 0) {
         return packedLast;
     }
-    return IsFp4PackedDtype(dtype) ? (packedLast * 2) : packedLast;
+    return IsFp4PackedDtype(dtype) ? (packedLast * 0x2) : packedLast;
 }
 
 #define AXIS_TO_LAST -2
@@ -326,7 +326,7 @@ static uint8_t ComputeSharedExponentNV(float maxAbsValue, float maxPos)
         return 0u;
     }
     const int e8m0 = static_cast<int>(std::ceil(std::log2(descale))) + kE8M0ExponentBias;
-    return static_cast<uint8_t>(std::clamp(e8m0, 0, 254));
+    return static_cast<uint8_t>(std::clamp(e8m0, 0, 0xfe));
 }
 
 // Compute the reciprocal scaling factor from an E8M0 biased exponent.
@@ -358,8 +358,7 @@ static std::pair<uint8_t, float> ComputeB16OcpExponentAndScaling(float maxAbsVal
     }
     const int targetMaxPow2 = isFp4E2M1 ? kFP4E2M1Params.targetMaxPow2 : kFP8E4M3Params.targetMaxPow2;
     if (std::isinf(maxAbsValue)) {
-        const auto e8m0 =
-            static_cast<uint8_t>(std::clamp(0xFF - targetMaxPow2, 0, 0xFE));
+        const auto e8m0 = static_cast<uint8_t>(std::clamp(0xFF - targetMaxPow2, 0, 0xFE));
         return {e8m0, std::ldexp(1.0f, kE8M0ExponentBias - static_cast<int>(e8m0))};
     }
     if (maxAbsValue <= std::ldexp(1.0f, targetMaxPow2 - kE8M0ExponentBias)) {
@@ -368,7 +367,7 @@ static std::pair<uint8_t, float> ComputeB16OcpExponentAndScaling(float maxAbsVal
     const int e8m0 =
         static_cast<int>(std::floor(std::log2(static_cast<long double>(maxAbsValue)))) - targetMaxPow2 +
         kE8M0ExponentBias;
-    const auto clamped = static_cast<uint8_t>(std::clamp(e8m0, 0, 254));
+    const auto clamped = static_cast<uint8_t>(std::clamp(e8m0, 0, 0xFE));
     return {clamped, std::ldexp(1.0f, kE8M0ExponentBias - static_cast<int>(clamped))};
 }
 
@@ -395,7 +394,6 @@ static uint8_t EncodeE4M3Fn(float value)
     const uint8_t sign = static_cast<uint8_t>((bits >> 24) & kSignMask);
     const uint32_t absBits = bits & 0x7FFFFFFFu;
     const float absVal = BitsToFloat(absBits);
-
     // Branch 1: saturation
     if (absVal >= p.maxPos) {
         return sign | kMaxCode;
@@ -696,7 +694,7 @@ static void Pad(const TensorData& out, const TensorData& input, const Element& p
     int64_t pad_right = 0;
     int64_t pad_bottom = 0;
 
-    if (ndim >= 2) {
+    if (ndim >= 0x2) {
         pad_right = std::max(static_cast<int64_t>(0), out_shape[ndim - 1] - in_shape[ndim - 1]);
         pad_bottom = std::max(static_cast<int64_t>(0), out_shape[ndim - 2] - in_shape[ndim - 2]);
     } else if (ndim == 1) {
@@ -723,7 +721,7 @@ static void FillPad(const TensorData& out, const TensorData& input, const Elemen
 
     std::vector<int64_t> rawFloatShape = input.rawShape;
     std::vector<int64_t> valid_shape = in_shape;
-    if (ndim >= 2) {
+    if (ndim >= 0x2) {
         valid_shape[ndim - 1] = std::min(in_shape[ndim - 1], rawFloatShape[ndim - 1]);
         valid_shape[ndim - 2] = std::min(in_shape[ndim - 2], rawFloatShape[ndim - 2]);
     } else if (ndim == 1) {
@@ -740,7 +738,7 @@ static void FillPad(const TensorData& out, const TensorData& input, const Elemen
             auto out_view = tout.second.slice(0, 0, valid_w);
             out_view.copy_(in_view);
         }
-    } else if (ndim == 2) {
+    } else if (ndim == 0x2) {
         int64_t valid_h = valid_shape[0];
         int64_t valid_w = valid_shape[1];
         if (valid_h > 0 && valid_w > 0) {
@@ -892,9 +890,9 @@ static void Add(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -919,9 +917,9 @@ static void Sub(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -946,9 +944,9 @@ static void Mul(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -973,9 +971,9 @@ static void Div(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -999,9 +997,9 @@ static void Hypot(const TensorData& out, const TensorData& self, const TensorDat
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -1026,9 +1024,9 @@ static void Fmod(const TensorData& out, const TensorData& self, const TensorData
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -1214,9 +1212,9 @@ static void Min(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -1241,9 +1239,9 @@ static void Max(const TensorData& out, const TensorData& self, const TensorData&
     std::vector<int64_t> shape_self = tself.second.sizes().vec();
     std::vector<int64_t> shape_other = tother.second.sizes().vec();
 
-    if (shape_self.size() == 2 && shape_other.size() == 2 && shape_self[0] == shape_other[0] &&
-        shape_self[1] != shape_other[1]) {
-        if (shape_other[1] == 8) {
+    if (shape_self.size() == 0x2 && shape_other.size() == 0x2 &&
+        shape_self[0] == shape_other[0] && shape_self[1] != shape_other[1]) {
+        if (shape_other[1] == 0x8) {
             int64_t cols_self = shape_self[1];
             int64_t cols_other = shape_other[1];
             int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
@@ -1301,7 +1299,7 @@ static void Range(const TensorData& out, const Element& start, const Element& en
 static uint32_t MultiplyHighLow(uint32_t a, uint32_t b, uint32_t& hi)
 {
     uint64_t product = static_cast<uint64_t>(a) * static_cast<uint64_t>(b);
-    hi = static_cast<uint32_t>(product >> 32);
+    hi = static_cast<uint32_t>(product >> 0x20);
     return static_cast<uint32_t>(product & 0xFFFFFFFF);
 }
 
@@ -1325,13 +1323,13 @@ static void Uniform(
 {
     std::vector<uint32_t> keyVec(2);
     keyVec[0] = static_cast<uint32_t>(key.Cast<uint64_t>() & 0xFFFFFFFF);
-    keyVec[1] = static_cast<uint32_t>(key.Cast<uint64_t>() >> 32);
+    keyVec[1] = static_cast<uint32_t>(key.Cast<uint64_t>() >> 0x20);
 
     std::vector<uint32_t> counterVec(4);
     counterVec[0] = static_cast<uint32_t>(counter0.Cast<uint64_t>() & 0xFFFFFFFF);
-    counterVec[1] = static_cast<uint32_t>(counter0.Cast<uint64_t>() >> 32);
+    counterVec[1] = static_cast<uint32_t>(counter0.Cast<uint64_t>() >> 0x20);
     counterVec[2] = static_cast<uint32_t>(counter1.Cast<uint64_t>() & 0xFFFFFFFF);
-    counterVec[3] = static_cast<uint32_t>(counter1.Cast<uint64_t>() >> 32);
+    counterVec[3] = static_cast<uint32_t>(counter1.Cast<uint64_t>() >> 0x20);
 
     int64_t totalElements = 1;
     for (int64_t dim : out.shape) {
@@ -1344,10 +1342,10 @@ static void Uniform(
 
     uint16_t roundsVal = rounds.Cast<uint16_t>();
 
-    for (int64_t i = 0; i < totalElements; i += 4) {
+    for (int64_t i = 0; i < totalElements; i += 0x4) {
         PhiloxRandomGolden(currentCounter, currentKey, roundsVal);
 
-        for (int j = 0; j < 4 && (i + j) < totalElements; ++j) {
+        for (int j = 0; j < 0x4 && (i + j) < totalElements; ++j) {
             result[i + j] = currentCounter[j];
         }
 
@@ -1625,7 +1623,7 @@ static void MatmulMultiDataLoad(
         auto viewR = View(rhs, shapeR, offsetR);
         out.add_(torch::matmul(viewL, viewR));
     }
-    if (biasShape.size() == 2) {
+    if (biasShape.size() == 0x2) {
         out.add_(bias);
     }
 }
@@ -1678,22 +1676,27 @@ static void QuantPreCompute(
 static torch::Tensor BuildMXScaleForA(const torch::Tensor& scaleA, bool scaleATrans, int64_t mSize, int64_t kSize)
 {
     auto localScaleA = scaleA;
-    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.dim() == 3)
+    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.dim() == 0x3)
         << "MX scale_a must be 3D, got dim: " << localScaleA.dim();
     torch::Tensor merged;
+    constexpr size_t localScaleIndex0 = 0;
+    constexpr size_t localScaleIndex1 = 1;
+    constexpr size_t localScaleIndex2 = 2;
     if (!scaleATrans) {
         // test reference: scale_a.view(m, k / 32)
         ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.size(0) == mSize && localScaleA.size(2) == 2)
-            << "MX scale_a shape mismatch, expected [M, K/64, 2], got [" << localScaleA.size(0) << ", "
-            << localScaleA.size(1) << ", " << localScaleA.size(2) << "]";
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+            localScaleA.size(localScaleIndex0) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
+            << "MX scale_a shape mismatch, expected [M, K/64, 2], got [" << localScaleA.size(localScaleIndex0) << ", "
+            << localScaleA.size(localScaleIndex1) << ", " << localScaleA.size(localScaleIndex2) << "]";
         merged = localScaleA.reshape({mSize, -1});
     } else {
         // test reference: torch.transpose(scale_a, -2, -1).reshape(k / 32, m).T
         ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.size(1) == mSize && localScaleA.size(2) == 2)
-            << "MX trans scale_a shape mismatch, expected [K/64, M, 2], got [" << localScaleA.size(0) << ", "
-            << localScaleA.size(1) << ", " << localScaleA.size(2) << "]";
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+            localScaleA.size(localScaleIndex1) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
+            << "MX trans scale_a shape mismatch, expected [K/64, M, 2], got [" << localScaleA.size(localScaleIndex0)
+            << ", " << localScaleA.size(localScaleIndex1) << ", " << localScaleA.size(localScaleIndex2) << "]";
         merged = localScaleA.transpose(-2, -1).reshape({-1, mSize}).transpose(0, 1);
     }
     auto expanded = merged.repeat_interleave(32, 1);
@@ -1705,22 +1708,27 @@ static torch::Tensor BuildMXScaleForA(const torch::Tensor& scaleA, bool scaleATr
 static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTrans, int64_t kSize, int64_t nSize)
 {
     auto localScaleB = scaleB;
-    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.dim() == 3)
+    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.dim() == 0x3)
         << "MX scale_b must be 3D, got dim: " << localScaleB.dim();
     torch::Tensor merged;
+    constexpr size_t localScaleIndex0 = 0;
+    constexpr size_t localScaleIndex1 = 1;
+    constexpr size_t localScaleIndex2 = 2;
     if (!scaleBTrans) {
         // test reference: torch.transpose(scale_b, -2, -1).reshape(k / 32, n)
         ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.size(1) == nSize && localScaleB.size(2) == 2)
-            << "MX scale_b shape mismatch, expected [K/64, N, 2], got [" << localScaleB.size(0) << ", "
-            << localScaleB.size(1) << ", " << localScaleB.size(2) << "]";
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+            localScaleB.size(localScaleIndex1) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
+            << "MX scale_b shape mismatch, expected [K/64, N, 2], got [" << localScaleB.size(localScaleIndex0) << ", "
+            << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
         merged = localScaleB.transpose(-2, -1).reshape({-1, nSize});
     } else {
         // test reference: scale_b.view(n, k / 32).T
         ASSERT(
-            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.size(0) == nSize && localScaleB.size(2) == 2)
-            << "MX trans scale_b shape mismatch, expected [N, K/64, 2], got [" << localScaleB.size(0) << ", "
-            << localScaleB.size(1) << ", " << localScaleB.size(2) << "]";
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+            localScaleB.size(localScaleIndex0) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
+            << "MX trans scale_b shape mismatch, expected [N, K/64, 2], got [" << localScaleB.size(localScaleIndex0)
+            << ", " << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
         merged = localScaleB.reshape({nSize, -1}).transpose(0, 1);
     }
     auto expanded = merged.repeat_interleave(32, 0);
@@ -1766,7 +1774,9 @@ static void MatMul(
     if (param.aScalePtr != nullptr && param.bScalePtr != nullptr) {
         auto taScale = From(*param.aScalePtr).second.to(calcType);
         auto tbScale = From(*param.bScalePtr).second.to(calcType);
-        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, tself.second.dim() == 2 && tother.second.dim() == 2)
+        ASSERT(
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH,
+            tself.second.dim() == 0x2 && tother.second.dim() == 0x2)
             << "MX MatMul currently only supports 2D matrices.";
         int64_t mSize = tself.second.size(0);
         int64_t kSize = tself.second.size(1);
@@ -1859,13 +1869,14 @@ void GatherINUBGolden(
     ASSERT(CalculatorErrorScene::GATHER_INUB_BLOCKSIZE_INVALID, blockSize > 0) << "blockSize must be > 0.";
 
     // ---- 形状严格限制：indices/pageTable 只能是 [1, a] ----
-    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, params.dim() == 2)
+    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, params.dim() == 0x2)
         << "params must be [num_buffer_tokens, hidden_dim]";
-    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, indices.dim() == 2 && indices.size(0) == 1)
+    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, indices.dim() == 0x2 && indices.size(0) == 1)
         << "indices must be [1, topk_count]";
-    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, pageTable.dim() == 2 && pageTable.size(0) == 1)
+    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, pageTable.dim() == 0x2 && pageTable.size(0) == 1)
         << "pageTable must be [1, num_logical_blocks]";
-    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, out.dim() == 2) << "out must be [topk_count, hidden_dim]";
+    ASSERT(CalculatorErrorScene::GATHER_INUB_SHAPE_INVALID, out.dim() == 0x2)
+        << "out must be [topk_count, hidden_dim]";
 
     const int64_t hidden_dim = params.size(1);
     const int64_t topk_count = indices.size(1);
@@ -2002,26 +2013,26 @@ void GatherMask(const TensorData& out, const TensorData& self, int patternMode)
     } else {
         torch::Tensor selected_indices;
         switch (patternMode) {
-            case 1:
-                selected_indices = torch::arange(0, last_dim, 2);
+            case 0x1:
+                selected_indices = torch::arange(0, last_dim, 0x2);
                 break;
-            case 2:
-                selected_indices = torch::arange(1, last_dim, 2);
+            case 0x2:
+                selected_indices = torch::arange(0x1, last_dim, 0x2);
                 break;
-            case 3:
-                selected_indices = torch::arange(0, last_dim, 4);
+            case 0x3:
+                selected_indices = torch::arange(0, last_dim, 0x4);
                 break;
-            case 4:
-                selected_indices = torch::arange(1, last_dim, 4);
+            case 0x4:
+                selected_indices = torch::arange(0x1, last_dim, 0x4);
                 break;
-            case 5:
-                selected_indices = torch::arange(2, last_dim, 4);
+            case 0x5:
+                selected_indices = torch::arange(0x2, last_dim, 0x4);
                 break;
-            case 6:
-                selected_indices = torch::arange(3, last_dim, 4);
+            case 0x6:
+                selected_indices = torch::arange(0x3, last_dim, 0x4);
                 break;
             default:
-                ASSERT(CalculatorErrorScene::GATHERMASK_PATTERNMODE_INVALID, patternMode >= 1 && patternMode <= 7)
+                ASSERT(CalculatorErrorScene::GATHERMASK_PATTERNMODE_INVALID, patternMode >= 0x1 && patternMode <= 0x7)
                     << "Invalid patternMode";
         }
         ret.second = src.second.index_select(-1, selected_indices);
@@ -2075,9 +2086,9 @@ static void Quantize(const TensorData &out, const TensorData &input, const Tenso
     auto rounded = torch::round(scaled);
 
     if (out.dtype == DT_UINT8) {
-        rounded = torch::clamp(rounded, 0, 255);
+        rounded = torch::clamp(rounded, 0, 0xff);
     } else if (out.dtype == DT_INT8) {
-        rounded = torch::clamp(rounded, -128, 127);
+        rounded = torch::clamp(rounded, -0x80, 0x7f);
     }
 
     ToOperand(rounded, tout.first, out.dtype);
@@ -2363,7 +2374,6 @@ static void PairArgMin(
     ToOperand(selectdValue, toutValue.first, outValue.dtype);
     ToOperand(selectdIndex, toutIndex.first, outIndex.dtype);
 }
-
 
 static void Reshape(const TensorData& out, const TensorData& self)
 {
@@ -2747,7 +2757,7 @@ static void TopkMerge(const TensorData& out, const TensorData& self, int mergeSi
     std::tie(std::ignore, sortIndices) = values.sort(axis, true); // Descending
 
     // Build actual element indices (each pack occupies 2 positions)
-    auto packIdx0 = sortIndices * 2; // value position
+    auto packIdx0 = sortIndices * 0x2; // value position
     auto packIdx1 = packIdx0 + 1;    // index position
     // Stack and flatten to 1D vector for index_select
     auto allIndices = torch::stack({packIdx0.flatten(), packIdx1.flatten()}, 1).flatten();
@@ -3058,7 +3068,7 @@ static void StoreQuantMXScaling(float* scalingPtr, int64_t row, int64_t groupCol
     if (ctx.performanceMode) {
         const int64_t offset = row * groupCols * ctx.scalingFactor + group * ctx.scalingFactor;
         scalingPtr[offset] = scaling;
-        if (ctx.scalingFactor == 2) {
+        if (ctx.scalingFactor == 0x2) {
             scalingPtr[offset + 1] = scaling;
         }
         return;
@@ -3091,7 +3101,7 @@ static void StoreQuantMXValue(
         const uint8_t encoded = EncodeE2M1Magic(scaled);
         uint8_t& packed = quantPtr[row * quantCols + col / 2];
         packed = (col & 1) == 0 ? static_cast<uint8_t>((packed & 0xF0u) | encoded) :
-                                  static_cast<uint8_t>((packed & 0x0Fu) | (encoded << 4));
+                                  static_cast<uint8_t>((packed & 0x0Fu) | (encoded << 0x4));
         return;
     }
     if (!ctx.performanceMode) {
@@ -3173,7 +3183,7 @@ static QuantMXShapes BuildQuantMXShapes(
     shapes.performanceGroupedShape = BuildQuantMXPerformanceGroupedShape(shapes.quantShape, shapes.groupedShape.back());
     shapes.performanceScalingShape = shapes.performanceGroupedShape;
     if (srcDtype == DT_FP32) {
-        shapes.performanceScalingShape.back() *= 2;
+        shapes.performanceScalingShape.back() *= 0x2;
     }
     shapes.scalingShape = performanceMode ? shapes.performanceScalingShape : input.sizes().vec();
     shapes.rows = input.numel() / shapes.cols;
@@ -3216,7 +3226,7 @@ static void QuantMX(
     auto tself = From(self);
 
     auto input = tself.second.to(torch::kFloat32).contiguous();
-    ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, input.dim() >= 1 && input.dim() <= 4)
+    ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, input.dim() >= 1 && input.dim() <= 0x4)
         << "QuantMX interpreter only supports 1D to 4D input.";
 
     const QuantMXShapes shapes = BuildQuantMXShapes(input, self.dtype, out.dtype, performanceMode);
@@ -3228,7 +3238,7 @@ static void QuantMX(
     auto quantFlat = quantRaw.view({shapes.rows, shapes.quantCols});
     auto expFlat = expRaw.view({shapes.rows, shapes.groupCols});
     auto scalingFlat = performanceMode ?
-        scalingTemp.view({shapes.rows, shapes.groupCols * (self.dtype == DT_FP32 ? 2 : 1)}) :
+        scalingTemp.view({shapes.rows, shapes.groupCols * (self.dtype == DT_FP32 ? 0x2 : 1)}) :
         scalingTemp.view({shapes.rows, shapes.cols});
     auto maxFlat = maxTemp.view({shapes.rows, shapes.groupCols});
 

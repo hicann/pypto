@@ -38,7 +38,7 @@ TypePtr DeduceBlockMatMulType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
 
     // Both arguments must be TileType
     auto lhs_type = As<TileType>(args[0]->GetType());
@@ -54,9 +54,9 @@ TypePtr DeduceBlockMatMulType(
     const auto& rhs_shape = rhs_type->shape_;
 
     // For block matmul, we require 2D tiles
-    CHECK(lhs_shape.size() == 2) << "The operator " << op_name << " requires lhs to be 2D, but got " << lhs_shape.size()
+    CHECK(lhs_shape.size() == 0x2) << "The operator " << op_name << " requires lhs to be 2D, but got " << lhs_shape.size()
                                  << " dimensions";
-    CHECK(rhs_shape.size() == 2) << "The operator " << op_name << " requires rhs to be 2D, but got " << rhs_shape.size()
+    CHECK(rhs_shape.size() == 0x2) << "The operator " << op_name << " requires rhs to be 2D, but got " << rhs_shape.size()
                                  << " dimensions";
 
     // Matrix multiplication: [M, K] @ [K, N] -> [M, N]
@@ -92,7 +92,7 @@ TypePtr DeduceBlockMatMulType(
     HardwareInfo hw_info;
     hw_info.blayout = TileLayout::col_major;
     hw_info.slayout = TileLayout::row_major;
-    hw_info.fractal = 1024;
+    hw_info.fractal = 0x400;
 
     return std::make_shared<TileType>(output_shape, result_dtype, std::nullopt, std::nullopt, hw_info);
 }
@@ -101,7 +101,7 @@ TypePtr DeduceBlockMatMulAccType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     // All arguments must be TileType
     auto acc_type = As<TileType>(args[0]->GetType());
@@ -121,11 +121,11 @@ TypePtr DeduceBlockMatMulAccType(
     const auto& rhs_shape = rhs_type->shape_;
 
     // For block matmul_acc, we require 2D tiles
-    CHECK(acc_shape.size() == 2) << "The operator " << op_name << " requires acc to be 2D, but got " << acc_shape.size()
+    CHECK(acc_shape.size() == 0x2) << "The operator " << op_name << " requires acc to be 2D, but got " << acc_shape.size()
                                  << " dimensions";
-    CHECK(lhs_shape.size() == 2) << "The operator " << op_name << " requires lhs to be 2D, but got " << lhs_shape.size()
+    CHECK(lhs_shape.size() == 0x2) << "The operator " << op_name << " requires lhs to be 2D, but got " << lhs_shape.size()
                                  << " dimensions";
-    CHECK(rhs_shape.size() == 2) << "The operator " << op_name << " requires rhs to be 2D, but got " << rhs_shape.size()
+    CHECK(rhs_shape.size() == 0x2) << "The operator " << op_name << " requires rhs to be 2D, but got " << rhs_shape.size()
                                  << " dimensions";
 
     // Matrix multiplication with accumulation: acc[M, N] += lhs[M, K] @ rhs[K, N]
@@ -171,7 +171,7 @@ TypePtr DeduceBlockMatMulAccType(
     HardwareInfo hw_info;
     hw_info.blayout = TileLayout::col_major;
     hw_info.slayout = TileLayout::row_major;
-    hw_info.fractal = 1024;
+    hw_info.fractal = 0x400;
 
     return std::make_shared<TileType>(output_shape, result_dtype, std::nullopt, std::nullopt, hw_info);
 }
@@ -180,7 +180,7 @@ TypePtr DeduceBlockMatMulBiasType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
+    CHECK(args.size() == 0x3) << "The operator " << op_name << " requires exactly 3 arguments, but got " << args.size();
 
     auto lhs_type = As<TileType>(args[0]->GetType());
     auto rhs_type = As<TileType>(args[1]->GetType());
@@ -197,11 +197,11 @@ TypePtr DeduceBlockMatMulBiasType(
     const auto& rhs_shape = rhs_type->shape_;
     const auto& bias_shape = bias_type->shape_;
 
-    CHECK(lhs_shape.size() == 2) << "The operator " << op_name << " requires lhs to be 2D, but got " << lhs_shape.size()
+    CHECK(lhs_shape.size() == 0x2) << "The operator " << op_name << " requires lhs to be 2D, but got " << lhs_shape.size()
                                  << " dimensions";
-    CHECK(rhs_shape.size() == 2) << "The operator " << op_name << " requires rhs to be 2D, but got " << rhs_shape.size()
+    CHECK(rhs_shape.size() == 0x2) << "The operator " << op_name << " requires rhs to be 2D, but got " << rhs_shape.size()
                                  << " dimensions";
-    CHECK(bias_shape.size() == 2) << "The operator " << op_name << " requires bias to be 2D, but got "
+    CHECK(bias_shape.size() == 0x2) << "The operator " << op_name << " requires bias to be 2D, but got "
                                   << bias_shape.size() << " dimensions";
 
     auto k_lhs_const = As<ConstInt>(lhs_shape[1]);

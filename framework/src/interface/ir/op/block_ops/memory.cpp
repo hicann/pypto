@@ -55,7 +55,7 @@ TypePtr DeduceBlockLoadType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
     // load signature: (tensor, offsets_tuple, shapes_tuple, valid_shapes_tuple)
-    CHECK(args.size() == 4) << "The operator " << op_name
+    CHECK(args.size() == 0x4) << "The operator " << op_name
                             << " requires 4 arguments (tensor, offsets, shapes, valid_shapes), but got " << args.size();
 
     // First argument must be TensorType
@@ -81,10 +81,10 @@ TypePtr DeduceBlockLoadType(
 
     // Verify shapes has exactly 2 elements (tile height and width)
     // offsets can have more dimensions than shapes (for N-D tensors with 2-D tiles)
-    CHECK(shapes_tuple->elements_.size() == 2)
+    CHECK(shapes_tuple->elements_.size() == 0x2)
         << "The operator " << op_name << " requires shapes to have exactly 2 elements (tile height and width), but got "
         << shapes_tuple->elements_.size() << " elements";
-    CHECK(offsets_tuple->elements_.size() >= 2)
+    CHECK(offsets_tuple->elements_.size() >= 0x2)
         << "The operator " << op_name << " requires offsets to have at least 2 dimensions, but got "
         << offsets_tuple->elements_.size() << " dimensions";
     CHECK(valid_shapes_tuple->elements_.size() == shapes_tuple->elements_.size())
@@ -122,7 +122,7 @@ TypePtr DeduceBlockStoreType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
     // store signature: (tile, offsets_tuple, shapes_tuple, output_tensor)
-    CHECK(args.size() == 4) << "The operator " << op_name
+    CHECK(args.size() == 0x4) << "The operator " << op_name
                             << " requires 4 arguments (tile, offsets, shapes, output_tensor), but got " << args.size();
 
     // First argument must be TileType
@@ -142,10 +142,10 @@ TypePtr DeduceBlockStoreType(
 
     // Verify shapes has exactly 2 elements (tile height and width)
     // offsets can have more dimensions than shapes (for N-D tensors with 2-D tiles)
-    CHECK(shapes_tuple->elements_.size() == 2)
+    CHECK(shapes_tuple->elements_.size() == 0x2)
         << "The operator " << op_name << " requires shapes to have exactly 2 elements (tile height and width), but got "
         << shapes_tuple->elements_.size() << " elements";
-    CHECK(offsets_tuple->elements_.size() >= 2)
+    CHECK(offsets_tuple->elements_.size() >= 0x2)
         << "The operator " << op_name << " requires offsets to have at least 2 dimensions, but got "
         << offsets_tuple->elements_.size() << " dimensions";
 
@@ -197,7 +197,8 @@ TypePtr DeduceBlockAllocType(
 {
     // alloc signature: (memory_space, addr, size, id)
     // Takes MemRef fields as arguments and returns MemRefType
-    CHECK(args.size() == 4) << "The operator " << op_name << " requires exactly 4 arguments, but got " << args.size();
+    CHECK(args.size() == 0x4)
+        << "The operator " << op_name << " requires exactly 4 arguments, but got " << args.size();
 
     // Return MemRefType
     return GetMemRefType();
@@ -207,14 +208,14 @@ TypePtr DeduceBlockPrintType(
     [[maybe_unused]] const std::vector<ExprPtr>& args,
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
-    CHECK(args.size() == 1 || args.size() == 3)
+    CHECK(args.size() == 0x1 || args.size() == 0x3)
         << "The operator " << op_name << " requires 1 argument (tile) or 3 arguments "
         << "(tile, offsets, shapes), but got " << args.size();
     auto tile_type = As<TileType>(args[0]->GetType());
     CHECK(tile_type) << "The operator " << op_name << " requires first argument to be a TileType, but got "
                      << args[0]->GetType()->TypeName();
 
-    if (args.size() == 3) {
+    if (args.size() == 0x3) {
         auto offsets = As<MakeTuple>(args[1]);
         CHECK(offsets) << "The operator " << op_name << " requires second argument to be a MakeTuple (offsets)";
 
@@ -222,8 +223,8 @@ TypePtr DeduceBlockPrintType(
         CHECK(shapes) << "The operator " << op_name << " requires third argument to be a MakeTuple (shapes)";
 
         const size_t rank = tile_type->shape_.size();
-        CHECK(rank == 2) << "The operator " << op_name << " currently only supports 2D tile windows, but got rank "
-                         << rank;
+        CHECK(rank == 0x2) << "The operator " << op_name
+                                       << " currently only supports 2D tile windows, but got rank " << rank;
         CHECK(offsets->elements_.size() == rank)
             << "The operator " << op_name << " offsets count (" << offsets->elements_.size()
             << ") must match tile rank (" << rank << ")";
@@ -263,7 +264,8 @@ TypePtr DeduceBlockCreateTileType(
 {
     // make_tile signature: (shape)
     // TileType requires static compile-time constant shapes
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 argument, but got " << args.size();
+    CHECK(args.size() == 0x2)
+        << "The operator " << op_name << " requires exactly 2 argument, but got " << args.size();
 
     // Extract dtype attribute
     DataType dtype = GetOpKwarg<DataType>(kwargs, "dtype");
@@ -352,7 +354,8 @@ TypePtr DeduceBlockFullType(
     [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name)
 {
     // block.full signature: (shape, value)
-    CHECK(args.size() == 2) << "The operator " << op_name << " requires exactly 2 arguments, but got " << args.size();
+    CHECK(args.size() == 0x2) << "The operator " << op_name << " requires exactly 2 arguments, but got "
+                                         << args.size();
 
     // Extract dtype attribute
     DataType dtype = GetOpKwarg<DataType>(kwargs, "dtype");
@@ -395,7 +398,8 @@ TypePtr DeduceBlockGetValType(
     // block.getval: Read a scalar value from a tile at flattened index
     // Args: (tile, index)
     // Returns: ScalarType with tile's element dtype
-    CHECK(args.size() == 2) << "block.getval requires exactly 2 arguments (tile, index), but got " << args.size();
+    CHECK(args.size() == 0x2)
+        << "block.getval requires exactly 2 arguments (tile, index), but got " << args.size();
 
     // First argument must be TileType
     auto tile_type = As<TileType>(args[0]->GetType());
@@ -419,8 +423,8 @@ TypePtr DeduceBlockSetValType(
     // block.setval: Write a scalar value to a tile at flattened index
     // Args: (tile, index, value)
     // Returns: TileType (same as input tile)
-    CHECK(args.size() == 3) << "block.setval requires exactly 3 arguments (tile, index, value), but got "
-                            << args.size();
+    CHECK(args.size() == 0x3)
+        << "block.setval requires exactly 3 arguments (tile, index, value), but got " << args.size();
 
     // First argument must be TileType
     auto tile_type = As<TileType>(args[0]->GetType());

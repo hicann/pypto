@@ -43,7 +43,7 @@ TypePtr DeduceTensorReadType(
     // tensor.read: Read a scalar value from a tensor at given indices
     // Args: (tensor, indices_tuple)
     // Returns: ScalarType with tensor's element dtype
-    CHECK(args.size() == 2) << "tensor.read requires exactly 2 arguments (tensor, indices), but got " << args.size();
+    CHECK(args.size() == 0x2) << "tensor.read requires exactly 2 arguments (tensor, indices), but got " << args.size();
 
     // First argument must be TensorType
     auto tensor_type = As<TensorType>(args[0]->GetType());
@@ -276,7 +276,7 @@ TypePtr DeduceTensorDimType(
     // tensor.dim: Extract a shape dimension from a tensor as a scalar
     // Args: (tensor, axis)
     // Returns: ScalarType(INT64)
-    CHECK(args.size() == 2) << "tensor.dim requires exactly 2 arguments (tensor, axis), but got " << args.size();
+    CHECK(args.size() == 0x2) << "tensor.dim requires exactly 2 arguments (tensor, axis), but got " << args.size();
 
     auto tensor_type = As<TensorType>(args[0]->GetType());
     CHECK(tensor_type) << "tensor.dim requires first argument to be a TensorType, but got "
@@ -314,7 +314,7 @@ TypePtr DeduceTensorGetValType(
     // tensor.getval: Read a scalar value from a tensor at linear offset
     // Args: (tensor, offset)
     // Returns: ScalarType with tensor's element dtype
-    CHECK(args.size() == 2) << "tensor.getval requires exactly 2 arguments (tensor, offset), but got " << args.size();
+    CHECK(args.size() == 0x2) << "tensor.getval requires exactly 2 arguments (tensor, offset), but got " << args.size();
 
     // First argument must be TensorType
     auto tensor_type = As<TensorType>(args[0]->GetType());
@@ -348,7 +348,7 @@ TypePtr DeduceTensorSetValType(
     // tensor.setval: Write a scalar value to a tensor at linear offset
     // Args: (tensor, offset, value)
     // Returns: TensorType (same as input tensor)
-    CHECK(args.size() == 3) << "tensor.setval requires exactly 3 arguments (tensor, offset, value), but got "
+    CHECK(args.size() == 0x3) << "tensor.setval requires exactly 3 arguments (tensor, offset, value), but got "
                             << args.size();
 
     // First argument must be TensorType
