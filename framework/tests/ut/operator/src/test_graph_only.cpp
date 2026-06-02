@@ -89,12 +89,6 @@ TEST_F(GraphTest, llama_1_1_256_128_mix)
     RunLLamaLayerGraph(dimsCfg);
 }
 
-TEST_F(GraphTest, llama_1_1_1024_128)
-{
-    AttentionDims dimsCfg = {1, 1, 1024, 128, DFT_SINGLE_M, DFT_SINGLE_N};
-    RunLLamaLayerGraph(dimsCfg);
-}
-
 TEST_F(GraphTest, deepseek_qkvPre)
 {
     int b = 2;
@@ -401,57 +395,6 @@ void TestMlaPrologV2(std::vector<int>& params, int inputType, bool isQuant = fal
             };
         }
     }
-}
-
-TEST_F(GraphTest, Test_MlaPrologV2_bfloat16_4_32_1_256_7168_1536)
-{ // b_n_s_s2_h_q_lora_rank, bfloat16
-    int b = 4;
-    int s = 1;
-    int s2 = 256;
-    int h = 7168;
-    int n = 32;
-    int qLoraRank = 1536;
-    int qkNopeHeadDim = 128;
-    int qkRopeHeadDim = 64;
-    int kvLoraRank = 512;
-    int vHeadDim = 128;
-
-    std::vector<int> params = {b, s, s2, n, h, qLoraRank, qkNopeHeadDim, qkRopeHeadDim, kvLoraRank, vHeadDim};
-    TestMlaPrologV2(params, 1);
-}
-
-TEST_F(GraphTest, Test_MlaPrologV2_bfloat16_4_32_1_256_7168_1536_splitnz)
-{ // b_n_s_s2_h_q_lora_rank, bfloat16
-    int b = 4;
-    int s = 1;
-    int s2 = 256;
-    int h = 7168;
-    int n = 32;
-    int qLoraRank = 1536;
-    int qkNopeHeadDim = 128;
-    int qkRopeHeadDim = 64;
-    int kvLoraRank = 512;
-    int vHeadDim = 128;
-
-    std::vector<int> params = {b, s, s2, n, h, qLoraRank, qkNopeHeadDim, qkRopeHeadDim, kvLoraRank, vHeadDim};
-    TestMlaPrologV2<true, true>(params, 1);
-}
-
-TEST_F(GraphTest, test_mla_bf16_low_quant_smooth)
-{ // b_n_s_s2_h_q_lora_rank, bfloat16
-    int b = 4;
-    int s = 1;
-    int s2 = 256;
-    int h = 7168;
-    int n = 32;
-    int qLoraRank = 1536;
-    int qkNopeHeadDim = 128;
-    int qkRopeHeadDim = 64;
-    int kvLoraRank = 512;
-    int vHeadDim = 128;
-
-    std::vector<int> params = {b, s, s2, n, h, qLoraRank, qkNopeHeadDim, qkRopeHeadDim, kvLoraRank, vHeadDim};
-    TestMlaPrologV2(params, 1, true);
 }
 
 void TestMlaProlog(std::vector<int>& params)

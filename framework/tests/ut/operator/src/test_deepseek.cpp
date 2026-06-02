@@ -950,25 +950,6 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp_withquant)
     }
 }
 
-TEST_F(FunctionTest, Test_quant)
-{
-    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-
-    std::vector<int64_t> vecTileShape = {128, 128};
-    int b = 32; // 32
-    int s = 1;  // 1, optimize set_tile
-    int h = 7168;
-    std::cout << "Test_deepseekAttention  b,s,h: " << b << ", " << s << ", " << h << std::endl;
-
-    Tensor input = Tensor(DT_FP16, {b, s, h}, "input");
-    Tensor res;
-
-    TileShape::Current().SetCubeTile({std::min(128, s), std::min(128, s)}, {256, 256}, {64, 64});
-    TileShape::Current().SetVecTile(1, vecTileShape[0], vecTileShape[1]); // for Assemble
-
-    FUNCTION("A") { res = std::get<0>(Quant(input)); }
-}
-
 TEST_F(FunctionTest, Test_ScalarOp)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);

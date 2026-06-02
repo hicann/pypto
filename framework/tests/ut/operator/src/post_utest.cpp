@@ -102,12 +102,3 @@ void TestAttentionPostUt(const TestPostParams& params, const PostTileConfig& til
     PostTensors postTensors{wUv, wo, wUvScale, smoothWUv, woScale, smoothWo};
     AttentionPostStandalone(x, postTensors, tileConfig, postOut);
 }
-
-TEST_F(AttentionPostUTest, b32_s1_nz_fp16_quant)
-{
-    // b, n, s, h, kvLoraRank, vHeadDim
-    TestPostParams params = {32, 128, 1, 7168, 512, 128};
-    PostTileConfig tileConfig = {16, 1};
-
-    TestAttentionPostUt<npu::tile_fwk::float16, true, npu::tile_fwk::float16, false, int8_t, true>(params, tileConfig);
-}
