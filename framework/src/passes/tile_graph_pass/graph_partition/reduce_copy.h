@@ -142,10 +142,15 @@ private:
     void CombineForkSubgraph(Function& function, MergeInput& mergeInput);
     Status MarkNoMergeSubgraph(Function& function);
     void UpdateConnectRecord(Function& function);
+    void UpdateMergeInput(MergeInput& mergeInput, std::multimap<int, std::vector<int>>& sortedMergeGroup);
     bool IsEnforceMergeBoundary(LogicalTensorPtr& tensor);
     Status RunOnFunction(Function& function) override;
     Status PostCheck(Function& function) override;
+    std::unordered_map<int, std::vector<int>> subgraphToOutputTensors;
+    std::unordered_map<int, std::vector<int>> subgraphToInputTensors;
+    std::unordered_map<int, std::vector<int>> tensorToMergeGroup;
     std::unordered_set<int> noMergeSubgraph;
+    std::unordered_set<int> noMergeSubgraphEnforce;
     std::map<std::vector<int>, int> mergeGroupToPriority;
     std::set<std::vector<int>> enforceMergeGroup;
     std::vector<int> subgraphInputSize;

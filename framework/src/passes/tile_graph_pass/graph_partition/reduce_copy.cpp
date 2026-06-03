@@ -139,12 +139,20 @@ void ReduceCopyMerge::CombineForkSubgraph(Function& function, MergeInput& mergeI
 
 Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
 {
+    noMergeSubgraph.clear();
+    noMergeSubgraphEnforce.clear();
     int subgraphNum = function.GetTotalSubGraphCount();
     std::vector<int> subgraphOpNum(subgraphNum, 0);
     std::vector<bool> subgraphHasReshape(subgraphNum, false);
     std::vector<bool> subgraphHasInnerDDR(subgraphNum, false);
     for (auto& op : function.Operations()) {
         int src = op.GetSubgraphID();
+        // noMergeSubgraphEnforce
+        if (OpcodeManager::Inst().GetCoreType(op.GetOpcode()) == OpCoreType::AICPU) {
+            noMergeSubgraphEnforce.insert(src);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph %d is not mergeable because it has AICPU op.", src);
+        }
+        // noMergeSubgraph
         subgraphOpNum[src] += 1;
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             subgraphHasReshape[src] = true;
@@ -161,7 +169,6 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
             }
         }
     }
-    noMergeSubgraph.clear();
     for (int i = 0; i < subgraphNum; i++) {
         if (subgraphOpNum[i] == 1 && subgraphHasReshape[i] == true) {
             noMergeSubgraph.insert(i);
@@ -251,13 +258,17 @@ void ReduceCopyMerge::UpdateConnectRecord(Function& function)
         if (connectGraphs.size() <= 1) {
             continue;
         }
+        int tensorMagic = tensor->GetMagic();
         for (auto& op : tensor->GetProducers()) {
             subgraphOutputSize[op->GetSubgraphID()] += tensorSize;
+            subgraphToOutputTensors[op->GetSubgraphID()].push_back(tensorMagic);
         }
         for (auto& op : tensor->GetConsumers()) {
             subgraphInputSize[op->GetSubgraphID()] += tensorSize;
+            subgraphToInputTensors[op->GetSubgraphID()].push_back(tensorMagic);
         }
         std::vector<int> mergeGroup(connectGraphs.begin(), connectGraphs.end());
+        tensorToMergeGroup[tensorMagic] = mergeGroup;
         APASS_LOG_DEBUG_F(Elements::Operation, "Found boundary tensor %d of subgraphs %s.",
             tensor->GetMagic(), IntVecToString(mergeGroup).c_str());
         mergeGroupToPriority[mergeGroup] += tensorSize;
@@ -271,9 +282,7 @@ void ReduceCopyMerge::UpdateConnectRecord(Function& function)
 Status ReduceCopyMerge::BuildMergeGroup(Function& function, MergeInput& mergeInput)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "Build merge group before mix subgraph merge start.");
-    subgraphInputSize.clear();
     subgraphInputSize.resize(mergeInput.numSubgraph, 0);
-    subgraphOutputSize.clear();
     subgraphOutputSize.resize(mergeInput.numSubgraph, 0);
     UpdateConnectRecord(function);
     std::multimap<int, std::vector<int>> sortedMergeGroup;
@@ -283,29 +292,42 @@ Status ReduceCopyMerge::BuildMergeGroup(Function& function, MergeInput& mergeInp
         sortedMergeGroup.insert({pair.second, boundaryGroup});
     }
     for (int subIdx = 0; subIdx < mergeInput.numSubgraph; subIdx++) {
-        if (mergeInput.subGraphInGraph[subIdx].size() <= 1) {
+        if (subgraphToOutputTensors.count(subIdx) == 0) {
             continue;
         }
-        std::vector<int> inputGroup{subIdx};
-        inputGroup.insert(
-            inputGroup.end(), mergeInput.subGraphInGraph[subIdx].begin(), mergeInput.subGraphInGraph[subIdx].end());
-        std::sort(inputGroup.begin(), inputGroup.end());
-        sortedMergeGroup.insert({subgraphInputSize[subIdx], inputGroup});
+        std::set<int> localGroup;
+        for (auto localBoundary : subgraphToOutputTensors[subIdx]) {
+            localGroup.insert(tensorToMergeGroup[localBoundary].begin(), tensorToMergeGroup[localBoundary].end());
+        }
+        if (localGroup.size() > 1) {
+            std::vector<int> group(localGroup.begin(), localGroup.end());
+            sortedMergeGroup.insert({subgraphOutputSize[subIdx], group});
+        }
     }
     for (int subIdx = 0; subIdx < mergeInput.numSubgraph; subIdx++) {
-        if (mergeInput.subGraphOutGraph[subIdx].size() <= 1) {
+        if (subgraphToInputTensors.count(subIdx) == 0) {
             continue;
         }
-        std::vector<int> outputGroup{subIdx};
-        outputGroup.insert(outputGroup.end(), mergeInput.subGraphOutGraph[subIdx].begin(),
-                           mergeInput.subGraphOutGraph[subIdx].end());
-        std::sort(outputGroup.begin(), outputGroup.end());
-        sortedMergeGroup.insert({subgraphOutputSize[subIdx], outputGroup});
+        std::set<int> localGroup;
+        for (auto localBoundary : subgraphToInputTensors[subIdx]) {
+            localGroup.insert(tensorToMergeGroup[localBoundary].begin(), tensorToMergeGroup[localBoundary].end());
+        }
+        if (localGroup.size() > 1) {
+            std::vector<int> group(localGroup.begin(), localGroup.end());
+            sortedMergeGroup.insert({subgraphInputSize[subIdx], group});
+        }
     }
+    UpdateMergeInput(mergeInput, sortedMergeGroup);
+    return SUCCESS;
+}
+
+void ReduceCopyMerge::UpdateMergeInput(MergeInput& mergeInput, std::multimap<int, std::vector<int>>& sortedMergeGroup)
+{
     int groupIdx = 0;
     std::set<std::vector<int>> visitedMergeGroup;
     for (auto it = sortedMergeGroup.rbegin(); it != sortedMergeGroup.rend(); it++) {
-        if (visitedMergeGroup.count(it->second) > 0) {
+        if (visitedMergeGroup.count(it->second) > 0 ||
+            !IsValidMergeGroup(it->second, noMergeSubgraphEnforce)) {
             continue;
         }
         visitedMergeGroup.insert(it->second);
@@ -317,7 +339,6 @@ Status ReduceCopyMerge::BuildMergeGroup(Function& function, MergeInput& mergeInp
             groupIdx, IntVecToString(it->second).c_str(), isEnforce ? "True" : "False");
         groupIdx++;
     }
-    return SUCCESS;
 }
 
 Status ReduceCopyMerge::PostCheck(Function& function)
