@@ -734,11 +734,14 @@ Status SplitReshape::ObtainReshapeSource(Function& function, const OpPara& para,
     auto overlap = para.oldInput;
     auto reshapeSource = para.oldOutput;
     std::vector<int64_t> assembleOffset = ObtainMapOffset(overlap, reshapeSource);
-    if (AddReshapeRawInputs(overlap->GetRawTensor()->GetRawMagic(), overlap) == FAILED) {
-        return FAILED;
+    int reshapeSourceRawMagic = reshapeSource->GetRawTensor()->GetRawMagic();
+    if (reshapeRawInputs_.find(reshapeSourceRawMagic) == reshapeRawInputs_.end()) {
+        auto reshapeRawInput = irBuilder_.CreateRawTensor(
+            overlap->Datatype(), reshapeSource->GetRawTensor()->GetRawShape(), overlap->Format());
+        reshapeRawInputs_[reshapeSourceRawMagic] = reshapeRawInput;
     }
     newReshapeSource = irBuilder_.CreateTensorVar(
-        reshapeRawInputs_[overlap->GetRawTensor()->GetRawMagic()], assembleOffset, overlap->shape,
+        reshapeRawInputs_[reshapeSourceRawMagic], assembleOffset, overlap->shape,
         std::vector<SymbolicScalar>{});
     if (newReshapeSource == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a shared ptr for newReshapeSource.");
@@ -764,10 +767,10 @@ Status SplitReshape::ProcessPerfectlyMatch(Function& function, Operation& op, co
     auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(op.GetOpAttribute().get());
     auto isAddReshapeOp = std::make_shared<ReshapeOp>(
         newReshapeSource, reshapeOutput, reshapeOpPtrs_[op.GetIOperands().front()->GetMagic()]);
-    if (isAddReshapeOp == nullptr || viewOpAttribute == nullptr) {
+    if (viewOpAttribute == nullptr) {
         APASS_LOG_ERROR_F(
             Elements::Operation,
-            "Failed to make a shared ptr for isAddReshapeOp or found null view attr for op[%d]. %s", op.opmagic,
+            "Found null view attr for op[%d]. %s", op.opmagic,
             GetFormatBacktrace(op).c_str());
         return FAILED;
     }
@@ -985,11 +988,10 @@ Status SplitReshape::ProcessPerfectlyMatchWithAll(
     auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(op.GetOpAttribute().get());
     auto isAddReshapeOp = std::make_shared<ReshapeOp>(
         newReshapeSource, reshapeOutput, reshapeOpPtrs_[op.GetIOperands().front()->GetMagic()]);
-    if (isAddReshapeOp == nullptr || viewOpAttribute == nullptr) {
+    if (viewOpAttribute == nullptr) {
         APASS_LOG_ERROR_F(
             Elements::Operation,
-            "Failed to create isAddReshapeOp or viewOpAttribute; Please make sure newReshapeSource, "
-            "reshapeOutput are valid and op has attribute. %s",
+            "Failed to obtain viewOpAttribute; Please make sure op has attribute. %s",
             GetFormatBacktrace(op).c_str());
         return FAILED;
     }
@@ -1030,29 +1032,27 @@ Status SplitReshape::UpdateForPerfectlyMatchWithAll(
     LogicalTensorPtr inputView = para.inputView;
     auto newReshapeSourceTileShape = sourcePara.newReshapeSourceTileShape;
     auto newReshapeSourceTileOffset = sourcePara.newReshapeSourceTileOffset;
-    auto tensor = overlaps.front();
-    if (AddReshapeRawInputs(tensor->GetRawTensor()->GetRawMagic(), tensor) == FAILED) {
-        return FAILED;
+    int reshapeSourceRawMagic = reshapeSource->GetRawTensor()->GetRawMagic();
+    if (reshapeRawInputs_.find(reshapeSourceRawMagic) == reshapeRawInputs_.end()) {
+        auto reshapeRawInput = irBuilder_.CreateRawTensor(
+            overlaps.front()->Datatype(), reshapeSource->GetRawTensor()->GetRawShape(), overlaps.front()->Format());
+        reshapeRawInputs_[reshapeSourceRawMagic] = reshapeRawInput;
     }
     auto newReshapeSource = irBuilder_.CreateTensorVar(
-        reshapeRawInputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], newReshapeSourceTileOffset,
+        reshapeRawInputs_[reshapeSourceRawMagic], newReshapeSourceTileOffset,
         newReshapeSourceTileShape, std::vector<SymbolicScalar>{});
     if (newReshapeSource == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a newReshapeSource ptr.");
         return FAILED;
     }
     newReshapeSource->SetMemoryTypeBoth(reshapeSource->GetMemoryTypeOriginal());
-    if (reshapeRawOutputs_.find(overlaps.front()->GetRawTensor()->GetRawMagic()) == reshapeRawOutputs_.end()) {
-        auto reshaperawOutput = std::make_shared<RawTensor>(
+    if (reshapeRawOutputs_.find(reshapeSourceRawMagic) == reshapeRawOutputs_.end()) {
+        auto reshaperawOutput = irBuilder_.CreateRawTensor(
             input->Datatype(), inputView->GetRawTensor()->GetRawShape(), inputView->Format());
-        if (reshaperawOutput == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a rawtensor ptr for reshaperawOutput.");
-            return FAILED;
-        }
-        reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()] = reshaperawOutput;
+        reshapeRawOutputs_[reshapeSourceRawMagic] = reshaperawOutput;
     }
     auto reshapeOutput = irBuilder_.CreateTensorVar(
-        reshapeRawOutputs_[overlaps.front()->GetRawTensor()->GetRawMagic()], inputView->offset, inputView->shape,
+        reshapeRawOutputs_[reshapeSourceRawMagic], inputView->offset, inputView->shape,
         std::vector<SymbolicScalar>{});
     if (reshapeOutput == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a reshapeOutput ptr.");
@@ -1083,11 +1083,7 @@ Status SplitReshape::AddReshapeRawInputs(const int overlapRawMagic, const Logica
 {
     if (reshapeRawInputs_.find(overlapRawMagic) == reshapeRawInputs_.end()) {
         auto reshapeRawInput =
-            std::make_shared<RawTensor>(overlap->Datatype(), overlap->GetRawTensor()->GetRawShape(), overlap->Format());
-        if (reshapeRawInput == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Failed to make a rawtensor shared ptr for reshapeRawInput.");
-            return FAILED;
-        }
+            irBuilder_.CreateRawTensor(overlap->Datatype(), overlap->GetRawTensor()->GetRawShape(), overlap->Format());
         reshapeRawInputs_[overlap->GetRawTensor()->GetRawMagic()] = reshapeRawInput;
     }
     return SUCCESS;
@@ -1176,10 +1172,6 @@ Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& chec
         return WARNING;
     }
     checkOutputParam.reshapeSource = reshapeSources_[input->GetRawTensor()->GetRawMagic()];
-    if (!CheckSameRawInput(checkOutputParam.reshapeSource)) {
-        APASS_LOG_WARN_F(Elements::Tensor, "Found assembling block from different raw tensor.");
-        return WARNING;
-    }
     if (ShapeAlign(
             checkOutputParam.reshapeSource->GetRawTensor()->GetRawShape(), input->GetRawTensor()->GetRawShape(),
             checkOutputParam.alignedShape) == WARNING) {
