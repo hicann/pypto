@@ -13,12 +13,12 @@ pypto@pypto:
   team: "pypto"
   src:
     release:
-      - framework/include
-      - framework/src
+      - framework/include/
+      - framework/src/
     unrelease:
-      - framework/src/machine/runtime
-      - framework/src/cost_model/simulation_pv
-      - framework/src/cann_host_runtime
+      - framework/src/machine/runtime/
+      - framework/src/cost_model/simulation_pv/
+      - framework/src/cann_host_runtime/
   llt:
     ut_check: true
     st_check: false
@@ -26,13 +26,14 @@ pypto@pypto:
 operator@pypto:
   src:
     release:
-      - framework/src/operator
+      - framework/src/operator/
     unrelease: null
 
 operation_vector@pypto:
   src:
     release:
-      - framework/src/interface/operation/vector
+      - framework/include/tilefwk/tilefwk_op.h
+      - framework/src/interface/operation/vector/
       - framework/src/interface/operation/attr_holder.h
       - framework/src/interface/operation/attribute.cpp
       - framework/src/interface/operation/attribute.h
@@ -61,8 +62,8 @@ operation_vector@pypto:
       - framework/src/interface/tileop/arch32/vector_bin.h
       - framework/src/interface/tileop/arch32/vector_una.h
       - framework/src/interface/tileop/arch32/vector.h
-      - framework/src/interface/tileop/utils
-      - framework/src/interface/tileop/vector
+      - framework/src/interface/tileop/utils/
+      - framework/src/interface/tileop/vector/
       - framework/src/interface/tileop/tileop_common.h
       - framework/src/interface/tileop/TileOpImpl.h
       - python/src/bindings/operation.cpp
@@ -75,48 +76,72 @@ operation_cube@pypto:
       - framework/src/interface/tileop/arch32/dynamic/cube_dyn.h
       - framework/src/interface/tileop/arch32/cube.h
       - framework/src/interface/tileop/arch32/fixpipe.h
-      - framework/src/interface/tileop/cube
+      - framework/src/interface/tileop/cube/
     unrelease: null
 
 operation_conv@pypto:
   src:
     release:
       - framework/src/interface/operation/conv_operation_impl.cpp
-      - framework/src/interface/tileop/conv
+      - framework/src/interface/tileop/conv/
     unrelease: null
 
 operation_distributed@pypto:
   src:
     release:
-      - framework/src/interface/operation/distributed
-      - framework/src/interface/tileop/distributed
+      - framework/include/tilefwk/comm_group_recorder.h
+      - framework/include/tilefwk/symbolic_distributed.h
+      - framework/src/interface/operation/distributed/
+      - framework/src/interface/tileop/distributed/
       - python/src/bindings/distributed.cpp
     unrelease: null
 
 cost_model@pypto:
   src:
     release:
-      - framework/src/cost_model
+      - framework/src/cost_model/
       - python/src/bindings/cost_model.cpp
     unrelease: null
 
 frontend@pypto:
   src:
-    release:
-      - framework/include
-      - framework/src/interface/cache
-      - framework/src/interface/configs
-      - framework/src/interface/core
-      - framework/src/interface/function
-      - framework/src/interface/inner
-      - framework/src/interface/interpreter
-      - framework/src/interface/ir
-      - framework/src/interface/plugin
-      - framework/src/interface/program
-      - framework/src/interface/schema
-      - framework/src/interface/tensor
-      - framework/src/interface/utils
-      - python/src/bindings/ir
+    release:      
+      - framework/include/core/any_cast.h
+      - framework/include/core/common.h
+      - framework/include/core/dtype.h
+      - framework/include/core/error.h
+      - framework/include/core/logging.h
+      - framework/include/tilefwk/config.h
+      - framework/include/tilefwk/data_type.h
+      - framework/include/tilefwk/element.h
+      - framework/include/tilefwk/file.h
+      - framework/include/tilefwk/function.h
+      - framework/include/tilefwk/lazy.h
+      - framework/include/tilefwk/symbolic_scalar.h
+      - framework/include/tilefwk/tensor.h
+      - framework/include/tilefwk/tilefwk.h
+      - framework/include/tilefwk/tile_shape.h
+      - framework/src/interface/cache/
+      - framework/src/interface/configs/
+      - framework/src/interface/core/
+      - framework/src/interface/function/
+      - framework/src/interface/inner/
+      - framework/src/interface/interpreter/
+      - framework/src/interface/plugin/
+      - framework/src/interface/program/
+      - framework/src/interface/schema/
+      - framework/src/interface/tensor/
+      - framework/src/interface/utils/common.cpp
+      - framework/src/interface/utils/common.h
+      - framework/src/interface/utils/file_utils.cpp
+      - framework/src/interface/utils/file_utils.h
+      - framework/src/interface/utils/id_gen.h
+      - framework/src/interface/utils/operator_tracer.cpp
+      - framework/src/interface/utils/operator_tracer.h
+      - framework/src/interface/utils/op_info_manager.cpp
+      - framework/src/interface/utils/op_info_manager.h
+      - framework/src/interface/utils/serialization.h
+      - framework/src/interface/utils/string_utils.h
       - python/src/bindings/bindings.h
       - python/src/bindings/controller.cpp
       - python/src/bindings/element.cpp
@@ -131,12 +156,25 @@ frontend@pypto:
       - python/src/pybind11.cpp
     unrelease: null
 
+block@pypto:
+  src:
+    release:      
+      - framework/include/ir/
+      - framework/include/block/
+      - framework/src/interface/ir/
+      - framework/src/interface/block/
+      - python/src/bindings/ir/
+      - python/src/bindings/block/
+    unrelease: null
+
 passes@pypto:
   src:
     release:
-      - framework/src/cann_host_runtime
-      - framework/src/passes
-      - framework/src/platform
+      - framework/include/tilefwk/cann_host_runtime.h
+      - framework/include/tilefwk/platform.h
+      - framework/src/cann_host_runtime/
+      - framework/src/passes/
+      - framework/src/platform/
       - python/src/bindings/pass_config.cpp
       - python/src/bindings/platform.cpp
     unrelease: null
@@ -144,17 +182,24 @@ passes@pypto:
 codegen@pypto:
   src:
     release:
-      - framework/src/codegen
+      - framework/src/codegen/
     unrelease: null
 
 machine@pypto:
   src:
     release:
-      - framework/src/adapter
-      - framework/src/interface/compiler_monitor
+      - framework/include/tilefwk/error_code.h      
+      - framework/include/tilefwk/error_manager.h
+      - framework/include/tilefwk/error.h
+      - framework/include/tilefwk/pypto_fwk_log.h
+      - framework/include/tilefwk/tilefwk_log.h
+      - framework/src/adapter/
+      - framework/src/interface/compiler_monitor/
       - framework/src/interface/tileop/arch32/dynamic/aicpu_call.h
-      - framework/src/interface/machine
-      - framework/src/machine
-      - framework/src/utils
+      - framework/src/interface/machine/
+      - framework/src/interface/utils/error.cpp
+      - framework/src/interface/utils/error.h
+      - framework/src/machine/
+      - framework/src/utils/
       - python/src/bindings/runtime.cpp
     unrelease: null
