@@ -530,7 +530,6 @@ def check_ol37(ctx: CheckContext) -> Finding:
 # OL50/OL51 — module_interfaces.yaml 契约与 impl 的一致性
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 def _load_module_interfaces(ctx: CheckContext) -> dict | None:
     """Load `<op_dir>/eval/module_interfaces.yaml`. Return None if absent / invalid."""
     yaml_path = os.path.join(ctx.op_dir, "eval", "module_interfaces.yaml")
@@ -762,17 +761,22 @@ def check_ol50(ctx: CheckContext) -> Finding:
             )
         actual = _func_arg_names(wrapper)
         if actual != expected:
+            fix_hint = ""
+            if not expected and "primary_inputs" not in interfaces:
+                fix_hint = (
+                    "\n提示: 当前 expected=[] 是因为 YAML 缺少顶层 `primary_inputs`；"
+                    "请按 `.opencode/agents/pypto-op-designer.md` 中的 "
+                    "`module_interfaces.yaml` schema 补回该字段，"
+                    "`source: primary` 不能替代它。"
+                )
             return ctx.make_finding(
                 "OL50", "FAIL",
                 f"[S1] {impl_file} 第 {wrapper.lineno} 行: wrapper `{wrapper.name}` 的 "
                 f"参数顺序与 module_interfaces.yaml 不一致。\n"
                 f"  expected (primary_inputs 顺序): {expected}\n"
                 f"  actual:                         {actual}\n"
-                f"修正方针: 按 YAML 的 `primary_inputs` 声明顺序以及 "
-                f"当前 module 的 `inputs[*].name (source=primary)` 重新排序。"
-                f"生产 wrapper 的显式参数列表只承载 primary_inputs；"
-                f"调试扩展请放入 `**kwargs` 或 `_debug/` 生成产物，"
-                f"`runtime_options` / `debug_options` 应放在 @pypto.frontend.jit 配置或调试工具内部。",
+                f"修正方针: wrapper 显式参数应只包含 expected 列表，并保持同顺序。"
+                f"{fix_hint}",
                 file=impl_file,
                 line=wrapper.lineno,
             )
