@@ -62,21 +62,13 @@ struct InvokeParaOffset {
     }
 };
 
-enum class CacheReuseType { None = 0, Function, Bin };
-
 class MachineTask {
 public:
-    MachineTask(uint64_t taskId, Function* function)
-        : taskId_(taskId), function_(function), cacheReuseType_(CacheReuseType::None)
-    {}
+    MachineTask(uint64_t taskId, Function* function) : taskId_(taskId), function_(function) {}
 
     uint64_t GetTaskId() const { return taskId_; }
     Function* GetFunction() const { return function_; }
     void SetFunction(Function* func) { function_ = func; }
-    CacheReuseType GetCacheReuseType() const { return cacheReuseType_; }
-    void SetCacheReuseType(const CacheReuseType cacheReuseType) { cacheReuseType_ = cacheReuseType; }
-    const std::string& GetCacheKey() const { return cacheKey_; }
-    void SetCacheKey(const std::string& cacheKey) { cacheKey_ = cacheKey; }
     void SetError(std::string msg) { error = std::move(msg); }
     const std::string& Error() { return error; }
     int GetFunctionIndex() const { return function_index_; }
@@ -85,8 +77,6 @@ public:
 private:
     uint64_t taskId_;
     Function* function_;
-    std::string cacheKey_;
-    CacheReuseType cacheReuseType_;
     std::string error;
     int function_index_{0}; // 1-based index for compiler monitor progress (k/N)
 };

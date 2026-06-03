@@ -23,7 +23,6 @@
 #include "machine/runtime/runner/device_runner.h"
 #include "machine/runtime/runner/pmu_common.h"
 #include "machine/utils/machine_ws_intf.h"
-#include "machine/platform/platform_manager.h"
 #define private public
 #include "machine/device/dynamic/aicore_prof.h"
 #ifdef private

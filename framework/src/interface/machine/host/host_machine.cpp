@@ -41,7 +41,6 @@ struct Backend {
     ExecuteFunc execute;
     ExecuteFunc simuExecute;
     PlatformFunc platform;
-    MatchCacheFunc matchCache;
     void (*resetAllPasses)();
 
     static Backend& GetBackend()
@@ -70,15 +69,9 @@ private:
         runPass = (RunPassFunc)GetSymbol(progHandle, "RunPass");
         getResumePath = (GetResumePathFunc)GetSymbol(progHandle, "GetResumePath");
         execute = (ExecuteFunc)GetSymbol(compilerHandle, "Execute");
-        matchCache = (MatchCacheFunc)GetSymbol(compilerHandle, "MatchCache");
         simuExecute = (ExecuteFunc)GetSymbol(simuHandle, "ExecuteSimulation");
 
         resetAllPasses = (void(*)())GetSymbol(progHandle, "ResetAllPasses");
-
-        auto initFunc = (InitFunc)GetSymbol(compilerHandle, "Initialize");
-        if (initFunc) {
-            initFunc();
-        }
     }
 
     void* GetSymbol(void* handle, const char* sym)
@@ -344,13 +337,7 @@ MachineTask* HostMachine::Compile(MachineTask* task) const
         CompileFunction(func);
         compileTask->SetFunction(func);
     } else {
-        auto function = compileTask->GetFunction();
-        compileTask->SetCacheKey(GetCacheKeyFromFunction(function));
-        if (backend.matchCache && backend.matchCache(compileTask->GetCacheKey())) {
-            compileTask->SetCacheReuseType(CacheReuseType::Bin);
-        } else {
-            CompileFunction(function);
-        }
+        CompileFunction(compileTask->GetFunction());
     }
 
     return compileTask;

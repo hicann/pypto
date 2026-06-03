@@ -14,56 +14,47 @@
  */
 
 #include "machine/host/backend.h"
-#include "machine/host/expr_generator.h"
-#include "machine/host/dump_host_topo.h"
-#include "tilefwk/tilefwk.h"
-#include "codegen/codegen.h"
-#include "codegen/utils/parallel_execute.h"
-#include "codegen/utils/codegen_utils.h"
-#include "interface/inner/tilefwk.h"
+#include <dlfcn.h>
+#include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error_code.h"
+#include "tilefwk/comm_group_recorder.h"
 #include "interface/program/program.h"
 #include "interface/operation/operation.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
-#include "machine/cache_manager/cache_manager.h"
+#include "interface/compiler_monitor/monitor_manager.h"
+#include "interface/compiler_monitor/monitor_stage_scope.h"
+#include "passes/pass_mgr/pass_manager.h"
+#include "codegen/codegen.h"
+#include "codegen/utils/codegen_utils.h"
+#include "codegen/utils/parallel_execute.h"
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/compile/aicore_compiler.h"
 #include "machine/compile/compile_control_bin.h"
-#include "tilefwk/comm_group_recorder.h"
-#include "passes/pass_mgr/pass_manager.h"
-#include "main_block.h"
-#include "interface/compiler_monitor/monitor_manager.h"
-#include "interface/compiler_monitor/monitor_stage_scope.h"
-#include <dlfcn.h>
-#include "tilefwk/pypto_fwk_log.h"
-#include "tilefwk/error_code.h"
-#include "mix_info.h"
+#include "machine/host/expr_generator.h"
+#include "machine/host/dump_host_topo.h"
+#include "machine/host/main_block.h"
+#include "machine/host/mix_info.h"
+
 using namespace npu::tile_fwk::dynamic;
 namespace npu::tile_fwk {
-
 enum ParallelMode {
     DEFAULT = 0,
     PARALLEL,
     CHILD,
 };
-
-void ForceLinkLibraryCompiler() {}
-
-constexpr int ALIGN_SIZE_8 = 8;
 constexpr uint32_t STITCH_FUNCTION_MAX_SIZE = 65535;
+const std::set<FunctionType> DYNAMIC_FUNC_TYPE_SET = {
+    FunctionType::DYNAMIC, FunctionType::DYNAMIC_LOOP, FunctionType::DYNAMIC_LOOP_PATH
+};
 constexpr const char* STAGE_DYNDEV_BUILD_CONTROL_FLOW = "DynDev:BuildControlFlow";
 constexpr const char* STAGE_DYNDEV_CONTROL_FLOW_COMPILE = "DynDev:ControlFlowCompile";
 constexpr const char* STAGE_DYNDEV_AICORE_KERNEL_COMPILE = "DynDev:AICoreKernelCompile";
 constexpr const char* STAGE_DYNDEV_ENCODE = "DynDev:Encode";
-extern "C" int32_t Initialize()
-{
-    CacheManager::Instance().Initialize();
-    return 0;
-}
 
-extern "C" bool MatchCache(const std::string& cacheKey) { return CacheManager::Instance().MatchBinCache(cacheKey); }
+void ForceLinkLibraryCompiler() {}
 
 extern "C" int32_t Execute(MachineTask* task, FunctionCache& cache)
 {
@@ -77,27 +68,14 @@ extern "C" int32_t Execute(MachineTask* task, FunctionCache& cache)
         return 0;
     }
     Function* function = task->GetFunction();
-    // recover task info and bin
-    if (task->GetCacheReuseType() == CacheReuseType::Bin) {
-        if (!CacheManager::Instance().RecoverTask(task->GetCacheKey(), function)) {
-            MACHINE_LOGW("Fail to recover task from cache[%s].", task->GetCacheKey().c_str());
-            return 0;
-        }
-    } else {
-        if (function->IsFunctionType(
-                {FunctionType::DYNAMIC, FunctionType::DYNAMIC_LOOP, FunctionType::DYNAMIC_LOOP_PATH})) {
-            if (function->GetGraphType() == GraphType::TILE_GRAPH) {
-                COMPILER_LOGI("The codegen of the current function is executed last");
-                // When expression fusion, don't need tile graph codegen.
-                return 0;
-            }
-        }
-        (void)GenCode(task, cache);
-        /* finish compile add function cache */
-        cache.Insert(function->GetFunctionHash(), *function);
-        // save compile result on disk
-        CacheManager::Instance().SaveTaskFile(task->GetCacheKey(), function);
+    if (function->IsFunctionType(DYNAMIC_FUNC_TYPE_SET) && function->GetGraphType() == GraphType::TILE_GRAPH) {
+        MACHINE_LOGI("The codegen of the current function is executed last");
+        // When expression fusion, don't need tile graph codegen.
+        return 0;
     }
+    (void)GenCode(task, cache);
+    /* finish compile add function cache */
+    cache.Insert(function->GetFunctionHash(), *function);
     return 0;
 }
 

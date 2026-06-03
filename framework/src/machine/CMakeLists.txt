@@ -17,9 +17,7 @@ add_subdirectory(runtime)
 file(GLOB_RECURSE _Compiler_Srcs
         host/*.cpp
         compile/*.cpp
-        platform/*.cpp
-        utils/*.cpp
-        cache_manager/*.cpp)
+        utils/*.cpp)
 
 add_library(tile_fwk_compiler SHARED)
 target_sources(tile_fwk_compiler PRIVATE ${_Compiler_Srcs})
