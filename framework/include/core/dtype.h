@@ -132,32 +132,32 @@ public:
     {
         switch (code_) {
             case kBoolCode:
-                return 8;
+                return 8; // These dtypes occupy 8 bits.
             case kHf4Code:
             case kFp4Code:
             case kUInt4Code:
             case kInt4Code:
-                return 4;
+                return 4; // These dtypes occupy 4 bits.
             case kHf8Code:
             case kFp8e4m3fnCode:
             case kFp8e5m2Code:
             case kUInt8Code:
             case kInt8Code:
-                return 8;
+                return 8; // These dtypes occupy 8 bits.
             case kBf16Code:
             case kFp16Code:
             case kUInt16Code:
             case kInt16Code:
-                return 16;
+                return 16; // These dtypes occupy 16 bits.
             case kFp32Code:
             case kUInt32Code:
             case kInt32Code:
-                return 32;
+                return 32; // These dtypes occupy 32 bits.
             case kUInt64Code:
             case kInt64Code:
             case kFp64Code:
             case kIndexCode:
-                return 64;
+                return 64; // These dtypes occupy 64 bits.
             default:
                 return 0;
         }

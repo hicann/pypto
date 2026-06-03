@@ -190,11 +190,11 @@ void bind_controller_loop(py::module& m)
         .def(py::init<std::int64_t>()) // C++ Implicit conversion int64_t -> SymbolicScalar
         .def("Dump", (std::string(LoopRange::*)()) & LoopRange::Dump)
         .def(
-            "Begin", (SymbolicScalar & (LoopRange::*)()) & LoopRange::Begin,
+            "Begin", (SymbolicScalar& (LoopRange::*)())& LoopRange::Begin,
             py::return_value_policy::reference_internal)
-        .def("End", (SymbolicScalar & (LoopRange::*)()) & LoopRange::End, py::return_value_policy::reference_internal)
+        .def("End", (SymbolicScalar& (LoopRange::*)())& LoopRange::End, py::return_value_policy::reference_internal)
         .def(
-            "Step", (SymbolicScalar & (LoopRange::*)()) & LoopRange::Step, py::return_value_policy::reference_internal);
+            "Step", (SymbolicScalar& (LoopRange::*)())& LoopRange::Step, py::return_value_policy::reference_internal);
 
     m.def("IsLoopBegin", &IsLoopBegin, py::arg("symbol"), py::arg("begin"));
     m.def("IsLoopEnd", &IsLoopEnd, py::arg("symbol"), py::arg("end"));

@@ -106,7 +106,6 @@ def elementwise_kernel(
 
 
 def test_elementwise_ops(device_id=None):
-    """Element-wise add + scalar mul: out = (a + b) * 2."""
     print("=" * 60)
     print("Example 2: Element-wise Operations")
     print("=" * 60)
@@ -169,7 +168,6 @@ def matmul_kernel(
 
 
 def test_matmul(device_id=None):
-    """Basic matrix multiplication: C = A @ B."""
     print("=" * 60)
     print("Example 3: Matrix Multiplication")
     print("=" * 60)

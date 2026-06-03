@@ -54,7 +54,7 @@ inline std::string DemangleTypeName(const char* mangledName)
         // Simplify common pypto types for readability
         size_t pos = result.find("pypto::");
         if (pos != std::string::npos) {
-            result = result.substr(pos + 7); // Remove "pypto::" prefix
+            result = result.substr(pos + 0x7); // Remove "pypto::" prefix
         }
 
         return result;

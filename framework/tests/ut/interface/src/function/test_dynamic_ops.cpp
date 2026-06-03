@@ -839,10 +839,12 @@ TEST_F_WITH_COST(DynamicOpsTest, Cube, 98)
     std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+        std::vector<std::string> passList{"CodegenPreproc"};
+        config::SetVerifyOption(KEY_PASS_VERIFY_FILTER, passList);
 
-        int n = 4;
-        int k = 1024;
-        int m = 576;
+        const int n = 4;
+        const int k = 1024;
+        const int m = 576;
 
         using EltType = float;
         DataType eltType = DT_FP32;
@@ -851,25 +853,18 @@ TEST_F_WITH_COST(DynamicOpsTest, Cube, 98)
         Tensor t2(eltType, {n, m}, "t2");
 
         std::vector<EltType> t0Data(n * k);
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < k; j++) {
-                t0Data[i * k + j] = (i / 32) * 4 + (j / 64);
-            }
-        }
         std::vector<EltType> t1Data(k * m);
-        for (int i = 0; i < k; i++) {
-            for (int j = 0; j < m; j++) {
-                t1Data[i * m + j] = (i / 64) * 4 + (j / 64);
-            }
+        std::vector<EltType> t2Data(n * m, 0);
+
+        for (int idx = 0; idx < n * k; ++idx) {
+            t0Data[idx] = ((idx / k) / 32) * 4 + ((idx % k) / 64);
         }
-        std::vector<EltType> t2Data(n * m);
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < m; j++) {
-                EltType sum = 0;
-                for (int x = 0; x < k; x++) {
-                    sum += t0Data[i * k + x] * t1Data[x * m + j];
-                }
-                t2Data[i * m + j] = sum;
+        for (int idx = 0; idx < k * m; ++idx) {
+            t1Data[idx] = ((idx / m) / 64) * 4 + ((idx % m) / 64);
+        }
+        for (int idx = 0; idx < n * m; ++idx) {
+            for (int x = 0; x < k; ++x) {
+                t2Data[idx] += t0Data[(idx / m) * k + x] * t1Data[x * m + (idx % m)];
             }
         }
 
@@ -889,7 +884,7 @@ TEST_F_WITH_COST(DynamicOpsTest, Cube, 98)
             LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
             {
                 (void)i;
-                t2 = Matrix::Matmul(eltType, t0, t1); // int32
+                t2 = Matrix::Matmul(eltType, t0, t1);
             }
         }
     });

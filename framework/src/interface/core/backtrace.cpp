@@ -227,11 +227,11 @@ static std::string CleanupFilePath(const std::string& path)
     // Replace the prefix up to "/./" with "./"
     size_t markerPos = path.find("/./");
     if (markerPos != std::string::npos) {
-        return "./" + path.substr(markerPos + 3);
+        return "./" + path.substr(markerPos + 0x3);
     }
 
     // If path already starts with "./", keep it as-is
-    if (path.size() >= 2 && path[0] == '.' && path[1] == '/') {
+    if (path.size() >= 0x2 && path[0] == '.' && path[1] == '/') {
         return path;
     }
 
@@ -313,7 +313,6 @@ std::vector<StackFrame> Backtrace::CaptureStackTrace(int skip)
 
         // Try to get file and line information using addr2line
         FileLocation loc = GetFileLineFromAddr2line(addr);
-
         if (!loc.filename.empty()) {
             loc.filename = CleanupFilePath(loc.filename);
         }

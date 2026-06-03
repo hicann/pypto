@@ -1321,11 +1321,11 @@ static void Uniform(
     const TensorData& out, const Element& key, const Element& counter0, const Element& counter1, const Element& rounds,
     DataType dtype)
 {
-    std::vector<uint32_t> keyVec(2);
+    std::vector<uint32_t> keyVec(0x2);
     keyVec[0] = static_cast<uint32_t>(key.Cast<uint64_t>() & 0xFFFFFFFF);
     keyVec[1] = static_cast<uint32_t>(key.Cast<uint64_t>() >> 0x20);
 
-    std::vector<uint32_t> counterVec(4);
+    std::vector<uint32_t> counterVec(0x4);
     counterVec[0] = static_cast<uint32_t>(counter0.Cast<uint64_t>() & 0xFFFFFFFF);
     counterVec[1] = static_cast<uint32_t>(counter0.Cast<uint64_t>() >> 0x20);
     counterVec[2] = static_cast<uint32_t>(counter1.Cast<uint64_t>() & 0xFFFFFFFF);
@@ -1697,9 +1697,9 @@ static torch::Tensor BuildMXScaleForA(const torch::Tensor& scaleA, bool scaleATr
             localScaleA.size(localScaleIndex1) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
             << "MX trans scale_a shape mismatch, expected [K/64, M, 2], got [" << localScaleA.size(localScaleIndex0)
             << ", " << localScaleA.size(localScaleIndex1) << ", " << localScaleA.size(localScaleIndex2) << "]";
-        merged = localScaleA.transpose(-2, -1).reshape({-1, mSize}).transpose(0, 1);
+        merged = localScaleA.transpose(-0x2, -1).reshape({-1, mSize}).transpose(0, 1);
     }
-    auto expanded = merged.repeat_interleave(32, 1);
+    auto expanded = merged.repeat_interleave(0x20, 1);
     ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, expanded.size(1) == kSize)
         << "MX scale_a expanded K mismatch, got " << expanded.size(1) << ", expect " << kSize;
     return expanded;
@@ -1713,7 +1713,7 @@ static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTr
     torch::Tensor merged;
     constexpr size_t localScaleIndex0 = 0;
     constexpr size_t localScaleIndex1 = 1;
-    constexpr size_t localScaleIndex2 = 2;
+    constexpr size_t localScaleIndex2 = 0x2;
     if (!scaleBTrans) {
         // test reference: torch.transpose(scale_b, -2, -1).reshape(k / 32, n)
         ASSERT(
@@ -1721,7 +1721,7 @@ static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTr
             localScaleB.size(localScaleIndex1) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
             << "MX scale_b shape mismatch, expected [K/64, N, 2], got [" << localScaleB.size(localScaleIndex0) << ", "
             << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
-        merged = localScaleB.transpose(-2, -1).reshape({-1, nSize});
+        merged = localScaleB.transpose(-0x2, -1).reshape({-1, nSize});
     } else {
         // test reference: scale_b.view(n, k / 32).T
         ASSERT(
@@ -1731,7 +1731,7 @@ static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTr
             << ", " << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
         merged = localScaleB.reshape({nSize, -1}).transpose(0, 1);
     }
-    auto expanded = merged.repeat_interleave(32, 0);
+    auto expanded = merged.repeat_interleave(0x20, 0);
     ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, expanded.size(0) == kSize)
         << "MX scale_b expanded K mismatch, got " << expanded.size(0) << ", expect " << kSize;
     return expanded;
@@ -2008,7 +2008,7 @@ void GatherMask(const TensorData& out, const TensorData& self, int patternMode)
     auto ret = From(out);
     auto src = From(self);
     auto last_dim = src.second.size(src.second.dim() - 1);
-    if (patternMode == 7) {
+    if (patternMode == 0x7) {
         ret.second = src.second;
     } else {
         torch::Tensor selected_indices;

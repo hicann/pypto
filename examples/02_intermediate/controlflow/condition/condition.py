@@ -179,7 +179,6 @@ def test_add_scalar_loop_dyn_axis_static_cond(device_id=None) -> None:
     print(f"Input0 shape: {input_data0.shape}")
     print(f"Input1 shape: {input_data1.shape}")
 
-    # Test with flag=False: output = input0 + input1
     output_data = torch.empty(shape, dtype=torch.float, device=device)
     add_scalar_loop_dyn_axis_static_cond_kernel_static(input_data0, input_data1, output_data, val, False)
     golden = torch.add(input_data0, input_data1)
@@ -189,7 +188,6 @@ def test_add_scalar_loop_dyn_axis_static_cond(device_id=None) -> None:
     if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
 
-    # Test with flag=True: output = input0 + input1 + val
     output_data2 = torch.empty(shape, dtype=torch.float, device=device)
     add_scalar_loop_dyn_axis_static_cond_kernel_dynamic(input_data0, input_data1, output_data2, val, True)
     golden2 = torch.add(input_data0, input_data1) + val

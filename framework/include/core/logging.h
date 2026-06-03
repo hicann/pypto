@@ -550,7 +550,7 @@ public:
     template <typename T>
     FatalLogger& operator<<(T&& val)
     {
-        ss << std::forward<T>(val);
+        ss << (std::forward<T>(val));
         return *this;
     }
 
