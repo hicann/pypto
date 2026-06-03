@@ -1632,6 +1632,7 @@ TEST_F(OperationImplTest, Test_Matmul_Bias)
 TEST_F(OperationImplTest, Test_MatmulMX_Bias)
 {
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
     Tensor matA(DT_FP8E5M2, {128, 256}, "matA");
     Tensor matB(DT_FP8E5M2, {256, 128}, "matB");
@@ -1646,6 +1647,8 @@ TEST_F(OperationImplTest, Test_MatmulMX_Bias)
         result = npu::tile_fwk::Matrix::MatmulMX(
             DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
     }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
 }
 
 TEST_F(OperationImplTest, Test_BatchMatmul_Bias_3D)
@@ -1711,6 +1714,7 @@ TEST_F(OperationImplTest, Test_BatchMatmul_fixpipe_3D)
 TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_3D)
 {
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
     Tensor matA(DT_FP8E5M2, {2, 128, 256}, "matA");
     Tensor matB(DT_FP8E5M2, {2, 256, 128}, "matB");
@@ -1725,11 +1729,13 @@ TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_3D)
         result = npu::tile_fwk::Matrix::BatchMatmulMX(
             DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
     }
+    Platform::Instance().ReloadMemoryPaths("2201");
 }
 
 TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_4D)
 {
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
     Tensor matA(DT_FP8E5M2, {2, 2, 128, 256}, "matA");
     Tensor matB(DT_FP8E5M2, {2, 2, 256, 128}, "matB");
@@ -1744,6 +1750,7 @@ TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_4D)
         result = npu::tile_fwk::Matrix::BatchMatmulMX(
             DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
     }
+    Platform::Instance().ReloadMemoryPaths("2201");
 }
 
 TEST_F(OperationImplTest, Test_BatchMatmulGCC_3D)

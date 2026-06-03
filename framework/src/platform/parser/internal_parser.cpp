@@ -58,6 +58,7 @@ std::vector<std::string> SplitByDelimiter(const std::string& str, const std::str
 // helper function
 MemoryType StringToMemoryType(const std::string& memType)
 {
+    // Keep this map in sync with MemoryType and platforminfo.ini PATHS entries.
     static const std::unordered_map<std::string, MemoryType> memTypeMap = {
         {"MEM_DEVICE_DDR", MemoryType::MEM_DEVICE_DDR},
         {"MEM_L1", MemoryType::MEM_L1},
@@ -65,7 +66,10 @@ MemoryType StringToMemoryType(const std::string& memType)
         {"MEM_L0B", MemoryType::MEM_L0B},
         {"MEM_L0C", MemoryType::MEM_L0C},
         {"MEM_UB", MemoryType::MEM_UB},
-        {"MEM_BT", MemoryType::MEM_BT}};
+        {"MEM_BT", MemoryType::MEM_BT},
+        {"MEM_L0AMX", MemoryType::MEM_L0AMX},
+        {"MEM_L0BMX", MemoryType::MEM_L0BMX},
+        {"MEM_FIX_QUANT_PRE", MemoryType::MEM_FIX_QUANT_PRE}};
     auto it = memTypeMap.find(memType);
     if (it != memTypeMap.end()) {
         return it->second;

@@ -691,7 +691,6 @@ TEST_F(AssignMemoryTypeTest, ViewReshape)
     Program::GetInstance().InsertFuncToFunctionMap("ViewReshape", currFunctionPtr);
 
     GetViewReshapeGraph(currFunctionPtr);
-
     CallAndVerify(currFunctionPtr, MemoryType::MEM_UB);
 }
 void L1DataMoveGraph(std::shared_ptr<Function>& currFunctionPtr)
@@ -1719,6 +1718,7 @@ TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
 {
     // 设置为 A5 平台
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
     std::vector<int64_t> shapeA = {NUM_64, NUM_128};
     std::vector<int64_t> shapeB = {NUM_128, NUM_64};
@@ -1768,12 +1768,14 @@ TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
     }
     // 恢复平台设置
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
 }
 
 TEST_F(AssignMemoryTypeTest, TestUB2L1SmallToLarge)
 {
     // 设置 A5 平台
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
     // m=32, k=64, n=64
     std::vector<int64_t> shapeA = {32, 64};
@@ -1828,6 +1830,7 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1SmallToLarge)
     }
     // 恢复平台设置
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
 }
 
 void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
@@ -1893,5 +1896,131 @@ TEST_F(AssignMemoryTypeTest, TestConvertOpsHaveDynValidShape)
         }
     }
 }
+}
+
+struct VecDupViewMatmulGraph {
+    LogicalTensorPtr vecDupOutput;
+    LogicalTensorPtr viewOutput;
+    LogicalTensorPtr inputB;
+    LogicalTensorPtr matmulOutput;
+    Operation* viewOp = nullptr;
+};
+
+static void BuildVecDupViewMatmulNoAssembleGraph(
+    std::shared_ptr<Function>& currFunctionPtr, VecDupViewMatmulGraph& graph)
+{
+    std::vector<int64_t> shape = {32, 16};
+    std::vector<int64_t> shapeB = {16, 16};
+    std::vector<int64_t> shapeC = {32, 16};
+    graph.vecDupOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shape, CreateTestConstIntVector(shape));
+    graph.vecDupOutput->SetMagic(100);
+    graph.viewOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shape, CreateTestConstIntVector(shape));
+    graph.viewOutput->SetMagic(101);
+    graph.inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeB, CreateTestConstIntVector(shapeB));
+    graph.inputB->SetMagic(102);
+    graph.matmulOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC, CreateTestConstIntVector(shapeC));
+    graph.matmulOutput->SetMagic(103);
+    auto& vecDupOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VEC_DUP, {}, {graph.vecDupOutput});
+    vecDupOp.opmagic = 2001;
+    auto& viewOp =
+        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {graph.vecDupOutput}, {graph.viewOutput});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    viewOp.opmagic = 2002;
+    graph.viewOp = &viewOp;
+    auto& matmulOp = IRBuilder().CreateTensorOpStmt(
+        *currFunctionPtr, Opcode::OP_A_MUL_B, {graph.viewOutput, graph.inputB}, {graph.matmulOutput});
+    matmulOp.opmagic = 2003;
+    currFunctionPtr->inCasts_.push_back(graph.inputB);
+    currFunctionPtr->outCasts_.push_back(graph.matmulOutput);
+}
+
+TEST_F(AssignMemoryTypeTest, VecDupViewMatmulNoAssemble)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "VecDupViewMatmulNoAssemble", "VecDupViewMatmulNoAssemble", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("VecDupViewMatmulNoAssemble", currFunctionPtr);
+
+    VecDupViewMatmulGraph graph;
+    BuildVecDupViewMatmulNoAssembleGraph(currFunctionPtr, graph);
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*currFunctionPtr), SUCCESS);
+
+    auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(graph.viewOp->GetOpAttribute());
+    ASSERT_NE(viewOpAttr, nullptr);
+    EXPECT_EQ(viewOpAttr->GetTo(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(graph.vecDupOutput->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(graph.vecDupOutput->GetMemoryTypeToBe(), MemoryType::MEM_UB);
+    EXPECT_EQ(graph.viewOutput->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(graph.viewOutput->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(graph.inputB->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(graph.inputB->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(graph.matmulOutput->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(graph.matmulOutput->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+
+    int assembleCount = 0;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
+            auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
+            ASSERT_NE(assembleOpAttr, nullptr);
+            EXPECT_EQ(assembleOpAttr->GetFrom(), MemoryType::MEM_UB);
+            ASSERT_FALSE(op.GetIOperands().empty());
+            ASSERT_FALSE(op.GetOOperands().empty());
+            EXPECT_EQ(op.GetIOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+            EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+            EXPECT_EQ(op.GetOOperands().front()->GetMemoryTypeToBe(), MemoryType::MEM_DEVICE_DDR);
+        }
+    }
+    EXPECT_EQ(assembleCount, 1) << "Should insert one assemble when vec_dup(UB) -> view -> A_MUL_B(DDR)";
+}
+
+TEST_F(AssignMemoryTypeTest, DdrViewMatmulNoAssemble)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(
+            Program::GetInstance(), "DdrViewMatmulNoAssemble", "DdrViewMatmulNoAssemble", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("DdrViewMatmulNoAssemble", currFunctionPtr);
+    std::vector<int64_t> shapeA = {32, 16};
+    std::vector<int64_t> shapeB = {16, 16};
+    std::vector<int64_t> shapeC = {32, 16};
+    auto inputA = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeA, CreateTestConstIntVector(shapeA));
+    inputA->SetMagic(110);
+    auto viewOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeA, CreateTestConstIntVector(shapeA));
+    viewOutput->SetMagic(111);
+    auto inputB = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeB, CreateTestConstIntVector(shapeB));
+    inputB->SetMagic(112);
+    auto matmulOutput = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP16, shapeC, CreateTestConstIntVector(shapeC));
+    matmulOutput->SetMagic(113);
+    auto& viewOp = IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_VIEW, {inputA}, {viewOutput});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    viewOp.opmagic = 2012;
+    auto& matmulOp =
+        IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {viewOutput, inputB}, {matmulOutput});
+    matmulOp.opmagic = 2013;
+    currFunctionPtr->inCasts_.push_back(inputA);
+    currFunctionPtr->inCasts_.push_back(inputB);
+    currFunctionPtr->outCasts_.push_back(matmulOutput);
+
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*currFunctionPtr), SUCCESS);
+
+    int assembleCount = 0;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleCount++;
+        }
+    }
+    EXPECT_EQ(assembleCount, 0) << "Should not insert assemble when view input is already DDR";
+    auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(viewOp.GetOpAttribute());
+    ASSERT_NE(viewOpAttr, nullptr);
+    EXPECT_EQ(viewOpAttr->GetTo(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(inputA->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(viewOutput->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
 }
 } // namespace npu::tile_fwk

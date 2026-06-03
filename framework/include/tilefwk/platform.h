@@ -119,6 +119,7 @@ struct MemoryGraph {
         MemoryType target, const std::shared_ptr<MemoryNode>& node, std::vector<MemoryType>& candidate,
         std::vector<MemoryType>& paths) const;
     bool FindNearestPath(MemoryType from, MemoryType to, std::vector<MemoryType>& paths) const;
+    bool HasDirectPath(MemoryType from, MemoryType to) const;
     void Reset() { nodes.clear(); }
 };
 
@@ -317,7 +318,10 @@ public:
     void SetMemHost1Size(size_t size) { mem_host1_size_ = size; }
 
     bool SetMemoryPath(const std::vector<std::pair<MemoryType, MemoryType>>& dataPaths);
+    void ResetMemoryPath() { memoryGraph_.Reset(); }
     bool FindNearestPath(MemoryType from, MemoryType to, std::vector<MemoryType>& paths) const;
+    bool HasDirectPath(MemoryType from, MemoryType to) const;
+    const MemoryGraph& GetMemoryGraph() const { return memoryGraph_; }
 
     std::string Dump() const
     {
@@ -513,6 +517,7 @@ public:
     void SetMemoryLimit(const PlatformParser& parser);
     void LoadPlatformInfo(const PlatformParser& parser);
     void ObtainPlatformInfo();
+    void ReloadMemoryPaths(const std::string& archType);
 
     std::string Dump()
     {

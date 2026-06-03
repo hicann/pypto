@@ -16,6 +16,7 @@
 #include "assign_memory_type_checker.h"
 #include "passes/pass_log/pass_log.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 
 #define MODULE_NAME "AssignMemoryType"
 
@@ -162,8 +163,7 @@ Status AssignMemoryTypeChecker::CheckMoveOpReachable(Function& function)
                 if (inMemType == outMemType) {
                     continue;
                 }
-                std::pair<MemoryType, MemoryType> moveOpPath = {inMemType, outMemType};
-                if (ALL_DEFINED_PATHS.find(moveOpPath) == ALL_DEFINED_PATHS.end()) {
+                if (!Platform::Instance().GetDie().HasDirectPath(inMemType, outMemType)) {
                     APASS_LOG_ERROR_F(
                         Elements::Tensor,
                         "OP[%d] has inputTensor[%d] with memoryType %s and "

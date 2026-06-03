@@ -1372,6 +1372,7 @@ TEST_F(DynamicOpsTest, ScaledMmMxMNSplitWithBiasFp8e4m3)
     std::string logOutput = CaptureLogFileAndEcho([]() {
         const NPUArch savedArch = Platform::Instance().GetSoc().GetNPUArch();
         Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+        Platform::Instance().ReloadMemoryPaths("3510");
         // Some environments use an older bisheng that does not support
         // --enable-pto-tile-fusion. Disable VF for this UT to avoid
         // unrelated toolchain-option failures.
@@ -1432,6 +1433,7 @@ TEST_F(DynamicOpsTest, ScaledMmMxMNSplitWithBiasFp8e4m3)
             }
         }
         Platform::Instance().GetSoc().SetNPUArch(savedArch);
+        Platform::Instance().ReloadMemoryPaths("2201");
     });
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }

@@ -95,6 +95,11 @@ bool Die::FindNearestPath(MemoryType from, MemoryType to, std::vector<MemoryType
     return false;
 }
 
+bool Die::HasDirectPath(MemoryType from, MemoryType to) const
+{
+    return memoryGraph_.HasDirectPath(from, to);
+}
+
 void SoC::SetNPUArch(const std::string& versionStr) { version_ = StringToNPUArch(versionStr); }
 
 void SoC::SetCCECVersion(const std::unordered_map<std::string, std::string>& ver)
@@ -198,6 +203,15 @@ bool MemoryGraph::FindNearestPath(MemoryType from, MemoryType to, std::vector<Me
     const auto it = nodes.find(from);
     DFS(to, it->second, candidate, paths);
     return true;
+}
+
+bool MemoryGraph::HasDirectPath(MemoryType from, MemoryType to) const
+{
+    auto it = nodes.find(from);
+    if (it == nodes.end()) {
+        return false;
+    }
+    return it->second->dests.count(to) > 0;
 }
 
 Platform& Platform::Instance()
@@ -308,5 +322,23 @@ void Platform::ObtainPlatformInfo()
     LoadPlatformInfo(*parser);
     PLATFORM_LOGD("Loaded platform info.");
     initialized = true;
+}
+
+void Platform::ReloadMemoryPaths(const std::string& archType)
+{
+    PLATFORM_LOGD("Reload memory paths for arch: %s.", archType.c_str());
+    GetDie().ResetMemoryPath();
+    if (archType.empty()) {
+        PLATFORM_LOGD("Empty archType, memory graph cleared.");
+        return;
+    }
+    InternalParser internalParser(archType);
+    std::vector<std::pair<MemoryType, MemoryType>> dataPath;
+    if (internalParser.LoadInternalInfo() && internalParser.GetDataPath(dataPath)) {
+        GetDie().SetMemoryPath(dataPath);
+        PLATFORM_LOGD("Reloaded memory paths for arch: %s.", archType.c_str());
+    } else {
+        PLATFORM_LOGW("Failed to reload memory paths for arch: %s.", archType.c_str());
+    }
 }
 } // namespace npu::tile_fwk
