@@ -39,18 +39,37 @@ private:
     void ProcessStaticLoopGroup(Operation& op, const std::vector<int64_t>& loopAxes);
     void ResetGroupState();
     void FinalizeLoopGroups();
+    void RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair<int, int>>& addrConflictIdx,
+                           std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap);
+    void IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
+                   std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap,
+                   std::set<std::pair<int, int>>& addrConflictIdx, int& idx);
+    void CheckAddrOverLap(bool isStaticLoop, std::vector<Operation * > & sameLoopOpGroup,
+                          std::set<std::pair<int,int>> & addrConflictIdx,
+                          std::map<int,std::vector<std::vector<size_t>>> & addrRecordMap);
+    void ProcessCutStaticGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup);
+    void ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup);
 
     int64_t groupIdx{INVALID_LOOP_GROUPID};
     int64_t lastGroupIdx{INVALID_LOOP_GROUPID};
     int64_t previousOutputMagic{INVALID_LOOP_GROUPID};
-    std::shared_ptr<Operation> lastOpInLoop{nullptr};
+    Operation* lastOpInLoop{nullptr};
+    Operation* lastOpInLoop1{nullptr};
     std::vector<int64_t> previousLoopAxes;
 
     int64_t dynGroupIdx{INVALID_LOOP_GROUPID};
     int64_t dynLastGroupIdx{INVALID_LOOP_GROUPID};
     int64_t dynPreviousOutputMagic{INVALID_LOOP_GROUPID};
-    std::shared_ptr<Operation> dynLastOpInLoop{nullptr};
+    Operation* dynLastOpInLoop{nullptr};
     std::vector<SymbolicScalar> dynPreviousLoopAxes;
+
+    std::map<int, std::vector<std::vector<size_t>>> addrStaticRecordMap;
+    std::vector<Operation*> sameStaticLoopOpGroup;
+    std::set<std::pair<int, int>> addrStaticConflictIdx;
+
+    std::map<int, std::vector<std::vector<size_t>>> addrDynRecordMap;
+    std::vector<Operation*> sameDynLoopOpGroup;
+    std::set<std::pair<int, int>> addrDynConflictIdx;
 };
 
 } // namespace tile_fwk
