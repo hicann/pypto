@@ -17,14 +17,14 @@
 
 ## 版本1：安装CANN包的Dockerfile
 
-支持环境信息：OS支持Ubuntu22.04、OpenEuler24.03，架构支持x86_64和aarch64，Python 3.11，CANN 8.5.0，支持A2/A3。
+支持环境信息：OS支持Ubuntu22.04、OpenEuler24.03，架构支持x86_64和aarch64，Python 3.11，CANN 9.0.0，支持A2/A3。
 
 在使用前，请根据**操作系统 + 硬件类型**指定`CANN_VERSION`：
 
-- **Ubuntu + A3**：`ARG CANN_VERSION=8.5.0-a3-ubuntu22.04-py3.11`
-- **Ubuntu + A2**：`ARG CANN_VERSION=8.5.0-910b-ubuntu22.04-py3.11`
-- **openEuler + A3**：`ARG CANN_VERSION=8.5.0-a3-openeuler24.03-py3.11`
-- **openEuler + A2**：`ARG CANN_VERSION=8.5.0-910b-openeuler24.03-py3.11`
+- **Ubuntu + A3**：`ARG CANN_VERSION=9.0.0-a3-ubuntu22.04-py3.11`
+- **Ubuntu + A2**：`ARG CANN_VERSION=9.0.0-910-ubuntu22.04-py3.11`
+- **openEuler + A3**：`ARG CANN_VERSION=9.0.0-a3-openeuler24.03-py3.11`
+- **openEuler + A2**：`ARG CANN_VERSION=9.0.0-910-openeuler24.03-py3.11`
 
 根据CPU架构指定`TARGETPLATFORM`：
 
@@ -35,7 +35,7 @@
 
 ```dockerfile
 # step1: 指定 CANN 基础镜像版本
-ARG CANN_VERSION=8.5.0-a3-ubuntu22.04-py3.11
+ARG CANN_VERSION=9.0.0-a3-ubuntu22.04-py3.11
 FROM quay.io/ascend/cann:$CANN_VERSION
 
 # 指定目标平台架构
@@ -66,8 +66,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
 
 # 安装指定版本 torch / torch-npu（CPU 源 + NPU 插件）
-RUN python -m pip install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu \
-    && python -m pip install --no-cache-dir torch-npu==2.6.0
+RUN python -m pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu \
+    && python -m pip install --no-cache-dir torch-npu==2.8.0.post4
 
 # step3: [Optional] 设置默认代理（仅当需要统一代理时启用）
 ENV PROXY=""
@@ -116,8 +116,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
 RUN pip install --no-cache-dir --upgrade setuptools
 
 # 安装 torch / torch-npu
-RUN pip install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir torch-npu==2.6.0
+RUN pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch-npu==2.8.0.post4
 
 # [Optional] 设置默认代理，便于容器内访问外网
 ENV PROXY=""

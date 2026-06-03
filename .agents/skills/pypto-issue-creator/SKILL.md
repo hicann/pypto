@@ -182,7 +182,7 @@ bash scripts/collect-env.sh
 | 信息类型 | 命令 | 输出示例 |
 |---------|------|---------|
 | 服务器/NPU 型号 | `lspci -n -D \| grep -oE '19e5:d80[23]'` | `19e5:d803` |
-| CANN 版本 | `echo $ASCEND_HOME_PATH \| sed -n 's/.*cann-\([0-9.]*\).*/\1/p'` | `8.5.0` |
+| CANN 版本 | `echo $ASCEND_HOME_PATH \| sed -n 's/.*cann-\([0-9.]*\).*/\1/p'` | `9.0.0` |
 | PyPTO Commit | `git log -1 --format='%h (%ci)' HEAD` | `abc1234 (2026-03-10 10:00:00 +0800)` |
 | Python 版本 | `python --version` | `Python 3.10.12` |
 | 操作系统 | `grep '^PRETTY_NAME=' /etc/os-release \| cut -d'=' -f2- \| tr -d '"'` | `Ubuntu 22.04.3 LTS` |

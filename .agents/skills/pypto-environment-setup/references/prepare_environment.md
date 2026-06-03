@@ -71,7 +71,7 @@ bash tools/prepare_env.sh --quiet --type=third_party
 
 ### CANN 内置方式（默认）
 
-CANN toolkit 安装后自带 PTO-ISA，路径为 `$ASCEND_HOME_PATH/<arch>-linux`（如 `/usr/local/Ascend/cann-8.5.0/aarch64-linux`）。通过 `export PTO_TILE_LIB_CODE_PATH=$ASCEND_HOME_PATH/<arch>-linux` 即可使用。
+CANN toolkit 安装后自带 PTO-ISA，路径为 `$ASCEND_HOME_PATH/<arch>-linux`（如 `/usr/local/Ascend/cann-9.0.0/aarch64-linux`）。通过 `export PTO_TILE_LIB_CODE_PATH=$ASCEND_HOME_PATH/<arch>-linux` 即可使用。
 
 > ⚠️ CANN 内置 PTO-ISA 版本可能与 pypto 源码（master 分支）不兼容。运行时如果出现 `no member named 'XXX' in namespace 'pto'` 错误，说明内置版本过旧，需切换到源码方式。
 
