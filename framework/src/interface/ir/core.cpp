@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <mutex>
 #include <atomic>
+#include "interface/utils/common.h"
 
 namespace pypto {
 namespace ir {
@@ -46,14 +47,11 @@ private:
 struct SpanImplHash {
     std::size_t operator()(SpanImpl* span) const
     {
-        auto combine = [](std::size_t seed, std::size_t hash) -> std::size_t {
-            return seed ^ (hash + 0x9e3779b9 + (seed << 6) + (seed >> 2));
-        };
         std::size_t h = std::hash<std::string>()(span->filename_);
-        h = combine(h, span->beginLine_);
-        h = combine(h, span->beginColumn_);
-        h = combine(h, span->endLine_);
-        h = combine(h, span->endColumn_);
+        npu::tile_fwk::HashCombine(h, span->beginLine_);
+        npu::tile_fwk::HashCombine(h, span->beginColumn_);
+        npu::tile_fwk::HashCombine(h, span->endLine_);
+        npu::tile_fwk::HashCombine(h, span->endColumn_);
         return h;
     }
 };

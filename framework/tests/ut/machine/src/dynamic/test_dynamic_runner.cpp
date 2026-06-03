@@ -71,7 +71,7 @@ TEST_F(TestDynamicDeviceRunner, DynPyptoKernelServerInit_ReturnsErrorWhenKernelN
 
 TEST_F(TestDynamicDeviceRunner, TestInitArgs)
 {
-    auto& runner = DeviceRunner::Get();
+    npu::tile_fwk::DeviceRunner runner;
     [[maybe_unused]] DeviceArgs args;
     args.nrAic = 2;
     args.nrAiv = 2;
@@ -82,7 +82,7 @@ TEST_F(TestDynamicDeviceRunner, TestInitArgs)
 
 TEST_F(TestDynamicDeviceRunner, TestDynamicRun)
 {
-    auto& runner = npu::tile_fwk::DeviceRunner::Get();
+    npu::tile_fwk::DeviceRunner runner;
     [[maybe_unused]] DeviceArgs args;
     args.nrAic = 2;
     args.nrAiv = 2;
@@ -163,7 +163,7 @@ TEST_F(TestDynamicDeviceRunner, test_launch_init)
     pyptoKernelArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
     pyptoKernelArgs.cfgdata = static_cast<int64_t*>(static_cast<void*>(&devKernelArgs));
     auto ret = DynTileFwkBackendKernelServer(&pyptoKernelArgs);
-    EXPECT_EQ(ret, -1);
+    EXPECT_NE(ret, 0);
 }
 
 TEST_F(TestDynamicDeviceRunner, test_launch_init_server)

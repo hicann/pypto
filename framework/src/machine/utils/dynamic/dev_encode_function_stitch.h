@@ -415,7 +415,6 @@ static uint32_t CellMatchFillIncastOutcast(
         return 0;
     }
 
-    bool allConcrete = true;
     for (size_t i = 0; i < useSize; i++) {
         auto& use = operandUseList[i];
         uint64_t offset[DEV_SHAPE_DIM_MAX];
@@ -429,7 +428,6 @@ static uint32_t CellMatchFillIncastOutcast(
                                                     static_cast<uint32_t>(use.opType), args...);
             if (errCode != 0) { return errCode; }
         }
-        allConcrete &= paramConcrete;
     }
 
     return 0;

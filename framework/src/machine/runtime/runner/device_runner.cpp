@@ -739,6 +739,10 @@ void DeviceRunner::StopMachinePerfTraceDumpThread()
 void DeviceRunner::MachinePerfTraceDumpThread()
 {
     MACHINE_LOGD("Dump thread start to machine perf trace data");
+    int32_t deviceId = static_cast<int32_t>(args_.deviceId);
+    if (RuntimeSetDevice(deviceId) != 0) {
+        MACHINE_LOGW("Dump perf thread set Device[%d] not success", deviceId);
+    }
     while (!dumpThreadStopFlag_.load()) {
         usleep(10000);
         dynamic::DumpDevTaskPerfData(args_, perfData_, false);
