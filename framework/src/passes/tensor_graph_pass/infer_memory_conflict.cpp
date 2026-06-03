@@ -65,6 +65,16 @@ bool HasNegativeDimAfterFirstIncast(const Function& function)
     return false;
 }
 
+LogicalTensorPtr FindNegativeDimAfterFirstNzIncast(const Function& function)
+{
+    for (const auto& incast : function.GetIncast()) {
+        if (HasNegativeDimAfterFirst(incast) && incast->Format() == TileOpFormat::TILEOP_NZ) {
+            return incast;
+        }
+    }
+    return nullptr;
+}
+
 bool HasOnlyViewConsumers(const LogicalTensorPtr& tensor)
 {
     return std::all_of(tensor->GetConsumers().begin(), tensor->GetConsumers().end(),
@@ -336,25 +346,37 @@ bool InferMemoryConflict::CheckReshapeContext(const LogicalTensorPtr& reshapeIn,
 }
 
 // batch MatMul优化pattern，不插入register copy
-bool InferMemoryConflict::MatchReshapePattern(
-    Function& function, const LogicalTensorPtr& reshapeIn, const LogicalTensorPtr& reshapeOut)
+Status InferMemoryConflict::MatchReshapePattern(
+    Function& function, const LogicalTensorPtr& reshapeIn, const LogicalTensorPtr& reshapeOut, bool& matched)
 {
+    matched = false;
+    auto nzIncast = FindNegativeDimAfterFirstNzIncast(function);
+    if (nzIncast) {
+        auto formatStr = std::to_string(nzIncast->Format());
+        APASS_LOG_ERROR_F(
+            Elements::Operation,
+            "The BMM input tensor does not support two or more dynamic axes when the tensor format is NZ. "
+            "Please check the format of the BMM input tensor. tensor format: %s",
+            formatStr.c_str());
+        return FAILED;
+    }
     if (!reshapeIn || !reshapeOut || HasNegativeDimAfterFirstIncast(function)) {
-        return false;
+        return SUCCESS;
     }
     Shape inRawShape = reshapeIn->GetRawTensor()->GetRawShape();
     Shape outRawShape = reshapeOut->GetRawTensor()->GetRawShape();
     if (CheckDynRawShape(inRawShape) || CheckDynRawShape(outRawShape) || !CheckReshapeContext(reshapeIn, reshapeOut)) {
-        return false;
+        return SUCCESS;
     }
 
     const auto& inputShape = reshapeIn->GetShape();
     const auto& outputShape = reshapeOut->GetShape();
     if (!AreReshapeShapesValid(inputShape, outputShape)) {
-        return false;
+        return SUCCESS;
     }
 
-    return MatchReshapeDimensionPair(inputShape, outputShape);
+    matched = MatchReshapeDimensionPair(inputShape, outputShape);
+    return SUCCESS;
 }
 
 Status InferMemoryConflict::UpdateForwardTensor(
@@ -365,10 +387,15 @@ Status InferMemoryConflict::UpdateForwardTensor(
         if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
             auto reshapeInput = consumer->GetIOperands().front();
             bool isInplace = consumer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
-            if (!isInplace && CheckRawShapeConflict(memoryInfo[curTensor], outputTensor) &&
-                 !MatchReshapePattern(function, reshapeInput, outputTensor)) {
-                preregcopys.insert(consumer);
-                continue;
+            if (!isInplace && CheckRawShapeConflict(memoryInfo[curTensor], outputTensor)) {
+                bool matched = false;
+                if (MatchReshapePattern(function, reshapeInput, outputTensor, matched) != SUCCESS) {
+                    return FAILED;
+                }
+                if (!matched) {
+                    preregcopys.insert(consumer);
+                    continue;
+                }
             }
         }
         if (memoryInfo.find(outputTensor) != memoryInfo.end() && function.IsFromOutCast(memoryInfo[outputTensor])) {
@@ -401,15 +428,25 @@ Status InferMemoryConflict::UpdateBackwardTensor(
         if (producer->GetOpcode() == Opcode::OP_RESHAPE) {
             auto reshapeInput = producer->GetIOperands().front();
             bool isInplace = producer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
-            if (!isInplace && CheckRawShapeConflict(inputTensor, memoryInfo[curTensor]) &&
-                 !MatchReshapePattern(function, reshapeInput, reshapeOutput)) {
-                postregcopys.insert(producer);
-                continue;
+            if (!isInplace && CheckRawShapeConflict(inputTensor, memoryInfo[curTensor])) {
+                bool matched = false;
+                if (MatchReshapePattern(function, reshapeInput, reshapeOutput, matched) != SUCCESS) {
+                    return FAILED;
+                }
+                if (!matched) {
+                    postregcopys.insert(producer);
+                    continue;
+                }
             }
         }
         if (memoryInfo.find(inputTensor) != memoryInfo.end()) {
             if (CheckConflict(memoryInfo[curTensor], memoryInfo[inputTensor])) {
-                if (producer->GetOpcode() == Opcode::OP_RESHAPE && !MatchReshapePattern(function, inputTensor, reshapeOutput)) {
+                bool matched = false;
+                if (producer->GetOpcode() == Opcode::OP_RESHAPE &&
+                    MatchReshapePattern(function, inputTensor, reshapeOutput, matched) != SUCCESS) {
+                    return FAILED;
+                }
+                if (producer->GetOpcode() == Opcode::OP_RESHAPE && !matched) {
                     postregcopys.insert(producer);
                 } else {
                     preregcopys.insert(producer);

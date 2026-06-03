@@ -57,7 +57,8 @@ private:
     bool CheckConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
     bool CheckRawShapeConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
     bool IsValidTileShape(const Operation& op) const;
-    bool MatchReshapePattern(Function& function, const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
+    Status MatchReshapePattern(
+        Function& function, const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut, bool& matched);
     bool CheckReshapeContext(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
 
     std::set<Operation*> preregcopys;
