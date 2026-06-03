@@ -26,6 +26,7 @@ public:
     ~InferDynShape() override {}
     Status RunOnFunction(Function& function) override;
     Status PostCheck(Function& function) override;
+    void RecordStaticValidShapeOnL0CCopyUB(Function& function);
 };
 } // namespace tile_fwk
 } // namespace npu

@@ -17,6 +17,8 @@
 #define PASS_BUFFER_POOL_H_
 #include "tilefwk/data_type.h"
 
+#include <optional>
+
 #include "interface/utils/common.h"
 #include "passes/pass_utils/pass_utils.h"
 
@@ -87,7 +89,12 @@ public:
     size_t UpdateIdx(
         size_t& i, size_t sizeNeedSpill, size_t startAddr,
         const std::vector<std::tuple<int, size_t, size_t>>& allocatedBufs);
+    // 单池 spill 选组: 返回所有可能的 spill 组合 (空即"没有可 spill 候选")。
+    // 与主线签名一致, 调用方按"空即失败"处理。
     std::vector<std::vector<int>> GetSpillGroup(size_t sizeNeedSpill);
+    // 提取已分配 buf 列表 (按 startOffset 升序): 双池 spill 选组与单池 GetSpillGroup
+    // 共用的"排序后已分配 buf"基本块, 拆出以便 OoOScheduler 层的双池 helper 直接复用。
+    std::vector<std::tuple<int, size_t, size_t>> GetSortedAllocatedBufs();
     std::vector<int> GetBufferSlices();
     std::vector<int> GetAddrSortedBufs();
     bool isAllocate(const int tensorId);
@@ -103,6 +110,17 @@ public:
     // Fills `changes` with one entry per moved memId for NotifyBufferRearrange.
     Status CompactBufferSlices(
         std::unordered_map<int, LocalBufferPtr>& localBufferMap, std::vector<BufferAddrChange>& changes);
+
+    // === DualDst 扩展 ===
+    // 返回本池按起点升序的扁平 [start, end) 空闲段列表;OoOScheduler::FindCommonFreeOffset
+    // 在两池列表上做归并求交集得到 dualdst 同址 offset。跨池交集决策不属于单池职责,
+    // 因此 BufferPool 只提供"自己的空闲段"原料, 决策上提到 OoOScheduler。
+    std::vector<std::pair<uint64_t, uint64_t>> GetSortedFreeIntervals();
+    // 把 tensor 固定放到 offset;越界 / 与已有 slice 重叠返回 FAILED。
+    Status AllocateAtOffset(LocalBufferPtr tensor, uint64_t offset);
+    // 注: 历史上的 GetSpillGroupsWithFreedRange + SpillGroupWithRange + WithFreedRange tag
+    //     已全部移除。dualdst 双池选组改由 OoOScheduler::GetDualSpillGroup 负责,
+    //     内部嵌套两次单池滑窗 + 比较 startAddr 是否一致, 不再依赖富信息结构体。
 
 private:
     MemoryType memType_{MemoryType::MEM_UNKNOWN};

@@ -63,14 +63,96 @@ Status OoOScheduler::GenBufferSpill(Operation* allocOp, SpillContext &ctx)
     return SUCCESS;
 }
 
-std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp) 
+std::vector<std::vector<int>> OoOScheduler::GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill)
 {
+    // 薄壳: 委托给 BufferPool::GetSpillGroup, 与 GetDualSpillGroup 形成对称的 scheduler 层入口。
+    // 决策分叉 (单池 vs 双池) 留在 SelectSpillBuffers, 此处不做额外逻辑。
+    return pool.GetSpillGroup(sizeNeedSpill);
+}
+
+std::vector<std::vector<int>> OoOScheduler::GetDualSpillGroup(
+    BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill)
+{
+    // 双池嵌套滑窗:
+    //   外层在 poolA 上找候选窗 [iA, jA), 内层在 poolB 上找候选窗 [iB, jB);
+    //   两侧"freed segment 的起点 startAddr"必须一致 (== 表示 dualdst 双池在同一地址段
+    //   都能腾出足够空间) 才输出 combined memIds。
+    // poolB 的 startAddrB 随 iB 单调递增, 所以内层在 startAddrB > startAddrA 时直接 break。
+    std::vector<std::vector<int>> result;
+    auto bufsA = poolA.GetSortedAllocatedBufs();
+    auto bufsB = poolB.GetSortedAllocatedBufs();
+
+    size_t iA = 0;
+    while (iA < bufsA.size()) {
+        size_t startAddrA = poolA.ObtainStartAddr(iA, bufsA);
+        if ((poolA.GetMemSize() - startAddrA) < sizeNeedSpill) {
+            break;
+        }
+        size_t jA = poolA.UpdateIdx(iA, sizeNeedSpill, startAddrA, bufsA);
+        if (iA == jA) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect idx for poolA allocatedBufs.");
+            return result;
+        }
+
+        size_t iB = 0;
+        while (iB < bufsB.size()) {
+            size_t startAddrB = poolB.ObtainStartAddr(iB, bufsB);
+            if (startAddrB != startAddrA) {
+                // startAddrB 在 iB 上单调递增: 没追上就推进, 已超过就停止本轮
+                if (startAddrB < startAddrA) { iB++; continue; }
+                break;
+            }
+            if ((poolB.GetMemSize() - startAddrB) < sizeNeedSpill) {
+                break;
+            }
+            size_t jB = poolB.UpdateIdx(iB, sizeNeedSpill, startAddrB, bufsB);
+            if (iB == jB) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect idx for poolB allocatedBufs.");
+                return result;
+            }
+            std::vector<int> combined;
+            combined.reserve((jA - iA) + (jB - iB));
+            for (size_t k = iA; k < jA; k++) combined.push_back(std::get<0>(bufsA[k]));
+            for (size_t k = iB; k < jB; k++) combined.push_back(std::get<0>(bufsB[k]));
+            result.push_back(std::move(combined));
+            iB++;
+        }
+        iA++;
+    }
+    return result;
+}
+
+std::vector<int> OoOScheduler::SelectSpillBuffers(Operation* allocOp)
+{
+    // dualdst / 单池两条路径只在"挑哪组"上分叉, "spill 执行"段 (GenBufferSpill 内的
+    // SpillBuffer 循环 + RearrangeBuffer + HasEnoughBuffer 兜底) 完全共用。
     LocalBufferPtr allocBuffer = localBufferMap_[opReqMemIdsMap[allocOp][0]];
-    auto coreType = opCoreLocationMap[allocOp];
-    std::vector<int> spillGroup = bufferManagerMap[coreType][allocBuffer->memType].GetAddrSortedBufs();
-    // 查找出可以spill 单个或多个tensor的集合
-    std::vector<std::vector<int>> canSpillGroups =
-        bufferManagerMap[coreType][allocBuffer->memType].GetSpillGroup(allocBuffer->size);
+    std::vector<int> spillGroup;           // spill-all 兜底
+    std::vector<std::vector<int>> canSpillGroups;
+
+    if (IsDualDstAlloc(allocOp)) {
+        DualDstAllocCtx ctx;
+        if (ResolveDualDstAllocCtx(allocOp, ctx) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                "DualDst spill select: ResolveDualDstAllocCtx failed.");
+            return {};
+        }
+        auto& poolA = bufferManagerMap[ctx.coreA][MemoryType::MEM_UB];
+        auto& poolB = bufferManagerMap[ctx.coreB][MemoryType::MEM_UB];
+        // 兜底"spill all": 两池 memId 全部, 不去重 (memId 跨 core 全局唯一)
+        auto sortedA = poolA.GetAddrSortedBufs();
+        auto sortedB = poolB.GetAddrSortedBufs();
+        spillGroup.reserve(sortedA.size() + sortedB.size());
+        spillGroup.insert(spillGroup.end(), sortedA.begin(), sortedA.end());
+        spillGroup.insert(spillGroup.end(), sortedB.begin(), sortedB.end());
+        canSpillGroups = GetDualSpillGroup(poolA, poolB, ctx.bufA->size);
+    } else {
+        auto coreType = opCoreLocationMap[allocOp];
+        auto& pool = bufferManagerMap[coreType][allocBuffer->memType];
+        spillGroup = pool.GetAddrSortedBufs();
+        canSpillGroups = GetSpillGroup(pool, allocBuffer->size);
+    }
+
     if (canSpillGroups.empty()) {
         APASS_LOG_WARN_F(Elements::Tensor, "Cannot find tensor to spill, begin spill all tensor.");
         return spillGroup;

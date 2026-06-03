@@ -118,6 +118,31 @@ struct SpillContext {
     std::vector<std::tuple<Operation*, MemoryType, CoreLocationType>> deleteAllocOps;
 };
 
+// === DualDst 融合候选对 ===
+// opEarly: fromOffset 较小,其 UB 输出 consumer 在 AIV0
+// opLate : fromOffset 较大,其 UB 输出 consumer 在 AIV1
+// allocEarly / allocLate: 两侧输出 tensor 的 ALLOC op (按 opExecOrderMap 决定保留哪条)
+// SplitM / SplitN 的方向不在此结构持久化,由 opEarly / opLate 的 fromOffset 直接推导。
+struct DualDstPair {
+    Operation* opEarly{nullptr};
+    Operation* opLate{nullptr};
+    Operation* allocEarly{nullptr};
+    Operation* allocLate{nullptr};
+    LogicalTensorPtr tensorEarly;
+    LogicalTensorPtr tensorLate;
+};
+
+// === DualDst 分配 / spill 共享上下文 ===
+// 由 IsDualDstAlloc 之后的 ResolveDualDstAllocCtx 填充,供 alloc / spill 两路使用。
+struct DualDstAllocCtx {
+    int memIdA{-1};
+    int memIdB{-1};
+    LocalBufferPtr bufA;
+    LocalBufferPtr bufB;
+    CoreLocationType coreA{CoreLocationType::UNKNOWN};
+    CoreLocationType coreB{CoreLocationType::UNKNOWN};
+};
+
 struct SingleSpillCreatedOps {
     Operation* copyoutOp{nullptr};
     Operation* allocOp{nullptr};
@@ -146,9 +171,16 @@ public:
 
     // Non-owning observer. Caller must ensure the observer outlives the whole Schedule() call.
     void AddObserver(ScheduleObserver* observer) { observers_.push_back(observer); }
-    std::vector<Operation*> GetNewOperations() { return newOperations_; }
+    // Defensive dedupe: dualdst 跨核 wake / spill 重入路径下,
+    // 上层 Function::ScheduleBy -> RefreshOpPosition 不允许重复 op 出现。
+    // 返回保留首次出现顺序的去重副本(内部 newOperations_ 不变,便于诊断)。
+    std::vector<Operation*> GetNewOperations();
     int64_t workspaceOffset{0};
     std::unordered_map<PipeType, int> pipeEndTime;
+
+    // === DualDst 开关 ===
+    // OoOSchedule 在调用 Schedule() 之前设置(默认 false 保持原行为)。
+    void SetEnableDualDst(bool v) { enableDualDst_ = v; }
 
 private:
     // 存储排好顺序的Operation指针
@@ -176,6 +208,19 @@ private:
 
     std::unordered_map<LogicalTensorPtr, LogicalTensorPtr> l02L0MXMap_;
 
+    // === DualDst: L0C tensor -> 该 L0C 整组选定的方向 (0=SplitM, 1=SplitN) ===
+    // identify 阶段为每个被融合的 L0C 写入一次,fuse 阶段读出供 CopyOpAttribute 设置 SplitMN。
+    // 一次 Schedule() 内复用;每次 RunDualDstFuse 入口处清空。
+    std::unordered_map<LogicalTensorPtr, int64_t> dualDstL0CDirection_;
+
+    // === DualDst memId -> 实际所在 UB pool 的 core (覆盖表) ===
+    // 主线 FreeBuffer 用 opCoreLocationMap[tensorAllocMap[memId]] 推 core, 但 dualdst
+    // 把一对 ub memId 各自放进 AIV0 / AIV1 两池, 而它们的 alloc op (tensorAllocMap
+    // 指向的) 在 opCoreLocationMap 里通常是同一核 (alloc op 自己的归核 != UB 服务的
+    // AIV 核)。该覆盖表在 CommitDualDstAlloc 阶段写入, FreeBuffer 优先查询此表以拿到
+    // 正确的 pool core, 避免 "Tensor[X] not in bufferSlices" 错配。
+    std::unordered_map<int, CoreLocationType> dualDstMemIdCoreOverride_;
+
     Function& function_;
     int issueId{0};
     uint64_t spillIssueCnt{0};
@@ -183,6 +228,14 @@ private:
     std::vector<Operation*> newOperations_;
     std::vector<Operation*> operations_;
     std::vector<ScheduleObserver*> observers_;
+
+    bool enableDualDst_{false};
+
+    // dualdst free 路径推核: 优先用 dualDstMemIdCoreOverride_ (CommitDualDstAlloc 写入
+    // 的 memId -> 实际 UB pool core 映射), 否则回退到 alloc op 自身的 opCoreLocationMap。
+    // 同时被 FreeBuffer / RetireIssue 两处调用以避免重复 code block 命中 codecheck dup-lines。
+    CoreLocationType ResolveCoreForFree(int memId);
+
     IRBuilder irBuilder_;
     // memId → DDRBufferKind. Doubles as the seen-set for EmitInitDDRBuffer.
     std::unordered_map<int, DDRBufferKind> ddrKindMap_;
@@ -240,6 +293,15 @@ private:
     Status BufferAllocStage(uint64_t& commitCnt) override;
     Status ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memType,
         IssueQueue &pipe);
+    // ExecuteAllocIssue 的两个分支被拆出,统一以 (allocated 是否成功) 与调用方约定:
+    //   返回 SUCCESS && allocated=true  : 已分配,调用方应 PopFront 并继续;
+    //   返回 SUCCESS && allocated=false : 暂时无法分配 (Full),调用方应 break;
+    //   返回 FAILED                       : 真错误。
+    Status TryDualDstAllocOnce(Operation* op, uint64_t& commitCnt, bool& allocated);
+    Status TryRegularAllocOnce(Operation* op, MemoryType memType, CoreLocationType coreLocation,
+                               const std::vector<int>& reqMemIds,
+                               uint64_t& commitCnt, bool& allocated);
+    // 新增：基于Operation*的版本
     void HandleViewOp(Operation* op);
     Status LaunchIssueStage(int& nextCycle) override;
     Status AllocTensorMemRange(Operation* op);
@@ -254,6 +316,13 @@ private:
     // gen spill
     Status GenBufferSpill(Operation* allocOp, SpillContext &ctx);
     std::vector<int> SelectSpillBuffers(Operation* allocOp);
+    // 单池选组: 薄壳, 委托 pool.GetSpillGroup, 与 dualdst 路径形成对称接口。
+    std::vector<std::vector<int>> GetSpillGroup(BufferPool& pool, size_t sizeNeedSpill);
+    // 双池选组: 嵌套两次单池滑窗, 匹配条件是两侧 startAddr 一致 (即两池同地址段都能腾出
+    // ≥ sizeNeedSpill 的空闲)。返回 vector<combined memId list>, 每个组里前半来自 poolA、
+    // 后半来自 poolB。memId 跨 core 全局唯一, SpillBuffer 用 ResolveCoreForFree 反查正确池。
+    std::vector<std::vector<int>> GetDualSpillGroup(
+        BufferPool& poolA, BufferPool& poolB, size_t sizeNeedSpill);
     Status GetGroupNextUseTime(std::vector<int> group, Operation* allocOp, std::vector<int> &groupNextUseTime,
         std::unordered_map<int, size_t> &nextUseTimeCache);
     bool IsBelongSpillBlackList(Operation* spillOp, Operation* op);
@@ -321,6 +390,74 @@ private:
 
     // 新增：插入Operation到orderedOps
     void InsertOrdered(Operation* insertOp);
+
+    // === DualDst 融合 (实现位于 dualdst_fuse.cpp) ===
+    // 入口: 在 Init 之后、GenSpillSchedule 之前调用
+    Status RunDualDstFuse();
+    // 阶段 1: 识别可融合 pair
+    Status IdentifyDualDstPairs(std::vector<DualDstPair>& pairs);
+    // 阶段 1 子步骤: 单个 L0C tensor 的处理
+    void IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor,
+                                const std::vector<Operation*>& copyUbs,
+                                std::vector<DualDstPair>& pairs);
+    // 阶段 2: 改图,把 pair 替换成单个 OP_L0C_COPY_UB_DUAL_DST
+    Status FuseDualDstPairs(const std::vector<DualDstPair>& pairs);
+    // 工具: allocOp 是否是 dualdst 保留下来的那条 ALLOC
+    bool IsDualDstAlloc(Operation* allocOp);
+    // 工具: 给定 dualdst alloc,返回其配对的另一个 memId; 失败返回 -1
+    int GetDualDstPairedMemId(Operation* allocOp);
+    // 工具: 给定 dualdst alloc,返回它服务的那个 OP_L0C_COPY_UB_DUAL_DST
+    Operation* GetDualDstCopyOpFor(Operation* allocOp);
+    // 工具: 把一个 op 从 orderedOps 与各 map 中安全移除
+    void EraseFromOrderedOps(Operation* op);
+    // 阶段 2 内部: 单对融合
+    Status FuseOnePair(const DualDstPair& p);
+    // 阶段 2 子步骤: 仅构造 OP_L0C_COPY_UB_DUAL_DST 节点 + 继承结构性属性
+    // (InternalSubgraphID / AIVCore / isCube)。返回新建的 op 指针。
+    Operation* CreateDualDstFusedOp(const DualDstPair& p, LogicalTensorPtr l0cIn);
+    // 阶段 2 子步骤: 给已建的 dualdst op 写 CopyOpAttribute (对齐 GenerateMoveOp::SetL0C2UBCopyAttr 模板)。
+    // 新规格各 attr 单值: srcOffset / shape / srcValidShape / dstValidShape。
+    // realShape = 沿 SplitMN 轴对 attrE/attrL shape 相加;SplitMN 通过 OpAttributeKey::splitMN 落到 C。
+    void SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn,
+                            const DualDstPair& p,
+                            std::shared_ptr<CopyOpAttribute> attrE,
+                            std::shared_ptr<CopyOpAttribute> attrL);
+    // 阶段 2 子步骤: 把 opEarly / opLate / B 的所有依赖边迁到 C / 摘除
+    void RewireEdgesForFusedOp(Operation* opEarly, Operation* opLate,
+                               Operation* A, Operation* B, Operation* C);
+    // 阶段 2 子步骤: 摘除被替代 op 在 tensor producer/consumer 链上的引用
+    void DetachOldOpsFromTensors(const DualDstPair& p, LogicalTensorPtr l0cIn, Operation* B);
+    // 阶段 2 子步骤: 把 C 写入 orderedOps 与各属性 map
+    void RegisterFusedOpInMaps(Operation* C, int execOrder);
+    // 阶段 2 子步骤: 同步 bufRefCount_ 与 opReqMemIdsMap[C]。
+    // InitBufRefCount 已在 fuse 前跑过,反映的是 pre-fuse 图的引用计数;
+    // 这里减掉 opEarly/opLate/B 的贡献,加上 C 的贡献,保证 FreeBuffer 能正确归零。
+    // 必须在 EraseFromOrderedOps(opEarly/opLate/B) 之前调用 (依赖它们的 opReqMemIdsMap)。
+    void SyncBufRefCountForFuse(const DualDstPair& p, Operation* B, Operation* C);
+
+    // === DualDst 分配 ===
+    // 调用方先用 IsDualDstAlloc 判定;此函数负责在 AIV0/AIV1 两个 UB 池上同地址放置
+    // dualdst 的两个输出 tensor。
+    //   返回 SUCCESS && allocated=true   : 两侧都已 AllocateAtOffset 成功
+    //   返回 SUCCESS && allocated=false  : 当前两池找不到共同空闲段(语义=Full),
+    //                                       由调用方触发 spill / break canAlloc
+    //   返回 FAILED                       : 真错误(回滚已尝试)
+    Status AllocateDualDstAtCurrent(Operation* allocA, bool& allocated);
+    // 双池公共空闲偏移查找: 分别取两池 GetSortedFreeIntervals(), 归并求首个 ≥ size 的交集,
+    // 命中返回起点 offset, 否则 nullopt。原 BufferPool::FindCommonFreeOffset 已上提至此,
+    // 与 GetDualSpillGroup 同源 — 单池查询留 BufferPool, 跨池决策归 OoOScheduler。
+    std::optional<uint64_t> FindCommonFreeOffset(BufferPool& poolA, BufferPool& poolB, uint64_t size);
+    // 共享: 解析 dualdst alloc 的两 memId / 两 localBuffer / 两核归属,失败时已打日志。
+    // 内部拆为 ResolveDualDstMemAndBuf + ResolveDualDstCores 两步, 控制单函数行数与圈复杂度。
+    Status ResolveDualDstAllocCtx(Operation* allocOp, DualDstAllocCtx& ctx);
+    Status ResolveDualDstMemAndBuf(Operation* allocOp, DualDstAllocCtx& ctx);
+    Status ResolveDualDstCores(Operation* allocOp, DualDstAllocCtx& ctx);
+    // 分配成功后的 bookkeeping (tensorOccupyMap / startCycle / 通知)
+    void CommitDualDstAlloc(Operation* allocA, const DualDstAllocCtx& ctx, uint64_t off);
+    // === DualDst spill ===
+    // SelectSpillBuffers 内部按 IsDualDstAlloc 分叉, dualdst 双池选组 + 单池执行流程
+    // (GenBufferSpill 内的 SpillBuffer 循环) 共用同一执行段。详见 spill_buffer.cpp。
+    // 不再有 SpillDualDstAllocBuffer / SpillOneSideWithCoreSwap 两个独立函数。
     // 新增：Tensor输入更新辅助函数
     void UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr tensor);
     void UpdateTensorInputForView(Operation& op, Operation* spillSrcOp, LogicalTensorPtr tensor);

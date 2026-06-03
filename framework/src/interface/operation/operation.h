@@ -120,6 +120,7 @@ public:
     static const std::string mxQuantAxis;
     static const std::string mxQuantPerformanceMode;
     static const std::string gmTensorParamIdxInCall;
+    static const std::string staticValidShape;
     // HashOrder attribute keys
     static const std::string l1ReuseHashOrder;
     static const std::string l1ReuseSubgraphCount;

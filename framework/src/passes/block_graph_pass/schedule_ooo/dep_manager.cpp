@@ -289,6 +289,28 @@ Status DependencyManager::InitDependencies(const std::vector<Operation *> &ops, 
         }
     }
 
+    // === DualDst 兼容: 融合后 OP_L0C_COPY_UB_DUAL_DST 的某个输出失去独立 ALLOC,
+    // 把它的 memId 也指向同 op 兄弟输出的 ALLOC, 这样下游 consumer (含 in-place
+    // 复用同 memId 的 ADDS 等) 在 InitAllocDependencies 里都能查到。
+    for (const auto &op : ops) {
+        if (op == nullptr || op->GetOpcode() != Opcode::OP_L0C_COPY_UB_DUAL_DST) continue;
+        Operation *dualAlloc = nullptr;
+        for (auto &outTensor : op->GetOOperands()) {
+            auto it = tensor2AllocOpMap.find(outTensor->memoryrange.memId);
+            if (it != tensor2AllocOpMap.end()) {
+                dualAlloc = it->second;
+                break;
+            }
+        }
+        if (dualAlloc == nullptr) continue;
+        for (auto &outTensor : op->GetOOperands()) {
+            int mid = outTensor->memoryrange.memId;
+            if (!tensor2AllocOpMap.count(mid)) {
+                tensor2AllocOpMap[mid] = dualAlloc;
+            }
+        }
+    }
+
     Clear();
     for (const auto &op : ops) {
         RegisterOp(op);

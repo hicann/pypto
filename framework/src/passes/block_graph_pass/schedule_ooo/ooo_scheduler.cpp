@@ -345,43 +345,66 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
     return SUCCESS;
 }
 
+Status OoOScheduler::TryDualDstAllocOnce(Operation* op, uint64_t& commitCnt, bool& allocated)
+{
+    if (AllocateDualDstAtCurrent(op, allocated) != SUCCESS) return FAILED;
+    if (!allocated) return SUCCESS;     // 当前 Full,由调用方 break 触发 SpillOnBlock
+    newOperations_.push_back(op);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert(dualdst): %s.", GetOpInfo(op).c_str());
+    if (RetireOpAndAwakeSucc(op, commitCnt) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation,
+            "RetireOpAndAwakeSucc failed for dualdst alloc. %s",
+            GetFormatBacktrace(*op).c_str());
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::TryRegularAllocOnce(Operation* op, MemoryType memType,
+                                         CoreLocationType coreLocation,
+                                         const std::vector<int>& reqMemIds,
+                                         uint64_t& commitCnt, bool& allocated)
+{
+    auto& pool = bufferManagerMap[coreLocation][memType];
+    auto buf = localBufferMap_[reqMemIds[0]];
+    if (pool.IsFull(buf, true)) { allocated = false; return SUCCESS; }
+    APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
+    if (pool.Allocate(buf) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", reqMemIds[0]);
+        return FAILED;
+    }
+    NotifyAllocExec(op, reqMemIds[0]);
+    tensorOccupyMap[reqMemIds[0]] = op;
+    buf->startCycle = clock;
+    if (op->GetOutputOperand(0) == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Alloc[%d] cannot find oOperand[0]. %s",
+            op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
+        return FAILED;
+    }
+    newOperations_.push_back(op);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Insert: %s.", GetOpInfo(op).c_str());
+    if (RetireOpAndAwakeSucc(op, commitCnt) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "RetireOpAndAwakeSuccOp failed. %s",
+            GetFormatBacktrace(*op).c_str());
+        return FAILED;
+    }
+    allocated = true;
+    return SUCCESS;
+}
+
 Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, IssueQueue& pipe)
 {
-    bool canAlloc = true;
-    while (canAlloc) {
-        if (pipe.Empty()) {
-            canAlloc = false;
-            break;
-        }
+    while (!pipe.Empty()) {
         Operation* op = pipe.Front();
         auto& coreLocation = opCoreLocationMap[op];
         auto& reqMemIds = GetOpMemIds(op);
-        if (!bufferManagerMap[coreLocation][memType].IsFull(localBufferMap_[reqMemIds[0]], true)) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
-            if (bufferManagerMap[coreLocation][memType].Allocate(localBufferMap_[reqMemIds[0]]) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", reqMemIds[0]);
-                return FAILED;
-            }
-            NotifyAllocExec(op, reqMemIds[0]);
-            tensorOccupyMap[reqMemIds[0]] = op;
-            localBufferMap_[reqMemIds[0]]->startCycle = clock;
-            if (op->GetOutputOperand(0) == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Alloc[%d] cannot find oOperand[0]. %s",
-                    op->GetOpMagic(), GetFormatBacktrace(*op).c_str());
-                return FAILED;
-            }
-            newOperations_.push_back(op);
-            APASS_LOG_DEBUG_F(Elements::Operation, "Insert: %s.", GetOpInfo(op).c_str());
-            pipe.PopFront();
-            if (RetireOpAndAwakeSucc(op, commitCnt) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "RetireOpAndAwakeSuccOp failed. %s",
-                    GetFormatBacktrace(*op).c_str());
-                return FAILED;
-            }
-        } else {
-            canAlloc = false;
-            break;
-        }
+        bool allocated = false;
+        Status st = (memType == MemoryType::MEM_UB && IsDualDstAlloc(op))
+                  ? TryDualDstAllocOnce(op, commitCnt, allocated)
+                  : TryRegularAllocOnce(op, memType, coreLocation, reqMemIds, commitCnt, allocated);
+        if (st != SUCCESS) return FAILED;
+        if (!allocated) break;     // Full;退出循环交给 SpillOnBlock
+        pipe.PopFront();
     }
     return SUCCESS;
 }
@@ -405,6 +428,15 @@ Status OoOScheduler::BufferAllocStage(uint64_t& commitCnt)
     return SUCCESS;
 }
 
+CoreLocationType OoOScheduler::ResolveCoreForFree(int memId)
+{
+    auto overrideIt = dualDstMemIdCoreOverride_.find(memId);
+    if (overrideIt != dualDstMemIdCoreOverride_.end()) {
+        return overrideIt->second;
+    }
+    return opCoreLocationMap[tensorAllocMap[memId]];
+}
+
 Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
 {
     auto& reqMemIds = GetOpMemIds(op);
@@ -414,7 +446,7 @@ Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
             return FAILED;
         }
         if (bufRefCount_[memId] == 0) {
-            auto coreLocation = opCoreLocationMap[tensorAllocMap[memId]];
+            CoreLocationType coreLocation = ResolveCoreForFree(memId);
             auto memType = localBufferMap_[memId]->memType;
             if (bufferManagerMap[coreLocation][memType].Free(localBufferMap_[memId]->id)
                 != SUCCESS) {
@@ -427,9 +459,29 @@ Status OoOScheduler::FreeBuffer(Operation* op, std::vector<int>& freedMemIds)
                 APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", memId);
                 return FAILED;
             }
+            dualDstMemIdCoreOverride_.erase(memId);   // free 后清理, 避免后续 spill 重 alloc 复用旧映射
         }
     }
     return SUCCESS;
+}
+
+std::vector<Operation*> OoOScheduler::GetNewOperations()
+{
+    std::vector<Operation*> uniq;
+    uniq.reserve(newOperations_.size());
+    std::unordered_set<Operation*> seen;
+    for (auto* op : newOperations_) {
+        if (op == nullptr) continue;
+        if (seen.insert(op).second) {
+            uniq.push_back(op);
+        } else {
+            // 命中即代表上游某条 push 路径漏了去重 (期望随后续根因修复降为 0)。
+            APASS_LOG_WARN_F(Elements::Operation,
+                "GetNewOperations dedupe drop duplicate op[%d] %s",
+                op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        }
+    }
+    return uniq;
 }
 
 Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
@@ -444,7 +496,6 @@ Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
     NotifyOpRetire(op, freedMemIds);
 
     auto& successors = depManager_.GetSuccessors(op);
-    auto& coreLocation = opCoreLocationMap[op];
     for (auto succOp : successors) {
         if (opIsRetiredMap[succOp]) {
             continue;
@@ -458,7 +509,44 @@ Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
             }
         }
         if (ready) {
-            issueQueues[coreLocation][opPipeTypeMap[succOp]].Insert(succOp);
+            // 路由到 succOp 自己所在 core 的队列 (而非前驱的 core)。
+            // 对单核前驱场景行为不变;对 dualdst (跨核前驱) 的场景避免 succOp 同时进入多个核的队列。
+            auto& q = issueQueues[opCoreLocationMap[succOp]][opPipeTypeMap[succOp]];
+            // 三层去重防止 dualdst 跨核前驱 / 跨阶段 wake 导致重复 launch:
+            //   (1) 已 issue 过 (在 newOperations_ 里);(2) 已在队列;(3) 正在某 pipe 执行 (curIssue)。
+            //
+            // TODO(dualdst-wake-root-cause): 三层去重是 dualdst 跨核 wake 的 workaround,
+            // 根因是 dualdst fused op 的两个 ub output 各自有 consumer 落在 AIV0 与 AIV1,
+            // RetireOpAndAwakeSucc 遍历到任一 output 的 successor 都会触发同一 succOp 的
+            // wake; 当前用线性 std::find 兜底, 在 newOperations_ / q.queue 较长时是 O(N)
+            // 性能退化点, 同时同核 chain 内部 wake 也走这条路径, 在 cycle 时序敏感场景下
+            // (如 currentlyRunning 检查) 可能误杀同核二级 vec op 的 wake (chained_ops 偶发
+            // out0 全零的实测现象与此一致)。
+            //
+            // 根因修复方向 (任选一条, 不另外开 issue 跟踪, 由本 TODO 关联):
+            //   1) 让 dualdst fused op 在 RewireEdgesForFusedOp 阶段就把两个 output 的
+            //      consumer 集合并到同一逻辑 succ 集合, RetireOpAndAwakeSucc 遍历时
+            //      自然只触发一次 wake (彻底消除"跨核重复 wake"的可能);
+            //   2) 引入 succOp 的 inQueue 位标记 (放在 opIsRetiredMap / opIsAllocMap 同
+            //      层的 unordered_map<Operation*, bool>), O(1) 替换三处 std::find;
+            //   3) 把 dedup 收窄到"opCoreLocationMap[op] != opCoreLocationMap[succOp]"
+            //      的跨核 wake 路径, 同核 chain 内部 wake 直接 Insert (test_dual_dst_chained_ops
+            //      flaky 在此分支下应稳定通过)。
+            // 修复任一条后, 本三层 dedup 可整段删除。
+            bool alreadyIssued =
+                std::find(newOperations_.begin(), newOperations_.end(), succOp) != newOperations_.end();
+            bool alreadyInQueue = std::find(q.queue.begin(), q.queue.end(), succOp) != q.queue.end();
+            bool currentlyRunning = false;
+            for (auto& [pipeType, pipe] : issueQueues[opCoreLocationMap[succOp]]) {
+                (void)pipeType;
+                if (pipe.busy && pipe.curIssue == succOp) {
+                    currentlyRunning = true;
+                    break;
+                }
+            }
+            if (!alreadyIssued && !alreadyInQueue && !currentlyRunning) {
+                q.Insert(succOp);
+            }
             APASS_LOG_DEBUG_F(Elements::Operation, "    Wakeup: %s, execOrder: %d",
                 GetOpInfo(succOp).c_str(), opExecOrderMap[succOp]);
         }
@@ -563,14 +651,14 @@ Status OoOScheduler::RetireIssue(Operation* op)
             return FAILED;
         }
         if (bufRefCount_[memId] == 0) {
-            // 加载时的核信息
-            auto coreLocation = opCoreLocationMap[tensorAllocMap[memId]];
+            CoreLocationType coreLocation = ResolveCoreForFree(memId);
             auto memType = localBufferMap_[memId]->memType;
             if (bufferManagerMap[coreLocation][memType].Free(localBufferMap_[memId]->id) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor[%d] failed.", memId);
                 return FAILED;
             }
             tensorOccupyMap.erase(memId);
+            dualDstMemIdCoreOverride_.erase(memId);   // 同 FreeBuffer: free 后清理映射
         }
     }
     return SUCCESS;
@@ -584,17 +672,44 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t &pcIdx)
     }
     LocalBufferPtr allocBuffer = localBufferMap_[GetOpMemIds(op)[0]];
     auto coreLocation = opCoreLocationMap[op];
-    if (bufferManagerMap[coreLocation][allocBuffer->memType].IsFull(allocBuffer, false)) {
+    const bool isDualDst = (allocBuffer->memType == MemoryType::MEM_UB) && IsDualDstAlloc(op);
+
+    // === Alloc 试一发 (dualdst 双池同址 / 单池常规) ===
+    bool needSpill = false;
+    if (isDualDst) {
+        bool allocated = false;
+        if (AllocateDualDstAtCurrent(op, allocated) != SUCCESS) return FAILED;
+        if (allocated) return SUCCESS;
+        needSpill = true;   // dualdst 同址失败,落到共用 spill 流程
+    } else {
+        needSpill = bufferManagerMap[coreLocation][allocBuffer->memType].IsFull(allocBuffer, false);
+    }
+
+    // === Spill (单池 / dualdst 共用 GenBufferSpill, 决策分叉在 SelectSpillBuffers 内) ===
+    if (needSpill) {
         SpillContext ctx;
         if (GenBufferSpill(op, ctx) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s", GetFormatBacktrace(*orderedOps[pcIdx]).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "GenBufferSpill failed at ExecuteAllocIssue. %s",
+                GetFormatBacktrace(*orderedOps[pcIdx]).c_str());
             return FAILED;
         }
         pcIdx += ctx.newCopyoutOps.size() - ctx.deleteRetiredOpSize;
     }
-    if (bufferManagerMap[coreLocation][allocBuffer->memType].Allocate(allocBuffer) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Allocate tensor[%d] failed.", allocBuffer->id);
-        return FAILED;
+
+    // === 最终 alloc (dualdst 走双池同址 retry, 单池走 BufferPool::Allocate) ===
+    if (isDualDst) {
+        bool allocated = false;
+        if (AllocateDualDstAtCurrent(op, allocated) != SUCCESS) return FAILED;
+        if (!allocated) {
+            APASS_LOG_ERROR_F(Elements::Operation,
+                "DualDst alloc still infeasible after spill. %s", GetFormatBacktrace(*op).c_str());
+            return FAILED;
+        }
+    } else {
+        if (bufferManagerMap[coreLocation][allocBuffer->memType].Allocate(allocBuffer) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Allocate tensor[%d] failed.", allocBuffer->id);
+            return FAILED;
+        }
     }
     return SUCCESS;
 }
@@ -909,6 +1024,11 @@ Status OoOScheduler::Schedule(
         return FAILED;
     }
     AllocWorkspaceGM(opList);
+    // DualDst 融合(开关关闭 / 非 Mix 路径会内部直接返回)
+    if (RunDualDstFuse() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "RunDualDstFuse failed!");
+        return FAILED;
+    }
     // Must run after AllocWorkspaceGM and before any OP_LAUNCH (ddrKindMap_ classifies ddrRefs).
     NotifyInitDDRBuffers();
     // 生成spill指令（顺序模拟阶段）

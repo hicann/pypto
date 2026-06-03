@@ -23,6 +23,11 @@
 
 namespace npu::tile_fwk {
 
+// TODO(dualdst-switch): 临时开关。后续接入 PassConfigs.enable_dual_dst (需要修改
+// framework/src/interface/configs/* 下的文件)再删掉这一行,改读 passDfxconfigs_。
+// 当前调试时手动改成 true 即可启用 dualdst 融合;Mix 路径才生效。
+static constexpr bool kTempEnableDualDst = false;
+
 bool OoOSchedule::IsAicpuProgram(std::vector<Operation*> opList)
 {
     for (auto& op : opList) {
@@ -93,6 +98,8 @@ Status OoOSchedule::NonMixSchedule(
         return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
+    // dualdst fuse 在 FuseDualDstPairs 内部以 EraseOperations(false, true) 刷新 opPosition_,
+    // 因此这里走默认 needRefresh=false 即可。
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);
@@ -215,6 +222,7 @@ Status OoOSchedule::MixSchedule(
         return FAILED;
     }
     OoOScheduler oooSchedule(*program.second);
+    oooSchedule.SetEnableDualDst(kTempEnableDualDst);
     OoOScheduleStatistic oooHealthCheck;
     MemoryTracer oooMemoryTrace;
     if (passDfxconfigs_.healthCheck) {
@@ -235,6 +243,8 @@ Status OoOSchedule::MixSchedule(
         CollectMemoryTrace(oooMemoryTrace, function, program);
     }
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
+    // dualdst fuse 在 FuseDualDstPairs 内部以 EraseOperations(false, true) 刷新 opPosition_,
+    // 因此这里走默认 needRefresh=false 即可。
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);

@@ -91,9 +91,8 @@ size_t BufferPool::UpdateIdx(
     return j;
 }
 
-std::vector<std::vector<int>> BufferPool::GetSpillGroup(size_t sizeNeedSpill)
+std::vector<std::tuple<int, size_t, size_t>> BufferPool::GetSortedAllocatedBufs()
 {
-    std::vector<std::vector<int>> canSpillGroups;
     std::vector<std::tuple<int, size_t, size_t>> allocatedBufs;
     for (auto& [memId, bufferSlice] : bufferSlices) {
         allocatedBufs.push_back(std::make_tuple(memId, bufferSlice.offset, bufferSlice.offset + bufferSlice.size));
@@ -103,6 +102,13 @@ std::vector<std::vector<int>> BufferPool::GetSpillGroup(size_t sizeNeedSpill)
         [&](std::tuple<int, size_t, size_t>& a, std::tuple<int, size_t, size_t>& b) {
             return std::get<1>(a) < std::get<1>(b);
         });
+    return allocatedBufs;
+}
+
+std::vector<std::vector<int>> BufferPool::GetSpillGroup(size_t sizeNeedSpill)
+{
+    std::vector<std::vector<int>> canSpillGroups;
+    auto allocatedBufs = GetSortedAllocatedBufs();
     size_t i = 0;
     while (i < allocatedBufs.size()) {
         size_t startAddr = ObtainStartAddr(i, allocatedBufs);
@@ -420,4 +426,67 @@ void BufferPool::PrintStatus()
             Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu", lastEnd, memSize_, memSize_ - lastEnd);
     }
 }
+
+// === DualDst 扩展 ===
+// 把 FindFreeIntervals 返回的 size -> {start,end} 桶状 map 扁平化成
+// 按 start 升序的 [start, end) 列表。OoOScheduler::FindCommonFreeOffset 在两池列表上
+// 归并求交集;原 BufferPool::FindCommonFreeOffset (跨池决策) 已上提至 OoOScheduler。
+std::vector<std::pair<uint64_t, uint64_t>> BufferPool::GetSortedFreeIntervals()
+{
+    auto freeMap = FindFreeIntervals();
+    std::vector<std::pair<uint64_t, uint64_t>> v;
+    for (auto& [sz, ranges] : freeMap) {
+        (void)sz;
+        for (auto& kv : ranges) {
+            v.emplace_back(kv.first, kv.second);
+        }
+    }
+    std::sort(v.begin(), v.end(),
+        [](const std::pair<uint64_t, uint64_t>& a, const std::pair<uint64_t, uint64_t>& b) {
+            return a.first < b.first;
+        });
+    return v;
+}
+
+Status BufferPool::AllocateAtOffset(LocalBufferPtr tensor, uint64_t offset)
+{
+    if (tensor == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "AllocateAtOffset: null tensor");
+        return FAILED;
+    }
+    if (offset + tensor->size > memSize_) {
+        APASS_LOG_ERROR_F(
+            Elements::Tensor, "AllocateAtOffset: Tensor[%d] (offset %lu, size %lu) exceeds pool size %lu.",
+            tensor->id, offset, tensor->size, memSize_);
+        return FAILED;
+    }
+    if (bufferSlices.find(tensor->id) != bufferSlices.end()) {
+        APASS_LOG_ERROR_F(
+            Elements::Tensor, "AllocateAtOffset: Tensor[%d] already allocated.", tensor->id);
+        return FAILED;
+    }
+    // 先保存 start/end 旧值, 用于 overlap 检查失败时回滚, 避免 tensor 处于
+    // "已修改 start/end 但未实际占位" 的不一致状态。
+    const uint64_t savedStart = tensor->start;
+    const uint64_t savedEnd = tensor->end;
+
+    BufferSlice ns(offset, tensor->size);
+    bufferSlices[tensor->id] = ns;
+    tensor->start = offset;
+    tensor->end = offset + tensor->size;
+    if (CheckBufferSlicesOverlap()) {
+        APASS_LOG_WARN_F(
+            Elements::Tensor, "AllocateAtOffset: Tensor[%d] at offset %lu overlaps existing slices.",
+            tensor->id, offset);
+        bufferSlices.erase(tensor->id);
+        tensor->start = savedStart;
+        tensor->end = savedEnd;
+        return FAILED;
+    }
+    APASS_LOG_DEBUG_F(
+        Elements::Tensor, " AllocateAtOffset Tensor[%d], range [%lu, %lu].", tensor->id, offset,
+        offset + tensor->size);
+    return SUCCESS;
+}
+
 } // namespace npu::tile_fwk

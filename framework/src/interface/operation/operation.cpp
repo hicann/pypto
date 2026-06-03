@@ -104,6 +104,7 @@ const std::string OpAttributeKey::mxQuantMode = "op_attr_mx_quant_mode";
 const std::string OpAttributeKey::mxQuantAxis = "op_attr_mx_quant_axis";
 const std::string OpAttributeKey::mxQuantPerformanceMode = "op_attr_mx_quant_performance_mode";
 const std::string OpAttributeKey::gmTensorParamIdxInCall = "gm_tensor_param_idx_in_call";
+const std::string OpAttributeKey::staticValidShape = "op_attr_static_valid_shape";
 const std::string OpAttributeKey::l1ReuseHashOrder = "l1_reuse_hashOrder";
 const std::string OpAttributeKey::l1ReuseSubgraphCount = "l1_reuse_subgraphCount";
 const std::string OpAttributeKey::cubeMergeHashOrder = "cube_merge_hashOrder";

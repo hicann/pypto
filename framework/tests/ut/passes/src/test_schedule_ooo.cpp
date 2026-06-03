@@ -29,6 +29,7 @@
 #include "passes/block_graph_pass/schedule_ooo/core_assign.h"
 #include "passes/block_graph_pass/schedule_ooo/buffer_rearrange.h"
 #include "passes/block_graph_pass/schedule_ooo/memory_aware_topo_sort.h"
+#include "passes/tile_graph_pass/graph_constraint/infer_dyn_shape.h"
 #include "operator/models/deepseek/deepseek_mla.h"
 #include "computational_graph_builder.h"
 
@@ -3450,5 +3451,736 @@ TEST_F(MemoryAwareSortTest, TestNoAllocAfterAnyConsumer)
             }
         }
     }
+}
+
+// ============================================================================
+// === DualDst 融合 / staticValidShape 快照 / core_assign DualDstProcess UT ===
+// ============================================================================
+//
+// 涉及源文件:
+//   passes/block_graph_pass/schedule_ooo/dualdst_fuse.cpp
+//   passes/block_graph_pass/schedule_ooo/core_assign.cpp  (HasSameValidShape2D /
+//                                                           DualDstProcess /
+//                                                           TryGetStaticValidShapeFromProducer)
+//   passes/tile_graph_pass/graph_constraint/infer_dyn_shape.cpp
+//                                                          (RecordStaticValidShapeOnL0CCopyUB)
+//
+// 目标: 通过公共/可见 (本文件 #define private public) 入口尽可能驱动覆盖:
+//   - DualDstFuse: RunDualDstFuse / IdentifyDualDstPairs / FuseDualDstPairs / 阶段 2 子步骤
+//                  / IsDualDstAlloc / GetDualDstCopyOpFor / GetDualDstPairedMemId
+//                  / AllocateDualDstAtCurrent / ResolveDualDstAllocCtx / CommitDualDstAlloc
+//                  + 匿名 ns 下的 DynShapeEq / ReadGeometry / LoadGeometries /
+//                    ConsumerCore / BuildAdjacencyCandidates / GreedyNonOverlapPick /
+//                    PickAllocOrder / FindAllocPred (经入口路径触达)
+//   - InferDynShape: RecordStaticValidShapeOnL0CCopyUB (含 dyn 跳过分支)
+//   - core_assign:   HasSameValidShape2D / TryGetStaticValidShapeFromProducer
+//                    (经 DualDstProcess 整体路径触达)
+namespace dualdst_ut {
+
+constexpr int64_t TILE_M = 64;
+constexpr int64_t TILE_N = 64;
+// 每个 dualdst UT 自己的小 UB pool, 便于 AllocateDualDstAtCurrent 测试。
+constexpr size_t SMALL_UB_POOL = 8 * 1024;
+
+// --- 形态构造工具 -----------------------------------------------------------
+
+// 给 OP_L0C_COPY_UB 类拷贝 op 设置 CopyOpAttribute (fromOff = src L0C 偏移,
+// shape = 实际搬运 tile shape)。dualdst identify 阶段读这两项做相邻 + tile 校验。
+void SetCopyL0cToUbAttr(Operation& op, const std::vector<int64_t>& fromOff,
+                        const std::vector<int64_t>& tileShape)
+{
+    auto fromOffImme = OpImmediate::Specified(fromOff);
+    auto shapeImme = OpImmediate::Specified(tileShape);
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        fromOffImme, MemoryType::MEM_UB, shapeImme, shapeImme));
+}
+
+// 把 vector<int64_t> 当 staticValidShape 写到 op 属性, 模拟 InferDynShape 阶段
+// RecordStaticValidShapeOnL0CCopyUB 的快照效果。
+void InjectStaticValidShape(Operation& op, const std::vector<int64_t>& vals)
+{
+    op.SetAttribute(OpAttributeKey::staticValidShape, vals);
+}
+
+// dualdst UT 通用图: 单 L0C tensor + 两条 OP_L0C_COPY_UB + 各自下游 Add(ub→out)。
+// fromOff0 / fromOff1 控制 SplitM 还是 SplitN 候选 (相邻 = tile 尺寸差)。
+struct DualDstGraph {
+    std::shared_ptr<ComputationalGraphBuilder> builder;
+    Function* func{nullptr};
+    Operation* allocL0c{nullptr};
+    Operation* allocUb0{nullptr};
+    Operation* allocUb1{nullptr};
+    Operation* allocOut0{nullptr};
+    Operation* allocOut1{nullptr};
+    Operation* copy0{nullptr};   // L0C -> ub0
+    Operation* copy1{nullptr};   // L0C -> ub1
+    Operation* add0{nullptr};    // ub0 -> out0  (consumer => AIV0)
+    Operation* add1{nullptr};    // ub1 -> out1  (consumer => AIV1)
+};
+
+// l0cShape: t_l0c 的 shape; tileShape: copy 的 tile shape (== ub shape);
+// fromOff0/1: 两 copy 的 src 偏移。
+DualDstGraph BuildDualDstGraph(const std::vector<int64_t>& l0cShape,
+                               const std::vector<int64_t>& tileShape,
+                               const std::vector<int64_t>& fromOff0,
+                               const std::vector<int64_t>& fromOff1)
+{
+    DualDstGraph g;
+    g.builder = std::make_shared<ComputationalGraphBuilder>();
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, l0cShape, MemoryType::MEM_L0C, "t_l0c"), true);
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_ub0"), true);
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_ub1"), true);
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_out0"), true);
+    EXPECT_EQ(g.builder->AddTensor(DataType::DT_FP32, tileShape, MemoryType::MEM_UB, "t_out1"), true);
+
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_ALLOC, {}, {"t_l0c"}, "alloc_l0c"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_ub0"}, "alloc_ub0"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_ub1"}, "alloc_ub1"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_out0"}, "alloc_out0"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_UB_ALLOC, {}, {"t_out1"}, "alloc_out1"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub0"}, "copy0"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_L0C_COPY_UB, {"t_l0c"}, {"t_ub1"}, "copy1"), true);
+    // OP_ADD 是 binary, 需要 2 个输入; 给同一 tensor 两次, consumers_ set 去重后
+    // ub0/ub1 的 consumer 仍只各 1 个 add op (满足 dualdst identify ConsumerCore 逻辑)。
+    // 这样能让 BinaryBrcinlineInferFunc 在 InferShape 路径下不越界访问 [1] 而段错。
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_ADD, {"t_ub0", "t_ub0"}, {"t_out0"}, "add0"), true);
+    EXPECT_EQ(g.builder->AddOp(Opcode::OP_ADD, {"t_ub1", "t_ub1"}, {"t_out1"}, "add1"), true);
+
+    g.func = g.builder->GetFunction();
+    g.allocL0c  = g.builder->GetOp("alloc_l0c");
+    g.allocUb0  = g.builder->GetOp("alloc_ub0");
+    g.allocUb1  = g.builder->GetOp("alloc_ub1");
+    g.allocOut0 = g.builder->GetOp("alloc_out0");
+    g.allocOut1 = g.builder->GetOp("alloc_out1");
+    g.copy0     = g.builder->GetOp("copy0");
+    g.copy1     = g.builder->GetOp("copy1");
+    g.add0      = g.builder->GetOp("add0");
+    g.add1      = g.builder->GetOp("add1");
+
+    SetCopyL0cToUbAttr(*g.copy0, fromOff0, tileShape);
+    SetCopyL0cToUbAttr(*g.copy1, fromOff1, tileShape);
+    return g;
+}
+
+// 给 OoOScheduler 预填 opCoreLocationMap:
+//   - add0->AIV0 / add1->AIV1, 让 dualdst identify 阶段的 ConsumerCore 校验过
+//     split (AIV0 + AIV1)。
+//   - dualdst ResolveDualDstAllocCtx 现已改用 "从 dual_dst op 的 ub output tensor 的
+//     consumer (add op) 反推 core", 不再依赖 tensorAllocCoreMap (该成员已随主线移除),
+//     所以只要 add0/add1 的 opCoreLocationMap 正确就足够。
+void InjectCoreMap(OoOScheduler& s, const DualDstGraph& g, bool sameCoreForAdds = false)
+{
+    s.opCoreLocationMap[g.copy0]  = CoreLocationType::AIC;
+    s.opCoreLocationMap[g.copy1]  = CoreLocationType::AIC;
+    s.opCoreLocationMap[g.add0]   = CoreLocationType::AIV0;
+    s.opCoreLocationMap[g.add1]   = sameCoreForAdds ? CoreLocationType::AIV0 : CoreLocationType::AIV1;
+    s.opCoreLocationMap[g.allocL0c]  = CoreLocationType::AIC;
+    s.opCoreLocationMap[g.allocUb0]  = CoreLocationType::AIV0;
+    s.opCoreLocationMap[g.allocUb1]  = CoreLocationType::AIV1;
+    s.opCoreLocationMap[g.allocOut0] = CoreLocationType::AIV0;
+    s.opCoreLocationMap[g.allocOut1] = CoreLocationType::AIV1;
+}
+
+} // namespace dualdst_ut
+
+// --- DynShapeEq 三条分支 (经 IdentifyDualDstPairs 间接驱动) -----------------
+// dump 严格相等 / concrete 数值相等 / 不等 -> identify 命中 vs miss
+TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpEqual_HitsIdentify)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        /*l0cShape*/  {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        /*tileShape*/ {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        /*fromOff0*/  {0, 0},
+        /*fromOff1*/  {0, dualdst_ut::TILE_N});
+    // 两侧 dyn validShape 都是 {S0, S1}, dump 字符串严格相等 -> DynShapeEq 走分支(1)
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("S0"), SymbolicScalar("S1")});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("S0"), SymbolicScalar("S1")});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 1u);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_ConcreteEqualButDifferentDump_StillHits)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    // 给两侧不同符号名但 concrete 数值相等的 SymbolicScalar -> 走分支(2)
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("a", dualdst_ut::TILE_M), SymbolicScalar("b", dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("c", dualdst_ut::TILE_M), SymbolicScalar("d", dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 1u);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_DynShapeEq_DumpDifferAndNoConcrete_NoPair)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    // 不同符号且无 concrete -> 走分支(3) 返回 false -> identify 0 pair
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("X0"), SymbolicScalar("X1")});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("Y0"), SymbolicScalar("Y1")});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 0u);
+}
+
+// --- ReadGeometry: staticValidShape 优先 + dyn fallback ---------------------
+// op 带 staticValidShape 属性, identify 应走属性路径 (覆盖 ReadGeometry 分支 1)
+TEST_F(ScheduleOoOTest, DualDst_ReadGeometry_PrefersStaticValidShape)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    // 故意把 dyn validShape 设成不同 dump、无 concrete: 若 ReadGeometry 错走 dyn
+    // 路径会判 false; 但我们注入了 staticValidShape -> 必须命中 (返回 1 对)。
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("X0"), SymbolicScalar("X1")});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("Y0"), SymbolicScalar("Y1")});
+    dualdst_ut::InjectStaticValidShape(*g.copy0, {dualdst_ut::TILE_M, dualdst_ut::TILE_N});
+    dualdst_ut::InjectStaticValidShape(*g.copy1, {dualdst_ut::TILE_M, dualdst_ut::TILE_N});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 1u);
+}
+
+// --- IdentifyDualDstPairs: SplitN 命中路径 (基本) ----------------------------
+TEST_F(ScheduleOoOTest, DualDst_Identify_SplitN_HappyPath)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    ASSERT_EQ(pairs.size(), 1u);
+    // SplitN: opEarly fromN 较小, 应是 copy0
+    EXPECT_EQ(pairs[0].opEarly, g.copy0);
+    EXPECT_EQ(pairs[0].opLate,  g.copy1);
+    EXPECT_NE(pairs[0].allocEarly, nullptr);
+    EXPECT_NE(pairs[0].allocLate,  nullptr);
+}
+
+// --- IdentifyDualDstPairs: SplitM 命中 ---------------------------------------
+TEST_F(ScheduleOoOTest, DualDst_Identify_SplitM_HappyPath)
+{
+    // M-axis adjacent: l0cShape M = 2*TILE_M; fromOff 沿 M 轴相差 TILE_M
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M * 2, dualdst_ut::TILE_N},
+        {dualdst_ut::TILE_M,     dualdst_ut::TILE_N},
+        {0, 0}, {dualdst_ut::TILE_M, 0});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    ASSERT_EQ(pairs.size(), 1u);
+    EXPECT_EQ(pairs[0].opEarly, g.copy0);   // fromM 0 < TILE_M
+    EXPECT_EQ(pairs[0].opLate,  g.copy1);
+    // SplitM 方向命中后 dualDstL0CDirection_ 应为 0
+    auto l0c = g.copy0->GetInputOperand(0);
+    EXPECT_EQ(s.dualDstL0CDirection_.count(l0c), 1u);
+    EXPECT_EQ(s.dualDstL0CDirection_[l0c], 0);
+}
+
+// --- IdentifyDualDstPairs: 不相邻 / 不同 core / shape 不一致 -> 0 pair ------
+TEST_F(ScheduleOoOTest, DualDst_Identify_NotAdjacent_NoPair)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 4},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N * 2});   // gap = 2*TILE_N, 不相邻
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 0u);
+}
+
+TEST_F(ScheduleOoOTest, DualDst_Identify_SameConsumerCore_NoPair)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g, /*sameCoreForAdds=*/true);  // both consumers AIV0
+
+    std::vector<DualDstPair> pairs;
+    EXPECT_EQ(s.IdentifyDualDstPairs(pairs), SUCCESS);
+    EXPECT_EQ(pairs.size(), 0u);
+}
+
+// --- RunDualDstFuse 三个出口分支 ---------------------------------------------
+// 分支 1: enableDualDst_ false -> 直接 SUCCESS, 不动图
+TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_DisabledIsNoOp)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    s.enableDualDst_ = false;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+}
+
+// 分支 2: 只有 AIV0 (HARDWARE_ONE) -> RunDualDstFuse 早返
+TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_SingleAivPoolEarlyExit)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_ONE), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    s.enableDualDst_ = true;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+}
+
+// 分支 3: 真的 fuse: 图实际被改 (旧 op SetAsDeleted -> EraseOperations(false, true) 生效)。
+// 不再校验外部 mutated 标志位 (该 flag 已随 EraseOperations 第二参 true 同步刷新 opPosition_
+// 一并删除), 改为直接对比 operations_.size() 变化。
+TEST_F(ScheduleOoOTest, DualDst_RunDualDstFuse_ActuallyFusesAndMutatesFunction)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+
+    size_t opsBefore = g.func->Operations().size();
+    s.enableDualDst_ = true;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+
+    // EraseOperations(false, true) 移除了 copy0 / copy1 / 一个被剔的 alloc,
+    // 新增 1 个 OP_L0C_COPY_UB_DUAL_DST -> 净减 2 个 op
+    size_t opsAfter = g.func->Operations().size();
+    EXPECT_EQ(opsBefore, opsAfter + 2);
+
+    // 至少有一个 OP_L0C_COPY_UB_DUAL_DST 出现
+    bool hasFused = false;
+    for (auto& op : g.func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { hasFused = true; break; }
+    }
+    EXPECT_TRUE(hasFused);
+}
+
+// --- IsDualDstAlloc / GetDualDstCopyOpFor / GetDualDstPairedMemId ----------
+// fuse 后保留下来的那条 alloc 应被识别成 dualdst alloc, 并能反查 dual op + paired memId
+TEST_F(ScheduleOoOTest, DualDst_AllocQueryHelpers_AfterFuse)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.enableDualDst_ = true;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+
+    // 找到 fuse 出来的 dualdst op 和它依赖的 (唯一保留) UB alloc
+    Operation* dual = nullptr;
+    for (auto& op : g.func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { dual = &op; break; }
+    }
+    ASSERT_NE(dual, nullptr);
+
+    Operation* survivingUbAlloc = nullptr;
+    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+        if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
+            survivingUbAlloc = pred;
+            break;
+        }
+    }
+    ASSERT_NE(survivingUbAlloc, nullptr);
+
+    EXPECT_TRUE(s.IsDualDstAlloc(survivingUbAlloc));
+    EXPECT_EQ(s.GetDualDstCopyOpFor(survivingUbAlloc), dual);
+    int paired = s.GetDualDstPairedMemId(survivingUbAlloc);
+    EXPECT_NE(paired, -1);
+    EXPECT_NE(paired, survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId);
+
+    // 非 dualdst alloc 应返回 false / nullptr / -1
+    EXPECT_FALSE(s.IsDualDstAlloc(g.allocL0c));
+    EXPECT_EQ(s.GetDualDstCopyOpFor(g.allocL0c), nullptr);
+    EXPECT_EQ(s.GetDualDstPairedMemId(nullptr), -1);
+}
+
+// --- AllocateDualDstAtCurrent: ResolveCtx + Commit 成功路径 ----------------
+// (Full 分支由 OoOScheduler::FindCommonFreeOffset 返回 nullopt 触发, 单测构造代价
+//  较大, 通过 spill 路径集成测试覆盖; 这里只验证 happy path 与 ResolveCtx OK。)
+TEST_F(ScheduleOoOTest, DualDst_AllocateDualDstAtCurrent_HappyPath)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.enableDualDst_ = true;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+
+    Operation* dual = nullptr;
+    for (auto& op : g.func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { dual = &op; break; }
+    }
+    ASSERT_NE(dual, nullptr);
+    Operation* survivingUbAlloc = nullptr;
+    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+        if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
+            survivingUbAlloc = pred;
+            break;
+        }
+    }
+    ASSERT_NE(survivingUbAlloc, nullptr);
+
+    int memIdA = survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId;
+    int memIdB = s.GetDualDstPairedMemId(survivingUbAlloc);
+    ASSERT_NE(s.localBufferMap_.find(memIdA), s.localBufferMap_.end());
+    ASSERT_NE(s.localBufferMap_.find(memIdB), s.localBufferMap_.end());
+
+    bool allocated = false;
+    EXPECT_EQ(s.AllocateDualDstAtCurrent(survivingUbAlloc, allocated), SUCCESS);
+    EXPECT_TRUE(allocated);
+}
+
+// --- SelectSpillBuffers + GetDualSpillGroup: dualdst 分支专项 ---------------
+// 归一改造后, SelectSpillBuffers 内按 IsDualDstAlloc 分叉:
+//   dualdst -> OoOScheduler::GetDualSpillGroup(poolA, poolB, need)
+//              内部嵌套两次单池滑窗, 匹配条件: 两侧 startAddr (freed segment 起点) 一致
+//              -> 返回 vector<combined memIds>, 前半来自 poolA、后半来自 poolB
+//   单池   -> OoOScheduler::GetSpillGroup(pool, need) (薄壳, 委托 pool.GetSpillGroup)
+// 选不出候选时 (canSpillGroups 空 或 GetGroupNextUseTime 全失败) -> 兜底返回 spill-all 列表:
+//   dualdst: 两池 GetAddrSortedBufs() 之并集
+//   单池  : 单池 GetAddrSortedBufs()
+// spill 执行段 (GenBufferSpill 内的 SpillBuffer 循环) 与单池路径共用,
+// 不在本 UT 覆盖, 由 ST/集成测试 (test_dualdst.py) 验证。
+
+// Positive: 两池 offset 0 各预填同 size 占位 buf -> GetDualSpillGroup 命中
+//          (startAddrA == startAddrB == 0) -> canSpillGroups 非空, GetGroupNextUseTime
+//          因 placeholder 未绑 alloc op 全部失败 -> 走 spill-all 兜底,
+//          返回两池 sortedBufs 并集 (含两个 placeholder memId)。
+TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_PicksMatchingGroupAcrossAivPools)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.enableDualDst_ = true;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+
+    Operation* dual = nullptr;
+    for (auto& op : g.func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { dual = &op; break; }
+    }
+    ASSERT_NE(dual, nullptr);
+    Operation* survivingUbAlloc = nullptr;
+    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+        if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
+            survivingUbAlloc = pred;
+            break;
+        }
+    }
+    ASSERT_NE(survivingUbAlloc, nullptr);
+    ASSERT_TRUE(s.IsDualDstAlloc(survivingUbAlloc));
+
+    int memIdA = survivingUbAlloc->GetOutputOperand(0)->memoryrange.memId;
+    ASSERT_NE(s.localBufferMap_.find(memIdA), s.localBufferMap_.end());
+    size_t needSize = s.localBufferMap_[memIdA]->size;
+
+    // 在 AIV0 / AIV1 两池 offset 0 各放一个占位 buf, size = needSize
+    // -> spill 后 freedRange = [0, poolMem) 双侧完全一致
+    auto& poolA = s.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+    ASSERT_GE(poolA.GetMemSize(), needSize);
+    ASSERT_GE(poolB.GetMemSize(), needSize);
+
+    constexpr int kPlaceholderMemIdA = 90001;   // 跨 core 全局唯一 (不与 graph builder 冲突)
+    constexpr int kPlaceholderMemIdB = 90002;
+    auto bufHolderA = std::make_shared<LocalBuffer>(kPlaceholderMemIdA, needSize, MemoryType::MEM_UB);
+    auto bufHolderB = std::make_shared<LocalBuffer>(kPlaceholderMemIdB, needSize, MemoryType::MEM_UB);
+    ASSERT_EQ(poolA.AllocateAtOffset(bufHolderA, 0), SUCCESS);
+    ASSERT_EQ(poolB.AllocateAtOffset(bufHolderB, 0), SUCCESS);
+
+    // 直接调 SelectSpillBuffers 验证 dualdst 选组分支
+    auto spillGroup = s.SelectSpillBuffers(survivingUbAlloc);
+
+    // 期待: 双池各贡献 1 个 placeholder memId, 合计 2 个
+    ASSERT_EQ(spillGroup.size(), 2u);
+    EXPECT_NE(std::find(spillGroup.begin(), spillGroup.end(), kPlaceholderMemIdA), spillGroup.end());
+    EXPECT_NE(std::find(spillGroup.begin(), spillGroup.end(), kPlaceholderMemIdB), spillGroup.end());
+}
+
+// Negative: 两池都为空 (无可 spill 候选) -> GetDualSpillGroup 返回空 -> spill-all
+//          兜底两池 sortedBufs 也为空 -> 最终返回空 vector
+TEST_F(ScheduleOoOTest, DualDst_SelectSpillBuffers_EmptyPoolsReturnEmpty)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+    dualdst_ut::InjectCoreMap(s, g);
+    s.enableDualDst_ = true;
+    EXPECT_EQ(s.RunDualDstFuse(), SUCCESS);
+
+    Operation* dual = nullptr;
+    for (auto& op : g.func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB_DUAL_DST) { dual = &op; break; }
+    }
+    ASSERT_NE(dual, nullptr);
+    Operation* survivingUbAlloc = nullptr;
+    for (auto* pred : s.depManager_.GetPredecessors(dual)) {
+        if (pred != nullptr && pred->GetOpcodeStr().find("UB_ALLOC") != std::string::npos) {
+            survivingUbAlloc = pred;
+            break;
+        }
+    }
+    ASSERT_NE(survivingUbAlloc, nullptr);
+    ASSERT_TRUE(s.IsDualDstAlloc(survivingUbAlloc));
+
+    // 不预填任何占位 buf -> AIV0/AIV1 两池 allocatedBufs 都空
+    // -> GetSpillGroup 返回空 -> SelectSpillBuffers 返回空
+    auto spillGroup = s.SelectSpillBuffers(survivingUbAlloc);
+    EXPECT_TRUE(spillGroup.empty());
+}
+
+// --- GetDualSpillGroup 专项 UT (绕过 SelectSpillBuffers 直接验证 helper) -----
+
+// Positive: 两池各预填一个 buf at offset 0
+//   外层 iA=0: startAddrA=0, jA=1, window={bufA}
+//   内层 iB=0: startAddrB=0 (== startAddrA), jB=1, window={bufB}
+//   -> 输出一个组 [bufA_memId, bufB_memId]
+TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_FindsSharedStartAddrCandidate)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+
+    auto& poolA = s.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+
+    constexpr int kBufMemIdA = 80001;
+    constexpr int kBufMemIdB = 80002;
+    constexpr size_t kBufSize = 1024;
+    constexpr size_t kNeedSize = 512;   // 小于 kBufSize, spill 后能腾出足够空闲段
+    ASSERT_GE(poolA.GetMemSize(), kBufSize);
+    ASSERT_GE(poolB.GetMemSize(), kBufSize);
+
+    auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, kBufSize, MemoryType::MEM_UB);
+    auto bufB = std::make_shared<LocalBuffer>(kBufMemIdB, kBufSize, MemoryType::MEM_UB);
+    ASSERT_EQ(poolA.AllocateAtOffset(bufA, 0), SUCCESS);
+    ASSERT_EQ(poolB.AllocateAtOffset(bufB, 0), SUCCESS);
+
+    auto groups = s.GetDualSpillGroup(poolA, poolB, kNeedSize);
+    ASSERT_EQ(groups.size(), 1u);
+    ASSERT_EQ(groups[0].size(), 2u);
+    EXPECT_NE(std::find(groups[0].begin(), groups[0].end(), kBufMemIdA), groups[0].end());
+    EXPECT_NE(std::find(groups[0].begin(), groups[0].end(), kBufMemIdB), groups[0].end());
+}
+
+// Negative: sizeNeedSpill > poolMem -> 外层 iA=0 进入即触发
+//   `(poolA.GetMemSize() - 0) < sizeNeedSpill` break -> 返回空 vector
+TEST_F(ScheduleOoOTest, DualDst_GetDualSpillGroup_NeedSizeExceedsPoolReturnsEmpty)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+
+    auto& poolA = s.bufferManagerMap[CoreLocationType::AIV0][MemoryType::MEM_UB];
+    auto& poolB = s.bufferManagerMap[CoreLocationType::AIV1][MemoryType::MEM_UB];
+
+    // 占位 buf 让 bufsA/bufsB 非空, 保证外层 while 能进入 (才能命中 size-exceeds 的 break)
+    constexpr int kBufMemIdA = 80003;
+    constexpr int kBufMemIdB = 80004;
+    auto bufA = std::make_shared<LocalBuffer>(kBufMemIdA, 1024, MemoryType::MEM_UB);
+    auto bufB = std::make_shared<LocalBuffer>(kBufMemIdB, 1024, MemoryType::MEM_UB);
+    ASSERT_EQ(poolA.AllocateAtOffset(bufA, 0), SUCCESS);
+    ASSERT_EQ(poolB.AllocateAtOffset(bufB, 0), SUCCESS);
+
+    // need > 池总容量 -> 不可能腾出 -> 空 vector
+    size_t needSize = poolA.GetMemSize() + 1024;
+    auto groups = s.GetDualSpillGroup(poolA, poolB, needSize);
+    EXPECT_TRUE(groups.empty());
+}
+
+// --- RecordStaticValidShapeOnL0CCopyUB (InferDynShape 阶段 InferShape 前快照) ---
+// 直接调用快照函数, 绕开 InferShape 全量遍历对 op 状态完整性的依赖。
+// 静态 validShape 应被快照成 op 属性。
+TEST_F(ScheduleOoOTest, DualDst_InferDynShape_RecordsStaticValidShape)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+    g.copy1->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar(dualdst_ut::TILE_M), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    InferDynShape pass;
+    pass.RecordStaticValidShapeOnL0CCopyUB(*g.func);
+
+    EXPECT_TRUE(g.copy0->HasAttribute(OpAttributeKey::staticValidShape));
+    EXPECT_TRUE(g.copy1->HasAttribute(OpAttributeKey::staticValidShape));
+    auto v0 = g.copy0->GetVectorIntAttribute<int64_t>(OpAttributeKey::staticValidShape);
+    EXPECT_EQ(v0.size(), 2u);
+    EXPECT_EQ(v0[0], dualdst_ut::TILE_M);
+    EXPECT_EQ(v0[1], dualdst_ut::TILE_N);
+}
+
+// 含动态成分的 validShape -> staticValidShape 不应被记录
+TEST_F(ScheduleOoOTest, DualDst_InferDynShape_SkipsDynamicValidShape)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    // 一维含符号 (无 concrete) -> allConcrete=false -> 跳过快照
+    g.copy0->GetOutputOperand(0)->UpdateDynValidShape(
+        {SymbolicScalar("dyn0"), SymbolicScalar(dualdst_ut::TILE_N)});
+
+    InferDynShape pass;
+    pass.RecordStaticValidShapeOnL0CCopyUB(*g.func);
+
+    EXPECT_FALSE(g.copy0->HasAttribute(OpAttributeKey::staticValidShape));
+}
+
+// --- GetNewOperations 去重 (dualdst 防御性 shim) -----------------------------
+TEST_F(ScheduleOoOTest, DualDst_GetNewOperations_DedupePreservesFirstOccurrence)
+{
+    auto g = dualdst_ut::BuildDualDstGraph(
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N * 2},
+        {dualdst_ut::TILE_M, dualdst_ut::TILE_N},
+        {0, 0}, {0, dualdst_ut::TILE_N});
+    OoOScheduler s(*g.func);
+    EXPECT_EQ(s.Init(g.func->Operations().DuplicatedOpList(), {}, CORE_INIT_CONFIGS_HARDWARE_TWO), SUCCESS);
+
+    // 故意往 newOperations_ 里塞重复 + nullptr -> GetNewOperations 应去重 + 跳 null
+    s.newOperations_.clear();
+    s.newOperations_.push_back(g.copy0);
+    s.newOperations_.push_back(g.copy1);
+    s.newOperations_.push_back(g.copy0);   // dup
+    s.newOperations_.push_back(nullptr);   // null
+
+    auto uniq = s.GetNewOperations();
+    EXPECT_EQ(uniq.size(), 2u);
+    EXPECT_EQ(uniq[0], g.copy0);
+    EXPECT_EQ(uniq[1], g.copy1);
 }
 } // namespace npu::tile_fwk
