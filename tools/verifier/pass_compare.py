@@ -372,25 +372,12 @@ class PassComparator:
         config = IsCloseConfig(
             rtol=rtol, atol=atol,
             is_detail=True, shape=a_shape,
-            calc_dtype=torch.float64
+            calc_dtype=torch.float64, top_k=topk
         )
-        result_dict = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
-        
-        if result_dict["AB>RESULT"] == "FAIL":
-            comparator = TensorComparator()
-            config = IsCloseConfig(
-                rtol=rtol,
-                atol=atol,
-                calc_dtype=torch.float64,
-                is_detail=True,
-                shape=a_shape
-            )
-            _, result_reason_str, result_info = comparator.check_isclose(tensor_a, tensor_b, config)
-            csv_path = os.path.join(verify_path_pass1,
-                                    result_file[:-4] + ".DETAIL",
-                                    a["FILENAME"][:-5] + ".csv")
-            comparator.print_isclose_info(False, result_reason_str, result_info, csv_path, topk)
-        
+        csv_path = os.path.join(verify_path_pass1,
+                                result_file[:-4] + ".DETAIL",
+                                a["FILENAME"][:-5] + ".csv")
+        result_dict = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
         return result_dict
 
     @staticmethod

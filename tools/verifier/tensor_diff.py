@@ -30,6 +30,7 @@ class IsCloseConfig(NamedTuple):
     is_detail: bool = False
     fail_factor: int = 128
     is_extra: bool = False
+    top_k: int = 1000
 
 
 class TensorComparator:
@@ -87,7 +88,7 @@ class TensorComparator:
 
     @staticmethod
     def check_isclose(a, b, config: IsCloseConfig = IsCloseConfig()):
-        rtol, atol, calc_dtype, shape, is_ignore_bothzero, is_detail, fail_factor, is_extra = config
+        rtol, atol, calc_dtype, shape, is_ignore_bothzero, is_detail, fail_factor, is_extra, top_k = config
         if calc_dtype not in [torch.float64, torch.float32]:
             raise ValueError(f'not support calculating dtype: {calc_dtype}')
         aa = a.flatten()
@@ -236,6 +237,7 @@ class TensorComparator:
 def compare_tensors_result_dict(
     tensor_a: torch.Tensor,
     tensor_b: torch.Tensor,
+    path: str,
     config: Optional[IsCloseConfig] = None,
     max_precision: int = None
 ) -> Dict[str, Any]:
@@ -245,6 +247,7 @@ def compare_tensors_result_dict(
     Args:
         tensor_a: 输入 tensor A (对应结果中的 B 字段，遵循 pass_compare 历史约定)
         tensor_b: 输入 tensor B (对应结果中的 A 字段)
+        path: 数据对比失败时, 将详细数据写入该路径文件
         config: 对比配置对象，默认创建 rtol=1e-3, atol=1e-3 的配置
         max_precision: 输出数值精度，默认使用 MAX_PRECISION
     
@@ -263,6 +266,7 @@ def compare_tensors_result_dict(
     if max_precision is None:
         max_precision = MAX_PRECISION
     
+    top_k = config.top_k
     comparator = TensorComparator()
     result_is_close, result_reason, result_info = comparator.check_isclose(
         tensor_a, tensor_b, config
@@ -273,6 +277,7 @@ def compare_tensors_result_dict(
         record["AB>RESULT"] = "PASS"
     else:
         record["AB>RESULT"] = "FAIL"
+        comparator.print_isclose_info(result_is_close, result_reason, result_info, path, top_k)
     record["result_reason"] = result_reason
     record["AB>rtol/atol"] = f"{config.rtol:.{max_precision}g}/{config.atol:.{max_precision}g}"
     

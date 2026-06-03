@@ -1156,7 +1156,6 @@ void AtomicRMW(const Tensor& t, const std::vector<SymbolicScalar>& dynOffset, Te
     auto& op = func.AddOperation(Opcode::OP_ATOMIC_RMW, {t.GetStorage()}, {dest.GetStorage()});
     op.SetAssembleOpAttribute(offset, dynOffset);
     op.SetAttribute(OpAttributeKey::rmwMode, (int)mode);
-    op.SetAttribute(OpAttributeKey::inplaceIdx, 1);
     func.UpdateTensorDataUsage(op);
 
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);

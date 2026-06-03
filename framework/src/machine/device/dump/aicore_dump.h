@@ -22,6 +22,7 @@
 
 namespace npu::tile_fwk::dynamic {
 constexpr uint64_t DEV_DUMP_DATA_SIZE = 2 * 1024 * 1024;
+constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
 using IDE_SESSION = void*;
 enum IdeErrorT {};
 extern "C" {
@@ -275,6 +276,10 @@ public:
 
         auto setDumpTensorInfo = [&](DevAscendRawTensor* rawTensor, int32_t idx, bool isIOperand) {
             uint32_t dimSize = rawTensor->GetDim();
+            int cceIndex = func->GetOperationAttrCalleeIndex(opIdx);
+            if (devProg_->devArgs.enableVFFusion) {
+                cceIndex = (func->GetOperationAttrCalleeIndex(opIdx) + 1) / MAIN_BLOCK_SIZE;
+            }
             dumpTensorInfo.headSize = sizeof(DumpTensorInfo);
             dumpTensorInfo.funcId = FuncID(taskId_);
             dumpTensorInfo.callopMagic = func->GetOperationDebugOpmagic(opIdx);
@@ -286,7 +291,7 @@ public:
             dumpTensorInfo.execStart = execStart_;
             dumpTensorInfo.execEnd = execEnd_;
             dumpTensorInfo.rootHash = func->rootHash;
-            dumpTensorInfo.funcHash = dyntask->cceBinary[func->GetOperationAttrCalleeIndex(opIdx)].funcHash;
+            dumpTensorInfo.funcHash = dyntask->cceBinary[cceIndex].funcHash;
             auto& operandInfo = func->GetOperationOperandInfo(opIdx, idx, isIOperand);
             GetTensorOffsetAndShape<false>(
                 func, dumpTensorInfo.offset, dumpTensorInfo.shape, &(dupData->GetExpression(0)), dimSize, opIdx,

@@ -29,6 +29,7 @@ from tensor_diff import compare_tensors_result_dict, IsCloseConfig
 # ===================== 核心配置（需和C/C++端一致）=====================
 DEV_SHAPE_DIM_MAX = 5  # 替换为实际值
 BYTE_ORDER = "<"       # 小端：< ；大端：> ；本机字节序：=
+RESULT_FILE = ""
 
 # 单个字段的字节数定义（无对齐，纯原始字节）
 FIELD_SIZES = {
@@ -201,7 +202,10 @@ class VerifyRes:
                 config = _get_compare_config(dtype)
                 tensor_a = torch.from_numpy(sliced_data.astype(np.float64)).to(torch.float64)
                 tensor_b = torch.from_numpy(sliced_verify.astype(np.float64)).to(torch.float64)
-                cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
+                file_name = tensor_info["B>FILENAME"].split('/')[-1]
+                csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL",
+                                        file_name[:-5] + ".csv")
+                cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
                 for key, value in cmp_result.items():
                     tensor_infos[i][key] = value
                 
@@ -485,7 +489,10 @@ class CompactDumpTensorInfoParser:
             config = _get_compare_config(dtype)
             tensor_a = torch.from_numpy(raw_data.astype(np.float64)).to(torch.float64)
             tensor_b = torch.from_numpy(verify_tensor_data.astype(np.float64)).to(torch.float64)
-            cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
+            file_name = merge_tensor_info["B>FILENAME"].split('/')[-1]
+            csv_path = os.path.join(RESULT_FILE[:-4] + ".DETAIL",
+                                    file_name[:-5] + ".csv")
+            cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, csv_path, config=config)
             for key, value in cmp_result.items():
                 merge_tensor_info[key] = value
             
@@ -730,6 +737,10 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
+    timestamp = int(time.time())
+    csv_path = os.path.join(args.verify_path, f"verify_task_result_cmp~CodegenPreproc~{timestamp}.csv")
+    global RESULT_FILE
+    RESULT_FILE = csv_path
     if not os.path.exists(args.dump_tensor_path):
         logging.error(f"目录不存在：{args.dump_tensor_path}")
         return
@@ -768,10 +779,6 @@ def main():
     df["B>execEnd"] = df["B>execEnd"].apply(lambda x: f"{x}'")
     df["B>TIMESTAMP"] = df["B>TIMESTAMP"].apply(lambda x: f"{x}'")
     df["B>tensorAddr"] = df["B>tensorAddr"].apply(lambda x: f"{x}'")
-
-    timestamp = int(time.time())
-    save_dir = os.path.dirname(os.path.dirname(args.dump_tensor_path.rstrip(os.sep)))
-    csv_path = os.path.join(save_dir, f"verify_task_result_cmp~{timestamp}.csv")
 
     logging.info(df)
 
