@@ -913,21 +913,24 @@ Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCo
         irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
-    auto& copyOutOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
-
-    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        input->GetMemoryTypeOriginal(), OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
-        OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+    auto& copyOutOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr},
+        [&input, &offset, &copyShape, &copyRawShape, &copyDynShape](Operation& op) {
+            op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+                input->GetMemoryTypeOriginal(), OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
+                OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+        });
     copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     auto copyInOutputPtr =
         irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyInOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
     auto& copyInOp = PassOperationUtils::AddOperation(
-        function, Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr});
-    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(offset), input->GetMemoryTypeOriginal(), OpImmediate::Specified(copyShape),
-        OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+        function, Opcode::OP_COPY_IN, {copyOutOutputPtr}, {copyInOutputPtr},
+        [&offset, &input, &copyShape, &copyRawShape, &copyDynShape](Operation& op) {
+            op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+                OpImmediate::Specified(offset), input->GetMemoryTypeOriginal(), OpImmediate::Specified(copyShape),
+                OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+        });
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     needInsertCopyAssOp->ReplaceInput(copyInOutputPtr, input);
@@ -963,20 +966,24 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
 
     // 为copy到Ub的Tensor进行32B对齐
     AlignmentUtils::ProcessLastDim32BAlignedOnUB(copyInOutputPtr);
-    auto& copyInOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {input}, {copyInOutputPtr});
-    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(inOffset), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
-        OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+    auto& copyInOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {input}, {copyInOutputPtr},
+        [&inOffset, &copyShape, &copyRawShape, &copyDynShape](Operation& op) {
+            op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+                OpImmediate::Specified(inOffset), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
+                OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+        });
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     auto copyOutOutputPtr =
         irBuilder_.CreateTensorVar(input->Datatype(), copyShape, std::vector<SymbolicScalar>{});
     copyOutOutputPtr->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto& copyOutOp = PassOperationUtils::AddOperation(
-        function, Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr});
-    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_UB, OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
-        OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+        function, Opcode::OP_COPY_OUT, {copyInOutputPtr}, {copyOutOutputPtr},
+        [&offset, &copyShape, &copyRawShape, &copyDynShape](Operation& op) {
+            op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+                MemoryType::MEM_UB, OpImmediate::Specified(offset), OpImmediate::Specified(copyShape),
+                OpImmediate::Specified(copyRawShape), OpImmediate::Specified(copyDynShape)));
+        });
     copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     needInsertCopyAssOp->ReplaceInput(copyOutOutputPtr, input);

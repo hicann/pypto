@@ -446,12 +446,13 @@ void RemoveRedundantOp::GenerateNewView(
         function.GetTensorMap().Erase(endTensor);
     }
     // 新建一个view op
-    auto& newViewOp = PassOperationUtils::AddOperation(function, Opcode::OP_VIEW, {startTensor}, {newViewTensor});
-    // 获取view上的dynoffset属性
     std::shared_ptr<ViewOpAttribute> viewAttribute =
         std::make_shared<ViewOpAttribute>(newoffset, newDynoffset, newViewTensor->GetDynValidShape());
     viewAttribute->SetToType(endTensor->GetMemoryTypeToBe());
-    newViewOp.SetOpAttribute(viewAttribute);
+    auto& newViewOp = PassOperationUtils::AddOperation(function, Opcode::OP_VIEW, {startTensor}, {newViewTensor},
+        [&viewAttribute](Operation& newOp) {
+            newOp.SetOpAttribute(viewAttribute);
+        });
     newOps_.push_back(&newViewOp);
     operationUpdated = true;
 }

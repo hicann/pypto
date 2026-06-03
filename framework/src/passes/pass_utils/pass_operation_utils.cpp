@@ -11,6 +11,7 @@
 #include "pass_operation_utils.h"
 
 #include <algorithm>
+#include "interface/operation/op_infer_shape_impl.h"
 #include "interface/operation/operation_common.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/tensor_offset.h"
@@ -18,11 +19,22 @@
 namespace npu::tile_fwk {
 
 Operation& PassOperationUtils::AddOperation(
-    Function& function, Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands, const ir::Span& span)
+    Function& function, Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
+    std::function<void(Operation&)> beforeInferShapeHandler, const ir::Span& span, bool inferShape)
 {
     auto processedOperands = PreprocessOperationInputs(function, opCode, std::move(iOperands));
     IRBuilder builder;
-    return builder.CreateTensorOpStmt(function, opCode, processedOperands, oOperands, span);
+    auto& op = builder.CreateTensorOpStmt(function, opCode, processedOperands, oOperands, span);
+
+    if (beforeInferShapeHandler) {
+        beforeInferShapeHandler(op);
+    }
+
+    if (inferShape) {
+        InferShapeRegistry::GetInstance().CallInferShapeFunc(&op);
+    }
+
+    return op;
 }
 
 LogicalTensors PassOperationUtils::PreprocessOperationInputs(

@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "interface/function/function.h"
 
 namespace npu::tile_fwk {
@@ -18,10 +20,13 @@ class PassOperationUtils {
 public:
     static Operation& AddOperation(
         Function& function, Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-        const ir::Span& span = ir::Span::Unknown());
+        std::function<void(Operation&)> beforeInferShapeHandler = nullptr,
+        const ir::Span& span = ir::Span::Unknown(),
+        bool inferShape = true);
 
 private:
     static LogicalTensors PreprocessOperationInputs(Function& function, Opcode opCode, LogicalTensors iOperands);
+
     static LogicalTensorPtr ConnectWithOverlap(Function& function, LogicalTensorPtr iOperand);
     
     static std::vector<std::vector<int64_t>> ProcessOffsetAdjustment(

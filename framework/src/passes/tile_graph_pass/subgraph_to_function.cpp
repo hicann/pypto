@@ -923,9 +923,11 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
 
             copyInTensor->SetMemoryTypeBoth(subgraphMemoryType);
             auto& copyInOp = PassOperationUtils::AddOperation(
-                function, Opcode::OP_COPY_IN, {copyInSourceTensor}, {copyInTensor});
+                function, Opcode::OP_COPY_IN, {copyInSourceTensor}, {copyInTensor},
+                [&copyInAttr](Operation& op) {
+                    op.SetOpAttribute(copyInAttr);
+                });
             copyInOp.UpdateSubgraphID(subgraphID);
-            copyInOp.SetOpAttribute(copyInAttr);
             SetEmuOpcode(&copyInOp, EMUOP_TENSOR_GETDATA_DEPEND);
             GetTensorDataSetIndex(&copyInOp, index);
 

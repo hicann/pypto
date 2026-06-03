@@ -20,6 +20,7 @@
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_operation_utils.h"
 #include "symbolic_scalar_test_utils.h"
+#include "pass_test_utils.h"
 #include "tilefwk/tilefwk.h"
 #include "ut_json/ut_json_tool.h"
 #include "passes/pass_mgr/pass_manager.h"
@@ -358,10 +359,14 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest10)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& view = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor});
-    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-    auto& assemble = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
-    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -411,10 +416,14 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest11)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape2, CreateTestConstIntVector(shape2), TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& view1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor});
-    view1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-    auto& view2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast2}, {ubTensor});
-    view2.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast2}, {ubTensor},
+        [&offset2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2));
+        });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast1);
@@ -972,11 +981,15 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest17)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& view = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1});
-    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+        });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
-    auto& assemble = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
-    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
 
     currFunctionPtr->inCasts_.push_back(inCast);
     currFunctionPtr->outCasts_.push_back(outCast);
@@ -1142,17 +1155,27 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewSpecialCase)
     auto ubTensor3 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     ubTensor3->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    auto& viewOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1});
-    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
-    auto& viewOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor2});
-    viewOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor1},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast1}, {ubTensor2},
+        [&offset2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2));
+        });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_MUL, {inCast2, inCast3}, {ubTensor3});
-    auto& assembleOp1 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast});
-    assembleOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
-    auto& assembleOp2 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
-    assembleOp2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset2));
-    auto& assembleOp3 = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor3}, {outCast});
-    assembleOp3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {outCast},
+        [&offset1](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset1));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset2](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset2));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor3}, {outCast},
+        [&offset3](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset3));
+        });
 
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
@@ -1202,10 +1225,14 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1});
-    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newDynOffset));
-    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2});
-    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {ubTensor1},
+        [&offset, &newDynOffset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newDynOffset));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);
@@ -1257,8 +1284,10 @@ TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase)
     auto ubTensor2 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape1, CreateTestConstIntVector(shape1));
     ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
 
-    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor1}, {outCast1});
-    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ddrTensor1}, {outCast1},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {ddrTensor1});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ddrTensor1}, {ubTensor2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {outCast2});
@@ -1303,10 +1332,14 @@ TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
     currFunctionPtr->outCasts_.push_back(outCast);
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {ubTensor1});
-    auto& view = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2});
-    auto& assemble = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
-    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
-    assemble.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {ubTensor1}, {ubTensor2},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
 
     RemoveRedundantOp removeredundantpass;
     EXPECT_EQ(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
@@ -1431,10 +1464,9 @@ TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
     currFunctionPtr->outCasts_.push_back(outCast);
 
     auto outcastBeforePass = currFunctionPtr->GetOutcast()[0];
-    auto defaultValidShape = CreateTestConstIntVector(shape16x8);
-    ASSERT_EQ(outcastBeforePass->GetDynValidShape().size(), defaultValidShape.size());
-    EXPECT_EQ(outcastBeforePass->GetDynValidShape()[0].Dump(), defaultValidShape[0].Dump());
-    EXPECT_EQ(outcastBeforePass->GetDynValidShape()[1].Dump(), defaultValidShape[1].Dump());
+    ASSERT_EQ(outcastBeforePass->GetDynValidShape().size(), kNumTwo);
+    EXPECT_EQ(outcastBeforePass->GetDynValidShape()[0].Dump(), "reshape_output_dim0");
+    EXPECT_EQ(outcastBeforePass->GetDynValidShape()[1].Dump(), "reshape_output_dim1");
 
     RemoveRedundantOp pass;
     EXPECT_EQ(pass.PreCheck(*currFunctionPtr), SUCCESS);
@@ -1500,11 +1532,15 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     auto outCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape4x16, CreateTestConstIntVector(shape4x16), TileOpFormat::TILEOP_ND, "outCast");
     outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
 
-    auto& viewOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {viewOutput});
-    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {inCast}, {viewOutput},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+        });
 
-    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput});
-    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {assembleOutput}, {outCast});
 
@@ -1514,22 +1550,10 @@ TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
     RemoveRedundantOp pass;
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
-    uint32_t viewNum = kNumZero;
-    uint32_t assembleNum = kNumZero;
-    const Operation* newViewOp = nullptr;
-    for (const auto& op : currFunctionPtr->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            ++viewNum;
-            newViewOp = &op;
-        }
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            ++assembleNum;
-        }
-    }
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_VIEW), kNumOne);
+    EXPECT_EQ(CountOpcode(currFunctionPtr, Opcode::OP_ASSEMBLE), kNumZero);
 
-    EXPECT_EQ(viewNum, kNumOne);
-    EXPECT_EQ(assembleNum, kNumZero);
-
+    const Operation* newViewOp = FindSingleOp(currFunctionPtr, Opcode::OP_VIEW);
     EXPECT_TRUE(newViewOp != nullptr);
     auto viewAttribute = dynamic_cast<ViewOpAttribute*>(newViewOp->GetOpAttribute().get());
     EXPECT_TRUE(viewAttribute != nullptr);

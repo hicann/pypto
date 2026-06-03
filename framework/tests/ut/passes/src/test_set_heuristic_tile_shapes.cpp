@@ -101,8 +101,12 @@ TEST_F(TestSetHeuristicTileShapes, TestVector)
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor2}, {ubTensor3});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ROWMAX, {ubTensor3}, {ubTensor4});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {ubTensor4}, {ubTensor5});
-    auto& transpose = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {ubTensor5}, {ubTensor6});
-    transpose.SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{1, 0});
+    std::vector<int> shapeVal = {1, 0};
+    std::string shapeKey = OP_ATTR_PREFIX + "shape";
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_TRANSPOSE_VNCHWCONV, {ubTensor5}, {ubTensor6},
+        [&shapeKey, &shapeVal](Operation& op) {
+            op.SetAttribute(shapeKey, shapeVal);
+        });
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_SQRT, {ubTensor6}, {outCast});
 
     currFunctionPtr->inCasts_.push_back(inCast);

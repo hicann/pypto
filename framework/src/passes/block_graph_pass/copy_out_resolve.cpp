@@ -115,11 +115,13 @@ void CopyOutResolve::InsertCopyOutResolveForLeaf(int copyOutResolveCoalescing, F
             opList.push_back(op);
 
             Opcode opcode = leafFunc->IsCube() ? Opcode::OP_AICPU_CALL_AIC : Opcode::OP_AICPU_CALL_AIV;
-            auto& aicpuCall = PassOperationUtils::AddOperation(*leafFunc, opcode, {outcast}, {});
+            auto& aicpuCall = PassOperationUtils::AddOperation(*leafFunc, opcode, {outcast}, {},
+                [&copyOutResolveCounter](Operation& newOp) {
+                    newOp.SetAttribute(
+                        OpAttributeKey::aicpuCall,
+                        (int64_t)(uint32_t)((AICPU_CALL_NUM_COPYOUT_RESOLVE << AICPU_CALL_ARG_BIT) + copyOutResolveCounter));
+                });
             aicpuCall.UpdateSubgraphID(subgraphID);
-            aicpuCall.SetAttribute(
-                OpAttributeKey::aicpuCall,
-                (int64_t)(uint32_t)((AICPU_CALL_NUM_COPYOUT_RESOLVE << AICPU_CALL_ARG_BIT) + copyOutResolveCounter));
             aicpuCall.GetCommentList().push_back("aicpuCall: " + oss.str());
             aicpuCallCopyOutFinishDistanceDict[&aicpuCall] = copyOutScheduleDefaultDistance;
 

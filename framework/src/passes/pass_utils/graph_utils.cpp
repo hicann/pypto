@@ -36,29 +36,8 @@ Operation& GraphUtils::AddDynOperation(
     Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
     const std::vector<std::vector<SymbolicScalar>>& outDynShape)
 {
-    auto& newOp = PassOperationUtils::AddOperation(function, opCode, std::move(iOperands), oOperands);
+    auto& newOp = PassOperationUtils::AddOperation(function, opCode, std::move(iOperands), oOperands, nullptr, ir::Span::Unknown(), false);
     SetDynShape(&newOp, outDynShape);
-    return newOp;
-}
-
-Operation& GraphUtils::AddDynRawOperation(
-    Function& function, const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-    const std::vector<std::vector<SymbolicScalar>>& outDynShape)
-{
-    IRBuilder builder;
-    auto& newOp = builder.CreateTensorOpStmt(function, opCode, iOperands, oOperands);
-    SetDynShape(&newOp, outDynShape);
-    return newOp;
-}
-
-Operation& GraphUtils::AddViewOperation(
-    Function& function, const ViewOp& view, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
-{
-    auto& newOp = AddDynOperation(function, Opcode::OP_VIEW, {view.input}, {view.output}, outDynShape);
-    if (view.originOp != nullptr) {
-        newOp.SetScopeInfo(view.originOp->GetScopeInfo());
-    }
-    SetViewAttr(function, newOp, view);
     return newOp;
 }
 
@@ -81,7 +60,7 @@ Operation& GraphUtils::AddReshapeOperation(
     Function& function, const LogicalTensorPtr iOperand, const LogicalTensorPtr& oOperand, const ReshapeOp& reshapeOp,
     const std::vector<SymbolicScalar>& outDynShape)
 {
-    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_RESHAPE, {iOperand}, {oOperand});
+    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_RESHAPE, {iOperand}, {oOperand}, nullptr, ir::Span::Unknown(), false);
     if (reshapeOp.originOpPtr != nullptr) {
         newOp.SetScopeInfo(reshapeOp.originOpPtr->GetScopeInfo());
         newOp.CopyAttrFrom(*reshapeOp.originOpPtr, "");
@@ -96,40 +75,6 @@ Operation& GraphUtils::AddReshapeOperation(
         newOp.SetAttribute(OP_ATTR_PREFIX + "validShape", outDynShape);
         oOperand->UpdateDynValidShape(outDynShape);
     }
-    return newOp;
-}
-
-void GraphUtils::SetCopyInAttr(Operation& op, const CopyInOutOp& copy)
-{
-    auto copyAttr =
-        std::make_shared<CopyOpAttribute>(copy.Offset, copy.from, copy.shape, copy.rawShape, copy.fromDynValidShape);
-    op.SetOpAttribute(copyAttr);
-}
-
-void GraphUtils::SetCopyOutAttr(Operation& op, const CopyInOutOp& copy)
-{
-    auto copyAttr =
-        std::make_shared<CopyOpAttribute>(copy.from, copy.Offset, copy.shape, copy.rawShape, copy.fromDynValidShape);
-    op.SetOpAttribute(copyAttr);
-}
-
-Operation& GraphUtils::AddCopyInOperation(
-    Function& function, const CopyInOutOp& copy, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
-{
-    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_IN, {copy.input}, {copy.output});
-    SetCopyInAttr(newOp, copy);
-    SetDynShape(&newOp, outDynShape);
-    newOp.UpdateSubgraphID(CommonUtils::GetTensorSubgraphID(copy.output));
-    return newOp;
-}
-
-Operation& GraphUtils::AddCopyOutOperation(
-    Function& function, const CopyInOutOp& copy, const std::vector<std::vector<SymbolicScalar>>& outDynShape)
-{
-    auto& newOp = PassOperationUtils::AddOperation(function, Opcode::OP_COPY_OUT, {copy.input}, {copy.output});
-    SetCopyOutAttr(newOp, copy);
-    SetDynShape(&newOp, outDynShape);
-    newOp.UpdateSubgraphID(CommonUtils::GetTensorSubgraphID(copy.input));
     return newOp;
 }
 
@@ -150,16 +95,6 @@ void GraphUtils::UpdateViewAttr(Function& function, Operation& op)
             viewAttribute->SetFromOffset(fromOffset, fromDynOffset);
         }
     }
-}
-
-void GraphUtils::SetViewAttr(Function& function, Operation& op, const ViewOp& view)
-{
-    std::vector<SymbolicScalar> toDynShape = view.output->GetDynValidShape();
-    auto viewAttribute = std::make_shared<ViewOpAttribute>(view.fromOffset);
-    viewAttribute->SetToDynValidShape(toDynShape);
-    viewAttribute->SetToType(view.toType);
-    op.SetOpAttribute(viewAttribute);
-    UpdateViewAttr(function, op);
 }
 
 void GraphUtils::SetAssembleAttr(Operation& op, const AssembleOp& assemble)

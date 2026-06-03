@@ -432,9 +432,11 @@ void SplitLargeFanoutTensor::FindOverlapAndCreateViewOp(
             for (size_t j = 0; j < newViewOffset.size(); j++) {
                 newViewOffset[j] -= oldAssembleOffset[j];
             }
-            auto& newViewOp = PassOperationUtils::AddOperation(function, Opcode::OP_VIEW, {overlap}, {newGcdTensor});
-            newViewOp.SetOpAttribute(
-                std::make_shared<ViewOpAttribute>(newViewOffset, overlap->GetMemoryTypeOriginal()));
+            auto& newViewOp = PassOperationUtils::AddOperation(function, Opcode::OP_VIEW, {overlap}, {newGcdTensor},
+                [&newViewOffset, &overlap](Operation& op) {
+                    op.SetOpAttribute(
+                        std::make_shared<ViewOpAttribute>(newViewOffset, overlap->GetMemoryTypeOriginal()));
+                });
             addedOps_.push_back(&newViewOp);
             APASS_LOG_INFO_F(
                 Elements::Operation,
@@ -453,9 +455,11 @@ void SplitLargeFanoutTensor::CreateOpForMoreSplit(
         auto newGcdTensor = irBuilder_.CreateTensorVar(
             largeTensor->Datatype(), gcdShape, std::vector<SymbolicScalar>{}, largeTensor->Format());
         auto& newAssembleOp = PassOperationUtils::AddOperation(
-            function, Opcode::OP_ASSEMBLE, {newGcdTensor}, {dualOverlap});
-        newAssembleOp.SetOpAttribute(
-            std::make_shared<AssembleOpAttribute>(largeTensor->GetMemoryTypeOriginal(), gcdTileOffset));
+            function, Opcode::OP_ASSEMBLE, {newGcdTensor}, {dualOverlap},
+            [&largeTensor, &gcdTileOffset](Operation& op) {
+                op.SetOpAttribute(
+                    std::make_shared<AssembleOpAttribute>(largeTensor->GetMemoryTypeOriginal(), gcdTileOffset));
+            });
         addedOps_.push_back(&newAssembleOp);
         APASS_LOG_INFO_F(
             Elements::Operation,
