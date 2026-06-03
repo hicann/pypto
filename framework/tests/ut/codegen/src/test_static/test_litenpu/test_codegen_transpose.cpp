@@ -13,24 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_transpose.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenTranspose : public CodegenTestLiteNPU {};
+TestCodeGenTranspose::TestCodeGenTranspose() = default;
+TestCodeGenTranspose::~TestCodeGenTranspose() = default;
 
-// fp16 test cases
-TEST_F(TestCodeGenTranspose, test_transpose_fp16_001)
+TestCodeGenTranspose& TestCodeGenTranspose::Instance()
+{
+    static TestCodeGenTranspose instance;
+    return instance;
+}
+
+void TestCodeGenTranspose::test_transpose_fp16_001()
 {
     PROGRAM("TRANSPOSE_FP16_001")
     {
@@ -45,7 +41,7 @@ TEST_F(TestCodeGenTranspose, test_transpose_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_002)
+void TestCodeGenTranspose::test_transpose_fp16_002()
 {
     PROGRAM("TRANSPOSE_FP16_002")
     {
@@ -60,7 +56,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_003)
+void TestCodeGenTranspose::test_transpose_fp16_003()
 {
     PROGRAM("TRANSPOSE_FP16_003")
     {
@@ -75,7 +71,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_004)
+void TestCodeGenTranspose::test_transpose_fp16_004()
 {
     PROGRAM("TRANSPOSE_FP16_004")
     {
@@ -90,7 +86,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_005)
+void TestCodeGenTranspose::test_transpose_fp16_005()
 {
     PROGRAM("TRANSPOSE_FP16_005")
     {
@@ -105,7 +101,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_006)
+void TestCodeGenTranspose::test_transpose_fp16_006()
 {
     PROGRAM("TRANSPOSE_FP16_006")
     {
@@ -120,7 +116,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_007)
+void TestCodeGenTranspose::test_transpose_fp16_007()
 {
     PROGRAM("TRANSPOSE_FP16_007")
     {
@@ -135,7 +131,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_008)
+void TestCodeGenTranspose::test_transpose_fp16_008()
 {
     PROGRAM("TRANSPOSE_FP16_008")
     {
@@ -150,7 +146,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_009)
+void TestCodeGenTranspose::test_transpose_fp16_009()
 {
     PROGRAM("TRANSPOSE_FP16_009")
     {
@@ -165,7 +161,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_010)
+void TestCodeGenTranspose::test_transpose_fp16_010()
 {
     PROGRAM("TRANSPOSE_FP16_010")
     {
@@ -180,8 +176,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp16_010)
     codeGen.GenCode(*function, {});
 }
 
-// fp32 test cases
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_001)
+void TestCodeGenTranspose::test_transpose_fp32_001()
 {
     PROGRAM("TRANSPOSE_FP32_001")
     {
@@ -196,7 +191,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_002)
+void TestCodeGenTranspose::test_transpose_fp32_002()
 {
     PROGRAM("TRANSPOSE_FP32_002")
     {
@@ -211,7 +206,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_003)
+void TestCodeGenTranspose::test_transpose_fp32_003()
 {
     PROGRAM("TRANSPOSE_FP32_003")
     {
@@ -226,7 +221,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_004)
+void TestCodeGenTranspose::test_transpose_fp32_004()
 {
     PROGRAM("TRANSPOSE_FP32_004")
     {
@@ -241,7 +236,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_005)
+void TestCodeGenTranspose::test_transpose_fp32_005()
 {
     PROGRAM("TRANSPOSE_FP32_005")
     {
@@ -256,7 +251,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_006)
+void TestCodeGenTranspose::test_transpose_fp32_006()
 {
     PROGRAM("TRANSPOSE_FP32_006")
     {
@@ -271,7 +266,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_007)
+void TestCodeGenTranspose::test_transpose_fp32_007()
 {
     PROGRAM("TRANSPOSE_FP32_007")
     {
@@ -286,7 +281,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_008)
+void TestCodeGenTranspose::test_transpose_fp32_008()
 {
     PROGRAM("TRANSPOSE_FP32_008")
     {
@@ -301,7 +296,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_009)
+void TestCodeGenTranspose::test_transpose_fp32_009()
 {
     PROGRAM("TRANSPOSE_FP32_009")
     {
@@ -316,7 +311,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_010)
+void TestCodeGenTranspose::test_transpose_fp32_010()
 {
     PROGRAM("TRANSPOSE_FP32_010")
     {
@@ -331,8 +326,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-// int32 test cases
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_001)
+void TestCodeGenTranspose::test_transpose_int32_001()
 {
     PROGRAM("TRANSPOSE_INT32_001")
     {
@@ -347,7 +341,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_002)
+void TestCodeGenTranspose::test_transpose_int32_002()
 {
     PROGRAM("TRANSPOSE_INT32_002")
     {
@@ -362,7 +356,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_003)
+void TestCodeGenTranspose::test_transpose_int32_003()
 {
     PROGRAM("TRANSPOSE_INT32_003")
     {
@@ -377,7 +371,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_004)
+void TestCodeGenTranspose::test_transpose_int32_004()
 {
     PROGRAM("TRANSPOSE_INT32_004")
     {
@@ -392,7 +386,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_005)
+void TestCodeGenTranspose::test_transpose_int32_005()
 {
     PROGRAM("TRANSPOSE_INT32_005")
     {
@@ -407,8 +401,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int32_005)
     codeGen.GenCode(*function, {});
 }
 
-// int16 test cases
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_001)
+void TestCodeGenTranspose::test_transpose_int16_001()
 {
     PROGRAM("TRANSPOSE_INT16_001")
     {
@@ -423,7 +416,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_002)
+void TestCodeGenTranspose::test_transpose_int16_002()
 {
     PROGRAM("TRANSPOSE_INT16_002")
     {
@@ -438,7 +431,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_003)
+void TestCodeGenTranspose::test_transpose_int16_003()
 {
     PROGRAM("TRANSPOSE_INT16_003")
     {
@@ -453,7 +446,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_004)
+void TestCodeGenTranspose::test_transpose_int16_004()
 {
     PROGRAM("TRANSPOSE_INT16_004")
     {
@@ -468,7 +461,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_005)
+void TestCodeGenTranspose::test_transpose_int16_005()
 {
     PROGRAM("TRANSPOSE_INT16_005")
     {
@@ -483,7 +476,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_006)
+void TestCodeGenTranspose::test_transpose_int16_006()
 {
     PROGRAM("TRANSPOSE_INT16_006")
     {
@@ -498,7 +491,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_007)
+void TestCodeGenTranspose::test_transpose_int16_007()
 {
     PROGRAM("TRANSPOSE_INT16_007")
     {
@@ -513,7 +506,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_008)
+void TestCodeGenTranspose::test_transpose_int16_008()
 {
     PROGRAM("TRANSPOSE_INT16_008")
     {
@@ -528,7 +521,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_009)
+void TestCodeGenTranspose::test_transpose_int16_009()
 {
     PROGRAM("TRANSPOSE_INT16_009")
     {
@@ -543,7 +536,7 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_010)
+void TestCodeGenTranspose::test_transpose_int16_010()
 {
     PROGRAM("TRANSPOSE_INT16_010")
     {
@@ -557,7 +550,8 @@ TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_010)
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
 }
-TEST_F(TestCodeGenTranspose, DISABLED_test_transpose_int16_011)
+
+void TestCodeGenTranspose::test_transpose_int16_011()
 {
     PROGRAM("TRANSPOSE_INT16_011")
     {

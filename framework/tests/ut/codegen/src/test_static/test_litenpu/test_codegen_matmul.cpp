@@ -13,23 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_matmul.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenMatmul : public CodegenTestLiteNPU {};
+TestCodeGenMatmul::TestCodeGenMatmul() = default;
+TestCodeGenMatmul::~TestCodeGenMatmul() = default;
 
-TEST_F(TestCodeGenMatmul, test_matmul_001)
+TestCodeGenMatmul& TestCodeGenMatmul::Instance()
+{
+    static TestCodeGenMatmul instance;
+    return instance;
+}
+
+void TestCodeGenMatmul::test_matmul_001()
 {
     PROGRAM("MATMUL_001")
     {
@@ -49,8 +46,7 @@ TEST_F(TestCodeGenMatmul, test_matmul_001)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_002: (128,130) x (130,32), bias=true, a_trans=false, b_trans=false, tile=(16,16,32,32,16,16)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_002)
+void TestCodeGenMatmul::test_matmul_002()
 {
     PROGRAM("MATMUL_002")
     {
@@ -73,8 +69,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_002)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_003: (30,150) x (150,60), bias=false, a_trans=false, b_trans=false, tile=(32,32,32,32,64,64)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_003)
+void TestCodeGenMatmul::test_matmul_003()
 {
     PROGRAM("MATMUL_003")
     {
@@ -94,8 +89,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_003)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_004: (128,32) x (32,100), bias=true, a_trans=false, b_trans=false, tile=(64,64,32,32,64,64)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_004)
+void TestCodeGenMatmul::test_matmul_004()
 {
     PROGRAM("MATMUL_004")
     {
@@ -118,8 +112,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_004)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_005: (40,130) x (40,64), bias=false, a_trans=true, b_trans=false, tile=(32,32,32,32,64,64)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_005)
+void TestCodeGenMatmul::test_matmul_005()
 {
     PROGRAM("MATMUL_005")
     {
@@ -139,8 +132,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_005)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_006: (5,80,64) x (5,64,1), bias=true, a_trans=false, b_trans=false, tile=(32,32,64,64,16,16)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_006)
+void TestCodeGenMatmul::test_matmul_006()
 {
     PROGRAM("MATMUL_006")
     {
@@ -161,8 +153,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_006)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_007: (16,1,64) x (5,64,64), bias=false, a_trans=false, b_trans=true, tile=(16,16,64,64,16,16)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_007)
+void TestCodeGenMatmul::test_matmul_007()
 {
     PROGRAM("MATMUL_007")
     {
@@ -182,8 +173,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_007)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_008: (2,16,129,64) x (2,16,64,35), bias=true, a_trans=false, b_trans=false, tile=(16,16,32,32,16,16)
-TEST_F(TestCodeGenMatmul, test_matmul_008)
+void TestCodeGenMatmul::test_matmul_008()
 {
     PROGRAM("MATMUL_008")
     {
@@ -203,8 +193,7 @@ TEST_F(TestCodeGenMatmul, test_matmul_008)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_009: (2,8,80,160) x (2,8,160,30), bias=false, a_trans=false, b_trans=false, tile=(32,32,64,64,32,32)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_009)
+void TestCodeGenMatmul::test_matmul_009()
 {
     PROGRAM("MATMUL_009")
     {
@@ -224,8 +213,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_009)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_fp_010: (1,4,60,80) x (1,4,32,60), bias=false, a_trans=true, b_trans=true, tile=(64,64,32,32,16,16)
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_010)
+void TestCodeGenMatmul::test_matmul_010()
 {
     PROGRAM("MATMUL_010")
     {
@@ -245,8 +233,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_010)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_s8s8_001: (16,32) x (32,16), bias=false, a_trans=false, b_trans=false, tile=(16,16,32,32,16,16), S8/S8->S8
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_s8s8_001)
+void TestCodeGenMatmul::test_matmul_s8s8_001()
 {
     PROGRAM("MATMUL_S8S8_001")
     {
@@ -266,8 +253,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_s8s8_001)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_s8s8_002: (16,32) x (32,16), bias=true, a_trans=false, b_trans=false, tile=(16,16,32,32,16,16), S8/S8->S8
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_s8s8_002)
+void TestCodeGenMatmul::test_matmul_s8s8_002()
 {
     PROGRAM("MATMUL_S8S8_002")
     {
@@ -290,9 +276,7 @@ TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_s8s8_002)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_s8s8_003: (16,32,64) x (16,64,16), bias=false, a_trans=false, b_trans=false, tile=(16,16,64,64,16,16),
-// S8/S8->S8
-TEST_F(TestCodeGenMatmul, test_matmul_s8s8_003)
+void TestCodeGenMatmul::test_matmul_s8s8_003()
 {
     PROGRAM("MATMUL_S8S8_003")
     {
@@ -312,9 +296,7 @@ TEST_F(TestCodeGenMatmul, test_matmul_s8s8_003)
     codeGen.GenCode(*function, {});
 }
 
-// matmul_s8s8_004: (2,16,32,64) x (2,16,64,32), bias=false, a_trans=true, b_trans=true, tile=(16,16,32,32,32,32),
-// S8/S8->S8
-TEST_F(TestCodeGenMatmul, DISABLED_test_matmul_s8s8_004)
+void TestCodeGenMatmul::test_matmul_s8s8_004()
 {
     PROGRAM("MATMUL_S8S8_004")
     {

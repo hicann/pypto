@@ -339,7 +339,7 @@ Status CubeProcess::AlignGMTensor(Function& function, std::vector<Operation*>& l
 
 Status CubeProcess::UpdateCubeOp(Function& function)
 {
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3113) {
+    if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
         return SUCCESS;
     }
     for (auto& op : function.Operations()) {

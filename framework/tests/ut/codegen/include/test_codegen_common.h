@@ -89,6 +89,8 @@ protected:
 
 class CodegenTestLiteNPU : public ::testing::Test {
 public:
+    CodegenTestLiteNPU(std::string socVersion) { socVersion_ = socVersion; }
+
     static void SetUpTestCase() {}
 
     static void TearDownTestCase() {}
@@ -99,10 +101,13 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-        config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, "Kirin9030");
+        config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, socVersion_);
     }
 
     void TearDown() override { config::SetCodeGenOption<std::string>(PLATFORM_SOC_VERSION, ""); }
+
+private:
+    std::string socVersion_;
 };
 
 } // namespace npu::tile_fwk

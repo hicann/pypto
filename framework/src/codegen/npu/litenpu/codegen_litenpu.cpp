@@ -211,6 +211,8 @@ std::string CodeGenLiteNPU::GetCoreArch([[maybe_unused]] const CompileInfo& comp
 {
     if (platform_ == NPUArch::DAV_3113) {
         return "dav-l311";
+    } else if (platform_ == NPUArch::DAV_3003) {
+        return "dav-l300";
     } else {
         return "dav-l311";
     }
@@ -225,6 +227,20 @@ void CodeGenLiteNPU::BuildExtraOptions(std::ostringstream& oss, const std::strin
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
         << "--cce-aicore-input-parameter-size=4096 ";
     oss << compileOptions << " ";
+}
+
+void CodeGenLiteNPU::BuildIncludes(std::ostringstream& oss) const
+{
+    // used for compiling cce
+    std::string ptoTileLibPath = GetPtoTileLibPathByEnv();
+    if (!ptoTileLibPath.empty()) {
+        oss << "-I" << ptoTileLibPath << " ";
+    }
+
+    std::string includePath = GetIncludePathForCompileCCE();
+    oss << "-I" << includePath << "/tilefwk "
+        << "-I" << includePath << "/tileop "
+        << "-I" << includePath << " ";
 }
 
 std::vector<std::string> CodeGenLiteNPU::GetInOutParams(std::pair<uint64_t, Function*> subFuncPair)

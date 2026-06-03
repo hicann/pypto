@@ -9,58 +9,24 @@
  */
 
 /*!
- * \file test_codegen_compare.cpp
+ * \file test_codegen_amin.cpp
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_amin.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenAmin : public CodegenTestLiteNPU {};
+TestCodeGenAmin::TestCodeGenAmin() = default;
+TestCodeGenAmin::~TestCodeGenAmin() = default;
 
-// fp16 test cases
-TEST_F(TestCodeGenAmin, test_amin_fp16_001)
+TestCodeGenAmin& TestCodeGenAmin::Instance()
 {
-    PROGRAM("AMIN_FP16_001")
-    {
-        TileShape::Current().SetVecTile({48});
-        Tensor operand(DT_FP16, {112}, "operand");
-        Tensor result;
-        FUNCTION("AMIN_FP16_001") { result = Amin(operand, -1, false); }
-    }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMIN_FP16_001");
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    static TestCodeGenAmin instance;
+    return instance;
 }
 
-TEST_F(TestCodeGenAmin, test_amin_fp16_002)
-{
-    PROGRAM("AMIN_FP16_002")
-    {
-        TileShape::Current().SetVecTile({96});
-        Tensor operand(DT_FP16, {100}, "operand");
-        Tensor result;
-        FUNCTION("AMIN_FP16_002") { result = Amin(operand, -1, false); }
-    }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMIN_FP16_002");
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-}
-
-TEST_F(TestCodeGenAmin, test_amin_fp16_003)
+void TestCodeGenAmin::test_amin_fp16_003()
 {
     PROGRAM("AMIN_FP16_003")
     {
@@ -75,7 +41,7 @@ TEST_F(TestCodeGenAmin, test_amin_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_004)
+void TestCodeGenAmin::test_amin_fp16_004()
 {
     PROGRAM("AMIN_FP16_004")
     {
@@ -90,7 +56,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_005)
+void TestCodeGenAmin::test_amin_fp16_005()
 {
     PROGRAM("AMIN_FP16_005")
     {
@@ -105,7 +71,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_006)
+void TestCodeGenAmin::test_amin_fp16_006()
 {
     PROGRAM("AMIN_FP16_006")
     {
@@ -120,7 +86,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_007)
+void TestCodeGenAmin::test_amin_fp16_007()
 {
     PROGRAM("AMIN_FP16_007")
     {
@@ -135,7 +101,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_008)
+void TestCodeGenAmin::test_amin_fp16_008()
 {
     PROGRAM("AMIN_FP16_008")
     {
@@ -150,7 +116,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_009)
+void TestCodeGenAmin::test_amin_fp16_009()
 {
     PROGRAM("AMIN_FP16_009")
     {
@@ -165,7 +131,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_010)
+void TestCodeGenAmin::test_amin_fp16_010()
 {
     PROGRAM("AMIN_FP16_010")
     {
@@ -180,7 +146,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_011)
+void TestCodeGenAmin::test_amin_fp16_011()
 {
     PROGRAM("AMIN_FP16_011")
     {
@@ -195,7 +161,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_012)
+void TestCodeGenAmin::test_amin_fp16_012()
 {
     PROGRAM("AMIN_FP16_012")
     {
@@ -210,7 +176,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_013)
+void TestCodeGenAmin::test_amin_fp16_013()
 {
     PROGRAM("AMIN_FP16_013")
     {
@@ -225,7 +191,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_014)
+void TestCodeGenAmin::test_amin_fp16_014()
 {
     PROGRAM("AMIN_FP16_014")
     {
@@ -240,7 +206,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_015)
+void TestCodeGenAmin::test_amin_fp16_015()
 {
     PROGRAM("AMIN_FP16_015")
     {
@@ -255,38 +221,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp16_015)
     codeGen.GenCode(*function, {});
 }
 
-// fp32 test cases
-TEST_F(TestCodeGenAmin, test_amin_fp32_001)
-{
-    PROGRAM("AMIN_FP32_001")
-    {
-        TileShape::Current().SetVecTile({48});
-        Tensor operand(DT_FP32, {112}, "operand");
-        Tensor result;
-        FUNCTION("AMIN_FP32_001") { result = Amin(operand, -1, false); }
-    }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMIN_FP32_001");
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-}
-
-TEST_F(TestCodeGenAmin, test_amin_fp32_002)
-{
-    PROGRAM("AMIN_FP32_002")
-    {
-        TileShape::Current().SetVecTile({96});
-        Tensor operand(DT_FP32, {100}, "operand");
-        Tensor result;
-        FUNCTION("AMIN_FP32_002") { result = Amin(operand, -1, false); }
-    }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "AMIN_FP32_002");
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-}
-
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_003)
+void TestCodeGenAmin::test_amin_fp32_003()
 {
     PROGRAM("AMIN_FP32_003")
     {
@@ -301,7 +236,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_004)
+void TestCodeGenAmin::test_amin_fp32_004()
 {
     PROGRAM("AMIN_FP32_004")
     {
@@ -316,7 +251,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_005)
+void TestCodeGenAmin::test_amin_fp32_005()
 {
     PROGRAM("AMIN_FP32_005")
     {
@@ -331,7 +266,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_006)
+void TestCodeGenAmin::test_amin_fp32_006()
 {
     PROGRAM("AMIN_FP32_006")
     {
@@ -346,7 +281,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_007)
+void TestCodeGenAmin::test_amin_fp32_007()
 {
     PROGRAM("AMIN_FP32_007")
     {
@@ -361,7 +296,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_008)
+void TestCodeGenAmin::test_amin_fp32_008()
 {
     PROGRAM("AMIN_FP32_008")
     {
@@ -376,7 +311,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_009)
+void TestCodeGenAmin::test_amin_fp32_009()
 {
     PROGRAM("AMIN_FP32_009")
     {
@@ -391,7 +326,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_010)
+void TestCodeGenAmin::test_amin_fp32_010()
 {
     PROGRAM("AMIN_FP32_010")
     {
@@ -406,7 +341,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_011)
+void TestCodeGenAmin::test_amin_fp32_011()
 {
     PROGRAM("AMIN_FP32_011")
     {
@@ -421,7 +356,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_012)
+void TestCodeGenAmin::test_amin_fp32_012()
 {
     PROGRAM("AMIN_FP32_012")
     {
@@ -436,7 +371,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_013)
+void TestCodeGenAmin::test_amin_fp32_013()
 {
     PROGRAM("AMIN_FP32_013")
     {
@@ -451,7 +386,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_014)
+void TestCodeGenAmin::test_amin_fp32_014()
 {
     PROGRAM("AMIN_FP32_014")
     {
@@ -466,7 +401,7 @@ TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAmin, DISABLED_test_amin_fp32_015)
+void TestCodeGenAmin::test_amin_fp32_015()
 {
     PROGRAM("AMIN_FP32_015")
     {

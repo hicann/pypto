@@ -321,8 +321,7 @@ Status PipeSync::InsertSync(Function& function, std::vector<Operation*>& syncedO
 std::string PipeSync::DepOp::DumpDepOp(const std::vector<Operation*>& opLog)
 {
     std::stringstream ss;
-    ss << "idx: " << idx << " opmagic: " << opLog[idx]->GetOpMagic() << ", " 
-        << opLog[idx]->GetOpcodeStr() << ", ";
+    ss << "idx: " << idx << " opmagic: " << opLog[idx]->GetOpMagic() << ", " << opLog[idx]->GetOpcodeStr() << ", ";
     ss << "setPipe: {";
     for (auto i : setPipe) {
         ss << opLog[i]->GetOpMagic() << " " << opLog[i]->GetOpcodeStr() << ", ";
@@ -672,7 +671,7 @@ Status PipeSync::RelaxMultipleEventIds(
 {
     size_t successNum = 0;
     std::vector<CorePair> coreTypes = {setwaitCoreType, {setwaitCoreType.second, setwaitCoreType.first}};
-    
+
     for (const auto& coreType : coreTypes) {
         for (size_t i = successNum; i < needEvIdNum; i++) {
             bool failedFlag = false;
@@ -1013,8 +1012,8 @@ Status PipeSync::IssueOpPipeSeq(
 }
 
 Status PipeSync::IssueSyncOp(
-    Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog,
-    size_t& totalIssued, size_t& allIssued)
+    Function& function, const std::vector<Operation*>& opLogPtr, std::vector<IndexOp>& syncedOpLog, size_t& totalIssued,
+    size_t& allIssued)
 {
     bool eventIdDeadlock = false;
     uint64_t eventIdDeadlockEnterTimes = 0;
@@ -1574,7 +1573,7 @@ Status PipeSync::RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog)
 bool PipeSync::GenSyncOp(PipeCoreRealEx set, PipeCoreRealEx wait, int eventId, bool isSet, Operation& op)
 {
     if (set.core != wait.core) {
-        if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3113) {
+        if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
             op.SetOpCode(isSet ? Opcode::OP_CV_SYNC_SRC : Opcode::OP_CV_SYNC_DST);
         }
         if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && !isSet && wait.core == CoreType::AIV) {
@@ -1599,7 +1598,7 @@ bool PipeSync::GenSyncOp(PipeCoreRealEx set, PipeCoreRealEx wait, int eventId, b
     op.syncQueue_ = {set.pipe, wait.pipe, set.core, wait.core, eventId, set.aivCore, wait.aivCore};
     if (set.core == CoreType::AIV) {
         if ((Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) ||
-            (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3113)) {
+            (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch()))) {
             return false;
         }
         op.SetOpCode(Opcode::OP_BAR_V);
@@ -1625,7 +1624,7 @@ Status PipeSync::GetEventId(const PipePairEx& pp, int& eventId)
 
     eventId = eventQ.front();
     eventQ.pop_front();
-    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3113) {
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
         if (pp.first.core != pp.second.core) {
             PipePairEx ppReverse = {pp.second, pp.first};
             auto& eventQReverse = GetFreeEventIdQueue(ppReverse);
@@ -1850,7 +1849,7 @@ void PipeSync::InitCVEventIdQ(CorePair corePair)
 std::deque<int>& PipeSync::GetFreeEventIdQueue(const PipePairEx& pp)
 {
     // 若coretype不同，所有CV同步共享16个eventid
-    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3113) {
+    if (!IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
         if (pp.first.core != pp.second.core) {
             CorePair corePair = {{pp.first.core, pp.first.aivCore}, {pp.second.core, pp.second.aivCore}};
             if (crossCoreFreeEventId_.count(corePair) == 0) {
@@ -1936,9 +1935,10 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
         if (i != oriOpList.size() - 1) {
             std::vector<std::shared_ptr<LogicalTensor>> input;
             std::vector<std::shared_ptr<LogicalTensor>> output;
-            Operation& syncOp = irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
+            Operation& syncOp =
+                irBuilder_.CreateTensorOpStmt(*subGraphFunc, npu::tile_fwk::Opcode::OP_BAR_ALL, input, output);
             syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
-                                AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
+                                 AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
             newOpList.push_back(&syncOp);
         }
     }

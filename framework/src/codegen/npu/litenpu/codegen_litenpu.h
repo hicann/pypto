@@ -55,6 +55,8 @@ private:
 
     void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const override;
 
+    void BuildIncludes(std::ostringstream& oss) const override;
+
     std::string GenFuncGlobalCodeAfterReplace(
         const Function& func, std::pair<uint64_t, Function*> subFuncPair, const std::string& subProgramCode);
 

@@ -13,24 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_unsqueeze.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenUnsqueeze : public CodegenTestLiteNPU {};
+TestCodeGenUnsqueeze::TestCodeGenUnsqueeze() = default;
+TestCodeGenUnsqueeze::~TestCodeGenUnsqueeze() = default;
 
-// fp16 test cases
-TEST_F(TestCodeGenUnsqueeze, test_unsqueeze_fp16_001)
+TestCodeGenUnsqueeze& TestCodeGenUnsqueeze::Instance()
+{
+    static TestCodeGenUnsqueeze instance;
+    return instance;
+}
+
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_001()
 {
     PROGRAM("UNSQUEEZE_FP16_001")
     {
@@ -45,7 +41,7 @@ TEST_F(TestCodeGenUnsqueeze, test_unsqueeze_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_002)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_002()
 {
     PROGRAM("UNSQUEEZE_FP16_002")
     {
@@ -60,7 +56,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_003)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_003()
 {
     PROGRAM("UNSQUEEZE_FP16_003")
     {
@@ -75,7 +71,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_004)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_004()
 {
     PROGRAM("UNSQUEEZE_FP16_004")
     {
@@ -90,7 +86,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_005)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_005()
 {
     PROGRAM("UNSQUEEZE_FP16_005")
     {
@@ -105,7 +101,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_006)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_006()
 {
     PROGRAM("UNSQUEEZE_FP16_006")
     {
@@ -120,7 +116,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_007)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_007()
 {
     PROGRAM("UNSQUEEZE_FP16_007")
     {
@@ -135,7 +131,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_008)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_008()
 {
     PROGRAM("UNSQUEEZE_FP16_008")
     {
@@ -150,7 +146,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_010)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp16_010()
 {
     PROGRAM("UNSQUEEZE_FP16_010")
     {
@@ -165,8 +161,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp16_010)
     codeGen.GenCode(*function, {});
 }
 
-// fp32 test cases
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_001)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_001()
 {
     PROGRAM("UNSQUEEZE_FP32_001")
     {
@@ -181,7 +176,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_002)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_002()
 {
     PROGRAM("UNSQUEEZE_FP32_002")
     {
@@ -196,7 +191,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_003)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_003()
 {
     PROGRAM("UNSQUEEZE_FP32_003")
     {
@@ -211,7 +206,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_004)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_004()
 {
     PROGRAM("UNSQUEEZE_FP32_004")
     {
@@ -226,7 +221,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_005)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_005()
 {
     PROGRAM("UNSQUEEZE_FP32_005")
     {
@@ -241,7 +236,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_006)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_006()
 {
     PROGRAM("UNSQUEEZE_FP32_006")
     {
@@ -256,7 +251,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_007)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_007()
 {
     PROGRAM("UNSQUEEZE_FP32_007")
     {
@@ -271,7 +266,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_008)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_008()
 {
     PROGRAM("UNSQUEEZE_FP32_008")
     {
@@ -286,7 +281,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_010)
+void TestCodeGenUnsqueeze::test_unsqueeze_fp32_010()
 {
     PROGRAM("UNSQUEEZE_FP32_010")
     {
@@ -301,8 +296,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-// int8 test cases
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_001)
+void TestCodeGenUnsqueeze::test_unsqueeze_int8_001()
 {
     PROGRAM("UNSQUEEZE_INT8_001")
     {
@@ -317,7 +311,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_002)
+void TestCodeGenUnsqueeze::test_unsqueeze_int8_002()
 {
     PROGRAM("UNSQUEEZE_INT8_002")
     {
@@ -332,7 +326,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_003)
+void TestCodeGenUnsqueeze::test_unsqueeze_int8_003()
 {
     PROGRAM("UNSQUEEZE_INT8_003")
     {
@@ -347,7 +341,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_004)
+void TestCodeGenUnsqueeze::test_unsqueeze_int8_004()
 {
     PROGRAM("UNSQUEEZE_INT8_004")
     {
@@ -362,7 +356,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_005)
+void TestCodeGenUnsqueeze::test_unsqueeze_int8_005()
 {
     PROGRAM("UNSQUEEZE_INT8_005")
     {
@@ -377,8 +371,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int8_005)
     codeGen.GenCode(*function, {});
 }
 
-// int16 test cases
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_001)
+void TestCodeGenUnsqueeze::test_unsqueeze_int16_001()
 {
     PROGRAM("UNSQUEEZE_INT16_001")
     {
@@ -393,7 +386,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_002)
+void TestCodeGenUnsqueeze::test_unsqueeze_int16_002()
 {
     PROGRAM("UNSQUEEZE_INT16_002")
     {
@@ -408,7 +401,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_003)
+void TestCodeGenUnsqueeze::test_unsqueeze_int16_003()
 {
     PROGRAM("UNSQUEEZE_INT16_003")
     {
@@ -423,7 +416,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_004)
+void TestCodeGenUnsqueeze::test_unsqueeze_int16_004()
 {
     PROGRAM("UNSQUEEZE_INT16_004")
     {
@@ -438,7 +431,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_005)
+void TestCodeGenUnsqueeze::test_unsqueeze_int16_005()
 {
     PROGRAM("UNSQUEEZE_INT16_005")
     {
@@ -453,8 +446,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int16_005)
     codeGen.GenCode(*function, {});
 }
 
-// int32 test cases
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_001)
+void TestCodeGenUnsqueeze::test_unsqueeze_int32_001()
 {
     PROGRAM("UNSQUEEZE_INT32_001")
     {
@@ -469,7 +461,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_002)
+void TestCodeGenUnsqueeze::test_unsqueeze_int32_002()
 {
     PROGRAM("UNSQUEEZE_INT32_002")
     {
@@ -484,7 +476,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_003)
+void TestCodeGenUnsqueeze::test_unsqueeze_int32_003()
 {
     PROGRAM("UNSQUEEZE_INT32_003")
     {
@@ -499,7 +491,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_004)
+void TestCodeGenUnsqueeze::test_unsqueeze_int32_004()
 {
     PROGRAM("UNSQUEEZE_INT32_004")
     {
@@ -514,7 +506,7 @@ TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenUnsqueeze, DISABLED_test_unsqueeze_int32_005)
+void TestCodeGenUnsqueeze::test_unsqueeze_int32_005()
 {
     PROGRAM("UNSQUEEZE_INT32_005")
     {

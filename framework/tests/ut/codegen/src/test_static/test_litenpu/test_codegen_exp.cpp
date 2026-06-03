@@ -9,28 +9,24 @@
  */
 
 /*!
- * \file test_operation_impl.cpp
+ * \file test_codegen_exp.cpp
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_exp.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenExp : public CodegenTestLiteNPU {};
+TestCodeGenExp::TestCodeGenExp() = default;
+TestCodeGenExp::~TestCodeGenExp() = default;
 
-// Unary_fp16_001
-TEST_F(TestCodeGenExp, test_Exp_fp16_001)
+TestCodeGenExp& TestCodeGenExp::Instance()
+{
+    static TestCodeGenExp instance;
+    return instance;
+}
+
+void TestCodeGenExp::test_Exp_fp16_001()
 {
     PROGRAM("EXP_fp16_001")
     {
@@ -49,8 +45,7 @@ TEST_F(TestCodeGenExp, test_Exp_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_002
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_002)
+void TestCodeGenExp::test_Exp_fp16_002()
 {
     PROGRAM("EXP_fp16_002")
     {
@@ -69,8 +64,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_003
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_003)
+void TestCodeGenExp::test_exp_fp32_003()
 {
     PROGRAM("EXP_fp32_003")
     {
@@ -89,8 +83,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_004
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_004)
+void TestCodeGenExp::test_exp_fp32_004()
 {
     PROGRAM("EXP_fp32_004")
     {
@@ -109,8 +102,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_005
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_005)
+void TestCodeGenExp::test_Exp_fp16_005()
 {
     PROGRAM("EXP_fp16_005")
     {
@@ -129,8 +121,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_006
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_006)
+void TestCodeGenExp::test_exp_fp32_006()
 {
     PROGRAM("EXP_fp32_006")
     {
@@ -149,8 +140,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_007
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_007)
+void TestCodeGenExp::test_Exp_fp16_007()
 {
     PROGRAM("EXP_fp16_007")
     {
@@ -169,8 +159,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_008
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_008)
+void TestCodeGenExp::test_exp_fp32_008()
 {
     PROGRAM("EXP_fp32_008")
     {
@@ -189,8 +178,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_009
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_009)
+void TestCodeGenExp::test_Exp_fp16_009()
 {
     PROGRAM("EXP_fp16_009")
     {
@@ -209,8 +197,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_010
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_010)
+void TestCodeGenExp::test_exp_fp32_010()
 {
     PROGRAM("EXP_fp32_010")
     {
@@ -229,8 +216,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_011
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_011)
+void TestCodeGenExp::test_Exp_fp16_011()
 {
     PROGRAM("EXP_fp16_011")
     {
@@ -249,8 +235,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_011)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_012
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_012)
+void TestCodeGenExp::test_exp_fp32_012()
 {
     PROGRAM("EXP_fp32_012")
     {
@@ -269,8 +254,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_012)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_013
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_013)
+void TestCodeGenExp::test_Exp_fp16_013()
 {
     PROGRAM("EXP_fp16_013")
     {
@@ -289,8 +273,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_013)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp32_014
-TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_014)
+void TestCodeGenExp::test_exp_fp32_014()
 {
     PROGRAM("EXP_fp32_014")
     {
@@ -309,8 +292,7 @@ TEST_F(TestCodeGenExp, DISABLED_test_exp_fp32_014)
     codeGen.GenCode(*function, {});
 }
 
-// Unary_fp16_015
-TEST_F(TestCodeGenExp, DISABLED_test_Exp_fp16_015)
+void TestCodeGenExp::test_Exp_fp16_015()
 {
     PROGRAM("EXP_fp16_015")
     {

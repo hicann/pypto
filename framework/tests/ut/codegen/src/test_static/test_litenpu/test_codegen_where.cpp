@@ -13,24 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_where.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenWhere : public CodegenTestLiteNPU {};
+TestCodeGenWhere::TestCodeGenWhere() = default;
+TestCodeGenWhere::~TestCodeGenWhere() = default;
 
-// fp16_001
-TEST_F(TestCodeGenWhere, test_where_fp16_001)
+TestCodeGenWhere& TestCodeGenWhere::Instance()
+{
+    static TestCodeGenWhere instance;
+    return instance;
+}
+
+void TestCodeGenWhere::test_where_fp16_001()
 {
     PROGRAM("WHERE_FP16_001")
     {
@@ -47,8 +43,7 @@ TEST_F(TestCodeGenWhere, test_where_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_002
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_002)
+void TestCodeGenWhere::test_where_fp16_002()
 {
     PROGRAM("WHERE_FP16_002")
     {
@@ -65,8 +60,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_003
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_003)
+void TestCodeGenWhere::test_where_fp16_003()
 {
     PROGRAM("WHERE_FP16_003")
     {
@@ -83,8 +77,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_004
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_004)
+void TestCodeGenWhere::test_where_fp16_004()
 {
     PROGRAM("WHERE_FP16_004")
     {
@@ -101,8 +94,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_005
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_005)
+void TestCodeGenWhere::test_where_fp16_005()
 {
     PROGRAM("WHERE_FP16_005")
     {
@@ -119,8 +111,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_006
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_006)
+void TestCodeGenWhere::test_where_fp16_006()
 {
     PROGRAM("WHERE_FP16_006")
     {
@@ -137,8 +128,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_007
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_007)
+void TestCodeGenWhere::test_where_fp16_007()
 {
     PROGRAM("WHERE_FP16_007")
     {
@@ -155,8 +145,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_008
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_008)
+void TestCodeGenWhere::test_where_fp16_008()
 {
     PROGRAM("WHERE_FP16_008")
     {
@@ -173,8 +162,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_009
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_009)
+void TestCodeGenWhere::test_where_fp16_009()
 {
     PROGRAM("WHERE_FP16_009")
     {
@@ -191,8 +179,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_010
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_010)
+void TestCodeGenWhere::test_where_fp16_010()
 {
     PROGRAM("WHERE_FP16_010")
     {
@@ -209,8 +196,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_010)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_011
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_011)
+void TestCodeGenWhere::test_where_fp16_011()
 {
     PROGRAM("WHERE_FP16_011")
     {
@@ -227,8 +213,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_011)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_012
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_012)
+void TestCodeGenWhere::test_where_fp16_012()
 {
     PROGRAM("WHERE_FP16_012")
     {
@@ -245,8 +230,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_012)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_013
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_013)
+void TestCodeGenWhere::test_where_fp16_013()
 {
     PROGRAM("WHERE_FP16_013")
     {
@@ -263,8 +247,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_013)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_014
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_014)
+void TestCodeGenWhere::test_where_fp16_014()
 {
     PROGRAM("WHERE_FP16_014")
     {
@@ -281,8 +264,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_014)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_015
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_015)
+void TestCodeGenWhere::test_where_fp16_015()
 {
     PROGRAM("WHERE_FP16_015")
     {
@@ -299,8 +281,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_015)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_016
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_016)
+void TestCodeGenWhere::test_where_fp16_016()
 {
     PROGRAM("WHERE_FP16_016")
     {
@@ -317,8 +298,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_016)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_017
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_017)
+void TestCodeGenWhere::test_where_fp16_017()
 {
     PROGRAM("WHERE_FP16_017")
     {
@@ -335,8 +315,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_017)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_018
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_018)
+void TestCodeGenWhere::test_where_fp16_018()
 {
     PROGRAM("WHERE_FP16_018")
     {
@@ -353,8 +332,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_018)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_019
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_019)
+void TestCodeGenWhere::test_where_fp16_019()
 {
     PROGRAM("WHERE_FP16_019")
     {
@@ -371,8 +349,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_019)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_020
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_020)
+void TestCodeGenWhere::test_where_fp16_020()
 {
     PROGRAM("WHERE_FP16_020")
     {
@@ -389,8 +366,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_020)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_021
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_021)
+void TestCodeGenWhere::test_where_fp16_021()
 {
     PROGRAM("WHERE_FP16_021")
     {
@@ -407,8 +383,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_021)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_022
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_022)
+void TestCodeGenWhere::test_where_fp16_022()
 {
     PROGRAM("WHERE_FP16_022")
     {
@@ -425,8 +400,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_022)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_023
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_023)
+void TestCodeGenWhere::test_where_fp16_023()
 {
     PROGRAM("WHERE_FP16_023")
     {
@@ -443,8 +417,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_023)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_024
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_024)
+void TestCodeGenWhere::test_where_fp16_024()
 {
     PROGRAM("WHERE_FP16_024")
     {
@@ -461,8 +434,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_024)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_025
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_025)
+void TestCodeGenWhere::test_where_fp16_025()
 {
     PROGRAM("WHERE_FP16_025")
     {
@@ -479,8 +451,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_025)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_026
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_026)
+void TestCodeGenWhere::test_where_fp16_026()
 {
     PROGRAM("WHERE_FP16_026")
     {
@@ -497,8 +468,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_026)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_027
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_027)
+void TestCodeGenWhere::test_where_fp16_027()
 {
     PROGRAM("WHERE_FP16_027")
     {
@@ -515,8 +485,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_027)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_028
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_028)
+void TestCodeGenWhere::test_where_fp16_028()
 {
     PROGRAM("WHERE_FP16_028")
     {
@@ -533,8 +502,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_028)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_029
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_029)
+void TestCodeGenWhere::test_where_fp16_029()
 {
     PROGRAM("WHERE_FP16_029")
     {
@@ -551,8 +519,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_029)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_030
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_030)
+void TestCodeGenWhere::test_where_fp16_030()
 {
     PROGRAM("WHERE_FP16_030")
     {
@@ -569,8 +536,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_030)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_031
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_031)
+void TestCodeGenWhere::test_where_fp16_031()
 {
     PROGRAM("WHERE_FP16_031")
     {
@@ -587,8 +553,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_031)
     codeGen.GenCode(*function, {});
 }
 
-// fp16_032
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_032)
+void TestCodeGenWhere::test_where_fp16_032()
 {
     PROGRAM("WHERE_FP16_032")
     {
@@ -605,8 +570,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp16_032)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_001
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_001)
+void TestCodeGenWhere::test_where_fp32_001()
 {
     PROGRAM("WHERE_FP32_001")
     {
@@ -623,8 +587,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_001)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_002
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_002)
+void TestCodeGenWhere::test_where_fp32_002()
 {
     PROGRAM("WHERE_FP32_002")
     {
@@ -641,8 +604,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_002)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_003
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_003)
+void TestCodeGenWhere::test_where_fp32_003()
 {
     PROGRAM("WHERE_FP32_003")
     {
@@ -659,8 +621,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_004
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_004)
+void TestCodeGenWhere::test_where_fp32_004()
 {
     PROGRAM("WHERE_FP32_004")
     {
@@ -677,8 +638,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_005
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_005)
+void TestCodeGenWhere::test_where_fp32_005()
 {
     PROGRAM("WHERE_FP32_005")
     {
@@ -695,8 +655,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_006
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_006)
+void TestCodeGenWhere::test_where_fp32_006()
 {
     PROGRAM("WHERE_FP32_006")
     {
@@ -713,8 +672,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_007
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_007)
+void TestCodeGenWhere::test_where_fp32_007()
 {
     PROGRAM("WHERE_FP32_007")
     {
@@ -731,8 +689,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_008
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_008)
+void TestCodeGenWhere::test_where_fp32_008()
 {
     PROGRAM("WHERE_FP32_008")
     {
@@ -749,8 +706,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_009
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_009)
+void TestCodeGenWhere::test_where_fp32_009()
 {
     PROGRAM("WHERE_FP32_009")
     {
@@ -767,8 +723,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_010
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_010)
+void TestCodeGenWhere::test_where_fp32_010()
 {
     PROGRAM("WHERE_FP32_010")
     {
@@ -785,8 +740,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_011
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_011)
+void TestCodeGenWhere::test_where_fp32_011()
 {
     PROGRAM("WHERE_FP32_011")
     {
@@ -803,8 +757,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_011)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_012
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_012)
+void TestCodeGenWhere::test_where_fp32_012()
 {
     PROGRAM("WHERE_FP32_012")
     {
@@ -821,8 +774,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_012)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_013
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_013)
+void TestCodeGenWhere::test_where_fp32_013()
 {
     PROGRAM("WHERE_FP32_013")
     {
@@ -839,8 +791,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_013)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_014
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_014)
+void TestCodeGenWhere::test_where_fp32_014()
 {
     PROGRAM("WHERE_FP32_014")
     {
@@ -857,8 +808,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_014)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_015
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_015)
+void TestCodeGenWhere::test_where_fp32_015()
 {
     PROGRAM("WHERE_FP32_015")
     {
@@ -875,8 +825,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_015)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_016
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_016)
+void TestCodeGenWhere::test_where_fp32_016()
 {
     PROGRAM("WHERE_FP32_016")
     {
@@ -893,8 +842,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_016)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_017
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_017)
+void TestCodeGenWhere::test_where_fp32_017()
 {
     PROGRAM("WHERE_FP32_017")
     {
@@ -911,8 +859,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_017)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_018
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_018)
+void TestCodeGenWhere::test_where_fp32_018()
 {
     PROGRAM("WHERE_FP32_018")
     {
@@ -929,8 +876,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_018)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_019
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_019)
+void TestCodeGenWhere::test_where_fp32_019()
 {
     PROGRAM("WHERE_FP32_019")
     {
@@ -947,8 +893,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_019)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_020
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_020)
+void TestCodeGenWhere::test_where_fp32_020()
 {
     PROGRAM("WHERE_FP32_020")
     {
@@ -965,8 +910,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_020)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_021
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_021)
+void TestCodeGenWhere::test_where_fp32_021()
 {
     PROGRAM("WHERE_FP32_021")
     {
@@ -983,8 +927,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_021)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_022
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_022)
+void TestCodeGenWhere::test_where_fp32_022()
 {
     PROGRAM("WHERE_FP32_022")
     {
@@ -1001,8 +944,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_022)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_023
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_023)
+void TestCodeGenWhere::test_where_fp32_023()
 {
     PROGRAM("WHERE_FP32_023")
     {
@@ -1019,8 +961,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_023)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_024
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_024)
+void TestCodeGenWhere::test_where_fp32_024()
 {
     PROGRAM("WHERE_FP32_024")
     {
@@ -1037,8 +978,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_024)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_025
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_025)
+void TestCodeGenWhere::test_where_fp32_025()
 {
     PROGRAM("WHERE_FP32_025")
     {
@@ -1055,8 +995,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_025)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_026
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_026)
+void TestCodeGenWhere::test_where_fp32_026()
 {
     PROGRAM("WHERE_FP32_026")
     {
@@ -1073,8 +1012,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_026)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_027
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_027)
+void TestCodeGenWhere::test_where_fp32_027()
 {
     PROGRAM("WHERE_FP32_027")
     {
@@ -1091,8 +1029,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_027)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_028
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_028)
+void TestCodeGenWhere::test_where_fp32_028()
 {
     PROGRAM("WHERE_FP32_028")
     {
@@ -1109,8 +1046,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_028)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_029
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_029)
+void TestCodeGenWhere::test_where_fp32_029()
 {
     PROGRAM("WHERE_FP32_029")
     {
@@ -1127,8 +1063,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_029)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_030
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_030)
+void TestCodeGenWhere::test_where_fp32_030()
 {
     PROGRAM("WHERE_FP32_030")
     {
@@ -1145,8 +1080,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_030)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_031
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_031)
+void TestCodeGenWhere::test_where_fp32_031()
 {
     PROGRAM("WHERE_FP32_031")
     {
@@ -1163,8 +1097,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_031)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_032
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_032)
+void TestCodeGenWhere::test_where_fp32_032()
 {
     PROGRAM("WHERE_FP32_032")
     {
@@ -1181,8 +1114,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_032)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_033
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_033)
+void TestCodeGenWhere::test_where_fp32_033()
 {
     PROGRAM("WHERE_FP32_033")
     {
@@ -1199,8 +1131,7 @@ TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_033)
     codeGen.GenCode(*function, {});
 }
 
-// fp32_034
-TEST_F(TestCodeGenWhere, DISABLED_test_where_fp32_034)
+void TestCodeGenWhere::test_where_fp32_034()
 {
     PROGRAM("WHERE_FP32_034")
     {

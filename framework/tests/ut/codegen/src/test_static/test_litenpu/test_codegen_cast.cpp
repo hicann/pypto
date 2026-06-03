@@ -9,28 +9,24 @@
  */
 
 /*!
- * \file test_operation_impl.cpp
+ * \file test_codegen_cast.cpp
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_cast.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenCast : public CodegenTestLiteNPU {};
+TestCodeGenCast::TestCodeGenCast() = default;
+TestCodeGenCast::~TestCodeGenCast() = default;
 
-// cast_001
-TEST_F(TestCodeGenCast, test_Cast_001)
+TestCodeGenCast& TestCodeGenCast::Instance()
+{
+    static TestCodeGenCast instance;
+    return instance;
+}
+
+void TestCodeGenCast::test_Cast_001()
 {
     PROGRAM("CAST_001")
     {
@@ -49,8 +45,7 @@ TEST_F(TestCodeGenCast, test_Cast_001)
     codeGen.GenCode(*function, {});
 }
 
-// cast_002
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_002)
+void TestCodeGenCast::test_Cast_002()
 {
     PROGRAM("CAST_002")
     {
@@ -69,8 +64,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_002)
     codeGen.GenCode(*function, {});
 }
 
-// cast_003
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_003)
+void TestCodeGenCast::test_Cast_003()
 {
     PROGRAM("CAST_003")
     {
@@ -89,8 +83,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_003)
     codeGen.GenCode(*function, {});
 }
 
-// cast_004
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_004)
+void TestCodeGenCast::test_Cast_004()
 {
     PROGRAM("CAST_004")
     {
@@ -99,7 +92,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_004)
         FUNCTION("CAST_004")
         {
             TileShape::Current().SetVecTile({1, 130});
-            output = Cast(input, DataType::DT_FP16, CAST_FLOOR, SaturationMode::OFF);
+            output = Cast(input, DataType::DT_FP16, CAST_ODD, SaturationMode::OFF);
         }
     }
 
@@ -109,8 +102,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_004)
     codeGen.GenCode(*function, {});
 }
 
-// cast_005
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_005)
+void TestCodeGenCast::test_Cast_005()
 {
     PROGRAM("CAST_005")
     {
@@ -129,8 +121,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_005)
     codeGen.GenCode(*function, {});
 }
 
-// cast_006
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_006)
+void TestCodeGenCast::test_Cast_006()
 {
     PROGRAM("CAST_006")
     {
@@ -149,8 +140,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_006)
     codeGen.GenCode(*function, {});
 }
 
-// cast_007
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_007)
+void TestCodeGenCast::test_Cast_007()
 {
     PROGRAM("CAST_007")
     {
@@ -159,7 +149,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_007)
         FUNCTION("CAST_007")
         {
             TileShape::Current().SetVecTile({1, 5, 32});
-            output = Cast(input, DataType::DT_FP16, CAST_ODD, SaturationMode::OFF);
+            output = Cast(input, DataType::DT_FP16, CAST_FLOOR, SaturationMode::OFF);
         }
     }
 
@@ -169,8 +159,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_007)
     codeGen.GenCode(*function, {});
 }
 
-// cast_008
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_008)
+void TestCodeGenCast::test_Cast_008()
 {
     PROGRAM("CAST_008")
     {
@@ -189,8 +178,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_008)
     codeGen.GenCode(*function, {});
 }
 
-// cast_009
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_009)
+void TestCodeGenCast::test_Cast_009()
 {
     PROGRAM("CAST_009")
     {
@@ -209,8 +197,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_009)
     codeGen.GenCode(*function, {});
 }
 
-// cast_010
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_010)
+void TestCodeGenCast::test_Cast_010()
 {
     PROGRAM("CAST_010")
     {
@@ -229,8 +216,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_010)
     codeGen.GenCode(*function, {});
 }
 
-// cast_011
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_011)
+void TestCodeGenCast::test_Cast_011()
 {
     PROGRAM("CAST_011")
     {
@@ -249,8 +235,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_011)
     codeGen.GenCode(*function, {});
 }
 
-// cast_012
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_012)
+void TestCodeGenCast::test_Cast_012()
 {
     PROGRAM("CAST_012")
     {
@@ -269,8 +254,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_012)
     codeGen.GenCode(*function, {});
 }
 
-// cast_013
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_013)
+void TestCodeGenCast::test_Cast_013()
 {
     PROGRAM("CAST_013")
     {
@@ -289,8 +273,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_013)
     codeGen.GenCode(*function, {});
 }
 
-// cast_014
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_014)
+void TestCodeGenCast::test_Cast_014()
 {
     PROGRAM("CAST_014")
     {
@@ -309,8 +292,7 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_014)
     codeGen.GenCode(*function, {});
 }
 
-// cast_015
-TEST_F(TestCodeGenCast, DISABLED_test_Cast_015)
+void TestCodeGenCast::test_Cast_015()
 {
     PROGRAM("CAST_015")
     {
@@ -324,6 +306,120 @@ TEST_F(TestCodeGenCast, DISABLED_test_Cast_015)
     }
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_015");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+void TestCodeGenCast::test_Cast_016()
+{
+    PROGRAM("CAST_016")
+    {
+        Tensor input(DataType::DT_FP32, {2, 3, 160}, "input");
+        auto output = Tensor(DataType::DT_INT16, {2, 3, 160}, "output");
+        FUNCTION("CAST_016")
+        {
+            TileShape::Current().SetVecTile({1, 3, 32});
+            output = Cast(input, DataType::DT_INT16, CAST_ROUND, SaturationMode::OFF);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_016");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+void TestCodeGenCast::test_Cast_017()
+{
+    PROGRAM("CAST_017")
+    {
+        Tensor input(DataType::DT_FP32, {3, 4, 128}, "input");
+        auto output = Tensor(DataType::DT_INT16, {3, 4, 128}, "output");
+        FUNCTION("CAST_017")
+        {
+            TileShape::Current().SetVecTile({2, 2, 64});
+            output = Cast(input, DataType::DT_INT16, CAST_FLOOR, SaturationMode::OFF);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_017");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+void TestCodeGenCast::test_Cast_018()
+{
+    PROGRAM("CAST_018")
+    {
+        Tensor input(DataType::DT_FP32, {2, 5, 144}, "input");
+        auto output = Tensor(DataType::DT_INT16, {2, 5, 144}, "output");
+        FUNCTION("CAST_018")
+        {
+            TileShape::Current().SetVecTile({1, 5, 144});
+            output = Cast(input, DataType::DT_INT16, CAST_CEIL, SaturationMode::OFF);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_018");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+void TestCodeGenCast::test_Cast_019()
+{
+    PROGRAM("CAST_019")
+    {
+        Tensor input(DataType::DT_FP32, {2, 4, 160}, "input");
+        auto output = Tensor(DataType::DT_FP16, {2, 4, 160}, "output");
+        FUNCTION("CAST_019")
+        {
+            TileShape::Current().SetVecTile({1, 2, 160});
+            output = Cast(input, DataType::DT_FP16, CAST_ROUND, SaturationMode::OFF);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_019");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+void TestCodeGenCast::test_Cast_020()
+{
+    PROGRAM("CAST_020")
+    {
+        Tensor input(DataType::DT_FP32, {3, 5, 136}, "input");
+        auto output = Tensor(DataType::DT_FP16, {3, 5, 136}, "output");
+        FUNCTION("CAST_020")
+        {
+            TileShape::Current().SetVecTile({2, 5, 136});
+            output = Cast(input, DataType::DT_FP16, CAST_CEIL, SaturationMode::OFF);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_020");
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+void TestCodeGenCast::test_Cast_021()
+{
+    PROGRAM("CAST_021")
+    {
+        Tensor input(DataType::DT_FP32, {4, 6, 148}, "input");
+        auto output = Tensor(DataType::DT_FP16, {4, 6, 148}, "output");
+        FUNCTION("CAST_021")
+        {
+            TileShape::Current().SetVecTile({2, 3, 148});
+            output = Cast(input, DataType::DT_FP16, CAST_ODD, SaturationMode::OFF);
+        }
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CAST_021");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

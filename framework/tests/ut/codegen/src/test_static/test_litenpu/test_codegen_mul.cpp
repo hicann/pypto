@@ -13,23 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_mul.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenMul : public CodegenTestLiteNPU {};
+TestCodeGenMul::TestCodeGenMul() = default;
+TestCodeGenMul::~TestCodeGenMul() = default;
 
-TEST_F(TestCodeGenMul, test_mul_001)
+TestCodeGenMul& TestCodeGenMul::Instance()
+{
+    static TestCodeGenMul instance;
+    return instance;
+}
+
+void TestCodeGenMul::test_mul_001()
 {
     PROGRAM("MUL_001")
     {
@@ -48,7 +45,7 @@ TEST_F(TestCodeGenMul, test_mul_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_002)
+void TestCodeGenMul::test_mul_002()
 {
     PROGRAM("MUL_002")
     {
@@ -67,7 +64,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_003)
+void TestCodeGenMul::test_mul_003()
 {
     PROGRAM("MUL_003")
     {
@@ -86,7 +83,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_004)
+void TestCodeGenMul::test_mul_004()
 {
     PROGRAM("MUL_004")
     {
@@ -105,7 +102,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_005)
+void TestCodeGenMul::test_mul_005()
 {
     PROGRAM("MUL_005")
     {
@@ -124,7 +121,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_006)
+void TestCodeGenMul::test_mul_006()
 {
     PROGRAM("MUL_006")
     {
@@ -143,7 +140,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_007)
+void TestCodeGenMul::test_mul_007()
 {
     PROGRAM("MUL_007")
     {
@@ -162,7 +159,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_008)
+void TestCodeGenMul::test_mul_008()
 {
     PROGRAM("MUL_008")
     {
@@ -181,7 +178,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_009)
+void TestCodeGenMul::test_mul_009()
 {
     PROGRAM("MUL_009")
     {
@@ -200,7 +197,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_010)
+void TestCodeGenMul::test_mul_010()
 {
     PROGRAM("MUL_010")
     {
@@ -219,7 +216,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_011)
+void TestCodeGenMul::test_mul_011()
 {
     PROGRAM("MUL_011")
     {
@@ -238,7 +235,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_012)
+void TestCodeGenMul::test_mul_012()
 {
     PROGRAM("MUL_012")
     {
@@ -257,7 +254,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_013)
+void TestCodeGenMul::test_mul_013()
 {
     PROGRAM("MUL_013")
     {
@@ -276,7 +273,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_014)
+void TestCodeGenMul::test_mul_014()
 {
     PROGRAM("MUL_014")
     {
@@ -295,7 +292,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_015)
+void TestCodeGenMul::test_mul_015()
 {
     PROGRAM("MUL_015")
     {
@@ -314,7 +311,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_016)
+void TestCodeGenMul::test_mul_016()
 {
     PROGRAM("MUL_016")
     {
@@ -333,7 +330,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_017)
+void TestCodeGenMul::test_mul_017()
 {
     PROGRAM("MUL_017")
     {
@@ -352,7 +349,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_018)
+void TestCodeGenMul::test_mul_018()
 {
     PROGRAM("MUL_018")
     {
@@ -371,7 +368,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_018)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_019)
+void TestCodeGenMul::test_mul_019()
 {
     PROGRAM("MUL_019")
     {
@@ -390,7 +387,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_019)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_020)
+void TestCodeGenMul::test_mul_020()
 {
     PROGRAM("MUL_020")
     {
@@ -409,7 +406,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_020)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_021)
+void TestCodeGenMul::test_mul_021()
 {
     PROGRAM("MUL_021")
     {
@@ -428,7 +425,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_021)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_022)
+void TestCodeGenMul::test_mul_022()
 {
     PROGRAM("MUL_022")
     {
@@ -447,7 +444,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_022)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_023)
+void TestCodeGenMul::test_mul_023()
 {
     PROGRAM("MUL_023")
     {
@@ -466,7 +463,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_023)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_024)
+void TestCodeGenMul::test_mul_024()
 {
     PROGRAM("MUL_024")
     {
@@ -485,7 +482,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_024)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_025)
+void TestCodeGenMul::test_mul_025()
 {
     PROGRAM("MUL_025")
     {
@@ -504,7 +501,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_025)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_026)
+void TestCodeGenMul::test_mul_026()
 {
     PROGRAM("MUL_026")
     {
@@ -523,7 +520,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_026)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_027)
+void TestCodeGenMul::test_mul_027()
 {
     PROGRAM("MUL_027")
     {
@@ -542,7 +539,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_027)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_028)
+void TestCodeGenMul::test_mul_028()
 {
     PROGRAM("MUL_028")
     {
@@ -561,7 +558,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_028)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_029)
+void TestCodeGenMul::test_mul_029()
 {
     PROGRAM("MUL_029")
     {
@@ -580,7 +577,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_029)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_030)
+void TestCodeGenMul::test_mul_030()
 {
     PROGRAM("MUL_030")
     {
@@ -599,7 +596,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_030)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_031)
+void TestCodeGenMul::test_mul_031()
 {
     PROGRAM("MUL_031")
     {
@@ -618,7 +615,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_031)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_032)
+void TestCodeGenMul::test_mul_032()
 {
     PROGRAM("MUL_032")
     {
@@ -637,7 +634,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_032)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_033)
+void TestCodeGenMul::test_mul_033()
 {
     PROGRAM("MUL_033")
     {
@@ -656,7 +653,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_033)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_034)
+void TestCodeGenMul::test_mul_034()
 {
     PROGRAM("MUL_034")
     {
@@ -675,7 +672,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_034)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_035)
+void TestCodeGenMul::test_mul_035()
 {
     PROGRAM("MUL_035")
     {
@@ -694,7 +691,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_035)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_036)
+void TestCodeGenMul::test_mul_036()
 {
     PROGRAM("MUL_036")
     {
@@ -713,7 +710,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_036)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_037)
+void TestCodeGenMul::test_mul_037()
 {
     PROGRAM("MUL_037")
     {
@@ -732,7 +729,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_037)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_038)
+void TestCodeGenMul::test_mul_038()
 {
     PROGRAM("MUL_038")
     {
@@ -751,7 +748,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_038)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_039)
+void TestCodeGenMul::test_mul_039()
 {
     PROGRAM("MUL_039")
     {
@@ -770,7 +767,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_039)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_040)
+void TestCodeGenMul::test_mul_040()
 {
     PROGRAM("MUL_040")
     {
@@ -789,7 +786,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_040)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_041)
+void TestCodeGenMul::test_mul_041()
 {
     PROGRAM("MUL_041")
     {
@@ -808,7 +805,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_041)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_042)
+void TestCodeGenMul::test_mul_042()
 {
     PROGRAM("MUL_042")
     {
@@ -827,7 +824,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_042)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_043)
+void TestCodeGenMul::test_mul_043()
 {
     PROGRAM("MUL_043")
     {
@@ -846,7 +843,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_043)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_044)
+void TestCodeGenMul::test_mul_044()
 {
     PROGRAM("MUL_044")
     {
@@ -865,7 +862,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_044)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_045)
+void TestCodeGenMul::test_mul_045()
 {
     PROGRAM("MUL_045")
     {
@@ -884,7 +881,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_045)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_046)
+void TestCodeGenMul::test_mul_046()
 {
     PROGRAM("MUL_046")
     {
@@ -903,7 +900,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_046)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_047)
+void TestCodeGenMul::test_mul_047()
 {
     PROGRAM("MUL_047")
     {
@@ -922,7 +919,7 @@ TEST_F(TestCodeGenMul, DISABLED_test_mul_047)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenMul, DISABLED_test_mul_048)
+void TestCodeGenMul::test_mul_048()
 {
     PROGRAM("MUL_048")
     {

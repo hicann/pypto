@@ -13,23 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_full.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenFull : public CodegenTestLiteNPU {};
+TestCodeGenFull::TestCodeGenFull() = default;
+TestCodeGenFull::~TestCodeGenFull() = default;
 
-TEST_F(TestCodeGenFull, test_full_001)
+TestCodeGenFull& TestCodeGenFull::Instance()
+{
+    static TestCodeGenFull instance;
+    return instance;
+}
+
+void TestCodeGenFull::test_full_001()
 {
     PROGRAM("FULL_001")
     {
@@ -51,7 +48,7 @@ TEST_F(TestCodeGenFull, test_full_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_002)
+void TestCodeGenFull::test_full_002()
 {
     PROGRAM("FULL_002")
     {
@@ -73,7 +70,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_003)
+void TestCodeGenFull::test_full_003()
 {
     PROGRAM("FULL_003")
     {
@@ -95,7 +92,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_004)
+void TestCodeGenFull::test_full_004()
 {
     PROGRAM("FULL_004")
     {
@@ -117,7 +114,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_005)
+void TestCodeGenFull::test_full_005()
 {
     PROGRAM("FULL_005")
     {
@@ -139,7 +136,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_006)
+void TestCodeGenFull::test_full_006()
 {
     PROGRAM("FULL_006")
     {
@@ -161,7 +158,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_007)
+void TestCodeGenFull::test_full_007()
 {
     PROGRAM("FULL_007")
     {
@@ -183,7 +180,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_008)
+void TestCodeGenFull::test_full_008()
 {
     PROGRAM("FULL_008")
     {
@@ -205,7 +202,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_009)
+void TestCodeGenFull::test_full_009()
 {
     PROGRAM("FULL_009")
     {
@@ -227,7 +224,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_010)
+void TestCodeGenFull::test_full_010()
 {
     PROGRAM("FULL_010")
     {
@@ -249,7 +246,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_011)
+void TestCodeGenFull::test_full_011()
 {
     PROGRAM("FULL_011")
     {
@@ -271,7 +268,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_012)
+void TestCodeGenFull::test_full_012()
 {
     PROGRAM("FULL_012")
     {
@@ -293,7 +290,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_013)
+void TestCodeGenFull::test_full_013()
 {
     PROGRAM("FULL_013")
     {
@@ -315,7 +312,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_014)
+void TestCodeGenFull::test_full_014()
 {
     PROGRAM("FULL_014")
     {
@@ -337,7 +334,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_015)
+void TestCodeGenFull::test_full_015()
 {
     PROGRAM("FULL_015")
     {
@@ -359,7 +356,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_016)
+void TestCodeGenFull::test_full_016()
 {
     PROGRAM("FULL_016")
     {
@@ -381,7 +378,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_017)
+void TestCodeGenFull::test_full_017()
 {
     PROGRAM("FULL_017")
     {
@@ -403,7 +400,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_018)
+void TestCodeGenFull::test_full_018()
 {
     PROGRAM("FULL_018")
     {
@@ -425,7 +422,7 @@ TEST_F(TestCodeGenFull, DISABLED_test_full_018)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenFull, DISABLED_test_full_019)
+void TestCodeGenFull::test_full_019()
 {
     PROGRAM("FULL_019")
     {

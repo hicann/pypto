@@ -13,23 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_add.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenAdd : public CodegenTestLiteNPU {};
+TestCodeGenAdd::TestCodeGenAdd() = default;
+TestCodeGenAdd::~TestCodeGenAdd() = default;
 
-TEST_F(TestCodeGenAdd, test_add_001)
+TestCodeGenAdd& TestCodeGenAdd::Instance()
+{
+    static TestCodeGenAdd instance;
+    return instance;
+}
+
+void TestCodeGenAdd::test_add_001()
 {
     PROGRAM("ADD_001")
     {
@@ -48,7 +45,7 @@ TEST_F(TestCodeGenAdd, test_add_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_002)
+void TestCodeGenAdd::test_add_002()
 {
     PROGRAM("ADD_002")
     {
@@ -67,7 +64,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_003)
+void TestCodeGenAdd::test_add_003()
 {
     PROGRAM("ADD_003")
     {
@@ -86,7 +83,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_004)
+void TestCodeGenAdd::test_add_004()
 {
     PROGRAM("ADD_004")
     {
@@ -105,7 +102,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_005)
+void TestCodeGenAdd::test_add_005()
 {
     PROGRAM("ADD_005")
     {
@@ -124,7 +121,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_006)
+void TestCodeGenAdd::test_add_006()
 {
     PROGRAM("ADD_006")
     {
@@ -143,7 +140,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_007)
+void TestCodeGenAdd::test_add_007()
 {
     PROGRAM("ADD_007")
     {
@@ -162,7 +159,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_008)
+void TestCodeGenAdd::test_add_008()
 {
     PROGRAM("ADD_008")
     {
@@ -181,7 +178,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_009)
+void TestCodeGenAdd::test_add_009()
 {
     PROGRAM("ADD_009")
     {
@@ -200,7 +197,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_010)
+void TestCodeGenAdd::test_add_010()
 {
     PROGRAM("ADD_010")
     {
@@ -219,7 +216,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_011)
+void TestCodeGenAdd::test_add_011()
 {
     PROGRAM("ADD_011")
     {
@@ -238,7 +235,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_012)
+void TestCodeGenAdd::test_add_012()
 {
     PROGRAM("ADD_012")
     {
@@ -257,7 +254,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_013)
+void TestCodeGenAdd::test_add_013()
 {
     PROGRAM("ADD_013")
     {
@@ -276,7 +273,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_014)
+void TestCodeGenAdd::test_add_014()
 {
     PROGRAM("ADD_014")
     {
@@ -295,7 +292,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_015)
+void TestCodeGenAdd::test_add_015()
 {
     PROGRAM("ADD_015")
     {
@@ -314,7 +311,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_016)
+void TestCodeGenAdd::test_add_016()
 {
     PROGRAM("ADD_016")
     {
@@ -333,7 +330,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_017)
+void TestCodeGenAdd::test_add_017()
 {
     PROGRAM("ADD_017")
     {
@@ -352,7 +349,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_018)
+void TestCodeGenAdd::test_add_018()
 {
     PROGRAM("ADD_018")
     {
@@ -371,7 +368,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_018)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_019)
+void TestCodeGenAdd::test_add_019()
 {
     PROGRAM("ADD_019")
     {
@@ -390,7 +387,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_019)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_020)
+void TestCodeGenAdd::test_add_020()
 {
     PROGRAM("ADD_020")
     {
@@ -409,7 +406,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_020)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_021)
+void TestCodeGenAdd::test_add_021()
 {
     PROGRAM("ADD_021")
     {
@@ -428,7 +425,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_021)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_022)
+void TestCodeGenAdd::test_add_022()
 {
     PROGRAM("ADD_022")
     {
@@ -447,7 +444,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_022)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_023)
+void TestCodeGenAdd::test_add_023()
 {
     PROGRAM("ADD_023")
     {
@@ -466,7 +463,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_023)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_024)
+void TestCodeGenAdd::test_add_024()
 {
     PROGRAM("ADD_024")
     {
@@ -485,7 +482,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_024)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_025)
+void TestCodeGenAdd::test_add_025()
 {
     PROGRAM("ADD_025")
     {
@@ -504,7 +501,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_025)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_026)
+void TestCodeGenAdd::test_add_026()
 {
     PROGRAM("ADD_026")
     {
@@ -523,7 +520,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_026)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_027)
+void TestCodeGenAdd::test_add_027()
 {
     PROGRAM("ADD_027")
     {
@@ -542,7 +539,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_027)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_028)
+void TestCodeGenAdd::test_add_028()
 {
     PROGRAM("ADD_028")
     {
@@ -561,7 +558,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_028)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_029)
+void TestCodeGenAdd::test_add_029()
 {
     PROGRAM("ADD_029")
     {
@@ -580,7 +577,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_029)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_030)
+void TestCodeGenAdd::test_add_030()
 {
     PROGRAM("ADD_030")
     {
@@ -599,7 +596,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_030)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_031)
+void TestCodeGenAdd::test_add_031()
 {
     PROGRAM("ADD_031")
     {
@@ -618,7 +615,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_031)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_032)
+void TestCodeGenAdd::test_add_032()
 {
     PROGRAM("ADD_032")
     {
@@ -637,7 +634,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_032)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_033)
+void TestCodeGenAdd::test_add_033()
 {
     PROGRAM("ADD_033")
     {
@@ -656,7 +653,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_033)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_034)
+void TestCodeGenAdd::test_add_034()
 {
     PROGRAM("ADD_034")
     {
@@ -675,7 +672,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_034)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_035)
+void TestCodeGenAdd::test_add_035()
 {
     PROGRAM("ADD_035")
     {
@@ -694,7 +691,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_035)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_036)
+void TestCodeGenAdd::test_add_036()
 {
     PROGRAM("ADD_036")
     {
@@ -713,7 +710,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_036)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_037)
+void TestCodeGenAdd::test_add_037()
 {
     PROGRAM("ADD_037")
     {
@@ -732,7 +729,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_037)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_038)
+void TestCodeGenAdd::test_add_038()
 {
     PROGRAM("ADD_038")
     {
@@ -751,7 +748,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_038)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_039)
+void TestCodeGenAdd::test_add_039()
 {
     PROGRAM("ADD_039")
     {
@@ -770,7 +767,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_039)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_040)
+void TestCodeGenAdd::test_add_040()
 {
     PROGRAM("ADD_040")
     {
@@ -789,7 +786,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_040)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_041)
+void TestCodeGenAdd::test_add_041()
 {
     PROGRAM("ADD_041")
     {
@@ -808,7 +805,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_041)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_042)
+void TestCodeGenAdd::test_add_042()
 {
     PROGRAM("ADD_042")
     {
@@ -827,7 +824,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_042)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_043)
+void TestCodeGenAdd::test_add_043()
 {
     PROGRAM("ADD_043")
     {
@@ -846,7 +843,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_043)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_044)
+void TestCodeGenAdd::test_add_044()
 {
     PROGRAM("ADD_044")
     {
@@ -865,7 +862,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_044)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_045)
+void TestCodeGenAdd::test_add_045()
 {
     PROGRAM("ADD_045")
     {
@@ -884,7 +881,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_045)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_046)
+void TestCodeGenAdd::test_add_046()
 {
     PROGRAM("ADD_046")
     {
@@ -903,7 +900,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_046)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_047)
+void TestCodeGenAdd::test_add_047()
 {
     PROGRAM("ADD_047")
     {
@@ -922,7 +919,7 @@ TEST_F(TestCodeGenAdd, DISABLED_test_add_047)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenAdd, DISABLED_test_add_048)
+void TestCodeGenAdd::test_add_048()
 {
     PROGRAM("ADD_048")
     {

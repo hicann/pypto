@@ -154,7 +154,7 @@ protected:
     virtual void BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const;
     void Prepare(const Function& topFunc);
 
-    void BuildIncludes(std::ostringstream& oss) const;
+    virtual void BuildIncludes(std::ostringstream& oss) const;
     virtual void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const;
 
     std::string GenAlloc(

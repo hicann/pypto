@@ -13,23 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_index_put.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenIndexPut : public CodegenTestLiteNPU {};
+TestCodeGenIndexPut::TestCodeGenIndexPut() = default;
+TestCodeGenIndexPut::~TestCodeGenIndexPut() = default;
 
-TEST_F(TestCodeGenIndexPut, test_index_put_001)
+TestCodeGenIndexPut& TestCodeGenIndexPut::Instance()
+{
+    static TestCodeGenIndexPut instance;
+    return instance;
+}
+
+void TestCodeGenIndexPut::test_index_put_001()
 {
     PROGRAM("INDEX_PUT_001")
     {
@@ -52,7 +49,7 @@ TEST_F(TestCodeGenIndexPut, test_index_put_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_002)
+void TestCodeGenIndexPut::test_index_put_002()
 {
     PROGRAM("INDEX_PUT_002")
     {
@@ -75,7 +72,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_003)
+void TestCodeGenIndexPut::test_index_put_003()
 {
     PROGRAM("INDEX_PUT_003")
     {
@@ -101,7 +98,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_004)
+void TestCodeGenIndexPut::test_index_put_004()
 {
     PROGRAM("INDEX_PUT_004")
     {
@@ -124,7 +121,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_005)
+void TestCodeGenIndexPut::test_index_put_005()
 {
     PROGRAM("INDEX_PUT_005")
     {
@@ -147,7 +144,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_006)
+void TestCodeGenIndexPut::test_index_put_006()
 {
     PROGRAM("INDEX_PUT_006")
     {
@@ -170,7 +167,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_007)
+void TestCodeGenIndexPut::test_index_put_007()
 {
     PROGRAM("INDEX_PUT_007")
     {
@@ -196,7 +193,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_008)
+void TestCodeGenIndexPut::test_index_put_008()
 {
     PROGRAM("INDEX_PUT_008")
     {
@@ -224,7 +221,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_009)
+void TestCodeGenIndexPut::test_index_put_009()
 {
     PROGRAM("INDEX_PUT_009")
     {
@@ -247,7 +244,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_010)
+void TestCodeGenIndexPut::test_index_put_010()
 {
     PROGRAM("INDEX_PUT_010")
     {
@@ -273,7 +270,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_011)
+void TestCodeGenIndexPut::test_index_put_011()
 {
     PROGRAM("INDEX_PUT_011")
     {
@@ -301,7 +298,7 @@ TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenIndexPut, DISABLED_test_index_put_012)
+void TestCodeGenIndexPut::test_index_put_012()
 {
     PROGRAM("INDEX_PUT_012")
     {

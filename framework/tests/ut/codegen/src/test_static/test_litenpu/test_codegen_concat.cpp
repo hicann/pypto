@@ -13,23 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_concat.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenConcat : public CodegenTestLiteNPU {};
+TestCodeGenConcat::TestCodeGenConcat() = default;
+TestCodeGenConcat::~TestCodeGenConcat() = default;
 
-TEST_F(TestCodeGenConcat, test_concat_001)
+TestCodeGenConcat& TestCodeGenConcat::Instance()
+{
+    static TestCodeGenConcat instance;
+    return instance;
+}
+
+void TestCodeGenConcat::test_concat_001()
 {
     PROGRAM("CONCAT_001")
     {
@@ -51,7 +48,7 @@ TEST_F(TestCodeGenConcat, test_concat_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_002)
+void TestCodeGenConcat::test_concat_002()
 {
     PROGRAM("CONCAT_002")
     {
@@ -73,7 +70,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_003)
+void TestCodeGenConcat::test_concat_003()
 {
     PROGRAM("CONCAT_003")
     {
@@ -96,7 +93,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_004)
+void TestCodeGenConcat::test_concat_004()
 {
     PROGRAM("CONCAT_004")
     {
@@ -119,7 +116,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_005)
+void TestCodeGenConcat::test_concat_005()
 {
     PROGRAM("CONCAT_005")
     {
@@ -141,7 +138,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_006)
+void TestCodeGenConcat::test_concat_006()
 {
     PROGRAM("CONCAT_006")
     {
@@ -163,7 +160,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_007)
+void TestCodeGenConcat::test_concat_007()
 {
     PROGRAM("CONCAT_007")
     {
@@ -185,7 +182,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_008)
+void TestCodeGenConcat::test_concat_008()
 {
     PROGRAM("CONCAT_008")
     {
@@ -208,7 +205,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_009)
+void TestCodeGenConcat::test_concat_009()
 {
     PROGRAM("CONCAT_009")
     {
@@ -230,7 +227,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_010)
+void TestCodeGenConcat::test_concat_010()
 {
     PROGRAM("CONCAT_010")
     {
@@ -252,7 +249,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_011)
+void TestCodeGenConcat::test_concat_011()
 {
     PROGRAM("CONCAT_011")
     {
@@ -274,7 +271,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_012)
+void TestCodeGenConcat::test_concat_012()
 {
     PROGRAM("CONCAT_012")
     {
@@ -296,7 +293,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_013)
+void TestCodeGenConcat::test_concat_013()
 {
     PROGRAM("CONCAT_013")
     {
@@ -319,7 +316,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_014)
+void TestCodeGenConcat::test_concat_014()
 {
     PROGRAM("CONCAT_014")
     {
@@ -342,7 +339,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_015)
+void TestCodeGenConcat::test_concat_015()
 {
     PROGRAM("CONCAT_015")
     {
@@ -365,7 +362,7 @@ TEST_F(TestCodeGenConcat, DISABLED_test_concat_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenConcat, DISABLED_test_concat_016)
+void TestCodeGenConcat::test_concat_016()
 {
     PROGRAM("CONCAT_016")
     {

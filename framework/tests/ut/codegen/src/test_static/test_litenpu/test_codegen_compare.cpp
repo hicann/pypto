@@ -13,24 +13,20 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
-#include "interface/interpreter/calc.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
-#include "interface/interpreter/calc.h"
-#include "codegen/codegen.h"
-#include "codegen/npu/litenpu/codegen_litenpu.h"
-#include "test_codegen_common.h"
+#include "include/test_codegen_compare.h"
 
 using namespace npu::tile_fwk;
 
-class TestCodeGenCompare : public CodegenTestLiteNPU {};
+TestCodeGenCompare::TestCodeGenCompare() = default;
+TestCodeGenCompare::~TestCodeGenCompare() = default;
 
-// fp16 系列测试用例 (001~023)
-TEST_F(TestCodeGenCompare, test_compare_eq_fp16_001)
+TestCodeGenCompare& TestCodeGenCompare::Instance()
+{
+    static TestCodeGenCompare instance;
+    return instance;
+}
+
+void TestCodeGenCompare::test_compare_eq_fp16_001()
 {
     PROGRAM("COMPARE_EQ_FP16_001")
     {
@@ -46,7 +42,7 @@ TEST_F(TestCodeGenCompare, test_compare_eq_fp16_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_002)
+void TestCodeGenCompare::test_compare_eq_fp16_002()
 {
     PROGRAM("COMPARE_EQ_FP16_002")
     {
@@ -62,7 +58,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_003)
+void TestCodeGenCompare::test_compare_eq_fp16_003()
 {
     PROGRAM("COMPARE_EQ_FP16_003")
     {
@@ -78,7 +74,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_004)
+void TestCodeGenCompare::test_compare_eq_fp16_004()
 {
     PROGRAM("COMPARE_EQ_FP16_004")
     {
@@ -94,7 +90,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_005)
+void TestCodeGenCompare::test_compare_eq_fp16_005()
 {
     PROGRAM("COMPARE_EQ_FP16_005")
     {
@@ -110,7 +106,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_006)
+void TestCodeGenCompare::test_compare_eq_fp16_006()
 {
     PROGRAM("COMPARE_EQ_FP16_006")
     {
@@ -126,7 +122,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_007)
+void TestCodeGenCompare::test_compare_eq_fp16_007()
 {
     PROGRAM("COMPARE_EQ_FP16_007")
     {
@@ -142,7 +138,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_008)
+void TestCodeGenCompare::test_compare_eq_fp16_008()
 {
     PROGRAM("COMPARE_EQ_FP16_008")
     {
@@ -158,7 +154,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_009)
+void TestCodeGenCompare::test_compare_eq_fp16_009()
 {
     PROGRAM("COMPARE_EQ_FP16_009")
     {
@@ -174,7 +170,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_010)
+void TestCodeGenCompare::test_compare_eq_fp16_010()
 {
     PROGRAM("COMPARE_EQ_FP16_010")
     {
@@ -190,7 +186,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_011)
+void TestCodeGenCompare::test_compare_eq_fp16_011()
 {
     PROGRAM("COMPARE_EQ_FP16_011")
     {
@@ -206,7 +202,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_012)
+void TestCodeGenCompare::test_compare_eq_fp16_012()
 {
     PROGRAM("COMPARE_EQ_FP16_012")
     {
@@ -222,7 +218,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_013)
+void TestCodeGenCompare::test_compare_eq_fp16_013()
 {
     PROGRAM("COMPARE_EQ_FP16_013")
     {
@@ -238,7 +234,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_014)
+void TestCodeGenCompare::test_compare_eq_fp16_014()
 {
     PROGRAM("COMPARE_EQ_FP16_014")
     {
@@ -254,7 +250,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_015)
+void TestCodeGenCompare::test_compare_eq_fp16_015()
 {
     PROGRAM("COMPARE_EQ_FP16_015")
     {
@@ -270,7 +266,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_016)
+void TestCodeGenCompare::test_compare_eq_fp16_016()
 {
     PROGRAM("COMPARE_EQ_FP16_016")
     {
@@ -286,7 +282,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_017)
+void TestCodeGenCompare::test_compare_eq_fp16_017()
 {
     PROGRAM("COMPARE_EQ_FP16_017")
     {
@@ -302,7 +298,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_018)
+void TestCodeGenCompare::test_compare_eq_fp16_018()
 {
     PROGRAM("COMPARE_EQ_FP16_018")
     {
@@ -318,7 +314,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_018)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_019)
+void TestCodeGenCompare::test_compare_eq_fp16_019()
 {
     PROGRAM("COMPARE_EQ_FP16_019")
     {
@@ -334,7 +330,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_019)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_020)
+void TestCodeGenCompare::test_compare_eq_fp16_020()
 {
     PROGRAM("COMPARE_EQ_FP16_020")
     {
@@ -350,7 +346,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_020)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_021)
+void TestCodeGenCompare::test_compare_eq_fp16_021()
 {
     PROGRAM("COMPARE_EQ_FP16_021")
     {
@@ -366,7 +362,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_021)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_022)
+void TestCodeGenCompare::test_compare_eq_fp16_022()
 {
     PROGRAM("COMPARE_EQ_FP16_022")
     {
@@ -382,7 +378,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_022)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_023)
+void TestCodeGenCompare::test_compare_eq_fp16_023()
 {
     PROGRAM("COMPARE_EQ_FP16_023")
     {
@@ -398,8 +394,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp16_023)
     codeGen.GenCode(*function, {});
 }
 
-// fp32 系列测试用例 (001~024)
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_001)
+void TestCodeGenCompare::test_compare_eq_fp32_001()
 {
     PROGRAM("COMPARE_EQ_FP32_001")
     {
@@ -415,7 +410,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_001)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_002)
+void TestCodeGenCompare::test_compare_eq_fp32_002()
 {
     PROGRAM("COMPARE_EQ_FP32_002")
     {
@@ -431,7 +426,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_002)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_003)
+void TestCodeGenCompare::test_compare_eq_fp32_003()
 {
     PROGRAM("COMPARE_EQ_FP32_003")
     {
@@ -447,7 +442,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_003)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_004)
+void TestCodeGenCompare::test_compare_eq_fp32_004()
 {
     PROGRAM("COMPARE_EQ_FP32_004")
     {
@@ -463,7 +458,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_004)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_005)
+void TestCodeGenCompare::test_compare_eq_fp32_005()
 {
     PROGRAM("COMPARE_EQ_FP32_005")
     {
@@ -479,7 +474,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_005)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_006)
+void TestCodeGenCompare::test_compare_eq_fp32_006()
 {
     PROGRAM("COMPARE_EQ_FP32_006")
     {
@@ -495,7 +490,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_006)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_007)
+void TestCodeGenCompare::test_compare_eq_fp32_007()
 {
     PROGRAM("COMPARE_EQ_FP32_007")
     {
@@ -511,7 +506,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_007)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_008)
+void TestCodeGenCompare::test_compare_eq_fp32_008()
 {
     PROGRAM("COMPARE_EQ_FP32_008")
     {
@@ -527,7 +522,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_008)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_009)
+void TestCodeGenCompare::test_compare_eq_fp32_009()
 {
     PROGRAM("COMPARE_EQ_FP32_009")
     {
@@ -543,7 +538,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_009)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_010)
+void TestCodeGenCompare::test_compare_eq_fp32_010()
 {
     PROGRAM("COMPARE_EQ_FP32_010")
     {
@@ -559,7 +554,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_010)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_011)
+void TestCodeGenCompare::test_compare_eq_fp32_011()
 {
     PROGRAM("COMPARE_EQ_FP32_011")
     {
@@ -575,7 +570,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_011)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_012)
+void TestCodeGenCompare::test_compare_eq_fp32_012()
 {
     PROGRAM("COMPARE_EQ_FP32_012")
     {
@@ -591,7 +586,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_012)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_013)
+void TestCodeGenCompare::test_compare_eq_fp32_013()
 {
     PROGRAM("COMPARE_EQ_FP32_013")
     {
@@ -607,7 +602,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_013)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_014)
+void TestCodeGenCompare::test_compare_eq_fp32_014()
 {
     PROGRAM("COMPARE_EQ_FP32_014")
     {
@@ -623,7 +618,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_014)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_015)
+void TestCodeGenCompare::test_compare_eq_fp32_015()
 {
     PROGRAM("COMPARE_EQ_FP32_015")
     {
@@ -639,7 +634,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_015)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_016)
+void TestCodeGenCompare::test_compare_eq_fp32_016()
 {
     PROGRAM("COMPARE_EQ_FP32_016")
     {
@@ -655,7 +650,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_016)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_017)
+void TestCodeGenCompare::test_compare_eq_fp32_017()
 {
     PROGRAM("COMPARE_EQ_FP32_017")
     {
@@ -671,7 +666,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_017)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_018)
+void TestCodeGenCompare::test_compare_eq_fp32_018()
 {
     PROGRAM("COMPARE_EQ_FP32_018")
     {
@@ -687,7 +682,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_018)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_019)
+void TestCodeGenCompare::test_compare_eq_fp32_019()
 {
     PROGRAM("COMPARE_EQ_FP32_019")
     {
@@ -703,7 +698,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_019)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_020)
+void TestCodeGenCompare::test_compare_eq_fp32_020()
 {
     PROGRAM("COMPARE_EQ_FP32_020")
     {
@@ -719,7 +714,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_020)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_021)
+void TestCodeGenCompare::test_compare_eq_fp32_021()
 {
     PROGRAM("COMPARE_EQ_FP32_021")
     {
@@ -735,7 +730,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_021)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_022)
+void TestCodeGenCompare::test_compare_eq_fp32_022()
 {
     PROGRAM("COMPARE_EQ_FP32_022")
     {
@@ -751,7 +746,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_022)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_023)
+void TestCodeGenCompare::test_compare_eq_fp32_023()
 {
     PROGRAM("COMPARE_EQ_FP32_023")
     {
@@ -767,7 +762,7 @@ TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_023)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodeGenCompare, DISABLED_test_compare_eq_fp32_024)
+void TestCodeGenCompare::test_compare_eq_fp32_024()
 {
     PROGRAM("COMPARE_EQ_FP32_024")
     {

@@ -17,6 +17,7 @@
 #define __LOGICALTENSOR_TILE_OP_IMPL__
 
 #include "aicore_runtime.h"
+#ifndef __LITE_NPU
 #include "mte.h"
 #include "dynamic/mte_dyn.h"
 #include "vector.h"
@@ -28,6 +29,7 @@
 #include "distributed/moe_dispatch.h"
 #include "distributed/moe_combine.h"
 #include "dynamic/aicpu_call.h"
+#endif
 
 #ifdef SUPPORT_TILE_TENSOR
 #ifndef __LITE_NPU

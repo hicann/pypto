@@ -128,6 +128,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 framework/src/platform/parser/simulation_platform/platform_config/950DT_958x.ini
                 framework/src/platform/parser/simulation_platform/platform_config/950PR_958x.ini
                 framework/src/platform/parser/simulation_platform/platform_config/Kirin9030.ini
+                framework/src/platform/parser/simulation_platform/platform_config/KirinX90.ini
             DESTINATION ${PyPTO_WhlName}/lib/configs
     )
 

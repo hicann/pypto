@@ -29,7 +29,7 @@ namespace npu::tile_fwk {
 
 Status IsoPartitioner::PartitionGraph(Function& function)
 {
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3113) {
+    if (IsLiteNPU(Platform::Instance().GetSoc().GetNPUArch())) {
         for (auto& op : function.Operations()) {
             op.UpdateSubgraphID(0);
         }

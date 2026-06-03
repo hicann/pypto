@@ -37,7 +37,7 @@ public:
         auto platform = Platform::Instance().GetSoc().GetNPUArch();
         if (platform == NPUArch::DAV_2201 || platform == NPUArch::DAV_3510) {
             return std::make_shared<CodeGenCloudNPU>(ctx);
-        } else if (platform == NPUArch::DAV_3113) {
+        } else if (IsLiteNPU(platform)) {
             return std::make_shared<CodeGenLiteNPU>(ctx);
         }
         ASSERT(FwkErr::PLATFORM_NOT_SUPPORTED, false)
