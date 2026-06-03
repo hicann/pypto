@@ -17,169 +17,198 @@
 #include "tilefwk/error.h"
 #include "interface/utils/error.h"
 
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 using namespace npu::tile_fwk;
 namespace {
-py::object GetTorchToDlpack()
+
+constexpr int kNpuFormatNz = 29; // NZ in CANN format is 29
+
+struct TensorDeviceInfo {
+    std::string type;
+    int index{0};
+};
+
+uintptr_t ReadTensorDataPtr(const py::object& torchTensor)
 {
-    try {
-        return py::module::import("torch").attr("_C").attr("_to_dlpack");
-    } catch (...) {
-        return py::none();
-    }
+    return static_cast<uintptr_t>(py::cast<int64_t>(torchTensor.attr("data_ptr")()));
 }
 
-void ParseTensorData(
-    py::object& torchTensor, py::object& tensorDef, py::object& toDlpack, uintptr_t& dataPtr,
-    std::vector<int64_t>& shape, DataType& dtype)
+std::vector<int64_t> ReadTensorShape(const py::object& torchTensor, DataType dtype)
 {
-    if (!pypto::TryParseDlpack(torchTensor, dataPtr, shape, dtype, toDlpack)) {
-        try {
-            dataPtr = static_cast<uintptr_t>(py::cast<int64_t>(torchTensor.attr("data_ptr")()));
-            for (auto dim : torchTensor.attr("shape")) {
-                shape.push_back(py::cast<int64_t>(dim));
-            }
-        } catch (...) {
-            PyErr_Clear();
-            throw std::runtime_error("Input tensor is not a valid torch tensor type");
-        }
+    py::object tensorShape = torchTensor.attr("shape");
+    std::vector<int64_t> shape;
+    shape.reserve(static_cast<size_t>(py::len(tensorShape)));
+    for (auto dim : tensorShape) {
+        shape.push_back(py::cast<int64_t>(dim));
     }
-    if (dtype == DataType::DT_BOTTOM || (!tensorDef.is_none() && !tensorDef.attr("explicit_dtype").is_none())) {
-        auto base = py::getattr(tensorDef, "_base", py::none());
-        if (!base.is_none() && py::isinstance<Tensor>(base)) {
-            dtype = base.cast<Tensor&>().GetDataType();
-        } else {
-            dtype = tensorDef.attr("dtype").cast<DataType>();
-        }
+    if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
+        shape.back() *= 0x2;
     }
+    return shape;
 }
 
-TileOpFormat ResolveFormat(py::object& tensorDef, Tensor& baseTensor, py::object& torchTensor, py::module& torch_npu)
+TensorDeviceInfo ReadDeviceInfo(const py::object& torchTensor)
+{
+    py::object device = torchTensor.attr("device");
+    std::string type = py::getattr(device, "type").cast<std::string>();
+    int index = type == "cpu" ? 0 : py::getattr(device, "index").cast<int>();
+    return TensorDeviceInfo{std::move(type), index};
+}
+
+DataType TorchDtypeToDataType(const py::object& torchDtype)
+{
+    static const std::unordered_map<std::string, DataType> dtypeMap = {
+        {"torch.float16", DataType::DT_FP16},
+        {"torch.bfloat16", DataType::DT_BF16},
+        {"torch.float32", DataType::DT_FP32},
+        {"torch.float64", DataType::DT_DOUBLE},
+        {"torch.int8", DataType::DT_INT8},
+        {"torch.uint8", DataType::DT_UINT8},
+        {"torch.int16", DataType::DT_INT16},
+        {"torch.uint16", DataType::DT_UINT16},
+        {"torch.int32", DataType::DT_INT32},
+        {"torch.uint32", DataType::DT_UINT32},
+        {"torch.int64", DataType::DT_INT64},
+        {"torch.uint64", DataType::DT_UINT64},
+        {"torch.bool", DataType::DT_BOOL},
+        {"torch.float8_e4m3fn", DataType::DT_FP8E4M3},
+        {"torch.float8_e5m2", DataType::DT_FP8E5M2},
+        {"torch.float8_e8m0fnu", DataType::DT_FP8E8M0},
+        {"torch.float4_e2m1fn_x2", DataType::DT_FP4_E2M1X2},
+    };
+
+    const std::string dtype = py::str(torchDtype).cast<std::string>();
+    auto iter = dtypeMap.find(dtype);
+    if (iter != dtypeMap.end()) {
+        return iter->second;
+    }
+    throw std::runtime_error("Input torch.dtype is not supported. Got " + dtype);
+}
+
+DataType ReadTensorDataType(const py::object& tensorDef, const py::object& torchTensor, Tensor& baseTensor)
+{
+    if (!tensorDef.attr("explicit_dtype").is_none()) {
+        return baseTensor.GetDataType();
+    }
+    return TorchDtypeToDataType(torchTensor.attr("dtype"));
+}
+
+TileOpFormat ReadTensorFormat(
+    const py::object& tensorDef, const py::object& torchTensor, Tensor& baseTensor, const TensorDeviceInfo& deviceInfo,
+    py::module& torch_npu)
 {
     if (!tensorDef.attr("explicit_format").is_none()) {
         return baseTensor.Format();
     }
-    std::string device_type = py::cast<std::string>(torchTensor.attr("device").attr("type"));
-    if (device_type == "npu") {
-        if (torch_npu.ptr() == nullptr) {
-            torch_npu = py::module::import("torch_npu");
-        }
-        int npu_format = py::cast<int>(torch_npu.attr("get_npu_format")(torchTensor));
-        if (npu_format == 29) { // NZ in CANN format is 29
-            return TileOpFormat::TILEOP_NZ;
-        }
+    if (deviceInfo.type != "npu") {
+        return TileOpFormat::TILEOP_ND;
     }
-    return TileOpFormat::TILEOP_ND;
+    if (torch_npu.ptr() == nullptr) {
+        torch_npu = py::module::import("torch_npu");
+    }
+    int npuFormat = py::cast<int>(torch_npu.attr("get_npu_format")(torchTensor));
+    return npuFormat == kNpuFormatNz ? TileOpFormat::TILEOP_NZ : TileOpFormat::TILEOP_ND;
 }
 
-py::object ConvertSingleTensor(
-    py::object torchTensor, py::object tensorDef, py::object toDlpack, py::module& torch_npu,
+Tensor& ReadTensorDefBase(const py::object& tensorDef)
+{
+    auto baseObj = py::getattr(tensorDef, "_base", py::none());
+    FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(baseObj))
+        << "the '_base' attribute must be a Tensor type";
+    return baseObj.cast<Tensor&>();
+}
+
+bool IsSameDevice(const TensorDeviceInfo& lhs, const TensorDeviceInfo& rhs)
+{
+    return lhs.type == rhs.type && lhs.index == rhs.index;
+}
+
+void ValidateTorchTensorType(const py::object& torchTensor, const py::object& torchTensorType, size_t index)
+{
+    if (py::isinstance(torchTensor, torchTensorType)) {
+        return;
+    }
+    throw std::runtime_error(
+        "Input " + std::to_string(index + 1) + " (index " + std::to_string(index) + ") is not a torch.Tensor");
+}
+
+const py::object& GetTorchTensorType()
+{
+    static py::object torchTensorType = py::module::import("torch").attr("Tensor");
+    return torchTensorType;
+}
+
+TensorDeviceInfo ConvertSingleTensor(
+    const py::object& torchTensor, const py::object& tensorDef, py::module& torch_npu,
     npu::tile_fwk::dynamic::DeviceTensorData& out)
 {
-    std::vector<int64_t> shape;
-    uintptr_t dataPtr = 0;
-    DataType dtype = DataType::DT_BOTTOM;
+    TensorDeviceInfo deviceInfo = ReadDeviceInfo(torchTensor);
+    Tensor& baseTensor = ReadTensorDefBase(tensorDef);
+    const DataType dtype = ReadTensorDataType(tensorDef, torchTensor, baseTensor);
 
-    ParseTensorData(torchTensor, tensorDef, toDlpack, dataPtr, shape, dtype);
-    if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
-        shape.back() *= 0x2;
-    }
+    const uintptr_t dataPtr = ReadTensorDataPtr(torchTensor);
+    std::vector<int64_t> shape = ReadTensorShape(torchTensor, dtype);
+    const TileOpFormat format = ReadTensorFormat(tensorDef, torchTensor, baseTensor, deviceInfo, torch_npu);
 
-    auto base = py::getattr(tensorDef, "_base", py::none());
-    FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(base))
-        << "the '_base' attribute must be a Tensor type";
-    auto& t = base.cast<Tensor&>();
-    TileOpFormat format = ResolveFormat(tensorDef, t, torchTensor, torch_npu);
     out = npu::tile_fwk::dynamic::DeviceTensorData(dtype, dataPtr, shape, format);
-
-    return torchTensor.attr("device");
+    return deviceInfo;
 }
 
-int ValidateDeviceAndReturnIndex(py::object& device)
+int ValidateDeviceAndReturnIndex(const TensorDeviceInfo& deviceInfo)
 {
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
-        if (py::getattr(device, "type").cast<std::string>() != "cpu") {
+        if (deviceInfo.type != "cpu") {
             throw std::runtime_error("Not cpu device");
         }
         return 0;
     }
-    if (py::getattr(device, "type").cast<std::string>() != "npu") {
+    if (deviceInfo.type != "npu") {
         throw std::runtime_error("Not npu device");
     }
-    return py::getattr(device, "index").cast<int>();
+    return deviceInfo.index;
 }
 
 } // namespace
 
 namespace pypto {
-bool ParseDlpackCapsule(
-    py::object& cap, uintptr_t& dataPtr, std::vector<int64_t>& shape, npu::tile_fwk::DataType& dtypeOut)
-{
-    if (cap.is_none())
-        return false;
-    void* ptr = PyCapsule_GetPointer(cap.ptr(), "dltensor");
-    if (!ptr) {
-        PyErr_Clear();
-        return false;
-    }
-    DLManagedTensor* tensor = static_cast<DLManagedTensor*>(ptr);
-    DLManagedTensor::DLTensor& t = tensor->dl_tensor;
-
-    dataPtr = reinterpret_cast<uintptr_t>(static_cast<char*>(t.data) + t.byte_offset);
-
-    int32_t ndim = t.ndim;
-    shape.clear();
-    shape.reserve(ndim);
-    for (int32_t i = 0; i < ndim; ++i) {
-        shape.push_back(t.shape[i]);
-    }
-
-    DlpackDtypeToDataType(t.dtype.code, t.dtype.bits, t.dtype.lanes, &dtypeOut);
-    return true;
-}
-
-bool TryParseDlpack(
-    py::object& torchTensor, uintptr_t& dataPtr, std::vector<int64_t>& shape, npu::tile_fwk::DataType& dtypeOut,
-    py::object toDlpack)
-{
-    if (toDlpack.is_none())
-        toDlpack = GetTorchToDlpack();
-    if (toDlpack.is_none())
-        return false;
-    py::object cap;
-    try {
-        cap = toDlpack(torchTensor);
-    } catch (...) {
-        PyErr_Clear();
-        return false;
-    }
-    return ParseDlpackCapsule(cap, dataPtr, shape, dtypeOut);
-}
 
 int TorchTensorConverter::Convert(
     py::sequence& tensors, py::sequence& tensor_defs,
     std::vector<npu::tile_fwk::dynamic::DeviceTensorData>& tensors_data)
 {
     const size_t n = static_cast<size_t>(py::len(tensors));
+    CHECK(FeError::INVALID_VAL, n != 0) << "Empty tensor list";
+
     tensors_data.reserve(n);
 
-    py::object toDlpack = GetTorchToDlpack();
     py::module torch_npu;
-    py::object device = py::none();
+    const py::object& torchTensorType = GetTorchTensorType();
+    std::optional<TensorDeviceInfo> commonDeviceInfo;
 
     for (size_t i = 0; i < n; i++) {
+        py::int_ index(i);
+        py::object torchTensor = tensors[index];
+        py::object tensorDef = tensor_defs[index];
+
+        ValidateTorchTensorType(torchTensor, torchTensorType, i);
+
         tensors_data.emplace_back();
-        py::object tensorDevice = ConvertSingleTensor(
-            tensors[py::int_(i)], tensor_defs[py::int_(i)], toDlpack, torch_npu, tensors_data.back());
-        if (device.is_none()) {
-            device = tensorDevice;
-        } else if (!device.equal(tensorDevice)) {
+
+        TensorDeviceInfo tensorDeviceInfo = ConvertSingleTensor(torchTensor, tensorDef, torch_npu, tensors_data.back());
+
+        if (!commonDeviceInfo.has_value()) {
+            commonDeviceInfo.emplace(std::move(tensorDeviceInfo));
+        } else if (!IsSameDevice(*commonDeviceInfo, tensorDeviceInfo)) {
             throw std::runtime_error("All input tensors must be on the same device");
         }
     }
-    return ValidateDeviceAndReturnIndex(device);
+
+    return ValidateDeviceAndReturnIndex(*commonDeviceInfo);
 }
 
 size_t ValidateInputs(py::sequence& tensors, py::sequence& tensorDefs)

@@ -24,8 +24,8 @@ DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     runtime_options={"run_mode": pypto.RunMode.NPU}
 )
 def kernel_with_dynamic(
-    a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
-    out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
+    a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
 ):
     pypto.set_vec_tile_shapes(16, 16)
     for idx in pypto.loop(a.shape[0], name="LOOP", idx_name="k"):
@@ -38,15 +38,15 @@ def test_kernel_reuse():
     torch.npu.set_device(DEVICE_ID)
     dev = f"npu:{DEVICE_ID}"
 
-    a = torch.ones(1, 8, dtype=torch.float32, device=dev)
-    out = torch.zeros(1, 8, dtype=torch.float32, device=dev)
+    a = torch.ones(1, 8, dtype=torch.bfloat16, device=dev)
+    out = torch.zeros(1, 8, dtype=torch.bfloat16, device=dev)
     t1 = time.perf_counter()
     kernel_with_dynamic(a, out)
     t1 = time.perf_counter() - t1
     assert torch.allclose(out.cpu(), (a + 1).cpu())
 
-    a = torch.ones(2, 8, dtype=torch.float32, device=dev)
-    out = torch.zeros(2, 8, dtype=torch.float32, device=dev)
+    a = torch.ones(2, 8, dtype=torch.bfloat16, device=dev)
+    out = torch.zeros(2, 8, dtype=torch.bfloat16, device=dev)
     t2 = time.perf_counter()
     kernel_with_dynamic(a, out)
     t2 = time.perf_counter() - t2

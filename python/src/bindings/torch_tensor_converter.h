@@ -17,19 +17,11 @@
 
 #include "pybind_common.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
-#include "interface/inner/dlpack_dtype.h"
 #include "tilefwk/data_type.h"
 
 #include <cstdint>
 #include <vector>
 namespace pypto {
-
-bool ParseDlpackCapsule(
-    py::object& cap, uintptr_t& dataPtr, std::vector<int64_t>& shape, npu::tile_fwk::DataType& dtypeOut);
-
-bool TryParseDlpack(
-    py::object& torchTensor, uintptr_t& dataPtr, std::vector<int64_t>& shape, npu::tile_fwk::DataType& dtypeOut,
-    py::object toDlpack = py::none());
 
 class TorchTensorConverter {
 public:
