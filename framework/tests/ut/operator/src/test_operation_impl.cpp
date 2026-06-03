@@ -1648,6 +1648,128 @@ TEST_F(OperationImplTest, Test_MatmulMX_Bias)
     }
 }
 
+TEST_F(OperationImplTest, Test_BatchMatmul_Bias_3D)
+{
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+    Tensor matA(DT_BF16, {2, 128, 256}, "matA");
+    Tensor matB(DT_BF16, {2, 256, 128}, "matB");
+    Tensor matBias(DT_FP32, {1, 128}, "biasA");
+    Tensor result;
+    npu::tile_fwk::Matrix::MatmulExtendParam extendParam;
+    extendParam.biasTensor = matBias;
+    FUNCTION("TestBatchMatmulBiasWith3Dim")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmul(DT_FP32, matA, matB, extendParam, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmul_Bias_4D)
+{
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+    Tensor matA(DT_BF16, {1, 2, 128, 256}, "matA");
+    Tensor matB(DT_BF16, {2, 2, 256, 128}, "matB");
+    Tensor matBias(DT_FP32, {1, 128}, "biasA");
+    Tensor result;
+    npu::tile_fwk::Matrix::MatmulExtendParam extendParam;
+    extendParam.biasTensor = matBias;
+    FUNCTION("TestBatchMatmulBiasWith4Dim")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmul(DT_FP32, matA, matB, extendParam, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmul_fixpipe_4D)
+{
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+    Tensor matA(DT_INT8, {1, 2, 128, 256}, "matA");
+    Tensor matB(DT_INT8, {2, 2, 256, 128}, "matB");
+    Tensor matfixpipe(DT_UINT64, {1, 128}, "fixpipeA");
+    Tensor result;
+    npu::tile_fwk::Matrix::MatmulExtendParam extendParam;
+    extendParam.scaleTensor = matfixpipe;
+    FUNCTION("TestBatchMatmulFixpipeWith4Dim")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmul(DT_FP16, matA, matB, extendParam, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmul_fixpipe_3D)
+{
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+    Tensor matA(DT_INT8, {2, 128, 256}, "matA");
+    Tensor matB(DT_INT8, {2, 256, 128}, "matB");
+    Tensor matfixpipe(DT_UINT64, {1, 128}, "fixpipeA");
+    Tensor result;
+    npu::tile_fwk::Matrix::MatmulExtendParam extendParam;
+    extendParam.scaleTensor = matfixpipe;
+    FUNCTION("TestBatchMatmulFixpipeWith3Dim")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmul(DT_FP16, matA, matB, extendParam, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_3D)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+    Tensor matA(DT_FP8E5M2, {2, 128, 256}, "matA");
+    Tensor matB(DT_FP8E5M2, {2, 256, 128}, "matB");
+    Tensor scaleA(DT_FP8E8M0, {128, 4, 2}, "scaleA");
+    Tensor scaleB(DT_FP8E8M0, {4, 128, 2}, "scaleB");
+    Tensor matBias(DT_BF16, {1, 128}, "biasA");
+    Tensor result;
+    npu::tile_fwk::Matrix::MatmulExtendParam extendParam;
+    extendParam.biasTensor = matBias;
+    FUNCTION("TestBatchMatmulMXBias3D")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmulMX(
+            DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmulMX_Bias_4D)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+    Tensor matA(DT_FP8E5M2, {2, 2, 128, 256}, "matA");
+    Tensor matB(DT_FP8E5M2, {2, 2, 256, 128}, "matB");
+    Tensor scaleA(DT_FP8E8M0, {128, 4, 2}, "scaleA");
+    Tensor scaleB(DT_FP8E8M0, {4, 128, 2}, "scaleB");
+    Tensor matBias(DT_BF16, {1, 128}, "biasA");
+    Tensor result;
+    npu::tile_fwk::Matrix::MatmulExtendParam extendParam;
+    extendParam.biasTensor = matBias;
+    FUNCTION("TestBatchMatmulMXBias4D")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmulMX(
+            DT_FP32, matA, scaleA, matB, scaleB, extendParam, false, false, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmulGCC_3D)
+{
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128}, true);
+    Tensor matA(DT_FP16, {2, 128, 256}, "matA");
+    Tensor matB(DT_FP16, {2, 256, 128}, "matB");
+    Tensor result;
+    FUNCTION("TestBatchMatmulGCC3D")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmul(DT_FP32, matA, matB, false, false, false);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BatchMatmulGCC_4D)
+{
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128}, true);
+    Tensor matA(DT_INT8, {2, 2, 128, 256}, "matA");
+    Tensor matB(DT_INT8, {2, 2, 256, 128}, "matB");
+    Tensor result;
+    FUNCTION("TestBatchMatmulGCC4D")
+    {
+        result = npu::tile_fwk::Matrix::BatchMatmul(DT_INT32, matA, matB, false, false, false);
+    }
+}
+
 TEST_F(OperationImplTest, test_FillPad_1D)
 {
     TileShape::Current().SetVecTile(8);
