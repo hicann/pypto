@@ -109,7 +109,7 @@ Status OoOScheduler::GetGroupNextUseTime(std::vector<int> group, Operation* allo
         if (nextUseTimeCache.find(memId) != nextUseTimeCache.end()) {
             minNextUseTime = std::min(minNextUseTime, nextUseTimeCache[memId]);
         } else {
-            int nextUseTime = GetBufNextUseTime(allocOp, memId);
+            int nextUseTime = GetBufNextUseTime(memId);
             if (nextUseTime == -1) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find Tensor[%d] next used time.", memId);
                 return FAILED;
@@ -618,8 +618,9 @@ Status OoOScheduler::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, Logical
         }
         if (!opIsRetiredMap[op]) {
             ctx.newNotRetiredCopyOutSize++;
+        } else {
+            ctx.newCopyoutOps.push_back(copyoutOp);
         }
-        ctx.newCopyoutOps.push_back(copyoutOp);
     }
     return SUCCESS;
 }
@@ -995,12 +996,16 @@ Status OoOScheduler::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operat
     return SUCCESS;
 }
 
-Status OoOScheduler::InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, Operation* spillAllocOp, int memId) {
-    int bufNextUseTime = GetBufNextUseTime(spillAllocOp, memId);
+Status OoOScheduler::InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
+    Operation* spillAllocOp, int memId)
+{
+    int bufNextUseTime = GetBufNextUseTime(memId);
     if (bufNextUseTime == -1) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Get Tensor[%d] next use time failed.", memId);
         return FAILED;
     }
+    bufNextUseTime = 
+        bufNextUseTime <= opExecOrderMap[spillAllocOp] ? opExecOrderMap[spillAllocOp] + 1 : bufNextUseTime;
     for (auto &op : opMemidMap) {
         opExecOrderMap[op.first] = bufNextUseTime++;
         InsertOrdered(op.first);
@@ -1210,24 +1215,23 @@ Operation* OoOScheduler::GetSpillOp(int memId) {
     return nullptr;
 }
 
-int OoOScheduler::GetBufNextUseTime(Operation* op, int curMemId) {
-    int execOrder = opExecOrderMap[op];
-    auto it = std::find_if(
-        orderedOps.begin(),
-        orderedOps.end(),
-        [this, execOrder, curMemId](Operation* a) {
-            // 条件1: 操作指针有效
-            if (!a) return false;
-            // 条件2: 操作的执行顺序必须大于当前操作（向后查找）
-            if (opExecOrderMap[a] <= execOrder) return false;
-            // 条件3: 该操作需未执行
-            if (opIsRetiredMap[a]) return false;
-            // 条件4: 该操作需要使用 curMemId 对应的 Buffer
-            auto& reqMemIds = opReqMemIdsMap[a];
-            return std::find(reqMemIds.begin(), reqMemIds.end(), curMemId) != reqMemIds.end();
+int OoOScheduler::GetBufNextUseTime(int curMemId)
+{
+    for (size_t i = 0; i < orderedOps.size(); i++) {
+        auto &op = orderedOps[i];
+        if (opIsRetiredMap[op]) continue;
+        auto &reqMemids = GetOpMemIds(op);
+        if (std::find(reqMemids.begin(), reqMemids.end(), curMemId) != reqMemids.end()) {
+            for (auto pre : depManager_.GetPredecessors(op)) {
+                if (opIsRetiredMap[pre]) continue;
+                if (opIsAllocMap[pre]) {
+                    return opExecOrderMap[pre];
+                }
+            }
+            return opExecOrderMap[op];
         }
-    );
-    return (it != orderedOps.end()) ? opExecOrderMap[*it] : -1;
+    }
+    return -1;
 }
 
 bool OoOScheduler::IsMultiProducerTensor(LogicalTensorPtr tensor)
@@ -1510,7 +1514,12 @@ Status OoOScheduler::RemoveSmallShapeSpillResources(int spillMemId, LogicalTenso
     CollectProducerChainForDeletion(spillTensor, opsToDelete, tensorsToDelete);
     APASS_LOG_DEBUG_F(
         Elements::Operation, "Collected %zu ops and %zu tensors.", opsToDelete.size(), tensorsToDelete.size());
-
+    for (auto deleteOp : opsToDelete) {
+        if (opIsAllocMap[deleteOp]) {
+            ctx.deleteAllocOps.push_back({deleteOp, 
+                deleteOp->GetOutputOperand(0)->GetMemoryTypeOriginal(), opCoreLocationMap[deleteOp]});
+        }
+    }
     // 2. 清理 ops, 并记录其中已执行 op 的数量
     auto deleteNum = CleanupCollectedOperations(opsToDelete);
     if (deleteNum > opsToDelete.size()) {

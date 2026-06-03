@@ -96,6 +96,16 @@ struct IssueQueue {
         queue.pop_back();
         return op;
     }
+
+    void DeleteOp(Operation* op) {
+        auto it = std::find(queue.begin(), queue.end(), op);
+        if (it != queue.end()) {
+            queue.erase(it);
+            if (compareFunc) {
+                std::make_heap(queue.begin(), queue.end(), compareFunc);
+            }
+        }
+    }
 };
 
 struct SpillContext {
@@ -105,6 +115,7 @@ struct SpillContext {
     int newNotRetiredCopyOutSize{0};      // spill 新插的未执行的 copy_out 数量
     int deleteRetiredOpSize{0};       // 删除 op 中 已执行的 op 数量
     int deleteNotRetiredOpSize{0};      // 删除 op 中 未被执行的 op 数量
+    std::vector<std::tuple<Operation*, MemoryType, CoreLocationType>> deleteAllocOps;
 };
 
 struct SingleSpillCreatedOps {
@@ -319,7 +330,7 @@ private:
     Status UpdateRemainMemid(int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
     int GetBufLastUseTime(Operation* op, int curMemId);
-    int GetBufNextUseTime(Operation* op, int curMemId);
+    int GetBufNextUseTime(int curMemId);
     int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType);
     Status RearrangeBuffer(Operation* allocOp, MemoryType memType);
     Status UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId, Operation* spillAllocOp, bool isRetired = true);

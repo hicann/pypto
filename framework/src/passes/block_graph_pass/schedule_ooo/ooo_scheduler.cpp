@@ -202,6 +202,9 @@ void OoOScheduler::ApplySpillContext(SpillContext& ctx, Operation* allocOp) {
     numTotalIssues += ctx.newNotRetiredCopyOutSize - ctx.deleteNotRetiredOpSize;
     MemoryType memType = allocOp->GetOutputOperand(0)->GetMemoryTypeOriginal();
 
+    for (auto deleteOp : ctx.deleteAllocOps) {
+        allocIssueQueue[get<2>(deleteOp)][get<1>(deleteOp)].DeleteOp(get<0>(deleteOp));
+    }
     for (auto &newAllocOp : ctx.newAllocOps) {
         allocIssueQueue[opCoreLocationMap[allocOp]][memType].Insert(newAllocOp);
     }
@@ -587,8 +590,7 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t &pcIdx)
             APASS_LOG_ERROR_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s", GetFormatBacktrace(*orderedOps[pcIdx]).c_str());
             return FAILED;
         }
-        numTotalIssues += ctx.newCopyoutOps.size() - (ctx.deleteRetiredOpSize + ctx.deleteNotRetiredOpSize);
-        pcIdx += ctx.newCopyoutOps.size() - ctx.newNotRetiredCopyOutSize - ctx.deleteRetiredOpSize;
+        pcIdx += ctx.newCopyoutOps.size() - ctx.deleteRetiredOpSize;
     }
     if (bufferManagerMap[coreLocation][allocBuffer->memType].Allocate(allocBuffer) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Allocate tensor[%d] failed.", allocBuffer->id);
