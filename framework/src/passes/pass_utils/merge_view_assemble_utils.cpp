@@ -48,13 +48,6 @@ Status MergeViewAssembleUtils::Process(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Cleanup phase failed.");
         return status;
     }
-    if (!newOps_.empty()) {
-        status = InferShapeUtils::InferShape(function, newOps_);
-        if (status != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Function, "InferShape for new operations failed.");
-            return status;
-        }
-    }
     return SUCCESS;
 }
 
@@ -63,7 +56,6 @@ Status MergeViewAssembleUtils::Initialize()
     visitedOp_.clear();
     viewOpToAppend_.clear();
     assembleOpToAppend_.clear();
-    newOps_.clear();
     return SUCCESS;
 }
 
@@ -117,7 +109,6 @@ Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
             mergedViewOp.SetAttr("op_attr_copy_in_mode", viewOp.copyInModeValue);
         }
         viewOp.output->UpdateDynValidShape(viewOp.dynValidShape);
-        newOps_.push_back(&mergedViewOp);
     }
     return SUCCESS;
 }
@@ -133,7 +124,6 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
             function, Opcode::OP_ASSEMBLE, {assembleOp.input}, {assembleOp.output}, assembleOp.span);
         mergedAssembleOp.SetScopeInfo(assembleOp.scopeInfo);
         mergedAssembleOp.SetOpAttribute(attr);
-        newOps_.push_back(&mergedAssembleOp);
     }
     return SUCCESS;
 }

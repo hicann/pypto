@@ -167,7 +167,6 @@ public:
     std::unordered_set<int> assembleWithoutAssembleConsumer_;
     std::vector<ViewOp> viewOpToAppend_;
     std::vector<AssembleOp> assembleOpToAppend_;
-    std::vector<Operation*> newOps_;
     IRBuilder irBuilder_;
 };
 } // namespace npu::tile_fwk
