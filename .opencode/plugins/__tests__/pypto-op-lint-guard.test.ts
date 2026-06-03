@@ -2,6 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { $ } from "bun";
 import { PyptoOpLintPlugin } from "../pypto-op-lint";
 
+async function rememberAgent(
+  plugin: Awaited<ReturnType<typeof PyptoOpLintPlugin>>,
+  agent: string,
+  sessionID = "test-session",
+) {
+  await plugin["chat.params"]?.(
+    { sessionID, agent } as never,
+    {} as never,
+  );
+}
+
 // ─── tool.execute.before tests ───
 
 test("blocks direct state write via write tool", async () => {
@@ -50,6 +61,73 @@ test("no watcher handler registered", async () => {
   } as never);
 
   expect(plugin["file.watcher.updated"]).toBeUndefined();
+});
+
+test("skips lint for built-in non-PyPTO agents", async () => {
+  const plugin = await PyptoOpLintPlugin({
+    $,
+    client: { app: { log: async () => {} } },
+    directory: process.cwd(),
+    worktree: process.cwd(),
+    project: {},
+  } as never);
+  const before = plugin["tool.execute.before"];
+
+  for (const agent of ["build", "plan", "general", "explore", "scout"]) {
+    const sessionID = `session-${agent}`;
+    await rememberAgent(plugin, agent, sessionID);
+    await expect(
+      before?.(
+        { tool: "bash", sessionID } as never,
+        { args: { command: "echo '{}' > /tmp/qat/.orchestrator_state.json" } } as never,
+      ),
+    ).resolves.toBeUndefined();
+  }
+});
+
+test("runs lint for PyPTO subagents", async () => {
+  const plugin = await PyptoOpLintPlugin({
+    $,
+    client: { app: { log: async () => {} } },
+    directory: process.cwd(),
+    worktree: process.cwd(),
+    project: {},
+  } as never);
+  await rememberAgent(plugin, "pypto-op-coder", "pypto-child");
+
+  const before = plugin["tool.execute.before"];
+  await expect(
+    before?.(
+      { tool: "bash", sessionID: "pypto-child" } as never,
+      { args: { command: "cat > custom/foo/foo_impl.py <<EOF\nimport pypto\nEOF" } } as never,
+    ),
+  ).rejects.toThrow("禁止通过 bash/shell 写入算子产物文件");
+});
+
+test("agent skip state is isolated by session", async () => {
+  const plugin = await PyptoOpLintPlugin({
+    $,
+    client: { app: { log: async () => {} } },
+    directory: process.cwd(),
+    worktree: process.cwd(),
+    project: {},
+  } as never);
+  await rememberAgent(plugin, "build", "build-session");
+  await rememberAgent(plugin, "pypto-op-orchestrator", "pypto-session");
+
+  const before = plugin["tool.execute.before"];
+  await expect(
+    before?.(
+      { tool: "bash", sessionID: "build-session" } as never,
+      { args: { command: "echo '{}' > /tmp/qat/.orchestrator_state.json" } } as never,
+    ),
+  ).resolves.toBeUndefined();
+  await expect(
+    before?.(
+      { tool: "bash", sessionID: "pypto-session" } as never,
+      { args: { command: "echo '{}' > /tmp/qat/.orchestrator_state.json" } } as never,
+    ),
+  ).rejects.toThrow("禁止通过 bash/shell 直接写入");
 });
 
 test("allows readonly bash commands mentioning state file", async () => {
@@ -282,4 +360,3 @@ test("post-edit blocks on S0/S1 violation", async () => {
     ),
   ).rejects.toThrow();
 });
-

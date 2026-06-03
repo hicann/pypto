@@ -180,8 +180,32 @@ export const PyptoOpLintPlugin: Plugin = async (input) => {
     }
   }
 
+  // tool.execute.* hooks do not carry agent identity. Remember the latest
+  // chat agent by session and skip instant lint only for known non-PyPTO
+  // agents. All other agents, including pypto-op-* subagents, keep lint on.
+  const LINT_SKIP_AGENTS = new Set(["build", "plan", "general", "explore", "scout"]);
+  const agentBySession = new Map<string, string>();
+  function rememberAgent(input: { sessionID?: unknown; agent?: unknown }): void {
+    if (typeof input.sessionID !== "string" || typeof input.agent !== "string") return;
+    agentBySession.set(input.sessionID, input.agent);
+  }
+  function shouldRunLint(input: { sessionID?: unknown }): boolean {
+    const sessionID = typeof input.sessionID === "string" ? input.sessionID : "";
+    const agent = sessionID ? agentBySession.get(sessionID) : undefined;
+    const run = agent === undefined || !LINT_SKIP_AGENTS.has(agent);
+    tdebug("gate", { sessionID, agent, run });
+    return run;
+  }
+
   return {
+    "chat.message": async (chatInput, _output) => {
+      rememberAgent(chatInput);
+    },
+    "chat.params": async (chatInput, _output) => {
+      rememberAgent(chatInput);
+    },
     "tool.execute.after": async (rawArgs, output) => {
+      if (!shouldRunLint(rawArgs)) return;
       const { tool, args } = rawArgs as { tool: unknown; args: any };
       const toolName = normTool(tool);
       const filePath = extractFilePath(args);
@@ -245,6 +269,7 @@ export const PyptoOpLintPlugin: Plugin = async (input) => {
     },
 
     "tool.execute.before": async (rawArgs, output) => {
+      if (!shouldRunLint(rawArgs)) return;
       const { tool } = rawArgs as { tool: unknown };
       const toolName = normTool(tool);
       const command = String(output.args?.command ?? "");
