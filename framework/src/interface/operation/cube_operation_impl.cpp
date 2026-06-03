@@ -1167,13 +1167,13 @@ void ConstructTileGraph(
 
     for (iterInfo.nOffset = 0; iterInfo.nOffset < tileInfo.nView; iterInfo.nOffset += tileInfo.tileNL0) {
         iterInfo.nL0Size = std::min(tileInfo.nView - iterInfo.nOffset, tileInfo.tileNL0);
-        tileGraphNodes.biasTensorPtr = LinkBias(
-            function, tensorGraphNodes, TileInfo({{1, iterInfo.nL0Size}, {0, iterInfo.nOffset}}),
-            TileInfo({{1, iterInfo.nL0Size}, {0, 0}}));
-        tileGraphNodes.scaleTensorPtr = LinkScale(
-            function, tensorGraphNodes, TileInfo({{1, iterInfo.nL0Size}, {0, iterInfo.nOffset}}),
-            TileInfo({{1, iterInfo.nL0Size}, {0, 0}}));
         for (iterInfo.mOffset = 0; iterInfo.mOffset < tileInfo.mView; iterInfo.mOffset += tileInfo.tileML0) {
+            tileGraphNodes.biasTensorPtr = LinkBias(
+                function, tensorGraphNodes, TileInfo({{1, iterInfo.nL0Size}, {0, iterInfo.nOffset}}),
+                TileInfo({{1, iterInfo.nL0Size}, {0, 0}}));
+            tileGraphNodes.scaleTensorPtr = LinkScale(
+                function, tensorGraphNodes, TileInfo({{1, iterInfo.nL0Size}, {0, iterInfo.nOffset}}),
+                TileInfo({{1, iterInfo.nL0Size}, {0, 0}}));
             iterInfo.mL0Size = std::min(tileInfo.mView - iterInfo.mOffset, tileInfo.tileML0);
             tileGraphNodes.outTensorPtr =
                 cTensorPtr->View(function, {iterInfo.mL0Size, iterInfo.nL0Size}, {iterInfo.mOffset, iterInfo.nOffset});
