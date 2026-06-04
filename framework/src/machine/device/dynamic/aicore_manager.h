@@ -2266,11 +2266,13 @@ private:
             auto taskCtrl = devTaskCtx->GetDeviceTaskCtrl();
             int maxC = static_cast<int>(taskCtrl->GetMaxC());
             int maxV = static_cast<int>(taskCtrl->GetMaxV());
-            if ((maxC >= aicValidNum_ && maxV >= aicValidNum_ * static_cast<int>(AIV_NUM_PER_AI_CORE)) ||
-                maxC == 0 || maxV == 0) {
+            int maxAivNum = aicValidNum_ * static_cast<int>(AIV_NUM_PER_AI_CORE);
+            if ((maxC >= aicValidNum_ && maxV >= maxAivNum) || maxC == 0 || maxV == 0) {
                 adjAicEnd_ = aicEnd_;
                 adjAivEnd_ = aivEnd_;
             } else {
+                maxC = maxC >= aicValidNum_ ? aicValidNum_ : maxC;
+                maxV = maxV >= maxAivNum ? maxAivNum : maxV;
                 UpdateAicoreEnd(maxC, schedIdx_, aicpuNum_, 1, aicStart_, adjAicEnd_);
                 if (archInfo_ == ArchInfo::DAV_3510) {
                     UpdateAicoreEnd(maxC, schedIdx_, aicpuNum_, AIV_NUM_PER_AI_CORE, aivStart_, adjAivEnd_);
