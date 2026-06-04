@@ -1605,6 +1605,9 @@ private:
 
         auto cceBinary = dyntask->cceBinary;
         auto func = dyntask->dynFuncDataCacheList[funcId].devFunc;
+        if (unlikely(func->IsTailTask(opIndex))) {
+            return DEVICE_MACHINE_OK;
+        }
         auto predCounts =  dyntask->dynFuncDataCacheList[funcId].predCount;
         auto callList = dyntask->dynFuncDataCacheList[funcId].calleeList;
 
@@ -1619,7 +1622,9 @@ private:
                 auto id = MakeTaskID(funcId, succIdx);
                 auto coreType = cceBinary[callList[succIdx]].coreType;
                 if (unlikely(coreType == static_cast<int>(CoreType::HUB))) {
-                    ret = ResolveDepDyn(deviceTaskCtx, id, resolveIndexBase, coreIdx);
+                    if (!func->IsDeadEndHub(succIdx)) {
+                        ret = ResolveDepDyn(deviceTaskCtx, id, resolveIndexBase, coreIdx);
+                    }
                     if (unlikely(ret != DEVICE_MACHINE_OK)) {
                         return ret;
                     }

@@ -265,6 +265,13 @@ void DeviceStitchContext::HandleOneStitch(
     PushBackTask(producerStitchList, MakeTaskID(consumerIdx, consumerOperationIdx), workspace);
     consumerDup.GetOperationCurrPredCount(consumerOperationIdx)++;
 
+    auto* producerFunc = producerDup.GetSource();
+    auto producerIdx = static_cast<uint32_t>(producerOperationIdx);
+    producerFunc->ClearTailTask(producerIdx);
+    if (producerFunc->ClearDeadEndHub(producerIdx)) {
+        producerFunc->PropagateDeadHubClear(producerIdx);
+    }
+
     DEV_IF_NONDEVICE
     {
         if (producerOperationIdx >= producerDup.GetSource()->GetOperationSize()) {

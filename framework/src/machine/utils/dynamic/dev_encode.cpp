@@ -1862,6 +1862,105 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+    // bitmap 位操作：idx 为 op 索引，bitmap 以 uint64 为单位
+    static void SetBitmapBit(std::vector<uint64_t>& bits, int idx)
+    {
+        bits[idx / 64] |= (1ULL << (idx % 64));
+    }
+    static bool IsBitmapBitSet(const std::vector<uint64_t>& bits, int idx)
+    {
+        return (bits[idx / 64] & (1ULL << (idx % 64))) != 0;
+    }
+
+    // 标记尾Hub，Hub节点后为空，或者多级Hub串联，最后一个Hub为空的场景
+    // 场景：HubA; HubA -> HubB -> HubC
+    void MarkDeadEndHubs(std::vector<uint64_t>& deadEndBits)
+    {
+        std::vector<Operation*> hubNodes;
+        std::unordered_map<Operation*, std::vector<Operation*>> hubPreds;
+        // 1. 标记 succ 为空的叶子 HUB，同时构建 HUB->HUB 前驱映射
+        for (auto& [op, succs] : callOpSuccDict) {
+            if (GetCoreType(op) != static_cast<int>(CoreType::HUB)) continue;
+            hubNodes.push_back(op);
+            if (succs.empty()) {
+                SetBitmapBit(deadEndBits, callList.GetIndex(op));
+            }
+            for (auto* succ : succs) {
+                if (GetCoreType(succ) == static_cast<int>(CoreType::HUB)) {
+                    hubPreds[succ].push_back(op);
+                }
+            }
+        }
+
+        // 2. 叶子 HUB 的 HUB 前驱入队
+        std::queue<Operation*> worklist;
+        for (auto* op : hubNodes) {
+            if (IsBitmapBitSet(deadEndBits, callList.GetIndex(op))) {
+                for (auto* pred : hubPreds[op]) worklist.push(pred);
+            }
+        }
+
+        // 3. 反向传播：后继全 dead 则标记自身，继续通知前驱
+        while (!worklist.empty()) {
+            auto* op = worklist.front();
+            worklist.pop();
+            int idx = callList.GetIndex(op);
+            if (IsBitmapBitSet(deadEndBits, idx)) {
+                continue;
+            }
+            bool allDead = true;
+            for (auto* succ : callOpSuccDict[op]) {
+                if (!IsBitmapBitSet(deadEndBits, callList.GetIndex(succ))) {
+                    allDead = false;
+                    break;
+                }
+            }
+            if (allDead && !callOpSuccDict[op].empty()) {
+                SetBitmapBit(deadEndBits, idx);
+                for (auto* pred : hubPreds[op]) worklist.push(pred);
+            }
+        }
+    }
+
+    // 标记尾task（后继为空或者后继均为 deadEnd HUB）。
+    // 场景： taskA; taskA -> HubA
+    void MarkTailTasks(const std::vector<uint64_t>& deadEndBits, std::vector<uint64_t>& tailBits)
+    {
+        for (auto& [op, succs] : callOpSuccDict) {
+            if (GetCoreType(op) == static_cast<int>(CoreType::HUB)) continue;
+            bool allDeadEnd = true;
+            for (auto* succ : succs) {
+                if (!IsBitmapBitSet(deadEndBits, callList.GetIndex(succ))) {
+                    allDeadEnd = false;
+                    break;
+                }
+            }
+            if (allDeadEnd) {
+                SetBitmapBit(tailBits, callList.GetIndex(op));
+            }
+        }
+    }
+
+    void MarkResolveBitmaps(DevAscendFunction* devFunc, uintdevptr_t& initOffset, bool fillContent)
+    {
+        int opCount = static_cast<int>(callList.size());
+        int bitmapWords = (opCount + 63) / 64;
+        devFunc->deadEndHubBitmap_.HostInitDataSizeOffset(initOffset, bitmapWords);
+        devFunc->tailTaskBitmap_.HostInitDataSizeOffset(initOffset, bitmapWords);
+        if (!fillContent) return;
+
+        std::vector<uint64_t> deadEndBits(bitmapWords, 0);
+        std::vector<uint64_t> tailBits(bitmapWords, 0);
+
+        MarkDeadEndHubs(deadEndBits);
+        MarkTailTasks(deadEndBits, tailBits);
+
+        for (int i = 0; i < bitmapWords; i++) {
+            devFunc->At(devFunc->deadEndHubBitmap_, i) = deadEndBits[i];
+            devFunc->At(devFunc->tailTaskBitmap_, i) = tailBits[i];
+        }
+    }
+
     void Init(DevAscendFunction* devFunc, const EncodeDevAscendFunctionParam& param, bool fillContent)
     {
         uintdevptr_t initOffset =
@@ -1885,6 +1984,9 @@ struct EncodeDevAscendFunctionInfo {
             calleeHashIndexDict, outcastStitchIndexList, noPredOpList, noSuccOpList, copyOutResolveSuccIndexListDict,
             fillContent);
         devFunc->InitWrapInfo(initOffset, callList, fillContent);
+
+        MarkResolveBitmaps(devFunc, initOffset, fillContent);
+
         devFunc->InitIncastOutcast(
             initOffset, incastList, outcastList, tensorList, incastOpAttrDict, outcastOpAttrDict, param, rawName,
             fillContent);

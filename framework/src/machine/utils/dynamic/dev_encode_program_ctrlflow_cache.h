@@ -76,6 +76,9 @@ struct DynFuncDataWorkspaceAddressBackup {
 struct DynFuncDataBackup {
     predcount_t* predCountBackup;
     uint64_t* rawTensorAddrBackup;
+    uint64_t* deadEndHubBitmapBackup{nullptr};
+    uint64_t* tailTaskBitmapBackup{nullptr};
+    size_t bitmapByteSize{0};
 
     DynFuncDataWorkspaceAddressBackup workspaceAddressBackup;
 
@@ -370,6 +373,36 @@ struct DevControlFlowCache {
         return true;
     }
 
+    void BitmapDataBackup(DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup)
+    {
+        auto* devFunc = dynDataCache->devFunc;
+        size_t bitmapBytes = devFunc->GetBitmapByteSize();
+        if (bitmapBytes == 0) {
+            return;
+        }
+
+        uint64_t* deadEndBuf = reinterpret_cast<uint64_t*>(AllocateCache(bitmapBytes));
+        uint64_t* tailBuf = reinterpret_cast<uint64_t*>(AllocateCache(bitmapBytes));
+        if (deadEndBuf == nullptr || tailBuf == nullptr) {
+            return;
+        }
+
+        dynDataBackup->deadEndHubBitmapBackup = deadEndBuf;
+        dynDataBackup->tailTaskBitmapBackup = tailBuf;
+        dynDataBackup->bitmapByteSize = bitmapBytes;
+        devFunc->BackupBitmapTo(deadEndBuf, tailBuf, bitmapBytes);
+    }
+
+    void BitmapDataRestore(DynFuncDataCache* dynDataCache, DynFuncDataBackup* dynDataBackup)
+    {
+        if (dynDataBackup->bitmapByteSize == 0) {
+            return;
+        }
+        dynDataCache->devFunc->RestoreBitmapFrom(
+            dynDataBackup->deadEndHubBitmapBackup, dynDataBackup->tailTaskBitmapBackup,
+            dynDataBackup->bitmapByteSize);
+    }
+
     void PredCountDataBackup(DynDeviceTaskBase* base)
     {
         DynFuncHeader* dynFuncDataList = base->GetDynFuncDataList();
@@ -386,8 +419,9 @@ struct DevControlFlowCache {
                 return;
             }
             dynDataBackup->predCountBackup = predCountBackup;
-
             memcpy_s(dynDataBackup->predCountBackup, backupSize, &duppedData->GetOperationCurrPredCount(0), backupSize);
+
+            BitmapDataBackup(dynDataCache, dynDataBackup);
         }
     }
 
@@ -401,8 +435,9 @@ struct DevControlFlowCache {
             DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
             DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
             size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
-
             memcpy_s(&duppedData->GetOperationCurrPredCount(0), backupSize, dynDataBackup->predCountBackup, backupSize);
+
+            BitmapDataRestore(dynDataCache, dynDataBackup);
         }
     }
 
@@ -1123,6 +1158,8 @@ struct DevControlFlowCache {
         relocCtrlCache.Reloc(dynDataCache->predCount);
         relocCtrlCache.RelocNullable(dynDataBackup->predCountBackup);
         relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
+        relocCtrlCache.RelocNullable(dynDataBackup->deadEndHubBitmapBackup);
+        relocCtrlCache.RelocNullable(dynDataBackup->tailTaskBitmapBackup);
     }
 
     /* Host-to-cache: devStartArgs should be nullptr. Cache-to-Device: devStartArgs should be filled */
