@@ -506,6 +506,64 @@ bool HasCalleeConsumer(Function& func, Function& calleeFunc, size_t outcastIdx)
     return false;
 }
 
+static std::vector<int> GetOutcastSlots(Function& func, size_t outcastIdx)
+{
+    auto& outcasts = func.GetOutcast();
+    FE_ASSERT(FeError::INVALID_VAL, outcastIdx < outcasts.size())
+        << "Outcast index " << outcastIdx << " out of bounds for outcast size " << outcasts.size();
+    return func.GetOutCastSlot(outcasts[outcastIdx]);
+}
+
+static bool IsLinkedInplaceOutcast(Function& func, size_t outcastIdx)
+{
+    auto& outcasts = func.GetOutcast();
+    FE_ASSERT(FeError::INVALID_VAL, outcastIdx < outcasts.size())
+        << "Outcast index " << outcastIdx << " out of bounds for outcast size " << outcasts.size();
+    return func.outIncastLinkMap.count(outcasts[outcastIdx]->GetRawTensor()) != 0;
+}
+
+static bool IsLinkedInplaceAssembleDstOutcast(Function& func, size_t outcastIdx)
+{
+    auto outcastSlots = GetOutcastSlots(func, outcastIdx);
+    auto slotMngr = Program::GetInstance().GetTensorSlotManager();
+
+    // Condition 1: this outcast is used as an assemble destination.
+    bool isAssembleDst = false;
+    for (const auto& slot : slotMngr->assembleSlotSet) {
+        auto it = slotMngr->slotIndexDict.find(slot);
+        if (it == slotMngr->slotIndexDict.end()) {
+            continue;
+        }
+        std::vector<int> assembleSlot = {it->second};
+        if (TensorSlotManager::HasSameSlot(outcastSlots, assembleSlot)) {
+            isAssembleDst = true;
+            break;
+        }
+    }
+    if (!isAssembleDst) {
+        return false;
+    }
+
+    // Condition 2: the same slot is linked to a reshape(inplace=True) outcast somewhere in the function graph.
+    for (auto& [funcName, funcPtr] : Program::GetInstance().GetFunctionMap()) {
+        (void)funcName;
+        Function* curFunc = funcPtr.get();
+        if (curFunc == nullptr) {
+            continue;
+        }
+        auto& outcasts = curFunc->GetOutcast();
+        for (size_t i = 0; i < outcasts.size(); ++i) {
+            if (!IsLinkedInplaceOutcast(*curFunc, i)) {
+                continue;
+            }
+            if (TensorSlotManager::HasSameSlot(GetOutcastSlots(*curFunc, i), outcastSlots)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void CalleeSlotNoConsumer(
     Function& calleeFunc, Function& func, const std::map<size_t, size_t>& outcasts,
     std::map<size_t, size_t>& outcastIdx2parent)
@@ -609,6 +667,8 @@ void RedundantOutCastCheck(
                 FE_ASSERT(FeError::INVALID_VAL, outcastIdx2parent.count(outCastIdx) > 0)
                     << "Outcast index " << outCastIdx << " should be in outcastIdx2parent";
                 getTensorDataRecord[func].insert(outcastIdx2parent[outCastIdx]);
+            } else if (IsLinkedInplaceAssembleDstOutcast(*calleeFunc, outCastIdx)) {
+                continue;
             } else {
                 removeRecord[calleeFunc].insert(outCastIdx);
             }
@@ -652,7 +712,9 @@ void Function::CleanRedundantOutCast()
                 << "outputMap does not contain outCastIdx " << outCastIdx;
             getTensorDataRecord[parent_].insert(outputMap[outCastIdx]);
         } else {
-            removeRecord[this].insert(outCastIdx);
+            if (!IsLinkedInplaceAssembleDstOutcast(*this, outCastIdx)) {
+                removeRecord[this].insert(outCastIdx);
+            }
         }
     }
     CleanRedundantOutcast(removeRecord, getTensorDataRecord);
@@ -1882,9 +1944,10 @@ bool IsAssembleLikeProducer(const Operation* op)
 }
 
 // Inspects @p origin's producer set once and fills OutcastProducerTraits:
-//   isAssembleOut     — at least one assemble-like producer → partial-update rewrite path.
-//   needRuntimeAlloc  — at least one other producer → backend marks slot for RUNTIME_SlotMarkNeedAlloc.
-OutcastProducerTraits ClassifyOutcastByProducers(const LogicalTensor& origin)
+//   isAssembleOut: at least one assemble-like producer uses the partial-update rewrite path.
+//   needRuntimeAlloc: at least one non-assemble producer needs RUNTIME_SlotMarkNeedAlloc,
+//   except reshape(inplace=True) outcasts that already reuse the linked incast address.
+OutcastProducerTraits ClassifyOutcastByProducers(const LogicalTensor& origin, bool isLinkedInplaceOutcast)
 {
     OutcastProducerTraits traits;
     for (Operation* op : origin.GetProducers()) {
@@ -1893,7 +1956,9 @@ OutcastProducerTraits ClassifyOutcastByProducers(const LogicalTensor& origin)
         if (IsAssembleLikeProducer(op)) {
             traits.isAssembleOut = true;
         } else {
-            traits.needRuntimeAlloc = true;
+            if (!isLinkedInplaceOutcast) {
+                traits.needRuntimeAlloc = true;
+            }
         }
     }
     return traits;
@@ -1914,6 +1979,7 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
         Parent().tensorMap_.Insert(outArgument);
         outArgumentList.push_back(outArgument);
 
+        bool isLinkedInplaceOutcast = outIncastLinkMap.count(origin->GetRawTensor()) != 0;
         auto outSymbol = CreateOutcastTensor(outArgument);
         if (scope) {
             scope->outcastToOutArgumentDict[outSymbol] = outArgument;
@@ -1922,8 +1988,7 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope>& sc
             slotScope_->outcastWriteSlotSet.push_back(slotScope_->oriOutcastWriteSlotSet[idx]);
             slotScope_->ioslot.outcastSlot.push_back(slotScope_->originalIocastsSlot.outcastSlot[idx]);
         }
-
-        const OutcastProducerTraits traits = ClassifyOutcastByProducers(*origin);
+        const OutcastProducerTraits traits = ClassifyOutcastByProducers(*origin, isLinkedInplaceOutcast);
         SetOutcastNeedAlloc(outCasts_.back(), traits.needRuntimeAlloc);
         if (traits.isAssembleOut) {
             Substitute(origin, outSymbol);

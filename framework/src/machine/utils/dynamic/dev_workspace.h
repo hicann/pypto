@@ -289,6 +289,13 @@ private:
             /* Output tensor */
             outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[outputSlotIndex].rtOutcastIter);
             RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
+        } else if (rawTensor->linkedIncastId != -1) {
+            /* reshape inplace or something */
+            auto& incastDesc = devRootDup.GetIncastAddress(rawTensor->linkedIncastId);
+            DEV_ASSERT(WsErr::WORKSPACE_CATEGORY_INVALID, incastDesc.IsRtOutcast());
+            DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, incastDesc.GetRtOutcastIter() != ITEM_POOL_INVALID_INDEX);
+            outcastDesc = incastDesc;
+            RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
         } else if (assembleSlotIndex != -1) {
             /* assemble outcast tensor */
             if (slotList[assembleSlotIndex].isAssembleSlotNeedAlloc) {
@@ -312,13 +319,6 @@ private:
             uint64_t addr = exprTbl[devRootSrc->GetOutcast(outcastIdx).exprListIndex];
             outcastDesc = AddressDescriptor::MakeFromRtOutcast(
                 MakeRuntimeOutcastTensor(WsAllocation(addr, curParallelWsId), RuntimeTensorMemProperty::EXTERNAL));
-        } else if (rawTensor->linkedIncastId != -1) {
-            /* reshape inplace or something */
-            auto& incastDesc = devRootDup.GetIncastAddress(rawTensor->linkedIncastId);
-            DEV_ASSERT(WsErr::WORKSPACE_CATEGORY_INVALID, incastDesc.IsRtOutcast());
-            DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, incastDesc.GetRtOutcastIter() != ITEM_POOL_INVALID_INDEX);
-            outcastDesc = incastDesc;
-            RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
         } else {
             outcastDesc = AddressDescriptor::MakeFromRtOutcast(MakeRuntimeOutcastTensor(
                 WsAllocation(outcastBaseAddr + devRootSrc->GetOutcastRawTensor(outcastIdx)->addrOffset, curParallelWsId),
