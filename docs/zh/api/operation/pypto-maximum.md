@@ -40,8 +40,12 @@ maximum(
 
 ## 约束说明
 
-1. Tensor和Element数据类型说明：
+1. 两个输入均为 Tensor 类型时，支持的数据类型如下：
    - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
+2. 一个输入为 Tensor，另一个输入为 Element 类型时，支持的数据类型如下：
+   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
 
