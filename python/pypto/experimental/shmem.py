@@ -8,14 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" """
-from typing import List, Union, Dict, Optional
+"""PyPTO"""
+from typing import List, Union, Optional
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from .._utils import to_syms
 from ..tensor import Tensor, ShmemTensor
 from ..symbolic_scalar import SymbolicScalar
-from ..enum import AtomicType
+from ..enum import AtomicType, DataType
 
 
 @op_wrapper
@@ -34,15 +34,15 @@ def shmem_store(
     ----------
     src : Tensor
         The source tensor in local UB.
-    offsets : list of int
+    offsets : list of int or SymbolicScalar
         The offsets in the destination tensor.
     dst : ShmemTensor
         The destination tensor on the remote device (symmetric memory).
-    dst_pe : int
+    dst_pe : int or SymbolicScalar
         The pe of the destination device.
     put_op : AtomicType
         The type of atomic operation to apply during the data transfer.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tokens used as control dependencies.
 
     Returns
@@ -80,22 +80,21 @@ def shmem_load(
     pred: List[Tensor] = None,
     valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None,
 ) -> Tensor:
-    """
-    Loads data from remote device Global Memory to local UB.
+    """Loads data from remote device Global Memory to local UB.
 
     Parameters
     ----------
     src : ShmemTensor
         The source tensor on the remote device (symmetric memory).
-    src_pe : int
+    src_pe : int or SymbolicScalar
         The pe of the source device.
     shape : list of int
         The shape of the source tensor.
-    offsets : list of int
+    offsets : list of int or SymbolicScalar
         The offsets of the source tensor.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate token used as a control dependency.
-    valid_shape: List[int] = None
+    valid_shape: list of int or SymbolicScalar = None
         Optional parameter to retrieve the effective data size of the schematic block.
         It is required that the valid_shape is smaller than the shape of the input.
 

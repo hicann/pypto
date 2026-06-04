@@ -36,7 +36,7 @@ shmem_signal(
 | signal   | 输入      | 发送到 src 中的信号值。 <br> 支持的数据类型为：int类型。 |
 | shape   | 输入      |  需要写入信号的 shared memory tensor 的视图大小。 <br> 参数类型为 list[int] 类型。 |
 | offsets   | 输入      | 需要写入信号的 shared memory tensor 的视图的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
-| target_pe   | 输入      | 接收信号的 pe。 <br> 如果 target_pe = -1，则广播信号给所有 pe。 <br> 支持 int 或 SymbolicScalar 类型的列表。 |
+| target_pe   | 输入      | 接收信号的 pe。 <br> 如果 target_pe = -1，则广播信号给所有 pe。 <br> 支持 int 或 SymbolicScalar 类型。 |
 | sig_op   | 输入      | 数据传输时应用的原子操作类型。 <br>支持的数据类型为: AtomicType.SET，AtomicType.ADD。 <br> 默认为 AtomicType.SET 类型。 |
 | pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
 

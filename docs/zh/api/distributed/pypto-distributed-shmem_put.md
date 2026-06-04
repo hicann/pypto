@@ -61,12 +61,12 @@ shmem_put(
 - 示例 1：先创建一个 shared memory tensor。将输入数据赋值到 pe = 1 的 shared memory tensor 的指定区域，并与该视图原本的数据进行累加操作。
 
     ```python
-    input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
+input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
     shmem_shape = input_tensor.shape
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP32, shape=shmem_shape)
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_BF16, shape=shmem_shape)
     pypto.set_vec_tile_shapes(16, 64)
     put_out = pypto.distributed.shmem_put(
-        src=input_tensor ,
+        src=input_tensor,
         offsets=[0, 0],
         dst=shmem_tensor,
         dst_pe=1,
@@ -79,7 +79,7 @@ shmem_put(
     ```python
     input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
     shmem_shape = input_tensor.shape
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP32, shape=shmem_shape)
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_BF16, shape=shmem_shape)
     pypto.set_vec_tile_shapes(16, 64)
     put_out = pypto.distributed.shmem_put(
         src=input_tensor,

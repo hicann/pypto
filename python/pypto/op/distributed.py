@@ -9,7 +9,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from enum import Enum
 from typing import Optional, Union
 
 from pypto import pypto_impl
@@ -103,15 +102,15 @@ def shmem_view(
     src: ShmemTensor
         The input tensor to extract a partial view, it must be a shmem tensor
         The constraints of the tensor shape and data type is same as pypto.view
-    shape: List[int]
+    shape: list of int
         Get the shape of the shmem view.
-        The constraints of this paramter is same as pypto.view
-    offsets: List[int]
+        The constraints of this parameter is same as pypto.view
+    offsets: list of int or SymbolicScalar
         Get the offset of each dimension relative to the input when obtaining the shmem view.
-        The constraints of this paramter is same as pypto.view
-    valid_shape: List[int] = None
+        The constraints of this parameter is same as pypto.view
+    valid_shape: list of int or SymbolicScalar = None
         Optional parameter to retrieve the effective data size of the schematic block.
-        The constraints of this paramter is same as pypto.view
+        The constraints of this parameter is same as pypto.view
 
     Returns
     -------
@@ -120,16 +119,16 @@ def shmem_view(
 
     Examples
     --------
-    x = pypto.distributed.create_shmem_tensor("tp", 4, [4, 8], pypto.DT_FP32)
+    x = pypto.distributed.create_shmem_tensor("tp", 4, pypto.DT_FP32, [4, 8])
     shape = [4, 4]
     offsets = [0, 4]
     valid_shape = [2, 4]
     y = pypto.distributed.shmem_view(x, shape, offsets, valid_shape=valid_shape)
     """
     if valid_shape is None:
-        return pypto_impl.ShmemView(input, shape, offsets)
+        return pypto_impl.ShmemView(src, shape, offsets)
     else:
-        return pypto_impl.ShmemView(input, shape, to_syms(valid_shape), to_syms(offsets))
+        return pypto_impl.ShmemView(src, shape, to_syms(valid_shape), to_syms(offsets))
 
 
 @op_wrapper
@@ -148,15 +147,15 @@ def shmem_put(
     ----------
     src: Tensor
         The source tensor located in local GM.
-    offsets : list of int
+    offsets : list of int or SymbolicScalar
         The offset in the destination shared memory GM.
     dst: ShmemTensor
         The destination tensor in shared memory GM (symmetric memory).
-    dst_pe : int
+    dst_pe : int or SymbolicScalar
         The pe of the destination device.
     put_op : AtomicType
         The type of atomic operation to apply during the data transfer.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used to control the execution dependency of the operation.
 
     Returns
@@ -197,16 +196,16 @@ def shmem_get(
     ----------
     src : ShmemTensor
         The source tensor in remote GM.
-    src_pe : Union[int, SymbolicScalar]
+    src_pe : int or SymbolicScalar
         The src_pe of the source device.
     shape : list of int
         The shape of the destination tensor.
-    offsets : list of int
+    offsets : list of int or SymbolicScalar
         The offset of the destination tensor in local GM.
     valid_shape: list[int] = None
         Optional parameter to retrieve the effective data size of the schematic block.
         It is required that the valid_shape is smaller than the shape of the input.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used as control dependencies.
 
     Returns
@@ -248,8 +247,8 @@ def shmem_signal(
     sig_op: AtomicType = AtomicType.SET,
     pred: list[Tensor] = None,
 ) -> Tensor:
-    """Send a signal to the target_pe, and the signal is trggierred by a operation on some shmem tensor,
-        which is discripted by src and src_pe.
+    """Send a signal to the target_pe, and the signal is triggered by an operation on some shmem tensor,
+        which is described by src and src_pe.
 
     Parameters
     ----------
@@ -261,13 +260,13 @@ def shmem_signal(
         The value of the signal sent to shared memory,
     shape : list of int
         The shapes of the shared memory signal;
-    offsets : list of int
+    offsets : list of int or SymbolicScalar
         The offsets of the signal in shared memory.
     target_pe: int or SymbolicScalar
-        The target device to recieve this signal
+        The target device to receive this signal
     sig_op : AtomicType
         The type of atomic operation.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used as control dependencies.
 
     Returns
@@ -281,11 +280,10 @@ def shmem_signal(
     dummy = pypto.distributed.shmem_signal(
         shmem_signal,
         1,
-        1,
         2,
         [128, 256],
         [0, 0],
-        target_pe=1,
+        target_pe=3,
         sig_op=pypto.AtomicType.SET,
         pred=pred_token,
     )
@@ -311,26 +309,26 @@ def shmem_wait_until(
     clear_signal: bool = False,
     pred: list[Tensor] = None,
 ) -> Tensor:
-    """Wait a signal to my_pe, and the signal is trggierred by a operation on some shmem tensor,
-        which is discripted by src and src_pe.
+    """Wait for a signal at my_pe, and the signal is triggered by an operation on some shmem tensor,
+        which is described by src and src_pe.
 
     Parameters
     ----------
     src : ShmemTensor
         The shared memory tensor which will trigger a signal
-    src_pe:
+    src_pe: int or SymbolicScalar
         The shared memory tensor belongs to.
-    cmp: int
+    cmp: OpType
         Comparison operation type for condition checking. only EQ is supported currently.
     cmp_value : int
         The value to wait for.
     shape : list of int
         The shapes of the shared memory signal;
-    offsets : list of int
-        he offsets of the shmem signal.
+    offsets : list of int or SymbolicScalar
+        The offsets of the shmem signal.
     clear_signal : bool
         Whether to reset the signal after waiting.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used as control dependencies.
 
     Returns
@@ -343,10 +341,10 @@ def shmem_wait_until(
     dummy = pypto.distributed.shmem_wait_until(
         shmem_signal,
         1,
-        OpType.EQ,
         4,
         [128, 256],
         [0, 0],
+        cmp=OpType.EQ,
         clear_signal=False,
         pred=pred_token,
     )
@@ -366,9 +364,9 @@ def shmem_barrier_all(
 
     Parameters
     ----------
-    src : Tensor
+    src : ShmemTensor
         The shared memory barrier signal.
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used as control dependencies.
 
     Returns
@@ -403,9 +401,9 @@ def shmem_clear_data(
         The shmem tensor to be cleared
     shape : list of int
         The shape of the shmem tensor to be cleared
-    offsets : list of int
+    offsets : list of int or SymbolicScalar
         The offsets of the shmem tensor to be cleared
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used as control dependencies.
 
     Returns
@@ -421,7 +419,6 @@ def shmem_clear_data(
         [1, 128, 256],
         [0, 0, 0],
         pred=pred_token,
-        is_signal=False,
     )
     """
     dummy = __normalize_pred(pred)
@@ -442,11 +439,7 @@ def shmem_clear_signal(
     ----------
     src : ShmemTensor
         The signal of shmem tensor to be cleared;
-    shape : list of int
-        The shape of the shmem tensor
-    offsets : list of int
-        The offsets of the shmem tensor
-    pred : Tensor
+    pred : list[Tensor]
         Predicate tensors used as control dependencies.
 
     Returns

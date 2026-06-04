@@ -102,30 +102,30 @@
 #### 0xA3000 AICPU_TASK_TIMEOUT
 
 1. **aicpu等待超时**：确认 shmem_signal 发送的信号能够被 shmem_wait_until 正常接收并等待完成。
-2. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
+2. **查日志上下文**：参考 `docs/trouble_shooting/machine.md` 文件，打开DEBUG日志。
 
 #### 0xA3001 AICPU_TASK_NUM_EXCEED_LIMIT
 
 1. **检查任务队列大小**：确认 SignalTileOp 队列的任务数未超出最大容量限制。
 2. **检查任务数量限制**：确认当前任务数量 (taskCount) 不超过 1024。
-3. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
+3. **查日志上下文**：参考 `docs/trouble_shooting/machine.md` 文件，打开DEBUG日志。
 
 #### 0xA3002 AICPU_TASK_QUEUE_EMPTY
 
 1. **检查 AICPU 任务队列**：确认任务队列在执行任务前不为空，避免在空队列上执行任务操作。
-2. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
+2. **查日志上下文**：参考 `docs/trouble_shooting/machine.md` 文件，打开DEBUG日志。
 
 #### 0xA3003 AICPU_TASKID_NOT_IN_MAP
 
 1. **检查任务 ID**：确认给定的 taskId 存在于任务 ID 映射表中，避免任务 ID 查找失败。
-2. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
+2. **查日志上下文**：参考 `docs/trouble_shooting/machine.md` 文件，打开DEBUG日志。
 
 #### 0xA3004 INVALID_GROUP_INDEX
 
 1. **检查通信域索引**：确认给定的 groupIndex 小于通信域的总数 commGroupNum_，确保索引在有效范围内。
-2. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
+2. **查日志上下文**：参考 `docs/trouble_shooting/machine.md` 文件，打开DEBUG日志。
 
 #### 0xA3005 NULLPTR
 
 1. **检查运行时管理对象**：确保 AicoreManager等运行时依赖对象已正确初始化并传入。
-2. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
+2. **查日志上下文**：参考 `docs/trouble_shooting/machine.md` 文件，打开DEBUG日志。

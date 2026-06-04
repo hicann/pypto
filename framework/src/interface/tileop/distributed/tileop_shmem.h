@@ -275,6 +275,7 @@ TILEOP void CopyGmToGmByPutGet(
     ShmemUbTile<DataType, kChunkRows, tileColShape> pongTile(kChunkRows, validColShape);
     pto::TASSIGN(pingTile, reinterpret_cast<uintptr_t>(buffer));
     pto::TASSIGN(pongTile, reinterpret_cast<uintptr_t>(buffer + kHalfBufferEleCount));
+    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
     if constexpr (useTPut) {
         if constexpr (atomicType == AtomicType::ADD) {
             pto::comm::TPUT<pto::AtomicType::AtomicAdd>(dstGlobal, srcGlobal, pingTile, pongTile);

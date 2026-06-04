@@ -224,7 +224,7 @@ inline std::tuple<int64_t, int64_t, std::vector<int64_t>, std::vector<int64_t>, 
         << " tileShape dim must >= " << MIN_TILE_SHAPE_DIM << ", but got dimensional=" << tileShape.size();
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() == tileShape.size() + 1)
         << "Invalid dimensional: "
-        << " dataShape dim must = tileShape dim + 1, but got dataShape dim=" << dataShape.size()
+        << " shape parameter dim must = tileShape dim, but got shape parameter dim=" << dataShape.size() - 1
         << ", tileShape dim=" << tileShape.size();
 
     size_t vecTileDim = tileShape.size();
@@ -233,8 +233,8 @@ inline std::tuple<int64_t, int64_t, std::vector<int64_t>, std::vector<int64_t>, 
     for (size_t i = 0; i < vecTileDim; ++i) {
         size_t curDim = startDim + i;
         ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, rawShape[curDim] % dataShape[curDim] == 0)
-            << "rawShape[" << curDim << "]=" << rawShape[curDim] << " must be divisible by dataShape[" << curDim
-            << "]=" << dataShape[curDim];
+            << "signal of shmem tensor shape[" << i << "]=" << rawShape[curDim]
+            << " must be divisible by shape parameter[" << i << "]=" << dataShape[curDim];
     }
 
     std::vector<int64_t> viewshapes(vecTileDim);

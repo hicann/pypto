@@ -64,7 +64,7 @@ shmem_store(
     ```python
     input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
     shmem_shape = input_tensor.shape
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=shmem_shape)
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_BF16, shape=shmem_shape)
     pypto.set_vec_tile_shapes(16, 64)
     store_out = pypto.experimental.shmem_store(
         src=input_tensor,
@@ -80,7 +80,7 @@ shmem_store(
     ```python
     input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
     shmem_shape = input_tensor.shape
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=shmem_shape)
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_BF16, shape=shmem_shape)
     pypto.set_vec_tile_shapes(16, 64)
     store_out = pypto.experimental.shmem_store(
         src=input_tensor,

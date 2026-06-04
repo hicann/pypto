@@ -38,7 +38,7 @@ shmem_get(
 
 ## 返回值说明
 
-返回一个与 src 数据类型和Shape相同的 Tensor。
+返回一个 Tensor。当未指定 shape 参数时，返回 Tensor 的形状与 src 的形状相同；当指定 shape 参数时，返回 Tensor 的形状与 shape 参数一致。返回 Tensor 的数据类型与 src 的数据类型相同。
 
 ## 约束说明
 
