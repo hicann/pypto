@@ -51,7 +51,7 @@ void MoeDistributedDispatchValidTensor(
     ASSERT(DistributedErrorCode::INVALID_TENSOR_SHAPE, input.GetShape(0) == row)
         << "Distributed constraint violated: " + input.GetName() + " row must be " + std::to_string(row)
         << "but got " << std::to_string(input.GetShape(0));
-    if (input.Dim() == 2) {
+    if (input.Dim() == MOE_INPUT_DIM) {
         ASSERT(DistributedErrorCode::INVALID_TENSOR_SHAPE, input.GetShape(1) == col)
         << "Distributed constraint violated: " + input.GetName() + " col must be " + std::to_string(col)
         << "but got " << std::to_string(input.GetShape(1));
@@ -552,14 +552,14 @@ void MoeDispatchValidateV1(
 {
     MoeDistributedDispatchValidConfig(moeConfig);
     MoeDistributedDispatchValidateGroup(group);
-    MoeDistributedDispatchValidTensor(tokenTensor, 2, DataType::DT_BF16, 8, 5120);
-    MoeDistributedDispatchValidTensor(tokenExpertTable, 2, DataType::DT_INT32, 8, 8);
+    MoeDistributedDispatchValidTensor(tokenTensor, MOE_INPUT_DIM, DataType::DT_BF16, 8, 5120);
+    MoeDistributedDispatchValidTensor(tokenExpertTable, MOE_INPUT_DIM, DataType::DT_INT32, 8, 8);
     int32_t expandXRow = std::min(
         static_cast<int32_t>(tokenTensor.GetShape(0)) * static_cast<int32_t>(tokenExpertTable.GetShape(1)) *
             moeConfig.rankNum, static_cast<int32_t>(tokenTensor.GetShape(0)) * moeConfig.routedExpertNum);
     MoeDistributedDispatchValidTensor(validCnt, 1, DataType::DT_INT32, moeConfig.expertNumPerRank, 1);
-    MoeDistributedDispatchValidTensor(expandX, 2, DataType::DT_BF16, expandXRow, 5120);
-    MoeDistributedDispatchValidTensor(combineInfo, 2, DataType::DT_INT32, expandXRow, 3);
+    MoeDistributedDispatchValidTensor(expandX, MOE_INPUT_DIM, DataType::DT_BF16, expandXRow, 5120);
+    MoeDistributedDispatchValidTensor(combineInfo, MOE_INPUT_DIM, DataType::DT_INT32, expandXRow, 3);
 }
 
 void CreateShmemData(
@@ -578,7 +578,7 @@ void CreateShmemData(
         BindTensor(
             hcclGroupIndex, memType,
             AlignUp(
-                BytesOf(dataType) * std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int64_t>()), 512)));
+                BytesOf(dataType) * std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int64_t>()), SHMEM_SIZE_ALIGN)));
 }
 
 void CreateShmemDispatchLoop(
@@ -653,12 +653,13 @@ void MoeDispatchValidateV2(
     MoeDistributedDispatchValidateGroup(group);
     ASSERT(DistributedErrorCode::INVALID_WORLD_SIZE, epWorldSize > 0)
         << "MoeDispatch constraint violated: epWorldSize must be > 0, but got " << std::to_string(epWorldSize);
-    ASSERT(DistributedErrorCode::INVALID_MOE_EXPERT_NUM, moeExpertNum == 160)
-        << "MoeDispatch constraint violated: moeExpertNum must 160, but got " << std::to_string(moeExpertNum);
+    ASSERT(DistributedErrorCode::INVALID_MOE_EXPERT_NUM, moeExpertNum == ROUTED_EXPET_NUM)
+        << "MoeDispatch constraint violated: moeExpertNum must " << ROUTED_EXPET_NUM << ", but got "
+        << std::to_string(moeExpertNum);
     int32_t routedExpertNum = moeExpertNum - sharedExpertNum;
     int32_t expertNumPerRank = routedExpertNum / epWorldSize;
-    MoeDistributedDispatchValidTensor(x, 2, DataType::DT_BF16, 8, 5120);
-    MoeDistributedDispatchValidTensor(expertIds, 2, DataType::DT_INT32, 8, 8);
+    MoeDistributedDispatchValidTensor(x, MOE_INPUT_DIM, DataType::DT_BF16, 8, 5120);
+    MoeDistributedDispatchValidTensor(expertIds, MOE_INPUT_DIM, DataType::DT_INT32, 8, 8);
     MoeDistributedDispatchValidTensor(expertTokenNums, 1, DataType::DT_INT32, expertNumPerRank, 1);
     MoeDistributedDispatchValidTensor(recvCounts, 1, DataType::DT_INT32, 1, 0);
     int batchSize = x.GetShape(0);
@@ -666,8 +667,8 @@ void MoeDispatchValidateV2(
     int32_t expandXRow = std::min(
         static_cast<int32_t>(batchSize) * static_cast<int32_t>(topK) * static_cast<int32_t>(epWorldSize),
         static_cast<int32_t>(batchSize) * routedExpertNum);
-    MoeDistributedDispatchValidTensor(expandX, 2, DataType::DT_BF16, expandXRow, 5120);
-    MoeDistributedDispatchValidTensor(assistInfoForCombine, 2, DataType::DT_INT32, expandXRow, 3);
+    MoeDistributedDispatchValidTensor(expandX, MOE_INPUT_DIM, DataType::DT_BF16, expandXRow, 5120);
+    MoeDistributedDispatchValidTensor(assistInfoForCombine, MOE_INPUT_DIM, DataType::DT_INT32, expandXRow, 3);
     uint64_t shmemSize =
         moeExpertNum * x.GetShape(0) * x.GetShape(1) * BytesOf(x.GetDataType()) +
         moeExpertNum * x.GetShape(0) * assistInfoForCombine.GetShape(1) * BytesOf(assistInfoForCombine.GetDataType()) +

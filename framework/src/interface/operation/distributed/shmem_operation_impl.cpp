@@ -32,8 +32,8 @@ void ValidateGroup(const char* group)
 {
     ASSERT(DistributedErrorCode::INVALID_GROUP_NAME, group != nullptr) << "\"group\" cannot be nullptr";
     auto groupLen = std::string(group).size();
-    ASSERT(DistributedErrorCode::INVALID_GROUP_NAME, (groupLen >= 1) && (groupLen < 128))
-        << "The length of \"group\" only supports [1, 128), but got " << groupLen;
+    ASSERT(DistributedErrorCode::INVALID_GROUP_NAME, (groupLen >= 1) && (groupLen < MAX_GROUP_NAME_LENGTH))
+        << "The length of \"group\" only supports [1, " << MAX_GROUP_NAME_LENGTH << "), but got " << groupLen;
 }
 
 void ValidateTiling(const Opcode& opCode, const Tensor& target, const std::string& desc, bool isData = false)

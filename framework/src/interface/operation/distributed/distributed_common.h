@@ -47,11 +47,14 @@ constexpr uint16_t SAME_ADDR_BYTE_SIZE = 512;
 constexpr uint64_t SHMEM_SIZE_ALIGN = 512;
 constexpr int32_t ROUTED_EXPET_NUM = 160;
 constexpr int32_t FFN_TILE_SIZE = 8;
+constexpr size_t MIN_TILE_SHAPE_DIM = 2;
 constexpr int32_t AIV_NUM = 4;
 constexpr int32_t RECEIVE_CNT_OUT_ROW = 1024;
 constexpr int32_t RECEIVE_CNT_OUT_COL = 512;
 constexpr int32_t SHMEM_SIGNAL_STRIDE = 8;
 constexpr int32_t MAX_SHMEM_TILE_DIMS = 4;
+constexpr int32_t MAX_GROUP_NAME_LENGTH = 128;
+constexpr uint64_t MOE_INPUT_DIM = 2;
 enum class TileIndex : size_t { HEAD_SHAPE, HEAD_NUM, TAIL_SHAPE };
 
 enum class AllReduceType {
@@ -216,9 +219,9 @@ inline std::tuple<int64_t, int64_t, std::vector<int64_t>, std::vector<int64_t>, 
     Shape rawShape = ((Operation*)src.signalOp)->GetOOperands()[0]->tensor->rawshape;
     Shape dataShape = src.signal.GetShape();
 
-    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() >= 2)
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() >= MIN_TILE_SHAPE_DIM)
         << "Invalid dimensional: "
-        << " tileShape dim must >= 2, but got dimensional=" << tileShape.size();
+        << " tileShape dim must >= " << MIN_TILE_SHAPE_DIM << ", but got dimensional=" << tileShape.size();
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() == tileShape.size() + 1)
         << "Invalid dimensional: "
         << " dataShape dim must = tileShape dim + 1, but got dataShape dim=" << dataShape.size()
