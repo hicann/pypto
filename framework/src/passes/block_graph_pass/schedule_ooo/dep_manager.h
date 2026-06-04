@@ -49,11 +49,13 @@ public:
 
     int InsertSuccessor(Operation *op, Operation *succ);
     int RemoveSuccessor(Operation *op, Operation *succ);
+    void RemoveSuccessorOp(Operation *op);
     int InsertPredecessor(Operation *op, Operation *pred);
     int RemovePredecessor(Operation *op, Operation *pred);
+    void RemovePredecessorOp(Operation *op);
 
-    std::set<Operation *> &GetSuccessors(Operation *op);
-    std::set<Operation *> &GetPredecessors(Operation *op);
+    std::set<Operation *, Operation::OperationComparator> &GetSuccessors(Operation *op);
+    std::set<Operation *, Operation::OperationComparator> &GetPredecessors(Operation *op);
     bool HasOp(Operation *op) const;
 
     std::string PrintOp(Operation *op);
@@ -74,10 +76,10 @@ private:
     void AddProducerDependencies(Operation *op);
     void AddConsumerDependencies(Operation *op);
 
-    std::unordered_map<Operation *, std::set<Operation *>> opConsumers;
-    std::unordered_map<Operation *, std::set<Operation *>> opProducers;
-    std::unordered_map<Operation *, std::set<Operation *>> inGraph_;
-    std::unordered_map<Operation *, std::set<Operation *>> outGraph_;
+    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> opConsumers;
+    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> opProducers;
+    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> inGraph_;
+    std::unordered_map<Operation *, std::set<Operation *, Operation::OperationComparator>> outGraph_;
 };
 
 } // namespace npu::tile_fwk

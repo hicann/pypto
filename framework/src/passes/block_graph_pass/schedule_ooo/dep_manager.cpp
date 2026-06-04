@@ -27,10 +27,10 @@ void DependencyManager::RegisterOp(Operation *op) {
         return;
     }
     if (inGraph_.find(op) == inGraph_.end()) {
-        inGraph_[op] = std::set<Operation *>();
+        inGraph_[op] = std::set<Operation *, Operation::OperationComparator>();
     }
     if (outGraph_.find(op) == outGraph_.end()) {
-        outGraph_[op] = std::set<Operation *>();
+        outGraph_[op] = std::set<Operation *, Operation::OperationComparator>();
     }
 }
 
@@ -107,6 +107,10 @@ int DependencyManager::RemoveSuccessor(Operation *op, Operation *succ) {
     return outGraph_[op].erase(succ);
 }
 
+void DependencyManager::RemoveSuccessorOp(Operation *op) {
+    opConsumers.erase(op);
+}
+
 int DependencyManager::InsertPredecessor(Operation *op, Operation *pred) {
     if (op == nullptr || pred == nullptr) {
         return 0;
@@ -122,12 +126,16 @@ int DependencyManager::RemovePredecessor(Operation *op, Operation *pred) {
     return inGraph_[op].erase(pred);
 }
 
-std::set<Operation *> &DependencyManager::GetSuccessors(Operation *op)
+void DependencyManager::RemovePredecessorOp(Operation *op) {
+    opProducers.erase(op);
+}
+
+std::set<Operation *, Operation::OperationComparator> &DependencyManager::GetSuccessors(Operation *op)
 {
     return outGraph_[op];
 }
 
-std::set<Operation *> &DependencyManager::GetPredecessors(Operation *op)
+std::set<Operation *, Operation::OperationComparator> &DependencyManager::GetPredecessors(Operation *op)
 {
     return inGraph_[op];
 }
@@ -257,6 +265,8 @@ void DependencyManager::FindDependencies(Operation *op, bool needView) {
 }
 
 void DependencyManager::InitOpConsumerAndProducer(const std::vector<Operation *> &ops) {
+    opConsumers.clear();
+    opProducers.clear();
     std::unordered_set<Operation *> opSet;
     for (auto op : ops) {
         opSet.insert(op);

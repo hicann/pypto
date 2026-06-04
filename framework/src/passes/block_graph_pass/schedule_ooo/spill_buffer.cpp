@@ -611,6 +611,7 @@ Status OoOScheduler::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalT
         consumer->SetAsDeleted();
         EraseSchedulerSideMaps(consumer);
     }
+    depManager_.InitDependencies(orderedOps, false);
     bufRefCount_[spillMemId] = 0;
     function_.EraseOperations(false, false);
     ctx.newCopyoutOps.push_back(copyoutOp);
@@ -988,6 +989,10 @@ void OoOScheduler::CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector
 
 void OoOScheduler::EraseSchedulerSideMaps(Operation* op)
 {
+    auto it = std::find(orderedOps.begin(), orderedOps.end(), op);
+    if (it != orderedOps.end()) {
+        orderedOps.erase(it);  // 只删除第一个2
+    }
     opExecOrderMap.erase(op);
     opPipeTypeMap.erase(op);
     opIsAllocMap.erase(op);
@@ -996,6 +1001,8 @@ void OoOScheduler::EraseSchedulerSideMaps(Operation* op)
     opViewOpsMap.erase(op);
     opReqMemIdsMap.erase(op);
     inOutOperandsCache_.erase(op);
+    depManager_.RemoveSuccessorOp(op);
+    depManager_.RemovePredecessorOp(op);
 }
 
 Status OoOScheduler::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId, 

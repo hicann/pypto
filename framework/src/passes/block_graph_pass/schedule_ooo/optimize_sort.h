@@ -82,7 +82,8 @@ public:
     Status UpdateOOperandPreDependence(
         size_t startIndex, std::shared_ptr<std::vector<Operation*>>& curOpList, std::vector<Operation*> consumersGroup);
     void RecoverSymbol(size_t startIndex, std::shared_ptr<std::vector<Operation*>> curOpList);
-    void GetConsumerGroup(std::set<Operation*>& consumers, std::vector<Operation*>& consumersGroup);
+    void GetConsumerGroup(std::set<Operation*, Operation::OperationComparator>& consumers, 
+        std::vector<Operation*>& consumersGroup);
     void GetStackTop(
         size_t& startIndex, std::shared_ptr<std::vector<Operation*>>& curOpList,
         std::map<MemoryType, int64_t>& curMemoryMap);
