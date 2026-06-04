@@ -1347,7 +1347,11 @@ static Tensor ConstructGmAccumulationTensorGraph(
         gmPartialSums.emplace_back(gmPartialSum);
     }
     if (outType == DT_INT32) {
-        return npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
+        gmAccumulationTensor = npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
+        ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, gmAccumulationTensor.GetStorage() != nullptr)
+            << "ReduceAcc's result can not be null.";
+        gmAccumulationTensor.GetStorage()->UpdateDynValidShape({mValidShape, nValidShape});
+        return gmAccumulationTensor;
     } else {
         return GetGmDeterministicAccumulationTensor(gmPartialSums, kLoop);
     }
@@ -1795,6 +1799,10 @@ static Tensor ConstructSingleBatchGmAccumulation(
 
     if (outType == DT_INT32) {
         cTensor = npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
+        ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, cTensor.GetStorage() != nullptr)
+            << "ReduceAcc's result can not be null.";
+        cTensor.GetStorage()->UpdateDynValidShape({mValidShape, nValidShape});
+        return cTensor;
     } else {
         cTensor = GetGmDeterministicAccumulationTensor(gmPartialSums, kLoop);
     }
