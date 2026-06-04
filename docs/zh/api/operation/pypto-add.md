@@ -37,7 +37,7 @@ add(input: Tensor, other: Union[Tensor, float]) -> Tensor
 2. other 为数字的时候，不支持隐式转化。
 3. other 不支持nan、inf等特殊值。
 4. Tensor数据类型说明：
-   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_UINT8，DT_INT8。
+   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32。
 
