@@ -48,6 +48,7 @@ def moe_distributed_dispatch_kernel(
 | group_name | str | 通信组名称，长度范围[1, 128) |
 
 **派生标量参数**:
+
 - `expand_x_row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)`: 预留的接收 tensor 的行数
 - `expert_num_per_rank = moe_expert_num // ep_world_size`: 每个 rank 负责的专家数量
 - `info_size = 4`: 发送到共享内存中的辅助信息长度（rank_id, token_id, k_offset, padding）
@@ -178,6 +179,7 @@ for expert_id in range(expert_num_per_rank):
 **目的**: 计算每个 token 在目标专家共享内存区域中的写入偏移量，避免多个 token 写入同一位置。当前实现采用 `one_hot + cumsum` 方式，天然兼容 mask 场景，无需感知 mask。
 
 **实现步骤**:
+
 1. 将`expert_ids`从 [batch_size, topk] 重塑为 [batch_size * topk] 的一维向量
 2. 对扁平后的 expert_ids 做`one_hot`编码，得到 shape [total_send_tasks, moe_expert_num] 的 one-hot 矩阵
 3. 沿第0维做`cumsum`，得到 cumsum_table，其中 `cumsum_table[i, e]` 表示前 i+1 个 token 中发送给专家 e 的总次数
@@ -206,6 +208,7 @@ for expert_id in range(expert_num_per_rank):
 **目的**: 将活跃 token 数据和辅助信息发送到目标 rank 的共享内存区域，并通过原子 ADD 操作为每个 expert 计数。
 
 **实现步骤**:
+
 1. 遍历所有 token（batch_size * topk个）
 2. 对每个 token，首先检查 `x_active_mask[token_id] == 1`，仅活跃 token 参与发送
 3. 对每个活跃 token：
@@ -286,6 +289,7 @@ for expert_id in range(expert_num_per_rank):
 **目的**: 等待所有数据准备好，计算每个 expert 在输出 tensor 中的行偏移量。
 
 **实现步骤**:
+
 1. **等待同步**:
    - 使用`shmem_wait_until`等待数据信号：`shmem_data.signal == batch_size * topk * ep_world_size`，表示全局所有卡的发送任务全部执行完
    - 等待完成后清理信号（`clear_signal=True`）
@@ -310,6 +314,7 @@ for expert_id in range(expert_num_per_rank):
 
 **示例**:
 假设 ep_world_size=4，expert_num_per_rank=40，则：
+
 - expert 0 的计数信息在`cum_sum_input[1:5, 0]`（从 rank 0,1,2,3接收的 token 数量）
 - expert 0 的总接收数量为`sum(cum_sum_input[1:5, 0])`
 - expert 0 的 0-3 卡的接收数据在 expand_x 中的行偏移为`cum_sum_result[1:5, 0]`
@@ -319,9 +324,11 @@ for expert_id in range(expert_num_per_rank):
 **目的**: 从共享内存中接收 token 数据和辅助信息，写入输出 expand_x。
 
 **实现步骤**:
+
 1. 外层循环遍历本卡所有 expert（0到expert_num_per_rank-1）
 2. 内层循环遍历每个 expert 下所有 rank（0到ep_world_size-1），其中 index = expert_id * ep_world_size + rank_id
 3. 对每个 (expert, rank) 区域：
+
    - **获取接收数量和偏移**:
      - `cur_count = cum_sum_input[index + 1, 0]`: 本卡某 expert 从该 rank 接收的 token 数量
      - `offset = cum_sum_result[index, 0]`: 该区域在输出 expand_x 中的行偏移量

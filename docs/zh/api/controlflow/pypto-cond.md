@@ -2,10 +2,8 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -19,7 +17,6 @@ cond(scalar: SymInt)
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | scalar | 输入      | 条件表达式，可以是整数或SymbolicScalar（符号标量），用于判断条件是否为真 |
@@ -30,10 +27,10 @@ pypto\_impl.RecordIfBranch: 返回一个条件分支对象，用于 Python 的 i
 
 ## 约束说明
 
--   必须与 Python 的 if、elif、else 语句配合使用
--   条件表达式会被记录到计算图中
--   支持嵌套的条件语句
--   当函数未使用 @pypto.frontend.jit 或 @pypto.frontend.function 装饰器修饰时，条件表达式需要用 pypto.cond 包装
+- 必须与 Python 的 if、elif、else 语句配合使用
+- 条件表达式会被记录到计算图中
+- 支持嵌套的条件语句
+- 当函数未使用 @pypto.frontend.jit 或 @pypto.frontend.function 装饰器修饰时，条件表达式需要用 pypto.cond 包装
 
 ## 调用示例
 

@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -24,7 +22,6 @@ copysign(input: Tensor, other: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为Tensor类型。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -36,7 +33,7 @@ copysign(input: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  input 和 other 类型应该相同。
+1. input 和 other 类型应该相同。
 
 ## 调用示例
 

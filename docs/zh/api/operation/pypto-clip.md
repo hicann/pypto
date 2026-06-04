@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -24,13 +22,11 @@ clip(
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为Tensor类型。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过 INT32_MAX。 |
 | min    | 输入      | 源操作数。 <br> 支持的类型为int\float\Element以及Tensor类型，数据类型必须与输入 input 的数据类型一致。 <br> 当为int或者float类型时会自动转换为Element类型，且数据类型与输入 input 的数据类型一致。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过 INT32_MAX。 <br> 可缺省，默认值为-INF。 <br> NaN，INF，-INF 仅在浮点数运算时有定义，即只在数据类型为 DT_FP16/DT_FP32 时生效；当数据类型为 DT_INT16 和 DT_INT32 时，会跳过默认值的比较逻辑。 |
 | max    | 输入      | 源操作数。 <br> 支持的类型为int\float\Element以及Tensor类型，数据类型必须与输入 input 的数据类型一致。 <br> 当为int或者float类型时会自动转换为Element类型，且数据类型与输入 input 的数据类型一致。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持1-4维，元素个数不超过 INT32_MAX。 <br> 可缺省，默认值为INF。 <br> NaN，INF，-INF 仅在浮点数运算时有定义，即只在数据类型为 DT_FP16/DT_FP32 时生效；当数据类型为 DT_INT16 和 DT_INT32 时，会跳过默认值的比较逻辑。 |
-
 
 ## 返回值说明
 
@@ -54,9 +50,9 @@ $$
 
 ## 约束说明
 
-1.  min / max 的类型必须一致，同时为 Element 或同时为 Tensor。
-2.  min / max 为Tensor类型时，其Shape大小必须满足可以广播到输入的Shape。
-3.  min 和 max 支持同时缺省，返回原值。
+1. min / max 的类型必须一致，同时为 Element 或同时为 Tensor。
+2. min / max 为Tensor类型时，其Shape大小必须满足可以广播到输入的Shape。
+3. min 和 max 支持同时缺省，返回原值。
 
 ## 调用示例
 

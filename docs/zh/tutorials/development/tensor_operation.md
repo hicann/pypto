@@ -8,7 +8,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
 
 向量运算是在张量上执行元素级别的计算，适用于各种基本数学操作。
 
--   算术运算
+- 算术运算
 
     ```python
     # 加法
@@ -37,7 +37,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     result = pypto.pow(a, scalar)  # a ** scalar
     ```
 
--   数学函数
+- 数学函数
 
     ```python
     # 指数和对数
@@ -67,7 +67,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     result = x.neg()
     ```
 
--   激活函数
+- 激活函数
 
     ```python
     # Sigmoid
@@ -85,7 +85,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     result = x.softmax(x, dim=-1)
     ```
 
--   比较操作
+- 比较操作
 
     ```python
     # 最大值和最小值
@@ -96,7 +96,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     result = pypto.clip(x, min_val, max_val)  # 将x的取值范围进行截断
     ```
 
--   归约操作
+- 归约操作
 
     ```python
     # 求和
@@ -112,7 +112,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     result = x.amin(dim=-1, keepdim=False)
     ```
 
--   原地修改 \(inplace\)
+- 原地修改 \(inplace\)
 
     ```python
     # 使用move()进行就地操作
@@ -122,7 +122,7 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     output[:] = pypto.add(a, b)   # 也是高效的
     ```
 
--   广播模式（broadcast）
+- 广播模式（broadcast）
 
     许多操作支持广播，这使得操作更加灵活和高效。
 
@@ -161,13 +161,13 @@ result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16, a_trans=False, b_trans=True
 
 矩阵乘法参数：
 
--   `input`：左矩阵 \[M, K\] 或 \[B, M, K\]
--   `mat2`：右矩阵 \[K, N\] 或 \[B, K, N\]
--   `out_dtype`：输出数据类型
--   `a_trans`：转置左矩阵（默认：False）
--   `b_trans`：转置右矩阵（默认：False）
--   `c_matrix_nz`：以NZ格式输出（默认值：False）
--   `extend_params`：扩展特征（偏置、去量化等）。
+- `input`：左矩阵 \[M, K\] 或 \[B, M, K\]
+- `mat2`：右矩阵 \[K, N\] 或 \[B, K, N\]
+- `out_dtype`：输出数据类型
+- `a_trans`：转置左矩阵（默认：False）
+- `b_trans`：转置右矩阵（默认：False）
+- `c_matrix_nz`：以NZ格式输出（默认值：False）
+- `extend_params`：扩展特征（偏置、去量化等）。
 
 ### 组合操作
 
@@ -195,7 +195,7 @@ def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
 
 ### 视图和组装
 
--   视图：视图操作创建对相同基础数据的新张量引用，适用于分块处理和局部计算。
+- 视图：视图操作创建对相同基础数据的新张量引用，适用于分块处理和局部计算。
 
     ```python
     # 视图
@@ -216,10 +216,10 @@ def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
 
     参数说明：
 
-    -   tensor：源张量
-    -   view\_shape：视图的形状
-    -   offset：源张量的起始位置
-    -   valid\_shape：实际有效尺寸（用于边界处理）
+    - tensor：源张量
+    - view\_shape：视图的形状
+    - offset：源张量的起始位置
+    - valid\_shape：实际有效尺寸（用于边界处理）
 
     Tensor支持Python风格的索引和切片，适用于灵活的数据访问。
 
@@ -236,7 +236,7 @@ def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
     ellipsis_slice = tensor[..., 0:10]
     ```
 
--   组装：assemble函数在指定的偏移处将较小的张量放入较大的张量，适用于分块处理后的结果合并。
+- 组装：assemble函数在指定的偏移处将较小的张量放入较大的张量，适用于分块处理后的结果合并。
 
     ```python
     # 将一个小的张量组装成一个大的张量

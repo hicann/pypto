@@ -2,15 +2,14 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
 根据PatternMode选择的内置Mask，对输入Tensor对应Bit位为1的位置组成输出Tensor，Bit位为0的值直接丢弃。PatternMode有7种模式：
+
 - PatternMode=1，尾轴每两个元素取第一个元素
 - PatternMode=2，尾轴每两个元素取第二个元素
 - PatternMode=3，尾轴每四个元素取第一个元素
@@ -27,16 +26,15 @@ gathermask(self: Tensor, pattern_mode: int) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | self   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_INT32, DT_UINT32，DT_FP16，DT_BF16, DT_FP32。 <br> 不支持空 Tensor，Shape 支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
 | pattern_mode | 输入      | 源操作数。 <br> int类型 ，取值范围为：1~7。 |
 
-
 ## 返回值说明
 
 返回输出 Tensor，输出Tensor数据类型与 self 数据类型一致，输出 Tensor的Shape如下：
+
 - pattern_mode <= 2，输出shape尾轴=self.shape尾轴/2，其它轴和输入shape一致；
 - 2 < pattern_mode < 7, 输出shape尾轴=self.shape尾轴/4，其它轴和输入shape一致；
 - pattern_mode = 7, 输出shape=输入shape

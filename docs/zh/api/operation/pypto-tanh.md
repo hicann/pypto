@@ -2,10 +2,8 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -35,8 +33,8 @@ tanh(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  TileShape 与 input 维度保持一致；
-2.  由于存在临时内存使用，当输入数据类型为 DT_FP32，TileShape 大小有额外约束，假设 TileShape 为 [...,H,W]（最后两维为 H 和 W），那么：
+1. TileShape 与 input 维度保持一致；
+2. 由于存在临时内存使用，当输入数据类型为 DT_FP32，TileShape 大小有额外约束，假设 TileShape 为 [...,H,W]（最后两维为 H 和 W），那么：
     `input_size + output_size + 2 * (W_align8) * H * sizeof(float) + (W_align8 / 8) * H + 32 bytes < UB`
     其中，`W_align8 = (W + 7) / 8 * 8`
     （FP32：input + output + 2 个 float temp tile + 1 个 compare mask tile + 32 bytes 对齐）
@@ -60,6 +58,7 @@ y = pypto.tanh(x)
 ```
 
 计算过程说明：
+
 - tanh(-3.0) ≈ -0.9951，接近 -1
 - tanh(-1.0) ≈ -0.7616
 - tanh(0.0) = 0.0

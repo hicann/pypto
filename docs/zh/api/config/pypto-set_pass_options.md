@@ -2,10 +2,8 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -70,7 +68,6 @@ set_pass_options(*,
    pypto.set_pass_options(vec_nbuffer_setting={"DEFAULT": 2, "V1": 1})
 ```
 
-
 ### dict类型配置说明（函数粒度 key / 语义标签 key）
 
 ### 函数粒度 key 配置说明（func{magic}\_{order}）
@@ -82,6 +79,7 @@ set_pass_options(*,
 #### 键值对含义
 
 Key: 字符串格式 `"func{magic}_{order}"` 或 `"DEFAULT"`。<br>
+
 - `"func{magic}_{order}"`：匹配 functionMagic 为 magic 的 function 中，hashorder 为 order 的同构子图组。<br>
 - `"DEFAULT"`：匹配所有未显式指定的同构子图组。<br>
 
@@ -98,6 +96,7 @@ Value (N): 表示合并粒度。即同构子图组内每 N 个子图合并为一
 #### 配置行为
 
 Pass 在处理当前 function 的子图合并时，遵循 "func{magic}\_{order} 精确匹配 > DEFAULT 默认配置 > 自动处理" 的逻辑：<br>
+
 - 精确匹配：若 funcMagic 和 hashorder 双双命中，则按其对应的 Value N 进行合并。<br>
 - DEFAULT 默认配置：若未精确命中，但字典中存在 `DEFAULT`，则按 `DEFAULT` 对应的 Value 执行合并。<br>
 - 自动处理：若既未精确命中也无 `DEFAULT`，则自动计算合并粒度。<br>
@@ -125,6 +124,7 @@ Value (N): 表示合并粒度。<br>
 #### 优先级机制
 
 字符串 key 的优先级**高于**函数粒度 key 的默认配置。处理流程为：<br>
+
 1. 首先根据函数粒度 key（`func{magic}_{order}` / `DEFAULT`）确定各同构子图组的基础合并粒度。<br>
 2. 然后字符串 key 的值**直接替换**（而非取 max）对应子图组的合并粒度。<br>
 3. 当多个不同的字符串 label 指向同一个同构子图组时，取这些 label 值中的最大值。<br>
@@ -146,6 +146,7 @@ Value (N): 表示合并粒度。<br>
 |{"DEFAULT": 2, "V1": 1, "V2": 3}|默认合并粒度为2；V1 所在组替换为1；V2 所在组替换为3。若某一组同时有 V1 和 V2 两种OP，则取 max(1, 3) = 3。|
 
 #### 配置示例
+
 ```python
    # 混合函数粒度 key 和语义标签 key 配置
    pypto.set_semantic_label("V1")
@@ -157,7 +158,6 @@ Value (N): 表示合并粒度。<br>
    # 纯语义标签 key 配置
    pypto.set_pass_options(cube_l1_reuse_setting={"MM1": 4})
 ```
-
 
 ### sg_set_scope 配置说明
 
@@ -183,7 +183,7 @@ pypto.set_pass_options(sg_set_scope=-1)
 
 当需要将整个计算图保持不切分时，因数据切块会产生多条并行分支，这些分支之间无直接数据依赖，默认会被切分算法拆为独立子图。推荐设置 `sg_set_scope=(scope_id, True, False)`，通过 `allow_parallel_merge=True` 使相同 scope_id 的并行分支 Operation 合并到同一子图。
 
-##### 场景二：A5 CV 混合场景，构造 Mix 子图以减少 GM 搬运
+##### 场景二：Ascend 950PR/Ascend 950DT CV 混合场景，构造 Mix 子图以减少 GM 搬运
 
 当 Cube 操作的前后均有 Vec 操作时，目标是构造一个包含 Cube 和 Vec 的 Mix 子图，避免中间结果在 GM 上反复搬运。根据是否明确 scope 边界，分为以下两种情况：
 
@@ -217,7 +217,6 @@ pypto.set_pass_options(sg_set_scope=-1)
 # 后续 Vec 操作（scope_id=-1），可与上方 scope 子图合并为更大子图
 result = other_vec_op(add_result)
 ```
-
 
 ### pg_partition_algorithm 算法选择指导 (Algorithm Selection Guidance)
 

@@ -36,7 +36,7 @@ from numpy.testing import assert_allclose
 
 ## 核心代码逻辑
 
-1.  实现核心计算函数。
+1. 实现核心计算函数。
 
     PyPTO提供了丰富的Operation（操作）接口，用于实现不同的计算逻辑。开发者可以根据算子数学表达式组合不同的Operation接口，实现复杂的计算逻辑。以下是Softmax算子的核心计算函数实现：
 
@@ -49,7 +49,7 @@ from numpy.testing import assert_allclose
         return exp / esum                              # 概率归一化
     ```
 
-2.  实现Softmax Kernel函数。
+2. 实现Softmax Kernel函数。
 
     为了使计算逻辑能够在硬件上高效运行，需要实现Softmax Kernel函数，并通过@pypto.frontend.jit装饰器将计算图转换为硬件指令，并在其中定义数据切分和循环处理等策略。在调用时直接传入PyTorch Tensor，PyPTO框架会自动处理Tensor的类型转换。
 
@@ -80,12 +80,6 @@ from numpy.testing import assert_allclose
     ```python
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     ```
-
-
-
-
-
-
 
 ## 测试用例
 
@@ -143,19 +137,19 @@ Output shape: torch.Size([32, 32, 1, 256])
 
 PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成的图结构，即计算图。该计算图经过PyPTO编译优化流程，完成从原始计算图到可执行图的编译过程，最终生成可在昇腾硬件环境中运行的可执行代码，以实现实际的计算任务。用户可借助PyPTO Toolkit可视化工具查看计算图中的关键信息。
 
-1.  右键单击$\{work\_path\}/output/output\_\*/program.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
+1. 右键单击$\{work\_path\}/output/output\_\*/program.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
     program.json文件包含了Execute Graph和Block Graph的汇总信息，图中的关键信息为：左右两边的卡片为Tensor节点（代表输入/输出数据）、中间卡片为调用节点（带有fx标识，单击可以实现信息钻取）。
 
     ![](../figures/zh-cn_image_0000002499877218.png)
 
-2.  双击中间卡片逐层钻取到下图所示的Execute Graph。
+2. 双击中间卡片逐层钻取到下图所示的Execute Graph。
 
     ![](../figures/zh-cn_image_0000002531853385.png)
 
     图中不同的色块（CALL:TENSOR\_xx）分别代表一个调用节点，表示该计算图被划分成不同的Block Graph子图。
 
-3.  双击上图的调用节点，可以看到Block Graph子图信息，标识着任务的具体执行过程。
+3. 双击上图的调用节点，可以看到Block Graph子图信息，标识着任务的具体执行过程。
 
     ![](../figures/zh-cn_image_0000002531638777.png)
 
@@ -167,7 +161,7 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
 
 泳道图用于直观展示计算图的实际调度与执行过程，清晰呈现任务的执行顺序和耗时信息，帮助开发者分析算子性能瓶颈。下面将介绍如何采集泳道图数据，并通过PyPTO Toolkit查看泳道图。
 
-1.  通过给@pypto.frontend.jit装饰器的入参debug\_options配置图执行阶段调试开关启动性能数据采集功能。
+1. 通过给@pypto.frontend.jit装饰器的入参debug\_options配置图执行阶段调试开关启动性能数据采集功能。
 
     ```python
     @pypto.frontend.jit(
@@ -175,7 +169,7 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
     )
     ```
 
-2.  重新执行算子程序。
+2. 重新执行算子程序。
 
     ```bash
     python3 softmax.py
@@ -183,7 +177,7 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
 
     在$\{work\_path\}/output/output\_\*/目录（\*代表时间戳）下生成泳道图数据文件，文件名为：merged\_swimlane.json。
 
-3.  通过PyPTO Toolkit插件查看泳道图。
+3. 通过PyPTO Toolkit插件查看泳道图。
 
     右键单击merged\_swimlane.json，在弹出的菜单中选择“使用PyPTO Toolkit打开”，如下图所示。
 

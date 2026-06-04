@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -40,6 +38,7 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 ## 约束说明
 
 约束说明
+
 1. view 生成的张量执行 reshape，仅允许 inplace 为 False。
 2. inplace 为 True 时，reshape 通常需单独置于 loop (1) 中，无其他类型的operation并列时，可省略loop (1)，框架自动补齐，见示例2。
 3. inplace 为 True 的输出，不可作为函数最终输出。

@@ -2,10 +2,8 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -19,7 +17,6 @@ loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymInt, int]]
 
 ## 参数说明
 
-
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
 | *args             | 输入      | 三个可选参数，分别为循环起始值（start），循环结束值（stop），循环步长（step），有以下三种写法：<br> - 单参数形式：stop(SymInt)，起始值默认为0，步长默认为1。等价于：loop_unroll(0, stop, 1)<br> - 双参数形式：start(SymInt)，stop(SymInt)，等价于loop_unroll(start, stop, 1)<br> - 三参数形式：start (SymInt)，stop(SymInt)，step(SymInt)，等价于loop_unroll(start, stop, step) |
@@ -31,10 +28,10 @@ loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymInt, int]]
 
 ## 约束说明
 
--   展开因子列表会被排序并去重，且总是包含 1
--   展开因子按从大到小排序
--   每个展开因子会生成一个子循环
--   多层循环使用了loop_unroll并且配置unroll_list，会大大增加编译出的图数量，影响编译性能
+- 展开因子列表会被排序并去重，且总是包含 1
+- 展开因子按从大到小排序
+- 每个展开因子会生成一个子循环
+- 多层循环使用了loop_unroll并且配置unroll_list，会大大增加编译出的图数量，影响编译性能
 
 ## 调用示例
 

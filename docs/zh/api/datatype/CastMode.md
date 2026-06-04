@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -27,7 +25,7 @@ class CastMode(enum.Enum):
 
 ## 舍入模式详细说明
 
-| CastMode | 说明 | A2A3支持 | A5支持 |
+| CastMode | 说明 | Atlas A2 训练系列产品/Atlas A2 推理系列产品/Atlas A3 训练系列产品/Atlas A3 推理系列产品支持 | Ascend 950PR/Ascend 950DT支持 |
 |----------|------|----------|--------|
 | CAST_RINT | 舍入到最近整数，平局时舍入到偶数（IEEE 754默认） | 全部支持 | 全部支持 |
 | CAST_ROUND | 舍入到最近整数，平局时远离零舍入 | 全部支持 | 全部支持 |
@@ -56,6 +54,7 @@ class CastMode(enum.Enum):
 ### 不支持的 CastMode 处理
 
 当用户为某个转换指定了硬件不支持的 CastMode 时：
+
 1. 框架不会报错
 2. 框架自动采用该转换的默认 CastMode（遵循上述默认规则）
 

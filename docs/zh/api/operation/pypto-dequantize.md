@@ -2,15 +2,14 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
 将量化后的低精度数据转换为高精度格式， 并应用缩放(scale)和偏移(zero_points)参数，当前支持
+
 - 输入DT_INT8/DT_INT16的Tensor反量化为DT_FP32的Tensor
   $$
   \text{dst} = ([float]\text{input} + \text{zero\_points}) * \text{scale}
@@ -24,7 +23,6 @@ dequantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8/DT_INT16; <br> 不支持空Tensor；<br> Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。<br> shape记为 [..., row, col] |
@@ -32,7 +30,6 @@ dequantize(input: Tensor, scale: Tensor, otype: DataType, axis: int, zero_points
 | otype  | 输入      | 返回值的数值类型 <br> 目前支持DT_FP32。|
 | axis  | 输入      | 指定反量化压缩的轴 <br> 目前支持末尾两轴，即 -1/-2 或者input.shape.size() -1/input.shape.size()-2|
 | zero_points  | 输入      | 可选的非对称量化的偏移因子 <br> 支持的类型为：Tensor。 <br> Tensor数据类型与otype一致，支持：DT_FP32；<br> 支持空Tensor；<br> Shape比input少一位维，仅支持1-3维；<br> Shape Size不大于2147483647（即INT32_MAX）；<br> axis = -1 或 input.shape.size() -1 时， shape = [..., row] <br> axis = -2 或 input.shape.size() -2 时， shape = [..., col]|
-
 
 ## 返回值说明
 
@@ -74,4 +71,3 @@ Input  zero_points:[-2.0, -2.0, -2.0]
 Output y1:[[1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 4.0]]
 Output y2:[[-1.0, 0.0, 1.0, 2.0], [-1.0, 0.0, 1.0, 2.0], [-1.0, 0.0, 1.0, 2.0]]
 ```
-

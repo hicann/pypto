@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -22,7 +20,6 @@ erfc(input: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16。 <br> 不支持空 Tensor；Shape 仅支持 1-4 维；Shape Size 不大于 2147483647（即 INT32_MAX）。 |
@@ -33,8 +30,8 @@ erfc(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  输入 Tensor 和 输出 Tensor 类型应该相同。
-2.  由于存在临时内存使用，TileShape 大小有额外约束，假设 TileShape 为\[a,b,c,d\]，那么 5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
+1. 输入 Tensor 和 输出 Tensor 类型应该相同。
+2. 由于存在临时内存使用，TileShape 大小有额外约束，假设 TileShape 为\[a,b,c,d\]，那么 5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
 
 ## 调用示例
 

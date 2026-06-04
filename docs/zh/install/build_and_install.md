@@ -1,6 +1,6 @@
-## PyPTO安装
+# PyPTO安装
 
-### 源码下载
+## 源码下载
 
 请根据CANN软件版本下载对应分支源码，\$\{tag\_version\}表示分支标签名。
 
@@ -15,9 +15,10 @@ git clone -b ${tag_version} https://gitcode.com/cann/pypto.git
 >
 > - gitcode平台在使用HTTPS协议的时候要配置并使用个人访问令牌代替登录密码进行克隆，推送等操作。
 > - 若您的编译环境无法访问网络，无法通过git指令下载代码，请先在联网环境中下载源码，再手动上传。
-### 通过源码编译安装（推荐）
+>
+## 通过源码编译安装（推荐）
 
-#### 环境自检
+### 环境自检
 
 如果您的开发环境可以正常访问[cann-src-third-party](https://gitcode.com/cann-src-third-party)，PyPTO编译所需的第三方开源软件将在编译过程中自动下载及编译。
 如果无法访问，请参考[手动安装 - 前提条件](./prepare_environment.md#前提条件)中"准备第三方开源软件源码包"的相关章节完成源码包准备，并在编译前设置如下环境变量：
@@ -26,7 +27,7 @@ git clone -b ${tag_version} https://gitcode.com/cann/pypto.git
 export PYPTO_THIRD_PARTY_PATH=<path-to-thirdparty>
 ```
 
-#### 常规安装
+### 常规安装
 
 此方式适用于生产环境或代码稳定后使用。编译安装后，对Python源码的修改不会体现到已安装的`pypto`包中。对应命令如下：
 
@@ -71,7 +72,7 @@ python3 -m pip install . --verbose
    python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-generator="Unix Makefiles"'
    ```
 
-#### 可编辑安装
+### 可编辑安装
 
 此方式适用于开发调试阶段。该模式会在`site-packages`目录中创建指向本地源码的软链接，对Python源码的修改会即时生效，无需重新安装。对应命令如下：
 
@@ -84,6 +85,7 @@ python3 -m pip install -e . --verbose
 ```
 
 **参数说明**：
+
 - `-e`：即`--editable`的简写形式，标识采用可编辑安装模式；
 - `--verbose`：会输出安装流程的基础详细信息(如下载的包版本，安装路径，依赖解析结果等)；
 
@@ -105,7 +107,7 @@ export PYPTO_BUILD_EXT_ARGS='--cmake-build-type=Debug --cmake-verbose'
 python3 -m pip install -e . --verbose
 ```
 
-### 通过PyPI安装
+## 通过PyPI安装
 
 PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改，可以直接使用`pip`命令安装。
 
@@ -115,6 +117,7 @@ PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改
 |:---|:---|
 | 8.5.0 | 0.1.2 |
 | 9.0.0 | 0.2.0 |
+
 针对CANN的`${cann_version}`版本，请参考上表对应关系，使用如下命令指定PyPTO版本进行安装：
 
 ```bash
@@ -128,7 +131,6 @@ python3 -m pip install pypto==${pypto_version}
 python3 -m pip install pypto==0.1.0
 ```
 
-### 安装验证
+## 安装验证
 
 完成以上步骤后，参考[样例运行](../invocation/examples_invocation.md)执行相关用例，验证PyPTO是否成功安装。
-

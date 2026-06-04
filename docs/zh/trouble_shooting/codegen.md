@@ -2,6 +2,7 @@
 
 - **范围**：F6XXXX
 - 本文档说明 CODEGEN 组件的错误码定义、场景说明与排查建议。
+
 ---
 
 ## 错误码定义
@@ -38,7 +39,6 @@
    - 其他类型错误需要结合上下文进行分析
 <br>
 
-
 ### 场景举例
 
 注意：所有场景日志分析均基于上述排查步骤中获取的日志为基础。
@@ -61,7 +61,6 @@
 
    其中!10010即该OP的唯一标识码，可以此为关键字在PASS的图或日志中搜索获取相关信息，PASS定位指导详见[pass trouble shooting](./pass.md)
 <br>
-
 
 #### 错误码 F62014：SYMBOL_NOT_FOUND
 
@@ -98,6 +97,7 @@ copy_matrix_cc_to_gm(dstGlobalAddr, srcTileAddr, xmReg, xtReg);
 ```
 
 数据类型不匹配可能原因有：
+
 - 前端调用Operation接口参数传递错误，参考：[执行代码有pto相关报错](https://gitcode.com/cann/pypto/issues/705)
 - 使用了PTO-ISA不支持的数据类型，需要重新分析用例场景，使用硬件支持的数据类型
 
@@ -112,10 +112,10 @@ error: function type 'void (__cbuf__ void *, __gm__ void *, unsigned char, unsig
 ```
 
 出现此类报错原因可能有：
+
 - kernel代码编译参数为Vector，但是生成的kernel代码中包含了Cube相关指令，或者反之编译参数为Cube，但是生成的kernel代码中包含了Vector相关指令，导致bisheng编译器报错。
   该类问题一般为PASS将Vector和Cube的Operation在CodeGen阶段前仍然混合到一张子图导致，需要PASS进一步分析子图切分逻辑。CodeGen阶段看到的必须是独立的纯Vector或纯Cube子图。
 - CodeGen使用Cube或Vector的编译参数依据为Function::IsCube()接口，需要PASS确认对不同子图，该接口设置的值是否正确。
-
 
 ##### 场景4: 变量未定义
 
@@ -128,7 +128,6 @@ UBTileTensorBF16Dim2_1 ubTensor_1((uint64_t)UB_S0_E512_T, (Shape2Dim(sym_209_dim
 
 此类变量用于运行时动态获取Shape、Offset大小，数据来源于Function::GetDynParamTable接口，可在报错日志中往前搜索首个出现的"subprogram id"关键字，找到子图ID并告知PASS，由PASS继续分析变量缺失原因。
 <br>
-
 
 #### 二进制编译时长统计
 
@@ -151,6 +150,7 @@ CodeGen模块耗时可通过执行算子后在屏幕输出中观察Compiler Moni
 [INFO ] PYPTO(726656):2026-03-19 10:59:36.135 [codegen_cloudnpu.cpp:768][CODEGEN]:Top Function magic: 8, hash: 16874966534923480783: Parallel compilation finished in 709.613831 ms
 
 ```
+
 日志中记录了该Top Function内所有子图执行bisheng命令编译二进制的并发进程数量，以及总体耗时。
 
 - 单个kernel文件编译时长确认方法：
@@ -158,11 +158,12 @@ CodeGen模块耗时可通过执行算子后在屏幕输出中观察Compiler Moni
      {前置路径}/output/output_20260319_145742_163710_1702013_6466B4B5/**kernel_aicore/TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.cpp**
   2. 打开kernel代码文件，到最底部找到编译该文件的bisheng命令并复制，例如：
 
-  ```bash
-  bisheng -c -O3 -g -x cce ... -o output/output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.o output/output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.cpp
-  ```
+     ```bash
+     bisheng -c -O3 -g -x cce ... -o output/ output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/ TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.o output/ output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/ TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.cpp
+     ```
+
   3. cd {前置路径}
-  确认当前在output文件夹上一层
+     确认当前在output文件夹上一层
   4. 执行刚刚复制的bisheng命令，确认可执行成功，若报bisheng命令找不到则参考:
   [prepare_environment](../../../.agents/skills/pypto-environment-setup/references/prepare_environment.md)  "CANN 环境加载（通用模板）"章节
   . 利用系统自带如time、perf或其他shell命令结合bisheng命令统计时长，例如：

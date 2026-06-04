@@ -15,10 +15,10 @@
 
 计算图编译各阶段生成的图分别为Tensor Graph、Tile Graph、Block Graph，Execute Graph，这些图是编译过程中的关键产物，表征了PyPTO程序从抽象计算描述到硬件执行的完整编译流程。
 
--   **Tensor Graph**：Tensor Graph由Tensor和Operation节点构成，用于描述用户定义的计算流程。该图不涉及Tile展开与内存层级等底层语义，仅作为高层计算逻辑的表达。基于Tensor Graph的优化主要集中在与硬件无关的通用图优化技术上，例如冗余节点消除、常量折叠等。
--   **Tile Graph**：Tile Graph由Tile和TileOp构成。Tensor Graph根据TileShape展开，将Tensor分解为Tile，将Operation分解为TileOp。Tile Graph依据TileOp信息以及目标硬件的内存层级，自动推导Tile的存储位置，并在必要时插入内存搬运节点，确保数据在不同内存层级之间正确传输。
--   **Block Graph**：Block Graph通过将Tile Graph切分为多个子图，使得每个子图可以调度运行在单个AI Core上。Block Graph用于硬件相关的优化，包括指令编排、片上内存分配、同步操作插入等，从而提升硬件执行效率。
--   **Execute Graph**：Execute Graph是编译流程的最终产物，整合了所有优化结果，精确描述各Block Graph之间的依赖关系，用于设备调度器的调度执行。
+- **Tensor Graph**：Tensor Graph由Tensor和Operation节点构成，用于描述用户定义的计算流程。该图不涉及Tile展开与内存层级等底层语义，仅作为高层计算逻辑的表达。基于Tensor Graph的优化主要集中在与硬件无关的通用图优化技术上，例如冗余节点消除、常量折叠等。
+- **Tile Graph**：Tile Graph由Tile和TileOp构成。Tensor Graph根据TileShape展开，将Tensor分解为Tile，将Operation分解为TileOp。Tile Graph依据TileOp信息以及目标硬件的内存层级，自动推导Tile的存储位置，并在必要时插入内存搬运节点，确保数据在不同内存层级之间正确传输。
+- **Block Graph**：Block Graph通过将Tile Graph切分为多个子图，使得每个子图可以调度运行在单个AI Core上。Block Graph用于硬件相关的优化，包括指令编排、片上内存分配、同步操作插入等，从而提升硬件执行效率。
+- **Execute Graph**：Execute Graph是编译流程的最终产物，整合了所有优化结果，精确描述各Block Graph之间的依赖关系，用于设备调度器的调度执行。
 
 借助PyPTO Toolkit可视化工具，可以直观地查看计算图结构，了解计算图的节点信息，从而帮助开发者更便捷地进行算子功能调试。
 
@@ -26,9 +26,9 @@
 
 下图展示了从资源准备、任务下发到计算运行的完整执行过程。
 
--   资源准备阶段：根据Execute Graph中描述的执行资源信息，向执行硬件申请如workspace内存、Stream等全局资源。
--   任务参数组装和下发阶段：PyPTO的硬件执行任务分为AI CPU任务和AI Core任务。完成这两类任务所需的参数组装和任务配置后，提交给RTS以完成任务下发。
--   任务执行阶段：通过AI CPU和AI Core之间类Client-Server架构的紧密配合，完成整个计算任务的执行。AI CPU基于Execute Graph完成子任务的解析和分发，AI Core则负责接收AI CPU分发的子任务并完成运行。
+- 资源准备阶段：根据Execute Graph中描述的执行资源信息，向执行硬件申请如workspace内存、Stream等全局资源。
+- 任务参数组装和下发阶段：PyPTO的硬件执行任务分为AI CPU任务和AI Core任务。完成这两类任务所需的参数组装和任务配置后，提交给RTS以完成任务下发。
+- 任务执行阶段：通过AI CPU和AI Core之间类Client-Server架构的紧密配合，完成整个计算任务的执行。AI CPU基于Execute Graph完成子任务的解析和分发，AI Core则负责接收AI CPU分发的子任务并完成运行。
 
 在执行前，可以启用泳道图的采集和输出，利用PyPTO Toolkit可视化工具，直观查看各个子任务在AIC/AIV上的核间并行关系及前后执行顺序，从而帮助开发者更便捷地了解整体流水线分布，并进行针对性的算子性能优化。
 
@@ -37,10 +37,10 @@
 
 下图展示了PyPTO任务在硬件运行时的AI CPU与AI Core的关系，以及详细的运行流程。主要过程概括为：HostMachine初始化资源\>DeviceMachine通过Stitch生成DeviceTask并调度CallTask\>CoreMachine执行CallTask\>DeviceProgram协调整个流程。
 
--   HostMachine：运行在Host侧，负责实际的硬件任务执行，包括资源准备、任务组装等。
--   DeviceMachine：运行在AI CPU侧，基于Execute Graph等执行态数据，负责AI Core执行子任务的分发和调度。具体流程为：Control-AICPU通过Stitch（字面意为“缝合”）将多个无依赖关系的Loop内的CallTask整合到一个DeviceTask中，以打破循环边界并最大化CallTask的并行度；Schedule-AICPU基于DeviceTask完成AI Core-CallTask的分发和管理。每个DeviceTask在3个Schedule-AICPU之间共享，各Schedule-AICPU根据所管理的AIC/AIV核的空闲状态，从DeviceTask中提取就绪的CallTask下发执行。
--   CoreMachine：运行在AI Core侧，负责接收来自AI CPU分发的CallTask并完成执行。CallTask是在 AIC/AIV 上运行的最小单元，由一系列CCE指令组成，用于在AI Core上执行具体的搬运和计算任务。
--   DeviceProgram：DeviceProgram是每个PyPTO算子在Device侧运行的核心数据，由Execute Graph中描述的信息结合硬件资源管理生成。
+- HostMachine：运行在Host侧，负责实际的硬件任务执行，包括资源准备、任务组装等。
+- DeviceMachine：运行在AI CPU侧，基于Execute Graph等执行态数据，负责AI Core执行子任务的分发和调度。具体流程为：Control-AICPU通过Stitch（字面意为“缝合”）将多个无依赖关系的Loop内的CallTask整合到一个DeviceTask中，以打破循环边界并最大化CallTask的并行度；Schedule-AICPU基于DeviceTask完成AI Core-CallTask的分发和管理。每个DeviceTask在3个Schedule-AICPU之间共享，各Schedule-AICPU根据所管理的AIC/AIV核的空闲状态，从DeviceTask中提取就绪的CallTask下发执行。
+- CoreMachine：运行在AI Core侧，负责接收来自AI CPU分发的CallTask并完成执行。CallTask是在 AIC/AIV 上运行的最小单元，由一系列CCE指令组成，用于在AI Core上执行具体的搬运和计算任务。
+- DeviceProgram：DeviceProgram是每个PyPTO算子在Device侧运行的核心数据，由Execute Graph中描述的信息结合硬件资源管理生成。
 
 **图 3**  执行态运行示意图
 ![](../figures/execution_state_runtime_diagram.png)
@@ -51,7 +51,7 @@
 
 ### 开启调试模式
 
-1.  开启图编译阶段调试模式开关。
+1. 开启图编译阶段调试模式开关。
 
     ```python
     @pypto.frontend.jit(
@@ -59,13 +59,13 @@
     )
     ```
 
-2.  执行用例
+2. 执行用例
 
     ```bash
     python3 examples/02_intermediate/operators/softmax/softmax.py
     ```
 
-3.  执行成功，在$\{work\_path\}/output/output\_\*/目录（\*代表时间戳）下生成不同阶段的计算图文件（.json 格式）。
+3. 执行成功，在$\{work\_path\}/output/output\_\*/目录（\*代表时间戳）下生成不同阶段的计算图文件（.json 格式）。
 
     ```txt
     ├── Pass_xx_xx
@@ -82,12 +82,12 @@
 
 下面将选取计算图各编译阶段的最后一张计算图，并使用PyPTO Toolkit可视化工具，帮助用户了解各类计算图上的关键信息，帮助开发者进行问题定位。
 
--   `Tensor Graph`：Before\_004\_ExpandFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json
--   `Tile Graph`：Before\_026\_SubgraphToFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json
--   `Block Graph`：After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_LEAF\_program\_id\_00\_15536366383870408930.json
--   `Execute Graph`：After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_ROOT.json
+- `Tensor Graph`：Before\_004\_ExpandFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json
+- `Tile Graph`：Before\_026\_SubgraphToFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json
+- `Block Graph`：After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_LEAF\_program\_id\_00\_15536366383870408930.json
+- `Execute Graph`：After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_ROOT.json
 
-1.  通过PyPTO Toolkit查看Tensor Graph。
+1. 通过PyPTO Toolkit查看Tensor Graph。
 
     右键单击Before\_004\_ExpandFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
@@ -95,7 +95,7 @@
 
     右上角可以看到计算图类型为Tensor Graph，Tensor Graph由Tensor和Operation组成，图中的Tensor Shape和代码定义一致，且没有经过Tile展开。
 
-2.  通过PyPTO Toolkit查看Tile Graph。
+2. 通过PyPTO Toolkit查看Tile Graph。
 
     右键单击Before\_026\_SubgraphToFunction\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
@@ -103,7 +103,7 @@
 
     右上角可以看到计算图类型为Tile Graph，相比于Tile展开前，Tile Graph中增加了很多节点，这是因为原Shape为\(-1, 32, 1, 256\)的Tensor经过Tile展开，切分成Shape为\(1, 4 ,1, 64\)的Tile。同时，为Tile分配内存层级（对应图中asis-原地址，tobe-目的地址），并自动插入内存搬运节点（对应图中TILE\_COPY\_IN和TILE\_COPY\_OUT）。
 
-3.  通过PyPTO Toolkit查看Block Graph。
+3. 通过PyPTO Toolkit查看Block Graph。
 
     右键单击After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_LEAF\_program\_id\_00\_15536366383870408930.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
@@ -113,7 +113,7 @@
 
     当前sample被切分成多个结构相同的子图（简称同构子图），因此Pass\_36\_CodegenPreproc目录下仅有一个文件名称包含After\_036\_CodegenPreproc\_\*\_**LEAF**\_\*关键字的json文件。
 
-4.  通过PyPTO Toolkit查看Execute Graph。
+4. 通过PyPTO Toolkit查看Execute Graph。
 
     右键单击After\_036\_CodegenPreproc\_TENSOR\_loop\_0\_Unroll1\_PATH0\_hiddenfunc0\_8\_ROOT.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
@@ -124,6 +124,7 @@
 ## CPU仿真调试
 
 在不具备昇腾设备时，也支持在CPU仿真环境中进行测试体验：
+
 - 性能仿真：支持用户查看算子的核内流水数据。
 - 精度仿真：支持用户在CPU环境获取算子运算结果（精度仿真依赖CANN软件包）。
 
@@ -131,34 +132,34 @@
 
 运行模式选择逻辑为：
 
--   手动指定仿真模式：
+- 手动指定仿真模式：
 
     在算子代码中显式调用`@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})`，强制启用CPU仿真模式执行算子程序。
     pypto先执行性能仿真，性能仿真执行完成后，若检测到CANN软件包，则继续执行精度仿真。
 
--   自动识别模式（仅支持性能仿真，不支持精度仿真）：
-    -   未检测到CANN软件包：自动启用仿真模式（无需显式配置）。
-    -   检测到CANN软件包：优先使用真实硬件执行，仿真模式不生效。
+- 自动识别模式（仅支持性能仿真，不支持精度仿真）：
+    - 未检测到CANN软件包：自动启用仿真模式（无需显式配置）。
+    - 检测到CANN软件包：优先使用真实硬件执行，仿真模式不生效。
 
 具体操作步骤为：
 
-1.  指定运行参数run\_mode。
+1. 指定运行参数run\_mode。
 
     ```python
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
     ```
 
-2.  执行算子，自动触发仿真运行
+2. 执行算子，自动触发仿真运行
 
     ```bash
     python examples/00_hello_world/hello_world.py --run_mode=sim
     ```
 
-3.  性能仿真执行成功后，在output目录下，生成以下文件信息。
+3. 性能仿真执行成功后，在output目录下，生成以下文件信息。
 
     ![](../figures/zh-cn_image_0000002527468273.png)
 
-4.  右键单击merged\_swimlane.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
+4. 右键单击merged\_swimlane.json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
     ![](../figures/zh-cn_image_0000002495188648.png)
 

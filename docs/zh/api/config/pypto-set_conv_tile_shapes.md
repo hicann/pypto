@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    ×     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    ×     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
 
 ## 功能说明
 
@@ -105,7 +103,7 @@ TileShape需要满足以下约束条件：
 
     - L0A、L0B、L0C空间约束：
 
-        ```
+        ```txt
         CeilAlign(tileH * tileW, 16)* CeilAlign(tileK, C0) * sizeof(dtype) <= L0A_size
 
         CeilAlign(tileK, C0) * CeilAlign(tileN, 16) * sizeof(dtype) <= L0B_size
@@ -127,7 +125,7 @@ TileShape需要满足以下约束条件：
 
     - L1空间约束：
 
-        ```
+        ```txt
         CeilAlign(hinL1 * winL1 * kAL1 * sizeof(dtype), ALIGN_SIZE_32) + CeilAlign(nL1 * kBL1 * sizeof(dtype), ALIGN_SIZE_32) + CeilAlign(tileN * sizeof(dtype), ALIGN_SIZE_32) <= L1_size
         ```
 

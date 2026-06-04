@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -24,7 +22,6 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = 
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor支持的数据类型为DT_FP16，DT_FP32。 <br> Atlas A5系列产品：Tensor支持的数据类型为DT_FP16，DT_FP32，DT_BF16。 <br> 不支持空Tensor；支持的维度：1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -37,10 +34,10 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = 
 
 ## 约束说明
 
-1.  input 和 other 类型应该相同。
-2.  other 为数字的时候，不支持隐式转化。
-3.  other 不支持nan、inf等特殊值
-4.  **精度模式说明**：
+1. input 和 other 类型应该相同。
+2. other 为数字的时候，不支持隐式转化。
+3. other 不支持nan、inf等特殊值
+4. **精度模式说明**：
     - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，当前仅在Ascend 950PR/Ascend 950DT上有效。
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 

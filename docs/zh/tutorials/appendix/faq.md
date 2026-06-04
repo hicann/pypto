@@ -265,16 +265,16 @@ CompileCCE failed. errCode = 256, cce file: output/output_20251111_175724_806073
 
 在PTO编程模型下，算子核内函数实现复杂的主要原因主要如下：
 
--   子图规模较大，导致变量过多。
--   子图计算逻辑复杂，导致变量的生命周期较长。
+- 子图规模较大，导致变量过多。
+- 子图计算逻辑复杂，导致变量的生命周期较长。
 
 ### 解决措施
 
 针对上述可能的原因，可以采取以下措施进行处理：
 
--   调整Tensor的Tiling切分策略，采用更大的Tile块进行切分。通过增加单个Tile块的计算数据量，在总数据量保持不变的情况下，可以减少子图所需的计算步骤，从而有效减小子图的规模。相关设置接口为：[pypto.set\_vec\_tile\_shapes](../../api/config/pypto-set_vec_tile_shapes.md)和[pypto.set\_cube\_tile\_shapes](../../api/config/pypto-set_cube_tile_shapes.md)。
--   对于矩阵乘（MATMUL）计算场景，建议用户对K轴进行多核切分。
--   修改控制子图大小的选项"cycle\_upper\_bound"，将单个子图的最大规模限制在指定范围内。相关设置接口为：[pypto.set\_pass\_options](../../api/config/pypto-set_pass_options.md)
+- 调整Tensor的Tiling切分策略，采用更大的Tile块进行切分。通过增加单个Tile块的计算数据量，在总数据量保持不变的情况下，可以减少子图所需的计算步骤，从而有效减小子图的规模。相关设置接口为：[pypto.set\_vec\_tile\_shapes](../../api/config/pypto-set_vec_tile_shapes.md)和[pypto.set\_cube\_tile\_shapes](../../api/config/pypto-set_cube_tile_shapes.md)。
+- 对于矩阵乘（MATMUL）计算场景，建议用户对K轴进行多核切分。
+- 修改控制子图大小的选项"cycle\_upper\_bound"，将单个子图的最大规模限制在指定范围内。相关设置接口为：[pypto.set\_pass\_options](../../api/config/pypto-set_pass_options.md)
 
 ## 循环中使用Python print函数打印
 
@@ -367,7 +367,7 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
 
 3. idx_name 表示循环索引的名称，默认值为loop_idx_{id}, 对于嵌套累的Loop使用相同的idx会产生覆盖行为， 目前会在前端进行检查报错
 
-4.  unroll_list 主要用于循环展开，产生更大的loop body， 降低调度开销。对于unroll_list=2, loop大概会产生如下代码
+4. unroll_list 主要用于循环展开，产生更大的loop body， 降低调度开销。对于unroll_list=2, loop大概会产生如下代码
 
     ```python
     new_start = start

@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √    |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √    |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √    |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -15,7 +13,6 @@
 $$
 y_i = \text{atanh}(x_i) = \frac{1}{2} \ln\left(\frac{1 + x_i}{1 - x_i}\right)
 $$
-
 
 ## 函数原型
 
@@ -34,8 +31,8 @@ atanh(input: Tensor) -> Tensor
 返回Tensor类型。其Shape与输入Tensor一致，数据类型与输入Tensor一致，其元素为输入Tensor对应元素的反双曲正切值。
 
 ## 约束说明
-输入超出±1时输出为NaN，输入为±1时输出为±inf。
 
+输入超出±1时输出为NaN，输入为±1时输出为±inf。
 
 ## 调用示例
 

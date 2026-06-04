@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -24,7 +22,6 @@ ceil_div(self: Tensor, other: Tensor) -> Tensor
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | self  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -36,7 +33,7 @@ ceil_div(self: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1.  input 和 other 类型应该相同。
+1. input 和 other 类型应该相同。
 2. 只支持单轴广播。
 3. input 和 other 中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32。
 

@@ -15,6 +15,7 @@
 `pypto.frontend.jit` 是前端架构中的核心装饰器，用于将 Python 函数即时编译（JIT）为高效的计算图并在 NPU 上执行。前端不支持返回值，仅支持 in-place 修改；支持传入 torch 张量及其他类型的变量。
 
 主要特性：
+
 - **In-place 修改**: 内核函数通过 in-place 修改输出张量传递计算结果，不支持返回值
 - **类型注解**: 在函数签名中明确指定张量的形状和数据类型
 - **直接调用**: 测试时可直接传入 torch 张量及其他类型的变量，无需显式转换
@@ -71,6 +72,7 @@ def kernel_function(...):
 5. 非张量参数支持 keyword 传参、位置参数、使用默认值
 
 **pypto.Tensor[...]说明**：
+
 - kernel函数里申明推荐使用 `pypto.Tensor[[shape], dtype]` 方括号语法，符合 Python 类型注解规范
 - 也兼容旧的小括号语法 `pypto.Tensor([shape], dtype)`
 - 方括号内不支持 `key=value` 形式的关键字参数（Python 语法限制），只能按位置传递或使用字典

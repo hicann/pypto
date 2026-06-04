@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -19,7 +17,6 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 ```
 
 ## 参数说明
-
 
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
@@ -34,7 +31,7 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 
 ## 约束说明
 
-1.  valid\_shape 用于动态图场景。
+1. valid\_shape 用于动态图场景。
 
     在动态图场景中，若需生成 \[5,5\] 的 Tensor并设置 ViewShape 为 \[2,2\]，框架会通过 pypto.loop 循环生成 \[2,2\] 分块，并按偏移量拼接。此时若未传入 valid\_shape，代码将默认生成全 \[2,2\] 的Tensor（如 pypto.full\(\[2,2\], 1, pypto.DT\_INT32\)）。
 
@@ -42,7 +39,7 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 
     pypto.full\(\[2, 2\], 1, pypto.DT\_INT32, valid\_shape=\[pypto.min\(2, 5 - 2 \* b\_idx\), pypto.min\(2, 5 - 2 \* s\_idx\)\]\), 其中b\_idx 和 s\_idx 表示循环索引。
 
-2.  tileshape的维度与result 维度相同，用于切分 result。
+2. tileshape的维度与result 维度相同，用于切分 result。
 
 ## 调用示例
 

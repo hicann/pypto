@@ -26,7 +26,7 @@ $$
 
 ## Tile配置优化
 
-#### 增大算数强度
+### 增大算数强度
 
 当M、N足够大时（如训练场景），Matmul切分前的算数强度足够大并且切分后的任务数足够分满核，此时我们倾向于在M、N两个维度上都选择较大的切分配置，从而达到尽可能大的切分后算数强度，以期望达成Compute Bound。
 
@@ -53,10 +53,12 @@ pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128], enable_split_k=Fa
 以上Tile配置的优点：
 
 - 在满足L0 Buffer约束的条件下可以达到较大的算数强度；
+
 $$
 AI = \frac{M \cdot N \cdot K \cdot 2}{M \cdot K \cdot \frac{N}{nL1} \cdot aByte + K \cdot N \cdot \frac{M}{mL1} \cdot bByte}
 $$
 根据上式，显然$mL1 = nL1$时AI取到极大值，又由于$mL1 * nL1 * sizeof(float) <= L0C\_SIZE = 131072$，则当$mL1 = nL1 = sqrt(L0C\_SIZE / sizeof(float)) = 181$ 时，AI极大值成立。但是由于Tile大小需要满足分型格式的对齐要求，同时要考虑切分大小对于写入、写出带宽的影响，一般取128-256的组合。
+
 - MTE2、MTE1搬运均可以开启double buffer，可以使能流水并行；
  上述配置下，L0A、L0B的空间占用为32KB，刚好可以使能MTE1 double buffer，同理，上述tile配置下MTE2也可以使能double buffer；同时由于kL1 > kL0并使能了大包搬运，单次MTE2的搬运量可以进一步增加，这有利于提高MTE2的带宽利用率。
  不过需要注意，当mL1与nL1取128-256组合时，L0C上无法开启nbuffer，因此这种tile配置适用于K轴较大（即搬出次数相对较少）的场景。当需要频繁搬出时，可以考虑选择128-128组合。
@@ -165,7 +167,7 @@ def matmul_split_k_kernel(
 
 ## 访存带宽优化
 
-#### 增加L2命中率
+### 增加L2命中率
 
 回到Compute Bound判据公式：
 $$

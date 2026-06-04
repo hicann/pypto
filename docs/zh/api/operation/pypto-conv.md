@@ -2,20 +2,18 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    ×     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    ×     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
 
 ## 功能说明
 
 实现输入input_conv、weight完成卷积运算，支持bias参数，计算公式为：out = input_conv @ weight + bias (@表示为卷积处理)
 
--   input_conv 、weight、bias为源操作数；input_conv 为输入矩阵，weight为权重矩阵，bias为输入的偏置
--   out 为目的操作数，存放卷积处理结果的矩阵
--   当前暂不支持量化场景
--   当前暂不支持Relu功能
+- input_conv 、weight、bias为源操作数；input_conv 为输入矩阵，weight为权重矩阵，bias为输入的偏置
+- out 为目的操作数，存放卷积处理结果的矩阵
+- 当前暂不支持量化场景
+- 当前暂不支持Relu功能
 
 ## 函数原型
 
@@ -41,6 +39,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 ## 返回值说明
 
 返回卷积运算后的输出 Tensor：
+
 - 1D 卷积输出 shape：(Batch, Cout, Wout)
 - 2D 卷积输出 shape：(Batch, Cout, Hout, Wout)
 - 3D 卷积输出 shape：(Batch, Cout, Dout, Hout, Wout)
@@ -50,12 +49,14 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 ## 约束说明
 
 ### 1. Shape 合法性约束
+
 - 输入特征图（input_conv）：Batch、Cin、Hin、Win、Din 维度必须在 [1, 1000000] 范围内；
 - 卷积核（weight）：Cout、Kh、Kw、Kd 维度必须在 [1, 1000000] 范围内；
 - 偏置（bias_tensor）：shape 必须等于 [Cout]，否则校验失败；
 - 输出特征图：H_out、W_out、D_out 维度必须在 [1, 1000000] 范围内。
 
 ### 2. 属性参数合法性约束
+
 - 基础维度匹配约束：
   - strides 维度数必须与卷积维度匹配（2D conv 长度=2，3D conv 长度=3）；
   - dilations 维度数必须与卷积维度匹配（2D conv 长度=2，3D conv 长度=3）；
@@ -74,9 +75,11 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
   - CinFmap = CinWeight × groups。
 
 ### 3. 缓存空间约束
+
 - 调用 conv 接口前，必须通过 pypto.set_conv_tile_shapes 接口设置 L1/L0 层级的卷积 TileShape 切分大小。
 
 ### 4. 功能支持约束
+
 - transposed=True（转置卷积）暂不支持，调用会抛出 RuntimeError；
 - input_conv/weight 仅支持 DT_FP16、DT_BF16、DT_FP32 数据类型，其他类型会抛出 ValueError；
 - input_conv 与 weight 的维度必须一致（如 input_conv 为 4D 则 weight 也需为 4D），否则抛出 RuntimeError。
@@ -97,11 +100,13 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 **Cin 维度动态切分精度说明**：
 
 Cin 维度的动态轴切分会影响计算精度，原因如下：
+
 - Cin 切分后需要对多个 tile 的卷积结果进行累加（通过 pypto.add 实现）
 - 累加过程中存在两次 cast 操作（FP16/BF16 → FP32 → FP16/BF16）
 - 这两次精度转换会引入精度损失，在 Cin 切分场景下需要评估精度需求
 
 **建议**：
+
 - 如果精度要求较高，建议避免 Cin 维度的动态切分
 - 如果必须进行 Cin 切分，建议使用 FP32 数据类型以减少精度损失
 - Cin 切分的 tile 大小需满足 32 字节对齐约束（FP16/BF16: %16==0, FP32: %8==0）

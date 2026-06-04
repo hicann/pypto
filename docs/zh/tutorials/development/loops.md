@@ -38,10 +38,10 @@ def add_kernel(
 for idx in pypto.loop(start, end, step, name="label", idx_name="idx_label", submit_before_loop=False)
 ```
 
--   参数说明：
-    -   start, end, step：可选参数，支持灵活配置循环范围。
-    -   name, idx\_name：循环标识和索引变量名称，用于调试。
-    -   submit\_before\_loop：控制循环执行顺序。
+- 参数说明：
+    - start, end, step：可选参数，支持灵活配置循环范围。
+    - name, idx\_name：循环标识和索引变量名称，用于调试。
+    - submit\_before\_loop：控制循环执行顺序。
 
 也可以按需简化成：
 

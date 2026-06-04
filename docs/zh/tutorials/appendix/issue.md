@@ -71,9 +71,9 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
 
 ### 解决措施
 
--   当前需要将读取和写入a的逻辑拆分成两个图去定义，避免一个图内存在环路。
+- 当前需要将读取和写入a的逻辑拆分成两个图去定义，避免一个图内存在环路。
 
--   后续等Assemble的SSA语义上线后使用该写法不会有问题。
+- 后续等Assemble的SSA语义上线后使用该写法不会有问题。
 
 ![](../figures/zh-cn_image_0000002530981685.png)
 
@@ -89,7 +89,7 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
 
 ### 处理步骤
 
--   方案1：针对每一次不同的静态值，定义不同的算子。
+- 方案1：针对每一次不同的静态值，定义不同的算子。
 
     ```python
     def handler(in): # 定义公共处理函数
@@ -107,7 +107,7 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
     adder_1024(in_1024)
     ```
 
--   方案2：定义为动态轴
+- 方案2：定义为动态轴
 
     ```python
     @pypto.frontend.jit

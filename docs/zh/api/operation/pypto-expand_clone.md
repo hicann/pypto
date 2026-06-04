@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -25,7 +23,6 @@ expand_clone(
 
 ## 参数说明
 
-
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
 | input       | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_BF16，DT_FP32，DT_FP16，DT_INT8，DT_INT16，DT_INT32，DT_UINT8，DT_UINT16，DT_UINT32，DT_BOOL。 <br> 不支持空Tensor；Shape仅支持1-4维，被广播的轴的Shape大小要为1；Shape Size不大于2147483647（即INT32_MAX）。 |
@@ -38,12 +35,12 @@ expand_clone(
 
 ## 约束说明
 
-1.  支持多维广播，输入Tensor被广播的轴的Shape大小要为1。
-2.  input的viewshape与 input 维度相同，viewshape\[dim\]=1，input\[dim\]=1, 其中dim为被拓展轴，其余维度不做限制。举例如下：
-    1.  \[a,1\] 拓展到\[a,5\]，其中dim=1，表示在dim 1 上进行拓展。
-    2.  len\(viewshape\)=2 并且 viewshape\[dim\]=1
+1. 支持多维广播，输入Tensor被广播的轴的Shape大小要为1。
+2. input的viewshape与 input 维度相同，viewshape\[dim\]=1，input\[dim\]=1, 其中dim为被拓展轴，其余维度不做限制。举例如下：
+    1. \[a,1\] 拓展到\[a,5\]，其中dim=1，表示在dim 1 上进行拓展。
+    2. len\(viewshape\)=2 并且 viewshape\[dim\]=1
 
-3.  关于 valid\_shape 的说明：
+3. 关于 valid\_shape 的说明：
 
     在动态图场景中，假设Tensor input \[a,1\] 扩展到 \[a,5\]，并设置 ViewShape 为 \[a,2\]，框架会通过 pypto.loop 循环生成 \[a,2\] 分块，并按偏移量拼接。此时若未传入 valid\_shape，代码将默认生成全 \[a,2\] 的Tensor（如 pypto.expand\_clone\(input, \[a,2\]\)）。
 
@@ -53,8 +50,8 @@ expand_clone(
 
     其中b\_idx  表示循环索引。
 
-4.  tileshape的维度与result 维度相同，用于切分 result。
-5.  tileshape 的大小形状无额外约束，只需保证不超过ub size。
+4. tileshape的维度与result 维度相同，用于切分 result。
+5. tileshape 的大小形状无额外约束，只需保证不超过ub size。
 
 ## 调用示例
 

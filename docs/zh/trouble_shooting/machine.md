@@ -38,12 +38,14 @@ AI agent 根据用户输入自动分流：
 #### 快捷模式对话示例
 
 **模式 A**（已知 CCE 文件）：
+
 ```
 帮我定位 aicore error 的问题代码行，CCE 文件是 /path/to/TENSOR_xxx.cpp，
 测试命令是 python3 test_my_op.py
 ```
 
 **模式 B**（已知 CCE 文件 + 行号）：
+
 ```
 帮我映射 aicore error 的源码位置，CCE 文件是 /path/to/TENSOR_xxx.cpp，
 问题行号是 42
@@ -726,7 +728,7 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 | **AiCorePrintShape** | 打印 Shape 信息 | 查看 tensor shape 维度 |
 | **AiCorePrintGmTensor** | 打印 GM Tensor | 查看 Global Memory 数据 |
 | **AiCorePrintUbTensor** | 打印 UB Tensor | 查看 Unified Buffer 数据（仅 AIV kernel） |
-| **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel，且仅支持Atlas A3 训练系列产品/Atlas A3 推理系列产品和Atlas A2 训练系列产品/Atlas A2 推理系列产品） |
+| **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel，且仅支持A2/A3平台） |
 | **AiCorePrintL0CTensor** | 打印 L0C Tensor | 查看 Accumulator Buffer 数据（仅 AIC kernel） |
 
 #### 支持的数据类型
@@ -924,12 +926,14 @@ AiCorePrintShape(param->ctx, Shape4Dim(dim0, dim1, dim2, dim3), "conv_out");
 ```
 
 L1 Tensor 打印示例：
+
 ```cpp
 __gm__ half* l1_staging = (__gm__ half*)(param->funcData->workspaceAddr);
 AiCorePrintL1Tensor(param->ctx, (__cbuf__ half*)l1Tensor.GetAddr(), 16, 0, l1_staging, "fp16_l1");
 ```
 
 L0C Tensor 打印示例（L0C 数据通过 DMA 搬运到 GM staging buffer 后打印）：
+
 ```cpp
 __gm__ int32_t* l0c_staging = (__gm__ int32_t*)(param->funcData->workspaceAddr);
 AiCorePrintL0CTensor(param->ctx, (__cc__ int32_t*)l0cTensor.GetAddr(), 1024, 0, 32, 32, l0c_staging, "int32_l0c");
@@ -951,22 +955,27 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 3. **FP8/HiFloat8 支持平台**：仅 `A5` 平台支持（见 `SUPPORT_FP8_HF8_PRINT` 宏定义）。
 
-4. **AiCorePrintL1Tensor 支持平台**：仅 `Atlas A3 训练系列产品/Atlas A3 推理系列产品和Atlas A2 训练系列产品/Atlas A2 推理系列产品` 支持（见`SUPPORT_L1_COPY` 宏定义）。
+4. **AiCorePrintL1Tensor 支持平台**：仅 `A2/A3` 平台支持（见`SUPPORT_L1_COPY` 宏定义）。
 
 5. **AIC (Cube核) 中不能使用 AiCorePrintUbTensor**：AIC (Cube核) 的标量处理器 (SP) 没有到 UB 地址空间的物理通路，无法从 UB 标量读取数据。编译期已通过 `static_assert` 拦截，在 AIC kernel 中调用 `AiCorePrintUbTensor` 会触发编译报错：
+
    ```
    error: static assertion failed: [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
    ```
+
    UB 数据检查请在 AIV (Vector核) kernel 中完成，或在 AIC 中使用 `AiCorePrintGmTensor` 打印已搬到 GM 的数据。
 
 6. **AiCoreLogF 在 AIC 中打印 UB 数据值会触发运行时错误**：`AiCoreLogF` 在 AIC kernel 中使用 `%f`、`%d` 等格式打印 UB 数据值时（如 `((__ubuf__ float*)addr)[521]`），编译器会生成一条从 UB 地址空间的标量 load 指令，AIC SP 不支持此操作，触发 MPU error 271：
+
    ```
    error from aicore error exception, core id is 0, error code = 271
    errorStr: The MPU address access is invalid
    ```
+
    `%p` 打印地址值（不读取 UB 数据）是安全的。**正确做法**：AIC kernel 中不直接读取 UB 数据值，将 UB 打印逻辑移到 AIV kernel 中。
 
 7. **不可通过 DMA 将 UB 数据搬到 GM 再打印**：AIC (Cube核) 上没有 MTE3 DMA 引擎（`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2` 等 intrinsic 不支持 cube target），`TStoreVec`（`OP_UB_COPY_OUT`）的 `OpCoreType` 为 `AIV`，属于 Vector 核专用。在 AIC kernel 中调用这些接口会编译报错：
+
    ```
    error: function type '...' of 'copy_ubuf_to_gm' does not support the given target feature
    ```
@@ -1039,6 +1048,7 @@ errorStr: The MPU address access is invalid
 **原因**：`((__ubuf__ float*)addr)[521]` 会生成一条从 UB 地址空间的标量 load 指令，AIC SP 不支持此操作。**注意**：AIC kernel 中从 UB 地址空间标量读取无法在编译期被 `static_assert` 拦截（因为 `AiCoreLogF` 的变参模板在参数表达式求值后，`__ubuf__` 属性已丢失），也无法在运行时拦截（MPU error 是硬件 trap，无软件恢复机制）。
 
 **解决方案**：
+
 - 将 UB 数据打印逻辑移到 AIV kernel 中
 - AIC kernel 中仅使用 `%p` 打印 UB 地址值（不读取数据），这是安全的
 - 检查 AIC kernel 的 CCE 代码，删除所有对 UB 地址空间做 `[]` 下标访问的表达式

@@ -2,9 +2,7 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
+- Ascend 950PR/Ascend 950DT：支持
 
 ## 功能说明
 
@@ -31,7 +29,6 @@ uniform(shape: List[int], key: List[int], counter: List[int], alg: List[int], dt
 
 ## 约束说明
 
-- 只在A5上支持。
 - 不支持shape切分多个view shape，view shape必须和输入的shape一致。
 - tile shape尾轴必须是4的倍数。
 

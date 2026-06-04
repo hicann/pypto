@@ -2,11 +2,9 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -26,7 +24,6 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 ```
 
 ## 参数说明
-
 
 | 参数名     | 输入/输出 | 说明                                                                 |
 |------------|-----------|----------------------------------------------------------------------|
@@ -71,9 +68,9 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 ---
 
-### Ascend 950PR/Ascend 950DT (A5 架构) 支持的转换
+### Ascend 950PR/Ascend 950DT 支持的转换
 
-A5 架构使用不同的 CastMode 体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的 CastMode enum。
+Ascend 950PR/Ascend 950DT使用不同的 CastMode 体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的 CastMode enum。
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -128,6 +125,7 @@ A5 架构使用不同的 CastMode 体系，内部实现基于 `RoundRType`/`Roun
 ### 饱和模式设置说明
 
 饱和模式（SaturationMode）用于控制浮点数转整数时的溢出处理方式：
+
 - **OFF（默认）**：截断模式，超出目标类型范围的数值按二进制截断
 - **ON**：饱和模式，超出目标类型范围的数值被截断到最大值或最小值
 
@@ -137,22 +135,22 @@ A5 架构使用不同的 CastMode 体系，内部实现基于 `RoundRType`/`Roun
 
 ### 其他约束
 
-1.  当 cast 前后类型相同的时候，某些场景下会产生空操作，不保证精度。
+1. 当 cast 前后类型相同的时候，某些场景下会产生空操作，不保证精度。
 
-2.  **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与 DT_FP16 的相互转换。
+2. **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与 DT_FP16 的相互转换。
 
-3.  **DT_HF8 (hifloat8) 特殊说明**：
-    - 仅 A5 架构支持
+3. **DT_HF8 (hifloat8) 特殊说明**：
+    - 仅Ascend 950PR/Ascend 950DT支持
     - 必须使用 CAST_ROUND 舍入模式（对应硬件的 ROUND_A）
     - 如果指定其他 CastMode，会自动回退到 CAST_ROUND
 
-4.  **不支持的 CastMode 处理**：
+4. **不支持的 CastMode 处理**：
     - 当用户为某个转换指定了硬件不支持的 CastMode 时，框架不会报错
     - 框架会自动采用该转换的默认 CastMode：
       - 浮点→整数：采用 CAST_TRUNC
       - 其他场景：采用 CAST_RINT
 
-5.  **deq 模式说明**：INT32→FP16 转换使用 deq 模式，需要通过 `set_deqscale` 设置缩放因子，默认值为 1.0。
+5. **deq 模式说明**：INT32→FP16 转换使用 deq 模式，需要通过 `set_deqscale` 设置缩放因子，默认值为 1.0。
 
 ## 调用示例
 

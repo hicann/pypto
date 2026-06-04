@@ -2,12 +2,9 @@
 
 ## 产品支持情况
 
-| 产品 | 是否支持 |
-|:-----|:--------:|
-| Ascend 950PR/Ascend 950DT | √ |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √ |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √ |
-
+- Ascend 950PR/Ascend 950DT：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -34,7 +31,7 @@ void
 
 ## 约束说明
 
--   对齐约束
+- 对齐约束
 
     - 通用对齐约束
 
@@ -56,11 +53,11 @@ void
 
     A、B矩阵在format为NZ场景时，要求外轴切分大小满足16元素对齐，内轴切分大小满足32字节对齐。例如，在A矩阵非转置场景，外轴为M、内轴为K，要求mL0、mL1满足16元素对齐，kL0、kL1满足32字节对齐。
 
--   空间约束
+- 空间约束
 
     - 输入dtype为DT_FP16或DT_BF16或DT_FP32：
 
-    ```
+    ```txt
     CeilAlign(mL0, 16) × CeilAlign(kL0, 16) × sizeof(aDtype) ≤ L0A_size
     CeilAlign(nL0, 16) × CeilAlign(kL0, 16) × sizeof(bDtype) ≤ L0B_size
     CeilAlign(mL0, 16) × CeilAlign(nL0, 16) × sizeof(cDtype) ≤ L0C_size
@@ -69,7 +66,7 @@ void
 
     - 输入dtype为DT_INT8或DT_FP8E5M2或DT_FP8E4M3或DT_HF8：
 
-    ```
+    ```txt
     CeilAlign(mL0, 32) × CeilAlign(kL0, 32) × sizeof(aDtype) ≤ L0A_size
     CeilAlign(nL0, 32) × CeilAlign(kL0, 32) × sizeof(bDtype) ≤ L0B_size
     CeilAlign(mL0, 32) × CeilAlign(nL0, 32) × sizeof(cDtype) ≤ L0C_size
@@ -80,7 +77,7 @@ void
 
     bias数据到达BTBuffer全部转为fp32，需满足以下约束：
 
-    ```
+    ```txt
     nL0 × 4 ≤ BTBuffer_size
     ```
 
@@ -88,7 +85,7 @@ void
 
     scaleTensor数据为uint64_t，需满足以下约束：
 
-    ```
+    ```txt
     nL0 × 8 ≤ FixBuffer_size
     ```
 
@@ -97,7 +94,7 @@ void
     - cDtype为输出矩阵数据类型，当输入为DT_INT8时cDtype为DT_INT32，其余场景cDtype为DT_FP32
     - `CeilAlign(value, align)` 元素对齐实现为：`(value + align - 1) / align * align`
 
--   多核切K约束
+- 多核切K约束
 
     - 仅支持2维/3维/4维矩阵多核切K。
     - 多核切K场景只支持out\_dtype数据类型为DT\_FP32或DT\_INT32。

@@ -6,7 +6,7 @@ PyPTO通过函数定义在NPU硬件上构建可编译的计算图结构，并利
 
 在执行JIT编译前，需要定义Kernel函数，获取输入输出Tensor、配置Tiling信息并实现计算逻辑。
 
--   基础函数定义：
+- 基础函数定义：
 
     ```python
     def add_kernel(input: pypto.Tensor, out: pypto.Tensor):
@@ -15,7 +15,7 @@ PyPTO通过函数定义在NPU硬件上构建可编译的计算图结构，并利
         out[:] = input + 1
     ```
 
--   多输入输出函数定义：
+- 多输入输出函数定义：
 
     ```python
     def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor, out: pypto.Tensor):
@@ -42,11 +42,10 @@ def add_kernel(
 
 JIT编译流程为：
 
--   首次调用时，函数以“记录模式”执行，操作被记录并优化为计算图，经编译器生成针对NPU的优化代码后缓存二进制文件；
--   后续调用时，函数直接调用缓存的二进制文件在NPU上执行，无需重复编译。
+- 首次调用时，函数以“记录模式”执行，操作被记录并优化为计算图，经编译器生成针对NPU的优化代码后缓存二进制文件；
+- 后续调用时，函数直接调用缓存的二进制文件在NPU上执行，无需重复编译。
 
 完整样例请参考：[hello_world](../../../../examples/00_hello_world/hello_world.py)。
-
 
 ## 条件编译
 
@@ -67,12 +66,12 @@ def advanced_function(input0, input1):
 
 JIT配置选项说明如下：
 
--   codegen\_options：代码生成设置。
--   host\_options：主机端选项。
--   pass\_options：编译器PASS传递选项。
--   runtime\_options：运行时执行选项。
--   verify\_options: 精度检验工具选项。
--   debug\_options: 性能数据采集功能配置选项。
+- codegen\_options：代码生成设置。
+- host\_options：主机端选项。
+- pass\_options：编译器PASS传递选项。
+- runtime\_options：运行时执行选项。
+- verify\_options: 精度检验工具选项。
+- debug\_options: 性能数据采集功能配置选项。
 
 除了使用JIT装饰器启用不同配置外， 还可以直接在代码中调用pypto.set\_codegen\_options、pypto.set\_host\_options、pypto.set\_pass\_options、pypto.set\_runtime\_options，pypto.set\_verify\_options, pypto.set\_debug\_options接口进行配置，例如：
 

@@ -10,6 +10,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 | 仿真环境 | 仅有CPU硬件 | 支持通过CPU仿真，获取预估性能和执行计算 |
 
 **说明:**
+
 - NPU：指昇腾AI处理器，目前仅支持如下产品型号：
     - Atlas A3 训练系列产品/Atlas A3 推理系列产品
     - Atlas A2 训练系列产品/Atlas A2 推理系列产品
@@ -194,6 +195,7 @@ ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
 > - **精度仿真**：模拟真实NPU的执行逻辑，获取运算结果，必须依赖CANN工具包。
 >
 > 因此：
+>
 > - 若仅编译和运行PyPTO**性能仿真**，可跳过本节。
 > - 若需编译和运行**精度仿真**，或计划在**真实NPU环境**中编译运行PyPTO，必须安装如下软件包。
 
@@ -285,6 +287,7 @@ Docker安装相关内容请参考：
 在阅读Docker文档前，请先确保已完成宿主机NPU驱动和固件安装。
 
 `pto-isa`安装具体方法请参考[安装pto-isa](#3-安装pto-isa)。
+
 ## 环境验证
 
 安装完CANN包后，需验证环境和驱动是否正常。
@@ -303,7 +306,9 @@ Docker安装相关内容请参考：
     cat /usr/local/Ascend/cann/${arch}-linux/ascend_toolkit_install.info
     # 查看CANN ops包版本信息（默认路径安装），WebIDE场景下将/usr/local替换为/home/developer
     cat /usr/
+
 环境准备完成后，请参考[PyPTO安装](./build_and_install.md)文档完成PyPTO的安装。
+
 ## 可选安装
 
 ### PyPTO Toolkit插件

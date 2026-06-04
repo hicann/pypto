@@ -1,16 +1,36 @@
 # 贡献文档
 
-欢迎参与PyPTO文档贡献，符合要求的文档将会在[PyPTO文档中心]( https://pypto.gitcode.com)中呈现。
+欢迎参与PyPTO文档贡献，符合要求的文档将会在[PyPTO文档中心](https://pypto.gitcode.com)中呈现。
 
 本项目支持Markdown格式的内容贡献，对应地可创建`.md`为后缀的文档或修改已存在的文档。
 
-## 更新/新增文档
+## 写作要求
 
-相关文档写作要求请参考[文档写作要求](https://gitcode.com/cann/community/blob/master/contributor/docs/document_writing_specs.md)。
+### 基础规范
+
+请严格遵循[文档写作要求](https://gitcode.com/cann/community/blob/master/contributor/docs/document_writing_specs.md)。
+
+### 术语标准表达规范
+
+所有领域内的术语必须严格遵循[术语表](./zh/tutorials/appendix/glossary.md)中的标准表达。如有术语表未覆盖的场景，可提交PR扩展术语表。
+
+### 产品型号标准表达
+
+为保持文档体系产品型号表述统一，请使用以下标准命名规范：
+
+- Ascend 950PR/Ascend 950DT
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
+
+### 产品差异说明规范
+
+所有产品型号间的功能差异建议统一归入对应.md文件的**约束说明**（如[pypto.bitwise_and](./zh/api/operation/pypto-bitwise_and.md)），便于用户快速定位差异信息，以及后续文档定制化扩展和版本迭代维护。
+
+## 更新/新增文档
 
 ### 更新文档
 
-如果您需要更新现有文档，可点击页面右上角的编辑按钮，跳转至源文件。修改该文件，并提交PR即可参与贡献。
+如果您需要更新现有文档，可点击[PyPTO文档中心](https://pypto.gitcode.com)页面右上角的编辑按钮，跳转至源文件。修改该文件，并提交PR即可参与贡献。
 
 ### 新增文档
 

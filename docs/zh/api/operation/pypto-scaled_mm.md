@@ -2,9 +2,7 @@
 
 ## 产品支持情况
 
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
+- Ascend 950PR/Ascend 950DT：支持
 
 ## 功能说明
 
@@ -49,7 +47,6 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 |:------|:------|:----------|:--------|:--------|:------------|:---------|
 | DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_FP16，DT_BF16，DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
 | DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_FP16，DT_BF16，DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
-
 
 表4： 量化支持的数据类型
 

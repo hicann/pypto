@@ -20,7 +20,7 @@
 
 **适用场景**：用于常规性能调优，重点关注子图执行顺序、任务耗时分布、AI Core 端到端耗时与 AI Core 利用率。
 
-1.  通过给 `@pypto.frontend.jit` 装饰器的入参 `debug_options` 配置图执行阶段调试开关，启动性能数据采集：
+1. 通过给 `@pypto.frontend.jit` 装饰器的入参 `debug_options` 配置图执行阶段调试开关，启动性能数据采集：
 
     ```python
     @pypto.frontend.jit(
@@ -28,19 +28,20 @@
     )
     ```
 
-2.  执行用例：
+2. 执行用例：
 
     ```bash
     python3 examples/02_intermediate/operators/softmax/softmax.py
     ```
 
-3.  采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
+3. 采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
 
 #### 方式二：AI CPU/AI Core 联合采集（`DUMP_DEVICE_PERF`）
 
 **适用场景**：用于分析 AI CPU 调度与 AI Core 执行的协同关系，定位首任务启动慢、调度等待等问题。
 
 **限制说明**：
+
 - 该工具最多支持 200 轮数据采集和打屏，超出部分将被截断。
 - 当前只支持采集 20 次 devTask 构建的数据。当 devTask 构建次数（与 `stitch_function_max_num` 配置相关，每次 stitch 对应一次 devTask 构建）超过 20 次时，超出部分的 perf 数据将被截断，并在日志中出现如下告警提示：
 
@@ -48,21 +49,21 @@
     Dev task num larger than: 20, the excess part will not be recorded
     ```
 
-1.  通过环境变量使能：
+1. 通过环境变量使能：
 
     ```bash
     export DUMP_DEVICE_PERF=true
     ```
 
-2.  执行用例：
+2. 执行用例：
 
     ```bash
     python3 examples/02_intermediate/operators/softmax/softmax.py
     ```
 
-3.  采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
+3. 采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
 
-4.  待数据全部落盘后，手动执行 analyze 命令查看 AI CPU/AI Core 数据汇总表：
+4. 待数据全部落盘后，手动执行 analyze 命令查看 AI CPU/AI Core 数据汇总表：
 
     ```bash
     python tools/scripts/machine_perf_trace.py analyze output/output_<时间戳>/machine_trace_perf_data_0.json
@@ -73,18 +74,18 @@
 ### 采集结果文件说明和参数含义解释
 
 关于采集结果文件的详细说明和 IDE 参数含义解释，请参阅 Machine 的 Troubleshooting（故障诊断）手册：
-- [output 目录产物说明及 IDE 参数含义解释](../../trouble_shooting/machine.md#output-目录产物说明)
 
+- [output 目录产物说明及 IDE 参数含义解释](../../trouble_shooting/machine.md#output-目录产物说明)
 
 ### 查看泳道图数据
 
-1.  通过终端查看 AI Core 执行端到端耗时以及 AI Core 利用率：
+1. 通过终端查看 AI Core 执行端到端耗时以及 AI Core 利用率：
 
     **图 1**  查看 AI Core Perf 信息
     
     ![](../figures/aicore_perf_summary.png "AI Core Perf信息")
 
-2.  通过 PyPTO Toolkit 插件查看泳道图。
+2. 通过 PyPTO Toolkit 插件查看泳道图。
 
     右键单击对应 JSON 文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
@@ -139,6 +140,7 @@ msprof --task-time=l3 [--output=<数据存放路径>] python xxx.py
 ```
 
 其中：
+
 - `l3`：开启 PMU 采集开关
 - `--output`：指定 PROF 产物的输出路径，默认落盘在项目根目录下
 
@@ -249,6 +251,7 @@ TileShape配置的基本原理与使用约束等参考[Tiling配置](../developm
 #### Matmul 初始 Tiling 配置
 
 针对矩阵运算场景，以A、B矩阵均为DT_BF16或DT_FP16类型为例，满足Buffer空间约束的推荐Tiling配置为：
+
 ```python
 # Cube的相关计算建议采用如下的TileShape，可根据M、K、N实际尺寸选择最接近的配置：
 pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256])
@@ -257,6 +260,7 @@ pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128])
 ```
 
 以上Tiling配置的优点：
+
 - 在满足L0 Buffer约束的条件下可以达到较大的算数强度；由于Tile大小需要满足分型格式的对齐要求，同时要考虑切分大小对于写入、写出带宽的影响，一般取128-256的组合。
 - 后续进一步使用合图相关接口进行深度调优时，有机会开启Double Buffer，使能流水并行。
 
@@ -378,6 +382,7 @@ PyPTO框架在深度方向上已经实现了自动合图的功能，在极致性
 当前主要考虑在连续的Vector计算过程中使用该能力，暂不支持将Matmul Operation与Vector Operation进行合图。使用时需要结合泳道图信息进行分析和调整。具体使用方式可以参考案例：[glm_attention.py](../../../../models/glm_v4_5/glm_attention.py)。
 
 #### 广度方向合图
+
 广度方向合图针对计算图中处于同一层级、可并行执行的 Operation，通过将多个并行 Operation 合并到同一 Kernel 中执行以增强单次 Kernel 的计算规模。在核内指令编排阶段，多分支融合能更充分地填充硬件流水，实现更优的多pipe并发。在访存层面，通过归并同源访存，将多次重复的GM到L1搬运整合为单次加载，在节省内存带宽的同时，有效摊薄了 Kernel 启动开销，最终提升了硬件计算单元的整体吞吐率。
 ![](../figures/pypto.set_pass_options_2.png)
 
@@ -404,6 +409,7 @@ Matmul运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_op
 ```
 
 CubeNBuffer针对的是不能使能L1Reuse的场景，此类场景较少，主要有以下两种：
+
 1. Cube子图间没有重复L1搬运。如BatchMatmul的左右矩阵Shape分别为(128,64,64)和(128,64,64)时，pass切出128个左右矩阵Shape分别为(64,64)和(64,64)的同构Cube子图后，它们之间没有重复L1搬运。还有FA算子的MM2，不同S2 block的MM2子图之间没有重复L1搬运。
 2. K轴很长。当没有进行切K时，L1Reuse要求左矩阵的一整行或右矩阵的一整列数据块驻留在L1中。而L1缓存容量有限。因此当K轴较长、且没有切K时，无法使用L1Reuse。
 
@@ -450,7 +456,8 @@ def matmul_kernel(a, b, out):
 ```
 
 - 增加冗余计算来避免冗余依赖和搬运。这些下面是PyPTO仓库的[glm_moe_fusion.py](../../../../models/glm_v4_5/glm_moe_fusion.py)的示例，通过将e_score_bias_2d复制tile_batch份后进行cast操作，使得每一份的cast都和对应batch的其他操作进行了合图。这避免了e_score_bias_2d的cast操作和每个batch的后续计算产生一对多的子图依赖、增加调度开销，还避免了cast结果的搬运。
-```
+
+```python
 e_score_bias_2d_tile = pypto.tensor([tile_batch, ne], e_score_bias_2d.dtype, "e_score_bias_2d_tile")
 for tmp_idx in range(tile_batch):
        pypto.assemble(e_score_bias_2d, [tmp_idx, 0], e_score_bias_2d_tile)

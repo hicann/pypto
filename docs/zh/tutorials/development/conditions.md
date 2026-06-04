@@ -2,8 +2,8 @@
 
 条件和分支用于在程序中实现条件判断，从而根据不同的条件执行不同的代码逻辑。编程框架支持两类条件与分支功能：
 
--   静态条件分支：在编译时配置条件分支，生成执行时固定的指令，可通过多个jit生成不同的kernel。
--   动态条件分支：在运行时判断条件及分支，执行对应的功能。
+- 静态条件分支：在编译时配置条件分支，生成执行时固定的指令，可通过多个jit生成不同的kernel。
+- 动态条件分支：在运行时判断条件及分支，执行对应的功能。
 
 ## 静态条件分支
 
@@ -61,9 +61,9 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
 
 运行时判断条件及分支，执行对应的功能。核心接口包括：
 
--   `pypto.cond`\(condition\)：运行时判断条件。
--   `pypto.is_loop_begin`\(idx\)：判断是否为循环首个迭代。
--   `pypto.is_loop_end`\(idx\)：判断是否为循环最后一个迭代。
+- `pypto.cond`\(condition\)：运行时判断条件。
+- `pypto.is_loop_begin`\(idx\)：判断是否为循环首个迭代。
+- `pypto.is_loop_end`\(idx\)：判断是否为循环最后一个迭代。
 
 ```python
 @pypto.frontend.jit

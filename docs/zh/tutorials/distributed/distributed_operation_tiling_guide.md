@@ -5,6 +5,7 @@
 本指南基于 PyPTO 通用切块机制，说明通信算子的特殊切块策略和约束。
 
 建议先阅读以下文档了解切块基础知识：
+
 - [Tiling配置](../development/tiling.md)：TileShape概念、设置方法、通用约束
 - [set_vec_tile_shapes API文档](../../api/config/pypto-set_vec_tile_shapes.md)：接口使用说明
 
@@ -67,6 +68,7 @@ n = \prod_{i=1}^{N} tile\_num\_dim_i
 $$
 
 其中：
+
 - $tile\_num\_dim_i$：表示第 $i$ 维切分的数量
 - $n$：表示总的数据块数量
 
@@ -89,18 +91,19 @@ $$
    $$tile\_shape_i = \min(s_i - tile\_offset_i, t_i)$$
 
 **示例**：假设 data tensor shape 为 $[128, 512]$（维度=2），TileShape 为 $[64, 256]$（维度=2）：
+
 - 第1维：$tile\_num\_dim_1 = \lceil 128/64 \rceil = 2$
 - 第2维：$tile\_num\_dim_2 = \lceil 512/256 \rceil = 2$
 - 总切块数：$n = 2 \times 2 = 4$
 
 切块结果：
+
 | tile_index | dim_indices | shape | offset |
 |------------|-------------|-------|--------|
 | 0 | [0, 0] | [64, 256] | [0, 0] |
 | 1 | [0, 1] | [64, 256] | [0, 256] |
 | 2 | [1, 0] | [64, 256] | [64, 0] |
 | 3 | [1, 1] | [64, 256] | [64, 256] |
-
 
 ### 3.2 控制边类型的tensor切分策略
 
@@ -147,10 +150,12 @@ $$
    - 若 $dim\_indices[i] \geq rem_i$：$tile\_offset_i = rem_i \times (base_i + 1) + (dim\_indices[i] - rem_i) \times base_i$
 
 **示例**：假设 dummy tensor shape 为 $[10, 7]$，需要切分为 $tile\_num\_dim_1 = 3$（行）、$tile\_num\_dim_2 = 2$（列）。检查条件：
+
 - 行方向：$p_1 = 10 \geq tile\_num\_dim_1 = 3$ ✓
 - 列方向：$p_2 = 7 \geq tile\_num\_dim_2 = 2$ ✓
 
 满足条件，进行切分：
+
 - 行方向：$base\_row = 10 / 3 = 3$, $rem\_row = 10 \bmod 3 = 1$（前1个行块多1行）
 - 列方向：$base\_col = 7 / 2 = 3$, $rem\_col = 7 \bmod 2 = 1$（前1个列块多1列）
 
@@ -172,6 +177,7 @@ $$
 所有 tile_op 共用同一个 dummy tensor，依赖该 op 的算子需要等所有展开的 tile_op 执行完成后方可执行。
 
 **示例**：假设 dummy tensor shape 为 $[2, 4]$，需要切分为 $tile\_num\_dim_1 = 3$（行）、$tile\_num\_dim_2 = 2$（列）。检查条件：
+
 - 行方向：$p_1 = 2 < tile\_num\_dim_1 = 3$ ✗
 
 不满足条件，不进行切分，所有 tile_op 共用原始 dummy tensor。

@@ -6,47 +6,47 @@ PyPTO采用PTO编程范式，核心思想是使用Tensor作为数据的基本表
 
 PTO编程范式的核心设计理念包括：
 
--   Tensor级别抽象：以Tensor而非单个元素描述计算，贴近算法设计者的数学表达式。
--   声明式编程：开发者只需描述“做什么”，框架自动处理“怎么做”。
--   基于Tile的计算：所有计算最终都基于Tile（硬件感知的数据块）进行，充分利用硬件并行计算能力。
--   计算图驱动：通过构建计算图，框架可以自动进行优化、调度和执行。
+- Tensor级别抽象：以Tensor而非单个元素描述计算，贴近算法设计者的数学表达式。
+- 声明式编程：开发者只需描述“做什么”，框架自动处理“怎么做”。
+- 基于Tile的计算：所有计算最终都基于Tile（硬件感知的数据块）进行，充分利用硬件并行计算能力。
+- 计算图驱动：通过构建计算图，框架可以自动进行优化、调度和执行。
 
 PyPTO提供了三种层次的编程接口：
 
--   Tensor层次编程：直接使用Tensor 和 Tensor Operation 构建计算图。
--   Tile层次编程：以Tile 和Tile Operation表达完整的计算，显式体现访存与依赖。
--   Block层次编程：定义单个处理器核执行的计算图，并通过多次实例化实现整体计算。
+- Tensor层次编程：直接使用Tensor 和 Tensor Operation 构建计算图。
+- Tile层次编程：以Tile 和Tile Operation表达完整的计算，显式体现访存与依赖。
+- Block层次编程：定义单个处理器核执行的计算图，并通过多次实例化实现整体计算。
 
 当前版本仅开放Tensor层次编程，这是最常用和推荐的编程方式。
 
 ## 核心数据结构
 
--   Tensor：是PyPTO中最基本的数据结构，表示一个多维数组。Tensor包含以下信息：
+- Tensor：是PyPTO中最基本的数据结构，表示一个多维数组。Tensor包含以下信息：
 
-    -   数据类型（dtype）：如FP32、FP16、INT32、BOOL等
-    -   形状（shape）：用一个整型数组描述各维度长度，例如\(32, 64\)、\(1, 32, 128\) 等
-    -   格式（format）：数据在内存中的排布格式
-    -   名称（name）：用于在计算图中标识该Tensor，便于调试与可视化
+    - 数据类型（dtype）：如FP32、FP16、INT32、BOOL等
+    - 形状（shape）：用一个整型数组描述各维度长度，例如\(32, 64\)、\(1, 32, 128\) 等
+    - 格式（format）：数据在内存中的排布格式
+    - 名称（name）：用于在计算图中标识该Tensor，便于调试与可视化
 
     Tensor之间可以通过各种操作（如加法、乘法、索引操作、归约操作等）进行组合，这些操作通常会生成新的Tensor，或者改变其在计算图中的引用方式（例如创建视图、改变Shape、转置等）。
 
--   Tile：是Tensor的子区间（sub-Tensor），通过Tiling（切分）将大的Tensor切分为多个子块。Tile的设计目的是：
+- Tile：是Tensor的子区间（sub-Tensor），通过Tiling（切分）将大的Tensor切分为多个子块。Tile的设计目的是：
 
-    -   使其能够存放在处理器核内私有缓存（如UB，L1）中，以提升数据局部性
-    -   充分利用硬件并行计算能力
-    -   优化内存访问模式
+    - 使其能够存放在处理器核内私有缓存（如UB，L1）中，以提升数据局部性
+    - 充分利用硬件并行计算能力
+    - 优化内存访问模式
 
     在Tensor层次编程中，Tiling由框架自动完成，开发者只需通过配置接口指定TileShape，框架会自动进行切分。
 
--   View与Assemble：提供对子Tensor的视图和组合操作，在处理动态Shape和循环计算中非常有用。
-    -   View：提供对子Tensor的视图操作，允许在不复制数据的情况下访问Tensor的子区间。
-    -   Assemble：将多个子Tensor组合成一个更大的Tensor。
+- View与Assemble：提供对子Tensor的视图和组合操作，在处理动态Shape和循环计算中非常有用。
+    - View：提供对子Tensor的视图操作，允许在不复制数据的情况下访问Tensor的子区间。
+    - Assemble：将多个子Tensor组合成一个更大的Tensor。
 
 ## Tensor层次编程
 
 Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使用Tensor和Tensor Operation构建计算图，无需关心底层的Tile切分和硬件细节。
 
--   基本编程模式
+- 基本编程模式
 
     典型的Tensor层次编程模式如下，Kernel入口函数通过@pypto.frontend.jit装饰器定义，在第一次调用时会进行JIT编译。
 
@@ -67,23 +67,23 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
     my_operator(tensor_a, tensor_b, output_tensor)
     ```
 
--   Tensor操作
+- Tensor操作
 
     PyPTO提供了丰富的Tensor操作，包括：
 
-    -   数学运算：add、sub、mul、div、matmul等
-    -   逻辑运算：logical\_not等
-    -   结构变换：reshape、transpose、view、unsqueeze等
-    -   归约操作：sum、amax、amin、topk等
-    -   激活函数：sigmoid、softmax等
-    -   超越函数：exp、log等
-    -   其他操作：gather、scatter、concat、assemble等
+    - 数学运算：add、sub、mul、div、matmul等
+    - 逻辑运算：logical\_not等
+    - 结构变换：reshape、transpose、view、unsqueeze等
+    - 归约操作：sum、amax、amin、topk等
+    - 激活函数：sigmoid、softmax等
+    - 超越函数：exp、log等
+    - 其他操作：gather、scatter、concat、assemble等
 
--   控制流
+- 控制流
 
     PyPTO支持控制流操作，用于处理动态Shape和条件执行：
 
-    -   循环（Loop）
+    - 循环（Loop）
 
         ```python
         # 处理动态维度数据
@@ -97,7 +97,7 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
             output_tensor[offset:end, :] = process_tile(input_view)
         ```
 
-    -   条件分支（Conditional）
+    - 条件分支（Conditional）
 
         ```python
         for idx in pypto.loop(b_loop):
@@ -108,7 +108,7 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
                 t2[b_offset:b_offset_end, ...] = t3_sub
         ```
 
--   符号化编程
+- 符号化编程
 
     PyPTO支持符号化标量（SymbolicScalar），用于支持动态Shape Tensor的表达和处理，使得框架可以在编译时进行Shape推断和优化。
 
@@ -122,41 +122,41 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
 
 ## 计算图
 
--   计算图的组成
+- 计算图的组成
 
     PyPTO的计算图由以下元素组成：
 
-    -   Tensor：数据节点。
-    -   Operation（Op）：对数据的操作，分为Tensor Op与Tile Op。
-        -   Tensor Op：作用于Tensor，逻辑上不受存储位置和规模约束。
-        -   Tile Op：Tensor Op的子集，限定输入输出位于同一核的L1内存，确保数据局部性。
+    - Tensor：数据节点。
+    - Operation（Op）：对数据的操作，分为Tensor Op与Tile Op。
+        - Tensor Op：作用于Tensor，逻辑上不受存储位置和规模约束。
+        - Tile Op：Tensor Op的子集，限定输入输出位于同一核的L1内存，确保数据局部性。
 
--   计算图的转换流程
+- 计算图的转换流程
 
     将用户定义的计算图计算图最终转换成可执行代码：
 
     ![](../figures/transformation_process.png)
 
--   计算图的查看
+- 计算图的查看
 
     PyPTO提供了多种方式查看计算图：
 
-    -   JSON格式：导出为JSON格式，便于程序分析
-    -   可视化工具：通过PyPTO Toolkit插件可视化计算图结构
+    - JSON格式：导出为JSON格式，便于程序分析
+    - 可视化工具：通过PyPTO Toolkit插件可视化计算图结构
 
 ## MPMD执行模型
 
 PyPTO基于MPMD（Multiple Program Multiple Data）执行模型，与传统的SPMD（Single Program Multiple Data）模型相比：
 
--   SPMD：用户需编写单一内核逻辑并实例化到多个处理器核上运行，带来同步开销和性能瓶颈
--   MPMD：计算被抽象为一组异构任务，任务之间通过依赖关系组织。运行时调度器根据依赖关系将任务分配到合适的执行单元，避免了全局同步限制，提升了整体利用率与效率
+- SPMD：用户需编写单一内核逻辑并实例化到多个处理器核上运行，带来同步开销和性能瓶颈
+- MPMD：计算被抽象为一组异构任务，任务之间通过依赖关系组织。运行时调度器根据依赖关系将任务分配到合适的执行单元，避免了全局同步限制，提升了整体利用率与效率
 
 MPMD执行模型的优势包括：
 
--   灵活的调度：不同任务可以分配到不同的处理器核，避免全局同步
--   更好的资源利用：根据任务特性选择合适的执行单元
--   细粒度并行：计算负载既可在细粒度上并行切分，又能在任务级别灵活调度
--   适配多核架构：更好地适配NPU的多核架构
+- 灵活的调度：不同任务可以分配到不同的处理器核，避免全局同步
+- 更好的资源利用：根据任务特性选择合适的执行单元
+- 细粒度并行：计算负载既可在细粒度上并行切分，又能在任务级别灵活调度
+- 适配多核架构：更好地适配NPU的多核架构
 
 执行流程为：
 
@@ -166,7 +166,7 @@ MPMD执行模型的优势包括：
 
 依托PTO编程范式，开发者可高效开发多样化算子，并与PyTorch无缝集成。
 
--   向量加法（Vector Add）
+- 向量加法（Vector Add）
 
     ```python
     import pypto
@@ -184,7 +184,7 @@ MPMD执行模型的优势包括：
     vector_add(tensor_a, tensor_b, output_tensor)
     ```
 
--   矩阵乘法（Matrix Multiplication）
+- 矩阵乘法（Matrix Multiplication）
 
     ```python
     import pypto
@@ -200,7 +200,7 @@ MPMD执行模型的优势包括：
     matmul(matrix_a, matrix_b, output_matrix)
     ```
 
--   动态Shape处理
+- 动态Shape处理
 
     ```python
     import pypto
@@ -237,7 +237,7 @@ MPMD执行模型的优势包括：
     dynamic_softmax(input_tensor, output_tensor)
     ```
 
--   与PyTorch集成
+- 与PyTorch集成
 
     ```python
     import pypto

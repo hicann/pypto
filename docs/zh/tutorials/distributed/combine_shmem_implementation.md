@@ -46,7 +46,7 @@ def moe_distributed_combine_kernel(
 
 | 参数名 | Shape | Dtype | 说明 |
 |--------|-------|-------|------|
-| `expand_x` | `[row, hidden_size]` | DT_BF16 | 专家处理后的 token，row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)，其中有效 token 数为 `recv_counts[0]` |
+| `expand_x` | `[row, hidden_size]` | DT_BF16 | 专家处理后的 token，row = min(topk *batch_size* ep_world_size, batch_size * moe_expert_num)，其中有效 token 数为 `recv_counts[0]` |
 | `assist_info_for_combine` | `[row, 3]`` | DT_INT32 | 辅助信息，每行包含 [rank_id, token_id, k_offset]，用于标识 token 的原始位置 |
 | `recv_counts` | `[1]` | DT_INT32 | 当前 rank 接收到的 token 总数，也就是 `expand_x` 里的有效 token 数 |
 | `expert_scales` | `[batch_size, topk]` | DT_FP32 | 每个 token 对应 topk 个专家的权重，用于加权合并 |
@@ -130,6 +130,7 @@ for row_index in range(recv_counts_scalar):
 ```
 
 **关键点**：
+
 - 使用 `shmem_put` 将 token 数据写入目标 rank 的共享内存
 - 使用 `shmem_signal` 发送信号，信号值累加（ADD 操作）
 - 信号位置 `[token_id, 0]` 对应每个 token 的信号计数器
@@ -167,6 +168,7 @@ for token_id in range(batch_size):
 ```
 
 **关键点**：
+
 - 使用 `shmem_wait_until` 等待信号值达到 topk
 - `clear_signal=True` 确保信号被清除，避免影响后续操作
 - 使用 `shmem_get` 一次性读取所有 topk 个专家的输出，减少任务下发次数
@@ -198,6 +200,7 @@ out[token_id:, :] = matmul_out_fp16
 ```
 
 **关键点**：
+
 - 使用 Cube 矩阵乘法加速加权求和
 - `expert_scales` shape: `[1, topk]`，`shmem_get_out` shape: `[topk, hidden_size]`
 - 矩阵乘法结果 shape: `[1, hidden_size]`
