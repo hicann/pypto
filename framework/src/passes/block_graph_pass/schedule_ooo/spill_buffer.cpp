@@ -1447,17 +1447,22 @@ void OoOScheduler::CollectUBSceneOpsAndTensors(
 {
     opsToDelete.push_back(producerOp);
     auto ubTensor2 = producerOp->GetInputOperand(0);
-    if (ubTensor2 != nullptr) {
-        tensorsToDelete.push_back(ubTensor2);
-
-        // 找 UB_COPY_ND2NZ
-        for (auto* op : ubTensor2->GetProducers()) {
-            if (op != nullptr && (opIsAllocMap[op] ||
-                op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos)) {
-                opsToDelete.push_back(op);
-                APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect %s[%d]",
-                    op->GetOpcodeStr().c_str(), op->GetOpMagic());
+    if (ubTensor2 == nullptr) return;
+    for (auto* op : ubTensor2->GetProducers()) {
+        if (op != nullptr && op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos) {
+            if (depManager_.GetSuccessors(op).size() > 1) {
+               return; 
             }
+        }
+    }
+    tensorsToDelete.push_back(ubTensor2);
+    // 找 UB_COPY_ND2NZ
+    for (auto* op : ubTensor2->GetProducers()) {
+        if (op != nullptr && (opIsAllocMap[op] ||
+            op->GetOpcodeStr().find("UB_COPY_ND2NZ") != std::string::npos)) {
+            opsToDelete.push_back(op);
+            APASS_LOG_DEBUG_F(Elements::Operation, "UB scene: collect %s[%d]",
+                op->GetOpcodeStr().c_str(), op->GetOpMagic());
         }
     }
 }
