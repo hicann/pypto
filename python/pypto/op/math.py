@@ -24,37 +24,21 @@ from ..enum import (
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
 
-_DTYPE_NP_MAP = {
-    DataType.DT_FP32: np.float32,
-    DataType.DT_FP16: np.float16,
-    DataType.DT_BF16: np.float32,
-}
-
-
-def _dtype_precision_product(dtype: DataType, a: float, b: float) -> float:
-    np_dtype = _DTYPE_NP_MAP.get(dtype)
-    if np_dtype is not None:
-        return float(np_dtype(a) * np_dtype(b))
-    return a * b
-
-
 @op_wrapper
 def add(
-    input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1
+    input_tensor: Tensor, other: Union[Tensor, float]
 ) -> Tensor:
-    """Computes the element-wise addition of `input` and `other`.
+    """Computes the element-wise addition of `input_tensor` and `other`.
 
-    This function calculates the formula: `out = input + alpha * other`.
+    This function calculates the formula: `out = input_tensor + other`.
     It supports broadcasting between the input tensors.
 
     Parameters
     ----------
-    input : Tensor
+    input_tensor : Tensor
         The first input tensor.
     other : Tensor or Number
         The second input tensor or a scalar to be added.
-    alpha : float, optional, keyword-only
-        A scaling factor for the `other` input. Default is 1.0.
 
     Returns
     -------
@@ -82,22 +66,9 @@ def add(
     Output out: [[3.0 5.0 7.0]]
     """
     if isinstance(other, pypto_impl.Tensor):
-        if alpha == 1 or alpha == 1.0:
-            return pypto_impl.Add(input, other)
-        else:
-            return pypto_impl.Add(
-                input, pypto_impl.Mul(other, pypto_impl.Element(input.dtype, alpha))
-            )
+        return pypto_impl.Add(input_tensor, other)
     else:
-        if alpha == 1 or alpha == 1.0:
-            return pypto_impl.Add(input, pypto_impl.Element(input.dtype, other))
-        else:
-            if not isinstance(other, (int, float)):
-                raise PyptoError(0xF00001, TypeError(
-                    f"alpha must be int or float, but got {type(other)}."
-                    ))
-            effective_scalar = _dtype_precision_product(input.dtype, other, alpha)
-            return pypto_impl.Add(input, pypto_impl.Element(input.dtype, effective_scalar))
+        return pypto_impl.Add(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
 @op_wrapper
@@ -161,21 +132,19 @@ def axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
 
 @op_wrapper
 def sub(
-    input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1
+    input_tensor: Tensor, other: Union[Tensor, float]
 ) -> Tensor:
-    """Computes the element-wise subtraction of `input` and `other`.
+    """Computes the element-wise subtraction of `input_tensor` and `other`.
 
-    This function calculates the formula: `out = input - alpha * other`.
+    This function calculates the formula: `out = input_tensor - other`.
     It supports broadcasting between the input tensors.
 
     Parameters
     ----------
-    input : Tensor
+    input_tensor : Tensor
         The first input tensor.
     other : Tensor or Number
         The second input tensor or a scalar to be subtracted.
-    alpha : float, optional, keyword-only
-        A scaling factor for the `other` input. Default is 1.0.
 
     Returns
     -------
@@ -199,30 +168,11 @@ def sub(
                    [1.0 2.0 3.0]]
     Output out1 : [[8.0 7.0 6.0],
                    [8.0 7.0 6.0]]
-
-    # Using a scalar and alpha
-    c = pypto.sub(x, 2.0, alpha=3) # Computes x - 2 * 3
-
-    Output c:[[3.0 3.0 3.0],
-              [3.0 3.0 3.0]]
     """
     if isinstance(other, pypto_impl.Tensor):
-        if alpha == 1 or alpha == 1.0:
-            return pypto_impl.Sub(input, other)
-        else:
-            return pypto_impl.Sub(
-                input, pypto_impl.Mul(other, pypto_impl.Element(input.dtype, alpha))
-            )
+        return pypto_impl.Sub(input_tensor, other)
     else:
-        if alpha == 1 or alpha == 1.0:
-            return pypto_impl.Sub(input, pypto_impl.Element(input.dtype, other))
-        else:
-            if not isinstance(other, (int, float)):
-                raise PyptoError(0xF00001, TypeError(
-                    f"alpha must be int or float, but got {type(other)}."
-                    ))
-            effective_scalar = _dtype_precision_product(input.dtype, other, alpha)
-            return pypto_impl.Sub(input, pypto_impl.Element(input.dtype, effective_scalar))
+        return pypto_impl.Sub(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
 @op_wrapper

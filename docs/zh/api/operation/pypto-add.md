@@ -13,13 +13,13 @@
 逐元素地将input与other值相加。计算公式如下：
 
 $$
-res_i = input_i + alpha \cdot other_i
+res_i = input_i + other_i
 $$
 
 ## 函数原型
 
 ```python
-add(input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1) -> Tensor
+add(input: Tensor, other: Union[Tensor, float]) -> Tensor
 ```
 
 ## 参数说明
@@ -29,7 +29,6 @@ add(input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1)
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other   | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。 不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| alpha   | 输入      | 缩放因子，用于对 other 进行缩放。 <br> 支持的类型为：int、float，默认值为1。 <br> 关键字参数，必须通过关键字传递。 |
 
 ## 返回值说明
 
@@ -41,9 +40,9 @@ add(input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1)
 2. other 为数字的时候，不支持隐式转化。
 3. other 不支持nan、inf等特殊值。
 4. Tensor数据类型说明：
-   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
+   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_UINT8，DT_INT8。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32。
 
 ## 调用示例
 
@@ -67,10 +66,6 @@ pypto.set_vec_tile_shapes(4, 16)
 a = pypto.tensor([1, 3], pypto.DT_FP32)
 b = pypto.tensor([1, 3], pypto.DT_FP32)
 out = pypto.add(a, b)
-
-a = pypto.tensor([1, 3], pypto.DT_FP32)
-b = pypto.tensor([1, 3], pypto.DT_FP32)
-out = pypto.add(a, b, alpha=2) 
 ```
 
 结果示例如下：
@@ -79,8 +74,4 @@ out = pypto.add(a, b, alpha=2)
 输入数据a:   [[1.0 2.0 3.0]]
 输入数据b:   [[2.0 3.0 4.0]]
 输出数据out: [[3.0 5.0 7.0]]
-
-输入数据a:   [[1.0 2.0 3.0]]
-输入数据b:   [[2.0 3.0 4.0]]
-输出数据out: [[5.0 8.0 11.0]]
 ```

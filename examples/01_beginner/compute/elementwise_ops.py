@@ -200,39 +200,6 @@ def test_add_scalar(device_id: int = None):
     print("✓ Test Adding a scalar to a tensor completed successfully")
 
 
-@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def add_with_alpha_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-    alpha: float):
-    pypto.set_vec_tile_shapes(2, 8)
-    out[:] = pypto.add(a, b, alpha=alpha)
-
-
-def test_add_with_alpha(device_id: int = None):
-    """Using the alpha parameter to scale the second input"""
-    print("=" * 60)
-    print("Test: Using the Alpha Parameter")
-    print("=" * 60)
-
-    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
-
-    dtype = torch.float32
-    a = torch.tensor([1, 2, 3], dtype=dtype, device=device)
-    b = torch.tensor([4, 5, 6], dtype=dtype, device=device)
-    alpha = 2.0
-    expected = torch.tensor([9, 12, 15], dtype=dtype, device=device)
-
-    out = torch.empty(a.shape, dtype=dtype, device=device)
-    add_with_alpha_kernel(a, b, out, alpha)
-    if global_run_mode == pypto.RunMode.NPU:
-        assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
-    print(f"Output: {out}")
-    print(f"Expected: {expected}")
-    print("✓ Using the alpha parameter to scale the second input completed successfully")
-
-
 # ============================================================================
 # CLIP Examples
 # ============================================================================
@@ -1016,43 +983,10 @@ def test_sub_scalar(device_id: int = None):
     print("✓ Test Subing a scalar to a tensor completed successfully")
 
 
-
-@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
-def sub_with_alpha_kernel(
-    a: pypto.Tensor([], pypto.DT_FP32),
-    b: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-    alpha: float):
-    pypto.set_vec_tile_shapes(2, 8)
-    out[:] = pypto.sub(a, b, alpha=alpha)
-
-
-def test_sub_with_alpha(device_id: int = None):
-    """Using the alpha parameter to scale the second input"""
-    print("=" * 60)
-    print("Test: Using the Alpha Parameter")
-    print("=" * 60)
-
-    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
-
-    dtype = torch.float32
-    a = torch.tensor([9, 8, 7], dtype=dtype, device=device)
-    b = torch.tensor([1, 2, 3], dtype=dtype, device=device)
-    alpha = 2.0
-    expected = torch.tensor([7, 4, 1], dtype=dtype, device=device)
-
-    out = torch.empty(a.shape, dtype=dtype, device=device)
-    sub_with_alpha_kernel(a, b, out, alpha)
-    if global_run_mode == pypto.RunMode.NPU:
-        assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
-    print(f"Output: {out}")
-    print(f"Expected: {expected}")
-    print("✓ Using the alpha parameter to scale the second input completed successfully")
-
-
 # ============================================================================
 # Main Function
 # ============================================================================
+
 
 def main():
     """Run element-wise examples.
@@ -1113,11 +1047,7 @@ Examples:
             'description': 'Adding a scalar to a tensor example',
             'function': test_add_scalar
         },
-        'add::test_add_with_alpha': {
-            'name': 'Using the alpha parameter to scale the second input',
-            'description': 'Using the alpha parameter example',
-            'function': test_add_with_alpha
-        },
+        
         'clip::test_clip_basic': {
             'name': 'Test basic usage of clip function',
             'description': 'Basic usage of clip function example',
@@ -1223,11 +1153,7 @@ Examples:
             'description': 'Subing a scalar to a tensor example',
             'function': test_sub_scalar
         },
-        'sub::test_sub_with_alpha': {
-            'name': 'Using the alpha parameter to scale the second input',
-            'description': 'Using the alpha parameter example',
-            'function': test_sub_with_alpha
-        }
+        
     }
 
     # List examples if requested

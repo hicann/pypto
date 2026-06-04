@@ -38,15 +38,15 @@ def test_kernel_reuse():
     torch.npu.set_device(DEVICE_ID)
     dev = f"npu:{DEVICE_ID}"
 
-    a = torch.ones(1, 8, dtype=torch.bfloat16, device=dev)
-    out = torch.zeros(1, 8, dtype=torch.bfloat16, device=dev)
+    a = torch.ones(1, 8, dtype=torch.float32, device=dev)
+    out = torch.zeros(1, 8, dtype=torch.float32, device=dev)
     t1 = time.perf_counter()
     kernel_with_dynamic(a, out)
     t1 = time.perf_counter() - t1
     assert torch.allclose(out.cpu(), (a + 1).cpu())
 
-    a = torch.ones(2, 8, dtype=torch.bfloat16, device=dev)
-    out = torch.zeros(2, 8, dtype=torch.bfloat16, device=dev)
+    a = torch.ones(2, 8, dtype=torch.float32, device=dev)
+    out = torch.zeros(2, 8, dtype=torch.float32, device=dev)
     t2 = time.perf_counter()
     kernel_with_dynamic(a, out)
     t2 = time.perf_counter() - t2

@@ -77,7 +77,7 @@ class ModuleConfig:
     """Configuration for multi-function module."""
     hidden_size: int = 128
     intermediate_size: int = 256
-    dtype: pypto.DataType = pypto.DT_BF16
+    dtype: pypto.DataType = pypto.DT_FP32
     use_dynamic_shape: bool = False
 
 
@@ -208,16 +208,16 @@ def test_sequential_functions(device_id: int = None, dynamic: bool = False) -> N
     batch_size, hidden_size = 32, 128
 
     # Create tensors
-    x = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    gamma = torch.ones(hidden_size, dtype=torch.bfloat16, device=device)
-    beta = torch.zeros(hidden_size, dtype=torch.bfloat16, device=device)
+    x = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
+    gamma = torch.ones(hidden_size, dtype=torch.float32, device=device)
+    beta = torch.zeros(hidden_size, dtype=torch.float32, device=device)
 
     # Step 1: Layer normalization
-    normed = torch.empty(x.shape, dtype=torch.bfloat16, device=device)
+    normed = torch.empty(x.shape, dtype=torch.float32, device=device)
     layer_norm_kernel(x, gamma, beta, normed)
 
     # Step 2: GELU activation
-    activated = torch.empty(normed.shape, dtype=torch.bfloat16, device=device)
+    activated = torch.empty(normed.shape, dtype=torch.float32, device=device)
     gelu_activation_kernel(normed, activated)
 
     # Verify
@@ -249,11 +249,11 @@ def test_residual_connection(device_id: int = None, dynamic: bool = False) -> No
     batch_size, hidden_size = 32, 128
 
     # Create tensors
-    x = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    residual = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
+    x = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
+    residual = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
 
     # Apply residual connection
-    out = torch.empty(x.shape, dtype=torch.bfloat16, device=device)
+    out = torch.empty(x.shape, dtype=torch.float32, device=device)
     residual_add_kernel(x, residual, out)
 
     # Verify
@@ -282,27 +282,27 @@ def test_transformer_block(device_id: int = None, dynamic: bool = False) -> None
     batch_size, hidden_size, intermediate_size = 32, 128, 256
 
     # Create input
-    x = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
+    x = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
 
     # Layer norm parameters
-    gamma = torch.ones(hidden_size, dtype=torch.bfloat16, device=device)
-    beta = torch.zeros(hidden_size, dtype=torch.bfloat16, device=device)
+    gamma = torch.ones(hidden_size, dtype=torch.float32, device=device)
+    beta = torch.zeros(hidden_size, dtype=torch.float32, device=device)
 
     # FFN weights (gate/up: 128->256, down: 256->128)
-    gate_weight = torch.randn(hidden_size, intermediate_size, dtype=torch.bfloat16, device=device)
-    up_weight = torch.randn(hidden_size, intermediate_size, dtype=torch.bfloat16, device=device)
-    down_weight = torch.randn(intermediate_size, hidden_size, dtype=torch.bfloat16, device=device)
+    gate_weight = torch.randn(hidden_size, intermediate_size, dtype=torch.float32, device=device)
+    up_weight = torch.randn(hidden_size, intermediate_size, dtype=torch.float32, device=device)
+    down_weight = torch.randn(intermediate_size, hidden_size, dtype=torch.float32, device=device)
 
     # Intermediate tensors
-    normed = torch.zeros(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    gate = torch.zeros(batch_size, intermediate_size, dtype=torch.bfloat16, device=device)
-    up = torch.zeros(batch_size, intermediate_size, dtype=torch.bfloat16, device=device)
-    activated = torch.zeros(batch_size, intermediate_size, dtype=torch.bfloat16, device=device)
-    ffn_out = torch.zeros(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    output = torch.zeros(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
+    normed = torch.zeros(batch_size, hidden_size, dtype=torch.float32, device=device)
+    gate = torch.zeros(batch_size, intermediate_size, dtype=torch.float32, device=device)
+    up = torch.zeros(batch_size, intermediate_size, dtype=torch.float32, device=device)
+    activated = torch.zeros(batch_size, intermediate_size, dtype=torch.float32, device=device)
+    ffn_out = torch.zeros(batch_size, hidden_size, dtype=torch.float32, device=device)
+    output = torch.zeros(batch_size, hidden_size, dtype=torch.float32, device=device)
     # Transformer block computation:
     # 1. Layer normalization
-    normed = torch.empty(x.shape, dtype=torch.bfloat16, device=device)
+    normed = torch.empty(x.shape, dtype=torch.float32, device=device)
     layer_norm_kernel(x, gamma, beta, normed)
     if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
@@ -316,7 +316,7 @@ def test_transformer_block(device_id: int = None, dynamic: bool = False) -> None
         torch.npu.synchronize()
 
     # 3. GELU activation on gate
-    activated = torch.empty(gate.shape, dtype=torch.bfloat16, device=device)
+    activated = torch.empty(gate.shape, dtype=torch.float32, device=device)
     gelu_activation_kernel(gate, activated)
     if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
@@ -328,7 +328,7 @@ def test_transformer_block(device_id: int = None, dynamic: bool = False) -> None
     linear_projection_kernel(activated, down_weight, ffn_out)
 
     # 6. Residual connection
-    output = torch.empty(x.shape, dtype=torch.bfloat16, device=device)
+    output = torch.empty(x.shape, dtype=torch.float32, device=device)
     residual_add_kernel(x, ffn_out, output)
 
     print(f"Input shape: {x.shape}")
@@ -350,17 +350,17 @@ def test_function_reuse(device_id: int = None, dynamic: bool = True) -> None:
     batch_size, hidden_size = 32, 128
 
     # Create multiple inputs
-    x1 = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    x2 = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    x3 = torch.randn(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
+    x1 = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
+    x2 = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
+    x3 = torch.randn(batch_size, hidden_size, dtype=torch.float32, device=device)
 
-    gamma = torch.ones(hidden_size, dtype=torch.bfloat16, device=device)
-    beta = torch.zeros(hidden_size, dtype=torch.bfloat16, device=device)
+    gamma = torch.ones(hidden_size, dtype=torch.float32, device=device)
+    beta = torch.zeros(hidden_size, dtype=torch.float32, device=device)
 
     # Outputs
-    out1 = torch.zeros(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    out2 = torch.zeros(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
-    out3 = torch.zeros(batch_size, hidden_size, dtype=torch.bfloat16, device=device)
+    out1 = torch.zeros(batch_size, hidden_size, dtype=torch.float32, device=device)
+    out2 = torch.zeros(batch_size, hidden_size, dtype=torch.float32, device=device)
+    out3 = torch.zeros(batch_size, hidden_size, dtype=torch.float32, device=device)
 
     # Reuse the same function with different inputs
     layer_norm_kernel(x1, gamma, beta, out1)

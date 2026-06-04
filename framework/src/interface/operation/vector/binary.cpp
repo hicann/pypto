@@ -361,7 +361,7 @@ Tensor Add(const Tensor& self, const Tensor& other)
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "ADD");
 
-    static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
                                                               DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(ADD_A2A3_TYPES, ADD_A5_TYPES);
@@ -374,7 +374,7 @@ Tensor Sub(const Tensor& self, const Tensor& other)
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "SUB");
 
-    static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
                                                               DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(SUB_A2A3_TYPES, SUB_A5_TYPES);
@@ -387,7 +387,7 @@ Tensor Mul(const Tensor& self, const Tensor& other)
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MUL");
 
-    static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
                                                               DT_FP16,  DT_BF16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(MUL_A2A3_TYPES, MUL_A5_TYPES);
@@ -400,7 +400,7 @@ Tensor Div(const Tensor& self, const Tensor& other, PrecisionType precisionType)
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "DIV");
 
-    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(DIV_A2A3_TYPES, DIV_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
@@ -841,7 +841,7 @@ Tensor Add(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
 
-    static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
                                                               DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(ADD_A2A3_TYPES, ADD_A5_TYPES);
@@ -855,7 +855,7 @@ Tensor Sub(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
 
-    static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
                                                               DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(SUB_A2A3_TYPES, SUB_A5_TYPES);
@@ -869,7 +869,7 @@ Tensor Mul(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
 
-    static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
                                                               DT_FP16,  DT_BF16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(MUL_A2A3_TYPES, MUL_A5_TYPES);
@@ -883,7 +883,7 @@ Tensor Div(const Tensor& self, const Element& other, PrecisionType precisionType
 {
     DECLARE_TRACER();
 
-    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32, DT_BF16};
+    static const std::unordered_set<DataType> DIV_A2A3_TYPES = {DT_FP16, DT_FP32};
     static const std::unordered_set<DataType> DIV_A5_TYPES = {DT_FP16, DT_FP32, DT_BF16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(DIV_A2A3_TYPES, DIV_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
