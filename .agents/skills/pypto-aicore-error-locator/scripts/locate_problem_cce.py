@@ -65,8 +65,8 @@ def _find_kernel_aicore_dir(run_dir):
     return None
 
 
-def check_test_result(returncode, output):
-    if returncode == 0:
+def check_test_result(returncode, output, use_pypto_test_framework=False):
+    if not use_pypto_test_framework and returncode == 0:
         return False, False
     output_lower = output.lower()
     has_aicore = "aicore error" in output_lower
@@ -95,7 +95,7 @@ def run_test_cmd(test_cmd, run_dir):
     return result.returncode, result.stdout + result.stderr
 
 
-def backup_and_test_cce(cce_file, test_cmd, run_dir, modify_func):
+def backup_and_test_cce(cce_file, test_cmd, run_dir, modify_func, use_pypto_test_framework=False):
     backup_file = cce_file + ".bak"
     shutil.copy(cce_file, backup_file)
     cce_lines = read_file(cce_file)
@@ -109,7 +109,7 @@ def backup_and_test_cce(cce_file, test_cmd, run_dir, modify_func):
     try:
         write_file(cce_file, modified_lines)
         returncode, output = run_test_cmd(test_cmd, run_dir)
-        has_aicore, has_parallel = check_test_result(returncode, output)
+        has_aicore, has_parallel = check_test_result(returncode, output, use_pypto_test_framework)
         if has_parallel:
             return False, output, original_lines, RESTART
         return has_aicore, output, original_lines
@@ -179,36 +179,64 @@ def enable_trace_logs(pypto_path):
     logger.info("---步骤 3.1: 启用追踪日志")
     logger.info("")
 
-    # 1. Modify tile_fwk_config.json — installed copy only (no recompilation)
-    modified_tile, _ = _modify_tile_fwk_config()
-
-    # 2. Modify device_switch.h (compile-time, needs rebuild)
     modified_switch = _modify_device_switch(pypto_path)
 
-    any_modified = modified_tile or modified_switch
-    needs_rebuild = modified_switch
-
-    if any_modified:
-        if needs_rebuild:
-            logger.info("")
-            logger.info("---步骤 3.1 结果: 已修改追踪日志配置，需要重新编译")
-        else:
-            logger.info("")
-            logger.info("---步骤 3.1 结果: 已修改已安装的 tile_fwk_config.json，无需重新编译")
+    if modified_switch:
+        logger.info("")
+        logger.info("---步骤 3.1 结果: 已修改追踪日志配置，需要重新编译")
     else:
         logger.info("")
-        logger.info("---步骤 3.1 结果: 追踪日志配置已为目标状态，无需重新编译")
-    return any_modified, needs_rebuild
+        logger.info("---步骤 3.1 结果: 追踪日志配置已为目标状态，无需修改")
+    return modified_switch, modified_switch
 
 
-def clean_and_run_test(device_log_path, run_path, test_cmd):
+def _modify_tile_fwk_config():
+    """Modify installed tile_fwk_config.json to enable trace."""
+    logger.info("")
+    logger.info("---步骤 3.1b: 修改已安装的 tile_fwk_config.json（直接修改，无需重编）")
+    logger.info("")
+    config_path = find_installed_tile_fwk_config()
+    if not config_path:
+        logger.info("警告：未找到已安装的 tile_fwk_config.json")
+        return False
+    backup_path = config_path + ".backup"
+    if not os.path.exists(backup_path):
+        shutil.copy(config_path, backup_path)
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    if 'global' in config and 'codegen' in config['global']:
+        codegen = config['global']['codegen']
+        already_set = (codegen.get('fixed_output_path') is True and
+                       codegen.get('force_overwrite') is False)
+        if already_set:
+            logger.info("tile_fwk_config.json 已为目标状态，无需修改")
+            return False
+        codegen['fixed_output_path'] = True
+        codegen['force_overwrite'] = False
+    else:
+        config['fixed_output_path'] = True
+        config['force_overwrite'] = False
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=4)
+    logger.info("已修改 tile_fwk_config.json (已安装)")
+    return True
+
+
+def clean_and_run_test(device_log_path, run_path, test_cmd, use_pypto_test_framework=False):
     logger.info("")
     logger.info("---步骤 3.3: 清理日志并运行测试")
     logger.info("")
 
-    if os.path.exists(device_log_path):
-        shutil.rmtree(device_log_path)
-    os.makedirs(device_log_path, exist_ok=True)
+    if use_pypto_test_framework:
+        output_dir = os.path.join(run_path, "output")
+        if os.path.exists(output_dir):
+            for root, _, _ in os.walk(output_dir):
+                if os.path.basename(root) == 'plog_output':
+                    shutil.rmtree(root)
+    else:
+        if os.path.exists(device_log_path):
+            shutil.rmtree(device_log_path)
+        os.makedirs(device_log_path, exist_ok=True)
 
     for pattern_path in Path(run_path).glob("kernel_aic*"):
         if pattern_path.is_dir():
@@ -238,7 +266,7 @@ def clean_and_run_test(device_log_path, run_path, test_cmd):
         text=True, errors='ignore', timeout=DEFAULT_TIMEOUT, check=False,
     )
     stderr_output = result.stdout + result.stderr
-    has_aicore, has_parallel = check_test_result(result.returncode, stderr_output)
+    has_aicore, has_parallel = check_test_result(result.returncode, stderr_output, use_pypto_test_framework)
 
     if not has_aicore:
         logger.info("")
@@ -266,14 +294,22 @@ def check_kernel_files(run_path):
     logger.info("---步骤 3.4 结果: 已检查 %d 个 kernel 文件", len(kernel_files))
 
 
-def get_latest_program_json(output_path):
+def get_latest_program_json(output_path, use_pypto_test_framework=False):
     if not os.path.exists(output_path):
         logger.info("警告：output 目录不存在: %s", output_path)
         return None
-    subdirs = [
-        os.path.join(output_path, d) for d in os.listdir(output_path)
-        if os.path.isdir(os.path.join(output_path, d)) and d.startswith('output_')
-    ]
+    if use_pypto_test_framework:
+        subdirs = []
+        for root, dirs, _ in os.walk(output_path):
+            if os.path.basename(root) == 'pass_output':
+                for d in dirs:
+                    if d.startswith('output_'):
+                        subdirs.append(os.path.join(root, d))
+    else:
+        subdirs = [
+            os.path.join(output_path, d) for d in os.listdir(output_path)
+            if os.path.isdir(os.path.join(output_path, d)) and d.startswith('output_')
+        ]
     if not subdirs:
         logger.info("警告：未找到以 'output_' 开头的子文件夹")
         return None
@@ -313,24 +349,47 @@ def _parse_event_line(line, event_name):
     return {'luid': luid, 'coreIdx': int(core_idx_match.group(1))}
 
 
-def find_trace_log_file(device_log_path):
-    logger.info("在 %s 下搜索包含 #trace 的日志文件...", device_log_path)
-    for log_file in Path(device_log_path).rglob("device*.log"):
+def find_trace_log_file(run_path, use_pypto_test_framework=False):
+    if use_pypto_test_framework:
+        base_path = os.path.join(run_path, "output")
+        if not os.path.exists(base_path):
+            logger.info("错误：output 目录不存在: %s", base_path)
+            return None
+        plog_dirs = []
+        for root, _, _ in os.walk(base_path):
+            if os.path.basename(root) == 'plog_output':
+                plog_dirs.append(root)
+        if not plog_dirs:
+            logger.info("错误：在 %s 下未找到 plog_output 目录", base_path)
+            return None
+        log_files = []
+        for plog_dir in plog_dirs:
+            debug_dir = os.path.join(plog_dir, "debug")
+            if os.path.isdir(debug_dir):
+                log_files.extend(Path(debug_dir).rglob("device*.log"))
+    else:
+        search_path = os.path.join(run_path, "wk", "debug")
+        if not os.path.isdir(search_path):
+            logger.info("错误：日志目录不存在: %s", search_path)
+            return None
+        log_files = list(Path(search_path).rglob("device*.log"))
+
+    logger.info("搜索包含 #trace 的日志文件...")
+    for log_file in log_files:
         try:
             content = log_file.read_text(encoding='utf-8')
             if '#trace' not in content:
                 continue
             logger.info("找到包含 #trace 的日志文件: %s", log_file)
             if 'LActStart' not in content:
-                logger.info(
-                    "日志文件不包含 LActStart 事件，不适用于该方法定位 aicore error")
+                logger.info("日志文件不包含 LActStart 事件，不适用于该方法定位 aicore error")
                 logger.info("  文件: %s", log_file)
                 return None
             logger.info("日志文件包含 LActStart 事件，适用于该方法定位")
             return str(log_file)
         except OSError as e:
             logger.warning("处理文件异常: %s, 原因: %s", log_file, e)
-    logger.info("错误：在 %s 下未找到包含 #trace 的日志文件", device_log_path)
+    logger.info("错误：未找到包含 #trace 的日志文件")
     return None
 
 
@@ -380,29 +439,24 @@ def find_cce_file(kernel_aicore_dir, leaf_index):
             continue
         logger.info("")
         logger.info("在文件中找到 leafIndex %d: %s", leaf_index, record_file)
-        core_match = re.search(r'sub_func_(\w+)_call_\d+\.h', record_file.name)
-        core_type = core_match.group(1) if core_match else None
-        if core_type:
-            logger.info("Core type: %s", core_type)
         func_match = re.search(rf'case {leaf_index}:\s*\{{\s*(\w+)\(', content)
         func_name = func_match.group(1) if func_match else None
         if not func_name:
-            break
+            logger.info("警告：无法从 Record 文件中提取函数名")
+            continue
         logger.info("Function name: %s", func_name)
-        suffix_match = re.search(r'_(\d+)_(\d+)_(\d+)$', func_name)
-        if not suffix_match:
-            break
-        cce_id, id_val = suffix_match.group(1), suffix_match.group(2)
-        cce_pre = func_name[:func_name.rfind(f'_{cce_id}_{id_val}_')]
-        logger.info("  CCE_pre_name: %s", cce_pre)
-        logger.info("  CCE_ID: %s", cce_id)
-        pattern = f"{cce_pre}_{cce_id}_*_{id_val}_{core_type}.cpp"
-        cce_files = list(Path(kernel_aicore_dir).glob(f"**/{pattern}"))
-        logger.info("搜索 CCE 文件模式: %s", pattern)
-        logger.info("找到 %d 个匹配文件", len(cce_files))
+        result = subprocess.run(
+            ["/usr/bin/grep", "-rl", func_name, kernel_aicore_dir],
+            capture_output=True, text=True, timeout=30)
+        matched_files = [Path(p) for p in result.stdout.strip().split('\n') if p]
+        logger.info("grep 函数名找到 %d 个匹配文件", len(matched_files))
+        for mf in matched_files:
+            logger.info("  %s", mf)
+        cce_files = [f for f in matched_files if f.suffix == '.cpp']
         if cce_files:
             logger.info("找到 CCE 文件: %s", cce_files[0])
             return str(cce_files[0])
+        logger.info("警告：未在匹配文件中找到 CCE 源文件 (.cpp)")
         break
     logger.info("")
     logger.info("错误：无法在任何 Record 文件中找到 leafIndex %d", leaf_index)
@@ -504,9 +558,24 @@ def _build_and_install_with_lld_handling(pypto_path):
             if not whl_files:
                 logger.info("错误：未找到 pypto whl 文件")
                 return False
+            target = None
+            show_result = subprocess.run([_PIP_CMD, "show", "pypto"], capture_output=True, text=True)
+            if show_result.returncode == 0:
+                for line in show_result.stdout.split('\n'):
+                    if line.startswith('Location:'):
+                        target = line.split(':', 1)[1].strip()
+                        break
+            if target:
+                for name in os.listdir(target):
+                    if name == 'pypto' or (name.startswith('pypto-') and name.endswith('.dist-info')):
+                        path = os.path.join(target, name)
+                        if os.path.isdir(path):
+                            shutil.rmtree(path)
+            install_cmd = [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"]
+            if target:
+                install_cmd += ["--target", target]
             install_result = subprocess.run(
-                [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"],
-                shell=False, capture_output=True, text=True, timeout=300)
+                install_cmd, shell=False, capture_output=True, text=True, timeout=300)
             if install_result.returncode != 0:
                 logger.info("安装失败: %s", install_result.stderr[-500:])
                 return False
@@ -536,6 +605,8 @@ def main():
                         help='运行测试的目录路径（默认: 当前目录）')
     parser.add_argument('--device-log-path', default='./device_log',
                         help='device log 落盘路径（默认: ./device_log）')
+    parser.add_argument('--use-pypto-test-framework', action='store_true',
+                        help='使用 Pypto_Test 框架模式')
     args = parser.parse_args()
 
     pypto_path = os.path.abspath(args.pypto_path)
@@ -555,6 +626,7 @@ def main():
     logger.info("run_path: %s", run_path)
     logger.info("device_log_path: %s", device_log_path)
     logger.info("test_cmd: %s", args.test_cmd)
+    use_pypto = args.use_pypto_test_framework
 
     trace_modified, needs_rebuild = enable_trace_logs(pypto_path)
 
@@ -567,16 +639,16 @@ def main():
             logger.info("步骤 3 结果: 编译安装失败")
             logger.info("=" * 80)
             sys.exit(1)
-    elif trace_modified:
-        logger.info("")
-        logger.info("tile_fwk_config.json 已在安装目录直接修改，无需重新编译")
     else:
         logger.info("")
         logger.info("步骤 3.1 未修改任何文件，跳过步骤 3.2: 重新编译和安装")
 
+    # Apply tile_fwk_config AFTER rebuild (modify installed copy)
+    _modify_tile_fwk_config()
+
     while True:
         stderr_output, has_parallel = clean_and_run_test(
-            device_log_path, run_path, args.test_cmd)
+            device_log_path, run_path, args.test_cmd, use_pypto_test_framework=use_pypto)
         if stderr_output is None:
             logger.info("=" * 80)
             logger.info("步骤 3 结果: 未检测到 aicore error，停止执行")
@@ -593,7 +665,7 @@ def main():
         logger.info("")
         logger.info("---步骤 3.5: 获取 program.json 路径")
         output_dir = os.path.join(run_path, "output")
-        program_json_path = get_latest_program_json(output_dir)
+        program_json_path = get_latest_program_json(output_dir, use_pypto_test_framework=use_pypto)
         if program_json_path:
             logger.info("program.json: %s", program_json_path)
             logger.info("---步骤 3.5 结果: %s", program_json_path)
@@ -606,7 +678,7 @@ def main():
 
         logger.info("")
         logger.info("---步骤 3.6: 分析追踪日志并定位 CCE 文件")
-        log_file = find_trace_log_file(device_log_path)
+        log_file = find_trace_log_file(run_path, use_pypto_test_framework=use_pypto)
         if not log_file:
             logger.info("---步骤 3.6 结果: 未找到包含 #trace 的日志文件")
             logger.info("=" * 80)

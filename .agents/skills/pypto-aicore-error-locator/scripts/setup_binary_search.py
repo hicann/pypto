@@ -19,6 +19,7 @@
 
 import os
 import sys
+import argparse
 import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -37,7 +38,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def determine_error_in_t(cce_file, test_cmd, run_dir):
+def determine_error_in_t(cce_file, test_cmd, run_dir, use_pypto_test_framework=False):
     logger.info("=" * 80)
     logger.info("步骤 4.1: 确定错误范围")
     logger.info("=" * 80)
@@ -56,7 +57,7 @@ def determine_error_in_t(cce_file, test_cmd, run_dir):
 
 
     error_exists, output, original_lines = backup_and_test(
-        cce_file, test_cmd, run_dir, _modify)
+        cce_file, test_cmd, run_dir, _modify, use_pypto_test_framework=use_pypto_test_framework)
 
 
     if original_lines is None:
@@ -99,13 +100,18 @@ def get_initial_range(cce_file, error_in_t):
 
 
 def main():
-    if len(sys.argv) < 4:
-        logger.info("用法: python3 setup_binary_search.py <cce_file> <test_cmd> <run_path>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="确定错误范围并获取二分查找初始范围")
+    parser.add_argument('cce_file', help="CCE 文件路径")
+    parser.add_argument('test_cmd', help="触发 aicore error 的测试命令")
+    parser.add_argument('run_path', help="运行测试命令的目录路径")
+    parser.add_argument('--use-pypto-test-framework', action='store_true',
+                        help="使用 Pypto_Test 框架")
+    args = parser.parse_args()
 
-    cce_file = os.path.abspath(sys.argv[1])
-    test_cmd = sys.argv[2]
-    run_dir = os.path.abspath(sys.argv[3])
+    cce_file = os.path.abspath(args.cce_file)
+    test_cmd = args.test_cmd
+    run_dir = os.path.abspath(args.run_path)
+    use_pypto = args.use_pypto_test_framework
 
     for path, label in [(cce_file, "CCE 文件"), (run_dir, "运行目录")]:
         valid, msg = validate_path(path, label)
@@ -113,7 +119,8 @@ def main():
             logger.info(msg)
             sys.exit(1)
 
-    error_in_t = determine_error_in_t(cce_file, test_cmd, run_dir)
+    error_in_t = determine_error_in_t(cce_file, test_cmd, run_dir,
+                                       use_pypto_test_framework=use_pypto)
     if error_in_t is None:
         sys.exit(2)
 

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import argparse
 import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -154,23 +155,16 @@ def print_source_code_line(file_path, line_number):
         logger.error("[ERROR] 无法读取源代码文件: %s", e)
 
 
-def print_usage():
-    logger.info("用法: python3 locate_source_line.py <cce_file> <program.json> <cce_line_number>")
-    logger.info("")
-    logger.info("参数说明:")
-    logger.info("  cce_file: CCE 文件路径")
-    logger.info("  program.json: program.json 文件路径")
-    logger.info("  cce_line_number: CCE 文件中的问题行号")
-
-
 def main():
-    if len(sys.argv) < 4:
-        print_usage()
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="将 CCE 问题行映射到前端源代码")
+    parser.add_argument('cce_file', help="CCE 文件路径")
+    parser.add_argument('program_json', help="program.json 文件路径")
+    parser.add_argument('cce_line_number', type=int, help="CCE 文件中的问题行号")
+    args = parser.parse_args()
 
-    cce_path = sys.argv[1]
-    json_path = sys.argv[2]
-    cce_line_number = int(sys.argv[3])
+    cce_path = os.path.abspath(args.cce_file)
+    json_path = os.path.abspath(args.program_json)
+    cce_line_number = args.cce_line_number
 
     cce_path = os.path.abspath(cce_path)
     json_path = os.path.abspath(json_path)

@@ -1,13 +1,27 @@
 ---
 name: pypto-aicore-error-locator
-description: 定位测试案例中出现 aicore error 时的问题 CCE 文件和问题代码行。当用户说"aicore error"、"定位 aicore error 的原因"、"帮我定位 aicore error 报错"时使用此技能。
+description: 定位测试案例中出现 aicore error 时的问题 CCE 文件和问题代码行。当用户说"aicore error"、"定位 aicore error 的原因"、"帮我定位 aicore error 报错"时使用此技能。也适用于用户直接提供 CCE 文件希望定位问题代码行或映射到源码的场景。
 ---
 
 # AICore Error 定位器
 
-此技能用于定位 PyPTO 测试中出现的 aicore error，通过系统化的排查流程，找出导致错误的 CCE 文件和具体代码行。
+此技能是总入口，根据用户输入自动分流到对应路径。
 
-## 工作流程概述
+## 路径选择（总入口）
+
+根据用户提供的输入，直接分流：
+
+| 用户输入特征 | 分流到 | 说明 |
+|---|---|---|
+| 提供了 CCE 文件路径 + 问题代码行号 | [quick-b](quick-b/SKILL.md) | 直达源码映射 |
+| 提供了 CCE 文件路径（无行号） | [quick-a](quick-a/SKILL.md) | 跳过步骤 1-3，从二分查找开始 |
+| 未提供 CCE 文件 | **完整流程**（下方） | 执行标准步骤 1-6 |
+
+> 判断依据：用户消息中包含 CCE 文件路径（如 `.cpp` 文件），以及是否同时提供了行号。
+
+---
+
+## 完整流程
 
 1. 初始测试 — 问题复现，检查是否为该脚本可适用的 aicore error 场景
 2. 排除 machine 框架调度问题 — 判断问题在 kernel 代码还是 machine 调度框架
@@ -18,6 +32,13 @@ description: 定位测试案例中出现 aicore error 时的问题 CCE 文件和
 5. 问题代码行映射到前端代码
     5.1 CCE 行映射到前端源文件
     5.2 输出最终结果
+
+### Pypto_Test 框架适配
+
+**重要**：如果用户明确使用 Pypto_Test 框架，所有脚本调用必须追加 `--use-pypto-test-framework` 参数。判断依据（**不区分大小写、不区分下划线 `_` 和中划线 `-`**）：
+- 用户提到 "Pypto_Test"、"pypto test"、"PYTO_TEST"、"pypto-test" 等任意变体
+- 测试命令中包含 pypto test 框架组件的导入或调用
+- 用户明确说"使用框架"、"框架模式"
 
 ---
 
@@ -37,7 +58,7 @@ description: 定位测试案例中出现 aicore error 时的问题 CCE 文件和
 **在修改任何代码之前**，先运行一次测试，确认 aicore error 确实存在：
 
 ```bash
-cd run_path && export ASCEND_GLOBAL_LOG_LEVEL=0 && test_cmd
+cd <run_path> && export ASCEND_GLOBAL_LOG_LEVEL=0 && <test_cmd>
 cd -
 ```
 
@@ -54,7 +75,8 @@ cd -
 ```bash
 python3 .agents/skills/pypto-aicore-error-locator/scripts/exclude_machine_framework.py \
   --test-cmd <test_cmd> \
-  --run-path run_path
+  --run-path <run_path> \
+  [--use-pypto-test-framework]
 ```
 
 **⚠️ 重要提示**：
@@ -71,10 +93,11 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/exclude_machine_framew
 
 ```bash
 python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_problem_cce.py \
-  --pypto-path pypto_path \
+  --pypto-path <pypto_path> \
   --test-cmd <test_cmd> \
-  --run-path run_path \
-  --device-log-path device_log_path
+  --run-path <run_path> \
+  --device-log-path <device_log_path> \
+  [--use-pypto-test-framework]
 ```
 
 **⚠️ 重要提示**：
@@ -94,7 +117,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_problem_cce.py 
 单个脚本合并 4.1 和 4.2：先注释所有 T 操作行并测试确定错误是否在 T 操作中，再根据结果计算二分查找的初始范围。
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py <cce_file> <test_cmd> run_path
+python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py <cce_file> <test_cmd> <run_path> [--use-pypto-test-framework]
 ```
 
 **⚠️ 重要提示**:
@@ -109,7 +132,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py
 根据步骤 4.1 的 `LEFT` 和 `RIGHT` 值，执行当前迭代：
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> test_cmd run_path <left> <right> ERROR_IN_T
+python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> <test_cmd> <run_path> <left> <right> <error_in_t> [--use-pypto-test-framework]
 ```
 
 记录输出的 `NEXT_LEFT` 和 `NEXT_RIGHT` 值。
@@ -120,6 +143,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteratio
 
 **⚠️ 重要提示**:
 - `cce_file` 为步骤 3 脚本输出的 `CCE_FILE` 值
+- `<error_in_t>` 为步骤 4.1 输出的 `ERROR_IN_T` 的值（`True` 或 `False`），必须传入字面量 `True`/`False`，不可传入变量名
 - 每次迭代仅执行一条命令（受超时限制），需要在多轮中逐步收敛
 - 若未定位到问题代码行（left > right 异常），请说明原因，**停止执行后续步骤**
 
@@ -166,7 +190,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_source_line.py 
 定位完成后，使用单个脚本恢复步骤 3 修改的配置文件并重新编译安装 pypto：
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/restore_initial_state.py --pypto-path pypto_path
+python3 .agents/skills/pypto-aicore-error-locator/scripts/restore_initial_state.py --pypto-path <pypto_path>
 ```
 
 脚本自动完成：恢复 `tile_fwk_config.json` 和 `device_switch.h` 的 `.backup` 备份 → 重新编译安装 pypto。

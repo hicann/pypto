@@ -110,7 +110,7 @@ def _comment_callsubfunctask(file_path):
     return True, start, end
 
 
-def _run_test(test_cmd, run_dir):
+def _run_test(test_cmd, run_dir, use_pypto_test_framework=False):
     logger.info("")
     logger.info("[测试用例执行] %s", test_cmd[:100])
     logger.info("")
@@ -130,7 +130,10 @@ def _run_test(test_cmd, run_dir):
         check=False,
     )
     stderr_output = result.stdout + result.stderr
-    has_aicore = result.returncode != 0 and "aicore error" in stderr_output.lower()
+    if use_pypto_test_framework:
+        has_aicore = "aicore error" in stderr_output.lower()
+    else:
+        has_aicore = result.returncode != 0 and "aicore error" in stderr_output.lower()
 
     logger.info("")
     logger.info("aicore error %s", "存在" if has_aicore else "已消失")
@@ -144,6 +147,8 @@ def main():
                         help='触发 aicore error 的测试命令')
     parser.add_argument('--run-path', default=os.getcwd(),
                         help='运行测试的目录路径（默认: 当前目录）')
+    parser.add_argument('--use-pypto-test-framework', action='store_true',
+                        help='使用 Pypto_Test 框架模式')
     args = parser.parse_args()
 
     run_path = os.path.abspath(args.run_path)
@@ -195,7 +200,8 @@ def main():
 
         logger.info("")
         logger.info("---步骤 2.3: 运行测试验证 — 判断 aicore error 是否消失")
-        has_aicore = _run_test(args.test_cmd, run_path)
+        has_aicore = _run_test(args.test_cmd, run_path,
+                                  use_pypto_test_framework=args.use_pypto_test_framework)
 
     finally:
         if did_backup:

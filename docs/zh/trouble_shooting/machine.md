@@ -13,28 +13,127 @@
 
 ### AICORE ERROR/The aicore execution is abnormal
 
-**前置步骤：初始测试 — 确认 aicore error 可复现**
+以下提供三种定位方式，**推荐优先使用 Agent 自动定位或一键脚本**。
 
-**在修改任何代码之前**，先运行一次测试确认 aicore error 确实存在：
+### Agent 自动定位
 
-```bash
-export ASCEND_GLOBAL_LOG_LEVEL=0 && <test_cmd>
+在 OpenCode 中直接描述问题，AI agent 自动执行全流程，无需手动敲命令。
+
+#### 触发方式
+
+```
+我的测试用例出现了 aicore error，测试命令是 python3 test_my_op.py，路径在 ./
 ```
 
-检查打屏输出，必须出现 `aicore error`。**如果未出现 aicore error，则不适用于该定位方法，立即停止后续步骤！**
+#### 三条执行路径
+
+AI agent 根据用户输入自动分流：
+
+| 用户输入 | 执行路径 |
+|---|---|
+| 仅提供 test_cmd | 完整流程（步骤 1-6） |
+| 提供 CCE 文件路径（含 `.cpp` 文件） | 模式 A：从二分查找开始 |
+| 提供 CCE 文件 + 问题代码行号 | 模式 B：直达源码映射 |
+
+#### 快捷模式对话示例
+
+**模式 A**（已知 CCE 文件）：
+```
+帮我定位 aicore error 的问题代码行，CCE 文件是 /path/to/TENSOR_xxx.cpp，
+测试命令是 python3 test_my_op.py
+```
+
+**模式 B**（已知 CCE 文件 + 行号）：
+```
+帮我映射 aicore error 的源码位置，CCE 文件是 /path/to/TENSOR_xxx.cpp，
+问题行号是 42
+```
+
+#### Pypto_Test 框架适配
+
+在描述中提及 "Pypto_Test 框架"，AI agent 自动识别（不区分大小写、下划线/中划线），并为所有步骤传递适配参数：
+
+```
+我的测试用例出现了 aicore error，用的是 Pypto_Test 框架，测试命令是 python3 test_my_op.py
+```
+
+**关联 SKILL**：[pypto-aicore-error-locator](../../../.agents/skills/pypto-aicore-error-locator/SKILL.md)
 
 ---
 
-以下步骤与 [pypto-aicore-error-locator SKILL](../../../.agents/skills/pypto-aicore-error-locator/SKILL.md) 中的流程完全一致。各步骤已通过以下脚本实现自动化，也可使用一键定位脚本 [locate_aicore_error.py](../../../tools/scripts/locate_aicore_error.py) 全自动完成。
+### 一键脚本定位
 
-### 1. 排除 machine 框架调度问题 — 判断 aicore error 源于 kernel 还是框架
+**关联脚本**：[locate_aicore_error.py](../../../tools/scripts/locate_aicore_error.py) — 一键完成定位，所有模式均支持 `--use-pypto-test-framework`。
+
+#### 完整流程
+
+```bash
+python3 tools/scripts/locate_aicore_error.py \
+    --pypto-path <pypto_path> \
+    --run-path <run_path> \
+    --test-cmd <test_cmd>
+```
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--pypto-path` | 否 | pypto 项目根目录（默认 `./`） |
+| `--run-path` | 否 | 运行测试的目录（默认 `./`） |
+| `--test-cmd` | 完整流程必填 | 触发 aicore error 的测试命令 |
+| `--device-log-path` | 否 | device log 落盘路径（默认 `./wk`） |
+| `--skip-machine-check` | 否 | 跳过步骤 2（machine 框架调度问题检查） |
+| `--skip-rebuild` | 否 | 跳过重新编译（使用当前安装的 pypto） |
+| `--use-pypto-test-framework` | 否 | 使用 Pypto_Test 框架模式 |
+
+#### 模式 A：已知 CCE 文件
+
+已定位到问题 CCE 文件，从二分查找开始：
+
+```bash
+python3 tools/scripts/locate_aicore_error.py \
+    --cce-file <cce_file_path> \
+    --test-cmd <test_cmd> \
+    --run-path <run_path>
+```
+
+自动完成：验证 CCE 文件 → 二分查找 → 源码映射。
+
+#### 模式 B：已知 CCE 文件 + 行号
+
+已定位到 CCE 问题代码行，直达源码映射，**不需要 `--test-cmd`**：
+
+```bash
+python3 tools/scripts/locate_aicore_error.py \
+    --cce-file <cce_file_path> \
+    --cce-line <line_number> \
+    --run-path <run_path>
+```
+
+---
+
+<details>
+<summary>人工手动分步定位指导（展开查看完整步骤）</summary>
+
+**前置步骤：初始测试 — 确认 aicore error 可复现**
+
+在修改任何代码之前，先运行一次测试确认 aicore error 确实存在：
+
+```bash
+export ASCEND_GLOBAL_LOG_LEVEL=1 && <test_cmd>
+```
+
+检查打屏输出，必须出现 `aicore error`。**如果未出现，则不适用该定位方法！**
+
+> 使用 Pypto_Test 框架时，所有步骤中标注 `[--use-pypto-test-framework]` 的参数均需添加。
+
+### 1. 排除 machine 框架调度问题
 
 > **说明**：使用单个脚本自动完成全部操作（定位 aicore_entry.h → 注释 CallSubFuncTask → 运行测试 → 恢复文件），**直接修改已安装 pypto 包，无需重新编译安装**。
 
 ```bash
 python3 .agents/skills/pypto-aicore-error-locator/scripts/exclude_machine_framework.py \
   --test-cmd <test_cmd> \
-  --run-path <run_path>
+  --run-path <run_path> \
+  [--use-pypto-test-framework]
 ```
 
 **判断**：
@@ -52,7 +151,8 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_problem_cce.py 
   --pypto-path <pypto_path> \
   --test-cmd <test_cmd> \
   --run-path <run_path> \
-  --device-log-path <device_log_path>
+  --device-log-path <device_log_path> \
+  [--use-pypto-test-framework]
 ```
 
 **判断**：
@@ -66,7 +166,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_problem_cce.py 
 > **说明**：单个脚本合并原有两步操作：先注释所有 T 操作行并测试确定错误是否在 T 操作中，再根据结果计算二分查找的初始范围。
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py <cce_file> <test_cmd> <run_path>
+python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py <cce_file> <test_cmd> <run_path> [--use-pypto-test-framework]
 ```
 
 结果说明：输出 `ERROR_IN_T=True|False`、`LEFT=<left>`、`RIGHT=<right>` 三个值。`ERROR_IN_T=True` 时仅对 T 操作行二分；`ERROR_IN_T=False` 时对除同步行外的所有行二分。
@@ -78,7 +178,7 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/setup_binary_search.py
 多轮迭代执行以下命令，每轮根据输出的 `NEXT_LEFT` / `NEXT_RIGHT` 更新参数：
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> <test_cmd> <run_path> <left> <right> ERROR_IN_T
+python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> <test_cmd> <run_path> <left> <right> <error_in_t> [--use-pypto-test-framework]
 ```
 
 结果说明：输出新的 `NEXT_LEFT` 和 `NEXT_RIGHT` 值。当 `NEXT_LEFT == NEXT_RIGHT` 时，输出 `FOUND <problem_line>`，即为问题代码行。
@@ -101,9 +201,9 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/restore_initial_state.
 
 脚本自动完成：恢复 `tile_fwk_config.json` 和 `device_switch.h` 的 `.backup` 备份 → 重新编译安装 pypto。
 
-**关联 SKILL**：[pypto-aicore-error-locator](../../../.agents/skills/pypto-aicore-error-locator/SKILL.md)
+</details>
 
-**关联脚本**：[locate_aicore_error.py](../../../tools/scripts/locate_aicore_error.py)（一键定位脚本，自动化执行上述步骤 1-6）
+---
 
 ### 怀疑和MACHINE内存处理有关的精度问题
 
@@ -705,14 +805,14 @@ rm -rf build_out/ && python build_ci.py && pip install build_out/pypto*whl --for
 
 ```bash
 rm -rf kernel_aic* output/ wk/
-export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && python xxx.py
 ```
 
 同一用例重复运行（已添加打印代码）：
 
 ```bash
 rm -rf output/ wk/
-export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && python xxx.py
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && python xxx.py
 ```
 
 **步骤 3.2：在生成的 CCE 文件中添加打印代码**
@@ -755,13 +855,13 @@ __gm__ T* l0c_staging = (__gm__ T*)(param->funcData->workspaceAddr);
 **重要**：以下命令必须**一次性完整执行**（使用 `&&` 连接），不要拆分为多个命令：
 
 ```bash
-export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=0 && rm -rf output/ wk/ && python xxx.py && grep -rn "DumpAicoreLog" ./wk
+export ASCEND_PROCESS_LOG_PATH=./wk && export ASCEND_GLOBAL_LOG_LEVEL=1 && rm -rf output/ wk/ && python xxx.py && grep -rn "DumpAicoreLog" ./wk
 ```
 
 **命令说明**：
 
 1. `export ASCEND_PROCESS_LOG_PATH=./wk`：设置日志输出目录为 `./wk`
-2. `export ASCEND_GLOBAL_LOG_LEVEL=0`：设置日志级别为 DEBUG（级别 0），开启最详细的日志输出
+2. `export ASCEND_GLOBAL_LOG_LEVEL=1`：设置日志级别为 INFO（级别 1），开启日志输出
 3. `rm -rf output/ wk/`：清理旧日志和编译产物，避免干扰
 4. `python xxx.py`：运行测试用例，触发 kernel 编译和执行
 5. `grep -rn "DumpAicoreLog" ./wk`：搜索并打印所有 AiCore Print 输出（包含 tensor 数据和调试信息）
@@ -875,7 +975,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 ##### 1. 未看到打印输出
 
-检查：ENABLE_AICORE_PRINT=1、已重新编译安装，已指定日志落盘路径，已设置日志级别为debug级别（0），grep搜索文件正确。
+检查：ENABLE_AICORE_PRINT=1、已重新编译安装，已指定日志落盘路径，已设置日志级别为info级别（1），grep搜索文件正确。
 
 ##### 2. L1/L0C Print 对齐 WARNING
 

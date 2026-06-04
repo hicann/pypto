@@ -40,16 +40,27 @@ def get_commentable_lines(lines, error_in_t=False):
     commentable_lines = []
     fast_commentable_lines = []
     skip_keywords = ['set_flag', 'wait_flag', 'pipe_barrier']
+
+    # Find the last } in the file ([aicore] main function's closing brace) — never comment it
+    tensor_close = None
+    for i in range(len(lines) - 1, -1, -1):
+        stripped = lines[i].strip()
+        if '}' in stripped and not stripped.startswith('//'):
+            tensor_close = i + 1
+            break
+
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
+        if i == tensor_close:
+            continue
         should_skip = (
             not stripped or
             stripped.startswith('//') or
-            '{' in stripped or
-            '}' in stripped or
             '#' in stripped or
             any(keyword in stripped for keyword in skip_keywords)
         )
+        if '{' in stripped and '[aicore]' in stripped:
+            should_skip = True
 
         if should_skip:
             continue
@@ -65,24 +76,43 @@ def get_commentable_lines(lines, error_in_t=False):
         return commentable_lines
 
 
+def _build_brace_pairs(lines):
+    pairs = {}
+    stack = []
+    for i, line in enumerate(lines):
+        for ch in line:
+            if ch == '{':
+                stack.append(i)
+            elif ch == '}' and stack:
+                pairs[stack.pop()] = i
+    return pairs
+
+
 def comment_lines_by_indices(lines, line_indices):
-    lines_to_comment = set(line_indices)
-
-    for line_num in sorted(lines_to_comment, reverse=True):
-        line_idx = line_num - 1
-        lines[line_idx] = '// ' + lines[line_idx]
-
+    lines = lines[:]
+    brace_pairs = _build_brace_pairs(lines)
+    extra = set()
+    for ln in set(line_indices):
+        close = brace_pairs.get(ln - 1)
+        if close is not None:
+            extra.add(close + 1)
+    for line_num in sorted(set(line_indices) | extra, reverse=True):
+        lines[line_num - 1] = '// ' + lines[line_num - 1]
     return lines
 
 
 def uncomment_lines_by_indices(lines, line_indices):
-    lines_to_uncomment = set(line_indices)
-
-    for line_num in sorted(lines_to_uncomment):
+    lines = lines[:]
+    brace_pairs = _build_brace_pairs(lines)
+    extra = set()
+    for ln in set(line_indices):
+        close = brace_pairs.get(ln - 1)
+        if close is not None:
+            extra.add(close + 1)
+    for line_num in sorted(set(line_indices) | extra):
         line_idx = line_num - 1
         if lines[line_idx].strip().startswith('//'):
             lines[line_idx] = lines[line_idx][3:]
-
     return lines
 
 
@@ -92,8 +122,8 @@ def comment_lines_by_range(lines, start_idx, end_idx):
             lines[i] = '// ' + lines[i]
 
 
-def has_error(returncode, output):
-    if returncode == 0:
+def has_error(returncode, output, use_pypto_test_framework=False):
+    if not use_pypto_test_framework and returncode == 0:
         return False
     return "aicore error" in output.lower()
 
@@ -122,7 +152,7 @@ def comment_special_lines(lines):
     return lines
 
 
-def backup_and_test(cce_file, test_cmd, run_dir, modify_func):
+def backup_and_test(cce_file, test_cmd, run_dir, modify_func, use_pypto_test_framework=False):
     backup_file = cce_file + ".bak"
     shutil.copy(cce_file, backup_file)
 
@@ -135,7 +165,7 @@ def backup_and_test(cce_file, test_cmd, run_dir, modify_func):
     try:
         write_file(cce_file, modified_lines)
         returncode, output = run_test(test_cmd, run_dir)
-        error_exists = has_error(returncode, output)
+        error_exists = has_error(returncode, output, use_pypto_test_framework)
     finally:
         write_file(cce_file, original_lines)
         if os.path.exists(backup_file):
@@ -191,9 +221,24 @@ def build_and_install(pypto_path):
     if not whl_files:
         return False
 
+    target = None
+    result = subprocess.run([_PIP_CMD, "show", "pypto"], capture_output=True, text=True)
+    if result.returncode == 0:
+        for line in result.stdout.split('\n'):
+            if line.startswith('Location:'):
+                target = line.split(':', 1)[1].strip()
+                break
+    if target:
+        for name in os.listdir(target):
+            if name == 'pypto' or (name.startswith('pypto-') and name.endswith('.dist-info')):
+                path = os.path.join(target, name)
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+    install_cmd = [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"]
+    if target:
+        install_cmd += ["--target", target]
     result = subprocess.run(
-        [_PIP_CMD, "install", str(whl_files[0]), "--force", "--no-deps"],
-        shell=False, capture_output=True, text=True, timeout=300)
+        install_cmd, shell=False, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
         return False
     return True

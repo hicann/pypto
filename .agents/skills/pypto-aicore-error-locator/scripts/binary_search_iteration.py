@@ -4,6 +4,7 @@
 import os
 import sys
 import shutil
+import argparse
 import logging
 from dataclasses import dataclass
 
@@ -34,6 +35,7 @@ class BinarySearchParams:
     left: int
     right: int
     error_in_t: bool
+    use_pypto_test_framework: bool = False
 
 
 def binary_search_iteration(params):
@@ -69,7 +71,7 @@ def binary_search_iteration(params):
     write_file(params.cce_file, current_lines)
     logger.info("运行测试...")
     returncode, output = run_test(params.test_cmd, params.run_dir)
-    error_exists = has_error(returncode, output)
+    error_exists = has_error(returncode, output, params.use_pypto_test_framework)
 
     write_file(params.cce_file, original_lines)
     os.remove(backup_file)
@@ -95,37 +97,26 @@ def binary_search_iteration(params):
     return new_left, new_right, None
 
 
-def print_usage():
-    logger.info("用法: python3 binary_search_iteration.py <cce_file> <test_cmd> <run_dir> <left> <right> <error_in_t>")
-    logger.info("")
-    logger.info("参数说明:")
-    logger.info("  cce_file: CCE 文件路径")
-    logger.info("  test_cmd: 触发 aicore error 的测试命令")
-    logger.info("  run_dir: 运行测试命令的目录路径")
-    logger.info("  left: 二分查找左边界")
-    logger.info("  right: 二分查找右边界")
-    logger.info("  error_in_t: 错误是否在T操作中 (True/False)")
-    logger.info("")
-    logger.info("输出格式:")
-    logger.info("  NEXT_LEFT <next_left>")
-    logger.info("  NEXT_RIGHT <next_right>")
-    logger.info("  FOUND <problem_line>  (可选，当 left == right 时)")
-
-
 def main():
-    if len(sys.argv) < 7:
-        print_usage()
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="二分查找迭代定位问题代码行")
+    parser.add_argument('cce_file', help="CCE 文件路径")
+    parser.add_argument('test_cmd', help="触发 aicore error 的测试命令")
+    parser.add_argument('run_dir', help="运行测试命令的目录路径")
+    parser.add_argument('left', type=int, help="二分查找左边界")
+    parser.add_argument('right', type=int, help="二分查找右边界")
+    parser.add_argument('error_in_t', type=lambda x: x.lower() == 'true',
+                        help="错误是否在T操作中 (True/False)")
+    parser.add_argument('--use-pypto-test-framework', action='store_true',
+                        help="使用 Pypto_Test 框架")
+    args = parser.parse_args()
 
-    cce_file = sys.argv[1]
-    test_cmd = sys.argv[2]
-    run_dir = sys.argv[3]
-    left = int(sys.argv[4])
-    right = int(sys.argv[5])
-    error_in_t = sys.argv[6].lower() == 'true'
-
-    cce_file = os.path.abspath(cce_file)
-    run_dir = os.path.abspath(run_dir)
+    cce_file = os.path.abspath(args.cce_file)
+    test_cmd = args.test_cmd
+    run_dir = os.path.abspath(args.run_dir)
+    left = args.left
+    right = args.right
+    error_in_t = args.error_in_t
+    use_pypto = args.use_pypto_test_framework
 
     valid, error_msg = validate_path(cce_file, "CCE 文件")
     if not valid:
@@ -143,7 +134,8 @@ def main():
         run_dir=run_dir,
         left=left,
         right=right,
-        error_in_t=error_in_t
+        error_in_t=error_in_t,
+        use_pypto_test_framework=use_pypto,
     )
     new_left, new_right, problem_line = binary_search_iteration(params)
 
