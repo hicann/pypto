@@ -1697,7 +1697,7 @@ static torch::Tensor BuildMXScaleForA(const torch::Tensor& scaleA, bool scaleATr
             localScaleA.size(localScaleIndex1) == mSize && localScaleA.size(localScaleIndex2) == 0x2)
             << "MX trans scale_a shape mismatch, expected [K/64, M, 2], got [" << localScaleA.size(localScaleIndex0)
             << ", " << localScaleA.size(localScaleIndex1) << ", " << localScaleA.size(localScaleIndex2) << "]";
-        merged = localScaleA.transpose(-0x2, -1).reshape({-1, mSize}).transpose(0, 1);
+        merged = localScaleA.transpose(0, 1).reshape({mSize, -1});
     }
     auto expanded = merged.repeat_interleave(0x20, 1);
     ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, expanded.size(1) == kSize)
@@ -1721,7 +1721,7 @@ static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTr
             localScaleB.size(localScaleIndex1) == nSize && localScaleB.size(localScaleIndex2) == 0x2)
             << "MX scale_b shape mismatch, expected [K/64, N, 2], got [" << localScaleB.size(localScaleIndex0) << ", "
             << localScaleB.size(localScaleIndex1) << ", " << localScaleB.size(localScaleIndex2) << "]";
-        merged = localScaleB.transpose(-0x2, -1).reshape({-1, nSize});
+        merged = localScaleB.transpose(0, 1).reshape({nSize, -1}).transpose(0, 1);
     } else {
         // test reference: scale_b.view(n, k / 32).T
         ASSERT(
@@ -2191,12 +2191,16 @@ static void Atan2(const TensorData& out, const TensorData& y, const TensorData& 
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Copy(const TensorData& out, const TensorData& self, bool trans)
+static void Copy(const TensorData& out, const TensorData& self, bool trans, bool isMx)
 {
     auto tout = From(out);
     auto tself = From(self);
     if (trans) {
         auto res = tself.second.transpose(-1, AXIS_TO_LAST);
+        if (isMx) {
+            //scaleMM输入量化参数为三维(m0,k0,2),转置需要对高两维进行转置操作
+            res = tself.second.transpose(0, 1);
+        }
         ToOperand(res, tout.first, out.dtype);
     } else {
         ToOperand(tself.second, tout.first, out.dtype);

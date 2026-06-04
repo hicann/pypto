@@ -519,9 +519,9 @@ inline void ReduceAcc(LogicalTensorDataPtr out, const std::vector<LogicalTensorD
     GetCalcOps()->ReduceAcc(Trans(out), TransVec(tdatas));
 }
 
-inline void Copy(LogicalTensorDataPtr out, LogicalTensorDataPtr self, bool trans = false)
+inline void Copy(LogicalTensorDataPtr out, LogicalTensorDataPtr self, bool trans = false, bool isMX = false)
 {
-    GetCalcOps()->Copy(Trans(out), Trans(self), trans);
+    GetCalcOps()->Copy(Trans(out), Trans(self), trans, isMX);
 }
 inline void ScatterUpdate(
     LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index, LogicalTensorDataPtr dst,

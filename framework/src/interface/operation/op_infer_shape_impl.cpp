@@ -766,19 +766,19 @@ REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_ND2NZ, Opcode::OP_UB_COPY_ND2NZ, Load2L1Inf
 
 void Load2L1MXScaleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, op != nullptr) << "op should not be nullptr";
     ASSERT(MatmulErrorCode::ERR_PARAM_INVALID,
            !op->GetIOperands().empty() && op->GetIOperands()[0] != nullptr &&
                op->GetIOperands()[0]->GetDynValidShape().size() == SHAPE_DIM3)
         << "op->GetIOperands() should not be empty and GetDynValidShape().size() should be SHAPE_DIM3";
-    std::vector<SymbolicScalar> srcValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    int64_t copyInMod = static_cast<int64_t>(Matrix::CopyInMode::ND2NZ);
-    op->GetAttr(Matrix::A_MUL_B_COPY_IN_MODE, copyInMod);
-    for (auto output : op->GetOOperands()) {
-        if (copyInMod == static_cast<int64_t>(Matrix::CopyInMode::DN2NZ)) {
-            outValidShapes.push_back({srcValidShape[1], srcValidShape[0], srcValidShape[SHAPE_DIM2]});
-        } else {
-            outValidShapes.push_back({srcValidShape[0], srcValidShape[1], srcValidShape[SHAPE_DIM2]});
+    auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (op->GetOOperands()[0] != nullptr && !(op->GetOOperands()[0]->GetDynValidShape().empty())) {
+        outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
+        if (copyOpAttribute != nullptr && (copyOpAttribute->GetToDynValidShape()).empty()) {
+            auto toDynShape = OpImmediate::Specified(op->GetOOperands()[0]->GetDynValidShape());
+            copyOpAttribute->SetToDynValidShape(toDynShape);
         }
+        return;
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_B_SCALE, Opcode::OP_L1_COPY_IN_B_SCALE, Load2L1MXScaleInferFunc);

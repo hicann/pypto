@@ -155,6 +155,7 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::CTX_OP_NULL, ctx->op != nullptr);
     auto& oop = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);
+    ASSERT(ExecuteOperationScene::CTX_NULL, oop != nullptr);
 
     // 若输入输出 dtype 不同，则按 ViewType 语义处理（保持底层字节不变，仅视图变换）
     auto iopDataType = ctx->op->GetIOperands()[0]->GetRawTensor()->GetDataType();
@@ -173,10 +174,20 @@ void ExecuteOpView(ExecuteOperationContext* ctx)
 
     bool trans =
         (ctx->op->HasAttr(Matrix::L1_TO_L0_TRANSPOSE)) ? ctx->op->GetBoolAttribute(Matrix::L1_TO_L0_TRANSPOSE) : false;
+    bool isMx = false;
+    if (ctx->op->HasAttr(Matrix::A_MUL_B_COPY_IN_MODE)) {
+        trans = (ctx->op->GetIntAttribute(Matrix::A_MUL_B_COPY_IN_MODE) ==
+            static_cast<int64_t>(Matrix::CopyInMode::DN2NZ)) ?
+            true :
+            false;
+        isMx = true;
+    }
     if (trans) {
-        std::vector<int64_t> oop_trans = {oop->GetShape()[1], oop->GetShape()[0]};
+        std::vector<int64_t> oop_trans = oop->GetShape();
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SIZE, oop->GetShape().size() >= SHAPE_DIM2);
+        std::swap(oop_trans[0], oop_trans[1]);
         auto ret = iop->View(oop_trans, offset);
-        calc::Copy(oop, ret, trans);
+        calc::Copy(oop, ret, trans, isMx);
         shmOffset = ret->GetStorageOffset() * ret->GetData()->GetElementSize();
     } else {
         auto ret = iop->View(oop->GetShape(), offset);

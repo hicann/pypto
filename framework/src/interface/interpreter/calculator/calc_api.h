@@ -194,7 +194,7 @@ struct CalcOps {
     void (*Transpose)(const TensorData&, const TensorData&, int64_t, int64_t);
 
     void (*ReduceAcc)(const TensorData&, const std::vector<TensorData>&);
-    void (*Copy)(const TensorData&, const TensorData&, bool);
+    void (*Copy)(const TensorData&, const TensorData&, bool, bool);
     void (*ScatterUpdate)(
         const TensorData&, const TensorData&, const TensorData&, const TensorData&, int, std::string, int);
     void (*ScatterElement)(const TensorData&, const TensorData&, const TensorData&, const Element&, int, int);
