@@ -123,6 +123,34 @@ static inline std::string DumpCellMatchTableDesc(const DevCellMatchTableDesc& de
     return DumpShape(desc.cellShape) + " x " + DumpStride(desc.stride);
 }
 
+struct DevAscendProgram;
+
+struct DevDynamicCellMatchStridePatch {
+    uint64_t descOffset{0};
+    DevAscendStride stride{};
+};
+
+inline void ApplyDynamicCellMatchDescPatchesFromLaunchArgs(DevAscendProgram* devProg, int64_t* inputs)
+{
+    if (devProg == nullptr || inputs == nullptr) {
+        return;
+    }
+    const uint64_t inputCount = static_cast<uint64_t>(inputs[0]);
+    const uint64_t outputCount = static_cast<uint64_t>(inputs[1]);
+    auto* patchCountPtr = reinterpret_cast<uint64_t*>(
+        reinterpret_cast<DevTensorData*>(inputs + TENSOR_INFO_OFFSET) + inputCount + outputCount);
+    const uint64_t patchCount = *patchCountPtr;
+    if (patchCount == 0) {
+        return;
+    }
+    auto* patches = reinterpret_cast<DevDynamicCellMatchStridePatch*>(patchCountPtr + 1);
+    auto* devProgBytes = reinterpret_cast<uint8_t*>(devProg);
+    for (uint64_t i = 0; i < patchCount; ++i) {
+        auto* dstDesc = reinterpret_cast<DevCellMatchTableDesc*>(devProgBytes + patches[i].descOffset);
+        dstDesc->stride = patches[i].stride;
+    }
+}
+
 struct DevSymShape {
     int dimSize{0};
     SymInt dim[DEV_SHAPE_DIM_MAX];

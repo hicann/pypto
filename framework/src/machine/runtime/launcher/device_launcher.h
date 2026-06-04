@@ -26,6 +26,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
+#include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/device/dynamic/device_common.h"
 #include "machine/runtime/runner/runtime_agent.h"
 #include "machine/runtime/memory_utils/device_memory_utils.h"
@@ -317,7 +318,8 @@ public:
     template <typename DeviceMemoryTy>
     static void DeviceInitKernelInOuts(
         DeviceMemoryTy& devMem, DeviceKernelArgs& kArgs, const std::vector<DeviceTensorData>& inputList,
-        const std::vector<DeviceTensorData>& outputList, const std::vector<uint8_t>& disableL2List)
+        const std::vector<DeviceTensorData>& outputList, const std::vector<uint8_t>& disableL2List,
+        uint64_t maxPatchCount = 0)
     {
         size_t l2InfoSize = disableL2List.size();
         auto buildInouts = [&](const std::vector<DeviceTensorData>& tensorDataList, DevTensorData* data,
@@ -329,8 +331,7 @@ public:
                     MACHINE_LOGI("Tensor[%zu]: ori=%#lx, l2offset=%lu.", tensorIdx, addr, devMem.GetL2Offset());
                     addr += devMem.GetL2Offset();
                 }
-                DevAscendTensorDataCreator::Init(
-                    data, addr, tensorData.GetShape().data(), tensorData.GetShape().size());
+                DevAscendTensorDataCreator::Init(data, addr, tensorData.GetShape().data(), tensorData.GetShape().size());
                 data++;
                 tensorIdx++;
             }
@@ -339,7 +340,8 @@ public:
         size_t inputSize = inputList.size() * sizeof(DevTensorData);
         size_t outputSize = outputList.size() * sizeof(DevTensorData);
         size_t tensorSize = inputSize + outputSize + 2 * sizeof(uint64_t);
-        size_t allSize = tensorSize + sizeof(AiCpuArgs);
+        size_t patchTailSize = sizeof(uint64_t) + static_cast<size_t>(maxPatchCount) * sizeof(DevDynamicCellMatchStridePatch);
+        size_t allSize = tensorSize + patchTailSize + sizeof(AiCpuArgs);
 
         if (unlikely(allSize > tensorInfo_.size())) {
             tensorInfo_.resize(allSize);
@@ -355,6 +357,9 @@ public:
         buildInouts(inputList, dataPtr, tensorIdx);
         dataPtr += inputList.size();
         buildInouts(outputList, dataPtr, tensorIdx);
+        dataPtr += outputList.size();
+        auto* patchCountPtr = reinterpret_cast<uint64_t*>(dataPtr);
+        *patchCountPtr = 0;
         if (devMem.IsDevice()) {
             kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data());
             kArgs.outputs = (int64_t*)allSize;
@@ -363,8 +368,8 @@ public:
             kArgs.outputs = kArgs.inputs + 1;
         }
         MACHINE_LOGD(
-            "Inputs=%p, outputs=%p, workspace=%p, cfgdata=%p, tensorSize=%zu.", kArgs.inputs, kArgs.outputs,
-            kArgs.workspace, kArgs.cfgdata, tensorSize);
+            "Inputs=%p, outputs=%p, workspace=%p, cfgdata=%p, tensorSize=%zu, patchTailSize=%zu.", kArgs.inputs,
+            kArgs.outputs, kArgs.workspace, kArgs.cfgdata, tensorSize, patchTailSize);
     }
 
     template <typename DeviceMemoryTy>

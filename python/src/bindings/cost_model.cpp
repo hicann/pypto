@@ -28,50 +28,6 @@ namespace pypto {
 
 std::string ValidateDynamicFunctionAndIO(
     Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs);
-bool TryBuildDynamicCellMatchDesc(
-    const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& launchMeta, Evaluator& eval,
-    DevCellMatchTableDesc& patchedDesc);
-void ValidateDynamicCellMatchTableMemBudget(uint64_t maxDynamicCellMatchTableMem);
-
-static bool PrepareSingleDynamicCellMatchDescForCostModel(
-    const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& meta, Evaluator& eval, DevAscendProgram* devProg)
-{
-    DevCellMatchTableDesc patchedDesc;
-    bool ready = TryBuildDynamicCellMatchDesc(meta, eval, patchedDesc);
-    if (!ready) {
-        return false;
-    }
-    auto* dst = reinterpret_cast<uint8_t*>(devProg) + meta.descOffset;
-    (void)memcpy_s(dst, sizeof(DevCellMatchTableDesc), &patchedDesc, sizeof(DevCellMatchTableDesc));
-    return true;
-}
-
-static void PrepareDynamicCellMatchDescForCostModel(
-    DyndevFunctionAttribute* attr, DevAscendProgram* devProg, const std::vector<DeviceTensorData>& inputs,
-    const std::vector<DeviceTensorData>& outputs)
-{
-    if (attr == nullptr || devProg == nullptr || attr->dynamicCellMatchLaunchMetaList.empty()) {
-        return;
-    }
-    Evaluator eval{attr->inputSymbolDict, inputs, outputs};
-    std::vector<DyndevFunctionAttribute::DynamicCellMatchLaunchMeta> const& metas = attr->dynamicCellMatchLaunchMetaList;
-    size_t unpreparedCount = 0;
-    int firstUnpreparedSlot = -1;
-    for (const auto& meta : metas) {
-        if (!PrepareSingleDynamicCellMatchDescForCostModel(meta, eval, devProg)) {
-            unpreparedCount++;
-            if (firstUnpreparedSlot < 0) {
-                firstUnpreparedSlot = meta.slotIndex;
-            }
-            continue;
-        }
-    }
-    if (unpreparedCount != 0) {
-        ASSERT(false)
-            << "cost model dynamic cell match prepare failed, unpreparedCount=" << unpreparedCount
-            << ", firstSlot=" << firstUnpreparedSlot;
-    }
-}
 
 static std::string ValidateFunctionAndIO(
     Function* func, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
@@ -136,22 +92,6 @@ std::string CostModelRunOnceDataFromHost(
     }
 
     Function* func = Program::GetInstance().GetLastFunction();
-    auto attr = func->GetDyndevAttribute();
-    if (attr != nullptr && !attr->devProgBinary.empty()) {
-        auto* devProg = reinterpret_cast<DevAscendProgram*>(attr->devProgBinary.data());
-        Evaluator eval{attr->inputSymbolDict, inputs, outputs};
-        PrepareDynamicCellMatchDescForCostModel(attr.get(), devProg, inputs, outputs);
-        if (attr->maxDynamicAssembleOutcastMem.IsValid()) {
-            devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(attr->maxDynamicAssembleOutcastMem);
-        }
-        if (attr->maxDynamicCellMatchTableMem.IsValid()) {
-            devProg->memBudget.metadata.maxDynamicCellMatchTableMem = eval.Evaluate(attr->maxDynamicCellMatchTableMem);
-            uint64_t totalDynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
-            devProg->memBudget.metadata.dynamicCellMatch =
-                totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
-            ValidateDynamicCellMatchTableMemBudget(devProg->memBudget.metadata.maxDynamicCellMatchTableMem);
-        }
-    }
     CostModelLauncher::CostModelRunOnce(func);
     CopyTensorFromModel(inputs, outputs);
     return "";

@@ -22,6 +22,7 @@
 #include "device_perf.h"
 #include "machine/device/dynamic/context/device_execute_context.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
+#include "machine/utils/dynamic/dev_encode_tensor.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/device_log.h"
 #include "machine/utils/barrier.h"
@@ -248,6 +249,7 @@ public:
         DEV_INFO("AscendCppDyInitTask begin");
 
         DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
+        ApplyDynamicCellMatchDescPatchesFromLaunchArgs(devProg, kargs->inputs);
         auto &tensorBudget = devProg->memBudget.tensor;
         auto &metadataBudget = devProg->memBudget.metadata;
         if (kargs->maxDynamicAssembleOutcastMem != 0) {

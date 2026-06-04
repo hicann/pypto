@@ -25,6 +25,7 @@
 #include "interface/function/function.h"
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/launcher/cell_match_dynamic.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "cost_model/simulation/backend.h"
@@ -231,7 +232,7 @@ private:
         DeviceKernelArgs kArgs;
         MemoryHelper memoryHelper(true);
         (void)InitKernelRuntime(memoryHelper, kArgs);
-        RefillDynamicBudgetsAndSyncSimCfg(memoryHelper, kArgs, inputs, outputs);
+        RefillDynamicBudgetsAndSyncCfg(memoryHelper, kArgs, inputs, outputs, true);
         for (int i = 0; i < (config_.controlFlowCache ? 1 : config_.repeatNum); i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, true, {});
             std::cout << "!!! Run CostModel " << i << "\n";
@@ -244,67 +245,9 @@ private:
         RunDynCostModel();
     }
 
-    static bool TryPatchDynamicCellMatchDesc(
-        DevAscendProgram* functionDevProg, const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& meta,
-        Evaluator& eval)
-    {
-        DevCellMatchTableDesc patchedDesc;
-        patchedDesc.SetCellShape(meta.cellShape);
-        const int dim = patchedDesc.GetDimensionSize();
-        if (meta.candidateRawDims.empty() || dim > DEV_SHAPE_DIM_MAX) {
-            return false;
-        }
-        int64_t refStride[DEV_SHAPE_DIM_MAX]{0};
-        for (size_t c = 0; c < meta.candidateRawDims.size(); ++c) {
-            int64_t currentStride[DEV_SHAPE_DIM_MAX]{0};
-            for (int d = dim - 1; d >= 0; --d) {
-                SymbolicScalar tensorDimExpr = meta.candidateRawDims[c][d];
-                int64_t tensorDim = eval.Evaluate(tensorDimExpr);
-                int64_t cellDim = std::max<int64_t>(patchedDesc.GetCellShape(d), 1);
-                int64_t tile = (tensorDim + cellDim - 1) / cellDim;
-                if (tile <= 0) {
-                    return false;
-                }
-                currentStride[d] = tile;
-            }
-            if (c == 0) {
-                std::copy_n(currentStride, dim, refStride);
-            } else if (!std::equal(refStride, refStride + dim, currentStride)) {
-                return false;
-            }
-        }
-        std::vector<int> strideShape(dim);
-        for (int d = 0; d < dim; ++d) {
-            strideShape[d] = static_cast<int>(refStride[d]);
-        }
-        patchedDesc.SetStrideShape(strideShape);
-        auto* dst = reinterpret_cast<uint8_t*>(functionDevProg) + meta.descOffset;
-        (void)memcpy_s(dst, sizeof(DevCellMatchTableDesc), &patchedDesc, sizeof(DevCellMatchTableDesc));
-        return true;
-    }
-
-    static void RefillDynamicMemBudgets(DevAscendProgram* functionDevProg, DyndevFunctionAttribute* dynAttr, Evaluator& eval)
-    {
-        if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
-            functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
-                eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
-        }
-        if (!dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
-            return;
-        }
-        functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem =
-            eval.Evaluate(dynAttr->maxDynamicCellMatchTableMem);
-        uint64_t totalDynamicCellMatchSlotNum =
-            functionDevProg->memBudget.metadata.dynamicCellMatchSlotNum;
-        functionDevProg->memBudget.metadata.dynamicCellMatch =
-            totalDynamicCellMatchSlotNum * functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
-    }
-
-    // Sim: cfgdata is a host-side copy made in DeviceInitTilingData; it lags host devProgBinary after symbol
-    // evaluation. Patch cell-match table on both, refill host memBudget, copy budget to cfg, then pool addrs.
-    void RefillDynamicBudgetsAndSyncSimCfg(
+    void RefillDynamicBudgetsAndSyncCfg(
         MemoryHelper& memoryHelper, DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
-        const std::vector<RawTensorDataPtr>& outputs)
+        const std::vector<RawTensorDataPtr>& outputs, bool syncMemBudgetToCfg)
     {
         auto dynAttr = function_->GetDyndevAttribute();
         auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
@@ -313,16 +256,13 @@ private:
         std::tie(evalInputList, evalOutputList) = BuildInputOutputFromHost(memoryHelper, inputs, outputs);
         Evaluator eval{dynAttr->inputSymbolDict, evalInputList, evalOutputList};
         auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
-        for (const auto& meta : dynAttr->dynamicCellMatchLaunchMetaList) {
-            (void)TryPatchDynamicCellMatchDesc(functionDevProg, meta, eval);
-            (void)TryPatchDynamicCellMatchDesc(cfgProg, meta, eval);
+        cellMatchDescPatches_ = PrepareHostDynamicCellMatchForLaunch(*dynAttr.get(), eval, functionDevProg);
+        if (syncMemBudgetToCfg) {
+            cfgProg->memBudget = functionDevProg->memBudget;
         }
-        RefillDynamicMemBudgets(functionDevProg, dynAttr.get(), eval);
-        cfgProg->memBudget = functionDevProg->memBudget;
         kArgs.maxDynamicAssembleOutcastMem = functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem;
         kArgs.maxDynamicCellMatchTableMem = functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
-        PatchRuntimeDynamicCellMatchMeta(
-            memoryHelper, functionDevProg, reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata));
+        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, cfgProg);
     }
 
     bool IsDumpTensorEnable() const { return GetDevProg(function_)->memBudget.debug.dumpTensor != 0; }
@@ -414,8 +354,7 @@ private:
         MemoryHelper memoryHelper(false);
         DeviceKernelArgs kArgs;
         auto dynAttr = InitKernelRuntime(memoryHelper, kArgs);
-        PatchRuntimeDynamicCellMatchMeta(memoryHelper, reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data()),
-            reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata));
+        RefillDynamicBudgetsAndSyncCfg(memoryHelper, kArgs, inputs, outputs, false);
         for (int i = 0; i < config_.repeatNum; i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
             rc = DeviceRunner::Get().DynamicRun(0, &kArgs, config_.blockdim, config_.aicpuNum);
@@ -520,7 +459,14 @@ private:
         std::vector<DeviceTensorData> inputList;
         std::vector<DeviceTensorData> outputList;
         std::tie(inputList, outputList) = BuildInputOutputFromHost(memoryHelper, inputTensors, outputTensors);
-        DeviceInitKernelInOuts(memoryHelper, kArgs, inputList, outputList, disableL2List);
+        const uint64_t maxPatchCount = function_->GetDyndevAttribute()->dynamicCellMatchLaunchMetaList.size();
+        DeviceInitKernelInOuts(memoryHelper, kArgs, inputList, outputList, disableL2List, maxPatchCount);
+        // Device path: kArgs.inputs points at AiCpuArgs; tensor info (and patch tail) starts after it.
+        int64_t* launchInputs = kArgs.inputs;
+        if (memoryHelper.IsDevice()) {
+            launchInputs = reinterpret_cast<int64_t*>(reinterpret_cast<uint8_t*>(kArgs.inputs) + sizeof(AiCpuArgs));
+        }
+        WriteDynamicCellMatchStridePatchesToLaunchArgs(launchInputs, cellMatchDescPatches_);
         MACHINE_LOGI(
             "Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata);
@@ -552,5 +498,6 @@ private:
 private:
     Function* function_;
     DeviceLauncherConfig config_;
+    std::vector<DevDynamicCellMatchStridePatch> cellMatchDescPatches_;
 };
 } // namespace npu::tile_fwk

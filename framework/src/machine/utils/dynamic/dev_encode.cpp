@@ -2843,10 +2843,6 @@ static void BuildDynamicCellMatchLaunchMeta(Function* func, DevAscendProgram& de
         for (int d = 0; d < dim; ++d) {
             meta.cellShape[d] = partial.cellMatchTableDesc.GetCellShape(d);
         }
-        meta.opMaxCount.resize(DevCellMatchTableDesc::CELL_MATCH_OP_TYPE_MAX_NUM);
-        for (size_t opIdx = 0; opIdx < DevCellMatchTableDesc::CELL_MATCH_OP_TYPE_MAX_NUM; opIdx++) {
-            meta.opMaxCount[opIdx] = partial.cellMatchTableDesc.GetCacheOpMaxCount(static_cast<uint32_t>(opIdx));
-        }
         for (const auto& [root, outcastIndex] : dynAttr->slotRootOutcastDict.at(slotIndex)) {
             auto rawTensor = root->GetOutcast()[outcastIndex]->GetRawTensor();
             auto dynShape = rawTensor->GetDynRawShape();

@@ -25,6 +25,7 @@
 #include "cost_model/simulation/pv/PvModelFactory.h"
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/launcher/cell_match_dynamic.h"
 #include "cost_model/simulation/backend.h"
 #include "tilefwk/pypto_fwk_log.h"
 
@@ -225,10 +226,9 @@ private:
         MemoryHelper memoryHelper(true);
         DeviceInitDistributedContext(memoryHelper, dynAttr->commGroupNames, kArgs);
         DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
+        RefillDynamicCellMatchAndMemBudget(memoryHelper, kArgs, inputs, outputs);
         InitKernelInOuts(kArgs, inputs, outputs, true);
         auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
-        auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
-        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, cfgProg);
         kArgs.maxDynamicAssembleOutcastMem = functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem;
         kArgs.maxDynamicCellMatchTableMem = functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
         RunCostModel(&kArgs);
@@ -325,7 +325,9 @@ private:
         devProg->devArgs.scheCpuNum = 1;
         AssignMetaAddr(devMem, kArgs, devProg, nullptr);
         PatchRuntimeDynamicCellMatchMeta(devMem, devProg, devProg);
-        size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t);
+        const uint64_t maxPatchCount = function_->GetDyndevAttribute()->dynamicCellMatchLaunchMetaList.size();
+        size_t patchTailSize = sizeof(uint64_t) + maxPatchCount * sizeof(DevDynamicCellMatchStridePatch);
+        size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t) + patchTailSize;
         std::vector<uint8_t> tensorInfo(tensorSize);
         auto data = reinterpret_cast<uint64_t*>(tensorInfo.data());
         *data = inputs.size();
@@ -336,6 +338,7 @@ private:
         buildInouts(inputs, dataPtr);
         dataPtr += inputs.size();
         buildInouts(outputs, dataPtr);
+        WriteDynamicCellMatchStridePatchesToLaunchArgs(reinterpret_cast<int64_t*>(tensorInfo.data()), cellMatchDescPatches_);
         kArgs.inputs = (int64_t*)pv_->CopyToDev(tensorInfo.data(), tensorSize);
         kArgs.outputs = kArgs.inputs + 1;
         kArgs.cfgdata = (int64_t*)pv_->CopyToDev(devProgData.data(), devProgData.size());
@@ -385,15 +388,34 @@ private:
         std::vector<DeviceTensorData> outputList;
         MemoryHelper memoryHelper(isTest);
         std::tie(inputList, outputList) = BuildInputOutputFromHost(memoryHelper, inputTensors, outputTensors);
-        DeviceInitKernelInOuts(memoryHelper, kArgs, inputList, outputList, {});
+        const uint64_t maxPatchCount = function_->GetDyndevAttribute()->dynamicCellMatchLaunchMetaList.size();
+        DeviceInitKernelInOuts(memoryHelper, kArgs, inputList, outputList, {}, maxPatchCount);
+        WriteDynamicCellMatchStridePatchesToLaunchArgs(kArgs.inputs, cellMatchDescPatches_);
         SIMULATION_LOGI(
             "Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata);
     }
 
+    void RefillDynamicCellMatchAndMemBudget(
+        MemoryHelper& memoryHelper, DeviceKernelArgs& kArgs, const std::vector<RawTensorDataPtr>& inputs,
+        const std::vector<RawTensorDataPtr>& outputs)
+    {
+        auto dynAttr = function_->GetDyndevAttribute();
+        auto* functionDevProg = reinterpret_cast<DevAscendProgram*>(dynAttr->devProgBinary.data());
+        std::vector<DeviceTensorData> evalInputList;
+        std::vector<DeviceTensorData> evalOutputList;
+        std::tie(evalInputList, evalOutputList) = BuildInputOutputFromHost(memoryHelper, inputs, outputs);
+        Evaluator eval{dynAttr->inputSymbolDict, evalInputList, evalOutputList};
+        auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
+        cellMatchDescPatches_ = PrepareHostDynamicCellMatchForLaunch(*dynAttr.get(), eval, functionDevProg);
+        cfgProg->memBudget = functionDevProg->memBudget;
+        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, cfgProg);
+    }
+
 private:
     Function* function_;
     DeviceLauncherConfig config_;
+    std::vector<DevDynamicCellMatchStridePatch> cellMatchDescPatches_;
     std::shared_ptr<CostModel::DynPvModel> pv_;
     std::shared_ptr<CostModel::AiCoreModel> model_;
 }; // CostModelLauncher

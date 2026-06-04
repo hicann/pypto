@@ -34,7 +34,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
-#include "machine/utils/dynamic/dev_encode_function_stitch.h"
+#include "machine/runtime/launcher/cell_match_dynamic.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/runtime/launcher/emulation_launcher.h"
 #include "machine/runtime/launcher/eslmodel_launcher.h"
@@ -69,66 +69,6 @@ std::string ValidateDynamicFunctionAndIO(
         return "mismatch input/output";
     }
     return "";
-}
-
-bool TryBuildDynamicCellMatchDesc(
-    const DyndevFunctionAttribute::DynamicCellMatchLaunchMeta& launchMeta, Evaluator& eval,
-    DevCellMatchTableDesc& patchedDesc)
-{
-    patchedDesc.SetCellShape(launchMeta.cellShape);
-    patchedDesc.SetCacheOpMaxCount(launchMeta.opMaxCount);
-    const int dim = patchedDesc.GetDimensionSize();
-    if (launchMeta.candidateRawDims.empty() || dim > DEV_SHAPE_DIM_MAX) {
-        return false;
-    }
-
-    bool consistent = true;
-    int64_t refStride[DEV_SHAPE_DIM_MAX]{0};
-    for (size_t c = 0; c < launchMeta.candidateRawDims.size(); ++c) {
-        int64_t currentStride[DEV_SHAPE_DIM_MAX]{0};
-        for (int d = dim - 1; d >= 0; --d) {
-            auto expr = launchMeta.candidateRawDims[c][d];
-            int64_t tensorDim = eval.Evaluate(expr);
-            int64_t cellDim = std::max<int64_t>(patchedDesc.GetCellShape(d), 1);
-            int64_t tile = (tensorDim + cellDim - 1) / cellDim;
-            ASSERT(tile > 0) << "Invalid tile for dynamic cell match slot=" << launchMeta.slotIndex << ", dim=" << d;
-            currentStride[d] = tile;
-        }
-        if (c == 0) {
-            for (int d = 0; d < dim; ++d) {
-                refStride[d] = currentStride[d];
-            }
-            continue;
-        }
-        for (int d = 0; d < dim; ++d) {
-            if (refStride[d] != currentStride[d]) {
-                consistent = false;
-                break;
-            }
-        }
-        if (!consistent) {
-            break;
-        }
-    }
-
-    if (!consistent) {
-        return false;
-    }
-
-    std::vector<int> strideShape(dim);
-    for (int d = 0; d < dim; ++d) {
-        strideShape[d] = static_cast<int>(refStride[d]);
-    }
-    patchedDesc.SetStrideShape(strideShape);
-    return true;
-}
-
-void ValidateDynamicCellMatchTableMemBudget(uint64_t maxDynamicCellMatchTableMem)
-{
-    uint64_t tableEntries = maxDynamicCellMatchTableMem / sizeof(uint64_t);
-    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, tableEntries < static_cast<uint64_t>(MAX_CELLMATCHSSTRIDE))
-        << " Dynamic cell match metadata pool per-slot table exceeds limit,"
-        << "Please appropriately configure the view shape and tile shape, and ensure aligned with the input shape.";
 }
 
 static bool IsUint8GoldenAndHf8InOut(const DeviceTensorData& inOutTensor, const DeviceTensorData& goldenTensor)
@@ -518,12 +458,6 @@ struct ControlFlowCache {
 
 class KernelBinary {
 public:
-    struct DynamicCellMatchDescPatch {
-        int slotIndex{-1};
-        uint64_t descOffset{0};
-        DevCellMatchTableDesc desc{};
-    };
-
     KernelBinary(std::shared_ptr<Function> func) : dynFunc(func)
     {
         dynAttr = dynFunc->GetDyndevAttribute().get();
@@ -598,11 +532,10 @@ public:
     int64_t GetWorkspaceSize(const std::vector<DeviceTensorData>& tensors)
     {
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
-        PrepareDynamicCellMatchDescPatches(tensors);
-        // Patch host/dev cfg together before Launch, so Launch stays read-only.
-        PatchDynamicCellMatchTableDescToCfgData(reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
+        Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
+        dynamicCellMatchDescPatches_ = PrepareDynamicCellMatchDescPatches(*dynAttr, eval);
+        PatchHostDynamicCellMatchTableDesc(devProg, dynamicCellMatchDescPatches_);
         if (dynAttr->maxDynamicAssembleOutcastMem.IsValid() || dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
-            Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
             if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
                 devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
             }
@@ -612,7 +545,7 @@ public:
                 uint64_t totalDynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
                 devProg->memBudget.metadata.dynamicCellMatch =
                     totalDynamicCellMatchSlotNum * devProg->memBudget.metadata.maxDynamicCellMatchTableMem;
-                ValidateDynamicCellMatchTableMemBudget(devProg->memBudget.metadata.maxDynamicCellMatchTableMem);
+                ValidateDynamicCellMatchTableMemBudget(*dynAttr, devProg);
             }
             if (devProg->memBudget.metadata.dynamicCellMatch != lastPreparedDynamicCellMatchBytes_) {
                 RefreshRuntimeDynamicCellMatchMeta(devProg->memBudget.metadata.dynamicCellMatch);
@@ -648,6 +581,8 @@ public:
             }
             tensorData++;
         }
+
+        WriteDynamicCellMatchStridePatchesToLaunchArgs(inputp, dynamicCellMatchDescPatches_);
 
         return {aicpuArgs, aicpuArgBuf.size() * sizeof(int64_t)};
     }
@@ -690,71 +625,6 @@ public:
     }
     uint64_t GetMaxDynamicAssembleOutcastMem() const { return devProg->memBudget.tensor.maxDynamicAssembleOutcastMem; }
     uint64_t GetMaxDynamicCellMatchTableMem() const { return devProg->memBudget.metadata.maxDynamicCellMatchTableMem; }
-    void PrepareDynamicCellMatchDescPatches(const std::vector<DeviceTensorData>& tensors)
-    {
-        dynamicCellMatchDescPatches_.clear();
-        if (dynAttr->dynamicCellMatchLaunchMetaList.empty()) {
-            return;
-        }
-        Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
-        size_t unpreparedCount = 0;
-        int firstUnpreparedSlot = -1;
-        for (const auto& launchMeta : dynAttr->dynamicCellMatchLaunchMetaList) {
-            DevCellMatchTableDesc patchedDesc;
-            bool ready = TryBuildDynamicCellMatchDesc(launchMeta, eval, patchedDesc);
-            if (!ready) {
-                unpreparedCount++;
-                if (firstUnpreparedSlot < 0) {
-                    firstUnpreparedSlot = launchMeta.slotIndex;
-                }
-                continue;
-            }
-            DynamicCellMatchDescPatch patch;
-            patch.slotIndex = launchMeta.slotIndex;
-            patch.desc = patchedDesc;
-            patch.descOffset = launchMeta.descOffset;
-            dynamicCellMatchDescPatches_.push_back(patch);
-        }
-        if (unpreparedCount != 0) {
-            ASSERT(false)
-                << "dynamic cell match launch prepare failed, unpreparedCount="
-                << unpreparedCount << ", firstSlot=" << firstUnpreparedSlot;
-        }
-    }
-
-    void PatchDynamicCellMatchTableDescToCfgData(int64_t* hostCfgdata, int64_t* devCfgdata)
-    {
-        if (dynamicCellMatchDescPatches_.empty()) {
-            return;
-        }
-        auto patchOneCfg = [&](int64_t* cfgdata) {
-            if (cfgdata == nullptr) {
-                return;
-            }
-            auto* cfgBytes = reinterpret_cast<uint8_t*>(cfgdata);
-            bool isHostCfg = IsHostCfgData(cfgBytes);
-            std::optional<AclModeGuard> captureRelaxGuard;
-            if (!isHostCfg && DeviceLauncher::IsCaptureMode()) {
-                captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
-            }
-            for (const auto& patch : dynamicCellMatchDescPatches_) {
-                auto* dst = cfgBytes + patch.descOffset;
-                if (isHostCfg) {
-                    (void)memcpy_s(
-                        dst, sizeof(DevCellMatchTableDesc), &patch.desc, sizeof(DevCellMatchTableDesc));
-                } else {
-                    int ret = RuntimeMemcpy(
-                        dst, sizeof(DevCellMatchTableDesc), &patch.desc, sizeof(DevCellMatchTableDesc),
-                        RtMemcpyKind::HOST_TO_DEVICE);
-                    ASSERT(ret == RT_SUCCESS) << "patch dynamic cell match desc failed, ret=" << ret;
-                }
-            }
-        };
-        patchOneCfg(hostCfgdata);
-        if (devCfgdata != hostCfgdata) {
-            patchOneCfg(devCfgdata);
-        }
-    }
 
     void PatchRuntimeDynamicCellMatchAddrToCfgData(int64_t* hostCfgdata, int64_t* devCfgdata)
     {
@@ -829,7 +699,9 @@ private:
     {
         auto argNum =
             dynAttr->startArgsInputLogicalTensorList.size() + dynAttr->startArgsOutputLogicalTensorList.size();
-        auto argSize = sizeof(AiCpuArgs) + 2 * sizeof(int64_t) + argNum * sizeof(DevTensorData);
+        const uint64_t maxPatchCount = dynAttr->dynamicCellMatchLaunchMetaList.size();
+        auto argSize = sizeof(AiCpuArgs) + 2 * sizeof(int64_t) + argNum * sizeof(DevTensorData) + sizeof(uint64_t) +
+                       maxPatchCount * sizeof(DevDynamicCellMatchStridePatch);
         MACHINE_ASSERT(argSize % 0x8 == 0);
         aicpuArgBuf.resize(argSize / 0x8);
 
@@ -840,6 +712,8 @@ private:
         int64_t* inputp = (int64_t*)(aicpuArgs + 1);
         inputp[0] = dynAttr->startArgsInputLogicalTensorList.size();
         inputp[1] = dynAttr->startArgsOutputLogicalTensorList.size();
+        const uint64_t tensorCount = static_cast<uint64_t>(inputp[0]) + static_cast<uint64_t>(inputp[1]);
+        *reinterpret_cast<uint64_t*>(reinterpret_cast<DevTensorData*>(inputp + 2) + tensorCount) = 0;
 
         l2Offset = GetRuntimeL2Offset();
 
@@ -863,7 +737,7 @@ private:
     std::vector<int64_t> aicpuArgBuf;
     uint64_t l2Offset{0};
     std::vector<DeviceTensorData> argTypes;
-    std::vector<DynamicCellMatchDescPatch> dynamicCellMatchDescPatches_;
+    std::vector<DevDynamicCellMatchStridePatch> dynamicCellMatchDescPatches_;
     uint64_t lastPreparedDynamicCellMatchBytes_{0};
     uint64_t runtimeDynamicCellMatchAddr_{0};
     uint64_t runtimeDynamicCellMatchHostAddr_{0};
