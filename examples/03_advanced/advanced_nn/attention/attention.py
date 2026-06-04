@@ -85,7 +85,7 @@ class AttentionConfig:
     num_heads: int = 8
     head_dim: int = 64
     scale: Optional[float] = None  # If None, uses 1/sqrt(head_dim)
-    dtype: pypto.DataType = pypto.DT_FP32
+    dtype: pypto.DataType = pypto.DT_BF16
     use_dynamic_shape: bool = False
 
 
@@ -128,17 +128,17 @@ def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def scaled_dot_product_attention_kernel(
-    q: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_FP32),
-    k: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_FP32),
-    v: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_FP32),
-    output: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_FP32)):
+    q: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16),
+    k: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_BF16),
+    v: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_BF16),
+    output: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16)):
     scale = 1.0 / (HEAD_DIM ** 0.5)
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
     pypto.set_vec_tile_shapes(1, 8, 16, HEAD_DIM)
-    scores = pypto.matmul(q, pypto.transpose(k, 2, 3), out_dtype=pypto.DT_FP32)
+    scores = pypto.matmul(q, pypto.transpose(k, 2, 3), out_dtype=pypto.DT_BF16)
     scores_scaled = pypto.mul(scores, scale)
     attn_weights = pypto.softmax(scores_scaled, dim=-1)
-    output.move(pypto.matmul(attn_weights, v, out_dtype=pypto.DT_FP32))
+    output.move(pypto.matmul(attn_weights, v, out_dtype=pypto.DT_BF16))
 
 
 def test_scaled_dot_product_attention(device_id=None, dynamic: bool = False) -> None:
@@ -149,10 +149,10 @@ def test_scaled_dot_product_attention(device_id=None, dynamic: bool = False) -> 
 
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
-    q_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM, dtype=torch.float32, device=device)
-    k_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM, dtype=torch.float32, device=device)
-    v_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM, dtype=torch.float32, device=device)
-    out = torch.empty(BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM, dtype=torch.float32, device=device)
+    q_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM, dtype=torch.bfloat16, device=device)
+    k_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM, dtype=torch.bfloat16, device=device)
+    v_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM, dtype=torch.bfloat16, device=device)
+    out = torch.empty(BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM, dtype=torch.bfloat16, device=device)
     scaled_dot_product_attention_kernel(q_torch, k_torch, v_torch, out)
 
     scale = 1.0 / (HEAD_DIM ** 0.5)
@@ -193,12 +193,12 @@ def attention_with_projection_core(q_view: pypto.Tensor, k_view: pypto.Tensor,
 
 @pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def attention_with_projection_kernel(
-    hidden_states: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_FP32),
-    q_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_FP32),
-    k_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_FP32),
-    v_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_FP32),
-    out_weight: pypto.Tensor((1, NUM_HEADS * HEAD_DIM, HIDDEN_SIZE), pypto.DT_FP32),
-    output_tensor: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_FP32)):
+    hidden_states: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16),
+    q_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
+    k_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
+    v_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
+    out_weight: pypto.Tensor((1, NUM_HEADS * HEAD_DIM, HIDDEN_SIZE), pypto.DT_BF16),
+    output_tensor: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16)):
     tile_b = 1
     b_loop = BATCH_SIZE // tile_b
 
@@ -206,9 +206,9 @@ def attention_with_projection_kernel(
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
     pypto.set_vec_tile_shapes(1, 16, 8, HEAD_DIM)
 
-    q_flat = pypto.matmul(hidden_states, q_weight, out_dtype=pypto.DT_FP32)
-    k_flat = pypto.matmul(hidden_states, k_weight, out_dtype=pypto.DT_FP32)
-    v_flat = pypto.matmul(hidden_states, v_weight, out_dtype=pypto.DT_FP32)
+    q_flat = pypto.matmul(hidden_states, q_weight, out_dtype=pypto.DT_BF16)
+    k_flat = pypto.matmul(hidden_states, k_weight, out_dtype=pypto.DT_BF16)
+    v_flat = pypto.matmul(hidden_states, v_weight, out_dtype=pypto.DT_BF16)
 
     q = pypto.reshape(q_flat, [BATCH_SIZE, SEQ_LEN, NUM_HEADS, HEAD_DIM])
     k = pypto.reshape(k_flat, [BATCH_SIZE, SEQ_LEN, NUM_HEADS, HEAD_DIM])
@@ -227,14 +227,14 @@ def attention_with_projection_kernel(
         k_view = pypto.view(k, view_shape, [b_offset, 0, 0, 0], valid_shape=valid_shape)
         v_view = pypto.view(v, view_shape, [b_offset, 0, 0, 0], valid_shape=valid_shape)
 
-        scores = pypto.matmul(q_view, pypto.transpose(k_view, 2, 3), out_dtype=pypto.DT_FP32)
+        scores = pypto.matmul(q_view, pypto.transpose(k_view, 2, 3), out_dtype=pypto.DT_BF16)
         scores_scaled = pypto.mul(scores, scale)
         attn_weights = pypto.softmax(scores_scaled, dim=-1)
-        context = pypto.matmul(attn_weights, v_view, out_dtype=pypto.DT_FP32)
+        context = pypto.matmul(attn_weights, v_view, out_dtype=pypto.DT_BF16)
 
         context = pypto.transpose(context, 1, 2)
         context_flat = pypto.reshape(context, [tile_b, SEQ_LEN, NUM_HEADS * HEAD_DIM])
-        output_view = pypto.matmul(context_flat, out_weight, out_dtype=pypto.DT_FP32)
+        output_view = pypto.matmul(context_flat, out_weight, out_dtype=pypto.DT_BF16)
         output_tensor[b_offset:, ...] = output_view
 
 
@@ -275,14 +275,14 @@ def test_attention_with_projection(device_id=None, dynamic: bool = False) -> Non
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     # Create tensors
-    hidden_states = torch.randn(BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE, dtype=torch.float32, device=device)
-    q_weight = torch.randn(1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM, dtype=torch.float32, device=device)
-    k_weight = torch.randn(1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM, dtype=torch.float32, device=device)
-    v_weight = torch.randn(1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM, dtype=torch.float32, device=device)
-    out_weight = torch.randn(1, NUM_HEADS * HEAD_DIM, HIDDEN_SIZE, dtype=torch.float32, device=device)
+    hidden_states = torch.randn(BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE, dtype=torch.bfloat16, device=device)
+    q_weight = torch.randn(1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM, dtype=torch.bfloat16, device=device)
+    k_weight = torch.randn(1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM, dtype=torch.bfloat16, device=device)
+    v_weight = torch.randn(1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM, dtype=torch.bfloat16, device=device)
+    out_weight = torch.randn(1, NUM_HEADS * HEAD_DIM, HIDDEN_SIZE, dtype=torch.bfloat16, device=device)
 
     # Execute
-    out = torch.empty(BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE, dtype=torch.float32, device=device)
+    out = torch.empty(BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE, dtype=torch.bfloat16, device=device)
     attention_with_projection_kernel(hidden_states, q_weight, k_weight, v_weight, out_weight, out)
 
     golden = attention_with_projection_golden(

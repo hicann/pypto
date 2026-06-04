@@ -73,7 +73,7 @@ class NormConfig:
     """Configuration for normalization operations."""
     norm_type: Literal["layernorm", "rmsnorm"] = "layernorm"
     eps: float = 1e-6
-    dtype: pypto.DataType = pypto.DT_FP32
+    dtype: pypto.DataType = pypto.DT_BF16
     use_dynamic_shape: bool = False
 
 
@@ -130,11 +130,11 @@ def test_layer_norm(device_id=None, dynamic: bool = False):
     batch_size, hidden_size = 32, 128
     shape = (batch_size, hidden_size)
 
-    x_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    gamma_torch = torch.ones(hidden_size, dtype=torch.float32, device=device)
-    beta_torch = torch.zeros(hidden_size, dtype=torch.float32, device=device)
+    x_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    gamma_torch = torch.ones(hidden_size, dtype=torch.bfloat16, device=device)
+    beta_torch = torch.zeros(hidden_size, dtype=torch.bfloat16, device=device)
     config = NormConfig(norm_type="layernorm", dtype=pypto.DT_BF16)
-    out_torch = torch.empty(shape, dtype=torch.float32, device=device)
+    out_torch = torch.empty(shape, dtype=torch.bfloat16, device=device)
     layer_norm_kernel(x_torch, gamma_torch, beta_torch, out_torch, config)
 
     expected = layernorm_golden(x_torch, gamma_torch, beta_torch, config.eps)
@@ -189,10 +189,10 @@ def test_rms_norm(device_id=None, dynamic: bool = False) -> None:
     batch_size, hidden_size = 32, 128
     shape = (batch_size, hidden_size)
 
-    x_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    gamma_torch = torch.ones(hidden_size, dtype=torch.float32, device=device)
+    x_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    gamma_torch = torch.ones(hidden_size, dtype=torch.bfloat16, device=device)
     config = NormConfig(norm_type="rmsnorm", dtype=pypto.DT_BF16)
-    out_torch = torch.empty(shape, dtype=torch.float32, device=device)
+    out_torch = torch.empty(shape, dtype=torch.bfloat16, device=device)
 
     rms_norm_kernel(x_torch, gamma_torch, out_torch, config)
 

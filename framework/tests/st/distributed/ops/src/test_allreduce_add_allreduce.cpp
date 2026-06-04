@@ -44,15 +44,7 @@ void LoopAdd(const Tensor& allReduceOut, Tensor& addOut)
     {
         (void)index;
         TileShape::Current().SetVecTile({128, 256});
-        if (allReduceOut.GetDataType() == DT_BF16) {
-            Tensor fp32AllReduceOut(DT_FP32, allReduceOut.GetShape(), "fp32AllReduceOut");
-            Tensor fp32AddOut(DT_FP32, addOut.GetShape(), "fp32AddOut");
-            fp32AllReduceOut = Cast(allReduceOut, DT_FP32);
-            fp32AddOut = npu::tile_fwk::Add(fp32AllReduceOut, fp32AllReduceOut);
-            addOut = Cast(fp32AddOut, DT_BF16);
-        } else {
-            addOut = npu::tile_fwk::Add(allReduceOut, allReduceOut);
-        }
+        addOut = npu::tile_fwk::Add(allReduceOut, allReduceOut);
     }
 }
 

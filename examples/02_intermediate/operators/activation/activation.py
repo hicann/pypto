@@ -132,8 +132,8 @@ def test_silu(device_id: int = None, dynamic: bool = False) -> None:
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 128)
-    x_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    out_torch = torch.empty(shape, dtype=torch.float32, device=device)
+    x_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    out_torch = torch.empty(shape, dtype=torch.bfloat16, device=device)
     # Execute
     silu_activation_kernel(x_torch, out_torch)
 
@@ -176,8 +176,8 @@ def test_gelu(device_id: int = None, dynamic: bool = False) -> None:
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 128)
-    x_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    out_torch = torch.empty(shape, dtype=torch.float32, device=device)
+    x_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    out_torch = torch.empty(shape, dtype=torch.bfloat16, device=device)
     # Execute
     gelu_activation_kernel(x_torch, out_torch)
 
@@ -224,9 +224,9 @@ def test_swiglu(device_id: int = None, dynamic: bool = False) -> None:
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 128)
-    gate_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    up_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    out_torch = torch.empty(shape, dtype=torch.float32, device=device)
+    gate_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    up_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    out_torch = torch.empty(shape, dtype=torch.bfloat16, device=device)
     # Execute
     swiglu_activation_kernel(gate_torch, up_torch, out_torch)
 
@@ -273,9 +273,9 @@ def test_geglu(device_id: int = None, dynamic: bool = False) -> None:
     device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 128)
-    gate_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    up_torch = torch.randn(shape, dtype=torch.float32, device=device)
-    out_torch = torch.empty(shape, dtype=torch.float32, device=device)
+    gate_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    up_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
+    out_torch = torch.empty(shape, dtype=torch.bfloat16, device=device)
     # Execute
     geglu_activation_kernel(gate_torch, up_torch, out_torch)
 

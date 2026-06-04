@@ -60,10 +60,8 @@ TEST_F(AutoCastTest, AddBF16)
     EXPECT_EQ(function->Operations().size(), 1);
     AutoCast autoCast;
     autoCast.RunOnFunction(*function);
-    
-    NPUArch arch = Platform::Instance().GetSoc().GetNPUArch();
-    int expectedOpNum = (arch == NPUArch::DAV_3510) ? 3 : 1;
-    EXPECT_EQ(function->Operations().size(), expectedOpNum);
+    const int opNum3 = 3;
+    EXPECT_EQ(function->Operations().size(), opNum3);
 }
 
 TEST_F(AutoCastTest, AddCascadeBF16)
@@ -85,10 +83,8 @@ TEST_F(AutoCastTest, AddCascadeBF16)
     EXPECT_EQ(function->Operations().size(), opNum2);
     AutoCast autoCast;
     autoCast.RunOnFunction(*function);
-    
-    NPUArch arch = Platform::Instance().GetSoc().GetNPUArch();
-    int expectedOpNum = (arch == NPUArch::DAV_3510) ? 5 : 2;
-    EXPECT_EQ(function->Operations().size(), expectedOpNum);
+    const int opNum5 = 5;
+    EXPECT_EQ(function->Operations().size(), opNum5);
 }
 
 TEST_F(AutoCastTest, Int32ToFP16Cast)
@@ -147,12 +143,10 @@ TEST_F(AutoCastTest, PostCheckNormal)
     std::vector<std::string> opNames{"ADD"};
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     Function* function = G.GetFunction();
-    ASSERT_NE(function, nullptr);
+    ASSERT_NE(function, nullptr); // 确保function有效
 
     AutoCast autoCast;
-    NPUArch arch = Platform::Instance().GetSoc().GetNPUArch();
-    Status expectedStatus = (arch == NPUArch::DAV_3510) ? FAILED : SUCCESS;
-    EXPECT_EQ(autoCast.PostCheck(*function), expectedStatus);
+    EXPECT_EQ(autoCast.PostCheck(*function), FAILED);
 }
 
 TEST_F(AutoCastTest, InvalidOutputNum)
@@ -189,9 +183,7 @@ TEST_F(AutoCastTest, BF16UnsupportedInput)
     ASSERT_NE(function2, nullptr);
 
     AutoCast autoCast2;
-    NPUArch arch = Platform::Instance().GetSoc().GetNPUArch();
-    Status expectedStatus = (arch == NPUArch::DAV_3510) ? FAILED : SUCCESS;
-    EXPECT_EQ(autoCast2.PostCheck(*function2), expectedStatus);
+    EXPECT_EQ(autoCast2.PostCheck(*function2), FAILED);
     autoCast2.RunOnFunction(*function2);
 }
 
@@ -209,9 +201,7 @@ TEST_F(AutoCastTest, BF16UnsupportedOutput)
     ASSERT_NE(function3, nullptr);
 
     AutoCast autoCast3;
-    NPUArch arch = Platform::Instance().GetSoc().GetNPUArch();
-    Status expectedStatus = (arch == NPUArch::DAV_3510) ? FAILED : SUCCESS;
-    EXPECT_EQ(autoCast3.PostCheck(*function3), expectedStatus);
+    EXPECT_EQ(autoCast3.PostCheck(*function3), FAILED);
     autoCast3.RunOnFunction(*function3);
 }
 

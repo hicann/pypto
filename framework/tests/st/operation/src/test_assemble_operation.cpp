@@ -2010,15 +2010,7 @@ void TestInnerAssembleMultiView()
             auto bView = View(b, {5, M}, {5, len2 - len1}, {idx * 5, len1});
             auto cView = View(c, {5, M}, {5, M - len2}, {idx * 5, len2});
             Assemble({{Assign(aView), {0, 0}}, {Assign(bView), {0, len1}}, {Assign(cView), {0, len2}}}, tmp, true);
-            if constexpr (std::is_same_v<T, bfloat16>) {
-                Tensor tmpFp32(DT_FP32, {5, M}, "tmpFp32");
-                Tensor addResultFp32(DT_FP32, {5, M}, "addResultFp32");
-                tmpFp32 = Cast(tmp, DT_FP32);
-                addResultFp32 = Add(tmpFp32, tmpFp32);
-                tmp = Cast(addResultFp32, DT_BF16);
-            } else {
-                tmp = Add(tmp, tmp);
-            }
+            tmp = Add(tmp, tmp);
             Assemble({{tmp, {idx * 5, 0}}}, dst, true);
         }
         config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});
