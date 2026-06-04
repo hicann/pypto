@@ -1422,7 +1422,10 @@ class BuildCtrl(CMakeParam):
                 continue
             # 分组策略 一个worker对应一组卡
             n_workers = len(dev_lst) // cards_per_case
-            ext_str = f'-n {n_workers} --device {dev_ext} --cards-per-case {cards_per_case} -m "world_size"'
+            needed_devices = n_workers * cards_per_case
+            used_dev_lst = dev_lst[:needed_devices]
+            used_dev_ext = " ".join(f"{d}" for d in used_dev_lst)
+            ext_str = f'-n {n_workers} --device {used_dev_ext} --cards-per-case {cards_per_case} -m "world_size"'
             self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "python/tests/st"), ],
                                      ext=ext_str)
 
