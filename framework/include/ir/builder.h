@@ -32,6 +32,7 @@ class BuildContext;
 class FunctionContext;
 class ForLoopContext;
 class IfStmtContext;
+class InsertPoint;
 
 /**
  * \brief IR Builder for incremental IR construction with context management
@@ -422,6 +423,19 @@ public:
     [[nodiscard]] bool InProgram() const;
 
     /**
+     * \brief Set the current context
+     *
+     * \param ctx New context to set
+     */
+    void SetInsertPoint(std::shared_ptr<InsertPoint> ctx);
+
+    /**
+     * \brief Clear the current insert point
+     *
+     */
+    void ClearInsertPoint();
+
+    /**
      * \brief Get return types for a function by name
      *
      * Returns the return types for a function if it has been added to the program.
@@ -433,7 +447,7 @@ public:
     [[nodiscard]] std::vector<TypePtr> GetFunctionReturnTypes(const std::string& func_name) const;
 
 private:
-    std::vector<std::unique_ptr<BuildContext>> context_stack_;
+    std::vector<std::shared_ptr<BuildContext>> context_stack_;
 
     // Helper to get current context with type checking
     template <typename T>
@@ -455,7 +469,7 @@ private:
  */
 class BuildContext {
 public:
-    enum class Type { FUNCTION, FOR_LOOP, WHILE_LOOP, IF_STMT, SECTION, PROGRAM };
+    enum class Type { INSERT, FUNCTION, FOR_LOOP, WHILE_LOOP, IF_STMT, SECTION, PROGRAM };
 
     explicit BuildContext(Type type, Span span) : type_(type), begin_span_(std::move(span)) {}
     virtual ~BuildContext() = default;
@@ -465,12 +479,25 @@ public:
 
     // Accumulate statements in this context
     virtual void AddStmt(const StmtPtr& stmt) = 0;
-    [[nodiscard]] const std::vector<StmtPtr>& GetStmts() const { return stmts_; }
+    virtual const std::vector<StmtPtr>& GetStmts() const { return stmts_; }
 
 protected:
     Type type_;
     Span begin_span_;
     std::vector<StmtPtr> stmts_;
+};
+
+/**
+ * \brief Context for Insert to exist block statement
+ */
+class InsertPoint : public BuildContext {
+public:
+    InsertPoint(ir::SeqStmtsPtr block) : BuildContext(Type::INSERT, block->span_), block_(block) {}
+    void AddStmt(const StmtPtr& stmt) override { block_->stmts_.push_back(stmt); }
+    const std::vector<StmtPtr>& GetStmts() const override { return block_->stmts_; }
+
+private:
+    ir::SeqStmtsPtr block_;
 };
 
 /**

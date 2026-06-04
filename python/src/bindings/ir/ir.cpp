@@ -132,6 +132,9 @@ void BindExpr(py::module& m)
         .def(py::init<const std::string&, const TypePtr&, const ExprPtr&, const Span&>(),
              py::arg("name"), py::arg("type"), py::arg("initValue"), py::arg("span"),
              "Create an iteration argument with initial value")
+        .def(py::init<VarPtr, const ExprPtr&>(),
+             py::arg("iterVar"), py::arg("initValue"),
+             "Create an iteration argument with initial value")
         .def("__str__", [](const std::shared_ptr<const IterArg>& self) -> std::string { return self->iterVar_->name_; })
         .def_property_readonly("name", [](const std::shared_ptr<const IterArg>& self) -> const std::string& {
             return self->iterVar_->name_;
@@ -391,6 +394,7 @@ void BindStmt(py::module& m)
         .def(py::init<const std::vector<StmtPtr>&, const Span&>(),
              py::arg("stmts"), py::arg("span"),
              "Create a sequence of statements")
+        .def(py::init<const Span&>(), py::arg("span"), "Create a sequence of statements")
         .def("__getitem__", [](SeqStmtsPtr& self, int index) {
             int size = static_cast<int>(self->stmts_.size());
             if (index < -size || index >= size) {

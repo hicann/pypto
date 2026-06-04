@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "interface/tensor/irbuilder.h"
+#include "ir/kind_traits.h"
+#include "ir/transforms/structural_comparison.h"
 
 namespace npu::tile_fwk {
 
@@ -394,7 +396,7 @@ void BindIRBuilder(py::module_& m)
             "    SymbolicScalar: The created constant integer scalar")
 
         .def(
-            "create_scalar_var", &IRBuilder::CreateScalarVar, py::arg("sym"),
+            "create_scalar_var", &IRBuilder::CreateScalarVar, py::arg("sym") = "",
             "Create a scalar variable.\n\n"
             "    sym: Symbol of the variable\n\n"
             "Returns:\n"
@@ -540,7 +542,79 @@ void BindIRBuilder(py::module_& m)
             "    name: Name of the program\n"
             "    span: Span of the program\n\n"
             "Returns:\n"
-            "    Program: The created program");
+            "    Program: The created program")
+
+        .def(
+            "create_var_like", &IRBuilder::CreateVarLike, py::arg("name"), py::arg("value"),
+            "Create a variable like the given value.\n\n"
+            "Args:\n"
+            "    name: Name of the variable\n"
+            "    value: Value to base the variable on\n"
+            "Returns:\n"
+            "    Var: The created variable")
+
+        .def(
+            "create_iter_arg",
+            [](IRBuilder& self, ir::VarPtr var, ir::ExprPtr initValue) { return self.CreateIterArg(var, initValue); },
+            py::arg("var"), py::arg("initValue"),
+            "Create an iteration argument.\n\n"
+            "Args:\n"
+            "    var: Variable of the iteration argument\n"
+            "    initValue: Initial value of the iteration argument\n"
+            "Returns:\n"
+            "    IterArg: The created iteration argument")
+
+        .def(
+            "create_iter_arg",
+            [](IRBuilder& self, std::string name, ir::TypePtr type, ir::ExprPtr initValue, ir::Span span) {
+                return self.CreateIterArg(name, type, initValue, span);
+            },
+            py::arg("name"), py::arg("type"), py::arg("initValue"), py::arg("span"),
+            "Create an iteration argument.\n\n"
+            "Args:\n"
+            "    name: Name of the iteration argument\n"
+            "    type: Type of the iteration argument\n"
+            "    initValue: Initial value of the iteration argument\n"
+            "    span: Span of the iteration argument\n\n"
+            "Returns:\n"
+            "    IterArg: The created iteration argument")
+
+        .def("emit_tensor_stmts", &IRBuilder::EmitTensorStmts, "Emit tensor statements.\n\n")
+
+        .def("none", &IRBuilder::None, "Get the None value.\n\n")
+
+        .def(
+            "set_insert_point", &IRBuilder::SetInsertPoint, py::arg("point"),
+            "Set insert point.\n\n"
+            "Args:\n"
+            "    point: Insert point\n"
+            "Returns:\n"
+            "    None")
+
+        .def("clear_insert_point", &IRBuilder::ClearInsertPoint, "Clear insert point.\n\n");
+
+    py::class_<ir::InsertPoint, std::shared_ptr<ir::InsertPoint>>(m, "InsertPoint").def(py::init<ir::SeqStmtsPtr>());
+
+    py::class_<Operation, std::shared_ptr<Operation>, ir::TensorOpStmt>(m, "Operation")
+        .def("__str__", [](Operation& self) { return self.Dump(); });
+    py::class_<RawSymbolicExpression, std::shared_ptr<RawSymbolicExpression>, ir::Expr>(m, "SymbolicExpression")
+        .def("__str__", [](RawSymbolicExpression& self) { return self.Dump(); });
+    py::class_<RawSymbolicSymbol, std::shared_ptr<RawSymbolicSymbol>, ir::Var>(m, "SymbolicSymbol")
+        .def("__str__", [](RawSymbolicSymbol& self) { return self.Dump(); });
+    py::class_<RawSymbolicImmediate, std::shared_ptr<RawSymbolicImmediate>, ir::ConstInt>(m, "SymbolicImmediate")
+        .def("__str__", [](RawSymbolicImmediate& self) { return self.Dump(); });
+
+    m.def("type_equal", [](ir::ExprPtr a, ir::ExprPtr b) {
+        bool ret = ir::structural_equal(a->GetType(), b->GetType());
+        if (ret) {
+            if (auto type = ir::As<ir::LogicalTensorType>(b->GetType())) {
+                auto ta = ir::AsMut<LogicalTensor>(a);
+                auto tb = ir::AsMut<LogicalTensor>(b);
+                return TypeEqual(ta, tb);
+            }
+        }
+        return ret;
+    });
 }
 } // namespace npu::tile_fwk
 

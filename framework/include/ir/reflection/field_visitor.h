@@ -41,6 +41,12 @@ template <typename IRNodeType>
 struct IsIRNodeField<std::shared_ptr<const IRNodeType>, std::enable_if_t<std::is_base_of_v<IRNode, IRNodeType>>>
     : std::true_type {};
 
+// Non-const shared_ptr<T> where T derives from IRNode (T must not be const)
+template <typename IRNodeType>
+struct IsIRNodeField<
+    std::shared_ptr<IRNodeType>,
+    std::enable_if_t<std::is_base_of_v<IRNode, IRNodeType> && !std::is_const_v<IRNodeType>>> : std::true_type {};
+
 /**
  * \brief Type trait to check if a type is std::vector of IRNode pointers
  *
@@ -68,6 +74,11 @@ struct IsIRNodeOptionalField : std::false_type {};
 template <typename IRNodeType>
 struct IsIRNodeOptionalField<std::optional<std::shared_ptr<const IRNodeType>>>
     : std::integral_constant<bool, std::is_base_of_v<IRNode, IRNodeType>> {};
+
+// // Non-const std::optional<shared_ptr<T>> where T derives from IRNode (T must not be const)
+template <typename IRNodeType>
+struct IsIRNodeOptionalField<std::optional<std::shared_ptr<IRNodeType>>>
+    : std::integral_constant<bool, std::is_base_of_v<IRNode, IRNodeType> && !std::is_const_v<IRNodeType>> {};
 
 /**
  * \brief Type trait to check if a type is std::map with IRNode pointer values

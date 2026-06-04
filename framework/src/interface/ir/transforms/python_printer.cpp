@@ -867,7 +867,7 @@ void IRPythonPrinter::VisitStmtBody(const StmtPtr& body, const std::vector<VarPt
             stream_ << GetIndent();
             VisitStmt(yield_stmt);
         }
-    } else if (auto seq_stmts = As<SeqStmts>(body)) {
+    } else if (auto seq_stmts = AsMut<SeqStmts>(body)) {
         VisitSeqStmtBody(seq_stmts, return_vars);
     } else {
         PrintStmtBlock(body);

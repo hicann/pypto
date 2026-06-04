@@ -19,7 +19,75 @@ using namespace pypto;
 
 namespace npu::tile_fwk {
 
-class IRContext;
+class IRContext {
+public:
+    IRContext(const IRContext&) = delete;
+    IRContext& operator=(const IRContext&) = delete;
+    IRContext(IRContext&&) = delete;
+    IRContext& operator=(IRContext&&) = delete;
+
+    ir::VarPtr MakeVar(std::string name, ir::TypePtr type, ir::Span span)
+    {
+        auto var_name = GetVarName(name);
+        type_map_[var_name] = type;
+        return std::make_shared<ir::Var>(var_name, type, span);
+    }
+
+    ir::VarPtr MakeTempVar(ir::TypePtr type, ir::Span span)
+    {
+        auto var_name = GetVarName();
+        return MakeVar(var_name, type, span);
+    }
+
+    ir::IterArgPtr MakeIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initVal, ir::Span span)
+    {
+        auto var_name = GetVarName(name);
+        type_map_[var_name] = type;
+        auto var = std::make_shared<ir::Var>(var_name, type, span);
+        return std::make_shared<ir::IterArg>(var, initVal);
+    }
+
+    ir::VarPtr MakeToken() { return MakeTempVar(ir::GetTokenType(), ir::Span::Unknown()); }
+
+    ir::TypePtr GetType(ir::VarPtr var) { return type_map_[var->name_]; }
+
+    void SetType(ir::VarPtr var, ir::TypePtr type) { type_map_[var->name_] = type; }
+
+    std::string GetOriginName(ir::VarPtr var) { return all_vars_[var->name_]; }
+
+    std::string GetVarName(const std::string& name = "")
+    {
+        auto var_name = name;
+        if (var_name.empty()) {
+            auto idx = temp_counter_++;
+            var_name = "$" + std::to_string(idx);
+        } else {
+            while (all_vars_.count(var_name)) {
+                auto idx = var_counter_[var_name]++;
+                var_name = name + "." + std::to_string(idx);
+            }
+        }
+        all_vars_[var_name] = name;
+        return var_name;
+    }
+
+    void Reset()
+    {
+        temp_counter_ = 0;
+        type_map_.clear();
+        var_counter_.clear();
+        all_vars_.clear();
+    }
+
+    static IRContext& Get();
+
+private:
+    IRContext() = default;
+    int64_t temp_counter_{0};                     // counter for temporary variables
+    std::map<std::string, ir::TypePtr> type_map_; // type for each variable
+    std::map<std::string, int64_t> var_counter_;  // counter for named variable
+    std::map<std::string, std::string> all_vars_; // unique var name -> var name
+};
 
 class IRBuilder : public ir::IRBuilder {
 public:
@@ -85,6 +153,8 @@ public:
 
     SymbolicScalar CreateScalarVar(std::string sym);
 
+    ir::VarPtr CreateVarLike(std::string name, ir::ExprPtr value);
+
     /* ==== scf statement ==== */
 
     ir::AssignStmtPtr CreateAssignStmt(ir::VarPtr var, ir::ExprPtr value, ir::Span span);
@@ -103,6 +173,10 @@ public:
         ir::VarPtr loopVar, ir::ExprPtr start, ir::ExprPtr stop, ir::ExprPtr step, std::vector<ir::IterArgPtr> iterArgs,
         ir::StmtPtr body, std::vector<ir::VarPtr> returnVars, ir::Span span);
 
+    ir::IterArgPtr CreateIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initValue, ir::Span span);
+
+    ir::IterArgPtr CreateIterArg(ir::VarPtr var, ir::ExprPtr initValue);
+
     ir::WhileStmtPtr CreateWhileStmt(
         ir::ExprPtr cond, std::vector<ir::IterArgPtr> iterArgs, ir::StmtPtr body, std::vector<ir::VarPtr> returnVars,
         ir::Span span);
@@ -118,6 +192,10 @@ public:
     ir::ProgramPtr CreateProgram(std::vector<ir::FunctionPtr> functions, std::string name, ir::Span span);
 
     ir::VarPtr CreateTokenVar(ir::Span span);
+
+    void EmitTensorStmts();
+
+    ir::ExprPtr None();
 
 private:
     IRContext& irContext_;

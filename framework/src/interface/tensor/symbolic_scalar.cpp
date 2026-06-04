@@ -87,7 +87,7 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
         argsGcc.push_back(macro);
     }
     argsGcc.insert(argsGcc.end(), {"-I" + includePath, "-I" + GetCurrentSharedLibPath() + "/include/",
-        "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
+                        "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
 
     FE_LOGI("[RunCmd] %s", std::accumulate(argsGcc.begin(), argsGcc.end(), std::string(),
         [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
@@ -814,6 +814,23 @@ SymbolicScalar SymbolicScalar::Simplify() const
 bool SymbolicScalar::IsImmediate() const { return raw_ && raw_->IsImmediate(); }
 bool SymbolicScalar::IsSymbol() const { return raw_ && raw_->IsSymbol(); }
 bool SymbolicScalar::IsExpression() const { return raw_ && raw_->IsExpression(); }
+
+pypto::ir::VarPtr SymbolicScalar::AsVar() const
+{
+    ASSERT(IsSymbol());
+    return std::dynamic_pointer_cast<RawSymbolicSymbol>(raw_);
+}
+
+pypto::ir::ExprPtr SymbolicScalar::AsExpr() const
+{
+    if (IsSymbol()) {
+        return std::dynamic_pointer_cast<RawSymbolicSymbol>(raw_);
+    } else if (IsImmediate()) {
+        return std::dynamic_pointer_cast<RawSymbolicImmediate>(raw_);
+    } else {
+        return std::dynamic_pointer_cast<RawSymbolicExpression>(raw_);
+    }
+}
 
 SymbolicScalar SymbolicScalar::Min(const SymbolicScalar& sval) const
 {

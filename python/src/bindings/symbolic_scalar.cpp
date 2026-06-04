@@ -154,16 +154,8 @@ void BindSymbolicScalar(py::module& m)
         .def_static(
             "tenary", [](const SymbolicScalar& cond, const SymbolicScalar& true_val,
                          const SymbolicScalar& false_val) { return std::ternary(cond, true_val, false_val); })
-        .def("as_expr", [](const SymbolicScalar& self) -> ir::ExprPtr {
-            if (self.IsImmediate()) {
-                return std::dynamic_pointer_cast<const ir::ConstInt>(self.Raw());
-            } else if (self.IsSymbol()) {
-                return std::dynamic_pointer_cast<const ir::Var>(self.Raw());
-            } else if (self.IsExpression()) {
-                return std::dynamic_pointer_cast<const ir::ScalarExpr>(self.Raw());
-            }
-            throw py::value_error("Empty expression.");
-        });
+        .def("as_expr", &SymbolicScalar::AsExpr)
+        .def("as_var", &SymbolicScalar::AsVar);
 
     py::implicitly_convertible<int64_t, SymbolicScalar>();
     py::implicitly_convertible<int, SymbolicScalar>();

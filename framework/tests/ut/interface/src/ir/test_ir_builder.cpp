@@ -698,7 +698,7 @@ TEST_F(IRBuilderTest, TestComplexProgram)
     ASSERT_NE(func, nullptr);
 
     // Body should be SeqStmts (for + return)
-    auto seqBody = std::dynamic_pointer_cast<const SeqStmts>(func->body_);
+    auto seqBody = func->body_;
     ASSERT_NE(seqBody, nullptr);
     ASSERT_EQ(seqBody->stmts_.size(), 2u);
 

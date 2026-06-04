@@ -275,5 +275,10 @@ std::shared_ptr<const T> As(const std::shared_ptr<const Base>& base)
     return IsA<T>(base) ? std::static_pointer_cast<const T>(base) : nullptr;
 }
 
+template <typename T, typename Base, typename = std::enable_if_t<std::is_base_of_v<Base, T>>>
+std::shared_ptr<T> AsMut(const std::shared_ptr<const Base>& base)
+{
+    return IsA<T>(base) ? std::static_pointer_cast<T>(std::const_pointer_cast<Base>(base)) : nullptr;
+}
 } // namespace ir
 } // namespace pypto

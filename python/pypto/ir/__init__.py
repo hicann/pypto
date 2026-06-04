@@ -10,6 +10,7 @@
 __all__ = [
     "IRBuilder",
     "IRNode",
+    "InsertPoint",
     "Span",
     "Type",
     "Expr",
@@ -18,6 +19,7 @@ __all__ = [
     "MemRef",
     "Function",
     "Program",
+    "LogicalTensor",
 
     "UnknownType",
     "ScalarType",
@@ -86,6 +88,9 @@ __all__ = [
     "EvalStmt",
     "BreakStmt",
     "ContinueStmt",
+    "TensorOpStmt",
+
+    "type_equal",
 ]
 
 # --- Type classes ---
@@ -112,7 +117,7 @@ from ..pypto_impl.ir import (
     CoreType,
 )
 
-from ..pypto_impl.ir import IRBuilder
+from ..pypto_impl.ir import IRBuilder, InsertPoint
 
 # --- Expression base & leaf classes ---
 from ..pypto_impl.ir import (
@@ -183,6 +188,10 @@ from ..pypto_impl.ir import (
 
 # --- Function / Program ---
 from ..pypto_impl.ir import Function, Program
+
+from ..pypto_impl.ir import type_equal
+
+from ..pypto_impl import LogicalTensor
 
 
 def tuple_get_item(value, index, span):

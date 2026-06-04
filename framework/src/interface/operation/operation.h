@@ -234,7 +234,7 @@ struct OperandAttribute {
 
 class Function;
 // Class to represent an operation (opcode) and its operands
-class Operation : public std::enable_shared_from_this<Operation>, public AttrHolder, public ir::TensorOpStmt {
+class Operation : public ir::TensorOpStmt, public std::enable_shared_from_this<Operation>, public AttrHolder {
 public:
     // MixSubgraphSplit相关字段的结构体
     struct MixSubgraphFields {
@@ -610,7 +610,11 @@ public:
 
     Opcode GetOpcode() const { return opcode_; }
 
-    void SetOpCode(Opcode opcode) { opcode_ = opcode; }
+    void SetOpCode(Opcode opcode)
+    {
+        opcode_ = opcode;
+        TensorOpStmt::opcode_ = OpcodeManager::Inst().GetOpcodeStr(opcode);
+    }
     int GetLatency() const { return latency_; }
     void UpdateLatency(int latency) { latency_ = latency; }
 

@@ -141,6 +141,13 @@ public:
      */
     SeqStmts(std::vector<StmtPtr> stmts, Span span) : Stmt(std::move(span)), stmts_(std::move(stmts)) {}
 
+    /**
+     * \brief Create a sequence of statements with no statements
+     *
+     * \param span Source location
+     */
+    SeqStmts(Span span) : Stmt(std::move(span)) {}
+
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::SeqStmts; }
     [[nodiscard]] std::string TypeName() const override { return "SeqStmts"; }
 
@@ -167,10 +174,10 @@ public:
     {
         std::vector<StmtPtr> flat;
         for (auto& s : stmts) {
-            if (auto seq = std::dynamic_pointer_cast<const SeqStmts>(s)) {
+            if (auto seq = AsMut(s)) {
                 // Recursively flatten nested SeqStmts
                 for (const auto& inner : seq->stmts_) {
-                    if (auto inner_seq = std::dynamic_pointer_cast<const SeqStmts>(inner)) {
+                    if (auto inner_seq = AsMut(inner)) {
                         flat.insert(flat.end(), inner_seq->stmts_.begin(), inner_seq->stmts_.end());
                     } else {
                         flat.push_back(inner);
@@ -186,6 +193,11 @@ public:
         return std::make_shared<SeqStmts>(std::move(flat), std::move(span));
     }
 
+    static std::shared_ptr<SeqStmts> AsMut(StmtPtr stmt)
+    {
+        return std::dynamic_pointer_cast<SeqStmts>(std::const_pointer_cast<Stmt>(stmt));
+    }
+
     /**
      * \brief Wrap a statement in a SeqStmts if it's not already one
      *
@@ -193,15 +205,15 @@ public:
      * \param span Source location
      * \return Wrapped statement
      */
-    static std::shared_ptr<const SeqStmts> Wrap(StmtPtr stmt, Span span)
+    static std::shared_ptr<SeqStmts> Wrap(StmtPtr stmt, Span span)
     {
-        if (auto seq = std::dynamic_pointer_cast<const SeqStmts>(stmt)) {
+        if (auto seq = AsMut(stmt)) {
             return seq;
         }
         return std::make_shared<SeqStmts>(std::vector<StmtPtr>{stmt}, std::move(span));
     }
 
-    static std::optional<std::shared_ptr<const SeqStmts>> Wrap(std::optional<StmtPtr> stmt, Span span)
+    static std::optional<std::shared_ptr<SeqStmts>> Wrap(std::optional<StmtPtr> stmt, Span span)
     {
         if (!stmt) {
             return std::nullopt;
@@ -210,10 +222,10 @@ public:
     }
 
 public:
-    std::vector<StmtPtr> stmts_; // List of statements
+    std::vector<StmtPtr> stmts_;
 };
 
-using SeqStmtsPtr = std::shared_ptr<const SeqStmts>;
+using SeqStmtsPtr = std::shared_ptr<SeqStmts>;
 
 /**
  * \brief Conditional statement

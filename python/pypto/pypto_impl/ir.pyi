@@ -865,7 +865,7 @@ class Var(Expr):
     name: Final[str]
     """Variable name (cosmetic label, not an identifier)."""
 
-    def __init__(self, name: str, type: Type, span: Span) -> None:
+    def __init__(self, name: str, type: Optional[Type], span: Span) -> None:
         """Create a variable reference.
 
         Args:
@@ -913,12 +913,16 @@ class MemRef(Expr):
         ...
 
 
-class IterArg(Var):
+class IterArg:
     """Iteration argument variable."""
 
     initValue: Final[Expr]
     """Initial value expression (can be any Expr)."""
 
+    iterVar: Final[Var]
+    """Iteration argument variable."""
+
+    @overload
     def __init__(self, name: str, type: Type, initValue: Expr, span: Span) -> None:
         """Create an iteration argument.
 
@@ -928,6 +932,15 @@ class IterArg(Var):
                   Memory reference information is stored in ShapedType for Tensor/Tile types
             initValue: Initial value expression (can be any Expr)
             span: Source location
+        """
+
+    @overload
+    def __init__(self, iterVar: Var, initValue: Expr) -> None:
+        """Create an iteration argument.
+
+        Args:
+            iterVar: Iteration argument variable
+            initValue: Initial value expression (can be any Expr)
         """
 
     def __str__(self) -> str:
@@ -1354,14 +1367,23 @@ class SectionStmt(Stmt):
 class SeqStmts(Stmt):
     """Sequence of statements: a sequence of statements."""
 
-    stmts: Final[list[Stmt]]
+    stmts: list[Stmt]
     """List of statements."""
 
+    @overload
     def __init__(self, stmts: list[Stmt], span: Span) -> None:
         """Create a sequence of statements.
 
         Args:
             stmts: List of statements
+            span: Source location
+        """
+
+    @overload
+    def __init__(self, span: Span) -> None:
+        """Create an empty sequence of statements.
+
+        Args:
             span: Source location
         """
 
@@ -1608,7 +1630,6 @@ class Program(IRNode):
         Returns:
             Function if found, None otherwise
         """
-
 
 
 # ========== IR Builder ==========
@@ -1989,7 +2010,7 @@ class IRBuilder:
             The created tensor operation statement
         """
 
-    def create_scalar_var(self, value: str) -> 'SymbolicScalar':
+    def create_scalar_var(self, value: str = "") -> 'SymbolicScalar':
         """Create a scalar variable from a symbol name.
 
         Args:
@@ -2182,3 +2203,93 @@ class IRBuilder:
         Returns:
             The created program
         """
+
+    def set_insert_point(self, insert_point: InsertPoint):
+        """Set the insert point for the builder.
+
+        Args:
+            insert_point: Insert point to set
+
+        Returns:
+            None
+        """
+
+    def clear_insert_point(self):
+        """Clear the insert point for the builder.
+
+        Returns:
+            None
+
+        """
+
+    def create_var_like(self, name: str, value: Expr) -> Var:
+        """Create a variable like the given value.
+
+        Args:
+            name: Name of the variable
+            value: Value to base the variable on
+
+        Returns:
+            The created variable
+        """
+
+    @overload
+    def create_iter_arg(self, var: Var, initValue: Optional[Expr]) -> IterArg:
+        """Create an iteration argument.
+
+        Args:
+            var: Variable of the iteration argument
+            initValue: Initial value of the iteration argument
+
+        Returns:
+            The created iteration argument
+        """
+
+    @overload
+    def create_iter_arg(self, name: str, type: Type, initValue: Expr, span: Span) -> IterArg:
+        """Create an iteration argument.
+
+        Args:
+            name: Name of the iteration argument
+            initValue: Initial value of the iteration argument
+            span: Span of the iteration argument
+
+        Returns:
+            The created iteration argument
+        """
+
+    def emit_tensor_stmts(self):
+        """Emit tensor statements.
+
+        Returns:
+            None
+        """
+
+    def none(self) -> Expr:
+        """Get the None value.
+
+        Returns:
+            The None value
+        """
+
+
+class InsertPoint:
+    def __init__(self, seq_stmts: SeqStmts):
+        """Create an insert point.
+
+        Args:
+            seq_stmts: Sequence of statements
+            span: Source location
+        """
+
+
+def type_equal(a: Expr, b: Expr) -> bool:
+    """Check if the types of two expressions are equal.
+
+    Args:
+        a: First expression
+        b: Second expression
+
+    Returns:
+        True if the types are equal, False otherwise
+    """

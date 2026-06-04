@@ -74,7 +74,7 @@ void IRBuilder::BeginFunction(const std::string& name, const Span& span, Functio
             CurrentContext()->GetBeginSpan().ToString());
     }
 
-    context_stack_.push_back(std::make_unique<FunctionContext>(name, span, type));
+    context_stack_.push_back(std::make_shared<FunctionContext>(name, span, type));
 }
 
 VarPtr IRBuilder::FuncArg(const std::string& name, const TypePtr& type, const Span& span)
@@ -134,7 +134,7 @@ void IRBuilder::BeginForLoop(
             "Cannot begin for loop: not inside a function or another valid context at " + span.ToString());
     }
 
-    context_stack_.push_back(std::make_unique<ForLoopContext>(loop_var, start, stop, step, span));
+    context_stack_.push_back(std::make_shared<ForLoopContext>(loop_var, start, stop, step, span));
 }
 
 void IRBuilder::AddIterArg(const IterArgPtr& iter_arg)
@@ -193,7 +193,7 @@ void IRBuilder::BeginWhileLoop(const ExprPtr& condition, const Span& span)
             "Cannot begin while loop: not inside a function or another valid context at " + span.ToString());
     }
 
-    context_stack_.push_back(std::make_unique<WhileLoopContext>(condition, span));
+    context_stack_.push_back(std::make_shared<WhileLoopContext>(condition, span));
 }
 
 void IRBuilder::AddWhileIterArg(const IterArgPtr& iter_arg)
@@ -252,7 +252,7 @@ void IRBuilder::BeginIf(const ExprPtr& condition, const Span& span)
 {
     IRCHECK(!context_stack_.empty()) << "Cannot begin if statement: not inside a function or another valid context at "
                                      << span.ToString();
-    context_stack_.push_back(std::make_unique<IfStmtContext>(condition, span));
+    context_stack_.push_back(std::make_shared<IfStmtContext>(condition, span));
 }
 
 void IRBuilder::BeginElse(const Span& span)
@@ -324,7 +324,7 @@ void IRBuilder::BeginSection(SectionKind section_kind, const Span& span)
 {
     CHECK(!context_stack_.empty()) << "Cannot begin section: not inside a function or another valid context at "
                                    << span.ToString();
-    context_stack_.push_back(std::make_unique<SectionContext>(section_kind, span));
+    context_stack_.push_back(std::make_shared<SectionContext>(section_kind, span));
 }
 
 StmtPtr IRBuilder::EndSection(const Span& end_span)
@@ -373,7 +373,7 @@ void IRBuilder::BeginProgram(const std::string& name, const Span& span)
             CurrentContext()->GetBeginSpan().ToString());
     }
 
-    context_stack_.push_back(std::make_unique<ProgramContext>(name, span));
+    context_stack_.push_back(std::make_shared<ProgramContext>(name, span));
 }
 
 void IRBuilder::AddFunction(const FunctionPtr& func)
@@ -381,6 +381,10 @@ void IRBuilder::AddFunction(const FunctionPtr& func)
     ValidateInProgram("AddFunction");
     static_cast<ProgramContext*>(CurrentContext())->AddFunction(func);
 }
+
+void IRBuilder::SetInsertPoint(std::shared_ptr<InsertPoint> ctx) { context_stack_.push_back(ctx); }
+
+void IRBuilder::ClearInsertPoint() { context_stack_.pop_back(); }
 
 ProgramPtr IRBuilder::EndProgram(const Span& end_span)
 {

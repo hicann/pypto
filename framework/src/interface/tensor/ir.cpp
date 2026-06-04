@@ -11,12 +11,20 @@
 #include "ir.h"
 
 #include "symbolic_scalar.h"
+#include "logical_tensor.h"
 
 namespace pypto::ir {
-std::string ToString(const ScalarExprPtr& op)
+std::string DumpScalarExpr(const ScalarExprPtr& op)
 {
     auto p = std::dynamic_pointer_cast<const npu::tile_fwk::RawSymbolicExpression>(op);
     ASSERT(p) << "not a RawSymbolicExpression";
     return p->Dump();
+}
+
+std::string DumpTensorVar(const VarPtr& var)
+{
+    auto t = std::dynamic_pointer_cast<const npu::tile_fwk::LogicalTensor>(var);
+    ASSERT(t) << "not a logical tensor";
+    return var->name_ + ": " + t->DumpType();
 }
 } // namespace pypto::ir

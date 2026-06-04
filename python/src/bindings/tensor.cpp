@@ -66,6 +66,7 @@ void BindTensor(py::module& m)
         .def(
             py::init<DataType, std::vector<SymbolicScalar>, std::string, TileOpFormat>(), py::arg("dtype"),
             py::arg("shape"), py::arg("name") = "", py::arg("format") = TileOpFormat::TILEOP_ND)
+        .def(py::init<LogicalTensorPtr>(), py::arg("logical_tensor"))
         .def("IsEmpty", &Tensor::IsEmpty)
         .def("Id", &Tensor::Id)
         .def(

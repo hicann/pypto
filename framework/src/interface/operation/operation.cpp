@@ -201,6 +201,13 @@ Operation::Operation(
     if (opmagic == -1) {
         opmagic = cur.opSeed_++;
     }
+    TensorOpStmt::opcode_ = OpcodeManager::Inst().GetOpcodeStr(opcode_);
+    for (auto& t : iOperand) {
+        TensorOpStmt::args_.push_back(t);
+    }
+    for (auto& t : oOperand) {
+        TensorOpStmt::result_.push_back(t);
+    }
 
     switch (opCoreType) {
         case OpCoreType::AIC:
@@ -968,15 +975,10 @@ Operation& Operation::CloneOperation(
 
 std::string Operation::GetOpcodeStr(bool appendTile) const
 {
-    if (!OpcodeManager::Inst().HasOpcode(opcode_)) {
-        return "";
-    }
-
-    auto result = OpcodeManager::Inst().GetOpcodeStr(opcode_);
     if (appendTile && isTileOp_) {
-        result = "TILE_" + result;
+        return "TILE_" + TensorOpStmt::opcode_;
     }
-    return result;
+    return TensorOpStmt::opcode_;
 }
 
 [[nodiscard]] std::string Operation::GetCoreTypeStr() const

@@ -16,84 +16,17 @@
 #include "interface/utils/id_gen.h"
 
 #include "ir/expr.h"
+#include "ir/kind_traits.h"
 
 using namespace pypto;
 
 namespace npu::tile_fwk {
 
-class IRContext {
-public:
-    IRContext(const IRContext&) = delete;
-    IRContext& operator=(const IRContext&) = delete;
-    IRContext(IRContext&&) = delete;
-    IRContext& operator=(IRContext&&) = delete;
-
-    ir::VarPtr MakeVar(std::string name, ir::TypePtr type, ir::Span span)
-    {
-        auto var_name = GetVarName(name);
-        type_map_[var_name] = type;
-        return std::make_shared<ir::Var>(var_name, type, span);
-    }
-
-    ir::VarPtr MakeTempVar(ir::TypePtr type, ir::Span span)
-    {
-        auto var_name = GetVarName();
-        return MakeVar(var_name, type, span);
-    }
-
-    ir::IterArgPtr MakeIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initVal, ir::Span span)
-    {
-        auto var_name = GetVarName(name);
-        type_map_[var_name] = type;
-        auto var = std::make_shared<ir::Var>(var_name, type, span);
-        return std::make_shared<ir::IterArg>(var, initVal);
-    }
-
-    ir::VarPtr MakeToken() { return MakeTempVar(ir::GetTokenType(), ir::Span::Unknown()); }
-
-    ir::TypePtr GetType(ir::VarPtr var) { return type_map_[var->name_]; }
-
-    void SetType(ir::VarPtr var, ir::TypePtr type) { type_map_[var->name_] = type; }
-
-    std::string GetOriginName(ir::VarPtr var) { return all_vars_[var->name_]; }
-
-    std::string GetVarName(const std::string& name = "")
-    {
-        auto var_name = name;
-        if (var_name.empty()) {
-            auto idx = temp_counter_++;
-            var_name = "%" + std::to_string(idx);
-        } else {
-            while (all_vars_.count(var_name)) {
-                auto idx = var_counter_[var_name]++;
-                var_name = name + "." + std::to_string(idx);
-            }
-        }
-        all_vars_[var_name] = name;
-        return var_name;
-    }
-
-    void Reset()
-    {
-        temp_counter_ = 0;
-        type_map_.clear();
-        var_counter_.clear();
-        all_vars_.clear();
-    }
-
-    static IRContext& Get()
-    {
-        static IRContext ctx;
-        return ctx;
-    }
-
-private:
-    IRContext() = default;
-    int64_t temp_counter_{0};                     // counter for temporary variables
-    std::map<std::string, ir::TypePtr> type_map_; // type for each variable
-    std::map<std::string, int64_t> var_counter_;  // counter for named variable
-    std::map<std::string, std::string> all_vars_; // unique var name -> var name
-};
+IRContext& IRContext::Get()
+{
+    static IRContext ctx;
+    return ctx;
+}
 
 Function& DummyFunc()
 {
@@ -110,25 +43,19 @@ IRBuilder::IRBuilder() : irContext_(IRContext::Get()) {}
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(DataType t, Shape shape, TileOpFormat format, std::string name)
 {
-    auto tensorName = irContext_.GetVarName(name);
-    auto tensor = std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), format, tensorName);
-    return tensor;
+    return std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), format, name);
 }
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(
     DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
 {
-    auto tensorName = irContext_.GetVarName(name);
-    auto tensor =
-        std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), std::move(validShape), format, tensorName);
-    return tensor;
+    return std::make_shared<LogicalTensor>(DummyFunc(), t, std::move(shape), std::move(validShape), format, name);
 }
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(
     std::shared_ptr<RawTensor> rawTensor, Offset offset, Shape shape, std::vector<SymbolicScalar> validShape)
 {
     LogicalTensorPtr tensor;
-    auto tensorName = irContext_.GetVarName(rawTensor->GetSymbol());
     if (validShape.empty()) {
         tensor =
             std::make_shared<LogicalTensor>(DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape));
@@ -136,23 +63,18 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
         tensor = std::make_shared<LogicalTensor>(
             DummyFunc(), std::move(rawTensor), std::move(offset), std::move(shape), std::move(validShape));
     }
-    tensor->name_ = tensorName;
     return tensor;
 }
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(Function& f, DataType t, Shape shape, TileOpFormat format, std::string name)
 {
-    auto tensorName = irContext_.GetVarName(name);
-    auto tensor = std::make_shared<LogicalTensor>(f, t, std::move(shape), format, tensorName);
-    return tensor;
+    return std::make_shared<LogicalTensor>(f, t, std::move(shape), format, name);
 }
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(
     Function& f, DataType t, Shape shape, std::vector<SymbolicScalar> validShape, TileOpFormat format, std::string name)
 {
-    auto tensorName = irContext_.GetVarName(name);
-    auto tensor = std::make_shared<LogicalTensor>(f, t, std::move(shape), std::move(validShape), format, tensorName);
-    return tensor;
+    return std::make_shared<LogicalTensor>(f, t, std::move(shape), std::move(validShape), format, name);
 }
 
 LogicalTensorPtr IRBuilder::CreateTensorVar(
@@ -160,14 +82,12 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
     std::vector<SymbolicScalar> validShape)
 {
     LogicalTensorPtr tensor;
-    auto tensorName = irContext_.GetVarName(rawTensor->GetSymbol());
     if (validShape.empty()) {
         tensor = std::make_shared<LogicalTensor>(f, std::move(rawTensor), std::move(offset), std::move(shape));
     } else {
         tensor = std::make_shared<LogicalTensor>(
             f, std::move(rawTensor), std::move(offset), std::move(shape), std::move(validShape));
     }
-    tensor->name_ = tensorName;
     return tensor;
 }
 
@@ -211,6 +131,24 @@ SymbolicScalar IRBuilder::CreateScalarVar(std::string sym)
 {
     auto name = irContext_.GetVarName(sym);
     return SymbolicScalar(name);
+}
+
+ir::VarPtr IRBuilder::CreateVarLike(std::string name, ir::ExprPtr value)
+{
+    if (auto type = ir::As<ir::LogicalTensorType>(value->GetType())) {
+        auto t = std::dynamic_pointer_cast<const LogicalTensor>(value);
+        auto var = CreateTensorVar(DummyFunc(), t->tensor, t->offset, t->shape, t->GetDynValidShape());
+        var->name_ = name;
+        return var;
+    }
+    if (auto type = ir::As<ir::ScalarType>(value->GetType())) {
+        return CreateScalarVar(name).AsVar();
+    }
+    if (auto type = ir::As<ir::UnknownType>(value->GetType())) {
+        return irContext_.MakeVar(name, ir::GetUnknownType(), ir::Span::Unknown());
+    }
+    ASSERT(false) << "CreateVarLike: unknown type" << value->GetType()->TypeName();
+    return nullptr;
 }
 
 /* scf statement */
@@ -278,4 +216,29 @@ ir::ProgramPtr IRBuilder::CreateProgram(std::vector<ir::FunctionPtr> functions, 
 }
 
 ir::VarPtr IRBuilder::CreateTokenVar(ir::Span span) { return irContext_.MakeTempVar(ir::GetTokenType(), span); }
+
+ir::ExprPtr IRBuilder::None()
+{
+    static auto none = irContext_.MakeVar("None", ir::GetUnknownType(), ir::Span::Unknown());
+    return none;
+}
+
+ir::IterArgPtr IRBuilder::CreateIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initValue, ir::Span span)
+{
+    return std::make_shared<ir::IterArg>(name, type, initValue, span);
+}
+
+ir::IterArgPtr IRBuilder::CreateIterArg(ir::VarPtr var, ir::ExprPtr initValue)
+{
+    return std::make_shared<ir::IterArg>(var, initValue);
+}
+
+void IRBuilder::EmitTensorStmts()
+{
+    auto func = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "__entry__");
+    for (auto &op : func->Operations(false)) {
+        Emit(std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this()));
+    }
+    func->ResetOperations();
+}
 } // namespace npu::tile_fwk

@@ -29,10 +29,12 @@
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 
+#include "irbuilder.h"
+
 using namespace npu::tile_fwk;
 
 LogicalTensor::LogicalTensor(Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname)
-    : ir::Var(tname, ir::GetLogicalTensorType(), ir::Span::Unknown()),
+    : ir::Var(IRContext::Get().GetVarName(tname), ir::GetLogicalTensorType(), ir::Span::Unknown()),
       tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
@@ -44,7 +46,7 @@ LogicalTensor::LogicalTensor(Function& function, DataType t, Shape tshape, TileO
 LogicalTensor::LogicalTensor(
     Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape, TileOpFormat format,
     std::string tname)
-    : ir::Var(tname, ir::GetLogicalTensorType(), ir::Span::Unknown()),
+    : ir::Var(IRContext::Get().GetVarName(tname), ir::GetLogicalTensorType(), ir::Span::Unknown()),
       tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
@@ -56,7 +58,7 @@ LogicalTensor::LogicalTensor(
 {}
 
 LogicalTensor::LogicalTensor(Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape)
-    : ir::Var(rawTensor->GetSymbol(), ir::GetLogicalTensorType(), ir::Span::Unknown()),
+    : ir::Var(IRContext::Get().GetVarName(rawTensor->GetSymbol()), ir::GetLogicalTensorType(), ir::Span::Unknown()),
       tensor(rawTensor),
       offset(toffset),
       shape(tshape),
@@ -72,7 +74,7 @@ LogicalTensor::LogicalTensor(Function& function, std::shared_ptr<RawTensor> rawT
 LogicalTensor::LogicalTensor(
     Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
     std::vector<SymbolicScalar> tValidShape)
-    : ir::Var(rawTensor->GetSymbol(), ir::GetLogicalTensorType(), ir::Span::Unknown()),
+    : ir::Var(IRContext::Get().GetVarName(rawTensor->GetSymbol()), ir::GetLogicalTensorType(), ir::Span::Unknown()),
       tensor(rawTensor),
       offset(toffset),
       shape(tshape),
@@ -266,13 +268,13 @@ std::string LogicalTensor::DumpType() const
 {
     std::string result = "<";
     for (auto& value : shape) {
-        result += std::to_string(value) + " x ";
+        result += std::to_string(value) + "x";
     }
     result += DataType2String(Datatype());
     if (dynValidShape_.size() != 0) {
         result += " / ";
         for (auto& value : dynValidShape_) {
-            result += value.Dump() + " x ";
+            result += value.Dump() + "x";
         }
         result += DataType2String(Datatype());
         if (tensor->format == TileOpFormat::TILEOP_NZ) {
@@ -810,6 +812,24 @@ SymbolicScalar GetTensorDataFillIO(const GetTensorDataIODescDict& iodescDict, co
         }
     }
     return SymbolicScalar(curr);
+}
+
+bool TypeEqual(const LogicalTensorPtr a, const LogicalTensorPtr b)
+{
+    auto ra = a->tensor;
+    auto rb = b->tensor;
+    if (ra->datatype != rb->datatype || ra->format != rb->format || ra->rawshape != rb->rawshape) {
+        return false;
+    }
+    if (a->shape != b->shape) {
+        return false;
+    }
+    for (size_t i = 0; i < a->shape.size(); i++) {
+        if (a->dynValidShape_[i].Dump() != b->dynValidShape_[i].Dump()) {
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace npu::tile_fwk

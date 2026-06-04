@@ -39,35 +39,6 @@
 #include "securec.h"
 
 namespace pypto {
-
-/**
- * \brief TTY command for colored terminal output
- *
- * Wraps ANSI escape codes for terminal text formatting and coloring.
- */
-class TTYCmd {
-public:
-    unsigned char code;
-
-    explicit TTYCmd(int codeIn) : code(codeIn) {}
-
-    /**
-     * \brief Convert the TTY command to an ANSI escape sequence string
-     * \return ANSI escape sequence as a string
-     */
-    [[nodiscard]] std::string Str() const { return "\033[" + std::to_string(code) + "m"; }
-};
-
-// TTY color macros for convenient colored output
-#define TTY_COLOR(n, ...) TTYCmd(n), ##__VA_ARGS__, TTYCmd(0)
-#define TTY_RED(...) TTY_COLOR(31, __VA_ARGS__)
-#define TTY_GREEN(...) TTY_COLOR(32, __VA_ARGS__)
-#define TTY_YELLOW(...) TTY_COLOR(33, __VA_ARGS__)
-#define TTY_BLUE(...) TTY_COLOR(34, __VA_ARGS__)
-#define TTY_MAGENTA(...) TTY_COLOR(35, __VA_ARGS__)
-#define TTY_CYAN(...) TTY_COLOR(36, __VA_ARGS__)
-#define TTY_WHITE(...) TTY_COLOR(37, __VA_ARGS__)
-
 /**
  * \brief Enumeration of available log levels
  *
@@ -97,17 +68,6 @@ enum class LogLevel : uint8_t {
  */
 class StdLogger {
 public:
-    /**
-     * \brief Log a TTY command (for colored output)
-     * \param cmd TTY command to output
-     * \return Reference to this logger for chaining
-     */
-    StdLogger& Log(TTYCmd&& cmd)
-    {
-        std::cerr << cmd.Str();
-        return *this;
-    }
-
     /**
      * \brief Log a value of any type
      * \tparam T Type of value to log
@@ -151,13 +111,6 @@ public:
     }
 
     /**
-     * \brief Log a TTY command (no-op for file logging)
-     * \param cmd TTY command (ignored)
-     * \return Reference to this logger for chaining
-     */
-    FileLogger& Log([[maybe_unused]] TTYCmd&& cmd) { return *this; }
-
-    /**
      * \brief Log a value to the file
      * \tparam T Type of value to log
      * \param t Value to log
@@ -181,12 +134,6 @@ public:
  */
 class LineLogger : public std::vector<std::string> {
 public:
-    /**
-     * \brief Log a TTY command (no-op for line logging)
-     * \param cmd TTY command (ignored)
-     * \return Reference to this logger for chaining
-     */
-    LineLogger& Log([[maybe_unused]] TTYCmd&& cmd) { return *this; }
 
     /**
      * \brief Log a string value
@@ -403,17 +350,6 @@ public:
     }
 
     /**
-     * \brief Log a TTY command for colored output
-     * \param val TTY command
-     * \return Reference to this logger for chaining
-     */
-    Logger& Log(TTYCmd&& val)
-    {
-        ssRich << val.Str();
-        return *this;
-    }
-
-    /**
      * \brief Log a value
      * \tparam T Type of value to log
      * \param val Value to log
@@ -462,13 +398,11 @@ public:
 };
 
 // Convenience macros for logging at different levels
-#define LOG_LEVEL(lvl) pypto::Logger(lvl, __LINE__)
-#define LOG_DEBUG LOG_LEVEL(pypto::LogLevel::DEBUG)
-#define LOG_INFO LOG_LEVEL(pypto::LogLevel::INFO)
-#define LOG_WARN LOG_LEVEL(pypto::LogLevel::WARN)
-#define LOG_ERROR LOG_LEVEL(pypto::LogLevel::ERROR)
-#define LOG_FATAL LOG_LEVEL(pypto::LogLevel::FATAL)
-#define LOG_EVENT LOG_LEVEL(pypto::LogLevel::EVENT)
+#define IR_LOGI() pypto::Logger(pypto::LogLevel::INFO, __LINE__)
+#define IR_LOGW() pypto::Logger(pypto::LogLevel::WARN, __LINE__)
+#define IR_LOGE() pypto::Logger(pypto::LogLevel::ERROR, __LINE__)
+#define IR_LOGF() pypto::Logger(pypto::LogLevel::FATAL, __LINE__)
+#define IR_LOGV() pypto::Logger(pypto::LogLevel::EVENT, __LINE__)
 
 /**
  * \brief Helper function for formatted logging to avoid redefining safe functions in macros

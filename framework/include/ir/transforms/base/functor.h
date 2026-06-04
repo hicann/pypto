@@ -201,6 +201,11 @@ protected:
         return VisitStmt_(op, std::forward<Args>(args)...); \
     }
 
+#define STMT_FUNCTOR_DISPATCH_MUT(OpType)                   \
+    if (auto op = AsMut<OpType>(stmt)) {                    \
+        return VisitStmt_(op, std::forward<Args>(args)...); \
+    }
+
 template <typename R, typename... Args>
 R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
 {
@@ -211,7 +216,7 @@ R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
     STMT_FUNCTOR_DISPATCH(ReturnStmt);
     STMT_FUNCTOR_DISPATCH(ForStmt);
     STMT_FUNCTOR_DISPATCH(WhileStmt);
-    STMT_FUNCTOR_DISPATCH(SeqStmts);
+    STMT_FUNCTOR_DISPATCH_MUT(SeqStmts);
     STMT_FUNCTOR_DISPATCH(OpStmts);
     STMT_FUNCTOR_DISPATCH(SectionStmt);
     STMT_FUNCTOR_DISPATCH(EvalStmt);

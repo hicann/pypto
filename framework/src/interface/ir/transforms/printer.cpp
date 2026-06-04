@@ -421,7 +421,7 @@ std::string IRPrinter::Print(const TypePtr& type)
     }
 
     if (auto logical_tensor_type = As<LogicalTensorType>(type)) {
-        return prefix_ + ".LogicalTensor";
+        return prefix_ + ".Tensor";
     }
 
     return prefix_ + ".Unknown";
@@ -430,7 +430,13 @@ std::string IRPrinter::Print(const TypePtr& type)
 std::string IRPrinter::GetIndent() const { return std::string(static_cast<size_t>(indent_ * 4), ' '); }
 
 // Expression visitors - reuse precedence logic from base printer
-void IRPrinter::VisitExpr_(const VarPtr& op) { stream_ << op->name_; }
+void IRPrinter::VisitExpr_(const VarPtr& op) {
+    if (auto type = As<LogicalTensorType>(op->GetType())) {
+        stream_ << DumpTensorVar(op);
+    } else {
+        stream_ << op->name_;
+    }
+}
 
 void IRPrinter::VisitExpr_(const MemRefPtr& op) { stream_ << PrintMemRef(*op); }
 
@@ -474,7 +480,7 @@ void IRPrinter::VisitExpr_(const ScalarExprPtr& op)
 {
     auto scalar_type = As<ScalarType>(op->GetType());
     INTERNAL_CHECK_SPAN(scalar_type, op->span_) << "ScalarExpr has non-scalar type";
-    stream_ << ToString(op);
+    stream_ << DumpScalarExpr(op);
 }
 
 // Binary and unary operators - reuse from base printer logic

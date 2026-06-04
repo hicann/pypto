@@ -591,6 +591,10 @@ class Tensor:
         obj._base = base
         return obj
 
+    @classmethod
+    def from_logical_tensor(cls, logical_tensor: 'LogicalTensor') -> 'Tensor':
+        return cls.from_base(pypto_impl.Tensor(logical_tensor))
+
     def to_tensor(self, name: str = ""):
         """Return self for unified interface with TensorAnnotation."""
         if name:
@@ -803,7 +807,7 @@ class Tensor:
     @source_location
     def signbit(self) -> 'Tensor':
         return pypto.signbit(self)
-        
+
     def tanh(self) -> 'Tensor':
         return pypto.tanh(self)
 

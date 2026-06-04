@@ -704,6 +704,30 @@ def test_builder_create_tensor_var_symbolic_shape():
     assert tv is not None
 
 
+def test_builder_create_iter_arg():
+    b = ir.IRBuilder()
+    sp = _span()
+    st = ir.ScalarType(ir.INT32)
+
+    var = ir.Var("acc", st, sp)
+    init_val = ir.ConstInt(0, ir.INT32, sp)
+    iter_arg = b.create_iter_arg(var, init_val)
+
+    assert isinstance(iter_arg, ir.IterArg)
+    assert iter_arg.iterVar.name == "acc"
+    assert str(iter_arg.initValue) == "0"
+
+    iter_arg = b.create_iter_arg("acc", ir.ScalarType(ir.INT32), init_val, sp)
+    assert isinstance(iter_arg, ir.IterArg)
+    assert str(iter_arg.initValue) == "0"
+
+    iter_arg = ir.IterArg(var, init_val)
+    assert iter_arg.iterVar.name == "acc"
+    assert str(iter_arg.initValue) == "0"
+
+    iter_arg = ir.IterArg("acc", ir.ScalarType(ir.INT32), init_val, sp)
+
+
 def test_builder_create_tensor_op_stmt():
     b = ir.IRBuilder()
     sp = _span()

@@ -21,6 +21,8 @@
 #include <vector>
 #include "error.h"
 
+#include "ir/expr.h"
+
 namespace npu::tile_fwk {
 class RawSymbolicScalar;
 using RawSymbolicScalarPtr = std::shared_ptr<RawSymbolicScalar>;
@@ -55,6 +57,9 @@ public:
     // use this as a hint to generate intermediat variable
     void AsIntermediateVariable();
     bool IsIntermediateVariable() const;
+
+    pypto::ir::VarPtr AsVar() const;
+    pypto::ir::ExprPtr AsExpr() const;
 
     operator int() const
     {

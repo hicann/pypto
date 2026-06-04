@@ -14,5 +14,6 @@
 #include "ir/scalar_expr.h"
 
 namespace pypto::ir {
-std::string ToString(const ScalarExprPtr& op);
+std::string DumpScalarExpr(const ScalarExprPtr& op);
+std::string DumpTensorVar(const VarPtr& tensor);
 }

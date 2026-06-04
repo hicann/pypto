@@ -145,11 +145,11 @@ private:
     bool intermediateVariable_{false};
 };
 
-class RawSymbolicImmediate : public RawSymbolicScalar, public ir::ConstInt {
+class RawSymbolicImmediate : public ir::ConstInt, public RawSymbolicScalar {
 public:
     explicit RawSymbolicImmediate(ScalarImmediateType immediate)
-        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE),
-          ir::ConstInt(immediate, ir::DataType::INT64, ir::Span::Unknown())
+        : ir::ConstInt(immediate, ir::DataType::INT64, ir::Span::Unknown()),
+          RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE)
     {}
 
     ScalarImmediateType Immediate() const { return value_; }
@@ -170,11 +170,11 @@ private:
     void DumpBuffer(std::ostream& buffer) const override { buffer << value_; }
 };
 
-class RawSymbolicSymbol : public RawSymbolicScalar, public ir::Var {
+class RawSymbolicSymbol : public ir::Var, public RawSymbolicScalar {
 public:
     explicit RawSymbolicSymbol(const std::string& name)
-        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL),
-          ir::Var(name, std::make_shared<ir::ScalarType>(ir::DataType::INT64), ir::Span::Unknown())
+        : ir::Var(name, std::make_shared<ir::ScalarType>(ir::DataType::INT64), ir::Span::Unknown()),
+          RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL)
     {}
 
     const std::string& Name() const { return name_; }
@@ -193,11 +193,11 @@ private:
     void DumpBuffer(std::ostream& buffer) const override { buffer << name_; }
 };
 
-class RawSymbolicExpression : public RawSymbolicScalar, public ir::ScalarExpr {
+class RawSymbolicExpression : public ir::ScalarExpr, public RawSymbolicScalar {
 public:
     RawSymbolicExpression(SymbolicOpcode opcode, const std::vector<RawSymbolicScalarPtr>& operandList)
-        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION),
-          ir::ScalarExpr(ir::DataType::INT64, ir::Span::Unknown()),
+        : ir::ScalarExpr(ir::DataType::INT64, ir::Span::Unknown()),
+          RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION),
           opcode_(opcode),
           operandList_(operandList)
     {

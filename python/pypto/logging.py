@@ -24,11 +24,13 @@ __all__ = [
     "LogLevel",
 ]
 
-from typing import NoReturn
+from typing import NoReturn, TypeVar
 
 from . import pypto_impl
 from .pypto_impl import LogLevel
 from .pypto_impl import InternalError
+
+T = TypeVar("T")
 
 _log_level = pypto_impl.get_log_level()
 
@@ -84,6 +86,16 @@ def internal_check(condition: bool, message: str) -> None:
 def raise_error(error_type: str, message: str) -> NoReturn:
     """Raise an error from C++ for testing error handling."""
     pypto_impl.raise_error(error_type, message)
+
+
+def value_error(message: str) -> NoReturn:
+    """Raise a ValueError from C++ for testing error handling."""
+    raise_error("ValueError", message)
+
+
+def internal_error(message: str) -> NoReturn:
+    """Raise an InternalError from C++ for testing error handling."""
+    raise_error("InternalError", message)
 
 
 def set_log_level(level: LogLevel) -> None:

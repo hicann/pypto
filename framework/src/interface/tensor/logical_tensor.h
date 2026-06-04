@@ -223,6 +223,8 @@ enum EmuOpcode {
 bool CheckEmuOpcode(const Operation* op, EmuOpcode opcode);
 void SetEmuOpcode(Operation* op, EmuOpcode opcode);
 
+bool TypeEqual(const LogicalTensorPtr a, const LogicalTensorPtr b);
+
 Tensor TensorExtract(const Tensor& src, const std::vector<SymbolicScalar>& offset);
 void TensorInsert(const Tensor& src, const std::vector<SymbolicScalar>& offset, Tensor& dst);
 

@@ -148,7 +148,7 @@ def test_basic_types():
 
     # LogicalTensorType
     lt = ir.LogicalTensorType()
-    assert str(lt) == "ir.LogicalTensor"
+    assert str(lt) == "ir.Tensor"
 
 
 def test_basic_expr():
