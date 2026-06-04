@@ -378,6 +378,7 @@ private:
     Operation* GetSpillOp(int memId);
     LogicalTensorPtr GetSpillTensor(Operation* spillOp, int spillMemId);
     void CollectL0CConsumers(LogicalTensorPtr spillTensor, std::vector<Operation*> &consumers);
+    Status GetActualSpillForNd2nz(Operation* &spillOp, LogicalTensorPtr &spillTensor);
     Status GetActualSpill(Operation* op, Operation* &actualOp, LogicalTensorPtr &actualTensor);
     void EraseSchedulerSideMaps(Operation* op);
     Status UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr newTensor, int spillMemId);

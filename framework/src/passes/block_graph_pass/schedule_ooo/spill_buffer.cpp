@@ -345,6 +345,11 @@ Status OoOScheduler::SpillGeneralBuffer(int spillMemId, Operation* spillOp, Logi
     Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created)
 {
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillGeneralBuffer begin.");
+    if (GetActualSpillForNd2nz(spillOp, spillTensor) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpillForNd2nz failed.");
+        return FAILED;
+    }
+
     LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId);
     LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
 
@@ -912,6 +917,26 @@ Operation* OoOScheduler::CreateAssembleOp(LogicalTensorPtr iOperand, LogicalTens
 LogicalTensorPtr OoOScheduler::GetSpillTensor(Operation* spillOp, int spillMemId) {
     int spillTensorIdx = GetOOperandIdx(spillOp, spillMemId);
     return spillOp->GetOutputOperand(spillTensorIdx);
+}
+
+Status OoOScheduler::GetActualSpillForNd2nz(Operation* &spillOp, LogicalTensorPtr &spillTensor) {
+    if (spillOp->GetOpcode() == Opcode::OP_UB_COPY_ND2NZ) {
+        for (auto producer : spillOp->ProducerOps()) {
+            if (opIsAllocMap[producer]) continue;
+            spillTensor = spillOp->GetInputOperand(0);
+            spillOp = producer;
+            if (spillTensor == nullptr) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Get %s spill tensor failed.", GetOpInfo(spillOp).c_str());
+                return FAILED;
+            }
+        }
+        if (spillOp->GetOpcode() == Opcode::OP_UB_COPY_ND2NZ) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Cannot spill %s.", GetOpInfo(spillOp).c_str());
+            return FAILED;
+        }
+        APASS_LOG_DEBUG_F(Elements::Operation, "Spill UB_COPY_ND2NZ producer %s", GetOpInfo(spillOp).c_str());
+    }
+    return SUCCESS;
 }
 
 // 场景1 L0C(actualTensor)->op(actual op)->spillTensor
