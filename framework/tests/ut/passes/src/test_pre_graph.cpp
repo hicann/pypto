@@ -822,7 +822,7 @@ void VerifyDynamicValidShapeReshapeCopyInGraph(ComputationalGraphBuilder& G, int
     EXPECT_EQ(reshapeOut->GetShape(), (std::vector<int64_t>{NUM2, 1, lMax}));
     auto reshapeDynValidShape = reshapeOut->GetDynValidShape();
     ASSERT_EQ(reshapeDynValidShape.size(), 3);
-    EXPECT_EQ(reshapeDynValidShape[0].Dump(), std::to_string(NUM2));
+    EXPECT_EQ(reshapeDynValidShape[0].Dump(), "1");
     EXPECT_EQ(reshapeDynValidShape[1].Dump(), "1");
     EXPECT_EQ(reshapeDynValidShape[2].Dump(), std::to_string(l));
 

@@ -40,7 +40,7 @@ public:
 private:
     void UpdateReshapeShape(
         Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape,
-        const std::vector<SymbolicScalar>& newDynRawShape, const std::vector<SymbolicScalar>& newDynValidShape) const;
+        const std::vector<SymbolicScalar>& newDynRawShape) const;
     Status SplitMultiConsumerReshape(
         Function& function, std::vector<std::pair<Operation*, Operation*>>& multiReshapeVector) const;
     Status ProcessReshape(

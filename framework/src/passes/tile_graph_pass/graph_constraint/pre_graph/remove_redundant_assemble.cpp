@@ -359,9 +359,8 @@ void UpdateCopyInAttrAfterRemoveView(
 
 void RemoveRedundantAssemble::UpdateReshapeShape(
     Operation& reshapeOp, LogicalTensorPtr tensorPtr, const Shape& newRawShape,
-    const std::vector<SymbolicScalar>& newDynRawShape, const std::vector<SymbolicScalar>& newDynValidShape) const
+    const std::vector<SymbolicScalar>& newDynRawShape) const
 {
-    tensorPtr->dynValidShape_ = newDynValidShape;
     reshapeOp.SetAttr(OP_ATTR_PREFIX + "validShape", tensorPtr->dynValidShape_);
     tensorPtr->shape = newRawShape;
     tensorPtr->tensor->UpdateRawShape(newRawShape);
@@ -436,15 +435,6 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
                 newDynRawShape)) {
             return SUCCESS;
         }
-        // After removing the VIEW, the RESHAPE output represents the whole reshaped source tensor.
-        // Its valid shape must be recomputed from the pre-view tensor, rather than keeping the
-        // single-slice valid shape from the original VIEW->RESHAPE result.
-        std::vector<SymbolicScalar> newDynValidShape;
-        if (!CalculateNewDynRawShapeExpand(
-                reshapeOp.GetOOperands().front()->shape, viewInput->GetDynValidShape(), newRawShape,
-                newDynValidShape)) {
-            return SUCCESS;
-        }
         auto oriReshapeDynValidShape = reshapeOp.GetOOperands().front()->GetDynValidShape();
         if (oriReshapeDynValidShape.empty()) {
             oriReshapeDynValidShape = CommonUtils::CreateConstIntVector(reshapeOp.GetOOperands().front()->shape);
@@ -461,8 +451,7 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
             IntVecToStr(newDynOffset).c_str());
         Shape staticNewRawShape = GetStaticShapeForDynAxes(newRawShape);
         UpdateCopyInAttrAfterRemoveView(reshapeOp, staticNewRawShape, newDynOffset, oriReshapeDynValidShape);
-        UpdateReshapeShape(
-            reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, newDynRawShape, newDynValidShape);
+        UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, newDynRawShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
     }
