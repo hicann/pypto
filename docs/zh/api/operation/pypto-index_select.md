@@ -34,7 +34,7 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor:
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：Atlas A2系列产品/Atlas A3系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16；Atlas A5系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_BOOL, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0。 <br> 其中DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0仅Ascend 950PR/Ascend 950DT支持。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | int 类型，索引的维度； <br> 支持任意不超过 input 维数的值，详见约束说明。 |
 | index   | 输入      | 源操作数； <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64； <br> 不支持空 Tensor，Shape只支持1-2维；Shape Size不大于2147483647（即INT32_MAX），且值为合法索引，即不超过 input 在 dim 轴上的 Shape 大小。
 
@@ -50,9 +50,12 @@ index_select(input: Tensor, dim: int, index: Tensor) -> Tensor:
 
 3. input.shape 的 dim 轴 viewshape 不可切，要求 viewshape\[dim\]\>=input.shape\[dim\]，其余维度的Shape大小不做限制；
 
-4. DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0仅Ascend 950PR/Ascend 950DT支持，Atlas A3训练系列产品/Atlas A3推理系列产品不支持；
+4. Tensor数据类型说明：
+   - Ascend 950PR/Ascend 950DT：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16, DT_BOOL, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT8, DT_INT16, DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_FP16, DT_FP32, DT_BF16。
 
-5. TileShape的维度与result相同，用于切分result。TileShape 设置需保证 result 不超过UB大小，具体用法详见 [TileShape设置示例]()
+5. TileShape的维度与result相同，用于切分result。TileShape 设置需保证 result 不超过UB大小，具体用法详见 [TileShape设置示例](#tileshape设置示例)。
 
 ## 调用示例
 

@@ -626,7 +626,7 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 | **AiCorePrintShape** | 打印 Shape 信息 | 查看 tensor shape 维度 |
 | **AiCorePrintGmTensor** | 打印 GM Tensor | 查看 Global Memory 数据 |
 | **AiCorePrintUbTensor** | 打印 UB Tensor | 查看 Unified Buffer 数据（仅 AIV kernel） |
-| **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel，且仅支持A2/A3平台） |
+| **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel，且仅支持Atlas A3 训练系列产品/Atlas A3 推理系列产品和Atlas A2 训练系列产品/Atlas A2 推理系列产品） |
 | **AiCorePrintL0CTensor** | 打印 L0C Tensor | 查看 Accumulator Buffer 数据（仅 AIC kernel） |
 
 #### 支持的数据类型
@@ -851,7 +851,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 3. **FP8/HiFloat8 支持平台**：仅 `A5` 平台支持（见 `SUPPORT_FP8_HF8_PRINT` 宏定义）。
 
-4. **AiCorePrintL1Tensor 支持平台**：仅 `A2/A3` 平台支持（见`SUPPORT_L1_COPY` 宏定义）。
+4. **AiCorePrintL1Tensor 支持平台**：仅 `Atlas A3 训练系列产品/Atlas A3 推理系列产品和Atlas A2 训练系列产品/Atlas A2 推理系列产品` 支持（见`SUPPORT_L1_COPY` 宏定义）。
 
 5. **AIC (Cube核) 中不能使用 AiCorePrintUbTensor**：AIC (Cube核) 的标量处理器 (SP) 没有到 UB 地址空间的物理通路，无法从 UB 标量读取数据。编译期已通过 `static_assert` 拦截，在 AIC kernel 中调用 `AiCorePrintUbTensor` 会触发编译报错：
    ```

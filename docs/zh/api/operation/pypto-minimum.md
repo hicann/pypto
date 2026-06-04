@@ -29,8 +29,8 @@ minimum(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor和Element支持的数据类型为DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。 <br> Atlas A5系列产品：Tensor和Element支持的数据类型为DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor和Element支持的数据类型为DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。 <br> Atlas A5系列产品：Tensor和Element支持的数据类型为DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 <br> 类型和数据类型必须与源操作数一保持一致。 |
+| input   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> 不同型号支持的Tensor和Element数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> 不同型号支持的Tensor和Element数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 <br> 类型和数据类型必须与源操作数一保持一致。 |
 
 源操作数一与源操作数二之间至少一者为Tensor。
 
@@ -39,6 +39,13 @@ minimum(
 当两个源操作数均为Tensor时，两个Tensor必须满足广播关系。该接口返回一个与源操作数一和源操作数二广播后Shape相同的Tensor，数据类型与源操作数相同，其元素为源操作数一和源操作数二的逐元素最小值。且源操作数为Tensor时，源操作数一和源操作数二均支持多轴广播。
 
 当两个源操作数之中存在一个Tensor时，返回与输入Tensor相同Shape的Tensor，其元素为源操作数一和源操作数二的逐元素最小值。
+
+## 约束说明
+
+1. Tensor和Element数据类型说明：
+   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
 
 ## 调用示例
 

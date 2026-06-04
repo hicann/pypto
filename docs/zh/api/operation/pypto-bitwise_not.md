@@ -27,11 +27,18 @@ bitwise_not(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Atlas A2系列产品/Atlas A3系列产品：Tensor支持的数据类型为DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_BOOL。 <br> Atlas A5系列产品：Tensor支持的数据类型为DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32，DT_BOOL。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的Tensor数据类型有所差异，详细请参见[约束说明](#约束说明)。 <br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和Shape与input相同。
+
+## 约束说明
+
+1. Tensor数据类型说明：
+   - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32，DT_BOOL。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_BOOL。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_BOOL。
 
 ## 调用示例
 
