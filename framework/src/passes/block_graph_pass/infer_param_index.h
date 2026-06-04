@@ -24,6 +24,15 @@
 
 namespace npu {
 namespace tile_fwk {
+
+//设置成symxxdimxx格式的特殊op
+const std::set<Opcode> setSymDimOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
+                                           Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
+                                           Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};
+//不更改其DynValidShape的op
+//Assemble、l0c copy ub和view均是因为重新推导dynvalidshape会引入错误而保留normalize                                      
+const std::set<Opcode> useSelfOps = {Opcode::OP_ASSEMBLE, Opcode::OP_L0C_COPY_UB, Opcode::OP_VIEW};
+
 class InferParamIndex : public Pass {
 public:
     InferParamIndex() : Pass("InferParamIndex") {}
@@ -32,7 +41,7 @@ public:
 
 private:
     std::string DumpParamIndex(const std::map<std::string, DynParamInfo>& dynParamTable);
-    bool HandleCopyOpShape(Operation& op, Function &function, bool &isCopyIn);
+    bool ResetGmCopyDynValidShape(Operation& op, Function &function);
     Status ResetOutputDynValidShape(Operation& op, Function &function);
     Status ResetViewDynValidShape(const Operation& op);
     Status ResetAssembleDynValidShape(const Operation& op);
