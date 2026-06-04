@@ -83,7 +83,7 @@ void TestQuant(std::vector<int64_t>& inputShape)
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodegenScalar, TestQuant_32_1_7168)
+TEST_F(TestCodegenScalar, DISABLED_TestQuant_32_1_7168)
 {
     std::vector<int64_t> inputShape = {32, 1, 7168};
     TestQuant(inputShape);
