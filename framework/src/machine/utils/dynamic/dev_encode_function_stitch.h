@@ -429,7 +429,6 @@ static uint32_t CellMatchFillIncastOutcast(
             if (errCode != 0) { return errCode; }
         }
     }
-
     return 0;
 }
 } // namespace npu::tile_fwk::dynamic

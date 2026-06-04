@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <functional>
 #include "securec.h"
+#include "tilefwk/device_error_code.h"
 #include "machine/runtime/runner/device_error_tracking.h"
 
 using namespace npu::tile_fwk;
@@ -66,37 +67,46 @@ std::string CaptureStdout(std::function<void()> func)
     return std::string(buffer, len);
 }
 
-TEST(DeviceErrorTrackingTest, GetExceptionTypeNameCoversAllCases)
+TEST(DeviceErrorTrackingTest, GetRetcodeMessageCoversAllRanges)
 {
-    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::INVALID), "exception invalid error");
-    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::FFTS_PLUS), "exception ffts_plus error");
-    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::AICORE), "exception aicore error");
-    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::UB), "exception ub error");
-    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::CCU), "exception ccu error");
-    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::FUSION), "exception fusion error");
-    EXPECT_STREQ(getExceptionTypeName(static_cast<RtExceptionExpandType>(100)), "unknown error type");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_PARAM_INVALID), "param invalid");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_SYMBOL_NOT_FOUND), "symbol not found");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_FEATURE_NOT_SUPPORT), "feature not support");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_TIMEOUT), "driver timeout");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_INTERNAL_ERROR), "runtime internal error");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_AICORE_EXCEPTION), "aicore exception");
+    EXPECT_STREQ(GetRetcodeMessage(PYPTO_DEVICE_ERROR_AICPU_EXCEPTION), "aicpu exception");
 }
 
-TEST(DeviceErrorTrackingTest, AicpuErrorCallBackOutputsCorrectInfo)
+TEST(DeviceErrorTrackingTest, GetRetcodeMessageUnknown)
+{
+    EXPECT_STREQ(GetRetcodeMessage(-1), "unknown error");
+    EXPECT_STREQ(GetRetcodeMessage(0), "unknown error");
+    EXPECT_STREQ(GetRetcodeMessage(999999), "unknown error");
+}
+
+TEST(DeviceErrorTrackingTest, PyPTOExceptionInfoCallBackOutputsCorrectInfo)
 {
     AclRtExceptionInfo exceptionInfo{};
     memset_s(&exceptionInfo, sizeof(AclRtExceptionInfo), 0, sizeof(AclRtExceptionInfo));
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICORE;
     exceptionInfo.taskid = 123;
     exceptionInfo.streamid = 456;
-    exceptionInfo.tid = 789;
     exceptionInfo.deviceid = 0;
-    exceptionInfo.retcode = 1;
-    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICORE;
-
+    exceptionInfo.retcode = PYPTO_DEVICE_ERROR_AICORE_EXCEPTION;
+    
     char kernelName[] = "test_kernel";
     exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = kernelName;
 
-    std::string output = CaptureStdout([&]() { AicpuErrorCallBack(&exceptionInfo); });
+    std::string output = CaptureStdout([&]() { PyPTOExceptionInfoCallBack(&exceptionInfo); });
 
-    EXPECT_NE(output.find("task_id = 123, stream_id = 456"), std::string::npos);
-    EXPECT_NE(output.find("Exception Type: exception aicore error"), std::string::npos);
-    EXPECT_NE(output.find("taskid: 123, streamid: 456, tid: 789, deviceid: 0, retcode: 1"), std::string::npos);
-    EXPECT_NE(output.find("kernelName = test_kernel"), std::string::npos);
+    EXPECT_NE(output.find("aicore exception"), std::string::npos);
+    EXPECT_NE(output.find("device_id: 0"), std::string::npos);
+    EXPECT_NE(output.find("stream_id: 456"), std::string::npos);
+    EXPECT_NE(output.find("task_id: 123"), std::string::npos);
+    EXPECT_NE(output.find("retcode: 507015"), std::string::npos);
+    EXPECT_NE(output.find("kernelName: test_kernel"), std::string::npos);
+    EXPECT_NE(output.find("PyPTO Inner Error"), std::string::npos);
 }
 
 TEST(DeviceErrorTrackingTest, InitializeErrorCallbackExecutesNormally)

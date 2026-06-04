@@ -45,6 +45,12 @@ namespace npu::tile_fwk {
 
 INLINE void SetLastWordStatus(__gm__ KernelArgs* args, int64_t val);
 INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args);
+INLINE void Trap()
+{
+#if IS_AICORE
+    trap();
+#endif
+}
 
 #define AICORE_DEVICE_TASK_WAIT_TIME_OUT 250000000
 #define AICORE_LEAF_TASK_RUN_TIMEOUT 3000000000
@@ -61,6 +67,7 @@ INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args);
     ++loop_count; \
     if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > timelen)) { \
         SetLastWordStatus(args, lastStatus); \
+        Trap(); \
         action; \
     }
 
@@ -137,6 +144,7 @@ INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx)
         nextLowIdx = GetLeafTaskId();
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_LEAF_TASK_WAIT_TIMEOUT)) {
+            Trap();
             return AICORE_TASK_ABNORMAL_STOP;
         }
     } while (nextLowIdx == lastTaskIdx);

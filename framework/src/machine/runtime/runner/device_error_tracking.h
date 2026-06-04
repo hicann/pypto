@@ -19,8 +19,8 @@
 #include "adapter/api/acl_define.h"
 
 namespace npu::tile_fwk {
-const char* getExceptionTypeName(RtExceptionExpandType type);
-void AicpuErrorCallBack(AclRtExceptionInfo* exceptionInfo);
+const char* GetRetcodeMessage(int32_t retcode);
+void PyPTOExceptionInfoCallBack(AclRtExceptionInfo* exceptionInfo);
 void InitializeErrorCallback();
 } // namespace npu::tile_fwk
 #endif

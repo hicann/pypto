@@ -26,6 +26,7 @@
 #include <fstream>
 #include <ostream>
 #include "securec.h"
+#include "tilefwk/device_error_code.h"
 #include "machine/utils/device_log.h"
 #include "interface/machine/device/tilefwk/aicpu_perf.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
@@ -50,16 +51,13 @@ inline constexpr bool IsDeviceMode()
 #endif // __DEVICE__
 }
 
-constexpr int32_t DEVICE_MACHINE_INVALID_RUN_MODE = -40;
-constexpr int32_t DEVICE_MACHINE_TIMEOUT_SCH_PARALLEL_DEVTASK = -7;
-constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH = -6;
-constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH = -5;
-constexpr int32_t DEVICE_MACHINE_TIMEOUT_AIV = -4;
-constexpr int32_t DEVICE_MACHINE_TIMEOUT_AIC = -3;
-constexpr int32_t DEVICE_MACHINE_TIMEOUT_CORETASK = -2;
-constexpr int32_t DEVICE_MACHINE_ERROR = -1;
-constexpr int32_t DEVICE_MACHINE_OK = 0;
-constexpr int32_t DEVICE_MACHINE_FINISHED = 1;
+constexpr int32_t DEVICE_MACHINE_INVALID_RUN_MODE = PYPTO_DEVICE_ERROR_PARAM_INVALID;
+constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH = PYPTO_DEVICE_ERROR_AICPU_TIMEOUT;
+constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH = PYPTO_DEVICE_ERROR_AICORE_TIMEOUT;
+constexpr int32_t DEVICE_MACHINE_TIMEOUT_CORETASK = PYPTO_DEVICE_ERROR_TASK_TIMEOUT;
+constexpr int32_t DEVICE_MACHINE_ERROR = PYPTO_DEVICE_ERROR_INTERNAL_ERROR;
+constexpr int32_t DEVICE_MACHINE_OK = PYPTO_DEVICE_SUCCESS;
+
 constexpr int32_t TIME_OUT_THRESHOLD = 1000000;      // 超时阈值 1s
 constexpr int32_t DFX_TIME_OUT_THRESHOLD = 50000000; // 超时阈值 50s
 constexpr uint32_t CTRL_CPU_THREAD_IDX = 0;
