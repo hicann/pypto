@@ -93,6 +93,7 @@ operation_distributed@pypto:
       - framework/include/tilefwk/symbolic_distributed.h
       - framework/src/interface/operation/distributed/
       - framework/src/interface/tileop/distributed/
+      - framework/src/machine/device/distributed/
       - python/src/bindings/distributed.cpp
     unrelease: null
 
@@ -122,6 +123,7 @@ frontend@pypto:
       - framework/include/tilefwk/tilefwk.h
       - framework/include/tilefwk/tile_shape.h
       - framework/src/interface/cache/
+      - framework/src/interface/compiler_monitor/
       - framework/src/interface/configs/
       - framework/src/interface/core/
       - framework/src/interface/function/
@@ -133,6 +135,8 @@ frontend@pypto:
       - framework/src/interface/tensor/
       - framework/src/interface/utils/common.cpp
       - framework/src/interface/utils/common.h
+      - framework/src/interface/utils/error.cpp
+      - framework/src/interface/utils/error.h
       - framework/src/interface/utils/file_utils.cpp
       - framework/src/interface/utils/file_utils.h
       - framework/src/interface/utils/id_gen.h
@@ -142,6 +146,7 @@ frontend@pypto:
       - framework/src/interface/utils/op_info_manager.h
       - framework/src/interface/utils/serialization.h
       - framework/src/interface/utils/string_utils.h
+      - framework/src/machine/device/dump/
       - python/src/bindings/bindings.h
       - python/src/bindings/controller.cpp
       - python/src/bindings/element.cpp
@@ -194,12 +199,17 @@ machine@pypto:
       - framework/include/tilefwk/pypto_fwk_log.h
       - framework/include/tilefwk/tilefwk_log.h
       - framework/src/adapter/
-      - framework/src/interface/compiler_monitor/
       - framework/src/interface/tileop/arch32/dynamic/aicpu_call.h
       - framework/src/interface/machine/
-      - framework/src/interface/utils/error.cpp
-      - framework/src/interface/utils/error.h
-      - framework/src/machine/
+      - framework/src/machine/compile/
+      - framework/src/machine/device/debug/
+      - framework/src/machine/device/dynamic/
+      - framework/src/machine/device/machine_interface/
+      - framework/src/machine/device/stub/
+      - framework/src/machine/host/
+      - framework/src/machine/runtime/
+      - framework/src/machine/simulation/
+      - framework/src/machine/utils/
       - framework/src/utils/
       - python/src/bindings/runtime.cpp
     unrelease: null
