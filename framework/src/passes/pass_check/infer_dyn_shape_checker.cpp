@@ -65,6 +65,10 @@ Status InferDynShapeChecker::DoPostCheck(Function& function)
                     op.GetOpMagic(), opOut->GetMagic());
                 return FAILED;
             }
+            //对多输出op的，不参与计算的临时Tensor不校验DynValidShape
+            if (opOut->GetConsumers().empty() && !function.IsFromOutCast(opOut)) {
+                continue;
+            }
             if (!IsValidShapeInTensorShape(opOut)) {
                 APASS_LOG_ERROR_F(
                     Elements::Tensor,
