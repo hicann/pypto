@@ -681,7 +681,63 @@ bool SubfuncParam::TensorParamTy::CompareParam(const SubfuncInvokeInfoTy::Tensor
     return (paramLoc == esgParam.paramLoc) && (shape == esgParam.shape) && (dataType == esgParam.dType);
 }
 namespace {
-const int32_t MAGIC_NUM_TWO = 2;
+constexpr size_t READY_STATE_INFO_NUM = 2;
+
+Status CheckDumpEntryArgs(
+    int esgId, int64_t entryOffset, const int64_t* entryParamPtr, const int32_t* readyStatePtr, size_t topologySize,
+    size_t readyStateTotalSize, size_t& esgIndex, size_t& readyStateOffset)
+{
+    if (entryParamPtr == nullptr || readyStatePtr == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Function, "Error: null buffer in DumpEachEntryInfo");
+        return FAILED;
+    }
+    if (esgId < 0) {
+        APASS_LOG_ERROR_F(Elements::Function, "Error: invalid esgId %d in DumpEachEntryInfo", esgId);
+        return FAILED;
+    }
+    esgIndex = static_cast<size_t>(esgId);
+    if (esgIndex >= topologySize) {
+        APASS_LOG_ERROR_F(
+            Elements::Function, "Error: invalid esgId %d in DumpEachEntryInfo, topology size is %zu", esgId,
+            topologySize);
+        return FAILED;
+    }
+    if (entryOffset < 0 || entryOffset % static_cast<int64_t>(sizeof(int64_t)) != 0) {
+        APASS_LOG_ERROR_F(Elements::Function, "Error: invalid entryOffset %ld in DumpEachEntryInfo", entryOffset);
+        return FAILED;
+    }
+    readyStateOffset = esgIndex * READY_STATE_INFO_NUM;
+    if (readyStateOffset + 1 >= readyStateTotalSize) {
+        APASS_LOG_ERROR_F(
+            Elements::Function, "Error: readyState buffer overflow risk in DumpEachEntryInfo, offset=%zu, total=%zu",
+            readyStateOffset, readyStateTotalSize);
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+std::vector<int64_t> BuildEntryParam(CoreType coreType, int esgId, int readyState, const setType& outGraph)
+{
+    std::vector<int64_t> entryParam;
+    entryParam.emplace_back((static_cast<uint64_t>(coreType) << 32) | static_cast<int64_t>(esgId));
+    entryParam.emplace_back(static_cast<int64_t>(readyState));
+    entryParam.emplace_back(static_cast<int64_t>(outGraph.size()));
+    for (auto& num : outGraph) {
+        entryParam.emplace_back(static_cast<int64_t>(num));
+    }
+    return entryParam;
+}
+
+Status CheckEntryParamBuffer(size_t entryOffsetBytes, size_t copyBytes, size_t entryParamTotalBytes)
+{
+    if (entryOffsetBytes <= entryParamTotalBytes && copyBytes <= entryParamTotalBytes - entryOffsetBytes) {
+        return SUCCESS;
+    }
+    APASS_LOG_ERROR_F(
+        Elements::Function, "Error: entry buffer overflow risk in DumpEachEntryInfo, offset=%zu, copy=%zu, total=%zu",
+        entryOffsetBytes, copyBytes, entryParamTotalBytes);
+    return FAILED;
+}
 }
 
 void SubfuncTopologyInfoTy::AddEntry(const int esgId, const int readState, const setType& succ)
@@ -759,27 +815,36 @@ void SubfuncTopologyInfoTy::Print(std::ostream& osm) const
     }
 }
 
-void SubfuncTopologyInfoTy::DumpEachEntryInfo(
-    int esgId, CoreType coreType, int64_t entryOffset, int64_t* entryParamPtr, int32_t* readyStatePtr) const
+Status SubfuncTopologyInfoTy::DumpEachEntryInfo(
+    int esgId, CoreType coreType, int64_t entryOffset, int64_t* entryParamPtr, size_t entryParamTotalBytes,
+    int32_t* readyStatePtr, size_t readyStateTotalSize) const
 { // dump each entry
-    std::vector<int64_t> entryParam;
-    entryParam.clear();
+    size_t esgIndex = 0;
+    size_t readyStateOffset = 0;
+    if (CheckDumpEntryArgs(
+            esgId, entryOffset, entryParamPtr, readyStatePtr, topology_.size(), readyStateTotalSize, esgIndex,
+            readyStateOffset) != SUCCESS) {
+        return FAILED;
+    }
 
-    // high 32 bit of the graphID is coretype
-    entryParam.emplace_back((static_cast<uint64_t>(coreType) << 32) | static_cast<int64_t>(esgId));
-    entryParam.emplace_back(static_cast<int64_t>(topology_[esgId].readyState));
-    entryParam.emplace_back(static_cast<int64_t>(topology_[esgId].outGraph.size()));
-    for (auto& num : topology_[esgId].outGraph) {
-        entryParam.emplace_back(static_cast<int64_t>(num));
+    const auto& entry = topology_[esgIndex];
+    std::vector<int64_t> entryParam = BuildEntryParam(coreType, esgId, entry.readyState, entry.outGraph);
+    const size_t copyBytes = entryParam.size() * sizeof(int64_t);
+    const size_t entryOffsetBytes = static_cast<size_t>(entryOffset);
+    const size_t entryOffsetElements = entryOffsetBytes / sizeof(int64_t);
+    if (CheckEntryParamBuffer(entryOffsetBytes, copyBytes, entryParamTotalBytes) != SUCCESS) {
+        return FAILED;
     }
+
     if (memcpy_s(
-        entryParamPtr + entryOffset / sizeof(int64_t), entryParam.size() * sizeof(int64_t), entryParam.data(),
-        entryParam.size() * sizeof(int64_t)) != EOK) {
+        entryParamPtr + entryOffsetElements, entryParamTotalBytes - entryOffsetBytes, entryParam.data(),
+        copyBytes) != EOK) {
         APASS_LOG_ERROR_F(Elements::Function, "Error: memcpy_s failed in DumpEachEntryInfo");
-        return;
+        return FAILED;
     }
-    *(readyStatePtr + static_cast<int32_t>(esgId) * MAGIC_NUM_TWO) = static_cast<int32_t>(topology_[esgId].readyState);
-    *(readyStatePtr + static_cast<int32_t>(esgId) * MAGIC_NUM_TWO + 1) = static_cast<int32_t>(coreType);
+    *(readyStatePtr + readyStateOffset) = static_cast<int32_t>(entry.readyState);
+    *(readyStatePtr + readyStateOffset + 1) = static_cast<int32_t>(coreType);
+    return SUCCESS;
 }
 
 bool SubfuncTopologyInfoTy::IsEsgReady(const int esgId) const { return topology_[esgId].readyState == 0; }

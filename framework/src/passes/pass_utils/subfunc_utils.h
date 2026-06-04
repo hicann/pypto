@@ -472,8 +472,9 @@ public:
 
     void Print(std::ostream& osm = std::cout) const;
 
-    void DumpEachEntryInfo(
-        int esgId, CoreType coreType, int64_t entryOffset, int64_t* entryParamPtr, int32_t* readyStatePtr) const;
+    Status DumpEachEntryInfo(
+        int esgId, CoreType coreType, int64_t entryOffset, int64_t* entryParamPtr, size_t entryParamTotalBytes,
+        int32_t* readyStatePtr, size_t readyStateTotalSize) const;
 
     bool IsEsgReady(const int esgId) const;
 

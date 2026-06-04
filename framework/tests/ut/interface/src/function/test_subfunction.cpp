@@ -245,5 +245,55 @@ TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_DumpEachEntryInfo)
 
     std::vector<int64_t> entryParam(10, 10);
     std::vector<int32_t> readyState(10, 10);
-    subfuncTopoInfo.DumpEachEntryInfo(1, CoreType::AIC, 0, entryParam.data(), readyState.data());
+    Status status = subfuncTopoInfo.DumpEachEntryInfo(
+        1, CoreType::AIC, 0, entryParam.data(), entryParam.size() * sizeof(int64_t), readyState.data(),
+        readyState.size());
+
+    EXPECT_EQ(status, SUCCESS);
+    const int64_t graphId = static_cast<int64_t>((static_cast<uint64_t>(CoreType::AIC) << 32) | 1U);
+    EXPECT_EQ(entryParam[0], graphId);
+    EXPECT_EQ(entryParam[1], 0);
+    EXPECT_EQ(entryParam[2], 1);
+    EXPECT_EQ(readyState[2], 0);
+    EXPECT_EQ(readyState[3], static_cast<int32_t>(CoreType::AIC));
+}
+
+TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_DumpEachEntryInfoEntryParamOverflow)
+{
+    SubfuncTopologyInfoTy subfuncTopoInfo;
+    int esgId = 0;
+    subfuncTopoInfo.AddEntry(esgId, 0, {esgId++});
+    subfuncTopoInfo.AddEntry(esgId, 0, {esgId++});
+
+    std::vector<int64_t> entryParam(2, 10);
+    std::vector<int32_t> readyState(4, 10);
+    Status status = subfuncTopoInfo.DumpEachEntryInfo(
+        1, CoreType::AIC, 0, entryParam.data(), entryParam.size() * sizeof(int64_t), readyState.data(),
+        readyState.size());
+
+    EXPECT_EQ(status, FAILED);
+    EXPECT_EQ(entryParam[0], 10);
+    EXPECT_EQ(entryParam[1], 10);
+    EXPECT_EQ(readyState[2], 10);
+    EXPECT_EQ(readyState[3], 10);
+}
+
+TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_DumpEachEntryInfoReadyStateOverflow)
+{
+    SubfuncTopologyInfoTy subfuncTopoInfo;
+    int esgId = 0;
+    subfuncTopoInfo.AddEntry(esgId, 0, {esgId++});
+    subfuncTopoInfo.AddEntry(esgId, 0, {esgId++});
+
+    std::vector<int64_t> entryParam(10, 10);
+    std::vector<int32_t> readyState(3, 10);
+    Status status = subfuncTopoInfo.DumpEachEntryInfo(
+        1, CoreType::AIC, 0, entryParam.data(), entryParam.size() * sizeof(int64_t), readyState.data(),
+        readyState.size());
+
+    EXPECT_EQ(status, FAILED);
+    EXPECT_EQ(entryParam[0], 10);
+    EXPECT_EQ(entryParam[1], 10);
+    EXPECT_EQ(entryParam[2], 10);
+    EXPECT_EQ(readyState[2], 10);
 }
