@@ -900,9 +900,9 @@ TEST_F(ScheduleOoOTest, TestScheduleSpill)
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.newOperations_[10]->GetOpcodeStr(), "COPY_OUT");
-    EXPECT_EQ(ooOScheduler.newOperations_[10]->oOperand[0]->memoryrange.start, 0);
-    EXPECT_EQ(ooOScheduler.newOperations_[10]->oOperand[0]->memoryrange.end, 65536);
+    EXPECT_EQ(ooOScheduler.newOperations_[8]->GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(ooOScheduler.newOperations_[8]->oOperand[0]->memoryrange.start, 0);
+    EXPECT_EQ(ooOScheduler.newOperations_[8]->oOperand[0]->memoryrange.end, 65536);
     EXPECT_EQ(ooOScheduler.newOperations_[13]->GetOpcodeStr(), "UB_ALLOC");
     EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.start, 65536);
     EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.end, 131072);
@@ -948,7 +948,7 @@ TEST_F(ScheduleOoOTest, TestScheduleSpillInplace)
     std::rotate(ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.begin() + 6, ooOScheduler.orderedOps.begin() + 11);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.newOperations_[9]->GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(ooOScheduler.newOperations_[6]->GetOpcodeStr(), "COPY_OUT");
     EXPECT_EQ(ooOScheduler.newOperations_[13]->GetOpcodeStr(), "COPY_IN");
     EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.start, 65536);
     EXPECT_EQ(ooOScheduler.newOperations_[13]->oOperand[0]->memoryrange.end, 131072);

@@ -474,7 +474,7 @@ Status OoOScheduler::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, 
     Operation* copyinOp = CreateCopyinOp(gmTensor, localTensor, attr->GetFromOffset());
 
     if (UpdateCopyoutScheduleInfo(
-            copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, spillOp) != SUCCESS) {
+            copyoutOp, actualSpillTensor, actualSpillTensor->memoryrange.memId, actualOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
         return FAILED;
     }
@@ -694,7 +694,7 @@ Status OoOScheduler::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, Logical
         }
         Operation *copyoutOp = CreateCopyoutOp(op, actualTensor, gmTensor, attr->GetToOffset());
         if (UpdateCopyoutScheduleInfo(
-                copyoutOp, actualTensor, actualTensor->memoryrange.memId, op, opIsRetiredMap[op]) != SUCCESS) {
+                copyoutOp, actualTensor, actualTensor->memoryrange.memId, actualOp, opIsRetiredMap[op]) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
             return FAILED;
         }
@@ -1009,7 +1009,15 @@ Status OoOScheduler::UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr s
     Operation* allocOp = tensorAllocMap[spillTensor->memoryrange.memId];
     opCoreLocationMap[op] = opCoreLocationMap[allocOp];
     UpdateOpInternalSubgraphID(*op, allocOp);
-    opExecOrderMap[op] = opExecOrderMap[spillOp] + 1;
+    int bufNextUseTime = opExecOrderMap[spillOp];
+    for (auto succOp : depManager_.GetSuccessors(spillOp)) {
+        if (!opIsRetiredMap[succOp]) continue;
+        if (succOp == op) continue;
+        if (succOp->GetOpcodeStr().find("COPY_OUT") != std::string::npos) {
+            bufNextUseTime = std::max(bufNextUseTime, opExecOrderMap[succOp]);
+        }
+    }
+    opExecOrderMap[op] = bufNextUseTime + 1;
     InsertOrdered(op);
     return SUCCESS;
 }
@@ -1139,24 +1147,6 @@ void OoOScheduler::UpdateTensorInputForView(Operation& op, Operation* spillOp, L
         if (consumers.empty()) break;
         p = *consumers.begin();
     }
-}
-
-int OoOScheduler::GetBufLastUseTime(Operation* op, int curMemId) {
-    auto targetIt = std::find(orderedOps.begin(), orderedOps.end(), op);
-    if (targetIt == orderedOps.end()) {
-        return -1;
-    }
-    int execOrder = opExecOrderMap[op];
-    for (auto it = std::make_reverse_iterator(targetIt); it != orderedOps.rend(); it++) {
-        Operation* curOp = *it;
-        if (curOp && opExecOrderMap[curOp] < execOrder) {
-            auto& reqMemIds = opReqMemIdsMap[curOp];
-            if (std::find(reqMemIds.begin(), reqMemIds.end(), curMemId) != reqMemIds.end()) {
-                return opExecOrderMap[curOp];
-            }
-        }
-    }
-    return -1;
 }
 
 void OoOScheduler::UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp) {

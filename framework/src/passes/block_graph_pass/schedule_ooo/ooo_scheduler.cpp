@@ -166,7 +166,10 @@ Status OoOScheduler::SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> or
         APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
         return FAILED;
     }
-    ApplySpillContext(ctx, allocIssueQueue[orderFirstPair.first][orderFirstPair.second].Front());
+    if (ApplySpillContext(ctx, allocIssueQueue[orderFirstPair.first][orderFirstPair.second].Front()) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ApplySpillContext failed.");
+        return FAILED;
+    }
     return SUCCESS;
 }
 
@@ -195,9 +198,24 @@ Status OoOScheduler::FindCoreLocationMemoryType(CoreLocationType coreLocation, M
     return SUCCESS;
 }
 
-void OoOScheduler::ApplySpillContext(SpillContext& ctx, Operation* allocOp) {
+Status OoOScheduler::ApplySpillContext(SpillContext& ctx, Operation* allocOp) {
     for (auto* copyoutOp : ctx.newCopyoutOps) {
-        newOperations_.push_back(copyoutOp);
+        int spillMemid = copyoutOp->GetInputOperand(0)->memoryrange.memId;
+        Operation *insertOp = nullptr;
+        for (auto op : newOperations_) {
+            auto &reqMemids = GetOpMemIds(op);
+            if (std::find(reqMemids.begin(), reqMemids.end(), spillMemid) != reqMemids.end()) {
+                insertOp = op;
+            }
+        }
+        if (insertOp == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Insert %s in newOperations failed.", GetOpInfo(copyoutOp).c_str());
+            return FAILED;
+        }
+        auto it = find(newOperations_.begin(), newOperations_.end(), insertOp);
+        if (it != newOperations_.end()) {
+            newOperations_.insert(it + 1, copyoutOp);
+        }
     }
     numTotalIssues += ctx.newNotRetiredCopyOutSize - ctx.deleteNotRetiredOpSize;
     MemoryType memType = allocOp->GetOutputOperand(0)->GetMemoryTypeOriginal();
@@ -212,6 +230,7 @@ void OoOScheduler::ApplySpillContext(SpillContext& ctx, Operation* allocOp) {
     for (auto memId : ctx.spillMemIds) {
         localBufferMap_[memId]->retireCycle = clock;
     }
+    return SUCCESS;
 }
 
 Status OoOScheduler::FindFirstOrder(std::pair<CoreLocationType, MemoryType> &orderFirstPair)

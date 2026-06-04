@@ -307,7 +307,7 @@ private:
     Status AllocTensorMemRange(Operation* op);
     Status AllocViewTensorMemRange(Operation &operation);
     Status CheckAndUpdateLifecycle();
-    void ApplySpillContext(SpillContext& ctx, Operation* allocOp);
+    Status ApplySpillContext(SpillContext& ctx, Operation* allocOp);
 
     void UpdateIssueExecOrder();
     void PrintOpList(std::vector<Operation *> opList);
@@ -466,11 +466,11 @@ private:
     void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
     Status UpdateRemainMemid(int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
-    int GetBufLastUseTime(Operation* op, int curMemId);
     int GetBufNextUseTime(int curMemId);
     int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType);
     Status RearrangeBuffer(Operation* allocOp, MemoryType memType);
-    Status UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId, Operation* spillAllocOp, bool isRetired = true);
+    Status UpdateCopyoutScheduleInfo(Operation* op, LogicalTensorPtr spillTensor, int spillMemId, 
+        Operation* spillAllocOp, bool isRetired = true);
     void UpdateOpScheduleInfo(Operation* op, std::vector<int> memIds, Operation* AllocOp);
     Status InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, Operation* spillAllocOp, int memId);
     Status UpdateScheduleStatus(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap, int memId,
