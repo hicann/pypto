@@ -103,6 +103,13 @@ public:
         }
     }
 
+    static void DeviceInitLauncherConfigForUser(std::vector<uint8_t>& devProgData)
+    {
+        auto* devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
+        devProg->devArgs.launchSchedAicpuNum = config::GetRuntimeOption<uint32_t>(LAUNCH_SCHED_AICPU_NUM);
+        devProg->devArgs.launchSchedSameCluster = config::GetRuntimeOption<int64_t>(LAUNCH_SCHED_SAME_CLUSTER) == 1;
+    }
+
     template <typename DeviceMemoryTy>
     static void AssignMetaAddr(
         DeviceMemoryTy& devMem, DeviceKernelArgs& kArgs, DevAscendProgram* devProg, CachedOperator* cachedOperator)
@@ -129,7 +136,7 @@ public:
         return;
     }
 
-    static uint32_t GetAiCpuNum(uint32_t aiCpuNum, uint32_t scheCpuNum, ArchInfo archInfo)
+    static uint32_t GetAiCpuNum(uint32_t aiCpuNum, uint32_t scheCpuNum, ArchInfo archInfo, [[maybe_unused]] bool isSameCluster)
     {
         if (scheCpuNum == 1) {
             return scheCpuNum;
@@ -140,18 +147,36 @@ public:
             uint32_t oneDieMaxCpuNum = oneDieMinCpuNum + (aiCpuNum - (oneDieMinCpuNum << 1));
             uint32_t oneDieMinScheCpuNum = scheCpuNum >> 1;
             uint32_t launchCpuNum = oneDieMaxCpuNum + oneDieMinScheCpuNum;
-            return launchCpuNum < aiCpuNum ? launchCpuNum : aiCpuNum;
+            return launchCpuNum < aiCpuNum ? launchCpuNum : scheCpuNum;
         } else {
+            if (!isSameCluster) {
+                MACHINE_LOGD("Set aicpu to not enforce the same cluster.");
+                return scheCpuNum;
+            }
             // sche = 2, need launch 3 aicpu ensure cluster; sche = 3, need launch 5 aicpu
             uint32_t launchCpuNum = 2 * scheCpuNum - 1; // 2 : ensure cluster success
-            return launchCpuNum < aiCpuNum ? launchCpuNum : aiCpuNum;
+            // when launchCpuNum >= aiCpuNum, can't use same cluster
+ 	        return launchCpuNum < aiCpuNum ? launchCpuNum : scheCpuNum;
         }
     }
 
     static void PrepareDevProgArgsCpuInfo(DevAscendProgram* devProg, DeviceLauncherConfig& config)
     {
-        const uint32_t needChangeAicpuNum = 6; // 6 : need change
         uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
+        // Read user configuration for launch_sched_aicpu_num
+        uint32_t launchSchedAicpuNum = devProg->devArgs.launchSchedAicpuNum;
+        if (launchSchedAicpuNum > 0) {
+            // user configuration provided: use user config if within valid range
+            if (launchSchedAicpuNum > aiCpuNum - dynamic::MAX_CONTROL_FLOW_AICPU_NUM) {
+                MACHINE_LOGW("User configured launch_sched_aicpu_num=%u exceeds hardware max=%u, using max value instead.",
+                    launchSchedAicpuNum, aiCpuNum);
+            } else {
+                aiCpuNum = launchSchedAicpuNum + dynamic::MAX_CONTROL_FLOW_AICPU_NUM; // use user configuration
+                MACHINE_LOGD("Using user configured launch_sched_aicpu_num=%u.", launchSchedAicpuNum);
+            }
+        }
+
+        const uint32_t needChangeAicpuNum = 6; // 6 : need change
         if (devProg->devArgs.archInfo != ArchInfo::DAV_3510) {
             devProg->devArgs.maxAicpuNum = aiCpuNum;
         } else {
@@ -160,7 +185,7 @@ public:
         }
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
-        config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo);
+        config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo, devProg->devArgs.launchSchedSameCluster);
         devProg->devArgs.nrAicpu = config.aicpuNum;
     }
 
@@ -441,7 +466,7 @@ public:
     static int LaunchAicpuKernel(
         RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function,
         const std::vector<DeviceTensorData>& tensors = {});
-    static int LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode);
+    static int LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode);
     static int LaunchAicoreKernel(
         AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg,
         bool debugEnable, [[maybe_unused]] Function* function);

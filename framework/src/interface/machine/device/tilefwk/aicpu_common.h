@@ -164,6 +164,8 @@ struct DeviceArgs {
     uint64_t devDfxArgAddr{0};             // devDfx
     uint64_t GetBlockNum() { return nrValidAic * (nrAiv / nrAic + 1); }
     uint32_t maxAicpuNum{0};
+    uint32_t launchSchedAicpuNum{7};    // user configures the number of launch schedules for aicpu
+    bool launchSchedSameCluster = true; // user configures whether enables binding aicpu within the same cluster
     bool enableVFFusion = false;
     bool enableEslModel = false;
     bool hasAicpuTask = false;

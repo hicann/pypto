@@ -317,6 +317,35 @@
                     "default": 1,
                     "minimum": 1,
                     "maximum": 8
+                },
+                "launch_sched_aicpu_num": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "指定启动的Schdule线程AICPU数量, 当指定的数量大于硬件最大可用aicpu数量或者小于等于0时, 将启用硬件自动计算值",
+                        "en": "Specifies the number of AICPUs for the scheduled startup thread, if the specified number is greater than the maximum available AICPUs in the hardware or less than or equal to 0, the hardware's automatic calculation value will be used"
+                    },
+                    "minimum": 0,
+                    "maximum": 6
+                },
+                "launch_sched_same_cluster": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "是否强制同Cluster线程分配, 1:强制同Cluster(默认); 0:允许跨Cluster, 开启同cluster时, launch_sched_aicpu_num配置不生效",
+                        "en": "Force same cluster arbitration. 1: force same cluster (default); 0: allow cross cluster, when enabling the same cluster, the launch_sched_aicpu_num configuration does not take effect"
+                    },
+                    "default": 1,
+                    "minimum": 0,
+                    "maximum": 1
+                    },
+                    "launch_early_mode": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "aicpu提前发射模式, 0:仅capture模式提前发射(默认); 1:所有模式都提前发射; 2:所有模式都不提前发射",
+                        "en": "aicpu early launch mode, 0: early launch only in capture mode (default); 1: early launch in all modes; 2: no early launch in any mode"
+                    },
+                    "default": 0,
+                    "minimum": 0,
+                    "maximum": 2
                 }
             }
         },

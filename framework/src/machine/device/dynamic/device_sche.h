@@ -250,7 +250,7 @@ struct DynMachineManager {
     int AllocThreadIdx(DeviceArgs* devArgs, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
         int ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
-        if (devArgs->scheCpuNum == 1) {
+        if (devArgs->scheCpuNum == devArgs->nrAicpu) {
             curThreadIdx = ++threadIdx;
             return ret;
         }

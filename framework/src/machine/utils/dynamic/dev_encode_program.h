@@ -339,10 +339,12 @@ struct DevAscendProgram {
         uint32_t nrValidAic;
         uint32_t scheCpuNum;
         uint32_t maxAicpuNum;
+        uint32_t launchSchedAicpuNum;
         ArchInfo archInfo;
         uint64_t dynamicCellMatchAddr;
         uint64_t dynamicCellMatchCapacity;
         bool hasAicpuTask;
+        bool launchSchedSameCluster;
     };
 
     DevArgsPreservedParams BackupDevArgsParams(const DeviceArgs& src)
@@ -354,10 +356,12 @@ struct DevAscendProgram {
         params.nrValidAic = src.nrValidAic;
         params.scheCpuNum = src.scheCpuNum;
         params.maxAicpuNum = src.maxAicpuNum;
+        params.launchSchedAicpuNum = src.launchSchedAicpuNum;
         params.archInfo = src.archInfo;
         params.dynamicCellMatchAddr = src.dynamicCellMatchAddr;
         params.dynamicCellMatchCapacity = src.dynamicCellMatchCapacity;
         params.hasAicpuTask = src.hasAicpuTask;
+        params.launchSchedSameCluster = src.launchSchedSameCluster;
         return params;
     }
 
@@ -369,10 +373,12 @@ struct DevAscendProgram {
         dst.nrValidAic = params.nrValidAic;
         dst.scheCpuNum = params.scheCpuNum;
         dst.maxAicpuNum = params.maxAicpuNum;
+        dst.launchSchedAicpuNum = params.launchSchedAicpuNum;
         dst.archInfo = params.archInfo;
         dst.dynamicCellMatchAddr = params.dynamicCellMatchAddr;
         dst.dynamicCellMatchCapacity = params.dynamicCellMatchCapacity;
         dst.hasAicpuTask = params.hasAicpuTask;
+        dst.launchSchedSameCluster = params.launchSchedSameCluster;
     }
 
     void ResetFromLaunch()

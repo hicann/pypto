@@ -347,6 +347,7 @@ void DeviceLauncher::FillDeviceKernelArgs(
     DeviceLauncherConfig config;
     CachedOperator cache;
     DeviceLauncherConfigFillDeviceInfo(config);
+    DeviceInitLauncherConfigForUser(devProgData);
     DeviceMemoryUtils deviceMemoryUtils;
     DeviceInitTilingData(deviceMemoryUtils, kargs, devProgData, nullptr, config, &cache);
     DeviceInitDistributedContext(deviceMemoryUtils, groupNames, kargs);
@@ -442,11 +443,16 @@ void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[m
     }
 }
 
-int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode)
+int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode, int launchEarlyMode)
 {
-    if (isCaptureMode) {
+    if (launchEarlyMode == 1) { // 1 ： early launch in all modes
         return 0;
     }
+    if (launchEarlyMode == 0 && isCaptureMode) {  // 0 : early launch only in capture mode
+        return 0;
+    }
+
+    //  close early launch
     auto schedStream = GetStreamContext().GetScheStream();
     auto ctrlStream = GetStreamContext().GetCtrlStream();
     return DeviceRunner::Get().RunPreSync(schedStream, ctrlStream, (RtStream)aicoreStream);

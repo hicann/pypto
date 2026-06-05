@@ -935,7 +935,7 @@ public:
 #if ENABLE_VERBOSE_LOG
         COMPILER_LOGI("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
 #endif
-        int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode);
+        int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode, launchEarlyMode);
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
 
         DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
@@ -1035,7 +1035,13 @@ private:
 
     void InitConfigOptions(py::object& module)
     {
-        auto options = module.attr("_runtime_options").cast<py::dict>();
+        if (!module.attr("_runtime_options").is_none()) {
+            auto rutimeOptions = module.attr("_runtime_options").cast<py::dict>();
+            if (rutimeOptions.contains("launch_early_mode")) {
+                launchEarlyMode = rutimeOptions["launch_early_mode"].cast<int>();
+            }
+        }
+
         if (!module.attr("_debug_options").is_none()) {
             auto debugOptions = module.attr("_debug_options").cast<py::dict>();
             if (debugOptions.contains("runtime_debug_mode")) {
@@ -1155,6 +1161,7 @@ private:
     int intervalSec{60};
     double timeoutSec{static_cast<double>(config::GetHostOption<int>(TIMEOUT_SEC))};
     int totalTimeoutSec{600};
+    int launchEarlyMode{0};
 
     RtHostInputInfo hostInfo;
     RtAicpuArgsEx rtAicpuArgs;
