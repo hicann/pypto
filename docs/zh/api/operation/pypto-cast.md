@@ -94,10 +94,7 @@ Ascend 950PR/Ascend 950DT使用不同的 CastMode 体系，内部实现基于 `R
 | DT_BF16 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | SAT_ROUND模式（先饱和后舍入） |
 | DT_UINT8 | DT_FP16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_UINT8 | DT_UINT16 | 不支持舍入模式 | - | 类型扩展 |
-| DT_UINT8 | DT_INT16 | 不支持舍入模式 | - | 类型扩展 |
-| DT_UINT8 | DT_INT32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_FP16 | 不支持舍入模式 | - | 类型扩展 |
-| DT_INT8 | DT_UINT16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_INT16 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT8 | DT_INT32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT16 | DT_UINT8 | 不支持舍入模式 | - | SAT_PART模式 |
