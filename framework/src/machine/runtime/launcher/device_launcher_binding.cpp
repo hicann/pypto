@@ -43,9 +43,9 @@ int DeviceRunOnce(Function* function, uint8_t* hostCtrlCache, const DeviceLaunch
 
 int HasInplaceArgs(Function* function) { return DeviceLauncher::HasInplaceArgs(function); }
 
-void DeviceLauncherInit() { DeviceLauncherContext::Get().DeviceInit(); }
+void DeviceLauncherInit() { DeviceLauncherContext::Get().Initialize(); }
 
-void DeviceLauncherFini() { DeviceLauncherContext::Get().DeviceFini(); }
+void DeviceLauncherFini() { DeviceLauncherContext::Get().Finalize(); }
 
 void CopyDevToHost(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
 {
@@ -64,9 +64,27 @@ uint8_t* CopyHostToDev(uint8_t* data, uint64_t size)
     return DeviceMemoryUtils(false).CopyToDev((uint8_t*)data, size, nullptr);
 }
 
-void ChangeCaptureModeRelax() { DeviceLauncher::ChangeCaptureModeRelax(); }
+void ChangeCaptureModeRelax() { ExchangeCaptureModeRelax(); }
 
-void ChangeCaptureModeGlobal() { DeviceLauncher::ChangeCaptureModeGlobal(); }
+void ChangeCaptureModeGlobal() { ExchangeCaptureModeGlobal(); }
+
+void GetCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture)
+{
+    (void)GetStreamCaptureInfo(aicoreStream, rtModel, isCapture);
+}
+
+void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary)
+{
+    return RegisterKernelBin(kernelBinary);
+}
+
+void UnregisterKernelBinary(void* hdl)
+{
+    int ret = RuntimeDevBinaryUnRegister(hdl);
+    if (ret != RT_SUCCESS) {
+        MACHINE_LOGE(RtErr::RT_REGISTER_FAILED, "unregister kernel failed, ret: %d", ret);
+    }
+}
 
 static std::unordered_map<ExportedOperator*, std::shared_ptr<ExportedOperator>> exportedOperatorDict;
 

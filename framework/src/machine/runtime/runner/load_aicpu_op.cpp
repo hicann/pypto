@@ -192,4 +192,17 @@ int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]] RtStream stream, [[maybe_unuse
     return 0;
 #endif
 }
+
+int LoadAicpuOp::LaunchPyptoNullOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum)
+{
+    if (!isPyptoNullLaunched_) {
+        auto ret = LaunchBuiltInOp(stream, kArgs, aicpuNum, "PyptoNull");
+        if (ret != 0) {
+            MACHINE_LOGE(HostLauncherErr::LAUNCH_BUILTIN_OP_NULL_FAILED, "launch built null failed");
+            return ret;
+        }
+        isPyptoNullLaunched_ = true;
+    }
+    return 0;
+}
 } // namespace npu::tile_fwk

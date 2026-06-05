@@ -25,6 +25,7 @@
 #include "machine/runtime/launcher/device_launcher_driver_gate.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/host/perf_analysis.h"
 
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
@@ -35,74 +36,19 @@ bool DeviceLauncher::inited_ = false;
 std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
 std::unordered_map<Function*, DeviceLauncher::DeviceRunCacheInfo> DeviceLauncher::cacheInfoDict_;
 
-const std::unordered_map<AclMdlRICaptureStatus, std::function<void(bool&)>> captureStatusHandlers = {
-    {npu::tile_fwk::AclMdlRICaptureStatus::ACTIVE, [](bool& isCapture) { isCapture = true; }},
-    {npu::tile_fwk::AclMdlRICaptureStatus::NONE,
-     [](bool& isCapture) {
-         (void)isCapture;
-         MACHINE_LOGD("GetStreamCaptureInfo: status NONE");
-     }},
-    {npu::tile_fwk::AclMdlRICaptureStatus::INVALIDATED, [](bool& isCapture) {
-         (void)isCapture;
-         MACHINE_LOGD("GetStreamCaptureInfo: status invalidated");
-     }}};
-
-namespace {
-void SyncCaptureModeFlag(bool isCapture)
-{
-    DeviceLauncherContext::Get().SetCaptureMode(isCapture);
-}
-} // namespace
-
-int DeviceLauncher::GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture)
-{
-    AclMdlRICaptureStatus captureStatus = AclMdlRICaptureStatus::NONE;
-    AclError ret = AclMdlRICaptureGetInfo(aicoreStream, &captureStatus, &rtModel);
-    if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
-        MACHINE_LOGW("Stream capture not support");
-        return 0;
-    } else if (ret != ACLRT_SUCCESS) {
-        MACHINE_LOGE(RtErr::RT_CAPTURE_FAILED, "AclMdlRICaptureGetInfo failed, return[%d]", ret);
-        return -1;
-    }
-
-    auto it = captureStatusHandlers.find(captureStatus);
-    if (it != captureStatusHandlers.end()) {
-        it->second(isCapture);
-    } else {
-        MACHINE_LOGE(RtErr::RT_CAPTURE_FAILED, "GetStreamCaptureInfo get unsupport capture status");
-        return -1;
-    }
-    MACHINE_LOGI("capture mode[%d]", isCapture);
-    return 0;
-}
-
 void DeviceLauncher::CheckAscendDriverVersionOnboard()
 {
     AscendDriverVersionGate::EnsureDriverVersionForOnboardOnce();
-}
-
-void DeviceLauncher::ChangeCaptureModeRelax()
-{
-    AclMdlRICaptureMode mode =
-        AclMdlRICaptureMode::RELAXED; // aclgraph does not support rtmemcpy / rtmemset, set to relaxed mode
-    AclMdlRICaptureThreadExchangeMode(&mode);
-}
-
-void DeviceLauncher::ChangeCaptureModeGlobal()
-{
-    AclMdlRICaptureMode mode = AclMdlRICaptureMode::GLOBAL;
-    AclMdlRICaptureThreadExchangeMode(&mode);
 }
 
 int DeviceLauncher::SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream, bool& isCapture)
 {
     AclMdlRI rtModel = nullptr;
 
-    if (GetStreamCaptureInfo(aicoreStream, rtModel, isCapture) < 0) {
+    if (!GetStreamCaptureInfo(aicoreStream, rtModel, isCapture)) {
         return -1;
     }
-    SyncCaptureModeFlag(isCapture);
+    DeviceLauncherContext::Get().SetCaptureMode(isCapture);
 
     if (isCapture) {
         if (rtModel == nullptr) {
@@ -130,7 +76,7 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
         if (rc < 0) {
             return rc;
         }
-        DeviceRunner::Get().SynchronizeDeviceToHostProfData();
+        DeviceRunner::Get().SyncProfData();
         DeviceRunner::Get().ResetPerData();
     }
     return 0;
@@ -141,25 +87,20 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator,
     DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
 {
-    bool isCapture = false;
     MACHINE_LOGI("Kernel Launch");
-    RtStream aicpuStream = GetContextScheStream();
-    RtStream ctrlStream = GetContextCtrlStream();
     aicoreStream = aicoreStream == nullptr ? GetContextAiCoreStream() : aicoreStream;
-    HOST_PERF_TRACE(TracePhase::RunDeviceInit);
-
+    KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), aicoreStream,
+        config.blockdim, config.aicpuNum);
     // 1.Add stream to capture model
-    int rc = SetCaptureStream(aicoreStream, aicpuStream, isCapture);
+    int rc = SetCaptureStream(launchInfo.aicoreStream, launchInfo.schedStream, launchInfo.isCaptureActivate);
     if (rc < 0) {
         return rc;
     }
 
     // 2. Change capture mode to relaxed
-    if (isCapture) {
-        ChangeCaptureModeRelax();
+    if (launchInfo.isCaptureActivate) {
+        ExchangeCaptureModeRelax();
     }
-    DeviceRunner::Get().SetCaptureFlag(isCapture);
-
     HOST_PERF_TRACE(TracePhase::RunDeviceSetCapture);
 
     DeviceRunner::Get().SetHostProfFunction(function);
@@ -167,6 +108,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     if (rc != 0 && rc != ACLRT_ERROR_REPEAT_INITIALIZE) {
         return rc;
     }
+    HOST_PERF_TRACE(TracePhase::RunDeviceInit);
 
     CheckAscendDriverVersionOnboard();
 
@@ -176,13 +118,15 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
             cachedOperator = GetDevRunCacheOperator(function);
         }
     }
+
     if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
-        rc = DeviceRunner::Get().RegisterKernelBin(
-            &(*reinterpret_cast<RtBinHandle*>(CachedOperator::GetBinHandleHolder(cachedOperator))),
-            function->GetDyndevAttribute()->kernelBinary);
-        if (rc < 0) {
+        launchInfo.binHandle = *reinterpret_cast<RtBinHandle*>(CachedOperator::GetBinHandleHolder(cachedOperator));
+        if (launchInfo.binHandle == nullptr) {
+            launchInfo.binHandle = RegisterKernelBin(function->GetDyndevAttribute()->kernelBinary);
+        }
+        if (launchInfo.binHandle == nullptr) {
             MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Register kernel bin failed.");
-            return rc;
+            return -1;
         }
     }
     HOST_PERF_TRACE(TracePhase::RunDevRegistKernelBin);
@@ -204,17 +148,18 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     HOST_PERF_TRACE(TracePhase::RunDevInitInOutTensor);
 
     DataDumpInit();
-    rc = DeviceRunner::Get().DynamicLaunch(
-        aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum);
+    launchInfo.blockDim = config.blockdim;
+    launchInfo.aicpuNum = config.aicpuNum;
+    rc = DeviceRunner::Get().DynamicLaunch(launchInfo, &kArgs);
     if (rc < 0) {
         return rc;
     }
-    rc = RunWithProfile(aicoreStream, aicpuStream, isCapture);
+    rc = RunWithProfile(aicoreStream, launchInfo.schedStream, launchInfo.isCaptureActivate);
     if (rc < 0) {
         return rc;
     }
     if (streamSynchronize) {
-        rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, ctrlStream, aicoreStream);
+        rc = DeviceRunner::Get().DynamicLaunchSynchronize(launchInfo.schedStream, launchInfo.ctrlStream, aicoreStream);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     MACHINE_LOGI("finish Kernel Launch.");
@@ -392,9 +337,9 @@ void DeviceLauncher::FreeControlFlowCache(uint8_t* ctrlCache)
     }
 }
 
-void DeviceLauncher::AddAicpuStream(AclMdlRI& rtModel)
+void DeviceLauncher::AddAicpuStream(const bool isCapture, AclMdlRI& rtModel)
 {
-    if (IsCaptureMode()) {
+    if (isCapture) {
         RuntimeStreamAddToModel(GetContextCtrlStream(), rtModel);
         RuntimeStreamAddToModel(GetContextScheStream(), rtModel);
     }
@@ -408,46 +353,23 @@ void DeviceLauncher::SaveStream(AclRtStream aicoreStream)
 
 void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
 {
-    SyncCaptureModeFlag(false);
-    AclMdlRICaptureStatus status = AclMdlRICaptureStatus::NONE;
-    auto ret = AclMdlRICaptureGetInfo(aicoreStream, &status, &rtModel);
-    if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
-        return;
-    } else if (ret != ACLRT_SUCCESS) {
-        MACHINE_LOGE(RtErr::RT_CAPTURE_FAILED, "get capture info failed: %d", ret);
-        return;
-    }
-    if (status == AclMdlRICaptureStatus::ACTIVE) {
-        SyncCaptureModeFlag(true);
-        MACHINE_LOGI("The current mode is capture mode");
-    }
+    bool isCapture = false;
+    (void)GetStreamCaptureInfo(aicoreStream, rtModel, isCapture);
+    DeviceLauncherContext::Get().SetCaptureMode(isCapture);
 }
 
 bool DeviceLauncher::IsCaptureMode() { return DeviceLauncherContext::Get().IsCaptureMode(); }
-
-void* DeviceLauncher::RegisterKernelBin(const std::vector<uint8_t>& kernelBinary)
-{
-    return RegisterKernelBinary(kernelBinary);
-}
-
-void DeviceLauncher::UnregisterKernelBin(void* hdl)
-{
-    int ret = RuntimeDevBinaryUnRegister(hdl);
-    if (ret != RT_SUCCESS) {
-        MACHINE_LOGE(RtErr::RT_REGISTER_FAILED, "unregister kernel failed, ret: %d", ret);
-    }
-}
 
 void DeviceLauncher::SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode)
 {
     auto& devRunner = DeviceRunner::Get();
     if (debugEnable || devRunner.GetEnableDumpDevPref() || devRunner.GetHostProfType() == 1) {
         if (isCaptureMode) {
-            ChangeCaptureModeRelax();
+            ExchangeCaptureModeRelax();
         }
         devRunner.SetDebugEnable();
         if (isCaptureMode) {
-            ChangeCaptureModeGlobal();
+            ExchangeCaptureModeGlobal();
         }
     }
 }
@@ -464,7 +386,32 @@ int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode,
     //  close early launch
     auto schedStream = GetStreamContext().GetScheStream();
     auto ctrlStream = GetStreamContext().GetCtrlStream();
-    return DeviceRunner::Get().RunPreSync(schedStream, ctrlStream, (RtStream)aicoreStream);
+    return RunPreSync(schedStream, ctrlStream, aicoreStream);
+}
+
+int DeviceLauncher::RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStream aicoreStream)
+{
+    AclRtEvent event;
+    if (AclRtCreateEventExWithFlag(&event, ACL_EVENT_SYNC) < 0) {
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtCreateEvent failed.");
+        return -1;
+    }
+    int rc = AclRtRecordEvent(event, aicoreStream);
+    if (rc < 0) {
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtRecordEvent failed %d\n", rc);
+        return rc;
+    }
+    rc = AclRtStreamWaitEvent(scheStream, event);
+    if (rc < 0) {
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtStreamWaitEvent failed %d\n", rc);
+        return rc;
+    }
+    rc = AclRtStreamWaitEvent(ctrlStream, event);
+    if (rc < 0) {
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "AclRtStreamWaitEvent failed %d\n", rc);
+        return rc;
+    }
+    return 0;
 }
 
 int DeviceLauncher::LaunchAicpuKernel(
@@ -518,7 +465,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
             return rc;
         }
-        devRunner.DumpAiCoreExecutionTimeData();
+        devRunner.SyncProfData();
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {

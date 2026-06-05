@@ -110,7 +110,7 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     DeviceLauncher::SetCaptureStream(aicoreStream, aicpuStream, isCapture);
 
     if (isCapture) {
-        DeviceLauncher::ChangeCaptureModeRelax();
+        ExchangeCaptureModeRelax();
     }
 
     auto rc = AclInit(nullptr);
@@ -125,7 +125,9 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     DeviceLauncher::DeviceInitDistributedContext(eslMemoryUtil, dynAttr->commGroupNames, kArgs);
     DeviceLauncher::DeviceInitTilingData(eslMemoryUtil, kArgs, dynAttr->devProgBinary, nullptr, config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(eslMemoryUtil, kArgs, inputList, outputList, dynAttr->disableL2List);
-    ExchangeCaptureMode(isCapture);
+    if (isCapture) {
+        ExchangeCaptureModeGlobal();
+    }
 
     rc = DynamicKernelLaunchEsl(&kArgs, aicoreStream, kernel);
     if (rc < 0) {

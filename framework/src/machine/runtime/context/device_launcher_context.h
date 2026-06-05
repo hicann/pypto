@@ -23,7 +23,7 @@ namespace npu::tile_fwk {
 class DeviceLauncherContext {
 public:
     static DeviceLauncherContext& Get();
-    void DeviceInit()
+    void Initialize()
     {
         // 使能 Aihac 后端
         oriEnableAihacBackend = config::GetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
@@ -42,7 +42,7 @@ public:
         ProgramData::GetInstance().Reset();
     }
 
-    void DeviceFini()
+    void Finalize()
     {
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
 #ifdef ENABLE_STEST_BINARY_CACHE

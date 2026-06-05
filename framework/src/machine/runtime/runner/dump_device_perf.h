@@ -18,11 +18,9 @@
 
 #include <vector>
 #include "tilefwk/aicpu_common.h"
-#include "nlohmann/json.hpp"
-using json = nlohmann::json;
 
 namespace npu::tile_fwk::dynamic {
-void DumpAicoreTaskExectInfo(DeviceArgs& args, const std::vector<void*>& perfData);
+void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& perfData);
 void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uint32_t freq, bool isLast);
 void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& perfData, bool isLast);
 } // namespace npu::tile_fwk::dynamic

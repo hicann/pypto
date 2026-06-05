@@ -463,7 +463,7 @@ public:
     {
         dynAttr = dynFunc->GetDyndevAttribute().get();
         devProg = (DevAscendProgram*)dynAttr->devProgBinary.data();
-        kernelBin = DeviceLauncher::RegisterKernelBin(dynAttr->kernelBinary);
+        kernelBin = RegisterKernelBinary(dynAttr->kernelBinary);
         workspaceSize = devProg->memBudget.Total();
         InitCachedArgs();
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
@@ -641,7 +641,7 @@ public:
                 offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchCapacity);
 
             std::optional<AclModeGuard> captureRelaxGuard;
-            if (!isHostCfg && DeviceLauncher::IsCaptureMode()) {
+            if (!isHostCfg && DeviceLauncher::IsCaptureMode()) { // KernelBinary
                 captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
             }
 
@@ -686,7 +686,7 @@ public:
         if (runtimeDynamicCellMatchHostOwned_ && runtimeDynamicCellMatchHostAddr_ != 0) {
             std::free(reinterpret_cast<void*>(runtimeDynamicCellMatchHostAddr_));
         }
-        DeviceLauncher::UnregisterKernelBin(kernelBin);
+        UnregisterKernelBinary(kernelBin);
         for (auto& cache : originShapeCaches) {
             DeviceLauncher::FreeControlFlowCache(cache.devCache);
         }
@@ -832,7 +832,7 @@ public:
         auto devCache = kernel->FindCtrlFlowCache(tensors, true);
         if (devCache == nullptr) {
             std::vector<std::vector<int64_t>> shape;
-            if (DeviceLauncher::IsCaptureMode()) {
+            if (DeviceLauncher::IsCaptureMode()) { // KernelModule
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
                 devCache = kernel->BuildControlFlowCache(tensors, true);
             } else if (InferCacheShape(module, tensors, shape)) {
@@ -930,7 +930,7 @@ public:
         args->kArgs.parameter.globalRound = ++sequence;
         args->kArgs.maxDynamicAssembleOutcastMem = kernel->GetMaxDynamicAssembleOutcastMem();
         args->kArgs.maxDynamicCellMatchTableMem = kernel->GetMaxDynamicCellMatchTableMem();
-        auto isCaptureMode = DeviceLauncher::IsCaptureMode();
+        auto isCaptureMode = DeviceLauncher::IsCaptureMode();  // KernelModule
         bool debugEnable = !isCaptureMode && isDebugMode;
 
 #if ENABLE_VERBOSE_LOG
@@ -1272,7 +1272,7 @@ private:
 #endif
         HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
 
-        DeviceLauncher::AddAicpuStream(rtModel);
+        DeviceLauncher::AddAicpuStream(DeviceLauncher::IsCaptureMode(), rtModel);
         HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
 
         uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, tensors);

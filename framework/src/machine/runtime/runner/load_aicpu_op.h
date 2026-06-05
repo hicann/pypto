@@ -33,6 +33,7 @@ public:
         [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
     int LaunchBuiltInOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum,
                         const std::string& funcName) const;
+    int LaunchPyptoNullOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum);
     int GetBuiltInOpBinHandle();
     int LaunchCustomOp(RtStream stream, DeviceKernelArgs* kArgs, std::string& OpType) const;
     void CustomAiCpuSoLoad();
@@ -44,6 +45,7 @@ public:
     }
 private:
     void* customBinHandle_ = nullptr;
+    bool isPyptoNullLaunched_ = false;
     std::string builtInOpJsonPath_;
     std::unordered_map<std::string, RtFuncHandle> builtInFuncMap_;
 };

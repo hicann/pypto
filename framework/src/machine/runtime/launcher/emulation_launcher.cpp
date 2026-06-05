@@ -315,10 +315,10 @@ int EmulationLauncher::EmulationLaunchDeviceTensorData(
     const DeviceLauncherConfig& config, DevControlFlowCache* ctrlCache)
 {
     EmulationMemoryUtils memUtils;
-    DeviceLauncher::ChangeCaptureModeRelax();
+    ExchangeCaptureModeRelax();
     auto inList = toHostTensorData(inDevList, true);
     auto outList = toHostTensorData(outDevList, false);
-    DeviceLauncher::ChangeCaptureModeGlobal();
+    ExchangeCaptureModeGlobal();
     int rc = EmulationLaunchOnceWithHostTensorData(function, inList, outList, ctrlCache, memUtils, config);
     FreeHostTensorData(inList);
     FreeHostTensorData(outList);

@@ -26,6 +26,8 @@
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/distributed/common.h"
 #include "machine/utils/checkinject.h"
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
 
 namespace npu::tile_fwk::dynamic {
 namespace {
@@ -139,7 +141,7 @@ void ConstructTaskInfo(
     }
 }
 
-void DumpAicoreTaskExectInfo(DeviceArgs& args, const std::vector<void*>& perfData)
+void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& perfData)
 {
     json rootTaskStatus = json::array();
     auto blockNum = args.GetBlockNum();

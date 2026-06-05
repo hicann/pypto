@@ -162,7 +162,7 @@ struct DeviceArgs {
     uint32_t validGetPgMask : 30;          // mark pgmask is invalid
     uint64_t aicpuPerfAddr{0};             // aicpuPer Gm addr
     uint64_t devDfxArgAddr{0};             // devDfx
-    uint64_t GetBlockNum() { return nrValidAic * (nrAiv / nrAic + 1); }
+    uint64_t GetBlockNum() const { return nrValidAic * (nrAiv / nrAic + 1); }
     uint32_t maxAicpuNum{0};
     uint32_t launchSchedAicpuNum{7};    // user configures the number of launch schedules for aicpu
     bool launchSchedSameCluster = true; // user configures whether enables binding aicpu within the same cluster

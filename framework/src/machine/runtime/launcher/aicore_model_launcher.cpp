@@ -279,10 +279,10 @@ int AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(
     const DeviceLauncherConfig& config, DevControlFlowCache* ctrlCache)
 {
     AicoreModelMemoryUtils memUtils;
-    DeviceLauncher::ChangeCaptureModeRelax();
+    ExchangeCaptureModeRelax();
     auto inList = toHostTensorData(inDevList, true);
     auto outList = toHostTensorData(outDevList, false);
-    DeviceLauncher::ChangeCaptureModeGlobal();
+    ExchangeCaptureModeGlobal();
     int rc = AicoreModelLaunchOnceWithHostTensorData(function, inList, outList, ctrlCache, memUtils, config);
     freeHostTensorData(inList);
     freeHostTensorData(outList);

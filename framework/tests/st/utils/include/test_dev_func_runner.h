@@ -198,8 +198,6 @@ private:
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
         if (function_ == nullptr || function_->GetDyndevAttribute() == nullptr) { return; }
-        DeviceRunner::Get().RegisterKernelBin(function_->GetDyndevAttribute()->kernelBinary);
-        DeviceRunner::Get().SetHostProfFunction(function_);
         KernelLaunchPrecheck(inputs, outputs);
         DevAscendProgram* functionDevProg =
             reinterpret_cast<DevAscendProgram*>(function_->GetDyndevAttribute()->devProgBinary.data());
@@ -355,11 +353,15 @@ private:
         DeviceKernelArgs kArgs;
         auto dynAttr = InitKernelRuntime(memoryHelper, kArgs);
         RefillDynamicBudgetsAndSyncCfg(memoryHelper, kArgs, inputs, outputs, false);
+        KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), GetContextAiCoreStream(),
+            config_.blockdim, config_.aicpuNum);
+        launchInfo.binHandle = RegisterKernelBin(function_->GetDyndevAttribute()->kernelBinary);
+        DeviceRunner::Get().SetHostProfFunction(function_);
         for (int i = 0; i < config_.repeatNum; i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
-            rc = DeviceRunner::Get().DynamicRun(0, &kArgs, config_.blockdim, config_.aicpuNum);
+            rc = DeviceRunner::Get().DynamicRun(launchInfo, &kArgs);
             EXPECT_EQ(rc, 0);
-            DeviceRunner::Get().SynchronizeDeviceToHostProfData();
+            DeviceRunner::Get().SyncProfData();
         }
         CopyBackInOut(memoryHelper, inputs, outputs);
         if (IsDumpTensorEnable()) {

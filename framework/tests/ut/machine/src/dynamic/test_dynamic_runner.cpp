@@ -76,8 +76,7 @@ TEST_F(TestDynamicDeviceRunner, TestInitArgs)
     args.nrAic = 2;
     args.nrAiv = 2;
     args.nrValidAic = args.nrAic;
-    runner.DumpAiCorePmuData();
-    runner.SynchronizeDeviceToHostProfData();
+    runner.SyncProfData();
 }
 
 TEST_F(TestDynamicDeviceRunner, TestDynamicRun)
@@ -92,16 +91,9 @@ TEST_F(TestDynamicDeviceRunner, TestDynamicRun)
     taskArgs.outputs = 0;
     runner.args_.nrAic = 2;
     runner.args_.nrAiv = 2;
-    int ret = runner.DynamicRun(0, &taskArgs, 2);
+    KernelLaunchInfo launchInfo(GetContextScheStream(), GetContextCtrlStream(), GetContextAiCoreStream(), 2, 5);
+    int ret = runner.DynamicRun(launchInfo, &taskArgs);
     EXPECT_EQ(ret, 0);
-}
-
-TEST_F(TestDynamicDeviceRunner, TestRegisterDynamicKernel)
-{
-    npu::tile_fwk::DeviceRunner runner;
-    [[maybe_unused]] RtBinHandle staticHdl_;
-    std::vector<uint8_t> bin;
-    runner.RegisterKernelBin(&staticHdl_, bin);
 }
 
 TEST_F(TestDynamicDeviceRunner, test_pypto_kernel_server_null)

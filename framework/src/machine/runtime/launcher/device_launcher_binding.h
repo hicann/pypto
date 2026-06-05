@@ -17,6 +17,8 @@
 #define SRC_RUNTIME_DEVICE_LAUNCHER_BINDING_H
 
 #include <vector>
+#include "adapter/api/acl_define.h"
+#include "adapter/api/runtime_define.h"
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "machine/utils/dynamic/dev_encode_program.h"
@@ -168,5 +170,10 @@ void ChangeCaptureModeRelax();
 
 void ChangeCaptureModeGlobal();
 
+void GetCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture);
+
+void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary);
+
+void UnregisterKernelBinary(void* hdl);
 } // namespace npu::tile_fwk::dynamic
 #endif // SRC_MACHINE_DEVICE_LAUNCHER_H

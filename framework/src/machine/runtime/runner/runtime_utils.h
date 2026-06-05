@@ -66,7 +66,7 @@ inline uint64_t AlignSize(const uint64_t bytes, const uint32_t aligns = 512U)
     return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
 }
 
-inline void* MachinePerfTraceDevMalloc(const uint64_t size, const RtMemType memType)
+inline void* DevMallocWithAlignSize(const uint64_t size, const RtMemType memType)
 {
     uint8_t* devPtr = nullptr;
     if (RuntimeMalloc(reinterpret_cast<void**>(&devPtr), AlignSize(size), memType, 0) != 0) {
@@ -74,7 +74,7 @@ inline void* MachinePerfTraceDevMalloc(const uint64_t size, const RtMemType memT
         return nullptr;
     }
     if (RuntimeMemset(devPtr, AlignSize(size), 0, AlignSize(size)) != 0) {
-        MACHINE_LOGW("reset perf device addr failed");
+        MACHINE_LOGW("Fail to memset of size[%lu].", size);
         RuntimeFree(devPtr);
         return nullptr;
     }
@@ -92,16 +92,20 @@ inline void CopyFromTensor(uint8_t* hostDstAddr, const uint8_t* devSrcAddr, cons
 #endif
 }
 
-inline void ExchangeCaptureMode(const bool& isCapture)
+inline void ExchangeCaptureModeRelax()
 {
-    if (isCapture) {
-        AclMdlRICaptureMode mode = AclMdlRICaptureMode::GLOBAL;
-        AclMdlRICaptureThreadExchangeMode(&mode);
-        MACHINE_LOGI("captureMode is: %d", static_cast<int>(mode));
-    }
+    AclMdlRICaptureMode mode = AclMdlRICaptureMode::RELAXED;
+    // aclgraph does not support rtmemcpy / rtmemset, set to relaxed mode
+    AclMdlRICaptureThreadExchangeMode(&mode);
 }
 
-inline void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary)
+inline void ExchangeCaptureModeGlobal()
+{
+    AclMdlRICaptureMode mode = AclMdlRICaptureMode::GLOBAL;
+    AclMdlRICaptureThreadExchangeMode(&mode);
+}
+
+inline void* RegisterKernelBin(const std::vector<uint8_t>& kernelBinary)
 {
     void* hdl = nullptr;
     if (kernelBinary.empty()) {
@@ -117,7 +121,25 @@ inline void* RegisterKernelBinary(const std::vector<uint8_t>& kernelBinary)
     if (RuntimeRegisterAllKernel(&binary, &hdl) != RT_SUCCESS) {
         MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "Failed to register kernel bin");
     }
+    MACHINE_LOGD("Kernel binary has been registered successfully, size is [%zu].", kernelBinary.size());
     return hdl;
+}
+
+inline bool GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture)
+{
+    AclMdlRICaptureStatus captureStatus = AclMdlRICaptureStatus::NONE;
+    AclError ret = AclMdlRICaptureGetInfo(aicoreStream, &captureStatus, &rtModel);
+    if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
+        MACHINE_LOGW("Stream capture not support");
+        return true;
+    }
+    if (ret != ACLRT_SUCCESS) {
+        MACHINE_LOGE(RtErr::RT_CAPTURE_FAILED, "AclMdlRICaptureGetInfo failed, return[%d]", ret);
+        return false;
+    }
+    isCapture = captureStatus == AclMdlRICaptureStatus::ACTIVE;
+    MACHINE_LOGI("Capture status [%d], capture mode[%d]", static_cast<int32_t>(captureStatus), isCapture);
+    return true;
 }
 
 int GetCfgBlockdim();

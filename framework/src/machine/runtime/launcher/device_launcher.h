@@ -441,9 +441,6 @@ public:
         }
     }
 
-    static void ChangeCaptureModeRelax();
-    static void ChangeCaptureModeGlobal();
-    static int GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture);
     static int SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream, bool& isCapture);
     static int RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, bool isCapture);
     static int DeviceLaunchOnceWithDeviceTensorData(
@@ -457,12 +454,10 @@ public:
         std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames);
     static uint8_t* CopyControlFlowCache(DevControlFlowCache* ctrlCache);
     static void FreeControlFlowCache(uint8_t* ctrlCache);
-    static void* RegisterKernelBin(const std::vector<uint8_t>& kernelBinary);
-    static void UnregisterKernelBin(void* hdl);
     static bool IsCaptureMode();
     static void SaveStream(AclRtStream aicoreStream);
     static void GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel);
-    static void AddAicpuStream(AclMdlRI& rtModel);
+    static void AddAicpuStream(const bool isCapture, AclMdlRI& rtModel);
     static int LaunchAicpuKernel(
         RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function,
         const std::vector<DeviceTensorData>& tensors = {});
@@ -481,6 +476,7 @@ public:
     static void SetDevPerfAddr([[maybe_unused]] const bool debugEnable, [[maybe_unused]] const bool isCaptureMode);
     static void DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors,
         const std::string& funcName);
+    static int RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStream aicoreStream);
 
 private:
     static void DataDumpInit();
