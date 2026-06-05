@@ -100,7 +100,7 @@ void ConstructTaskInfo(
         if (taskStats[j].execEnd != 0) {
             json taskObj;
             taskObj["seqNo"] = taskStats[j].seqNo;
-            taskObj["subGraphId"] = taskStats[j].subGraphId;
+            taskObj["leafIndex"] = taskStats[j].subGraphId;
             taskObj["taskId"] = taskStats[j].taskId;
             taskObj["execStart"] = taskStats[j].execStart;
             taskObj["execEnd"] = taskStats[j].execEnd;
