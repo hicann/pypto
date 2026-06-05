@@ -261,15 +261,15 @@ def _kernel_impl(...):
 
 ### OL47 (S3 / INFO) — Single global tile-shape call with multiple sub-kernels
 
-If `_kernel_impl` calls `set_*_tile_shapes(...)` once and then dispatches to two or more `pypto_*` sub-kernels, each sub-kernel is forced to use the same tile shape. When the sub-kernels do different ops (e.g. one matmul + one reduction), per-stage tiles are usually faster.
+If `_kernel_impl` calls `set_*_tile_shapes(...)` once and then dispatches to two or more `pypto_*` sub-kernels, each sub-kernel is forced to use the same tile shape. When the sub-kernels do different ops (e.g. one matmul + one reduction), per-stage tiles are usually faster. Before Stage 7, concrete cube values still follow the Tile shape baseline; the non-128 values below illustrate scope only.
 
 ```python
 # ❌ BAD-ish (works, but loses the per-stage tile opportunity)
 def _kernel_impl(q, k, v, out):
     pypto.set_cube_tile_shapes([128,128], [128,128], [128,128])
     pypto.loop(NT)
-    a = pypto_stage_alpha(q, k)        # wants [64,128] tiles
-    b = pypto_stage_beta(a, v)         # wants [128,64] tiles
+    a = pypto_stage_alpha(q, k)     # wants [64,128] tiles
+    b = pypto_stage_beta(a, v)      # wants [128,64] tiles
 
 # ✅ GOOD (per-stage local tiles)
 def pypto_stage_alpha(q, k):
@@ -299,7 +299,7 @@ Full reference material in skill `pypto-op-develop`'s `references/pypto-kernel-d
 - No `-> None` return annotation on JIT functions
 - No `.shape` unpacking inside JIT — extract on host, pass as `int` params
 - Tile shapes divide ALL test dimensions
-- **First-pass tile sizing (Stage 5 default):** take the tile shape from DESIGN.md §3.2.5 verbatim. Those values are already minimum-viable (vec axes ∈ [16, 64] or < 16 with rationale; cube tile by quick_ref.md M-based recommendation table). Do **not** raise tile values during coder dispatch — that is done later at Stage 7, not during coder dispatch. If DESIGN.md does not yet have §3.2.5 filled, return to pypto-op-orchestrator rather than guessing.
+- **First-pass tile sizing (Stage 5 default):** take the tile shape from DESIGN.md §3.2.5 verbatim and follow the pre-Stage-7 Tile shape baseline. Any API/shape hard-constraint exception must already be documented in DESIGN.md. Do **not** introduce training/decode/core-utilization cube-tile branches during coder dispatch — that is done later at Stage 7, not during coder dispatch. If DESIGN.md does not yet have §3.2.5 filled, return to pypto-op-orchestrator rather than guessing.
 - **Tile shape values must be compile-time-known (OL48 enforces).** Every argument to `pypto.set_vec_tile_shapes(...)` and every list element inside `pypto.set_cube_tile_shapes([...], [...], [...])` must be a Python `int` literal, or a `Name` that resolves to a literal via a module-level / function-local `Assign` (e.g. `D = 128` then `pypto.set_vec_tile_shapes(1, D)` is OK). Forbidden: kernel function parameters, `x.shape[i]`, `tensor.shape`, `SymbolicScalar` (including `B = x.shape[0]` then `set_vec_tile_shapes(B, …)`), runtime arithmetic, any `Call` result. Rationale: PyPTO 编译期需要 concrete tile shape to materialize the kernel; symbolic / parameter-driven tiles produce opaque `F21004` / `REGISTER_COPY` failures.
 - `pypto.loop(1)` wrapper around kernel body (vector-pipe default)
 - Write-back via `output[:] = result`

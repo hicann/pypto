@@ -169,16 +169,20 @@ def {op_name}_kernel(
 
 #### 3.2.2 Tile design + rationale (mandatory)
 
+- **Stage 7 前 Tile shape 基线**：
+  - Cube / matmul：统一使用 128 基线，首跑前不做性能化切分。
+  - Vector：沿用默认 vec tile 规则，每轴通常在 `[16, 64]`，按 alignment / UB / rank 约束调整。
+  - 如因 API/shape 硬约束无法使用 Tile shape 基线，必须说明例外原因和替代值。
 - **采用 vec tile**: `pypto.set_vec_tile_shapes({tile_dims})`
-- **采用 cube tile** (若含 matmul): `pypto.set_cube_tile_shapes([{M_L0}, {M_L1}], [{K_L0}, {K_L1}], [{N_L0}, {N_L1}])`
+- **采用 cube tile** (若含 matmul): `pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])`
 - **Rationale** (单句, mandatory):
-  > {Vec tile：[16, 64] 范围内最小可行；Cube tile：按 quick_ref §「Cube tile 推荐」M-based 表选值；偏离时说明理由}
+  > {Cube tile：Stage 7 前统一 128；Vec tile：默认 [16, 64] 范围内稳定值；偏离时说明 API/shape 硬约束原因}
 - **Source**:
   - [ ] User-specified (见 SPEC.md §{X} 或 prompt)
-  - [ ] Vec tile 按 [16, 64] 范围；Cube tile 按 M-based 表（详见 SKILL.md §R2 步骤 1.6 + quick_ref.md）
-  - [ ] Architect-designed (偏离默认，rationale 见上)
+  - [ ] Stage 7 前 Tile shape 基线（详见 SKILL.md §R2 步骤 1.6 + quick_ref.md）
+  - [ ] API/shape hard-constraint exception (rationale 见上)
 
-> **Note**: 默认值不要超过 64 / 每个轴。性能优化由 Stage 7 optimizer 负责，不要在 architect 阶段把 tile 调大。
+> **Note**: Stage 7 前只使用稳定首跑基线。性能优化由 Stage 7 optimizer 负责，不要在 architect 阶段做训练/decode/核利用率等性能化 tile 分支。
 
 #### 3.2.3 Alternatives considered (optional, 推荐填)
 
@@ -187,7 +191,7 @@ def {op_name}_kernel(
 | {tile A}  | {x/10} | {1 句否决理由} |
 | {tile B}  | {x/10} | {1 句}         |
 
-> **可选**: 若 tile 选择有明显权衡（例如 vec tile 在 [16, 64] 范围内多个合理选择，或 cube tile 偏离 M-based 推荐表），建议列出。性能权衡是 Stage 7 的工作，architect 阶段不强制穷举。
+> **可选**: 若 tile 选择有明显约束权衡（例如 vec tile 在 `[16, 64]` 范围内多个合理选择，或 API/shape 迫使 cube 偏离 128），建议列出。性能权衡是 Stage 7 的工作，architect 阶段不强制穷举。
 
 #### 3.2.4 PyPTO syntax compliance (machine-verifiable, 全部 ☑ required)
 
@@ -200,7 +204,8 @@ def {op_name}_kernel(
 - [ ] broadcast 1 轴 rule: 无隐式 multi-axis expand，broadcast 轴用 size-1 显式标
 - [ ] vec tile per-stage 设置: 若 §3.2.1 列举的 vec-op shape class ≥ 2，则在 §3.2.5 中按 stage 重新 set
 - [ ] tile 参数全部编译期静态（**OL48**）: `set_vec_tile_shapes` / `set_cube_tile_shapes` 的每个值（含 list 元素）是 Python int 字面量或解析到字面量的常量 Assign；**无** kernel 入参 / `tensor.shape[i]` / SymbolicScalar / 运行时计算
-- [ ] vec tile axis ∈ [16, 64]：每个轴值在该范围内；超 UB 已下调至 < 16 并在 §3.2.2 rationale 中说明；不要超过 64（Stage 7 optimizer 上调）；**cube tile 不在此约束内**，按 quick_ref §「Cube tile 推荐」M-based 表
+- [ ] Stage 7 前 Tile shape 基线已应用，或已说明 API/shape 硬约束例外
+- [ ] vec tile axis ∈ [16, 64]：每个轴值在该范围内；超 UB 已下调至 <16 并在 §3.2.2 rationale 中说明；不要超过 64（Stage 7 optimizer 上调）
 
 > 任一 ☐ 未勾选 → 回到 §3.2.2 重新设计 tile
 
@@ -209,13 +214,7 @@ def {op_name}_kernel(
 ```python
 # 单一值 (shape range 窄时):
 pypto.set_vec_tile_shapes({tile_dims})
-pypto.set_cube_tile_shapes([{M_L0}, {M_L1}], [{K_L0}, {K_L1}], [{N_L0}, {N_L1}])
-
-# Shape-conditional (shape range 广时):
-if {dim_var} >= {threshold}:
-    pypto.set_*_tile_shapes(... 大 tile ...)
-else:
-    pypto.set_*_tile_shapes(... 小 tile ...)
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 
 # Per-stage (多 vec-op shape class 时):
 pypto.set_vec_tile_shapes({stage_A_tile})
@@ -275,17 +274,18 @@ def {op}_kernel(
 | 1 | 所有 sum 输入已转 FP32 |  |  |
 | 2 | matmul 两侧 dtype 一致 |  |  |
 | 3 | TileShape 维度数 = 操作数维度数 |  |  |
-| 4 | 尾轴满足对齐 |  |  |
-| 5 | 同阶段 UB 占用 ≤ 容量 |  |  |
-| 6 | 表达式展开 < 18000 |  |  |
-| 7 | 输出经 `[:]` / `assemble` 显式写回 |  |
-| 8 | 无 view/assemble 同张量回环 |  |
-| 9 | 动态轴标 `pypto.DYNAMIC` |  |
-| 10 | 动态 loop 提供 `unroll_list`（**嵌套时仅最内层 `pypto.loop`**；OL49 门禁） |  |
-| 10b | `unroll_list` 在 Stage 6 之前**只含单一值**（默认 `[1]`；有依据时可用其它单值并在 §4 记录理由；禁止多值，调优留到 Stage 7；OL56 门禁 S0） |  |
-| 11 | 跨迭代状态用 `submit_before_loop=True` |  |
-| 12 | 尾块在 `pypto.view` / `pypto.reshape` 处传 `valid_shape=...`（**不是** `pypto.assemble` 的参数） |  |
-| 13 | 无 SymbolicScalar 用作 `**` / list index / Python `if` |  |
+| 4 | Stage 7 前 Tile shape 基线已应用，或已说明硬约束例外 |  |  |
+| 5 | 尾轴满足对齐 |  |  |
+| 6 | 同阶段 UB 占用 ≤ 容量 |  |  |
+| 7 | 表达式展开 < 18000 |  |  |
+| 8 | 输出经 `[:]` / `assemble` 显式写回 |  |  |
+| 9 | 无 view/assemble 同张量回环 |  |  |
+| 10 | 动态轴标 `pypto.DYNAMIC` |  |  |
+| 11 | 动态 loop 提供 `unroll_list`（**嵌套时仅最内层 `pypto.loop`**；OL49 门禁） |  |  |
+| 12 | `unroll_list` 在 Stage 6 之前**只含单一值**（默认 `[1]`；有依据时可用其它单值并在 §4 记录理由；禁止多值，调优留到 Stage 7；OL56 门禁 S0） |  |  |
+| 13 | 跨迭代状态用 `submit_before_loop=True` |  |  |
+| 14 | 尾块在 `pypto.view` / `pypto.reshape` 处传 `valid_shape=...`（**不是** `pypto.assemble` 的参数） |  |  |
+| 15 | 无 SymbolicScalar 用作 `**` / list index / Python `if` |  |  |
 
 ### 开放问题
 
@@ -308,4 +308,3 @@ def {op}_kernel(
 |-------|------|------|
 | FP32  | 1e-5 | 1e-5 |
 | BF16  | 1e-3 | 1e-3 |
-

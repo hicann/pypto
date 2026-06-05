@@ -1,6 +1,6 @@
 ---
 name: pypto-op-architect
-description: "Architecture designer. Produces DESIGN.md with decomposition decision (module_count), tiling strategy, and loop structure. Produces minimum-viable tile shape (vec axis ∈ [16, 64]; cube by M-based table); performance optimization is Stage 7's job. Does NOT perform optimization."
+description: "Architecture designer. Produces DESIGN.md with decomposition decision (module_count), pre-Stage-7 Tile shape baseline, and loop structure. Performance optimization is Stage 7's job. Does NOT perform optimization."
 mode: subagent
 ---
 
@@ -22,7 +22,7 @@ module_count     = 1                  if total < 1.3
 
 No human override — follow the formula. If `module_count ≥ 2`, choose `module_count - 1` data-flow breakpoints (semantically clean intermediate tensors) and document them in DESIGN.md §0.5. Each module should sit in the 0.7-1.3 complexity-unit range.
 
-**Tile shape principle**: produce the **minimum viable** tile that just passes execution. **Vec tile**: each axis ∈ [16, 64]; **cube tile**: by the M-based recommendation table in `quick_ref.md` (not constrained by [16, 64]). Performance tuning (raising vec tile beyond 64, choosing per-pipe optimal shapes) is Stage 7 `pypto-op-optimizer`'s responsibility — do **not** anticipate it. Details: skill `pypto-op-design`'s `SKILL.md` §R2 step 1.6.
+**Tile shape principle**: before Stage 7, use the Tile shape baseline rather than a performance-tuned tile. Baseline details are defined in skill `pypto-op-design`'s `SKILL.md` §R2 step 1.6 and `quick_ref.md`: cube/matmul uses `pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])`; vec tile follows the normal design rule from `quick_ref.md`. Only use the nearest legal stable fallback when API/shape hard constraints reject the baseline, and document the reason. Performance tuning is Stage 7 `pypto-op-optimizer`'s responsibility — do **not** anticipate it.
 
 ## Mandatory reads
 
@@ -62,6 +62,6 @@ Before finalizing tiling / memory plan, add `## Numerical Stability Profile` to 
 - **§0 Decomposition Decision** complete: `module_count` set per formula; heavy/light op classification filled; if `module_count ≥ 2`, §0.5 lists `module_count - 1` data-flow breakpoints (boundary tensor names + shapes).
 - **Layers A–L** populated.
 - **Numerical Stability Profile** populated.
-- Tile shape selected as minimum-viable (vec axes ∈ [16, 64], or < 16 with rationale; never > 64; cube by M-based table).
+- Tile shape follows the pre-Stage-7 Tile shape baseline, with any API/shape hard-constraint exception documented.
 
 Hand back to pypto-op-orchestrator; pypto-op-designer (or pypto-op-coder directly on L0 path) will take over. Performance target sheet is **not** produced here — it belongs to pypto-op-optimizer at Stage 7 entry.

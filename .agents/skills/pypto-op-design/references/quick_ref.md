@@ -68,49 +68,34 @@ tile_size × dtype_bytes × tensor_count ≤ UB 容量
 | **cube tile 16 元素 alignment** (BF16/FP16 场合) | 违反则编译失败 |
 | **broadcast 1-轴 rule** | PyTorch 中允许多轴同时 expand，但 PyPTO 仅支持单轴 |
 | **vec tile per-stage rule** | 若有多个不同 shape class 的 vec op，需在每个 stage 前**重新 set** `set_vec_tile_shapes`. 单一 tile 仅适用于 shape class 仅 1 种的情况. (与 cube OL47 per-matmul rule 对称) |
+| Stage 7 前 Tile shape 基线 | `set_cube_tile_shapes([128, 128], [128, 128], [128, 128])`；vec tile 按常规默认规则 |
 
-### Vec tile shape 数值范围（默认规则）
+### Stage 7 前 Tile shape 基线
 
-> **只针对 vec tile**。Cube tile 用下面「设计参考: Cube tile 推荐」的 M-based 表，不受此范围约束。
+Stage 7 前不做 cube 性能调优型分支，vec tile 保持常规默认策略：
 
-| 范围 | 数值 | 理由 |
+| 类型 | 基线 | 说明 |
 |---|---|---|
-| **下限** | 16 | FP32 满足 32B 对齐（multiple of 8）；BF16/FP16 恰好 32B 对齐（= 16 elements）；小张量 shape < 16 时仍按 16 取（pad，subgraph 不受影响） |
-| **上限** | 64 | 单 tile × dtype 较小，subgraph 易满足 UB 容量；性能优化（调高）由 Stage 7 optimizer 负责 |
-| 例外 | < 16 | 仅当 [16, 64] 范围撑爆 UB（高 rank + 大 dtype + 多 tensor）时下调，在 DESIGN.md §3.2.2 rationale 中说明 |
-| 禁止 | > 64 | architect 阶段不要尝试性能优化；上限交由 Stage 7 optimizer |
+| Cube / matmul | `[128, 128], [128, 128], [128, 128]` | 统一首跑基线，避免 16/32 等过小 tile 造成编译展开爆炸 |
+| Vector | 每轴通常在 `[16, 64]` | 首选偏小值（16/32）；按 alignment、UB 与 rank 约束调整 |
+| 例外 | 最近的合法稳定值 | 仅当 API/shape 硬约束不允许默认值时使用，并在 DESIGN.md §3.2.2 写明原因 |
 
-### Tiling 推导步骤（最小可行）
+### Tiling 推导步骤（Stage 7 前）
 
-1. 确定尾轴对齐值：`align = 32 / dtype_bytes`（fp16/bf16=16, fp32=8）
-2. **Vec tile**：每个 axis 取值在 [16, 64] 范围（首选偏小，如 16 或 32；下限 16 自动满足 alignment）
-3. 验证 **per op** UB 容量：`tile_size × dtype × tensor_count ≤ UB 容量`，其中 tensor_count 按 op 类型取（unary=2, binary=3, reduce/expand 保守 4）；对算子内最重的 op 验证即可
-4. 验证展开约束：`(shape / tile) × tensor_count ≤ 18000`
-5. **Cube tile**（如果有 matmul）：查下方「设计参考: Cube tile 推荐」表按 M 维选值；cube tile 不受 [16, 64] 约束，遵循 well-tested 推荐
-6. 若以上任何约束不满足 → 下调部分轴（vec 可 < 16；cube 按表降一档），rationale 说明
+1. 判断计算类型，并按 Tile shape 基线选择配置；混合算子在对应操作前切换配置。
+2. Cube / matmul 统一使用 128 基线，不按训练、decode、核利用率做性能化分支。
+3. Vec tile 每轴通常取 `[16, 64]` 范围内的稳定值；首选偏小值，必要时按 API/shape/UB 约束调整并记录原因。
+4. 验证 per-op UB/L1 占用、尾块 `valid_shape` 和展开约束 `(shape / tile) × tensor_count ≤ 18000`。
+5. 只有 API/shape 硬约束不允许默认值时，才采用最近的合法值并记录原因；性能调优留到 Stage 7。
 
 ### Tile shape anti-patterns (避免)
 
 | Anti-pattern | 为什么坏 | 正确做法 |
 |--------------|---------|---------|
 | **尾轴 tile 不是 alignment 倍数** (e.g. FP32 last dim = 7 / 10 / 17) | 编译报错或运行时性能极差 | round up 到对齐倍数 (FP32: 8/16/24/32...; BF16: 16/32/48/64...) |
-| **vec tile 单轴 > 64** | architect 阶段不要做性能优化；大 tile 单 op UB 占用大，subgraph 易撑爆 UB | 默认 [16, 64] 范围；Stage 7 optimizer 在 profiling 后再上调（cube tile 不在此条约束内，按下方 M-based 推荐表） |
+| **vec tile 单轴 > 64** | architect 阶段不要做性能优化；大 tile 单 op UB 占用大，subgraph 易撑爆 UB | 默认 [16, 64] 范围；Stage 7 optimizer 在 profiling 后再上调（cube tile 不在此条约束内，Stage 7 前按 Tile shape 基线） |
 | **vec tile 全部按 tensor.shape 取（单 op UB 占用 = 整 tensor 字节数）** | 单 op UB 占用 = 整 tensor 字节数，撑爆 UB | vec tile 各轴 ∈ [16, 64]；single-op UB 自然 fit |
 | **多个 shape class 的 vec op 用单一 tile 处理** (e.g. `(1,1,BT,K)` setting 同时处理 `[1,1,BT,BT]` 和 `[1,1,K,V]` 的 op) | 大部分 op 的 partitioning 错位，UB / 并行度恶化 | 按 shape class per-stage 重新 set `set_vec_tile_shapes` |
-
-### 设计参考: Cube tile 推荐 (按 matmul M 维分类)
-
-经验上 well-tested 的值. **该表为 reference**，非 mandate.
-若不遵循该表，DESIGN.md §3.2.2 中需要 rationale.
-
-| M_actual | 推荐 `[mL0, mL1], [kL0, kL1], [nL0, nL1]` | 适用 |
-|---|---|---|
-| M ≥ 64 (training class) | `[128, 128], [64, 256], [256, 256]` | 大 M 充分利用 cube 算力 |
-| 32 ≤ M < 64 | `[64, 64], [64, 256], [128, 128]` | 中等 M, 平衡并行度 |
-| 16 ≤ M < 32 | `[16, 16], [16, K_actual], [128, 128]` | 小 M, K 轴整体驻留 L1 |
-| M = 1 (decode) | `[16, 16], [16, K_actual, 256], [256, 256]` | M=1 用 K 轴 split + A 矩阵 L1 驻留 |
-
-**注**: `[16, 16], [16, 16], [16, 16]` 是 **Decode (M=1) 专用**. M ≥ 32 时使用会导致 cube 利用率降至 5-10%, 性能下降 3-10×. 若有意在 Decode 以外使用，DESIGN.md §3.2.2 rationale 必须明确说明**「why M ≥ 32 use `[16,16]`」**.
 
 ### 设计参考: Vec tile 推荐 (architect 默认值，按 op 类型分类)
 
@@ -120,7 +105,7 @@ tile_size × dtype_bytes × tensor_count ≤ UB 容量
 | Pointwise (2D, 单 tensor) | `(32, 32)` 或 `(16, 64)` | 每轴 ∈ [16, 64] |
 | Reduction (sum/max along last) | `(16, 32)` 或 `(16, 64)` | reduce 轴用 tile 切分，编译器自动累加 |
 | Broadcast multiply | broadcast 轴用 size-1 明示 (e.g. `(1, 1, 16, 1)` for K-side broadcast) | broadcast 轴用 size-1 明示，禁止隐式 expand |
-| Mixed cube + vec | 两者都 set (cube 在 matmul 前，按 M-based 表；vec 在 vec op 前，按 [16, 64] 范围) | 应用 per-stage tile 策略 |
+| Mixed cube + vec | 两者都 set (cube 在 matmul 前统一 128；vec 在 vec op 前按 [16, 64] 范围) | 应用 per-stage tile 作用域，性能调优留到 Stage 7 |
 
 ### 2.4 动态轴模式
 
@@ -226,7 +211,7 @@ for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[1]):  # Stage
 | matmul 两侧 dtype 不一致 | 编译失败 | 统一 cast 到相同 dtype |
 | 动态轴参与受限 API（matmul/sum/amax/mean/prod 等） | `dim = -1`、`Cannot convert symbols to int` | 选语义合适的轴做 DYNAMIC + loop；受限 API 只操作静态 tile（见 §2.4）|
 | view + assemble 同一 tensor | DAG 环路 | 使用两个独立 tensor 或拆分 JIT 函数 |
-| TileShape 过小 | 表达式膨胀 > 编译超时 | 增大 tile，减少循环次数 |
+| TileShape 过小 | 表达式膨胀 > 编译超时 | Stage 7 前回到 Tile shape 基线；不要用 16/32 等过小 cube tile 首跑 |
 | TileShape 过大 | UB/L1 溢出 | 缩小 tile，增加循环次数 |
 | Cube + Vec 混合计算 | 不同阶段需不同 tiling | 在计算阶段间切换 tile 配置 |
 

@@ -303,7 +303,7 @@ Rule of thumb:
 
 ### 11c. Tile shape scope — per-stage, not per-kernel
 
-`set_vec_tile_shapes` and `set_cube_tile_shapes` change the active tile layout for every PyPTO call that follows them in the same JIT body. When a kernel has multiple stages with different tile-optimal shapes (e.g. one matmul wants `[64, 128]` cube tiles and another wants `[128, 64]`), setting tiles **once at the top of `_kernel_impl`** forces every stage to share the same tiles and loses optimization headroom.
+`set_vec_tile_shapes` and `set_cube_tile_shapes` change the active tile layout for every PyPTO call that follows them in the same JIT body. When a kernel has multiple stages with different tile-optimal shapes (e.g. one matmul wants `[64, 128]` cube tiles and another wants `[128, 64]`), setting tiles **once at the top of `_kernel_impl`** forces every stage to share the same tiles and loses optimization headroom. The example values below illustrate scope only; concrete tile values come from DESIGN.md §3.2.5.
 
 The recommended pattern is to push the tile-shape call **into each `pypto_*` sub-kernel** so each stage sets its own optimal layout:
 
@@ -358,33 +358,11 @@ out = pypto.matmul(a, b, pypto.DT_BF16)      # [M, N]
 **3. Tile config lines show tile shape**
 
 ```python
-pypto.set_vec_tile_shapes(1, 1, 8, 8)                         # tile dimensions per doc
-pypto.set_cube_tile_shapes([128, 128], [64, 128], [128, 256]) # each list is [L0, L1]; see below
+pypto.set_vec_tile_shapes(1, 1, 8, 8)                         # tile dimensions per DESIGN.md §3.2.5
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128]) # each list is [L0, L1]
 ```
 
-> **`set_cube_tile_shapes` parameter rules** — each of `m`, `k`, `n` is a **2-element list `[L0, L1]`**,
-> NOT a single-element list. Constraints (from `docs/zh/api/config/pypto-set_cube_tile_shapes.md`):
->
-> - `0 < mL0 <= mL1` and `mL1 % mL0 == 0` (same for `k`, `n`).
-> - `kL0, kL1, nL0, nL1`: 32-byte aligned (**FP32 input: 16-element aligned** instead).
-> - L0A/L0B/L0C and L1 buffer budgets must fit; a common safe baseline for FP16/BF16/FP32 is
->   `[128, 128], [64, 128], [128, 256]`, tuned per shape.
-> - `enable_split_k=True` is only valid when inputs are 2D (not 3D/4D).
->
-> ❌ `pypto.set_cube_tile_shapes([16], [32], [64])` — WRONG (1-element lists).
-> ✅ `pypto.set_cube_tile_shapes([16, 32], [32, 64], [64, 128])` — 2-element lists.
->
-> **`set_vec_tile_shapes` parameter rules** — vector tile shape errors
-> are common; standardize this call during kernel coding and debugging.
-> Constraints (from `docs/zh/api/config/pypto-set_vec_tile_shapes.md`):
->
-> - Pass **positive integer tile sizes** matching the operand rank
->   (e.g. `set_vec_tile_shapes(1, 1, 8, 8)` for a rank-4 operand).
-> - Tile dimension count **must equal** the rank of the operand it
->   precedes; mismatched arity is a frequent cause of `FC1001`-style
->   tile-alignment errors.
-> - If the tile sizes deviate from the per-doc baseline, document the
->   chosen values and the reasoning in `custom/<op>/MEMORY.md`.
+> Tile shape 具体值、参数格式规则和约束详见 skill `pypto-op-design` SKILL.md "第 2 轮：Tiling 推导" + quick_ref.md。
 
 **4. Loop body tensors show the slice shape, not the full shape**
 

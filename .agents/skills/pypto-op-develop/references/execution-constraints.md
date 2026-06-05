@@ -51,6 +51,7 @@
 - `pypto.set_vec_tile_shapes(...)` 的每个维度都必须大于 0，参数个数最多 4 个。
 - TileShape 维度数必须和相关输出维度匹配；否则会在扩图阶段直接报错。
 - `pypto.set_cube_tile_shapes(...)` 是 `pypto.matmul` 的前置条件。
+- 具体 tile 值见 DESIGN.md §3.2.5；tile 推导规则见 skill `pypto-op-design` SKILL.md "第 2 轮：Tiling 推导" + quick_ref.md。
 
 ## 3. 控制流
 
@@ -301,7 +302,7 @@ q_2d = q   # 已经是 2D，不需要 reshape
 3. 把所有动态轴显式标成 `pypto.DYNAMIC` 或 `pypto.DYN`；禁止用 `pypto.Tensor()` 空注解。声明了动态轴的 kernel 必须含真实 `pypto.loop`（trip count 为符号表达式，不能是常量），不允许 `pypto.loop(1)` 这类空循环。
 4. 把依赖 Python 标量隐式 dtype 映射的写法改成显式 `Element` 或显式 dtype 转换。
 5. 把多轴广播改写成文档支持的单轴广播或等价拆分写法。
-6. 检查 TileShape 维度数、最后一维对齐和相关算子的 Tile 约束，再执行编译。
+6. 检查 TileShape 维度数、最后一维对齐和相关算子的 Tile 约束；tile 值按 DESIGN.md §3.2.5 设置，再执行编译。
 7. 无法自动推导动态 `view` 的 `valid_shape` 时，显式传入 `valid_shape`。
 8. 避免同一 Tensor 在同一图里既被读取又被 `assemble` 回写。
 9. 多动态轴算子必须采用 "2D reshape + 嵌套 loop + concrete tile" 模式（见第 5 节），不要尝试在 4D DYN tensor 上直接 matmul。

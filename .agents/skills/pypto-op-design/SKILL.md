@@ -148,9 +148,9 @@ else:
 
 ---
 
-### 第 2 轮：Tiling 推导（最小可行 tile shape）
+### 第 2 轮：Tiling 推导（Stage 7 前 Tile shape 基线）
 
-**核心问题**：tile shape 取多少能编译通过、subgraph 装得下 UB？（不追求性能最优，Stage 7 optimizer 会调）
+**核心问题**：第 1 轮确定的 tensor 能否按 Stage 7 前 Tile shape 基线稳定编译和首跑？
 
 **前置依赖**：第 1 轮确定的 API 序列和 tensor 清单。
 
@@ -167,21 +167,24 @@ else:
    - **列举所有 matmul 的 operand shape** (用于 cube OL47 per-matmul rule 判定)
 
 1.6. **Tile design (mandatory)**：
+   - **Cube / matmul**：Stage 7 前统一使用 128 基线，不按训练、decode、核利用率等性能目标做分支：
+     `pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])`
    - **Vec tile 首选规则**：每个 axis 取值在 `[16, 64]` 范围内（首选偏小值，如 16 或 32）
      - 下限 16：FP32 满足 32B 对齐（multiple of 8），BF16/FP16 恰好 32B 对齐（16 elements）
      - 上限 64：单 op UB 占用较小，subgraph 自然 fit UB
      - 小张量例外：若 tensor 在每个轴的 shape < 16，仍按 16 取（pad）
      - UB 超出例外：若 [16, 64] 范围内仍撑爆 UB（高 rank + 大 dtype + 多 tensor），降低部分轴至 < 16，在 §3.2.2 rationale 中说明
      - 禁止 > 64：上限交由 Stage 7 optimizer 基于 profiling 上调
-   - **Cube tile**：按 `quick_ref.md` 的「设计参考: Cube tile 推荐」表（M-based）选值，**不受 [16, 64] 约束**。表为 well-tested reference，偏离需 rationale。
-   - 若 SPEC.md 或 prompt 中有 user-specified tile，**采用该 tile**，rationale 中明确标注「user-specified」
+   - 混合算子仍需在对应 stage 前显式切换 vec/cube tile；Stage 7 前切换的是作用域，不是性能化 tile 值。
+   - 只有 API/shape 硬约束不允许 Tile shape 基线时，才使用最近的合法稳定值，并在 DESIGN.md §3.2.2 rationale 中说明原因。
+   - 若 SPEC.md 或 prompt 中有 user-specified tile，采用前先确认它不违反 Tile shape 基线；若确需例外，rationale 中明确标注「user-specified exception」。
 
 1.7. **Alternatives considered** (optional)：
    - 推荐但不强制：列举 1-3 个备选方案 + 否决理由
    - 性能权衡是 Stage 7 的工作，architect 阶段不需要穷举
 
 2. **列出同时驻留的 tensor**（输入、输出、所有中间结果）及其 dtype
-3. **尾轴对齐**：bf16/fp16 → 16 元素，fp32 → 8 元素（vec tile [16, 64] 默认范围自动满足；cube tile 按 M-based 表选值也满足）
+3. **尾轴对齐**：bf16/fp16 → 16 元素，fp32 → 8 元素（vec tile [16, 64] 默认范围自动满足；cube tile 128 也满足）
 4. **UB 容量估算（per operation）**：`tile_size × dtype_bytes × tensor_count ≤ UB 容量`
    - tensor_count 按 op 类型取：unary = 2（1 输入 + 1 输出），binary = 3（2 输入 + 1 输出），reduce / expand 保守取 4
    - 对算子内最重的 op（即 tile_size × tensor_count 最大的那个）验证即可
@@ -201,14 +204,15 @@ else:
    - ☑ cube tile 16 元素 alignment (BF16/FP16 场合)
    - ☑ broadcast 1 轴 rule
    - ☑ vec tile per-stage 设置 (多 shape class 场合)
-   - ☑ vec tile axis ∈ [16, 64]（超 UB 已下调并 rationale 说明；cube tile 不在此约束内，按 M-based 表）
+   - ☑ Stage 7 前 Tile shape 基线已应用，或已说明 API/shape 硬约束例外
+   - ☑ vec tile axis ∈ [16, 64]（超 UB 已下调并 rationale 说明；cube tile 不在此约束内）
    - ☑ tile 参数全部编译期静态（**OL48**，无 kernel 入参 / tensor.shape[i] / SymbolicScalar）
 
    全部 ☑ 后才能进入第 3 轮。
 
 **回溯条件**：
-- vec tile 算出来过大（UB 放不下，即便已取 [16, 64] 下限）→ 进一步下调或回第 1 轮减少中间 tensor 或调整精度路由
-- tile 过小（展开爆炸 > 18000）→ vec 适度调大轴的 tile 值（仍在 [16, 64] 内）；cube 按 M-based 表升一档
+- 基线 tile 算出来过大（UB/L1 放不下）→ 回第 1 轮减少中间 tensor、调整精度路由，或记录 API/shape 硬约束例外
+- tile 过小（展开爆炸 > 18000）→ vec 适度调大轴的 tile 值（仍在 [16, 64] 内）；cube 回到 Stage 7 前 128 基线，不得使用 16/32 等过小 cube tile 作为首跑方案
 - syntax compliance fail → 回到步骤 1.6 重新设计 tile
 
 **产出**：DESIGN.md §3 (Tiling 策略), 特别是 §3.2.1〜§3.2.5 所有 sub-section 都填齐
@@ -531,6 +535,7 @@ def softmax_kernel(
 
 **Tiling 层（→ 第 2 轮）**
 - [ ] TileShape 维度数 = tensor 维度数
+- [ ] Stage 7 前 Tile shape 基线已应用，或已说明 API/shape 硬约束例外
 - [ ] 尾轴 alignment OK (FP32: 8 倍数, BF16/FP16: 16 倍数) — DESIGN.md §3.2.4 中 YES
 - [ ] cube tile dim 关系 OK (mL0 ≤ mL1, etc.) — §3.2.4 中 YES
 - [ ] cube tile 16 元素 alignment (BF16/FP16 场合) — §3.2.4 中 YES

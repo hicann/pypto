@@ -37,7 +37,7 @@ Append to `custom/<op>/MEMORY.md` → **Performance target sheet** section:
 | **Baseline (ms)** | Measure current `<op>_impl.py` on representative P0 shape from SPEC.md via `perf-analyzer/scripts/analyze_perf.py` |
 | **Target (ms)** | From SPEC.md performance budget (if specified); else from comparable upstream kernel; else "match torch eager on NPU" |
 | **Required speedup** | Target / Baseline |
-| **Tile shape upper bound** | architect 阶段 vec tile 各轴 ∈ [16, 64]，cube tile 按 M-based 表；此处由本 agent 在 profiling 后允许上调 vec tile > 64 / cube tile 偏离推荐表 |
+| **Tile shape baseline** | Stage 7 前 architect/coder 使用 Tile shape 基线。本 agent 进入 profiling 后可基于实测调整 tile，并在 `MEMORY.md` 记录依据。 |
 
 Once the sheet exists, proceed to Stage 1 (Frontend) below.
 

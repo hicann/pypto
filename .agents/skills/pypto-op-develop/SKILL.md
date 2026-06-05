@@ -198,14 +198,14 @@ echo $TILE_FWK_DEVICE_ID  # 必须有值
 4. **golden / impl / test 必须职责分离**：不要把 golden 逻辑、实现逻辑和测试逻辑混写到同一个文件中（OL15 强制 impl 不能 `import pypto`，OL46 强制 test 不能 `import pypto`，OL47 强制 impl 不能 `import torch`）。
 5. **动态数据范围使用 valid_shape**：当最后一块数据量可能小于固定块大小时，`pypto.view` / `pypto.reshape` 中必须指定 `valid_shape`。
 6. **动态循环边界使用 unroll_list**：当循环次数为动态值时，需要使用 `unroll_list`；多层循环嵌套时，最内层使用 `unroll_list`。**Stage 6 之前 `unroll_list` 只能含单一值**（默认 `[1]`）——照搬 DESIGN.md §4 中 Designer 选定的单值，禁止自行扩成多值（如 `[16, 8, 4, 2, 1]`）；多值会触发编译路径爆炸、拖慢编译并使开发流程超时，多值展开调优仅允许在 Stage 7 optimization（OL56 强制 FAIL，S0）。
-7. **matmul / cube 场景**：必须确认 `set_cube_tile_shapes(...)` 已正确配置；优先放在使用它的 `pypto_*` 子内核内部（详见 design-format §11c）。
+7. **matmul / cube 场景**：必须确认 `set_cube_tile_shapes(...)` 已正确配置，并优先放在使用它的 `pypto_*` 子内核内部（详见 design-format §11c）。具体 tile 值见 DESIGN.md §3.2.5。
 8. **输出写回必须显式完成**：使用 `output[:] = ...`、`output.move(...)` 或 `pypto.assemble(..., output)`；不要写 `output = ...`（OL02）。
 9. **动态轴必须显式标注**：所有动态 shape 输入和输出都必须在 Tensor 注解中标成 `pypto.DYNAMIC` / `pypto.DYN`。**禁止** `pypto.Tensor()` / `pypto.Tensor([], dtype)` 这类空注解写法（门禁 OL25 会直接判 FAIL）；静态轴写常量整数，动态轴写 `pypto.DYNAMIC`，不可混淆。
 10. **声明动态轴时 kernel 必须含真实 `pypto.loop`**：DESIGN.md `dynamic_axes` 非空时，JIT 函数内必须存在遍历动态轴的 `pypto.loop(...)` 调用，trip count 必须来自动态轴（`tensor.shape[i]`、函数参数或其符号表达式）；**禁止**用 `pypto.loop(1)`、`pypto.loop(常量)` 等空循环或注释里写 `pypto.loop` 来糊弄门禁 OL43，门禁正向校验为 FAIL。
 11. **lint / NPU 冲突按门禁处理**：NPU 运行通过不能作为忽略 lint 失败的理由；lint 失败时不得判定完成、不得写成 OLxx 误报，必须保持门禁合规的实现方向并继续修到 lint 通过。
 12. **Element 用于固定标量 dtype**：当标量参与计算且 dtype 不能依赖隐式映射时，显式使用 `pypto.Element(dtype, value)`。
 13. **避免同图内回环读写**：同一 Tensor 不要在同一图里既 `view` 读取又 `assemble` 回写。
-14. **设计方案优先**：如果设计方案中已有 tiling / loop 约束，编码时优先遵循设计方案，不要临时拍脑袋改写。
+14. **设计方案优先**：如果设计方案中已有 tiling / loop 约束，编码时优先遵循设计方案；不得在 Stage 5 引入性能调优型 tile 分支。
 15. **Layer K 严禁 Python loop 驱动 kernel**（OL45）：chunk 迭代必须放进 Layer I 的 `pypto.loop(NT)` + `pypto.view(..., offsets=[...])`，**不要**在 Layer K 里 `for chunk in range(NT): kernel_npu(...)`。
 16. **`pypto.loop(1)` 是 layout-check 逃生口而非默认包装**（OL46，详见 design-format §11b）：仅当内核没有其他 `pypto.loop` 且 vector pipe 简单 op 需要满足布局检查时使用；如果已有 `pypto.loop(N)`，禁止再外加 `pypto.loop(1)`。
 17. **Tile shape 必须编译期静态**（OL48 强制）：`set_vec_tile_shapes(...)` 与 `set_cube_tile_shapes([...], [...], [...])` 的每个参数（含 list 元素）必须是 Python int 字面量，或解析到字面量的局部 / 模块级 Assign（如 `D = 128` 后写 `set_vec_tile_shapes(1, D)` 可接受）。**禁止**用 kernel 入参、`tensor.shape[i]`、SymbolicScalar（含 `B = x.shape[0]` 间接绑定）、运行时计算、`Call` 结果等动态值。违反 OL48 会判 S0 致命 FAIL。
@@ -259,7 +259,7 @@ echo $TILE_FWK_DEVICE_ID  # 必须有值
     ```
 
     **设计含义**：当 DESIGN.md 把 Layer I 设计为独立辅助函数（如 `_<op>_kernel_impl`），如果该 body 含 `pypto.is_loop_begin` / `pypto.is_loop_end`，Coder 必须把整个 body inline 到 Layer J 的 `@pypto.frontend.jit` 函数里，或在 Layer I 上加 `@pypto.frontend.function`。**这是模板 `impl_template.py` 默认 Layer I/J 切分的已知陷阱**。
-20. **直接采用 DESIGN.md tile**（Stage 5 默认）：第一次写 `<op>_module<k>_impl.py` 或集成 kernel 时，按 DESIGN.md §3.2.5 的 tile shape 原样落码（architect 已选好最小可行值：vec tile 在 [16, 64] 范围内，cube tile 按 quick_ref.md M-based 表）。**禁止在 coder 阶段擅自上调** tile 值——性能调优是 Stage 7 `pypto-op-optimizer` 的工作。若 DESIGN.md §3.2.5 未填好，交回 pypto-op-orchestrator 而不要拍脑袋猜。
+20. **直接采用 DESIGN.md tile**（Stage 5 默认）：第一次写 `<op>_module<k>_impl.py` 或集成 kernel 时，按 DESIGN.md §3.2.5 的 tile shape 原样落码。**禁止在 coder 阶段擅自引入训练/decode/核利用率等 cube-tile 分支**——性能调优是 Stage 7 `pypto-op-optimizer` 的工作。若 DESIGN.md §3.2.5 未填好，交回 pypto-op-orchestrator 而不要猜。
 
 ---
 
@@ -270,7 +270,7 @@ echo $TILE_FWK_DEVICE_ID  # 必须有值
 1. **BFloat16 转 NumPy 失败**：必须先 `.float()` 再 `.numpy()`
 2. **环境变量未设置**：先运行 `bash scripts/list_idle_chip_ids.sh` 确认可用 chip id，再设置 `export TILE_FWK_DEVICE_ID=<空闲 chip id>`
 3. **动态轴定义位置错误**：必须在 jit 函数外部定义
-4. **Tile Shape 未设置**：matmul 前必须调用 `set_cube_tile_shapes`；vec 操作前需要 `set_vec_tile_shapes`
+4. **Tile Shape 未设置或过小**：matmul 前必须调用 `set_cube_tile_shapes`；vec 操作前需要 `set_vec_tile_shapes`；具体值按 DESIGN.md §3.2.5
 5. **精度标准不合理**：bfloat16 使用 `atol=0.0001, rtol=0.0078125`
 6. **使用 PyTorch 作为 Golden**：使用 NumPy 实现 golden 函数时，bfloat16 数据类型转换不够准确；golden 必须独立在 `{op}_golden.py`，使用纯 torch 实现
 7. **SymbolicScalar 用作 list 索引报错**：`TypeError: list indices must be integers or slices, not SymbolicScalar`。原因：`pypto.loop` 返回的是编译时符号值，不是 Python runtime 对象。解决方法：使用 tensor slice 或 `pypto.view`/`pypto.assemble` 构建数据流。
@@ -309,7 +309,7 @@ echo $TILE_FWK_DEVICE_ID  # 必须有值
 
 **Layer I + Layer H**
 6. 所有 `pypto.loop(...)` 调用都在 Layer I；Layer K 内零 `pypto.loop`。
-7. Tile shape 设置遵循 design-format §11c：单 stage 用全局，多 stage 各 stage 局部设置。
+7. Tile shape 设置遵循 design-format §11c：单 stage 用全局，多 stage 各 stage 局部设置；具体值按 DESIGN.md §3.2.5。
 8. 没有冗余的 `pypto.loop(1)` 包裹真实循环（OL46）。
 
 **类型与签名**
