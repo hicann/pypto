@@ -47,9 +47,11 @@ kernel code. The orchestrator never edits kernel code itself.
 ### 2. pypto-op-mathematician — Stage 2
 
 - **Deliverables:** `custom/<op>/golden.py` (PyPTO-friendly form),
-  `MEMORY.md` → **Golden function inventory**.
+  `MEMORY.md` → **Golden function inventory**,
+  `custom/<op>/GOLDEN_PERF_REPORT.md` (NPU profiling via
+  `pypto-golden-generate/scripts/profile_golden.py` §15).
 - **Gate:** shape comments on all intermediates; inventory recorded;
-  `allclose(original, normalized)` passes.
+  `allclose(original, normalized)` passes; profiling report exists.
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-architect`.
 
 ### 3. pypto-op-architect — Stage 3

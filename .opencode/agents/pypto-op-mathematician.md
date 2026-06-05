@@ -21,6 +21,7 @@ Cap active skills at 2.
 |------|---------|
 | `custom/<op>/golden.py` | PyTorch or NumPy reference, PyPTO-friendly form |
 | `custom/<op>/MEMORY.md` → **Golden function inventory** | List every function used, with confidence score |
+| `custom/<op>/GOLDEN_PERF_REPORT.md` | NPU profiling report (via `pypto-golden-generate/scripts/profile_golden.py`) |
 
 ## Hard constraints
 
@@ -30,4 +31,4 @@ Cap active skills at 2.
 
 ## Handoff
 
-Update gate evidence in `custom/<op>/MEMORY.md`. Return to pypto-op-orchestrator. Do NOT start pypto-op-architect or pypto-op-designer work.
+Update gate evidence in `custom/<op>/MEMORY.md`. Run profiling via `pypto-golden-generate` §15 (`scripts/profile_golden.py`) to produce `GOLDEN_PERF_REPORT.md`. Return to pypto-op-orchestrator. Do NOT start pypto-op-architect or pypto-op-designer work.
