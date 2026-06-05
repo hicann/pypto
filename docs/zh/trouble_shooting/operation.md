@@ -1,7 +1,5 @@
 # OPERATION 组件错误码
 
-（待补充）
-
 - **范围**：FCXXXX（含 VECTOR/MATMUL/CONV/视图类OP 子范围）
 - 本文档说明 OPERATION 组件的错误码定义、场景说明与排查建议。
 - 补充错误码时，可注明 **关联 Skill**（链接至 [.agents/skills](../../../.agents/skills) 下对应技能，便于排查时加载）。

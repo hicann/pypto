@@ -13,6 +13,7 @@ import math
 import pkgutil
 
 import numpy as np
+import torch
 
 
 def is_number(input_str: str):
@@ -80,8 +81,6 @@ def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
 
     if check and name == "bf16" and bfloat16 is None:
         raise TypeError("No module named 'ml_dtypes'.")
-
-    import torch
 
     str_to_dtype = {
         "int8": [np.int8, torch.int8],
