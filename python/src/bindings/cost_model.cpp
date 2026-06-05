@@ -97,5 +97,5 @@ std::string CostModelRunOnceDataFromHost(
     return "";
 }
 
-void BindCostModelRuntime(py::module& m) { m.def("CostModelRunOnceDataFromHost", &CostModelRunOnceDataFromHost); }
+void BindCostModelRuntime(py::module_& m) { m.def("CostModelRunOnceDataFromHost", &CostModelRunOnceDataFromHost); }
 } // namespace pypto

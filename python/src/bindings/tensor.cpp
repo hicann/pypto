@@ -18,7 +18,7 @@
 using namespace npu::tile_fwk;
 
 namespace pypto {
-void BindTensor(py::module& m)
+void BindTensor(py::module_& m)
 {
     py::class_<Tensor>(m, "Tensor")
         .def(py::init<>())

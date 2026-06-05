@@ -236,7 +236,8 @@ std::string DeviceRunOnceDataFromHost(
         return "emulation run failed";
     }
 
-    if (launchMode == LaunchMode::AICORE_MODEL && AicoreModelLauncher::AicoreModelRunOnce(func, hostCache, config) != 0) {
+    if (launchMode == LaunchMode::AICORE_MODEL &&
+        AicoreModelLauncher::AicoreModelRunOnce(func, hostCache, config) != 0) {
         return "aicore model run failed";
     }
 
@@ -537,7 +538,8 @@ public:
         PatchHostDynamicCellMatchTableDesc(devProg, dynamicCellMatchDescPatches_);
         if (dynAttr->maxDynamicAssembleOutcastMem.IsValid() || dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
             if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
-                devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
+                devProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
+                    eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
             }
             if (dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
                 devProg->memBudget.metadata.maxDynamicCellMatchTableMem =
@@ -551,8 +553,7 @@ public:
                 RefreshRuntimeDynamicCellMatchMeta(devProg->memBudget.metadata.dynamicCellMatch);
                 lastPreparedDynamicCellMatchBytes_ = devProg->memBudget.metadata.dynamicCellMatch;
             }
-            PatchRuntimeDynamicCellMatchAddrToCfgData(
-                reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
+            PatchRuntimeDynamicCellMatchAddrToCfgData(reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
             workspaceSize = devProg->memBudget.Total();
         }
         return workspaceSize;
@@ -952,8 +953,9 @@ public:
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
     }
 
-    DevControlFlowCache* GetHostCtrlFlowCache(KernelBinary* kernel,
-        std::vector<DeviceTensorData>& tensors, uint8_t* devCache, std::vector<uint8_t>& hostCache)
+    DevControlFlowCache* GetHostCtrlFlowCache(
+        KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, uint8_t* devCache,
+        std::vector<uint8_t>& hostCache)
     {
         DevControlFlowCache* ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);
         if (ctrlCache == nullptr && devCache != nullptr) {
@@ -963,7 +965,9 @@ public:
             std::vector<uint8_t> hostCacheVec;
             hostCacheVec.resize(ctrlCacheSize);
             AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-            if (RuntimeMemcpy(hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST) != RT_SUCCESS) {
+            if (RuntimeMemcpy(
+                    hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST) !=
+                RT_SUCCESS) {
                 MACHINE_ASSERT(false) << "RuntimeMemcpy cache failed!";
                 return nullptr;
             }
@@ -984,10 +988,12 @@ public:
         DevControlFlowCache* ctrlCache = GetHostCtrlFlowCache(kernel, tensors, devCache, hostCache);
         int ret = 0;
         if (launchMode_ == LaunchMode::EMULATION) {
-            ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
+            ret = EmulationLauncher::EmulationLaunchDeviceTensorData(
+                kernel->GetFunction(), tensors, {}, config, ctrlCache);
             MACHINE_ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
         } else if (launchMode_ == LaunchMode::AICORE_MODEL) {
-            ret = AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
+            ret = AicoreModelLauncher::AicoreModelLaunchDeviceTensorData(
+                kernel->GetFunction(), tensors, {}, config, ctrlCache);
             MACHINE_ASSERT(ret == RT_SUCCESS) << "aicore model run failed: " << ret;
         }
     }
@@ -1146,7 +1152,8 @@ private:
         int64_t hash;
         std::vector<uint8_t> hostCache;
 
-        HostControlFlowCache(std::vector<DeviceTensorData>& datas, std::vector<uint8_t>&& hcache) : hostCache(std::move(hcache))
+        HostControlFlowCache(std::vector<DeviceTensorData>& datas, std::vector<uint8_t>&& hcache)
+            : hostCache(std::move(hcache))
         {
             hash = ControlFlowCache::Hash(datas);
         }
@@ -1298,7 +1305,7 @@ public:
 using KernelModulePtr = std::shared_ptr<KernelModule>;
 #endif
 
-void BindRuntime(py::module& m)
+void BindRuntime(py::module_& m)
 {
     m.def("DeviceInit", &DeviceInit);
     m.def("DeviceFini", &DeviceFini);

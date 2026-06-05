@@ -21,7 +21,7 @@ using namespace npu::tile_fwk;
 
 namespace pypto {
 
-void BindFunction(py::module& m)
+void BindFunction(py::module_& m)
 {
     // Bind the Function class
     py::class_<Function, std::shared_ptr<Function>>(m, "Function")

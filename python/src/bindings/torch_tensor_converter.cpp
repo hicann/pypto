@@ -100,7 +100,7 @@ DataType ReadTensorDataType(const py::object& tensorDef, const py::object& torch
 
 TileOpFormat ReadTensorFormat(
     const py::object& tensorDef, const py::object& torchTensor, Tensor& baseTensor, const TensorDeviceInfo& deviceInfo,
-    py::module& torch_npu)
+    py::module_& torch_npu)
 {
     if (!tensorDef.attr("explicit_format").is_none()) {
         return baseTensor.Format();
@@ -144,7 +144,7 @@ const py::object& GetTorchTensorType()
 }
 
 TensorDeviceInfo ConvertSingleTensor(
-    const py::object& torchTensor, const py::object& tensorDef, py::module& torch_npu,
+    const py::object& torchTensor, const py::object& tensorDef, py::module_& torch_npu,
     npu::tile_fwk::dynamic::DeviceTensorData& out)
 {
     TensorDeviceInfo deviceInfo = ReadDeviceInfo(torchTensor);

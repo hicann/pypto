@@ -18,7 +18,7 @@
 using namespace npu::tile_fwk;
 
 namespace pypto {
-void bind_pass_const(py::module& m)
+void BindPassConst(py::module_& m)
 {
     m.attr("KEY_DUMP_GRAPH") = KEY_DUMP_GRAPH;
     m.attr("KEY_PRINT_GRAPH") = KEY_PRINT_GRAPH;
@@ -28,7 +28,7 @@ void bind_pass_const(py::module& m)
 }
 
 // config pass_global_configs.x parameters
-void bind_pass_global_config(py::module& m)
+void BindPassGlobalConfig(py::module_& m)
 {
     m.def(
         "GetPassGlobalConfig",
@@ -64,7 +64,7 @@ void bind_pass_global_config(py::module& m)
 }
 
 // config pass_global_configs.default_pass_configs.x parameters
-void bind_pass_default_config(py::module& m)
+void BindPassDefaultConfig(py::module_& m)
 {
     m.def(
         "GetPassDefaultConfig",
@@ -100,7 +100,7 @@ void bind_pass_default_config(py::module& m)
 }
 
 // config strategies.x parameters
-void bind_pass_config(py::module& m)
+void BindPassConfig(py::module_& m)
 {
     m.def(
         "GetPassConfig",
@@ -143,7 +143,7 @@ void bind_pass_config(py::module& m)
         py::arg("strategy"), py::arg("identifier"), py::arg("key"), py::arg("value"));
 }
 
-void bind_pass_configs(py::module& m)
+void BindPassConfigs(py::module_& m)
 {
     py::class_<PassConfigs>(m, "PassConfigs")
         .def_readonly("printGraph", &PassConfigs::printGraph)
@@ -161,12 +161,12 @@ void bind_pass_configs(py::module& m)
         py::arg("strategy"), py::arg("identifier"));
 }
 
-void BindPass(py::module& m)
+void BindPass(py::module_& m)
 {
-    bind_pass_const(m);
-    bind_pass_global_config(m);
-    bind_pass_default_config(m);
-    bind_pass_config(m);
-    bind_pass_configs(m);
+    BindPassConst(m);
+    BindPassGlobalConfig(m);
+    BindPassDefaultConfig(m);
+    BindPassConfig(m);
+    BindPassConfigs(m);
 }
 } // namespace pypto

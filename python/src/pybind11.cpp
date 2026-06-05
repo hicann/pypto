@@ -26,7 +26,8 @@ PYBIND11_MODULE(pypto_impl, m)
     BindEnum(m);
 
     BindIR(m);
-    BindCore(m);
+    BindError(m);
+    BindLogging(m);
 
     BindElement(m);
     BindTensor(m);
@@ -40,5 +41,5 @@ PYBIND11_MODULE(pypto_impl, m)
     BindDistributed(m);
     BindPlatform(m);
     BindUtils(m);
-};
+}
 } // namespace pypto

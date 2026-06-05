@@ -19,7 +19,7 @@ using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::Distributed;
 
 namespace pypto {
-void BindDistributed(py::module& m)
+void BindDistributed(py::module_& m)
 {
     py::class_<ShmemTensor>(m, "ShmemTensor")
         .def(py::init<>())

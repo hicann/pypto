@@ -19,7 +19,7 @@
 using namespace npu::tile_fwk;
 
 namespace pypto {
-void BindEnum(py::module& m)
+void BindEnum(py::module_& m)
 {
     // clang-format off
     py::native_enum<DataType>(m, "DataType", "enum.IntEnum")

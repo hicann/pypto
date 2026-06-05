@@ -5,6 +5,7 @@
 # THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
+
 from typing import Final, Union, Any, Optional, Sequence, overload
 import enum
 from .. import pypto_impl
@@ -888,18 +889,18 @@ class MemRef(Expr):
     memory_space: MemorySpace
     """Base Ptr variable (allocation identity token)."""
 
-    offset: Expr
-    """Byte offset from base (0 for root alloc, computed for views)."""
+    addr: Expr
+    """Starting address expression."""
 
     size: int
     """Size in bytes (64-bit unsigned)."""
 
     def __init__(
-        self, memory_space: MemorySpace, offset: Expr | int, size: int, span: Optional[Span] = None
+        self, memory_space: MemorySpace, addr: Expr | int, size: int, span: Optional[Span] = None
     ) -> None:
         """Create a memory reference.
 
-        New API: MemRef(base, byte_offset, size)
+        New API: MemRef(memory_space, addr, size)
         """
 
     @staticmethod

@@ -59,7 +59,7 @@ namespace pypto {
 
 #define DEFINE_UNARY_OP(name, uop) .def(name, [](const SymbolicScalar& self) { return uop self; })
 
-void BindSymbolicScalar(py::module& m)
+void BindSymbolicScalar(py::module_& m)
 {
     py::class_<SymbolicScalar>(m, "SymbolicScalar", py::dynamic_attr())
         .def(

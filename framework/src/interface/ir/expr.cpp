@@ -18,6 +18,7 @@
 #include "ir/kind_traits.h"
 #include "ir/scalar_expr.h"
 #include "ir/span.h"
+#include "ir/transforms/structural_comparison.h"
 #include "ir/type.h"
 
 namespace pypto {
@@ -49,13 +50,22 @@ GetItemExpr::GetItemExpr(ExprPtr value, ExprPtr slice, Span span)
     }
 
     if (auto tuple_type = As<TupleType>(value_type)) {
-        auto const_idx = As<ConstInt>(slice_);
-        CHECK(const_idx) << "GetItemExpr on a tuple requires slice to be a ConstInt, got " << slice_->TypeName();
-        int index = static_cast<int>(const_idx->value_);
-        CHECK(index >= 0 && index < static_cast<int>(tuple_type->types_.size()))
-            << "GetItemExpr index " << index << " out of bounds for tuple with " << tuple_type->types_.size()
-            << " elements";
-        type_ = tuple_type->types_[index];
+        if (auto const_idx = As<ConstInt>(slice_)) {
+            int index = static_cast<int>(const_idx->value_);
+            CHECK(index >= 0 && index < static_cast<int>(tuple_type->types_.size()))
+                << "GetItemExpr index " << index << " out of bounds for tuple with " << tuple_type->types_.size()
+                << " elements";
+            type_ = tuple_type->types_[index];
+        } else {
+            CHECK(!tuple_type->types_.empty()) << "GetItemExpr: cannot index into an empty tuple";
+            const auto& first = tuple_type->types_[0];
+            for (size_t i = 1; i < tuple_type->types_.size(); ++i) {
+                CHECK(structural_equal(first, tuple_type->types_[i]))
+                    << "GetItemExpr with dynamic index requires all tuple elements to have the same type, "
+                    << "but element 0 and element " << i << " differ";
+            }
+            type_ = first;
+        }
         return;
     }
 

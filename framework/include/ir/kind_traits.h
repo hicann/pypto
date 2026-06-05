@@ -173,7 +173,7 @@ struct KindTrait<Expr> {
         ObjectKind::Cast,
         ObjectKind::ScalarExpr,
     };
-    static constexpr size_t count = 38;
+    static constexpr size_t count = sizeof(kinds) / sizeof(ObjectKind);
 };
 
 // BinaryExpr base class - matches any binary expression kind

@@ -24,10 +24,9 @@ using namespace npu::tile_fwk;
 using ref_tensors = std::vector<std::reference_wrapper<const Tensor>>;
 
 namespace pypto {
-void bind_controller_config(py::module& m)
+void BindControllerConfig(py::module_& m)
 {
-    m.def(
-        "SetBuildStatic", [](const bool& value) { config::SetBuildStatic(value); }, py::arg("value"));
+    m.def("SetBuildStatic", [](const bool& value) { config::SetBuildStatic(value); }, py::arg("value"));
 
     m.def("ResetOptions", []() { config::Reset(); });
 
@@ -50,7 +49,7 @@ void bind_controller_config(py::module& m)
     m.def("ResetLog", [](const std::string& path) { ConfigManager::Instance().ResetLog(path); });
 }
 
-void bind_controller_set_tile(py::module& m)
+void BindControllerSetTile(py::module_& m)
 {
     m.def("SetVecTile", [](py::args args) {
         std::vector<int64_t> v;
@@ -131,7 +130,7 @@ void bind_controller_set_tile(py::module& m)
     });
 }
 
-void bind_controller_function(py::module& m)
+void BindControllerFunction(py::module_& m)
 {
     m.def("BeginFunction", [](const std::string& funcName, GraphType graphType, FunctionType funcType, py::args args) {
         std::vector<std::reference_wrapper<const Tensor>> tensors;
@@ -174,7 +173,7 @@ void bind_controller_function(py::module& m)
         });
 }
 
-void bind_controller_loop(py::module& m)
+void BindControllerLoop(py::module_& m)
 {
     py::class_<RecordIfBranch>(m, "RecordIfBranch")
         .def(
@@ -182,9 +181,10 @@ void bind_controller_loop(py::module& m)
             py::arg("line") = 0)
         .def("__bool__", py::overload_cast<>(&RecordIfBranch::operator bool, py::const_));
     py::class_<LoopRange>(m, "LoopRange")
-        .def(py::init<
-             const SymbolicScalar& /* rangeBegin */, const SymbolicScalar& /* rangeEnd */,
-             const SymbolicScalar& /* rangeStep */>())
+        .def(
+            py::init<
+                const SymbolicScalar& /* rangeBegin */, const SymbolicScalar& /* rangeEnd */,
+                const SymbolicScalar& /* rangeStep */>())
         .def(py::init<const SymbolicScalar& /* rangeBegin */, const SymbolicScalar& /* rangeEnd */>())
         .def(py::init<const SymbolicScalar& /* rangeEnd */>())
         .def(py::init<std::int64_t>()) // C++ Implicit conversion int64_t -> SymbolicScalar
@@ -200,7 +200,7 @@ void bind_controller_loop(py::module& m)
     m.def("IsLoopEnd", &IsLoopEnd, py::arg("symbol"), py::arg("end"));
 }
 
-void bind_controller_utils(py::module& m)
+void BindControllerUtils(py::module_& m)
 {
     m.def("Dump", []() { return Program::GetInstance().Dump(); });
     m.def("BytesOf", [](DataType t) { return BytesOf(t); });
@@ -414,7 +414,7 @@ std::map<std::string, npu::tile_fwk::Any> ConvertPyDictToCppMap(const py::dict& 
     return cpp_values;
 }
 
-void bind_controller_scope(py::module& m)
+void BindControllerScope(py::module_& m)
 {
     m.def(
         "BeginScope",
@@ -481,7 +481,7 @@ py::object AnyToPyObject(const Any& val)
     throw py::type_error("Unsupported config value type: " + std::string(val.Type().name()));
 }
 
-void bind_controller_scope_classes(py::module& m)
+void BindControllerScopeClasses(py::module_& m)
 {
     py::class_<ConfigScope, std::shared_ptr<ConfigScope>>(m, "ConfigScope")
         .def(
@@ -542,14 +542,14 @@ void bind_controller_scope_classes(py::module& m)
         .def("__str__", [](const ConvTile& t) { return t.ToString(); });
 }
 
-void BindController(py::module& m)
+void BindController(py::module_& m)
 {
-    bind_controller_config(m);
-    bind_controller_set_tile(m);
-    bind_controller_function(m);
-    bind_controller_loop(m);
-    bind_controller_utils(m);
-    bind_controller_scope(m);
-    bind_controller_scope_classes(m);
+    BindControllerConfig(m);
+    BindControllerSetTile(m);
+    BindControllerFunction(m);
+    BindControllerLoop(m);
+    BindControllerUtils(m);
+    BindControllerScope(m);
+    BindControllerScopeClasses(m);
 }
 } // namespace pypto

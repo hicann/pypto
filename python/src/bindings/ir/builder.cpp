@@ -8,22 +8,29 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "bindings.h"
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "bindings.h"
 #include "interface/tensor/irbuilder.h"
 #include "ir/kind_traits.h"
+#include "ir/scalar_expr.h"
 #include "ir/transforms/structural_comparison.h"
 
 namespace npu::tile_fwk {
 
 void BindIRBuilder(py::module_& m)
 {
+    // Get or create ir submodule
+    py::module_ ir = m.attr("ir");
+
     // IRBuilder class
     py::class_<IRBuilder>(
-        m, "IRBuilder",
+        ir, "IRBuilder",
         "IR Builder for incremental IR construction with context management.\n\n"
         "The IRBuilder provides a stateful API for building IR incrementally using\n"
         "Begin/End patterns. It maintains a context stack to track nested scopes\n"
@@ -42,10 +49,7 @@ void BindIRBuilder(py::module_& m)
             "Args:\n"
             "    name: Function name\n"
             "    span: Source location for function definition\n"
-            "    type: Function type (default: Opaque)\n"
-            "    level: Hierarchy level (default: None)\n"
-            "    role: Function role (default: None)\n"
-            "    attrs: Function-level attributes dict (default: None)\n\n"
+            "    type: Function type (default: Opaque)\n\n"
             "Raises:\n"
             "    RuntimeError: If already inside a function (nested functions not allowed)")
 
@@ -95,11 +99,7 @@ void BindIRBuilder(py::module_& m)
             "    start: Start value expression\n"
             "    stop: Stop value expression\n"
             "    step: Step value expression\n"
-            "    span: Source location for loop definition\n"
-            "    kind: Loop kind (Sequential or Parallel, default: Sequential)\n"
-            "    chunk_size: Optional chunk size for loop chunking\n"
-            "    chunk_policy: Chunk distribution policy (default: Guarded)\n"
-            "    attrs: Loop-level attributes (default: empty)\n\n"
+            "    span: Source location for loop definition\n\n"
             "Raises:\n"
             "    RuntimeError: If not inside a valid context")
 
@@ -305,6 +305,28 @@ void BindIRBuilder(py::module_& m)
             "Raises:\n"
             "    RuntimeError: If not inside a valid context")
 
+        .def(
+            "break_", &IRBuilder::Break, py::arg("span"),
+            "Create a break statement and emit it.\n\n"
+            "Convenience method that creates and emits a break statement.\n\n"
+            "Args:\n"
+            "    span: Source location for break statement\n\n"
+            "Returns:\n"
+            "    BreakStmt: The created break statement\n\n"
+            "Raises:\n"
+            "    RuntimeError: If not inside a valid context")
+
+        .def(
+            "continue_", &IRBuilder::Continue, py::arg("span"),
+            "Create a continue statement and emit it.\n\n"
+            "Convenience method that creates and emits a continue statement.\n\n"
+            "Args:\n"
+            "    span: Source location for continue statement\n\n"
+            "Returns:\n"
+            "    ContinueStmt: The created continue statement\n\n"
+            "Raises:\n"
+            "    RuntimeError: If not inside a valid context")
+
         // Context state queries
         .def(
             "in_function", &IRBuilder::InFunction,
@@ -344,7 +366,6 @@ void BindIRBuilder(py::module_& m)
         .def(
             "add_function", &IRBuilder::AddFunction, py::arg("func"),
             "Add a completed function to the current program.\n\n"
-            "The function must have been previously declared with declare_function.\n\n"
             "Args:\n"
             "    func: Completed function to add\n\n"
             "Raises:\n"
@@ -593,18 +614,18 @@ void BindIRBuilder(py::module_& m)
 
         .def("clear_insert_point", &IRBuilder::ClearInsertPoint, "Clear insert point.\n\n");
 
-    py::class_<ir::InsertPoint, std::shared_ptr<ir::InsertPoint>>(m, "InsertPoint").def(py::init<ir::SeqStmtsPtr>());
+    py::class_<ir::InsertPoint, std::shared_ptr<ir::InsertPoint>>(ir, "InsertPoint").def(py::init<ir::SeqStmtsPtr>());
 
-    py::class_<Operation, std::shared_ptr<Operation>, ir::TensorOpStmt>(m, "Operation")
+    py::class_<Operation, std::shared_ptr<Operation>, ir::TensorOpStmt>(ir, "Operation")
         .def("__str__", [](Operation& self) { return self.Dump(); });
-    py::class_<RawSymbolicExpression, std::shared_ptr<RawSymbolicExpression>, ir::Expr>(m, "SymbolicExpression")
+    py::class_<RawSymbolicExpression, std::shared_ptr<RawSymbolicExpression>, ir::Expr>(ir, "SymbolicExpression")
         .def("__str__", [](RawSymbolicExpression& self) { return self.Dump(); });
-    py::class_<RawSymbolicSymbol, std::shared_ptr<RawSymbolicSymbol>, ir::Var>(m, "SymbolicSymbol")
+    py::class_<RawSymbolicSymbol, std::shared_ptr<RawSymbolicSymbol>, ir::Var>(ir, "SymbolicSymbol")
         .def("__str__", [](RawSymbolicSymbol& self) { return self.Dump(); });
-    py::class_<RawSymbolicImmediate, std::shared_ptr<RawSymbolicImmediate>, ir::ConstInt>(m, "SymbolicImmediate")
+    py::class_<RawSymbolicImmediate, std::shared_ptr<RawSymbolicImmediate>, ir::ConstInt>(ir, "SymbolicImmediate")
         .def("__str__", [](RawSymbolicImmediate& self) { return self.Dump(); });
 
-    m.def("type_equal", [](ir::ExprPtr a, ir::ExprPtr b) {
+    ir.def("type_equal", [](ir::ExprPtr a, ir::ExprPtr b) {
         bool ret = ir::structural_equal(a->GetType(), b->GetType());
         if (ret) {
             if (auto type = ir::As<ir::LogicalTensorType>(b->GetType())) {

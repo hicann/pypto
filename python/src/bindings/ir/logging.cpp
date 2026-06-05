@@ -8,17 +8,33 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "bindings.h"
+#include "core/logging.h"
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include <string>
 
 #include "core/error.h"
-#include "core/logging.h"
-#include "ir/expr.h"
+#include "bindings/ir/bindings.h"
+
+namespace py = pybind11;
 
 namespace pypto {
 
-void BindError(py::module& m)
+namespace {
+
+void LogDebug(const std::string& message) { pypto::Logger(LogLevel::DEBUG, __LINE__) << message; }
+void LogInfo(const std::string& message) { pypto::Logger(LogLevel::INFO, __LINE__) << message; }
+void LogWarn(const std::string& message) { pypto::Logger(LogLevel::WARN, __LINE__) << message; }
+void LogError(const std::string& message) { pypto::Logger(LogLevel::ERROR, __LINE__) << message; }
+void LogFatal(const std::string& message) { pypto::Logger(LogLevel::FATAL, __LINE__) << message; }
+void LogEvent(const std::string& message) { pypto::Logger(LogLevel::EVENT, __LINE__) << message; }
+
+} // namespace
+
+void BindError(py::module_& m)
 {
-    // Register custom exception types and map them to Python exceptions
     static py::exception<ir::Error> exc_error(m, "Error", PyExc_Exception);
     static py::exception<ir::ValueError> exc_value_error(m, "ValueError", PyExc_ValueError);
     static py::exception<ir::TypeError> exc_type_error(m, "TypeError", PyExc_TypeError);
@@ -29,11 +45,10 @@ void BindError(py::module& m)
     static py::exception<ir::AssertionError> exc_assertion_error(m, "AssertionError", PyExc_AssertionError);
     static py::exception<ir::InternalError> exc_internal_error(m, "InternalError", PyExc_RuntimeError);
 
-    // Set __module__ so the exception displays as "pypto.ir.InternalError"
     PyObject* internal_error_type = exc_internal_error.ptr();
-    PyObject_SetAttrString(internal_error_type, "__module__", PyUnicode_FromString("pypto.ir"));
+    PyObject_SetAttrString(internal_error_type, "__module__", PyUnicode_FromString("pypto"));
 
-    // Register exception translator to convert C++ exceptions to Python exceptions
+    // Merged translator: use GetFullMessage() from pypto_impl for richer error messages
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p) {
@@ -59,9 +74,9 @@ void BindError(py::module& m)
     });
 }
 
-void BindLogging(py::module& m)
+void BindLogging(py::module_& m)
 {
-    py::native_enum<LogLevel>(m, "LogLevel", "enum.IntEnum", "Enumeration of available log levels")
+    py::enum_<LogLevel>(m, "LogLevel", py::arithmetic(), py::module_local(), "Enumeration of available log levels")
         .value("DEBUG", LogLevel::DEBUG, "Detailed information for debugging")
         .value("INFO", LogLevel::INFO, "General informational messages")
         .value("WARN", LogLevel::WARN, "Warning messages for potentially harmful situations")
@@ -69,15 +84,25 @@ void BindLogging(py::module& m)
         .value("FATAL", LogLevel::FATAL, "Critical errors that may cause termination")
         .value("EVENT", LogLevel::EVENT, "Special events and milestones")
         .value("NONE", LogLevel::NONE, "Disable all logging")
-        .export_values()
-        .finalize(); // Export values to module scope for convenience
+        .export_values();
 
-    // Bind LoggerManager functions
-    m.def("set_log_level", &LoggerManager::SetLevel, py::arg("level"), "Set the log level threshold.");
-    m.def("get_log_level", &LoggerManager::GetLevel, "Get the current log level threshold.");
+    m.def("set_log_level", &LoggerManager::SetLevel, py::arg("level"), "Set the global log level threshold.");
+    m.def("get_log_level", &LoggerManager::GetLevel, "Get the current global log level threshold.");
+
+    // Per-level logging functions (from pypto_core)
+    m.def("log_debug", &LogDebug, py::arg("message"), "Log a message at the DEBUG level");
+    m.def("log_info", &LogInfo, py::arg("message"), "Log a message at the INFO level");
+    m.def("log_warn", &LogWarn, py::arg("message"), "Log a message at the WARN level");
+    m.def("log_error", &LogError, py::arg("message"), "Log a message at the ERROR level");
+    m.def("log_fatal", &LogFatal, py::arg("message"), "Log a message at the FATAL level");
+    m.def("log_event", &LogEvent, py::arg("message"), "Log a message at the EVENT level");
+
+    // Generic log function (from pypto_impl)
     m.def(
-        "log", [](LogLevel level, std::string message) { pypto::Logger(level, __LINE__) << message; }, py::arg("level"),
-        py::arg("message"), "Log a message at the DEBUG level");
+        "log", [](LogLevel level, const std::string& message) { pypto::Logger(level, __LINE__) << message; },
+        py::arg("level"), py::arg("message"), "Log a message at the specified level");
+
+    // Test helper (from pypto_impl)
     m.def(
         "raise_error",
         [](const std::string& error_type, const std::string& message) {
@@ -98,15 +123,10 @@ void BindLogging(py::module& m)
             } else if (error_type == "InternalError") {
                 throw ir::InternalError(message);
             } else {
-                throw ir::Error("Unknown error type");
+                throw ir::Error("Unknown error type: " + error_type);
             }
         },
-        py::arg("error_type"), py::arg("message"), "Raise a Error from C++ for testing error handling");
+        py::arg("error_type"), py::arg("message"), "Raise a C++ error for testing error handling");
 }
 
-void BindCore(py::module& m)
-{
-    BindError(m);
-    BindLogging(m);
-}
 } // namespace pypto

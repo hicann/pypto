@@ -9,24 +9,20 @@
  */
 #pragma once
 #include <any>
-#include <pybind11/pybind11.h>
+#include <utility>
+#include <vector>
 
-#include "Python.h"
-#include "pybind11/chrono.h"
-#include "pybind11/complex.h"
-#include "pybind11/functional.h"
-#include "pybind11/operators.h"
-#include "pybind11/stl.h"
-#include "pybind11/native_enum.h"
+#include <pybind11/pybind11.h>
 
 namespace py = pybind11;
 
 namespace pypto {
-void BindIR(py::module& m);
-void BindCore(py::module& m);
+void BindIR(py::module_& m);
+void BindError(py::module_& m);
+void BindLogging(py::module_& m);
 
 namespace ir {
-void BindIRBuilder(py::module& m);
+void BindIRBuilder(py::module_& m);
 std::vector<std::pair<std::string, std::any>> ConvertAttrDict(const py::dict& attrs);
 } // namespace ir
 } // namespace pypto

@@ -19,17 +19,17 @@
 
 namespace py = pybind11;
 namespace pypto {
-void BindEnum(py::module& m);
-void BindElement(py::module& m);
-void BindTensor(py::module& m);
-void BindSymbolicScalar(py::module& m);
-void BindController(py::module& m);
-void BindOperation(py::module& m);
-void BindRuntime(py::module& m);
-void BindCostModelRuntime(py::module& m);
-void BindPass(py::module& m);
-void BindFunction(py::module& m);
-void BindDistributed(py::module& m);
-void BindPlatform(py::module& m);
-void BindUtils(py::module& m);
+void BindEnum(py::module_& m);
+void BindElement(py::module_& m);
+void BindTensor(py::module_& m);
+void BindSymbolicScalar(py::module_& m);
+void BindController(py::module_& m);
+void BindOperation(py::module_& m);
+void BindRuntime(py::module_& m);
+void BindCostModelRuntime(py::module_& m);
+void BindPass(py::module_& m);
+void BindFunction(py::module_& m);
+void BindDistributed(py::module_& m);
+void BindPlatform(py::module_& m);
+void BindUtils(py::module_& m);
 } // namespace pypto

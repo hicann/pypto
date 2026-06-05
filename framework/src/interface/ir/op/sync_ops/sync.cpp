@@ -271,5 +271,41 @@ REGISTER_OP("system.mutex_unlock_dyn")
     .set_attr<std::vector<int>>("buf_id_values")
     .f_deduce_type(DeduceUnknownType);
 
+// ============================================================================
+// Mask Control Ops — CCE-mode only
+// ----------------------------------------------------------------------------
+// These ops directly map to CCE intrinsics for controlling the vector mask
+// register. They are NOT lowered through PTO/ISA.
+//   - set_mask_count: switch mask register to count mode
+//   - set_mask_norm:  switch mask register back to normal (bit) mode
+//   - set_vec_mask:   set mask register to (mask_high, mask_low)
+//   - reset_mask:     reset mask register to all-ones
+// ============================================================================
+
+REGISTER_OP("system.set_mask_count")
+    .set_description("Switch vector mask register to count mode")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
+REGISTER_OP("system.set_mask_norm")
+    .set_description("Switch vector mask register back to normal (bit) mode")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
+REGISTER_OP("system.set_vec_mask")
+    .set_description("Set vector mask register to (mask_high, mask_low)")
+    .set_op_category("SyncOp")
+    .add_argument("mask_high", "Upper 64-bit mask value")
+    .add_argument("mask_low", "Lower 64-bit mask value")
+    .f_deduce_type(DeduceUnknownType);
+
+REGISTER_OP("system.reset_mask")
+    .set_description("Reset vector mask register to all-ones")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
 } // namespace ir
 } // namespace pypto

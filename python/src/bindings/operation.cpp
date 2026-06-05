@@ -22,7 +22,7 @@ using namespace npu::tile_fwk;
 namespace pypto {
 constexpr const int SCATTER_UPDATE_DIM = -2;
 constexpr uint16_t DEFAULT_UNIFORM_ROUNDS = 10;
-void BindOperation(py::module& m)
+void BindOperation(py::module_& m)
 {
     m.def(
         "Add", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Add(self, other); }, "Tensor add.");

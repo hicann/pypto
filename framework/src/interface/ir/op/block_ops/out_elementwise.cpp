@@ -42,20 +42,6 @@ namespace ir {
 // Shared type deduction helpers
 // ---------------------------------------------------------------------------
 
-/// Return the TileType of the last argument (the pre-allocated output tile).
-static TypePtr DeduceBlockOutType(
-    [[maybe_unused]] const std::vector<ExprPtr>& args,
-    [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs, const std::string& op_name,
-    size_t expected_args)
-{
-    CHECK(args.size() == expected_args) << "The operator " << op_name << " requires exactly " << expected_args
-                                        << " arguments, but got " << args.size();
-    auto out_type = As<TileType>(args.back()->GetType());
-    CHECK(out_type) << "The operator " << op_name << " requires last argument (out) to be TileType, but got "
-                    << args.back()->GetType()->TypeName();
-    return out_type;
-}
-
 // Validate that args[idx] is TileType.
 static void CheckTileArg([[maybe_unused]] const std::vector<ExprPtr>& args, size_t idx, const std::string& op_name)
 {
@@ -78,7 +64,7 @@ static TypePtr DeduceBlockOutBinaryTile(
     CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (lhs, rhs, out)";
     CheckTileArg(args, 0, op_name);
     CheckTileArg(args, 1, op_name);
-    return DeduceBlockOutType(args, kwargs, op_name, 0x3);
+    return DeduceBlockOutTileType(args, kwargs, op_name, 0x3);
 }
 
 // Type deduction for (TileType, ScalarType, out:TileType) -> out.
@@ -89,7 +75,7 @@ static TypePtr DeduceBlockOutBinaryScalar(
     CHECK(args.size() == 0x3) << op_name << " requires 3 arguments (tile, scalar, out)";
     CheckTileArg(args, 0, op_name);
     CheckScalarArg(args, 1, op_name);
-    return DeduceBlockOutType(args, kwargs, op_name, 0x3);
+    return DeduceBlockOutTileType(args, kwargs, op_name, 0x3);
 }
 
 // Type deduction for (TileType, out:TileType) -> out  (unary).
@@ -99,7 +85,7 @@ static TypePtr DeduceBlockOutUnary(
 {
     CHECK(args.size() == 0x2) << op_name << " requires 2 arguments (src, out)";
     CheckTileArg(args, 0, op_name);
-    return DeduceBlockOutType(args, kwargs, op_name, 0x2);
+    return DeduceBlockOutTileType(args, kwargs, op_name, 0x2);
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +122,10 @@ REGISTER_BLOCK_OUT_BINARY_TILE(sub_relu);
 REGISTER_BLOCK_OUT_BINARY_TILE(mul_add_dst);
 REGISTER_BLOCK_OUT_BINARY_TILE(fused_mul_add);
 REGISTER_BLOCK_OUT_BINARY_TILE(fused_mul_add_relu);
+REGISTER_BLOCK_OUT_BINARY_TILE(partadd);
+REGISTER_BLOCK_OUT_BINARY_TILE(partmax);
+REGISTER_BLOCK_OUT_BINARY_TILE(partmin);
+REGISTER_BLOCK_OUT_BINARY_TILE(partmul);
 
 #undef REGISTER_BLOCK_OUT_BINARY_TILE
 
@@ -209,6 +199,7 @@ REGISTER_BLOCK_OUT_BINARY_SCALAR(shrs);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(maxs);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(mins);
 REGISTER_BLOCK_OUT_BINARY_SCALAR(lrelu);
+REGISTER_BLOCK_OUT_BINARY_SCALAR(axpy);
 
 #undef REGISTER_BLOCK_OUT_BINARY_SCALAR
 
@@ -238,12 +229,12 @@ REGISTER_OP("block.gather")
                     has_cmp_mode = true;
             }
             if (!has_cmp_mode) {
-                return DeduceBlockOutType(args, kwargs, "block.gather", args.size());
+                return DeduceBlockOutTileType(args, kwargs, "block.gather", args.size());
             }
         }
         // Compare form: 5 args (src, k_value, cdst, tmp, out) + cmp_mode + offset
         if (args.size() == 5) {
-            return DeduceBlockOutType(args, kwargs, "block.gather", 5);
+            return DeduceBlockOutTileType(args, kwargs, "block.gather", 5);
         }
         throw std::runtime_error("block.gather: expected index form (3-4 args) or compare form (5 args + cmp_mode)");
     });
@@ -257,7 +248,33 @@ REGISTER_OP("block.gatherb")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.gatherb", 3);
+        return DeduceBlockOutTileType(args, kwargs, "block.gatherb", 3);
+    });
+
+// block.gathermask: (src_tile, out) + kwargs(pattern_mode) -> out's type
+// Gathers elements where the corresponding bit in the pattern is 1.
+REGISTER_OP("block.gathermask")
+    .set_op_category("BlockOp")
+    .set_description("Block explicit-output gathermask: gather elements by built-in mask pattern (1-7)")
+    .add_argument("src", "Source tile (TileType, b16 or b32)")
+    .add_argument("out", "Pre-allocated output tile (TileType)")
+    .set_attr<int>("pattern_mode")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockOutTileType(args, kwargs, "block.gathermask", 2);
+    });
+
+// block.scatter: (src_tile, indices_tile, dst) -> dst's type
+// Semantics: dst[indices[i,j], j] = src[i, j]
+REGISTER_OP("block.scatter")
+    .set_op_category("BlockOp")
+    .set_description("Block explicit-output scatter: dst[indices[i,j], j] = src[i, j]")
+    .add_argument("src", "Source tile (TileType)")
+    .add_argument("indices", "Index tile (TileType, INT32)")
+    .add_argument("dst", "Pre-allocated destination tile (TileType)")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockOutTileType(args, kwargs, "block.scatter", 3);
     });
 
 // ---------------------------------------------------------------------------
@@ -314,7 +331,7 @@ REGISTER_OP("block.xor")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.xor", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.xor", 4);
     });
 
 // XOR-scalar with tmp buffer (tile, scalar, tmp, out): 4 args.
@@ -327,7 +344,7 @@ REGISTER_OP("block.xors")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.xors", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.xors", 4);
     });
 
 // prelu with tmp buffer (tile, slope, tmp, out): 4 args.
@@ -340,7 +357,7 @@ REGISTER_OP("block.prelu")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.prelu", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.prelu", 4);
     });
 
 // Three-tile arithmetic (tile, tile, tile, out): 4 args.
@@ -353,7 +370,7 @@ REGISTER_OP("block.addc")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.addc", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.addc", 4);
     });
 
 REGISTER_OP("block.subc")
@@ -365,7 +382,7 @@ REGISTER_OP("block.subc")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.subc", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.subc", 4);
     });
 
 // (tile, scalar, tile, out): 4 args.
@@ -378,7 +395,7 @@ REGISTER_OP("block.addsc")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.addsc", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.addsc", 4);
     });
 
 REGISTER_OP("block.subsc")
@@ -390,7 +407,7 @@ REGISTER_OP("block.subsc")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.subsc", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.subsc", 4);
     });
 
 // Selection (mask, lhs, rhs, tmp, out): 5 args.
@@ -405,7 +422,7 @@ REGISTER_OP("block.sel")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.sel", 5);
+        return DeduceBlockOutTileType(args, kwargs, "block.sel", 5);
     });
 
 // sels (lhs, rhs, scalar_mode, out): 4 args.
@@ -418,7 +435,7 @@ REGISTER_OP("block.sels")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.sels", 4);
+        return DeduceBlockOutTileType(args, kwargs, "block.sels", 4);
     });
 
 // ---------------------------------------------------------------------------
@@ -460,7 +477,17 @@ REGISTER_OP("block.expands")
     .add_argument("out", "Pre-allocated output tile (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.expands", 2);
+        return DeduceBlockOutTileType(args, kwargs, "block.expands", 2);
+    });
+
+REGISTER_OP("block.create_vec_idx")
+    .set_op_category("BlockOp")
+    .set_description("Block explicit-output consecutive index creation: out[j] = start + j (calls TCI)")
+    .add_argument("start", "Starting index value (ScalarType or constant)")
+    .add_argument("out", "Pre-allocated output tile (TileType)")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockOutTileType(args, kwargs, "block.create_vec_idx", 2);
     });
 
 // ---------------------------------------------------------------------------
@@ -476,7 +503,7 @@ REGISTER_OP("block.reshape")
     .add_argument("out", "Pre-allocated output tile with target shape (TileType)")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        return DeduceBlockOutType(args, kwargs, "block.reshape", 3);
+        return DeduceBlockOutTileType(args, kwargs, "block.reshape", 3);
     });
 
 // block.transpose: (src_tile, out) -> out's type; axis attrs.
@@ -490,6 +517,40 @@ REGISTER_OP("block.transpose")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutUnary(args, kwargs, "block.transpose");
+    });
+
+// ---------------------------------------------------------------------------
+// Quantize / Dequantize operations
+// ---------------------------------------------------------------------------
+
+// block.quant: (src, scale, [offset,] out) -> out's type; mode kwarg ("sym" or "asym").
+REGISTER_OP("block.quant")
+    .set_op_category("BlockOp")
+    .set_description("Block explicit-output quantize: TQuant (FP32 -> INT8/UINT8)")
+    .add_argument("src", "Source tile (TileType, FP32)")
+    .add_argument("scale", "Per-row scale tile (TileType, FP32)")
+    .add_argument("out", "Pre-allocated output tile (TileType, INT8 or UINT8)")
+    .set_attr<std::string>("mode")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        CHECK(args.size() == 3 || args.size() == 4)
+            << "block.quant requires 3 args (sym) or 4 args (asym), got " << args.size();
+        auto out_type = As<TileType>(args.back()->GetType());
+        CHECK(out_type) << "block.quant: last argument (out) must be TileType";
+        return out_type;
+    });
+
+// block.dequant: (src, scale, offset, out) -> out's type.
+REGISTER_OP("block.dequant")
+    .set_op_category("BlockOp")
+    .set_description("Block explicit-output dequantize: TDequant (INT8/INT16 -> FP32)")
+    .add_argument("src", "Source tile (TileType, INT8 or INT16)")
+    .add_argument("scale", "Per-row scale tile (TileType, FP32)")
+    .add_argument("offset", "Zero-point offset tile (TileType, FP32)")
+    .add_argument("out", "Pre-allocated output tile (TileType, FP32)")
+    .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
+                      [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
+        return DeduceBlockOutTileType(args, kwargs, "block.dequant", 4);
     });
 
 } // namespace ir
