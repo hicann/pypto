@@ -116,7 +116,6 @@ public:
     std::string PrintRangeTileTensor(
         const std::string& startVal, const std::string& stepVal, const std::string& tileIdxExpr) const;
     std::string GenL0CToUBTileTensor() const;
-    std::string GenL0CToUBTileTensorDualDst() const;
 
     std::string GenScatterElementSOp() const;
     std::string GenScatterOp() const;
@@ -477,7 +476,7 @@ protected:
     std::string PrintMatmulTileTensor(
         bool isAcc, std::unordered_map<OperandType, std::string>& tensorWithMemType) const;
     std::string PrintTmove() const;
-    std::string PrintL0CToL1UBTileTensor() const;
+    std::string PrintL0CToL1TileTensor() const;
 
     std::string PrintScatterElementSOpStatic(const PrintScatterElemParam& param) const;
     std::string PrintScatterElementSOpDynamicUnaligned(const PrintScatterElemParam& param) const;

@@ -113,9 +113,10 @@ TILEOP void TExtractMX(DstTileData& dst, SrcTileData& src, const Coord& coord)
 }
 
 // Copy data from L0C to UB
-template <typename config, CopyMode mode, typename Coord, typename DstTileTensor, typename SrcTileTensor, typename FbTileTensor>
-TILEOP void TCopyL0C2UB(
-    DstTileTensor& dst, SrcTileTensor& src, FbTileTensor fixbuf, const Coord& dstCoord, const Coord& srcCoord, int16_t subblockId, uint64_t scaleValue = 0)
+template <typename config, CopyMode mode, DualDstMode dualDstMode, typename Coord, typename DstTileTensor,
+    typename SrcTileTensor, typename FbTileTensor>
+TILEOP void TCopyL0C2UB(DstTileTensor& dst, SrcTileTensor& src, FbTileTensor& fixbuf, const Coord& dstCoord,
+    const Coord& srcCoord, int16_t subblockId, uint64_t scaleValue = 0)
 {
     if (!CheckShapeValid(dst, src)) {
         return;
@@ -123,7 +124,8 @@ TILEOP void TCopyL0C2UB(
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileTensor::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     static_assert(DstTileTensor::FORMAT == Hardware::UB && SrcTileTensor::FORMAT == Hardware::L0C);
-    TCopyL0C2UBImpl<config, mode, Coord, DstTileTensor, SrcTileTensor, FbTileTensor>(dst, src, fixbuf, dstCoord, srcCoord, subblockId, scaleValue);
+    TCopyL0C2UBImpl<config, mode, dualDstMode, Coord, DstTileTensor, SrcTileTensor, FbTileTensor>(dst, src, fixbuf,
+        dstCoord, srcCoord, subblockId, scaleValue);
 }
 
 template <

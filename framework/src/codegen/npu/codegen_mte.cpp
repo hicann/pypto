@@ -128,22 +128,53 @@ std::string CodeGenOpNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) const
     return buffer;
 }
 
-std::string CodeGenOpNPU::GenL0CToUBTileTensor() const { return PrintL0CToL1UBTileTensor(); }
-
-std::string CodeGenOpNPU::GenL0CToUBTileTensorDualDst() const
+std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
 {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
-    // TMP_IDX is do not use in this case
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    auto [coordDst, coordSrc] =
-        PrintDstSrcCoordFromAttr(ToUnderlying(MIMOIdx::DST_IDX), ToUnderlying(MIMOIdx::SRC0_IDX));
     std::string nzVar = "CopyOutMode::NZ2ND"; // current only support NZ2ND in L0C -> UB
-    int64_t splitMN = 0;
-    GetOpAttr(OpAttributeKey::splitMN, splitMN);
+    int64_t isAcc = 0;
+    int64_t reluMode = 0;
+    GetOpAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
+    std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
+    std::string storeConfig = WrapParamByAngleBrackets(storeConfigList);
+    std::vector<std::string> templateParam = {TSTORE_CONF + storeConfig};
+    int64_t copyMode = 0;
+    GetOpAttr(OpAttributeKey::localCopyLocalMode, copyMode);
+    std::string cpModeStr = CopyModeToString(static_cast<Matrix::CopyMode>(copyMode));
+    std::string dualDstMode = "DualDstMode::DUAL_DST_DISABLE";
+    int64_t aivId = 0;
+    GetOpAttr(OpAttributeKey::subBlockIdx, aivId);
+    Element scaleValue = Element(DataType::DT_UINT64, 0);
+    GetOpAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
+    std::vector<std::string> tileOpParamList;
+    if (opCode == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
+        std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+        // TMP_IDX is do not use in this case
+        std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+        auto [coordDst, coordSrc] =
+            PrintDstSrcCoordFromAttr(ToUnderlying(MIMOIdx::DST_IDX), ToUnderlying(MIMOIdx::SRC0_IDX));
+        cpModeStr = "CopyMode::EXTRACT";
+        tileOpParamList = {dstTensor, src0Tensor, src0Tensor, coordDst, coordSrc, std::to_string(aivId),
+            std::to_string(scaleValue.GetUnsignedData())};
+        int64_t splitMN = 0;
+        GetOpAttr(OpAttributeKey::splitMN, splitMN);
+        dualDstMode = (splitMN == 0) ? "DualDstMode::DUAL_DST_SPLIT_M" : "DualDstMode::DUAL_DST_SPLIT_N";
+    } else {
+        std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+        std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+        std::string src1Tensor = src0Tensor;
+        auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr();
+        if ((!scaleValue.GetUnsignedData()) && ((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16))) {
+            src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+        }
+        tileOpParamList = {dstTensor, src0Tensor, src1Tensor, coordDst, coordSrc, std::to_string(aivId),
+            std::to_string(scaleValue.GetUnsignedData())};
+    }
+    templateParam.emplace_back(cpModeStr);
+    templateParam.emplace_back(dualDstMode);
     std::ostringstream oss;
     oss << tileOpName;
-    oss << WrapParamByAngleBrackets({nzVar, std::to_string(splitMN)});
-    oss << WrapParamByParentheses({dstTensor, src0Tensor, coordDst, coordSrc});
+    oss << WrapParamByAngleBrackets(templateParam);
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
 }
@@ -302,7 +333,7 @@ std::string CodeGenOpNPU::GenReshapeCopyIn() const { return GenMemUBTransfer(fal
 
 std::string CodeGenOpNPU::GenReshapeCopyOut() const { return GenMemUBTransfer(true); }
 
-std::string CodeGenOpNPU::PrintL0CToL1UBTileTensor() const
+std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -314,18 +345,9 @@ std::string CodeGenOpNPU::PrintL0CToL1UBTileTensor() const
     int64_t reluMode = 0;
     GetOpAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
     std::string nzVar = "CopyOutMode::NZ2NZ";
-    if (opCode == Opcode::OP_L0C_COPY_UB) {
-        nzVar = "CopyOutMode::NZ2ND";
-    }
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
     std::string storeConfig = WrapParamByAngleBrackets(storeConfigList);
     std::vector<std::string> templateParam = {TSTORE_CONF + storeConfig};
-    if (opCode == Opcode::OP_L0C_COPY_UB) {
-        int64_t copyMode = 0;
-        GetOpAttr(OpAttributeKey::localCopyLocalMode, copyMode);
-        std::string cpModeStr = CopyModeToString(static_cast<Matrix::CopyMode>(copyMode));
-        templateParam.emplace_back(cpModeStr);
-    }
 
     Element scaleValue = Element(DataType::DT_UINT64, 0);
     GetOpAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
@@ -333,12 +355,6 @@ std::string CodeGenOpNPU::PrintL0CToL1UBTileTensor() const
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coordDst, coordSrc};
-
-    if (opCode == Opcode::OP_L0C_COPY_UB) {
-        int64_t aivId = 0;
-        GetOpAttr(OpAttributeKey::subBlockIdx, aivId);
-        tileOpParamList.emplace_back(std::to_string(aivId));
-    }
 
     tileOpParamList.emplace_back(std::to_string(scaleValue.GetUnsignedData()));
 
@@ -352,7 +368,7 @@ std::string CodeGenOpNPU::PrintL0CToL1UBTileTensor() const
 std::string CodeGenOpNPU::GenMemL0CToL1() const
 {
     if (isSupportLayout) {
-        return PrintL0CToL1UBTileTensor();
+        return PrintL0CToL1TileTensor();
     }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
     std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);

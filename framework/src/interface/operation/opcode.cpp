@@ -595,12 +595,12 @@ void OpcodeManager::RegisterVectorReduction()
         Opcode::OP_ROWPROD_SINGLE, OpCoreType::AIV, "ROWPROD_SINGLE", {MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowprodsingle", PIPE_V, PIPE_V, CoreType::AIV},
         OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
-    RegisterInfo(	 
-         Opcode::OP_ROWARGMAX_SINGLE, OpCoreType::AIV, "ROWARGMAX_SINGLE", {MemoryType::MEM_UB},	 
-         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowargmaxsingle", PIPE_V, PIPE_V, CoreType::AIV},	 
-         OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);	 
-     RegisterInfo(	 
-         Opcode::OP_ROWARGMIN_SINGLE, OpCoreType::AIV, "ROWARGMIN_SINGLE", {MemoryType::MEM_UB},	 
+    RegisterInfo(
+         Opcode::OP_ROWARGMAX_SINGLE, OpCoreType::AIV, "ROWARGMAX_SINGLE", {MemoryType::MEM_UB},
+         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowargmaxsingle", PIPE_V, PIPE_V, CoreType::AIV},
+         OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+     RegisterInfo(
+         Opcode::OP_ROWARGMIN_SINGLE, OpCoreType::AIV, "ROWARGMIN_SINGLE", {MemoryType::MEM_UB},
          {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Trowargminsingle", PIPE_V, PIPE_V, CoreType::AIV},
          OpCalcType::REDUCE, {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
     RegisterInfo(
@@ -1089,7 +1089,7 @@ void OpcodeManager::RegisterCube()
         {"TileOp::L0CCopyUB", PIPE_FIX, PIPE_FIX, CoreType::AIC}, OpCalcType::MOVE_OUT);
     RegisterInfo(
         Opcode::OP_L0C_COPY_UB_DUAL_DST, OpCoreType::AIC, "L0C_COPY_UB_DUAL_DST", {MemoryType::MEM_L0C},
-        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TCopyL0C2UBDualDst", PIPE_FIX, PIPE_FIX, CoreType::AIC},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TCopyL0C2UB", PIPE_FIX, PIPE_FIX, CoreType::AIC},
         OpCalcType::MOVE_OUT);
     RegisterInfo(
         Opcode::OP_UB_COPY_L1, OpCoreType::AIV, "UB_COPY_L1", {MemoryType::MEM_UB}, {MemoryType::MEM_L1},
@@ -1491,7 +1491,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_L1_TO_BT, "TExtract"},
     {Opcode::OP_UB_COPY_L1, "TCopyUB2L1"},
     {Opcode::OP_L0C_COPY_UB, "TCopyL0C2UB"},
-    {Opcode::OP_L0C_COPY_UB_DUAL_DST, "TCopyL0C2UBDualDst"},
+    {Opcode::OP_L0C_COPY_UB_DUAL_DST, "TCopyL0C2UB"},
     {Opcode::OP_L0C_TO_L1, "TExtract"},
     {Opcode::OP_UB_COPY_ND2NZ, "TMoveND2NZ"},
     {Opcode::OP_L1_COPY_IN, "TLoad"},

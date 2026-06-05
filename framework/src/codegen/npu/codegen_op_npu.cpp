@@ -78,7 +78,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_INDEX_OUTCAST, [this]() { return GenIndexOutCastOp(); }},
           // lOC -> UB
           {Opcode::OP_L0C_COPY_UB, [this]() { return GenL0CToUBTileTensor(); }},
-          {Opcode::OP_L0C_COPY_UB_DUAL_DST, [this]() { return GenL0CToUBTileTensorDualDst(); }},
+          {Opcode::OP_L0C_COPY_UB_DUAL_DST, [this]() { return GenL0CToUBTileTensor(); }},
 
           {Opcode::OP_UB_COPY_L1, [this]() { return GenUBToL1TileTensor(); }},
           {Opcode::OP_UB_COPY_ND2NZ, [this]() { return GenUBToUBND2NZTileTensor(); }},

@@ -114,10 +114,28 @@ TILEOP void TInsertL0CToUB(
     }
 }
 
+// Copy data from L0C to UB dualdst
+template <DualDstMode dualDstMode, typename ubTileData, typename l0cTileData>
+INLINE void TExtractL0CToUBDualDst(ubTileData& ubTile, l0cTileData& l0cTile, uint16_t l0cOffset0, uint16_t l0cOffset1)
+{
+    constexpr bool supportedQuantMode = IsSupportedQuantMode<typename l0cTileData::DType, typename ubTileData::DType>();
+    constexpr bool supportedBasicMode = IsSupportedBasicMode<typename l0cTileData::DType, typename ubTileData::DType>();
+    static_assert(!supportedQuantMode && !supportedBasicMode,
+        "[TCopyL0C2UBDualDst Error]: DualDst mode in L0C2UB does not support fixpipe online quant functionality.");
+    if constexpr (dualDstMode == DualDstMode::DUAL_DST_SPLIT_M) {
+        pto::TEXTRACT<ubTileData, l0cTileData, pto::AccToVecMode::DualModeSplitM>(ubTile, l0cTile, l0cOffset0,
+            l0cOffset1);
+    } else {
+        pto::TEXTRACT<ubTileData, l0cTileData, pto::AccToVecMode::DualModeSplitN>(ubTile, l0cTile, l0cOffset0,
+            l0cOffset1);
+    }
+}
+
 // Copy data from L0C to UB
-template <typename config, CopyMode mode, typename Coord, typename DstTileTensor, typename SrcTileTensor, typename FbTileTensor>
-INLINE void TCopyL0C2UBImpl(
-    DstTileTensor& dst, SrcTileTensor& src, FbTileTensor& fixbuf, const Coord& dstCoord, const Coord& srcCoord, int16_t subblockId, uint64_t scaleValue = 0)
+template <typename config, CopyMode mode, DualDstMode dualDstMode, typename Coord, typename DstTileTensor,
+    typename SrcTileTensor, typename FbTileTensor>
+INLINE void TCopyL0C2UBImpl(DstTileTensor& dst, SrcTileTensor& src, FbTileTensor& fixbuf, const Coord& dstCoord,
+    const Coord& srcCoord, int16_t subblockId, uint64_t scaleValue = 0)
 {
     static_assert(
         mode != CopyMode::UNKNOWN,
@@ -149,13 +167,16 @@ INLINE void TCopyL0C2UBImpl(
     l0cTileData l0cTile(srcShape0, srcShape1);
     pto::TASSIGN(ubTile, (uint64_t)dst.GetAddr());
     pto::TASSIGN(l0cTile, (uint64_t)src.GetAddr());
-    if constexpr (mode == CopyMode::EXTRACT || mode == CopyMode::MOVE) {
-        TExtractL0CToUB<config, ubTileData, l0cTileData, FbTileTensor>(
-            ubTile, l0cTile, fixbuf, srcOffset0, srcOffset1, subblockId, scaleValue);
-    } else if (mode == CopyMode::INSERT) {
-        TInsertL0CToUB<config, ubTileData, l0cTileData, FbTileTensor>(
-            ubTile, l0cTile, fixbuf, dstOffset0, dstOffset1, subblockId, scaleValue);
+    if constexpr (dualDstMode == DualDstMode::DUAL_DST_DISABLE) {
+        if constexpr (mode == CopyMode::EXTRACT || mode == CopyMode::MOVE) {
+            TExtractL0CToUB<config, ubTileData, l0cTileData, FbTileTensor>(
+                ubTile, l0cTile, fixbuf, srcOffset0, srcOffset1, subblockId, scaleValue);
+        } else if (mode == CopyMode::INSERT) {
+            TInsertL0CToUB<config, ubTileData, l0cTileData, FbTileTensor>(
+                ubTile, l0cTile, fixbuf, dstOffset0, dstOffset1, subblockId, scaleValue);
+        }
+    } else {
+        TExtractL0CToUBDualDst<dualDstMode>(ubTile, l0cTile, srcOffset0, srcOffset1);
     }
 }
-
 #endif // TILEOP_TILE_OPERATOR_ARCH35_COPY_L0C_TO_UB_IMPL__H

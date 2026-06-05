@@ -69,6 +69,8 @@ enum class CopyOutMode : int64_t { NZ2ND = 0, NZ2NZ = 1, ND2ND = 2, NZ2DN = 3 };
 
 enum class CopyMode : int64_t { UNKNOWN = 0, EXTRACT = 1, INSERT = 2, MOVE = 3 };
 
+enum class DualDstMode : int64_t { DUAL_DST_DISABLE = 0, DUAL_DST_SPLIT_M = 1, DUAL_DST_SPLIT_N = 2};
+
 enum class TransMode : int64_t { CAST_NONE = 0, CAST_RINT = 1, CAST_ROUND = 2 };
 
 enum class PaddingMode : int64_t { NO_PADDING = 0, PADDING_OUTER = 1, PADDING_INNER = 2 };
