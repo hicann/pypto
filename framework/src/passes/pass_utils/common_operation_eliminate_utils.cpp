@@ -29,7 +29,8 @@
 namespace npu::tile_fwk {
 void CommonOperationEliminateUtils::SortedProducer(std::vector<Operation*>& sortedProducers) const
 {
-    std::sort(sortedProducers.begin(), sortedProducers.end(), [](const Operation* op1, const Operation* op2) {
+    // Keep the original producer order for ties so hash generation stays deterministic.
+ 	std::stable_sort(sortedProducers.begin(), sortedProducers.end(), [](const Operation* op1, const Operation* op2) {
         const auto& iOp1 = op1->GetIOperands();
         const auto& iOp2 = op2->GetIOperands();
         size_t minLen = std::min(iOp1.size(), iOp2.size());

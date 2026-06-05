@@ -248,6 +248,39 @@ TEST_F(CommonOperationEliminateTest, IgnoreDifferentSubgraph)
     EXPECT_EQ(function->Operations().size(), validOpNum);
 }
 
+TEST_F(CommonOperationEliminateTest, RespectReduceCopyPreSubgraphId)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<Opcode> opCodes{Opcode::OP_ABS, Opcode::OP_ABS, Opcode::OP_MUL};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t1"}, {"t2", "t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"ABS1", "ABS2", "MUL"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, {16, 16}, tensorNames), true);
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t1"}), true);
+    EXPECT_EQ(G.SetOutCast({"t4"}), true);
+    auto* abs1 = G.GetOp("ABS1");
+    auto* abs2 = G.GetOp("ABS2");
+    auto* mul = G.GetOp("MUL");
+    ASSERT_NE(abs1, nullptr);
+    ASSERT_NE(abs2, nullptr);
+    ASSERT_NE(mul, nullptr);
+    // The current subgraph id is identical; only the ReduceCopy source subgraph id differs.
+    abs1->UpdateSubgraphID(0);
+    abs1->SetAttr(OpAttributeKey::reduceCopyPreSubgraphId, static_cast<int64_t>(0));
+    abs2->UpdateSubgraphID(0);
+    abs2->SetAttr(OpAttributeKey::reduceCopyPreSubgraphId, static_cast<int64_t>(1));
+    mul->UpdateSubgraphID(0);
+    EXPECT_NE(abs1->DumpAttr().find(OpAttributeKey::reduceCopyPreSubgraphId), std::string::npos);
+    EXPECT_NE(abs2->DumpAttr().find(OpAttributeKey::reduceCopyPreSubgraphId), std::string::npos);
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    CommonOperationEliminate COE;
+    EXPECT_EQ(COE.Run(*function, "", "", 0), SUCCESS);
+    EXPECT_EQ(function->Operations().size(), 3);
+}
+
 TEST_F(CommonOperationEliminateTest, IgnoreSpecialOp)
 {
     ComputationalGraphBuilder G;

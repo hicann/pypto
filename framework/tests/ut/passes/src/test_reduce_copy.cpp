@@ -96,6 +96,7 @@ void BuildMatmulAddBranch(
         for (auto opName : opNamesV1) {
             G.GetOp(opName)->UpdateSubgraphID(brId + 1 + k);
             G.GetOp(opName)->UpdateLatency(Num50);
+            G.GetOp(opName)->SetAttr(OpAttributeKey::isCube, false);
         }
     }
 }
@@ -119,9 +120,10 @@ TEST_F(ReduceCopyTest, TestCase0)
     ComputationalGraphBuilder G;
     BuildMatmulAddsGraph(G);
     Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
     ReduceCopyMerge merger;
     function->paramConfigs_.autoMixPartition = 1;
-    merger.RunOnFunction(*function);
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
     const int Num2 = 2;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
 }
@@ -188,8 +190,10 @@ void BuildConnectVector(
     const int Num50 = 50;
     G.GetOp("adds1" + br)->UpdateSubgraphID(brId);
     G.GetOp("adds1" + br)->UpdateLatency(Num50);
+    G.GetOp("adds1" + br)->SetAttr(OpAttributeKey::isCube, false);
     G.GetOp("adds2" + br)->UpdateSubgraphID(brId + 1);
     G.GetOp("adds2" + br)->UpdateLatency(Num50);
+    G.GetOp("adds2" + br)->SetAttr(OpAttributeKey::isCube, false);
 }
 
 void BuildConnect(ComputationalGraphBuilder& G)
@@ -230,6 +234,29 @@ TEST_F(ReduceCopyTest, TestCase2)
     merger.RunOnFunction(*function);
     const int Num2 = 2;
     EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+}
+
+TEST_F(ReduceCopyTest, PreserveOriginalSubgraphId)
+{
+    ComputationalGraphBuilder G;
+    BuildMatmulAddsGraph(G);
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    auto* add11 = G.GetOp("add11");
+    ASSERT_NE(add11, nullptr);
+    const int64_t add11SubgraphId = static_cast<int64_t>(add11->GetSubgraphID());
+    auto* add14 = G.GetOp("add14");
+    ASSERT_NE(add14, nullptr);
+    const int64_t add14SubgraphId = static_cast<int64_t>(add14->GetSubgraphID());
+    function->paramConfigs_.autoMixPartition = 1;
+    ReduceCopyMerge merger;
+    EXPECT_EQ(merger.RunOnFunction(*function), SUCCESS);
+
+    int64_t preSubgraphId = -1;
+    ASSERT_TRUE(add11->GetAttr(OpAttributeKey::reduceCopyPreSubgraphId, preSubgraphId));
+    EXPECT_EQ(preSubgraphId, add11SubgraphId);
+    ASSERT_TRUE(add14->GetAttr(OpAttributeKey::reduceCopyPreSubgraphId, preSubgraphId));
+    EXPECT_EQ(preSubgraphId, add14SubgraphId);
 }
 
 TEST_F(ReduceCopyTest, TestCase3)

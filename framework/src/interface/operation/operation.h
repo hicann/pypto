@@ -130,6 +130,7 @@ public:
     static const std::string vecMergeSubgraphCount;
     static const std::string atomicAdd;
     static const std::string splitMN; // for L0C->UB Dual Dst
+    static const std::string reduceCopyPreSubgraphId;
     // HashOrder attribute keys for conv
     static const std::string postK;
     static const std::string postM;
