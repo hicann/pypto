@@ -1507,7 +1507,7 @@ def check_ol52(ctx: CheckContext) -> Finding:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OL57 — @jit 图代码内只允许 pypto.loop 循环；禁止任何 Python for/while
+# OL57 — @jit 图代码内允许 pypto.loop / pypto.loop_unroll / range 循环；禁止 while 和非 range 的 for
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1519,6 +1519,16 @@ def _is_pypto_loop_iter(node: ast.AST, aliases) -> bool:
     if isinstance(f, ast.Attribute) and f.attr in ("loop", "loop_unroll"):
         if isinstance(f.value, ast.Name) and f.value.id in aliases:
             return True
+    return False
+
+
+def _is_range_iter(node: ast.AST) -> bool:
+    """判定 `for x in range(...)` 的 iter。"""
+    if not isinstance(node, ast.Call):
+        return False
+    f = node.func
+    if isinstance(f, ast.Name) and f.id == "range":
+        return True
     return False
 
 
@@ -1561,14 +1571,14 @@ def _collect_jit_code_funcs(func_defs, jit_names, aliases, op):
 
 
 def _find_forbidden_loop(fn, aliases):
-    """在 fn body 内查找非 pypto.loop 的 Python 循环 / 含 pypto 算子的推导式。
+    """在 fn body 内查找非 pypto.loop / range 的 Python 循环 / 含 pypto 算子的推导式。
     返回 (kind, lineno) 或 None。"""
     for stmt in fn.body:
         for node in ast.walk(stmt):
             if isinstance(node, ast.While):
                 return ("while", node.lineno)
             if isinstance(node, (ast.For, ast.AsyncFor)):
-                if not _is_pypto_loop_iter(node.iter, aliases):
+                if not _is_pypto_loop_iter(node.iter, aliases) and not _is_range_iter(node.iter):
                     return ("for", node.lineno)
             if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
                 if _contains_pypto_call(node, aliases):
@@ -1579,11 +1589,13 @@ def _find_forbidden_loop(fn, aliases):
 @register("OL57")
 def check_ol57(ctx: CheckContext) -> Finding:
     """@pypto.frontend.jit 配下的图代码（kernel 本体 + 其调用到的所有函数 /
-    含 pypto 算子的函数）内只允许 `pypto.loop` / `pypto.loop_unroll` 循环；
-    其它 Python `for` / `while`（及含 pypto 算子的推导式）一律禁止。
+    含 pypto 算子的函数）内只允许 `pypto.loop` / `pypto.loop_unroll` /
+    `range(...)` 循环；其它 Python `for` / `while`（及含 pypto 算子的
+    推导式）一律禁止。
 
-    迭代必须用 `pypto.loop(...)`（迭代间有依赖时加 `submit_before_loop=True`）。
-    静态展开（如 inverse 类分块）也不得用 Python for/while。Layer K host
+    迭代可用 `pypto.loop(...)`（迭代间有依赖时加 `submit_before_loop=True`）
+    或 `for ... in range(...)`（编译期全展开）。
+    静态展开（如 inverse 类分块）不得用 Python while。Layer K host
     wrapper 的 kernel 驱动循环由 OL45 管辖, 不在本规则范围。
     """
     impl_files = _impl_files_to_scan(ctx)
@@ -1620,11 +1632,12 @@ def check_ol57(ctx: CheckContext) -> Finding:
                 return ctx.make_finding(
                     "OL57",
                     "FAIL",
-                    f"[S0] {impl_file}: JIT 图代码函数 `{name}` 内出现非 pypto.loop 的 "
+                    f"[S0] {impl_file}: JIT 图代码函数 `{name}` 内出现非 pypto.loop/loop_unroll/range 的 "
                     f"Python {kind} 循环 (第 {lineno} 行)。@pypto.frontend.jit 配下"
-                    f"(kernel 本体及其调用的所有函数) 的迭代必须用 `pypto.loop(...)`; "
+                    f"(kernel 本体及其调用的所有函数) 的迭代可用 `pypto.loop(...)` / `pypto.loop_unroll(...)` "
+                    f"或 `for ... in range(...)`; "
                     f"迭代间有数据依赖时加 `submit_before_loop=True`。静态展开 (含 "
-                    f"inverse 类分块) 也不得用 Python for/while。Layer K host wrapper "
+                    f"inverse 类分块) 不得用 Python while。Layer K host wrapper "
                     f"的 kernel 驱动循环另由 OL45 管辖。",
                     file=impl_file,
                     line=lineno,
@@ -1632,7 +1645,7 @@ def check_ol57(ctx: CheckContext) -> Finding:
     if not saw_jit:
         return ctx.make_finding("OL57", "SKIP", "无 jit 函数")
     return ctx.make_finding(
-        "OL57", "PASS", "JIT 图代码内未发现非 pypto.loop 的 Python 循环"
+        "OL57", "PASS", "JIT 图代码内未发现非 pypto.loop/loop_unroll/range 的 Python 循环"
     )
 
 

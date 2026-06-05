@@ -298,6 +298,12 @@ def matmul_mish_mish_wrapper(x, w, b):
 - **编译期已知但超出 tile** → **不标 DYNAMIC**，用 Python for 或编译器自动切分
 - **运行时才确定大小** → **标 `pypto.DYNAMIC`**，用 `pypto.loop`
 
+**`for ... in range(...)` 的使用条件**：JIT 图代码内的循环应优先使用 `pypto.loop` / `pypto.loop_unroll`。仅当循环变量需要作为 **Python 具体整数** 参与以下操作时，才使用 `for ... in range(...)`（编译期全展开）：
+
+1. **Python 数据结构索引** — 用作 list 下标、dict 键、`.append()` 等（SymInt 不可索引 Python 容器）
+2. **Python 级条件分支** — `if i == 0` 区分初始化与累加、选择不同命名变量等（SymInt 不可做 Python `==` 判断）
+3. **嵌套在 `pypto.loop_unroll` 内部** — 外层已生成动态循环，内层需具体 int 计算 offset 或索引 block table
+
 #### Production kernel 动态轴 4 要素（canonical，必须同时具备）
 
 接受任意 shape 的 production kernel 必须同时具备以下 4 要素，**缺一就 production

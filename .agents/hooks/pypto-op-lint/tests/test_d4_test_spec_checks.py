@@ -122,6 +122,42 @@ def test_ol21_pass_when_both_levels(tmp_path: Path):
     assert finding.status == "PASS"
 
 
+def test_ol21_pass_when_l0_l1_naming(tmp_path: Path):
+    """test_template.py 推荐的 _l0/_l1 命名应通过 OL21。"""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    test = """import torch
+from numpy.testing import assert_allclose
+
+def test_demo_l0():
+    x = torch.randn(1024, dtype=torch.bfloat16)
+    assert_allclose(x.numpy(), x.numpy())
+
+def test_demo_l1():
+    x = torch.randn(1024, 256, dtype=torch.bfloat16)
+    assert_allclose(x.numpy(), x.numpy())
+"""
+    write_file(op_dir / "test_demo.py", test)
+    finding = run_rule(mod, op_dir, "OL21")
+    assert finding.status == "PASS", finding.message
+
+
+def test_ol21_fail_when_only_l0(tmp_path: Path):
+    """只有 _l0 没有 _l1 时应 FAIL。"""
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    test = """import torch
+from numpy.testing import assert_allclose
+
+def test_demo_l0():
+    x = torch.randn(1024, dtype=torch.bfloat16)
+    assert_allclose(x.numpy(), x.numpy())
+"""
+    write_file(op_dir / "test_demo.py", test)
+    finding = run_rule(mod, op_dir, "OL21")
+    assert finding.status == "FAIL"
+
+
 def test_ol22_fail_when_no_manual_seed(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")

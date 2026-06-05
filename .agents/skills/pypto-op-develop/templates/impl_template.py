@@ -82,9 +82,9 @@
 #   - OL45 Layer K host wrapper must NOT drive the kernel with a Python
 #         `for ... in range(...)` (call the JIT entry exactly once)
 #   - OL57 inside the JIT graph (the @pypto.frontend.jit entry + every
-#         function it calls) the ONLY allowed loop is `pypto.loop(...)`;
-#         any other Python `for` / `while` (incl. static unroll like a
-#         block-wise loop) is forbidden — use `pypto.loop(...)` instead
+#         function it calls) the allowed loops are `pypto.loop(...)`,
+#         `pypto.loop_unroll(...)` and `for ... in range(...)`;
+#         `while` and non-range Python `for` are forbidden
 #         (add `submit_before_loop=True` when iterations are dependent)
 #   - OL26 tensor args precede non-tensor args in JIT signatures
 # =============================================================================

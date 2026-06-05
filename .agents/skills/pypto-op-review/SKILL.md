@@ -25,7 +25,7 @@ The checks formerly performed by a standalone layout script are covered by pypto
 | Test uses `assert_allclose` **or** `detailed_tensor_compare` | OL19 |
 | Staged module trio (`*_module<k>_impl.py` + `_golden.py` + `test_*`) | OL44 |
 | No Python `for ... in range(...)` driving the kernel from the host wrapper | OL45 |
-| Only `pypto.loop` inside the JIT graph (no other Python `for` / `while`) | OL57 |
+| Only `pypto.loop` / `pypto.loop_unroll` / `range(...)` inside the JIT graph (no `while` or non-range `for`) | OL57 |
 | `pypto.view(...)` shape / offsets / valid_shape ranks match (view is not reshape) | OL52 |
 | `set_cube_tile_shapes` each m/k/n is `[L0, L1]`, 0<L0<=L1, L1%L0==0 | OL48 |
 | Tile args are compile-time int literals | OL48 |

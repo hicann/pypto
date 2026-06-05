@@ -858,12 +858,12 @@ def demo_module1_wrapper(x, y):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OL57 — JIT 图代码内只允许 pypto.loop 循环 (禁止 Python for/while)
+# OL57 — JIT 图代码内允许 pypto.loop / pypto.loop_unroll / range 循环 (禁止 while 和非 range 的 for)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_ol57_fail_python_for_range_in_kernel_impl(tmp_path: Path):
-    """GroupNorm 式: _kernel_impl 内 `for g in range(8)` → FAIL。"""
+def test_ol57_pass_python_for_range_in_kernel_impl(tmp_path: Path):
+    """GroupNorm 式: _kernel_impl 内 `for g in range(8)` → PASS (range 已放行)。"""
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     impl = """import pypto
@@ -884,12 +884,11 @@ def demo_wrapper(x, y):
 """
     write_file(op_dir / "demo_impl.py", impl)
     finding = run_rule(mod, op_dir, "OL57")
-    assert finding.status == "FAIL", finding.message
-    assert "_demo_kernel_impl" in finding.message
+    assert finding.status == "PASS", finding.message
 
 
-def test_ol57_fail_inverse_style_for_with_concat(tmp_path: Path):
-    """inverse_pto 式: helper 内 `for i in range(8)` + list + concat → FAIL (strict)。"""
+def test_ol57_pass_inverse_style_for_with_concat(tmp_path: Path):
+    """inverse_pto 式: helper 内 `for i in range(8)` + list + concat → PASS (range 已放行)。"""
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
     impl = """import pypto
@@ -909,8 +908,7 @@ def demo_wrapper(attn, out):
 """
     write_file(op_dir / "demo_impl.py", impl)
     finding = run_rule(mod, op_dir, "OL57")
-    assert finding.status == "FAIL", finding.message
-    assert "inverse_pto" in finding.message
+    assert finding.status == "PASS", finding.message
 
 
 def test_ol57_fail_while_loop(tmp_path: Path):

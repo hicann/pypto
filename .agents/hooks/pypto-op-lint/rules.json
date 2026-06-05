@@ -605,7 +605,7 @@
         6
       ],
       "target": "impl",
-      "rule": "@pypto.frontend.jit 图代码（kernel 本体 + 其调用到的所有函数 / 含 pypto 算子的函数）内只允许 pypto.loop / pypto.loop_unroll 循环；其它 Python for / while（及含 pypto 算子的推导式）一律禁止，应改用 pypto.loop（迭代间有依赖时加 submit_before_loop=True）。静态展开（含 inverse 类分块）也不得用 Python for/while。Layer K host wrapper 的 kernel 驱动循环由 OL45 管辖",
+      "rule": "@pypto.frontend.jit 图代码（kernel 本体 + 其调用到的所有函数 / 含 pypto 算子的函数）内允许 pypto.loop / pypto.loop_unroll / for...in range(...) 循环；禁止 while 和非 range 的 Python for（及含 pypto 算子的推导式）。迭代可用 pypto.loop（迭代间有依赖时加 submit_before_loop=True）或 for...in range(...)（编译期全展开）。Layer K host wrapper 的 kernel 驱动循环由 OL45 管辖",
       "check_function": "check_ol57"
     },
     {

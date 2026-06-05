@@ -168,14 +168,15 @@ def _has_test_level_markers(tree: ast.Module, source: str) -> tuple[bool, bool]:
 
     支持：
     - 函数名中的 level0 / level1
+    - 函数名中的 _l0 / _l1（test_template.py 推荐的命名约定）
     - 功能_P0 / 性能_P0（含 func_p0 / perf_p0）这类 case 命名或元数据
     """
     func_names = [
         node.name.lower() for node in ast.iter_child_nodes(tree)
         if isinstance(node, ast.FunctionDef)
     ]
-    has_level0 = any("level0" in name for name in func_names)
-    has_level1 = any("level1" in name for name in func_names)
+    has_level0 = any("level0" in name or "_l0" in name for name in func_names)
+    has_level1 = any("level1" in name or "_l1" in name for name in func_names)
     if has_level0 and has_level1:
         return True, True
 

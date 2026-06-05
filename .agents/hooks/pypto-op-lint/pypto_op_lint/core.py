@@ -32,7 +32,7 @@ IMPL_RULE_IDS = [
     "OL16", "OL23", "OL25", "OL26", "OL28", "OL29", "OL37", "OL48", "OL49",
     "OL55",  # PyPTO API 存在性 (typo 防止: pypto.empty 等)
     "OL56",  # Stage 6 之前 unroll_list 只能含单一值 (默认 [1])
-    "OL57",  # JIT 图代码内只允许 pypto.loop 循环 (禁止 Python for/while)
+    "OL57",  # JIT 图代码内允许 pypto.loop / pypto.loop_unroll / range 循环 (禁止 while 和非 range 的 for)
     "OL58",  # Layer K wrapper output buffer 必须 torch.* 预分配 (禁止 host pypto.zeros)
 ]
 

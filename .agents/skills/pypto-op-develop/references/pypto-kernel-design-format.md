@@ -174,21 +174,9 @@ Lint rule **OL45 (S0)** auto-detects this pattern. It blocks the per-Phase / cle
 
 ### 9a-2. Inside the JIT graph, the only loop is `pypto.loop` (OL57, S0)
 
-OL45 governs Layer K (the host wrapper). The complementary rule **OL57 (S0)** governs the **JIT graph** — the `@pypto.frontend.jit` entry plus every function it calls (Layer I `_kernel_impl`, Layer H `pypto_*` sub-kernels, and any helper). Inside that JIT-reachable code the **only** permitted loop is `pypto.loop(...)` / `pypto.loop_unroll(...)`. Any other Python loop — `for ... in range(...)`, `for ... in <list>`, a `while`, or a comprehension that issues `pypto.*` ops — is forbidden.
+OL45 governs Layer K (the host wrapper). The complementary rule **OL57 (S0)** governs the **JIT graph** — the `@pypto.frontend.jit` entry plus every function it calls (Layer I `_kernel_impl`, Layer H `pypto_*` sub-kernels, and any helper). Inside that JIT-reachable code the only permitted loop is `pypto.loop(...)` / `pypto.loop_unroll(...)` (`for ... in range(...)` is also allowed). Any other Python loop — `for ... in <list>`, a `while`, or a comprehension that issues `pypto.*` ops — is forbidden.
 
 This holds even for a **static, small unroll**. Iterating a tensor axis (e.g. `for g in range(num_groups): pypto.view(...); pypto.assemble(...)`) must be `pypto.loop(num_groups)`; and a structural block decomposition (e.g. a block-wise matrix inverse) must also use `pypto.loop` (add `submit_before_loop=True` when iterations are dependent), not a Python `for`. A Python `for`/`while` in JIT code unrolls the iteration into the graph at construction time, defeats the framework's tiling / parallelism, and bloats compile time.
-
-```python
-# ❌ BAD — Python range loop sweeping the group axis inside _kernel_impl
-for g in range(num_groups):
-    xg = pypto.view(x, [1, Cg, H, W], [b, g * Cg, 0, 0])
-    pypto.assemble(out_g, [b, g * Cg, 0, 0], y)
-
-# ✅ GOOD — pypto.loop owns the axis iteration
-for g in pypto.loop(num_groups, name="group", unroll_list=[1]):
-    xg = pypto.view(x, [1, Cg, H, W], [b, g * Cg, 0, 0])
-    pypto.assemble(out_g, [b, g * Cg, 0, 0], y)
-```
 
 ### 9b. Reshape inputs so the kernel's core compute stays low-rank (host-side `reshape`)
 

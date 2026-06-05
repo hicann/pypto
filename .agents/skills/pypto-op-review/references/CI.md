@@ -15,7 +15,7 @@ Layout and structure rules for `custom/<operator_name>/` (MEMORY.md / `test_<op>
 | Test uses `assert_allclose` or `detailed_tensor_compare` | OL19 |
 | Staged module trio per active phase | OL44 |
 | Host wrapper must not drive the kernel with `for ... in range(...)` | OL45 |
-| Only `pypto.loop` inside the JIT graph | OL57 |
+| Only `pypto.loop` / `pypto.loop_unroll` / `range(...)` inside the JIT graph | OL57 |
 | `pypto.view` rank consistency (not a reshape) | OL52 |
 | `set_cube_tile_shapes` m/k/n = `[L0, L1]`, 0<L0<=L1, L1%L0==0; tile args are literals | OL48 |
 | `pypto.loop` present for dynamic-axis iteration | OL23 / OL43 |
