@@ -2728,7 +2728,7 @@ static void ProcessDevFunctionOutcasts(
     uint64_t funcDevTaskInnerExclusiveOutcastMem =
         CalcUnrolledRootBudget(devFunc->exclusiveOutcastWsMemoryRequirement, unroll, EstimatedStitchingCount());
     MACHINE_LOGD(
-        "[worskspaceSize] RootInnerTensorWsMemoryRequirement is %lu, funcDevTaskInnerExclusiveOutcastMem is %lu.",
+        "[workspaceSize] RootInnerTensorWsMemoryRequirement is %lu, funcDevTaskInnerExclusiveOutcastMem is %lu.",
         devFunc->rootInnerTensorWsMemoryRequirement, devFunc->exclusiveOutcastWsMemoryRequirement);
 
     maxRootInnerMem = std::max(maxRootInnerMem, funcRootInnerMem);

@@ -19,6 +19,7 @@
 #include <memory>
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/runtime_api.h"
+#include "machine/runtime/launcher/device_launcher.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
 #include "interface/utils/file_utils.h"
 #include "interface/configs/config_manager.h"
@@ -31,7 +32,18 @@ namespace {
 constexpr int DUMP_LEVEL_FOUR = 4;
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
 uint32_t g_last_round_num = 0;
+
+inline RtError RuntimeMemcpyRelaxedInCapture(
+    void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+{
+    if (DeviceLauncher::IsCaptureMode()) {
+        // RuntimeMemcpy requires RELAXED thread capture mode in capture graph.
+        AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
+        return RuntimeMemcpy(dst, destMax, src, cnt, kind);
+    }
+    return RuntimeMemcpy(dst, destMax, src, cnt, kind);
 }
+} // namespace
 
 void DumpDevTaskPerfData(DeviceArgs& args, const std::vector<void*>& perfData, bool isLast)
 {
@@ -82,7 +94,7 @@ void ConstructTaskInfo(
     void* devPtr = perfData[index];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    RuntimeMemcpyRelaxedInCapture(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     Metrics* aicpuMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
     if (aicpuMetric->taskCount > MAX_DFX_TASK_NUM_PER_CORE) {
         aicpuMetric->taskCount = MAX_DFX_TASK_NUM_PER_CORE;
@@ -116,7 +128,8 @@ void ConstructTaskInfo(
         rootTaskStats.push_back(coreObj);
     }
     aicpuMetric->taskCount = 0;
-    RuntimeMemcpy(perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics), RtMemcpyKind::HOST_TO_DEVICE);
+    RuntimeMemcpyRelaxedInCapture(
+        perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics), RtMemcpyKind::HOST_TO_DEVICE);
 }
 
 void DumpAicoreTaskExectInfo(DeviceArgs& args, const std::vector<void*>& perfData)
@@ -234,7 +247,7 @@ inline void DumpAicoreDevTask(
         void* devPtr = perfData[i];
         size_t dataSize = PERF_DATA_TOTAL_SIZE;
         std::vector<uint8_t> hostBuffer(dataSize);
-        RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+        RuntimeMemcpyRelaxedInCapture(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
         Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
         std::string coreType = aicoreMetric->coreType == static_cast<int16_t>(CoreType::AIC) ? "AIC" : "AIV";
         json aicoreTask;
@@ -257,7 +270,7 @@ inline std::unique_ptr<MetricPerf> GetAicpuPrefAddr(const DeviceArgs& args, cons
         return aicpuMetric;
     }
 
-    auto ret = RuntimeMemcpy(
+    auto ret = RuntimeMemcpyRelaxedInCapture(
         PtrToPtr<MetricPerf, void>(aicpuMetric.get()), sizeof(MetricPerf), aicpuPer, sizeof(MetricPerf),
         RtMemcpyKind::DEVICE_TO_HOST);
     if (ret != 0) {
@@ -308,7 +321,7 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     void* devPtr = perfData[0];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    RuntimeMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    RuntimeMemcpyRelaxedInCapture(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
     auto sumRoundNum = (aicoreMetric->turnNum > MAX_ROUND_NUM) ? MAX_ROUND_NUM : aicoreMetric->turnNum;
     MACHINE_LOGD("CoreId 0 devAddr: %p, sumRoundNum: %ld", devPtr, sumRoundNum);
