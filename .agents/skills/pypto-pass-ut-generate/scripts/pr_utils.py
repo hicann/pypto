@@ -1176,10 +1176,10 @@ def main():
   python pr_utils.py --pr 1856
 
   # 离线：分析 diff 文件
-  python pr_utils.py --diff /path/to/diff.file
+  python pr_utils.py --diff ./diff.file
 
   # 离线：分析 UT-Report 文件
-  python pr_utils.py --report /path/to/report.html
+  python pr_utils.py --report ./report.html
 
   # 离线：综合分析
   python pr_utils.py --diff diff.file --report report.html

@@ -581,10 +581,10 @@ def main():
         epilog="""
 示例用法:
   # 解析 diff 文件
-  python ut_coverage.py --diff /path/to/diff.file
+  python ut_coverage.py --diff ./diff.file
 
   # 解析本地覆盖率报告
-  python ut_coverage.py --report /path/to/coverage.html
+  python ut_coverage.py --report ./coverage.html
 
   # 从 URL 下载并解析覆盖率报告
   python ut_coverage.py --report https://example.com/ut_cov.tar.gz

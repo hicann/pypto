@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 """
 List PyPTO API call sites in a Python file (line number + call expression).

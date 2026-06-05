@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 
 """D2 工件完整性与流程合规规则（OL09-OL14, OL24）核心测试。"""

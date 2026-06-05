@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 """从 openlibing.com CodeCheck 页面提取违规项。"""
 

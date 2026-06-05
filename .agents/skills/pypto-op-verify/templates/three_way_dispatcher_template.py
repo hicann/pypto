@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 
 # Template: SIM / NPU 2-way dispatcher for adversarial_runner.py

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 """PyPTO/PyTorch/CANN/NPU 环境诊断。输出结构化报告供排查使用。"""
 from __future__ import annotations

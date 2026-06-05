@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 """Ascend NPU 硬件深度检测模块。
 
@@ -592,7 +593,7 @@ def detect_npu() -> NPUDetectionResult:
     result = NPUDetectionResult()
 
     _detect_lspci(result)          # Level 0 最高优先：lspci PCI device ID
-    _detect_pci_sysfs(result)       # Level 0a: /sys/bus/pci sysfs 扫描
+    _detect_pci_sysfs(result)       # Level 0a: PCI sysfs 扫描
     _detect_dev_davinci(result)
     _detect_driver_version(result)
     _detect_cann_version(result)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2025. All rights reserved.
 
 """D4 测试规范规则（OL19-OL22）核心测试。"""

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2025. All rights reserved.
 
 """D1 框架约束合规规则（OL04-OL06, OL25, OL26）补充测试。"""

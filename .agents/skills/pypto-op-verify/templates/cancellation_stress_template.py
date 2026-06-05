@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 
 # Template: cancellation_stress input generation for test_inputs.py

@@ -79,8 +79,8 @@ def get_gitcode_token(print_hint: bool = True) -> str:
         logger.info("  配置文件路径: %s", os.path.expanduser("~/.config/opencode/opencode.json"))
         logger.info('  添加以下内容: {"mcp": {"gitcode": {"environment": {"GITCODE_TOKEN": "your_token_here"}}}}')
         logger.info("方式二：手动提供离线文件")
-        logger.info("  - 提供 .diff 文件: python3 scripts/pr_utils.py --diff /path/to/diff.file")
-        logger.info("  - 提供覆盖率报告: python3 scripts/ut_coverage.py --report /path/to/coverage.html")
+        logger.info("  - 提供 .diff 文件: python3 scripts/pr_utils.py --diff ./diff.file")
+        logger.info("  - 提供覆盖率报告: python3 scripts/ut_coverage.py --report ./coverage.html")
 
     return ""
 

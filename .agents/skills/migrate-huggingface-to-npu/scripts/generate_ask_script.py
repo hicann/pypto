@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description="生成大语言模型问答脚本"
 parser.add_argument("--model-name", required=True, help="模型名称（如 Qwen2-7B）")
 parser.add_argument("--script-dir", required=True, help="脚本输出目录（绝对路径）")
 parser.add_argument(
-    "--default-model-dir", default="/data/models", help="默认模型存放目录"
+    "--default-model-dir", default="./models", help="默认模型存放目录"
 )
 args = parser.parse_args()
 

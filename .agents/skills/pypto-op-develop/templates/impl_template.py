@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
 # =============================================================================
 # impl_template.py
 # Starter for `custom/<op>/modules/<op>_module<suffix_k>_impl.py`
