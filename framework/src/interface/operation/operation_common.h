@@ -178,8 +178,8 @@ public:
         j["core_type"] = static_cast<int>(coreType_);
         j["tri_core_type"] = static_cast<int>(trigCoreType_);
         j["event_id"] = eventId_;
-        j["set_aiv_core"] = setAivCore_;
-        j["wait_aiv_core"] = waitAivCore_;
+        j["set_aiv_core"] = static_cast<int>(setAivCore_);
+        j["wait_aiv_core"] = static_cast<int>(waitAivCore_);
         j["gm_buf_id"] = gMBufId;
         j["offset"] = offset_;
         return j;
