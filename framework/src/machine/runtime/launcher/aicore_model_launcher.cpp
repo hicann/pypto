@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 #include <unistd.h>
+#include "machine/utils/device_log.h"
 #include "tilefwk/aicpu_perf.h"
 #if defined(__linux__)
 #include <sched.h>
@@ -120,9 +121,10 @@ static void AicoreModelWorker(
     const char* role = isAic ? "aic" : "aiv";
     const char* threadName = nullptr;
     (void)scheCpuNum;
-        if (sprintf_s(name, sizeof(name), "aicore_model_%s_%d", role, blockId) == 0) {
-        threadName = name;
+    if (sprintf_s(name, sizeof(name), "aicore_model_%s_%d", role, blockId) < 0) {
+        DEV_WARN("sprintf_s failed, role: %s, blockId: %d", role, blockId);
     }
+    threadName = name;
     SetThreadAffinity(bindCpu, threadName);
     
     HostCoreContext ctx;
@@ -170,8 +172,8 @@ static int AicoreModelLaunchOnce(DeviceKernelArgs& kArgs)
         char name[64];
         const char* role = (runMode == RUN_SPLITTED_STREAM_CTRL) ? "ctrl" : "sche";
         int schedIdx = (runMode == RUN_SPLITTED_STREAM_CTRL) ? 0 : threadIndex;
-        if (sprintf_s(name, sizeof(name), "aicore_model_%s_%d", role, schedIdx) != 0) {
-            return;
+        if (sprintf_s(name, sizeof(name), "aicore_model_%s_%d", role, schedIdx) < 0) {
+            DEV_WARN("sprintf_s failed, role: %s, schedIdx: %d", role, schedIdx);   
         }
         SetThreadAffinity(bindCpu, name);
         DeviceKernelArgs localArgs = kArgs;
