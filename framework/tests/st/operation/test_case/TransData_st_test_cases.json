@@ -1,0 +1,758 @@
+{
+    "test_cases": [
+        {
+            "case_index": 0,
+            "case_name": "TransData_case1",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        7,
+                        1,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        1,
+                        1,
+                        8,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                16,
+                4,
+                64
+            ],
+            "tile_shape": [
+                1,
+                8,
+                1,
+                8
+            ],
+            "params": {
+                "type": 2,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 0
+        },
+        {
+            "case_index": 1,
+            "case_name": "TransData_case2",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        32,
+                        8,
+                        32
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        4,
+                        8,
+                        32,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                32,
+                8,
+                32
+            ],
+            "tile_shape": [
+                1,
+                32,
+                2,
+                16
+            ],
+            "params": {
+                "type": 2,
+                "group": 4,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 1
+        },
+        {
+            "case_index": 2,
+            "case_name": "TransData_case3",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        2,
+                        1,
+                        6,
+                        96
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        2,
+                        1,
+                        6,
+                        96,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                2,
+                16,
+                6,
+                96
+            ],
+            "tile_shape": [
+                1,
+                16,
+                2,
+                48
+            ],
+            "params": {
+                "type": 2,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 2
+        },
+        {
+            "case_index": 3,
+            "case_name": "TransData_case4",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        33,
+                        5,
+                        128
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        3,
+                        5,
+                        128,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                48,
+                5,
+                128
+            ],
+            "tile_shape": [
+                1,
+                32,
+                1,
+                64
+            ],
+            "params": {
+                "type": 2,
+                "group": 3,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 3
+        },
+        {
+            "case_index": 4,
+            "case_name": "TransData_case5",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        2,
+                        51,
+                        4,
+                        256
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        2,
+                        6,
+                        4,
+                        256,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                2,
+                64,
+                4,
+                256
+            ],
+            "tile_shape": [
+                1,
+                64,
+                1,
+                128
+            ],
+            "params": {
+                "type": 2,
+                "group": 3,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 4
+        },
+        {
+            "case_index": 5,
+            "case_name": "TransData_case7",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        3,
+                        81,
+                        4,
+                        192
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        3,
+                        9,
+                        4,
+                        192,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                3,
+                96,
+                4,
+                192
+            ],
+            "tile_shape": [
+                1,
+                64,
+                1,
+                96
+            ],
+            "params": {
+                "type": 2,
+                "group": 9,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 5
+        },
+        {
+            "case_index": 6,
+            "case_name": "TransData_case9",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        2,
+                        113,
+                        3,
+                        160
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        2,
+                        8,
+                        3,
+                        160,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                2,
+                128,
+                3,
+                160
+            ],
+            "tile_shape": [
+                1,
+                64,
+                1,
+                80
+            ],
+            "params": {
+                "type": 2,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 6
+        },
+        {
+            "case_index": 7,
+            "case_name": "TransData_case10",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        132,
+                        5,
+                        192
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        12,
+                        5,
+                        192,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                144,
+                5,
+                192
+            ],
+            "tile_shape": [
+                1,
+                96,
+                1,
+                96
+            ],
+            "params": {
+                "type": 2,
+                "group": 12,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 7
+        },
+        {
+            "case_index": 8,
+            "case_name": "TransData_case11",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        15,
+                        15,
+                        2,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        1,
+                        16,
+                        16
+                    ],
+                    "dtype": "fp16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16,
+                2,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16,
+                2,
+                16
+            ],
+            "params": {
+                "type": 4,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 8
+        },
+        {
+            "case_index": 9,
+            "case_name": "TransData_case11",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        7,
+                        1,
+                        1,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        1,
+                        1,
+                        1,
+                        8,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                8,
+                1,
+                1,
+                8
+            ],
+            "tile_shape": [
+                1,
+                8,
+                1,
+                1,
+                8
+            ],
+            "params": {
+                "type": 3,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 9
+        },
+        {
+            "case_index": 10,
+            "case_name": "TransData_case1",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        1,
+                        1,
+                        8,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        8,
+                        1,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                1,
+                1,
+                8,
+                8
+            ],
+            "tile_shape": [
+                1,
+                1,
+                1,
+                8,
+                8
+            ],
+            "params": {
+                "type": 0,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 10
+        },
+        {
+            "case_index": 11,
+            "case_name": "TransData_case1",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        1,
+                        1,
+                        1,
+                        1,
+                        8,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        1,
+                        8,
+                        1,
+                        1,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                1,
+                1,
+                1,
+                8,
+                8
+            ],
+            "tile_shape": [
+                1,
+                1,
+                1,
+                1,
+                8,
+                8
+            ],
+            "params": {
+                "type": 0,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 11
+        },
+        {
+            "case_index": 12,
+            "case_name": "TransData_case1",
+            "operation": "TransData",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        15,
+                        7,
+                        1,
+                        1,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        8,
+                        1,
+                        16,
+                        8
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                8,
+                1,
+                8,
+                1,
+                8
+            ],
+            "tile_shape": [
+                16,
+                8,
+                1,
+                1,
+                8
+            ],
+            "params": {
+                "type": 5,
+                "group": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 12
+        }
+    ]
+}

@@ -22,6 +22,7 @@
 #include "tilefwk/element.h"
 
 namespace npu::tile_fwk {
+class Function;
 class SymbolicScalar;
 class Element;
 constexpr const int TILE_VEC_DIMS = 2;
@@ -159,9 +160,13 @@ Tensor Full(
     const SymbolicScalar& src, DataType dtype, const std::vector<int64_t>& dstShape,
     std::vector<SymbolicScalar> validShape = {});
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
+Tensor TransData(const Tensor& self, TileOpFormat transDataType, int group = 1);
+std::shared_ptr<LogicalTensor> TransData(
+    Function& function, const std::shared_ptr<LogicalTensor>& self, TileOpFormat transDataType, int group = 1);
 Tensor Cast(
     const Tensor& self, DataType dstDataType, CastMode mode = CAST_NONE, SaturationMode satmode = SaturationMode::OFF);
 Tensor Permute(const Tensor& self, std::vector<int> perm);
+Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm);
 
 Tensor Exp(const Tensor& self, PrecisionType precisionType = PrecisionType::INTRINSIC);
 Tensor Exp2(const Tensor& self);
@@ -519,9 +524,9 @@ Tensor BatchMatmul(
     bool isCMatrixNZ = false);
 
 Tensor BatchMatmul(
-    DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulExtendParam &extendParam,
+    DataType dataType, const Tensor& aMatrix, const Tensor& bMatrix, const MatmulExtendParam& extendParam,
     bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false);
-    
+
 Tensor BatchMatmulMX(
     DataType dataType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
     bool isTransA = false, bool isAScaleTrans = false, bool isTransB = false, bool isBScaleTrans = false,

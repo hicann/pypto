@@ -214,6 +214,51 @@ std::string CodeGenOpNPU::PrintPermuteLayout() const
 
 std::string CodeGenOpNPU::GenPermuteOp() const { return PrintPermuteLayout(); }
 
+std::string CodeGenOpNPU::GenTransData() const
+{
+    auto transDataAttr = opAttrs.at(OpAttributeKey::transDataOffset);
+    const auto& tileParams = AnyCast<std::vector<SymbolicScalar>>(transDataAttr);
+    std::vector<std::string> tileParamsStr = {};
+    for (auto tileParam : tileParams) {
+        auto tmpExpr = AnyCast<SymbolicScalar>(tileParam);
+        tileParamsStr.push_back("(int)(" + SymbolicExpressionTable::BuildExpression(tmpExpr) + ")");
+    }
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "TransData only support TileTensor mode";
+
+    return PrintTransDataLayout(tileParamsStr);
+}
+
+std::string CodeGenOpNPU::PrintTransDataLayout(const std::vector<std::string>& param) const
+{
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID0);
+    std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
+    std::string coord = PrintCoord(rawShape[ID0].size(), coordCp);
+    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
+    std::string inputTensor = QueryTileTensorNameByIdx(ID2);
+    std::vector<std::string> paramList = {dstTensor, coord, tmpTensor, inputTensor};
+    std::vector<std::string> templateParam = {};
+    if (opCode == Opcode::OP_NCHW2NC1HWC0) {
+        paramList.insert(paramList.end(), param.begin(), param.begin() + 4);
+        templateParam = std::vector<std::string>(param.begin() + 4, param.end());
+    } else if (opCode == Opcode::OP_NCHW2Fractal_Z) {
+        paramList.insert(paramList.end(), param.begin(), param.begin() + 6);
+        templateParam = std::vector<std::string>(param.begin() + 6, param.end());
+    } else if (opCode == Opcode::OP_NCDHW2NDC1HWC0 || opCode == Opcode::OP_NC1HWC02NCHW) {
+        paramList.insert(paramList.end(), param.begin(), param.begin() + 5);
+        templateParam = std::vector<std::string>(param.begin() + 5, param.end());
+    } else if (opCode == Opcode::OP_NDC1HWC02NCDHW) {
+        paramList.insert(paramList.end(), param.begin(), param.begin() + 6);
+        templateParam = std::vector<std::string>(param.begin() + 6, param.end());
+    } else if (opCode == Opcode::OP_NCDHW2FRACTAL_Z_3D) {
+        paramList.insert(paramList.end(), param.begin(), param.begin() + 7);
+        templateParam = std::vector<std::string>(param.begin() + 7, param.end());
+    }
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByAngleBrackets(templateParam) << WrapParamByParentheses(paramList) << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::GenTransposeDataMove() const
 {
     bool isCopyLocalToGM = opCode == Opcode::OP_TRANSPOSE_MOVEOUT;

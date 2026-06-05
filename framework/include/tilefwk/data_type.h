@@ -61,7 +61,7 @@ enum DataType {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) name,
     DATA_TYPE_ALL
 #undef DTYPE_DESC
-    DT_BOTTOM
+        DT_BOTTOM
 };
 
 enum class NodeType {
@@ -73,6 +73,10 @@ enum class NodeType {
 enum class TileOpFormat {
     TILEOP_ND = 0,
     TILEOP_NZ = 1,
+    TILEOP_NC1HWC0 = 2,
+    TILEOP_NDC1HWC0 = 3,
+    TILEOP_FRACTAL_Z = 4,
+    TILEOP_FRACTAL_Z_3D = 5,
     TILEOP_FORMAT_NUM [[maybe_unused]],
 };
 
@@ -131,7 +135,8 @@ inline bool IsFloat(DataType t)
 {
     switch (t) {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) \
-    case name:  return is_float;
+    case name:                                                 \
+        return is_float;
         DATA_TYPE_ALL
 #undef DTYPE_DESC
         default:
@@ -156,8 +161,8 @@ inline const char* DataType2String(DataType t, bool brief = false)
     const char* ret = nullptr;
     switch (t) {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) \
-    case name:                                                  \
-        ret = #name;                                            \
+    case name:                                                 \
+        ret = #name;                                           \
         break;
         DATA_TYPE_ALL
 #undef DTYPE_DESC
@@ -171,7 +176,7 @@ inline size_t BytesOf(DataType t)
 {
     switch (t) {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) \
-    case name:                                                  \
+    case name:                                                 \
         return byte;
         DATA_TYPE_ALL
 #undef DTYPE_DESC
@@ -184,7 +189,7 @@ inline int64_t BitsOf(DataType t)
 {
     switch (t) {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) \
-    case name:                                                  \
+    case name:                                                 \
         return bit;
         DATA_TYPE_ALL
 #undef DTYPE_DESC
@@ -197,7 +202,7 @@ inline const char* DataType2CCEStr(DataType t)
 {
     switch (t) {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) \
-    case name:                                                  \
+    case name:                                                 \
         return #type;
         DATA_TYPE_ALL
 #undef DTYPE_DESC
@@ -249,10 +254,12 @@ const std::unordered_map<std::string, DataType> STR_DATA_TYPE_MAP = {
     {"fp4_e1m2", DT_FP4_E1M2},
     {"fp4_e1m2x2", DT_FP4_E1M2X2}};
 
-inline size_t DataType2CannType(DataType t) {
+inline size_t DataType2CannType(DataType t)
+{
     switch (t) {
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_type) \
-    case name:  return cann_type;
+    case name:                                                 \
+        return cann_type;
         DATA_TYPE_ALL
 #undef DTYPE_DESC
         default:

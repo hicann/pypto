@@ -38,9 +38,10 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
     return ss.str();
 }
 
-static bool IsInGMSpill(Operation& op) {
+static bool IsInGMSpill(Operation& op)
+{
     if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode())) {
-        for (auto &iOperand : op.GetIOperands()) {
+        for (auto& iOperand : op.GetIOperands()) {
             if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
                 return true;
             }
@@ -49,9 +50,10 @@ static bool IsInGMSpill(Operation& op) {
     return false;
 }
 
-static bool IsOutGMSpill(Operation& op) {
+static bool IsOutGMSpill(Operation& op)
+{
     if (OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-        for (auto &oOperand : op.GetOOperands()) {
+        for (auto& oOperand : op.GetOOperands()) {
             if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
                 return true;
             }
@@ -60,17 +62,24 @@ static bool IsOutGMSpill(Operation& op) {
     return false;
 }
 
-Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function &function)
+Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function& function)
 {
     
     if (ResetGmCopyDynValidShape(op, function)) {
         return SUCCESS;
     }
     for (auto outOperand : op.GetOOperands()) {
+        if ((op.GetOpcode() == Opcode::OP_INDEX_ADD || op.GetOpcode() == Opcode::OP_NCHW2NC1HWC0 ||
+             op.GetOpcode() == Opcode::OP_NC1HWC02NCHW || op.GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
+             op.GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 || op.GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D ||
+             op.GetOpcode() == Opcode::OP_NDC1HWC02NCDHW) &&
+            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand))
+            continue;
         std::vector<SymbolicScalar> validShape;
         if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || setSymDimOps.count(op.GetOpcode())) {
             for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {
-                validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));
+                validShape.emplace_back(
+                    "sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));
             }
         }
         // 通信的输出要从opattr中获取不能直接使用normalize

@@ -222,7 +222,7 @@ void PermuteElementOperationTileFunc(
     TiledPermuteElementOperation(function, tileShape, 0, input, oOperand[0], perm);
 }
 
-Tensor Permute(const Tensor& self, std::vector<int> perm)
+Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm)
 {
     DECLARE_TRACER();
     CheckTensorShapeSize(self.GetStorage(), "PERMUTE");
@@ -248,10 +248,17 @@ Tensor Permute(const Tensor& self, std::vector<int> perm)
 
     bool lastAxisInvolved = (perm[shapeSize - 1] != shapeSize - 1);
     if (lastAxisInvolved) {
-        RETURN_CALL(ElementPermuteOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), perm);
+        RETURN_CALL(ElementPermuteOperation, function, self.GetStorage(), perm);
     }
 
-    RETURN_CALL(PermuteOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), perm);
+    RETURN_CALL(PermuteOperation, function, self.GetStorage(), perm);
+}
+
+Tensor Permute(const Tensor& self, std::vector<int> perm)
+{
+    DECLARE_TRACER();
+    auto& function = *Program::GetInstance().GetCurrentFunction();
+    return Permute(function, self, perm);
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_PERMUTE, Opcode::OP_PERMUTE, PermuteOperationTileFunc);

@@ -74,6 +74,14 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_TRANSPOSE_MOVEOUT, [this]() { return GenTransposeDataMove(); }},
           {Opcode::OP_TRANSPOSE_MOVEIN, [this]() { return GenTransposeDataMove(); }},
 
+          // transData
+          {Opcode::OP_NCHW2NC1HWC0, [this]() { return GenTransData(); }},
+          {Opcode::OP_NCHW2Fractal_Z, [this]() { return GenTransData(); }},
+          {Opcode::OP_NC1HWC02NCHW, [this]() { return GenTransData(); }},
+          {Opcode::OP_NCDHW2NDC1HWC0, [this]() { return GenTransData(); }},
+          {Opcode::OP_NCDHW2FRACTAL_Z_3D, [this]() { return GenTransData(); }},
+          {Opcode::OP_NDC1HWC02NCDHW, [this]() { return GenTransData(); }},
+
           // index outcast
           {Opcode::OP_INDEX_OUTCAST, [this]() { return GenIndexOutCastOp(); }},
           // lOC -> UB

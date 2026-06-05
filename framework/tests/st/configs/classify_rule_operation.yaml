@@ -85,7 +85,7 @@ stest:
       - TestAxpy/AxpyOperationTest.TestAxpy/4
       - TestAxpy/AxpyOperationTest.TestAxpy/6
       - TestAxpy/AxpyOperationTest.TestAxpy/12
-      - TestAxpy/AxpyOperationTest.TestAxpy/13   
+      - TestAxpy/AxpyOperationTest.TestAxpy/13
       - TestRange/RangeOperationTest.TestRange/0
       - TestRange/RangeOperationTest.TestRange/1
       - TestAdd/AddOperationTest.TestAdd/10
@@ -101,10 +101,18 @@ stest:
       - TestGcd/GcdOperationTest.TestGcd/4
       - TestGcds/GcdsOperationTest.TestGcds/1
       - TestGcds/GcdsOperationTest.TestGcds/2
+      - TestTransData/TransDataOperationTest.TestTransData/0
+      - TestTransData/TransDataOperationTest.TestTransData/8
       - TestCumProd/CumProdOperationTest.TestCumProd/0
       - TestCumProd/CumProdOperationTest.TestCumProd/1
       - TestCumSum/CumSumOperationTest.TestCumSum/2
       - TestCumSum/CumSumOperationTest.TestCumSum/3
+      - TestTransData/TransDataOperationTest.TestTransData/0
+      - TestTransData/TransDataOperationTest.TestTransData/8
+      - TestTransData/TransDataOperationTest.TestTransData/9
+      - TestTransData/TransDataOperationTest.TestTransData/10
+      - TestTransData/TransDataOperationTest.TestTransData/11
+      - TestTransData/TransDataOperationTest.TestTransData/12
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/0
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/4
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/14
@@ -215,7 +223,7 @@ stest:
       - TestPermute/PermuteOperationTest.TestPermute/7
       - TestPermute/PermuteOperationTest.TestPermute/8
       - TestPermute/PermuteOperationTest.TestPermute/9
-      - TestPermute/PermuteOperationTest.TestPermute/10  
+      - TestPermute/PermuteOperationTest.TestPermute/10
       - TestWhere/WhereOperationTest.TestWhere/0
       - TestWhere/WhereOperationTest.TestWhere/8
       - TestWhere/WhereOperationTest.TestWhere/15

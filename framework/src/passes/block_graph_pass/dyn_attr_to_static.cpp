@@ -97,8 +97,7 @@ struct CoaInfo {
             macroType = CoaType::PARAM;
             if (SToIWrapper(match[INPUT_PARAM_POS_ONE].str(), idx) != SUCCESS) {
                 APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "ParseCoaString failed to convert indices, CoaType::PARAM, input coaExpr %s.",
+                    Elements::Operation, "ParseCoaString failed to convert indices, CoaType::PARAM, input coaExpr %s.",
                     coaExpr.c_str());
                 return FAILED;
             }
@@ -165,8 +164,7 @@ struct IsConstMetric {
     int GetAttrValue() { return attrValue; }
     bool TryInitAndCheckEqual(int newValue)
     {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Update dynScalar value=%d.", newValue);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Update dynScalar value=%d.", newValue);
         if (newValue < 0) {
             isConst = 0;
             attrValue = -1;
@@ -236,13 +234,23 @@ std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynami
         return dynamicAttributeList;
     }
 
-    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE};
+    const std::set<Opcode> specifiedOps = {
+        Opcode::OP_VEC_DUP,        Opcode::OP_EXPAND,       Opcode::OP_RESHAPE,        Opcode::OP_NCHW2NC1HWC0,
+        Opcode::OP_NCHW2Fractal_Z, Opcode::OP_NC1HWC02NCHW, Opcode::OP_NCDHW2NDC1HWC0, Opcode::OP_NCDHW2FRACTAL_Z_3D,
+        Opcode::OP_NDC1HWC02NCDHW};
     if (specifiedOps.count(opcode)) {
         auto& attrDict = op.GetAllAttr();
         auto it = attrDict.find(OpAttributeKey::dynScalar);
         if (it != attrDict.end()) {
             auto& value = *npu::tile_fwk::AnyCast<SymbolicScalar>(&it->second);
             dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
+        }
+        it = attrDict.find(OpAttributeKey::transDataOffset);
+        if (it != attrDict.end()) {
+            auto& values = *npu::tile_fwk::AnyCast<std::vector<SymbolicScalar>>(&it->second);
+            for (auto& value : values) {
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
+            }
         }
         return dynamicAttributeList;
     }
@@ -534,7 +542,8 @@ void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor>& tensor, const std::se
         int aiCpuFlag = inOutCast.count(tensor->GetRawMagic()) ? 3 : 2;
         if (paramAddr.second.IsExpression() && paramArgs.first != -1 && paramArgs.second != -1) {
             paramAddr.second = GET_PARAM_ADDR_MAYBE_CONST(
-                builder.CreateConstInt(static_cast<int64_t>(aiCpuFlag)), builder.CreateConstInt(static_cast<int64_t>(0)),
+                builder.CreateConstInt(static_cast<int64_t>(aiCpuFlag)),
+                builder.CreateConstInt(static_cast<int64_t>(0)),
                 builder.CreateConstInt(static_cast<int64_t>(paramArgs.first)),
                 builder.CreateConstInt(static_cast<int64_t>(paramArgs.second)));
         }

@@ -134,6 +134,7 @@ const std::string OpAttributeKey::wStride = "W_STRIDE";
 const std::string OpAttributeKey::srcGmConvValidShape = "SRC_CONV_GM_VALID_SHAPE";
 const std::string OpAttributeKey::l0cValidMN = "L0C_VALID_MN";
 const std::string OpAttributeKey::rmwMode = "op_attr_rmw_mode";
+const std::string OpAttributeKey::transDataOffset = "TRANSDATA_OFFSET";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";

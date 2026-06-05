@@ -345,6 +345,29 @@ int64_t RuntimeGetViewValidShapeDim(int64_t validshape, int64_t viewOffset, int6
 #define GET_PARAM_STRIDE_5(param, n, base) GET_PARAM_ATTR_5_STRIDE(RAWSHAPE, param, n, base)
 #define GET_PARAM_STRIDE_DIM_5(s0, s1, s2, s3, s4) (s1) * (s2) * (s3) * (s4), (s2) * (s3) * (s4), (s3) * (s4), (s4), 1
 
+#define GET_PARAM_ATTR_6(name, param, n, base)                                                            \
+    GET_PARAM_##name##_BY_IDX(param, n, base, 6, 0), GET_PARAM_##name##_BY_IDX(param, n, base, 6, 1),     \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 2), GET_PARAM_##name##_BY_IDX(param, n, base, 6, 3), \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 4), GET_PARAM_##name##_BY_IDX(param, n, base, 6, 5)
+
+#define GET_PARAM_ATTR_6_STRIDE(name, param, n, base)                                                          \
+    GET_PARAM_##name##_BY_IDX(param, n, base, 6, 1) * GET_PARAM_##name##_BY_IDX(param, n, base, 6, 2) *        \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 3) * GET_PARAM_##name##_BY_IDX(param, n, base, 6, 4) *    \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 5),                                                       \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 2) * GET_PARAM_##name##_BY_IDX(param, n, base, 6, 3) *    \
+            GET_PARAM_##name##_BY_IDX(param, n, base, 6, 4) * GET_PARAM_##name##_BY_IDX(param, n, base, 6, 5), \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 3) * GET_PARAM_##name##_BY_IDX(param, n, base, 6, 4) *    \
+            GET_PARAM_##name##_BY_IDX(param, n, base, 6, 5),                                                   \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 4) * GET_PARAM_##name##_BY_IDX(param, n, base, 6, 5),     \
+        GET_PARAM_##name##_BY_IDX(param, n, base, 6, 5), 1
+
+#define GET_PARAM_OFFSET_6(param, n, base) GET_PARAM_ATTR_6(OFFSET, param, n, base)
+#define GET_PARAM_SHAPE_6(param, n, base) GET_PARAM_ATTR_6(SHAPE, param, n, base)
+#define GET_PARAM_RAWSHAPE_6(param, n, base) GET_PARAM_ATTR_6(RAWSHAPE, param, n, base)
+#define GET_PARAM_STRIDE_6(param, n, base) GET_PARAM_ATTR_6_STRIDE(RAWSHAPE, param, n, base)
+#define GET_PARAM_STRIDE_DIM_6(s0, s1, s2, s3, s4, s5) \
+    (s1) * (s2) * (s3) * (s4) * (s5), (s2) * (s3) * (s4) * (s5), (s3) * (s4) * (s5), (s4) * (s5), (s5), 1
+
 INLINE uint64_t RUNTIME_Min(uint64_t input1, uint64_t input2) { return input1 < input2 ? input1 : input2; }
 
 INLINE uint64_t RUNTIME_Max(uint64_t input1, uint64_t input2) { return input1 > input2 ? input1 : input2; }

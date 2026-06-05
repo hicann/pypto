@@ -904,6 +904,10 @@ class Tensor:
         return pypto.transpose(self, dim0, dim1)
 
     @source_location
+    def transdata(self, format: int, group: int = 1) -> 'Tensor':
+        return pypto.transdata(self, format, group)
+
+    @source_location
     def gather(self, dim: int, index: 'Tensor') -> 'Tensor':
         return pypto.gather(self, dim, index)
 

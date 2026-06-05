@@ -2983,6 +2983,21 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
             }
         } else if (op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op->GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
             NormalizeReshapeCopyDynValidShape(op.get(), coaLists, coaIndex, valueToIndex);
+        } else if (
+            op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0 || op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
+            op->GetOpcode() == Opcode::OP_NC1HWC02NCHW || op->GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 ||
+            op->GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D || op->GetOpcode() == Opcode::OP_NDC1HWC02NCDHW) {
+            if (op->HasAttr(OpAttributeKey::transDataOffset)) {
+                std::vector<SymbolicScalar> offsets;
+                op->GetAttr(OpAttributeKey::transDataOffset, offsets);
+                for (auto& offset : offsets) {
+                    std::vector<SymbolicScalar> valueCoaList;
+                    MaybeNormalizeValue(valueCoaList, offset, coaIndex, valueToIndex);
+                    coaLists.emplace_back(valueCoaList);
+                    coaIndex += 1;
+                }
+                op->SetAttribute(OpAttributeKey::transDataOffset, offsets);
+            }
         }
     }
 }

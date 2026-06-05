@@ -107,6 +107,7 @@ public:
     std::string GenDupOp() const;
 
     std::string GenTransposeDataMove() const;
+    std::string GenTransData() const;
 
     std::string GenGatherElementOp() const;
     std::string GenGatherMaskOp() const;
@@ -429,6 +430,8 @@ protected:
     std::string PrintTransposeDataMoveStatic(const PrintTransposeDataMoveParam& param) const;
     std::string PrintTransposeDataMoveDynamic(const PrintTransposeDataMoveParam& param) const;
     std::string PrintTransposeDataMoveDynamicUnaligned(const PrintTransposeDataMoveParam& param) const;
+
+    std::string PrintTransDataLayout(const std::vector<std::string>& param) const;
 
     std::string PrintGatherElementDynamicUnaligned(const PrintGatherEleParam& param) const;
     std::string PrintGatherElementStatic(const PrintGatherEleParam& param) const;

@@ -134,6 +134,12 @@ void BindOperation(py::module& m)
         [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Transpose(self, perm); },
         "Tensor transpose.");
     m.def(
+        "TransData",
+        [](const Tensor& self, const int& format, const int& group) {
+            return npu::tile_fwk::TransData(self, static_cast<TileOpFormat>(format), group);
+        },
+        "Tensor transdata.");
+    m.def(
         "Abs", [](const Tensor& self) { return npu::tile_fwk::Abs(self); }, "Tensor abs.");
     m.def(
         "Reciprocal", [](const Tensor& operand) { return npu::tile_fwk::Reciprocal(operand); }, "Tensor reciprocal.");
@@ -641,7 +647,7 @@ void BindOperation(py::module& m)
     m.def(
         "BatchMatmul",
         [](DataType out_type, const Tensor& tensor_a, const Tensor& tensor_b, bool a_trans, bool b_trans,
-           bool c_matrix_nz, const Matrix::MatmulExtendParam &extend_param) {
+           bool c_matrix_nz, const Matrix::MatmulExtendParam& extend_param) {
             return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, extend_param, a_trans, b_trans, c_matrix_nz);
         },
         py::arg("out_type"), py::arg("a"), py::arg("b"), py::arg("a_trans") = false, py::arg("b_trans") = false,

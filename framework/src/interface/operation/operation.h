@@ -152,6 +152,7 @@ public:
     static const std::string srcGmConvValidShape;
     static const std::string l0cValidMN;
     static const std::string rmwMode;
+    static const std::string transDataOffset;
 };
 
 class ConvOpAttributeKey {
@@ -519,6 +520,12 @@ public:
             Opcode::OP_INDEX_ADD,
             Opcode::OP_TRANSPOSE_MOVEIN,
             Opcode::OP_TRANSPOSE_MOVEOUT,
+            Opcode::OP_NCHW2NC1HWC0,
+            Opcode::OP_NCHW2Fractal_Z,
+            Opcode::OP_NC1HWC02NCHW,
+            Opcode::OP_NCDHW2NDC1HWC0,
+            Opcode::OP_NCDHW2FRACTAL_Z_3D,
+            Opcode::OP_NDC1HWC02NCDHW,
             Opcode::OP_FFN_SCHED,
             Opcode::OP_FFN_BATCHING,
             Opcode::OP_FFN_COMBINEINFO,
