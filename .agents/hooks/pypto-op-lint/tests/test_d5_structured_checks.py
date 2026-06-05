@@ -191,6 +191,30 @@ def demo_wrapper(x, y, **kwargs):
     assert finding.status == "PASS"
 
 
+def test_ol50_provides_guidance_for_standalone_module_suffix(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    pass
+
+def demo_module15_wrapper(x, y):
+    demo_kernel(x, y)
+"""
+    write_file(op_dir / "modules" / "demo_module15_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL50")
+    assert finding.status == "FAIL"
+    assert "累积命名规则" in finding.message
+    assert "module123" in finding.message or "module12" in finding.message
+    assert "修正方式" in finding.message
+    assert "standalone" in finding.message
+
+
 def test_ol51_counts_only_real_assemble_targets(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")
@@ -254,6 +278,101 @@ def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
     pypto.set_vec_tile_shapes(32, 128)
     out_a.move(x)
     out_b[:] = y
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+def test_ol51_recognizes_index_add__as_writeback(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    index = pypto.zeros([32], pypto.DT_INT32)
+    pypto.index_add_(out_a, 0, index, x)
+    pypto.index_add_(out_b, 0, index, y)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+def test_ol51_recognizes_scatter__as_writeback(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    index = pypto.zeros([32, 32], pypto.DT_INT64)
+    pypto.scatter_(out_a, 0, index, x)
+    pypto.scatter_(out_b, 0, index, y)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+def test_ol51_recognizes_axpy__as_writeback(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    pypto.axpy_(out_a, x, alpha=1.0)
+    pypto.axpy_(out_b, y, alpha=1.0)
+
+def demo_wrapper(x, y):
+    demo_kernel(x, y, y, y)
+"""
+    write_file(op_dir / "demo_impl.py", impl)
+
+    finding = run_rule(mod, op_dir, "OL51")
+    assert finding.status == "PASS"
+
+
+def test_ol51_recognizes_tensor_method_index_add__as_writeback(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_module_interfaces(op_dir)
+    impl = """import pypto
+@pypto.frontend.jit
+def demo_kernel(x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                y: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+                out_b: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16)):
+    pypto.set_vec_tile_shapes(32, 128)
+    index = pypto.zeros([32], pypto.DT_INT32)
+    out_a.index_add_(0, index, x)
+    out_b.index_add_(0, index, y)
 
 def demo_wrapper(x, y):
     demo_kernel(x, y, y, y)

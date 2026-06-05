@@ -51,7 +51,9 @@ def check_ol09(ctx: CheckContext) -> Finding:
         return ctx.make_finding(
             "OL09",
             "FAIL",
-            f"{SPEC_FILE} 缺少必需内容: {', '.join(missing)}",
+            f"{SPEC_FILE} 缺少必需内容: {', '.join(missing)}\n"
+            f"提示: 以上关键词可能因 heading 使用了英文等价词（如 Mathematical Formula）"
+            f"而未匹配，请检查对应章节的 heading 是否包含上述中文关键词。",
             file=SPEC_FILE,
         )
 
@@ -258,7 +260,9 @@ def check_ol10(ctx: CheckContext) -> Finding:
         return ctx.make_finding(
             "OL10",
             "FAIL",
-            f"{API_REPORT_FILE} 缺少必需内容: {', '.join(missing)}",
+            f"{API_REPORT_FILE} 缺少必需内容: {', '.join(missing)}\n"
+            f"提示: 以上关键词可能因 heading 使用了英文等价词（如 API Mapping）"
+            f"而未匹配，请检查对应章节的 heading 是否包含上述中文关键词。",
             file=API_REPORT_FILE,
         )
     return ctx.make_finding(
@@ -326,7 +330,9 @@ def check_ol12(ctx: CheckContext) -> Finding:
         return ctx.make_finding(
             "OL12",
             "FAIL",
-            f"{DESIGN_FILE} 缺少必需内容: {', '.join(missing)}",
+            f"{DESIGN_FILE} 缺少必需内容: {', '.join(missing)}\n"
+            f"提示: 以上关键词可能因 heading 使用了英文等价词（如 Compute Graph、Verification Plan）"
+            f"而未匹配，请检查对应章节的 heading 是否包含上述中文关键词。",
             file=DESIGN_FILE,
         )
     return ctx.make_finding(

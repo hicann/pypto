@@ -742,10 +742,21 @@ def check_ol50(ctx: CheckContext) -> Finding:
         else:
             module_ids = _suffix_to_module_ids(suffix)
             if not module_ids:
+                cumulative_example = (
+                    "".join(str(i) for i in range(1, int(suffix) + 1))
+                    if suffix.isdigit() else "123..."
+                )
                 return ctx.make_finding(
                     "OL50", "FAIL",
-                    f"{impl_file}: 模块 suffix '{suffix}' "
-                    f"不满足 `primary_inputs` 的累积命名规约 (1, 12, 123, ...)",
+                    f"{impl_file}: 模块 suffix '{suffix}' 不满足累积命名规约。\n"
+                    f"累积命名规则: 文件名 suffix 必须是从 1 开始的连续模块 ID 拼接。\n"
+                    f"  合法示例: module1(M1), module12(M1+M2), module123(M1+M2+M3)\n"
+                    f"  当前 suffix '{suffix}' 无法解析为累积序列。\n"
+                    f"修正方式:\n"
+                    f"  - 如果这是第 {suffix} 个 Phase 的累积产物（M1–M{suffix}），"
+                    f"文件名应为 module{cumulative_example}_impl.py\n"
+                    f"  - 如果这是 standalone 模块（不参与累积），应将其逻辑合并到 "
+                    f"顶层 {ctx.op_name}_impl.py 中，或重新设计模块分解使其参与累积 Phase 链",
                     file=impl_file,
                 )
             expected = _primary_inputs_for_modules(interfaces, module_ids)
@@ -800,6 +811,12 @@ def _collected_writeback_targets(tree: ast.Module) -> set[str]:
       - `pypto.move(src, <name>)`
       - `<name>.move(src)` / `<name>.assemble(src, offsets)`
       - `<name>[idx] = expr` 一般写法 (Subscript any)
+      - `pypto.index_add_(<name>, ...)` — inplace 索引累加
+      - `pypto.index_add__ub(<name>, ...)` — inplace UB 变体索引累加
+      - `pypto.index_put_(<name>, ...)` — inplace 索引写入
+      - `pypto.scatter_(<name>, ...)` — inplace 散射写入
+      - `pypto.axpy_(<name>, ...)` — inplace AXPY (y = alpha*x + y)
+      - `<name>.index_add_(...)` / `.scatter_(...)` / `.axpy_(...)`
     """
     out: set[str] = set()
     for node in ast.walk(tree):
@@ -829,7 +846,20 @@ def _collected_writeback_targets(tree: ast.Module) -> set[str]:
                     for kw in node.keywords:
                         if kw.arg in ("target", "dst", "out") and isinstance(kw.value, ast.Name):
                             out.add(kw.value.id)
-                elif f.attr in ("move", "assemble"):
+                elif receiver == "pypto" and f.attr in (
+                    "index_add_", "index_add__ub", "index_put_",
+                    "scatter_", "axpy_",
+                ):
+                    # Inplace ops: first arg is the target tensor
+                    if node.args and isinstance(node.args[0], ast.Name):
+                        out.add(node.args[0].id)
+                    for kw in node.keywords:
+                        if kw.arg in ("input", "y") and isinstance(kw.value, ast.Name):
+                            out.add(kw.value.id)
+                elif f.attr in (
+                    "move", "assemble",
+                    "index_add_", "scatter_", "axpy_",
+                ):
                     out.add(receiver)
         # `<name>[...] = expr` augmented or simple
         if isinstance(node, (ast.Assign, ast.AugAssign)):
