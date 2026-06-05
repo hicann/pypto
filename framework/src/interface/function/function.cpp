@@ -1230,7 +1230,8 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const
         }
     }
     for (auto& op : operations_) {
-        FE_ASSERT(outDegree[opToIndex[op.get()]] == 0) << "cycle detected: " << op->Dump();
+        FE_ASSERT(FeError::OP_DEPENDENCY_CYCLE, outDegree[opToIndex[op.get()]] == 0)
+            << "cycle detected: " << op->Dump();
     }
     FE_ASSERT(operations_.size() == sortedOperations.size())
         << "Sorted operations size mismatch: " << sortedOperations.size() << " and original size "

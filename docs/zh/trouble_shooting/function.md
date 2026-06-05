@@ -11,7 +11,7 @@
 
 其中定义了以下错误码（`FeError`）：
 
-### 通用错误码（0x21001U - 0x21009U）
+### 通用错误码（0x21001U - 0x2100AU）
 
 - **EINTERNAL (0x21001U)**：内部错误
 
@@ -30,6 +30,8 @@
 - **NOT_EXIST (0x21008U)**：参数/操作不存在
 
 - **DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED (0x21009U)**：不支持 Shape 为动态的 Tensor 直接参与计算
+
+- **OP_DEPENDENCY_CYCLE (0x2100AU)**：算子依赖图存在环，拓扑排序失败
 
 ### 文件错误码（0x29001U - 0x29002U）
 
@@ -270,6 +272,60 @@ def kernel_with_dynamic(
         temp = a[idx: idx + view, :]
         out[idx: idx + view, :] = pypto.exp(temp)
 ```
+
+---
+
+### OP_DEPENDENCY_CYCLE (0x2100AU)
+
+**错误描述：** 算子依赖图存在环，`GetSortedOperations` 拓扑排序失败
+
+**报错特征：**
+
+- 错误码：`F2100A`（`Enum: OP_DEPENDENCY_CYCLE`）
+- 附加信息通常包含 `cycle detected:` 及首个未消减出度的 Operation dump
+
+**出现原因：**
+
+- 前端构图阶段，Tensor 的 producer/consumer（`iOperand` / `dependOperand`）或 `AddOperationGroup` 顺序约束共同构成有向环
+- `GetTensorData` 相关的 incast/outcast 依赖与算子依赖叠加形成环
+
+**定位指导适用范围：**
+
+| 触发阶段 | 是否提供用户侧定位指导 |
+|----------|------------------------|
+| **进入 Pass 流水线之前**（如 `EndFunction` 内、用户代码触发的 `SortOperations()` 之前） | **是** — 属用户构图问题，按下方步骤排查 |
+| **Pass 执行之后**（堆栈来自 Pass 或框架内部图变换后的 `SortOperations`） | **否** — 属框架内部错误，请联系技术支持 |
+
+判断方式：查看堆栈是否仅包含前端 `Function::GetSortedOperations` / `Function::SortOperations`（且发生在 Pass 入口之前）。若堆栈已包含具体 Pass 名称或 `pass.cpp` 等 Pass 路径，则不要按用户构图问题处理。
+
+**解决办法（仅适用于进入 Pass 之前触发）：**
+
+1. 在即将调用 `SortOperations()` 的位置**之前**，导出当前 Function 计算图 JSON（C++ 调试场景可在 `Function` 成员函数内调用）：
+
+   ```cpp
+   this->DumpJsonFile("before_sort.json");
+   SortOperations();
+   ```
+
+   `DumpJsonFile` 传入非空路径时，JSON 写入该路径；未传参时默认写入 `LogTopFolder/<funcRawName>.json`。
+
+2. 使用计算图分析脚本进行 **Op 级成环检测**（在仓库根目录执行）：
+
+   ```bash
+   python3 .agents/skills/pypto-pass-error-locator/scripts/computation_graph_analyzer.py \
+     --json-path before_sort.json \
+     --detect-op-cycle
+   ```
+
+3. 根据脚本输出的环路径（Op magic / 依赖边），回到用户 kernel 代码检查：
+   - 是否存在张量读写形成闭环（A 依赖 B 的输出，B 又依赖 A）
+   - `dependOperand` / `GetTensorData` 引入的额外依赖是否与 `AddOperationGroup` 顺序冲突
+   - 动态子图边界（incast/outcast）是否错误地连回同一 Function 内更早的 producer
+
+**关联工具：**
+
+- 计算图查看：[查看计算图.md](../tools/computation_graph/查看计算图.md)
+- Pass 错误分析技能（含 `computation_graph_analyzer.py` 说明）：`pypto-pass-error-locator`
 
 ---
 
