@@ -144,15 +144,22 @@ TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto src0Shape4 = src0Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     constexpr bool src0IsColMajor = (Src0TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT);
     constexpr bool src1IsColMajor = (Src1TileInfo::tileW == 1 && GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT);
-    using Src0PtoTile =
-        typename std::conditional<src0IsColMajor, PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
-    using Src1PtoTile =
-        typename std::conditional<src1IsColMajor, PtoTile<T2, pto::BLayout::ColMajor>, PtoTile<T2>>::type;
-    auto dstTile = PtoTile<T0>(1, shape4).Data();
-    auto src0Tile = Src0PtoTile(1, src0Shape4).Data();
-    auto src1Tile = Src1PtoTile(1, src1Shape4).Data();
+
+    constexpr pto::BLayout src0BLayout = src0IsColMajor ? pto::BLayout::ColMajor : pto::BLayout::RowMajor;
+    constexpr pto::BLayout src1BLayout = src1IsColMajor ? pto::BLayout::ColMajor : pto::BLayout::RowMajor;
+    constexpr auto src0TileH = src0IsColMajor ? Src0TileInfo::tileH : 1;
+    constexpr auto src1TileH = src1IsColMajor ? Src1TileInfo::tileH : 1;
+    using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+    using src0TileDefine =
+        pto::Tile<pto::TileType::Vec, typename T1::Type, src0TileH, Src0TileInfo::tileW, src0BLayout, -1, -1>;
+    using src1TileDefine =
+        pto::Tile<pto::TileType::Vec, typename T2::Type, src1TileH, Src1TileInfo::tileW, src1BLayout, -1, -1>;
+    dstTileDefine dstTile(1, shape4);
+    src0TileDefine src0Tile(1, src0Shape4);
+    src1TileDefine src1Tile(1, src1Shape4);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {

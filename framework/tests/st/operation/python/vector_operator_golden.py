@@ -3644,8 +3644,11 @@ def gen_bitwise_right_shift_op_golden(case_name: str, output: Path, case_index: 
     def golden_func(inputs: list, _config: dict):
         x0 = torch.tensor(inputs[0])
         x1 = torch.tensor(inputs[1])
-        y = torch.bitwise_right_shift(x0, x1)
-        return [y.numpy()]
+        if not x0.is_signed():
+            y = np.right_shift(x0.numpy(), x1.numpy())
+        else:
+            y = torch.bitwise_right_shift(x0, x1).numpy()
+        return [y]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("BitwiseRightShift", golden_func, output, case_index)
@@ -3660,8 +3663,11 @@ def gen_bitwise_left_shift_op_golden(case_name: str, output: Path, case_index: i
     def golden_func(inputs: list, _config: dict):
         x0 = torch.tensor(inputs[0])
         x1 = torch.tensor(inputs[1])
-        y = torch.bitwise_left_shift(x0, x1)
-        return [y.numpy()]
+        if not x0.is_signed():
+            y = np.left_shift(x0.numpy(), x1.numpy())
+        else:
+            y = torch.bitwise_left_shift(x0, x1).numpy()
+        return [y]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("BitwiseLeftShift", golden_func, output, case_index)
@@ -3678,8 +3684,11 @@ def gen_bitwise_right_shifts_op_golden(case_name: str, output: Path, case_index:
         x0 = torch.tensor(inputs[0])
         params["scalar_type"] = params.get("scalar_type", "int32")
         params["scalar"] = get_dtype_by_name(params["scalar_type"])(params["scalar"])
-        y = torch.bitwise_right_shift(x0, params["scalar"])
-        return [y.numpy()]
+        if not x0.is_signed():
+            y = np.right_shift(x0.numpy(), params["scalar"])
+        else:
+            y = torch.bitwise_right_shift(x0, params["scalar"]).numpy()
+        return [y]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("BitwiseRightShifts", golden_func, output, case_index)
@@ -3696,8 +3705,11 @@ def gen_bitwise_left_shifts_op_golden(case_name: str, output: Path, case_index: 
         x0 = torch.tensor(inputs[0])
         params["scalar_type"] = params.get("scalar_type", "int32")
         params["scalar"] = get_dtype_by_name(params["scalar_type"])(params["scalar"])
-        y = torch.bitwise_left_shift(x0, params["scalar"])
-        return [y.numpy()]
+        if not x0.is_signed():
+            y = np.left_shift(x0.numpy(), params["scalar"])
+        else:
+            y = torch.bitwise_left_shift(x0, params["scalar"]).numpy()
+        return [y]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("BitwiseLeftShifts", golden_func, output, case_index)
@@ -3714,8 +3726,11 @@ def gen_s_bitwise_right_shift_op_golden(case_name: str, output: Path, case_index
         x1 = torch.tensor(inputs[0])
         params["scalar_type"] = params.get("scalar_type", "int32")
         params["scalar"] = get_dtype_by_name(params["scalar_type"])(params["scalar"])
-        y = torch.bitwise_right_shift(params["scalar"], x1)
-        return [y.numpy()]
+        if not x1.is_signed():
+            y = np.right_shift(params["scalar"], x1.numpy())
+        else:
+            y = torch.bitwise_right_shift(params["scalar"], x1).numpy()
+        return [y]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("SBitwiseRightShift", golden_func, output, case_index)
@@ -3732,8 +3747,11 @@ def gen_s_bitwise_left_shift_op_golden(case_name: str, output: Path, case_index:
         x1 = torch.tensor(inputs[0])
         params["scalar_type"] = params.get("scalar_type", "int32")
         params["scalar"] = get_dtype_by_name(params["scalar_type"])(params["scalar"])
-        y = torch.bitwise_left_shift(params["scalar"], x1)
-        return [y.numpy()]
+        if not x1.is_signed():
+            y = np.left_shift(params["scalar"], x1.numpy())
+        else:
+            y = torch.bitwise_left_shift(params["scalar"], x1).numpy()
+        return [y]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("SBitwiseLeftShift", golden_func, output, case_index)

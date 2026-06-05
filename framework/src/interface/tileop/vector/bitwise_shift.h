@@ -19,6 +19,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 #include "tileop_common.h"
+#include "unary.h"
 
 template <BitwiseShiftOp op, typename T0, typename T1, typename T2>
 TILEOP void BitwiseShiftComputeImpl(T0 dst, T1 src0, T2 src1)
@@ -48,51 +49,34 @@ TILEOP void BitwiseShiftScalarComputeImpl(T0 dst, T1 src0, Scalar src1)
     }
 }
 
-template <size_t MAX_SHIFT_NUM, typename T, typename U, typename V>
-TILEOP void GetValidShiftTile(T& dst, U& src1, V& tmp)
+template <size_t MAX_SHIFT_NUM, typename T, typename U, typename V, typename USigned, typename VSigned>
+TILEOP void GetValidShiftTile(T& dst, U& src1, V& tmp, USigned& src1Signed, VSigned& tmpSigned)
 {
     pto::TEXPANDS(tmp, MAX_SHIFT_NUM);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TSUB(tmp, tmp, src1);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
+    pto::TSUB(tmpSigned, tmpSigned, src1Signed);
+    SyncV();
     pto::TOR(tmp, tmp, src1);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TSHRS(tmp, tmp, MAX_SHIFT_NUM);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
+    pto::TSHRS(tmpSigned, tmpSigned, MAX_SHIFT_NUM);
+    SyncV();
     pto::TNOT(dst, tmp);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TAND(src1, src1, dst);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TEXPANDS(dst, MAX_SHIFT_NUM);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TAND(tmp, tmp, dst);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     pto::TOR(src1, src1, tmp);
 }
 
-template <BitwiseShiftOp op, size_t MAX_SHIFT_NUM, typename T0, typename T1, typename T2, typename T3>
-TILEOP void BitwiseShiftImpl(T0& dst, T1& src0, T2& src1, T3& tmp)
+template <BitwiseShiftOp op, size_t MAX_SHIFT_NUM, typename T0, typename T1, typename T2, typename T3,
+          typename T2Signed, typename T3Signed>
+TILEOP void BitwiseShiftImpl(T0& dst, T1& src0, T2& src1, T3& tmp, T2Signed& src1Signed, T3Signed& tmpSigned)
 {
-    GetValidShiftTile<MAX_SHIFT_NUM>(dst, src1, tmp);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    GetValidShiftTile<MAX_SHIFT_NUM>(dst, src1, tmp, src1Signed, tmpSigned);
+    SyncV();
     BitwiseShiftComputeImpl<op>(dst, src0, src1);
 }
 
@@ -108,6 +92,10 @@ TILEOP void BitwiseShiftCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
     auto src0Tile = PtoTile<T1>(src0);
     auto src1Tile = PtoTile<T2>(src1);
     auto tmpTile = PtoTile<T3>(tmp);
+    auto src1SignedTile =
+        PtoTile<T2, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T2>::Dtype>>(src1);
+    auto tmpSignedTile =
+        PtoTile<T3, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T3>::Dtype>>(tmp);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -117,7 +105,11 @@ TILEOP void BitwiseShiftCompute(T0 dst, T1 src0, T2 src1, T3 tmp)
                 src0Tile.Assign(src0, tileOffsets);
                 src1Tile.Assign(src1, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                BitwiseShiftImpl<op, MAX_SHIFT_NUM>(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmpTile.Data());
+                src1SignedTile.Assign(src1, tileOffsets);
+                tmpSignedTile.Assign(tmp, tileOffsets);
+                BitwiseShiftImpl<op, MAX_SHIFT_NUM>(
+                    dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmpTile.Data(),
+                    src1SignedTile.Data(), tmpSignedTile.Data());
             }
         }
     }
@@ -148,17 +140,15 @@ TILEOP void BitwiseShiftScalarCompute(T0 dst, T1 src0, Scalar src1)
     }
 }
 
-template <BitwiseShiftOp op, size_t MAX_SHIFT_NUM, typename T0, typename Scalar, typename T1, typename T2>
-TILEOP void ScalarBitwiseShiftImpl(T0& dst, Scalar& src0, T1& src1, T2& tmp)
+template <BitwiseShiftOp op, size_t MAX_SHIFT_NUM, typename T0, typename Scalar, typename T1, typename T2,
+          typename T1Signed, typename T2Signed>
+TILEOP void ScalarBitwiseShiftImpl(
+    T0& dst, Scalar& src0, T1& src1, T2& tmp, T1Signed& src1Signed, T2Signed& tmpSigned)
 {
-    GetValidShiftTile<MAX_SHIFT_NUM>(dst, src1, tmp);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    GetValidShiftTile<MAX_SHIFT_NUM>(dst, src1, tmp, src1Signed, tmpSigned);
+    SyncV();
     pto::TEXPANDS(dst, src0);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
+    SyncV();
     BitwiseShiftComputeImpl<op>(dst, dst, src1);
 }
 
@@ -173,6 +163,10 @@ TILEOP void ScalarBitwiseShiftCompute(T0 dst, Scalar src0, T1 src1, T2 tmp)
     auto dstTile = PtoTile<T0>(dst);
     auto src1Tile = PtoTile<T1>(src1);
     auto tmpTile = PtoTile<T2>(tmp);
+    auto src1SignedTile =
+        PtoTile<T1, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T1>::Dtype>>(src1);
+    auto tmpSignedTile =
+        PtoTile<T2, pto::BLayout::RowMajor, false, std::make_signed_t<typename PtoTile<T2>::Dtype>>(tmp);
 
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
@@ -181,7 +175,11 @@ TILEOP void ScalarBitwiseShiftCompute(T0 dst, Scalar src0, T1 src1, T2 tmp)
                 dstTile.Assign(dst, tileOffsets);
                 src1Tile.Assign(src1, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                ScalarBitwiseShiftImpl<op, MAX_SHIFT_NUM>(dstTile.Data(), src0, src1Tile.Data(), tmpTile.Data());
+                src1SignedTile.Assign(src1, tileOffsets);
+                tmpSignedTile.Assign(tmp, tileOffsets);
+                ScalarBitwiseShiftImpl<op, MAX_SHIFT_NUM>(
+                    dstTile.Data(), src0, src1Tile.Data(), tmpTile.Data(),
+                    src1SignedTile.Data(), tmpSignedTile.Data());
             }
         }
     }

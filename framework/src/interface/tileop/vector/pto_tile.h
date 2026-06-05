@@ -166,7 +166,8 @@ __aicore__ inline constexpr int GetValidWidth()
     }
 }
 
-template <typename T, pto::BLayout Layout = pto::BLayout::RowMajor, bool Mergeable = false>
+template <typename T, pto::BLayout Layout = pto::BLayout::RowMajor, bool Mergeable = false,
+          typename DtypeOverride = void>
 class PtoTile {
 private:
     static constexpr auto size = Std::tuple_size<typename T::Shape>::value;
@@ -176,7 +177,8 @@ private:
     static constexpr auto validW = GetValidWidth<T>();
 
 public:
-    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;
+    using DefaultDtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;
+    using Dtype = std::conditional_t<std::is_void_v<DtypeOverride>, DefaultDtype, DtypeOverride>;
     using Type = pto::Tile<pto::TileType::Vec, Dtype, tileH, tileW, Layout, validH, validW>;
 
     __aicore__ inline PtoTile() : data_()
