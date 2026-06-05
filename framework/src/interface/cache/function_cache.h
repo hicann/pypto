@@ -22,6 +22,7 @@
 #include "interface/function/function.h"
 #include "interface/cache/hash.h"
 #include "tilefwk/core_func_data.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 // 保存CoreFunction在CoreFunctionTopo列表里的偏移
@@ -104,6 +105,10 @@ public:
         for (auto& callopAttr : callopAttrList) {
             auto hash = callopAttr->GetCalleeHash();
             Function* calleeFunction = GetCacheFunction(hash);
+            if (calleeFunction == nullptr) {
+                FE_LOGE(FeError::EINTERNAL, "calleeFunction is nullptr, hash: %lu", hash.GetHash());
+                continue;
+            }
             hashDict[hash] = calleeFunction;
             BuildHashDict(calleeFunction, hashDict);
         }
