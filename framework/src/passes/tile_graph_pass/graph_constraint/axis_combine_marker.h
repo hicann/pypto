@@ -29,9 +29,9 @@
 #include "interface/function/function.h"
 namespace npu::tile_fwk {
 enum class AxisReorderStatus {
-    ENABLE = 0, // 明确可以支持合轴优化
-    DISABLE,    // 尾轴为1，但是不支持合轴优化的场景
-    UNKNOWN     // 不涉及合轴优化
+    UNKNOWN = 0, // 不确定合轴优化
+    ENABLE,      // 明确可以支持合轴优化
+    DISABLE      // 尾轴为1，但是不支持合轴优化的场景
 };
 class AxisCombineMarker {
 public:
@@ -51,6 +51,9 @@ private:
     // 并查集相关方法
     LogicalTensorPtr Find(LogicalTensorPtr x);
     void Union(LogicalTensorPtr x, LogicalTensorPtr y);
+    bool IsEligibleUnionOutput(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor) const;
+    void UnionOutputWithInputs(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor);
+    void UnionMultiOutputTensors(Operation* op);
     void BuildUnionFind();
     void ResolveGroupStatus();
     std::unordered_map<LogicalTensorPtr, AxisReorderStatus> tensorStatus_;

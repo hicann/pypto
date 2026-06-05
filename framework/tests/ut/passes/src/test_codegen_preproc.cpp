@@ -106,10 +106,14 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
 TEST_F(CodegenPreprocTest, TestCombineAxisRowSumLine)
 {
     ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 12, 1}, MemoryType::MEM_DEVICE_DDR, "gm_in"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 12, 1}, MemoryType::MEM_UB, "in"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 12, 1}, MemoryType::MEM_UB, "out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 12, 1}, MemoryType::MEM_DEVICE_DDR, "gm_out"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 8}, MemoryType::MEM_UB, "tmp"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in"}, {"in"}, "copy_in", true), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUMLINE, {"in"}, {"out", "tmp"}, "sumline", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"out"}, {"gm_out"}, "copy_out", true), true);
     auto sumline = graph.GetOp("sumline");
     sumline->SetAttribute(REDUCE_AXIS, 0);
 

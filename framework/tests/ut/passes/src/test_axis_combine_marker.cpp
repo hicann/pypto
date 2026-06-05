@@ -330,8 +330,10 @@ TEST_F(TestAxisCombineMarker, reduce_last_axis)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 16}, MemoryType::MEM_DEVICE_DDR, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 16}, MemoryType::MEM_UB, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 1}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1, 1}, MemoryType::MEM_DEVICE_DDR, "t4"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "copy_in", true), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_SINGLE, {"t2"}, {"t3"}, "reduce", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t3"}, {"t4"}, "copy_out", true), true);
     auto reduce_op = graph.GetOp("reduce");
     reduce_op->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2); // Reduce last axis
 
@@ -564,6 +566,7 @@ TEST_F(TestAxisCombineMarker, expand_reduce_chain)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 8, 1}, MemoryType::MEM_UB, "t2"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 8, 1}, MemoryType::MEM_UB, "t3"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 8, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 8, 1}, MemoryType::MEM_DEVICE_DDR, "t5"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "copy_in", true), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_EXPAND, {"t2"}, {"t3"}, "expand", true), true);
     auto expand_op = graph.GetOp("expand");
@@ -571,6 +574,7 @@ TEST_F(TestAxisCombineMarker, expand_reduce_chain)
     EXPECT_EQ(graph.AddOp(Opcode::OP_ROWMAX_SINGLE, {"t3"}, {"t4"}, "reduce", true), true);
     auto reduce_op = graph.GetOp("reduce");
     reduce_op->SetAttribute(OP_ATTR_PREFIX + "AXIS", 0); // Reduce last axis
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t4"}, {"t5"}, "copy_out", true), true);
 
     auto* rootFuncPtr = graph.GetFunction();
     AxisCombineMarker marker;
@@ -895,4 +899,122 @@ TEST_F(TestAxisCombineMarker, axiscombineVarReduceChain)
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rsl1_tmp")), false);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rss0")), false);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("rss0_tmp")), false);
+}
+
+/*
+ROWARGMAXWITHVALUE_SINGLE 多输出对齐场景：
+    copyin
+    [10,896]
+       |
+  rowargmaxwithvalue_single  (axis=1, 尾轴 reduce, 3 输出)
+   /     |     \
+ v[10,1] i[10,1] t[10,896]
+          |
+         ADDS
+        [10,1]
+          |
+        copyout
+*/
+void RunMultiOutputAlignAxisReorderStatusTest(const std::vector<int64_t>& gmOutShape, bool expectEnable)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 896}, MemoryType::MEM_DEVICE_DDR, "gm_in"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 896}, MemoryType::MEM_UB, "ub_in"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in"}, {"ub_in"}, "copy_in", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 1}, MemoryType::MEM_UB, "argmax_val"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 1}, MemoryType::MEM_UB, "argmax_idx"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 896}, MemoryType::MEM_UB, "argmax_tmp"), true);
+    EXPECT_EQ(
+        graph.AddOp(Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"ub_in"},
+            {"argmax_val", "argmax_idx", "argmax_tmp"}, "argmax", true),
+        true);
+    graph.GetOp("argmax")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {10, 1}, MemoryType::MEM_UB, "adds_out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADDS, {"argmax_idx"}, {"adds_out"}, "adds", true), true);
+    graph.GetOp("adds")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 0.0));
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, gmOutShape, MemoryType::MEM_DEVICE_DDR, "gm_out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"adds_out"}, {"gm_out"}, "copy_out", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("argmax_val")), expectEnable);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("argmax_idx")), expectEnable);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("adds_out")), expectEnable);
+}
+
+TEST_F(TestAxisCombineMarker, multi_output_align_status1) { RunMultiOutputAlignAxisReorderStatusTest({10, 1}, true); }
+
+TEST_F(TestAxisCombineMarker, multi_output_align_status2) { RunMultiOutputAlignAxisReorderStatusTest({-1, -1}, false); }
+
+/*
+图结构:
+    copyin [8,16]    copyin [8,1]
+         |              |
+        SUB [8,16]
+          |
+    rowargmaxwithvalue_single (axis=1, 3 outputs)
+    /     |        \
+  v[8,1] i[8,1]  t[8,896]
+    |       |
+   ADDS   ADDS
+   [8,1]  [8,1]
+     |
+   copyout (dynamic shape [-1,-1] triggers rawShape mismatch)
+            adds_idx → SUB(另外一路copyin [8,1]) [8,1] → copyout [8,1]
+*/
+TEST_F(TestAxisCombineMarker, multi_output_align_status3)
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_DEVICE_DDR, "gm_in"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_UB, "ub_in"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_in"}, {"ub_in"}, "copy_in", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm_sub1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ub_sub1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_sub1"}, {"ub_sub1"}, "copy_in_sub1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 16}, MemoryType::MEM_UB, "sub_in"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_SUB, {"ub_in", "ub_sub1"}, {"sub_in"}, "sub_in", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "val"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "idx"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 896}, MemoryType::MEM_UB, "tmp"), true);
+    EXPECT_EQ(
+        graph.AddOp(Opcode::OP_ROWARGMAXWITHVALUE_SINGLE, {"sub_in"}, {"val", "idx", "tmp"}, "argmax", true), true);
+    graph.GetOp("argmax")->SetAttribute(OP_ATTR_PREFIX + "AXIS", 1);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "adds_val"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADDS, {"val"}, {"adds_val"}, "adds_val", true), true);
+    graph.GetOp("adds_val")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 0.0));
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "adds_idx"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ADDS, {"idx"}, {"adds_idx"}, "adds_idx", true), true);
+    graph.GetOp("adds_idx")->SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 0.0));
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {-1, -1}, MemoryType::MEM_DEVICE_DDR, "gm_out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"adds_val"}, {"gm_out"}, "copy_out", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm_sub2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "ub_sub2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm_sub2"}, {"ub_sub2"}, "copy_in_sub2", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_UB, "sub_idx"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_SUB, {"adds_idx", "ub_sub2"}, {"sub_idx"}, "sub_idx", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {8, 1}, MemoryType::MEM_DEVICE_DDR, "gm_out2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"sub_idx"}, {"gm_out2"}, "copy_out2", true), true);
+
+    auto* rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("val")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("idx")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("adds_val")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("adds_idx")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("sub_idx")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("ub_sub2")), false);
 }

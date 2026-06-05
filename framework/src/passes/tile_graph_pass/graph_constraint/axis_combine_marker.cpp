@@ -65,6 +65,7 @@ void AxisCombineMarker::Init(Function& function)
 
 void UpdateCopyinStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
 {
+    // 约束: COPY_IN 为单输入单输出。
     auto inputTensor = op->GetIOperands()[0];
     auto outputTensor = op->GetOOperands()[0];
     if (outputTensor->GetShape().back() != 1) {
@@ -81,6 +82,7 @@ void UpdateCopyinStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
 
 void UpdateViewStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
 {
+    // 约束: VIEW 为单输入单输出。
     auto inputTensor = op->GetIOperands()[0];
     auto outputTensor = op->GetOOperands()[0];
     if (inputTensor->GetShape().back() != outputTensor->GetShape().back()) {
@@ -106,6 +108,7 @@ void UpdateViewStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisRe
 
 void UpdateAssembleStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
 {
+    // 约束: ASSEMBLE/COPY_OUT 为单输入单输出。
     auto inputTensor = op->GetIOperands()[0];
     auto outputTensor = op->GetOOperands()[0];
     if (tensorStatus.find(inputTensor) != tensorStatus.end()) {
@@ -126,6 +129,7 @@ void UpdateAssembleStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Ax
 
 void UpdateExpandStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
 {
+    // 约束: EXPAND 为单输入单输出。
     auto inputTensor = op->GetIOperands()[0];
     auto outputTensor = op->GetOOperands()[0];
     if (tensorStatus[inputTensor] == AxisReorderStatus::ENABLE) {
@@ -164,27 +168,32 @@ void UpdateReduceStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
 {
     // 最后两根轴不发生reduce，并且尾轴为1。那么支持交换轴，如果倒数第二根轴发生reduce，不支持。尾轴reduce，需不需要交换轴要看后继节点
     auto inputTensor = op->GetIOperands()[0];
-    auto outputTensor = op->GetOOperands()[0];
     auto dimSize = static_cast<int>(inputTensor->GetShape().size());
     int axis = op->GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
-    if (dimSize > 1 && axis < dimSize - 2) {
-        tensorStatus[outputTensor] = tensorStatus[inputTensor];
-        return;
+    for (auto outputTensor : op->GetOOperands()) {
+        if (outputTensor->GetConsumers().empty()) {
+            tensorStatus[outputTensor] = AxisReorderStatus::UNKNOWN;
+            continue;
+        }
+        if (dimSize > 1 && axis < dimSize - 2) {
+            tensorStatus[outputTensor] = tensorStatus[inputTensor];
+            continue;
+        }
+        if (axis == dimSize - 2) {
+            // reduce倒数第二轴，当前不支持合轴优化
+            tensorStatus[inputTensor] = AxisReorderStatus::DISABLE;
+            tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
+            continue;
+        }
+        if (inputTensor->GetShape().back() == outputTensor->GetShape().back()) {
+            // reduce tensor shape尾轴为1, 且语义为尾轴Reduce
+            tensorStatus[inputTensor] = AxisReorderStatus::DISABLE;
+            tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
+            continue;
+        }
+        // Reduce尾轴，默认可以
+        tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
     }
-    if (axis == dimSize - 2) {
-        // reduce倒数第二轴，当前不支持合轴优化
-        tensorStatus[inputTensor] = AxisReorderStatus::DISABLE;
-        tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
-        return;
-    }
-    if (inputTensor->GetShape().back() == outputTensor->GetShape().back()) { 
-        // reduce tensor shape尾轴为1, 且语义为尾轴Reduce
-        tensorStatus[inputTensor] = AxisReorderStatus::DISABLE;
-        tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
-        return;
-    }
-    // Reduce尾轴，默认可以
-    tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
 }
 
 void UpdateElewiseStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
@@ -313,29 +322,54 @@ void AxisCombineMarker::Union(LogicalTensorPtr x, LogicalTensorPtr y)
     }
 }
 
+bool AxisCombineMarker::IsEligibleUnionOutput(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor) const
+{
+    bool isPropagationOp = propagationCalcType.find(calcType) != propagationCalcType.end();
+    bool isTailPreserved = (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
+        outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back();
+    return isPropagationOp || isTailPreserved;
+}
+
+void AxisCombineMarker::UnionOutputWithInputs(Operation* op, OpCalcType calcType, LogicalTensorPtr outputTensor)
+{
+    if (!IsEligibleUnionOutput(op, calcType, outputTensor) || outputTensor->GetShape().back() != 1) {
+        return;
+    }
+    for (auto inputTensor : op->GetIOperands()) {
+        if (inputTensor->GetShape().back() != 1) {
+            continue;
+        }
+        Union(inputTensor, outputTensor);
+    }
+}
+
+void AxisCombineMarker::UnionMultiOutputTensors(Operation* op)
+{
+    if (op->GetOOperands().size() <= 1) {
+        return;
+    }
+    LogicalTensorPtr firstOut = nullptr;
+    for (auto outputTensor : op->GetOOperands()) {
+        if (outputTensor->GetShape().back() != 1) {
+            continue;
+        }
+        if (firstOut == nullptr) {
+            firstOut = outputTensor;
+            continue;
+        }
+        Union(firstOut, outputTensor);
+    }
+}
+
 void AxisCombineMarker::BuildUnionFind()
 {
     for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
         auto op = opList_[opIdx];
-        auto outputTensor = op->GetOOperands()[0];
         auto calcType = OpcodeManager::Inst().GetOpCalcType(op->GetOpcode());
-        // 仅对可传播的算子类型建立并查集：逐元素/广播/类型转换，以及尾轴一致的view/assemble
-        bool eligible = propagationCalcType.find(calcType) != propagationCalcType.end() ||
-            ((op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
-             outputTensor->GetShape().back() == op->GetIOperands()[0]->GetShape().back());
-        if (!eligible) {
-            continue;
+        for (auto outputTensor : op->GetOOperands()) {
+            UnionOutputWithInputs(op, calcType, outputTensor);
         }
-        // 将该算子的所有输入tensor和输出tensor合并到同一个集合
-        if (outputTensor->GetShape().back() != 1) {
-            continue;
-        }
-        for (auto inputTensor : op->GetIOperands()) {
-            if (inputTensor->GetShape().back() != 1) {
-                continue;
-            }
-            Union(inputTensor, outputTensor);
-        }
+        UnionMultiOutputTensors(op);
     }
 }
 
@@ -399,6 +433,5 @@ void AxisCombineMarker::ForwardVisit()
         }
     }
 }
-
 } // namespace tile_fwk
 } // namespace npu
