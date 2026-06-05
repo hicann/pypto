@@ -157,7 +157,7 @@ def gelu_activation_kernel(
     GELU (Gaussian Error Linear Unit) activation function.
 
     Uses approximation: x * sigmoid(1.702 * x)
-    This is a fast approximation of the full GELU formula.
+    This is a fast approximation of the full GELU formula, the magnitude of the maximum error is approximately 0.02.
     """
     configure_tiling(x)
 
