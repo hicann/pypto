@@ -65,9 +65,18 @@ def str_to_bool(input_str: str):
 
 def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
     if pkgutil.find_loader("ml_dtypes"):
-        from ml_dtypes import bfloat16
+        from ml_dtypes import bfloat16, float8_e4m3fn, float8_e5m2
+        fp8_e4m3_np = float8_e4m3fn
+        fp8_e5m2_np = float8_e5m2
     else:
         bfloat16 = None
+        fp8_e4m3_np = None
+        fp8_e5m2_np = None
+
+    # torch FP8 dtype
+    fp8_e4m3_torch = torch.float8_e4m3fn if hasattr(torch, 'float8_e4m3fn') else None
+    fp8_e5m2_torch = torch.float8_e5m2 if hasattr(torch, 'float8_e5m2') else None
+    fp8_e8m0_torch = torch.float8_e8m0fnu if hasattr(torch, 'float8_e8m0fnu') else None
 
     if check and name == "bf16" and bfloat16 is None:
         raise TypeError("No module named 'ml_dtypes'.")
@@ -83,9 +92,9 @@ def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
         "fp32": [np.float32, torch.float32],
         "fp64": [np.float64, torch.float64],
         "uint8": [np.uint8, torch.uint8],
-        "uint16": [np.uint16, None],
-        "uint32": [np.uint32, None],
-        "uint64": [np.uint64, None],
+        "uint16": [np.uint16, torch.uint16 if hasattr(torch, 'uint16') else None],
+        "uint32": [np.uint32, torch.uint32 if hasattr(torch, 'uint32') else None],
+        "uint64": [np.uint64, torch.uint64 if hasattr(torch, 'uint64') else None],
         "bool": [np.bool_, torch.bool],
         "double": [np.float64, torch.double],
         "complex64": [np.complex64, torch.complex64],
@@ -93,6 +102,13 @@ def get_dtype_by_name(name: str, is_torch: bool = False, check: bool = True):
         "bf16": [bfloat16, torch.bfloat16],
         "fp4_e2m1x2": [np.uint8, torch.uint8],
         "fp4_e1m2x2": [np.uint8, torch.uint8],
+        "fp8e4m3": [fp8_e4m3_np if fp8_e4m3_np is not None else np.uint8,
+                     fp8_e4m3_torch if fp8_e4m3_torch is not None else np.uint8],
+        "fp8e5m2": [fp8_e5m2_np if fp8_e5m2_np is not None else np.uint8,
+                     fp8_e5m2_torch if fp8_e5m2_torch is not None else np.uint8],
+        "fp8e8m0": [np.uint8,
+                     fp8_e8m0_torch if fp8_e8m0_torch is not None else np.uint8],
+        "hf8": [np.uint8, torch.uint8],
     }
     return str_to_dtype.get(name, [np.float32, torch.float32])[is_torch]
 

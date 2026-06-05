@@ -18,6 +18,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 #include <cstdint>
+#include <type_traits>
 
 namespace permute_detail {
 
@@ -25,12 +26,15 @@ template <int tileH, int tileW, typename dstType, typename srcType>
 TILEOP void LoadVecTile(
     __ubuf__ dstType* dstPtr, __gm__ srcType* srcAddr, int64_t gmOff, int64_t innerDim, int64_t srcStride4)
 {
+    using ActualSrcType = std::conditional_t<std::is_same_v<srcType, bool>, uint8_t, srcType>;
+    using ActualDstType = std::conditional_t<std::is_same_v<dstType, bool>, uint8_t, dstType>;
     using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
     using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
-    using GlobalData = pto::GlobalTensor<srcType, ShapeDim5, StrideDim5>;
-    using TileDefine = pto::Tile<pto::TileType::Vec, dstType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    using GlobalData = pto::GlobalTensor<ActualSrcType, ShapeDim5, StrideDim5>;
+    using TileDefine = pto::Tile<pto::TileType::Vec, ActualDstType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     TileDefine dstTile(1, innerDim);
-    GlobalData srcGlobal(srcAddr + gmOff, pto::Shape(1, 1, 1, 1, innerDim), pto::Stride(0, 0, 0, 0, srcStride4));
+    GlobalData srcGlobal((__gm__ ActualSrcType*)(srcAddr + gmOff),
+        pto::Shape(1, 1, 1, 1, innerDim), pto::Stride(0, 0, 0, 0, srcStride4));
     pto::TASSIGN(dstTile, (uint64_t)dstPtr);
     pto::TLOAD(dstTile, srcGlobal);
 }
@@ -308,8 +312,8 @@ TILEOP void TPermute(T0 dst, T1 src, C0 srcCoordinate)
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     auto srcOffset = srcLayout.template GetGmOffset<C0, srcExpectSize>(srcCoordinate);
-    using srcType = typename T1::Type;
-    using dstType = typename T0::Type;
+    using srcType = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
+    using dstType = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     __gm__ srcType* srcAddr = (__gm__ srcType*)((uint64_t)(src.GetAddr()));
     srcAddr += srcOffset;
     __ubuf__ dstType* dstAddr = (__ubuf__ dstType*)((uint64_t)(dst.GetAddr()));
@@ -346,8 +350,8 @@ TILEOP void TPermuteElewise(T0 dst, T1 src, C0 srcCoordinate)
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     constexpr size_t N = Std::tuple_size<typename T1::Shape>::value;
-    using srcType = typename T1::Type;
-    using dstType = typename T0::Type;
+    using srcType = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
+    using dstType = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     __gm__ srcType* srcAddr = (__gm__ srcType*)((uint64_t)(src.GetAddr()));
     __ubuf__ dstType* dstAddr = (__ubuf__ dstType*)((uint64_t)(dst.GetAddr()));
 

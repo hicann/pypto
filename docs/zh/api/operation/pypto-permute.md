@@ -13,19 +13,29 @@
 ## 函数原型
 
 ```python
-permute(input: Tensor, const std::vector<int> &perm) -> Tensor
+permute(input: Tensor, perm: list[int]) -> Tensor
 ```
 
 ## 参数说明
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_UINT16，DT_FP32，DT_INT32，DT_UINT32。<br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。<br> 算子对不同 Shape 支持不同，详见约束说明。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | perm    | 输入      | 维度顺序列表。必须是一个包含所有维度索引的排列，长度与输入张量的维度数相同。每个维度索引在 0 到 ShapeSize-1 范围内且不重复。 |
 
 ## 返回值说明
 
 返回一个与输入数据类型一致的Tensor，其维度顺序按照 perm 指定的顺序重新排列。
+
+## 约束说明
+
+1. 输入 Tensor 和输出 Tensor 的数据类型必须相同。
+2. Shape 仅支持 1-5 维，不支持空 Tensor。
+3. 64 位整型格式限制：DT_INT64、DT_UINT64 不支持 NZ（Fractal-Z）格式，仅支持 ND 格式。
+4. Tensor数据类型说明：
+   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP8E8M0。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL。
 
 ## 调用示例
 

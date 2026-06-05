@@ -158,7 +158,7 @@ def _write_golden_outputs(res: list, output_path: Path, config: dict) -> None:
     for idx in range(len(config["output_tensors"])):
         output_dtype = config["output_tensors"][idx]["dtype"]
         output_file = Path(output_path, config["output_tensors"][idx]["name"] + ".bin")
-        if output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0", "fp4_e2m1x2"] and res[idx].dtype == np.uint8:
+        if output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0", "hf8", "fp4_e2m1x2"] and res[idx].dtype == np.uint8:
             res[idx].tofile(output_file)
         else:
             res[idx].astype(get_dtype_by_name(output_dtype)).tofile(output_file)
@@ -2012,19 +2012,26 @@ def permute_params_func(params: dict):
 def gen_permute_op_golden(
     case_name: str, output: Path, case_index: int = None
 ) -> bool:
-    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+
     def golden_func(inputs: list, config: dict):
         params = config.get("params")
-        x = safe_tensor_conversion(inputs[0])
-        input_dtype = x.dtype
-        tensor_dtype = get_dtype_by_name(input_dtype, True)
         perm = tuple(params["perm"])
-        y = torch.permute(x, dims=perm)
-        if input_dtype == bfloat16:
+        input_arr = inputs[0]
+        input_dtype_name = config["input_tensors"][0]["dtype"]
+        if input_dtype_name == "hf8":
+            y = np.transpose(input_arr, perm)
+            return [y]
+        if input_dtype_name == "bf16":
+            x = safe_tensor_conversion(input_arr)
+            y = torch.permute(x, dims=perm)
             y = y.to(torch.float32).numpy().astype(bfloat16)
-        else:
-            y = y.to(tensor_dtype).numpy()
-        return [np.array(y)]
+            return [y]
+        if input_dtype_name in ("fp8e4m3", "fp8e5m2", "fp8e8m0"):
+            y = np.transpose(input_arr, perm)
+            return [y.view(np.uint8) if y.dtype != np.uint8 else y]
+        x = safe_tensor_conversion(input_arr)
+        y = torch.permute(x, dims=perm)
+        return [y.numpy()]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Permute", golden_func, output, case_index)
