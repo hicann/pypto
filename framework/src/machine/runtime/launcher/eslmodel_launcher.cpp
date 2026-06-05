@@ -72,7 +72,7 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStrea
     int launchAiCpuNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
     std::vector<std::thread> aicpuThreads(launchAiCpuNum);
     std::atomic<int> idx{0};
-    std::this_thread::sleep_for(std::chrono::seconds(30));
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     auto threadFun = [&](uint32_t runMode) {
         int tidx = idx++;
         cpu_set_t cpuSet;

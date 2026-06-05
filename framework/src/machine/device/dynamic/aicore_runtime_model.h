@@ -7,14 +7,18 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
- 
+
 #pragma once
 
 #include <cstdint>
-#include <functional>
+#include <deque>
+#include <array>
 
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/device/dynamic/eslmodel_aicore_hal.h"
+#include "machine/device/dynamic/device_utils.h"
+#include "machine/device/dynamic/aicore_constants.h"
+#include "machine/device/dynamic/eslmodel_manager.h"
 #include "machine/simulation/aicore_hardware.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
 
@@ -131,13 +135,35 @@ public:
     void SetReadyQueue(int coreIdx, int phyId, uint64_t value) override
     {
         (void)phyId;
-        eslModel_.WriteEslReg(coreIdx, &value);
+        uint64_t taskId = (value & 0xFFFFFFFF) - 1;
+        bool skipReplay =
+            value == 0 || taskId == AICORE_TASK_INIT || taskId == AICORE_TASK_STOP || taskId == AICORE_FUNC_STOP;
+        bool matchReplay = skipReplay || eslModelReplayMgr_->ReplayMatch(taskId);
+        if (matchReplay) {
+            eslModel_.WriteEslReg(coreIdx, &value);
+            replayQueueFlag_[coreIdx] = 0;
+        } else {
+            taskIds_[coreIdx].push_back(taskId);
+            replayQueueFlag_[coreIdx] = 1;
+        }
     }
 
     uint64_t GetFinishedTask(int coreIdx, int phyId) override
     {
         (void)phyId;
-        return eslModel_.ReadEslReg(coreIdx);
+        if (replayQueueFlag_[coreIdx] == 0) {
+            uint64_t result = eslModel_.ReadEslReg(coreIdx);
+            return result;
+        } else {
+            if (taskIds_[coreIdx].empty())
+                return AICORE_FUNC_STOP | AICORE_FIN_MASK;
+            uint64_t taskId = 0;
+            while (!taskIds_[coreIdx].empty()) {
+                taskId = taskIds_[coreIdx].front();
+                taskIds_[coreIdx].pop_front();
+            }
+            return taskId | AICORE_FIN_MASK;
+        }
     }
 
     void ResetShakeBuf(volatile KernelArgs* arg) override
@@ -199,8 +225,16 @@ public:
         }
     }
 
+    void SetEslModelReplayManager(EslModelReplayManager* replayMgr)
+    {
+        eslModelReplayMgr_ = replayMgr;
+    }
+
 private:
     EslAicoreHal eslModel_;
+    std::array<std::deque<uint64_t>, MAX_AICORE_NUM> taskIds_;
+    EslModelReplayManager* eslModelReplayMgr_{nullptr};
+    std::array<int, MAX_AICORE_NUM> replayQueueFlag_;
 };
 
 class CostModelAdapter : public ModelBase {

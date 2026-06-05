@@ -41,8 +41,8 @@
 #include "machine/device/dynamic/aicpu_task_manager.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/dynamic/wrap_manager.h"
+#include "machine/device/dynamic/eslmodel_manager.h"
 #include "machine/device/dump/aicore_dump.h"
-#include "machine/device/debug/schema_trace_utils.h"
 #include "device_trace.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -1820,6 +1820,8 @@ private:
         } else {
             aicoreHal_.SetTaskTimeCost([this](uint64_t coreIdx, uint64_t taskId, uint64_t time) {
                 return GetCostModelTaskTime(coreIdx, taskId, time);});
+            eslModelReplayMgr_.Init(context_);
+            aicoreHal_.SetEslModelReplayManager(&eslModelReplayMgr_);
         }
         firstLock[static_cast<int>(CoreType::AIC)] = true;
         firstLock[static_cast<int>(CoreType::AIV)] = true;
@@ -2353,6 +2355,7 @@ private:
 
 private:
     AicoreHAL aicoreHal_;
+    EslModelReplayManager eslModelReplayMgr_;
     bool aicoreDevTaskInited{false};
     bool firstLock[AICORE_TYPE_NUM]{true,true};
     int aicNum_{0};

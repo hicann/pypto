@@ -325,6 +325,11 @@ public:
 
     void SetTaskTimeCost(std::function<uint64_t(uint64_t, uint64_t, uint64_t)> func) { getTaskTimeCost = func; }
 
+    void SetEslModelReplayManager(EslModelReplayManager* replayMgr)
+    {
+        eslModel_.SetEslModelReplayManager(replayMgr);
+    }
+
     uint64_t CostModelGetTask(int coreIdx)
     {
         auto currentTime = GetCycles();
