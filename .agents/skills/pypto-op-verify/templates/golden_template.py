@@ -16,7 +16,11 @@
 # Reference implementation constraints (OL15 + golden normalization rules)
 #
 #   ALLOWED:
-#     - torch.matmul, elementwise ops (+ - * /), torch.sigmoid, torch.softmax
+#     - torch.matmul(a.float(), b.float()), elementwise ops (+ - * /),
+#       torch.sigmoid, torch.softmax
+#       matmul inputs MUST be .float() first to match pypto.matmul's FP32
+#       accumulation on NPU Cube L0C. Output dtype via .to(target) after.
+#       ❌ torch.matmul(a_bf16, b_bf16).float() — BF16 accumulation, precision lost.
 #     - torch.sum / torch.mean over named or last dim with explicit dim=
 #     - explicit Python loops over batch / head / chunk on the HOST
 #       (this is golden code, not kernel code — the OL18 ban does not apply

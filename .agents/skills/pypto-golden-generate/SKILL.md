@@ -105,6 +105,13 @@ def layer_norm_golden(
 - 参数顺序：必要张量参数在前，可选参数在后
 - 所有 spec 中定义的参数都要实现，包括可选参数
 - dtype 不作为参数，计算精度跟随输入张量
+- **matmul 精度对齐**：所有 `torch.matmul` 输入必须先 `.float()`，与 `pypto.matmul` 在 NPU Cube L0C 上的 FP32 累加路径对齐。
+
+  | 写法 | 累加精度 | 正确 |
+  |------|---------|------|
+  | `torch.matmul(a_bf16, b_bf16).float()` | BF16 | ❌ |
+  | `torch.matmul(a.float(), b.float())` | FP32 | ✅ |
+  | `torch.matmul(a.float(), b.float()).to(torch.bfloat16)` | FP32 累加 + BF16 输出 | ✅ |
 
 ### 边界条件映射
 
