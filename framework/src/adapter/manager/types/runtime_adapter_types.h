@@ -22,8 +22,8 @@ namespace npu::tile_fwk {
 enum class RuntimeFunc {
     Malloc = 0,
     Memset,
-    Memcpy,
-    MemcpyAsync,
+    MemCopy,
+    MemCopyAsync,
     Free,
     SetDevice,
     GetDevice,
@@ -57,8 +57,8 @@ const std::string kRuntimeLibName = "libruntime.so";
 const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap {
     {RuntimeFunc::Malloc, "rtMalloc"},
     {RuntimeFunc::Memset, "rtMemset"},
-    {RuntimeFunc::Memcpy, "rtMemcpy"},
-    {RuntimeFunc::MemcpyAsync, "rtMemcpyAsync"},
+    {RuntimeFunc::MemCopy, "rtMemcpy"},
+    {RuntimeFunc::MemCopyAsync, "rtMemcpyAsync"},
     {RuntimeFunc::Free, "rtFree"},
     {RuntimeFunc::SetDevice, "rtSetDevice"},
     {RuntimeFunc::GetDevice, "rtGetDevice"},

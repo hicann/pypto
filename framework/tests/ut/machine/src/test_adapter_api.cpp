@@ -19,6 +19,7 @@
 #include "adapter/api/hcomm_api.h"
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/runtime_api.h"
+#include "adapter/api/runtime_capture_context.h"
 #include "adapter/manager/adapter_manager.h"
 
 namespace npu::tile_fwk {
@@ -90,7 +91,23 @@ TEST_F(TestAdapterApi, test_runtime_api)
     EXPECT_EQ(RuntimeMalloc(nullptr, 0, 0, 0), RT_SUCCESS);
     EXPECT_EQ(RuntimeMemset(nullptr, 0, 0, 0), RT_SUCCESS);
     EXPECT_EQ(RuntimeMemcpy(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST), RT_SUCCESS);
+    EXPECT_EQ(
+        RuntimeMemcpyWithLocation(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, "ut_scene", __FILE__, __LINE__),
+        RT_SUCCESS);
+
+    RuntimeCaptureContext::SetCaptureMode(true);
+    RuntimeCaptureContext::SetTestThreadCaptureMode(AclMdlRICaptureMode::RELAXED, true);
+    EXPECT_EQ(RuntimeMemcpy(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST), RT_SUCCESS);
+    EXPECT_EQ(
+        RuntimeMemcpyWithLocation(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, __func__, __FILE__, __LINE__),
+        RT_SUCCESS);
     EXPECT_EQ(RuntimeMemcpyAsync(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, nullptr), RT_SUCCESS);
+    EXPECT_EQ(
+        RuntimeMemcpyAsyncWithLocation(
+            nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, nullptr, __func__, __FILE__, __LINE__),
+        RT_SUCCESS);
+    RuntimeCaptureContext::SetTestThreadCaptureMode(AclMdlRICaptureMode::RELAXED, false);
+    RuntimeCaptureContext::SetCaptureMode(false);
     EXPECT_EQ(RuntimeFree(nullptr), RT_SUCCESS);
     EXPECT_EQ(RuntimeSetDevice(0), RT_SUCCESS);
     EXPECT_EQ(RuntimeGetDevice(nullptr), RT_SUCCESS);
@@ -162,7 +179,7 @@ TEST_F(TestAdapterApi, test_runtime_adapter)
 {
     bool hasCann = std::getenv("ASCEND_HOME_PATH") != nullptr;
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Malloc) != nullptr, hasCann);
-    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemcpyAsync) != nullptr, hasCann);
+    EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopyAsync) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Free) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::SetDevice) != nullptr, hasCann);
     EXPECT_EQ(AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::GetDevice) != nullptr, hasCann);

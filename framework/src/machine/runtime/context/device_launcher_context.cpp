@@ -14,11 +14,18 @@
  */
 
 #include "machine/runtime/context/device_launcher_context.h"
+#include "adapter/api/runtime_capture_context.h"
 
 namespace npu::tile_fwk {
 DeviceLauncherContext& DeviceLauncherContext::Get()
 {
     static DeviceLauncherContext context;
     return context;
+}
+
+void DeviceLauncherContext::SetCaptureMode(const bool captureMode)
+{
+    captureMode_ = captureMode;
+    RuntimeCaptureContext::SetCaptureMode(captureMode);
 }
 }

@@ -53,7 +53,7 @@ public:
 #endif
     }
 
-    void SetCaptureMode(const bool captureMode) { captureMode_ = captureMode; }
+    void SetCaptureMode(const bool captureMode);
 
     bool IsCaptureMode() const { return captureMode_; }
 

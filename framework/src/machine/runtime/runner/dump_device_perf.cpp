@@ -94,7 +94,11 @@ void ConstructTaskInfo(
     void* devPtr = perfData[index];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    RuntimeMemcpyRelaxedInCapture(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    auto ret = RuntimeMemcpyRelaxedInCapture(
+        hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    if (ret != 0) {
+        MACHINE_LOGW("task perf D2H copy failed ret: %d, index: %u", ret, index);
+    }
     Metrics* aicpuMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
     if (aicpuMetric->taskCount > MAX_DFX_TASK_NUM_PER_CORE) {
         aicpuMetric->taskCount = MAX_DFX_TASK_NUM_PER_CORE;
@@ -128,8 +132,11 @@ void ConstructTaskInfo(
         rootTaskStats.push_back(coreObj);
     }
     aicpuMetric->taskCount = 0;
-    RuntimeMemcpyRelaxedInCapture(
+    ret = RuntimeMemcpyRelaxedInCapture(
         perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics), RtMemcpyKind::HOST_TO_DEVICE);
+    if (ret != 0) {
+        MACHINE_LOGW("task perf H2D copy failed ret: %d, index: %u", ret, index);
+    }
 }
 
 void DumpAicoreTaskExectInfo(DeviceArgs& args, const std::vector<void*>& perfData)
@@ -247,7 +254,11 @@ inline void DumpAicoreDevTask(
         void* devPtr = perfData[i];
         size_t dataSize = PERF_DATA_TOTAL_SIZE;
         std::vector<uint8_t> hostBuffer(dataSize);
-        RuntimeMemcpyRelaxedInCapture(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+        auto ret = RuntimeMemcpyRelaxedInCapture(
+            hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+        if (ret != 0) {
+            MACHINE_LOGW("aicore perf D2H copy failed ret: %d, block: %u", ret, i);
+        }
         Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
         std::string coreType = aicoreMetric->coreType == static_cast<int16_t>(CoreType::AIC) ? "AIC" : "AIV";
         json aicoreTask;
@@ -321,7 +332,11 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     void* devPtr = perfData[0];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    RuntimeMemcpyRelaxedInCapture(hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    auto memcpyRet = RuntimeMemcpyRelaxedInCapture(
+        hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
+    if (memcpyRet != 0) {
+        MACHINE_LOGW("aicpu perf header D2H copy failed ret: %d", memcpyRet);
+    }
     Metrics* aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
     auto sumRoundNum = (aicoreMetric->turnNum > MAX_ROUND_NUM) ? MAX_ROUND_NUM : aicoreMetric->turnNum;
     MACHINE_LOGD("CoreId 0 devAddr: %p, sumRoundNum: %ld", devPtr, sumRoundNum);

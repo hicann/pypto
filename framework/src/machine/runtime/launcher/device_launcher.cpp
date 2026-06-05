@@ -20,6 +20,7 @@
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/adump_api.h"
+#include "machine/runtime/context/device_launcher_context.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/runtime/launcher/device_launcher_driver_gate.h"
 #include "machine/runtime/context/stream_context.h"
@@ -45,6 +46,13 @@ const std::unordered_map<AclMdlRICaptureStatus, std::function<void(bool&)>> capt
          (void)isCapture;
          MACHINE_LOGD("GetStreamCaptureInfo: status invalidated");
      }}};
+
+namespace {
+void SyncCaptureModeFlag(bool isCapture)
+{
+    DeviceLauncherContext::Get().SetCaptureMode(isCapture);
+}
+} // namespace
 
 int DeviceLauncher::GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture)
 {
@@ -94,6 +102,7 @@ int DeviceLauncher::SetCaptureStream(RtStream aicoreStream, RtStream aicpuStream
     if (GetStreamCaptureInfo(aicoreStream, rtModel, isCapture) < 0) {
         return -1;
     }
+    SyncCaptureModeFlag(isCapture);
 
     if (isCapture) {
         if (rtModel == nullptr) {
@@ -399,7 +408,7 @@ void DeviceLauncher::SaveStream(AclRtStream aicoreStream)
 
 void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
 {
-    DeviceLauncherContext::Get().SetCaptureMode(false);
+    SyncCaptureModeFlag(false);
     AclMdlRICaptureStatus status = AclMdlRICaptureStatus::NONE;
     auto ret = AclMdlRICaptureGetInfo(aicoreStream, &status, &rtModel);
     if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
@@ -409,7 +418,7 @@ void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
         return;
     }
     if (status == AclMdlRICaptureStatus::ACTIVE) {
-        DeviceLauncherContext::Get().SetCaptureMode(true);
+        SyncCaptureModeFlag(true);
         MACHINE_LOGI("The current mode is capture mode");
     }
 }

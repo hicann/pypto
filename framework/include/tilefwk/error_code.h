@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 namespace npu::tile_fwk {
 template <typename T, typename = std::enable_if_t<std::is_enum_v<T>>>

@@ -13,7 +13,17 @@
  * \brief
  */
 
+#define PYPTO_RUNTIME_API_IMPL
 #include "adapter/api/runtime_api.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+
+#include "adapter/api/acl_api.h"
+#include "adapter/api/runtime_capture_context.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 #ifdef BUILD_WITH_CANN
 #include "adapter/manager/adapter_manager.h"
@@ -26,6 +36,102 @@
 #include "adapter/stubs/runtime_stubs.h"
 
 namespace npu::tile_fwk {
+namespace {
+RtError RuntimeMemcpyDirect(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopy);
+    if (func != nullptr) {
+        rtError_t(*runtimeFunc)(void *, uint64_t, const void *, uint64_t, rtMemcpyKind_t) =
+            reinterpret_cast<rtError_t(*)(void *, uint64_t, const void *, uint64_t, rtMemcpyKind_t)>(func);
+        return runtimeFunc(dst, destMax, src, cnt, static_cast<rtMemcpyKind_t>(kind));
+    }
+#endif
+    return StubMemcpy(dst, destMax, src, cnt, kind);
+}
+
+const char *SceneOrUnknown(const char *scene)
+{
+    return (scene != nullptr && scene[0] != '\0') ? scene : "unknown";
+}
+
+const char *FileOrUnknown(const char *file)
+{
+    return (file != nullptr && file[0] != '\0') ? file : "unknown";
+}
+
+[[noreturn]] void ReportMemcpyCaptureError(const char *apiName, const std::string &msg)
+{
+    (void)fprintf(stderr, "[%s ERROR] %s\n", apiName, msg.c_str());
+    abort();
+}
+
+void CheckCaptureRelaxedBeforeMemcpy(const char *apiName, const char *scene, const char *file, int line)
+{
+    if (!RuntimeCaptureContext::IsCaptureMode()) {
+        return;
+    }
+
+    AclMdlRICaptureMode currentMode = AclMdlRICaptureMode::GLOBAL;
+    const bool queryOk = RuntimeCaptureContext::QueryThreadCaptureMode(currentMode);
+    if (!queryOk) {
+        std::ostringstream oss;
+        oss << "cannot query ACL capture thread mode before rtMemcpy\n"
+            << "  scene: " << SceneOrUnknown(scene) << ", call site: " << FileOrUnknown(file) << ":" << line;
+        ReportMemcpyCaptureError(apiName, oss.str());
+    }
+
+    if (currentMode != AclMdlRICaptureMode::RELAXED) {
+        std::ostringstream oss;
+        oss << "rtMemcpy requires RELAXED capture mode on this thread\n"
+            << "  scene: " << SceneOrUnknown(scene) << ", call site: " << FileOrUnknown(file) << ":" << line << "\n"
+            << "  current mode: " << static_cast<int>(currentMode) << ", required: RELAXED ("
+            << static_cast<int>(AclMdlRICaptureMode::RELAXED) << ")\n"
+            << "  fix: before rtMemcpy, switch to RELAXED (AclMdlRICaptureThreadExchangeMode or AclModeGuard)";
+        ReportMemcpyCaptureError(apiName, oss.str());
+    }
+}
+
+RtError RuntimeMemcpyDirectAsync(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
+                                 RtStream stm)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemCopyAsync);
+    if (func != nullptr) {
+        rtError_t(*runtimeFunc)(void*, uint64_t, const void *, uint64_t, rtMemcpyKind_t, rtStream_t) =
+            reinterpret_cast<rtError_t(*)(void*, uint64_t, const void *, uint64_t, rtMemcpyKind_t, rtStream_t)>(func);
+        return runtimeFunc(dst, destMax, src, cnt, static_cast<rtMemcpyKind_t>(kind), stm);
+    }
+#endif
+    return StubMemcpyAsync(dst, destMax, src, cnt, kind, stm);
+}
+
+RtError RuntimeMemcpyImpl(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
+                          const char *scene, const char *file, int line)
+{
+    CheckCaptureRelaxedBeforeMemcpy("RuntimeMemcpy", scene, file, line);
+    const RtError ret = RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
+    if (ret != RT_SUCCESS) {
+        ADAPTER_LOGW(
+            "RuntimeMemcpy failed: scene=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p",
+            SceneOrUnknown(scene), FileOrUnknown(file), line, ret, static_cast<int>(kind), cnt, dst, src);
+    }
+    return ret;
+}
+
+RtError RuntimeMemcpyAsyncImpl(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
+                               RtStream stm, const char *scene, const char *file, int line)
+{
+    CheckCaptureRelaxedBeforeMemcpy("RuntimeMemcpyAsync", scene, file, line);
+    const RtError ret = RuntimeMemcpyDirectAsync(dst, destMax, src, cnt, kind, stm);
+    if (ret != RT_SUCCESS) {
+        ADAPTER_LOGW(
+            "RuntimeMemcpyAsync failed: scene=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p",
+            SceneOrUnknown(scene), FileOrUnknown(file), line, ret, static_cast<int>(kind), cnt, dst, src);
+    }
+    return ret;
+}
+} // namespace
 RtError RuntimeMalloc(void **devPtr, uint64_t size, RtMemType type, const uint16_t moduleId)
 {
 #ifdef BUILD_WITH_CANN
@@ -54,28 +160,26 @@ RtError RuntimeMemset(void *devPtr, uint64_t destMax, uint32_t val, uint64_t cnt
 
 RtError RuntimeMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
 {
-#ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::Memcpy);
-    if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void *, uint64_t, const void *, uint64_t, rtMemcpyKind_t) =
-            reinterpret_cast<rtError_t(*)(void *, uint64_t, const void *, uint64_t, rtMemcpyKind_t)>(func);
-        return runtimeFunc(dst, destMax, src, cnt, static_cast<rtMemcpyKind_t>(kind));
-    }
-#endif
-    return StubMemcpy(dst, destMax, src, cnt, kind);
+    return RuntimeMemcpyImpl(dst, destMax, src, cnt, kind, "RuntimeMemcpy", nullptr, 0);
 }
 
 RtError RuntimeMemcpyAsync(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind, RtStream stm)
 {
-#ifdef BUILD_WITH_CANN
-    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::MemcpyAsync);
-    if (func != nullptr) {
-        rtError_t(*runtimeFunc)(void*, uint64_t, const void *, uint64_t, rtMemcpyKind_t, rtStream_t) =
-            reinterpret_cast<rtError_t(*)(void*, uint64_t, const void *, uint64_t, rtMemcpyKind_t, rtStream_t)>(func);
-        return runtimeFunc(dst, destMax, src, cnt, static_cast<rtMemcpyKind_t>(kind), stm);
-    }
-#endif
-    return StubMemcpyAsync(dst, destMax, src, cnt, kind, stm);
+    return RuntimeMemcpyAsyncImpl(dst, destMax, src, cnt, kind, stm, "RuntimeMemcpyAsync", nullptr, 0);
+}
+
+RtError RuntimeMemcpyWithLocation(
+    void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind, const char *scene, const char *file,
+    int line)
+{
+    return RuntimeMemcpyImpl(dst, destMax, src, cnt, kind, scene, file, line);
+}
+
+RtError RuntimeMemcpyAsyncWithLocation(
+    void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind, RtStream stm, const char *scene,
+    const char *file, int line)
+{
+    return RuntimeMemcpyAsyncImpl(dst, destMax, src, cnt, kind, stm, scene, file, line);
 }
 
 RtError RuntimeFree(void *devPtr)
