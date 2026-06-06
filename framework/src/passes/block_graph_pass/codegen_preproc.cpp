@@ -15,6 +15,7 @@
 
 #include "interface/function/function.h"
 #include "interface/operation/opcode.h"
+#include "interface/operation/attribute.h"
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
@@ -27,6 +28,7 @@
 
 #include <vector>
 #include <set>
+#include <optional>
 #include <queue>
 #include <algorithm>
 #include <unordered_map>
@@ -55,6 +57,96 @@ const SymbolicScalar& GetRuntimeParamSymbol()
     }();
     return kRuntimeParam;
 }
+
+void ComputeGmCheckValues(
+    const std::vector<SymbolicScalar>& rawShape, const std::vector<SymbolicScalar>& dynOffset,
+    const std::vector<SymbolicScalar>& dynValidShape, GmOutOfRangeCheckInfo& info)
+{
+    std::vector<SymbolicScalar> strides(rawShape.size());
+    strides[rawShape.size() - 1] = SymbolicScalar(1);
+    if (rawShape.size() >= 2) {
+        for (size_t i = rawShape.size() - 1; i > 0; --i) {
+            strides[i - 1] = strides[i] * rawShape[i];
+        }
+    }
+
+    SymbolicScalar oneDimOffset(0);
+    for (size_t i = 0; i < dynOffset.size() && i < strides.size(); ++i) {
+        oneDimOffset = oneDimOffset + dynOffset[i] * strides[i];
+    }
+    info.oneDimOffset = OpImmediate::Specified(oneDimOffset);
+
+    SymbolicScalar oneDimExtent(0);
+    for (size_t i = 0; i < dynValidShape.size() && i < strides.size(); ++i) {
+        oneDimExtent = oneDimExtent + (dynValidShape[i] - 1) * strides[i];
+    }
+    oneDimExtent = oneDimExtent + 1;
+    info.oneDimExtent = OpImmediate::Specified(oneDimExtent);
+
+    SymbolicScalar totalSize(1);
+    for (auto& dim : rawShape) {
+        totalSize = totalSize * dim;
+    }
+    info.totalSize = OpImmediate::Specified(totalSize);
+}
+
+std::optional<std::vector<SymbolicScalar>> GetDynValidShape(const Operation& op, const std::shared_ptr<CopyOpAttribute>& attr)
+{
+    const std::vector<OpImmediate>& dynValidShape = attr->IsCopyOut() 
+        ? attr->GetFromDynValidShape() 
+        : attr->GetToDynValidShape();
+    
+    const std::vector<OpImmediate>& chosenShape = dynValidShape.empty() 
+        ? attr->GetShape() 
+        : dynValidShape;
+    
+    std::vector<SymbolicScalar> result;
+    for (const auto& opImm : chosenShape) {
+        if (!opImm.IsSpecified()) {
+            APASS_LOG_WARN_F(
+                Elements::Operation,
+                "GenGmOoRCheckInfo: op %d dynValidShape has non-Specified OpImmediate: %s, skip GM OoR check",
+                op.GetOpMagic(), opImm.Dump().c_str());
+            return std::nullopt;
+        }
+        result.push_back(opImm.GetSpecifiedValue());
+    }
+    
+    return result;
+}
+
+std::vector<SymbolicScalar> GetDynOffset(const Operation& op, const std::shared_ptr<CopyOpAttribute>& attr)
+{
+    const std::vector<OpImmediate>& offsetAttr = attr->IsCopyOut()
+        ? attr->GetCopyOutAttr().second
+        : attr->GetCopyInAttr().first;
+
+    std::vector<SymbolicScalar> result;
+    for (const auto& opImm : offsetAttr) {
+        ASSERT(OperErr::ATTRIBUTE_INVALID, opImm.IsSpecified())
+            << "GenGmOoRCheckInfo: op " << op.GetOpMagic()
+            << " dynOffset has non-Specified OpImmediate: " << opImm.Dump();
+        result.push_back(opImm.GetSpecifiedValue());
+    }
+
+    return result;
+}
+
+std::vector<SymbolicScalar> GetRawShape(const Operation& op, const std::shared_ptr<CopyOpAttribute>& attr)
+{
+    const auto& rawShape = attr->GetRawShape();
+
+    std::vector<SymbolicScalar> result;
+    for (const auto& opImm : rawShape) {
+        ASSERT(OperErr::ATTRIBUTE_INVALID, opImm.IsSpecified())
+            << "GenGmOoRCheckInfo: op " << op.GetOpMagic()
+            << " rawShape has non-Specified OpImmediate: " << opImm.Dump();
+        result.push_back(opImm.GetSpecifiedValue());
+    }
+
+    return result;
+}
+
 } // namespace
 
 // only save general gm input/output, not contain spill-out scene
@@ -330,11 +422,87 @@ void CodegenPreproc::SetNeedAllocAttr(Function& function)
     APASS_LOG_DEBUG_F(Elements::Operation, "%s", DumpOpList(function).c_str());
 }
 
+GmOutOfRangeCheckInfo CodegenPreproc::ComputeGmOoRCheckInfo(
+    const Operation& op,
+    const std::vector<SymbolicScalar>& dynOffset,
+    const std::vector<SymbolicScalar>& dynValidShape,
+    const std::vector<SymbolicScalar>& rawShape,
+    GmOutOfRangeCheckInfo::AccessType accessType) const
+{
+    GmOutOfRangeCheckInfo info;
+    info.accessType = accessType;
+
+    ASSERT(OperErr::ATTRIBUTE_INVALID, !rawShape.empty() && !dynOffset.empty() && !dynValidShape.empty())
+        << "ComputeGmOoRCheckInfo: op " << op.GetOpMagic() << " data empty"
+        << " rawShape.size=" << rawShape.size() << " dynOffset.size=" << dynOffset.size()
+        << " dynValidShape.size=" << dynValidShape.size();
+
+    ComputeGmCheckValues(rawShape, dynOffset, dynValidShape, info);
+
+    APASS_LOG_DEBUG_F(
+        Elements::Operation,
+        "ComputeGmOoRCheckInfo op=%d opcode=%s oneDimOffset=%s oneDimExtent=%s totalSize=%s accessType=%d",
+        op.GetOpMagic(), op.GetOpcodeStr().c_str(), info.oneDimOffset.GetSpecifiedValue().Dump().c_str(),
+        info.oneDimExtent.GetSpecifiedValue().Dump().c_str(), info.totalSize.GetSpecifiedValue().Dump().c_str(),
+        static_cast<int>(info.accessType));
+
+    return info;
+}
+
+void CodegenPreproc::GenGmOoRCheckInfoForOp(Operation& op) const
+{
+    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+    bool isCopyOut = attr->IsCopyOut();
+    bool isCopyIn = !isCopyOut;
+    if (isCopyIn && !op.iOperand.empty() &&
+        op.iOperand[0]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        APASS_LOG_WARN_F(
+            Elements::Operation, "GMOutOfRangeCheck skip op=%d opcode=%s: input is not DDR, memType=%s",
+            op.GetOpMagic(), op.GetOpcodeStr().c_str(),
+            MemoryTypeToString(op.iOperand[0]->GetMemoryTypeOriginal()).c_str());
+        return;
+    }
+    if (isCopyOut && !op.oOperand.empty() &&
+        op.oOperand[0]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        APASS_LOG_WARN_F(
+            Elements::Operation, "GMOutOfRangeCheck skip op=%d opcode=%s: output is not DDR, memType=%s",
+            op.GetOpMagic(), op.GetOpcodeStr().c_str(),
+            MemoryTypeToString(op.oOperand[0]->GetMemoryTypeOriginal()).c_str());
+        return;
+    }
+
+    auto dynValidShapeOpt = GetDynValidShape(op, attr);
+    if (!dynValidShapeOpt) {
+        return;
+    }
+    auto dynOffset = GetDynOffset(op, attr);
+    auto rawShape = GetRawShape(op, attr);
+    auto accessType = isCopyOut ? GmOutOfRangeCheckInfo::AccessType::WRITE_GM
+                                : GmOutOfRangeCheckInfo::AccessType::READ_GM;
+    auto gmInfo = ComputeGmOoRCheckInfo(op, dynOffset, *dynValidShapeOpt, rawShape, accessType);
+    attr->SetGmOutOfRangeCheck(gmInfo);
+
+    ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr && attr->GetGmOutOfRangeCheck() != nullptr)
+        << "GmOutOfRangeCheckInfo is missing for DDR copy op op=" << op.GetOpMagic()
+        << " opcode=" << op.GetOpcodeStr()
+        << ". All CopyIn from DDR and CopyOut to DDR must have valid GmOutOfRangeCheckInfo.";
+}
+
+void CodegenPreproc::GenGmOoRCheckInfo(Function& function) const
+{
+    for (auto& subProgram : function.rootFunc_->programs_) {
+        for (auto& op : subProgram.second->Operations(false)) {
+            if (!OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode())) {
+                continue;
+            }
+            GenGmOoRCheckInfoForOp(op);
+        }
+    }
+}
+
 static void GetEventsInfo(
-    int subgraphNum,
-    const std::vector<std::set<int>>& subgraphOutGraph,
-    const std::vector<int>& subgraphLatency,
-    std::vector<std::tuple<int, bool, int>> &events)
+    int subgraphNum, const std::vector<std::set<int>>& subgraphOutGraph, const std::vector<int>& subgraphLatency,
+    std::vector<std::tuple<int, bool, int>>& events)
 {
     std::vector<int> inDegree(subgraphNum, 0);
     for (int i = 0; i < subgraphNum; ++i) {
@@ -385,9 +553,7 @@ static void GetEventsInfo(
 }
 
 inline std::pair<int, int> EstimateRequiredCores(
-    int subgraphNum,
-    const std::vector<bool>& isCubeGraph,
-    const std::vector<std::set<int>>& subgraphOutGraph,
+    int subgraphNum, const std::vector<bool>& isCubeGraph, const std::vector<std::set<int>>& subgraphOutGraph,
     const std::vector<int>& subgraphLatency)
 {
     if (subgraphNum == 0) {
@@ -398,7 +564,9 @@ inline std::pair<int, int> EstimateRequiredCores(
     GetEventsInfo(subgraphNum, subgraphOutGraph, subgraphLatency, events);
 
     auto cmp = [](const auto& a, const auto& b) {
-        if (std::get<0>(a) != std::get<0>(b)) return std::get<0>(a) < std::get<0>(b);
+        if (std::get<0>(a) != std::get<0>(b)) {
+            return std::get<0>(a) < std::get<0>(b);
+        }
         return std::get<1>(a) < std::get<1>(b);
     };
     std::sort(events.begin(), events.end(), cmp);
@@ -432,13 +600,13 @@ inline std::pair<int, int> EstimateRequiredCores(
     return {maxCCores, maxVCores};
 }
 
-inline void EstimateCVCores(Function &function)
+inline void EstimateCVCores(Function& function)
 {
     int subgraphNum = function.GetTotalSubGraphCount();
     std::vector<bool> isCubeGraph(subgraphNum, false);
     std::vector<std::set<int>> subgraphOutGraph(subgraphNum);
     std::vector<int> subgraphLatency(subgraphNum, 0);
-    for (auto &op : function.Operations()) {
+    for (auto& op : function.Operations()) {
         int subgraphID = op.GetSubgraphID();
         if (op.HasAttribute(OpAttributeKey::isCube) && op.GetBoolAttribute(OpAttributeKey::isCube)) {
             isCubeGraph[subgraphID] = true;
@@ -454,14 +622,14 @@ inline void EstimateCVCores(Function &function)
     function.SetMaxCVCoreUsage(maxCVCores);
 
     if (function.GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH) {
-        Function *rootFuntion = function.GetRootFunction();
+        Function* rootFuntion = function.GetRootFunction();
         if (rootFuntion != nullptr) {
             rootFuntion->SetMaxCVCoreUsage(maxCVCores);
         }
     }
 }
 
-Status CodegenPreproc::RunOnFunction(Function &function)
+Status CodegenPreproc::RunOnFunction(Function& function)
 {
     EstimateCVCores(function);
     combineAxis = function.paramConfigs_.combineAxis;
@@ -486,7 +654,9 @@ Status CodegenPreproc::RunOnFunction(Function &function)
         }
     }
 
+    GenGmOoRCheckInfo(function);
     SetNeedAllocAttr(function);
+
     APASS_LOG_INFO_F(
         Elements::Operation, "===============================================================> Finish CodegenPreproc.");
     return SUCCESS;

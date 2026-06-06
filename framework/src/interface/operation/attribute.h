@@ -222,7 +222,7 @@ public:
 
     std::string Dump() const override;
     Json DumpDynJson() override;
-    void LoadJson([[maybe_unused]] const Json& attrJson) override{};
+    void LoadJson([[maybe_unused]] const Json& attrJson) override {};
     virtual std::shared_ptr<OpAttribute> Clone() const override;
 
     void SetToType(MemoryType to) { to_ = to; }
@@ -270,7 +270,7 @@ public:
 
     std::string Dump() const override;
     Json DumpDynJson() override;
-    void LoadJson([[maybe_unused]] const Json& attrJson) override{};
+    void LoadJson([[maybe_unused]] const Json& attrJson) override {};
     virtual std::shared_ptr<OpAttribute> Clone() const override;
 
     void SetFromType(MemoryType from) { from_ = from; }
@@ -337,7 +337,7 @@ public:
     Json DumpDynJson() override;
     std::string DumpAttr(int idx = -1) const;
     Json DumpInvokeInfoJson();
-    void LoadJson([[maybe_unused]] const Json& attrJson) override{};
+    void LoadJson([[maybe_unused]] const Json& attrJson) override {};
     virtual std::shared_ptr<OpAttribute> Clone() const override;
 
     const std::string& GetCalleeMagicName() const { return calleMagicName_; }
@@ -382,7 +382,7 @@ public:
     ConvertOpAttribute(MemoryType from, MemoryType to) : from_(from), to_(to) {}
 
     std::string Dump() const override;
-    void LoadJson([[maybe_unused]] const Json& attrJson) override{};
+    void LoadJson([[maybe_unused]] const Json& attrJson) override {};
     virtual std::shared_ptr<OpAttribute> Clone() const override;
     Json DumpDynJson() override;
     std::pair<MemoryType, MemoryType> GetConvertPath() const;
@@ -392,6 +392,14 @@ public:
 private:
     MemoryType from_;
     MemoryType to_;
+};
+
+struct GmOutOfRangeCheckInfo {
+    enum class AccessType : int64_t { READ_GM = 0, WRITE_GM = 1 };
+    OpImmediate oneDimOffset;
+    OpImmediate oneDimExtent;
+    OpImmediate totalSize;
+    AccessType accessType{AccessType::READ_GM};
 };
 
 class CopyOpAttribute : public OpAttribute {
@@ -414,7 +422,7 @@ public:
     {}
 
     [[nodiscard]] std::string Dump() const override;
-    void LoadJson([[maybe_unused]] const Json& attrJson) override{};
+    void LoadJson([[maybe_unused]] const Json& attrJson) override {};
     virtual std::shared_ptr<OpAttribute> Clone() const override;
 
     void SetFromOffset(std::vector<OpImmediate> fromOffset) { fromOffset_ = std::move(fromOffset); }
@@ -435,6 +443,11 @@ public:
     [[nodiscard]] const std::vector<OpImmediate>& GetFromDynValidShape() const { return fromDynValidShape_; }
     [[nodiscard]] std::vector<OpImmediate>& GetFromDynValidShape() { return fromDynValidShape_; }
     [[nodiscard]] std::vector<int64_t> GetSpecifiedShape(int64_t defaultValue) const;
+    void SetGmOutOfRangeCheck(const GmOutOfRangeCheckInfo& info) { gmOutOfRangeCheck_ = info; }
+    const GmOutOfRangeCheckInfo* GetGmOutOfRangeCheck() const
+    {
+        return gmOutOfRangeCheck_.has_value() ? &gmOutOfRangeCheck_.value() : nullptr;
+    }
     void SetShape(std::vector<OpImmediate> shape) { tensorShape_ = std::move(shape); }
     void SetRawShape(std::vector<OpImmediate> rawShape) { rawShape_ = std::move(rawShape); }
     void SetToDynValidShape(std::vector<OpImmediate> toDynValidShape) { toDynValidShape_ = std::move(toDynValidShape); }
@@ -464,7 +477,8 @@ private:
           rawShape_(std::move(rawShape)),
           toDynValidShape_(std::move(toDynValidShape)),
           fromDynValidShape_(std::move(fromDynValidShape)),
-          isCopyOut_(isCopyOut)
+          isCopyOut_(isCopyOut),
+          gmOutOfRangeCheck_(std::nullopt)
     {}
 
     MemoryType from_;
@@ -477,6 +491,7 @@ private:
     std::vector<OpImmediate> fromDynValidShape_;
     OpImmediate baseAddr_;
     bool isCopyOut_;
+    std::optional<GmOutOfRangeCheckInfo> gmOutOfRangeCheck_;
 };
 
 } // namespace npu::tile_fwk

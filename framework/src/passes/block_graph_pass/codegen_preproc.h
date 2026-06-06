@@ -18,6 +18,7 @@
 
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/operation/attribute.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_utils/pass_utils.h"
 
@@ -45,6 +46,14 @@ private:
     void SetNeedAllocAttr(Function& function);
     void FixExpandDimForAxisCombine(Operation& op, int dimSize) const;
     std::string DumpOpList(Function& function);
+    GmOutOfRangeCheckInfo ComputeGmOoRCheckInfo(
+        const Operation& op,
+        const std::vector<SymbolicScalar>& dynOffset,
+        const std::vector<SymbolicScalar>& dynValidShape,
+        const std::vector<SymbolicScalar>& rawShapeScalar,
+        GmOutOfRangeCheckInfo::AccessType accessType) const;
+    void GenGmOoRCheckInfoForOp(Operation& op) const;
+    void GenGmOoRCheckInfo(Function& function) const;
     bool combineAxis{false};
 };
 

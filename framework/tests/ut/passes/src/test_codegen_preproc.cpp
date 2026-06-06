@@ -458,5 +458,124 @@ TEST_F(CodegenPreprocTest, TestCombineAxis3510BothLastDimOne)
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
+TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoCopyInCopyOut)
+{
+    ComputationalGraphBuilder graph;
+    std::vector<int64_t> shape = {4, 8};
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_DEVICE_DDR, "ddr_in"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_UB, "ub_buf"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_DEVICE_DDR, "ddr_out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"ddr_in"}, {"ub_buf"}, "copyin", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"ub_buf"}, {"ddr_out"}, "copyout", true), true);
+
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestGmOoRCheck", "TestGmOoRCheck", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestGmOoRCheckLeaf", "TestGmOoRCheckLeaf", graph.GetFunction());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+
+    CodegenPreproc codegenPreprocPass;
+    EXPECT_EQ(codegenPreprocPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+    // Expected values for shape={4,8}, rawShape={4,8}, offset={0,0}:
+    //   strides = [8, 1]
+    //   oneDimOffset = 0*8 + 0*1 = 0
+    //   oneDimExtent = (4-1)*8 + (8-1)*1 + 1 = 24 + 7 + 1 = 32
+    //   totalSize = 4 * 8 = 32
+
+    auto copyinOp = graph.GetOp("copyin");
+    auto copyinAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyinOp->GetOpAttribute());
+    ASSERT_NE(copyinAttr, nullptr);
+    const auto* copyinCheck = copyinAttr->GetGmOutOfRangeCheck();
+    ASSERT_NE(copyinCheck, nullptr);
+    EXPECT_EQ(copyinCheck->accessType, GmOutOfRangeCheckInfo::AccessType::READ_GM);
+    EXPECT_EQ(copyinCheck->oneDimOffset.GetSpecifiedValue().Dump(), "0");
+    EXPECT_EQ(copyinCheck->oneDimExtent.GetSpecifiedValue().Dump(), "32");
+    EXPECT_EQ(copyinCheck->totalSize.GetSpecifiedValue().Dump(), "32");
+
+    auto copyoutOp = graph.GetOp("copyout");
+    auto copyoutAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyoutOp->GetOpAttribute());
+    ASSERT_NE(copyoutAttr, nullptr);
+    const auto* copyoutCheck = copyoutAttr->GetGmOutOfRangeCheck();
+    ASSERT_NE(copyoutCheck, nullptr);
+    EXPECT_EQ(copyoutCheck->accessType, GmOutOfRangeCheckInfo::AccessType::WRITE_GM);
+    EXPECT_EQ(copyoutCheck->oneDimOffset.GetSpecifiedValue().Dump(), "0");
+    EXPECT_EQ(copyoutCheck->oneDimExtent.GetSpecifiedValue().Dump(), "32");
+    EXPECT_EQ(copyoutCheck->totalSize.GetSpecifiedValue().Dump(), "32");
+}
+
+TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoWithOffset)
+{
+    ComputationalGraphBuilder graph;
+    std::vector<int64_t> shape = {4, 8};
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_DEVICE_DDR, "ddr_in"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_UB, "ub_buf"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"ddr_in"}, {"ub_buf"}, "copyin", true), true);
+
+    auto copyinOp = graph.GetOp("copyin");
+    auto copyinAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyinOp->GetOpAttribute());
+    ASSERT_NE(copyinAttr, nullptr);
+    copyinAttr->SetFromOffset(OpImmediate::Specified({2, 3}));
+
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestGmOoROffset", "TestGmOoROffset", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestGmOoROffsetLeaf", "TestGmOoROffsetLeaf", graph.GetFunction());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+
+    CodegenPreproc codegenPreprocPass;
+    EXPECT_EQ(codegenPreprocPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+    // Expected values for shape={4,8}, rawShape={4,8}, offset={2,3}:
+    //   strides = [8, 1]
+    //   oneDimOffset = 2*8 + 3*1 = 19
+    //   oneDimExtent = (4-1)*8 + (8-1)*1 + 1 = 32
+    //   totalSize = 4 * 8 = 32
+    const auto* check = copyinAttr->GetGmOutOfRangeCheck();
+    ASSERT_NE(check, nullptr);
+    EXPECT_EQ(check->accessType, GmOutOfRangeCheckInfo::AccessType::READ_GM);
+    EXPECT_EQ(check->oneDimOffset.GetSpecifiedValue().Dump(), "19");
+    EXPECT_EQ(check->oneDimExtent.GetSpecifiedValue().Dump(), "32");
+    EXPECT_EQ(check->totalSize.GetSpecifiedValue().Dump(), "32");
+}
+
+TEST_F(CodegenPreprocTest, TestGenGmOoRCheckInfoNonDdrSkipped)
+{
+    ComputationalGraphBuilder graph;
+    std::vector<int64_t> shape = {4, 8};
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_UB, "ub_in"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, shape, MemoryType::MEM_UB, "ub_out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"ub_in"}, {"ub_out"}, "copyin", true), true);
+
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestGmOoRSkip", "TestGmOoRSkip", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestGmOoRSkipLeaf", "TestGmOoRSkipLeaf", graph.GetFunction());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+
+    CodegenPreproc codegenPreprocPass;
+    EXPECT_EQ(codegenPreprocPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+
+    auto copyinOp = graph.GetOp("copyin");
+    auto copyinAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyinOp->GetOpAttribute());
+    ASSERT_NE(copyinAttr, nullptr);
+    EXPECT_EQ(copyinAttr->GetGmOutOfRangeCheck(), nullptr);
+}
+
 } // namespace tile_fwk
 } // namespace npu
