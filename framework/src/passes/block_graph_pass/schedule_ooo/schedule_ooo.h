@@ -24,6 +24,7 @@
 #include "passes/block_graph_pass/schedule_ooo/optimize_sort.h"
 #include "passes/block_graph_pass/schedule_ooo/latency_estimator.h"
 #include "passes/block_graph_pass/schedule_ooo/core_assign.h"
+#include "passes/block_graph_pass/schedule_ooo/task_splitter.h"
 
 namespace npu::tile_fwk {
 struct ScheduleUnit {
@@ -52,8 +53,8 @@ private:
     void DoHealthCheckAfter(Function& function, const std::string& folderPath) override;
     void SortTaskList(std::vector<Operation*>& operations, std::vector<Operation*>& taskList);
     Status SortAndLatencyEstimate(std::vector<Operation*>& opList, std::vector<Operation*>& taskOpList, int& latency);
-    void CollectStatistic(OoOScheduleStatistic& oooHealthCheck,
-        Function& function, std::pair<uint64_t, Function*>& program);
+    void CollectStatistic(
+        OoOScheduleStatistic& oooHealthCheck, Function& function, std::pair<uint64_t, Function*>& program);
     Status RecordLastUseMemory(Function& function);
     Status NonMixSchedule(
         std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
@@ -61,24 +62,26 @@ private:
     Status MixSchedule(
         std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
         int64_t& maxWorkeSpaceSize);
-    Status EstimateTaskLatencyAndSchedule(TaskSpliter& spliter, std::vector<Operation*>& opList);
-    Status BuildMixedScheduleOps(TaskSpliter& spliter, std::vector<Operation*>& opList,
+    Status EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList);
+    Status BuildMixedScheduleOps(
+        TaskSplitter& splitter, std::vector<Operation*>& opList,
         std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
-    Status AdvanceAlloc(std::vector<Operation*>& opList, Operation* op, size_t& index);
-    Status ModifyBoundaryOrder(std::vector<Operation*>& opList);
-    bool IsBoundary(Operation* op);
-    Status UpdateOpCoreMap(
-        const TaskNode& taskNode, std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
-    std::vector<ScheduleUnit> BuildScheduleUnits(const std::vector<TaskNode> &taskNodeList,
-        const std::vector<std::pair<int, int>> &cyclePairs, std::vector<Operation*> &opList);
+    Status BuildMemIdToAllocIdx(
+        const std::vector<Operation*>& opList, std::unordered_map<uint64_t, size_t>& memIdToAllocIdx);
+    bool MoveAllocBeforeOp(
+        std::vector<Operation*>& opList, size_t allocIdx, int targetIdx,
+        std::unordered_map<uint64_t, size_t>& memIdToAllocIdx, uint64_t memId);
+    Status ModifyAllocOrder(std::vector<Operation*>& opList);
+    Status UpdateOpCoreMap(const TaskNode& taskNode, std::unordered_map<Operation*, CoreLocationType>& opCoreMap);
+    std::vector<ScheduleUnit> BuildScheduleUnits(
+        const std::vector<TaskNode>& taskNodeList, const std::vector<std::pair<int, int>>& cyclePairs,
+        std::vector<Operation*>& opList);
     std::vector<Function*> oriFunctions;
     std::map<uint64_t, OoOScheduleStatistic> statisticMap_;
     // Per-program tracers, populated on SUCCESS only; failure path flushes inline.
     std::map<uint64_t, MemoryTracer> tracerMap_;
-    void CollectMemoryTrace(MemoryTracer& tracer,
-        Function& function, std::pair<uint64_t, Function*>& program);
-    void FlushMemoryTraceOnFailure(MemoryTracer& tracer,
-        Function& function, std::pair<uint64_t, Function*>& program);
+    void CollectMemoryTrace(MemoryTracer& tracer, Function& function, std::pair<uint64_t, Function*>& program);
+    void FlushMemoryTraceOnFailure(MemoryTracer& tracer, Function& function, std::pair<uint64_t, Function*>& program);
     std::unordered_map<LogicalTensorPtr, Operation*> lastUseMap_;
     OoOScheduleChecker checker;
 };

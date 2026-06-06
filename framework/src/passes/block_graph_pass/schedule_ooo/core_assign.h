@@ -19,6 +19,9 @@
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
+#include <map>
+#include <set>
 #include <string>
 #include <iostream>
 #include <queue>
@@ -34,6 +37,36 @@ namespace npu::tile_fwk {
 enum class ScheduleCoreType { AIC = 0, AIV = 1 };
 
 enum class TargetCoreType { AIC = 0, AIV0 = 1, AIV1 = 2, UNKNOWN = 3 };
+
+constexpr int64_t NEGATIVE_ONE = -1;
+
+inline std::string ScheduleCoreTypeToString(ScheduleCoreType coreType)
+{
+    if (coreType == ScheduleCoreType::AIC) {
+        return "AIC";
+    }
+    if (coreType == ScheduleCoreType::AIV) {
+        return "AIV";
+    }
+    return "UNKNOWN";
+}
+
+inline std::string TargetCoreTypeToString(TargetCoreType coreType)
+{
+    static const std::unordered_map<TargetCoreType, std::string> targetToString{
+        {TargetCoreType::AIC, "AIC"},
+        {TargetCoreType::AIV0, "AIV0"},
+        {TargetCoreType::AIV1, "AIV1"},
+        {TargetCoreType::UNKNOWN, "UNKNOWN"}};
+    auto it = targetToString.find(coreType);
+    return it != targetToString.end() ? it->second : "UNKNOWN";
+}
+
+// 跨核通信延迟惩罚权重（用于调度优化的目标函数, 后续可能需要差异化设置）
+constexpr double GAP_C_C = 0.01; // cube -> cube 间隙惩罚
+constexpr double GAP_C_V = 0.01; // cube -> vector 间隙惩罚
+constexpr double GAP_V_C = 0.01; // vector -> cube 间隙惩罚
+constexpr double GAP_V_V = 0.01; // vector -> vector 间隙惩罚
 
 // 切分后的AIC或AIV子图
 class TaskNode {
@@ -54,6 +87,9 @@ public:
     int startTimeCandidate{0};
     int endTimeCandidate{0};
     std::vector<Operation*> opList_;
+    // 该 task 所属的 vec 连通分支 ID（task 级别，分割完 task 后基于 task 间 AIV 连通性计算）
+    // -1 表示 AIC task（不参与分支翻转）
+    int vecBranchId{-1};
 };
 
 // 完整的mix子图
@@ -71,123 +107,42 @@ public:
 // 用于将切分后的AIC和AIV子图调度到AIC,AIV0和AIV1核心上
 class CoreScheduler {
 public:
-    void FindEarliestSlot(
+    static void FindEarliestSlot(
         std::vector<std::pair<int, int>>& timeSlot, int earliestStart, int latency, int& currentIdx,
         std::pair<int, int>& currentInterval);
-    void UpdateInterval(
+    static void UpdateInterval(
         std::vector<std::pair<int, int>>& timeSlot, int& insertIdx, std::pair<int, int>& insertInterval);
     std::vector<int> GetDFSTopoSeq(TaskGraph& taskGraph);
     void EFTWithInsertSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
     void EFTSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
     void BruteForceScheduleRecursiveStep(
         std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph, std::vector<int>& topoList);
-    void Schedule(TaskGraph& taskGraph, int bruteForceThreshold);
+    void Schedule(TaskGraph& taskGraph);
+    void OptimalScheduleWithSearch(TaskGraph& taskGraph);
+    double CalcBaselineCost(const TaskGraph& taskGraph, int n);
 
     void GapMinSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
     void GapMinForwardPass(TaskGraph& taskGraph, std::vector<int>& topoSeq);
-    void GapMinBackwardShift(TaskGraph& taskGraph, std::vector<int>& topoSeq);
+    static void GapMinBackwardShift(TaskGraph& taskGraph, const std::vector<int>& topoSeq);
     int64_t SumCrossCoreGap(const TaskGraph& g) const;
     void SelectAIVCore(
-        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-        int evalDepTimeStart, int maxCrossDepEnd, int latency,
-        TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval);
+        TaskGraph& taskGraph, int taskId,
+        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, int evalDepTimeStart,
+        int latency, TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval);
+    int FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) const;
     void ScheduleOneTask(
         TaskGraph& taskGraph, int taskId,
         std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-        std::function<bool(TargetCoreType)> isAicCore);
-    void TryScheduleCrossCoreSuccessors(
+        std::function<bool(TargetCoreType)> isAicCore,
+        std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    TargetCoreType LookupPinnedAIVCore(
+        const TaskNode& task, const std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    void TryScheduleSuccessors(
         TaskGraph& taskGraph, int taskId,
         std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, std::set<int>& scheduledTasks,
-        std::function<bool(TargetCoreType)> isAicCore);
+        std::function<bool(TargetCoreType)> isAicCore,
+        std::unordered_map<int, TargetCoreType>& vecBranchToCore);
 };
 
-// 并查集
-class DSUWithOrder {
-public:
-    DSUWithOrder(int num);
-    int Find(int i);
-    void Union(int i, int j);
-    std::vector<int> parent;
-};
-
-// 用于进行子图切分，任务排布和internalSubgraphId写回
-class TaskSpliter {
-public:
-    void SplitGraph(const std::vector<Operation*>& opList); // 此处opList必须符合拓扑序
-    void BuildOpGraph();
-    void BuildInOutGraph(
-        std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph, std::vector<int>& clusterIds,
-        int clusterNum);
-    TaskGraph BuildTaskGraph();
-    void BuildSameLayerConnectionWithBack();
-    void BuildSameLayerConnectionWithFront();
-    void UnionSameCoreOps(DSUWithOrder& dsu);
-    void UnionSameLayerConnections(DSUWithOrder& dsu);
-    void UnionCrossCoreAICToAIV(DSUWithOrder& dsu);
-    void UnionL0CToL1CopyIn(DSUWithOrder& dsu);
-    int BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes);
-    void ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result,
-        std::vector<bool>& visited);
-    std::vector<std::vector<int>> FindMergeableTaskNodes();
-    void MergeTask();
-    void MergeTaskByTargetCoreType();
-    void MarkInternalSubgraphID();
-    void CombineSCC(
-        std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes,
-        std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
-        std::vector<std::vector<int>>& sccResult);
-    void RecordIDMap(std::unordered_map<int, int>& oldClusterToNewCluster,
-        std::vector<ScheduleCoreType>& clusterCoreTypes);
-    TaskGraph& GetTaskGraph() { return taskGraph_; }
-    std::vector<Operation*> GetMergedOperations();
-    std::vector<Operation*> opList_;
-    std::vector<ScheduleCoreType> opCoreTypes_;
-    std::vector<std::set<int>> opInGraph_;
-    std::vector<std::set<int>> opOutGraph_;
-    std::vector<std::pair<int, int>> sameLayerConnection_;
-    std::vector<std::vector<int>> taskIdToOps_;
-    std::vector<int> opIdxToTaskId_;
-    std::vector<ScheduleCoreType> taskCoreTypes_;
-    std::vector<std::set<int>> inGraph_;
-    std::vector<std::set<int>> outGraph_;
-    std::unordered_map<int, int> opMagicToIdx_;
-    TaskGraph taskGraph_;
-    // 在 Tarjan SCC 阶段检测到的、包含 AIC+AIV 混合的成环 SCC 中的原始 Cluster ID 列表
-    std::vector<std::vector<int>> cycledSCCClusters_;
-    // CombineSCC 之后，映射为新 TaskNode ID 的成环对
-    std::vector<std::pair<int, int>> cycledTaskNodePairs_;
-    void RecordCycledClusters(const std::vector<ScheduleCoreType> &clusterCoreTypes,
-        const std::vector<std::vector<int>> &sccResult);
-    const std::vector<std::pair<int, int>>& GetCycledTaskNodePairs() const
-    {
-        return cycledTaskNodePairs_;
-    }
-};
-
-// 使用TarJan算法寻找强连通分量
-class StrongConnectionComponentFinder {
-public:
-    void Find(
-        std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
-        std::vector<std::vector<int>>& sccResult);
-    void TarJanAlg(int idx, std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult);
-    std::vector<std::vector<int>> strongConnectionComponent_;
-    int index_;
-    std::vector<int> dfn_;
-    std::vector<int> low_;
-    std::vector<int> stack_;
-    std::vector<bool> instack_;
-    std::unordered_set<int> visited_;
-};
-
-// 使用传递闭包判断有向无环图中节点可达性
-class DAGReachableJudger {
-public:
-    void Build(const std::vector<std::set<int>>& inGraph, const std::vector<std::set<int>>& outGraph);
-    void SetReachable(const int src, const int dst);
-    void MergeReachable(int src, int dst);
-    bool IsReachable(int src, int dst);
-    std::vector<std::vector<uint32_t>> reachableSet;
-};
 } // namespace npu::tile_fwk
 #endif // PASS_CORE_ASSIGN_H

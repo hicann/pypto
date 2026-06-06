@@ -14,7 +14,15 @@
  */
 
 #include "core_assign.h"
+#include "local_search_solver.h"
 #include "passes/pass_log/pass_log.h"
+
+#include <cstdio>
+#include <sstream>
+#include <cstring>
+#include <cstdlib>
+#include <cmath>
+#include <array>
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "CoreAssign"
@@ -22,33 +30,6 @@
 
 namespace npu::tile_fwk {
 
-constexpr int64_t NEGATIVE_ONE = -1;
-
-inline std::string ScheduleCoreTypeToString(ScheduleCoreType coreType)
-{
-    if (coreType == ScheduleCoreType::AIC) {
-        return "AIC";
-    }
-    if (coreType == ScheduleCoreType::AIV) {
-        return "AIV";
-    }
-    return "UNKNOWN";
-}
-
-inline std::string TargetCoreTypeToString(TargetCoreType coreType)
-{
-    std::unordered_map<TargetCoreType, std::string> targetToString{
-        {TargetCoreType::AIC, "AIC"},
-        {TargetCoreType::AIV0, "AIV0"},
-        {TargetCoreType::AIV1, "AIV1"},
-        {TargetCoreType::UNKNOWN, "UNKNOWN"}};
-    if (targetToString.count(coreType) > 0) {
-        return targetToString[coreType];
-    }
-    return "UNKNOWN";
-}
-
-// 判断候选规划是否好于当前规划，是则将候选规划设为当前规划
 void TaskGraph::ApplyCandidate()
 {
     int prevTime = makespan;
@@ -320,9 +301,8 @@ void CoreScheduler::BruteForceScheduleRecursiveStep(
 }
 
 void CoreScheduler::SelectAIVCore(
-    std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-    int evalDepTimeStart, int maxCrossDepEnd, int latency,
-    TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval)
+    TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+    int evalDepTimeStart, int latency, TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval)
 {
     int idxAIV0 = -1;
     std::pair<int, int> intervalAIV0{-1, -1};
@@ -331,19 +311,9 @@ void CoreScheduler::SelectAIVCore(
     std::pair<int, int> intervalAIV1{-1, -1};
     FindEarliestSlot(availTime[TargetCoreType::AIV1], evalDepTimeStart, latency, idxAIV1, intervalAIV1);
 
-    auto calcGap = [&](const std::pair<int, int>& iv) -> int64_t {
-        if (iv.first < 0)
-            return INT64_MAX;
-        if (maxCrossDepEnd == INT32_MIN)
-            return 0;
-        return std::max<int64_t>(0, static_cast<int64_t>(iv.first) - maxCrossDepEnd);
-    };
-    int64_t gap0 = calcGap(intervalAIV0);
-    int64_t gap1 = calcGap(intervalAIV1);
-
-    auto getLastFinishBefore = [&](TargetCoreType core, int intervalAIVFirstTime) -> int {
+    auto getLastFinishBefore = [&](TargetCoreType core, int time) -> int {
         for (auto& slot : availTime[core]) {
-            if (slot.second >= intervalAIVFirstTime && slot.first <= intervalAIVFirstTime) {
+            if (slot.second >= time && slot.first <= time) {
                 return slot.first;
             }
         }
@@ -351,16 +321,13 @@ void CoreScheduler::SelectAIVCore(
     };
 
     bool chooseAIV0 = false;
-    if (gap0 < gap1) {
+    if (intervalAIV0.first < intervalAIV1.first) {
         chooseAIV0 = true;
-    } else if (gap0 == gap1) {
-        if (intervalAIV0.first < intervalAIV1.first) {
-            chooseAIV0 = true;
-        } else if (intervalAIV0.first == intervalAIV1.first) {
-            int lastFinish0 = getLastFinishBefore(TargetCoreType::AIV0, intervalAIV0.first);
-            int lastFinish1 = getLastFinishBefore(TargetCoreType::AIV1, intervalAIV1.first);
-            chooseAIV0 = (lastFinish0 <= lastFinish1);
-        }
+    } else if (intervalAIV0.first == intervalAIV1.first) {
+        int depAIVEnd = FindDepAIVLastEnd(taskGraph, taskId);
+        int score0 = std::max(getLastFinishBefore(TargetCoreType::AIV0, intervalAIV0.first), depAIVEnd);
+        int score1 = std::max(getLastFinishBefore(TargetCoreType::AIV1, intervalAIV1.first), depAIVEnd);
+        chooseAIV0 = (score0 <= score1);
     }
     if (chooseAIV0) {
         evalCore = TargetCoreType::AIV0;
@@ -373,23 +340,51 @@ void CoreScheduler::SelectAIVCore(
     }
 }
 
+// 回溯依赖链，找当前 AIV 任务所依赖的所有 AIV 任务中最晚的结束时间
+// 对 AIC 前驱则继续回溯其 AIV 前驱
+int CoreScheduler::FindDepAIVLastEnd(const TaskGraph& taskGraph, int taskId) const
+{
+    int result = 0;
+    std::queue<int> q;
+    std::unordered_set<int> visited;
+    q.push(taskId);
+    visited.insert(taskId);
+    while (!q.empty()) {
+        int cur = q.front();
+        q.pop();
+        for (int prevId : taskGraph.tasks[cur].inTasks) {
+            if (visited.count(prevId) > 0) {
+                continue;
+            }
+            visited.insert(prevId);
+            auto& prev = taskGraph.tasks[prevId];
+            bool prevIsAIV =
+                (prev.targetCoreTypeCandidate == TargetCoreType::AIV0 ||
+                 prev.targetCoreTypeCandidate == TargetCoreType::AIV1);
+            if (prevIsAIV) {
+                result = std::max(result, prev.endTimeCandidate);
+            } else {
+                // AIC 前驱：继续回溯找其 AIV 前驱
+                q.push(prevId);
+            }
+        }
+    }
+    return result;
+}
+
 // --------- GapMin: 启发式最小化跨核相邻依赖边的等待间隔 ---------
 // 紧耦合调度单个任务
 void CoreScheduler::ScheduleOneTask(
     TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-    std::function<bool(TargetCoreType)> isAicCore)
+    std::function<bool(TargetCoreType)> /* isAicCore */,
+    std::unordered_map<int, TargetCoreType>& vecBranchToCore)
 {
     auto& task = taskGraph.tasks[taskId];
     int evalDepTimeStart = 0;
-    int maxCrossDepEnd = INT32_MIN;
     bool taskIsAic = (task.coreType == ScheduleCoreType::AIC);
     for (int prevTaskId : task.inTasks) {
         auto& prev = taskGraph.tasks[prevTaskId];
         evalDepTimeStart = std::max(evalDepTimeStart, prev.endTimeCandidate);
-        bool prevIsAic = isAicCore(prev.targetCoreTypeCandidate);
-        if (taskIsAic != prevIsAic) {
-            maxCrossDepEnd = std::max(maxCrossDepEnd, prev.endTimeCandidate);
-        }
     }
 
     TargetCoreType evalCore = TargetCoreType::UNKNOWN;
@@ -400,18 +395,45 @@ void CoreScheduler::ScheduleOneTask(
         evalCore = TargetCoreType::AIC;
         FindEarliestSlot(availTime[evalCore], evalDepTimeStart, task.latency, currentIdx, currentInterval);
     } else {
-        SelectAIVCore(availTime, evalDepTimeStart, maxCrossDepEnd, task.latency, evalCore, currentIdx, currentInterval);
+        TargetCoreType pinnedCore = LookupPinnedAIVCore(task, vecBranchToCore);
+        if (pinnedCore != TargetCoreType::UNKNOWN) {
+            evalCore = pinnedCore;
+            FindEarliestSlot(availTime[evalCore], evalDepTimeStart, task.latency, currentIdx, currentInterval);
+        } else {
+            SelectAIVCore(
+                taskGraph, taskId, availTime, evalDepTimeStart, task.latency, evalCore, currentIdx, currentInterval);
+        }
     }
     task.targetCoreTypeCandidate = evalCore;
     task.startTimeCandidate = currentInterval.first;
     task.endTimeCandidate = currentInterval.second;
     UpdateInterval(availTime[evalCore], currentIdx, currentInterval);
+
+    if (!taskIsAic && task.vecBranchId >= 0) {
+        vecBranchToCore[task.vecBranchId] = evalCore;
+    }
+}
+
+// 查找 AIV 任务是否因连通分支约束而必须钉在某个核上
+// 遍历已调度的 AIV 任务，若其 vecBranchId 与当前任务相同，则复用其核
+TargetCoreType CoreScheduler::LookupPinnedAIVCore(
+    const TaskNode& task, const std::unordered_map<int, TargetCoreType>& vecBranchToCore)
+{
+    if (task.vecBranchId < 0) {
+        return TargetCoreType::UNKNOWN;
+    }
+    auto it = vecBranchToCore.find(task.vecBranchId);
+    if (it != vecBranchToCore.end()) {
+        return it->second;
+    }
+    return TargetCoreType::UNKNOWN;
 }
 
 // 尝试调度跨核后继
-void CoreScheduler::TryScheduleCrossCoreSuccessors(
+void CoreScheduler::TryScheduleSuccessors(
     TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
-    std::set<int>& scheduledTasks, std::function<bool(TargetCoreType)> isAicCore)
+    std::set<int>& scheduledTasks, std::function<bool(TargetCoreType)> isAicCore,
+    std::unordered_map<int, TargetCoreType>& vecBranchToCore)
 {
     auto& task = taskGraph.tasks[taskId];
 
@@ -421,11 +443,6 @@ void CoreScheduler::TryScheduleCrossCoreSuccessors(
         }
 
         auto& succ = taskGraph.tasks[succId];
-        bool isCrossCore = (task.coreType != succ.coreType);
-        if (!isCrossCore) {
-            continue;
-        }
-
         bool allPredScheduled = true;
         for (int predId : succ.inTasks) {
             if (scheduledTasks.count(predId) == 0) {
@@ -435,9 +452,9 @@ void CoreScheduler::TryScheduleCrossCoreSuccessors(
         }
 
         if (allPredScheduled) {
-            ScheduleOneTask(taskGraph, succId, availTime, isAicCore);
+            ScheduleOneTask(taskGraph, succId, availTime, isAicCore, vecBranchToCore);
             scheduledTasks.insert(succId);
-            TryScheduleCrossCoreSuccessors(taskGraph, succId, availTime, scheduledTasks, isAicCore);
+            TryScheduleSuccessors(taskGraph, succId, availTime, scheduledTasks, isAicCore, vecBranchToCore);
         }
     }
 }
@@ -452,21 +469,22 @@ void CoreScheduler::GapMinForwardPass(TaskGraph& taskGraph, std::vector<int>& to
     auto isAicCore = [](TargetCoreType c) { return c == TargetCoreType::AIC; };
 
     std::set<int> scheduledTasks;
+    std::unordered_map<int, TargetCoreType> vecBranchToCore;
 
     for (int taskId : topoSeq) {
         if (scheduledTasks.count(taskId) > 0) {
             continue;
         }
 
-        ScheduleOneTask(taskGraph, taskId, availTime, isAicCore);
+        ScheduleOneTask(taskGraph, taskId, availTime, isAicCore, vecBranchToCore);
         scheduledTasks.insert(taskId);
 
-        TryScheduleCrossCoreSuccessors(taskGraph, taskId, availTime, scheduledTasks, isAicCore);
+        TryScheduleSuccessors(taskGraph, taskId, availTime, scheduledTasks, isAicCore, vecBranchToCore);
     }
 }
 
 // 轮 2.：按拓扑序反向 ALAP 位移 —— 把每个任务右移到 "同核右邻 start" 与 "所有后继最早 start" 的下界，收敛 outbound gap
-void CoreScheduler::GapMinBackwardShift(TaskGraph& taskGraph, std::vector<int>& topoSeq)
+void CoreScheduler::GapMinBackwardShift(TaskGraph& taskGraph, const std::vector<int>& topoSeq)
 {
     // 1. 按核分组并按 startTimeCandidate 排序，建立同核右邻映射
     std::unordered_map<TargetCoreType, std::vector<int>> coreGroups;
@@ -542,867 +560,59 @@ void CoreScheduler::GapMinSchedule(TaskGraph& taskGraph, std::vector<int>& topoS
         static_cast<long long>(SumCrossCoreGap(taskGraph)), taskGraph.makespan);
 }
 
-// 根据节点数量，判断是否遍历所有拓扑序进行任务排布
-void CoreScheduler::Schedule(TaskGraph& taskGraph, int bruteForceThreshold)
+// 计算 GapMin baseline 的总代价 = makespan + Σ_e (gap(e) * coeff(e))
+double CoreScheduler::CalcBaselineCost(const TaskGraph& taskGraph, int n)
+{
+    double penalty = 0.0;
+    static const double gapCoeffTable[2][2] = {{GAP_C_C, GAP_C_V}, {GAP_V_C, GAP_V_V}};
+    for (int i = 0; i < n; ++i) {
+        auto& taskA = taskGraph.tasks[i];
+        bool isAC = (taskA.coreType == ScheduleCoreType::AIC);
+        for (int taskBId : taskA.outTasks) {
+            auto& taskB = taskGraph.tasks[taskBId];
+            int gap = taskB.startTime - taskA.endTime;
+            bool isBC = (taskB.coreType == ScheduleCoreType::AIC);
+            penalty += gapCoeffTable[isAC ? 0 : 1][isBC ? 0 : 1] * gap;
+        }
+    }
+    return taskGraph.makespan + penalty;
+}
+
+// In-process classical local-search refinement on top of the GapMin baseline.
+// Returns true if improved cost, false otherwise. Deterministic for identical inputs.
+static bool RunLocalSearch(TaskGraph& taskGraph, double baselineTotalCost)
+{
+    LocalSearchSolver solver;
+    return solver.Solve(taskGraph, baselineTotalCost);
+}
+
+void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph)
 {
     taskGraph.ClearSchedule();
-    APASS_LOG_INFO_F(Elements::Operation, "Start schedule with brute force threshold %d.", bruteForceThreshold);
-    if (static_cast<int>(taskGraph.tasks.size()) > bruteForceThreshold) {
-        std::vector<int> topoSeq = GetDFSTopoSeq(taskGraph);
-        GapMinSchedule(taskGraph, topoSeq);
-    } else {
-        std::vector<bool> visited(taskGraph.tasks.size(), false);
-        std::vector<int> topoList;
-        BruteForceScheduleRecursiveStep(visited, 0, taskGraph, topoList);
-    }
-}
+    APASS_LOG_INFO_F(Elements::Operation, "Start hybrid schedule: GapMin baseline + local-search refinement.");
 
-// Alloc op需要与其同级的op处于同一个子图中, Convert的alloc应跟随其后op
-void TaskSpliter::BuildSameLayerConnectionWithBack()
-{
-    for (size_t i = 0; i < opList_.size(); i++) {
-        if (ALLOC_OPCODE.count(opList_[i]->GetOpcode()) == 0) {
-            continue;
-        }
-        ScheduleCoreType srcCoreType = opCoreTypes_[i];
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
-            opList_[i]->GetOpMagic());
-        for (auto& oop : opList_[i]->GetOOperands()) {
-            for (auto& sameLayerOpPtr : oop->GetProducers()) {
-                int dstOpMagic = sameLayerOpPtr->GetOpMagic();
-                if (opMagicToIdx_.count(dstOpMagic) == 0) {
-                    continue;
-                }
-                if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType) {
-                    continue;
-                }
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "-- add %s[%d] to same layer connection because of the alloc op.",
-                    sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
-                sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
-            }
-        }
-    }
-}
-
-// Alloc op需要与其同级的op处于同一个子图中, Convert的alloc应跟随其前op
-void TaskSpliter::BuildSameLayerConnectionWithFront()
-{
-    for (size_t i = 0; i < opList_.size(); i++) {
-        if (ALLOC_OPCODE.count(opList_[i]->GetOpcode()) == 0) {
-            continue;
-        }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(),
-            opList_[i]->GetOpMagic());
-        for (auto& oop : opList_[i]->GetOOperands()) {
-            for (auto& sameLayerOpPtr : oop->GetProducers()) {
-                int dstOpMagic = sameLayerOpPtr->GetOpMagic();
-                if (opMagicToIdx_.count(dstOpMagic) == 0) {
-                    continue;
-                }
-                APASS_LOG_DEBUG_F(
-                    Elements::Operation, "-- add %s[%d] to same layer connection because of the alloc op.",
-                    sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
-                sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
-                opCoreTypes_[i] = opCoreTypes_[opMagicToIdx_[dstOpMagic]];
-            }
-        }
-    }
-}
-
-// 构建op的coreType和连接图
-void TaskSpliter::BuildOpGraph()
-{
-    int opNum = static_cast<int>(opList_.size());
-    opCoreTypes_.resize(opNum);
-    opMagicToIdx_.clear();
-    for (int i = 0; i < opNum; i++) {
-        opMagicToIdx_[opList_[i]->GetOpMagic()] = i;
-        opCoreTypes_[i] = OpcodeManager::Inst().GetCoreType(opList_[i]->GetOpcode()) == OpCoreType::AIC ?
-                              ScheduleCoreType::AIC :
-                              ScheduleCoreType::AIV;
-    }
-    for (int i = 0; i < opNum; i++) {
-        if (opList_[i]->GetOpcode() == Opcode::OP_COPY_IN) {
-            auto nextOp = *opList_[i]->ConsumerOps().begin();
-            opCoreTypes_[i] = opCoreTypes_[opMagicToIdx_[nextOp->GetOpMagic()]];
-        } else if (opList_[i]->GetOpcode() == Opcode::OP_COPY_OUT) {
-            auto prevOp = *opList_[i]->ProducerOps().begin();
-            opCoreTypes_[i] = opCoreTypes_[opMagicToIdx_[prevOp->GetOpMagic()]];
-        }
-        if (opList_[i]->HasAttribute(OpAttributeKey::isCube)) {
-            bool isCube = opList_[i]->GetBoolAttribute(OpAttributeKey::isCube);
-            opCoreTypes_[i] = isCube ? ScheduleCoreType::AIC : ScheduleCoreType::AIV;
-        }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "Mark %s[%d] as %s core type.", opList_[i]->GetOpcodeStr().c_str(),
-            opList_[i]->GetOpMagic(), opCoreTypes_[i] == ScheduleCoreType::AIC ? "AIC" : "AIV");
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "Mark core type finished.");
-    opInGraph_.resize(opNum);
-    opOutGraph_.resize(opNum);
-    for (int i = 0; i < opNum; i++) {
-        for (auto consumerOp : opList_[i]->ConsumerOps()) {
-            if (opMagicToIdx_.count(consumerOp->GetOpMagic()) == 0) {
-                continue;
-            }
-            int nextOpIdx = opMagicToIdx_[consumerOp->GetOpMagic()];
-            opOutGraph_[i].insert(nextOpIdx);
-            opInGraph_[nextOpIdx].insert(i);
-        }
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "Build op connection graph finished.");
-}
-
-// 记录成环的 Cluster 对
-void TaskSpliter::RecordCycledClusters(
-    const std::vector<ScheduleCoreType> &clusterCoreTypes,
-    const std::vector<std::vector<int>> &sccResult)
-{
-    cycledTaskNodePairs_.clear();
-    for (int sccId = 0; sccId < static_cast<int>(sccResult.size()); sccId++) {
-        if (sccResult[sccId].size() <= 1) {
-            continue;
-        }
-        // 这个 SCC 有成环。找出包含的 AIC 和 AIV cluster
-        bool hasAIC = false;
-        bool hasAIV = false;
-        for (int clusterId : sccResult[sccId]) {
-            if (clusterCoreTypes[clusterId] == ScheduleCoreType::AIC) {
-                hasAIC = true;
-            } else {
-                hasAIV = true;
-            }
-        }
-
-        // 输出日志：记录成环的 Cluster
-        std::string sccInfo = "SCC " + std::to_string(sccId) + " has cycle with "
-            + std::to_string(sccResult[sccId].size()) + " clusters: [";
-        for (size_t j = 0; j < sccResult[sccId].size(); j++) {
-            int cid = sccResult[sccId][j];
-            sccInfo += "(cluster=" + std::to_string(cid)
-                + ", core=" + ScheduleCoreTypeToString(clusterCoreTypes[cid]) + ")";
-            if (j + 1 < sccResult[sccId].size()) {
-                sccInfo += ", ";
-            }
-        }
-        sccInfo += "]";
-        APASS_LOG_WARN_F(Elements::Operation, "%s", sccInfo.c_str());
-
-        // 如果同时包含 AIC 和 AIV，FlattenSCC 后会拆成两个新 Cluster,CombineSCC 会消除 SCC 内部边,故记录下这对关系
-        if (hasAIC && hasAIV) {
-            APASS_LOG_WARN_F(Elements::Operation,
-                "SCC %d contains both AIC and AIV clusters, "
-                "potential cycle after FlattenSCC between the resulting AIC-group and AIV-group taskNodes.", sccId);
-            // 标记：这个 SCC 包含的所有 cluster ID，后续在 CombineSCC 映射后
-            // 会被映射到新的 taskNode ID。我们在 SplitGraph 结束后再进行映射。
-            cycledSCCClusters_.push_back(sccResult[sccId]);
-        }
+    int n = static_cast<int>(taskGraph.tasks.size());
+    if (n == 0) {
+        return;
     }
 
-    if (cycledSCCClusters_.empty()) {
-        APASS_LOG_INFO_F(Elements::Operation, "No AIC-AIV mixed cycles detected in SCC results.");
-    } else {
-        APASS_LOG_WARN_F(Elements::Operation,
-            "Detected %zu SCC(s) with AIC-AIV mixed cycles, will record for post-schedule reorder.",
-            cycledSCCClusters_.size());
-    }
-}
-// mix子图切分主函数
-void TaskSpliter::SplitGraph(const std::vector<Operation*>& opList)
-{
-    APASS_LOG_INFO_F(Elements::Operation, "Start to split mix graph with op num %zu.", opList.size());
-    opList_ = opList;
-    BuildOpGraph();
-    BuildSameLayerConnectionWithBack();
-    std::vector<int> clusterIds;
-    std::vector<ScheduleCoreType> clusterCoreTypes;
-    int clusterNum = BuildCluster(clusterIds, clusterCoreTypes);
-    APASS_LOG_INFO_F(Elements::Operation, "Find clusters finished.");
-    std::vector<std::set<int>> inGraph;
-    std::vector<std::set<int>> outGraph;
-    BuildInOutGraph(inGraph, outGraph, clusterIds, clusterNum);
-    std::vector<std::vector<int>> sccResult;
-    StrongConnectionComponentFinder sccFinder;
-    sccFinder.Find(inGraph, outGraph, sccResult);
-    // 这两个新 Cluster 之间的"成环关系"
-    RecordCycledClusters(clusterCoreTypes, sccResult);
-    CombineSCC(clusterIds, clusterCoreTypes, inGraph, outGraph, sccResult);
-    APASS_LOG_INFO_F(Elements::Operation, "Find strongly connected components finished.");
-    opIdxToTaskId_.swap(clusterIds);
-    inGraph_.swap(inGraph);
-    outGraph_.swap(outGraph);
-    taskCoreTypes_ = std::vector<ScheduleCoreType>(inGraph_.size(), ScheduleCoreType::AIV);
-    taskIdToOps_.clear();
-    taskIdToOps_.resize(inGraph_.size());
-    for (size_t i = 0; i < opList_.size(); i++) {
-        int currTaskId = opIdxToTaskId_[i];
-        taskIdToOps_[currTaskId].push_back(i);
-        if (opCoreTypes_[i] == ScheduleCoreType::AIC) {
-            taskCoreTypes_[currTaskId] = ScheduleCoreType::AIC;
-        }
-    }
-    taskGraph_ = BuildTaskGraph();
-    APASS_LOG_INFO_F(Elements::Operation, "Build the task graph finished.");
-}
-
-// 将强连通分量展开，避免成环
-inline int FlattenSCC(
-    std::vector<ScheduleCoreType>& clusterCoreTypes, std::vector<std::vector<int>>& sccResult,
-    std::unordered_map<int, int>& oldClusterIdToSCCId, std::unordered_map<int, std::vector<int>>& sccIdToNewClusters,
-    std::unordered_map<int, int>& oldClusterToNewCluster)
-{
-    int currNewClusterIdx = 0;
-    for (int sccId = 0; sccId < static_cast<int>(sccResult.size()); sccId++) {
-        for (int clusterId : sccResult[sccId]) {
-            oldClusterIdToSCCId[clusterId] = sccId;
-        }
-        if (sccResult[sccId].size() == 0) {
-            continue;
-        }
-        if (sccResult[sccId].size() == 1) {
-            sccIdToNewClusters[sccId].push_back(currNewClusterIdx);
-            oldClusterToNewCluster[sccResult[sccId][0]] = currNewClusterIdx;
-            currNewClusterIdx++;
-            continue;
-        }
-        std::vector<int> AICclusters;
-        std::vector<int> AIVclusters;
-        for (int clusterId : sccResult[sccId]) {
-            if (clusterCoreTypes[clusterId] == ScheduleCoreType::AIC) {
-                AICclusters.push_back(clusterId);
-            } else {
-                AIVclusters.push_back(clusterId);
-            }
-        }
-        if (AICclusters.size() > 0) {
-            for (int aicIds : AICclusters) {
-                oldClusterToNewCluster[aicIds] = currNewClusterIdx;
-            }
-            sccIdToNewClusters[sccId].push_back(currNewClusterIdx);
-            currNewClusterIdx++;
-        }
-        if (AIVclusters.size() > 0) {
-            for (int aivIds : AIVclusters) {
-                oldClusterToNewCluster[aivIds] = currNewClusterIdx;
-            }
-            sccIdToNewClusters[sccId].push_back(currNewClusterIdx);
-            currNewClusterIdx++;
-        }
-    }
-    return currNewClusterIdx;
-}
-
-// 将 cycledSCCClusters_ 中记录的旧 Cluster ID 映射为新 TaskNode ID, 形成 cycledTaskNodePairs_
-void TaskSpliter::RecordIDMap(std::unordered_map<int, int>& oldClusterToNewCluster,
-    std::vector<ScheduleCoreType>& clusterCoreTypes)
-{
-    for (auto &oldClusters : cycledSCCClusters_) {
-        std::set<int> aicNewIds;
-        std::set<int> aivNewIds;
-        for (int oldCid : oldClusters) {
-            int newCid = oldClusterToNewCluster[oldCid];
-            if (clusterCoreTypes[oldCid] == ScheduleCoreType::AIC) {
-                aicNewIds.insert(newCid);
-            } else {
-                aivNewIds.insert(newCid);
-            }
-        }
-        // 每个 AIC 新 ID 和 AIV 新 ID 之间都是成环对
-        for (int aicId : aicNewIds) {
-            for (int aivId : aivNewIds) {
-                cycledTaskNodePairs_.push_back({aicId, aivId});
-                APASS_LOG_INFO_F(Elements::Operation,
-                    "Recorded cycled taskNode pair: taskNode %d (AIC) <-> taskNode %d (AIV).", aicId, aivId);
-            }
-        }
-    }
-}
-
-// 将强连通分量展开，并构建新的连接图
-void TaskSpliter::CombineSCC(
-    std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes, std::vector<std::set<int>>& inGraph,
-    std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult)
-{
-    std::unordered_map<int, int> oldClusterIdToSCCId;
-    std::unordered_map<int, std::vector<int>> sccIdToNewClusters;
-    std::unordered_map<int, int> oldClusterToNewCluster;
-    int newClusterNum =
-        FlattenSCC(clusterCoreTypes, sccResult, oldClusterIdToSCCId, sccIdToNewClusters, oldClusterToNewCluster);
+    // Step 1: GapMin baseline
+    std::vector<int> topoSeq = GetDFSTopoSeq(taskGraph);
+    GapMinSchedule(taskGraph, topoSeq);
+    double baselineTotalCost = CalcBaselineCost(taskGraph, n);
+    int baselineMakespan = taskGraph.makespan;
     APASS_LOG_INFO_F(
-        Elements::Operation, "Cluster num after flatten strongly connected components is %d.", newClusterNum);
-    RecordIDMap(oldClusterToNewCluster, clusterCoreTypes);
-    std::set<std::pair<int, int>> sccConnection;
-    for (size_t oldIdx = 0; oldIdx < inGraph.size(); oldIdx++) {
-        int currSCC = oldClusterIdToSCCId[oldIdx];
-        for (int prevIdx : inGraph[oldIdx]) {
-            int prevSCC = oldClusterIdToSCCId[prevIdx];
-            if (currSCC == prevSCC) {
-                continue;
-            }
-            sccConnection.insert({prevSCC, currSCC});
-        }
-    }
-    std::vector<std::set<int>> newInGraph(newClusterNum);
-    std::vector<std::set<int>> newOutGraph(newClusterNum);
-    for (auto pr : sccConnection) {
-        for (int prevNewCluster : sccIdToNewClusters[pr.first]) {
-            for (int currNewCluster : sccIdToNewClusters[pr.second]) {
-                newInGraph[currNewCluster].insert(prevNewCluster);
-                newOutGraph[prevNewCluster].insert(currNewCluster);
-            }
-        }
-    }
-    inGraph.swap(newInGraph);
-    outGraph.swap(newOutGraph);
-    for (size_t i = 0; i < clusterIds.size(); i++) {
-        clusterIds[i] = oldClusterToNewCluster[clusterIds[i]];
-    }
+        Elements::Operation, "GapMin baseline: makespan=%d, total_cost=%.4f.", baselineMakespan, baselineTotalCost);
+
+    // Step 2: in-process local-search refinement (deterministic, no external solver)
+    RunLocalSearch(taskGraph, baselineTotalCost);
 }
 
-// 获得有向图中所有强连通分量
-void StrongConnectionComponentFinder::Find(
-    std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult)
+// 根据节点数量，判断是否遍历所有拓扑序进行任务排布
+void CoreScheduler::Schedule(TaskGraph& taskGraph)
 {
-    sccResult.clear();
-    index_ = 0;
-    dfn_.clear();
-    dfn_.resize(inGraph.size(), 0);
-    low_.resize(inGraph.size());
-    instack_.clear();
-    instack_.resize(inGraph.size(), false);
-    visited_.clear();
-    stack_.clear();
-    APASS_LOG_INFO_F(Elements::Operation, "Start finding strongly connected components using TarJan Algorithm.");
-    for (int i = 0; i < static_cast<int>(inGraph.size()); i++) {
-        if (dfn_[i] == 0) {
-            TarJanAlg(i, outGraph, sccResult);
-        }
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "TarJan Algorithm finished.");
-}
-
-// 递归使用TarJan算法获得强连通分量
-void StrongConnectionComponentFinder::TarJanAlg(
-    int idx, std::vector<std::set<int>>& outGraph, std::vector<std::vector<int>>& sccResult)
-{
-    index_++;
-    dfn_[idx] = index_;
-    low_[idx] = index_;
-    stack_.push_back(idx);
-    instack_[idx] = true;
-    for (int nextIdx : outGraph[idx]) {
-        if (dfn_[nextIdx] == 0) {
-            TarJanAlg(nextIdx, outGraph, sccResult);
-            low_[idx] = std::min(low_[idx], low_[nextIdx]);
-        } else if (instack_[nextIdx]) {
-            low_[idx] = std::min(low_[idx], dfn_[nextIdx]);
-        }
-    }
-    if (dfn_[idx] == low_[idx]) {
-        sccResult.push_back({});
-        int currSCCidx = static_cast<int>(sccResult.size()) - 1;
-        int stackTop = 0;
-        do {
-            stackTop = stack_.back();
-            stack_.pop_back();
-            instack_[stackTop] = false;
-            sccResult[currSCCidx].push_back(stackTop);
-        } while (stackTop != idx);
-    }
-}
-
-// 获得taskNode的连接图
-void TaskSpliter::BuildInOutGraph(
-    std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph, std::vector<int>& clusterIds,
-    int clusterNum)
-{
-    inGraph.clear();
-    inGraph.resize(clusterNum);
-    outGraph.clear();
-    outGraph.resize(clusterNum);
-    int opNum = static_cast<int>(opList_.size());
-    for (int i = 0; i < opNum; i++) {
-        int currTaskIdx = clusterIds[i];
-        for (auto consumerOp : opList_[i]->ConsumerOps()) {
-            int nextOpIdx = opMagicToIdx_[consumerOp->GetOpMagic()];
-            int nextTaskIdx = clusterIds[nextOpIdx];
-            if (currTaskIdx == nextTaskIdx) {
-                continue;
-            }
-            outGraph[currTaskIdx].insert(nextTaskIdx);
-            inGraph[nextTaskIdx].insert(currTaskIdx);
-        }
-    }
-}
-
-// 建立TaskGraph
-TaskGraph TaskSpliter::BuildTaskGraph()
-{
-    TaskGraph s = TaskGraph();
-    for (int taskId = 0; taskId < static_cast<int>(taskIdToOps_.size()); taskId++) {
-        s.AddTask(std::to_string(taskId), taskCoreTypes_[taskId], 0);
-        for (auto opIdx : taskIdToOps_[taskId]) {
-            s.tasks[taskId].opList_.push_back(opList_[opIdx]);
-            s.tasks[taskId].latency += opList_[opIdx]->GetLatency();
-        }
-    }
-    for (int taskId = 0; taskId < static_cast<int>(outGraph_.size()); taskId++) {
-        for (auto nextTaskId : outGraph_[taskId]) {
-            s.AddDependency(taskId, nextTaskId);
-        }
-    }
-    return s;
-}
-
-// 判断op的ioperand为AIC类型且ooperand为AIV类型
-inline bool IsFromAICToAIV(Operation* op)
-{
-    const std::unordered_set<MemoryType> AICmem{
-        MemoryType::MEM_L0C, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B};
-    const std::unordered_set<MemoryType> AIVmem{MemoryType::MEM_UB};
-    for (auto iop : op->GetIOperands()) {
-        if (AICmem.count(iop->GetMemoryTypeToBe()) == 0) {
-            return false;
-        }
-    }
-    for (auto oop : op->GetOOperands()) {
-        if (AIVmem.count(oop->GetMemoryTypeToBe()) == 0) {
-            return false;
-        }
-    }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "op %s[%d] is from AIC to AIV.", op->GetOpcodeStr().c_str(), op->GetOpMagic());
-    return true;
-}
-
-// 判断op的ioperand为AIV类型且ooperand为AIC类型
-inline bool IsFromAIVToAIC(Operation* op)
-{
-    const std::unordered_set<MemoryType> AICmem{
-        MemoryType::MEM_L0C, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0B};
-    const std::unordered_set<MemoryType> AIVmem{MemoryType::MEM_UB};
-    for (auto iop : op->GetIOperands()) {
-        if (AIVmem.count(iop->GetMemoryTypeToBe()) == 0) {
-            return false;
-        }
-    }
-    for (auto oop : op->GetOOperands()) {
-        if (AICmem.count(oop->GetMemoryTypeToBe()) == 0) {
-            return false;
-        }
-    }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation, "op %s[%d] is from AIV to AIC.", op->GetOpcodeStr().c_str(), op->GetOpMagic());
-    return true;
-}
-
-// 反向DFS查找产出指定MemoryType tensor的前驱op
-void TaskSpliter::ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result, std::vector<bool>& visited)
-{
-    if (visited[opIdx]) {
-        return;
-    }
-    visited[opIdx] = true;
-    for (auto& oop : opList_[opIdx]->GetOOperands()) {
-        if (oop->GetMemoryTypeToBe() == targetMemType) {
-            result.push_back(opIdx);
-            return;
-        }
-    }
-    for (auto& iop : opList_[opIdx]->GetIOperands()) {
-        for (auto& producerOp : iop->GetProducers()) {
-            if (opMagicToIdx_.count(producerOp->GetOpMagic()) == 0) {
-                continue;
-            }
-            int producerIdx = opMagicToIdx_[producerOp->GetOpMagic()];
-            ReverseDFSFindByOutputMemType(producerIdx, targetMemType, result, visited);
-        }
-    }
-}
-
-// Union 同核操作
-void TaskSpliter::UnionSameCoreOps(DSUWithOrder& dsu)
-{
-    for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
-        // 判断后接 tensor 为 L1 且存在多个消费者时，不进行 union
-        bool skip = false;
-        if (opList_[idx]->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
-            opOutGraph_[idx].size() > 1) {
-            skip = true;
-            APASS_LOG_DEBUG_F(Elements::Operation, "Skip union op: %s[%d]",
-                opList_[idx]->GetOpcodeStr().c_str(), opList_[idx]->GetOpMagic());
-        }
-        for (int nextOpIdx : opOutGraph_[idx]) {
-            if (opCoreTypes_[idx] == opCoreTypes_[nextOpIdx] && (!skip ||
-                opList_[nextOpIdx]->GetOpcodeStr().find("L1_TO_L0") == std::string::npos)) {
-                dsu.Union(idx, nextOpIdx);
-            }
-        }
-    }
-}
-
-// Union 同层连接
-void TaskSpliter::UnionSameLayerConnections(DSUWithOrder& dsu)
-{
-    for (auto pr : sameLayerConnection_) {
-        if (opCoreTypes_[pr.first] == opCoreTypes_[pr.second]) {
-            dsu.Union(pr.first, pr.second);
-        }
-    }
-}
-
-// Union AIC->AIV 跨核操作
-void TaskSpliter::UnionCrossCoreAICToAIV(DSUWithOrder& dsu)
-{
-    for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
-        if (IsFromAICToAIV(opList_[idx])) {
-            for (int nextOpIdx : opOutGraph_[idx]) {
-                dsu.Union(nextOpIdx, *opOutGraph_[idx].begin());
-            }
-        }
-    }
-}
-
-// Union L0C 输入到 L1_COPY_IN
-void TaskSpliter::UnionL0CToL1CopyIn(DSUWithOrder& dsu)
-{
-    // 对输入tensor为L0C的非alloc op，反向DFS找L1_COPY_IN，未与L1_TO_L0 union的则union到当前L0C集合
-    for (size_t idx = 0; idx < opList_.size(); idx++) {
-        if (opList_[idx]->GetIOperands().size() == 0 ||
-            opList_[idx]->GetInputOperand(0)->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
-            continue;
-        }
-        std::vector<int> l1CopyInOps;
-        std::vector<bool> visited(opList_.size(), false);
-        ReverseDFSFindByOutputMemType(idx, MemoryType::MEM_L1, l1CopyInOps, visited);
-        for (auto& l1CopyInOpIdx : l1CopyInOps) {
-            bool alreadyUnionedWithL1ToL0 = false;
-            for (auto& consumer : opList_[l1CopyInOpIdx]->ConsumerOps()) {
-                if (consumer->GetOpcodeStr().find("L1_TO_L0") == std::string::npos) {
-                    continue;
-                }
-                if (opMagicToIdx_.count(consumer->GetOpMagic()) == 0) {
-                    continue;
-                }
-                int consumerIdx = opMagicToIdx_[consumer->GetOpMagic()];
-                if (dsu.Find(l1CopyInOpIdx) == dsu.Find(consumerIdx)) {
-                    alreadyUnionedWithL1ToL0 = true;
-                    break;
-                }
-            }
-            if (!alreadyUnionedWithL1ToL0 && opCoreTypes_[idx] == opCoreTypes_[l1CopyInOpIdx]) {
-                dsu.Union(l1CopyInOpIdx, idx);
-            }
-        }
-    }
-}
-
-// 根据op的CoreType构建连通集
-int TaskSpliter::BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes)
-{
-    DSUWithOrder dsu(opList_.size());
-    UnionSameCoreOps(dsu);
-    UnionSameLayerConnections(dsu);
-    UnionCrossCoreAICToAIV(dsu);
-    UnionL0CToL1CopyIn(dsu);
-    clusterIds.resize(opOutGraph_.size());
-    clusterCoreTypes.clear();
-    int currIdx = 0;
-    std::unordered_map<int, int> rootIdToClusterId;
-    for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
-        int rootId = dsu.Find(idx);
-        if (rootIdToClusterId.count(rootId) == 0) {
-            rootIdToClusterId[rootId] = currIdx;
-            clusterCoreTypes.push_back(opCoreTypes_[idx]);
-            currIdx++;
-        }
-        clusterIds[idx] = rootIdToClusterId[rootId];
-    }
-    return currIdx;
-}
-
-// 判断currTask与currOldTasks都无依赖关系
-inline bool NoDepDeteched(const std::vector<int>& currOldTasks, int currTaskId, DAGReachableJudger& judger)
-{
-    for (int oldTaskId : currOldTasks) {
-        if (judger.IsReachable(oldTaskId, currTaskId)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-// 根据taskNode在模拟泳道图中的位置和可达性，返回合并后的taskNode列表
-std::vector<std::vector<int>> TaskSpliter::FindMergeableTaskNodes()
-{
-    std::vector<std::vector<int>> newTaskToOldTasks;
-    std::unordered_map<TargetCoreType, std::vector<int>> targetTypeToTasks{
-        {TargetCoreType::AIC, {}}, {TargetCoreType::AIV0, {}}, {TargetCoreType::AIV1, {}}};
-    DAGReachableJudger reachableJudger;
-    reachableJudger.Build(inGraph_, outGraph_);
-    for (int i = 0; i < static_cast<int>(taskGraph_.tasks.size()); i++) {
-        targetTypeToTasks[taskGraph_.tasks[i].targetCoreType].push_back(i);
-    }
-    for (auto& tasksPair : targetTypeToTasks) {
-        std::sort(tasksPair.second.begin(), tasksPair.second.end(), [this](int i, int j) {
-            return taskGraph_.tasks[i].startTime < taskGraph_.tasks[j].startTime;
-        });
-        std::vector<int> oldTasks;
-        for (int currTaskId : tasksPair.second) {
-            if (oldTasks.empty() || NoDepDeteched(oldTasks, currTaskId, reachableJudger)) {
-                oldTasks.push_back(currTaskId);
-            } else {
-                newTaskToOldTasks.push_back(oldTasks);
-                oldTasks.clear();
-                oldTasks.push_back(currTaskId);
-            }
-        }
-        if (!oldTasks.empty()) {
-            newTaskToOldTasks.push_back(oldTasks);
-        }
-    }
-    return newTaskToOldTasks;
-}
-
-// 根据taskNode在模拟泳道图中的位置和可达性，创建合并后的taskGraph
-void TaskSpliter::MergeTask()
-{
-    std::vector<std::vector<int>> newTaskToOldTasks = FindMergeableTaskNodes();
-    std::vector<int> oldTaskToNewTask(taskGraph_.tasks.size());
-    TaskGraph s;
-    s.makespan = taskGraph_.makespan;
-    for (size_t newTaskIdx = 0; newTaskIdx < newTaskToOldTasks.size(); newTaskIdx++) {
-        int sampleOldTaskId = newTaskToOldTasks[newTaskIdx][0];
-        int sampleOldTaskIdEnd = newTaskToOldTasks[newTaskIdx].back();
-        int newTaskId = s.AddTask(std::to_string(newTaskIdx), taskGraph_.tasks[sampleOldTaskId].coreType, 0);
-        s.tasks[newTaskId].targetCoreType = taskGraph_.tasks[sampleOldTaskId].targetCoreType;
-        s.tasks[newTaskId].startTime = taskGraph_.tasks[sampleOldTaskId].startTime;
-        s.tasks[newTaskId].endTime = taskGraph_.tasks[sampleOldTaskIdEnd].endTime;
-        for (int oldTaskId : newTaskToOldTasks[newTaskIdx]) {
-            oldTaskToNewTask[oldTaskId] = newTaskIdx;
-            s.tasks[newTaskId].latency += taskGraph_.tasks[oldTaskId].latency;
-            s.tasks[newTaskId].opList_.insert(
-                s.tasks[newTaskId].opList_.end(), taskGraph_.tasks[oldTaskId].opList_.begin(),
-                taskGraph_.tasks[oldTaskId].opList_.end());
-        }
-    }
-    for (int oldTaskId = 0; oldTaskId < static_cast<int>(taskGraph_.tasks.size()); oldTaskId++) {
-        int currNewTaskId = oldTaskToNewTask[oldTaskId];
-        for (int nextOldTaskId : taskGraph_.tasks[oldTaskId].outTasks) {
-            s.AddDependency(currNewTaskId, oldTaskToNewTask[nextOldTaskId]);
-        }
-    }
-    taskGraph_ = s;
-}
-
-// 将属于同一个TargetCoreType的taskNode合并成一个taskNode
-void TaskSpliter::MergeTaskByTargetCoreType()
-{
-    std::unordered_map<TargetCoreType, std::vector<int>> targetTypeToTasks{
-        {TargetCoreType::AIC, {}}, {TargetCoreType::AIV0, {}}, {TargetCoreType::AIV1, {}}};
-    std::unordered_map<TargetCoreType, ScheduleCoreType> targetTypeToScheduleType{
-        {TargetCoreType::AIC, ScheduleCoreType::AIC},
-        {TargetCoreType::AIV0, ScheduleCoreType::AIV},
-        {TargetCoreType::AIV1, ScheduleCoreType::AIV}};
-    for (int i = 0; i < static_cast<int>(taskGraph_.tasks.size()); i++) {
-        targetTypeToTasks[taskGraph_.tasks[i].targetCoreType].push_back(i);
-    }
-    TaskGraph s;
-    int newTaskIdx = 0;
-    for (auto& tasksPair : targetTypeToTasks) {
-        if (tasksPair.second.size() == 0) {
-            continue;
-        }
-        std::sort(tasksPair.second.begin(), tasksPair.second.end(), [this](int i, int j) {
-            return taskGraph_.tasks[i].startTime < taskGraph_.tasks[j].startTime;
-        });
-        int newTaskId = s.AddTask(std::to_string(newTaskIdx), targetTypeToScheduleType[tasksPair.first], 0);
-        newTaskIdx++;
-        s.tasks[newTaskId].targetCoreType = tasksPair.first;
-        s.tasks[newTaskId].startTime = taskGraph_.tasks[tasksPair.second[0]].startTime;
-        s.tasks[newTaskId].endTime = taskGraph_.tasks[tasksPair.second.back()].endTime;
-        for (int oldTaskId : tasksPair.second) {
-            s.tasks[newTaskId].latency += taskGraph_.tasks[oldTaskId].latency;
-            s.tasks[newTaskId].opList_.insert(
-                s.tasks[newTaskId].opList_.end(), taskGraph_.tasks[oldTaskId].opList_.begin(),
-                taskGraph_.tasks[oldTaskId].opList_.end());
-        }
-    }
-    taskGraph_ = s;
-}
-
-// 根据划分结果标记op的AIVCore与internalSubgraphID
-void TaskSpliter::MarkInternalSubgraphID()
-{
-    std::unordered_map<TargetCoreType, AIVCore> targetMap{
-        {TargetCoreType::AIC, AIVCore::UNSPECIFIED},
-        {TargetCoreType::UNKNOWN, AIVCore::UNSPECIFIED},
-        {TargetCoreType::AIV0, AIVCore::AIV0},
-        {TargetCoreType::AIV1, AIVCore::AIV1}};
-    std::unordered_map<TargetCoreType, int> subGraphIdMap{
-        {TargetCoreType::AIC, NEGATIVE_ONE},
-        {TargetCoreType::AIV0, NEGATIVE_ONE},
-        {TargetCoreType::AIV1, NEGATIVE_ONE},
-        {TargetCoreType::UNKNOWN, NEGATIVE_ONE}};
-    int id = 0;
-    for (auto& task : taskGraph_.tasks) {
-        if (task.targetCoreType == TargetCoreType::UNKNOWN) {
-            APASS_LOG_ERROR_F(Elements::Operation, "task %d coreType is unknow", task.idx);
-        }
-        AIVCore targetType = targetMap[task.targetCoreType];
-        if (subGraphIdMap[task.targetCoreType] == NEGATIVE_ONE) {
-            subGraphIdMap[task.targetCoreType] = id++;
-        }
-        for (auto opPtr : task.opList_) {
-            opPtr->SetAIVCore(targetType);
-        }
-    }
-    for (auto& task : taskGraph_.tasks) {
-        auto subGraphId = subGraphIdMap[task.targetCoreType];
-        for (auto opPtr : task.opList_) {
-            opPtr->UpdateInternalSubgraphID(subGraphId);
-        }
-    }
-}
-
-// 将多个taskNode的opList在保持内部顺序的前提下合并成符合拓扑序的一个opList
-std::vector<Operation*> TaskSpliter::GetMergedOperations()
-{
-    std::priority_queue<
-        std::pair<int, Operation*>, std::vector<std::pair<int, Operation*>>, std::greater<std::pair<int, Operation*>>>
-        pQueue;
-    std::unordered_map<Operation*, int> opPriority;
-    std::unordered_map<Operation*, int> inLinkNum;
-    std::vector<Operation*> topoSeq;
-    for (auto& task : taskGraph_.tasks) {
-        for (size_t opIdx = 0; opIdx < task.opList_.size(); opIdx++) {
-            Operation* opPtr = task.opList_[opIdx];
-            opPriority[opPtr] = opIdx;
-            inLinkNum[opPtr] = opPtr->ProducerOps().size();
-            if (inLinkNum[opPtr] == 0) {
-                pQueue.push({opIdx, opPtr});
-            }
-        }
-    }
-    while (pQueue.size() > 0) {
-        auto ele = pQueue.top();
-        pQueue.pop();
-        topoSeq.push_back(ele.second);
-        for (auto& nextOpPtr : ele.second->ConsumerOps()) {
-            inLinkNum[nextOpPtr]--;
-            if (inLinkNum[nextOpPtr] == 0) {
-                pQueue.push({opPriority[nextOpPtr], nextOpPtr});
-            }
-        }
-    }
-    return topoSeq;
-}
-
-DSUWithOrder::DSUWithOrder(int num)
-{
-    parent.resize(num);
-    for (int i = 0; i < num; i++) {
-        parent[i] = i;
-    }
-}
-
-int DSUWithOrder::Find(int i)
-{
-    if (parent[i] == i) {
-        return i;
-    }
-    parent[i] = Find(parent[i]);
-    return parent[i];
-}
-
-void DSUWithOrder::Union(int i, int j)
-{
-    int rootI = Find(i);
-    int rootJ = Find(j);
-    if (rootI == rootJ) {
-        return;
-    }
-    if (rootI < rootJ) {
-        parent[rootJ] = rootI;
-    } else {
-        parent[rootI] = rootJ;
-    }
-}
-
-// 根据连接图计算传递闭包
-void DAGReachableJudger::Build(const std::vector<std::set<int>>& inGraph, const std::vector<std::set<int>>& outGraph)
-{
-    int nodeNum = static_cast<int>(inGraph.size());
-    APASS_LOG_DEBUG_F(Elements::Operation, "Build DAG reachable judger with node num %d.", nodeNum);
-    const int bitPerBlock = 32;
-    int blockNum = (nodeNum + bitPerBlock - 1) / bitPerBlock;
-    reachableSet.resize(nodeNum);
-    for (int i = 0; i < nodeNum; i++) {
-        reachableSet[i].resize(blockNum, 0);
-    }
-    std::vector<bool> finishedTasks(inGraph.size(), false);
-    std::vector<int> taskStack;
-    for (size_t i = 0; i < inGraph.size(); i++) {
-        taskStack.push_back(i);
-    }
-    while (taskStack.size() > 0) {
-        int taskId = taskStack.back();
-        taskStack.pop_back();
-        if (finishedTasks[taskId]) {
-            continue;
-        }
-        std::vector<int> notReadyNextTaskIds;
-        for (int nextTaskId : outGraph[taskId]) {
-            if (!finishedTasks[nextTaskId]) {
-                notReadyNextTaskIds.push_back(nextTaskId);
-            }
-        }
-        if (notReadyNextTaskIds.size() > 0) {
-            taskStack.push_back(taskId);
-            taskStack.insert(taskStack.end(), notReadyNextTaskIds.begin(), notReadyNextTaskIds.end());
-            continue;
-        }
-        for (int nextTaskId : outGraph[taskId]) {
-            SetReachable(taskId, nextTaskId);
-            MergeReachable(taskId, nextTaskId);
-        }
-        finishedTasks[taskId] = true;
-    }
-}
-
-// 设定从src到dst可达
-void DAGReachableJudger::SetReachable(const int src, const int dst)
-{
-    const int bitPerBlock = 32;
-    size_t index = dst / bitPerBlock;
-    size_t offset = dst % bitPerBlock;
-    if (reachableSet[src].size() < index + 1) {
-        reachableSet[src].resize(index + 1, 0);
-    }
-    reachableSet[src][index] |= (1U << offset);
-}
-
-// 设定从src可以到达dst可达的所有节点
-void DAGReachableJudger::MergeReachable(int src, int dst)
-{
-    if (reachableSet[src].size() < reachableSet[dst].size()) {
-        reachableSet[src].resize(reachableSet[dst].size(), 0);
-    }
-    for (size_t i = 0; i < reachableSet[dst].size(); i++) {
-        reachableSet[src][i] |= reachableSet[dst][i];
-    }
-}
-
-// 判断有向无环图中是否存在从src到dst的路径
-bool DAGReachableJudger::IsReachable(int src, int dst)
-{
-    const int bitPerBlock = 32;
-    size_t index = dst / bitPerBlock;
-    size_t offset = dst % bitPerBlock;
-    return (reachableSet[src][index] & (1U << offset)) != 0;
+    APASS_LOG_INFO_F(Elements::Operation, "Start schedule.");
+    OptimalScheduleWithSearch(taskGraph);
 }
 
 } // namespace npu::tile_fwk
