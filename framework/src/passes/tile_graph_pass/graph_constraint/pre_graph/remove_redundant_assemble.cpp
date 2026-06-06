@@ -327,7 +327,8 @@ Shape GetStaticShapeForDynAxes(const Shape& rawShape)
 void UpdateCopyInAttrAfterRemoveView(
     Operation& reshapeOp, const Shape& newRawShape,
     const std::vector<SymbolicScalar>& newDynOffset,
-    const std::vector<SymbolicScalar>& oriReshapeDynValidShape)
+    const std::vector<SymbolicScalar>& oriReshapeDynValidShape,
+    const SymbolicScalar& validShapeExpr)
 {
     for (const auto& copyIn : reshapeOp.GetOOperands().front()->GetConsumers()) {
         auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
@@ -349,10 +350,15 @@ void UpdateCopyInAttrAfterRemoveView(
         }
         copyAttr->SetFromOffset(newOffset);
         copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
-        auto copyDynValidShape = copyIn->GetOOperands().front()->GetDynValidShape();
+        auto copyOut = copyIn->GetOOperands().front();
+        auto copyDynValidShape = copyOut->GetDynValidShape();
         if (copyDynValidShape.empty()) {
             copyDynValidShape = oriReshapeDynValidShape;
         }
+        for (auto& validShape : copyDynValidShape) {
+            validShape = (validShape * validShapeExpr).Simplify();
+        }
+        copyOut->UpdateDynValidShape(copyDynValidShape);
         copyAttr->SetToDynValidShape(OpImmediate::Specified(copyDynValidShape));
     }
 }
@@ -439,6 +445,25 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
         if (oriReshapeDynValidShape.empty()) {
             oriReshapeDynValidShape = CommonUtils::CreateConstIntVector(reshapeOp.GetOOperands().front()->shape);
         }
+        auto viewInputDynValidShape = viewInput->GetDynValidShape();
+        if (viewInputDynValidShape.empty()) {
+            viewInputDynValidShape = CommonUtils::CreateConstIntVector(viewInput->shape);
+        }
+        IRBuilder builder;
+        SymbolicScalar validShapeExpr = builder.CreateConstInt(1);
+        constexpr size_t dim4D = 4;
+        if (viewInputDynValidShape.size() == dim4D && offset.size() == dim4D) {
+            auto zero = builder.CreateConstInt(0);
+            auto one = builder.CreateConstInt(1);
+            validShapeExpr = (viewInputDynValidShape[1] - offset[1]).Max(zero);
+            validShapeExpr = validShapeExpr.Min(one).Simplify();
+        } else if (viewInputDynValidShape.size() == dim4D) {
+            APASS_LOG_ERROR_F(
+                Elements::Tensor,
+                "Cannot update reshape dyn valid shape as viewInputDynValidShape size [%zu] is not equal to offset "
+                "size [%zu].",
+                viewInputDynValidShape.size(), offset.size());
+        }
         std::vector<SymbolicScalar> newDynOffset;
         // Offset remapping must follow the physical reshape layout rather than the valid shape.
         auto dynViewPhysicalShape = viewInput->tensor->GetDynRawShape().empty() ?
@@ -450,7 +475,8 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function& function) cons
             producerOp->GetOpMagic(), reshapeOp.GetOOperands().front()->GetMagic(), IntVecToStr(newRawShape).c_str(),
             IntVecToStr(newDynOffset).c_str());
         Shape staticNewRawShape = GetStaticShapeForDynAxes(newRawShape);
-        UpdateCopyInAttrAfterRemoveView(reshapeOp, staticNewRawShape, newDynOffset, oriReshapeDynValidShape);
+        UpdateCopyInAttrAfterRemoveView(
+            reshapeOp, staticNewRawShape, newDynOffset, oriReshapeDynValidShape, validShapeExpr);
         UpdateReshapeShape(reshapeOp, reshapeOp.GetOOperands().front(), staticNewRawShape, newDynRawShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
