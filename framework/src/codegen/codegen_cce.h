@@ -42,7 +42,6 @@ protected:
     CodeGenCtx ctx;
 
 private:
-    static std::string GetEmitPath(const std::string& name);
     void PrepareOutputPath();
     void PrepareDefaultOutputPath();
 };

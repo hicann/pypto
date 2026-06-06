@@ -87,7 +87,7 @@ const std::string KEY_ENABLE_VF_UNROLL = "enable_vf_unroll";
 
 /* CodeGen KEYs */
 const std::string KEY_PARALLEL_COMPILE = "parallel_compile";
-const std::string KEY_FIXED_OUTPUT_PATH = "fixed_output_path"; // if true, dump cce to output directory
+const std::string KEY_FIXED_OUTPUT_PATH = "fixed_output_path"; // if true, dump cce to fixed directory (respects ASCEND_WORK_PATH/pypto)
 const std::string KEY_FORCE_OVERWRITE = "force_overwrite";     // if true, don't dump cce when file exists
 const std::string KEY_CODEGEN_SUPPORT_TILE_TENSOR = "codegen_support_tile_tensor"; // if true, gen code with layout mode
 const std::string KEY_ENABLE_PMU_TRACE = "enable_pmu_trace";                       // if true, enable pmu trace
@@ -406,6 +406,10 @@ inline const std::string& LogTopFolder() { return ConfigManager::Instance().LogT
 inline const std::string& LogTensorGraphFolder() { return ConfigManager::Instance().LogTensorGraphFolder(); }
 
 inline const std::string& LogFile() { return ConfigManager::Instance().LogFile(); }
+
+const std::string& OutputBaseDir();
+
+std::string GetEmitPath(const std::string& name);
 
 inline Status SetPassStrategy(const std::string s)
 {

@@ -27,6 +27,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
+#include "tilefwk/comm_group_recorder.h"
 #include <unistd.h>
 namespace npu::tile_fwk {
 
@@ -166,15 +167,7 @@ static std::string CreateLogTopFolder()
     constexpr int NUM_SIX = 6;
     timestamp << "_" << std::setw(NUM_SIX) << std::setfill('0') << us;
 
-    std::string folderPath = "output";
-    const char* envDir = std::getenv("TILE_FWK_OUTPUT_DIR");
-    if (envDir != nullptr) {
-        std::string envStr(envDir);
-        if (!envStr.empty()) {
-            FE_LOGD("Get env TILE_FWK_OUTPUT_DIR[%s] successfully.", envStr.c_str());
-            folderPath = std::move(envStr);
-        }
-    }
+    std::string folderPath = config::OutputBaseDir();
     bool ret = CreateDir(folderPath);
     CHECK(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
@@ -433,6 +426,53 @@ void SetPrintOptions(int edgeItems, int precision, int threshold, int linewidth)
 }
 
 PrintOptions& GetPrintOptions() { return g_config.printOption; }
+
+const std::string& OutputBaseDir()
+{
+    static std::string baseDir;
+    static std::once_flag flag;
+    std::call_once(flag, []() {
+        const char* tileFwkDir = std::getenv("TILE_FWK_OUTPUT_DIR");
+        if (tileFwkDir != nullptr && strlen(tileFwkDir) > 0) {
+            FE_LOGD("Get env TILE_FWK_OUTPUT_DIR[%s] successfully.", tileFwkDir);
+            baseDir = tileFwkDir;
+        } else {
+            const char* ascendWorkPath = std::getenv("ASCEND_WORK_PATH");
+            if (ascendWorkPath != nullptr && strlen(ascendWorkPath) > 0) {
+                baseDir = std::string(ascendWorkPath) + "/pypto";
+            } else {
+                baseDir = "output";
+            }
+        }
+    });
+    return baseDir;
+}
+
+std::string GetEmitPath(const std::string& name)
+{
+    std::string dirPath;
+    if (ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
+        std::string rootDir;
+        const char* ascendWorkPath = std::getenv("ASCEND_WORK_PATH");
+        if (ascendWorkPath != nullptr && strlen(ascendWorkPath) > 0) {
+            rootDir = std::string(ascendWorkPath) + "/pypto";
+        }
+        std::vector<std::string> groupNames = Distributed::CommGroupRecorder::GetInstance().Output();
+        if (groupNames.size() == 0) {
+            dirPath = rootDir.empty() ? name : (rootDir + "/" + name);
+        } else {
+            const char* rankId = std::getenv("TILE_FWK_DEVICE_ID");
+            if (rootDir.empty()) {
+                dirPath = std::string(rankId) + "/" + name;
+            } else {
+                dirPath = rootDir + "/" + std::string(rankId) + "/" + name;
+            }
+        }
+    } else {
+        dirPath = LogTopFolder() + "/" + name;
+    }
+    return dirPath;
+}
 
 } // namespace config
 } // namespace npu::tile_fwk

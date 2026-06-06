@@ -489,7 +489,7 @@ static void GenerateExpression(
 {
     const auto& primaryExprs = exprTable->GetPrimaryExpressionSet();
     size_t totalExprs = primaryExprs.size();
-    std::string outputDir = GetEmitPath("kernel_aicpu");
+    std::string outputDir = config::GetEmitPath("kernel_aicpu");
     ExprBatchGenerator generator(outputDir, devRootKey, totalExprs);
     generator.GenerateBatchFile(
         exprTable, controlFlowOss, exprHeaderOss, expName, primaryExprs, exprSrcFiles, indent, devRootKey);
@@ -540,7 +540,7 @@ static void BuildControlFlow(
                        << "#include \"tilefwk/aicpu_runtime.h\"\n"
                        << "#include \"tilefwk/aicpu_distributed.h\"\n"
                        << "#include \"control_flow_expr_table.h\"\n";
-        ExprBatchGenerator generator(GetEmitPath("kernel_aicpu"), 0, 0);
+        ExprBatchGenerator generator(config::GetEmitPath("kernel_aicpu"), 0, 0);
         generator.HeaderFileBegin(exprHeaderOss);
         expressionOss << "\n/* Symbol table list */\n" << linker.GetSymbolTable()->BuildSymbolList();
         const std::vector<std::string>& inputNameList =
@@ -1220,7 +1220,7 @@ static void RunCodeGenStage(
         std::function<void(void)> task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
             Function* devTile = attr->rootTileDict[devRoot];
             bool isDynamicAligned = devTile->paramConfigs_.dynamicAlignedOps;
-            npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"), false, isDynamicAligned);
+            npu::tile_fwk::CodeGenCtx codeGenCtx("", config::GetEmitPath("kernel_aicore"), false, isDynamicAligned);
             npu::tile_fwk::CodeGen codeGen(codeGenCtx);
             COMPILER_LOGI(
                 "Function :[%s] starts executing codegen and binary compilation", devTile->GetMagicName().c_str());
@@ -1276,7 +1276,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
         buildControlFlowStepCount + controlFlowCompileStepCount +
         (hasAicoreKernelLink ? aicoreKernelStepCount : 0) + encodeStepCount);
     uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
-    std::string aicpuDirPath = GetEmitPath("kernel_aicpu");
+    std::string aicpuDirPath = config::GetEmitPath("kernel_aicpu");
     npu::tile_fwk::CreateMultiLevelDir(aicpuDirPath);
     const std::string expName = "expression_" + std::to_string(tilingKey) + ".h";
     std::vector<std::string> exprSrcFiles;
@@ -1319,7 +1319,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
 
 MachineTask* GenCode(MachineTask* task, FunctionCache& cache)
 {
-    npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"));
+    npu::tile_fwk::CodeGenCtx codeGenCtx("", config::GetEmitPath("kernel_aicore"));
     npu::tile_fwk::CreateMultiLevelDir(codeGenCtx.cceDir);
     npu::tile_fwk::CodeGen codeGen(codeGenCtx);
     auto function = task->GetFunction();

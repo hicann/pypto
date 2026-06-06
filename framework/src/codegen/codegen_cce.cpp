@@ -21,17 +21,6 @@
 #include "interface/utils/file_utils.h"
 
 namespace npu::tile_fwk {
-std::string CodeGenCCE::GetEmitPath(const std::string& name)
-{
-    std::string dirPath;
-    if (ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
-        dirPath = name;
-    } else {
-        dirPath = config::LogTopFolder() + "/" + name;
-    }
-    return dirPath;
-}
-
 void CodeGenCCE::PrepareOutputPath()
 {
     if (ctx.IsCCEPathEmpty() || !IsPathExist(ctx.cceDir)) {
@@ -42,7 +31,7 @@ void CodeGenCCE::PrepareOutputPath()
 void CodeGenCCE::PrepareDefaultOutputPath()
 {
     if (ctx.IsCCEPathEmpty()) {
-        ctx.cceDir = GetEmitPath("kernel_aicore");
+        ctx.cceDir = config::GetEmitPath("kernel_aicore");
     };
     CreateMultiLevelDir(ctx.cceDir);
 }

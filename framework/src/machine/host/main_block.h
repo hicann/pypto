@@ -17,28 +17,10 @@
 
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
-#include "../include/tilefwk/comm_group_recorder.h"
 
 namespace npu::tile_fwk {
 constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
 constexpr const size_t MAX_RUNTIME_AND_NESTING_DEPTH = 7000;
-
-inline std::string GetEmitPath(const std::string& name)
-{
-    std::string dirPath;
-    if (npu::tile_fwk::ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
-        std::vector<std::string> groupNames = npu::tile_fwk::Distributed::CommGroupRecorder::GetInstance().Output();
-        if (groupNames.size() == 0) {
-            dirPath = name;
-        } else {
-            const char* rankId = std::getenv("TILE_FWK_DEVICE_ID");
-            dirPath = std::string(rankId) + "/" + name;
-        }
-    } else {
-        dirPath = config::LogTopFolder() + "/" + name;
-    }
-    return dirPath;
-}
 
 class MainBlockCondBulider {
 public:

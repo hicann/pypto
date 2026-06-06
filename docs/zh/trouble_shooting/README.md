@@ -52,7 +52,7 @@
 | `ASCEND_GLOBAL_EVENT_ENABLE` | 控制全局事件日志开关（用于事件类问题排查）。 | `export ASCEND_GLOBAL_EVENT_ENABLE=1` |
 | `ASCEND_HOST_LOG_FILE_NUM` | 控制单进程日志文件保留数量（超出后滚动删除最早日志）。 | `export ASCEND_HOST_LOG_FILE_NUM=1000` |
 | `ASCEND_PROCESS_LOG_PATH` | 指定进程日志落盘目录（不存在时会自动创建）。 | `export ASCEND_PROCESS_LOG_PATH=/tmp/ascend_plog` |
-| `ASCEND_WORK_PATH` | 指定 CANN 运行工作目录（用于相关运行产物/中间文件）。 | `export ASCEND_WORK_PATH=/tmp/ascend_work` |
+| `ASCEND_WORK_PATH` | 指定 CANN 运行工作目录，PyPTO 编译产物（output 目录、kernel_aicore/kernel_aicpu 等）统一落盘至 `$ASCEND_WORK_PATH/pypto`。 | `export ASCEND_WORK_PATH=/tmp/ascend_work` |
 
 组合示例（调试时常用）：
 
