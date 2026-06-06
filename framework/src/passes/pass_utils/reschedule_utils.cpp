@@ -163,7 +163,8 @@ unsigned long RescheduleUtils::ComputeOperationHash(const Operation* op)
     }
 
     switch (op->GetOpcode()) {
-        case Opcode::OP_CONV:
+        case Opcode::OP_CONV2D:
+        case Opcode::OP_CONV3D:
         case Opcode::OP_CONV_ADD:
             GetConvOpAttrStr(ss, op);
             break;

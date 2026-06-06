@@ -33,7 +33,8 @@ namespace npu::tile_fwk {
 void OpcodeManager::RegisterInfo(
     Opcode opcode, OpCoreType coreType, std::string str, std::vector<MemoryType> inputsMemType,
     std::vector<MemoryType> outputsMemType, const TileOpCfg tileOpCfg, OpCalcType calcType,
-    const std::vector<std::string>& attrs, VerifyOperationEntry verifyOperationEntry)
+    const std::vector<std::string>& attrs, VerifyOperationEntry verifyOperationEntry,
+    std::unordered_map<std::string, std::vector<std::vector<TileOpFormat>>> supportOpFormatList)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, opcode < Opcode::OP_UNKNOWN)
         << "opcode: " << static_cast<int64_t>(opcode) << " is unknown";
@@ -44,7 +45,7 @@ void OpcodeManager::RegisterInfo(
     strToEnum_.emplace(str, opcode);
     opcodeInfos_[static_cast<int>(opcode)] =
         OpcodeInfo{opcode,    coreType, std::move(str), std::move(inputsMemType), std::move(outputsMemType),
-                   tileOpCfg, calcType, attrs,          verifyOperationEntry};
+                   tileOpCfg, calcType, attrs,          verifyOperationEntry,     std::move(supportOpFormatList)};
 }
 
 void OpcodeManager::RegisterVectorBinary()
@@ -551,6 +552,9 @@ void OpcodeManager::RegisterVectorSort()
         Opcode::OP_TOPK_EXTRACT, OpCoreType::AIV, "TOPK_EXTRACT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TopKExtract", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "is_index", OP_ATTR_PREFIX + "k"});
+    RegisterInfo(
+        Opcode::OP_FAKE_TRANS, OpCoreType::ANY, "FAKE_TRANS", {}, {}, {"FAKE_TRANS", PIPE_MTE3, PIPE_MTE3, CoreType::AIV},
+        OpCalcType::MOVE_OUT, {});
 }
 
 void OpcodeManager::RegisterVectorReduction()
@@ -989,8 +993,15 @@ void OpcodeManager::RegisterCube()
         {MemoryType::MEM_L0C}, {"TileOp::Tmad", PIPE_M, PIPE_M, CoreType::AIC}, OpCalcType::MATMUL);
 
     RegisterInfo(
-        Opcode::OP_CONV, OpCoreType::AIC, "CONV", {}, {}, {"CUBE_CONV", PIPE_M, PIPE_M, CoreType::AIC},
-        OpCalcType::CONV, convAttrStrList);
+        Opcode::OP_CONV2D, OpCoreType::AIC, "CONV2D", {}, {}, {"CUBE_CONV2D", PIPE_M, PIPE_M, CoreType::AIC},
+        OpCalcType::CONV, convAttrStrList, nullptr,
+        {{"DAV_2201", {{TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_FRACTAL_Z, TileOpFormat::TILEOP_ND},
+                    {TileOpFormat::TILEOP_NC1HWC0}}}});
+    RegisterInfo(
+        Opcode::OP_CONV3D, OpCoreType::AIC, "CONV3D", {}, {}, {"CUBE_CONV3D", PIPE_M, PIPE_M, CoreType::AIC},
+        OpCalcType::CONV, convAttrStrList, nullptr,
+        {{"DAV_2201", {{TileOpFormat::TILEOP_NDC1HWC0, TileOpFormat::TILEOP_FRACTAL_Z_3D, TileOpFormat::TILEOP_ND},
+                    {TileOpFormat::TILEOP_NDC1HWC0}}}});
     RegisterInfo(
         Opcode::OP_CONV_ADD, OpCoreType::AIC, "CONV_ADD", {}, {}, {"CUBE_CONV_ADD", PIPE_M, PIPE_M, CoreType::AIC},
         OpCalcType::CONV, convAttrStrList);

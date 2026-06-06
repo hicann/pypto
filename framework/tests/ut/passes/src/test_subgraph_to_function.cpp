@@ -687,7 +687,7 @@ TEST_F(SubgraphToFunctionTest, EliminateRedundantEdges)
     // 定义操作和子图分配 - 创建两条路径到MAX_SG3
     std::vector<Opcode> opCodes{
         Opcode::OP_ADD,    // 子图0
-        Opcode::OP_CONV,   // 子图1
+        Opcode::OP_CONV2D, // 子图1
         Opcode::OP_ABS,    // 子图2
         Opcode::OP_ADD,    // 子图3
         Opcode::OP_MAXIMUM // 子图4

@@ -202,8 +202,10 @@ enum class Opcode {
     OP_AT_MUL_B,
     OP_AT_MUL_BT,
 
-    OP_CONV,
+    OP_CONV2D,
+    OP_CONV3D,
     OP_CONV_ADD,
+    OP_FAKE_TRANS,
     OP_CUBE_CONV_D2S,
     OP_CUBE_CONCAT_C,
     OP_L1_TO_L0A,
@@ -407,7 +409,8 @@ public:
     void RegisterInfo(
         Opcode opcode, OpCoreType coreType, std::string str, std::vector<MemoryType> inputsMemType,
         std::vector<MemoryType> outputsMemType, const TileOpCfg tileOpCfg, OpCalcType calcType,
-        const std::vector<std::string>& attrs = {}, VerifyOperationEntry verifyOperationEntry = nullptr);
+        const std::vector<std::string>& attrs = {}, VerifyOperationEntry verifyOperationEntry = nullptr,
+        std::unordered_map<std::string, std::vector<std::vector<TileOpFormat>>> supportOpFormatList = {});
     void RegisterVectorBinary();
     void RegisterVectorUnary();
     void RegisterVectorSort();
@@ -575,6 +578,7 @@ private:
         OpCalcType calcType;
         std::vector<std::string> attrs;
         VerifyOperationEntry verifyOperationEntry;
+        std::unordered_map<std::string, std::vector<std::vector<TileOpFormat>>> supportOpFormatList;
     };
 
 private:

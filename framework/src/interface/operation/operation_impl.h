@@ -193,11 +193,17 @@ constexpr const int NCDHW_C_IDX = 1;
 constexpr const int NCDHW_D_IDX = 2;
 constexpr const int NCDHW_H_IDX = 3;
 constexpr const int NCDHW_W_IDX = 4;
-constexpr const int NC1HWC0_N_IDX = 1;
+constexpr const int NC1HWC0_N_IDX = 0;
 constexpr const int NC1HWC0_C1_IDX = 1;
 constexpr const int NC1HWC0_H_IDX = 2;
 constexpr const int NC1HWC0_W_IDX = 3;
 constexpr const int NC1HWC0_C0_IDX = 4;
+constexpr const int NDC1HWC0_N_IDX = 0;
+constexpr const int NDC1HWC0_D_IDX = 1;
+constexpr const int NDC1HWC0_C1_IDX = 2;
+constexpr const int NDC1HWC0_H_IDX = 3;
+constexpr const int NDC1HWC0_W_IDX = 4;
+constexpr const int NDC1HWC0_C0_IDX = 5;
 constexpr const int FRACTALZ_CO1_IDX = 1;
 constexpr const int INPUT_FMAP_IDX = 0;
 constexpr const int INPUT_WEIGHT_IDX = 1;
@@ -221,7 +227,6 @@ const std::string OP_ATTR_PREFIX = "op_attr_";
 const std::string CONV_PADDINGS_ATTR = OP_ATTR_PREFIX + "paddings";
 const std::string CONV_DILATIONS_ATTR = OP_ATTR_PREFIX + "dilations";
 const std::string CONV_STRIDES_ATTR = OP_ATTR_PREFIX + "strides";
-const std::string CONV_GROUPS_ATTR = OP_ATTR_PREFIX + "groups";
 const std::string CONV_ORI_FMAP_SHAPE_ATTR = OP_ATTR_PREFIX + "ori_fmap_shape";
 const std::string CONV_ORI_WEIGHT_SHAPE_ATTR = OP_ATTR_PREFIX + "ori_weight_shape";
 const std::string CONV_ORI_RES_SHAPE_ATTR = OP_ATTR_PREFIX + "ori_res_shape";
@@ -372,5 +377,12 @@ void ConstructTileGraph(
     const LogicalTensorPtr& cTensorPtr, const Operation& op);
 
 } // namespace Conv
+
+namespace FakeTrans {
+
+void ConstructTileGraph(
+    Function& function, const std::vector<LogicalTensorPtr>& operandVec, const LogicalTensorPtr& cTensorPtr);
+
+} // namespace FakeTrans
 
 } // namespace npu::tile_fwk

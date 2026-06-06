@@ -1650,8 +1650,13 @@ void ExpandOperationInto(
             Matrix::ConstructTileGraph(function, tileShape, iOperand, oOperand[0], op);
             break;
         }
-        case Opcode::OP_CONV: {
+        case Opcode::OP_CONV2D:
+        case Opcode::OP_CONV3D: {
             Conv::ConstructTileGraph(function, tileShape, iOperand, oOperand[0], op);
+            break;
+        }
+        case Opcode::OP_FAKE_TRANS: {
+            FakeTrans::ConstructTileGraph(function, iOperand, oOperand[0]);
             break;
         }
         case Opcode::OP_TOPK_SORT: {

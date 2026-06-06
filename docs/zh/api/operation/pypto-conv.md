@@ -3,8 +3,8 @@
 ## 产品支持情况
 
 - Ascend 950PR/Ascend 950DT：支持
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -25,8 +25,8 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
-| input_conv       | 输入      | 输入特征图 Tensor。<br>不支持空 Tensor。<br>支持维度：3D（1D conv）、4D（2D conv）、5D（3D conv）。<br>支持格式：NCL、NCHW、NCDHW。<br>支持数据类型：DT_FP16、DT_BF16、DT_FP32。<br>shape 约束：各维度取值范围 [1, 1000000]。 input_conv：cin = weight：cin * groups|
-| weight            | 输入      | 卷积核 Tensor。<br>维度必须与 input_conv 一致（3D/4D/5D）。<br>数据类型必须与 input_conv 一致。<br>shape 约束：各维度取值范围 [1, 1000000]。 |
+| input_conv       | 输入      | 输入特征图 Tensor。<br>不支持空 Tensor。<br>支持维度：3D（1D conv）、4D（2D conv）、5D（3D conv）。<br>支持格式：NCL、NCHW、NCDHW。<br>支持数据类型：DT_FP16、DT_BF16、DT_FP32。<br>shape 约束：各维度取值范围 [1, 1000000]。 input_conv：cin = weight：cin * groups。 |
+| weight            | 输入      | 卷积核 Tensor。<br>维度必须与 input_conv 一致（3D/4D/5D）。<br>数据类型必须与 input_conv 一致。<br>shape 约束：各维度取值范围 [1, 1000000]。（注意：对于Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品，当 groups > 1 时，weight 的 N 轴需为 C0 的整数倍。） |
 | out_dtype         | 输入      | 输出 Tensor 数据类型。<br>支持：DT_FP16、DT_BF16、DT_FP32。<br>必须与 input_conv 一致；fixpipe 量化场景可单独指定。 |
 | strides           | 输入      | 卷积步长，单向参数。<br>- 1D（1D conv）<br>- 2D（2D conv）<br>- 3D（3D conv）<br>取值范围：[1, 63]。 |
 | paddings          | 输入      | 卷积填充，双向参数。<br>- 2D（1D conv）<br>- 4D（2D conv）<br>- 6D（3D conv）<br>取值范围：[0, 255]，且每维填充值 < 对应卷积核大小。 |
@@ -34,7 +34,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | groups            | 输入      | 分组卷积组数，默认 1。<br>取值范围：[1, 65535]。<br>Cin、Cout 必须可被 groups 整除。 |
 | transposed        | 输入      | 是否为转置卷积（反卷积），默认 False。<br>当前暂不支持 True。 |
 | output_paddings   | 输入      | 转置卷积输出端填充，仅 transposed=True 时使用。<br>当前暂不支持。 |
-| extend_params     | 输入      | 扩展参数字典，支持 bias、scale、relu、scale_tensor：<br>- bias_tensor：可选的偏置张量，形状为 (C_out,)，仅支持 ND 格式，bias的数据类型必须与 input_conv 一致。<br>- scale：浮点型，per-tensor 缩放因子。<br>- scale_tensor：uint64 类型 per-channel 缩放 Tensor，shape [1, Cout]，仅 ND 格式。<br>- relu_type：激活类型，支持 RELU/NO_RELU 等。 |
+| extend_params     | 输入      | 扩展参数字典，支持 bias、scale、relu、scale_tensor：<br>- bias_tensor：可选的偏置张量，形状为 (C_out,)，仅支持 ND 格式，bias 的数据类型必须与 input_conv 一致(注意：对于Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品，若 input_conv 的数据类型为 DT_BF16，则 bias 的数据类型应为 DT_FP32)。<br>- scale：浮点型，per-tensor 缩放因子。<br>- scale_tensor：uint64 类型 per-channel 缩放 Tensor，shape [1, Cout]，仅 ND 格式。<br>- relu_type：激活类型，支持 RELU/NO_RELU 等。 |
 
 ## 返回值说明
 
@@ -97,6 +97,11 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | Wout       |    √     | TileShape 动态切分 + 前端循环       | Wout 维度动态切分，配合前端循环实现完整覆盖                           |
 | Cin        |    √     | 前端循环切分 + pypto.add 累加       | Cin 维度动态切分需使用 pypto.add 累加多个 tile 结果                   |
 
+### 6. 数据类型约束
+
+- Ascend 950PR/Ascend 950DT产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。input、weight、bias和output的数据类型需要相同。
+- Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。对于DT_FP16和DT_FP32类型，input、weight、bias和output的数据类型需要相同；对于DT_BF16类型，input、weight和output为BF16类型，bias需为DT_FP32类型。
+
 **Cin 维度动态切分精度说明**：
 
 Cin 维度的动态轴切分会影响计算精度，原因如下：
@@ -118,12 +123,6 @@ Cin 维度的动态轴切分会影响计算精度，原因如下：
 input_conv = pypto.tensor((1, 32, 8, 16), pypto.DT_FP16, "input_conv")
 weight = pypto.tensor((32, 32, 1, 1), pypto.DT_FP16, "weight")
 
-# 暂时不支持子图合并特性，需要手动关闭
-pypto.set_pass_options(
-    cube_l1_reuse_setting={-1: 1},
-    cube_nbuffer_setting={-1: 1},
-)
-
 out = pypto.conv(input_conv, weight, pypto.DT_FP16,
                    strides=[1, 1],
                    paddings=[0, 0, 0, 0],
@@ -135,12 +134,6 @@ weight = pypto.tensor((32, 32, 1, 1), pypto.DT_FP16, "weight")
 bias = pypto.tensor((32,), pypto.DT_FP16, "bias")
 extend_params = {'bias_tensor': bias, 'relu_type': pypto.ReLuType.RELU}
 
-# 暂时不支持子图合并特性，需要手动关闭
-pypto.set_pass_options(
-    cube_l1_reuse_setting={-1: 1},
-    cube_nbuffer_setting={-1: 1},
-)
-
 out = pypto.conv(input_conv, weight, pypto.DT_FP16,
                    strides=[1, 1],
                    paddings=[0, 0, 0, 0],
@@ -150,12 +143,6 @@ out = pypto.conv(input_conv, weight, pypto.DT_FP16,
 # 3D 卷积示例
 input_conv = pypto.tensor((1, 96, 2, 16, 16), pypto.DT_FP16, "input_conv")
 weight = pypto.tensor((32, 96, 1, 1, 1), pypto.DT_FP16, "weight")
-
-# 暂时不支持子图合并特性，需要手动关闭
-pypto.set_pass_options(
-    cube_l1_reuse_setting={-1: 1},
-    cube_nbuffer_setting={-1: 1},
-)
 
 out = pypto.conv(input_conv, weight, pypto.DT_FP16,
                    strides=[1, 1, 1],

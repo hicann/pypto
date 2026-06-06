@@ -263,11 +263,17 @@ def __validate_data_type_consistency(params: ConvParams) -> None:
 
     if params.extend_params is not None and 'bias_tensor' in params.extend_params:
         bias = params.extend_params['bias_tensor']
-        if bias is not None and hasattr(bias, 'GetDataType') and bias.GetDataType() != params.input_conv.GetDataType():
-            raise PyptoError(0xF00002, ValueError(
-                f"Bias data type must be consistent with input, "
-                f"but got bias: {bias.GetDataType()}, input: {params.input_conv.GetDataType()}"
-            ))
+        if bias is not None and hasattr(bias, 'GetDataType'):
+            input_dtype = params.input_conv.GetDataType()
+            bias_dtype = bias.GetDataType()
+            expected_bias_dtype = input_dtype
+            if pypto_impl.GetNPUArch() == 'DAV_2201' and input_dtype == pypto_impl.DataType.DT_BF16:
+                expected_bias_dtype = pypto_impl.DataType.DT_FP32
+            if bias_dtype != expected_bias_dtype:
+                raise PyptoError(0xF00002, ValueError(
+                    f"Bias data type must be {expected_bias_dtype}, "
+                    f"but got bias: {bias_dtype}, input: {input_dtype}"
+                ))
 
 
 def __convert_conv_extend_params(extend_params) -> dict:

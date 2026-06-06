@@ -59,10 +59,8 @@ public:
     std::string GenMemL1ToBt() const;
     std::string GenMemL1CopyIn() const;
     std::string GenMemL1CopyOut() const;
-    std::string GetConvCopyInMode() const;
-    std::string GetConvCopyOutMode() const;
     std::string GenMemL1CopyInConv() const;
-    std::string GenMemL1CopyOutConv() const;
+    std::string GenMemL0CCopyOutConv() const;
     std::string GenMemL1ToFB() const;
     std::string GenMemL0CCopyOut() const;
     std::string GenMemL0CToL1() const;
@@ -196,9 +194,15 @@ protected:
 
     std::string InsertOpComment(std::string& tileOpSourceCode) const;
 
+    int64_t GetConvCopyInMode() const;
+    std::string GetConvCopyOutMode() const;
+    std::string GenMemL1CopyInConvNZ2NZ(
+        const std::string& dstTensor, const std::string& srcTensor, const std::string& copyInModeStr) const;
     void GetDynamicOffsetExpr(
         const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, std::vector<std::string>& gmOffsetExpr,
         std::vector<int64_t>& staticOffsets) const;
+    void GetNZ2NZDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap,
+        std::vector<std::string>& gmOffsetExpr, std::vector<std::string>& staticOffsets) const;
     std::vector<std::string> BuildCopyInParamList(
         const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
         const std::vector<int64_t>& staticOffsets, const std::vector<std::string>& srcShape, bool isConv3D) const;

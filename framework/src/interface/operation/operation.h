@@ -155,6 +155,10 @@ public:
     static const std::string transDataOffset;
 };
 
+const std::string CONV_GROUPS_ATTR = "op_attr_groups";
+const std::string FAKE_TRANS_IN_FORMAT_ATTR = "op_attr_fake_trans_in_format";
+const std::string FAKE_TRANS_OUT_FORMAT_ATTR = "op_attr_fake_trans_out_format";
+
 class ConvOpAttributeKey {
 public:
     static const std::string cin;

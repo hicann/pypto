@@ -400,7 +400,7 @@ void CodeGenOp::ConvertAttribute(const Operation& operation)
     ASSERT(OperErr::OPERAND_COUNT_EXCEEDED, operation.iOperand.size() + operation.oOperand.size() <= MAX_OPERANDS)
         << "can not support operation.iOperand.size: " << operation.iOperand.size()
         << ", operation.oOperand.size: " << operation.oOperand.size() << ", Op is " << operation.Dump();
-    if (opCode == Opcode::OP_CONV || opCode == Opcode::OP_CONV_ADD) {
+    if (opCode == Opcode::OP_CONV2D || opCode == Opcode::OP_CONV3D || opCode == Opcode::OP_CONV_ADD) {
         std::vector<std::string> intAttrStrList{
             ConvOpAttributeKey::cin,        ConvOpAttributeKey::cout,         ConvOpAttributeKey::paddingLeft,
             ConvOpAttributeKey::paddingTop, ConvOpAttributeKey::paddingRight, ConvOpAttributeKey::paddingBottom,
