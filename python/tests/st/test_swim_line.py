@@ -97,6 +97,9 @@ def test_swim():
             tasks = core.get("tasks", [])
             block_idx = core.get("block_idx", -1)
             core_count = sum(1 for task in tasks if task["name"].startswith("BEGIN"))
+            if core["coreType"].startswith("AICPU"):
+                exit_core_count = sum(1 for task in tasks if task["name"].startswith("EXIT"))
+                assert exit_core_count == 3, f"{block_idx} Multiple Turn with exit info is invalid"
             assert len(tasks) > 0, f"{block_idx} Could not Get aicpu perf"
             assert core_count == 3, f"{block_idx} Multiple Turn Get aicpu perf not success"
     swim_lane_json_path = pref_path + "/merged_swimlane.json"

@@ -191,14 +191,16 @@ inline void DevTaskPerfFormat(
     uint32_t tid, uint32_t type, json& devTaskJson, const MetricPerf* aicpuPer, const uint32_t& turnIdx)
 {
     json per_dev_task;
-    for (uint32_t i = 0; i < aicpuPer->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)]; i++) {
+    uint32_t idx = DEVTASK_PERF_ARRY_INDEX(type);
+    const DevTaskPerf& perfSlot = aicpuPer->devTaskPerfs[tid][idx];
+    for (uint32_t i = 0; i < perfSlot.cnt; i++) {
         std::string name = PerfTraceName[type];
         name = name + "_" + std::to_string(turnIdx);
         if (type != PERF_TRACE_DEV_TASK_SEND_FIRST_LEAF_TASK) {
             name = name + "(" + std::to_string(i) + ")";
         }
         per_dev_task["name"] = name;
-        per_dev_task["end"] = aicpuPer->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][i];
+        per_dev_task["end"] = perfSlot.timeStamp[i];
         devTaskJson.push_back(per_dev_task);
     }
 }
@@ -310,7 +312,7 @@ inline void DumpAicpuDevTask(
         for (uint32_t turnIdx = g_last_round_num; turnIdx < turnNum; turnIdx++) {
             auto aicpuMetric = GetAicpuPrefAddr(args, turnIdx);
             for (uint32_t type = 0; type < PERF_TRACE_MAX; type++) {
-                if (PerfTraceIsDevTask[type]) {
+                if (IsDevTaskType(type)) {
                     DevTaskPerfFormat(i, type, aicpuDevTasks, aicpuMetric.get(), turnIdx);
                     continue;
                 }

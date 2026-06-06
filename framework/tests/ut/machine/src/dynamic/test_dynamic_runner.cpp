@@ -129,9 +129,9 @@ TEST_F(TestDynamicDeviceRunner, test_dump_device_perf)
     metr->turnNum = 1;
 
     auto aicpuMetPer = std::make_unique<MetricPerf>();
-    aicpuMetPer->perfAicpuTraceDevTask[0][0][0] = 1;
-    aicpuMetPer->perfAicpuTraceDevTask[1][0][0] = 2;
-    aicpuMetPer->perfAicpuTraceDevTask[2][0][0] = 3;
+    aicpuMetPer->devTaskPerfs[0][0].timeStamp[0] = 1;
+    aicpuMetPer->devTaskPerfs[1][0].timeStamp[0] = 2;
+    aicpuMetPer->devTaskPerfs[2][0].timeStamp[0] = 3;
     devKernelArgs.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(static_cast<void*>(aicpuMetPer.get()));
 
     for (uint64_t i = 0; i < perfDataNum; i++) {

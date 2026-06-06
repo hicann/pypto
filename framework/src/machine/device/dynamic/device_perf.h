@@ -218,28 +218,26 @@ struct PerfEvtMgr {
 
     void PerfTrace(uint32_t type, uint32_t tid, uint64_t cycle)
     {
-        if (tid >= MAX_USED_AICPU_NUM) {
+        if (unlikely(tid >= MAX_USED_AICPU_NUM || aicpuPerf_ == 0)) {
             return;
         }
-        MetricPerf* aicpuMetrics = nullptr;
-        if (aicpuPerf_ > 0) {
-            aicpuMetrics = (MetricPerf*)(aicpuPerf_ + (tid == 0 ? ctrlTurn_ : schTurn_) * sizeof(MetricPerf));
-        }
-        if (PerfTraceIsDevTask[type] && DEVTASK_PERF_ARRY_INDEX(type) < DEVTASK_PERF_TYPE_NUM) {
-            uint8_t devCnt = aicpuMetrics->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
-            if (devCnt < PERF_TRACE_COUNT_DEVTASK_MAX_NUM) {
-                if (aicpuMetrics != nullptr) {
-                    aicpuMetrics->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)] += 1;
-                    aicpuMetrics->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][devCnt] =
-                        cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
-                }
-            } else {
-                DEV_EVENT("Dev task num larger than: %u, the excess part will not be recorded",
-                          PERF_TRACE_COUNT_DEVTASK_MAX_NUM);
+
+        MetricPerf* aicpuMetrics = (MetricPerf*)(aicpuPerf_ + (tid == 0 ? ctrlTurn_ : schTurn_) * sizeof(MetricPerf));
+
+        if (IsDevTaskType(type)) {
+            uint32_t idx = DEVTASK_PERF_ARRY_INDEX(type);
+            DevTaskPerf& perfSlot = aicpuMetrics->devTaskPerfs[tid][idx];
+            uint64_t& devCnt = perfSlot.cnt;
+            if (unlikely(devCnt >= PERF_TRACE_COUNT_DEVTASK_MAX_NUM)) {
+                DEV_EVENT(
+                    "Dev task num larger than: %u, the excess part will not be recorded",
+                    PERF_TRACE_COUNT_DEVTASK_MAX_NUM);
+                return;
             }
-            return;
-        }
-        if (aicpuMetrics != nullptr) {
+
+            perfSlot.timeStamp[devCnt] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
+           devCnt++;
+        } else {
             aicpuMetrics->perfAicpuTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
         }
     }
@@ -307,12 +305,8 @@ inline void PerfMtEvent(int type, int tid, uint64_t start, uint64_t end, std::st
 
 inline void PerfMtTrace(uint32_t type, uint32_t tid, uint64_t cycle = 0)
 {
-    (void)type;
-    (void)tid;
-    (void)cycle;
-    if (unlikely(ENABLE_PERF_TRACE == 1 || PerfEvtMgr::Instance().GetIsOpenProf())) {
-        PerfEvtMgr::Instance().PerfTrace(type, tid, cycle);
-    }
+    PerfEvtMgr::Instance().PerfTrace(type, tid, cycle);
+    
 }
 
 struct AutoScopedPerf {

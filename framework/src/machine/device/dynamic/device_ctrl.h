@@ -390,10 +390,6 @@ public:
     {
         SetModuleLogLevel(kargs);
         PerfBegin(PERF_EVT_DEVICE_MACHINE_INIT_DYN);
-#ifdef __DEVICE__
-        InitLogSwitch();
-        AiCoreProf::RegDevProf();
-#endif
         if (kargs == nullptr) {
             return -1;
         }

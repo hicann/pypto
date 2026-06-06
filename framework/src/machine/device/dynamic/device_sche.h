@@ -359,12 +359,6 @@ struct DynMachineManager {
 
     int RunCtrlInitNoLock(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
-#ifdef __DEVICE__
-        auto devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
-        if (devArgs->aicpuPerfAddr != 0) {
-            PerfEvtMgr::Instance().SetIsOpenProf(true, devArgs->aicpuPerfAddr);
-        }
-#endif
         int ret = entry.kernelCtrlServerInit(kargs);
         return ret;
     }
@@ -501,13 +495,13 @@ struct DynMachineManager {
 
             if (splittedInfo_.ScheSync(runtimeDataCurrent, devArgs.scheCpuNum)) {
                 RunSchPost(devProg);
-                PerfEvtMgr::Instance().AddScheduleTurn();
                 ret = DEVICE_MACHINE_OK;
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         }
         if (++schExitNum_ == devArgs.nrAicpu) {
             RunSchDeInit();
+            PerfEvtMgr::Instance().AddScheduleTurn();
             DEV_INFO("All sche cpu exited.");
         }
         return ret;

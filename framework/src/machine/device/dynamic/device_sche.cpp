@@ -25,6 +25,7 @@
 #include "machine/utils/device_log.h"
 #include "tilefwk/error_code.h"
 #include "device_utils.h"
+#include "aicore_prof.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -50,6 +51,12 @@ extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelSer
         DEV_ERROR(DevCommonErr::INIT_FAILED, "Pypto Trace init failed");
         return -1;
     }
+    DeviceKernelArgs* kargs = (DeviceKernelArgs*)targ;
+    auto devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
+    if (devArgs->aicpuPerfAddr != 0) {
+        PerfEvtMgr::Instance().SetIsOpenProf(true, devArgs->aicpuPerfAddr);
+    }
+    AiCoreProf::RegDevProf();
 #endif
     DEV_ATRACE("Start to Reg signal");
     g_machine_mgr.SignalReg(SigAct);

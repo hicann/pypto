@@ -50,13 +50,13 @@ enum PerfTraceType {
 #undef X
 };
 
-inline bool PerfTraceIsDevTask[] = {
-#define X(trace) 0,
-#define XDEVTASK(trace) 1,
-    PERF_TRACES
+#define X(trace)
+#define XDEVTASK(trace) | (1ULL << PERF_TRACE_##trace)
+constexpr uint64_t DEV_TASK_TYPE_MASK = 0ULL PERF_TRACES;
 #undef XDEVTASK
 #undef X
-};
+
+inline constexpr bool IsDevTaskType(uint32_t type) { return (DEV_TASK_TYPE_MASK >> type) & 1ULL; }
 
 inline const char* PerfTraceName[] = {
 #define X(trace) #trace,

@@ -242,14 +242,14 @@ constexpr uint32_t PERF_DATA_SYNC_EVENT_SIZE = SET_WAIT_EVENT_DATA_SIZE * 2;
 constexpr uint32_t PERF_DATA_BASE_SIZE = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
 constexpr uint32_t PERF_DATA_TOTAL_SIZE = PERF_DATA_BASE_SIZE + PERF_DATA_SYNC_EVENT_SIZE;
 
+struct DevTaskPerf {
+    uint64_t cnt{0};
+    uint64_t timeStamp[npu::tile_fwk::dynamic::PERF_TRACE_COUNT_DEVTASK_MAX_NUM] = {0};
+};
+
 struct MetricPerf {
     uint64_t perfAicpuTrace[npu::tile_fwk::dynamic::MAX_USED_AICPU_NUM][npu::tile_fwk::dynamic::PERF_TRACE_MAX] = {{0}};
-    uint64_t perfAicpuTraceDevTask[npu::tile_fwk::dynamic::MAX_USED_AICPU_NUM]
-                                  [npu::tile_fwk::dynamic::DEVTASK_PERF_TYPE_NUM]
-                                  [npu::tile_fwk::dynamic::PERF_TRACE_COUNT_DEVTASK_MAX_NUM] = {
-                                      {{0}}}; // 每个devTask 的对应type的数据
-    uint8_t perfAicpuTraceDevTaskCnt[npu::tile_fwk::dynamic::MAX_USED_AICPU_NUM]
-                                    [npu::tile_fwk::dynamic::DEVTASK_PERF_TYPE_NUM] = {{0}};
+    DevTaskPerf devTaskPerfs[npu::tile_fwk::dynamic::MAX_USED_AICPU_NUM][npu::tile_fwk::dynamic::DEVTASK_PERF_TYPE_NUM];
 };
 
 inline const char* AicorePerfTraceName[] = {
