@@ -975,7 +975,9 @@ void InnerTransData(
     int64_t outputGroupAxis = format2OutputAxis[T];
     int64_t inputPerGroup = input->GetShape()[inputGroupAxis] / group;
     int64_t factor = (T == TileOpFormat::TILEOP_FRACTAL_Z || T == TileOpFormat::TILEOP_FRACTAL_Z_3D) ? N0 : C0;
-    int64_t dstPerGroup = dstTensor->GetShape()[outputGroupAxis] / group * factor; // 注意dst形状
+    bool isFractalZ = T == TileOpFormat::TILEOP_FRACTAL_Z || T == TileOpFormat::TILEOP_FRACTAL_Z_3D;
+    int64_t dstPerGroup = isFractalZ ? dstTensor->GetShape()[outputGroupAxis] * factor :
+                                       dstTensor->GetShape()[outputGroupAxis] / group * factor;
 
     if (cur == input->GetShape().size()) {
         int64_t offsetSuffix = transDataTileInfoPara.inputTileInfo.offset[inputGroupAxis] % dstPerGroup;

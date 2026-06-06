@@ -484,9 +484,10 @@ std::vector<LogicalTensorPtr> GetOperandVecIn(
     int64_t kw = convAttrParam.isConv3D ? operandVecIn[INPUT_WEIGHT_IDX]->GetShape()[NCDHW_W_IDX] :
                                           operandVecIn[INPUT_WEIGHT_IDX]->GetShape()[NCHW_W_IDX];
     int64_t cin1PerGroup = CeilDiv(cinPerGroup, cin0);
+    int64_t cout1PerGroup = CeilDiv(cout / convAttrParam.groups, MKN_N_VALUE);
     std::vector<int64_t> inputNzShape = {batch, convAttrParam.groups * cin1PerGroup, hi, wi, cin0};
     std::vector<int64_t> weightFzShape =
-        {convAttrParam.groups * cin1PerGroup * kh * kw, cout / MKN_N_VALUE, MKN_N_VALUE, cin0};
+        {convAttrParam.groups * cin1PerGroup * kh * kw, cout1PerGroup, MKN_N_VALUE, cin0};
     TileOpFormat inputNzFormat = TileOpFormat::TILEOP_NC1HWC0;
     TileOpFormat weightFzFormat = TileOpFormat::TILEOP_FRACTAL_Z;
     if (convAttrParam.isConv3D) {
@@ -495,7 +496,7 @@ std::vector<LogicalTensorPtr> GetOperandVecIn(
         int64_t din = operandVecIn[INPUT_FMAP_IDX]->GetShape()[NCDHW_D_IDX];
         int64_t kd = operandVecIn[INPUT_WEIGHT_IDX]->GetShape()[NCDHW_D_IDX];
         inputNzShape = {batch, din, convAttrParam.groups * cin1PerGroup, hi, wi, cin0};
-        weightFzShape = {convAttrParam.groups * kd * cin1PerGroup * kh * kw, cout / MKN_N_VALUE, MKN_N_VALUE, cin0};
+        weightFzShape = {convAttrParam.groups * kd * cin1PerGroup * kh * kw, cout1PerGroup, MKN_N_VALUE, cin0};
     }
     Tensor inputNzTensor(operandVecIn[INPUT_FMAP_IDX]->Datatype(), inputNzShape, "TensorInputNz", inputNzFormat);
     Tensor weightFzTensor(operandVecIn[INPUT_FMAP_IDX]->Datatype(), weightFzShape, "TensorWeightFz", weightFzFormat);

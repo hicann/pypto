@@ -15,6 +15,7 @@
 
 #pragma once
 #include <cstdint>
+#include <map>
 #include "tilefwk/error.h"
 #include "tilefwk/error_code.h"
 
@@ -29,6 +30,7 @@ enum class PassType : int32_t {
 
 enum class PassName {
     LOOP_UNROLL,
+    INFER_TENSOR_FORMAT,
     AUTO_CAST,
     REMOVE_REDUNDANT_RESHAPE,
     INFER_MEMORY_CONFLICT,
@@ -75,103 +77,63 @@ enum class PassName {
     NOT_DEFINED
 };
 
-inline constexpr const char* PassNameStr(PassName name)
+inline const std::map<PassName, const char*> kPassNameStringMap = {
+    {PassName::LOOP_UNROLL, "LoopUnroll"},
+    {PassName::INFER_TENSOR_FORMAT, "InferTensorFormat"},
+    {PassName::AUTO_CAST, "AutoCast"},
+    {PassName::REMOVE_REDUNDANT_RESHAPE, "RemoveRedundantReshape"},
+    {PassName::INFER_MEMORY_CONFLICT, "InferMemoryConflict"},
+    {PassName::REMOVE_UNDRIVEN_VIEW, "RemoveUndrivenView"},
+    {PassName::EXPAND_FUNCTION, "ExpandFunction"},
+    {PassName::DUPLICATE_OP, "DuplicateOp"},
+    {PassName::MERGE_VIEW_ASSEMBLE, "MergeViewAssemble"},
+    {PassName::SPLIT_RESHAPE, "SplitReshape"},
+    {PassName::SPLIT_RAW_TENSOR, "SplitRawTensor"},
+    {PassName::SPLIT_LARGE_FANOUT_TENSOR, "SplitLargeFanoutTensor"},
+    {PassName::ASSIGN_MEMORY_TYPE, "AssignMemoryType"},
+    {PassName::INFER_DISCONTINUOUS_INPUT, "InferDiscontinuousInput"},
+    {PassName::REMOVE_REDUNDANT_OP, "RemoveRedundantOp"},
+    {PassName::INSERT_OP_FOR_VIEWASSEMBLE, "InsertOpForViewAssemble"},
+    {PassName::PROCESS_ATOMIC, "ProcessAtomic"},
+    {PassName::GRAPH_PARTITION, "GraphPartition"},
+    {PassName::REDUCE_COPY_MERGE, "ReduceCopyMerge"},
+    {PassName::N_BUFFER_MERGE, "NBufferMerge"},
+    {PassName::INTRA_SUBGRAPH_ADAPTER, "IntraSubgraphAdapter"},
+    {PassName::GENERATE_MOVE_OP, "GenerateMoveOp"},
+    {PassName::COMMON_OPERATION_ELIMINATE, "CommonOperationEliminate"},
+    {PassName::L1_COPY_IN_REUSE_MERGE, "L1CopyInReuseMerge"},
+    {PassName::AXIS_COMBINE, "AxisCombine"},
+    {PassName::PAD_LOCAL_BUFFER, "PadLocalBuffer"},
+    {PassName::REMOVE_UNALIGNED_RESHAPE, "RemoveUnalignedReshape"},
+    {PassName::REPLACE_TENSOR, "ReplaceTensor"},
+    {PassName::PRE_GRAPH_PROCESS, "PreGraphProcess"},
+    {PassName::INFER_DYN_SHAPE, "InferDynShape"},
+    {PassName::SUBGRAPH_TO_FUNCTION, "SubgraphToFunction"},
+    {PassName::INFER_PARAM_INDEX, "InferParamIndex"},
+    {PassName::SRC_DST_BUFFER_MERGE, "SrcDstBufferMerge"},
+    {PassName::ADD_ALLOC, "AddAlloc"},
+    {PassName::OOO_SCHEDULE, "OoOSchedule"},
+    {PassName::GLOBAL_MEMORY_REUSE, "GlobalMemoryReuse"},
+    {PassName::REMOVE_ALLOC, "RemoveAlloc"},
+    {PassName::COPY_OUT_RESOLVE, "CopyOutResolve"},
+    {PassName::INSERT_SYNC, "InsertSync"},
+    {PassName::MIX_SUBGRAPH_SPLIT, "MixSubgraphSplit"},
+    {PassName::CODEGEN_PREPROC, "CodegenPreproc"},
+    {PassName::DYN_ATTR_TO_STATIC, "DynAttrToStatic"},
+    {PassName::LOOPAXES_PROC, "LoopaxesProc"},
+    {PassName::TUNE_TILEOP_SEQ_FOR_VF, "TuneTileOpSeqForVF"},
+    {PassName::TUNE_SYNC_FOR_VF, "TuneSyncForVF"},
+    {PassName::NOT_DEFINED, "NotDefined"},
+};
+
+inline const char* PassNameStr(PassName name)
 {
-    switch (name) {
-        case PassName::LOOP_UNROLL:
-            return "LoopUnroll";
-        case PassName::REMOVE_REDUNDANT_RESHAPE:
-            return "RemoveRedundantReshape";
-        case PassName::AUTO_CAST:
-            return "AutoCast";
-        case PassName::INFER_MEMORY_CONFLICT:
-            return "InferMemoryConflict";
-        case PassName::REMOVE_UNDRIVEN_VIEW:
-            return "RemoveUndrivenView";
-        case PassName::EXPAND_FUNCTION:
-            return "ExpandFunction";
-        case PassName::DUPLICATE_OP:
-            return "DuplicateOp";
-        case PassName::MERGE_VIEW_ASSEMBLE:
-            return "MergeViewAssemble";
-        case PassName::SPLIT_RESHAPE:
-            return "SplitReshape";
-        case PassName::SPLIT_RAW_TENSOR:
-            return "SplitRawTensor";
-        case PassName::SPLIT_LARGE_FANOUT_TENSOR:
-            return "SplitLargeFanoutTensor";
-        case PassName::ASSIGN_MEMORY_TYPE:
-            return "AssignMemoryType";
-        case PassName::INFER_DISCONTINUOUS_INPUT:
-            return "InferDiscontinuousInput";
-        case PassName::REMOVE_REDUNDANT_OP:
-            return "RemoveRedundantOp";
-        case PassName::INSERT_OP_FOR_VIEWASSEMBLE:
-            return "InsertOpForViewAssemble";
-        case PassName::PROCESS_ATOMIC:
-            return "ProcessAtomic";
-        case PassName::GRAPH_PARTITION:
-            return "GraphPartition";
-        case PassName::REDUCE_COPY_MERGE:
-            return "ReduceCopyMerge";
-        case PassName::N_BUFFER_MERGE:
-            return "NBufferMerge";
-        case PassName::INTRA_SUBGRAPH_ADAPTER:
-            return "IntraSubgraphAdapter";
-        case PassName::GENERATE_MOVE_OP:
-            return "GenerateMoveOp";
-        case PassName::COMMON_OPERATION_ELIMINATE:
-            return "CommonOperationEliminate";
-        case PassName::AXIS_COMBINE:
-            return "AxisCombine";
-        case PassName::L1_COPY_IN_REUSE_MERGE:
-            return "L1CopyInReuseMerge";
-        case PassName::PAD_LOCAL_BUFFER:
-            return "PadLocalBuffer";
-        case PassName::REMOVE_UNALIGNED_RESHAPE:
-            return "RemoveUnalignedReshape";
-        case PassName::REPLACE_TENSOR:
-            return "ReplaceTensor";
-        case PassName::PRE_GRAPH_PROCESS:
-            return "PreGraphProcess";
-        case PassName::INFER_DYN_SHAPE:
-            return "InferDynShape";
-        case PassName::SUBGRAPH_TO_FUNCTION:
-            return "SubgraphToFunction";
-        case PassName::INFER_PARAM_INDEX:
-            return "InferParamIndex";
-        case PassName::SRC_DST_BUFFER_MERGE:
-            return "SrcDstBufferMerge";
-        case PassName::ADD_ALLOC:
-            return "AddAlloc";
-        case PassName::OOO_SCHEDULE:
-            return "OoOSchedule";
-        case PassName::GLOBAL_MEMORY_REUSE:
-            return "GlobalMemoryReuse";
-        case PassName::REMOVE_ALLOC:
-            return "RemoveAlloc";
-        case PassName::COPY_OUT_RESOLVE:
-            return "CopyOutResolve";
-        case PassName::INSERT_SYNC:
-            return "InsertSync";
-        case PassName::MIX_SUBGRAPH_SPLIT:
-            return "MixSubgraphSplit";
-        case PassName::CODEGEN_PREPROC:
-            return "CodegenPreproc";
-        case PassName::DYN_ATTR_TO_STATIC:
-            return "DynAttrToStatic";
-        case PassName::LOOPAXES_PROC:
-            return "LoopaxesProc";
-        case PassName::TUNE_TILEOP_SEQ_FOR_VF:
-            return "TuneTileOpSeqForVF";
-        case PassName::TUNE_SYNC_FOR_VF:
-            return "TuneSyncForVF";
-        case PassName::NOT_DEFINED:
-            return "NotDefined";
-        default:
-            ASSERT(FunctionErr::FUNCTION_SPECIAL_STRUCTURE, false) << "[PassDependency][Manager][ERROR]: PassName not defined.";
-            return "Invalid";
+    auto it = kPassNameStringMap.find(name);
+    if (it != kPassNameStringMap.end()) {
+        return it->second;
     }
+    ASSERT(FunctionErr::FUNCTION_SPECIAL_STRUCTURE, false) << "[PassDependency][Manager][ERROR]: PassName not defined.";
+    return "Invalid";
 }
 
 inline std::ostream& operator<<(std::ostream& os, PassName name) { return os << PassNameStr(name); }

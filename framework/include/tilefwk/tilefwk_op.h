@@ -162,7 +162,7 @@ Tensor Full(
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
 Tensor TransData(const Tensor& self, TileOpFormat transDataType, int group = 1);
 std::shared_ptr<LogicalTensor> TransData(
-    Function& function, const std::shared_ptr<LogicalTensor>& self, TileOpFormat transDataType, int group = 1);
+    Function& function, const std::shared_ptr<LogicalTensor>& self, const std::shared_ptr<LogicalTensor>& fakeDstTensor, TileOpFormat transDataType, int group = 1);
 Tensor Cast(
     const Tensor& self, DataType dstDataType, CastMode mode = CAST_NONE, SaturationMode satmode = SaturationMode::OFF);
 Tensor Permute(const Tensor& self, std::vector<int> perm);

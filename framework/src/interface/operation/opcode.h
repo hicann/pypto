@@ -481,6 +481,13 @@ public:
         return info.attrs;
     }
 
+    const std::unordered_map<std::string, std::vector<std::vector<TileOpFormat>>>& GetSupportOpFormatList(
+        Opcode opcode) const
+    {
+        auto& info = opcodeInfos_[static_cast<int>(opcode)];
+        return info.supportOpFormatList;
+    }
+
     VerifyOperationEntry GetVerifyOperationEntry(Opcode opcode) const
     {
         auto& info = opcodeInfos_[static_cast<int>(opcode)];

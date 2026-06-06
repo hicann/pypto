@@ -15,6 +15,7 @@
 
 #include "pass_manager.h"
 
+#include <initializer_list>
 #include <unistd.h>
 #include "interface/configs/config_manager.h"
 #include "interface/compiler_monitor/monitor_pass_scope.h"
@@ -25,6 +26,7 @@
 #include "tilefwk/platform.h"
 #include "pass_dependency.h"
 // tensor graph pass
+#include "passes/tensor_graph_pass/infer_tensor_format.h"
 #include "passes/tensor_graph_pass/remove_redundant_reshape.h"
 #include "passes/tensor_graph_pass/auto_cast.h"
 #include "passes/tensor_graph_pass/infer_memory_conflict.h"
@@ -58,6 +60,69 @@
 #define MODULE_NAME "PassManager"
 
 namespace npu::tile_fwk {
+
+namespace {
+using PassEntry = PassManager::PassEntry;
+
+std::vector<PassEntry> BuildPassEntries(std::initializer_list<PassName> passNames)
+{
+    std::vector<PassEntry> entries;
+    entries.reserve(passNames.size());
+    for (auto passName : passNames) {
+        entries.emplace_back(PassNameStr(passName), passName);
+    }
+    return entries;
+}
+
+std::vector<PassEntry> BuildPvc2OooPassEntries()
+{
+    return BuildPassEntries({
+        PassName::INFER_TENSOR_FORMAT,
+        PassName::REMOVE_REDUNDANT_RESHAPE,
+        PassName::AUTO_CAST,
+        PassName::INFER_MEMORY_CONFLICT,
+        PassName::REMOVE_UNDRIVEN_VIEW,
+        PassName::EXPAND_FUNCTION,
+        PassName::MERGE_VIEW_ASSEMBLE,
+        PassName::SPLIT_RESHAPE,
+        PassName::SPLIT_RAW_TENSOR,
+        PassName::SPLIT_LARGE_FANOUT_TENSOR,
+        PassName::DUPLICATE_OP,
+        PassName::ASSIGN_MEMORY_TYPE,
+        PassName::INFER_DISCONTINUOUS_INPUT,
+        PassName::REMOVE_REDUNDANT_OP,
+        PassName::INSERT_OP_FOR_VIEWASSEMBLE,
+        PassName::PROCESS_ATOMIC,
+        PassName::GRAPH_PARTITION,
+        PassName::N_BUFFER_MERGE,
+        PassName::L1_COPY_IN_REUSE_MERGE,
+        PassName::REDUCE_COPY_MERGE,
+        PassName::INTRA_SUBGRAPH_ADAPTER,
+        PassName::GENERATE_MOVE_OP,
+        PassName::COMMON_OPERATION_ELIMINATE,
+        PassName::AXIS_COMBINE,
+        PassName::PAD_LOCAL_BUFFER,
+        PassName::REMOVE_UNALIGNED_RESHAPE,
+        PassName::REPLACE_TENSOR,
+        PassName::PRE_GRAPH_PROCESS,
+        PassName::INFER_DYN_SHAPE,
+        PassName::SUBGRAPH_TO_FUNCTION,
+        PassName::INFER_PARAM_INDEX,
+        PassName::SRC_DST_BUFFER_MERGE,
+        PassName::ADD_ALLOC,
+        PassName::OOO_SCHEDULE,
+        PassName::TUNE_TILEOP_SEQ_FOR_VF,
+        PassName::REMOVE_ALLOC,
+        PassName::COPY_OUT_RESOLVE,
+        PassName::INSERT_SYNC,
+        PassName::TUNE_SYNC_FOR_VF,
+        PassName::MIX_SUBGRAPH_SPLIT,
+        PassName::GLOBAL_MEMORY_REUSE,
+        PassName::CODEGEN_PREPROC,
+    });
+}
+} // namespace
+
 PassManager& PassManager::Instance()
 {
     static PassManager instance;
@@ -66,6 +131,7 @@ PassManager& PassManager::Instance()
 
 void RegPass()
 {
+    REG_PASS(InferTensorFormat);
     REG_PASS(GlobalMemoryReuse);
     REG_PASS(SubgraphToFunction);
     REG_PASS(GraphPartition);
@@ -114,56 +180,9 @@ void RegPass()
 
 void PassManager::RegDefaultStrategy()
 {
-    RegisterStrategy(
-        "PVC2_OOO", {
-                        {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                        {"AutoCast", PassName::AUTO_CAST},
-                        {"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT},
-                        {"RemoveUndrivenView", PassName::REMOVE_UNDRIVEN_VIEW},
-                        {"ExpandFunction", PassName::EXPAND_FUNCTION},
-                        {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
-                        {"SplitReshape", PassName::SPLIT_RESHAPE},
-                        {"SplitRawTensor", PassName::SPLIT_RAW_TENSOR},
-                        {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
-                        {"DuplicateOp", PassName::DUPLICATE_OP},
-                        {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
-                        {"InferDiscontinuousInput", PassName::INFER_DISCONTINUOUS_INPUT},
-                        {"RemoveRedundantOp", PassName::REMOVE_REDUNDANT_OP},
-                        {"InsertOpForViewAssemble", PassName::INSERT_OP_FOR_VIEWASSEMBLE},
-                        {"ProcessAtomic", PassName::PROCESS_ATOMIC},
-                        {"GraphPartition", PassName::GRAPH_PARTITION},
-                        {"NBufferMerge", PassName::N_BUFFER_MERGE},
-                        {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
-                        {"ReduceCopyMerge", PassName::REDUCE_COPY_MERGE},
-                        {"IntraSubgraphAdapter", PassName::INTRA_SUBGRAPH_ADAPTER},
-                        {"GenerateMoveOp", PassName::GENERATE_MOVE_OP},
-                        {"CommonOperationEliminate", PassName::COMMON_OPERATION_ELIMINATE},
-                        {"AxisCombine", PassName::AXIS_COMBINE},
-                        {"PadLocalBuffer", PassName::PAD_LOCAL_BUFFER},
-                        {"RemoveUnalignedReshape", PassName::REMOVE_UNALIGNED_RESHAPE},
-                        {"ReplaceTensor", PassName::REPLACE_TENSOR},
-                        {"PreGraphProcess", PassName::PRE_GRAPH_PROCESS},
-                        {"InferDynShape", PassName::INFER_DYN_SHAPE},
-                        {"SubgraphToFunction", PassName::SUBGRAPH_TO_FUNCTION},
-                        {"InferParamIndex", PassName::INFER_PARAM_INDEX},
-                        {"SrcDstBufferMerge", PassName::SRC_DST_BUFFER_MERGE},
-                        {"AddAlloc", PassName::ADD_ALLOC},
-                        {"OoOSchedule", PassName::OOO_SCHEDULE},
-                        {"TuneTileOpSeqForVF", PassName::TUNE_TILEOP_SEQ_FOR_VF},
-                        {"RemoveAlloc", PassName::REMOVE_ALLOC},
-                        {"CopyOutResolve", PassName::COPY_OUT_RESOLVE},
-                        {"InsertSync", PassName::INSERT_SYNC},
-                        {"TuneSyncForVF", PassName::TUNE_SYNC_FOR_VF},
-                        {"MixSubgraphSplit", PassName::MIX_SUBGRAPH_SPLIT},
-                        {"GlobalMemoryReuse", PassName::GLOBAL_MEMORY_REUSE},
-                        {"CodegenPreproc", PassName::CODEGEN_PREPROC},
-                    });
-    RegisterStrategy("FunctionUnroll", {{"LoopUnroll", PassName::LOOP_UNROLL}});
-    RegisterStrategy(
-        "ExecuteGraph", {
-                            {"DynAttrToStatic", PassName::DYN_ATTR_TO_STATIC},
-                            {"LoopaxesProc", PassName::LOOPAXES_PROC},
-                        });
+    RegisterStrategy("PVC2_OOO", BuildPvc2OooPassEntries());
+    RegisterStrategy("FunctionUnroll", BuildPassEntries({PassName::LOOP_UNROLL}));
+    RegisterStrategy("ExecuteGraph", BuildPassEntries({PassName::DYN_ATTR_TO_STATIC, PassName::LOOPAXES_PROC}));
 }
 
 PassManager::PassManager()
