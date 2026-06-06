@@ -106,35 +106,37 @@ struct DevAscendFunctionDuppedData {
 
     const DevAscendFunctionDuppedStitchList& GetOperationStitch(int operationIndex, bool maybeNull = true) const
     {
-        int outcastStitchIndex = GetSource()->GetOperationOutcastStitchIndex(operationIndex);
+        int stitchIndex = GetSource()->GetOperationStitchIndex(operationIndex);
+
         DEV_IF_NONDEVICE
         {
-            if (!maybeNull && outcastStitchIndex == 0) {
+            if (!maybeNull && stitchIndex == 0) {
                 DEV_ERROR(
                     ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                    "#ctrl.encode.stitch.outcast: GetOperationStitch: operationIndex=%d has invalid outcast stitch "
-                    "index 0",
+                    "#ctrl.encode.stitch.outcast: GetOperationStitch: operationIndex=%d has invalid stitch index 0",
                     operationIndex);
             }
-            DEV_ASSERT(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, maybeNull || outcastStitchIndex != 0);
+            DEV_ASSERT(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, maybeNull || stitchIndex != 0);
         }
-        return GET_DATA(DevAscendFunctionDuppedStitchList, data_, operationList_.stitchBase, outcastStitchIndex);
+
+        return GET_DATA(DevAscendFunctionDuppedStitchList, data_, operationList_.stitchBase, stitchIndex);
     }
     DevAscendFunctionDuppedStitchList& GetOperationStitch(int operationIndex, bool maybeNull = true)
     {
-        int outcastStitchIndex = GetSource()->GetOperationOutcastStitchIndex(operationIndex);
+        int stitchIndex = GetSource()->GetOperationStitchIndex(operationIndex);
+
         DEV_IF_NONDEVICE
         {
-            if (!maybeNull && outcastStitchIndex == 0) {
+            if (!maybeNull && stitchIndex == 0) {
                 DEV_ERROR(
                     ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                    "#ctrl.encode.stitch.outcast: GetOperationStitch: operationIndex=%d has invalid outcast stitch "
-                    "index 0",
-                    operationIndex);
+                    "#ctrl.encode.stitch.outcast: GetOperationStitch: operationIndex=%d has invalid stitch "
+                    "index 0", operationIndex);
             }
-            DEV_ASSERT(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, maybeNull || outcastStitchIndex != 0);
+            DEV_ASSERT(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, maybeNull || stitchIndex != 0);
         }
-        return GET_DATA(DevAscendFunctionDuppedStitchList, data_, operationList_.stitchBase, outcastStitchIndex);
+
+        return GET_DATA(DevAscendFunctionDuppedStitchList, data_, operationList_.stitchBase, stitchIndex);
     }
 
     inline uint64_t GetIncastDataSize(int incastIndex) const

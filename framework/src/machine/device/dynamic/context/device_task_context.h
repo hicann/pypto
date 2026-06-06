@@ -82,6 +82,8 @@ private:
             return;
 
         if (coreType == static_cast<int>(CoreType::HUB)) {
+            DEV_VERBOSE_DEBUG(
+                "doResolve hub func %d succindex %d", static_cast<int>(funcIdx), static_cast<int>(succIdx));
             ResolveEarlyDepends(dyntask, funcIdx, succIdx);
         } else {
             int32_t* opWrapList = reinterpret_cast<int32_t*>(dyntask->devTask.mixTaskData.opWrapList[funcIdx]);

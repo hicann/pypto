@@ -136,7 +136,7 @@ protected:
             ops[i].attrList.AssignOffsetSize(attrOffset, 1);
             ops[i].depGraphSuccList.AssignOffsetSize(0, 0);
             ops[i].depGraphPredCount = 0;
-            ops[i].outcastStitchIndex = 0;
+            ops[i].stitchIndex = 0;
         }
     }
 

@@ -232,6 +232,7 @@ static uint32_t UpdateSlotsImpl(
         for (size_t j = 0; j < incast.fromSlotList.size(); ++j) {
             int slotIdx = devRootSrc->At(incast.fromSlotList, j);
             auto& slot = slotList[slotIdx];
+            DEV_VERBOSE_DEBUG("[UpdateSlots]   Begin update Incast [%3zu] from slot [%3d].", incastIdx, slotIdx);
             uint32_t errCode =
                 UpdateSlotsForIncastStitch(slotIdx, slot, devRootSrc, incast, devTaskId, devNextIdx, expressionList);
             DEV_VERBOSE_DEBUG(

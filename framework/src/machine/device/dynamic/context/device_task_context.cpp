@@ -359,15 +359,20 @@ void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcI
     auto predList = dyntask->dynFuncDataCacheList[funcIndex].predCount;
     auto succList = func->GetOperationDepGraphSuccAddr(opIdx, succSize);
     auto callList = dyntask->dynFuncDataCacheList[funcIndex].calleeList;
-
+    DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: funcdup %p", &dyntask->stitchedList[funcIndex]);
     for (size_t index = 0; index < succSize; ++index) {
         auto succIdx = succList[index];
+        DEV_VERBOSE_DEBUG(
+            "ResolveEarlyDepends inner func %d opindex %d succfunc %d succOpIdx %d", static_cast<int>(funcIndex),
+            static_cast<int>(opIdx), static_cast<int>(funcIndex), succIdx);
         doResolve(dyntask, cceBinary[callList[succIdx]].coreType, funcIndex, succIdx, predList);
     }
 
     auto& funcDup = dyntask->stitchedList[funcIndex];
     auto& stitchList = funcDup.GetOperationStitch(opIdx);
+    DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: stitchList %p", &stitchList);
     for (auto* node = stitchList.Head(); node != nullptr; node = node->Next()) {
+        DEV_VERBOSE_DEBUG("ResolveEarlyDepends:: node %p", node);
         uint32_t listSize = node->Size();
         for (uint32_t index = 0; index < listSize; ++index) {
             uint32_t id = node->At(index);
@@ -375,6 +380,10 @@ void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask, size_t funcI
             auto succIdx = TaskID(id);
             predList = dyntask->dynFuncDataCacheList[succFuncIdx].predCount;
             callList = dyntask->dynFuncDataCacheList[succFuncIdx].calleeList;
+            DEV_VERBOSE_DEBUG(
+                "ResolveEarlyDepends inner stitch func %d opindex %d succfunc %d succOpIdx %d",
+                static_cast<int>(funcIndex), static_cast<int>(opIdx), static_cast<int>(succFuncIdx),
+                static_cast<int>(succIdx));
             doResolve(dyntask, cceBinary[callList[succIdx]].coreType, succFuncIdx, succIdx, predList);
         }
     }
@@ -390,6 +399,7 @@ void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask* dyntask)
         auto opIndex = predInfo.totalZeroPredAIC + predInfo.totalZeroPredAIV + predInfo.totalZeroPredAicpu;
         while (opIndex < predInfo.totalZeroPred) {
             if (predList[opIndex] == 0) {
+                DEV_VERBOSE_DEBUG("ResolveEarlyDepends func %d opindex %lu", static_cast<int>(funcIdx), opIndex);
                 ResolveEarlyDepends(dyntask, funcIdx, opIndex);
             }
             opIndex++;

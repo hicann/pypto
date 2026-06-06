@@ -68,7 +68,7 @@ void DevAscendFunction::InitIncastOutcastAttr(
 }
 
 static void FillDuppedDataFields(DevAscendFunctionDuppedData* dupData, uint64_t operationSize, uint64_t incastSize,
-    uint64_t outcastSize, uint64_t expressionSize, uint32_t outcastStitchCount, uint64_t predCountListDataSize,
+    uint64_t outcastSize, uint64_t expressionSize, uint32_t stitchCount, uint64_t predCountListDataSize,
     uint64_t incastDataSize, uint64_t outcastDataSize, uint64_t expressionDataSize, uint64_t stitchDataSize,
     uint64_t totalDataSize, uint64_t duppedDataAllocSize)
 {
@@ -91,7 +91,7 @@ static void FillDuppedDataFields(DevAscendFunctionDuppedData* dupData, uint64_t 
     offset += expressionDataSize;
 
     dupData->operationList_.stitchBase = offset;
-    dupData->operationList_.stitchCount = outcastStitchCount;
+    dupData->operationList_.stitchCount = stitchCount;
     offset += stitchDataSize;
     ASSERT(DevCommonErr::PARAM_CHECK_FAILED, offset == totalDataSize)
         << "Offset mismatch:offset " << offset << " != totalDataSize " << totalDataSize;
@@ -140,7 +140,7 @@ static void VerifyDuppedDataRanges(DevAscendFunctionDuppedData* dupData, uint64_
 }
 
 void DevAscendFunction::InitOperationDynamicField(
-    uintdevptr_t& initOffset, DevAscendFunctionPredInfo predInfo, uint32_t outcastStitchCount,
+    uintdevptr_t& initOffset, DevAscendFunctionPredInfo predInfo, uint32_t stitchCount,
     [[maybe_unused]] const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
     const SymbolicExpressionTable* expressionTable, const OrderedSet<Operation*>& callList,
     const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
@@ -158,7 +158,7 @@ void DevAscendFunction::InitOperationDynamicField(
     uint64_t incastDataSize = AlignUp(incastSize * sizeof(void*), sizeof(uint64_t));
     uint64_t outcastDataSize = AlignUp(outcastSize * sizeof(void*), sizeof(uint64_t));
     uint64_t expressionDataSize = AlignUp(expressionSize * sizeof(uint64_t), sizeof(uint64_t));
-    uint64_t stitchDataSize = AlignUp(outcastStitchCount * sizeof(DevAscendFunctionDuppedStitchList), sizeof(uint64_t));
+    uint64_t stitchDataSize = AlignUp(stitchCount * sizeof(DevAscendFunctionDuppedStitchList), sizeof(uint64_t));
     uint64_t totalDataSize =
         predCountListDataSize + incastDataSize + outcastDataSize + expressionDataSize + stitchDataSize;
     duppedDataAllocSize_ = sizeof(DevAscendFunctionDuppedData) + totalDataSize;
@@ -173,7 +173,7 @@ void DevAscendFunction::InitOperationDynamicField(
     ONFILLCONTENT
     {
         DevAscendFunctionDuppedData* dupData = reinterpret_cast<DevAscendFunctionDuppedData*>(&At(duppedData_, 0));
-        FillDuppedDataFields(dupData, operationSize, incastSize, outcastSize, expressionSize, outcastStitchCount,
+        FillDuppedDataFields(dupData, operationSize, incastSize, outcastSize, expressionSize, stitchCount,
             predCountListDataSize, incastDataSize, outcastDataSize, expressionDataSize, stitchDataSize, totalDataSize,
             duppedDataAllocSize_);
         VerifyDuppedDataRanges(dupData, operationSize, incastSize, outcastSize, expressionSize);
@@ -530,7 +530,7 @@ void DevAscendFunction::InitOperation(
     const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
     const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& outcastStitchIndexList,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
     const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent)
 {
@@ -539,7 +539,7 @@ void DevAscendFunction::InitOperation(
     InitOperationBufferLayouts(initOffset, callList, callOpSuccDict, copyOutResolveSuccIndexListDict);
     FillOperationEncodedContent(
         expressionTable, callList, tlist, rawList, callOpPredDict, callOpSuccDict, calleeHashIndexDict,
-        outcastStitchIndexList, copyOutResolveSuccIndexListDict, fillContent);
+        stitchIndexList, copyOutResolveSuccIndexListDict, fillContent);
 }
 
 void DevAscendFunction::InitOperationNoPredNoSuccIndices(
@@ -612,14 +612,14 @@ void DevAscendFunction::FillOperationEncodedContent(
     const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
     const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& outcastStitchIndexList,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent)
 {
     ONFILLCONTENT
     {
         auto* dupData = reinterpret_cast<DevAscendFunctionDuppedData*>(&At(duppedData_, 0));
         PopulateOperationEncodedContent(
-            expressionTable, callList, tlist, rawList, callOpSuccDict, calleeHashIndexDict, outcastStitchIndexList,
+            expressionTable, callList, tlist, rawList, callOpSuccDict, calleeHashIndexDict, stitchIndexList,
             copyOutResolveSuccIndexListDict, dupData);
         VerifyOperationEncodedContent(callList, callOpPredDict, dupData);
         dupData->GetSource() = this;
@@ -638,7 +638,7 @@ void DevAscendFunction::PopulateOperationEncodedContent(
     const SymbolicExpressionTable* expressionTable, const OrderedSet<Operation*>& callList,
     const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
     const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& outcastStitchIndexList,
+    const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
     const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
     DevAscendFunctionDuppedData* dupData)
 {
@@ -649,7 +649,7 @@ void DevAscendFunction::PopulateOperationEncodedContent(
     for (size_t index = 0; index < callList.size(); index++) {
         PopulateOneEncodedOpOperandsAndAttrs(
             index, operanSize, staticAttributeSize, expressionTable, callList, tlist, rawList, calleeHashIndexDict,
-            outcastStitchIndexList);
+            stitchIndexList);
         PopulateOneEncodedOpGraphEdges(
             index, sucSize, copyOutResolveSuccIdxSize, callList, callOpSuccDict, copyOutResolveSuccIndexListDict,
             dupData);
@@ -678,13 +678,13 @@ void DevAscendFunction::PopulateOneEncodedOpOperandsAndAttrs(
     size_t index, int& operanSize, int& staticAttributeSize, const SymbolicExpressionTable* expressionTable,
     const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
     const OrderedSet<std::shared_ptr<RawTensor>>& rawList, const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-    const std::vector<int32_t>& outcastStitchIndexList)
+    const std::vector<int32_t>& stitchIndexList)
 {
     Operation* op = callList[index];
     auto callop = std::static_pointer_cast<CallOpAttribute>(callList[index]->GetOpAttribute());
     DevAscendOperation& staticField = At(operationList_, index);
 
-    staticField.outcastStitchIndex = outcastStitchIndexList[index];
+    staticField.stitchIndex = stitchIndexList[index];
     staticField.debugOpmagic = op->GetOpMagic();
     staticField.ioperandList.AssignRangeOffsetSize(operationOperandInfoList_, operanSize, op->GetIOperands().size());
     std::map<int, int> rawTensorIndex;
@@ -1019,8 +1019,8 @@ struct EncodeDevAscendFunctionInfo {
     std::vector<int> noSuccOpList;
     std::vector<int> noPredOpList;
 
-    uint32_t outcastStitchCount{0};
-    std::vector<int32_t> outcastStitchIndexList;
+    uint32_t stitchCount{0};
+    std::vector<int32_t> stitchIndexList;
 
     OrderedSet<std::shared_ptr<RawTensor>> incastRawTensorList;
     OrderedSet<std::shared_ptr<RawTensor>> outcastRawTensorList;
@@ -1221,9 +1221,8 @@ struct EncodeDevAscendFunctionInfo {
         outcastOpAttrDict.insert({o, outcastOpAttr});
     }
 
-    void EncodeOutCasts()
+    void EncodeOutCasts(std::set<uint32_t>& allInOutcastUseOpSet, std::set<int>& noSuccOpSet)
     {
-        std::set<uint32_t> allOutcastUseOpSet;
         for (auto& i : outcastList) {
             tensorList.Insert(i);
             outcastRawTensorList.Insert(i->GetRawTensor());
@@ -1232,7 +1231,7 @@ struct EncodeDevAscendFunctionInfo {
             auto dimSize = i->shape.size();
             outcastOpAttr.dim = dimSize;
             outcastOpAttr.cellMatchTableDesc = InitCellMatchTableDesc(i->GetShape(), std::vector<int64_t>(dimSize, 1));
-            EncodeAnalysisOpUseOutCasts(i, allOutcastUseOpSet, outcastOpAttr);
+            EncodeAnalysisOpUseOutCasts(i, allInOutcastUseOpSet, outcastOpAttr);
         }
 
         // Add edge from all stitchPolicyFullCoverProducerList's node to the single node
@@ -1254,7 +1253,6 @@ struct EncodeDevAscendFunctionInfo {
             }
         }
 
-        std::set<int> noSuccOpSet;
         for (size_t index = 0; index < callList.size(); index++) {
             Operation* op = callList[index];
             if (!callOpSuccDict.count(op) || callOpSuccDict.at(op).empty()) {
@@ -1263,22 +1261,9 @@ struct EncodeDevAscendFunctionInfo {
             }
         }
 
-        /*
-        * As we need a reference of null, we use the 0-th element for the reference of null for
-        * DevAscendFunctionDuppedData So outcastStitchCount starts from 1, as the 0-th is for the reference of null.
-        */
-        outcastStitchCount = 1;
-        for (size_t index = 0; index < callList.size(); index++) {
-            if (allOutcastUseOpSet.count(index) || noSuccOpSet.count(index)) {
-                outcastStitchIndexList.push_back(outcastStitchCount);
-                outcastStitchCount++;
-            } else {
-                outcastStitchIndexList.push_back(0);
-            }
-        }
     }
 
-    void EncodeIncasts()
+    void EncodeIncasts(std::set<uint32_t> &allInOutcastUseOpSet)
     {
         for (auto& index : incastList) {
             tensorList.Insert(index);
@@ -1297,28 +1282,30 @@ struct EncodeDevAscendFunctionInfo {
                 for (size_t k = 0; k < op.GetIOperands().size(); ++k) {
                     auto& iOperand = op.GetIOperands()[k];
                     auto coaIndex = op.GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
-                    if (index->tensor->rawmagic == iOperand->tensor->rawmagic) {
-                        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, iOperand->GetShape().size() == dimSize)
-                            << "Shape size mismatch: expected: " << dimSize << ", got " << iOperand->GetShape().size()
-                            << " for operand: " << k;
-                        std::vector<int64_t> shape =
-                            callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
-                        if (shape == Shape(shape.size())) { // 跳过全0
-                            continue;
-                        }
-                        incastOpAttr.useList.emplace_back(j, coaIndex, coaIndex + dimSize, CellMatchOpType::READ);
-                        UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
-                        MACHINE_LOGD(
-                            "Minimal shape for incast %d rawtensor magic %d coaIndex %d op %zu %d is %s.\n", index->magic,
-                            index->GetRawMagic(), coaIndex, j, op.GetOpMagic(),
-                            IntVecToStr(ShapeToVector(incastOpAttr.cellMatchTableDesc.cellShape)).c_str());
-                        incastUseOpSet.insert(j);
+                    if (index->tensor->rawmagic != iOperand->tensor->rawmagic) {
+                        continue;
                     }
+                    ASSERT(DevCommonErr::PARAM_CHECK_FAILED, iOperand->GetShape().size() == dimSize)
+                        << "Shape size mismatch: expected: " << dimSize << ", got " << iOperand->GetShape().size()
+                        << " for operand: " << k;
+                    std::vector<int64_t> shape =
+                        callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
+                    if (shape == Shape(shape.size())) { // 跳过全0
+                        continue;
+                    }
+                    incastOpAttr.useList.emplace_back(j, coaIndex, coaIndex + dimSize, CellMatchOpType::READ);
+                    UpdateCellMatchShape(incastOpAttr.cellMatchTableDesc, shape);
+                    MACHINE_LOGD(
+                        "Minimal shape for incast %d rawtensor magic %d coaIndex %d op %zu %d is %s.\n", index->magic,
+                        index->GetRawMagic(), coaIndex, j, op.GetOpMagic(),
+                        IntVecToStr(ShapeToVector(incastOpAttr.cellMatchTableDesc.cellShape)).c_str());
+                    incastUseOpSet.insert(j);
                 }
             }
             UpdateCellMatchStrideAndSize(incastOpAttr.cellMatchSize, incastOpAttr.cellMatchTableDesc, index, dimSize);
             incastOpAttr.useOpList.insert(incastOpAttr.useOpList.end(), incastUseOpSet.begin(), incastUseOpSet.end());
             incastOpAttrDict.insert({index, incastOpAttr});
+            allInOutcastUseOpSet.insert(incastUseOpSet.begin(), incastUseOpSet.end());
         }
 
         for (size_t index = 0; index < callList.size(); index++) {
@@ -1800,6 +1787,28 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+    void EncodeInOutCast()
+    {
+        std::set<uint32_t> allInOutcastUseOpSet;
+        std::set<int> noSuccOpSet;
+        EncodeIncasts(allInOutcastUseOpSet);
+        EncodeOutCasts(allInOutcastUseOpSet, noSuccOpSet);
+        
+        /*
+        * As we need a reference of null, we use the 0-th element for the reference of null for
+        * DevAscendFunctionDuppedData So stitchCount starts from 1, as the 0-th is for the reference of null.
+        */
+        stitchCount = 1;
+        for (size_t index = 0; index < callList.size(); index++) {
+            if (allInOutcastUseOpSet.count(index) || noSuccOpSet.count(index)) {
+                stitchIndexList.push_back(stitchCount);
+                stitchCount++;
+            } else {
+                stitchIndexList.push_back(0);
+            }
+        }
+    }
+
     EncodeDevAscendFunctionInfo(
         Function* dyndev, const std::unordered_map<uint64_t, int>& tHashIndexDict,
         const std::vector<CceCodeInfo>& tCceCodeInfoList, const SymbolicExpressionTable* tExpressionTable,
@@ -1847,8 +1856,7 @@ struct EncodeDevAscendFunctionInfo {
             callList.Insert(op);
         }
 
-        EncodeIncasts();
-        EncodeOutCasts();
+        EncodeInOutCast();
 
         // dummy op might be inserted in EncodeOutcast, add dummy copy out resolve.
         for (auto& op : callList) {
@@ -1973,7 +1981,7 @@ struct EncodeDevAscendFunctionInfo {
         devFunc->hubOpCount_ = hubOpCount;
         devFunc->InitIncastOutcastAttr(initOffset, incastList, outcastList, fillContent);
         devFunc->InitOperationDynamicField(
-            initOffset, predInfo, outcastStitchCount, calleeHashIndexDict, expressionTable, callList, incastList,
+            initOffset, predInfo, stitchCount, calleeHashIndexDict, expressionTable, callList, incastList,
             outcastList, callOpSuccDict, fillContent);
         devFunc->InitRawTensorAndMemoryRequirement(
             initOffset, incastRawTensorList, outcastRawTensorList, rawTensorList, rawMagicToRawTensor, rawAttrs, param,
@@ -1981,7 +1989,7 @@ struct EncodeDevAscendFunctionInfo {
         devFunc->InitTensor(initOffset, tensorList, rawTensorList, fillContent);
         devFunc->InitOperation(
             initOffset, expressionTable, callList, tensorList, rawTensorList, callOpPredDict, callOpSuccDict,
-            calleeHashIndexDict, outcastStitchIndexList, noPredOpList, noSuccOpList, copyOutResolveSuccIndexListDict,
+            calleeHashIndexDict, stitchIndexList, noPredOpList, noSuccOpList, copyOutResolveSuccIndexListDict,
             fillContent);
         devFunc->InitWrapInfo(initOffset, callList, fillContent);
 

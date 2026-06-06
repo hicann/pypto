@@ -62,6 +62,9 @@ struct HandleCellMatchFull {
                                       LUid(none(), 0, none(), consumerOperationIdx, none()), none(), none(),
                                       debugSlotIdx, none(), none()),
                                   StitchReasonUniqueMatch())));
+            DEV_VERBOSE_DEBUG(
+                "FullCoverUpdateStitch HandleCellMatchFull handle one stitch [%u] -> [%u!%u]", producerOperationIdx,
+                static_cast<uint32_t>(devNextIdx), static_cast<uint32_t>(consumerOperationIdx));
             DeviceStitchContext::HandleOneStitch(
                 *prevDup, *nextDup, producerOperationIdx, devNextIdx, consumerOperationIdx, workspace,
                 DeviceStitchContext::StitchKind::StitchDefault, debugSlotIdx);
@@ -261,7 +264,10 @@ void DeviceStitchContext::HandleOneStitch(
 {
     (void)debugStitchKind;
     (void)debugSlotIdx;
-
+    DEV_VERBOSE_DEBUG(
+        "DeviceStitchContext::HandleOneStitch %p stitchlist %p opindex %d -> [%u!%u]", &producerDup,
+        &producerStitchList, static_cast<int>(producerOperationIdx), static_cast<uint32_t>(consumerIdx),
+        static_cast<uint32_t>(consumerOperationIdx));
     PushBackTask(producerStitchList, MakeTaskID(consumerIdx, consumerOperationIdx), workspace);
     consumerDup.GetOperationCurrPredCount(consumerOperationIdx)++;
 
@@ -423,6 +429,9 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(
         for (size_t conIndex = 0, conSize = incast.stitchPolicyFullCoverConsumerAllOpIdxList.size(); conIndex < conSize;
              conIndex++) {
             auto& consumerOpIdx = consumerAllOpIdxList[conIndex];
+            DEV_VERBOSE_DEBUG(
+                "FullCoverUpdateStitch hub handle one stitch [%u!%u] -> [%u!%u]", slot.stitchDupIdx,
+                static_cast<uint32_t>(producerHubOpIdx), static_cast<uint32_t>(devNextIdx), consumerOpIdx);
             DeviceStitchContext::HandleOneStitch(
                 prevDup, nextDup, producerHubOpIdx, devNextIdx, consumerOpIdx, workspace_, StitchKind::StitchFullCover,
                 slotIdx);
@@ -440,6 +449,9 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(
             for (size_t conIndex = 0, conSize = incast.stitchPolicyFullCoverConsumerAllOpIdxList.size();
                  conIndex < conSize; conIndex++) {
                 auto& consumerOpIdx = consumerAllOpIdxList[conIndex];
+                DEV_VERBOSE_DEBUG(
+                    "FullCoverUpdateStitch handle one stitch [%u!%u] -> [%u!%u]", slot.stitchDupIdx,
+                    static_cast<uint32_t>(producerOperationIdx), static_cast<uint32_t>(devNextIdx), consumerOpIdx);
                 DeviceStitchContext::HandleOneStitch(
                     prevDup, nextDup, producerOperationIdx, devNextIdx, consumerOpIdx, workspace_,
                     StitchKind::StitchFullCover, slotIdx);
@@ -659,12 +671,12 @@ void DeviceStitchContext::DumpStitchInfo(DevAscendFunctionDupped* stitchedList, 
         auto& funcDup = stitchedList[i];
         for (size_t opIndex = 0; opIndex < funcDup.GetSource()->GetOperationSize(); opIndex++) {
             auto& stitch = funcDup.GetOperationStitch(opIndex);
-            if (stitch.IsNull()) {
-                continue;
-            }
+
             std::stringstream oss;
             oss << stitch.Dump();
-            DEV_VERBOSE_DEBUG("func %d opIndex %zu stitch list: %s.", funcId, opIndex, oss.str().c_str());
+            DEV_VERBOSE_DEBUG(
+                "func %d opIndex %zu stitch list: %p stitchindex:%u %s.", funcId, opIndex, &stitch,
+                funcDup.GetSource()->GetOperationStitchIndex(opIndex), oss.str().c_str());
         }
         funcId++;
     }
@@ -697,6 +709,9 @@ void DeviceStitchContext::StitchForWorkspaceReuse(
                     Producer(LUid(none(), 0, none(), prevNoSucc, none()), none(), none(), none(), none(), none()),
                     Consumer(LUid(none(), 0, none(), currNoPred, none()), none(), none(), none(), none(), none()),
                     StitchReasonWorkspaceReuse())));
+            DEV_VERBOSE_DEBUG(
+                "StitchForWorkspaceReuse handle one stitch [%u] -> [%u!%u]", static_cast<uint32_t>(prevNoSucc),
+                static_cast<uint32_t>(devCurrIdx), static_cast<uint32_t>(currNoPred));
             DeviceStitchContext::HandleOneStitch(
                 prevDup, currDup, stitch, prevNoSucc, devCurrIdx, currNoPred, workspace,
                 DeviceStitchContext::StitchKind::StitchReuse, -1);

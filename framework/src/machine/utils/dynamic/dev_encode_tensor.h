@@ -118,9 +118,21 @@ struct DevCellMatchTableDesc {
         cellUint64Size = offset;
     }
 };
+
+static inline std::string DumpMemLayOut(const DevCellMatchTableDesc& tableDesc)
+{
+    std::ostringstream oss;
+    oss << " memLayout = [" << tableDesc.cellUint64Size << "]{";
+    for (uint32_t k = 0; k < DevCellMatchTableDesc::CELL_MATCH_OP_TYPE_MAX_NUM; k++) {
+        oss << Delim(k != 0, ",") << tableDesc.cacheOpMaxCount[k];
+    }
+    oss << "}";
+    return oss.str();
+}
+
 static inline std::string DumpCellMatchTableDesc(const DevCellMatchTableDesc& desc)
 {
-    return DumpShape(desc.cellShape) + " x " + DumpStride(desc.stride);
+    return DumpShape(desc.cellShape) + " x " + DumpStride(desc.stride) + DumpMemLayOut(desc);
 }
 
 struct DevAscendProgram;

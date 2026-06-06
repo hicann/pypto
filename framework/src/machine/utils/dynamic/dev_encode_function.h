@@ -370,9 +370,9 @@ public:
         memcpy_s(&At(deadEndHubBitmap_, 0), byteSize, deadEndBuf, byteSize);
         memcpy_s(&At(tailTaskBitmap_, 0), byteSize, tailBuf, byteSize);
     }
-    inline uint32_t GetOperationOutcastStitchIndex(int operationIndex) const
+    inline uint32_t GetOperationStitchIndex(int operationIndex) const
     {
-        return At(operationList_, operationIndex).outcastStitchIndex;
+        return At(operationList_, operationIndex).stitchIndex;
     }
     inline uint32_t GetOperationDebugOpmagic(int operationIndex) const
     {
@@ -589,7 +589,7 @@ private:
         uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& iList,
         const std::vector<std::shared_ptr<LogicalTensor>>& oList, bool fillContent);
     void InitOperationDynamicField(
-        uintdevptr_t& initOffset, DevAscendFunctionPredInfo predInfo, uint32_t outcastStitchCount,
+        uintdevptr_t& initOffset, DevAscendFunctionPredInfo predInfo, uint32_t stitchCount,
         const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const SymbolicExpressionTable* expressionTable,
         const OrderedSet<Operation*>& callList, const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
         const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
@@ -618,7 +618,7 @@ private:
         const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
         const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& outcastStitchIndexList, const std::vector<int>& noPredOpList,
+        const std::vector<int32_t>& stitchIndexList, const std::vector<int>& noPredOpList,
         const std::vector<int>& noSuccOpList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent);
     void InitOperationNoPredNoSuccIndices(
@@ -636,14 +636,14 @@ private:
         const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
         const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& outcastStitchIndexList,
+        const std::vector<int32_t>& stitchIndexList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent);
     void PopulateOperationEncodedContent(
         const SymbolicExpressionTable* expressionTable, const OrderedSet<Operation*>& callList,
         const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
         const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& outcastStitchIndexList,
+        const std::vector<int32_t>& stitchIndexList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
         DevAscendFunctionDuppedData* dupData);
     void PopulateOneEncodedOpOperandsAndAttrs(
@@ -651,7 +651,7 @@ private:
         const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
         const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
         const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& outcastStitchIndexList);
+        const std::vector<int32_t>& stitchIndexList);
     void PopulateOneEncodedOpGraphEdges(
         size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,

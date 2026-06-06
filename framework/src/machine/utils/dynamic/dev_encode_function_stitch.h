@@ -82,6 +82,7 @@ struct DevAscendFunctionDuppedStitchList {
     {
         if (head_ == nullptr || head_->Size() == DUPPED_STITCH_SIZE) {
             auto* newNode = allocate();
+            DEV_VERBOSE_DEBUG("New node %p", newNode);
             newNode->InitWithNext(head_);
             head_ = newNode;
         }
@@ -423,6 +424,17 @@ static uint32_t CellMatchFillIncastOutcast(
         bool paramConcrete = GetTensorOffsetAndValidShape<skipExpression>(
             devFunc, offset, validShape, runtimeExpressionList, cellMatchTableDesc,
             cellMatchTableDesc.GetDimensionSize(), use.operationIdx, use.offsetAttrIdx);
+
+        DEV_IF_VERBOSE_DEBUG
+        {
+            for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
+                DEV_VERBOSE_DEBUG(
+                    "CellMatchFillIncastOutcast, op[%d] -> dimension[%d] = (offset:%lu "
+                    ", validShape:%lu, cellshape:%d)",
+                    use.operationIdx, j, offset[j], validShape[j], cellMatchTableDesc.cellShape.dim[j]);
+            }
+        }
+
         if (paramConcrete) {
             uint32_t errCode = CellMatchFillEnhance(offset, validShape, use.operationIdx, cellMatchTableDesc,
                                                     static_cast<uint32_t>(use.opType), args...);

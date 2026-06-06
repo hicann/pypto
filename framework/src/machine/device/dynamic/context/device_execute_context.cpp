@@ -80,7 +80,7 @@ DeviceExecuteContext::DeviceExecuteContext(DevStartArgs* startArgs)
     DEV_IF_VERBOSE_DEBUG
     {
         std::string dump = devProg->Dump(0, true);
-        DEV_VERBOSE_DEBUG("[DEVICE] %s.", dump.c_str());
+        DEV_VERBOSE_DEBUG_SPLIT("[DEVICE] %s.", dump.c_str());
     }
 
     PerfBegin(PERF_EVT_CONTROL_FLOW_MAPEXE);

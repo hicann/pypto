@@ -72,7 +72,7 @@ std::string DevAscendFunction::DumpOperationAttr(
     }
     oss << " " << schema::outSuccIndex(outSuccIndexDataList).Dump();
     oss << " "
-        << "#outcastStitch{" << GetOperationOutcastStitchIndex(operationIndex) << "}";
+        << "#stitchIndex{" << GetOperationStitchIndex(operationIndex) << "}";
     return oss.str();
 }
 
