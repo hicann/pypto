@@ -133,12 +133,35 @@ std::string CodeGenNPU::GenFuncHeader(uint64_t programId, Function& topFunc, Com
     return funcHeader.str();
 }
 
+void CodeGenNPU::GenDDRChecker(std::ostringstream& oss) const
+{
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_GM_OUT_OF_BOUNDS &&
+        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_ALL) {
+        return;
+    }
+
+    std::string checkFunc = R"!!!(
+inline __aicore__ void  CheckInvalidAccessOfDDR(uint64_t ddr_size, uint64_t access_offset, uint64_t access_extent, uint32_t read_or_write) {
+    if (access_offset < 0 || access_offset + access_extent > ddr_size) {
+        if (read_or_write == 1) {
+            trap();
+        } else {
+            trap();
+        }
+    }
+}
+)!!!";
+
+    oss << checkFunc << "\n";
+}
+
 void CodeGenNPU::GenFuncBodyBefore(
     const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc, CompileInfo& compileInfo,
     std::ostringstream& oss) const
 {
     GenInclude(topFunc, oss);
     GenCommentBeforeFuncHeader(*subFuncPair.second, oss);
+    GenDDRChecker(oss);
     oss << GenFuncHeader(subFuncPair.first, topFunc, compileInfo);
 }
 

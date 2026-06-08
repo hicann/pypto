@@ -174,6 +174,7 @@ protected:
     void GenerateMakefile(const std::string& makefilePath) const;
     void ExecuteParallelCompile(const Function& topFunc);
     std::string GetOutputDir() const;
+    void GenDDRChecker(std::ostringstream& oss) const;
 
     mutable std::mutex compileTasksMutex_;
     mutable std::vector<CompileTaskInfo> compileTasks_;

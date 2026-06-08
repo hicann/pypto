@@ -129,7 +129,7 @@ void CodeGenOp::UpdateShape(const Operation& oper, const LogicalTensor& logicalT
 
     Opcode opcode = oper.GetOpcode();
     if (logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR && IsOpShapeFromAttr(opcode)) {
-        std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+        std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
         ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
         // 1. for spilling GM scene 2. for conv
         shapeFromAttr[operandIdx] = attr->GetSpecifiedShape(1);
@@ -140,7 +140,7 @@ void CodeGenOp::UpdateShape(const Operation& oper, const LogicalTensor& logicalT
     }
 
     if ((opCode == Opcode::OP_L0C_TO_L1) && (operandIdx == 0)) {
-        std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+        std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
         ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
         UpdateShapeFromAttr(attr->GetToDynValidShape(), operandIdx);
     }
@@ -154,7 +154,7 @@ void CodeGenOp::UpdateValidShapeForShmemCopyOps(const Operation& oper, int opera
     if ((!IsShmemCopyOp(opcode)) || (operandIdx != 0)) {
         return;
     }
-    std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+    std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
     ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
     const auto& validShape =
         (attr->GetFromDynValidShape().size() != 0) ? attr->GetFromDynValidShape() : attr->GetToDynValidShape();
@@ -198,7 +198,7 @@ void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor&
     bool distCondition = distOpcode.count(opCode);
     bool useAttrShapeOffsetForInputGM =
         OpcodeManager::Inst().IsCopyIn(opCode) && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR;
-    std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+    std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
     if (attr != nullptr && (distCondition || cubeMDLCondition || useAttrShapeOffsetForInputGM)) {
         // only used for 1. L1 Copy; 2. spilling to gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         CODEGEN_LOGI("start update offset for GM input");
@@ -217,7 +217,7 @@ void CodeGenOp::UpdateOffsetForOutput(const Operation& oper, const LogicalTensor
     bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode);
     bool useAttrShapeOffsetForOutputGM =
         OpcodeManager::Inst().IsCopyOut(opCode) && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR;
-    std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+    std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
     if (attr != nullptr && (cubeMDLCondition || useAttrShapeOffsetForOutputGM)) {
         // only used for 1. L1 Copy; 2. spilling to gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         CODEGEN_LOGI("start update offset for GM output");

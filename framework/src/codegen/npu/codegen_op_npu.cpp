@@ -878,6 +878,34 @@ std::string CodeGenOpNPU::QueryTileTensorTypeByIdx(int paramIdx) const
     return tileTensor.usingType;
 }
 
+std::string CodeGenOpNPU::GenGmCheck() const
+{
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_GM_OUT_OF_BOUNDS &&
+        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_ALL) {
+        return "";
+    }
+
+    std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(originalOp.GetOpAttribute());
+    if (attr == nullptr) {
+        return "";
+    }
+
+    auto checkInfo = attr->GetGmOutOfRangeCheck();
+    if (checkInfo == nullptr) {
+        CODEGEN_LOGI_FULL("checkInfo is null, op is %s", originalOp.Dump().c_str());
+        return "";
+    }
+
+    std::string gmOffset = SymbolicExpressionTable::BuildExpression(checkInfo->oneDimOffset.GetSpecifiedValue());
+    std::string gmExtent = SymbolicExpressionTable::BuildExpression(checkInfo->oneDimExtent.GetSpecifiedValue());
+    std::string gmTotalSize = SymbolicExpressionTable::BuildExpression(checkInfo->totalSize.GetSpecifiedValue());
+    std::string rw = checkInfo->accessType == GmOutOfRangeCheckInfo::AccessType::READ_GM ? "1" : "0";
+
+    std::ostringstream os;
+    os << "CheckInvalidAccessOfDDR" << WrapParamByParentheses({gmTotalSize, gmOffset, gmExtent, rw}) << STMT_END;
+    return os.str();
+}
+
 std::string CodeGenOpNPU::GenOpCode() const
 {
     std::string tileOpSourceCode;
@@ -889,7 +917,8 @@ std::string CodeGenOpNPU::GenOpCode() const
         return std::string{"CAN NOT HANDLE OP: " + opCodeStr};
     }
 
-    std::string ret = InsertOpComment(tileOpSourceCode);
+    std::string ret = GenGmCheck();
+    ret += InsertOpComment(tileOpSourceCode);
 
     if (forBlkMgr_ == nullptr || !forBlkMgr_->IsInLoop()) {
         CODEGEN_LOGI_FULL("op codegen result: \n, %s", ret.c_str());

@@ -185,6 +185,9 @@ public:
     std::string QueryTileTensorNameByIdx(int paramIdx) const;
     std::string QueryTileTensorTypeByIdx(int paramIdx) const;
 
+    // check whether the GM address is out of bounds
+    std::string GenGmCheck() const;
+
 protected:
     virtual TileTensor QueryTileTensorByIdx(int paramIdx) const;
     std::vector<std::string> GetTileOpParamsByOrder(int paramCnt = 0) const;

@@ -499,11 +499,11 @@
                 "runtime_debug_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "设置执行阶段调试模式。0：不使能；1：使能，一键开启图执行相关配置（如泳道图）；2：使能,一键开启端到端Host侧仿真；3：使能,运行时依赖正确性校验数据 dump",
-                        "en": "Set debug mode during execution stage. 0: disabled; 1: enabled, one-click to enable execution-related configs (e.g. swimlane graph); 2:  enable, One-click start of end-to-end host-side simulation; 3: enable, runtime dependency-verification data dump."
+                        "zh": "设置执行阶段调试模式。0：不使能；1：使能，一键开启图执行相关配置（如泳道图）；2：使能,一键开启端到端Host侧仿真；3：使能,运行时依赖正确性校验数据 dump；4：使能, 运行时GM内存越界检查",
+                        "en": "Set debug mode during execution stage. 0: disabled; 1: enabled, one-click to enable execution-related configs (e.g. swimlane graph); 2:  enable, One-click start of end-to-end host-side simulation; 3: enable, runtime dependency-verification data dump; 4: enable, runtime GM memory out-of-bounds check."
                     },
                     "minimum": 0,
-                    "maximum": 3
+                    "maximum": 4
                 }
             }
         },

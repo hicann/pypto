@@ -505,8 +505,9 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0
         GetOpAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
     }
 
-    bool isFixBuf = (((operandDtype[param.localIdx] == DT_INT32) && (operandDtype[param.gmIdx] == DT_FP16)) ||
-                    (operandDtype[param.gmIdx] == DT_INT8));
+    bool isFixBuf =
+        (((operandDtype[param.localIdx] == DT_INT32) && (operandDtype[param.gmIdx] == DT_FP16)) ||
+         (operandDtype[param.gmIdx] == DT_INT8));
     if ((!scaleValue.GetUnsignedData()) && isFixBuf) {
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
@@ -544,7 +545,7 @@ void CodeGenOpNPU::AppendValidShapeForReshapeCopy(std::vector<std::string>& tile
     if (opCode != Opcode::OP_RESHAPE_COPY_OUT && opCode != Opcode::OP_RESHAPE_COPY_IN) {
         return;
     }
-    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(originalOp.GetOpAttribute());
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(originalOp.GetOpAttribute());
     ASSERT(OperErr::ATTRIBUTE_INVALID, copyAttr != nullptr) << "CopyOpAttribute is null for RESHAPE_COPY operation";
     std::vector<SymbolicScalar> dynValidShape;
     dynValidShape = opCode == Opcode::OP_RESHAPE_COPY_OUT ? OpImmediate::ToSpecified(copyAttr->GetToDynValidShape()) :

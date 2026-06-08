@@ -88,6 +88,8 @@ constexpr int64_t CFG_DEBUG_NONE = 0;
 constexpr int64_t CFG_DEBUG_ALL = 1;
 constexpr int64_t CFG_DEBUG_AICORE_MODEL = 2;
 constexpr int64_t CFG_DEBUG_VERIFY = 3;
+constexpr int64_t CFG_DEBUG_GM_OUT_OF_BOUNDS = 4;
+
 // operation
 const std::string KEY_COMBINE_AXIS = "combine_axis";
 

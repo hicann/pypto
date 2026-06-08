@@ -295,10 +295,8 @@ std::string TestMatmulMteBody(const std::string& funcName, Opcode opcode, Memory
             std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_L0A, shapeImme, shapeImme));
     } else if (opcode == Opcode::OP_L0C_COPY_UB || opcode == Opcode::OP_L0C_COPY_UB_DUAL_DST) {
         // Align with GenerateMoveOp::SetL0C2UBCopyAttr (CopyIn, toDynValidShape on UB destination).
-        op.SetOpAttribute(
-            std::make_shared<CopyOpAttribute>(
-                OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme,
-                OpImmediate::Specified(shape)));
+        op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme, OpImmediate::Specified(shape)));
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
         copyAttr->SetFromOffset(OpImmediate::Specified({0, 0}));
         copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
@@ -411,10 +409,8 @@ std::string TestCopyL1Body(Opcode opcode, MemoryType inputType, MemoryType outpu
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     if (opcode == Opcode::OP_L0C_TO_L1) {
         auto shapeImme = OpImmediate::Specified(shape);
-        op.SetOpAttribute(
-            std::make_shared<CopyOpAttribute>(
-                OpImmediate::Specified({0, 0}), MemoryType::MEM_L1, shapeImme, shapeImme,
-                OpImmediate::Specified(shape)));
+        op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified({0, 0}), MemoryType::MEM_L1, shapeImme, shapeImme, OpImmediate::Specified(shape)));
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
         copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
     }
@@ -466,15 +462,20 @@ void TestUBCopyInBody(const std::string funcName, const std::string& expect)
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+    GmOutOfRangeCheckInfo gmCheckInfo = {
+        OpImmediate::Specified(SymbolicScalar(0)), OpImmediate::Specified(SymbolicScalar(64)),
+        OpImmediate::Specified(SymbolicScalar(1024))};
+    copyAttr->SetGmOutOfRangeCheck(gmCheckInfo);
     op.SetIOpAtt(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     std::string res = GenOpCodeFromOp(*function, op);
-    EXPECT_EQ(res, expect);
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynCopy, UBCopyIn)
 {
+    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, CFG_DEBUG_GM_OUT_OF_BOUNDS);
     std::string expect =
         R"!!!(TileOp::DynUBCopyIn<float, 1, 1, 64, 64>((__ubuf__ float*)UB_S0_E0, (__gm__ float*)GET_PARAM_ADDR(param, 0, 0), 1, 1, 1, 64, 64, 1, 1, 1, GET_PARAM_RAWSHAPE_2(param, 0, 0), 0, 0, 0, GET_PARAM_OFFSET_2(param, 0, 0));
 )!!!";
@@ -500,10 +501,8 @@ TEST_F(TestCodegenDynCopy, L0CToL1)
 
     auto& op = function->AddOperation(Opcode::OP_L0C_TO_L1, {localTensor}, {localOutTensor});
     auto shapeImmeL0C = OpImmediate::Specified(shape);
-    op.SetOpAttribute(
-        std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified({0, 0}), MemoryType::MEM_L1, shapeImmeL0C, shapeImmeL0C,
-            OpImmediate::Specified(shape)));
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0}), MemoryType::MEM_L1, shapeImmeL0C, shapeImmeL0C, OpImmediate::Specified(shape)));
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
     copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
