@@ -201,6 +201,16 @@ struct ParallelSchDeviceTaskContext {
             }
         }
     }
+
+    void GatherParallelDevTaskData(int64_t* localFuncData, uint32_t* localDevTaskIds)
+    {
+        for (uint32_t idx = front; idx < rear; idx++) {
+            uint32_t slot = idx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
+            auto dyntask = (DynDeviceTask*)(elements[idx].GetDeviceTask());
+            localFuncData[slot] = static_cast<int64_t>(PtrToValue(dyntask->GetDynFuncDataList()));
+            localDevTaskIds[slot] = dyntask->GetIndex();
+        }
+    }
 };
 
 struct SchduleContext {

@@ -29,6 +29,12 @@
 
 constexpr uint32_t LAUNCH_AICPU_NUM = 5;
 constexpr int MAX_RETRIES = 100;
+//  same-cluster CPU ID bounds in Dav2201
+//  (dev0,dev1) and (dev2,dev3) each form a dual-die pair
+constexpr int CLUSTER_ID_LOW_BOUND_DIE0 = 4;
+constexpr int CLUSTER_ID_HIGH_BOUND_DIE0 = 7;
+constexpr int CLUSTER_ID_LOW_BOUND_DIE1 = 12;
+constexpr int CLUSTER_ID_HIGH_BOUND_DIE1 = 15;
 
 namespace npu::tile_fwk::dynamic {
 struct AicoreLogManager {
@@ -215,35 +221,19 @@ struct DynMachineManager {
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
     }
 
-    int AllocThreadIdxForDav2201(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
+    int AllocThreadIdxForDav2201(int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
-        cpumask_.fetch_or(1 << cpu, std::memory_order_release);
-        
-        int ret = WaitForCpuMaskReady(devArgs, cpu, curThreadIdx);
-        if (ret != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-            return ret;
-        }
-
-        auto maskval = cpumask_.load(std::memory_order_relaxed);
-        int cpuoff = 0;
-        int clus_id = -1;
-        for (int index = 0; index < static_cast<int>(sizeof(uint64_t)); ++index) {
-            int mask = (maskval >> cpuoff) & 0xF;
-            if (__builtin_popcount(static_cast<uint32_t>(mask)) >= static_cast<int>(devArgs->scheCpuNum)) {
-                clus_id = index;
-                break;
+        if (IsDeviceMode()) {
+            if ((cpu >= CLUSTER_ID_LOW_BOUND_DIE0 && cpu <= CLUSTER_ID_HIGH_BOUND_DIE0) ||
+                (cpu >= CLUSTER_ID_LOW_BOUND_DIE1 && cpu <= CLUSTER_ID_HIGH_BOUND_DIE1)) {
+                curThreadIdx = ++threadIdx;
+            } else {
+                curThreadIdx = -1;
             }
-            cpuoff += CPUS_PER_CLUSTER;
-        }
-        if (clus_id == -1) {
+        } else {
+            (void) cpu;
             curThreadIdx = ++threadIdx;
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
         }
-        if (cpu < cpuoff || cpu >= (cpuoff + CPUS_PER_CLUSTER)) {
-            curThreadIdx = -1;
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
-        }
-        curThreadIdx = ++threadIdx;
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
     }
 
@@ -263,7 +253,7 @@ struct DynMachineManager {
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
             ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx);
         } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
-            ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx);
+            ret = AllocThreadIdxForDav2201(cpu, curThreadIdx, threadIdx);
         } else {
             curThreadIdx = ++threadIdx;
         }
@@ -494,12 +484,12 @@ struct DynMachineManager {
             }
 
             if (splittedInfo_.ScheSync(runtimeDataCurrent, devArgs.scheCpuNum)) {
-                RunSchPost(devProg);
                 ret = DEVICE_MACHINE_OK;
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         }
         if (++schExitNum_ == devArgs.nrAicpu) {
+            RunSchPost(devProg);
             RunSchDeInit();
             PerfEvtMgr::Instance().AddScheduleTurn();
             DEV_INFO("All sche cpu exited.");

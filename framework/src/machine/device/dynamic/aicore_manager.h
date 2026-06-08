@@ -93,37 +93,40 @@ public:
 
     void InitAicoreParallelDevTask(ParallelSchDeviceTaskContext* parallelCtx)
     {
+        int64_t localFuncData[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
+        uint32_t localDevTaskIds[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
+        parallelCtx->GatherParallelDevTaskData(localFuncData, localDevTaskIds);
+
         DEV_IF_DEVICE {
             ForEachManageAicore([&](int coreIdx) {
                 auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
                 aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
-                FillKernelArgsParallexDevTask(parallelCtx, coreIdx);
+                FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
             });
         } else {
             if (enableEslModel_) {
                 ForEachManageAicore([&](int coreIdx) {
                     auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
                     aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
-                    FillKernelArgsParallexDevTask(parallelCtx, coreIdx);
+                    FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
                 });
             } else if (aicoreHal_.IsHostSimMode()) {
                 ForEachManageAicore([&](int coreIdx) {
                     auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
                     aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
-                    FillKernelArgsParallexDevTask(parallelCtx, coreIdx);
+                    FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
                 });
             }
         }
     }
 
-    void FillKernelArgsParallexDevTask(ParallelSchDeviceTaskContext* parallelCtx, int coreIdx)
+    void FillKernelArgsParallexDevTaskPreGathered(ParallelSchDeviceTaskContext* parallelCtx, int coreIdx,
+            const int64_t* localFuncData, const uint32_t* localDevTaskIds)
     {
         volatile ParallelDevTask* kernelParallDevTask = aicoreHal_.GetParallelDevTask(coreIdx);
         for (uint32_t idx = parallelCtx->front; idx < parallelCtx->rear; idx++) {
-            auto dyntask = (DynDeviceTask *)(parallelCtx->Element(idx)->GetDeviceTask());
-            aicoreHal_.SetParallelDevTask(
-                kernelParallDevTask, idx, static_cast<int64_t>(PtrToValue(dyntask->GetDynFuncDataList())),
-                dyntask->GetIndex());
+            auto slot = idx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
+            aicoreHal_.SetParallelDevTask(kernelParallDevTask, idx, localFuncData[slot], localDevTaskIds[slot]);
         }
         aicoreHal_.SetParallelDevTaskSize(kernelParallDevTask, parallelCtx->front, parallelCtx->rear);
         aicoreHal_.SetParallelDevTaskCtxVersion(coreIdx, parallelCtx->Version());
@@ -857,6 +860,11 @@ private:
         return static_cast<uint16_t>(context_->corePendReadyCnt_[static_cast<int>(type)]);
     }
 
+    inline uint16_t GetRunReadyCoreNum(CoreType type)
+    {
+        return static_cast<uint16_t>(context_->coreRunReadyCnt_[static_cast<int>(type)]);
+    }
+
     [[gnu::hot]] inline uint64_t TryBatchSendTask(SchDeviceTaskContext* devTaskCtx, CoreType type, ReadyCoreFunctionQueue* readyQue,
                 int coreIdxStart, int coreIdxEnd)
     {
@@ -1214,7 +1222,7 @@ private:
         uint32_t aicIndex = static_cast<uint32_t>(CoreType::AIC);
         uint32_t aivIndex = static_cast<uint32_t>(CoreType::AIV);
         if (devTaskCtx->readyCount[aicIndex] > 0) {
-            uint32_t needSendCnt = std::min(GetReadyCoreNum(CoreType::AIC), devTaskCtx->readyCount[aicIndex]);
+            uint32_t needSendCnt = std::min(GetRunReadyCoreNum(CoreType::AIC), devTaskCtx->readyCount[aicIndex]);
             if (needSendCnt > 0) {
                 devTaskCtx->readyCount[aicIndex] -= BatchSendTask(devTaskCtx,
                     CoreType::AIC, &devTaskCtx->readyIds[aicIndex][devTaskCtx->readyCount[aicIndex] - 1], needSendCnt,
@@ -1237,7 +1245,7 @@ private:
         }
 
         if (devTaskCtx->readyCount[aivIndex] > 0) {
-            uint32_t needSendCnt = std::min(GetReadyCoreNum(CoreType::AIV), devTaskCtx->readyCount[aivIndex]);
+            uint32_t needSendCnt = std::min(GetRunReadyCoreNum(CoreType::AIV), devTaskCtx->readyCount[aivIndex]);
             if (needSendCnt > 0) {
                 devTaskCtx->readyCount[aivIndex] -= BatchSendTask(devTaskCtx,
                     CoreType::AIV, &devTaskCtx->readyIds[aivIndex][devTaskCtx->readyCount[aivIndex] - 1], needSendCnt,
