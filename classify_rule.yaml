@@ -207,7 +207,10 @@ machine@pypto:
       - framework/src/machine/device/machine_interface/
       - framework/src/machine/device/stub/
       - framework/src/machine/host/
-      - framework/src/machine/runtime/
+      - framework/src/machine/runtime/context/
+      - framework/src/machine/runtime/launcher/
+      - framework/src/machine/runtime/memory_utils/
+      - framework/src/machine/runtime/runner/
       - framework/src/machine/simulation/
       - framework/src/machine/utils/
       - framework/src/utils/
