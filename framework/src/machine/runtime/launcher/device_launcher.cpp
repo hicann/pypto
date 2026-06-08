@@ -465,7 +465,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
             return rc;
         }
-        devRunner.SyncProfData();
+        devRunner.SyncProfData(true);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {

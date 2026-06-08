@@ -28,7 +28,7 @@ public:
     void InitAndStartDumpThread(const DeviceArgs &args);
     bool RunPrepare() const;
     void ResetPerData() const;
-    void SyncProfData();
+    void SyncProfData(const bool forceSync);
     void SetDebugEnable();
 
 private:
