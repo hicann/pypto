@@ -166,6 +166,7 @@ class FeatureParam(CMakeParam):
     whl_plat_name: Optional[str] = None  # python3 whl 包 plat-name
     whl_isolation: bool = False  # 以 isolation 模式编译 whl 包
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
+    whl_break_system_packages: bool = False
 
     def __init__(self, args):
         """初始化 FeatureParam 实例
@@ -183,6 +184,7 @@ class FeatureParam(CMakeParam):
         self.whl_plat_name = f"{args.plat_name}_{CMakeParam.get_system_processor()}" if args.plat_name else ""
         self.whl_isolation = args.isolation
         self.whl_editable = args.editable
+        self.whl_break_system_packages = args.break_system_packages
 
     def __str__(self) -> str:
         """返回特性参数的字符串表示
@@ -198,6 +200,7 @@ class FeatureParam(CMakeParam):
                 desc += f"\n    PlatName                : {self.whl_plat_name}"
             desc += f"\n    Isolation               : {self.whl_isolation}"
             desc += f"\n    Editable                : {self.whl_editable}"
+            desc += f"\n    BreakSystemPackages     : {self.whl_break_system_packages}"
         desc += f"\n    Backend                 : {self.backend_type}"
         return desc
 
@@ -231,6 +234,8 @@ class FeatureParam(CMakeParam):
                                  "Build dependencies must be installed separately when this option is used.")
         parser.add_argument("--editable", action="store_true", default=False,
                             help="Install whl in editable mode (i.e. setuptools \"editable_wheel\")")
+        parser.add_argument("--break_system_packages", action="store_true", default=False,
+                            help="Bypass system Python package protection to force global pip installation.")
         parser.add_argument("-b", "--backend", nargs="?", type=str, default="npu",
                             choices=["npu", "cost_model"],
                             help="backend, such as npu/cost_model etc.")
@@ -1228,6 +1233,7 @@ class BuildCtrl(CMakeParam):
         edit_str = "-e " if self.feature.whl_editable else ""
         cmd = f"{sys.executable} -m pip install {edit_str}" + f"{whl} {opt}" + (" -vvv " if self.verbose else "")
         cmd += f" --target={dest}" if dest else ""
+        cmd += f" --break-system-packages" if self.feature.whl_break_system_packages else ""
         logging.info("Install %s, Cmd: %s, Timeout: %s", whl, cmd, self.remain_timeout)
         _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pip")
         logging.info("Install %s%s success, %s", whl, f" to {dest}" if dest else "", duration)
@@ -1251,6 +1257,7 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(p)
         else:
             cmd = f"{sys.executable} -m pip uninstall -v -y {name}"
+            cmd += f" --break-system-packages" if self.feature.whl_break_system_packages else ""
             logging.info("Uninstall %s package, Cmd: %s, Timeout: %s", name, cmd, self.remain_timeout)
             _, _ = self.run_build_cmd(cmd=cmd, pg_desc="pip")
         logging.info("Uninstall %s package%s success", name, f" from {path}" if path else "")

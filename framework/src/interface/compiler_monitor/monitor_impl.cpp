@@ -416,7 +416,7 @@ void MonitorImpl::MonitorLoop()
         PrintTotalTimeOut(totalElapsed, totalTimeoutSec);
 
         auto waitDuration = std::chrono::milliseconds(checkIntervalSec * kMillisecondsPerSecond);
-        if (manager_->GetCurrentStageName() == STAGE_PASS && manager_->IsPassDetailEnabled()) {
+        if (checkEnable && manager_->GetCurrentStageName() == STAGE_PASS && manager_->IsPassDetailEnabled()) {
             waitDuration = std::chrono::milliseconds(kPassDetailMonitorIntervalMs);
         }
         std::unique_lock<std::mutex> lock(mutex_);

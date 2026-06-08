@@ -39,6 +39,7 @@ from importlib import metadata
 from setuptools import setup, Extension
 from setuptools.command.editable_wheel import editable_wheel
 from setuptools.command.build_ext import build_ext
+from setuptools.command.develop import develop
 
 
 class CMakeExtension(Extension):
@@ -82,6 +83,22 @@ class EditModeHelper:
                 return Path(path)
         # 非 Debian 系统(如 CentOS/Windows), 返回默认 platlib
         return Path(site_paths[0]) if site_paths else Path(sysconfig.get_path("platlib"))
+
+
+class CustomDevelop(develop):
+    """自定义 develop 命令
+
+    继承自 setuptools 的 develop 命令, 在执行前传递 -e (可编辑) 模式标记给 build_ext 命令,
+    确保 CMake 安装路径指向源码目录而非暂存目录.
+
+    pip <21.3 使用 setup.py develop 而非 editable_wheel 执行可编辑安装,
+    因此需要本类作为 fallback, 使 CMakeBuild._edit_mode() 在 develop 路径下也能返回 True.
+    """
+
+    def run(self):
+        build_ext_cmd = self.distribution.get_command_obj("build_ext")
+        build_ext_cmd.pypto_editable_mode = True
+        super().run()
 
 
 class CustomEditableWheel(editable_wheel, EditModeHelper):
@@ -596,7 +613,8 @@ class SetupCtrl:
                 CMakeExtension(),
             ],
             cmdclass={
-                'editable_wheel': CustomEditableWheel,  # setuptools>=58.0.0, pip install -e 会触发 editable_wheel
+                'editable_wheel': CustomEditableWheel,  # setuptools>=58.0.0, pip>=21.3 会触发 editable_wheel
+                'develop': CustomDevelop,  # pip<21.3 会触发 develop, 需同样设置 editable 标记
                 'build_ext': CMakeBuild,
             },
         )

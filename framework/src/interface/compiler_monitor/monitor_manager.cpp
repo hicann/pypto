@@ -111,16 +111,23 @@ void MonitorManager::Initialize(
 
 void MonitorManager::Shutdown()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!initialized_ || !enable_) {
-        return;
+    MonitorImpl* implToStop = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!initialized_) {
+            return;
+        }
+        if (impl_) {
+            implToStop = impl_;
+            impl_ = nullptr;
+        }
+        initialized_ = false;
+        stageDoing_ = false;
     }
-    if (impl_) {
-        impl_->Stop();
-        delete impl_;
-        impl_ = nullptr;
+    if (implToStop) {
+        implToStop->Stop();
+        delete implToStop;
     }
-    initialized_ = false;
 }
 
 void MonitorManager::MaybeStartTotalClock()
@@ -312,7 +319,7 @@ void MonitorManager::NotifyCompilationFinished()
     MonitorImpl* implToStop = nullptr;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!initialized_ || !enable_) {
+        if (!initialized_) {
             return;
         }
         PrintCompilationFinished();
