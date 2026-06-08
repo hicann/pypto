@@ -2752,6 +2752,13 @@ def scatter_golden_func(inputs, config: dict):
                 .numpy()
                 .astype(inputs[0].dtype)
             )
+    elif np.issubdtype(inputs[0].dtype, np.integer):
+        src = torch.from_numpy(inputs[0])
+        int_scalar = int(np.dtype(inputs[0].dtype).type(scalar))
+        if len(reduceop) == 0 or reduceop == "None":
+            res = src.scatter(axis, indices, int_scalar).numpy()
+        else:
+            res = src.scatter(axis, indices, int_scalar, reduce=reduceop).numpy()
     else:
         src = torch.from_numpy(inputs[0])
         if len(reduceop) == 0 or reduceop == "None":

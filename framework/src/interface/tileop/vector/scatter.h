@@ -14,6 +14,7 @@
  */
 #ifndef TILEOP_TILE_OPERATOR_SCATTER__H
 #define TILEOP_TILE_OPERATOR_SCATTER__H
+#include <type_traits>
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
@@ -66,11 +67,21 @@ TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2)
                         if constexpr (scatterMode == 0) {
                             dstAddr[dstOffset] = src2;
                         } else if constexpr (scatterMode == 1) {
-                            dstAddr[dstOffset] = static_cast<typename T0::Type>(
-                                static_cast<float>(src2) + static_cast<float>(dstAddr[dstOffset]));
+                            if constexpr (std::is_integral_v<typename T0::Type>) {
+                                dstAddr[dstOffset] = static_cast<typename T0::Type>(
+                                    static_cast<typename T0::Type>(src2) + dstAddr[dstOffset]);
+                            } else {
+                                dstAddr[dstOffset] = static_cast<typename T0::Type>(
+                                    static_cast<float>(src2) + static_cast<float>(dstAddr[dstOffset]));
+                            }
                         } else {
-                            dstAddr[dstOffset] = static_cast<typename T0::Type>(
-                                static_cast<float>(src2) * static_cast<float>(dstAddr[dstOffset]));
+                            if constexpr (std::is_integral_v<typename T0::Type>) {
+                                dstAddr[dstOffset] = static_cast<typename T0::Type>(
+                                    static_cast<typename T0::Type>(src2) * dstAddr[dstOffset]);
+                            } else {
+                                dstAddr[dstOffset] = static_cast<typename T0::Type>(
+                                    static_cast<float>(src2) * static_cast<float>(dstAddr[dstOffset]));
+                            }
                         }
                     }
                 }
