@@ -52,10 +52,6 @@ Status ProcessAtomic::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate AtomicRMW failed.");
         return FAILED;
     }
-    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed in CommonOperationEliminate.");
-        return FAILED;
-    }
     APASS_LOG_INFO_F(Elements::Function, "===> End ProcessAtomic.");
     return SUCCESS;
 }
@@ -100,6 +96,10 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
         }
     }
     function.EraseOperations(true);
+    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for ReduceAcc in CommonOperationEliminate.");
+        return FAILED;
+    }
     return SUCCESS;
 }
 
@@ -113,6 +113,10 @@ Status ProcessAtomic::EliminateAtomicRMW(Function& function)
         }
     }
     function.EraseOperations(true);
+    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for AtomicRMW in CommonOperationEliminate.");
+        return FAILED;
+    }
     return SUCCESS;
 }
 

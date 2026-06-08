@@ -72,7 +72,7 @@ TEST_F(TestCodegenDynUna, TestAbsDynamic)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTabs_<half, /*DS*/ 1, 8, 128, /*SS*/ 1, 8, 128>((__ubuf__ half*)UB_S0_E2048, (__ubuf__ half*)UB_S0_E2048, 1, 1, sym_146_dim_0, sym_146_dim_1);)!!!";
+        R"!!!(TileOp::DynTabs_<half, /*DS*/ 1, 8, 128, /*SS*/ 1, 8, 128>((__ubuf__ half*)UB_S0_E2048, (__ubuf__ half*)UB_S0_E2048, 1, 1, sym_41_dim_0, sym_41_dim_1);)!!!";
     CheckStringExist(expect, res);
 }
 
