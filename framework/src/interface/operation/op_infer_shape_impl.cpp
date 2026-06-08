@@ -527,8 +527,36 @@ REGISTER_INFER_SHAPE_FUNC(OP_ONEHOT, Opcode::OP_ONEHOT, OneHotInferFunc);
 // Quantize infer shape func
 void QuantizeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> outValidShape(op->GetIOperands()[0]->GetDynValidShape());
-    outValidShapes.push_back(outValidShape);
+    // First output (dst): use input's valid shape
+    std::vector<SymbolicScalar> dstValidShape(op->GetIOperands()[0]->GetDynValidShape());
+    outValidShapes.push_back(dstValidShape);
+
+    // Second output (tmpbuf): calculate size based on input rows
+    // tmpbuf size = rows * sizeof(half), where rows is from input's second last dimension
+    auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    if (!inputValidShape.empty()) {
+        // tmpbuf shape: one 32B block per row -> [rows, 1] in terms of half elements
+        // But for valid shape, we can represent it as a 1D size
+        // rows = inputValidShape[inputValidShape.size() - 2]
+        // tmpBufBytes = rows * 32
+        // tmpBufHalfElements = rows * 2 (since 32B = 16 half elements)
+        std::vector<SymbolicScalar> tmpValidShape;
+        if (inputValidShape.size() >= 2) {
+            // tmpbuf size in bytes: rows * 32 (one 32B block per row)
+            SymbolicScalar rows = inputValidShape[inputValidShape.size() - 2];
+            SymbolicScalar tmpBufSize = rows * 32;
+            tmpValidShape.push_back(tmpBufSize);
+        } else {
+            // Fallback: use a constant size
+            tmpValidShape.push_back(SymbolicScalar(256));  // 8 rows * 32B
+        }
+        outValidShapes.push_back(tmpValidShape);
+    } else {
+        // No dynamic shape info, use default size
+        std::vector<SymbolicScalar> tmpValidShape;
+        tmpValidShape.push_back(SymbolicScalar(256));  // Default size
+        outValidShapes.push_back(tmpValidShape);
+    }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_QUANTIZE_SYM, Opcode::OP_QUANTIZE_SYM, QuantizeInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_QUANTIZE_ASYM, Opcode::OP_QUANTIZE_ASYM, QuantizeInferFunc);

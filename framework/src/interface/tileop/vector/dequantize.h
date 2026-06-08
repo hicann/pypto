@@ -104,10 +104,10 @@ TILEOP void TDequantInt8(T0 dst, T1 src, T2 scale, T3 offset) {
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(int8_t)));
 
     // scale/offset: FP32, ColMajor 布局
-    constexpr auto scaleTileH = TileOp::GetTensorTileShapeDim<T2, 3, expectSize>();
-    constexpr int paddedRow_scale = PTO_CEIL(scaleTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr auto offsetTileH = TileOp::GetTensorTileShapeDim<T3, 3, expectSize>();
-    constexpr int paddedRow_offset = PTO_CEIL(offsetTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, expectSize>();
+    constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 数据类型
     using DstDtype = typename T0::Type;      // float
@@ -217,10 +217,10 @@ TILEOP void TDequantInt16(T0 dst, T1 src, T2 scale, T3 offset) {
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(int16_t)));
 
     // scale/offset: FP32, ColMajor
-    constexpr auto scaleTileH = TileOp::GetTensorTileShapeDim<T2, 3, expectSize>();
-    constexpr int paddedRow_scale = PTO_CEIL(scaleTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr auto offsetTileH = TileOp::GetTensorTileShapeDim<T3, 3, expectSize>();
-    constexpr int paddedRow_offset = PTO_CEIL(offsetTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, expectSize>();
+    constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
     // 数据类型
     using DstDtype = typename T0::Type;      // float

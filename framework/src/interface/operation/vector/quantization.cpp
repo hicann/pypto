@@ -388,14 +388,21 @@ void QuantMXTileFunc(
 // =============================================================================
 
 void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size_t cur,
-    Input &srcInput, Input &scaleInput, Input &dstInput, int64_t axis) {
+    Input &srcInput, Input &scaleInput, Input &dstInput, int64_t axis, uint32_t workspaceSize) {
     if (cur == dstInput.tensor.GetShape().size()) {
         auto srcTile = srcInput.tensor.GetStorage()->View(function, srcInput.tileInfo.shape, srcInput.tileInfo.offset);
         auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape, scaleInput.tileInfo.offset);
         auto dstTile = dstInput.tensor.GetStorage()->View(function, dstInput.tileInfo.shape, dstInput.tileInfo.offset);
 
-        auto &op = function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile});
-        op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        Operation *op = nullptr;
+        if (workspaceSize == 0) {
+            op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile});
+        } else {
+            LogicalTensorPtr workspace =
+                std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
+            op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile, workspace});
+        }
+        op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         return;
     }
 
@@ -420,13 +427,13 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size
             scaleInput.tileInfo.offset[cur] = scaleIdx;
         }
 
-        TiledQuantizeSymmetric(function, tileShape, cur + 1, srcInput, scaleInput, dstInput, axis);
+        TiledQuantizeSymmetric(function, tileShape, cur + 1, srcInput, scaleInput, dstInput, axis, workspaceSize);
     }
 }
 
 void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
     const LogicalTensorPtr &src, const LogicalTensorPtr &scale,
-    const LogicalTensorPtr &dst, int64_t axis) {
+    const LogicalTensorPtr &dst, int64_t axis, uint32_t workspaceSize) {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
         << "Source shape size and offset size should be equal";
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
@@ -440,7 +447,7 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
     auto scaleInput = Input{Tensor(scale), scaleTileInfo};
     auto dstInput = Input{Tensor(dst), dstTileInfo};
 
-    TiledQuantizeSymmetric(function, tileShape, 0, srcInput, scaleInput, dstInput, axis);
+    TiledQuantizeSymmetric(function, tileShape, 0, srcInput, scaleInput, dstInput, axis, workspaceSize);
 }
 
 // =============================================================================
@@ -448,15 +455,22 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
 // =============================================================================
 
 void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, size_t cur,
-    Input &srcInput, Input &scaleInput, Input &offsetInput, Input &dstInput, int64_t axis) {
+    Input &srcInput, Input &scaleInput, Input &offsetInput, Input &dstInput, int64_t axis, uint32_t workspaceSize) {
     if (cur == dstInput.tensor.GetShape().size()) {
         auto srcTile = srcInput.tensor.GetStorage()->View(function, srcInput.tileInfo.shape, srcInput.tileInfo.offset);
         auto scaleTile = scaleInput.tensor.GetStorage()->View(function, scaleInput.tileInfo.shape, scaleInput.tileInfo.offset);
         auto offsetTile = offsetInput.tensor.GetStorage()->View(function, offsetInput.tileInfo.shape, offsetInput.tileInfo.offset);
         auto dstTile = dstInput.tensor.GetStorage()->View(function, dstInput.tileInfo.shape, dstInput.tileInfo.offset);
 
-        auto &op = function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile});
-        op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        Operation *op = nullptr;
+        if (workspaceSize == 0) {
+            op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile});
+        } else {
+            LogicalTensorPtr workspace =
+                std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
+            op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile, workspace});
+        }
+        op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         return;
     }
 
@@ -486,13 +500,13 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, siz
             offsetInput.tileInfo.offset[cur] = offsetIdx;
         }
 
-        TiledQuantizeAsymmetric(function, tileShape, cur + 1, srcInput, scaleInput, offsetInput, dstInput, axis);
+        TiledQuantizeAsymmetric(function, tileShape, cur + 1, srcInput, scaleInput, offsetInput, dstInput, axis, workspaceSize);
     }
 }
 
 void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape,
     const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset,
-    const LogicalTensorPtr &dst, int64_t axis) {
+    const LogicalTensorPtr &dst, int64_t axis, uint32_t workspaceSize) {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
         << "Source shape size and offset size should be equal";
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
@@ -508,7 +522,7 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape,
     auto offsetInput = Input{Tensor(offset), offsetTileInfo};
     auto dstInput = Input{Tensor(dst), dstTileInfo};
 
-    TiledQuantizeAsymmetric(function, tileShape, 0, srcInput, scaleInput, offsetInput, dstInput, axis);
+    TiledQuantizeAsymmetric(function, tileShape, 0, srcInput, scaleInput, offsetInput, dstInput, axis, workspaceSize);
 }
 
 // =============================================================================
@@ -640,14 +654,30 @@ void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &til
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
     const Operation &op) {
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
-    TiledQuantizeSymmetric(function, tileShape, iOperand[0], iOperand[1], oOperand[0], axis);
+
+    // Calculate workspace size: one 32B block per row
+    auto shape = tileShape.GetVecTile();
+    int dim = shape.size();
+    // tmpbuf: [rows, 8] with float type, 8 float = 32B per row
+    int64_t tmpRows = (dim >= 2) ? shape.tile[dim - 2] : 1;
+    uint32_t workspaceSize = tmpRows * 32;  // one 32B block per row
+
+    TiledQuantizeSymmetric(function, tileShape, iOperand[0], iOperand[1], oOperand[0], axis, workspaceSize);
 }
 
 void QuantizeAsymmetricOperationTileFunc(Function &function, const TileShape &tileShape,
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
     const Operation &op) {
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
-    TiledQuantizeAsymmetric(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis);
+
+    // Calculate workspace size: one 32B block per row
+    auto shape = tileShape.GetVecTile();
+    int dim = shape.size();
+    // tmpbuf: [rows, 8] with float type, 8 float = 32B per row
+    int64_t tmpRows = (dim >= 2) ? shape.tile[dim - 2] : 1;
+    uint32_t workspaceSize = tmpRows * 32;  // one 32B block per row
+
+    TiledQuantizeAsymmetric(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis, workspaceSize);
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_QUANTIZE_SYM, Opcode::OP_QUANTIZE_SYM, QuantizeSymmetricOperationTileFunc);

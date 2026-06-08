@@ -44,9 +44,10 @@ constexpr size_t TILE_ALIGNMENT_BYTES = 32;
  * @param dst   输出 INT8 张量, 形状 [..., H, W]
  * @param src   输入 FP32 张量, 形状 [..., H, W]
  * @param scale 缩放因子, 形状 [..., H]
+ * @param tmp   临时缓冲区
  */
-template <typename T0, typename T1, typename T2>
-TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale) {
+template <typename T0, typename T1, typename T2, typename T3>
+TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
     constexpr size_t expectSize = 5;
 
     const auto dstLayout = dst.GetLayout();
@@ -89,13 +90,18 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale) {
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
-    constexpr auto scaleTileH = TileOp::GetTensorTileShapeDim<T2, 3, expectSize>();
-    constexpr int paddedRow_scale = PTO_CEIL(scaleTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+
+    // 计算一个 tile 的大小（元素个数）
+    constexpr auto tileShapeSize =
+        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
     // 数据类型
     using DstDtype = typename T0::Type;
     using SrcDtype = typename T1::Type;
     using ScaleDtype = typename T2::Type;
+    using TmpDtype = float;
 
     // 定义 Tile 类型
     using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst,
@@ -104,6 +110,9 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale) {
                                     pto::BLayout::RowMajor, -1, -1>;
     using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
                                     pto::BLayout::ColMajor, -1, -1>;
+    // tmpbuf: [rows, 8] with float type, one 32B block per row (8 float = 32B)
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, dstTileH, 8,
+                                    pto::BLayout::RowMajor, -1, -1>;
 
     // 遍历所有 Tile
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -112,6 +121,7 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale) {
                 DstTileDefine dstTile(dstShape3, dstShape4);
                 SrcTileDefine srcTile(srcShape3, srcShape4);
                 ParaTileDefine scaleTile(srcShape3, 1);
+                TmpTileDefine tmpTile(dstShape3, 8);
 
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
@@ -121,8 +131,10 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale) {
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * sizeof(DstDtype)));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * sizeof(SrcDtype)));
                 pto::TASSIGN(scaleTile, (uint64_t)(scale.GetAddr() + scaleOffset * sizeof(ScaleDtype)));
+                // tmpbuf 从单独的 tmp 参数获取地址
+                pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
 
-                pto::TQUANT<pto::QuantType::INT8_SYM>(dstTile, srcTile, scaleTile);
+                pto::TQUANT<pto::QuantType::INT8_SYM>(dstTile, srcTile, scaleTile, tmpTile);
             }
         }
     }
@@ -139,9 +151,10 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale) {
  * @param src    输入 FP32 张量, 形状 [..., H, W]
  * @param scale  缩放因子, 形状 [..., H]
  * @param offset 零点偏移, 形状 [..., H]
+ * @param tmp    临时缓冲区
  */
-template <typename T0, typename T1, typename T2, typename T3>
-TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset) {
+template <typename T0, typename T1, typename T2, typename T3, typename T4>
+TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     constexpr size_t expectSize = 5;
 
     const auto dstLayout = dst.GetLayout();
@@ -189,16 +202,21 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset) {
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
 
-    constexpr auto scaleTileH = TileOp::GetTensorTileShapeDim<T2, 3, expectSize>();
-    constexpr int paddedRow_scale = PTO_CEIL(scaleTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
-    constexpr auto offsetTileH = TileOp::GetTensorTileShapeDim<T3, 3, expectSize>();
-    constexpr int paddedRow_offset = PTO_CEIL(offsetTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
+    constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr auto offsetTileW = TileOp::GetTensorTileShapeDim<T3, 4, expectSize>();
+    constexpr int paddedRow_offset = PTO_CEIL(offsetTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+
+    // 计算一个 tile 的大小（元素个数）
+    constexpr auto tileShapeSize =
+        TileOp::GetAnyAxisMergeResult<DIM_1ST, Std::tuple_size<typename T0::TileShape>::value, typename T0::TileShape>();
 
     // 数据类型
     using DstDtype = typename T0::Type;
     using SrcDtype = typename T1::Type;
     using ScaleDtype = typename T2::Type;
     using OffsetDtype = typename T3::Type;
+    using TmpDtype = float;
 
     // 定义 Tile 类型
     using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW,
@@ -207,6 +225,9 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset) {
                                     pto::BLayout::RowMajor, -1, -1>;
     using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
                                     pto::BLayout::ColMajor, -1, -1>;
+    // tmpbuf: [rows, 8] with float type, one 32B block per row (8 float = 32B)
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, dstTileH, 8,
+                                    pto::BLayout::RowMajor, -1, -1>;
 
     // 遍历所有 Tile
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
@@ -216,6 +237,7 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset) {
                 SrcTileDefine srcTile(srcShape3, srcShape4);
                 ParaTileDefine scaleTile(srcShape3, 1);
                 ParaTileDefine offsetTile(srcShape3, 1);
+                TmpTileDefine tmpTile(dstShape3, 8);
 
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
@@ -227,8 +249,10 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset) {
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * sizeof(SrcDtype)));
                 pto::TASSIGN(scaleTile, (uint64_t)(scale.GetAddr() + scaleOffset * sizeof(ScaleDtype)));
                 pto::TASSIGN(offsetTile, (uint64_t)(offset.GetAddr() + offsetOffset * sizeof(OffsetDtype)));
+                // tmpbuf 从单独的 tmp 参数获取地址
+                pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
 
-                pto::TQUANT<pto::QuantType::INT8_ASYM>(dstTile, srcTile, scaleTile, &offsetTile);
+                pto::TQUANT<pto::QuantType::INT8_ASYM>(dstTile, srcTile, scaleTile, tmpTile, &offsetTile);
             }
         }
     }
@@ -243,20 +267,20 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset) {
  * @brief 统一量化接口
  * @tparam quantType INT8_SYM 或 INT8_ASYM
  */
-template <pto::QuantType quantType, typename T0, typename T1, typename T2>
-TILEOP void TQuant(T0 dst, T1 src, T2 scale) {
+template <pto::QuantType quantType, typename T0, typename T1, typename T2, typename T3>
+TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 tmp) {
     static_assert(quantType == pto::QuantType::INT8_SYM,
-                  "TQuant with 3 parameters only supports INT8_SYM. "
-                  "TQuant only supports INT8_SYM(3 parameters) and INT8_ASYM(4 parameters).");
-    TQuantInt8Sym(dst, src, scale);
+                  "TQuant with 4 parameters only supports INT8_SYM. "
+                  "TQuant only supports INT8_SYM(4 parameters) and INT8_ASYM(5 parameters).");
+    TQuantInt8Sym(dst, src, scale, tmp);
 }
 
-template <pto::QuantType quantType, typename T0, typename T1, typename T2, typename T3>
-TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 offset) {
+template <pto::QuantType quantType, typename T0, typename T1, typename T2, typename T3, typename T4>
+TILEOP void TQuant(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     static_assert(quantType == pto::QuantType::INT8_ASYM,
-                  "TQuant with 4 parameters only supports INT8_ASYM."
-                  "TQuant only supports INT8_SYM(3 parameters) and INT8_ASYM(4 parameters).");
-    TQuantInt8Asym(dst, src, scale, offset);
+                  "TQuant with 5 parameters only supports INT8_ASYM."
+                  "TQuant only supports INT8_SYM(4 parameters) and INT8_ASYM(5 parameters).");
+    TQuantInt8Asym(dst, src, scale, offset, tmp);
 }
 
 #if defined PTO_NPU_ARCH_A5

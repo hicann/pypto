@@ -662,12 +662,12 @@ void OpcodeManager::RegisterVectorQuant()
 {
     RegisterInfo(
         Opcode::OP_QUANTIZE_SYM, OpCoreType::AIV, "QUANTIZE_SYM", {MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {MemoryType::MEM_UB}, {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"},
         TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_QUANTIZE_ASYM, OpCoreType::AIV, "QUANTIZE_ASYM",
-        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OpAttributeKey::excludeBufferReuse, OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"},
         TileShapeVerifier::Verify);

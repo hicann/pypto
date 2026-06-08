@@ -1420,7 +1420,8 @@ std::string CodeGenOpNPU::PrintQuantizeTileTensor() const
     std::vector<std::string> templateParamList;
     templateParamList.emplace_back(quantType);
 
-    std::vector<std::string> paramList = GetTileOpParamsByOrder();
+    // Use GetTileOpParamsWithTmpBuf to put tmpbuf at the end
+    std::vector<std::string> paramList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
 
     oss << tileOpName;
     oss << WrapParamByAngleBrackets(templateParamList);
