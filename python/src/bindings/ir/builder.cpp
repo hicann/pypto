@@ -629,8 +629,8 @@ void BindIRBuilder(py::module_& m)
         bool ret = ir::structural_equal(a->GetType(), b->GetType());
         if (ret) {
             if (auto type = ir::As<ir::LogicalTensorType>(b->GetType())) {
-                auto ta = ir::AsMut<LogicalTensor>(a);
-                auto tb = ir::AsMut<LogicalTensor>(b);
+                auto ta = std::dynamic_pointer_cast<LogicalTensor>(std::const_pointer_cast<ir::Expr>(a));
+                auto tb = std::dynamic_pointer_cast<LogicalTensor>(std::const_pointer_cast<ir::Expr>(b));
                 return TypeEqual(ta, tb);
             }
         }

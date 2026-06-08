@@ -956,6 +956,8 @@ bool StructuralEqualImpl<AssertMode>::EqualType(const TypePtr& lhs, const TypePt
         return true;
     } else if (IsA<MemRefType>(lhs) || IsA<UnknownType>(lhs)) {
         return true; // Singleton type, both being same type kind is sufficient
+    } else if (IsA<LogicalTensorType>(lhs) && IsA<LogicalTensorType>(rhs))  {
+        return true;
     }
 
     INTERNAL_UNREACHABLE << "EqualType encountered unhandled Type: " << lhs->TypeName();

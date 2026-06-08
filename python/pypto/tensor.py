@@ -601,6 +601,9 @@ class Tensor:
             self.name = name
         return self
 
+    def is_empty(self) -> bool:
+        return self._base.IsEmpty()
+
     def set_cache_policy(self, policy: CachePolicy, value: bool) -> None:
         self._base.SetCachePolicy(policy, value)
 

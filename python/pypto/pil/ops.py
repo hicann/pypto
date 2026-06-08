@@ -28,6 +28,8 @@ def _to_ir_type(val: Any, ctx: BuildContext) -> ir.Expr:
     elif isinstance(val, pypto.SymbolicScalar):
         return val.as_expr()
     elif isinstance(val, pypto.Tensor):
+        if (val.is_empty()):
+            return ctx.none()
         return val.logical_tensor()
     else:
         raise TypeError(f"Invalid type {type(val)} for wrap")

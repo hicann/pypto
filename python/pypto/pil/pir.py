@@ -196,13 +196,13 @@ class Scope:
         self.varmap = {}
         self.eval = True
 
-    def __getitem__(self, name: str) -> ir.Var:
+    def __getitem__(self, name: str) -> Optional[ir.Var]:
         var = self.locals[name]
         if var is None:
             if self.parent:
                 var = self.parent[name]
             else:
-                raise ValueError(f"Variable {name} is not initialized")
+                return None
         return var
 
     def __setitem__(self, key: str, value: Union[ir.Var, Any]):
@@ -214,7 +214,7 @@ class Scope:
         scope[name] = value
 
     @staticmethod
-    def load(name: str) -> ir.Var:
+    def load(name: str) -> Optional[ir.Var]:
         scope = Scope.current()
         return scope[name]
 

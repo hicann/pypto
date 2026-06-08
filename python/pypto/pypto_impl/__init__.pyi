@@ -284,7 +284,7 @@ class SymbolicScalar:
     def tenary(cond: SymbolicScalar, true_val: SymbolicScalar, false_val: SymbolicScalar) -> SymbolicScalar: ...
 
 
-class LogicalTensor:
+class LogicalTensor(ir.Var):
     """Logical tensor"""
 
 
@@ -327,6 +327,8 @@ class Tensor:
     def Format(self) -> TileOpFormat: ...
 
     def LogicalTensor(self) -> LogicalTensor: ...
+
+    def IsEmpty(self) -> bool: ...
 
 
 def GetInputShape(a: Tensor, axis: int) -> SymbolicScalar: ...
