@@ -211,8 +211,6 @@ void PipeMachine::SendCachePacket(bool read)
     auto l2Cache = std::dynamic_pointer_cast<CacheMachine>(l2cacheMachine);
     l2Cache->RequestData(packet);
     waitL2CacheResponse = true;
-    SIMULATION_LOGI(
-        "[Cycle: %lu][PipeMachine: %zu][SendL2Request] %s", GetSim()->GetCycles(), machineId, packet.Dump().c_str());
 }
 
 void PipeMachine::ProcessTileOp()

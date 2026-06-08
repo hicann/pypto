@@ -18,6 +18,8 @@
 #include "tilefwk/platform.h"
 #include "cost_model/simulation_pv/PvModelImpl.h"
 #include "cost_model/simulation/pv/PvModelFactory.h"
+#include "cost_model/simulation/common/CommonTools.h"
+#include "cost_model/simulation/common/BaseQueue.h"
 
 namespace CostModel {
 
@@ -110,4 +112,26 @@ extern "C" __global__ [aicore] void PvModelKernelEntry(__gm__ npu::tile_fwk::Dyn
 )!!!";
     EXPECT_EQ(expect, content);
 }
+
+TEST(PvModelTest, TestOutputSilencerSilenceAndRestore)
+{
+    CostModel::OutputSilencer silencer;
+    silencer.silence();
+    fflush(stdout);
+    silencer.restore();
+    fflush(stdout);
+}
+
+TEST(PvModelTest, TestSimQueueReset)
+{
+    SimQueue<int> queue;
+    queue.Enqueue(1);
+    queue.Enqueue(2);
+    queue.Step();
+    EXPECT_GT(queue.Size(), 0);
+    queue.Reset();
+    EXPECT_EQ(queue.Size(), 0);
+    EXPECT_EQ(queue.WriteQueueSize(), 0);
+}
+
 } // namespace CostModel

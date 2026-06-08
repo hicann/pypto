@@ -430,7 +430,6 @@ public:
     explicit Tile() {}
     explicit Tile(const std::string& str);
     void GetPipeType();
-    void Print();
     std::string Dump();
     int SizeinBytes();
 };
@@ -462,7 +461,6 @@ public:
 
     explicit TileOp() = default;
 
-    void Print();
     void GetPipeType();
     // For MTE_IN/MTE_OUT access cache.
     uint64_t GetAddress();

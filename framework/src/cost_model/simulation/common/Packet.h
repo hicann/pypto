@@ -73,7 +73,6 @@ struct CachePacket {
     uint64_t addr = 0; // functionHash; data address;
     uint64_t size = 0;
     CycleInfo cycleInfo;
-    [[nodiscard]] std::string Dump() const;
 };
 
 struct PipeCompletedMsg {

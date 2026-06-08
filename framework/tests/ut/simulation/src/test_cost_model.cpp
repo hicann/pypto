@@ -29,6 +29,7 @@
 #include "cost_model/simulation/machine/Scheduler.h"
 #include "cost_model/simulation/tools/ParseInput.h"
 #include "cost_model/simulation/arch/PipeSimulatorFast.h"
+#include "cost_model/simulation/tools/visualizer.h"
 
 using namespace npu::tile_fwk;
 
@@ -411,6 +412,41 @@ TEST_F(CostModelTest, TestA5ArchType)
     EXPECT_TRUE(simulator != nullptr);
 }
 
+TEST_F(CostModelTest, TestPipeFactoryCreateA2A3)
+{
+    auto sim = CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_MTE_IN, "A2A3");
+    EXPECT_TRUE(sim != nullptr);
+    auto sim2 = CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_VECTOR_ALU, "A2A3");
+    EXPECT_TRUE(sim2 != nullptr);
+    auto sim3 = CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_CUBE, "A2A3");
+    EXPECT_TRUE(sim3 != nullptr);
+    auto sim4 = CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_TILE_ALLOC, "A2A3");
+    EXPECT_TRUE(sim4 != nullptr);
+    auto sim5 = CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_CALL, "A2A3");
+    EXPECT_TRUE(sim5 != nullptr);
+}
+
+TEST_F(CostModelTest, TestPipeFactoryCreateUnknownPipeType)
+{
+    EXPECT_THROW(CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_UNKNOW, "A2A3"), std::invalid_argument);
+}
+
+TEST_F(CostModelTest, TestPipeFactoryCreateCacheA2A3)
+{
+    auto cacheImpl = CostModel::PipeFactory::CreateCache(CostModel::CacheType::L2CACHE, "A2A3");
+    EXPECT_TRUE(cacheImpl != nullptr);
+}
+
+TEST_F(CostModelTest, TestPipeFactoryCreateCacheUnknownArch)
+{
+    EXPECT_THROW(CostModel::PipeFactory::CreateCache(CostModel::CacheType::L2CACHE, "A0"), std::invalid_argument);
+}
+
+TEST_F(CostModelTest, TestPipeFactoryCreateCacheUnknownType)
+{
+    EXPECT_THROW(CostModel::PipeFactory::CreateCache(CostModel::CacheType::FUNCTION_CACHE, "A2A3"), std::invalid_argument);
+}
+
 TEST_F(CostModelTest, TestCoreMachineDeadlock2)
 {
     CostModel::CoreMachine* coreMachine = new CostModel::CoreMachine(CostModel::MachineType::AIC);
@@ -639,6 +675,33 @@ TEST_F(CostModelTest, TestParseInputFile)
     parser.ParseJson(nullptr, path);
 }
 
+TEST_F(CostModelTest, TestParseJsonWithValidFile)
+{
+    std::string jsonPath = "/tmp/parse_json_test_" + std::to_string(getpid()) + ".json";
+    std::ofstream ofs(jsonPath);
+    ofs << R"({"functions":[]})";
+    ofs.close();
+    auto sim = std::make_shared<CostModel::SimSys>();
+    CostModel::ParseInput parser;
+    parser.ParseJson(sim, jsonPath);
+    unlink(jsonPath.c_str());
+}
+
+TEST_F(CostModelTest, TestParseSingleFunction)
+{
+    auto sim = std::make_shared<CostModel::SimSys>();
+    std::string name = "TestParseSingleFunc";
+    auto func = std::make_shared<Function>(npu::tile_fwk::Program::GetInstance(), name, name, nullptr);
+    std::vector<int64_t> shape = {1, 1};
+    auto incast = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto outcast = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    func->inCasts_.push_back(incast);
+    func->outCasts_.push_back(outcast);
+    CostModel::ParseInput parser;
+    parser.ParseSingleFunction(sim, func.get());
+    EXPECT_NE(sim, nullptr);
+}
+
 TEST_F(CostModelTest, TestJsonFErrororFormat)
 {
     using namespace CostModel;
@@ -723,4 +786,352 @@ TEST_F(CostModelTest, TestGetCyclesForPassSo)
     });
     int64_t cycle = get_cycles_func(opCode, shape, dtype);
     EXPECT_GT(cycle, 0);
+}
+
+TEST_F(CostModelTest, TestMachineName)
+{
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::DEVICE), "DEVICE");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::CPU), "AICPU");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::AIC), "AIC");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::AIV), "AIV");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::MIXAICORE), "MIXAICORE");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::PIPE), "PIPE");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::CACHE), "CACHE");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::HUB), "HUB");
+    EXPECT_EQ(CostModel::MachineName(CostModel::MachineType::UNKNOWN), "ILLEGAL");
+}
+
+TEST_F(CostModelTest, TestCacheName)
+{
+    EXPECT_EQ(CostModel::CacheName(CostModel::CacheType::FUNCTION_CACHE), "FunctionCache");
+    EXPECT_EQ(CostModel::CacheName(CostModel::CacheType::L2CACHE), "L2CACHE");
+    EXPECT_EQ(CostModel::CacheName(CostModel::CacheType::TOTAL_CACHE_TYPE), "ILLEGAL");
+}
+
+TEST_F(CostModelTest, TestCacheRequestName)
+{
+    EXPECT_EQ(CostModel::CacheRequestName(CostModel::CacheRequestType::FUNCTION_REQ), "Function_Read");
+    EXPECT_EQ(CostModel::CacheRequestName(CostModel::CacheRequestType::DATA_READ_REQ), "Data_Read");
+    EXPECT_EQ(CostModel::CacheRequestName(CostModel::CacheRequestType::DATA_WRITE_REQ), "Data_Write");
+}
+
+TEST_F(CostModelTest, TestTileStringConstructor)
+{
+    std::string jsonStr = R"({"magic":42,"shape":[1,2,3],"offset":[0,1,2],"memorytype":{"tobe":"MEM_UB"},"nodetype":"LOCAL","rawtensor":{"symbol":"x","datatype":"DT_FP16","rawmagic":99,"rawshape":[4,5,6]}})";
+    CostModel::Tile tile(jsonStr);
+    EXPECT_EQ(tile.magic, 42);
+    EXPECT_EQ(tile.shape, std::vector<int>({1, 2, 3}));
+    EXPECT_EQ(tile.offset, std::vector<int>({0, 1, 2}));
+    EXPECT_EQ(tile.bufType, CostModel::OperandType::BUF_UB);
+}
+
+TEST_F(CostModelTest, TestGetOpSequeceAfterOOO)
+{
+    CostModel::Function func;
+    func.opSequenceAfterOOO_[10] = 100;
+    uint64_t index = 0;
+    func.GetOpSequeceAfterOOO(10, index);
+    EXPECT_EQ(index, 100);
+    uint64_t index2 = 5;
+    func.GetOpSequeceAfterOOO(20, index2);
+    EXPECT_EQ(index2, 5);
+}
+
+TEST_F(CostModelTest, TestGetOpRelativeReadyCycle)
+{
+    CostModel::Function func;
+    func.startCycles = 10;
+    auto tileOp = std::make_shared<CostModel::TileOp>();
+    tileOp->exeInfo.cycleInfo.executeStartCycle = 50;
+    tileOp->pipeType = CostModel::CorePipeType::PIPE_VECTOR_BMU;
+    func.pipeLastEndCycle[CostModel::CorePipeType::PIPE_VECTOR_BMU] = 60;
+    uint64_t result = func.GetOpRelativeReadyCycle(tileOp, 20);
+    EXPECT_GE(result, 60);
+}
+
+TEST_F(CostModelTest, TestCalculateRelativeCycle)
+{
+    CostModel::Function func;
+    func.startCycles = 10;
+    auto tileOp = std::make_shared<CostModel::TileOp>();
+    tileOp->exeInfo.cycleInfo.executeStartCycle = 50;
+    tileOp->exeInfo.cycleInfo.executeEndCycle = 100;
+    tileOp->pipeType = CostModel::CorePipeType::PIPE_VECTOR_ALU;
+    func.opMagicSequence.push_back(1);
+    func.tileOpMap[1] = tileOp;
+    func.CalculateRelativeCycle(20, 1.0);
+    EXPECT_EQ(tileOp->exeInfo.cycleInfo.relativeStartCycle, 60);
+    EXPECT_EQ(tileOp->exeInfo.cycleInfo.relativeEndCycle, 110);
+}
+
+TEST_F(CostModelTest, TestParseJsonWithValidData)
+{
+    std::string jsonPath = "/tmp/parse_json_data_test_" + std::to_string(getpid()) + ".json";
+    std::ofstream ofs(jsonPath);
+    ofs << R"({
+        "functions": [{
+            "hash": "12345",
+            "magic": 1,
+            "magicname": "test_func_START",
+            "operations": [{
+                "opcode": "ADD",
+                "opmagic": 10,
+                "ioperands": [{"magic":100,"shape":[1,1],"offset":[0,0],"memorytype":{"tobe":"MEM_UB"},"nodetype":"LOCAL","rawtensor":{"symbol":"x","datatype":"DT_FP16","rawmagic":200,"rawshape":[1,1]}}],
+                "ooperands": [{"magic":101,"shape":[1,1],"offset":[0,0],"memorytype":{"tobe":"MEM_UB"},"nodetype":"OUTCAST","rawtensor":{"symbol":"y","datatype":"DT_FP16","rawmagic":201,"rawshape":[1,1]}}]
+            }]
+        }]
+    })";
+    ofs.close();
+    auto sim = std::make_shared<CostModel::SimSys>();
+    sim->config.startFunctionLabel = "START";
+    CostModel::ParseInput parser;
+    parser.ParseJson(sim, jsonPath);
+    EXPECT_EQ(sim->startFuncName, "test_func_START");
+    EXPECT_EQ(sim->startFuncHash, 12345);
+    unlink(jsonPath.c_str());
+}
+
+TEST_F(CostModelTest, TestParseTopoJsonWithValidData)
+{
+    std::string topoPath = "/tmp/parse_topo_test_" + std::to_string(getpid()) + ".json";
+    std::ofstream ofs(topoPath);
+    ofs << R"([{"seqNo":0,"taskId":1,"leafIndex":0,"opmagic":10,"psgId":-1,"rootIndex":0,"uniqueKey":1,"funcHash":123,"coreType":"AIV","successors":[]}])";
+    ofs.close();
+    std::deque<CostModel::TaskMap> deque;
+    CostModel::ParseInput parser;
+    parser.ParseTopoJson(topoPath, deque);
+    EXPECT_EQ(deque.size(), 1);
+    unlink(topoPath.c_str());
+}
+
+TEST_F(CostModelTest, TestParseReplayInfoJsonWithValidData)
+{
+    std::string replayPath = "/tmp/parse_replay_test_" + std::to_string(getpid()) + ".json";
+    std::ofstream ofs(replayPath);
+    ofs << R"([{"blockIdx":0,"coreType":"AIV","tasks":[{"seqNo":1,"taskId":100,"execStart":10,"execEnd":20}]}])";
+    ofs.close();
+    std::unordered_map<uint64_t, std::deque<CostModel::ReplayTaskEntry>> map;
+    CostModel::ParseInput parser;
+    parser.ParseReplayInfoJson(replayPath, map);
+    EXPECT_GT(map.size(), 0);
+    unlink(replayPath.c_str());
+}
+
+TEST_F(CostModelTest, TestDebugFunction)
+{
+    auto func = std::make_shared<CostModel::Function>();
+    func->funcName = "test_debug";
+    std::unordered_map<int, CostModel::TilePtr> tiles;
+    std::unordered_map<int, CostModel::TileOpPtr> tileOps;
+    CostModel::ModelVisualizer visualizer;
+    std::string outdir = "/tmp/debug_func_test_" + std::to_string(getpid());
+    mkdir(outdir.c_str(), 0755);
+    visualizer.DebugFunction(func, tiles, tileOps, outdir);
+    std::ifstream ifs(outdir + "/test_debug.deadlock_debug_graph.dot");
+    EXPECT_TRUE(ifs.is_open());
+    unlink((outdir + "/test_debug.deadlock_debug_graph.dot").c_str());
+}
+
+TEST_F(CostModelTest, TestSimQueueBuild)
+{
+    CostModel::SimQueue<int> queue;
+    queue.Enqueue(10);
+    queue.Build();
+    EXPECT_EQ(queue.Size(), 0);
+}
+
+TEST_F(CostModelTest, TestSimQueueXferAndGetSim)
+{
+    CostModel::SimQueue<int> queue;
+    queue.Xfer();
+    EXPECT_EQ(queue.GetSim(), nullptr);
+}
+
+TEST_F(CostModelTest, TestSimQueueFrontAndPopFront)
+{
+    CostModel::SimQueue<int> queue;
+    int val = 0;
+    EXPECT_FALSE(queue.Front(val));
+    EXPECT_FALSE(queue.PopFront());
+
+    queue.Enqueue(42);
+    queue.UpdateIntervalCycles(1);
+    queue.Step();
+    EXPECT_TRUE(queue.Front(val));
+    EXPECT_EQ(val, 42);
+    EXPECT_TRUE(queue.PopFront());
+    EXPECT_EQ(queue.Size(), 0);
+}
+
+TEST_F(CostModelTest, TestSimQueueDequeueEmpty)
+{
+    CostModel::SimQueue<int> queue;
+    int val = 0;
+    EXPECT_FALSE(queue.Dequeue(val));
+}
+
+TEST_F(CostModelTest, TestSimQueueEmptyStates)
+{
+    CostModel::SimQueue<int> queue;
+    EXPECT_TRUE(queue.Empty());
+
+    queue.Enqueue(1);
+    EXPECT_TRUE(queue.Empty());
+
+    queue.UpdateIntervalCycles(1);
+    queue.Step();
+    EXPECT_FALSE(queue.Empty());
+}
+
+TEST_F(CostModelTest, TestSimQueueWriteQueueSize)
+{
+    CostModel::SimQueue<int> queue;
+    EXPECT_EQ(queue.WriteQueueSize(), 0);
+    queue.Enqueue(1);
+    queue.Enqueue(2);
+    EXPECT_EQ(queue.WriteQueueSize(), 2);
+}
+
+TEST_F(CostModelTest, TestSimQueueFullAndSetMaxSize)
+{
+    CostModel::SimQueue<int> queue;
+    queue.SetMaxSize(2);
+    EXPECT_FALSE(queue.Full());
+    queue.Enqueue(1);
+    queue.Enqueue(2);
+    EXPECT_TRUE(queue.Full());
+}
+
+TEST_F(CostModelTest, TestSimQueueCalendarPopFront)
+{
+    CostModel::SimQueue<int> queue;
+    EXPECT_EQ(queue.CalendarPopFront(), 0);
+
+    queue.Enqueue(7);
+    queue.UpdateIntervalCycles(1);
+    queue.Step();
+    EXPECT_EQ(queue.CalendarPopFront(), 7);
+}
+
+TEST_F(CostModelTest, TestSimQueueIsTerminate)
+{
+    CostModel::SimQueue<int> queue;
+    EXPECT_TRUE(queue.IsTerminate());
+    queue.Enqueue(1);
+    EXPECT_FALSE(queue.IsTerminate());
+}
+
+TEST_F(CostModelTest, TestSimQueueGetMinWaitCyclesZero)
+{
+    CostModel::SimQueue<int> queue;
+    queue.SetWriteDelay(0);
+    queue.SetReadDelay(0);
+    queue.Enqueue(1);
+    queue.UpdateIntervalCycles(1);
+    queue.Step();
+    queue.Step();
+    uint64_t wait = queue.GetMinWaitCycles();
+    EXPECT_TRUE(wait >= 1);
+}
+
+TEST_F(CostModelTest, TestSimQueueWithDelay)
+{
+    CostModel::SimQueue<int> queue;
+    queue.SetWriteDelay(3);
+    queue.SetReadDelay(2);
+    queue.Enqueue(10);
+    queue.UpdateIntervalCycles(1);
+    queue.Step();
+    queue.Step();
+    queue.Step();
+    queue.Step();
+    int val = 0;
+    EXPECT_TRUE(queue.Dequeue(val));
+    EXPECT_EQ(val, 10);
+}
+
+TEST_F(CostModelTest, TestSimQueueReset)
+{
+    CostModel::SimQueue<int> queue;
+    queue.Enqueue(1);
+    queue.Enqueue(2);
+    queue.Reset();
+    EXPECT_EQ(queue.Size(), 0);
+    EXPECT_EQ(queue.WriteQueueSize(), 0);
+}
+
+TEST_F(CostModelTest, TestSimQueueSetCounterInfo)
+{
+    CostModel::SimQueue<int> queue;
+    auto logger = std::make_shared<CostModel::TraceLogger>();
+    queue.SetCounterInfo(logger, 1, 2);
+}
+
+TEST_F(CostModelTest, TestParseDynTopo)
+{
+    std::string topoPath = "/tmp/parse_dyn_topo_test_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(topoPath);
+    ofs << "1,2,3,4,5,6,7,8,9,10,11,12\n";
+    ofs.close();
+    npu::tile_fwk::CostModelAgent agent;
+    Json res = agent.ParseDynTopo(topoPath);
+    EXPECT_GT(res.size(), 0);
+    unlink(topoPath.c_str());
+}
+
+TEST_F(CostModelTest, TestSubmitTopo)
+{
+    std::string topoPath = "/tmp/submit_topo_test_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(topoPath);
+    ofs << "1,2,3,4,5,6,7,8,9,10,11,12\n";
+    ofs.close();
+    npu::tile_fwk::CostModelAgent agent;
+    agent.SubmitTopo(topoPath);
+    EXPECT_FALSE(agent.topoJsonPath.empty());
+    unlink(topoPath.c_str());
+}
+
+TEST_F(CostModelTest, TestGetLeafFunctionTimeCost)
+{
+    npu::tile_fwk::CostModelAgent agent;
+    EXPECT_EQ(agent.GetLeafFunctionTimeCost(0), 0);
+}
+
+TEST_F(CostModelTest, TestSubmitSingleFuncToCostModel)
+{
+    npu::tile_fwk::CostModelAgent agent;
+    std::string name = "TestSingleFunc";
+    auto newFunc = std::make_shared<npu::tile_fwk::Function>(npu::tile_fwk::Program::GetInstance(), name, name, nullptr);
+    agent.SubmitSingleFuncToCostModel(newFunc.get());
+}
+
+TEST_F(CostModelTest, TestDebugSingleFunc)
+{
+    npu::tile_fwk::CostModelAgent agent;
+    auto newFunc = std::make_shared<npu::tile_fwk::Function>(npu::tile_fwk::Program::GetInstance(), "root", "root", nullptr);
+    config::SetSimConfig(KEY_DEBUG_SINGLE_FUNCNAME, "");
+    agent.DebugSingleFunc(newFunc.get());
+}
+
+TEST_F(CostModelTest, TestPipeMachineImplSimulate)
+{
+    class TestPipeImpl : public CostModel::PipeMachineImpl {
+        uint64_t Simulate(const CostModel::TileOpPtr&) override { return 42; }
+        uint64_t PostSimulate(const CostModel::TileOpPtr&) override { return 10; }
+    };
+    TestPipeImpl impl;
+    auto tileOp = std::make_shared<CostModel::TileOp>();
+    EXPECT_EQ(impl.Simulate(tileOp), 42);
+    EXPECT_EQ(impl.PostSimulate(tileOp), 10);
+}
+
+TEST_F(CostModelTest, TestPipeMachineImplSimulateForPass)
+{
+    class TestPipeImpl : public CostModel::PipeMachineImpl {
+        uint64_t Simulate(const CostModel::TileOpPtr&) override { return 0; }
+        uint64_t PostSimulate(const CostModel::TileOpPtr&) override { return 0; }
+    };
+    TestPipeImpl impl;
+    EXPECT_EQ(impl.SimulateForPass("ADD", {{1, 1}}, npu::tile_fwk::DataType::DT_FP32), 0);
+    EXPECT_EQ(impl.PostSimulateForPass("ADD", {{1, 1}}, npu::tile_fwk::DataType::DT_FP32), 0);
 }

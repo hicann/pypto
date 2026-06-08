@@ -34,13 +34,11 @@ public:
     void Insert(FunctionPtr func);
     void CountFunctionCache(uint64_t key, CostModel::Pid pid, CostModel::Tid tid, bool hit);
     bool Lookup(uint64_t key, CostModel::Pid pid = LLONG_MAX, CostModel::Tid tid = LLONG_MAX);
-    bool LookupCache(uint64_t key);
     // Get Function Cache line.
     FunctionPtr GetFunction(uint64_t key);
     std::shared_ptr<SimSys> GetSim();
     void SetSim(std::shared_ptr<CostModel::SimSys> simPtr);
     void SetMaxCacheSize(uint64_t cacheSize);
-    uint64_t GetMaxCacheSize() const;
 
 private:
     std::shared_ptr<CostModel::SimSys> sim = nullptr;

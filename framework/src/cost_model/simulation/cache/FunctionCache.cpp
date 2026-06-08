@@ -64,16 +64,6 @@ bool FunctionCache::Lookup(uint64_t key, CostModel::Pid pid, CostModel::Tid tid)
     return hit;
 }
 
-bool FunctionCache::LookupCache(uint64_t key)
-{
-    auto it = cache.find(key);
-    if (it == cache.end()) {
-        return false;
-    } else {
-        return true;
-    }
-}
-
 FunctionPtr FunctionCache::GetFunction(uint64_t key) { return cache.at(key); }
 
 std::shared_ptr<SimSys> FunctionCache::GetSim() { return sim; }
@@ -81,6 +71,4 @@ std::shared_ptr<SimSys> FunctionCache::GetSim() { return sim; }
 void FunctionCache::SetSim(std::shared_ptr<CostModel::SimSys> simPtr) { sim = std::move(simPtr); }
 
 void FunctionCache::SetMaxCacheSize(uint64_t cacheSize) { maxCacheSize = cacheSize; }
-
-uint64_t FunctionCache::GetMaxCacheSize() const { return maxCacheSize; }
 } // namespace CostModel

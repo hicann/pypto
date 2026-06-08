@@ -94,9 +94,6 @@ void SimSys::BuildCaches()
 {
     functionCache.SetSim(GetShared());
     functionCache.SetMaxCacheSize(config.functionCacheSize);
-    SIMULATION_LOGI(
-        "[ModelTop][BuildCache] FunctionCache max size: %lu",
-        static_cast<unsigned long>(functionCache.GetMaxCacheSize()));
 
     // Create the L2 cache.
     auto l2BankId = 0;

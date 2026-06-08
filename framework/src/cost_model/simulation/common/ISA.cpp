@@ -75,8 +75,6 @@ void Tile::GetPipeType()
     }
 }
 
-void Tile::Print() { SIMULATION_LOGI("%s", Dump().c_str()); }
-
 std::string Tile::Dump()
 {
     std::stringstream oss;
@@ -180,8 +178,6 @@ bool TileOp::IsSpecial()
     }
     return false;
 }
-
-void TileOp::Print() { SIMULATION_LOGI("%s", Dump().c_str()); }
 
 std::string TileOp::Dump(bool outDetail)
 {
