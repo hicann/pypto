@@ -19,13 +19,13 @@
 #include "utils/tile_tensor.h"
 
 template <typename TileData>
-PTO_INST void TZEROS(TileData& dst)
+PTO_INST void TZEROS(TileData& dst, int shape3, int shape4)
 {
     static_assert(TileData::isRowMajor, "layout of dst must be pto::BLayout::RowMajor.");
     if constexpr (std::is_same_v<typename TileData::DType, int64_t>) {
         using DstTileType =
             pto::Tile<TileData::Loc, int32_t, TileData::Rows, TileData::Cols * 2, pto::BLayout::RowMajor, -1, -1>;
-        DstTileType dstTile(dst.RowMaskInternal, dst.ColMaskInternal * 2);
+        DstTileType dstTile(shape3, shape4 * 2);
         pto::TASSIGN(dstTile, (uint64_t)dst.data());
         pto::TEXPANDS(dstTile, 0);
     } else {
@@ -34,66 +34,48 @@ PTO_INST void TZEROS(TileData& dst)
 }
 
 #define OP_TILE_OP_ONEHOT TOneHot
-template <typename DstTensor, typename SrcTensor>
-TILEOP void TOneHot(DstTensor dst, SrcTensor src)
+template <typename DST, typename SRC>
+TILEOP void TOneHot(DST dst, SRC src)
 {
-    constexpr auto dstShapeSize = Std::tuple_size<typename DstTensor::Shape>::value;
-    constexpr auto srcShapeSize = Std::tuple_size<typename SrcTensor::Shape>::value;
-    static_assert(srcShapeSize + 1 == dstShapeSize);
-
-    constexpr size_t expectSize = 5;
+    constexpr auto dstShapeSize = Std::tuple_size<typename DST::Shape>::value;
+    constexpr auto srcShapeSize = Std::tuple_size<typename SRC::Shape>::value;
+    static_assert(srcShapeSize + 1 == dstShapeSize, "dst Shape Size must be src Shape Size + 1.");
+    auto dstTile = PtoTile<DST>(dst);
     const auto dstLayout = dst.GetLayout();
-    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
-    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
-    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
-    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
-    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
-    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
-    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
-    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
-
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
     const auto srcLayout = src.GetLayout();
-    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize - 1>();
-    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize - 1>();
-    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize - 1>();
-
-    using SrcDtype = typename SrcTensor::Type;
-    using DstDtype = typename DstTensor::Type;
-    using DstTileShape = typename DstTensor::TileShape;
-
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<DstTensor, 3, 5>();
-    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DstTensor, 4, 5>();
-
-    using DstTileType = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    using SrcDtype = typename SRC::Type;
+    using DstDtype = typename DST::Type;
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<DST, DIM_5TH, MAX_DIMS>();
     if (dstShape3 == 0 || dstShape4 == 0) {
         return;
     }
-
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
-                DstTileType dstTile(dstShape3, dstShape4);
-
-                auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
-                auto dstAddr = dst.GetAddr() + dstOffset * sizeof(DstDtype); // 32B align
-                pto::TASSIGN(dstTile, dstAddr);
-                TZEROS(dstTile);
-
+                auto dstOffset = TileOffset(n0Index, n1Index, n2Index);
+                dstTile.Assign(dst, dstOffset);
+                TZEROS(dstTile.Data(), dstShape3, dstShape4);
                 set_flag(PIPE_V, PIPE_S, EVENT_ID7);
                 wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
-
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 auto srcPtr = (__ubuf__ SrcDtype*)(src.GetAddr() + srcOffset * sizeof(SrcDtype));
                 for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
-                    auto dstPtr = (__ubuf__ DstDtype*)(dstAddr + n3Index * dstTileW * sizeof(DstDtype));
+                    auto dstPtr = dstTile.Data().data() + n3Index * dstTileW;
                     SrcDtype onePos = srcPtr[n3Index];
                     dstPtr[onePos] = 1;
                 }
+                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
 }
 #endif
