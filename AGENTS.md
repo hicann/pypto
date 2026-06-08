@@ -85,8 +85,7 @@ for M_k in [M1, M12, M123, …, M123…N]:
 
 ### Stage 7：性能调优
 
-- `pypto-op-optimization`：Stage 7 调优工作流总入口
-- `pypto-op-perf-tune`：三阶段调优总编排（frontend → swimlane → incore）
+- `pypto-op-perf-tune`：Stage 7 调优工作流总入口；三阶段配置级调优（frontend → swimlane → incore）+ 收敛后可选算法级优化
 - `perf-analyzer`：性能数据采集与瓶颈定位
 - `tune-frontend`：前端 tile / dtype 调优
 - `tune-swimlane`：swimlane 并行调优 / 自动化搜索 / leafhash → code 映射
