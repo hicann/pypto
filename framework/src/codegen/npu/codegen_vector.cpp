@@ -216,14 +216,12 @@ std::string CodeGenOpNPU::GenPermuteOp() const { return PrintPermuteLayout(); }
 
 std::string CodeGenOpNPU::GenTransData() const
 {
-    auto transDataAttr = opAttrs.at(OpAttributeKey::transDataOffset);
-    const auto& tileParams = AnyCast<std::vector<SymbolicScalar>>(transDataAttr);
+    std::vector<SymbolicScalar> transDataAttr;
+    GetOpAttr(OpAttributeKey::transDataOffset, transDataAttr);
     std::vector<std::string> tileParamsStr = {};
-    for (auto tileParam : tileParams) {
-        auto tmpExpr = AnyCast<SymbolicScalar>(tileParam);
-        tileParamsStr.push_back("(int)(" + SymbolicExpressionTable::BuildExpression(tmpExpr) + ")");
+    for (auto tileParam : transDataAttr) {
+        tileParamsStr.emplace_back("(int)(" + SymbolicExpressionTable::BuildExpression(tileParam) + ")");
     }
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "TransData only support TileTensor mode";
 
     return PrintTransDataLayout(tileParamsStr);
 }
@@ -238,22 +236,19 @@ std::string CodeGenOpNPU::PrintTransDataLayout(const std::vector<std::string>& p
     std::string inputTensor = QueryTileTensorNameByIdx(ID2);
     std::vector<std::string> paramList = {dstTensor, coord, tmpTensor, inputTensor};
     std::vector<std::string> templateParam = {};
-    if (opCode == Opcode::OP_NCHW2NC1HWC0) {
-        paramList.insert(paramList.end(), param.begin(), param.begin() + 4);
-        templateParam = std::vector<std::string>(param.begin() + 4, param.end());
-    } else if (opCode == Opcode::OP_NCHW2Fractal_Z) {
-        paramList.insert(paramList.end(), param.begin(), param.begin() + 6);
-        templateParam = std::vector<std::string>(param.begin() + 6, param.end());
-    } else if (opCode == Opcode::OP_NCDHW2NDC1HWC0 || opCode == Opcode::OP_NC1HWC02NCHW) {
-        paramList.insert(paramList.end(), param.begin(), param.begin() + 5);
-        templateParam = std::vector<std::string>(param.begin() + 5, param.end());
-    } else if (opCode == Opcode::OP_NDC1HWC02NCDHW) {
-        paramList.insert(paramList.end(), param.begin(), param.begin() + 6);
-        templateParam = std::vector<std::string>(param.begin() + 6, param.end());
-    } else if (opCode == Opcode::OP_NCDHW2FRACTAL_Z_3D) {
-        paramList.insert(paramList.end(), param.begin(), param.begin() + 7);
-        templateParam = std::vector<std::string>(param.begin() + 7, param.end());
-    }
+    static const std::unordered_map<Opcode, unsigned> opParamPos{
+            {Opcode::OP_NCHW2NC1HWC0, 4},
+            {Opcode::OP_NCHW2Fractal_Z, 6},
+            {Opcode::OP_NCDHW2NDC1HWC0, 5},
+            {Opcode::OP_NC1HWC02NCHW, 5},
+            {Opcode::OP_NDC1HWC02NCDHW, 6},
+            {Opcode::OP_NCDHW2FRACTAL_Z_3D, 7}
+    };
+    auto iter = opParamPos.find(opCode);
+    ASSERT(OperErr::ATTRIBUTE_INVALID, iter != opParamPos.end()) << "This transData conversion is not supported.";
+    unsigned pos = iter->second;
+    paramList.insert(paramList.end(), param.begin(), param.begin() + pos);
+    templateParam = std::vector<std::string>(param.begin() + pos, param.end());
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets(templateParam) << WrapParamByParentheses(paramList) << STMT_END;
     return oss.str();

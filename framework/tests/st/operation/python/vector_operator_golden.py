@@ -1878,8 +1878,8 @@ def gen_transpose_op_golden(
             for i in range(group):
                 tmp_input_tensor = input_tensor[:, i * per_group_c:(i + 1) * per_group_c, :, :]
                 if input_c < total_c:
-                    padSize = (total_c - input_c) // group
-                    tmp_input_tensor = F.pad(tmp_input_tensor, (0, 0, 0, 0, 0, padSize))
+                    pad_size = (total_c - input_c) // group
+                    tmp_input_tensor = F.pad(tmp_input_tensor, (0, 0, 0, 0, 0, pad_size))
                 tmp_input_tensor = tmp_input_tensor.view(input_n, per_group_c1, c0, input_h, input_w)
                 tmp_res = tmp_input_tensor.permute(0, 1, 3, 4, 2).contiguous()
                 res[:, i * per_group_c1:(i + 1) * per_group_c1, :, :, :] = tmp_res

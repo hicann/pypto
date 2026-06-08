@@ -29,12 +29,11 @@ class TestCodegenDynTransData : public CodegenTestBase {
 public:
     TestCodegenDynTransData() : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION}) {}
 
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
+    static void TearDownTestCase() {}
 };
 
 TEST_F(TestCodegenDynTransData, TestTransData2)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     constexpr const int N = 1;
     constexpr const int C = 7;
     constexpr const int H = 1;
@@ -64,7 +63,6 @@ TEST_F(TestCodegenDynTransData, TestTransData2)
 
 TEST_F(TestCodegenDynTransData, TestTransData0_5)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     constexpr const int N = 1;
     constexpr const int C1 = 1;
     constexpr const int H = 1;
@@ -96,7 +94,6 @@ TEST_F(TestCodegenDynTransData, TestTransData0_5)
 
 TEST_F(TestCodegenDynTransData, TestTransData4)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     constexpr const int N = 15;
     constexpr const int C = 15;
     constexpr const int H = 2;
@@ -127,7 +124,6 @@ TEST_F(TestCodegenDynTransData, TestTransData4)
 
 TEST_F(TestCodegenDynTransData, TestTransData0_6)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     constexpr const int N = 1;
     constexpr const int D = 1;
     constexpr const int C1 = 1;
@@ -160,7 +156,6 @@ TEST_F(TestCodegenDynTransData, TestTransData0_6)
 
 TEST_F(TestCodegenDynTransData, TestTransData3)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     constexpr const int N = 1;
     constexpr const int C = 7;
     constexpr const int D = 1;
@@ -192,7 +187,6 @@ TEST_F(TestCodegenDynTransData, TestTransData3)
 
 TEST_F(TestCodegenDynTransData, TestTransData5)
 {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     constexpr const int N = 15;
     constexpr const int C = 7;
     constexpr const int D = 1;

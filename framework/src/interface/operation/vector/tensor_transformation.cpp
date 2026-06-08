@@ -527,6 +527,7 @@ std::shared_ptr<LogicalTensor> transDataPadNC1HWC0(
     auto inputShape = inputTile->GetShape();
     int64_t N = inputShape[0];
     int64_t C = inputShape[1];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[2];
@@ -562,6 +563,7 @@ std::shared_ptr<LogicalTensor> transDataPadFractalZ(
     auto inputShape = inputTile->GetShape();
     int64_t N = inputShape[0];
     int64_t C = inputShape[1];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[2];
@@ -618,6 +620,7 @@ std::shared_ptr<LogicalTensor> transDataPadFractalZ3D(
     int64_t N = inputShape[0];
     int64_t C = inputShape[1];
     int64_t D = inputShape[2];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[3];
@@ -674,6 +677,7 @@ std::shared_ptr<LogicalTensor> transDataPadNDC1HWC0(
     int64_t N = inputShape[0];
     int64_t D = inputShape[1];
     int64_t C = inputShape[2];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[3];
@@ -880,6 +884,7 @@ void InnerTransDataND5Dim(
 
     std::unordered_map<int64_t, int64_t> format2InputAxis = {{5, 1}, {6, 2}};
     int64_t inputGroupAxis = format2InputAxis[inputSize];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t inputPerGroup = input->GetShape()[inputGroupAxis] / group;
 
     if (cur == input->GetShape().size()) {
@@ -973,6 +978,7 @@ void InnerTransData(
         {TileOpFormat::TILEOP_NDC1HWC0, 2},
         {TileOpFormat::TILEOP_FRACTAL_Z_3D, 1}};
     int64_t outputGroupAxis = format2OutputAxis[T];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t inputPerGroup = input->GetShape()[inputGroupAxis] / group;
     int64_t factor = (T == TileOpFormat::TILEOP_FRACTAL_Z || T == TileOpFormat::TILEOP_FRACTAL_Z_3D) ? N0 : C0;
     bool isFractalZ = T == TileOpFormat::TILEOP_FRACTAL_Z || T == TileOpFormat::TILEOP_FRACTAL_Z_3D;
@@ -1033,6 +1039,8 @@ LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPt
     Shape resultShape = self->GetShape();
     int64_t C = resultShape[1];
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int perGroupC = C / group;
     int perGroupC1 = (perGroupC + C0 - 1) / C0;
     int totalC1 = perGroupC1 * group;
@@ -1075,6 +1083,7 @@ LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensor
     int64_t H = self->GetShape()[2];
     int64_t W = self->GetShape()[3];
     int64_t N0 = 16;
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t perGroupN = N / group;
     int64_t perGroupN1 = (perGroupN + N0 - 1) / N0;
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
@@ -1122,6 +1131,8 @@ LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensor
     int64_t H = self->GetShape()[3];
     int64_t W = self->GetShape()[4];
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t perGroupC = C / group;
     int64_t perGroupC1 = (perGroupC + C0 - 1) / C0;
     int64_t totalC1 = perGroupC1 * group;
@@ -1174,6 +1185,7 @@ LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPt
     int64_t H = self->GetShape()[3];
     int64_t W = self->GetShape()[4];
     int64_t N0 = 16;
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t perGroupN = N / group;
     int64_t perGroupN1 = (perGroupN + N0 - 1) / N0;
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());

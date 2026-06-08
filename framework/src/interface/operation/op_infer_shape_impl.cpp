@@ -963,6 +963,7 @@ void TransDataDefaultInferFunc(Operation* op, std::vector<std::vector<SymbolicSc
     SymbolicScalar validShapeN0 = 16;
     SymbolicScalar validShapeC0 = SymbolicScalar(BLOCK_SIZE / BytesOf(op->GetIOperands()[0]->Datatype()));
     SymbolicScalar validShapeN1 = validShapeN / validShapeN0;
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, validShapeC0 > 0) << "The validShapeC0 is not valid !";
     SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
 
     if (op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0) {
@@ -988,6 +989,7 @@ void TransDataNCDHW2NDC1HWC0InferFunc(Operation* op, std::vector<std::vector<Sym
     SymbolicScalar validShapeH = inputValidShape[3];
     SymbolicScalar validShapeW = inputValidShape[4];
     SymbolicScalar validShapeC0 = SymbolicScalar(BLOCK_SIZE / BytesOf(op->GetIOperands()[0]->Datatype()));
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, validShapeC0 > 0) << "The validShapeC0 is not valid !";
     SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
 
     std::vector<SymbolicScalar> outputValidShape = {validShapeN, validShapeD, validShapeC1,
@@ -1039,6 +1041,7 @@ void TransDataNCDHW2Fractal_Z_3DInferFunc(Operation* op, std::vector<std::vector
     SymbolicScalar validShapeW = inputValidShape[4];
     SymbolicScalar validShapeC0 = SymbolicScalar(BLOCK_SIZE / BytesOf(op->GetIOperands()[0]->Datatype()));
     SymbolicScalar validShapeN0 = SymbolicScalar(16);
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, validShapeC0 > 0) << "The validShapeC0 is not valid !";
     SymbolicScalar validShapeC1 = validShapeC / validShapeC0;
     SymbolicScalar validShapeN1 = validShapeN / validShapeN0;
 

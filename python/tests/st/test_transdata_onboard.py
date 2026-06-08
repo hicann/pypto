@@ -19,17 +19,17 @@ def test_transdata_onboard():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     group = 1
-    intputShape = (1, 8, 1, 8)
-    outputShape = (1, 1, 1, 8, 8)
+    input_shape = (1, 8, 1, 8)
+    output_shape = (1, 1, 1, 8, 8)
     view_shape = (1, 8, 1, 8)
     tile_shape = (1, 8, 1, 8)
     pypto.runtime._device_init()
 
-    input = pypto.tensor(intputShape, pypto.DT_INT32, "pypto_TENSOR_input")
-    output = pypto.tensor(outputShape, pypto.DT_INT32, "pypto_TENSOR_output")
+    input = pypto.tensor(input_shape, pypto.DT_INT32, "pypto_TENSOR_input")
+    output = pypto.tensor(output_shape, pypto.DT_INT32, "pypto_TENSOR_output")
 
     with pypto.function("MAIN", input, output):
-        for b_idx in pypto.loop(1, name="b0", idx_name="bidx"):
+        for _ in pypto.loop(1, name="b0", idx_name="bidx"):
             view_tensor_a = pypto.view(input, view_shape,
                                         [0, 0, 0, 0],
                                         valid_shape=[pypto.symbolic_scalar(input.shape[0]),
@@ -46,8 +46,8 @@ def test_transdata_onboard():
     assert isinstance(output, pypto.tensor)
 
     a_tensor = torch.randint(
-        low=-10, high=10, size=intputShape, dtype=torch.int32)
-    b_tensor = torch.zeros(outputShape, dtype=torch.int32)
+        low=-10, high=10, size=input_shape, dtype=torch.int32)
+    b_tensor = torch.zeros(output_shape, dtype=torch.int32)
 
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
     pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
