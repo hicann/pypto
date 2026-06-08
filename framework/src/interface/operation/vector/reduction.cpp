@@ -19,6 +19,7 @@
 #include "passes/pass_utils/pass_utils.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/tilefwk_op.h"
+#include "tensor_transformation.h"
 
 namespace npu::tile_fwk {
 
@@ -464,8 +465,14 @@ Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
     resultShape[axis] = 1;
 
     Tensor result(DataType::DT_INT32, resultShape);
-    CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMAX", self, result, axis);
-
+    if (self.GetDataType() == DT_FP16) {
+        auto castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+        CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMAX", castSelf, result, axis);
+    } else {
+        CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMAX", self, result, axis);
+    }
+    
     return ProcessResultShape(result, self, axis, keepDim);
 }
 
@@ -484,7 +491,13 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
     resultShape[axis] = 1;
 
     Tensor result(DataType::DT_INT32, resultShape);
-    CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMIN", self, result, axis);
+    if (self.GetDataType() == DT_FP16) {
+        auto castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+        CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMIN", castSelf, result, axis);
+    } else {
+        CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMIN", self, result, axis);
+    }
 
     return ProcessResultShape(result, self, axis, keepDim);
 }
