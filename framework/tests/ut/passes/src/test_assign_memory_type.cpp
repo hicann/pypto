@@ -966,6 +966,38 @@ TEST_F(AssignMemoryTypeTest, TestPostcheckFailWhenPathUnreachable)
     EXPECT_EQ(assignMemoryType.PostCheck(*function), FAILED);
 }
 
+TEST_F(AssignMemoryTypeTest, UnalignedAssembleBeforeReshapeFallbackDdr)
+{
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_16, NUM_32};
+    Shape reshapeShape{NUM_32, NUM_16};
+    G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "vec_dup_out");
+    G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "assemble_out");
+    G.AddTensor(DataType::DT_FP16, reshapeShape, MemoryType::MEM_UNKNOWN, "reshape_out");
+    G.AddTensor(DataType::DT_FP16, reshapeShape, MemoryType::MEM_UNKNOWN, "view_out");
+
+    G.AddOp(Opcode::OP_VEC_DUP, {}, {"vec_dup_out"}, "vec_dup");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"vec_dup_out"}, {"assemble_out"}, "assemble");
+    G.GetOp("assemble")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(Offset{0, 1}));
+    G.AddOp(Opcode::OP_RESHAPE, {"assemble_out"}, {"reshape_out"}, "reshape");
+    G.AddOp(Opcode::OP_VIEW, {"reshape_out"}, {"view_out"}, "view");
+    G.GetOp("view")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_UB));
+
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+
+    EXPECT_EQ(G.GetTensor("vec_dup_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(G.GetTensor("assemble_out")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetTensor("reshape_out")->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
+    EXPECT_EQ(G.GetTensor("view_out")->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+
+    auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(G.GetOp("assemble")->GetOpAttribute());
+    ASSERT_NE(assembleOpAttr, nullptr);
+    EXPECT_EQ(assembleOpAttr->GetFrom(), MemoryType::MEM_UB);
+}
+
 TEST_F(AssignMemoryTypeTest, AssembleAndReshapeAfterAssemble)
 {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");

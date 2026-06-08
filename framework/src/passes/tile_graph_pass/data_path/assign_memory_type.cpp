@@ -661,7 +661,8 @@ Status AssignMemoryType::TryInferAssembleOutputByProducerCandidate(const Logical
     bool hasConflict = false;
     MemoryType producerCandidate = InferAssembleProducerCandidate(output, hasConflict);
     handled = !hasConflict && producerCandidate != MemoryType::MEM_UNKNOWN &&
-              FitsAssembleOutputMemoryLimit(output, producerCandidate);
+              FitsAssembleOutputMemoryLimit(output, producerCandidate) &&
+              AreAssembleDirectPathsSupported(output, producerCandidate);
     if (!handled)
         return SUCCESS;
     return ApplyAssembleProducerCandidate(output, producerCandidate);
