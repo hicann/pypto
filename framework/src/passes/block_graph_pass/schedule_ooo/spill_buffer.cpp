@@ -232,7 +232,8 @@ void OoOScheduler::FindFilterLtags(Operation* allocOp, std::set<Operation*> &fil
 }
 
 bool OoOScheduler::CheckMachineAndL1(Operation* spillOp, Operation* allocOp) {
-    if (!spillOp->GetInputOperand(0)) {
+    if (!spillOp->GetInputOperand(0) &&
+        allocOp->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
         APASS_LOG_WARN_F(Elements::Tensor, "CheckMachineAndL1: spillOp %s has no inputOperand.", GetOpInfo(spillOp).c_str());
         return false;
     }
