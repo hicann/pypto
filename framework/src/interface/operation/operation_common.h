@@ -165,8 +165,8 @@ public:
     CoreType coreType_{CoreType::AIV};
     CoreType trigCoreType_{CoreType::AIV};
     int eventId_{0};
-    AIVCore setAivCore_;
-    AIVCore waitAivCore_;
+    AIVCore setAivCore_{-1};
+    AIVCore waitAivCore_{-1};
     int gMBufId{0};
     std::vector<int> offset_;
 
