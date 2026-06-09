@@ -3891,6 +3891,8 @@ bool Function::InsertLoopIdxNameList(const std::string& idxName)
     }
 
     auto realParent = parent_->parent_;
+    FE_ASSERT(FeError::INVALID_VAL, realParent != nullptr)
+        << "Current function name: " << GetRawName() << " has no parent function, frontend kernel is not JIT decorated";
     if (realParent->GetFunctionType() == FunctionType::DYNAMIC_LOOP &&
         realParent->LoopIdxNameList().find(idxName) != realParent->LoopIdxNameList().end()) {
         return false;
