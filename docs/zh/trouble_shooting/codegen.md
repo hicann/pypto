@@ -28,11 +28,11 @@
 2. **设置并行编译数量为1**
    由于CodeGen模块通过并行编译多个子图方式节省编译时长，故为了防止输出日志乱序，定位问题时需要将并行编译改为串行，设置方法如下：
    - 修改tile_fwk_config.json中的parallel_compile为1
-   - 重新编译并安装pypto包，参考[编译安装](../install/build_and_install.md)。
+   - 重新编译并安装pyPTO包，参考[编译安装](../install/build_and_install.md)。
 
 3. **再次执行用例，获取日志及kernel代码文件**
    日志路径一般为：   *{用户指定日志路径}*/debug/plog/pypto-log***.log
-   kernel代码文件路径一般为：   pypto工程路径或测试框架执行路径下，搜索kernel_aicore文件夹，文件夹内的TENSOR***.cpp即kernel代码文件。
+   kernel代码文件路径一般为：   pyPTO工程路径或测试框架执行路径下，搜索kernel_aicore文件夹，文件夹内的TENSOR***.cpp即kernel代码文件。
 
 4. **分析日志**
    - 对于FRAMEWORK（F60XXX）、OPERATION_ADAPTER（F61XXX）类错误，一般为上游数据异常导致，需要结合PASS日志分析
@@ -55,7 +55,7 @@
 3. 找到日志后往上搜索出现的第一个”Op CodeGenNPU Start”关键字，即该TileOp生成的开始位置，由此往后以此检查日志信息是否符合预期。
 4. 若怀疑和PASS传入的数据有关，则可以在"Op CodeGenNPU Start"关键字后搜索"Gen OP IS"关键字，后面包含了该Operation的Dump信息，样例如下：
 
-   ```c++
+   ```log
    Gen OP IS: <2 x 2 x 16 x 16 x DT_FP32 / sym_3_dim_0 x sym_3_dim_1 x sym_3_dim_2 x sym_3_dim_3 x DT_FP32> %152@5#(0)MEM_UB::MEM_UB = !10010 TILE_ADD(g:0, s:-1) %3@3#(0)MEM_UB::MEM_UB, %4@4#(0)MEM_UB::MEM_UB #IS_CUBE{0} #last_use{[0, 1, 1]}
    ```
 
@@ -154,12 +154,12 @@ CodeGen模块耗时可通过执行算子后在屏幕输出中观察Compiler Moni
 日志中记录了该Top Function内所有子图执行bisheng命令编译二进制的并发进程数量，以及总体耗时。
 
 - 单个kernel文件编译时长确认方法：
-  1. 从pypto工程路径或测试框架路径下找到kernel_aicore文件夹及需要验证的kernel代码文件Tensor**.cpp，例如：
+  1. 从pyPTO工程路径或测试框架路径下找到kernel_aicore文件夹及需要验证的kernel代码文件Tensor**.cpp，例如：
      {前置路径}/output/output_20260319_145742_163710_1702013_6466B4B5/**kernel_aicore/TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.cpp**
   2. 打开kernel代码文件，到最底部找到编译该文件的bisheng命令并复制，例如：
 
      ```bash
-     bisheng -c -O3 -g -x cce ... -o output/ output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/ TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.o output/ output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/ TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.cpp
+     bisheng -c -O3 -g -x cce ... -o output/output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/ TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.o output/ output_20260319_145742_163710_1702013_6466B4B5/kernel_aicore/ TENSOR_Step0_Unroll1_PATH0_hiddenfunc0_8_16874966534923480783_0_aiv.cpp
      ```
 
   3. cd {前置路径}

@@ -28,9 +28,7 @@ inline constexpr std::underlying_type_t<T> ToUnderlying(T value)
 // =============================================================================
 // F0XXXX: external limitation
 // =============================================================================
-enum class ExternalError : uint32_t {
-    COMMON_EXTERNAL_ERROR = 0x0FFFFU
-};
+enum class ExternalError : uint32_t { COMMON_EXTERNAL_ERROR = 0x0FFFFU };
 
 // =============================================================================
 // F1XXXX-: internal limitation
@@ -121,10 +119,10 @@ enum class ManagerErr : uint32_t {};
 // F6XXXX: CODEGEN
 // =============================================================================
 enum class CodeGenErrorCategory {
-    FRAMEWORK = 60000U,
-    OPERATION_ADAPTER = 61000U,
-    GEN_OP_CODE = 62000U,
-    COMPILE_CODE = 63000U,
+    FRAMEWORK = 0x60000U,
+    OPERATION_ADAPTER = 0x61000U,
+    GEN_OP_CODE = 0x62000U,
+    COMPILE_CODE = 0x63000U,
 };
 
 enum class FwkErr : uint32_t {
@@ -475,11 +473,7 @@ enum class MatmulErrorCode : uint32_t {
     ERR_RUNTIME_LOGIC = 0xC5002U,
 };
 
-enum class ConvOperationError : uint32_t {
-    INPUT_INVALID = 0xC6101U,
-    OVER_BUFFER_LIMIT = 0xC6102U,
-    UNKNOWN = 0xC6199U
-};
+enum class ConvOperationError : uint32_t { INPUT_INVALID = 0xC6101U, OVER_BUFFER_LIMIT = 0xC6102U, UNKNOWN = 0xC6199U };
 
 enum class ConvExpandFuncError : uint32_t {
     EXPANDFUNC_TENSOR_OP_NULLPTR = 0xC6201U,
@@ -520,10 +514,7 @@ enum class SimulationErrorCategory {
     UNKNOWN = 99000U,
 };
 
-enum class InternelErrorScene : uint32_t { 
-    NULL_POINTER = 90001U,
-    UNKNOWN = 90099U
-};
+enum class InternelErrorScene : uint32_t { NULL_POINTER = 90001U, UNKNOWN = 90099U };
 
 enum class ExternalErrorScene : uint32_t {
     INVALID_CONFIG = 91001U,
