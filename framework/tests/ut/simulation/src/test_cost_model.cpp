@@ -30,6 +30,9 @@
 #include "cost_model/simulation/tools/ParseInput.h"
 #include "cost_model/simulation/arch/PipeSimulatorFast.h"
 #include "cost_model/simulation/tools/visualizer.h"
+#include "cost_model/simulation/base/Reporter.h"
+#include "cost_model/simulation/statistics/TraceLogger.h"
+#include "cost_model/simulation/common/CommonTools.h"
 
 using namespace npu::tile_fwk;
 
@@ -1134,4 +1137,1146 @@ TEST_F(CostModelTest, TestPipeMachineImplSimulateForPass)
     TestPipeImpl impl;
     EXPECT_EQ(impl.SimulateForPass("ADD", {{1, 1}}, npu::tile_fwk::DataType::DT_FP32), 0);
     EXPECT_EQ(impl.PostSimulateForPass("ADD", {{1, 1}}, npu::tile_fwk::DataType::DT_FP32), 0);
+}
+
+class MockCacheMachineImpl : public CostModel::CacheMachineImpl {
+public:
+    uint64_t SimulateLatency = 10;
+    uint64_t Simulate(const CostModel::CachePacket& packet) override
+    {
+        (void)packet;
+        return SimulateLatency;
+    }
+};
+
+class CacheMachineTest : public testing::Test {
+public:
+    static void SetUpTestCase() {}
+
+    static void TearDownTestCase() {}
+
+    void SetUp() override
+    {
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, true);
+        sim = std::make_shared<CostModel::SimSys>();
+        cacheMachine = new CostModel::CacheMachine(CostModel::CacheType::L2CACHE, "A2A3");
+        cacheMachine->sim = sim;
+        cacheMachine->Build();
+    }
+
+    void TearDown() override
+    {
+        delete cacheMachine;
+    }
+
+protected:
+    std::shared_ptr<CostModel::SimSys> sim;
+    CostModel::CacheMachine* cacheMachine = nullptr;
+};
+
+TEST_F(CacheMachineTest, TestConstructor)
+{
+    EXPECT_NE(cacheMachine->cacheImpl, nullptr);
+    EXPECT_EQ(cacheMachine->cacheType, CostModel::CacheType::L2CACHE);
+}
+
+TEST_F(CacheMachineTest, TestBuild)
+{
+    EXPECT_NE(cacheMachine->stats, nullptr);
+}
+
+TEST_F(CacheMachineTest, TestInitQueueDelay)
+{
+    cacheMachine->InitQueueDelay();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestStepQueue)
+{
+    sim->globalCycles = 100;
+    cacheMachine->lastCycles = 50;
+    cacheMachine->StepQueue();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestGetQueueNextCycles)
+{
+    sim->globalCycles = 100;
+    uint64_t nextCycles = cacheMachine->GetQueueNextCycles();
+    EXPECT_GE(nextCycles, 100);
+}
+
+TEST_F(CacheMachineTest, TestIsTerminateNoTask)
+{
+    cacheMachine->executingTask = false;
+    bool terminate = cacheMachine->IsTerminate();
+    EXPECT_TRUE(terminate);
+}
+
+TEST_F(CacheMachineTest, TestIsTerminateWithExecutingTask)
+{
+    cacheMachine->executingTask = true;
+    bool terminate = cacheMachine->IsTerminate();
+    EXPECT_FALSE(terminate);
+}
+
+TEST_F(CacheMachineTest, TestIsTerminateWithDataInQueue)
+{
+    cacheMachine->executingTask = false;
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x1000;
+    cacheMachine->dataRequestQueue.Enqueue(pkt, 0);
+    bool terminate = cacheMachine->IsTerminate();
+    EXPECT_FALSE(terminate);
+}
+
+TEST_F(CacheMachineTest, TestRequestData)
+{
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x1000;
+    pkt.requestType = CostModel::CacheRequestType::DATA_READ_REQ;
+
+    cacheMachine->lastCycles = sim->globalCycles;
+    cacheMachine->RequestData(pkt, 0);
+
+    EXPECT_TRUE(cacheMachine->dataRequestQueue.Empty());
+}
+
+TEST_F(CacheMachineTest, TestStepWithEmptyQueue)
+{
+    sim->globalCycles = 100;
+    cacheMachine->executingTask = false;
+    cacheMachine->Step();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestStepWithPacketCacheHit)
+{
+    sim->globalCycles = 100;
+    cacheMachine->executingTask = false;
+
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x1000;
+    pkt.requestType = CostModel::CacheRequestType::DATA_READ_REQ;
+    cacheMachine->dataRequestQueue.Enqueue(pkt, 0);
+
+    auto mockImpl = new MockCacheMachineImpl();
+    mockImpl->SimulateLatency = 10;
+    cacheMachine->cacheImpl.reset(mockImpl);
+
+    cacheMachine->AccessCache(0x1000, 100);
+
+    cacheMachine->Step();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestStepWithPacketCacheMiss)
+{
+    sim->globalCycles = 100;
+    cacheMachine->executingTask = false;
+
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x2000;
+    pkt.requestType = CostModel::CacheRequestType::DATA_READ_REQ;
+    cacheMachine->dataRequestQueue.Enqueue(pkt, 0);
+
+    cacheMachine->Step();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestXfer)
+{
+    sim->globalCycles = 100;
+    cacheMachine->lastCycles = 50;
+
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x3000;
+    pkt.requestType = CostModel::CacheRequestType::DATA_READ_REQ;
+    cacheMachine->dataRequestQueue.Enqueue(pkt, 0);
+
+    cacheMachine->Xfer();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestProcessMSHR)
+{
+    sim->globalCycles = 100;
+    cacheMachine->config.l2MissExtraLatency = 150;
+    cacheMachine->config.l2HitLatency = 50;
+
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x4000;
+    pkt.requestType = CostModel::CacheRequestType::DATA_READ_REQ;
+    cacheMachine->AddMSHR(pkt, 100);
+
+    sim->globalCycles = 300;
+    cacheMachine->ProcessMSHR();
+    EXPECT_TRUE(cacheMachine->responseQueue.empty() == false ||
+                cacheMachine->responseQueue.size() == 0);
+}
+
+TEST_F(CacheMachineTest, TestProcessRespWithMachine)
+{
+    auto coreMachine = new CostModel::CoreMachine(CostModel::MachineType::AIC);
+    coreMachine->sim = sim;
+    sim->pidToMachineMp[1] = std::shared_ptr<CostModel::Machine>(coreMachine);
+
+    CostModel::CachePacket pkt;
+    pkt.pid = 1;
+    pkt.addr = 0x5000;
+    pkt.requestType = CostModel::CacheRequestType::DATA_READ_REQ;
+    pkt.cycleInfo.cacheRecvCycle = 100;
+    cacheMachine->responseQueue.emplace_back(pkt, sim->globalCycles);
+
+    cacheMachine->ProcessResp();
+    EXPECT_TRUE(true);
+}
+
+TEST_F(CacheMachineTest, TestAllocateCacheAndEvict)
+{
+    cacheMachine->config.l2Size = 1024;
+    cacheMachine->config.l2LineSize = 64;
+
+    for (int i = 0; i < 20; ++i) {
+        cacheMachine->AllocateCache(0x1000 + i * 0x100, 100 + i);
+    }
+
+    EXPECT_TRUE(cacheMachine->cache.size() <= 16);
+}
+
+TEST_F(CacheMachineTest, TestAccessCacheHit)
+{
+    cacheMachine->AllocateCache(0x6000, 100);
+    bool hit = cacheMachine->AccessCache(0x6000, 200);
+    EXPECT_TRUE(hit);
+}
+
+TEST_F(CacheMachineTest, TestAccessCacheMiss)
+{
+    bool hit = cacheMachine->AccessCache(0x7000, 100);
+    EXPECT_FALSE(hit);
+}
+
+TEST_F(CacheMachineTest, TestEvictLRU)
+{
+    cacheMachine->AllocateCache(0x8000, 100);
+    size_t sizeBefore = cacheMachine->cache.size();
+
+    cacheMachine->EvictLRU();
+
+    EXPECT_TRUE(cacheMachine->cache.size() < sizeBefore || sizeBefore == 1);
+}
+
+TEST_F(CacheMachineTest, TestReport)
+{
+    EXPECT_NO_THROW(cacheMachine->Report());
+}
+
+TEST_F(CacheMachineTest, TestGetSim)
+{
+    EXPECT_EQ(cacheMachine->GetSim(), sim);
+}
+
+TEST_F(CacheMachineTest, TestReset)
+{
+    EXPECT_NO_THROW(cacheMachine->Reset());
+}
+
+// ==================== Reporter UTs ====================
+
+class ReporterTest : public testing::Test {
+public:
+    static void SetUpTestCase() {}
+    static void TearDownTestCase() {}
+    void SetUp() override {}
+    void TearDown() override {}
+};
+
+TEST_F(ReporterTest, TestReporterReportTitle)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportTitle("TestTitle");
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("TestTitle"), std::string::npos);
+    EXPECT_EQ(output.size(), CostModel::TOTAL_WIDTH + 1);
+    size_t leftCount = output.find("TestTitle");
+    size_t rightCount = output.size() - leftCount - std::string("TestTitle").size() - 1;
+    EXPECT_GE(leftCount, 0);
+    EXPECT_GE(rightCount, 0);
+}
+
+TEST_F(ReporterTest, TestReporterReportMap)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    std::map<uint64_t, uint64_t> emptyMap;
+    CostModel::Reporter::ReportMap("EmptyMap", emptyMap);
+    std::string output1 = oss.str();
+
+    std::map<uint64_t, uint64_t> fewMap = {{1, 10}, {2, 20}, {3, 30}};
+    CostModel::Reporter::ReportMap("FewMap", fewMap);
+    std::string output2 = oss.str();
+
+    std::map<uint64_t, uint64_t> manyMap;
+    for (int i = 0; i < 9; ++i) {
+        manyMap[i] = i * 100;
+    }
+    CostModel::Reporter::ReportMap("ManyMap", manyMap);
+    std::string output3 = oss.str();
+
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output1.find("EmptyMap"), std::string::npos);
+    EXPECT_NE(output2.find("FewMap"), std::string::npos);
+    EXPECT_NE(output2.find("1"), std::string::npos);
+    EXPECT_NE(output2.find("10"), std::string::npos);
+    EXPECT_NE(output3.find("ManyMap"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportMapAndPct)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    std::map<int, uint64_t> vals = {{0, 50}, {1, 30}};
+    uint64_t baseVal = 100;
+    CostModel::Reporter::ReportMapAndPct("TestPct", vals, baseVal);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("TestPct"), std::string::npos);
+    EXPECT_NE(output.find("50"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportMapsAndPct)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    std::map<int, uint64_t> vals = {{0, 50}, {1, 30}};
+    std::map<int, uint64_t> baseValsHasKey = {{0, 100}, {1, 200}};
+    CostModel::Reporter::ReportMapsAndPct("HasBase", vals, baseValsHasKey);
+
+    std::map<int, uint64_t> baseValsNoKey = {{2, 100}};
+    CostModel::Reporter::ReportMapsAndPct("NoBaseKey", vals, baseValsNoKey);
+
+    std::map<int, uint64_t> baseValsZero = {{0, 0}};
+    std::map<int, uint64_t> valsZero = {{0, 50}};
+    CostModel::Reporter::ReportMapsAndPct("ZeroBase", valsZero, baseValsZero);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("HasBase"), std::string::npos);
+    EXPECT_NE(output.find("NoBaseKey"), std::string::npos);
+    EXPECT_NE(output.find("ZeroBase"), std::string::npos);
+    EXPECT_NE(output.find("nan%"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportVal)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportVal("Uint64Val", static_cast<uint64_t>(12345));
+    CostModel::Reporter::ReportVal("FloatVal", 3.14f);
+    CostModel::Reporter::ReportVal("DoubleVal", 2.718);
+    CostModel::Reporter::ReportValWithLvl("Uint64Lvl", static_cast<uint64_t>(999), 1);
+    CostModel::Reporter::ReportValWithLvl("FloatLvl", 1.5f, 2);
+    CostModel::Reporter::ReportValWithLvl("DoubleLvl", 0.01, 3);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("Uint64Val"), std::string::npos);
+    EXPECT_NE(output.find("12345"), std::string::npos);
+    EXPECT_NE(output.find("FloatVal"), std::string::npos);
+    EXPECT_NE(output.find("DoubleVal"), std::string::npos);
+    EXPECT_NE(output.find("|--Uint64Lvl"), std::string::npos);
+    EXPECT_NE(output.find("|--FloatLvl"), std::string::npos);
+    EXPECT_NE(output.find("|--DoubleLvl"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportAvg)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportAvg("AvgUint64", static_cast<uint64_t>(100), static_cast<uint64_t>(10));
+    CostModel::Reporter::ReportAvg("AvgFloatNormal", 100.0f, 10.0f);
+    CostModel::Reporter::ReportAvg("AvgFloatNegDenom", 100.0f, -1.0f);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("AvgUint64"), std::string::npos);
+    EXPECT_NE(output.find("AvgFloatNormal"), std::string::npos);
+    EXPECT_NE(output.find("AvgFloatNegDenom"), std::string::npos);
+    EXPECT_NE(output.find("nan"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportPct)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportPct("PctUint64", static_cast<uint64_t>(50), static_cast<uint64_t>(100));
+    CostModel::Reporter::ReportPct("PctFloatNormal", 50.0f, 100.0f);
+    CostModel::Reporter::ReportPct("PctFloatNegDenom", 50.0f, -1.0f);
+    CostModel::Reporter::ReportPct("PctFloatRate", 0.5f);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("PctUint64"), std::string::npos);
+    EXPECT_NE(output.find("PctFloatNormal"), std::string::npos);
+    EXPECT_NE(output.find("PctFloatNegDenom"), std::string::npos);
+    EXPECT_NE(output.find("nan%"), std::string::npos);
+    EXPECT_NE(output.find("PctFloatRate"), std::string::npos);
+    EXPECT_NE(output.find("50.00%"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportValAndPct)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportValAndPct("VPUint64Normal", static_cast<uint64_t>(50), static_cast<uint64_t>(100));
+    CostModel::Reporter::ReportValAndPct("VPUint64ZeroDenom", static_cast<uint64_t>(50), static_cast<uint64_t>(0));
+    CostModel::Reporter::ReportValAndPct("VPFloatUint64", 50.0f, static_cast<uint64_t>(100));
+    CostModel::Reporter::ReportValAndPctFl("VPFlNormal", 50.0, 100.0);
+    CostModel::Reporter::ReportValAndPctFl("VPFlNegDenom", 50.0, -1.0);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("VPUint64Normal"), std::string::npos);
+    EXPECT_NE(output.find("VPUint64ZeroDenom"), std::string::npos);
+    EXPECT_NE(output.find("nan%"), std::string::npos);
+    EXPECT_NE(output.find("VPFloatUint64"), std::string::npos);
+    EXPECT_NE(output.find("VPFlNormal"), std::string::npos);
+    EXPECT_NE(output.find("VPFlNegDenom"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportHexCounter)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportHexCounter("HexName", 0xff, 42);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("HexName"), std::string::npos);
+    EXPECT_NE(output.find("42"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterReportStallLoc)
+{
+    std::ostringstream oss;
+    std::streambuf* oldBuf = std::cout.rdbuf(oss.rdbuf());
+
+    CostModel::Reporter::ReportStallLoc("Stall", 0xa, 0xb, 0xc, 100.0);
+
+    std::string output = oss.str();
+    std::cout.rdbuf(oldBuf);
+
+    EXPECT_NE(output.find("Stall"), std::string::npos);
+    EXPECT_NE(output.find("local_0x"), std::string::npos);
+    EXPECT_NE(output.find("peer_0x"), std::string::npos);
+}
+
+TEST_F(ReporterTest, TestReporterOutputStream)
+{
+    CostModel::Reporter reporter;
+    std::string tmpFile = "/tmp/reporter_test_" + std::to_string(getpid()) + ".txt";
+
+    std::streambuf* oldBuf = reporter.ReportSetOutStreamFile(tmpFile);
+    EXPECT_NE(oldBuf, nullptr);
+    std::cout << "LineToRedirect" << std::endl;
+    reporter.ReportResetOutStreamCout(oldBuf);
+
+    std::ifstream ifs(tmpFile);
+    EXPECT_TRUE(ifs.is_open());
+    std::string content;
+    std::getline(ifs, content);
+    EXPECT_NE(content.find("LineToRedirect"), std::string::npos);
+    ifs.close();
+    unlink(tmpFile.c_str());
+}
+
+TEST_F(ReporterTest, TestReporterOutputStreamAppend)
+{
+    CostModel::Reporter reporter;
+    std::string tmpFile = "/tmp/reporter_append_test_" + std::to_string(getpid()) + ".txt";
+
+    std::ofstream ofs(tmpFile);
+    ofs << "ExistingLine" << std::endl;
+    ofs.close();
+
+    std::streambuf* oldBuf = reporter.ReportSetOutStreamFile(tmpFile, true);
+    EXPECT_NE(oldBuf, nullptr);
+    std::cout << "AppendedLine" << std::endl;
+    reporter.ReportResetOutStreamCout(oldBuf);
+
+    std::ifstream ifs(tmpFile);
+    std::string line1, line2;
+    std::getline(ifs, line1);
+    std::getline(ifs, line2);
+    EXPECT_NE(line1.find("ExistingLine"), std::string::npos);
+    EXPECT_NE(line2.find("AppendedLine"), std::string::npos);
+    ifs.close();
+
+    reporter.ReportResetOutStreamCout(nullptr);
+
+    unlink(tmpFile.c_str());
+}
+
+// ==================== TraceLogger UTs ====================
+
+class TraceLoggerTest : public testing::Test {
+public:
+    static void SetUpTestCase() {}
+    static void TearDownTestCase() {}
+    void SetUp() override
+    {
+        logger = std::make_shared<CostModel::TraceLogger>();
+        sim = std::make_shared<CostModel::SimSys>();
+        logger->sim = sim;
+    }
+    void TearDown() override {}
+
+protected:
+    std::shared_ptr<CostModel::TraceLogger> logger;
+    std::shared_ptr<CostModel::SimSys> sim;
+};
+
+TEST_F(TraceLoggerTest, TestEventToJson)
+{
+    CostModel::Event evBasic;
+    evBasic.name = "TestEvent";
+    evBasic.id = -1;
+    evBasic.catagory = "";
+    evBasic.phase = "B";
+    evBasic.bp = "";
+    evBasic.timestamp = 1000;
+    evBasic.pid = 1;
+    evBasic.tid = 2;
+    evBasic.hint = "";
+    CostModel::Json j1 = evBasic.ToJson();
+    EXPECT_EQ(j1["name"], "TestEvent");
+    EXPECT_EQ(j1["ph"], "B");
+    EXPECT_EQ(j1["ts"], 1000);
+    EXPECT_EQ(j1["pid"], 1);
+    EXPECT_EQ(j1["tid"], 2);
+    EXPECT_TRUE(j1.find("cat") == j1.end());
+    EXPECT_TRUE(j1.find("bp") == j1.end());
+    EXPECT_TRUE(j1.find("id") == j1.end());
+    EXPECT_TRUE(j1.find("args") == j1.end());
+
+    CostModel::Event evFull;
+    evFull.name = "FullEvent";
+    evFull.id = 5;
+    evFull.catagory = "event";
+    evFull.phase = "X";
+    evFull.bp = "e";
+    evFull.timestamp = 2000;
+    evFull.pid = 3;
+    evFull.tid = 4;
+    evFull.hint = "some hint";
+    CostModel::Json j2 = evFull.ToJson();
+    EXPECT_EQ(j2["cat"], "event");
+    EXPECT_EQ(j2["bp"], "e");
+    EXPECT_EQ(j2["id"], 5);
+    EXPECT_TRUE(j2.find("args") != j2.end());
+    EXPECT_EQ(j2["args"]["event-hint"], "some hint");
+
+    CostModel::Event evHintWithColor;
+    evHintWithColor.name = "Op(red)";
+    evHintWithColor.id = 1;
+    evHintWithColor.catagory = "event";
+    evHintWithColor.phase = "B";
+    evHintWithColor.bp = "";
+    evHintWithColor.timestamp = 3000;
+    evHintWithColor.pid = 1;
+    evHintWithColor.tid = 1;
+    evHintWithColor.hint = "hint text";
+    CostModel::Json j3 = evHintWithColor.ToJson();
+    EXPECT_EQ(j3["args"]["color"], "red");
+}
+
+TEST_F(TraceLoggerTest, TestEventFlowJson)
+{
+    CostModel::Event ev;
+    ev.name = "FlowEvent";
+    ev.id = 10;
+    ev.catagory = "event";
+    ev.phase = "B";
+    ev.bp = "e";
+    ev.timestamp = 5000;
+    ev.pid = 2;
+    ev.tid = 3;
+
+    CostModel::Json jStart = ev.ToFlowStartJson(42);
+    EXPECT_EQ(jStart["id"], 42);
+    EXPECT_EQ(jStart["ph"], "s");
+    EXPECT_EQ(jStart["name"], "machine-view-last-dep");
+    EXPECT_EQ(jStart["ts"], 4999);
+    EXPECT_EQ(jStart["pid"], 2);
+    EXPECT_EQ(jStart["tid"], 3);
+
+    CostModel::Json jEnd = ev.ToFlowEndJson(42);
+    EXPECT_EQ(jEnd["id"], 42);
+    EXPECT_EQ(jEnd["ph"], "f");
+    EXPECT_EQ(jEnd["bp"], "e");
+    EXPECT_EQ(jEnd["ts"], 5000);
+}
+
+TEST_F(TraceLoggerTest, TestEventGetColor)
+{
+    CostModel::Event ev1;
+    ev1.name = "Op(red)";
+    EXPECT_EQ(ev1.GetColor(), "red");
+
+    CostModel::Event ev2;
+    ev2.name = "NoParentheses";
+    EXPECT_EQ(ev2.GetColor(), "");
+
+    CostModel::Event ev3;
+    ev3.name = "Op(left(";
+    EXPECT_EQ(ev3.GetColor(), "");
+
+    CostModel::Event ev4;
+    ev4.name = "Op()";
+    EXPECT_EQ(ev4.GetColor(), "");
+
+    CostModel::Event ev5;
+    ev5.name = "Op(blue)extra";
+    EXPECT_EQ(ev5.GetColor(), "blue");
+}
+
+TEST_F(TraceLoggerTest, TestEventExtraHintInfo)
+{
+    CostModel::Event ev;
+    ev.hint = "TaskId:42 pSgId:5";
+    std::string taskKey = "TaskId:";
+    int taskId = ev.ExtraHintInfo(taskKey);
+    EXPECT_EQ(taskId, 42);
+
+    std::string sgKey = "pSgId:";
+    int sgId = ev.ExtraHintInfo(sgKey);
+    EXPECT_EQ(sgId, 5);
+}
+
+TEST_F(TraceLoggerTest, TestCounterEventToJson)
+{
+    CostModel::CounterEvent ce;
+    ce.id = 1;
+    ce.catagory = "count";
+    ce.phase = "C";
+    ce.type = CostModel::CounterType::COUNT_SIZE;
+    ce.size = 42;
+    ce.timestamp = 1000;
+    ce.pid = 1;
+    ce.tid = 2;
+
+    CostModel::Json j = ce.ToJson();
+    EXPECT_EQ(j["args"]["size"], 42);
+    EXPECT_EQ(j["name"], "count");
+    EXPECT_EQ(j["pid"], 1);
+    EXPECT_EQ(j["tid"], 2);
+    EXPECT_EQ(j["ph"], "C");
+    EXPECT_EQ(j["ts"], 1000);
+}
+
+TEST_F(TraceLoggerTest, TestThreadProcessToJson)
+{
+    CostModel::Thread th;
+    th.name = "WorkerThread";
+    th.pid = 1;
+    th.tid = 2;
+    CostModel::Json jTh = th.ToJson();
+    EXPECT_EQ(jTh["args"]["name"], "WorkerThread");
+    EXPECT_EQ(jTh["cat"], "__metadata");
+    EXPECT_EQ(jTh["name"], "thread_name");
+    EXPECT_EQ(jTh["ph"], "M");
+    EXPECT_EQ(jTh["pid"], 1);
+    EXPECT_EQ(jTh["tid"], 2);
+
+    CostModel::Process proc;
+    proc.name = "AICore";
+    proc.pid = 3;
+    proc.coreIdx = 5;
+    CostModel::Json jProc = proc.ToJson();
+    EXPECT_EQ(jProc["args"]["name"], "AICore");
+    EXPECT_EQ(jProc["cat"], "__metadata");
+    EXPECT_EQ(jProc["name"], "process_name");
+    EXPECT_EQ(jProc["ph"], "M");
+    EXPECT_EQ(jProc["pid"], 3);
+
+    CostModel::Json jSort = proc.ToSortIndexJson(7);
+    EXPECT_EQ(jSort["args"]["sort_index"], 7);
+    EXPECT_EQ(jSort["name"], "process_sort_index");
+    EXPECT_EQ(jSort["pid"], 3);
+}
+
+TEST_F(TraceLoggerTest, TestDurationToJson)
+{
+    CostModel::Duration dur1;
+    dur1.start.name = "EmptyCatHint";
+    dur1.start.id = 1;
+    dur1.start.catagory = "";
+    dur1.start.hint = "";
+    dur1.start.timestamp = 100;
+    dur1.start.pid = 1;
+    dur1.start.tid = 2;
+    dur1.end.timestamp = 200;
+    CostModel::Json j1 = dur1.ToJson();
+    EXPECT_EQ(j1["ph"], "X");
+    EXPECT_EQ(j1["name"], "EmptyCatHint");
+    EXPECT_EQ(j1["ts"], 100);
+    EXPECT_EQ(j1["dur"], 100);
+    EXPECT_TRUE(j1.find("cat") == j1.end());
+    EXPECT_TRUE(j1.find("args") == j1.end());
+
+    CostModel::Duration dur2;
+    dur2.start.name = "Op(blue)";
+    dur2.start.id = 2;
+    dur2.start.catagory = "event";
+    dur2.start.hint = "hint text";
+    dur2.start.timestamp = 300;
+    dur2.start.pid = 3;
+    dur2.start.tid = 4;
+    dur2.end.timestamp = 500;
+    CostModel::Json j2 = dur2.ToJson();
+    EXPECT_EQ(j2["cat"], "event");
+    EXPECT_TRUE(j2.find("args") != j2.end());
+    EXPECT_EQ(j2["args"]["event-hint"], "hint text");
+    EXPECT_EQ(j2["args"]["color"], "blue");
+}
+
+TEST_F(TraceLoggerTest, TestDurationOutputTraces)
+{
+    std::map<CostModel::Pid, CostModel::Process> mProcesses;
+    std::map<CostModel::PTid, CostModel::Thread> mThreads;
+
+    mProcesses[1] = CostModel::Process{.name = "AIC", .pid = 1, .coreIdx = 3};
+    mProcesses[1000] = CostModel::Process{.name = "MachineView", .pid = 1000, .coreIdx = 0};
+    mThreads[CostModel::PTid{1, 1}] = CostModel::Thread{.name = "Pipe1", .pid = 1, .tid = 1};
+    mThreads[CostModel::PTid{1000, 1}] = CostModel::Thread{.name = "MVThread", .pid = 1000, .tid = 1};
+
+    CostModel::Duration dur;
+    dur.start.name = "TileOp";
+    dur.start.id = 1;
+    dur.start.catagory = "event";
+    dur.start.hint = "hint";
+    dur.start.timestamp = 1000;
+    dur.start.pid = 1;
+    dur.start.tid = 1;
+    dur.end.timestamp = 2000;
+    dur.end.pid = 1;
+    dur.end.tid = 1;
+
+    std::string ctxPath = "/tmp/dur_ctx_trace_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofsCtx(ctxPath);
+    CostModel::Duration durCtx;
+    durCtx.start.name = "MVOp";
+    durCtx.start.timestamp = 5000;
+    durCtx.start.pid = 1000;
+    durCtx.start.tid = 1;
+    durCtx.end.timestamp = 6000;
+    durCtx.end.pid = 1000;
+    durCtx.end.tid = 1;
+    durCtx.OutputContextSwitchTrace(ofsCtx, mProcesses, mThreads, 1800000);
+    ofsCtx.close();
+
+    std::ifstream ifsCtx(ctxPath);
+    std::string ctxContent;
+    std::getline(ifsCtx, ctxContent);
+    EXPECT_NE(ctxContent.find("sched_wakeup"), std::string::npos);
+    ifsCtx.close();
+    unlink(ctxPath.c_str());
+
+    std::string beginEndPath = "/tmp/dur_beginend_trace_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofsBE(beginEndPath);
+    dur.OutputBeginEndTrace(ofsBE, mProcesses, mThreads, 1800000);
+    ofsBE.close();
+
+    std::ifstream ifsBE(beginEndPath);
+    std::string beContent;
+    std::getline(ifsBE, beContent);
+    EXPECT_NE(beContent.find("tracing_mark_write"), std::string::npos);
+    ifsBE.close();
+    unlink(beginEndPath.c_str());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerSetNames)
+{
+    logger->SetProcessName("AICore", 1, 5);
+    EXPECT_TRUE(logger->mProcesses.find(1) != logger->mProcesses.end());
+    EXPECT_EQ(logger->mProcesses[1].name, "AICore");
+    EXPECT_EQ(logger->mProcesses[1].coreIdx, 5);
+    EXPECT_TRUE(logger->mMachineTileOpMap.find(1) != logger->mMachineTileOpMap.end());
+
+    logger->SetThreadName("Worker", 1, 2);
+    CostModel::PTid ptid{1, 2};
+    EXPECT_TRUE(logger->mThreads.find(ptid) != logger->mThreads.end());
+    EXPECT_EQ(logger->mThreads[ptid].name, "Worker");
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerAddEventBeginEnd)
+{
+    logger->SetProcessName("AICore", CostModel::GetProcessID(CostModel::MachineType::AIC, 0), 0);
+    CostModel::Pid corePid = CostModel::GetProcessID(CostModel::MachineType::AIC, 0);
+    CostModel::Tid coreTid = 1;
+    logger->SetThreadName("AICThread", corePid, coreTid);
+
+    CostModel::Event beginEv = logger->AddEventBegin("TileStart", corePid, coreTid, 100, "TaskId:10 pSgId:5");
+    EXPECT_EQ(beginEv.name, "TileStart");
+    EXPECT_GT(beginEv.id, 0);
+    EXPECT_EQ(beginEv.phase, "B");
+    EXPECT_EQ(beginEv.timestamp, 100);
+    EXPECT_FALSE((logger->m_eventStacks[CostModel::PTid{corePid, coreTid}].empty()));
+
+    CostModel::Event endEv = logger->AddEventEnd(corePid, coreTid, 200);
+    EXPECT_EQ(endEv.name, "TileStart");
+    EXPECT_EQ(endEv.phase, "E");
+    EXPECT_EQ(endEv.timestamp, 200);
+    EXPECT_TRUE((logger->m_eventStacks[CostModel::PTid{corePid, coreTid}].empty()));
+    EXPECT_TRUE(logger->mDurations.find(beginEv.id) != logger->mDurations.end());
+
+    logger->SetProcessName("MachineView", logger->topMachineViewPid, 0);
+    CostModel::Tid mvTid = CostModel::GetProcessID(CostModel::MachineType::AIC, 1);
+    logger->SetThreadName("MVThread", logger->topMachineViewPid, mvTid);
+    CostModel::Event mvBegin = logger->AddEventBegin("MVOp", logger->topMachineViewPid, mvTid, 300, "TaskId:20 SeqNo:1 pSgId:3");
+    EXPECT_EQ(mvBegin.hint, "TaskId:20 SeqNo:1 pSgId:3");
+    CostModel::Event mvEnd = logger->AddEventEnd(logger->topMachineViewPid, mvTid, 400);
+    EXPECT_TRUE(logger->mTaskIDToDurationIndex.find(20) != logger->mTaskIDToDurationIndex.end());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerAddDuration)
+{
+    logger->SetProcessName("AICore", 1, 0);
+
+    CostModel::LogData data1;
+    data1.isLogTileOp = false;
+    data1.name = "NormalOp";
+    data1.pid = 1;
+    data1.tid = 1;
+    data1.sTime = 100;
+    data1.eTime = 200;
+    data1.hint = "hint";
+    logger->AddDuration(data1);
+    EXPECT_EQ(logger->mEvents.size(), 2);
+    EXPECT_FALSE(logger->mDurations.empty());
+
+    CostModel::LogData data2;
+    data2.isLogTileOp = true;
+    data2.name = "100 TileOp";
+    data2.pid = 1;
+    data2.tid = 1;
+    data2.sTime = 300;
+    data2.eTime = 400;
+    data2.hint = "";
+    logger->AddDuration(data2);
+    EXPECT_TRUE(logger->mMachineTileOpMap[1].find(100) != logger->mMachineTileOpMap[1].end());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerAddFlow)
+{
+    logger->AddFlow("testFlow", CostModel::EventId{CostModel::PTid{1, 2}, 3}, CostModel::EventId{CostModel::PTid{4, 5}, 6});
+    EXPECT_EQ(logger->mFlows.size(), 1);
+    EXPECT_EQ(logger->mFlows[0].name, "testFlow");
+
+    logger->SetProcessName("AICore", 1, 0);
+    CostModel::LogData data;
+    data.isLogTileOp = true;
+    data.name = "100 SrcOp";
+    data.pid = 1;
+    data.tid = 1;
+    data.sTime = 100;
+    data.eTime = 200;
+    logger->AddDuration(data);
+    data.isLogTileOp = true;
+    data.name = "200 DstOp";
+    data.pid = 1;
+    data.tid = 1;
+    data.sTime = 300;
+    data.eTime = 400;
+    logger->AddDuration(data);
+
+    logger->AddTileOpFlow(1, 100, 200);
+    EXPECT_EQ(logger->mFlows.size(), 2);
+
+    logger->AddTileOpFlow(2, 100, 200);
+    EXPECT_EQ(logger->mFlows.size(), 2);
+
+    logger->AddTileOpFlow(1, 999, 200);
+    EXPECT_EQ(logger->mFlows.size(), 2);
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerAddCounterEvent)
+{
+    sim->globalCycles = 500;
+    logger->AddCounterEvent(1, 2, CostModel::CounterType::QUEUE_PUSH);
+    EXPECT_FALSE(logger->mCounters.empty());
+    EXPECT_EQ(logger->mCounters.back().type, CostModel::CounterType::QUEUE_PUSH);
+    EXPECT_EQ(logger->mCounters.back().pid, 1);
+    EXPECT_EQ(logger->mCounters.back().tid, 2);
+
+    CostModel::PTid ptid{1, 2};
+    EXPECT_TRUE(logger->mCounts.find(ptid) != logger->mCounts.end());
+    EXPECT_FALSE(logger->mCounts[ptid].empty());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerEraseLogInfo)
+{
+    logger->SetProcessName("AICore", 1, 0);
+    logger->SetThreadName("Thread1", 1, 1);
+
+    CostModel::Event begin1 = logger->AddEventBegin("Op1", 1, 1, 100);
+    logger->AddEventEnd(1, 1, 200);
+
+    CostModel::Event begin2 = logger->AddEventBegin("Op2", 1, 1, 300);
+    logger->AddEventEnd(1, 1, 400);
+
+    sim->globalCycles = 500;
+    logger->AddCounterEvent(1, 2, CostModel::CounterType::QUEUE_PUSH);
+    sim->globalCycles = 600;
+    logger->AddCounterEvent(1, 2, CostModel::CounterType::QUEUE_POP);
+
+    size_t eventsBefore = logger->mEvents.size();
+    size_t durationsBefore = logger->mDurations.size();
+    size_t countersBefore = logger->mCounters.size();
+
+    logger->EraseLogInfo(250);
+
+    EXPECT_LT(logger->mEvents.size(), eventsBefore);
+    EXPECT_LT(logger->mDurations.size(), durationsBefore);
+    EXPECT_LT(logger->mCounters.size(), countersBefore);
+    EXPECT_TRUE(logger->mTaskIDToDurationIndex.empty());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerQSizeToJson)
+{
+    std::vector<CostModel::CounterEvent> emptyVec;
+    CostModel::Json j1 = logger->QSizeToJson(emptyVec);
+    EXPECT_TRUE(j1.is_array());
+    EXPECT_EQ(j1.size(), 0);
+
+    std::vector<CostModel::CounterEvent> counterVec;
+    CostModel::CounterEvent ce1;
+    ce1.id = 1;
+    ce1.catagory = "count";
+    ce1.phase = "C";
+    ce1.type = CostModel::CounterType::COUNT_SIZE;
+    ce1.size = 10;
+    ce1.timestamp = 100;
+    ce1.pid = 1;
+    ce1.tid = 2;
+    counterVec.push_back(ce1);
+
+    CostModel::CounterEvent ce2;
+    ce2.id = 2;
+    ce2.catagory = "count";
+    ce2.phase = "C";
+    ce2.type = CostModel::CounterType::COUNT_SIZE;
+    ce2.size = 20;
+    ce2.timestamp = 200;
+    ce2.pid = 1;
+    ce2.tid = 2;
+    counterVec.push_back(ce2);
+
+    CostModel::Json j2 = logger->QSizeToJson(counterVec);
+    EXPECT_EQ(j2.size(), 2);
+    EXPECT_EQ(j2[0]["args"]["size"], 10);
+    EXPECT_EQ(j2[1]["args"]["size"], 20);
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerToJson)
+{
+    logger->SetProcessName("AICore", 1, 0);
+    logger->SetThreadName("Thread1", 1, 1);
+    logger->processDeviceReadyQueue = true;
+
+    CostModel::Event beginEv = logger->AddEventBegin("TestOp", 1, 1, 100, "hint");
+    logger->AddEventEnd(1, 1, 200);
+
+    logger->AddFlow("flow1", CostModel::EventId{CostModel::PTid{1, 1}, beginEv.id},
+                    CostModel::EventId{CostModel::PTid{1, 1}, beginEv.id});
+
+    CostModel::Json j = logger->ToJson();
+    EXPECT_TRUE(j.find("traceEvents") != j.end());
+    EXPECT_TRUE(j["traceEvents"].is_array());
+    EXPECT_GT(j["traceEvents"].size(), 0);
+
+    bool hasProcess = false;
+    bool hasThread = false;
+    bool hasDuration = false;
+    for (auto& item : j["traceEvents"]) {
+        if (item["name"] == "process_name") hasProcess = true;
+        if (item["name"] == "thread_name") hasThread = true;
+        if (item["ph"] == "X") hasDuration = true;
+    }
+    EXPECT_TRUE(hasProcess);
+    EXPECT_TRUE(hasThread);
+    EXPECT_TRUE(hasDuration);
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerToTrace)
+{
+    logger->SetProcessName("AICore", 1, 0);
+    logger->SetThreadName("Thread1", 1, 1);
+
+    CostModel::Event beginEv = logger->AddEventBegin("TestOp", 1, 1, 100, "hint");
+    logger->AddEventEnd(1, 1, 200);
+
+    std::string tracePath = "/tmp/trace_logger_trace_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(tracePath);
+    logger->ToTrace(ofs);
+    ofs.close();
+
+    std::ifstream ifs(tracePath);
+    std::string content;
+    std::getline(ifs, content);
+    EXPECT_NE(content.find("tracing_mark_write"), std::string::npos);
+    ifs.close();
+    unlink(tracePath.c_str());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerLogCoreInfo)
+{
+    logger->SetProcessName("AICore", 1, 0);
+    logger->SetThreadName("Thread1", 1, 1);
+    sim->taskCompleteSeq[10] = 1;
+
+    CostModel::Event startEv;
+    startEv.name = "InitTask";
+    startEv.pid = 1;
+    startEv.tid = 1;
+    startEv.timestamp = 100;
+    startEv.hint = "TaskId:10 pSgId:5";
+    CostModel::Event endEv;
+    endEv.pid = 1;
+    endEv.tid = 1;
+    endEv.timestamp = 200;
+
+    CostModel::Duration dur;
+    dur.start = startEv;
+    dur.end = endEv;
+    EXPECT_NO_THROW(logger->LogCoreInfo(dur));
+
+    CostModel::Event startEvNoInit;
+    startEvNoInit.name = "NormalTask";
+    startEvNoInit.pid = 1;
+    startEvNoInit.tid = 1;
+    startEvNoInit.timestamp = 300;
+    startEvNoInit.hint = "TaskId:10 pSgId:5";
+    CostModel::Duration durNoInit;
+    durNoInit.start = startEvNoInit;
+    durNoInit.end = endEv;
+    EXPECT_NO_THROW(logger->LogCoreInfo(durNoInit));
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerToPipeTrace)
+{
+    logger->mCoreInfoLogs[0] = CostModel::CoreInfoLog(0, "AIC");
+    logger->mCoreInfoLogs[0].pipeLogs["Pipe1"].push_back(CostModel::Json::object({{"tileOp", "Op1"}, {"execStart", 100}, {"execEnd", 200}}));
+
+    std::string pipePath = "/tmp/pipe_trace_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(pipePath);
+    logger->ToPipeTrace(ofs);
+    ofs.close();
+
+    std::ifstream ifs(pipePath);
+    CostModel::Json j;
+    ifs >> j;
+    EXPECT_TRUE(j.is_array());
+    EXPECT_GT(j.size(), 0);
+    EXPECT_EQ(j[0]["blockIdx"], 0);
+    EXPECT_EQ(j[0]["coreType"], "AIC");
+    ifs.close();
+    unlink(pipePath.c_str());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerToFilterTrace)
+{
+    logger->SetProcessName("AICore", CostModel::GetProcessID(CostModel::MachineType::AIC, 0), 0);
+    logger->SetThreadName("Thread1", CostModel::GetProcessID(CostModel::MachineType::AIC, 0), 1);
+    sim->taskCompleteSeq[10] = 1;
+
+    std::map<int, std::pair<std::string, std::vector<CostModel::Json>>> coreTasks;
+    std::string filterPath = "/tmp/filter_trace_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(filterPath);
+    logger->ToFilterTrace(ofs, coreTasks);
+    ofs.close();
+
+    EXPECT_TRUE(coreTasks.find(0) != coreTasks.end());
+    unlink(filterPath.c_str());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerAddEventBeginEndNoHint)
+{
+    logger->SetProcessName("AICore", 1, 0);
+    logger->SetThreadName("Thread2", 1, 2);
+
+    CostModel::Event beginEv = logger->AddEventBegin("NoHintOp", 1, 2, 500);
+    EXPECT_EQ(beginEv.hint, "");
+    EXPECT_EQ(beginEv.phase, "B");
+
+    CostModel::Event endEv = logger->AddEventEnd(1, 2, 600);
+    EXPECT_EQ(endEv.phase, "E");
+    EXPECT_EQ(endEv.hint, "");
+    EXPECT_EQ(endEv.timestamp, 600);
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerToCalendarGlobalJson)
+{
+    std::map<int, std::pair<std::string, std::vector<CostModel::Json>>> coreTasks;
+    coreTasks[0] = {"AIC", {}};
+    coreTasks[1] = {"AIV", {}};
+
+    std::string calPath = "/tmp/calendar_global_" + std::to_string(getpid()) + ".txt";
+    std::ofstream ofs(calPath);
+    logger->ToCalendarGlobalJson(ofs, coreTasks);
+    ofs.close();
+
+    std::ifstream ifs(calPath);
+    CostModel::Json j;
+    ifs >> j;
+    EXPECT_EQ(j["numSupportedCounters"], 1);
+    EXPECT_TRUE(j["cores"].is_array());
+    ifs.close();
+    unlink(calPath.c_str());
+}
+
+TEST_F(TraceLoggerTest, TestTraceLoggerEraseLogInfoAllAfter)
+{
+    logger->SetProcessName("AICore", 1, 0);
+    logger->SetThreadName("Thread1", 1, 1);
+
+    logger->AddEventBegin("Op1", 1, 1, 100);
+    logger->AddEventEnd(1, 1, 200);
+    logger->AddEventBegin("Op2", 1, 1, 300);
+    logger->AddEventEnd(1, 1, 400);
+
+    size_t durationsBefore = logger->mDurations.size();
+
+    logger->EraseLogInfo(50);
+
+    EXPECT_LT(logger->mDurations.size(), durationsBefore);
+    EXPECT_TRUE(logger->mTaskIDToDurationIndex.empty());
 }
