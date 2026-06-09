@@ -197,4 +197,4 @@ def test_<label>_l1() -> None:
 # if __name__ == "__main__":
 #     test_<label>_l0()
 #     test_<label>_l1()
-#     print("OK")
+#     print("[PRECISION_PASS]")
