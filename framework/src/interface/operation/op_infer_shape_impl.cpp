@@ -320,7 +320,13 @@ void CastInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outV
 {
     auto srcValidShape = op->GetIOperands()[0]->GetDynValidShape();
     outValidShapes.push_back(srcValidShape);
-    outValidShapes.push_back({1, srcValidShape[srcValidShape.size() - 1]});
+    if (op->GetOOperands().size() > 1) {
+        std::vector<SymbolicScalar> tmpValidShape;
+        for (size_t i = 0; i < op->GetOOperands()[1]->GetShape().size(); ++i) {
+            tmpValidShape.push_back(SymbolicScalar(op->GetOOperands()[1]->GetShape()[i]));
+        }
+        outValidShapes.push_back(tmpValidShape);
+    }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_CAST, Opcode::OP_CAST, CastInferFunc);
 

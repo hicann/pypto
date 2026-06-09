@@ -1051,6 +1051,7 @@ void TensorTriUL(Function& function, const TriULPara& triULPara)
             function, DT_FP16, triULPara.input->GetShape(), triULPara.input->GetDynValidShape());
         auto& castinputOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {triULPara.input}, {inputConverted});
         castinputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        castinputOp.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(SaturationMode::ON));
         LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(
             function, DT_FP16, triULPara.dstTensor->GetShape(), inputConverted->GetDynValidShape());
         auto& op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {inputConverted}, {dstConverted});
@@ -1059,6 +1060,7 @@ void TensorTriUL(Function& function, const TriULPara& triULPara)
         triULPara.dstTensor->UpdateDynValidShape(dstConverted->GetDynValidShape());
         auto& castDstOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {dstConverted}, {triULPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
+        castDstOp.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(SaturationMode::ON));
     } else {
         triULPara.dstTensor->UpdateDynValidShape(triULPara.input->GetDynValidShape());
         auto& op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {triULPara.input}, {triULPara.dstTensor});
