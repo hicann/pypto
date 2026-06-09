@@ -10,10 +10,12 @@
 
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
 #include "adapter/api/runtime_api.h"
+#include "machine/runtime/launcher/device_launcher.h"
 #include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
@@ -27,6 +29,16 @@ inline uint64_t MemSizeAlign(const uint64_t bytes, const uint32_t aligns = 512U)
 {
     const uint64_t alignSize = (aligns == 0U) ? sizeof(uintptr_t) : aligns;
     return (((bytes + alignSize) - 1U) / alignSize) * alignSize;
+}
+
+inline RtError NormalizedRtMemcpy(
+    void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
+{
+    std::optional<dynamic::AclModeGuard> captureRelaxGuard;
+    if (dynamic::DeviceLauncher::IsCaptureMode()) {
+        captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
+    }
+    return RuntimeMemcpy(dst, destMax, src, cnt, kind);
 }
 }
 
@@ -220,8 +232,8 @@ void DevMemoryPool::PutSentinelAddr(uint8_t* baseAddr, uint64_t baseSize)
 {
     if (needMemCheck_) {
         uint8_t* sentinelAddr = baseAddr + baseSize;
-        if (RuntimeMemcpy(sentinelAddr, SENTINEL_MEM_SIZE, sentinelVec_.data(), SENTINEL_MEM_SIZE,
-                          RtMemcpyKind::HOST_TO_DEVICE) != 0) {
+        if (NormalizedRtMemcpy(sentinelAddr, SENTINEL_MEM_SIZE, sentinelVec_.data(), SENTINEL_MEM_SIZE,
+                                          RtMemcpyKind::HOST_TO_DEVICE) != 0) {
             MACHINE_LOGW("Memory copy sentinel value failed! Do not check memory.");
             return;
         }
@@ -287,8 +299,8 @@ bool DevMemoryPool::CheckSentinel(uint8_t* baseAddr, bool remove)
     auto& sentinelVec = iter->second;
     for (auto sentinelAddr : sentinelVec) {
         MACHINE_LOGI("Check Sentinel: baseAddr=%p, sentinelAddr=%p.", baseAddr, sentinelAddr);
-        if (RuntimeMemcpy(sentinelVal.data(), SENTINEL_MEM_SIZE, sentinelAddr, SENTINEL_MEM_SIZE,
-            RtMemcpyKind::DEVICE_TO_HOST) != 0) {
+        if (NormalizedRtMemcpy(sentinelVal.data(), SENTINEL_MEM_SIZE, sentinelAddr, SENTINEL_MEM_SIZE,
+                                          RtMemcpyKind::DEVICE_TO_HOST) != 0) {
             MACHINE_LOGW("Memory copy D2H failed! Do not check memory.");
             break;
         }

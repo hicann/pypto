@@ -17,6 +17,7 @@
 
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/runtime_api.h"
 #include "machine/runtime/launcher/device_launcher.h"
@@ -35,13 +36,12 @@ constexpr int DUMP_LEVEL_FOUR = 4;
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
 uint32_t g_last_round_num = 0;
 
-inline RtError RuntimeMemcpyRelaxedInCapture(
+inline RtError NormalizedRtMemcpy(
     void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind)
 {
+    std::optional<AclModeGuard> captureRelaxGuard;
     if (DeviceLauncher::IsCaptureMode()) {
-        // RuntimeMemcpy requires RELAXED thread capture mode in capture graph.
-        AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-        return RuntimeMemcpy(dst, destMax, src, cnt, kind);
+        captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
     }
     return RuntimeMemcpy(dst, destMax, src, cnt, kind);
 }
@@ -96,7 +96,7 @@ void ConstructTaskInfo(
     void* devPtr = perfData[index];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    auto ret = RuntimeMemcpyRelaxedInCapture(
+    auto ret = NormalizedRtMemcpy(
         hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     if (ret != 0) {
         MACHINE_LOGW("task perf D2H copy failed ret: %d, index: %u", ret, index);
@@ -134,7 +134,7 @@ void ConstructTaskInfo(
         rootTaskStats.push_back(coreObj);
     }
     aicpuMetric->taskCount = 0;
-    ret = RuntimeMemcpyRelaxedInCapture(
+    ret = NormalizedRtMemcpy(
         perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics), RtMemcpyKind::HOST_TO_DEVICE);
     if (ret != 0) {
         MACHINE_LOGW("task perf H2D copy failed ret: %d, index: %u", ret, index);
@@ -258,7 +258,7 @@ inline void DumpAicoreDevTask(
         void* devPtr = perfData[i];
         size_t dataSize = PERF_DATA_TOTAL_SIZE;
         std::vector<uint8_t> hostBuffer(dataSize);
-        auto ret = RuntimeMemcpyRelaxedInCapture(
+        auto ret = NormalizedRtMemcpy(
             hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
         if (ret != 0) {
             MACHINE_LOGW("aicore perf D2H copy failed ret: %d, block: %u", ret, i);
@@ -285,7 +285,7 @@ inline std::unique_ptr<MetricPerf> GetAicpuPrefAddr(const DeviceArgs& args, cons
         return aicpuMetric;
     }
 
-    auto ret = RuntimeMemcpyRelaxedInCapture(
+    auto ret = NormalizedRtMemcpy(
         PtrToPtr<MetricPerf, void>(aicpuMetric.get()), sizeof(MetricPerf), aicpuPer, sizeof(MetricPerf),
         RtMemcpyKind::DEVICE_TO_HOST);
     if (ret != 0) {
@@ -336,7 +336,7 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
     void* devPtr = perfData[0];
     size_t dataSize = PERF_DATA_TOTAL_SIZE;
     std::vector<uint8_t> hostBuffer(dataSize);
-    auto memcpyRet = RuntimeMemcpyRelaxedInCapture(
+    auto memcpyRet = NormalizedRtMemcpy(
         hostBuffer.data(), dataSize, devPtr, dataSize, RtMemcpyKind::DEVICE_TO_HOST);
     if (memcpyRet != 0) {
         MACHINE_LOGW("aicpu perf header D2H copy failed ret: %d", memcpyRet);
