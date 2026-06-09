@@ -46,7 +46,7 @@ __always_inline void WaitAicoreStart([[maybe_unused]] npu::tile_fwk::DevStartArg
 {
 #if defined(__aarch64__) && defined(__DEVICE__)
     uint64_t start = GetCycles();
-    while (startArgs->syncFlag != 1) {
+    while (__atomic_load_n(&startArgs->syncFlag, __ATOMIC_ACQUIRE) != 1) {
         if ((GetCycles() - start) > SYNC_TIMEOUT_CYCLES) {
             break;
         }

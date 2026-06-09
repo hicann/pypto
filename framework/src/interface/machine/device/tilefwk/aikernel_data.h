@@ -70,7 +70,7 @@ struct DevStartArgsBase {
     uint64_t outputTensorSize;
     __gm__ int64_t* commContexts;
     uint64_t commGroupNum;
-    std::atomic<uint64_t> syncFlag{0}; // sche and ctrl soft sync flag
+    volatile uint64_t syncFlag{0}; // sche and ctrl soft sync flag
 #ifdef __TILE_FWK_HOST__
     int GetInputTensorSize() const { return inputTensorSize; }
     const DevTensorData& GetInputTensor(int index) const { return devTensorList[index]; }
