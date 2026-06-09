@@ -102,4 +102,6 @@ Dequantize_asymmetric_int16_2d_unaligned_prime,"[19, 31], [19], [19]","int16, fp
 Dequantize_symmetric_int8_2d_unaligned_axis2_prime,"[11, 23], [23]","int8, fp32","ND, ND","[-108, 108], [0.001, 0.01]","[11, 23]",fp32,ND,"[11, 23]","[11, 23]",0,-2,false,1
 Dequantize_asymmetric_int8_2d_unaligned_axis2_prime,"[13, 29], [29], [29]","int8, fp32, fp32","ND, ND, ND","[-97, 97], [0.001, 0.01], [-10.0, 10.0]","[13, 29]",fp32,ND,"[13, 29]","[13, 29]",0,-2,true,1
 Dequantize_symmetric_int16_2d_unaligned_axis2_prime,"[17, 31], [31]","int16, fp32","ND, ND","[-27250, 27250], [0.00001, 0.0001]","[17, 31]",fp32,ND,"[17, 31]","[17, 31]",0,-2,false,2
-Dequantize_asymmetric_int16_2d_unaligned_axis2_prime,"[23, 37], [37], [37]","int16, fp32, fp32","ND, ND, ND","[-21800, 21800], [0.00001, 0.0001], [-100.0, 100.0]","[23, 37]",fp32,ND,"[23, 37]","[23, 37]",0,-2,true,2
+Dequantize_asymmetric_int16_2d_unaligned_axis2_prime,"[23, 37], [37], [37]","int16, fp32, fp32","ND, ND, ND","[-21800, 21800], [0.00001, 0.0001], [-100.0, 100.0]","[23, 37]",fp32,ND,"[23, 37]","[23, 37]",0,-2,true,2
+Dequantize_symmetric_int8_1d_axis1,"[16], [1]","int8, fp32","ND, ND","[-100, 100], [0.001, 0.01]","[16]",fp32,ND,"[16]","[16]",0,-1,false,1
+Dequantize_asymmetric_int8_1d_axis1,"[16], [1], [1]","int8, fp32, fp32","ND, ND, ND","[-100, 100], [0.001, 0.01], [-10.0, 10.0]","[16]",fp32,ND,"[16]","[16]",0,-1,true,1

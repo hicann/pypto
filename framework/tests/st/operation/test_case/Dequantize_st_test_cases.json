@@ -7579,6 +7579,137 @@
                 "func_id": -1
             },
             "index": 103
+        },
+        {
+            "case_index": 104,
+            "case_name": "Dequantize_symmetric_int8_1d_axis1",
+            "operation": "Dequantize",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0.001,
+                        "max": 0.01
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16
+            ],
+            "tile_shape": [
+                16
+            ],
+            "params": {
+                "otype": 0,
+                "axis": -1,
+                "use_zero_points": false,
+                "param_input_dtype": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 104
+        },
+        {
+            "case_index": 105,
+            "case_name": "Dequantize_asymmetric_int8_1d_axis1",
+            "operation": "Dequantize",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0.001,
+                        "max": 0.01
+                    }
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10.0,
+                        "max": 10.0
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16
+            ],
+            "tile_shape": [
+                16
+            ],
+            "params": {
+                "otype": 0,
+                "axis": -1,
+                "use_zero_points": true,
+                "param_input_dtype": 1,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 105
         }
     ]
 }

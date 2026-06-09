@@ -41,6 +41,69 @@ struct QuantizeOpMetaData {
 };
 
 // ============================================================
+// 1D Tensor Tests
+// ============================================================
+
+// Symmetric quantization (FP32 -> INT8) for 1D tensor with axis=-1
+static void Quantize1DOperationExeFunc(
+    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
+    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]}) {
+        auto args = static_cast<const QuantizeOpFuncArgs *>(opArgs);
+        const int viewShape = args->viewShape_[0];
+
+        SymbolicScalar dim = inputs[0].GetShape()[0];
+        const int loop = CeilDiv(dim, viewShape);
+
+        DataType dtype = args->dtype_;
+        int axis = args->axis_;
+
+        LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1)) {
+            auto tileTensorInput = View(inputs[0], {viewShape},
+                {std::min(dim - idx * viewShape, viewShape)},
+                {idx * viewShape});
+
+            // Scale shape: [1] for axis=-1 on 1D tensor
+            auto tileTensorScale = inputs[1];
+
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = Quantize(tileTensorInput, tileTensorScale, dtype, axis, Tensor());
+            Assemble(res, {idx * viewShape}, outputs[0]);
+        }
+    }
+}
+
+// Asymmetric quantization (FP32 -> UINT8) for 1D tensor with axis=-1
+static void Quantize1DAsymmetricOperationExeFunc(
+    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
+    FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]}) {
+        auto args = static_cast<const QuantizeOpFuncArgs *>(opArgs);
+        const int viewShape = args->viewShape_[0];
+
+        SymbolicScalar dim = inputs[0].GetShape()[0];
+        const int loop = CeilDiv(dim, viewShape);
+
+        DataType dtype = args->dtype_;
+        int axis = args->axis_;
+
+        LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1)) {
+            auto tileTensorInput = View(inputs[0], {viewShape},
+                {std::min(dim - idx * viewShape, viewShape)},
+                {idx * viewShape});
+
+            // Scale shape: [1] for axis=-1 on 1D tensor
+            auto tileTensorScale = inputs[1];
+
+            // Zero_points shape: [1] for axis=-1 on 1D tensor
+            auto tileTensorZeroPoints = inputs[2];
+
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = Quantize(tileTensorInput, tileTensorScale, dtype, axis, tileTensorZeroPoints);
+            Assemble(res, {idx * viewShape}, outputs[0]);
+        }
+    }
+}
+
+// ============================================================
 // 2D Tensor Tests
 // ============================================================
 
@@ -349,7 +412,9 @@ static void Quantize4DAsymmetricOperationExeFunc(
 
 // Helper function to select the appropriate execution function based on test parameters
 OpFunc SelectQuantizeOpFunc(int ndim, bool useZeroPoints) {
-    if (ndim == 2) {
+    if (ndim == 1) {
+        return useZeroPoints ? Quantize1DAsymmetricOperationExeFunc : Quantize1DOperationExeFunc;
+    } else if (ndim == 2) {
         return useZeroPoints ? QuantizeAsymmetricOperationExeFunc : QuantizeSymmetricOperationExeFunc;
     } else if (ndim == 3) {
         return useZeroPoints ? Quantize3DAsymmetricOperationExeFunc : Quantize3DOperationExeFunc;
@@ -365,7 +430,8 @@ class QuantizeOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_A
 
 INSTANTIATE_TEST_SUITE_P(TestQuantize, QuantizeOperationTest,
     ::testing::ValuesIn(GetOpMetaData<QuantizeOpMetaData>(
-        {QuantizeSymmetricOperationExeFunc, QuantizeAsymmetricOperationExeFunc,
+        {Quantize1DOperationExeFunc, Quantize1DAsymmetricOperationExeFunc,
+        QuantizeSymmetricOperationExeFunc, QuantizeAsymmetricOperationExeFunc,
         Quantize3DOperationExeFunc, Quantize3DAsymmetricOperationExeFunc,
         Quantize4DOperationExeFunc, Quantize4DAsymmetricOperationExeFunc}, "Quantize")));
 

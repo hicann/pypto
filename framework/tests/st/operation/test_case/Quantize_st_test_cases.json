@@ -8946,6 +8946,135 @@
                 "func_id": -1
             },
             "index": 122
+        },
+        {
+            "case_index": 123,
+            "case_name": "quant_1d_sym_axis1_01",
+            "operation": "Quantize",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10.0,
+                        "max": 10.0
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0.01,
+                        "max": 0.15
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "int8",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16
+            ],
+            "tile_shape": [
+                16
+            ],
+            "params": {
+                "dtype": 1,
+                "axis": -1,
+                "use_zero_points": false,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 123
+        },
+        {
+            "case_index": 124,
+            "case_name": "quant_1d_Asym_axis1_01",
+            "operation": "Quantize",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10.0,
+                        "max": 10.0
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0.01,
+                        "max": 0.15
+                    }
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0.0,
+                        "max": 127.0
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "uint8",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16
+            ],
+            "tile_shape": [
+                16
+            ],
+            "params": {
+                "dtype": 11,
+                "axis": -1,
+                "use_zero_points": true,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 124
         }
     ]
 }

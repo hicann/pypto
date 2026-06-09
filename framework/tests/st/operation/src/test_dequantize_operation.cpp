@@ -41,6 +41,64 @@ struct DequantizeOpMetaData {
 };
 
 // ============================================================
+// 1D Tensor Tests
+// ============================================================
+
+// 1D dequantization with axis=-1, symmetric/asymmetric
+static void Dequantize1DOperationExeFunc(
+    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
+    auto args = static_cast<const DequantizeOpFuncArgs *>(opArgs);
+    const bool useZeroPoints = args->useZeroPoints_;
+
+    if (useZeroPoints) {
+        FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]}) {
+            const int viewShape = args->viewShape_[0];
+
+            SymbolicScalar dim = inputs[0].GetShape()[0];
+            const int loop = CeilDiv(dim, viewShape);
+
+            int axis = args->axis_;
+
+            LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1)) {
+                auto tileTensorInput = View(inputs[0], {viewShape},
+                    {std::min(dim - idx * viewShape, viewShape)},
+                    {idx * viewShape});
+
+                // Scale shape: [1] for axis=-1 on 1D tensor
+                auto tileTensorScale = inputs[1];
+                auto tileTensorZeroPoints = inputs[2];
+
+                TileShape::Current().SetVecTile(args->tileShape_);
+                auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, tileTensorZeroPoints);
+                Assemble(res, {idx * viewShape}, outputs[0]);
+            }
+        }
+    } else {
+        FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]}) {
+            const int viewShape = args->viewShape_[0];
+
+            SymbolicScalar dim = inputs[0].GetShape()[0];
+            const int loop = CeilDiv(dim, viewShape);
+
+            int axis = args->axis_;
+
+            LOOP("LOOP_L0_idx", FunctionType::DYNAMIC_LOOP, idx, LoopRange(0, loop, 1)) {
+                auto tileTensorInput = View(inputs[0], {viewShape},
+                    {std::min(dim - idx * viewShape, viewShape)},
+                    {idx * viewShape});
+
+                // Scale shape: [1] for axis=-1 on 1D tensor
+                auto tileTensorScale = inputs[1];
+
+                TileShape::Current().SetVecTile(args->tileShape_);
+                auto res = Dequantize(tileTensorInput, tileTensorScale, DataType::DT_FP32, axis, Tensor());
+                Assemble(res, {idx * viewShape}, outputs[0]);
+            }
+        }
+    }
+}
+
+// ============================================================
 // 2D Tensor Tests
 // ============================================================
 
@@ -332,7 +390,9 @@ static void Dequantize4DOperationExeFunc(
 // Helper function to select the appropriate execution function based on test parameters
 OpFunc SelectDequantizeOpFunc(int ndim) {
     // inputDtype (INT8/INT16) doesn't affect loop structure, only ndim matters
-    if (ndim == 2) {
+    if (ndim == 1) {
+        return Dequantize1DOperationExeFunc;
+    } else if (ndim == 2) {
         return Dequantize2DOperationExeFunc;
     } else if (ndim == 3) {
         return Dequantize3DOperationExeFunc;
@@ -348,7 +408,7 @@ class DequantizeOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops
 
 INSTANTIATE_TEST_SUITE_P(TestDequantize, DequantizeOperationTest,
     ::testing::ValuesIn(GetOpMetaData<DequantizeOpMetaData>(
-        {Dequantize2DOperationExeFunc, Dequantize3DOperationExeFunc, Dequantize4DOperationExeFunc}, "Dequantize")));
+        {Dequantize1DOperationExeFunc, Dequantize2DOperationExeFunc, Dequantize3DOperationExeFunc, Dequantize4DOperationExeFunc}, "Dequantize")));
 
 TEST_P(DequantizeOperationTest, TestDequantize) {
     auto test_data = GetParam().test_data_;

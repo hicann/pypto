@@ -33,7 +33,7 @@ def quantize(
     ----------
     input : Tensor
         Source operand. dtype must be DT_FP32.
-        Shape: [..., row, col], 2-4 dimensions supported.
+        Shape: [..., row, col], 1-4 dimensions supported.
     scale : Tensor
         Scaling factor. dtype must be DT_FP32.
         When axis=-1: shape is [..., row]
@@ -42,6 +42,7 @@ def quantize(
         Output data type. DT_INT8 for symmetric, DT_UINT8 for asymmetric.
     axis : int
         Quantization axis. Supports -1, -2 or relative dimensions.
+        When input is 1D, only -1 is supported.
     zero_points : Tensor, optional
         Zero point offset for asymmetric quantization.
 
@@ -83,7 +84,7 @@ def dequantize(
     ----------
     input : Tensor
         Source operand. dtype must be DT_INT8 or DT_UINT8.
-        Shape: [..., row, col], 2-4 dimensions supported.
+        Shape: [..., row, col], 1-4 dimensions supported.
     scale : Tensor
         Scaling factor. dtype must be DT_FP32.
         When axis=-1: shape is [..., row]
@@ -92,6 +93,7 @@ def dequantize(
         Output data type. Typically DT_FP32.
     axis : int
         Dequantization axis. Supports -1, -2 or relative dimensions.
+        When input is 1D, only -1 is supported.
     zero_points : Tensor, optional
         Zero point offset for asymmetric dequantization.
 

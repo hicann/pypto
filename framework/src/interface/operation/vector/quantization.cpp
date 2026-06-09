@@ -556,9 +556,47 @@ LogicalTensorPtr TensorQuantizeAsymmetricOperation(Function &function,
 Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int axis, const Tensor &zeroPoints) {
     DECLARE_TRACER();
 
-    // Validate input shapes
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM2 && input.GetShape().size() <= SHAPE_DIM5)
-        << "The shape.size() only support 2~5";
+    // Validate input dimensions
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
+        << "The shape.size() only support 1~5";
+
+    // Handle 1D input: reshape to [1, n] and process as 2D
+    // scale/zeroPoints remain 1D (no reshape needed)
+    bool is1DInput = (input.GetShape().size() == 1);
+
+    // Validate: 1D input only supports axis=-1
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, !(is1DInput && axis == -2))
+        << "1D input only supports axis=-1, axis=-2 is not supported";
+
+    Tensor processedInput = input;
+    Tensor originalInputStorage = input;
+    VecTile originalVecTile;
+
+    if (is1DInput) {
+        // Store original VecTile and extend it for 2D processing
+        originalVecTile = TileShape::Current().GetVecTile();
+        if (!originalVecTile.tile.empty()) {
+            VecTile extendedVecTile = originalVecTile;
+            // Extend 1D tile to 2D by inserting 1 at the front
+            extendedVecTile.tile.insert(extendedVecTile.tile.begin(), 1);
+            TileShape::Current().SetVecTile(extendedVecTile);
+        }
+
+        // Reshape 1D input to [1, n]
+        int64_t n = input.GetShape()[0];
+        std::vector<int64_t> newShape = {1, n};
+
+        // Extend validShape from 1D to 2D
+        auto originalValidShape = input.GetStorage()->GetDynValidShape();
+        std::vector<SymbolicScalar> extendedValidShape;
+        if (!originalValidShape.empty()) {
+            // originalValidShape is [n], extend to [1, n]
+            extendedValidShape.push_back(SymbolicScalar(1));
+            extendedValidShape.push_back(originalValidShape[0]);
+        }
+
+        processedInput = Reshape(input, newShape, extendedValidShape);
+    }
 
     // Validate data types
     std::vector<DataType> SUPPORT_INPUT_DATATYPES = {DataType::DT_FP32};
@@ -567,7 +605,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
         << "The input datatype is not supported";
 
     // Normalize axis to negative indexing
-    int ndim = static_cast<int>(input.GetShape().size());
+    int ndim = static_cast<int>(processedInput.GetShape().size());
     int normalizedAxis = axis;
     if (axis >= 0) {
         normalizedAxis = axis - ndim;
@@ -586,17 +624,17 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
         int secondLastDim = ndim - 2;  // -2 in positive index
 
         // Transpose input: [..., H, W] -> [..., W, H]
-        Tensor transposedInput = Transpose(input, {secondLastDim, lastDim});
+        Tensor transposedInput = Transpose(processedInput, {secondLastDim, lastDim});
         // [TQuant] get tmp Tile for Tquant
         VecTile oriVectile = TileShape::Current().GetVecTile();
         VecTile tmpVectile = TileShape::Current().GetVecTile();
         std::swap(tmpVectile[secondLastDim], tmpVectile[lastDim]);
         TileShape::Current().SetVecTile(tmpVectile);
         // [TQuant] get tmp validShape
-        auto tmpValidShape = input.GetStorage()->dynValidShape_;
+        auto tmpValidShape = processedInput.GetStorage()->dynValidShape_;
         std::swap(tmpValidShape[secondLastDim], tmpValidShape[lastDim]);
         transposedInput.GetStorage()->UpdateDynValidShape(tmpValidShape);
-        
+
         // init result
         Tensor quantizedResult;
 
@@ -607,14 +645,14 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
             quantizedResult = CALL(QuantizeAsymmetricOperation,
                 *Program::GetInstance().GetCurrentFunction(),
                 transposedInput.GetStorage(), scale.GetStorage(),
-                zeroPoints.GetStorage(), normalizedAxis);
+                zeroPoints.GetStorage(), -1);
         } else {
             // Symmetric quantization with axis=-1
             ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
                 << "Symmetric quantization output type should be INT8";
             quantizedResult = CALL(QuantizeSymmetricOperation,
                 *Program::GetInstance().GetCurrentFunction(),
-                transposedInput.GetStorage(), scale.GetStorage(), normalizedAxis);
+                transposedInput.GetStorage(), scale.GetStorage(), -1);
         }
 
         // [Transpose] set tmp validShape
@@ -624,26 +662,52 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
         // output back: [..., W, H] -> [..., H, W]
         Tensor result = Transpose(quantizedResult, {secondLastDim, lastDim});
         // [Tstore] get origin ValidShape
-        result.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);
+        result.GetStorage()->UpdateDynValidShape(processedInput.GetStorage()->dynValidShape_);
         // [Tstore] get origin TileShape
         TileShape::Current().SetVecTile(oriVectile);
+
+        // If input was 1D, reshape output back to 1D and restore original VecTile
+        if (is1DInput) {
+            int64_t n = originalInputStorage.GetShape()[0];
+            std::vector<int64_t> originalShape = {n};
+            auto originalValidShape = originalInputStorage.GetStorage()->GetDynValidShape();
+            result = Reshape(result, originalShape, originalValidShape);
+            // Restore original VecTile
+            if (!originalVecTile.tile.empty()) {
+                TileShape::Current().SetVecTile(originalVecTile);
+            }
+        }
         return result;
     }
 
     // axis=-1 case: direct quantization without transpose
+    Tensor result;
     if (isAsymmetric) {
         // Asymmetric quantization: FP32 -> UINT8
         ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
             << "Asymmetric quantization output type should be UINT8";
-        RETURN_CALL(QuantizeAsymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
-            input.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
+        result = CALL(QuantizeAsymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
+            processedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
     } else {
         // Symmetric quantization: FP32 -> INT8
         ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
             << "Symmetric quantization output type should be INT8";
-        RETURN_CALL(QuantizeSymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
-            input.GetStorage(), scale.GetStorage(), normalizedAxis);
+        result = CALL(QuantizeSymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
+            processedInput.GetStorage(), scale.GetStorage(), normalizedAxis);
     }
+
+    // If input was 1D, reshape output back to 1D and restore original VecTile
+    if (is1DInput) {
+        int64_t n = originalInputStorage.GetShape()[0];
+        std::vector<int64_t> originalShape = {n};
+        auto originalValidShape = originalInputStorage.GetStorage()->GetDynValidShape();
+        result = Reshape(result, originalShape, originalValidShape);
+        // Restore original VecTile
+        if (!originalVecTile.tile.empty()) {
+            TileShape::Current().SetVecTile(originalVecTile);
+        }
+    }
+    return result;
 }
 
 // =============================================================================
@@ -766,11 +830,47 @@ static LogicalTensorPtr CreateZeroOffsetTensor(Function &function, const Logical
 Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int axis, const Tensor &zeroPoints) {
     DECLARE_TRACER();
 
-    // Validate input shapes: 2D to 5D tensors supported
-    size_t inputRank = input.GetShape().size();
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
-        inputRank >= SHAPE_DIM2 && inputRank <= SHAPE_DIM5)
-        << "Dequantize input rank must be 2~5, but got rank=" << inputRank;
+    // Validate input dimensions
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
+        << "The shape.size() only support 1~5";
+
+    // Handle 1D input: reshape to [1, n] and process as 2D
+    // scale/zeroPoints remain 1D (no reshape needed)
+    bool is1DInput = (input.GetShape().size() == 1);
+
+    // Validate: 1D input only supports axis=-1
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, !(is1DInput && axis == -2))
+        << "1D input only supports axis=-1, axis=-2 is not supported";
+
+    Tensor processedInput = input;
+    Tensor originalInputStorage = input;
+    VecTile originalVecTile;
+
+    if (is1DInput) {
+        // Store original VecTile and extend it for 2D processing
+        originalVecTile = TileShape::Current().GetVecTile();
+        if (!originalVecTile.tile.empty()) {
+            VecTile extendedVecTile = originalVecTile;
+            // Extend 1D tile to 2D by inserting 1 at the front
+            extendedVecTile.tile.insert(extendedVecTile.tile.begin(), 1);
+            TileShape::Current().SetVecTile(extendedVecTile);
+        }
+
+        // Reshape 1D input to [1, n]
+        int64_t n = input.GetShape()[0];
+        std::vector<int64_t> newShape = {1, n};
+
+        // Extend validShape from 1D to 2D
+        auto originalValidShape = input.GetStorage()->GetDynValidShape();
+        std::vector<SymbolicScalar> extendedValidShape;
+        if (!originalValidShape.empty()) {
+            // originalValidShape is [n], extend to [1, n]
+            extendedValidShape.push_back(SymbolicScalar(1));
+            extendedValidShape.push_back(originalValidShape[0]);
+        }
+
+        processedInput = Reshape(input, newShape, extendedValidShape);
+    }
 
     // Validate input data type: INT8 or INT16
     ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
@@ -783,7 +883,7 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
         << "Dequantize output type must be FP32, but got dtype=" << static_cast<int>(otype);
 
     // Normalize axis to negative indexing and validate
-    int ndim = static_cast<int>(input.GetShape().size());
+    int ndim = static_cast<int>(processedInput.GetShape().size());
     int normalizedAxis = axis;
     if (axis >= 0) {
         normalizedAxis = axis - ndim;
@@ -801,14 +901,14 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
         int secondLastDim = ndim - 2;
 
         // Transpose input: [..., H, W] -> [..., W, H]
-        Tensor transposedInput = Transpose(input, {secondLastDim, lastDim});
+        Tensor transposedInput = Transpose(processedInput, {secondLastDim, lastDim});
         // [TDequant] get tmp Tile for TDequant
         VecTile oriVectile = TileShape::Current().GetVecTile();
         VecTile tmpVectile = TileShape::Current().GetVecTile();
         std::swap(tmpVectile[secondLastDim], tmpVectile[lastDim]);
         TileShape::Current().SetVecTile(tmpVectile);
         // [TDequant] get tmp validShape
-        auto tmpValidShape = input.GetStorage()->dynValidShape_;
+        auto tmpValidShape = processedInput.GetStorage()->dynValidShape_;
         std::swap(tmpValidShape[secondLastDim], tmpValidShape[lastDim]);
         transposedInput.GetStorage()->UpdateDynValidShape(tmpValidShape);
 
@@ -838,23 +938,49 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
         // output back: [..., W, H] -> [..., H, W]
         Tensor result = Transpose(dequantizedResult, {secondLastDim, lastDim});
         // [Tstore] get origin ValidShape
-        result.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);
+        result.GetStorage()->UpdateDynValidShape(processedInput.GetStorage()->dynValidShape_);
         // [Tstore] get origin TileShape
         TileShape::Current().SetVecTile(oriVectile);
+
+        // If input was 1D, reshape output back to 1D and restore original VecTile
+        if (is1DInput) {
+            int64_t n = originalInputStorage.GetShape()[0];
+            std::vector<int64_t> originalShape = {n};
+            auto originalValidShape = originalInputStorage.GetStorage()->GetDynValidShape();
+            result = Reshape(result, originalShape, originalValidShape);
+            // Restore original VecTile
+            if (!originalVecTile.tile.empty()) {
+                TileShape::Current().SetVecTile(originalVecTile);
+            }
+        }
         return result;
     }
 
     // axis=-1 case
+    Tensor result;
     if (isAsymmetric) {
-        RETURN_CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(),
-            input.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
+        result = CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(),
+            processedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
     } else {
         // Symmetric: create zero offset tensor
         auto zeroOffset = CreateZeroOffsetTensor(*Program::GetInstance().GetCurrentFunction(),
             scale.GetStorage());
-        RETURN_CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(),
-            input.GetStorage(), scale.GetStorage(), zeroOffset, normalizedAxis);
+        result = CALL(DequantizeOperation, *Program::GetInstance().GetCurrentFunction(),
+            processedInput.GetStorage(), scale.GetStorage(), zeroOffset, normalizedAxis);
     }
+
+    // If input was 1D, reshape output back to 1D and restore original VecTile
+    if (is1DInput) {
+        int64_t n = originalInputStorage.GetShape()[0];
+        std::vector<int64_t> originalShape = {n};
+        auto originalValidShape = originalInputStorage.GetStorage()->GetDynValidShape();
+        result = Reshape(result, originalShape, originalValidShape);
+        // Restore original VecTile
+        if (!originalVecTile.tile.empty()) {
+            TileShape::Current().SetVecTile(originalVecTile);
+        }
+    }
+    return result;
 }
 
 Tensor DequantizeSymmetric(const Tensor &src, const Tensor &scale, int64_t axis) {

@@ -4126,10 +4126,20 @@ def gen_quantize_op_golden(case_name: str, output: Path, case_index: int = None)
         input_tensor = from_numpy(inputs[0])
         scale = from_numpy(inputs[1])
 
+        # Handle 1D input: reshape to [1, n] for processing
+        is_1d_input = (input_tensor.dim() == 1)
+        if is_1d_input:
+            n = input_tensor.shape[0]
+            input_tensor = input_tensor.reshape(1, n)
+
         # Get output dtype from config
         output_dtype = config.get("output_tensors")[0].get("dtype")
         axis = int(params.get("axis", "-1"))
         use_zero_points = params.get("use_zero_points", False)
+
+        # Validate: 1D input only supports axis=-1
+        if is_1d_input and axis == -2:
+            raise ValueError("1D input only supports axis=-1, axis=-2 is not supported")
 
         # Convert to target dtype
         if output_dtype == "int8":
@@ -4145,6 +4155,11 @@ def gen_quantize_op_golden(case_name: str, output: Path, case_index: int = None)
                 quantized = ascend_tcvt_uint8(input_tensor * scale[..., None, :] + zero_points[..., None, :])
         else:
             raise ValueError(f"Unsupported output dtype for quantize: {output_dtype}")
+
+        # If input was 1D, reshape output back to 1D
+        if is_1d_input:
+            quantized = quantized.reshape(n)
+
         return [to_numpy(quantized)]
 
     logging.debug(f"Generating golden files of {case_name} ...")
@@ -4195,6 +4210,16 @@ def gen_dequantize_op_golden(case_name: str, output: Path, case_index: int = Non
         axis = int(params.get("axis", "-1"))
         use_zero_points = params.get("use_zero_points", False)
 
+        # Handle 1D input: reshape to [1, n] for processing
+        is_1d_input = (input_tensor.ndim == 1)
+        if is_1d_input:
+            n = input_tensor.shape[0]
+            input_tensor = input_tensor.reshape(1, n)
+
+        # Validate: 1D input only supports axis=-1
+        if is_1d_input and axis == -2:
+            raise ValueError("1D input only supports axis=-1, axis=-2 is not supported")
+
         # Convert input to float for computation
         if input_tensor.dtype == np.int8:
             input_float = input_tensor.astype(np.float32)
@@ -4234,6 +4259,10 @@ def gen_dequantize_op_golden(case_name: str, output: Path, case_index: int = Non
                 if scale.ndim == ndim - 1:
                     scale = np.expand_dims(scale, axis=-2)
             result = input_float * scale
+
+        # If input was 1D, reshape output back to 1D
+        if is_1d_input:
+            result = result.reshape(n)
 
         # Output is always FP32
         return [result.astype(np.float32)]
