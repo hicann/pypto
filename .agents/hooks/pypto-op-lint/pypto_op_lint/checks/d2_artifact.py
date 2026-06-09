@@ -40,53 +40,37 @@ def check_ol09(ctx: CheckContext) -> Finding:
             file=SPEC_FILE,
         )
 
+    issues: list[str] = []
     headings = _extract_markdown_headings(content)
-    missing: list[str] = []
+    missing_headings: list[str] = []
     if not _has_heading_like(headings, "数学公式"):
-        missing.append("数学公式")
+        missing_headings.append("数学公式")
     if not _has_heading_like(headings, "输入输出规格"):
-        missing.append("输入输出规格")
+        missing_headings.append("输入输出规格")
     if not _has_heading_like(headings, "精度要求"):
-        missing.append("精度要求")
-    if missing:
-        return ctx.make_finding(
-            "OL09",
-            "FAIL",
-            f"{SPEC_FILE} 缺少必需内容: {', '.join(missing)}\n"
-            f"提示: 以上关键词可能因 heading 使用了英文等价词（如 Mathematical Formula）"
-            f"而未匹配，请检查对应章节的 heading 是否包含上述中文关键词。",
-            file=SPEC_FILE,
+        missing_headings.append("精度要求")
+    if missing_headings:
+        issues.append(
+            f"缺少必需章节: {', '.join(missing_headings)}"
+            f"（关键词可能因 heading 使用英文等价词而未匹配）"
         )
 
-    # 数学/算法章节：尝试多个可能的章节名
     math_text = _extract_section_text(content, "数学")
     if not math_text:
         math_text = _extract_section_text(content, "算法")
     if not math_text:
         math_text = _extract_section_text(content, "基础信息")
-    # 公式建议统一使用 $$...$$ 块公式；为兼容少量纯文本公式，仍保留 '=' 判定。
     if not math_text or not any(
         token in math_text
         for token in ("$$", "=", "\\begin{equation}", "round", "clamp")
     ):
-        return ctx.make_finding(
-            "OL09",
-            "FAIL",
-            f"{SPEC_FILE} 数学定义章节内容不足（缺少可解析公式特征）",
-            file=SPEC_FILE,
-        )
+        issues.append("数学定义章节内容不足（缺少可解析公式特征）")
 
-    # 输入输出/数据规格章节
     io_text = _extract_section_text(content, "输入输出规格")
     if not io_text:
         io_text = _extract_section_text(content, "数据规格")
     if not io_text or "dtype" not in io_text.lower() or "shape" not in io_text.lower():
-        return ctx.make_finding(
-            "OL09",
-            "FAIL",
-            f"{SPEC_FILE} 输入输出规格章节内容不足（需包含 shape/dtype）",
-            file=SPEC_FILE,
-        )
+        issues.append("输入输出规格章节内容不足（需包含 shape/dtype）")
 
     precision_text = _extract_section_text(content, "精度")
     lower_prec = precision_text.lower() if precision_text else ""
@@ -94,29 +78,24 @@ def check_ol09(ctx: CheckContext) -> Finding:
         kw in lower_prec for kw in ("atol", "rtol", "mare")
     )
     if not _has_tolerance:
-        return ctx.make_finding(
-            "OL09",
-            "FAIL",
-            f"{SPEC_FILE} 精度要求章节内容不足（需包含 atol/rtol 或指标阈值）",
-            file=SPEC_FILE,
-        )
+        issues.append("精度要求章节内容不足（需包含 atol/rtol 或指标阈值）")
 
-    # Front matter schema 校验：在 SPEC 生成时即拦截格式问题（如 p0_shapes 非 list）
     spec_meta, _ = _parse_front_matter(content)
     if not spec_meta:
-        return ctx.make_finding(
-            "OL09",
-            "FAIL",
-            f"{SPEC_FILE} 缺少 front matter"
-            "（必须以 --- 开头，含 schema_version/op_name/supported_dtypes/p0_shapes/tolerance）",
-            file=SPEC_FILE,
+        issues.append(
+            "缺少 front matter"
+            "（必须以 --- 开头，含 schema_version/op_name/supported_dtypes/p0_shapes/tolerance）"
         )
-    schema_errors = _validate_doc_schema("SPEC", spec_meta)
-    if schema_errors:
+    else:
+        schema_errors = _validate_doc_schema("SPEC", spec_meta)
+        if schema_errors:
+            issues.append(f"front matter schema 非法: {'; '.join(schema_errors)}")
+
+    if issues:
         return ctx.make_finding(
             "OL09",
             "FAIL",
-            f"{SPEC_FILE} front matter schema 非法: {'; '.join(schema_errors)}",
+            f"{SPEC_FILE} 存在 {len(issues)} 个问题:\n" + "\n".join(f"  - {i}" for i in issues),
             file=SPEC_FILE,
         )
 

@@ -42,6 +42,28 @@ def test_ol09_fail_when_spec_missing(tmp_path: Path):
     assert finding.status == "FAIL"
 
 
+def test_ol09_aggregates_multiple_issues(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    spec = """---
+schema_version: 1
+op_name: demo
+supported_dtypes: [bfloat16]
+p0_shapes: [[1024, 128]]
+tolerance: {'atol': 0.001, 'rtol': 0.001}
+---
+# demo
+some text without required sections
+"""
+    write_file(op_dir / "SPEC.md", spec)
+    finding = run_rule(mod, op_dir, "OL09", stage=1)
+    assert finding.status == "FAIL"
+    assert "个问题" in finding.message
+    assert "数学" in finding.message
+    assert "输入输出" in finding.message
+    assert "精度" in finding.message
+
+
 # ── OL10: API_REPORT.md 结构化章节校验 ──
 
 def test_ol10_pass_when_api_report_complete(tmp_path: Path):
