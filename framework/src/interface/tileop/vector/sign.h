@@ -24,11 +24,11 @@ TILEOP void SignInt(DstTile dstTile, SrcTile srcTile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
-    pto::TMINS(srcTile, srcTile, static_cast<T>(1));
+    pto::TMINS(dstTile, srcTile, static_cast<T>(1));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMAXS(dstTile, srcTile, static_cast<T>(-1));
+    pto::TMAXS(dstTile, dstTile, static_cast<T>(-1));
 }
 
 template <typename LastUse, typename T, typename DstTile, typename SrcTile>
@@ -36,19 +36,19 @@ TILEOP void SignHalf(DstTile dstTile, SrcTile srcTile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
-    pto::TMINS(srcTile, srcTile, static_cast<T>(5.960464e-08f));
+    pto::TMINS(dstTile, srcTile, static_cast<T>(5.960464e-08f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMAXS(srcTile, srcTile, static_cast<T>(-5.960464e-08f));
+    pto::TMAXS(dstTile, dstTile, static_cast<T>(-5.960464e-08f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(srcTile, srcTile, static_cast<T>(4.096000e+03f));
+    pto::TMULS(dstTile, dstTile, static_cast<T>(4.096000e+03f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(dstTile, srcTile, static_cast<T>(4.096000e+03f));
+    pto::TMULS(dstTile, dstTile, static_cast<T>(4.096000e+03f));
 }
 
 template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename TmpTile>
@@ -84,23 +84,23 @@ TILEOP void SignFloat(DstTile dstTile, SrcTile srcTile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
-    pto::TMINS(srcTile, srcTile, static_cast<T>(1.1754943508222875e-38f));
+    pto::TMINS(dstTile, srcTile, static_cast<T>(1.1754943508222875e-38f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMAXS(srcTile, srcTile, static_cast<T>(-1.1754943508222875e-38f));
+    pto::TMAXS(dstTile, dstTile, static_cast<T>(-1.1754943508222875e-38f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(srcTile, srcTile, static_cast<T>(4.6116860184273879e+18f));
+    pto::TMULS(dstTile, dstTile, static_cast<T>(4.6116860184273879e+18f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(srcTile, srcTile, static_cast<T>(4.6116860184273879e+18f));
+    pto::TMULS(dstTile, dstTile, static_cast<T>(4.6116860184273879e+18f));
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TMULS(dstTile, srcTile, static_cast<T>(4.0000000000000000e+00f));
+    pto::TMULS(dstTile, dstTile, static_cast<T>(4.0000000000000000e+00f));
 }
 
 template <typename LastUse, typename T, typename DstTile, typename SrcTile, typename TmpTile>
