@@ -13,9 +13,22 @@ from typing import Union, Sequence, List
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
+from ..enum import DataType
 from ..error import PyptoError
 from ..tensor import Tensor
 from .._element import Element
+
+
+def _check_where_scalar_dtype(arg_name: str, scalar_val, tensor_arg, tensor_name: str):
+    if isinstance(scalar_val, float) and isinstance(tensor_arg, Tensor):
+        tensor_dtype = tensor_arg.dtype
+        if tensor_dtype != DataType.DT_FP32:
+            raise PyptoError(0xF00002, TypeError(
+                f"where() does not support float scalar with non-fp32 tensor: "
+                f"'{arg_name}' is a float scalar but '{tensor_name}' tensor dtype is {tensor_dtype}. "
+                f"This type mismatch is not supported. Please use Element to specify the desired dtype, "
+                f"e.g. pypto.Element(pypto.{tensor_dtype}, {scalar_val})."
+            ))
 
 
 @op_wrapper
@@ -33,10 +46,14 @@ def where(
     ----------
     condition : Tensor of bool
         A boolean tensor indicating which elements to select from `input` (True) or `other` (False).
-    input : Tensor or Number
+    input : Tensor or float or Element
         A tensor or scalar value to be selected where `condition` is True.
-    other : Tensor or Number
+        When a float scalar is used, the paired tensor argument must be DT_FP32.
+        For other dtypes, use Element instead, e.g. pypto.Element(pypto.DT_FP16, 1.0).
+    other : Tensor or float or Element
         A tensor or scalar value to be selected where `condition` is False.
+        When a float scalar is used, the paired tensor argument must be DT_FP32.
+        For other dtypes, use Element instead, e.g. pypto.Element(pypto.DT_FP16, 0.0).
 
     Returns
     -------
@@ -51,6 +68,8 @@ def where(
         If `condition`, `input`, and `other` cannot be broadcasted to a common shape.
     TypeError
         If `condition` is not a boolean tensor.
+    TypeError
+        If a float scalar is used with a non-fp32 tensor. Use Element instead.
 
     See Also
     --------
@@ -69,24 +88,31 @@ def where(
     Input y:     [10.0 20.0 30.0 40.0]
     Output out1: [1.0  20.0 3.0  40.0]
 
-    # Using scalar inputs
+    # Using scalar inputs (float scalar is converted to DT_FP32 Element)
     out2 = pypto.where(cond, 1.0, 0.0)
 
     Output out2: [1.0 0.0 1.0 0.0]
+
+    # Using Element for non-fp32 dtypes
+    x_fp16 = pypto.tensor([4], pypto.DT_FP16)
+    out3 = pypto.where(cond, x_fp16, pypto.Element(pypto.DT_FP16, 0.0))
 
     # Broadcasting example
     cond = pypto.tensor([2, 2], pypto.DT_BOOL)
     x = pypto.tensor([1, 2], pypto.DT_FP32)  # Will be broadcasted
     y = 0.0
-    out3 = pypto.where(cond, x, y)
+    out4 = pypto.where(cond, x, y)
 
     Input cond:  [[True False], [False True]]
     Input x:     [1.0 2.0]
     Input y:     0.0
 
-    Output out3: [[1.0 0.0],
+    Output out4: [[1.0 0.0],
                   [0.0 2.0]])
     """
+    _check_where_scalar_dtype("input", input, other, "other")
+    _check_where_scalar_dtype("other", other, input, "input")
+
     if isinstance(input, pypto_impl.Tensor) or isinstance(input, pypto_impl.Element):
         input_base = input
     else:
