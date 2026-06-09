@@ -2,8 +2,9 @@
 
 ## 产品支持情况
 
-- Atlas A3 推理系列产品：支持
-- Atlas A2 推理系列产品：支持
+- Ascend 950PR
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 功能说明
 
@@ -21,8 +22,8 @@ create_shmem_tensor(group_name: str, n_pes: int, dtype: DataType, shape: list[in
 |---------|-----------|----------------------------------------------------------------------|
 | group_name   | 输入      | 指定需要创建 shared memory tensor 的通信域的名字，字符串长度: 1~128。<br> 支持的类型为：str 类型。 |
 | n_pes   | 输入      | 通信域中的 pe 总数，n_pes > 0。 <br> 同一个 group_name 下的创建 shared memory tensor 必须保证 n_pes 一致。 <br> 支持的类型为 int 类型。 |
-| dtype   | 输入      |创建的 shared memory tensor 的数据类型。 <br> 支持的类型为 pypto 的数据类型，可选值：DT_INT32、DT_FP16、DT_FP32、DT_BF16。 |
-| shape   | 输入      |创建的 shared memory tensor 的形状。 <br> 参数类型为 list[int] 类型。 <br> 运行时判断当前创建的 shared memory tensor 是否超出共享区大小，进行报错提示。 <br> 支持的 shmem Tensor 维度：2 - 4 维。 |
+| dtype   | 输入      |创建的 shared memory tensor 的数据类型。 |
+| shape   | 输入      |创建的 shared memory tensor 的形状。 <br> 参数类型为 list[int] 类型。 <br> 运行时会检查 shmem tensor 的总字节大小（shape各维度乘积 × dtype字节大小）是否超过共享区限制（200MB），若超过则报错 WIN_SIZE_EXCEED_LIMIT（0xA2000）。 <br> 支持的 shmem Tensor 维度：2 - 4 维。 |
 
 ## 返回值说明
 
@@ -30,7 +31,10 @@ create_shmem_tensor(group_name: str, n_pes: int, dtype: DataType, shape: list[in
 
 ## 约束说明
 
-无
+1. dtype 支持的数据类型说明：
+    - **Ascend 950PR**：DT_INT32、DT_FP16、DT_FP32、DT_BF16
+    - **Atlas A3 训练系列产品/Atlas A3 推理系列产品**：DT_INT32、DT_FP16、DT_FP32、DT_BF16
+    - **Atlas A2 训练系列产品/Atlas A2 推理系列产品**：DT_INT32、DT_FP16、DT_FP32、DT_BF16
 
 ## 调用示例
 

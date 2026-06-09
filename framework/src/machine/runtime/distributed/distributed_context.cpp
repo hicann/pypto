@@ -304,8 +304,9 @@ std::vector<uint64_t> DistributedContext::GetCommContext([[maybe_unused]] const 
         tilingStruct = std::make_shared<TilingStructV2>();
     }
     std::vector<uint64_t> commContext(groupNames.size(), 0);
-    ASSERT(DistributedErrorCode::INVALID_WORLD_SIZE, groupNames.size() <= DIST_COMM_GROUP_NUM)
-        << "Commgroup size is not be supported";
+    ASSERT(DistributedErrorCode::INVALID_GROUP_COUNT, groupNames.size() <= DIST_COMM_GROUP_NUM)
+        << "The number of communication groups (" << groupNames.size() << ") exceeds the maximum limit ("
+        << DIST_COMM_GROUP_NUM << ").";
     for (size_t groupIndex = 0; groupIndex < groupNames.size(); ++groupIndex) {
         auto groupName = groupNames[groupIndex];
         if (g_context.find(groupName) != g_context.end()) { // 检查context缓存
@@ -339,8 +340,9 @@ std::vector<uint64_t> DistributedContext::GetCommContextToHost(
 {
     std::vector<uint64_t> devAddrs = GetCommContext(groupNames);
     std::vector<uint64_t> hostContext;
-    ASSERT(DistributedErrorCode::INVALID_WORLD_SIZE, groupNames.size() <= DIST_COMM_GROUP_NUM)
-        << "Commgroup size is not be supported";
+    ASSERT(DistributedErrorCode::INVALID_GROUP_COUNT, groupNames.size() <= DIST_COMM_GROUP_NUM)
+        << "The number of communication groups (" << groupNames.size() << ") exceeds the maximum limit ("
+        << DIST_COMM_GROUP_NUM << ").";
     for (size_t groupIndex = 0; groupIndex < groupNames.size(); groupIndex++) {
         std::string groupName = groupNames[groupIndex];
         hostContext.push_back((uint64_t)g_context[groupName].second);

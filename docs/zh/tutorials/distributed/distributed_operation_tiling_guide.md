@@ -13,7 +13,7 @@
 
 ---
 
-## 1. 背景介绍
+## 背景介绍
 
 在 PyPTO 分布式计算中，通信算子用于实现多卡间的数据传输与同步。由于硬件资源限制（如单次传输大小限制、内存带宽等）和性能优化需求，通信算子通常需要将大数据块划分为多个小块进行传输和操作，这种划分方式称为切块（Tiling）。
 
@@ -27,7 +27,7 @@
 
 通信算子间存在严格的执行依赖关系（如数据写入完成后才能发送信号、信号到达后才能读取数据），切块配置需要在保证依赖关系正确的前提下，尽可能提升并行度和通信效率。
 
-## 2. 通信算子支持切块情况
+## 通信算子支持切块情况
 
 | 算子名称            | 切块支持 | 切块含义                 |
 | ------------------- | -------- | ------------------------ |
@@ -45,7 +45,7 @@
 | shmem_store         | 支持     | 设置分块发送的数据大小   |
 | shmem_load          | 支持     | 设置分块读取的数据大小   |
 
-## 3. 通信算子切块策略
+## 通信算子切块策略
 
 切块主要针对 tensor 类型的数据。当前通信算子的输入和输出主要可以划分为两种类型的 tensor：
 
@@ -57,7 +57,7 @@
 
 切块的主体对象为 data tensor，切块的核心目的是：在计算图展开阶段，将 data tensor对应的数据区域划分为多个子区域，使单个算子能够被展开为多个 tile 算子（tile_op），从而提升任务执行的并行度。此外，通信算子的执行依赖输入、输出 dummy tensor 建立严格的依赖关系。为在 tile_op 之间构建更细粒度的依赖关系，同样需要对 dummy tensor 进行切分，以此实现更优的流水排布，进一步提升整体并行效率。data tensor 和 dummy tensor 基于 TileShape 进行切分时，采取不同的切分策略。
 
-### 3.1 数据类型的tensor切分策略
+### 数据类型的tensor切分策略
 
 当前支持 **N 维切块**（N 可以是 2 - 4）。
 假设 data tensor 的 shape 大小为 $[s_1, s_2, \ldots, s_N]$（维度 = N），TileShape 大小为 $[t_1, t_2, \ldots, t_N]$（维度 = N）。data tensor 会被切分为共 $n$ 个数据块。n 的计算方式如下：
@@ -78,7 +78,7 @@ $$
 
 1. **计算每个维度索引**：
 
-   ```
+   ```.txt
    dim_index[N-1] = tile_index % tile_num_dim_N
    dim_index[N-2] = (tile_index / tile_num_dim_N) % tile_num_dim_N-1
    ...
@@ -105,7 +105,7 @@ $$
 | 2 | [1, 0] | [64, 256] | [64, 0] |
 | 3 | [1, 1] | [64, 256] | [64, 256] |
 
-### 3.2 控制边类型的tensor切分策略
+### 控制边类型的tensor切分策略
 
 对 dummy tensor 切分时，遵循以下核心原则：**检查每个维度是否足够切分，满足条件就切分，不满足就不切分**。
 
@@ -129,7 +129,7 @@ $$
 
 1. **计算每个维度索引**：从 `tile_index` 反推各维度的索引位置
 
-   ```
+   ```.txt
    dim_indices[N-1] = tile_index % tile_num_dim_N
    dim_indices[N-2] = (tile_index / tile_num_dim_N) % tile_num_dim_N-1
    ...
@@ -182,7 +182,7 @@ $$
 
 不满足条件，不进行切分，所有 tile_op 共用原始 dummy tensor。
 
-## 4. 具体样例
+## 具体样例
 
 以双卡的 allreduce 通信为例，具体介绍切块对通信算子执行的影响。
 
@@ -260,7 +260,7 @@ def allreduce_kernel(
 - **依赖关联关系**：`tile_wait_until_dummy00/01` 对应等待阶段的 `tile_wait_until_dummy0`，`tile_wait_until_dummy10/11` 对应等待阶段的 `tile_wait_until_dummy1`；
 - **细粒度调度**：`tile_shmem_wait_until0` 执行完成后，`tile_shmem_get0/1` 即可立即执行，无需等待所有分块等待操作完成。
 
-## 5. 切块约束条件
+## 切块约束条件
 
 合理切块是通信算子正常执行的前提。完整通信流程包含**写数据、写信号量、等信号量、读数据**四个阶段，各阶段支持独立配置切块策略。通信各阶段相互独立但又高度关联，切块配置必须保证整体通信流程符合语义，否则会引发信号量等待超时、计算精度异常等问题。
 
@@ -268,101 +268,101 @@ def allreduce_kernel(
 
 1. **切块数量不超过 1023 块**
 
-由于底层哈希表和任务数组的性能限制，单个算子切分后的 tile_op 数量不得超过 1023 块。该限制来源于 `shmem_wait_until` 等通信算子底层实现中的固定大小数组 `SignalTileOp* hashTable[AICPU_TASK_ARRAY_SIZE]`，其中 `AICPU_TASK_ARRAY_SIZE` 定义为 1024（预留1个位置用于边界检查）。超出此限制会导致运行时错误：`taskCount >= AICPU_TASK_ARRAY_SIZE`。
+    由于底层哈希表和任务数组的性能限制，单个算子切分后的 tile_op 数量不得超过 1023 块。该限制来源于 `shmem_wait_until` 等通信算子底层实现中的固定大小数组 `SignalTileOp* hashTable[AICPU_TASK_ARRAY_SIZE]`，其中 `AICPU_TASK_ARRAY_SIZE` 定义为 1024（预留1个位置用于边界检查）。超出此限制会导致运行时错误：`taskCount >= AICPU_TASK_ARRAY_SIZE`。
 
-在设计切块策略时，应确保根据 data tensor 的 shape 和 TileShape 计算得到的总切块数量 `n = tile_row_num × tile_col_num` 不超过 1023。
+    在设计切块策略时，应确保根据 data tensor 的 shape 和 TileShape 计算得到的总切块数量 `n = tile_row_num × tile_col_num` 不超过 1023。
 
 2. **切块维度**
 
-TileShape 的维度数与 shmem tensor 的维度数一致。
+    TileShape 的维度数与 shmem tensor 的维度数一致。
 
 3. **shmem_signal 写信号量时需确保对应的数据已经发送完成**
 
-`shmem_signal` 通常在 `shmem_put` 之后写入信号量，用于通知 PE 对应的数据块已写入完成。二者的执行依赖关系，通过 `shmem_put` 输出的 `dummy` 进行控制。由于 dummy tensor 和 data tensor 切分策略不同，当 `shmem_signal` 与 `shmem_put` 这两个接口设置不同的切块时，需分析切块后的 `shmem_signal` 写入的信号量是否符合语义，即其对应的数据块是否已通过 `shmem_put` 写入完成，否则可能引起精度错误。
+    `shmem_signal` 通常在 `shmem_put` 之后写入信号量，用于通知 PE 对应的数据块已写入完成。二者的执行依赖关系，通过 `shmem_put` 输出的 `dummy` 进行控制。由于 dummy tensor 和 data tensor 切分策略不同，当 `shmem_signal` 与 `shmem_put` 这两个接口设置不同的切块时，需分析切块后的 `shmem_signal` 写入的信号量是否符合语义，即其对应的数据块是否已通过 `shmem_put` 写入完成，否则可能引起精度错误。
 
-**示例分析：**
+    **示例分析：**
 
-```python
-# 示例 1：符合语义
-input_tensor = pypto.tensor([64, 64], pypto.DT_INT32)
-pypto.set_vec_tile_shapes(16, 64)
-put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
-              put_op=pypto.AtomicType.ADD, pred=[input_tensor])
-pypto.set_vec_tile_shapes(32, 64)
-pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
-              [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
+    ```python
+    # 示例（符合语义）：符合语义
+    input_tensor = pypto.tensor([64, 64], pypto.DT_INT32)
+    pypto.set_vec_tile_shapes(16, 64)
+    put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
+                put_op=pypto.AtomicType.ADD, pred=[input_tensor])
+    pypto.set_vec_tile_shapes(32, 64)
+    pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
+                [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
 
-# 示例 2：不符合语义
-input_tensor = pypto.tensor([64, 64], pypto.DT_INT32)
-pypto.set_vec_tile_shapes(16, 64)
-put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
-              put_op=pypto.AtomicType.ADD, pred=[input_tensor])
-pypto.set_vec_tile_shapes(33, 64)
-pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
-              [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
-```
+    # 示例（不符合语义）：不符合语义
+    input_tensor = pypto.tensor([64, 64], pypto.DT_INT32)
+    pypto.set_vec_tile_shapes(16, 64)
+    put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
+                put_op=pypto.AtomicType.ADD, pred=[input_tensor])
+    pypto.set_vec_tile_shapes(33, 64)
+    pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
+                [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
+    ```
 
-**示例 1** 中，输入数据的 shape 为 [64, 64]，`shmem_put` 与 `shmem_signal` 切块配置及执行逻辑如下：
+    **示例** 中，输入数据的 shape 为 [64, 64]，`shmem_put` 与 `shmem_signal` 切块配置及执行逻辑如下：
 
-- **shmem_put 切分**：设置 TileShape 为 [16, 64]，单个 `shmem_put` 被切分为 4 个 `tile_shmem_put`（`tile_shmem_put0`、`tile_shmem_put1`、`tile_shmem_put2`、`tile_shmem_put3`）；同时 `put_dummy` 切分为 4 个 `tile_put_dummy`（`tile_put_dummy0`、`tile_put_dummy1`、`tile_put_dummy2`、`tile_put_dummy3`）；
-- **shmem_signal 切分**：设置 TileShape 为 [32, 64]，单个 `shmem_signal` 被切分为 2 个 `tile_shmem_signal`（`tile_shmem_signal0`、`tile_shmem_signal1`）；同时 `put_dummy` 同步切分为 2 个 `tile_put_dummy`，分别对应 `tile_put_dummy0`、`tile_put_dummy1` 和 `tile_put_dummy2`、`tile_put_dummy3`；
-- **执行逻辑**：`tile_shmem_signal0` 需在 `tile_shmem_put0` 和 `tile_shmem_put1` 执行完成后触发，标识 [32, 64] 大小的数据已写入，数据写入与信号量对应关系正确，符合语义要求。
+    - **shmem_put 切分**：设置 TileShape 为 [16, 64]，单个 `shmem_put` 被切分为 4 个 `tile_shmem_put`（`tile_shmem_put0`、`tile_shmem_put1`、`tile_shmem_put2`、`tile_shmem_put3`）；同时 `put_dummy` 切分为 4 个 `tile_put_dummy`（`tile_put_dummy0`、`tile_put_dummy1`、`tile_put_dummy2`、`tile_put_dummy3`）；
+    - **shmem_signal 切分**：设置 TileShape 为 [32, 64]，单个 `shmem_signal` 被切分为 2 个 `tile_shmem_signal`（`tile_shmem_signal0`、`tile_shmem_signal1`）；同时 `put_dummy` 同步切分为 2 个 `tile_put_dummy`，分别对应 `tile_put_dummy0`、`tile_put_dummy1` 和 `tile_put_dummy2`、`tile_put_dummy3`；
+    - **执行逻辑**：`tile_shmem_signal0` 需在 `tile_shmem_put0` 和 `tile_shmem_put1` 执行完成后触发，标识 [32, 64] 大小的数据已写入，数据写入与信号量对应关系正确，符合语义要求。
 
-**示例 2**：`shmem_put` 与 `shmem_signal` 的切块数量，以及切块后 `tile_op` 之间的依赖关系与示例 1 保持一致：
+    **示例**：`shmem_put` 与 `shmem_signal` 的切块数量，以及切块后 `tile_op` 之间的依赖关系与前述示例保持一致：
 
-- **切块配置**：`shmem_put` 与 `shmem_signal` 切块数量，以及依赖关系沿用示例 1 的对应规则；
-- **执行逻辑**：`tile_shmem_signal0` 在 `tile_shmem_put0` 和 `tile_shmem_put1` 执行完成后触发，标识已写入 [33, 64] 大小的数据；
-- **问题说明**：实际 `tile_shmem_put0` 和 `tile_shmem_put1` 共写入 [32, 64] 大小的数据，信号量标识的数据量与实际写入数据量不匹配，数据写入与信号量对应关系不正确，不符合语义，可能引起精度问题。
+    - **切块配置**：`shmem_put` 与 `shmem_signal` 切块数量，以及依赖关系沿用示例 1 的对应规则；
+    - **执行逻辑**：`tile_shmem_signal0` 在 `tile_shmem_put0` 和 `tile_shmem_put1` 执行完成后触发，标识已写入 [33, 64] 大小的数据；
+    - **问题说明**：实际 `tile_shmem_put0` 和 `tile_shmem_put1` 共写入 [32, 64] 大小的数据，信号量标识的数据量与实际写入数据量不匹配，数据写入与信号量对应关系不正确，不符合语义，可能引起精度问题。
 
 4. **shmem_wait_until 和 shmem_signal 需要设置相同的切块大小**
 
-两者操作同一个 shared memory tensor，需要精确匹配。如果切块大小不同，signal 写入的 tile 块和 wait_until 等待的 tile 块不对应，会引起等信号量超时错误。
+    两者操作同一个 shared memory tensor，需要精确匹配。如果切块大小不同，signal 写入的 tile 块和 wait_until 等待的 tile 块不对应，会引起等信号量超时错误。
 
 5. **shmem_get 读取数据前需确保数据已经写入完成**
 
-`shmem_get` 通常在 `shmem_wait_until` 之后执行，以确保目标数据完成写入后读取。二者之间的执行依赖关系由 `shmem_wait_until` 输出的 dummy 张量进行控制。
+    `shmem_get` 通常在 `shmem_wait_until` 之后执行，以确保目标数据完成写入后读取。二者之间的执行依赖关系由 `shmem_wait_until` 输出的 dummy 张量进行控制。
 
-由于 dummy tensor 和 data tensor 切分策略不同，当这两个接口配置不同的切块方式时，需要保证 `shmem_get` 读取的数据块语义正确，即其对应的数据块已完成写入，否则可能导致精度异常。
+    由于 dummy tensor 和 data tensor 切分策略不同，当这两个接口配置不同的切块方式时，需要保证 `shmem_get` 读取的数据块语义正确，即其对应的数据块已完成写入，否则可能导致精度异常。
 
-```python
-# 示例 1：符合语义
-input_tensor = pypto.tensor([64,64], pypto.DT_INT32)
-pypto.set_vec_tile_shapes(16, 64)
-put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
-            put_op=pypto.AtomicType.ADD, pred=[input_tensor])
-pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
-            [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
-my_pe = pypto.distributed.my_symbolic_pe(group_name)
-wait_until_dummy = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
-        shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor])
-pypto.set_vec_tile_shapes(32, 64)
-all_reduce_out = pypto.distributed.shmem_get(
-        shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_dummy], valid_shape=shmem_shape
-    )
-# 示例 2：不符合语义
-input_tensor = pypto.tensor([64,64], pypto.DT_INT32)
-pypto.set_vec_tile_shapes(32, 64)
-put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
-            put_op=pypto.AtomicType.ADD, pred=[input_tensor])
-pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
-            [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
-my_pe = pypto.distributed.my_symbolic_pe(group_name)
-wait_until_dummy = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
-        shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor])
-pypto.set_vec_tile_shapes(33, 64)
-all_reduce_out = pypto.distributed.shmem_get(
-        shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_dummy], valid_shape=shmem_shape
-    )
-```
+    ```python
+    # 示例（符合语义）：符合语义
+    input_tensor = pypto.tensor([64,64], pypto.DT_INT32)
+    pypto.set_vec_tile_shapes(16, 64)
+    put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
+                put_op=pypto.AtomicType.ADD, pred=[input_tensor])
+    pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
+                [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
+    my_pe = pypto.distributed.my_symbolic_pe(group_name)
+    wait_until_dummy = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
+            shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor])
+    pypto.set_vec_tile_shapes(32, 64)
+    all_reduce_out = pypto.distributed.shmem_get(
+            shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_dummy], valid_shape=shmem_shape
+        )
+    # 示例（不符合语义）：不符合语义
+    input_tensor = pypto.tensor([64,64], pypto.DT_INT32)
+    pypto.set_vec_tile_shapes(32, 64)
+    put_dummy = pypto.distributed.shmem_put(input_tensor, [0, 0], shmem_tensor, 0,
+                put_op=pypto.AtomicType.ADD, pred=[input_tensor])
+    pypto.distributed.shmem_signal(shmem_tensor, 0, 1, shmem_shape,
+                [0, 0], target_pe=0, sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
+    my_pe = pypto.distributed.my_symbolic_pe(group_name)
+    wait_until_dummy = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
+            shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[input_tensor])
+    pypto.set_vec_tile_shapes(33, 64)
+    all_reduce_out = pypto.distributed.shmem_get(
+            shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_dummy], valid_shape=shmem_shape
+        )
+    ```
 
-**示例 1** 中，输入数据的 shape 为 [64, 64]，`shmem_wait_until` 与 `shmem_get` 切块配置及执行逻辑如下：
+    **示例** 中，输入数据的 shape 为 [64, 64]，`shmem_wait_until` 与 `shmem_get` 切块配置及执行逻辑如下：
 
-- **shmem_wait_until 切分**：设置 TileShape 为 [16, 64]，单个 `shmem_wait_until` 被切分为 4 个 `tile_shmem_wait_until`（`tile_shmem_wait_until0`、`tile_shmem_wait_until1`、`tile_shmem_wait_until2`、`tile_shmem_wait_until3`）；同时 `wait_until_dummy` 切分为 4 个 `tile_wait_until_dummy`（`tile_wait_until_dummy0`、`tile_wait_until_dummy1`、`tile_wait_until_dummy2`、`tile_wait_until_dummy3`）；
-- **shmem_get 切分**：设置 TileShape 为 [32, 64]，单个 `shmem_get` 被切分为 2 个 `tile_shmem_get`（`tile_shmem_get0`、`tile_shmem_get1`）；同时 `wait_until_dummy` 同步切分为 2 个 `tile_wait_until_dummy`，分别对应 `tile_wait_until_dummy0`、`tile_wait_until_dummy1` 和 `tile_wait_until_dummy2`、`tile_wait_until_dummy3`；
-- **执行逻辑**：`tile_shmem_get0` 会在 `tile_shmem_wait_until0` 和 `tile_shmem_wait_until1` 执行完成后执行，用于读取 [32, 64] 大小的数据，与等待的信号量对应关系正确，符合语义要求。
+    - **shmem_wait_until 切分**：设置 TileShape 为 [16, 64]，单个 `shmem_wait_until` 被切分为 4 个 `tile_shmem_wait_until`（`tile_shmem_wait_until0`、`tile_shmem_wait_until1`、`tile_shmem_wait_until2`、`tile_shmem_wait_until3`）；同时 `wait_until_dummy` 切分为 4 个 `tile_wait_until_dummy`（`tile_wait_until_dummy0`、`tile_wait_until_dummy1`、`tile_wait_until_dummy2`、`tile_wait_until_dummy3`）；
+    - **shmem_get 切分**：设置 TileShape 为 [32, 64]，单个 `shmem_get` 被切分为 2 个 `tile_shmem_get`（`tile_shmem_get0`、`tile_shmem_get1`）；同时 `wait_until_dummy` 同步切分为 2 个 `tile_wait_until_dummy`，分别对应 `tile_wait_until_dummy0`、`tile_wait_until_dummy1` 和 `tile_wait_until_dummy2`、`tile_wait_until_dummy3`；
+    - **执行逻辑**：`tile_shmem_get0` 会在 `tile_shmem_wait_until0` 和 `tile_shmem_wait_until1` 执行完成后执行，用于读取 [32, 64] 大小的数据，与等待的信号量对应关系正确，符合语义要求。
 
-**示例 2**：`shmem_wait_until` 与 `shmem_get` 的切块数量，以及切块后 `tile_op` 之间的依赖关系与示例 1 保持一致：
+    **示例**：`shmem_wait_until` 与 `shmem_get` 的切块数量，以及切块后 `tile_op` 之间的依赖关系与前述示例保持一致：
 
-- **切块配置**：`shmem_wait_until` 与 `shmem_get` 切块数量，以及依赖关系沿用示例 1 的对应规则；
-- **执行逻辑**：`tile_shmem_get0` 在 `tile_shmem_wait_until0` 和 `tile_shmem_wait_until1` 执行完成后执行，读取 [33, 64] 大小的数据；
-- **问题说明**：实际 `tile_shmem_wait_until0` 和 `tile_shmem_wait_until1` 等待的信号量对应的数据区域大小为 [32, 64]，信号量标识的数据量与实际读取数据量不匹配，不符合语义，可能引起精度问题。
+    - **切块配置**：`shmem_wait_until` 与 `shmem_get` 切块数量，以及依赖关系沿用示例 1 的对应规则；
+    - **执行逻辑**：`tile_shmem_get0` 在 `tile_shmem_wait_until0` 和 `tile_shmem_wait_until1` 执行完成后执行，读取 [33, 64] 大小的数据；
+    - **问题说明**：实际 `tile_shmem_wait_until0` 和 `tile_shmem_wait_until1` 等待的信号量对应的数据区域大小为 [32, 64]，信号量标识的数据量与实际读取数据量不匹配，不符合语义，可能引起精度问题。

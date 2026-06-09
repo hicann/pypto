@@ -2,8 +2,9 @@
 
 ## 产品支持情况
 
-- Atlas A3 推理系列产品：支持
-- Atlas A2 推理系列产品：支持
+- Ascend 950PR
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 功能说明
 
@@ -40,9 +41,9 @@ shmem_view(
 
 ## 调用示例
 
-- 示例 1：从  shared memory tensor 的提取一个部分视图，该部分视图的 shape 为 [64, 64]，offset 为 [0, 1]，实际获取的数据有效大小为 [64, 32]。
+- 示例：从 shared memory tensor 的提取一个部分视图，该部分视图的 shape 为 [64, 64]，offset 为 [0, 0]，实际获取的数据有效大小为 [64, 32]。
 
     ```python
     x = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
-    y = pypto.distributed.shmem_view(src=x , shape=[64, 64], offsets=[0, 1], valid_shape=[64, 32])
+    y = pypto.distributed.shmem_view(src=x , shape=[64, 64], offsets=[0, 0], valid_shape=[64, 32])
     ```

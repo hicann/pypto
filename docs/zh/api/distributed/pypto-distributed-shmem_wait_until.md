@@ -2,8 +2,9 @@
 
 ## 产品支持情况
 
-- Atlas A3 推理系列产品：支持
-- Atlas A2 推理系列产品：支持
+- Ascend 950PR
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 功能说明
 
@@ -50,9 +51,10 @@ shmem_wait_until(
 
 ### TileShape 设置示例
 
-说明：调用 shmem_wait_until 前，应通过set_vec_tile_shapes设置TileShape。TileShape 维度应和参数 shape 保持一致。
+> [!NOTE]说明
+> 调用 shmem_wait_until 前，应通过set_vec_tile_shapes设置TileShape。TileShape 维度应和参数 shape 保持一致。
 
-- 示例 1：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
+- 示例：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 
     ```python
     pypto.set_vec_tile_shapes(4, 8)
@@ -60,7 +62,7 @@ shmem_wait_until(
 
 ### 接口调用示例
 
-- 示例 1：当前 pe = 1 在给定的 pe = 1 的 shared memory tensor 全部视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，不重置该视图的值。注意，shmem_signal 和 shmem_wait_until必须配合使用，且设置的切块大小保持一致。
+- 示例：当前 pe = 1 在给定的 pe = 1 的 shared memory tensor 全部视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，不重置该视图的值。注意，shmem_signal 和 shmem_wait_until必须配合使用，且设置的切块大小保持一致。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -69,20 +71,23 @@ shmem_wait_until(
         src=shmem_tensor,
         src_pe=1,
         signal=2,
+        shape=None,
+        offsets=None,
         target_pe=1,
         sig_op=pypto.AtomicType.ADD,
-        pred=predToken,
     )
     wait_until_out = pypto.distributed.shmem_wait_until(
         src=shmem_tensor,
         src_pe=1,
         cmp_value=4,
+        shape=None,
+        offsets=None,
         clear_signal=False,
         pred=[signal_out],
     )
     ```
 
-- 示例 2：当前 pe = 1 在给定的 pe = 1 的 shared memory tensor 部分视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，不重置该视图的值。
+- 示例：当前 pe = 1 在给定的 pe = 1 的 shared memory tensor 部分视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，不重置该视图的值。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -95,7 +100,6 @@ shmem_wait_until(
         offsets=[0, 0],
         target_pe=1,
         sig_op=pypto.AtomicType.ADD,
-        pred=predToken,
     )
     wait_until_out = pypto.distributed.shmem_wait_until(
         src=shmem_tensor,
@@ -109,7 +113,7 @@ shmem_wait_until(
     )
     ```
 
-- 示例 3：当前 pe = 5 在给定的 pe = 3 的 shared memory tensor 部分视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，该视图的值重置为0。
+- 示例：当前 pe = 5 在给定的 pe = 3 的 shared memory tensor 部分视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，该视图的值重置为0。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -122,7 +126,6 @@ shmem_wait_until(
         offsets=[0, 1],
         target_pe=5,
         sig_op=pypto.AtomicType.SET,
-        pred=predToken,
     )
     wait_until_out = pypto.distributed.shmem_wait_until(
         src=shmem_tensor,

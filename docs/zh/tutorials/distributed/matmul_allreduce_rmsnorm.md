@@ -14,7 +14,7 @@ $$
 PreNorm(x) = x + norm(MHA(x))
 $$
 
-RMS Norm 由于其计算简单，计算效率更高，且保持了 LayerNorm 的大部分优势如平移不变性、数值稳定性，作为 PerNorm 中的归一化层在 Qwen3/DeepSeek 等大模型架构中被广泛使用。其计算如下：
+RMS Norm 由于其计算简单，计算效率更高，且保持了 LayerNorm 的大部分优势如平移不变性、数值稳定性，作为 PreNorm 中的归一化层在 Qwen3/DeepSeek 等大模型架构中被广泛使用。其计算如下：
 
 $$
 RMSNorm(x)=\frac{x}{\sqrt{\frac{1}{n} \sum_{i=1}^{n} x_i^2 + \epsilon}} \cdot \gamma + \beta
@@ -24,7 +24,7 @@ $$
 
 ## 开发介绍
 
-本文以每张卡上的数据类型为 bfloat16，每个输入左矩阵为 $BS \times D$，权重矩阵为 $H \times D$，首先给出整体的代码实现：
+本文以每张卡上的数据类型为 bfloat16，每个输入左矩阵为 $BS \times D$，权重矩阵存储形式为 $D \times H$（计算时通过 `b_trans=True` 转置为 $H \times D$），首先给出整体的代码实现：
 
 ```python
 @pypto.frontend.jit()
@@ -52,7 +52,7 @@ def matmul_allreduce_add_rmsnorm_kernel(
     bias_2d = pypto.reshape(bias, [1, hidden_size], inplace=True)
 
     for bs_idx in pypto.loop(bs_loop, name="LOOP_MM_ALLREDUCE_ADD_RMSNORM", idx_name="bs_idx"):
-        # 1. create shmem tesnor
+        # 1. create shmem tensor
         shmem_shape = [view_row_shape, hidden_size]
         shmem_tensor = pypto.distributed.create_shmem_tensor(
             group_name, world_size, pypto.DT_BF16, shmem_shape)
@@ -142,7 +142,7 @@ def matmul_allreduce_add_rmsnorm_kernel(
 3. 将该中间结果广播给通信域中的其他卡，并通过 AtomicAdd 操作完成规约和的计算；
 4. 通过阻塞等信号完成获取规约和的结果；
 5. 从原始输入的残差连接项对应的矩阵中切分出一块 $8 \times H$ 的切块矩阵；
-6. 将该矩阵域规约和的结果相加，得到残差连接后的结果；
+6. 将该矩阵与规约和的结果相加，得到残差连接后的结果；
 7. 计算上述结果的 RMS Norm。
 
 ## MatmulAllReduce 卡间通信
@@ -162,14 +162,14 @@ def matmul_allreduce_add_rmsnorm_kernel(
 
 ```python
 shmem_tensor = pypto.distributed.create_shmem_tensor(
-            group_name, world_size, pypto.DT_FP32, shmem_shape)
+            group_name, world_size, pypto.DT_BF16, shmem_shape)
 ```
 
 上述代码创建了一个对应通信域名称为 `group_name`，通信域中进程数为 `world_size` 的通信域，通信域的数据缓冲区大小与 `shmem_shape` 一致，数据类型为 DT_BF16。需要注意，由于在每个进程上都会执行上述代码，因此每个进程都具备一片上述的数据缓冲区作为本进程对应通信域下的数据缓冲区作为共享内存。返回结果 `shmem_tensor` 中既包含了数据缓冲区，也绑定了该数据缓冲区对应的信号缓冲区。
 
 为了保证每个切片间互不干扰，代码实现首先通过 `shmem_clear_data`/`shmem_clear_signal` 将当前切块对应的共享数据/信号缓冲区的内存数据置为 0，并通过 `shmem_barrier_all` 等待共享信号缓冲区以及信号区的置 0 操作全部完成。
 
-随后通过 matmul 算子将做切块矩阵域权重矩阵做矩阵乘法计算，由于权重矩阵的形状大小为 $D \times H$，而切块矩阵的形状大小为 $8 \times H$，因此权重矩阵需要进行转置变为 $H \times D$ 后进行计算，在代码实现中通过 `b_trans=True` 进行配置。并且在矩阵乘法中通过指定输出类型为 DT_BF16 保证其与数据缓冲区的大小一致。
+随后通过 matmul 算子对切块矩阵与权重矩阵做矩阵乘法计算，由于权重矩阵的形状大小为 $D \times H$，而切块矩阵的形状大小为 $8 \times H$，因此权重矩阵需要进行转置变为 $H \times D$ 后进行计算，在代码实现中通过 `b_trans=True` 进行配置。并且在矩阵乘法中通过指定输出类型为 DT_BF16 保证其与数据缓冲区的大小一致。
 
 矩阵乘法完成后，代码实现通过广播的方式将矩阵乘法结果告知通信域中所有 rank 并写入其对应的数据缓冲区中。
 
@@ -187,7 +187,7 @@ all_reduce_out = pypto.experimental.shmem_load(
 )
 ```
 
-通过 `dyn_idx` 对通信域中所有其他 rank 进行遍历，并将结果通过 `shmem_put` 写入该 rank 的数据缓冲区中，写入时的偏移为 [0， 0] (该场景下数据缓冲区的大小为三维，形状为 [8, H])。并通过 `AtomicType.ADD` 指定写入模式为在原内存的值上做累加。由于远端 rank 需要知道该写操作是否完成，因此在 `shmem_put` 操作后需要通过 `shmem_signal` 告知远端 rank 该操作已完成，该方法的参数与 `shmem_put` 类似，不做赘述，需要注意的时该方法的参数 `1` 为写入远端 rank 信号区内存的值。
+通过 `dyn_idx` 对通信域中所有其他 rank 进行遍历，并将结果通过 `shmem_put` 写入该 rank 的数据缓冲区中，写入时的偏移为 [0， 0] (该场景下数据缓冲区的大小为三维，形状为 [8, H])。并通过 `AtomicType.ADD` 指定写入模式为在原内存的值上做累加。由于远端 rank 需要知道该写操作是否完成，因此在 `shmem_put` 操作后需要通过 `shmem_signal` 告知远端 rank 该操作已完成，该方法的参数与 `shmem_put` 类似，不做赘述。注意，该方法的参数 `1` 为写入远端 rank 信号区内存的值。
 
 广播完成后，当前进程所在的 rank 需要从自身的数据缓冲区中获取最终结果，而在这之前必须保证所有远端 rank 的内存写入操作完成，因此需要通过 `shmem_wait_until` 操作阻塞流程，直至所有内存写入完成后才进行后续操作。由于在上述 `shmem_signal` 过程中代码实现会将远端 rank 所在的信号区内存值加 1，当所有写入完成时最终信号区的值会为通信域中的进程数，即通信域大小。因此 `shmem_wait_until` 中通过指定比较方式为 `pypto.OpType.EQ`，比较值为 `world_size` 确保所有 rank 广播操作完成。
 

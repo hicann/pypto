@@ -2,8 +2,9 @@
 
 ## 产品支持情况
 
-- Atlas A3 推理系列产品：支持
-- Atlas A2 推理系列产品：支持
+- Ascend 950PR
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 功能说明
 
@@ -24,7 +25,7 @@ shmem_clear_signal(
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | src   | 输入      |  要清除的 shared memory tensor。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 |
 
 ## 返回值说明
 
@@ -36,12 +37,11 @@ shmem_clear_signal(
 
 ## 调用示例
 
-- 示例1：创建了一个 shape = [128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的信号值。
+- 示例：创建了一个 shape = [128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的信号值。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])
     data_clear_dummy = pypto.distributed.shmem_clear_signal(
         src=shmem_tensor,
-        pred=predToken,
     )
     ```

@@ -55,6 +55,10 @@ constexpr int32_t SHMEM_SIGNAL_STRIDE = 8;
 constexpr int32_t MAX_SHMEM_TILE_DIMS = 4;
 constexpr int32_t MAX_GROUP_NAME_LENGTH = 128;
 constexpr uint64_t MOE_INPUT_DIM = 2;
+constexpr int32_t MOE_HIDDEN_SIZE = 5120;
+constexpr int32_t MOE_BATCH_SIZE = 8;
+constexpr int32_t MOE_TOPK = 8;
+constexpr int32_t MOE_ASSIST_INFO_COL = 3;
 enum class TileIndex : size_t { HEAD_SHAPE, HEAD_NUM, TAIL_SHAPE };
 
 enum class AllReduceType {
@@ -222,7 +226,7 @@ inline std::tuple<int64_t, int64_t, std::vector<int64_t>, std::vector<int64_t>, 
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() >= MIN_TILE_SHAPE_DIM)
         << "Invalid dimensional: "
         << " tileShape dim must >= " << MIN_TILE_SHAPE_DIM << ", but got dimensional=" << tileShape.size();
-    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() == tileShape.size() + 1)
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() == (tileShape.size() + 1))
         << "Invalid dimensional: "
         << " shape parameter dim must = tileShape dim, but got shape parameter dim=" << dataShape.size() - 1
         << ", tileShape dim=" << tileShape.size();

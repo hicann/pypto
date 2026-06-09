@@ -2,8 +2,9 @@
 
 ## 产品支持情况
 
-- Atlas A3 推理系列产品：支持
-- Atlas A2 推理系列产品：支持
+- Ascend 950PR
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 功能说明
 
@@ -46,9 +47,10 @@ shmem_get(
 
 ### TileShape 设置示例
 
-说明：调用该接口前，应通过 set_vec_tile_shapes 设置 TileShape。TileShape 维度应和 src 一致。
+> [!NOTE]说明
+> 调用该接口前，应通过 set_vec_tile_shapes 设置 TileShape。TileShape 维度应和 src 一致。
 
-- 示例 1：输入的 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
+- 示例：输入的 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 
     ```python
     pypto.set_vec_tile_shapes(4, 8)
@@ -56,7 +58,7 @@ shmem_get(
 
 ### 接口调用示例
 
-- 示例 1：从  pe = 1 的 shared memory tensor 的全部视图中获取数据并输出该数据，对应的输出数据 shape 为 [128, 256]。
+- 示例：从  pe = 1 的 shared memory tensor 的全部视图中获取数据并输出该数据，对应的输出数据 shape 为 [128, 256]。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])
@@ -64,11 +66,10 @@ shmem_get(
     shmem_get_out = pypto.distributed.shmem_get(
         src=shmem_tensor,
         src_pe=1,
-        pred=predToken,
     )
     ```
 
-- 示例 2：从  pe = 1 的 shared memory tensor 的部分视图中获取数据并输出该数据。该部分视图的 shape 为 [128, 128]，offset 为 [0, 0]，对应的输出数据 shape 为 [128, 128]，实际获取的数据有效大小为 [128, 64]。
+- 示例：从  pe = 1 的 shared memory tensor 的部分视图中获取数据并输出该数据。该部分视图的 shape 为 [128, 128]，offset 为 [0, 0]，对应的输出数据 shape 为 [128, 128]，实际获取的数据有效大小为 [128, 64]。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])
@@ -79,6 +80,5 @@ shmem_get(
         shape=[128, 128],
         offsets=[0, 0],
         valid_shape=[128, 64],
-        pred=predToken,
     )
     ```

@@ -1,6 +1,6 @@
 # 使用 Shmem API 实现 Combine Kernel
 
-## 1. Combine 功能概述
+## Combine 功能概述
 
 Combine 是 MoE（Mixture of Experts）分布式训练中的关键算子，与 Dispatch 算子形成逆操作关系：
 
@@ -9,7 +9,7 @@ Combine 是 MoE（Mixture of Experts）分布式训练中的关键算子，与 D
 
 Combine 的核心任务是实现 token 的逆向路由和加权聚合。
 
-## 2. Combine Kernel 原型
+## Combine Kernel 原型
 
 ```python
 def moe_distributed_combine_kernel(
@@ -34,9 +34,9 @@ def moe_distributed_combine_kernel(
     return kernel
 ```
 
-## 3. 参数说明
+## 参数说明
 
-### 3.1 标量参数
+### 标量参数
 
 | 参数名 | 类型 | 说明 |
 |--------|------|------|
@@ -47,23 +47,23 @@ def moe_distributed_combine_kernel(
 | `ep_world_size` | int | Expert parallel 的 rank 数，支持 2、4、8 或 16 |
 | `group_name` | str | 通信域名称，长度 1-128 |
 
-### 3.2 输入 Tensor
+### 输入 Tensor
 
 | 参数名 | Shape | Dtype | 说明 |
 |--------|-------|-------|------|
-| `expand_x` | `[row, hidden_size]` | DT_BF16 | 专家处理后的 token，row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)，其中有效 token 数为 `recv_counts[0]` |
-| `assist_info_for_combine` | `[row, 3]`` | DT_INT32 | 辅助信息，每行包含 [rank_id, token_id, k_offset]，用于标识 token 的原始位置 |
+| `expand_x` | `[row, hidden_size]` | DT_BF16 | 专家处理后的 token，`row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)`，有效 token 数为 `recv_counts[0]` |
+| `assist_info_for_combine` | `[row, 3]` | DT_INT32 | 辅助信息，每行包含 [rank_id, token_id, k_offset]，用于标识 token 的原始位置 |
 | `recv_counts` | `[1]` | DT_INT32 | 当前 rank 接收到的 token 总数，也就是 `expand_x` 里的有效 token 数 |
 | `expert_scales` | `[batch_size, topk]` | DT_FP32 | 每个 token 对应 topk 个专家的权重，用于加权合并 |
 | `x_active_mask` | `[batch_size]` | DT_INT32 | 标识哪些 token 为活跃状态，值为 1 表示活跃，0 表示不活跃，注意：1 必须排在 0 之前，即活跃 token 必须连续排列在前部，例如 `{1, 1, 0}` 为合法输入，而 `{1, 0, 1}` 为非法输入 |
 
-### 3.3 输出 Tensor
+### 输出 Tensor
 
 | 参数名 | Shape | Dtype | 说明 |
 |--------|-------|-------|------|
 | `out` | `[batch_size, hidden_size]` | DT_BF16 | 合并后的输出，每个 token 是其 topk 个专家输出的加权和 |
 
-## 4. 计算逻辑伪代码
+## 计算逻辑伪代码
 
 ```python
 def combine_logic(expand_x, assist_info_for_combine, recv_counts, expert_scales, x_active_mask):
@@ -101,9 +101,9 @@ def combine_logic(expand_x, assist_info_for_combine, recv_counts, expert_scales,
     return out
 ```
 
-## 5. 计算流程详解
+## 计算流程详解
 
-### 5.1 发送阶段（Send Phase）
+### 发送阶段（Send Phase）
 
 每个 rank 将自己接收到的 token 发送回原始 rank：
 
@@ -143,7 +143,7 @@ for row_index in range(recv_counts_scalar):
 - 使用 `shmem_signal` 发送信号，信号值累加（ADD 操作）
 - 信号位置 `[token_id, 0]` 对应每个 token 的信号计数器
 
-### 5.2 接收阶段（Receive Phase）
+### 接收阶段（Receive Phase）
 
 每个 rank 等待并接收所有发送给它的活跃 token：
 
@@ -184,7 +184,7 @@ for token_id in pypto.loop(batch_size, name='MOE_DISTRIBUTED_RECEIVE', idx_name=
 - 使用 `pypto.experimental.shmem_load` 一次性读取所有 topk 个专家的输出，减少任务下发次数
 - `shmem_load` 返回的 Tensor 形状为 `[topk, hidden_size]`
 
-### 5.3 合并阶段（Combine Phase）
+### 合并阶段（Combine Phase）
 
 使用 expert_scales 进行加权合并（仅对活跃 token）：
 
@@ -217,7 +217,7 @@ if x_active_mask[token_id] == 1:
 - `mul` 结果 shape: `[topk, hidden_size]`，`sum` 后 shape: `[1, hidden_size]`
 - 仅对 `x_active_mask == 1` 的活跃 token 执行合并计算
 
-## 6. 完整 Kernel 代码
+## 完整 Kernel 代码
 
 ```python
 def moe_distributed_combine_kernel(
@@ -316,7 +316,7 @@ def moe_distributed_combine_kernel(
     return kernel
 ```
 
-## 7. 总结
+## 总结
 
 Combine kernel 通过 Shmem API 实现了高效的跨 rank token 收集和合并：
 

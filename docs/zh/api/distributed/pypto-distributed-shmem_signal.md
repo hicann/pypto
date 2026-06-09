@@ -2,8 +2,9 @@
 
 ## 产品支持情况
 
-- Atlas A3 推理系列产品：支持
-- Atlas A2 推理系列产品：支持
+- Ascend 950PR
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 功能说明
 
@@ -50,9 +51,10 @@ shmem_signal(
 
 ### TileShape 设置示例
 
-说明：调用 shmem_signal 前，应通过 set_vec_tile_shapes 设置 TileShape， TileShape 维度应和参数 shape 保持一致。
+> [!NOTE]说明
+> 调用 shmem_signal 前，应通过 set_vec_tile_shapes 设置 TileShape， TileShape 维度应和参数 shape 保持一致。
 
-- 示例1：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
+- 示例：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
 
     ```python
     pypto.set_vec_tile_shapes(4, 8)
@@ -60,7 +62,7 @@ shmem_signal(
 
 ### 接口调用示例
 
-- 示例 1：将信号值 2 写入 pe = 1 的 shared memory tensor 的全部视图中，并与该视图原本的值进行累加操作，从而通知 pe = 1。
+- 示例：将信号值 2 写入 pe = 1 的 shared memory tensor 的全部视图中，并与该视图原本的值进行累加操作，从而通知 pe = 1。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -71,11 +73,10 @@ shmem_signal(
         signal=2,
         target_pe=1,
         sig_op=pypto.AtomicType.ADD,
-        pred=predToken,
     )
     ```
 
-- 示例 2：将信号值 2 写入 pe = 1 的 shared memory tensor 的部分视图中，从而通知 pe = 1。该部分视图的 shape 为 [64, 64]，offset 为 [0, 0]， 并与该视图原本的值进行累加操作。
+- 示例：将信号值 2 写入 pe = 1 的 shared memory tensor 的部分视图中，从而通知 pe = 1。该部分视图的 shape 为 [64, 64]，offset 为 [0, 0]， 并与该视图原本的值进行累加操作。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -88,11 +89,10 @@ shmem_signal(
         offsets=[0, 0],
         target_pe=1,
         sig_op=pypto.AtomicType.ADD,
-        pred=predToken,
     )
     ```
 
-- 示例 3：将信号值 4 写入 pe = 3 的 shared memory tensor 的部分视图中，从而通知 pe = 5。该部分视图的 shape 为 [64, 64]，offset 为 [0, 1]， 并覆盖该视图原本的值。
+- 示例：将信号值 4 写入 pe = 3 的 shared memory tensor 的部分视图中，从而通知 pe = 5。该部分视图的 shape 为 [64, 64]，offset 为 [0, 1]， 并覆盖该视图原本的值。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -105,11 +105,10 @@ shmem_signal(
         offsets=[0, 1],
         target_pe=5,
         sig_op=pypto.AtomicType.SET,
-        pred=predToken,
     )
     ```
 
-- 示例 4：将信号值 4 写入 pe = 3 的 shared memory tensor 的部分视图中，从而通知所有 pe。该部分视图的 shape 为 [64, 64]，offset 为 [0, 1]， 并覆盖该视图原本的值。
+- 示例：将信号值 4 写入 pe = 3 的 shared memory tensor 的部分视图中，从而通知所有 pe。该部分视图的 shape 为 [64, 64]，offset 为 [0, 1]， 并覆盖该视图原本的值。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -121,6 +120,5 @@ shmem_signal(
         shape=[64, 64],
         offsets=[0, 1],
         target_pe=-1,
-        pred=predToken,
     )
     ```

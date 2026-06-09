@@ -63,9 +63,16 @@ def shmem_store(
     )
     """
     if pred is None:
-        dummy = Tensor([1, 1], DataType.DT_INT32).base()
+        dummy = pypto_impl.Tensor(DataType.DT_INT32, [1, 1], "", pypto_impl.TileOpFormat.TILEOP_ND)
     else:
-        dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
+        src_id = src.Id()
+        valid_pred = [p for p in pred if p.Id() != src_id]
+        if len(valid_pred) == 0:
+            dummy = pypto_impl.Tensor(DataType.DT_INT32, [1, 1], "", pypto_impl.TileOpFormat.TILEOP_ND)
+        elif len(valid_pred) == 1:
+            dummy = valid_pred[0]
+        else:
+            dummy = pypto_impl.Nop(valid_pred)
     dst_tile = pypto_impl.ShmemView(dst, src.shape, offsets)
     return pypto_impl.ShmemStore(src, dst_tile, dst_pe, put_op, dummy)
 
