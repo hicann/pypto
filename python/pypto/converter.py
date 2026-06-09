@@ -38,19 +38,17 @@ def _count_calls(func):
 def _check_inner_shape(tensor, dtype, is_nz):
     if tensor.dim() <= 0:
         return
-    is_b4 = dtype == DataType.DT_FP4_E2M1X2 or dtype == DataType.DT_FP4_E1M2X2
+    fp4_types = [DataType.DT_FP4_E2M1X2, DataType.DT_FP4_E1M2X2, DataType.DT_FP4_E2M1, DataType.DT_FP4_E1M2]
+    is_b4 = dtype in fp4_types
     shape_back = tensor.shape[-1]
     if shape_back == -1:
         return
     if is_nz:
-        block_align_bytes = 64 if is_b4 else 32
+        block_align_bytes = 32
         total_bytes = shape_back if is_b4 else shape_back * tensor.element_size()
         if total_bytes % block_align_bytes != 0:
             raise FeError(
-                RuntimeError("NZ format inner axis must be aligned to 32B(4bit dtype must be aligned to 64)."))
-    elif is_b4:
-        if shape_back % 2 != 0:
-            raise FeError(RuntimeError("ND format and 4bit dtype inner axis must be even number."))
+                RuntimeError("NZ format inner axis must be aligned to 32B."))
 
 
 @_count_calls

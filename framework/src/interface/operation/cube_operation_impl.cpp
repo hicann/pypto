@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@ namespace tile_fwk {
 namespace Matrix {
 const float EPSILON = 1e-6f;
 const uint64_t VECTOR_TILE_SHAPE = 128;
+static const std::vector<DataType> FP4_TYPES = {
+ 	    DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2, DataType::DT_FP4_E2M1, DataType::DT_FP4_E1M2};
 
 template <typename T>
 auto CeilAlign(T num_1, T num_2) -> T
@@ -53,7 +55,7 @@ inline bool CheckValidShape(const LogicalTensorPtr& tensorPtr)
 
 inline size_t GetAlignSize(DataType dataType)
 {
-    bool isB4 = dataType == DataType::DT_FP4_E2M1X2 || dataType == DataType::DT_FP4_E1M2X2;
+    bool isB4 = std::find(FP4_TYPES.begin(), FP4_TYPES.end(), dataType) != FP4_TYPES.end();
     return isB4 ? ALIGN_SIZE_64 : ALIGN_SIZE_32;
 }
 
@@ -260,7 +262,7 @@ void SetTensorGraphNodes(
     }
 }
 
-Status CheckOperandShape(const Tensor& operand1, const Tensor& operand2)
+Status CheckOperandShape(const Tensor& operand1, const Tensor& operand2, const MatmulAttrParam& attrParam)
 {
     // 检查 shape 维度一致性
     const Shape shape1 = operand1.GetShape();
@@ -312,6 +314,14 @@ Status CheckOperandShape(const Tensor& operand1, const Tensor& operand2)
     for (size_t i = 0; i < operand2Dim; ++i) {
         ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, shape2[i] > 0)
             << "operand2 dim[" << i << "] = " << shape2[i] << ", must be > 0";
+    }
+
+    // 检查FP4输入场景A矩阵K轴是否/2
+    if (operand1.GetDataType() == DataType::DT_FP4_E2M1 || operand1.GetDataType() == DataType::DT_FP4_E1M2) {
+        const int64_t operand1DimK = attrParam.transA ? operand1.GetShape()[0] : operand1.GetShape()[1];
+        const int64_t operand2DimK = attrParam.transB ? operand2.GetShape()[1] : operand2.GetShape()[0];
+        ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, operand1DimK == operand2DimK)
+            << "when the input is FP4E2M1/E1M2, the K-axis of the A matrix needs to be divided by 2.";
     }
 
     MATMUL_LOGD("CheckOperandShape: PASS");
@@ -397,7 +407,7 @@ void CheckOperandShapeBound(const Tensor& operand)
             << "Current outer axis: " << operand.GetShape()[operand.GetShape().size() - SHAPE_DIM2]
             << ", when input is ND format, outer axis must be less than 2^31 - 1";
 
-        if (operand.GetDataType() == DataType::DT_FP4_E2M1X2 || operand.GetDataType() == DataType::DT_FP4_E1M2X2) {
+        if (operand.GetDataType() == DataType::DT_FP4_E2M1 || operand.GetDataType() == DataType::DT_FP4_E1M2) {
             ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, (operand.GetShape().back() & 1) == 0)
                 << "Current inner axis: " << operand.GetShape().back()
                 << ", when input is ND format and 4bit dtype, inner axis must be even number";
@@ -533,25 +543,47 @@ void CheckBiasParam(const Tensor& operand2, bool transB, const MatmulExtendParam
 
 void CheckA5BiasParam(const Tensor& operand2, bool transB, const MatmulExtendParam& param = {})
 {
-    DataType inDtype = operand2.GetDataType();
     if (param.biasTensor.GetStorage() == nullptr) {
         return;
     }
-    auto biasDtype = param.biasTensor.GetDataType();
-    std::vector<DataType> floatInDtype = {DataType::DT_FP8E5M2,    DataType::DT_FP8E4M3, DataType::DT_FP4_E2M1X2,
-                                          DataType::DT_FP4_E1M2X2, DataType::DT_FP16,    DataType::DT_BF16,
-                                          DataType::DT_FP32};
-    std::vector<DataType> floatBiasDtype = {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32};
-    bool isfloatInDtype = std::find(floatInDtype.begin(), floatInDtype.end(), inDtype) != floatInDtype.end();
-    bool isfloatBiasDtype = std::find(floatBiasDtype.begin(), floatBiasDtype.end(), biasDtype) != floatBiasDtype.end();
-    if (isfloatInDtype) {
-        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, isfloatBiasDtype)
-            << "When input tensor is DT_FP8E5M2/E4M3 or DT_FP4_E2M1X2/E1M2X2 or DT_FP16 or DT_BF16 or DT_FP32, "
-            << "bias must be DT_FP16 or DT_BF16 or DT_FP32.";
-    } else if (inDtype == DataType::DT_INT8) {
-        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, param.biasTensor.GetDataType() == DataType::DT_INT32)
-            << "When input tensor is DT_INT8, bias must be DT_INT32.";
+    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
+        << "Current check only supports bias validation for the A5 platform.";
+
+    DataType inDtype = operand2.GetDataType();
+    static const std::unordered_map<DataType, std::unordered_set<DataType>> InputToBiasTypeMapA5 = {
+        {DataType::DT_FP16, {DataType::DT_FP16, DataType::DT_FP32}},
+        {DataType::DT_BF16, {DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_FP8E5M2, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_FP8E4M3, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_FP4_E2M1X2, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_FP4_E1M2X2, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_FP4_E2M1, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_FP4_E1M2, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_HF8, {DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32}},
+        {DataType::DT_INT8, {DataType::DT_INT32}},
+        {DataType::DT_FP32, {DataType::DT_FP32}},
+    };
+    auto it = InputToBiasTypeMapA5.find(inDtype);
+    if (it == InputToBiasTypeMapA5.end()) {
+        ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, false)
+            << "Unsupported input dtype " << DataType2String(inDtype) << " for matmul.";
+        return;
     }
+    auto getSupportedBiasTypesStr = [&]() -> std::string {
+        std::string result;
+        for (DataType dt : it->second) {
+            if (!result.empty())
+                result += ", ";
+            result += DataType2String(dt);
+        }
+        return result;
+    };
+    auto biasDtype = param.biasTensor.GetDataType();
+    ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, it->second.count(biasDtype) > 0)
+        << "Input operand dtype is " << DataType2String(inDtype)
+        << ", which only supports bias dtype: " << getSupportedBiasTypesStr() << ". But got bias dtype "
+        << DataType2String(biasDtype) << ".";
+
     CheckBiasShapeParam(operand2, transB, param);
 }
 
@@ -661,7 +693,7 @@ void CheckOperandDtype(DataType outType, const Tensor& operand1, const Tensor& o
     const DataType operand1Dtype = operand1.GetDataType();
     const DataType operand2Dtype = operand2.GetDataType();
     const bool isOperand1Fp8 = (operand1Dtype == DataType::DT_FP8E5M2 || operand1Dtype == DataType::DT_FP8E4M3);
-    const bool isOperand1Fp4 = (operand1Dtype == DataType::DT_FP4_E2M1X2 || operand1Dtype == DataType::DT_FP4_E1M2X2);
+    const bool isOperand1Fp4 = std::find(FP4_TYPES.begin(), FP4_TYPES.end(), operand1Dtype) != FP4_TYPES.end();
     ASSERT(
         MatmulErrorCode::ERR_PARAM_MISMATCH,
         !isOperand1Fp8 || (operand2Dtype == DataType::DT_FP8E5M2 || operand2Dtype == DataType::DT_FP8E4M3))
@@ -672,7 +704,8 @@ void CheckOperandDtype(DataType outType, const Tensor& operand1, const Tensor& o
     ASSERT(
         MatmulErrorCode::ERR_PARAM_INVALID, (isOperand1Fp4 == false && isOperand1Fp8 == false) ||
                                                 (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510))
-        << "When operand1 data type is DT_FP8E5M2/E4M3 or FP4_E2M1X2/E1M2X2, only DAV_3510 architecture is supported.";
+        << "When operand1 data type is DT_FP8E5M2/E4M3 or FP4_E2M1X2/E1M2X2 or FP4_E2M1/E1M2, only DAV_3510 "
+           "architecture is supported.";
 
     ASSERT(
         MatmulErrorCode::ERR_PARAM_INVALID,
@@ -706,7 +739,7 @@ Status CheckMatmulOperands(
     // dtype valid check
     CheckOperandDtype(outType, operand1, operand2);
     // shape valid check
-    CheckOperandShape(operand1, operand2);
+    CheckOperandShape(operand1, operand2, attrParam);
     // GM Acc valid check
     CheckGmAccumulationParam(outType, operand1, operand2, attrParam, param);
     // tile valid check
@@ -802,15 +835,17 @@ Status CheckMXMatmulOperands(
                                                                 DataType::DT_FP4_E2M1X2, DataType::DT_FP4_E1M2X2,
                                                                 DataType::DT_FP4_E2M1,   DataType::DT_FP4_E1M2};
     ASSERT(MatmulErrorCode::ERR_PARAM_UNSUPPORTED, supportedTypes.find(inDType) != supportedTypes.end())
-        << "Unsupported input data type. Only support DT_FP8E4M3, DT_FP8E5M2, DT_FP4_E2M1X2, DT_FP4_E1M2X2.";
+        << "Unsupported input data type. Only support DT_FP8E4M3, DT_FP8E5M2, DT_FP4_E2M1X2, DT_FP4_E1M2X2, "
+           "DT_FP4_E2M1, DT_FP4_E1M2";
     auto cubeTile = TileShape::Current().GetCubeTile();
     const int64_t kL0 = cubeTile.k[0];
     ASSERT(MatmulErrorCode::ERR_CONFIG_ALIGNMENT, kL0 % ALIGN_SIZE_64 == 0)
         << "Current length of kL0: " << kL0 << ", the length of kL0 for mx matmul must be aligned to 64 elements";
-    CheckOperandShape(aScaleTensor, bScaleTensor);
+    CheckOperandShape(aScaleTensor, bScaleTensor, attrParam);
     CheckMXMatmulShape(aTensor, aScaleTensor, bTensor, bScaleTensor, attrParam);
     return SUCCESS;
 }
+
 void SetMatmulTileInfo(
     const TileShape& tileShape, const MatmulAttrParam& attrParam, const MatmulGraphNodes& tensorGraphNodes,
     MatmulTileInfo& tileInfo)

@@ -47,6 +47,8 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 |:------|:------|:----------|:--------|:--------|:------------|:---------|
 | DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_FP16，DT_BF16，DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
 | DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_FP16，DT_BF16，DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
+| DT_FP4_E2M1 | DT_FP4_E2M1 | DT_FP16，DT_BF16，DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
+| DT_FP4_E1M2 | DT_FP4_E1M2 | DT_FP16，DT_BF16，DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16，DT_BF16，DT_FP32 | 仅950PR/DT |
 
 表4： 量化支持的数据类型
 
@@ -54,6 +56,8 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 |:------|:-----|:----------|:----------|
 | DT_FP8E5M2 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 | 仅950PR/DT |
 | DT_FP8E4M3 | DT_FP8E5M2，DT_FP8E4M3 | DT_INT8 | 仅950PR/DT |
+| DT_FP4_E2M1 | DT_FP4_E2M1 | DT_INT8 | 仅950PR/DT |
+| DT_FP4_E1M2 | DT_FP4_E1M2 | DT_INT8 | 仅950PR/DT |
 
 ## 返回值说明
 
@@ -62,6 +66,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 ## 约束说明
 
 - 当前只支持左右矩阵为2/3/4维输入，且scale_a/scale_b均为3维。
+- 当输入为DT_FP4_E2M1/DT_FP4_E1M2量化场景时，需保证内轴为偶数。
 - 调用scaled_mm接口前需要通过pypto.set\_cube\_tile\_shapes设置M、N、K轴上的切分大小。
 - 调用scaled_mm接口的输入为调用pypto.reshape后的NZ格式时，需要调用pypto.set\_matrix\_size接口设置pypto.reshape前的输入到matmul的原始Shape的m,k,n值。
 

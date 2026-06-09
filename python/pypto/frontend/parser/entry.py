@@ -214,7 +214,9 @@ class JitCallableWrapper:
         "torch.uint8": [
             pypto.DataType.DT_HF8,
             pypto.DataType.DT_FP4_E2M1X2,
+            pypto.DataType.DT_FP4_E1M2X2,
             pypto.DataType.DT_FP4_E2M1,
+            pypto.DataType.DT_FP4_E1M2,
         ]
     }
 
