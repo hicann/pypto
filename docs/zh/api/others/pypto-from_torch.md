@@ -23,7 +23,7 @@ from_torch(tensor: torch.Tensor, name: str="", *, dynamic_axis: Optional[List[in
 | tensor         | 输入      | 需要转换为pypto.Tensor的torch.Tensor对象。 |
 | name           | 输入      | pypto.Tensor的名称。默认为空字符串，表示由from_torch自动为其命名。 |
 | dynamic_axis   | 输入      | 要标记为动态的维度索引列表。默认为None，表示不标记任何维度。 |
-| tensor_format  | 输入      | 要指定的pypto.TileOpFormat格式。为None时根据Tensor NPU Fromat 自动推导。 |
+| tensor_format  | 输入      | 要指定的pypto.TileOpFormat格式。为None时根据Tensor NPU Format 自动推导。 |
 | dtype      | 输入      | 要指定的pypto.DataType类型。为None时根据torch.Tensor的dtype自动推导。 |
 
 ## 返回值说明

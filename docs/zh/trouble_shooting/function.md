@@ -486,7 +486,7 @@ program.BeginFunction(funcName, npu::tile_fwk::FunctionType::STATIC,
 
 ```cpp
 // C++ 代码调用 GetAnyConfig
-// 错误示例 - 会导致 "key[xx.no_exist] has been not loaded form tile_fwk_config_schema.json." 错误
+// 错误示例 - 会导致 "key[xx.no_exist] has been not loaded from tile_fwk_config_schema.json." 错误
 auto &cm = ConfigManagerNg::GetInstance();
 auto scope = cm.CurrentScope();
 auto value = AnyCast<int64_t>(scope->GetAnyConfig("xx.no_exist"));
@@ -515,7 +515,7 @@ auto value = AnyCast<int64_t>(scope->GetAnyConfig("pass.pg_parallel_lower_bound"
     "properties": {
         "pg_parallel_lower_bound": {
             "type": "integer",
-            "label": "...",
+            "label": "..."
         }
     }
 }

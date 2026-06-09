@@ -12,7 +12,7 @@
 ## 函数原型
 
 ```python
-cond(scalar: SymInt)
+cond(scalar: SymInt) -> pypto_impl.RecordIfBranch
 ```
 
 ## 参数说明

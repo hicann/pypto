@@ -44,4 +44,5 @@ a = pypto.SymbolicScalar()
 b = pypto.SymbolicScalar(10)
 c = pypto.SymbolicScalar("x")
 d = pypto.SymbolicScalar("x", 10)
+e = pypto.SymbolicScalar(c)
 ```

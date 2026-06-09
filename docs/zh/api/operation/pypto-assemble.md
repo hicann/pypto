@@ -23,9 +23,9 @@ assemble(inputs: List[Tuple[Tensor, List[Union[int, SymbolicScalar]]]], out: Ten
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的数据类型为：PyPto支持的数据类型。 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
-| inputs   | 输入      | 源操和输出偏移组成的Tuple列表。 <br> 单个支持的数据类型为：PyPto支持的数据类型。 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| inputs   | 输入      | 源操作数和输出偏移组成的Tuple列表。 <br> 单个支持的数据类型为：PyPto支持的数据类型。 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
 | offsets | 输入      | 相对于目标输出的偏移。 <br> 需要保证offsets小于out的Shape。          |
-| out     | 输入      | 目的操作数，需要和input的维度数量一致。 <br> 支持的数据类型为：PyPto支持的数据类型。 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
+| out     | 输出      | 目的操作数，需要和input的维度数量一致。 <br> 支持的数据类型为：PyPto支持的数据类型。 <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
 | parallel | 输入      | 是否并行执行。 <br> 默认值为False |
 
 ## 返回值说明

@@ -26,7 +26,7 @@ def softmax(x: torch.Tensor, dynamic: bool = True) -> torch.Tensor:
     if isinstance(x, FakeTensor):
         return torch.zeros(x.shape, dtype=x.dtype, device=f'{x.device}')
     # launch the kernel
-    out = torch.zeros(shape, dtype=x.dtype, device=f'{x.device}')
+    out = torch.zeros(x.shape, dtype=x.dtype, device=f'{x.device}')
     softmax_kernel(x, out)
     return out
 

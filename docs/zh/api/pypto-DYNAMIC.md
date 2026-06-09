@@ -28,7 +28,7 @@
 
 ## 约束说明
 
-1. 动态维度必须应在 JIT 函数的类型注解中使用
+1. 动态维度必须在 JIT 函数的类型注解中使用
 
 ## 调用示例
 
@@ -56,7 +56,7 @@ out1 = torch.randn(2, 128, dtype=torch.float32, device='npu:0')
 result1 = add_bias(x1, bias, out1)  # batch=2
 
 x2 = torch.randn(8, 128, dtype=torch.float32, device='npu:0')
-out2 = torch.randn(2, 128, dtype=torch.float32, device='npu:0')
+out2 = torch.randn(8, 128, dtype=torch.float32, device='npu:0')
 result2 = add_bias(x2, bias, out2)  # batch=8
 ```
 

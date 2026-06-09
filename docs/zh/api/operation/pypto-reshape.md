@@ -65,8 +65,8 @@ z = pypto.add(y, 1.0)
             [4]]
 输出数据z: [[2],
             [3],
-            [3],
-            [4]]
+            [4],
+            [5]]
 ```
 
 示例2：
@@ -75,7 +75,7 @@ z = pypto.add(y, 1.0)
 x = pypto.tensor([2, 2], pypto.DT_FP32)
 # reshape(..., inplace=True) 单独在loop(1)内。loop(1) 可省略
 for _ in pypto.loop(1, name="reshape_inplace", idx_name="tmp_loop"):
-    x_1 = x.reshape(x, [4], inplace=True)
+    x_1 = x.reshape([4], inplace=True)
 for _ in pypto.loop(1, name="loop", idx_name="loop"):
     y = pypto.add(x_1, 1.0)
 ```
