@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import inspect
 import io
 import os
 import sys
@@ -58,7 +59,6 @@ def _run_one_mode(
     case: dict,
     mode: str,
     make_inputs_fn,
-    primary_input_order: list,
     truth_tuple: tuple,
     compare_fn,
 ) -> Dict[str, Any]:
@@ -83,8 +83,16 @@ def _run_one_mode(
 
     try:
         # Build inputs once per mode (shapes/dtypes live in case).
+        # Use inspect.signature to adapt to the wrapper's actual parameters,
+        # avoiding argument-count mismatches for per-module impls (OL50).
         inputs = make_inputs_fn(case)
-        positional = [inputs[name] for name in primary_input_order]
+        sig = inspect.signature(impl_module.host_wrapper)
+        positional = []
+        for name in sig.parameters:
+            if sig.parameters[name].kind.name.startswith("VAR"):
+                continue
+            if name in inputs:
+                positional.append(inputs[name])
 
         # Override run_mode on the impl's JIT wrapper.
         run_mode_map = {"sim": pypto.RunMode.SIM, "npu": pypto.RunMode.NPU}
@@ -131,7 +139,6 @@ def run_modes(
     modes: List[str],
     *,
     make_inputs_fn,
-    primary_input_order: list,
     truth_tuple: tuple,
     compare_fn,
 ) -> Dict[str, Dict[str, Any]]:
@@ -144,7 +151,6 @@ def run_modes(
         out[mode] = _run_one_mode(
             impl_module, case, mode,
             make_inputs_fn=make_inputs_fn,
-            primary_input_order=primary_input_order,
             truth_tuple=truth_tuple,
             compare_fn=compare_fn,
         )
@@ -208,7 +214,6 @@ with:
     per_mode = run_modes(
         impl_module, case, modes,
         make_inputs_fn=make_inputs,
-        primary_input_order=PRIMARY_INPUT_ORDER,
         truth_tuple=truth_tuple,
         compare_fn=_compare,
     )
