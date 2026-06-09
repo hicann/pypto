@@ -57,6 +57,26 @@ def test_ol34_recognizes_shapes_from_run_and_check(tmp_path: Path):
     assert finding.status == "PASS"
 
 
+def test_ol34_named_dim_fail_includes_format_hint(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    spec = """---
+schema_version: 1
+op_name: demo
+supported_dtypes: [bfloat16]
+p0_shapes:
+  - {B: 4, C: 64, H: 56, W: 56}
+tolerance: {'atol': 0.001, 'rtol': 0.001}
+---
+# SPEC
+"""
+    write_file(op_dir / "SPEC.md", spec)
+    finding = run_rule(mod, op_dir, "OL34")
+    assert finding.status == "FAIL"
+    assert "期望格式" in finding.message
+    assert "[[1024, 128]" in finding.message
+
+
 def test_ol31_focuses_on_primary_kernel_called_by_wrapper(tmp_path: Path):
     mod = load_lint_module()
     op_dir = build_stateless_op_dir(tmp_path, "demo")

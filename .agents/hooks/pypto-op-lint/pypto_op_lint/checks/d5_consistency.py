@@ -371,7 +371,9 @@ def check_ol34(ctx: CheckContext) -> Finding:
 
     if not spec_p0_shapes:
         return ctx.make_finding("OL34", "FAIL",
-            f"{SPEC_FILE} front matter 中未找到有效 p0_shapes",
+            f"{SPEC_FILE} front matter 中未找到有效 p0_shapes。\n"
+            "期望格式: [[1024, 128], [1024, 256]] 或 [{x: [4, 2560], y: [4, 1024]}]\n"
+            "注意: {B: 4, C: 64} 格式不支持（value 必须是 list，不能是标量）",
             file=SPEC_FILE)
     test_shapes = _extract_shapes_from_test_ast(test_tree) | _extract_shapes_from_text(test_source)
     missing = spec_p0_shapes - test_shapes

@@ -366,7 +366,10 @@ def _rule_fix_hint(rule_id: str) -> str:
         "OL30": "在 SPEC.md front matter 中填写 supported_dtypes，并在 test 中覆盖对应 dtype",
         "OL31": "在 DESIGN.md front matter 设置 dynamic_axes，并在 impl Tensor 注解使用 pypto.DYNAMIC",
         "OL32": "在 SPEC.md front matter 的 tolerance 中填写 atol/rtol，并校准 test 断言阈值",
-        "OL34": "在 SPEC.md front matter 的 p0_shapes 填写 P0 形状，并在 test 用例覆盖",
+        "OL34": (
+            "在 SPEC.md front matter 的 p0_shapes 填写 P0 形状，并在 test 用例覆盖。"
+            "格式: [[1024,128]] 或 [{x: [4,2560]}]（value 必须是 list，不支持 {B:4} 纯标量）"
+        ),
         "OL39": "为 SPEC.md/DESIGN.md/API_REPORT.md 添加 front matter 块（--- 包裹）",
         "OL40": "补齐 front matter 必填字段并修正字段类型（list/dict）",
         "OL41": "删除代码文件中的 lint 门禁输出文本，确保仅保留可执行源码/文档内容",
