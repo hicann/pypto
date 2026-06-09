@@ -52,12 +52,13 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_L1_COPY_OUT, [this]() { return GenMemL1CopyOut(); }},
           {Opcode::OP_GATHER_IN_L1, [this]() { return GenGatherInL1(); }},
           {Opcode::OP_L1_COPY_IN_CONV, [this]() { return GenMemL1CopyInConv(); }},
+          {Opcode::OP_L1_RESHAPE_COPY_IN, [this]() { return GenMemL1CopyIn(); }},
 
           // L0C <-> GM
           {Opcode::OP_L0C_COPY_OUT, [this]() { return GenMemL0CCopyOut(); }},
           {Opcode::OP_L0C_COPY_OUT_CONV, [this]() { return GenMemL0CCopyOutConv(); }},
-
           {Opcode::OP_L0C_TO_L1, [this]() { return GenMemL0CToL1(); }},
+          {Opcode::OP_L0C_RESHAPE_COPY_OUT, [this]() { return GenMemL0CCopyOut(); }},
 
           // L1 <-> L0
           {Opcode::OP_L1_TO_L0A, [this]() { return GenMemL1ToL0(); }},

@@ -42,8 +42,11 @@ const std::unordered_set<Opcode> OP_SHAPE_FROM_ATTR{
     Opcode::OP_L0C_COPY_OUT_CONV,
     Opcode::OP_RESHAPE_COPY_IN,
     Opcode::OP_RESHAPE_COPY_OUT,
+    Opcode::OP_L1_RESHAPE_COPY_IN,
+    Opcode::OP_L0C_RESHAPE_COPY_OUT,
 };
 bool IsOpShapeFromAttr(Opcode opcode) { return OP_SHAPE_FROM_ATTR.find(opcode) != OP_SHAPE_FROM_ATTR.end(); }
+
 const std::unordered_set<Opcode> SHMEM_COPY_OPS{
     Opcode::OP_SHMEM_GET, Opcode::OP_SHMEM_LOAD, Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_STORE};
 bool IsShmemCopyOp(Opcode opcode) { return SHMEM_COPY_OPS.find(opcode) != SHMEM_COPY_OPS.end(); }
@@ -105,10 +108,33 @@ void CodeGenOp::CombineAxisOffset(const Operation& oper, int operandIdx)
         operandIdx, IntVecToStr(offset[operandIdx]).c_str(), IntVecToStr(dynamicOffset[operandIdx]).c_str());
 }
 
+void CodeGenOp::UpdateDynValidShapeFromAttr(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
+{
+    std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
+    if (attr == nullptr) {
+        return;
+    }
+
+    if ((opCode == Opcode::OP_RESHAPE_COPY_IN || opCode == Opcode::OP_L1_RESHAPE_COPY_IN) &&
+        logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR) {
+        SetDynValidShapeFromAttr(attr->GetFromDynValidShape(), operandIdx);
+        return;
+    }
+
+    if ((opCode == Opcode::OP_L0C_TO_L1 && logicalTensor.GetMemoryTypeOriginal() == MEM_L1) ||
+        ((opCode == Opcode::OP_RESHAPE_COPY_OUT || opCode == Opcode::OP_L0C_RESHAPE_COPY_OUT) &&
+         logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
+        SetDynValidShapeFromAttr(attr->GetToDynValidShape(), operandIdx);
+        return;
+    }
+
+    UpdateValidShapeForShmemCopyOps(oper, operandIdx, attr);
+}
+
 void CodeGenOp::UpdateShape(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
 {
     CODEGEN_LOGI(
-        "op code %s, operandIdx: %d, shape is %s, raw shape is %s, dynamicValidShape is %s, "
+        "UpdateShape: op code %s, operandIdx: %d, shape is %s, raw shape is %s, dynamicValidShape is %s, "
         "dynamicRawShape is %s",
         oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(logicalTensor.shape).c_str(),
         IntVecToStr(logicalTensor.tensor->rawshape).c_str(), IntVecToStr(logicalTensor.GetDynValidShape()).c_str(),
@@ -135,55 +161,37 @@ void CodeGenOp::UpdateShape(const Operation& oper, const LogicalTensor& logicalT
         shapeFromAttr[operandIdx] = attr->GetSpecifiedShape(1);
         dynamicRawShape[operandIdx] = OpImmediate::ToSpecified(attr->GetRawShape());
         CODEGEN_LOGI(
-            "(from op CopyOpAttribute) attrShape = %s, dynamicRawShape = %s",
-            IntVecToStr(shapeFromAttr[operandIdx]).c_str(), IntVecToStr(dynamicRawShape[operandIdx]).c_str());
+            "(from op CopyOpAttribute) shapeFromAttr[%d] = %s, dynamicRawShape[%d] = %s", operandIdx,
+            IntVecToStr(shapeFromAttr[operandIdx]).c_str(), operandIdx,
+            IntVecToStr(dynamicRawShape[operandIdx]).c_str());
     }
 
-    if ((opCode == Opcode::OP_L0C_TO_L1) && (operandIdx == 0)) {
-        std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
-        ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
-        UpdateShapeFromAttr(attr->GetToDynValidShape(), operandIdx);
-    }
-
-    UpdateValidShapeForShmemCopyOps(oper, operandIdx);
+    UpdateDynValidShapeFromAttr(oper, logicalTensor, operandIdx);
 }
 
-void CodeGenOp::UpdateValidShapeForShmemCopyOps(const Operation& oper, int operandIdx)
+void CodeGenOp::UpdateValidShapeForShmemCopyOps(
+    const Operation& oper, int operandIdx, std::shared_ptr<CopyOpAttribute> attr)
 {
     Opcode opcode = oper.GetOpcode();
     if ((!IsShmemCopyOp(opcode)) || (operandIdx != 0)) {
         return;
     }
-    std::shared_ptr<CopyOpAttribute> attr = std::dynamic_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
-    ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
     const auto& validShape =
         (attr->GetFromDynValidShape().size() != 0) ? attr->GetFromDynValidShape() : attr->GetToDynValidShape();
-    UpdateShapeFromAttr(validShape, 0);
+    SetDynValidShapeFromAttr(validShape, operandIdx);
 }
 
 void CodeGenOp::UpdateOffsetValueFromAttr(const std::vector<OpImmediate>& offsets, int operandIdx)
 {
-    std::vector<SymbolicScalar> dynOffset(offsets.size());
-    for (size_t i = 0; i < offsets.size(); ++i) {
-        if (offsets[i].IsSpecified()) {
-            auto val = offsets[i].GetSpecifiedValue();
-            dynOffset[i] = val;
-        }
-    }
-    offsetFromAttr[operandIdx] = dynOffset;
-    CODEGEN_LOGI("UpdateOffsetValueFromAttr: %s", IntVecToStr(dynOffset).c_str());
+    offsetFromAttr[operandIdx] = OpImmediate::ToSpecified(offsets);
+    CODEGEN_LOGI("Set offsetFromAttr[%d] = %s", operandIdx, IntVecToStr(offsetFromAttr[operandIdx]).c_str());
 }
 
-void CodeGenOp::UpdateShapeFromAttr(const std::vector<OpImmediate>& toValidShape, int operandIdx)
+void CodeGenOp::SetDynValidShapeFromAttr(const std::vector<OpImmediate>& toValidShape, int operandIdx)
 {
-    std::vector<SymbolicScalar> validShape(toValidShape.size());
-    for (size_t i = 0; i < toValidShape.size(); ++i) {
-        if (toValidShape[i].IsSpecified()) {
-            validShape[i] = toValidShape[i].GetSpecifiedValue();
-        }
-    }
-    dynValidShapeFromOpAttr[operandIdx] = validShape;
-    CODEGEN_LOGI("UpdateShapeFromAttr , dynValidShapeFromOpAttr is %s", IntVecToStr(validShape).c_str());
+    dynValidShapeFromOpAttr[operandIdx] = OpImmediate::ToSpecified(toValidShape);
+    CODEGEN_LOGI(
+        "Set dynValidShapeFromOpAttr[%d] = %s", operandIdx, IntVecToStr(dynValidShapeFromOpAttr[operandIdx]).c_str());
 }
 
 void CodeGenOp::UpdateOffsetForInput(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx)
@@ -328,8 +336,8 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
-    UpdateShapeAndOffset(ops, *tensor, isInput, operandIdx, ioIdx);
     operandDtype[operandIdx] = tensor->tensor->datatype;
+    UpdateShapeAndOffset(ops, *tensor, isInput, operandIdx, ioIdx);
     auto it = OPERAND_TYPE_TO_MEMORY_TYPE.find(tensor->GetMemoryTypeOriginal());
     ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, it != OPERAND_TYPE_TO_MEMORY_TYPE.end())
         << "can not support memory type: " << static_cast<size_t>(tensor->GetMemoryTypeOriginal()) << ", Tensor is "

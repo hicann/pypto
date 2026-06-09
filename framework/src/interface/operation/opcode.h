@@ -221,6 +221,8 @@ enum class Opcode {
     OP_RESHAPE,
     OP_RESHAPE_COPY_IN,
     OP_RESHAPE_COPY_OUT,
+    OP_L1_RESHAPE_COPY_IN,
+    OP_L0C_RESHAPE_COPY_OUT,
     OP_ASSEMBLE,
     OP_ASSEMBLE_SSA,
     OP_VIEW,
@@ -537,7 +539,8 @@ public:
                opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
                opCode == Opcode::OP_L1_TO_FIX_QUANT_PRE || opCode == Opcode::OP_L1_TO_BT ||
                opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
-               opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV;
+               opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV ||
+               opCode == Opcode::OP_L1_RESHAPE_COPY_IN;
     }
 
     inline bool IsCopyOut(Opcode opCode) const
@@ -554,7 +557,8 @@ public:
                opCode == Opcode::OP_SHMEM_SIGNAL || opCode == Opcode::OP_SHMEM_GET ||
                opCode == Opcode::OP_SHMEM_STORE || opCode == Opcode::OP_RESHAPE_COPY_OUT ||
                opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND ||
-               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_L0C_COPY_OUT_CONV;
+               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_L0C_COPY_OUT_CONV ||
+               opCode == Opcode::OP_L0C_RESHAPE_COPY_OUT;
     }
 
     inline bool IsCopyInOrOut(Opcode opCode) const { return IsCopyIn(opCode) || IsCopyOut(opCode); }
@@ -1017,7 +1021,8 @@ const std::unordered_set<Opcode> UNSUPPORT_BF16_ARCH35_OPS{
     Opcode::OP_ROWPROD_SINGLE,
     Opcode::OP_ROWPRODLINE,
     Opcode::OP_REMS,
-    Opcode::OP_LRELU,};
+    Opcode::OP_LRELU,
+};
 
 const std::unordered_set<Opcode> FIX_COPY_IN_OPS{
     Opcode::OP_L1_TO_FIX,           Opcode::OP_L1_TO_FIX_QUANT_PRE,  Opcode::OP_L1_TO_FIX_RELU_PRE,
@@ -1071,7 +1076,8 @@ inline bool IsCopyIn(const Opcode opCode)
     return opCode == Opcode::OP_COPY_IN || opCode == Opcode::OP_UB_COPY_IN || opCode == Opcode::OP_L1_COPY_IN ||
            opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
            opCode == Opcode::OP_SHMEM_LOAD || opCode == Opcode::OP_L1_COPY_IN_A_SCALE ||
-           opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV;
+           opCode == Opcode::OP_L1_COPY_IN_B_SCALE || opCode == Opcode::OP_L1_COPY_IN_CONV ||
+           opCode == Opcode::OP_L1_RESHAPE_COPY_IN;
 }
 
 inline bool IsCopyOut(const Opcode& op)
@@ -1086,7 +1092,7 @@ inline bool IsCopyOut(const Opcode& op)
         op == Opcode::OP_NCHW2NC1HWC0 || op == Opcode::OP_NCHW2Fractal_Z || op == Opcode::OP_NC1HWC02NCHW ||
         op == Opcode::OP_NDC1HWC02NCDHW || op == Opcode::OP_NCDHW2NDC1HWC0 || op == Opcode::OP_NCDHW2FRACTAL_Z_3D ||
         op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND || op == Opcode::OP_INDEX_ADD ||
-        op == Opcode::OP_L0C_COPY_OUT_CONV);
+        op == Opcode::OP_L0C_COPY_OUT_CONV || op == Opcode::OP_L0C_RESHAPE_COPY_OUT);
 }
 
 inline bool IsOpCodeSupportMultiProducers(Opcode opCode)

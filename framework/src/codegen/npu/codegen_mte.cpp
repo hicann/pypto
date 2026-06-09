@@ -21,8 +21,16 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
+namespace {
 const std::string TSTORE_CONF = "TStoreConfig";
 const std::string TSTORE_CONF_VEC = "TStoreConfigVec";
+const std::unordered_set<Opcode> RESHAPE_COPY_OP = {
+    Opcode::OP_RESHAPE_COPY_IN,
+    Opcode::OP_RESHAPE_COPY_OUT,
+    Opcode::OP_L1_RESHAPE_COPY_IN,
+    Opcode::OP_L0C_RESHAPE_COPY_OUT,
+};
+} // namespace
 
 DynamicParamPackMTE CodeGenOpNPU::PrepareDynamicShapeInfoForMTE(int dynShapeIdx, int shapeDim, bool isGmSpill) const
 {
@@ -153,7 +161,13 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
         auto [coordDst, coordSrc] =
             PrintDstSrcCoordFromAttr(ToUnderlying(MIMOIdx::DST_IDX), ToUnderlying(MIMOIdx::SRC0_IDX));
         cpModeStr = "CopyMode::EXTRACT";
-        tileOpParamList = {dstTensor, src0Tensor, src0Tensor, coordDst, coordSrc, std::to_string(aivId),
+        tileOpParamList = {
+            dstTensor,
+            src0Tensor,
+            src0Tensor,
+            coordDst,
+            coordSrc,
+            std::to_string(aivId),
             std::to_string(scaleValue.GetUnsignedData())};
         int64_t splitMN = 0;
         GetOpAttr(OpAttributeKey::splitMN, splitMN);
@@ -166,7 +180,13 @@ std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
         if ((!scaleValue.GetUnsignedData()) && ((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16))) {
             src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
         }
-        tileOpParamList = {dstTensor, src0Tensor, src1Tensor, coordDst, coordSrc, std::to_string(aivId),
+        tileOpParamList = {
+            dstTensor,
+            src0Tensor,
+            src1Tensor,
+            coordDst,
+            coordSrc,
+            std::to_string(aivId),
             std::to_string(scaleValue.GetUnsignedData())};
     }
     templateParam.emplace_back(cpModeStr);
@@ -493,12 +513,11 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0
     std::string src1Tensor = srcTensor;
     int64_t nzValue = 0;
     int64_t isAcc = 0;
-    auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape);
     GetOpAttr(OP_ATTR_PREFIX + "atomic_add", isAcc);
     GetOpAttr(OpAttributeKey::copyIsNZ, nzValue);
     std::string nzVar = nzValue ? "CopyOutMode::NZ2NZ" : "CopyOutMode::NZ2ND";
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
-    std::string storeConfig = WrapParamByAngleBrackets(storeConfigList);
+    std::string storeConfig = TSTORE_CONF + WrapParamByAngleBrackets(storeConfigList);
 
     Element scaleValue = Element(DataType::DT_UINT64, 0);
     if (!isAcc) {
@@ -512,17 +531,18 @@ std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
 
-    std::vector<std::string> tileOpParamList = {dstTensor,
-                                                srcTensor,
-                                                src1Tensor,
-                                                coord,
-                                                outerValueStr,
-                                                innerValueStr,
-                                                std::to_string(scaleValue.GetUnsignedData())};
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord};
+    if (opCode == Opcode::OP_L0C_COPY_OUT) {
+        auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape);
+        tileOpParamList.insert(tileOpParamList.end(), {outerValueStr, innerValueStr});
+    } else {
+        AppendGmValidShapeForReshapeCopy(tileOpParamList, param.gmIdx);
+    }
+    tileOpParamList.emplace_back(std::to_string(scaleValue.GetUnsignedData()));
+
     std::ostringstream oss;
-    oss << tileOpName << "<" << TSTORE_CONF << storeConfig << ">";
-    oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << STMT_END;
+    oss << tileOpName << WrapParamByAngleBrackets({storeConfig});
+    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 
@@ -540,17 +560,17 @@ std::vector<std::string> CodeGenOpNPU::GenTileOpParamForNormalCopyTileTensor(uns
     return tileOpParamList;
 }
 
-void CodeGenOpNPU::AppendValidShapeForReshapeCopy(std::vector<std::string>& tileOpParamList) const
+void CodeGenOpNPU::AppendGmValidShapeForReshapeCopy(std::vector<std::string>& tileOpParamList, unsigned gmIdx) const
 {
-    if (opCode != Opcode::OP_RESHAPE_COPY_OUT && opCode != Opcode::OP_RESHAPE_COPY_IN) {
+    if (RESHAPE_COPY_OP.find(opCode) == RESHAPE_COPY_OP.end()) {
         return;
     }
-    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(originalOp.GetOpAttribute());
-    ASSERT(OperErr::ATTRIBUTE_INVALID, copyAttr != nullptr) << "CopyOpAttribute is null for RESHAPE_COPY operation";
-    std::vector<SymbolicScalar> dynValidShape;
-    dynValidShape = opCode == Opcode::OP_RESHAPE_COPY_OUT ? OpImmediate::ToSpecified(copyAttr->GetToDynValidShape()) :
-                                                            OpImmediate::ToSpecified(copyAttr->GetFromDynValidShape());
-    FillVecWithDummyInHead<SymbolicScalar>(dynValidShape, MAX_DIM - dynValidShape.size(), 1);
+
+    std::vector<SymbolicScalar> dynValidShape = dynValidShapeFromOpAttr[gmIdx];
+    ASSERT(OperErr::ATTRIBUTE_INVALID, !dynValidShape.empty()) << "dynValidShape is invalid from attr";
+    if (opCode == Opcode::OP_RESHAPE_COPY_IN || opCode == Opcode::OP_RESHAPE_COPY_OUT) {
+        FillVecWithDummyInHead<SymbolicScalar>(dynValidShape, MAX_DIM - dynValidShape.size(), 1);
+    }
     for (auto s : dynValidShape) {
         tileOpParamList.emplace_back(SymbolicExpressionTable::BuildExpression(s));
     }
@@ -734,12 +754,12 @@ std::string CodeGenOpNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopyWithL
         std::string coordCp = WrapParamByParentheses(dstOffset);
         std::string coord = PrintCoord(rawShape[ID0].size(), coordCp);
         tileOpParamList.insert(tileOpParamList.end() - 1, coord);
-    }
-
-    auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape, param.isSpillingToGM);
-    if (opCode != Opcode::OP_L1_COPY_IN_A_SCALE && opCode != Opcode::OP_L1_COPY_IN_B_SCALE) {
+        auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape, param.isSpillingToGM);
         tileOpParamList.insert(tileOpParamList.end(), {outerValueStr, innerValueStr});
     }
+
+    AppendGmValidShapeForReshapeCopy(tileOpParamList, param.gmIdx);
+
     int64_t copyInMode = -1;
     if (opAttrs.count(OpAttributeKey::copyInMode)) {
         copyInMode = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::copyInMode));
@@ -1097,7 +1117,7 @@ std::vector<std::string> CodeGenOpNPU::GetGmOffsetForTileTensor(unsigned gmIdx) 
 std::string CodeGenOpNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBParam& param) const
 {
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx);
-    AppendValidShapeForReshapeCopy(tileOpParamList);
+    AppendGmValidShapeForReshapeCopy(tileOpParamList, param.gmIdx);
     std::ostringstream oss;
     oss << tileOpName;
     if (opCode == Opcode::OP_UB_COPY_OUT) {

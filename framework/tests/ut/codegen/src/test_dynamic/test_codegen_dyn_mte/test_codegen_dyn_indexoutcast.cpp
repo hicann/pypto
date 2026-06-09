@@ -89,7 +89,7 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast)
     auto to_offset = OpImmediate::Specified({0, 0});
     auto shapeImme = OpImmediate::Specified({16, 16});
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, to_offset, shapeImme, shapeImme));
-    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
     op.SetOOpAtt(0, 0);
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
@@ -130,7 +130,7 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor)
     auto to_offset = OpImmediate::Specified({0, 0});
     auto shapeImme = OpImmediate::Specified(scaterShape);
     indexoutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, to_offset, shapeImme, shapeImme));
-    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(indexoutOp.GetOpAttribute());
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(indexoutOp.GetOpAttribute());
     indexoutOp.SetOOpAtt(0, 0);
     std::string res = GenOpCodeFromOp(*function, indexoutOp, {.isMainBlk = true});
     std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_0, ubTensor_1, ubTensor_1, Coord2Dim(0, 0));

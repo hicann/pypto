@@ -550,7 +550,9 @@ public:
             Opcode::OP_L1_TO_L0B_SCALE,
             Opcode::OP_L1_COPY_IN_CONV,
             Opcode::OP_L0C_COPY_OUT,
-            Opcode::OP_L0C_COPY_OUT_CONV};
+            Opcode::OP_L0C_COPY_OUT_CONV,
+            Opcode::OP_L1_RESHAPE_COPY_IN,
+            Opcode::OP_L0C_RESHAPE_COPY_OUT};
         if (copyOpAttrOpTypes.count(opcode_) > 0) {
             FE_ASSERT(std::dynamic_pointer_cast<CopyOpAttribute>(opAttribute_) != nullptr);
             return;
