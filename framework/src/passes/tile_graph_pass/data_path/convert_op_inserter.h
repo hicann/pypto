@@ -16,9 +16,8 @@
 #ifndef PASS_CONVERT_OP_INSERTER_H_
 #define PASS_CONVERT_OP_INSERTER_H_
 
-#include <map>
-#include <set>
 #include <unordered_map>
+#include <set>
 
 #include "interface/function/function.h"
 #include "interface/operation/attribute.h"
@@ -31,32 +30,9 @@
 namespace npu {
 namespace tile_fwk {
 
-template <typename PtrType, typename KeyGetter>
-bool CompareNullableByKey(const PtrType& a, const PtrType& b, KeyGetter keyGetter)
-{
-    if (a == b) {
-        return false;
-    }
-    if (a == nullptr) {
-        return true;
-    }
-    if (b == nullptr) {
-        return false;
-    }
-    return keyGetter(a) < keyGetter(b);
-}
-
 struct OpMagicComparator {
-    bool operator()(const Operation* a, const Operation* b) const
-    {
-        return CompareNullableByKey(a, b, [](const Operation* op) { return op->GetOpMagic(); });
-    }
-};
-
-struct LogicalTensorMagicComparator {
-    bool operator()(const LogicalTensorPtr& a, const LogicalTensorPtr& b) const
-    {
-        return CompareNullableByKey(a, b, [](const LogicalTensorPtr& tensor) { return tensor->GetMagic(); });
+    bool operator()(const Operation* a, const Operation* b) const {
+        return a->GetOpMagic() < b->GetOpMagic();
     }
 };
 
@@ -76,12 +52,11 @@ public:
     std::unordered_map<int, std::shared_ptr<RawTensor>> oldRawToNewRaw;
 
     /*
-        key: Tensor pointer ordered by stable tensor magic.
+        key: Tensor 指针
         value: Opmagic到consumer op的指针和该op所需内存类型对的映射map
     */
-    std::map<LogicalTensorPtr, std::map<int, std::pair<Operation *, MemoryType>>, LogicalTensorMagicComparator>
-        tensorTobeMap;
-    std::map<int, std::map<MemoryType, std::set<Operation*, OpMagicComparator>>> conflictMap;
+    std::map<LogicalTensorPtr, std::map<int, std::pair<Operation *, MemoryType>>> tensorTobeMap;
+    std::unordered_map<int, std::map<MemoryType, std::set<Operation*, OpMagicComparator>>> conflictMap;
 
     // 设置指定tensor的指定consumer op所需的mem tobe 类型
     void UpdateTensorTobeMap(const LogicalTensorPtr& tensor, Operation& operation, MemoryType t,

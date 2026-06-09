@@ -38,6 +38,7 @@
 #include "interface/interpreter/flow_verifier.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/graph_utils.h"
 
 using namespace npu::tile_fwk;
 
@@ -762,7 +763,8 @@ void Function::FillOriginInOutCast(std::vector<Operation*>& operationList)
         for (auto& iOperand : op->iOperand) {
             if (op->IsCall()) {
                 addOrigin(iOperand, originInCasts_);
-            } else if (visited.count(iOperand) == 0) {
+            }
+            else if (visited.count(iOperand) == 0) {
                 visited.insert(iOperand);
                 if (&iOperand->BelongFunction() != this) {
                     addOrigin(iOperand, originInCasts_);
@@ -782,14 +784,12 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
 {
     // Deduce Incast and Outcast here, need by TENSOR_GRAPH & STATIC_TILE_GRAPH
     std::vector<Operation*> operationList = Operations(false).DuplicatedOpList();
-    if (IsGraphType(GraphType::TENSOR_GRAPH) ||
-        IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
+    if (IsGraphType(GraphType::TENSOR_GRAPH) || IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
         FillOriginInOutCast(operationList);
     }
 
     LogicalTensors inArgumentList, outArgumentList;
-    if (IsGraphType(GraphType::TENSOR_GRAPH) ||
-        IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
+    if (IsGraphType(GraphType::TENSOR_GRAPH) || IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::TILE_GRAPH)) {
         SetCallOpSlot();
         inArgumentList = MakeIncasts(scope);
         outArgumentList = MakeOutcasts(scope);
@@ -829,6 +829,7 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
         argList = NormalizeCoa(iOpAttr, oOpAttr);
         GetOutcastSymbolicExpr(outIndexToExpr);
     }
+    BuildTensorMap();
     ComputeHash();
     return {std::move(inArgumentList), std::move(outArgumentList), std::move(iOpAttr),
             std::move(oOpAttr),        std::move(outIndexToExpr),  std::move(argList)};
@@ -1570,25 +1571,62 @@ FunctionHash Function::ComputeHash()
     return functionHash_;
 }
 
-void Function::AddOriginIncast(const std::shared_ptr<LogicalTensor> tensor) { originInCasts_.push_back(tensor); }
-
-void Function::AddOriginOutcast(const std::shared_ptr<LogicalTensor> tensor) { originOutCasts_.push_back(tensor); }
-
-Operation& Function::AddOperation(
-    const std::string& opName, LogicalTensors iOperands, const LogicalTensors& oOperands, const bool updateTensorMap)
+void Function::BuildTensorMap()
 {
-    return AddOperation(FindOpcode(opName), iOperands, oOperands, updateTensorMap);
+    tensorMap_.Reset();
+    for (auto& ele : inCasts_) {
+        tensorMap_.Insert(ele);
+    }
+    for (auto& ele : operations_) {
+        for (auto& oOp : ele->GetOOperands()) {
+            if (!tensorMap_.GetTensorByMagic(oOp->magic)) {
+                tensorMap_.Insert(oOp);
+            }
+        }
+    }
 }
 
-Operation& Function::AddOperation(
-    const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands, const bool updateTensorMap)
+Operation& Function::AddOperation(const std::string& opName, LogicalTensors iOperands, const LogicalTensors& oOperands)
+{
+    return AddOperation(FindOpcode(opName), iOperands, oOperands);
+}
+
+Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands)
 {
     CheckTensorDynamicShape(iOperands, opCode);
-    for (auto& iOperand : iOperands) {
-        FE_ASSERT(FeError::INVALID_VAL, iOperand->shape.size() != 0) << "tensor shape size invalid";
-        iOperand = ConnectWithOverlap(iOperand);
+
+    auto ClearOffset = [](LogicalTensorPtr t) {
+        int dim = t->shape.size();
+        t->offset = std::vector<int64_t>(dim, 0);
+        t->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
+    };
+
+    for (auto& iOp : iOperands) {
+        LogicalTensorPtr parent = nullptr;
+        if (iOp->GetAttr("SLICE_PARENT", parent)) {
+            auto newRaw = std::make_shared<RawTensor> (iOp->tensor->datatype, iOp->shape, iOp->tensor->format, iOp->tensor->symbol);
+            auto& op = AddRawOperation(Opcode::OP_VIEW, {parent}, {iOp});
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(iOp->offset, iOp->dynOffset_, iOp->dynValidShape_));
+            ClearOffset(iOp);
+            iOp->RemoveAttr("SLICE_PARENT");
+            iOp->tensor = newRaw;
+        }
     }
-    return AddRawOperation(opCode, iOperands, oOperands, updateTensorMap);
+
+    auto& ret = AddRawOperation(opCode, iOperands, oOperands);
+
+    for (auto& oOp : oOperands) {
+        LogicalTensorPtr parent = nullptr;
+        if (oOp->GetAttr("SLICE_PARENT", parent)) {
+            auto newRaw = std::make_shared<RawTensor> (oOp->tensor->datatype, oOp->shape, oOp->tensor->format, oOp->tensor->symbol);
+            auto& op = AddRawOperation(Opcode::OP_ASSEMBLE, {oOp}, {parent});
+            op.SetAssembleOpAttribute(oOp->offset, oOp->dynOffset_);
+            ClearOffset(oOp);
+            oOp->RemoveAttr("SLICE_PARENT");
+            oOp->tensor = newRaw;
+        }
+    }
+    return ret;
 }
 
 void Function::UpdateTensorDataUsage(Operation& op)
@@ -1624,17 +1662,14 @@ void Function::UpdateTensorDataUsage(Operation& op)
 }
 
 Operation& Function::AddRawOperation(
-    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, bool updateTensorMap,
-    const ir::Span& span)
+    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, ir::Span span)
 {
     if (IsFunctionTypeAndGraphType(FunctionType::STATIC, {GraphType::EXECUTE_GRAPH, GraphType::BLOCK_GRAPH})) {
-        updateTensorMap = false;
         sorted_ = true;
     } else {
         sorted_ = functionType_ == FunctionType::DYNAMIC;
     }
-    auto& op =
-        operations_.emplace_back(std::make_shared<Operation>(*this, opCode, iOperands, oOperands, updateTensorMap));
+    auto& op = operations_.emplace_back(std::make_shared<Operation>(*this, opCode, iOperands, oOperands));
     opPosition_.emplace(op.get(), operations_.size() - 1);
     auto scopeConfig = config::GetPassOption<std::vector<int64_t>>(SG_SET_SCOPE);
     if (scopeConfig.size() == 0x3) {
@@ -1823,7 +1858,6 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
         *this, inArgument->tensor->datatype, inArgument->shape, inArgument->tensor->GetDynRawShape(),
         inArgument->Format(), newSymbol);
     incastSymbol->tensor->UpdateDynRawShape(inArgument->tensor->GetDynRawShape());
-    tensorMap_.Insert(incastSymbol);
     inCasts_.push_back(incastSymbol);
 
     UpdateLinkMap(inArgument, incastSymbol);
@@ -1862,7 +1896,6 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
         int rank = origin->shape.size();
         std::vector<int64_t> zeroOffset(rank, 0);
         auto inArgument = std::make_shared<LogicalTensor>(Parent(), origin->tensor, zeroOffset, origin->shape);
-        Parent().tensorMap_.Insert(inArgument);
         inArgumentList.push_back(inArgument);
 
         auto incastSymbol = CreateIncastTensor(inArgument);
@@ -1899,7 +1932,6 @@ std::shared_ptr<LogicalTensor> Function::CreateOutcastTensor(const std::shared_p
         outArgument->Format(), newSymbol);
     outSymbol->tensor->UpdateDynRawShape(outArgument->tensor->GetDynRawShape());
 
-    tensorMap_.Insert(outSymbol);
     outCasts_.push_back(outSymbol);
 
     UpdateLinkMap(outArgument, outSymbol, true);
@@ -3500,10 +3532,8 @@ void Function::ResetOperations()
     opPosition_.clear();
     sorted_ = false;
     tensorMap_.Reset();
-    for (auto& i : inCasts_) {
-        tensorMap_.Insert(i);
-    }
     for (auto& t : inCasts_) {
+        tensorMap_.Insert(t);
         t->GetConsumers().clear();
     }
     for (auto& t : outCasts_) {
@@ -3635,7 +3665,7 @@ void Function::OpValidCheck(Operation& op) const
         FE_ASSERT(FeError::INVALID_VAL, oOperand->GetShape().size() == oOperand->GetOffset().size())
             << "Output operand shape size does not match offset size";
         FE_ASSERT(&oOperand->BelongFunction() == this) << "Output operand does not belong to current function";
-        auto tmp = GetTensorMap().GetTensorByMagic(oOperand->magic);
+        auto tmp = GraphUtils::GetTensorByMagic(const_cast<Function&>(*this), oOperand->magic);
         FE_ASSERT(FeError::NOT_EXIST, tmp == oOperand) << "Tensor map does not match output operand";
         FE_ASSERT(oOperand->HasProducer(op))
             << "Output operand does not have current operation as a producer, opmagic: " << op.GetOpMagic()
@@ -3646,7 +3676,7 @@ void Function::OpValidCheck(Operation& op) const
             << "Input operand shape size does not match offset size";
         FE_ASSERT(&iOperand->BelongFunction() == this) << "Input operand does not belong to current function";
         if (!iOperand->GetProducers().empty() || incasts.count(iOperand) != 0) {
-            auto tmp = GetTensorMap().GetTensorByMagic(iOperand->magic);
+            auto tmp = GraphUtils::GetTensorByMagic(const_cast<Function&>(*this), iOperand->magic);
             FE_ASSERT(FeError::NOT_EXIST, tmp == iOperand) << "Tensor map does not match input operand";
         }
 
@@ -3760,97 +3790,6 @@ std::shared_ptr<OpAttribute> Function::CreateCallOpAttribute(
     }
     auto opAttribute = std::make_shared<CallOpAttribute>(hash, argList, GetMagicName(), outIndexToExpr);
     return opAttribute;
-}
-
-std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<LogicalTensor> iOperand)
-{
-    auto matches = GetTensorMap().Find(iOperand);
-    if (matches.empty()) {
-        return iOperand;
-    }
-    auto overlapStatus = CalcOverlap(iOperand, matches);
-    FE_ASSERT(!matches.empty()) << "Matches should not be empty";
-    std::vector<std::vector<int64_t>> offsetOfOverlaps;
-    std::vector<std::shared_ptr<LogicalTensor>> needAddConsumer;
-    sort(matches.begin(), matches.end(), [](const auto& a, const auto& b) -> bool { return a->offset < b->offset; });
-
-    std::vector<int64_t> minimumOffsets = matches.front()->offset;
-
-    for (auto& m : matches) {
-        offsetOfOverlaps.emplace_back(m->offset);
-        for (size_t idx = 0; idx < minimumOffsets.size(); idx++) {
-            minimumOffsets[idx] = std::min(minimumOffsets[idx], m->offset[idx]);
-        }
-    }
-    for (auto& offsetOfOverlap : offsetOfOverlaps) {
-        for (size_t idx = 0; idx < offsetOfOverlap.size(); idx++) {
-            offsetOfOverlap[idx] -= minimumOffsets[idx];
-        }
-    }
-
-    switch (overlapStatus) {
-        case OverlapStatus::PERFECTLY_MATCH_WITH_ALL: {
-            auto assembleResult = std::make_shared<LogicalTensor>(
-                *this, iOperand->Datatype(), iOperand->shape, iOperand->GetDynValidShape(), iOperand->Format(),
-                "Assemble_" + matches[0]->Symbol());
-            FE_ASSERT(FeError::NOT_EXIST, assembleResult->GetProducers().empty())
-                << "Assemble result should have no producers";
-            for (size_t idx = 0; idx < matches.size(); idx++) {
-                auto& assembleOp = AddRawOperation(Opcode::OP_ASSEMBLE, {matches[idx]}, {assembleResult});
-                assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-                    offsetOfOverlaps[idx], SymbolicScalar::FromConcrete(offsetOfOverlaps[idx])));
-            }
-            return assembleResult;
-        }
-        case OverlapStatus::PERFECTLY_MATCH: {
-            // IF there is an existing tensor that fully matches GetIOperands(), change GetIOperands() to
-            // the existing tensor
-            return matches.front();
-        }
-        case OverlapStatus::BE_COVERED: {
-            auto viewResult = std::make_shared<LogicalTensor>(
-                *this, matches.front()->tensor->datatype, iOperand->shape, iOperand->Format(),
-                "View_" + matches.front()->tensor->symbol);
-            auto& viewOp = AddRawOperation(Opcode::OP_VIEW, {matches.front()}, {viewResult});
-            viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
-                iOperand->GetOffset(), iOperand->GetDynOffset(), iOperand->GetDynValidShape()));
-            if (!iOperand->GetDynValidShape().empty()) {
-                viewResult->UpdateDynValidShape(iOperand->GetDynValidShape());
-            }
-            return viewResult;
-        }
-        case OverlapStatus::BE_COVERED_BY_ALL: {
-            std::vector<int64_t> minimumOffset;
-            std::vector<int64_t> maximumShape;
-            CalcShapeAndOffsetOfGroup(matches, minimumOffset, maximumShape);
-
-            auto assembleResult = std::make_shared<LogicalTensor>(
-                *this, matches[0]->Datatype(), maximumShape, iOperand->Format(), "Assemble_" + matches[0]->Symbol());
-            FE_ASSERT(FeError::NOT_EXIST, assembleResult->GetProducers().empty())
-            "Assemble result should have no producers";
-            for (size_t idx = 0; idx < matches.size(); idx++) {
-                auto& assembleOp = AddRawOperation(Opcode::OP_ASSEMBLE, {matches[idx]}, {assembleResult});
-                assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-                    offsetOfOverlaps[idx], SymbolicScalar::FromConcrete(offsetOfOverlaps[idx])));
-            }
-
-            auto viewResult = std::make_shared<LogicalTensor>(
-                *this, assembleResult->Datatype(), iOperand->shape, iOperand->Format(),
-                "View_" + assembleResult->Symbol());
-            auto& viewOp = AddRawOperation(Opcode::OP_VIEW, {assembleResult}, {viewResult});
-            std::vector<int64_t> newOffset = TensorOffset::Sub(iOperand->GetOffset(), minimumOffset);
-            std::vector<SymbolicScalar> newDynOffset = TensorOffset::Sub(iOperand->GetDynOffset(), minimumOffset);
-            // fill valid shape
-            viewOp.SetOpAttribute(
-                std::make_shared<ViewOpAttribute>(newOffset, newDynOffset, iOperand->GetDynValidShape()));
-            return viewResult;
-        }
-        default:
-            FE_ASSERT(false) << "unexpected behavior";
-    }
-
-    FE_ASSERT(false) << "unexpected behavior";
-    return nullptr;
 }
 
 using SameSlotSetIndex = std::map<std::vector<int>, std::vector<int>>;

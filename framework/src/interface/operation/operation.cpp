@@ -180,8 +180,17 @@ bool OperationCmp::operator()(const Operation* lhs, const Operation* rhs) const
     return lhs->GetOpMagic() < rhs->GetOpMagic();
 }
 
-Operation::Operation(
-    Function& cur, Opcode opcode, LogicalTensors iOperands, LogicalTensors oOperands, bool updateTensorMap, int opMagic)
+int64_t GetLatencyByOperands(const LogicalTensors& operands, const std::string& opcode)
+{
+    std::vector<std::vector<int64_t>> shape;
+    shape.reserve(operands.size());
+    for (const auto& operand : operands) {
+        shape.emplace_back(operand->shape);
+    }
+    return GetCycles(opcode, shape, operands[0]->tensor->datatype);
+}
+
+Operation::Operation(Function& cur, Opcode opcode, LogicalTensors iOperands, LogicalTensors oOperands, int opMagic)
     : ir::TensorOpStmt(ir::Span()),
       iOperand(std::move(iOperands)),
       oOperand(std::move(oOperands)),
@@ -197,8 +206,6 @@ Operation::Operation(
 
     iOpAttr_.resize(iOperands.size());
     oOpAttr_.resize(oOperands.size());
-
-    auto opCoreType = OpcodeManager::Inst().GetCoreType(opcode);
     tileShape_.Reset();
     if (opmagic == -1) {
         opmagic = cur.opSeed_++;
@@ -210,7 +217,23 @@ Operation::Operation(
     for (auto& t : oOperand) {
         TensorOpStmt::result_.push_back(t);
     }
+    InitCoreTypeAndTileShape(opcode);
+    InitTensorGraphMetadata();
 
+    for (auto& input : GetIOperands()) {
+        input->AddConsumer(this);
+    }
+
+    for (auto& output : GetOOperands()) {
+        output->AddProducer(this);
+    }
+
+    InitLatency(opcode);
+}
+
+void Operation::InitCoreTypeAndTileShape(Opcode opcode)
+{
+    auto opCoreType = OpcodeManager::Inst().GetCoreType(opcode);
     switch (opCoreType) {
         case OpCoreType::AIC:
             coreType_ = CoreType::AIC;
@@ -225,76 +248,43 @@ Operation::Operation(
             break;
     }
 
-    if (!IsOpCodeSupportMultiProducers(opcode)) {
-    } else if (opcode == Opcode::OP_CALL) {
-        if (cur.IsCompiledFunction()) {
-            for (auto& t : GetOOperands()) {
-                if (cur.GetTensorMap().GetTensorByMagic(t->magic) == nullptr) {
-                    FE_ASSERT(FeError::NOT_EXIST, updateTensorMap || cur.IsCompiledFunction());
-                }
-            }
-        }
-    } else {
-        if (cur.GetTensorMap().GetTensorByMagic(GetOOperands()[0]->magic) == nullptr) {
-            FE_ASSERT(FeError::NOT_EXIST, updateTensorMap || cur.IsCompiledFunction());
-        } else {
-            updateTensorMap = false;
-        }
+    if (!function_->IsGraphType(GraphType::TENSOR_GRAPH)) {
+        return;
     }
-
-    if (function_->IsGraphType(GraphType::TENSOR_GRAPH)) {
-        tileShape_ = TileShape::Current();
-        if (coreType_ == CoreType::AIC) {
-            auto& cubeTile = tileShape_.GetCubeTile();
-            auto& convTile = tileShape_.GetConvTile();
-            FE_ASSERT(FeError::INVALID_VAL, cubeTile.valid() || convTile.valid())
-                << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
-        }
-        OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(opcode);
-        if (coreType_ == CoreType::AIV && calcType != OpCalcType::DISTRIBUTED) {
-            auto& vecTile = tileShape_.GetVecTile();
-            FE_ASSERT(FeError::INVALID_VAL, vecTile.valid())
-                << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
-        }
+    tileShape_ = TileShape::Current();
+    if (coreType_ == CoreType::AIC) {
+        auto& cubeTile = tileShape_.GetCubeTile();
+        auto& convTile = tileShape_.GetConvTile();
+        FE_ASSERT(FeError::INVALID_VAL, cubeTile.valid() || convTile.valid())
+            << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
     }
-
-    if (function_->IsGraphType({GraphType::TENSOR_GRAPH, GraphType::TILE_GRAPH})) {
-        SetSemanticLabel(config::GetSemanticLabel());
-        SetSpan(ir::Span::Current());
-    }
-
-    for (auto& input : GetIOperands()) {
-        input->AddConsumer(this);
-    }
-
-    for (auto& output : GetOOperands()) {
-        output->AddProducer(this);
-        if (updateTensorMap) {
-            function_->GetTensorMap().Insert(output);
-        }
-    }
-
-    if (opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_VIEW) {
-        if (!GetOOperands().empty()) {
-            // Get operation latency
-            std::vector<std::vector<int64_t>> shape;
-            for (auto& tgtTile : GetOOperands()) {
-                shape.emplace_back(tgtTile->shape);
-            }
-            latency_ = GetCycles(GetOpcodeStr(), shape, GetOOperands()[0]->tensor->datatype);
-        }
-    } else {
-        if (!GetIOperands().empty()) {
-            // Get operation latency
-            std::vector<std::vector<int64_t>> shape;
-            for (auto& srcTile : GetIOperands()) {
-                shape.emplace_back(srcTile->shape);
-            }
-            latency_ = GetCycles(GetOpcodeStr(), shape, GetIOperands()[0]->tensor->datatype);
-        }
+    OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(opcode);
+    if (coreType_ == CoreType::AIV && calcType != OpCalcType::DISTRIBUTED) {
+        auto& vecTile = tileShape_.GetVecTile();
+        FE_ASSERT(FeError::INVALID_VAL, vecTile.valid())
+            << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
     }
 }
 
+void Operation::InitTensorGraphMetadata()
+{
+    if (!function_->IsGraphType({GraphType::TENSOR_GRAPH, GraphType::TILE_GRAPH})) {
+        return;
+    }
+    SetSemanticLabel(config::GetSemanticLabel());
+    SetSpan(ir::Span::Current());
+}
+
+void Operation::InitLatency(Opcode opcode)
+{
+    const auto& latencyOperands =
+        (opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_VIEW) ? GetOOperands() : GetIOperands();
+    if (!latencyOperands.empty()) {
+        // Get operation latency
+        latency_ = GetLatencyByOperands(latencyOperands, GetOpcodeStr());
+    }
+}
+ 
 std::string Operation::GetStringAttribute(const std::string& key) const
 {
     FE_ASSERT(FeError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
@@ -692,7 +682,7 @@ std::shared_ptr<Operation> Operation::LoadJson(
 
     Opcode opcode = FindOpcode(opDump["opcode"].get<std::string>());
     int opMagic = opDump["opmagic"].get<int>();
-    std::shared_ptr<Operation> op = std::make_shared<Operation>(cur, opcode, ioperands, ooperands, true, opMagic);
+    std::shared_ptr<Operation> op = std::make_shared<Operation>(cur, opcode, ioperands, ooperands, opMagic);
 
     op->LoadLocationFromJson(opDump);
     op->LoadBasicInfoFromJson(opDump);

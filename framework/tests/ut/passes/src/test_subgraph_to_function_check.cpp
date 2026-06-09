@@ -283,7 +283,6 @@ TEST_F(SubgraphToFunctionCheckTest, CheckSubGraphTopo_EmptySubgraph)
     EXPECT_EQ(status, FAILED);
 }
 
-
 TEST_F(SubgraphToFunctionCheckTest, CheckSubGraphBoundary_Rule1_DDR_NotBoundary)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);

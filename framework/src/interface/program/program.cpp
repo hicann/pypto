@@ -118,12 +118,10 @@ void Program::CreateCallerCalleeLink(Function* caller, Function* callee)
     for (auto& outcast : callee->outCasts_) {
         auto newOutcast = outcast->Clone(*caller, true);
         caller->outCasts_.push_back(newOutcast);
-        caller->GetTensorMap().Insert(newOutcast);
     }
     for (auto& incast : callee->inCasts_) {
         auto newIncast = incast->Clone(*caller, true);
         caller->inCasts_.push_back(newIncast);
-        caller->GetTensorMap().Insert(newIncast);
     }
 
     FunctionCallArgs args = {
@@ -307,7 +305,7 @@ Operation& Program::ConnectCallerGusket(Function& caller, FunctionCallArgs& args
     // callFunc is used for:
     //  1. Submit to machine
     //  2. Draw graph
-    auto& callFunc = caller.AddRawOperation(Opcode::OP_CALL, args.iOperands, args.oOperands, false);
+    auto& callFunc = caller.AddRawOperation(Opcode::OP_CALL, args.iOperands, args.oOperands);
     callFunc.SetOpAttribute(currentFunctionPtr_->CreateCallOpAttribute(args.argList, args.outIndexToExpr));
     callFunc.SetOperandAttr(args.iOpAttr, args.oOpAttr);
     return callFunc;

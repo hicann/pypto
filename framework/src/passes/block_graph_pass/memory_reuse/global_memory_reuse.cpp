@@ -21,6 +21,7 @@
 #include "interface/tensor/irbuilder.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #define MODULE_NAME "GlobalMemoryReuse"
 
@@ -734,20 +735,16 @@ bool Allocator::TryReuseInputForOutput(
 
 void Allocator::UpdateStorageForActualRaw(LogicalTensorPtr& input) const
 {
-    if (input->tensor->actualRawmagic == -1) {
+    if (!input || !input->tensor || input->tensor->actualRawmagic == -1) {
         return;
     }
 
     // 获取当前actualRawmagic的tensor集合
     int64_t actualRawMagic = input->tensor->actualRawmagic;
-    auto& tensorMap = function_->GetTensorMap().tensorMap_;
-    auto iter = tensorMap.find(actualRawMagic);
-    if (iter == tensorMap.end() || iter->second.empty()) {
-        return;
-    }
+    auto tensorMap = GraphUtils::GetTensorsByRawMagic(input->BelongFunction(), actualRawMagic);
 
     // 更新所有相同actualRawmagic的tensor的存储
-    for (LogicalTensorPtr tensor : iter->second) {
+    for (const auto& tensor : tensorMap) {
         tensor->storage_ = input->storage_;
     }
 }

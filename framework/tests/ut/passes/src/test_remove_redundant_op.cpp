@@ -204,8 +204,8 @@ TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)
 
 std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
 {
-    auto func = std::make_shared<Function>(Program::GetInstance(),
-        "ProcessRedundantOpParallelAssembleWithReshape",
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "ProcessRedundantOpParallelAssembleWithReshape",
         "ProcessRedundantOpParallelAssembleWithReshape", nullptr);
 
     std::vector<int64_t> inputShape = {32, 128};

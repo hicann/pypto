@@ -44,7 +44,7 @@ void TestCodegenDynCumSumBody(int axis)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        axis == 0 ? "TCumOperation<3, 1>(ubTensor_2, ubTensor_0);" : "TCumOperation<3, 1>(ubTensor_7, ubTensor_2);";
+        axis == 0 ? "TCumOperation<3, 1>(ubTensor_2, ubTensor_0);" : "TCumOperation<3, 1>(ubTensor_5, ubTensor_2);";
     CheckStringExist(expect, res);
 }
 

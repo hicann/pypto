@@ -744,6 +744,7 @@ void TanOperationTileFunc(
 struct CumOperationTileInfoPara {
     TileInfo inputTileInfo;
     TileInfo dstTileInfo;
+    LogicalTensorPtr lastAxisTileFromPrev{nullptr};
 };
 
 struct CumOperationPara {
@@ -782,13 +783,12 @@ void InnerTiledCumOperation(
         }
         std::vector<int64_t> offset = cumOperationTileInfo.dstTileInfo.offset;
         if (offset[axis] > 0) {
-            offset[axis] -= 1;
-            std::vector<int64_t> shape = cumOperationTileInfo.dstTileInfo.shape;
-            shape[axis] = 1;
-            LogicalTensorPtr lastAxisTile = dstTensor->View(function, shape, offset);
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, cumOperationTileInfo.lastAxisTileFromPrev != nullptr)
+                << "lastAxisTileFromPrev must be set when cum axis tile offset > 0";
             LogicalTensorPtr lastTile = std::make_shared<LogicalTensor>(
                 function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
-            auto& eop = function.AddOperation("TILE_EXPAND", {lastAxisTile}, {lastTile});
+            auto& eop = function.AddOperation(
+                "TILE_EXPAND", {cumOperationTileInfo.lastAxisTileFromPrev}, {lastTile});
             eop.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{axis});
             if (is_sum) {
                 function.AddOperation(Opcode::OP_ADD, {srcTile, lastTile}, {dstTile});
@@ -798,6 +798,13 @@ void InnerTiledCumOperation(
         } else {
             function.AddOperation(Opcode::OP_REGISTER_COPY, {srcTile}, {dstTile});
         }
+        // Carry for next tile: last element of current dstTile (global cumulative at tile end).
+        // Use tile-local dstTile view instead of dstTensor view to avoid dependency cycles.
+        std::vector<int64_t> lastShape = cumOperationTileInfo.dstTileInfo.shape;
+        lastShape[axis] = 1;
+        std::vector<int64_t> lastViewOffset(lastShape.size(), 0);
+        lastViewOffset[axis] = cumOperationTileInfo.dstTileInfo.shape[axis] - 1;
+        cumOperationTileInfo.lastAxisTileFromPrev = dstTile->View(function, lastShape, lastViewOffset);
         return;
     }
     int64_t tmpTile = vecTile[cur];
@@ -1010,8 +1017,8 @@ void InnerTiledTriUL(
     if (cur == dstTensor->GetShape().size()) {
         auto dstTile = dstTensor->View(function, triULTileInfo.dstTileInfo.shape, triULTileInfo.dstTileInfo.offset);
         auto inputTile = input->View(function, triULTileInfo.inputTileInfo.shape, triULTileInfo.inputTileInfo.offset);
-        auto& op = function.AddOperation(Opcode::OP_TRIUL, {inputTile}, {dstTile});
         realDiagonal = realDiagonal + dstTile->GetOffset()[cur - 2] - dstTile->GetOffset()[cur - 1];
+        auto& op = function.AddOperation(Opcode::OP_TRIUL, {inputTile}, {dstTile});
         op.SetAttribute(OpAttributeKey::dynScalar, realDiagonal);
         op.SetAttribute(OpAttributeKey::isUpper, isUpper);
         return;

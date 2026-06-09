@@ -18,6 +18,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #include <sstream>
 
@@ -843,23 +844,27 @@ bool RemoveRedundantAssemble::IsCandidateAssembleOp(Function& function, Operatio
 void RemoveRedundantAssemble::HandleForReshapeToOutcast(Function& function) const
 {
     for (auto& op : function.Operations()) {
-        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-            auto dstRT = op.GetOOperands().front()->tensor;
-            auto srcRT = op.GetIOperands().front()->tensor;
-            if (function.outIncastLinkMap.count(dstRT) && function.outIncastLinkMap[dstRT] == srcRT) {
-                continue;
-            }
-            if (function.IsFromOutCast(op.GetOOperands()[0])) {
-                // INPUT --> RESHAPE --> OCAST
-                if (op.GetIOperands()[0]->tensor->actualRawmagic != -1) {
-                    // 说明输入也来自于reshape，需要找到指向的raw tensor，并更新其actual raw
-                    int inputActualRawId = op.GetIOperands()[0]->tensor->actualRawmagic;
-                    auto inputRaw = function.GetTensorMap().GetRawTensorByRawMagic(inputActualRawId);
-                    inputRaw->actualRawmagic = op.GetOOperands()[0]->GetRawMagic();
-                }
-                op.GetIOperands()[0]->tensor->actualRawmagic = op.GetOOperands()[0]->GetRawMagic();
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        auto dstRT = op.GetOOperands().front()->tensor;
+        auto srcRT = op.GetIOperands().front()->tensor;
+        if (function.outIncastLinkMap.count(dstRT) && function.outIncastLinkMap[dstRT] == srcRT) {
+            continue;
+        }
+        if (!function.IsFromOutCast(op.GetOOperands()[0])) {
+            continue;
+        }
+        // INPUT --> RESHAPE --> OCAST
+        if (op.GetIOperands()[0]->tensor->actualRawmagic != -1) {
+            // 说明输入也来自于reshape，需要把这条actual raw链上的tensor重定向到新的outcast raw
+            int inputActualRawId = op.GetIOperands()[0]->tensor->actualRawmagic;
+            auto inputRaw = GraphUtils::GetRawTensorByRawMagic(function, inputActualRawId);
+            if (inputRaw != nullptr) {
+                inputRaw->actualRawmagic = op.GetOOperands()[0]->GetRawMagic();
             }
         }
+        op.GetIOperands()[0]->tensor->actualRawmagic = op.GetOOperands()[0]->GetRawMagic();
     }
 }
 

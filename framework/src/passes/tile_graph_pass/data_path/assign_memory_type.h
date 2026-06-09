@@ -183,7 +183,7 @@ private:
 
     MemoryType InferOriginalFromRequirements(const LogicalTensorPtr& tensor) const;
 
-    void SyncTensorToBe(Function& function);
+    Status SyncTensorToBe(Function& function);
 
     Status SetOriginalChecked(
         const LogicalTensorPtr& tensor, MemoryType memoryType, const std::string& reason = "unknown",

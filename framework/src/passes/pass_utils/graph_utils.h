@@ -26,6 +26,25 @@
 
 namespace npu {
 namespace tile_fwk {
+struct CompareTensorByMagic {
+    bool operator()(const LogicalTensorPtr& a, const LogicalTensorPtr& b) const
+    {
+        if (a == b) {
+            return false;
+        }
+        if (!a) {
+            return b != nullptr;
+        }
+        if (!b) {
+            return false;
+        }
+
+        return a->GetMagic() > b->GetMagic();
+    }
+};
+
+using TensorSet = std::set<LogicalTensorPtr, CompareTensorByMagic>;
+
 class GraphUtils {
 public:
     /**
@@ -113,6 +132,59 @@ public:
      * @brief Determine it is a CV seperate or CV mix platform.
      */
     static bool IsCVMixPlatform();
+    /**
+     * @brief Get all tensors in the function that match the given rawMagic.
+     *        This method traverses inCasts, outCasts, and all operation inputs/outputs.
+     *        It represents the logical-tensor bucket keyed by rawmagic.
+     *
+     * @param function the target function to search in.
+     * @param rawMagic the raw magic ID to match.
+     * @return a TensorSet containing LogicalTensorPtrs matching the rawMagic.
+     */
+    static TensorSet GetTensorsByRawMagic(Function& function, int64_t rawMagic);
+    /**
+     * @brief Get the shared RawTensor represented by the given rawMagic bucket.
+     *
+     * @param function the target function to search in.
+     * @param rawMagic the raw magic ID of the bucket.
+     * @return the shared RawTensor for the bucket, or nullptr if the bucket is empty.
+     */
+    static std::shared_ptr<RawTensor> GetRawTensorByRawMagic(Function& function, int64_t rawMagic);
+    /**
+     * @brief Get all tensors in the function that match the given actualRawMagic.
+     *        This method traverses inCasts, outCasts, and all operation outputs.
+     *
+     * @param function the target function to search in.
+     * @param actualRawMagic the actual raw magic ID to match.
+     * @return a TensorSet containing LogicalTensorPtrs matching the actualRawMagic.
+     */
+    static TensorSet GetTensorsByActualRawMagic(Function& function, int64_t actualRawMagic);
+    /**
+     * @brief Get overlapped tensors in the function that match the given tensor's rawMagic.
+     *        If current function has no rawMagic bucket, recursively look up parent function.
+     *
+     * @param function the target function to search in.
+     * @param tensor the tensor to match overlap against.
+     * @return a list of overlapped LogicalTensorPtrs.
+     */
+    static std::vector<LogicalTensorPtr> FindOverlappedTensors(Function& function, const LogicalTensorPtr& tensor);
+    /**
+     * @brief Get the unique tensor in the function that matches the given magic.
+     *        This method searches inCasts, outCasts, and all operation outputs.
+     *
+     * @param function the target function to search in.
+     * @param magic the magic ID to match.
+     * @return the LogicalTensorPtr matching the magic, or nullptr if not found.
+     */
+    static LogicalTensorPtr GetTensorByMagic(Function& function, int magic);
+    /**
+     * @brief Get all tensors in the function.
+     *        This method replaces the old global tensorMap_ traversal.
+     *
+     * @param function the target function to search in.
+     * @return a TensorSet containing all LogicalTensorPtrs in the graph.
+     */
+    static TensorSet GetAllTensors(Function& function);
 };
 } // namespace tile_fwk
 } // namespace npu

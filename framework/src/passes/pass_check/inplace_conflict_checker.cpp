@@ -16,6 +16,7 @@
 #include <utility>
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
 #include "inplace_conflict_checker.h"
 
@@ -32,46 +33,50 @@ constexpr size_t DST_TILE_INPUT_PARAM_INDEX = 2;
 */
 Status InplaceConflictChecker::CheckIndexOutcastDisorderedCoverage(Function& function)
 {
-    for (const auto& tMap : function.GetTensorMap().tensorMap_) {
-        for (const auto& tensor : tMap.second) {
-            if (tensor->GetConsumers().size() <= 1) {
+    TensorSet allTensors = GraphUtils::GetAllTensors(function);
+    for (const auto& tensor : allTensors) {
+        if (tensor->GetConsumers().size() <= 1) {
+            continue;
+        }
+        for (const auto& consumerOp : tensor->GetConsumers()) {
+            if (consumerOp->GetOpcode() != Opcode::OP_INDEX_OUTCAST) {
                 continue;
             }
-            for (const auto& consumerOp : tensor->GetConsumers()) {
-                if (consumerOp->GetOpcode() != Opcode::OP_INDEX_OUTCAST) {
-                    continue;
-                }
-                if (consumerOp->GetIOperands().size() <= DST_TILE_INPUT_PARAM_INDEX ||
-                    consumerOp->GetIOperands()[DST_TILE_INPUT_PARAM_INDEX]->GetMagic() != tensor->GetMagic()) {
-                    continue;
-                }
-                APASS_LOG_WARN_F(Elements::Tensor, "Tensor[%d] is the dst of OP_INDEX_OUTCAST, it can't be input of other OP.", tensor->GetMagic());
-                return FAILED;
+            if (consumerOp->GetIOperands().size() <= DST_TILE_INPUT_PARAM_INDEX ||
+                consumerOp->GetIOperands()[DST_TILE_INPUT_PARAM_INDEX]->GetMagic() != tensor->GetMagic()) {
+                continue;
             }
+            APASS_LOG_WARN_F(
+                Elements::Tensor, "Tensor[%d] is the dst of OP_INDEX_OUTCAST, it can't be input of other OP.",
+                tensor->GetMagic());
+            return FAILED;
         }
     }
     return SUCCESS;
 }
 
 /*
-    tensor -> view/reshape -> 其他原地操作 场景，如果tensor还作为了其他Op的输入，则无法确认其他Op从tensor中取到的值是被原地操作更新前还是跟新后的值
+    tensor -> view/reshape -> 其他原地操作
+   场景，如果tensor还作为了其他Op的输入，则无法确认其他Op从tensor中取到的值是被原地操作更新前还是跟新后的值
 */
 Status InplaceConflictChecker::CheckInplaceOperationConflict(Function& function)
 {
-    for (const auto& tMap : function.GetTensorMap().tensorMap_) {
-        for (const auto& tensor : tMap.second) {
-            if (tensor->GetConsumers().size() <= 1) {
+    TensorSet allTensors = GraphUtils::GetAllTensors(function);
+    for (const auto& tensor : allTensors) {
+        if (tensor->GetConsumers().size() <= 1) {
+            continue;
+        }
+        std::unordered_set<Opcode> checkOpSet = {Opcode::OP_RESHAPE, Opcode::OP_VIEW};
+        for (const auto& consumerOp : tensor->GetConsumers()) {
+            if (checkOpSet.count(consumerOp->GetOpcode()) == 0) {
                 continue;
             }
-            std::unordered_set<Opcode> checkOpSet = { Opcode::OP_RESHAPE, Opcode::OP_VIEW };
-            for (const auto& consumerOp : tensor->GetConsumers()) {
-                if (checkOpSet.count(consumerOp->GetOpcode()) == 0) {
-                    continue;
-                }
-                APASS_LOG_WARN_F(Elements::Tensor,
-                    "Tensor[%d] is the input of multiple operations, and contains inplace operation, the precision may be abnormal.", tensor->GetMagic());
-                return FAILED;
-            }
+            APASS_LOG_WARN_F(
+                Elements::Tensor,
+                "Tensor[%d] is the input of multiple operations, and contains inplace operation, the precision may "
+                "be abnormal.",
+                tensor->GetMagic());
+            return FAILED;
         }
     }
     return SUCCESS;

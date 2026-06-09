@@ -1601,12 +1601,6 @@ void OoOScheduler::EraseOrphanedTensors(
         for (auto* op : opsToDelete) {
             tensor->RemoveConsumer(op);
         }
-
-        // 如果 tensor 已孤立（无生产者和消费者），删除它
-        if (tensor->GetProducers().empty() && tensor->GetConsumers().empty()) {
-            function_.GetTensorMap().Erase(tensor);
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Erased tensor[%d].", tensor->memoryrange.memId);
-        }
     }
 }
 

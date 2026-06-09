@@ -348,6 +348,12 @@ std::shared_ptr<LogicalTensor> LogicalTensor::View(
         view->dynOffset_ = TensorOffset::Add(dynOffset_, newOffset);
     }
     view->dynValidShape_ = GetViewValidShape(dynValidShape_, newOffset, {}, newShape);
+
+    auto parent = const_cast<LogicalTensor*>(this)->shared_from_this();
+    if (HasAttr("SLICE_PARENT")) {
+        GetAttr("SLICE_PARENT", parent);
+    }
+    view->SetAttr("SLICE_PARENT", parent);
     return view;
 }
 

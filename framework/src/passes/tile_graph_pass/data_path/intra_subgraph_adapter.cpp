@@ -394,7 +394,6 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
         irBuilder_.CreateTensorVar(newRawTensor, tensor->GetOffset(), tensor->GetShape(), std::vector<SymbolicScalar>{});
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
-    function.GetTensorMap().Insert(newTensor, false);
     op.ReplaceOutputOperand(tensor, newTensor);
     APASS_LOG_DEBUG_F(Elements::Tensor, "Compare Ori: %s", tensor->Dump().c_str());
     APASS_LOG_DEBUG_F(Elements::Tensor, "Compare New: %s", newTensor->Dump().c_str());
@@ -442,7 +441,6 @@ LogicalTensorPtr IntraSubgraphAdapter::InsertOpBetween(
     newTensor->UpdateOffset(tensor->GetTensorOffset());
     GraphUtils::CopyDynStatus(newTensor, tensor);
     newTensor->SetMemoryTypeBoth(tensor->GetMemoryTypeOriginal(), true);
-    function.GetTensorMap().Insert(newTensor, false);
     APASS_LOG_DEBUG_F(Elements::Tensor, "Compare Ori: %s", tensor->Dump().c_str());
     APASS_LOG_DEBUG_F(Elements::Tensor, "Compare New: %s", newTensor->Dump().c_str());
 
@@ -504,8 +502,9 @@ std::set<int> IntraSubgraphAdapter::SetIntersection(std::set<int>& a, std::set<i
 LogicalTensors IntraSubgraphAdapter::CollectBoundaryTensors(Function& function)
 {
     LogicalTensors ret;
-    for (auto& [magic, tensor] : function.GetTensorMap().inverseMap_) {
-        (void)magic;
+    TensorSet allTensors = GraphUtils::GetAllTensors(function);
+    for (const auto& tensor : allTensors) {
+        if (!tensor) continue;
         std::set<int> colors;
         CollectProducerColors(tensor, colors);
         CollectConsumerColors(tensor, colors);

@@ -70,16 +70,16 @@ void TopKOnBoardFunc(TopKParams& params)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "TOPK_T_TILETENSOR");
     std::string res = GenCodeByFunction(*function);
 
-    std::string expect = R"(TBitSort<1, 0, 1>(ubTensor_2, ubTensor_0, ubTensor_3); // [opMagic:10005])";
+    std::string expect = R"(TBitSort<1, 0, 1>(ubTensor_2, ubTensor_0, ubTensor_3); // [opMagic:10006])";
     CheckStringExist(expect, res);
 
-    expect = R"(TMrgSort<1, 32, 32>(ubTensor_2, ubTensor_2, ubTensor_6); // [opMagic:10006])";
+    expect = R"(TMrgSort<1, 32, 32>(ubTensor_2, ubTensor_2, ubTensor_6); // [opMagic:10007])";
     CheckStringExist(expect, res);
 
-    expect = R"(TExtract<32, 0, 1>(ubTensor_8, ubTensor_2); // [opMagic:10007])";
+    expect = R"(TExtract<32, 0, 1>(ubTensor_8, ubTensor_2); // [opMagic:10008])";
     CheckStringExist(expect, res);
 
-    expect = R"(TExtract<32, 1, 1>(ubTensor_10, ubTensor_2); // [opMagic:10008])";
+    expect = R"(TExtract<32, 1, 1>(ubTensor_10, ubTensor_2); // [opMagic:10010])";
     CheckStringExist(expect, res);
 }
 

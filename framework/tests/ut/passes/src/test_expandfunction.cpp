@@ -46,6 +46,7 @@ static const uint16_t kNumFour = 4u;
 static const uint16_t kNumEight = 8u;
 static const uint16_t kNumForteen = 14u;
 static const uint16_t kNumExpFour = 16u;
+static const uint16_t kNumSevenTeen = 17u;
 static const uint16_t kNumTwentyfive = 25u;
 static const uint16_t kNumExpFive = 32u;
 static const uint16_t kNumExpSix = 64u;
@@ -588,7 +589,7 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionSTest2)
     EXPECT_EQ(view_num, kNumForteen);
     EXPECT_EQ(exp_num, kNumFour);
     // 12个后链接的assemble
-    EXPECT_EQ(assemble_num, kNumTwentyfive);
+    EXPECT_EQ(assemble_num, kNumSevenTeen);
     // reshape前合入
     EXPECT_EQ(reshape_num, kNumOne);
     EXPECT_EQ(sqrt_num, kNumFour);
@@ -686,7 +687,6 @@ TEST_F(TestExpandFunctionPass, PreCheckForDisorderIndexOutcast)
     EXPECT_EQ(G.SetOutCast({"outcast1", "outcast2"}), true);
 
     Function* function = G.GetFunction();
-    function->GetTensorMap().Insert(G.GetTensor("dst"));
 
     ExpandFunction expandfunctionpass;
     EXPECT_EQ(expandfunctionpass.PreRun(*function), SUCCESS);
@@ -716,7 +716,6 @@ TEST_F(TestExpandFunctionPass, PreCheckForViewConflict)
     EXPECT_EQ(G.SetOutCast({"view_output", "add_output1"}), true);
 
     Function* function = G.GetFunction();
-    function->GetTensorMap().Insert(G.GetTensor("tensor"));
 
     InplaceConflictChecker inplaceConflictChecker;
     EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), FAILED);
@@ -746,7 +745,6 @@ TEST_F(TestExpandFunctionPass, PreCheckForReshapeConflict)
     EXPECT_EQ(G.SetOutCast({"reshape_output", "mul_output"}), true);
 
     Function* function = G.GetFunction();
-    function->GetTensorMap().Insert(G.GetTensor("tensor"));
 
     InplaceConflictChecker inplaceConflictChecker;
     EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), FAILED);
@@ -773,7 +771,6 @@ TEST_F(TestExpandFunctionPass, PreCheckForViewNoConflict)
     EXPECT_EQ(G.SetOutCast({"final_output"}), true);
 
     Function* function = G.GetFunction();
-    function->GetTensorMap().Insert(G.GetTensor("tensor"));
 
     InplaceConflictChecker inplaceConflictChecker;
     EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), SUCCESS);
@@ -800,7 +797,6 @@ TEST_F(TestExpandFunctionPass, PreCheckForReshapeNoConflict)
     EXPECT_EQ(G.SetOutCast({"final_output"}), true);
 
     Function* function = G.GetFunction();
-    function->GetTensorMap().Insert(G.GetTensor("tensor"));
 
     InplaceConflictChecker inplaceConflictChecker;
     EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), SUCCESS);

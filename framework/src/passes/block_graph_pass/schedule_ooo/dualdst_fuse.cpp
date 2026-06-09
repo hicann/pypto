@@ -469,8 +469,7 @@ Operation* OoOScheduler::CreateDualDstFusedOp(const DualDstPair& p, LogicalTenso
     Operation& cRef = function_.AddRawOperation(
         Opcode::OP_L0C_COPY_UB_DUAL_DST,
         {l0cIn},
-        {p.tensorEarly, p.tensorLate},
-        /*updateTensorMap=*/false);
+        {p.tensorEarly, p.tensorLate});
     Operation* C = &cRef;
     C->UpdateInternalSubgraphID(p.opEarly->GetInternalSubgraphID());
     // OP_L0C_COPY_UB_DUAL_DST 在 cube 侧执行,不涉及 AIV 选择;isCube 恒为 true。

@@ -539,25 +539,26 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "---> CollectLargeTensor.");
     std::unordered_set<int> visited;
-    auto& tensorMap = function.GetTensorMap().tensorMap_;
-    for (const auto& tMap : tensorMap) {
-        for (const auto& logicalTensor : tMap.second) {
-            // 对于每个tensor, 寻找满足前序为Assemble且后序为View的LargeTensor
-            auto producer = *logicalTensor->GetProducers().begin();
-            auto consumer = *logicalTensor->GetConsumers().begin();
-            if (producer == nullptr || consumer == nullptr) {
-                break;
+    auto tensorMap = GraphUtils::GetAllTensors(function);
+    for (const auto& logicalTensor : tensorMap) {
+        if (logicalTensor == nullptr || logicalTensor->GetProducers().empty() || logicalTensor->GetConsumers().empty()) {
+            continue;
+        }
+        // 对于每个tensor, 寻找满足前序为Assemble且后序为View的LargeTensor
+        auto producer = *logicalTensor->GetProducers().begin();
+        auto consumer = *logicalTensor->GetConsumers().begin();
+        if (producer == nullptr || consumer == nullptr) {
+            continue;
+        }
+        if (producer->GetOpcode() == Opcode::OP_ASSEMBLE && consumer->GetOpcode() == Opcode::OP_VIEW) {
+            // 收集大Tensor, 形成Set{TensorPtr1, TensorPtr2, ...}
+            if (visited.count(logicalTensor->GetMagic()) == 0) {
+                visited.insert(logicalTensor->GetMagic());
+                largeTensors_.push_back(logicalTensor);
             }
-            if (producer->GetOpcode() == Opcode::OP_ASSEMBLE && consumer->GetOpcode() == Opcode::OP_VIEW) {
-                // 收集大Tensor, 形成Set{TensorPtr1, TensorPtr2, ...}
-                if (visited.count(logicalTensor->GetMagic()) == 0) {
-                    visited.insert(logicalTensor->GetMagic());
-                    largeTensors_.push_back(logicalTensor);
-                }
-                CollectLargeTensorToInfo(logicalTensor);
-                CollectLargeTensorFromInfo(logicalTensor);
-                APASS_LOG_INFO_F(Elements::Tensor, "Large tensor magic is %d.", logicalTensor->GetMagic());
-            }
+            CollectLargeTensorToInfo(logicalTensor);
+            CollectLargeTensorFromInfo(logicalTensor);
+            APASS_LOG_INFO_F(Elements::Tensor, "Large tensor magic is %d.", logicalTensor->GetMagic());
         }
     }
 }

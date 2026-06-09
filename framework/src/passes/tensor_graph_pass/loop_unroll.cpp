@@ -439,7 +439,6 @@ Status LoopUnroll::UpdateTopFuncInoutCast(Function* function)
         if (lastWriteMap_.find(slotIdx) != lastWriteMap_.end()) {
             scope->ioslot.incastSlot.push_back({slotIdx});
             topFunction_->inCasts_.push_back(lastWriteMap_[slotIdx].first);
-            topFunction_->GetTensorMap().Insert(lastWriteMap_[slotIdx].first, false);
         }
     }
     std::vector<int> outcastSlot = Program::GetInstance().GetTensorSlotManager()->LookupSlotIndexConst(

@@ -250,6 +250,7 @@ Status MergeViewAssembleUtils::ProcessConsumerChain(
 
 Status MergeViewAssembleUtils::ProcessChainEnd(Function& function, std::vector<Operation*>& chain)
 {
+    (void)function;
     // 1. 验证链的有效性
     Operation* startOp = chain.front();
     Operation* endOp = chain.back();
@@ -287,7 +288,6 @@ Status MergeViewAssembleUtils::ProcessChainEnd(Function& function, std::vector<O
 
     // 清理链尾
     endOp->oOperand.clear();
-    function.GetTensorMap().Erase(endTensor);
     return SUCCESS;
 }
 
@@ -434,6 +434,7 @@ Status MergeViewAssembleUtils::ProcessAssembleConsumers(
 Status MergeViewAssembleUtils::ProcessAssembleChainEnd(
     Function& function, std::vector<Operation*>& chain, Operation& operation)
 {
+    (void)function;
     // 验证链有效性
     if (chain.front()->iOperand.empty() || chain.back()->oOperand.empty()) {
         APASS_LOG_ERROR_F(Elements::Function, "Invalid chain operations.");
@@ -452,7 +453,6 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(
     Operation::ScopeInfo chainScopeInfo = GetChainScopeInfo(chain);
     // 4. 记录并清理
     RecordAssembleOperation(startTensor, endTensor, newOffset, newDynOffset, firstSpan, chainScopeInfo);
-    function.GetTensorMap().Erase(endTensor);
     operation.SetAsDeleted();
 
     return SUCCESS;

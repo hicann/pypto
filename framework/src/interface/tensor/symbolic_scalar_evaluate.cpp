@@ -184,6 +184,17 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetRawShape(
     auto coaIndex = dataList[1] + COA_INDEX_DIM_BASE + dataList[0] * 2 + dataList[2];
     return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
 }
+
+ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetParam(
+    EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
+    const std::vector<SymbolicScalar>& linearArgList)
+{
+    FE_ASSERT(linearArgList.size()) << "linearArgList is null";
+    FE_ASSERT(dataList.size() == 1);
+    // Matches RUNTIME_COA_GET_PARAM(idx) in aicore_runtime.h: GetCoa<0, 0>(param, idx)
+    auto coaIndex = dataList[0];
+    return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
+}
 } // namespace
 
 ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(
@@ -208,6 +219,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(
         EvaluateSymbol*, const std::vector<ScalarImmediateType>& dataList,
         const std::vector<SymbolicScalar>& linearArgList);
     static std::unordered_map<std::string, CallWithLinerArgsEntry> CallWithLinerArgsEntryDict = {
+        {"RUNTIME_COA_GET_PARAM", EvaluateSymbolicCallRuntimeCoaGetParam},
         {"RUNTIME_COA_GET_PARAM_VALID_SHAPE", EvaluateSymbolicCallRuntimeCoaGetValidShape},
         {"RUNTIME_COA_GET_PARAM_OFFSET", EvaluateSymbolicCallRuntimeCoaGetOffset},
         {"RUNTIME_COA_GET_PARAM_RAW_SHAPE", EvaluateSymbolicCallRuntimeCoaGetRawShape},

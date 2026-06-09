@@ -33,6 +33,7 @@
 #include "interface/utils/file_utils.h"
 #include "interface/tensor/hypercube_overlap_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #define MODULE_NAME "TensorAndTileGraphStatistic"
 
@@ -96,8 +97,8 @@ void CalcTensorInfo(Function& function, json& report)
 {
     MetricData consumerMetric;
     MetricData producerMetric;
-    for (auto ele : function.GetTensorMap().inverseMap_) {
-        auto tensor = ele.second;
+    TensorSet allTensors = GraphUtils::GetAllTensors(function);
+    for (auto tensor : allTensors) {
         int tensorMagic = tensor->GetMagic();
         uint64_t consumerSize = static_cast<uint64_t>(tensor->GetConsumers().size());
         consumerMetric.UpdateMetricData(consumerSize, tensorMagic);
@@ -106,7 +107,7 @@ void CalcTensorInfo(Function& function, json& report)
     }
 
     // 写出consumerMetric和producerMetric
-    report["totalTensorCount"] = function.GetTensorMap().inverseMap_.size();
+    report["totalTensorCount"] = allTensors.size();
     report["maxConsumerCount"] = consumerMetric.GetMaxSize();
     report["maxConsumerTensors"] = *consumerMetric.GetMaxNodes();
     report["maxproducerCount"] = producerMetric.GetMaxSize();
@@ -232,8 +233,7 @@ std::unordered_map<std::string, int> redundantCopyMemoryMap = {
 
 Status CalRedundantCopy(Function& function, json& report)
 {
-    for (auto& [magic, tensor] : function.GetTensorMap().inverseMap_) {
-        (void)magic;
+    for (auto tensor : GraphUtils::GetAllTensors(function)) {
         auto dataSize = BytesOf(tensor->Datatype());
         std::unordered_map<MemoryType, HypercubeOverlapChecker<Operation*>> overlapChecker;
         for (auto& consumer : tensor->GetConsumers()) {

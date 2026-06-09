@@ -17,6 +17,7 @@
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 #include <iostream>
 #include <vector>
 #include <numeric>
@@ -245,8 +246,7 @@ bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr& tensor)
 
 void ReduceCopyMerge::UpdateConnectRecord(Function& function)
 {
-    for (const auto& item : function.GetTensorMap().inverseMap_) {
-        LogicalTensorPtr tensor = item.second;
+    for (auto tensor : GraphUtils::GetAllTensors(function)) {
         int tensorSize = tensor->MemorySize();
         if (tensor->GetProducers().size() == 0 || tensor->GetConsumers().size() == 0) {
             continue;

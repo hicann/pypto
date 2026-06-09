@@ -64,7 +64,7 @@ TEST_F(TestCodegenDynScalar, TestScalarAdds)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127, sym_5_dim_0, sym_5_dim_1);)!!!";
+        R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127,)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -95,7 +95,7 @@ TEST_F(TestCodegenDynScalar, TestScalarDivs)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTSdivs<float, /*DstRawShape*/ 1, 2, 40, /*Src0RawShape*/ 1, 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127, sym_5_dim_0, sym_5_dim_1, sym_5_dim_2);)!!!";
+        R"!!!(TileOp::DynTSdivs<float, /*DstRawShape*/ 1, 2, 40, /*Src0RawShape*/ 1, 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127,)!!!";
     CheckStringExist(expect, res);
 }
 

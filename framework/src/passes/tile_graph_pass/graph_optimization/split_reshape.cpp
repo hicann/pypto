@@ -1408,7 +1408,6 @@ Status SplitReshape::AddOperation(Function& function)
         }
         auto& newReshape =
             GraphUtils::AddReshapeOperation(function, b.second->input, b.second->output, *b.second, dynValidShape);
-        function.GetTensorMap().Insert(newReshape.GetOOperands()[0], false);
         APASS_LOG_INFO_F(
             Elements::Operation,
             "ADD OP_RESHAPE, magic %d, IOperand tensor magic %d OOperand tensor magic %d, dynValidShape %s.",

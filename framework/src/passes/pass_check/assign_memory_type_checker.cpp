@@ -15,6 +15,7 @@
 
 #include "assign_memory_type_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
 #include "tilefwk/platform.h"
 
@@ -138,12 +139,11 @@ Status AssignMemoryTypeChecker::DoPostCheck(Function& function)
 
 Status AssignMemoryTypeChecker::CheckTensorNotMemUnknown(Function& function)
 {
-    for (const auto& tMap : function.GetTensorMap().tensorMap_) {
-        for (const auto& tensor : tMap.second) {
-            if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UNKNOWN) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d]'s memoryType is still unknown.", tensor->GetMagic());
-                return FAILED;
-            }
+    TensorSet allTensors = GraphUtils::GetAllTensors(function);
+    for (const auto& tensor : allTensors) {
+        if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UNKNOWN) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d]'s memoryType is still unknown.", tensor->GetMagic());
+            return FAILED;
         }
     }
     return SUCCESS;

@@ -23,6 +23,7 @@
 #include "passes/pass_utils/parallel_tool.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
 
 #ifndef MODULE_NAME
@@ -328,13 +329,10 @@ bool OoOScheduleChecker::PostCheckNewTensor(std::pair<const int, Function*> prog
         }
     }
     for (auto& newtensor : newTensors) {
-        auto matchTensors = program.second->GetTensorMap().Find(newtensor);
-        bool existFlag = false;
-        if (matchTensors.size() != 0) {
-            for (auto matchTensor : matchTensors) {
-                existFlag = true;
-                break;
-            }
+        auto matchTensors = GraphUtils::FindOverlappedTensors(*(program.second), newtensor);
+        bool existFlag = GraphUtils::GetTensorByMagic(*(program.second), newtensor->GetMagic()) == newtensor;
+        if (!existFlag && matchTensors.size() != 0) {
+            existFlag = true;
         }
         if (existFlag == false) {
             APASS_LOG_ERROR_F(

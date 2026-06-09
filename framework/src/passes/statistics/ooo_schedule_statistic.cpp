@@ -17,6 +17,7 @@
 #include <fstream>
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #define MODULE_NAME "OooScheduleStatistic"
 namespace npu {
@@ -168,21 +169,23 @@ void OoOScheduleStatistic::ReportMemoryUsage(const std::unordered_map<MemoryType
 void OoOScheduleStatistic::HealthCheckBlockGraph(Function* function)
 {
     report["totalOpCount"] = function->Operations().size();
-    auto& tensors = function->GetTensorMap().inverseMap_;
+    auto tensors = GraphUtils::GetAllTensors(*function);
     size_t maxProducers = 0;
     size_t maxConsumers = 0;
     std::vector<int> maxProducersTensors;
     std::vector<int> maxConsumersTensors;
     for (auto& tensor : tensors) {
-        maxProducers = std::max(tensor.second->GetProducers().size(), maxProducers);
-        maxConsumers = std::max(tensor.second->GetConsumers().size(), maxConsumers);
+        if (!tensor) continue;
+        maxProducers = std::max(tensor->GetProducers().size(), maxProducers);
+        maxConsumers = std::max(tensor->GetConsumers().size(), maxConsumers);
     }
     for (auto& tensor : tensors) {
-        if (tensor.second->GetProducers().size() == maxProducers) {
-            maxProducersTensors.emplace_back(tensor.second->GetMagic());
+        if (!tensor) continue;
+        if (tensor->GetProducers().size() == maxProducers) {
+            maxProducersTensors.emplace_back(tensor->GetMagic());
         }
-        if (tensor.second->GetConsumers().size() == maxConsumers) {
-            maxConsumersTensors.emplace_back(tensor.second->GetMagic());
+        if (tensor->GetConsumers().size() == maxConsumers) {
+            maxConsumersTensors.emplace_back(tensor->GetMagic());
         }
     }
     size_t maxInputs = 0;

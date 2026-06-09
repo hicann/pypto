@@ -286,16 +286,13 @@ public:
     QueueType queueType;
 
     // Constructor to initialize the opcode, input operands, output operands, and opmagic
-    Operation(
-        Function& cur, Opcode opcode, LogicalTensors iOperands, LogicalTensors oOperands, bool updateTensorMap = true,
-        int opMagic = -1);
+    Operation(Function& cur, Opcode opcode, LogicalTensors iOperands, LogicalTensors oOperands, int opMagic = -1);
 
-    Operation(Function& cur, Opcode opcode) : Operation(cur, opcode, {}, {}, false) {}
+    Operation(Function& cur, Opcode opcode) : Operation(cur, opcode, {}, {}) {}
 
     Operation(
-        Function& cur, const std::string& op, const LogicalTensors& input, const LogicalTensors& output,
-        bool updateTensormap = true)
-        : Operation(cur, FindOpcode(op), input, output, updateTensormap)
+        Function& cur, const std::string& op, const LogicalTensors& input, const LogicalTensors& output)
+        : Operation(cur, FindOpcode(op), input, output)
     {
         if (op.substr(0, TILE_STR_PREFIX_LEN) == "TILE_") {
             isTileOp_ = true;
@@ -743,6 +740,10 @@ public:
     std::vector<std::string>& GetCommentList() { return commentList_; }
 
 private:
+    void InitCoreTypeAndTileShape(Opcode opcode);
+    void InitTensorGraphMetadata();
+    void InitLatency(Opcode opcode);
+
     Opcode opcode_{Opcode::OP_UNKNOWN};
     int subgraphID_{NOT_IN_SUBGRAPH};
     bool isTileOp_{false};

@@ -47,7 +47,7 @@ Status AssignMemoryType::RunOnFunction(Function& function)
     RETURN_IF_NOT_SUCCESS(ResolveMemoryUnknowns(function));
     RETURN_IF_NOT_SUCCESS(SyncViewAssembleMemoryAttrs(function));
     RETURN_IF_NOT_SUCCESS(InsertConvertOpsAndInferShape(function));
-    SyncTensorToBe(function);
+    RETURN_IF_NOT_SUCCESS(SyncTensorToBe(function));
     APASS_LOG_INFO_F(Elements::Function, "===> End AssignMemoryType.");
     return SUCCESS;
 }
@@ -198,7 +198,6 @@ Status AssignMemoryType::AssignInOutCastMemoryTypes(Function& function)
 
 Status AssignMemoryType::EnsureAllConsumerRequirementsExist(Function& function)
 {
-    // Membership-only deduplication. Do not iterate this set to produce pass output.
     std::unordered_set<LogicalTensorPtr> visited;
     auto ensureTensor = [this, &visited](const LogicalTensorPtr& tensor) -> Status {
         if (tensor == nullptr || !visited.insert(tensor).second)
@@ -381,12 +380,12 @@ bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(
         directPath = inserter.FitL0C2L1(operation);
         return true;
     }
-    const auto& die = Platform::Instance().GetDie();
-    if (from == MemoryType::MEM_L0C && to == MemoryType::MEM_UB && die.HasDirectPath(from, to)) {
+    bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    if (isA5 && from == MemoryType::MEM_L0C && to == MemoryType::MEM_UB) {
         directPath = true;
         return true;
     }
-    if (from == MemoryType::MEM_UB && to == MemoryType::MEM_L1 && die.HasDirectPath(from, to)) {
+    if (isA5 && from == MemoryType::MEM_UB && to == MemoryType::MEM_L1) {
         directPath = inserter.FitUB2L1(operation.iOperand.front());
         return true;
     }
@@ -1153,7 +1152,6 @@ Status AssignMemoryType::ApplyPlatformPathFallbackRules(Function& function)
 
 Status AssignMemoryType::ResolveMemoryUnknowns(Function& function)
 {
-    // Membership-only deduplication. Do not iterate this set to produce pass output.
     std::unordered_set<LogicalTensorPtr> visited;
     auto resolveTensor = [this, &visited](const LogicalTensorPtr& tensor) -> Status {
         if (tensor != nullptr && !visited.insert(tensor).second) {
@@ -1277,11 +1275,11 @@ MemoryType AssignMemoryType::InferOriginalFromRequirements(const LogicalTensorPt
     return MemoryType::MEM_DEVICE_DDR;
 }
 
-void AssignMemoryType::SyncTensorToBe(Function& function)
+Status AssignMemoryType::SyncTensorToBe(Function& function)
 {
-    // Membership-only deduplication. Do not iterate this set to produce pass output.
+    size_t syncCount = 0;
     std::unordered_set<LogicalTensorPtr> visited;
-    auto syncTensor = [&visited](const LogicalTensorPtr& tensor) {
+    auto syncTensor = [&syncCount, &visited](const LogicalTensorPtr& tensor) {
         if (tensor == nullptr) {
             return;
         }
@@ -1289,6 +1287,7 @@ void AssignMemoryType::SyncTensorToBe(Function& function)
             return;
         }
         tensor->SetMemoryTypeToBe(tensor->GetMemoryTypeOriginal());
+        ++syncCount;
     };
     for (auto& op : function.Operations()) {
         for (auto& input : op.iOperand) {
@@ -1298,6 +1297,7 @@ void AssignMemoryType::SyncTensorToBe(Function& function)
             syncTensor(output);
         }
     }
+    return SUCCESS;
 }
 
 Status AssignMemoryType::SetOriginalChecked(
@@ -1536,6 +1536,41 @@ bool AssignMemoryType::CheckConsumerViewShapeMultiple(const LogicalTensorPtr& ou
     return true;
 }
 
+static bool IsViewConsumerToUb(Operation* consumerOp)
+{
+    if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_VIEW || consumerOp->oOperand.empty()) {
+        return false;
+    }
+    auto output = consumerOp->oOperand.front();
+    if (output != nullptr && output->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        return true;
+    }
+    auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
+    return viewOpAttribute != nullptr && viewOpAttribute->GetTo() == MemoryType::MEM_UB;
+}
+
+static bool IsConsumerRequirementTowardsUb(const LogicalTensorPtr& tensor, Operation* consumerOp, MemoryType requirement)
+{
+    if (requirement == MemoryType::MEM_UB) {
+        return true;
+    }
+    if (requirement != tensor->GetMemoryTypeOriginal()) {
+        return false;
+    }
+    return IsViewConsumerToUb(consumerOp);
+}
+
+static bool AreAllConsumerRequirementsTowardsUb(ConvertInserter& inserter, const LogicalTensorPtr& tensor)
+{
+    auto requirements = inserter.GetConsumerRequirements(tensor);
+    if (requirements.empty()) {
+        return false;
+    }
+    return std::all_of(requirements.begin(), requirements.end(), [&tensor](const auto& item) {
+        return IsConsumerRequirementTowardsUb(tensor, item.first, item.second);
+    });
+}
+
 void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
 {
     for (auto& op : function.Operations()) {
@@ -1553,13 +1588,22 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
         bool isVecTileShapeValid = CheckUBTileShape(oOperand);
-        if (!AreAllConsumerRequirements(oOperand, MemoryType::MEM_UB) ||
-            !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple ||
-            !isVecTileShapeValid) {
+        bool canUseUb = AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
+            IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) && isConsumerOutputMultiple &&
+            isVecTileShapeValid && FitsAssembleOutputMemoryLimit(oOperand, MemoryType::MEM_UB);
+        if (!canUseUb) {
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             DowngradeConsumerRequirements(oOperand, MemoryType::MEM_L0C);
             APASS_LOG_DEBUG_F(Elements::Tensor, "Set tensor %d original memory type to DDR since "
                 "not towards UB or not multiple dimensions.", oOperand->magic);
+            continue;
+        }
+        ForceSetOriginal(oOperand, MemoryType::MEM_UB, "ProcessL0C2UBSmallToLarge");
+        for (const auto& [consumerOp, memoryType] : inserter.GetConsumerRequirements(oOperand)) {
+            if (memoryType != MemoryType::MEM_UB && IsViewConsumerToUb(consumerOp)) {
+                inserter.UpdateTensorTobeMap(
+                    oOperand, *consumerOp, MemoryType::MEM_UB, "ProcessL0C2UBSmallToLarge");
+            }
         }
     }
 }

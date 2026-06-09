@@ -989,9 +989,11 @@ void ExecuteOpTri(ExecuteOperationContext* ctx)
     auto& output = ctx->ooperandInplaceDataViewList->at(0);
     auto& input = ctx->ioperandDataViewList->at(0);
 
-    // dynScalar 存的是 SymbolicScalar，需用 GetSymbolicScalarAttribute + EvaluateSymbolicScalar 取整型值
+    // dynScalar 可能为 RUNTIME_COA_GET_PARAM(idx)，需经 callop linearArgList 解析
     SymbolicScalar diaSym = ctx->op->GetSymbolicScalarAttribute(OpAttributeKey::dynScalar);
-    int diagonal = static_cast<int>(ctx->opInter->EvaluateSymbolicScalar(diaSym));
+    std::vector<OpImmediate> diaImmList = {OpImmediate::Specified(diaSym)};
+    int diagonal = static_cast<int>(ctx->opInter->EvaluateOpImmediate(ctx->frame, diaImmList)[0]);
+    std::cout << "diagonal: " << diagonal << std::endl;
     bool isUpper = ctx->op->GetBoolAttribute(OpAttributeKey::isUpper);
     isUpper ? calc::TriU(output, input, diagonal) : calc::TriL(output, input, diagonal);
 }

@@ -47,7 +47,9 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
     if (info.magic != -1) {
         localTensor->SetMagic(info.magic);
     }
-    info.function.GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
+    if (!info.dynValidShape.empty()) {
+        localTensor->UpdateDynValidShape(info.dynValidShape);
+    }
     return localTensor;
 }
 
@@ -155,7 +157,6 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
     tensorPtr->UpdateDynValidShape(SymbolicScalar::FromConcrete(shape));
     tensorPtr->SetMemoryTypeOriginal(memType);
     tensorPtr->SetMemoryTypeToBe(memType);
-    function.GetTensorMap().inverseMap_[tensorPtr->GetMagic()] = tensorPtr;
     return tensorPtr;
 }
 

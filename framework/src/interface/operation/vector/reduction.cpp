@@ -54,8 +54,7 @@ void TileReduceNew(
         opNew = "SUM";
     }
 
-    auto source = std::make_shared<LogicalTensor>(
-        function, in->tensor, in->offset, in->shape, in->GetDynValidShape());
+    auto source = in;
 
     auto vecTile = tileShape.GetVecTile();
     int64_t width = (source->shape[axis] + vecTile[axis] - 1) / vecTile[axis] * vecTile[axis]; // 向上对齐

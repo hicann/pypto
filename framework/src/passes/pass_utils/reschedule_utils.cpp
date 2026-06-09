@@ -265,9 +265,6 @@ void RescheduleUtils::UpdateTensorConsProd(Function* funcPtr)
             inverseMap[outOperand->GetMagic()] = outOperand;
         }
     }
-
-    funcPtr->GetTensorMap().tensorMap_.swap(tensorMap);
-    funcPtr->GetTensorMap().inverseMap_.swap(inverseMap);
 }
 
 void RescheduleUtils::PrintColorNode(Function& func)

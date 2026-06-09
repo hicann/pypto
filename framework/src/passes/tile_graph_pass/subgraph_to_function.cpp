@@ -139,13 +139,14 @@ void SubgraphToFunction::RecordConnectionWithProducers(RecordInfo recordInfo, Su
     }
 }
 
-bool isFromCast(LogicalTensorPtr &operand) {
+bool isFromCast(LogicalTensorPtr& operand)
+{
     if (!(operand->GetConsumers().empty()) && !(operand->GetProducers().empty())) {
         std::set<int> boundTensorIDs;
-        for (auto &outOp : operand->GetConsumers()) {
+        for (auto& outOp : operand->GetConsumers()) {
             boundTensorIDs.insert(outOp->GetSubgraphID());
         }
-        for (auto &inOp : operand->GetProducers()) {
+        for (auto& inOp : operand->GetProducers()) {
             boundTensorIDs.insert(inOp->GetSubgraphID());
         }
         if (boundTensorIDs.size() == 1) {
@@ -165,8 +166,8 @@ void SubgraphToFunction::RecordIncastInfo(Function& function, RecordInfo recordI
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
     if (!isFromCast(iOperand)) {
-        APASS_LOG_INFO_F(Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be incast.", 
-            iOperand->GetMagic());
+        APASS_LOG_INFO_F(
+            Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be incast.", iOperand->GetMagic());
         return;
     }
     // 这里逻辑可能有一些问题，期望是尽可能不要把inplace语义的COPY_OUT的输出变成leaf的incast
@@ -229,8 +230,8 @@ void SubgraphToFunction::RecordOutcastInfo(Function& function, RecordInfo record
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
     if (!isFromCast(oOperand)) {
-        APASS_LOG_INFO_F(Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be outcast.", 
-            oOperand->GetMagic());
+        APASS_LOG_INFO_F(
+            Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be outcast.", oOperand->GetMagic());
         return;
     }
     if (op.HasAttribute(OpAttributeKey::inplaceIdx) &&
@@ -258,8 +259,7 @@ void SubgraphToFunction::RecordOutcastInfo(Function& function, RecordInfo record
         }
         refCount++;
         int connectedTgtOperandIdx = oOperand->magic;
-        relatedIncastList.push_back(
-            typename SubfuncInvokeInfoTy::SuccessorIncastRecTy(
+        relatedIncastList.push_back(typename SubfuncInvokeInfoTy::SuccessorIncastRecTy(
             eSgId, connectedTgtOperandIdx, nullptr, consumer->GetOpMagic()));
     }
     iter.RecordOutcast(
@@ -734,9 +734,9 @@ void SubgraphToFunction::InitializeRootFunction(Function& function, Function& ro
             }
         }
     }
+    TensorSet allTensors = GraphUtils::GetAllTensors(rootFunc);
     APASS_LOG_DEBUG_F(
-        Elements::Operation, "Root function tensor map size is %zu %zu.", rootFunc.GetTensorMap().inverseMap_.size(),
-        rootFunc.GetTensorMap().tensorMap_.size());
+        Elements::Operation, "Root function tensor map size is %zu.", allTensors.size());
 }
 
 struct GetTensorDataOutcastDesc {
@@ -759,7 +759,7 @@ static std::unordered_map<int, GetTensorDataOutcastDesc> GetTensorDataBuildOutca
     for (auto& [index, desc] : getTensorDataOutcastDescDict) {
         (void)index;
         ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, desc.opListDict[Opcode::OP_ADDS].size() == 1)
-            << "Expect the size is 1 for opListDict, but we get " << desc.opListDict[Opcode::OP_ADDS].size() 
+            << "Expect the size is 1 for opListDict, but we get " << desc.opListDict[Opcode::OP_ADDS].size()
             << "OP_ADDS";
         auto mark = desc.opListDict[Opcode::OP_ADDS][0];
 

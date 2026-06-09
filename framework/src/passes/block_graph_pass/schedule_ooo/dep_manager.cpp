@@ -218,26 +218,25 @@ void DependencyManager::HandleScaleOpDependency(Operation *op, MemoryType memTyp
 
 void DependencyManager::AddProducerDependencies(Operation *op) {
     for (auto &producer : op->ProducerOps()) {
-        if (IsViewOp(*producer)) {
-            for (auto viewProducer : producer->ProducerOps()) {
-                Operation *lastView = SkipViewChain(viewProducer, true);
-                Operation *realProd = (lastView != nullptr) ? *lastView->ProducerOps().begin() : viewProducer;
-                AddDependency(realProd, op);
-            }
-        } else {
-            AddDependency(producer, op);
+        Operation *lastView = SkipViewChain(producer, true);
+        if (lastView == nullptr) {
+            AddDependency(producer, op);  // producer 不是 view，直接连
+            continue;
+        }
+        for (auto *realProd : lastView->ProducerOps()) {
+            AddDependency(realProd, op);
         }
     }
 }
 
 void DependencyManager::AddConsumerDependencies(Operation *op) {
     for (auto &consumer : op->ConsumerOps()) {
-        if (IsViewOp(*consumer)) {
-            for (auto viewConsumer : consumer->ConsumerOps()) {
-                Operation *lastView = SkipViewChain(viewConsumer, false);
-                Operation *realCon = (lastView != nullptr) ? *lastView->ConsumerOps().begin() : viewConsumer;
-                AddDependency(op, realCon);
-            }
+        Operation *lastView = SkipViewChain(consumer, false);
+        if (lastView == nullptr) {
+            continue;  // 非 view consumer 的边由它自己的 AddProducerDependencies 补
+        }
+        for (auto *realCon : lastView->ConsumerOps()) {
+            AddDependency(op, realCon);
         }
     }
 }

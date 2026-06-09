@@ -607,6 +607,7 @@ public:
     }
     std::unordered_set<int> LoopCheck();
     FunctionHash ComputeHash();
+    void BuildTensorMap();
     std::vector<std::shared_ptr<Operation>> GetSortedOperations() const;
     OperationsViewer Operations(bool sorted = true);
     OperationsViewer OperationsAfterOOO();
@@ -630,8 +631,6 @@ public:
     void CheckGroupValid() const;
 
     void CreateLeafInAndOutCast(const LogicalTensorPtr& inOrOut, LogicalTensors& inOrOutList) const;
-    void AddOriginIncast(const std::shared_ptr<LogicalTensor> tensor);
-    void AddOriginOutcast(const std::shared_ptr<LogicalTensor> tensor);
     bool IsFromInCast(const std::shared_ptr<LogicalTensor>& tensor);
     bool IsFromOutCast(const std::shared_ptr<LogicalTensor>& tensor);
     bool IsFromDummyOutCast(int rawMagic);
@@ -641,15 +640,11 @@ public:
     void RemoveCallOpViewAssemble();
     void ResetOperations();
 
-    Operation& AddOperation(
-        const std::string& opName, LogicalTensors iOperands, const LogicalTensors& oOperands,
-        const bool updateTensorMap = true);
-    Operation& AddOperation(
-        const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands,
-        const bool updateTensorMap = true);
+    Operation& AddOperation(const std::string& opName, LogicalTensors iOperands, const LogicalTensors& oOperands);
+    Operation& AddOperation(const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands);
     Operation& AddRawOperation(
         const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
-        bool updateTensorMap = true, const ir::Span& span = ir::Span::Unknown());
+        ir::Span span = ir::Span::Unknown());
 
     std::map<std::shared_ptr<RawTensor>, std::shared_ptr<RawTensor>> outIncastLinkMap; // 记录outcast 共享地址的 incast
     void SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst);
@@ -1044,7 +1039,6 @@ private:
 private:
     unsigned long ComputeHashOrderless() const;
     void OpValidCheck(Operation& op) const;
-    std::shared_ptr<LogicalTensor> ConnectWithOverlap(std::shared_ptr<LogicalTensor> iOperand);
     void RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& originIncast) const;
     std::shared_ptr<LogicalTensor> CreateIncastTensor(const std::shared_ptr<LogicalTensor>& inArgument);
     void CreateFromIncast(

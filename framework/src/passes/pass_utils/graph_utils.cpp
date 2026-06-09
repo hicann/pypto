@@ -112,5 +112,182 @@ bool GraphUtils::IsCVMixPlatform()
     }
     return false;
 }
+
+TensorSet GraphUtils::GetTensorsByRawMagic(Function& function, int64_t rawMagic)
+{
+    TensorSet result;
+
+    for (const auto& tensor : function.inCasts_) {
+        if (tensor && tensor->tensor && tensor->tensor->rawmagic == rawMagic) {
+            result.insert(tensor);
+        }
+    }
+
+    for (const auto& tensor : function.outCasts_) {
+        if (tensor && tensor->tensor && tensor->tensor->rawmagic == rawMagic) {
+            result.insert(tensor);
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetOOperands()) {
+            if (tensor && tensor->tensor && tensor->tensor->rawmagic == rawMagic) {
+                result.insert(tensor);
+            }
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetIOperands()) {
+            if (tensor && tensor->tensor && tensor->tensor->rawmagic == rawMagic) {
+                result.insert(tensor);
+            }
+        }
+    }
+    return result;
+}
+
+std::shared_ptr<RawTensor> GraphUtils::GetRawTensorByRawMagic(Function& function, int64_t rawMagic)
+{
+    auto tensors = GetTensorsByRawMagic(function, rawMagic);
+    if (tensors.empty()) {
+        return nullptr;
+    }
+    const auto& firstTensor = *tensors.begin();
+    if (firstTensor == nullptr) {
+        return nullptr;
+    }
+    return firstTensor->tensor;
+}
+
+TensorSet GraphUtils::GetTensorsByActualRawMagic(Function& function, int64_t actualRawMagic)
+{
+    TensorSet result;
+
+    for (const auto& tensor : function.inCasts_) {
+        if (tensor && tensor->tensor && tensor->tensor->actualRawmagic == actualRawMagic) {
+            result.insert(tensor);
+        }
+    }
+
+    for (const auto& tensor : function.outCasts_) {
+        if (tensor && tensor->tensor && tensor->tensor->actualRawmagic == actualRawMagic) {
+            result.insert(tensor);
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetOOperands()) {
+            if (tensor && tensor->tensor && tensor->tensor->actualRawmagic == actualRawMagic) {
+                result.insert(tensor);
+            }
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetIOperands()) {
+            if (tensor && tensor->tensor && tensor->tensor->actualRawmagic == actualRawMagic) {
+                result.insert(tensor);
+            }
+        }
+    }
+    return result;
+}
+
+std::vector<LogicalTensorPtr> GraphUtils::FindOverlappedTensors(Function& function, const LogicalTensorPtr& tensor)
+{
+    if (tensor == nullptr || tensor->tensor == nullptr) {
+        return {};
+    }
+
+    auto candidates = GraphUtils::GetTensorsByRawMagic(function, tensor->tensor->rawmagic);
+    if (candidates.empty()) {
+        if (!function.HasParent() ||
+            function.IsFunctionTypeAndGraphType(FunctionType::STATIC, GraphType::EXECUTE_GRAPH)) {
+            return {};
+        }
+        return FindOverlappedTensors(function.Parent(), tensor);
+    }
+
+    std::vector<LogicalTensorPtr> result;
+    for (const auto& candidate : candidates) {
+        if (candidate == nullptr || candidate->tensor == nullptr) {
+            continue;
+        }
+        if (candidate->magic == tensor->magic) {
+            continue;
+        }
+        if (CalcOverlap(candidate, tensor) == OverlapStatus::NO_OVER_LAP) {
+            continue;
+        }
+        result.push_back(candidate);
+    }
+    return result;
+}
+
+LogicalTensorPtr GraphUtils::GetTensorByMagic(Function& function, int magic)
+{
+    for (const auto& tensor : function.inCasts_) {
+        if (tensor && tensor->GetMagic() == magic) {
+            return tensor;
+        }
+    }
+
+    for (const auto& tensor : function.outCasts_) {
+        if (tensor && tensor->GetMagic() == magic) {
+            return tensor;
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetOOperands()) {
+            if (tensor && tensor->GetMagic() == magic) {
+                return tensor;
+            }
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetIOperands()) {
+            if (tensor && tensor->GetMagic() == magic) {
+                return tensor;
+            }
+        }
+    }
+    return nullptr;
+}
+
+TensorSet GraphUtils::GetAllTensors(Function& function)
+{
+    TensorSet result;
+    for (const auto& tensor : function.inCasts_) {
+        if (tensor) {
+            result.insert(tensor);
+        }
+    }
+
+    for (const auto& tensor : function.outCasts_) {
+        if (tensor) {
+            result.insert(tensor);
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetOOperands()) {
+            if (tensor) {
+                result.insert(tensor);
+            }
+        }
+    }
+
+    for (auto& op : function.Operations(false)) {
+        for (const auto& tensor : op.GetIOperands()) {
+            if (tensor) {
+                result.insert(tensor);
+            }
+        }
+    }
+    return result;
+}
 } // namespace tile_fwk
 } // namespace npu

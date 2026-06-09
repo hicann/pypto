@@ -17,6 +17,7 @@
 #include <queue>
 #include <set>
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/error_code.h"
 
 #define MODULE_NAME "InferDiscontinuousInputChecker"
@@ -45,7 +46,8 @@ Status checkAssemble(
         if (rawMagicToRawOffset.find(rawMagic) == rawMagicToRawOffset.end()) {
             rawMagicToRawOffset[rawMagic] = rawOffset;
         } else if (rawMagicToRawOffset[rawMagic] != rawOffset) {
-            APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation,
+            APASS_LOG_ERROR_C(
+                TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation,
                 "LogicTensor(%d) relative position to rawTensor(%ld) changed after the assemble op.",
                 logicTensor->GetMagic(), static_cast<long>(rawMagic));
             return FAILED;
@@ -53,7 +55,9 @@ Status checkAssemble(
     }
     for (auto& [rawMagic, shape] : rawTensorSize) {
         if (shape != 0) {
-            APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Tensor, "RawTensor(%ld) is not fully covered.", static_cast<long>(rawMagic));
+            APASS_LOG_ERROR_C(
+                TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Tensor, "RawTensor(%ld) is not fully covered.",
+                static_cast<long>(rawMagic));
             return FAILED;
         }
     }
@@ -72,7 +76,8 @@ Status checkView(Operation* op)
             continue;
         }
         if (logicTensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-            APASS_LOG_ERROR_C(TensorErr::TENSOR_INVALID_MEMORY_TYPE, Elements::Tensor,
+            APASS_LOG_ERROR_C(
+                TensorErr::TENSOR_INVALID_MEMORY_TYPE, Elements::Tensor,
                 "Tensor(%d) memory type is MEM_DEVICE_DDR, which is not supported for VIEW->ASSEMBLE case.",
                 logicTensor->GetMagic());
             return FAILED;
@@ -102,8 +107,9 @@ Status checkTensor(const LogicalTensorPtr& tensor)
         std::shared_ptr<AssembleOpAttribute> attr =
             std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
         if (attr == nullptr) {
-            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op %d do not have attribute. %s", producer->GetOpMagic(),
-                GetFormatBacktrace(producer).c_str());
+            APASS_LOG_ERROR_C(
+                OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op %d do not have attribute. %s",
+                producer->GetOpMagic(), GetFormatBacktrace(producer).c_str());
             return FAILED;
         }
         LogicalTensorPtr inputTensor = *(producer->GetIOperands().begin());
@@ -130,13 +136,11 @@ Status InferDisContinuousInputChecker::DoPostCheck(Function& function)
         return FAILED;
     }
 
-    auto& tensorMap = function.GetTensorMap().tensorMap_;
-    for (const auto& tMap : tensorMap) {
-        for (const auto& logicalTensor : tMap.second) {
-            if (checkTensor(logicalTensor) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Tensor(%d) CheckTensor Failed.", logicalTensor->GetMagic());
-                return FAILED;
-            }
+    auto tensorMap = GraphUtils::GetAllTensors(function);
+    for (const auto& logicalTensor : tensorMap) {
+        if (checkTensor(logicalTensor) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor(%d) CheckTensor Failed.", logicalTensor->GetMagic());
+            return FAILED;
         }
     }
 

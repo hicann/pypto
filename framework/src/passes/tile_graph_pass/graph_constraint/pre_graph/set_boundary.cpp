@@ -34,7 +34,6 @@ void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
             tensorGM->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             tensorGM->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
             operandGm.push_back(tensorGM);
-            function.GetTensorMap().Insert(tensorGM);
 
             LogicalTensors operandUb;
             operandUb.push_back(input);

@@ -171,9 +171,7 @@ Status ExpandFunction::RunOnFunction(Function& function)
 Status ExpandFunction::Expandfunction(Function& function) const
 {
     if (!function.IsGraphType(GraphType::TENSOR_GRAPH)) {
-        APASS_LOG_INFO_F(
-            Elements::Function, "Function %s is not static tensor graph, skip expanding.",
-            function.GetRawName().c_str());
+        APASS_LOG_INFO_F(Elements::Function, "Function %s is not static tensor graph, skip expanding.", function.GetRawName().c_str());
         return SUCCESS;
     }
     function.expandFunctionAccelerate = true;
@@ -220,6 +218,7 @@ Status ExpandFunction::Expandfunction(Function& function) const
         }
         ir::Span::ClearCurrent();
     }
+    function.BuildTensorMap();
     function.expandFunctionAccelerate = false;
     return SUCCESS;
 }

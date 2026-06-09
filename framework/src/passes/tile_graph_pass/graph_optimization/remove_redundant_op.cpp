@@ -288,7 +288,6 @@ void RemoveRedundantOp::ProcessPerfectMatch(
             startTensor->AddConsumer(assembleConsumer);
         }
         endTensor->GetConsumers().clear();
-        function.GetTensorMap().Erase(endTensor);
         operationUpdated = true;
     }
 }
@@ -443,7 +442,6 @@ void RemoveRedundantOp::GenerateNewView(
             newViewTensor->AddConsumer(assembleConsumer);
         }
         endTensor->GetConsumers().clear();
-        function.GetTensorMap().Erase(endTensor);
     }
     // 新建一个view op
     std::shared_ptr<ViewOpAttribute> viewAttribute =

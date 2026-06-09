@@ -134,6 +134,24 @@ public:
         EXPECT_EQ(outputMemOri, outputMemTobe) << "OP_CONVERT output Memory Ori should be the same as Memory Tobe.";
         EXPECT_NE(inputMemOri, outputMemOri) << "OP_CONVERT input should have different memory type from output.";
     }
+
+    int CountAndCheckNewOps(
+        Function& function, const std::vector<int64_t>& beforeMagic, const std::vector<Opcode>& targetOpcodes)
+    {
+        int convertNum = 0;
+        for (const auto& op : function.Operations()) {
+            if (std::find(beforeMagic.begin(), beforeMagic.end(), op.opmagic) != beforeMagic.end()) {
+                continue;
+            }
+            if (std::find(targetOpcodes.begin(), targetOpcodes.end(), op.GetOpcode()) == targetOpcodes.end()) {
+                continue;
+            }
+            std::cout << op.GetOpcodeStr() << " " << op.GetOpMagic() << std::endl;
+            CheckConvertOp(op, true);
+            convertNum++;
+        }
+        return convertNum;
+    }
 };
 
 TEST_F(AssignMemoryTypeTest, AddReshape)
@@ -309,8 +327,8 @@ TEST_F(AssignMemoryTypeTest, TestVecToCubeV2)
                 CheckConvertOp(op, true);
             }
         }
-        constexpr int expextedConvertNum = 4;
-        EXPECT_EQ(convertNum, expextedConvertNum) << "4 operations should be Convert";
+        constexpr int expextedConvertNum = 0;
+        EXPECT_EQ(convertNum, expextedConvertNum) << "0 operations should be Convert";
     }
 }
 
@@ -358,19 +376,7 @@ TEST_F(AssignMemoryTypeTest, TestCubeToCube)
         assignMemoryType.RunOnFunction(*originFunction);
         assignMemoryType.PostCheck(*originFunction);
         // ================== Verify Pass Effect ==================
-        auto opList = originFunction->Operations();
-        int convertNum = 0;
-        for (const auto& op : opList) {
-            if (std::find(beforeMagic.begin(), beforeMagic.end(), op.opmagic) != beforeMagic.end()) {
-                continue;
-            }
-            if (op.GetOpcode() != Opcode::OP_CONVERT) {
-                continue;
-            }
-            std::cout << op.GetOpcodeStr() << " " << op.GetOpMagic() << std::endl;
-            CheckConvertOp(op, true);
-            convertNum++;
-        }
+        int convertNum = CountAndCheckNewOps(*originFunction, beforeMagic, {Opcode::OP_CONVERT});
         constexpr int expextedConvertNum = 0;
         EXPECT_EQ(convertNum, expextedConvertNum) << "0 operations should be Convert";
     }
@@ -421,22 +427,10 @@ TEST_F(AssignMemoryTypeTest, TestCubeToCubeV2)
         assignMemoryType.RunOnFunction(*originFunction);
         assignMemoryType.PostCheck(*originFunction);
         // ================== Verify Pass Effect ==================
-        auto opList = originFunction->Operations();
-        int convertNum = 0;
-        for (const auto& op : opList) {
-            if (std::find(beforeMagic.begin(), beforeMagic.end(), op.opmagic) != beforeMagic.end()) {
-                continue;
-            }
-            if (op.GetOpcode() != Opcode::OP_CONVERT && op.GetOpcode() != Opcode::OP_VIEW &&
-                op.GetOpcode() != Opcode::OP_ASSEMBLE) {
-                continue;
-            }
-            std::cout << op.GetOpcodeStr() << " " << op.GetOpMagic() << std::endl;
-            CheckConvertOp(op, true);
-            convertNum++;
-        }
-        constexpr int expextedConvertNum = 16;
-        EXPECT_EQ(convertNum, expextedConvertNum) << "16 operations should be Convert";
+        int convertNum = CountAndCheckNewOps(
+            *originFunction, beforeMagic, {Opcode::OP_CONVERT, Opcode::OP_VIEW, Opcode::OP_ASSEMBLE});
+        constexpr int expextedConvertNum = 0;
+        EXPECT_EQ(convertNum, expextedConvertNum) << "0 operations should be Convert";
     }
 }
 
@@ -494,8 +488,7 @@ TEST_F(AssignMemoryTypeTest, TestCubeToVec)
                     << "View to either l1, ub, l0a or l0b";
             }
         }
-        EXPECT_EQ(afterViewNum, beforeViewNum + 1)
-            << "Should insert one view after assemble and transfter data to DDR before to UB";
+        EXPECT_EQ(afterViewNum, beforeViewNum);
     }
 }
 

@@ -91,7 +91,10 @@ static int64_t GetAsParameterCoaIndex(const RawSymbolicScalarPtr& value)
         auto dim = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_DIM_SIZE_INDEX]->GetImmediateValue();
         auto base = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_COA_INDEX]->GetImmediateValue();
         auto dimIdx = operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_DIM_INDEX]->GetImmediateValue();
-        return base + COA_INDEX_DIM_BASE + dim * 0x2 + dimIdx;
+        return base + COA_INDEX_DIM_BASE + dim * 2 + dimIdx;
+    } else if (value->IsExpressionCall("RUNTIME_COA_GET_PARAM")) {
+        auto& operands = value->GetExpressionOperandList();
+        return operands[RUNTIME_GET_PARAM_OFFSET_OPERAND_INDEX_DIM_SIZE_INDEX]->GetImmediateValue();
     }
     return -1;
 }

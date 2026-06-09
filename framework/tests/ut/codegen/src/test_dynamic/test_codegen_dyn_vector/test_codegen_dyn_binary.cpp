@@ -52,7 +52,7 @@ void TestAddDynBody(const std::string& name, bool isNeedCalcMinForBinaryOperands
     }
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTadd_<float, /*DS*/ 1, 1, 64, 64, /*S0*/ 1, 1, 64, 64, /*S1*/ 1, 1, 64, 64>((__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S16384_E32768, 1, 1, sym_6_dim_0, sym_6_dim_1, 1, 1, sym_9_dim_0, sym_9_dim_1);)!!!";
+        R"!!!(TileOp::DynTadd_<float, /*DS*/ 1, 1, 64, 64, /*S0*/ 1, 1, 64, 64, /*S1*/ 1, 1, 64, 64>((__ubuf__ float*)UB_S0_E16384+(((RUNTIME_COA_GET_PARAM_OFFSET(2, 46, 0)) * 64) + (RUNTIME_COA_GET_PARAM_OFFSET(2, 46, 1))), (__ubuf__ float*)UB_S0_E16384+(((RUNTIME_COA_GET_PARAM_OFFSET(2, 37, 0)) * 64) + (RUNTIME_COA_GET_PARAM_OFFSET(2, 37, 1))), (__ubuf__ float*)UB_S16384_E32768+(((RUNTIME_COA_GET_PARAM_OFFSET(2, 28, 0)) * 64) + (RUNTIME_COA_GET_PARAM_OFFSET(2, 28, 1))), 1, 1, )!!!";
     CheckStringExist(expect, res);
 }
 
@@ -104,7 +104,7 @@ void TestAddSDynBody(
 TEST_F(TestCodegenDynBinary, TestAddSDynamic)
 {
     std::vector<std::string> expect = {
-        R"!!!(TileOp::DynTadds_<float, /*DS*/ 1, 64, 64, /*S0S*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S0_E16384, (float)1.5, 1, 1, sym_5_dim_0, sym_5_dim_1);
+        R"!!!(TileOp::DynTadds_<float, /*DS*/ 1, 64, 64, /*S0S*/ 1, 64, 64>((__ubuf__ float*)UB_S0_E16384, (__ubuf__ float*)UB_S0_E16384, (float)1.5, 1, 1, sym_39_dim_0, sym_39_dim_1);
 )!!!"};
     TestAddSDynBody("TestAddsDynamic", 1.5, false, expect);
 }
@@ -162,7 +162,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle)
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =
-        R"!!!(TileOp::DynTgatherElement<float, int32_t, 1, 2, 256, 1, 2, 8, 1, 2, 8, 3>((__ubuf__ float*)UB_S2112_E2176, (__ubuf__ float*)UB_S0_E2048, (__ubuf__ int32_t*)UB_S2048_E2112, 1, 1, sym_9_dim_0, sym_9_dim_1);)!!!";
+        R"!!!(TileOp::DynTgatherElement<float, int32_t, 1, 2, 256, 1, 2, 8, 1, 2, 8, 3>((__ubuf__ float*)UB_S2112_E2176, (__ubuf__ float*)UB_S0_E2048, (__ubuf__ int32_t*)UB_S2048_E2112, 1, 1, sym_59_dim_0, sym_59_dim_1);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -294,17 +294,17 @@ float __ubuf__ *UB_S0_E16384 = (float __ubuf__ *)get_imm(0x0); // size: 0x4000
 float *UB_S0_E16384_T = (float *)get_imm(0x0); // size: 0x4000
 float __ubuf__ *UB_S16384_E32768 = (float __ubuf__ *)get_imm(0x4000); // size: 0x4000
 float *UB_S16384_E32768_T = (float *)get_imm(0x4000); // size: 0x4000
-uint64_t sym_63_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 0);
-uint64_t sym_63_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 1);
-uint64_t sym_64_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 1, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, 1, 2, 0);
-uint64_t sym_64_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 1, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, 1, 2, 1);
+uint64_t sym_60_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 0);
+uint64_t sym_60_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 1);
+uint64_t sym_61_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 1, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, 1, 2, 0);
+uint64_t sym_61_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 1, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, 1, 2, 1);
 using GMTileTensorFP32Dim2_1 = TileTensor<__gm__ float, DynLayout2Dim, Hardware::GM>;
 using UBTileTensorFP32Dim2_0 = TileTensor<float, LocalLayout2Dim<64, 64>, Hardware::UB>;
 SUBKERNEL_PHASE1
-UBTileTensorFP32Dim2_0 ubTensor_0((uint64_t)UB_S0_E16384_T, (Shape2Dim(sym_63_dim_0, sym_63_dim_1)));
+UBTileTensorFP32Dim2_0 ubTensor_0((uint64_t)UB_S0_E16384_T, (Shape2Dim(sym_60_dim_0, sym_60_dim_1)));
 GMTileTensorFP32Dim2_1 gmTensor_1((__gm__ float*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 1, 10)), DynLayout2Dim(Shape2Dim((RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 10, 0)), (RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 10, 1))), Stride2Dim(GET_PARAM_STRIDE_DIM_2((RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 10, 0)), (RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 10, 1))))));
 TLoad(ubTensor_0, gmTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 10, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 10, 1))));
-UBTileTensorFP32Dim2_0 ubTensor_2((uint64_t)UB_S16384_E32768_T, (Shape2Dim(sym_64_dim_0, sym_64_dim_1)));
+UBTileTensorFP32Dim2_0 ubTensor_2((uint64_t)UB_S16384_E32768_T, (Shape2Dim(sym_61_dim_0, sym_61_dim_1)));
 GMTileTensorFP32Dim2_1 gmTensor_3((__gm__ float*)(RUNTIME_GET_PARAM_ADDR(RUNTIME_param, 0, 1)), DynLayout2Dim(Shape2Dim((RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 1, 0)), (RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 1, 1))), Stride2Dim(GET_PARAM_STRIDE_DIM_2((RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 1, 0)), (RUNTIME_COA_GET_PARAM_RAW_SHAPE(2, 1, 1))))));
 TLoad(ubTensor_2, gmTensor_3, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 1, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 1, 1))));
 SUBKERNEL_PHASE2

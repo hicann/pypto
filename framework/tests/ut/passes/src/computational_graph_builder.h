@@ -33,13 +33,11 @@ class ComputationalGraphBuilder {
 public:
     explicit ComputationalGraphBuilder() : function(Program::GetInstance().GetCurrentFunction())
     {
-        function->GetTensorMap().Reset();
         function->ResetOperations();
         function->SetFunctionType(FunctionType::STATIC);
     }
     explicit ComputationalGraphBuilder(Function* func) : function(func)
     {
-        function->GetTensorMap().Reset();
         function->ResetOperations();
         function->SetFunctionType(FunctionType::STATIC);
     }

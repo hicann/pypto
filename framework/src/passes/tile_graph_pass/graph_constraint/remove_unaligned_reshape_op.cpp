@@ -113,6 +113,7 @@ LogicalTensorPtr RemoveUnalignedReshape::InsertIOTensor(
     Function& function, Operation& op, std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>>& rawIO,
     LogicalTensorPtr& ioTensor)
 {
+    (void)function;
     (void)op;
     if (rawIO.count(ioTensor->tensor->rawmagic) == 0) {
         auto reshapeRawTensor = std::make_shared<RawTensor>(ioTensor->Datatype(), ioTensor->shape, ioTensor->Format());
@@ -121,7 +122,6 @@ LogicalTensorPtr RemoveUnalignedReshape::InsertIOTensor(
     auto newReshapeIO = irBuilder_.CreateTensorVar(
         rawIO[ioTensor->tensor->rawmagic], ioTensor->offset, ioTensor->shape, std::vector<SymbolicScalar>{});
     newReshapeIO->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    function.GetTensorMap().Insert(newReshapeIO);
     return newReshapeIO;
 }
 

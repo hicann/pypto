@@ -1798,7 +1798,7 @@ void ExpandOperationInto(
             break;
         }
         case Opcode::OP_BLOCK_CALL: {
-            auto& newOp = function.AddRawOperation(Opcode::OP_BLOCK_CALL, iOperand, oOperand, true);
+            auto& newOp = function.AddRawOperation(Opcode::OP_BLOCK_CALL, iOperand, oOperand);
             newOp.SetOpAttribute(op.GetOpAttribute());
             newOp.SetAttr(OpAttributeKey::dontTouch, true);
             break;

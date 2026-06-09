@@ -193,7 +193,7 @@ void ConvertInserter::FilterConflictTensor()
                 continue;
             }
         }
-        conflictMap[tensorLocal->GetMagic()] = tobeMap;
+        conflictMap[tensorLocal->magic] = tobeMap;
     }
     APASS_LOG_INFO_F(Elements::Tensor, "--- ConflictMap size: %zu ---", conflictMap.size());
 }
@@ -211,7 +211,8 @@ void ConvertInserter::UpdateConsumerAndReconnect(
 {
     newTensor->AddConsumer(op);
     auto updateViewOffset = [](std::shared_ptr<LogicalTensor> oldTensor1, std::shared_ptr<LogicalTensor> newTensor1,
-                               Operation* op1) {
+                               Operation* op1)
+{
         auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(op1->GetOpAttribute().get());
         if (viewOpAttribute != nullptr) {
             auto oldOffset = viewOpAttribute->GetFromOffset();

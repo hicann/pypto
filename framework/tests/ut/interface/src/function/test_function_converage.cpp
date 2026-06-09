@@ -301,9 +301,6 @@ TEST_F(FunctionCoverageTest, TestOpValidCheckViewOp)
     inCast->offset = {0, 0};
     outCast->offset = {0, 0};
 
-    currFunctionPtr->GetTensorMap().Insert(inCast);
-    currFunctionPtr->GetTensorMap().Insert(outCast);
-
     auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {outCast});
 
     std::vector<int64_t> fromOffset = {0, 0};
@@ -342,9 +339,6 @@ TEST_F(FunctionCoverageTest, TestOpValidCheckAssembleOp)
 
     inCast->offset = {0, 0};
     outCast->offset = {0, 0};
-
-    currFunctionPtr->GetTensorMap().Insert(inCast);
-    currFunctionPtr->GetTensorMap().Insert(outCast);
 
     auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
 

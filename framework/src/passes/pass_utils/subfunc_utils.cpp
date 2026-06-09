@@ -19,6 +19,7 @@
 #include "interface/function/function.h"
 #include "tilefwk/platform.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #define MODULE_NAME "SubfuncUtils"
 
@@ -290,7 +291,7 @@ void SubfuncInvokeInfoTy::LoadIncastFromJson(const Json& incastJson, Function* b
     int opMagic = incastJson["op_magic"].get<int>();
     int operandIdx = incastJson["operandIdx"].get<int>();
     std::shared_ptr<LogicalTensor> tensorPtr =
-        belongTo->GetTensorMap().GetTensorByMagic(incastJson["tensor"].get<int>());
+        GraphUtils::GetTensorByMagic(*belongTo, incastJson["tensor"].get<int>());
     if (tensorPtr == nullptr) {
         APASS_LOG_ERROR_F(
             Elements::Function, "Tile FWK for incast %d op %d is nullptr, function type %s name %s",
@@ -311,7 +312,7 @@ void SubfuncInvokeInfoTy::LoadOutcastFromJson(const Json& outcastJson, Function*
     int opMagic = outcastJson["op_magic"].get<int>();
     int operandIdx = outcastJson["operandIdx"].get<int>();
     std::shared_ptr<LogicalTensor> tensorPtr =
-        belongTo->GetTensorMap().GetTensorByMagic(outcastJson["tensor"].get<int>());
+        GraphUtils::GetTensorByMagic(*belongTo, outcastJson["tensor"].get<int>());
     if (tensorPtr == nullptr) {
         APASS_LOG_ERROR_F(
             Elements::Function, "Tile FWK for outcast %d op %d is nullptr function type %s name %s",
@@ -331,7 +332,7 @@ void SubfuncInvokeInfoTy::LoadTensorFromJson(const Json& tensorJson, Function* b
     int opMagic = tensorJson["op_magic"].get<int>();
     int operandIdx = tensorJson["operandIdx"].get<int>();
     std::shared_ptr<LogicalTensor> tensorPtr =
-        belongTo->GetTensorMap().GetTensorByMagic(tensorJson["tensor"].get<int>());
+        GraphUtils::GetTensorByMagic(*belongTo, tensorJson["tensor"].get<int>());
     if (tensorPtr == nullptr) {
         APASS_LOG_ERROR_F(
             Elements::Function, "Tile FWK for tensor %d op %d is nullptr, function type %s name %s",

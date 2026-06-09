@@ -51,7 +51,7 @@ public:
     bool IsEmpty() const { return end <= start; }
 };
 
-class LogicalTensor : public AttrHolder, public ir::Var {
+class LogicalTensor : public std::enable_shared_from_this<LogicalTensor>, public AttrHolder, public ir::Var {
 public:
     std::shared_ptr<RawTensor> tensor;
     Offset offset;
@@ -64,9 +64,6 @@ public:
     std::shared_ptr<Storage> storage_ = nullptr;
     uint64_t storageOffset_ = 0;
     int magic;
-
-    std::vector<std::weak_ptr<LogicalTensor>> conflicterTensors;
-    std::vector<std::shared_ptr<LogicalTensor>> overlapper;
 
     TileRange memoryrange;
 

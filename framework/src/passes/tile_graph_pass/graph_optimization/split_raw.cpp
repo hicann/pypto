@@ -15,6 +15,7 @@
 
 #include "split_raw.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #define MODULE_NAME "SplitRawTensor"
 
@@ -190,8 +191,7 @@ bool SplitRawTensor::ShouldProcessTensor(Function& function, const LogicalTensor
     return true;
 }
 
-bool SplitRawTensor::SplitLogicalTensor(
-    Function& function, const LogicalTensorPtr& logicalTensor, NewRawVec& newRawVec) const
+bool SplitRawTensor::SplitLogicalTensor(Function& function, const LogicalTensorPtr& logicalTensor) const
 {
     if (!ShouldProcessTensor(function, logicalTensor)) {
         return false;
@@ -201,12 +201,9 @@ bool SplitRawTensor::SplitLogicalTensor(
     APASS_LOG_DEBUG_F(
         Elements::Operation, "SplitRawTensor::SplitRaw: tensor[%d] updated new raw tensor[%d] with the same raw shape.",
         logicalTensor->GetMagic(), logicalTensor->GetRawMagic());
-    TensorSet newSet;
-    newSet.emplace(logicalTensor);
     UpdateConsumerView(function, logicalTensor);
     UpdateProducerAssemble(function, logicalTensor);
     UpdateProducerShmemGet(function, logicalTensor);
-    newRawVec.emplace_back(std::make_pair(logicalTensor->tensor->GetRawMagic(), newSet));
     for (auto& offset : logicalTensor->offset) {
         offset = 0;
     }
@@ -220,35 +217,18 @@ bool SplitRawTensor::SplitLogicalTensor(
 */
 void SplitRawTensor::SplitRaw(Function& function) const
 {
-    std::vector<int> rawIdNeedDelete;
-    NewRawVec newRawVec;
     // 为了按序访问tensormap, 将tensormap转化为有序map
-    auto& tensorMap = function.GetTensorMap().tensorMap_;
+    TensorSet allTensors = GraphUtils::GetAllTensors(function);
     std::map<int, TensorSet> omap;
-    for (const auto& kv : tensorMap) {
-        omap.insert(kv);
+    for (const auto& tensor : allTensors) {
+        if (tensor && tensor->tensor) {
+            omap[tensor->tensor->rawmagic].insert(tensor);
+        }
     }
     for (const auto& ele : omap) {
-        bool needDelete = false;
         for (const auto& logicalTensor : ele.second) {
-            if (SplitLogicalTensor(function, logicalTensor, newRawVec)) {
-                needDelete = true;
-            }
+            SplitLogicalTensor(function, logicalTensor);
         }
-        if (needDelete) {
-            rawIdNeedDelete.emplace_back(ele.first);
-        }
-    }
-    // 将tensormap更新回来
-    tensorMap.clear();
-    for (const auto& kv : omap) {
-        tensorMap.insert(kv);
-    }
-    for (const auto& ele : newRawVec) {
-        function.GetTensorMap().tensorMap_.emplace(ele);
-    }
-    for (const auto& id : rawIdNeedDelete) {
-        function.GetTensorMap().tensorMap_.erase(id);
     }
 }
 

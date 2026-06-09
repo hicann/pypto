@@ -25,6 +25,7 @@
 #include "computational_graph_builder.h"
 #include "ut_json/ut_json_tool.h"
 #include "passes/tile_graph_pass/graph_optimization/merge_view_assemble.h"
+#include "passes/pass_utils/graph_utils.h"
 #include <fstream>
 #include <vector>
 #include <string>
@@ -221,8 +222,8 @@ TEST_F(MergeViewAssembleTest, MergeTwoConsecutiveViews)
 
     // 4.5 检查中间tensor是否被清理
     bool midTensorExists = false;
-    for (const auto& item : function->GetTensorMap().inverseMap_) {
-        if (item.second == midTensor) {
+    for (const auto& item : GraphUtils::GetAllTensors(*function)) {
+        if (item == midTensor) {
             midTensorExists = true;
             break;
         }
@@ -290,11 +291,11 @@ TEST_F(MergeViewAssembleTest, MergeThreeConsecutiveAssembles)
     // 4.3检查中间tensor是否被清理
     bool midTensor1Exists = false;
     bool midTensor2Exists = false;
-    for (const auto& item : function->GetTensorMap().inverseMap_) {
-        if (item.second == midTensor1) {
+    for (const auto& item : GraphUtils::GetAllTensors(*function)) {
+        if (item == midTensor1) {
             midTensor1Exists = true;
         }
-        if (item.second == midTensor2) {
+        if (item == midTensor2) {
             midTensor2Exists = true;
         }
     }

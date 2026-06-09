@@ -147,3 +147,15 @@ def test_tensor_atomic():
     with pypto.function("AtomicRMW", a, b):
         pypto.set_vec_tile_shapes(32, 32)
         pypto.atomic_add(a, [0, 0], b)
+
+
+def test_tensor_move():
+    dtype = pypto.DT_INT32
+    shape = [64, 64]
+    a = pypto.tensor(shape, dtype, "a")
+
+    with pypto.function("main", a):
+        pypto.set_vec_tile_shapes(32, 32)
+        a[:] = a - 1
+
+

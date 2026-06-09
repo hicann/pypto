@@ -94,7 +94,7 @@ LogicalTensorPtr IRBuilder::CreateTensorVar(
 Operation& IRBuilder::CreateTensorOpStmt(
     Function& f, const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, ir::Span span)
 {
-    return f.AddRawOperation(opCode, iOperands, oOperands, true, span);
+    return f.AddRawOperation(opCode, iOperands, oOperands, span);
 }
 
 std::shared_ptr<RawTensor> IRBuilder::CreateRawTensor(DataType t, Shape shape, TileOpFormat format, std::string name)

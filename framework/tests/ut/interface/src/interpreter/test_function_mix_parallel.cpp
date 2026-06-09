@@ -76,8 +76,8 @@ TEST_F(FunctionMixParallelTest, GroupedMixSplitCallOpsExecuteTwoCalleeFrames)
 
     auto calleeHash1 = calleeFunc1->ComputeHash();
     auto calleeHash2 = calleeFunc2->ComputeHash();
-    auto& callOp1 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn1}, {rootOut1}, false);
-    auto& callOp2 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn2}, {rootOut2}, false);
+    auto& callOp1 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn1}, {rootOut1});
+    auto& callOp2 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn2}, {rootOut2});
 
     std::map<int, SymbolicScalar> emptyOutExpr;
     std::vector<std::vector<SymbolicScalar>> emptyArgList;
@@ -187,14 +187,13 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
     calleeOut1->UpdateDynValidShape(dynShape);
     calleeFunc1->inCasts_ = {calleeIn1};
     calleeFunc1->outCasts_ = {calleeOut1};
-    auto& l0cCopyUbOp1 = calleeFunc1->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn1}, {calleeOut1}, false);
+    auto& l0cCopyUbOp1 = calleeFunc1->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn1}, {calleeOut1});
     {
         // Match GenerateMoveOp::SetL0C2UBCopyAttr: CopyIn ctor (DDR->to), memoryPath {MEM_DEVICE_DDR, MEM_UB},
         // isCopyOut=false; valid shape is toDynValidShape (UB side), not CopyOut's fromDynValidShape.
         auto shapeImme = OpImmediate::Specified(shape);
         l0cCopyUbOp1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme,
-            OpImmediate::Specified(shape)));
+            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme, OpImmediate::Specified(shape)));
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(l0cCopyUbOp1.GetOpAttribute());
         ASSERT_NE(copyAttr, nullptr);
         copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
@@ -208,12 +207,11 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
     calleeOut2->UpdateDynValidShape(dynShape);
     calleeFunc2->inCasts_ = {calleeIn2};
     calleeFunc2->outCasts_ = {calleeOut2};
-    auto& l0cCopyUbOp2 = calleeFunc2->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn2}, {calleeOut2}, false);
+    auto& l0cCopyUbOp2 = calleeFunc2->AddRawOperation(Opcode::OP_L0C_COPY_UB, {calleeIn2}, {calleeOut2});
     {
         auto shapeImme = OpImmediate::Specified(shape);
         l0cCopyUbOp2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme,
-            OpImmediate::Specified(shape)));
+            OpImmediate::Specified({0, 0}), MemoryType::MEM_UB, shapeImme, shapeImme, OpImmediate::Specified(shape)));
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(l0cCopyUbOp2.GetOpAttribute());
         ASSERT_NE(copyAttr, nullptr);
         copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
@@ -234,8 +232,8 @@ TEST_F(FunctionMixParallelTest, MixGlobalTensorDictThreadSyncWithCallOps)
     auto calleeHash2 = calleeFunc2->ComputeHash();
     ASSERT_NE(calleeHash1.GetHash(), calleeHash2.GetHash())
         << "callee hashes must differ so calleeHashDict keeps both callees; adjust mixId or graph if this fails";
-    auto& callOp1 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn1}, {rootOut1}, false);
-    auto& callOp2 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn2}, {rootOut2}, false);
+    auto& callOp1 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn1}, {rootOut1});
+    auto& callOp2 = rootFunc->AddRawOperation(Opcode::OP_CALL, {rootIn2}, {rootOut2});
 
     std::map<int, SymbolicScalar> emptyOutExpr;
     std::vector<std::vector<SymbolicScalar>> emptyArgList;
@@ -303,7 +301,7 @@ TEST_F(FunctionMixParallelTest, BuildCallInOutDataPairWaitsUntilMixGlobalTensorR
     std::vector<int64_t> shape = {1};
     auto in = std::make_shared<LogicalTensor>(*rootFunc, DT_FP32, shape);
     auto out = std::make_shared<LogicalTensor>(*rootFunc, DT_FP32, shape);
-    auto& callOp = rootFunc->AddRawOperation(Opcode::OP_CALL, {in}, {out}, false);
+    auto& callOp = rootFunc->AddRawOperation(Opcode::OP_CALL, {in}, {out});
 
     std::map<int, SymbolicScalar> emptyOutExpr;
     std::vector<std::vector<SymbolicScalar>> emptyArgList;
