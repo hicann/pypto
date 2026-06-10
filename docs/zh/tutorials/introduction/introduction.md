@@ -106,5 +106,6 @@ PyPTO适用于以下场景：
 
 PyPTO支持在如下产品型号使用：
 
+- Ascend 950PR
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品
