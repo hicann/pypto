@@ -87,7 +87,6 @@ DEFINE_KIND_TRAIT(SeqStmts, ObjectKind::SeqStmts);
 DEFINE_KIND_TRAIT(EvalStmt, ObjectKind::EvalStmt);
 DEFINE_KIND_TRAIT(WhileStmt, ObjectKind::WhileStmt);
 DEFINE_KIND_TRAIT(SectionStmt, ObjectKind::SectionStmt);
-DEFINE_KIND_TRAIT(OpStmts, ObjectKind::OpStmts);
 DEFINE_KIND_TRAIT(BreakStmt, ObjectKind::BreakStmt);
 DEFINE_KIND_TRAIT(ContinueStmt, ObjectKind::ContinueStmt);
 DEFINE_KIND_TRAIT(ScalarOpStmt, ObjectKind::ScalarOpStmt);

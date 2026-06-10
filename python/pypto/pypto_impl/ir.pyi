@@ -1402,21 +1402,6 @@ class SeqStmts(Stmt):
         """
 
 
-class OpStmts(Stmt):
-    """Operation statement block."""
-
-    stmts: Final[list[Stmt]]
-    """List of statements."""
-
-    def __init__(self, stmts: list[Stmt], span: Span) -> None:
-        """Create an operation statement block.
-
-        Args:
-            stmts: List of statements
-            span: Source location
-        """
-
-
 class EvalStmt(Stmt):
     """Evaluation statement: expr."""
 

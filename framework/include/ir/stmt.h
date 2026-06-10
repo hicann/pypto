@@ -515,7 +515,7 @@ using WhileStmtPtr = std::shared_ptr<const WhileStmt>;
 class SectionStmt : public Stmt {
 public:
     SectionStmt(SectionKind sectionKind, StmtPtr body, Span span)
-        : Stmt(std::move(span)), sectionKind_(sectionKind), body_(std::move(body))
+        : Stmt(std::move(span)), sectionKind_(sectionKind), body_(SeqStmts::Wrap(body, span))
     {}
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::SectionStmt; }
@@ -531,29 +531,10 @@ public:
 
 public:
     SectionKind sectionKind_;
-    StmtPtr body_;
+    SeqStmtsPtr body_;
 };
 
 using SectionStmtPtr = std::shared_ptr<const SectionStmt>;
-
-class OpStmts : public Stmt {
-public:
-    OpStmts(std::vector<StmtPtr> stmts, Span span);
-
-    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::OpStmts; }
-    [[nodiscard]] std::string TypeName() const override { return "OpStmts"; }
-
-    static constexpr auto GetFieldDescriptors()
-    {
-        return std::tuple_cat(
-            Stmt::GetFieldDescriptors(), std::make_tuple(reflection::UsualField(&OpStmts::stmts_, "stmts")));
-    }
-
-public:
-    std::vector<StmtPtr> stmts_;
-};
-
-using OpStmtsPtr = std::shared_ptr<const OpStmts>;
 
 /**
  * \brief Evaluation statement

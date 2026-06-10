@@ -206,7 +206,6 @@ public:
 protected:
     PYPTO_IR_PRINTER_COMMON_VISITOR_OVERRIDES();
     void VisitStmt_(const SectionStmtPtr& op) override;
-    void VisitStmt_(const OpStmtsPtr& op) override;
 
 private:
     std::ostringstream stream_;
@@ -220,7 +219,7 @@ private:
     void DecreaseIndent();
 
     // Print a statement block at current indent level.
-    // SeqStmts/OpStmts are transparent containers - recursed into without extra indent.
+    // SeqStmts is a transparent container - recursed into without extra indent.
     void PrintStmtBlock(const StmtPtr& stmt);
 
     // Statement body visitor with SSA-style handling
@@ -750,28 +749,12 @@ void IRPythonPrinter::VisitStmt_(const SeqStmtsPtr& op)
     }
 }
 
-void IRPythonPrinter::VisitStmt_(const OpStmtsPtr& op)
-{
-    for (size_t i = 0; i < op->stmts_.size(); ++i) {
-        PrintStmtBlock(op->stmts_[i]);
-        if (i < op->stmts_.size() - 1) {
-            stream_ << "\n";
-        }
-    }
-}
-
 void IRPythonPrinter::PrintStmtBlock(const StmtPtr& stmt)
 {
     if (auto seq = As<SeqStmts>(stmt)) {
         for (size_t i = 0; i < seq->stmts_.size(); ++i) {
             PrintStmtBlock(seq->stmts_[i]);
             if (i < seq->stmts_.size() - 1)
-                stream_ << "\n";
-        }
-    } else if (auto ops = As<OpStmts>(stmt)) {
-        for (size_t i = 0; i < ops->stmts_.size(); ++i) {
-            PrintStmtBlock(ops->stmts_[i]);
-            if (i < ops->stmts_.size() - 1)
                 stream_ << "\n";
         }
     } else {

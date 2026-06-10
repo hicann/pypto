@@ -1002,15 +1002,6 @@ void BindStmt(py::module_& ir)
         py::arg("index"), "Get statement by index, supports negative indexing");
     BindFields<SeqStmts>(seq_stmts_class);
 
-    // OpStmts - const shared_ptr
-    auto op_stmts_class = py::class_<OpStmts, Stmt, std::shared_ptr<OpStmts>>(
-        ir, "OpStmts",
-        "Operation statements: a sequence of assignment and/or evaluation statements");
-    op_stmts_class.def(
-        py::init<const std::vector<StmtPtr>&, const Span&>(), py::arg("stmts"), py::arg("span"),
-        "Create an operation statements");
-    BindFields<OpStmts>(op_stmts_class);
-
     // EvalStmt - const shared_ptr
     auto eval_stmt_class = py::class_<EvalStmt, Stmt, std::shared_ptr<EvalStmt>>(
         ir, "EvalStmt", "Evaluation statement: expr");

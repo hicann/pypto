@@ -595,26 +595,6 @@ StmtPtr IRMutator::VisitStmt_(const SeqStmtsPtr& op)
     return op;
 }
 
-StmtPtr IRMutator::VisitStmt_(const OpStmtsPtr& op)
-{
-    std::vector<StmtPtr> new_stmts;
-    bool changed = false;
-    new_stmts.reserve(op->stmts_.size());
-    for (size_t i = 0; i < op->stmts_.size(); ++i) {
-        INTERNAL_CHECK_SPAN(op->stmts_[i], op->span_) << "OpStmts has null statement at index " << i;
-        auto new_stmt = StmtFunctor<StmtPtr>::VisitStmt(op->stmts_[i]);
-        INTERNAL_CHECK_SPAN(new_stmt, op->span_) << "OpStmts statement at index " << i << " mutated to null";
-        new_stmts.push_back(new_stmt);
-        if (new_stmt.get() != op->stmts_[i].get()) {
-            changed = true;
-        }
-    }
-    if (changed) {
-        return std::make_shared<const OpStmts>(std::move(new_stmts), op->span_);
-    }
-    return op;
-}
-
 StmtPtr IRMutator::VisitStmt_(const SectionStmtPtr& op)
 {
     INTERNAL_CHECK_SPAN(op->body_, op->span_) << "SectionStmt has null body";

@@ -185,7 +185,6 @@ protected:
     virtual R VisitStmt_(const ForStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const WhileStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const SeqStmtsPtr& op, Args... args) = 0;
-    virtual R VisitStmt_(const OpStmtsPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const SectionStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const EvalStmtPtr& op, Args... args) = 0;
     virtual R VisitStmt_(const BreakStmtPtr& op, Args... args) = 0;
@@ -217,7 +216,6 @@ R StmtFunctor<R, Args...>::VisitStmt(const StmtPtr& stmt, Args... args)
     STMT_FUNCTOR_DISPATCH(ForStmt);
     STMT_FUNCTOR_DISPATCH(WhileStmt);
     STMT_FUNCTOR_DISPATCH_MUT(SeqStmts);
-    STMT_FUNCTOR_DISPATCH(OpStmts);
     STMT_FUNCTOR_DISPATCH(SectionStmt);
     STMT_FUNCTOR_DISPATCH(EvalStmt);
     STMT_FUNCTOR_DISPATCH(BreakStmt);

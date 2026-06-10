@@ -240,14 +240,6 @@ void IRVisitor::VisitStmt_(const SeqStmtsPtr& op)
     }
 }
 
-void IRVisitor::VisitStmt_(const OpStmtsPtr& op)
-{
-    for (size_t i = 0; i < op->stmts_.size(); ++i) {
-        INTERNAL_CHECK_SPAN(op->stmts_[i], op->span_) << "OpStmts has null statement at index " << i;
-        VisitStmt(op->stmts_[i]);
-    }
-}
-
 void IRVisitor::VisitStmt_(const SectionStmtPtr& op)
 {
     INTERNAL_CHECK_SPAN(op->body_, op->span_) << "SectionStmt has null body";
