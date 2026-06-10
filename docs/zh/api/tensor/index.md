@@ -59,7 +59,6 @@ pypto-Tensor-trunc
 pypto-Tensor-sub
 pypto-Tensor-sum
 pypto-Tensor-topk
-pypto-Tensor-transdata
 pypto-Tensor-transpose
 pypto-Tensor-tril
 pypto-Tensor-tril_

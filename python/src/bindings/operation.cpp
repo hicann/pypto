@@ -134,12 +134,6 @@ void BindOperation(py::module_& m)
         [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Transpose(self, perm); },
         "Tensor transpose.");
     m.def(
-        "TransData",
-        [](const Tensor& self, const int& format, const int& group) {
-            return npu::tile_fwk::TransData(self, static_cast<TileOpFormat>(format), group);
-        },
-        "Tensor transdata.");
-    m.def(
         "Abs", [](const Tensor& self) { return npu::tile_fwk::Abs(self); }, "Tensor abs.");
     m.def(
         "Reciprocal", [](const Tensor& operand) { return npu::tile_fwk::Reciprocal(operand); }, "Tensor reciprocal.");
