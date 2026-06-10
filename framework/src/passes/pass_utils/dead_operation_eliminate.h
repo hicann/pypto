@@ -25,8 +25,7 @@ public:
     ~DeadOperationEliminator() = default;
 
     void EliminateDeadOperationBackward(Function& function);
-    void EliminateOperation(Function& function, bool sorted = true);
-    void EliminateOperationAndNotSortAfterErase(Function& function, bool sorted = false);
+    void EliminateOperation(Function& function, bool useSortedOperations = true, bool sortAfterErase = true);
     static Status EliminateDeadOperation(Function& function);
 };
 } // namespace npu::tile_fwk

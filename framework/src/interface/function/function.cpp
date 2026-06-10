@@ -81,6 +81,176 @@ struct ViewKey {
     Offset offset;
     std::vector<SymbolicScalar> dynOffset;
 };
+
+struct TensorDependency {
+    std::vector<int> producers;
+    int pendingConsumerCount{0};
+};
+
+struct SortContext {
+    std::unordered_map<const Operation*, int> opToIndex;
+    std::unordered_map<const LogicalTensor*, size_t> tensorToDep;
+    std::vector<TensorDependency> tensorDeps;
+    std::vector<std::vector<size_t>> tensorDepsByConsumer;
+    std::vector<int> outDegree;
+};
+
+class LightweightOperationSorter {
+public:
+    LightweightOperationSorter(
+        const Function& function, const std::vector<std::shared_ptr<Operation>>& operations,
+        const LogicalTensors& inCasts, const LogicalTensors& outCasts)
+        : function_(function), operations_(operations), inCasts_(inCasts), outCasts_(outCasts)
+    {}
+
+    std::vector<std::shared_ptr<Operation>> Sort()
+    {
+        // Cache each tensor's producers as a dependency barrier, then run Kahn's algorithm from consumers to
+        // producers. A tensor barrier is released once all pending consumers are emitted, avoiding repeated
+        // producer-list scans during lightweight sorting.
+        BuildOpIndex();
+        BuildTensorDeps();
+        BuildOutDegree();
+        auto sortedOperations = RunTopologicalSort();
+        CheckSortedOperations(sortedOperations);
+        std::reverse(sortedOperations.begin(), sortedOperations.end());
+        return sortedOperations;
+    }
+
+private:
+    void BuildOpIndex()
+    {
+        context_.opToIndex.reserve(operations_.size());
+        for (size_t idx = 0; idx < operations_.size(); idx++) {
+            auto op = operations_[idx].get();
+            auto insertResult = context_.opToIndex.emplace(op, static_cast<int>(idx));
+            FE_ASSERT(FeError::IS_EXIST, insertResult.second) << "Duplicate operation found: " << op->Dump();
+        }
+    }
+
+    size_t GetOrCreateTensorDepIndex(const LogicalTensorPtr& tensor)
+    {
+        auto iter = context_.tensorToDep.find(tensor.get());
+        if (iter != context_.tensorToDep.end()) {
+            return iter->second;
+        }
+        size_t depIndex = context_.tensorDeps.size();
+        context_.tensorToDep.emplace(tensor.get(), depIndex);
+        TensorDependency dep;
+        dep.producers.reserve(tensor->GetProducers().size());
+        for (const auto& producer : tensor->GetProducers()) {
+            if (producer->BelongTo() != &function_) {
+                continue;
+            }
+            auto producerIter = context_.opToIndex.find(producer);
+            FE_ASSERT(FeError::NOT_EXIST, producerIter != context_.opToIndex.end())
+                << "Producer not found in opToIndex: " << producer->Dump();
+            dep.producers.emplace_back(producerIter->second);
+        }
+        context_.tensorDeps.emplace_back(std::move(dep));
+        return depIndex;
+    }
+
+    void RecordTensorDep(int consumerIdx, const LogicalTensorPtr& tensor)
+    {
+        size_t depIndex = GetOrCreateTensorDepIndex(tensor);
+        auto& dep = context_.tensorDeps[depIndex];
+        if (dep.producers.empty()) {
+            return;
+        }
+        dep.pendingConsumerCount++;
+        context_.tensorDepsByConsumer[consumerIdx].emplace_back(depIndex);
+    }
+
+    void BuildTensorDeps()
+    {
+        context_.tensorToDep.reserve(operations_.size());
+        context_.tensorDepsByConsumer.resize(operations_.size());
+        for (size_t idx = 0; idx < operations_.size(); idx++) {
+            const auto& op = operations_[idx];
+            for (const auto& iop : op->iOperand) {
+                RecordTensorDep(static_cast<int>(idx), iop);
+            }
+            for (const auto& dop : op->dependOperand) {
+                RecordTensorDep(static_cast<int>(idx), dop);
+            }
+            if (!op->IsCall()) {
+                for (auto [type, index] : GetTensorDataUsage(op->GetDynamicAttributeList())) {
+                    if (type == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) {
+                        RecordTensorDep(static_cast<int>(idx), inCasts_[index]);
+                    } else if (type == GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST) {
+                        RecordTensorDep(static_cast<int>(idx), outCasts_[index]);
+                    }
+                }
+            }
+        }
+    }
+
+    void BuildOutDegree()
+    {
+        context_.outDegree.assign(operations_.size(), 0);
+        for (auto& dep : context_.tensorDeps) {
+            if (dep.producers.empty() || dep.pendingConsumerCount == 0) {
+                continue;
+            }
+            for (int producerIdx : dep.producers) {
+                context_.outDegree[producerIdx]++;
+            }
+        }
+    }
+
+    std::vector<std::shared_ptr<Operation>> RunTopologicalSort()
+    {
+        std::queue<int> readyOps;
+        for (size_t idx = 0; idx < operations_.size(); idx++) {
+            if (context_.outDegree[idx] == 0) {
+                readyOps.emplace(idx);
+            }
+        }
+        auto releasePrevOp = [this, &readyOps](int prevOpIndex) {
+            if (--context_.outDegree[prevOpIndex] == 0) {
+                readyOps.emplace(prevOpIndex);
+            }
+        };
+        auto releaseTensorDep = [this, &releasePrevOp](size_t depIndex) {
+            auto& dep = context_.tensorDeps[depIndex];
+            if (--dep.pendingConsumerCount == 0) {
+                for (int producerIdx : dep.producers) {
+                    releasePrevOp(producerIdx);
+                }
+            }
+        };
+        std::vector<std::shared_ptr<Operation>> sortedOperations;
+        sortedOperations.reserve(operations_.size());
+        while (!readyOps.empty()) {
+            int currIndex = readyOps.front();
+            readyOps.pop();
+            sortedOperations.emplace_back(operations_[currIndex]);
+            for (size_t depIndex : context_.tensorDepsByConsumer[currIndex]) {
+                releaseTensorDep(depIndex);
+            }
+        }
+        return sortedOperations;
+    }
+
+    void CheckSortedOperations(const std::vector<std::shared_ptr<Operation>>& sortedOperations) const
+    {
+        for (auto& op : operations_) {
+            const int opIndex = context_.opToIndex.at(op.get());
+            FE_ASSERT(context_.outDegree[opIndex] == 0) << "cycle detected: " << op->Dump();
+        }
+        FE_ASSERT(operations_.size() == sortedOperations.size())
+            << "Sorted operations size mismatch: " << sortedOperations.size() << " and original size "
+            << operations_.size();
+    }
+
+    const Function& function_;
+    const std::vector<std::shared_ptr<Operation>>& operations_;
+    const LogicalTensors& inCasts_;
+    const LogicalTensors& outCasts_;
+    SortContext context_;
+};
+
 } // namespace
 
 std::vector<Operation*> OperationsViewer::DuplicatedOpList() const
@@ -1241,9 +1411,26 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const
     return sortedOperations;
 }
 
-void Function::SortOperations()
+std::vector<std::shared_ptr<Operation>> Function::GetLightweightSortedOperations() const
 {
-    std::vector<std::shared_ptr<Operation>> sortedOperations = GetSortedOperations();
+    FE_ASSERT(operationGroups_.empty()) << "Lightweight sort does not support operationGroups_.";
+    LightweightOperationSorter sorter(*this, operations_, inCasts_, outCasts_);
+    return sorter.Sort();
+}
+
+void Function::SortOperations(SortOperationsMode mode)
+{
+    std::vector<std::shared_ptr<Operation>> sortedOperations;
+    switch (mode) {
+        case SortOperationsMode::GENERAL:
+            sortedOperations = GetSortedOperations();
+            break;
+        case SortOperationsMode::LIGHTWEIGHT:
+            sortedOperations = GetLightweightSortedOperations();
+            break;
+        default:
+            FE_ASSERT(FeError::INVALID_VAL, false) << "Invalid sort operations mode.";
+    }
     operations_ = sortedOperations;
     RefreshOpPosition();
     sorted_ = true;
@@ -2581,7 +2768,10 @@ static const SymbolicScalar RUNTIME_COA_GetValidShape = AddRuntimeCoaPrefix("GET
 static const SymbolicScalar RUNTIME_COA_GetRawShape = AddRuntimeCoaPrefix("GET_PARAM_RAW_SHAPE");
 static const SymbolicScalar RUNTIME_COA_GetParam = AddRuntimeCoaPrefix("GET_PARAM");
 
-static int64_t MakeTensorIndex(int64_t magic) { return magic | (1UL << 62); } // Create tensor index by setting bit 62 of magic number
+static int64_t MakeTensorIndex(int64_t magic)
+{
+    return magic | (1UL << 62);
+} // Create tensor index by setting bit 62 of magic number
 
 static void MaybeNormalizeValue(
     const SymbolicScalar& coaFunc, std::vector<SymbolicScalar>& operandCoaList, int operandCoaIndex,

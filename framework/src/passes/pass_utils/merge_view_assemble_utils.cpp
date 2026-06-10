@@ -136,7 +136,8 @@ Status MergeViewAssembleUtils::CleanUp(Function& function)
         return status;
     }
     DeadOperationEliminator eliminator;
-    eliminator.EliminateOperation(function, false);
+    eliminator.EliminateOperation(function, false, false);
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     return SUCCESS;
 }
 

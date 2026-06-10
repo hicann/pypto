@@ -69,6 +69,11 @@ inline const BiMap<GraphType>& GetGraphTypeNameDict()
 
 enum class EndFuncReturnParam { INPUT = 0, OUTPUT, ARGS };
 
+enum class SortOperationsMode {
+    GENERAL,
+    LIGHTWEIGHT,
+};
+
 enum class MixResourceType {
     UNKNOWN = 0,
     ONE_CUBE_ONE_VECTOR = 1, // 1C1V
@@ -615,7 +620,7 @@ public:
     // 这个LeafOperations写法破坏封装性，但是是针对LeafFunction特有的，后续在Function按类拆分的时候会将其只放到LeafFunction中
     std::vector<OperationPtr>& GetProgramOp();
     void SetProgramOp(const std::vector<OperationPtr>& operations);
-    void SortOperations();
+    void SortOperations(SortOperationsMode mode = SortOperationsMode::GENERAL);
     void ScheduleBy(const std::vector<Operation*>& newList, bool needRefresh = false);
     void EraseOperations(bool eraseRelatedTensor = true, bool sorted = true);
     void EraseOperations(const OperationDeleter& deleter);
@@ -1037,6 +1042,8 @@ private:
     std::unordered_map<LogicalTensorPtr, bool>  outcastNeedAllocMap_;
 
 private:
+    std::vector<std::shared_ptr<Operation>> GetLightweightSortedOperations() const;
+
     unsigned long ComputeHashOrderless() const;
     void OpValidCheck(Operation& op) const;
     void RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& originIncast) const;

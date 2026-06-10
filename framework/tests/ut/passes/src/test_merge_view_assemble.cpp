@@ -13,6 +13,10 @@
  * \brief Unit test for merge_view_assemble pass.
  */
 
+#include <unordered_map>
+#include <vector>
+#include <string>
+
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
@@ -26,10 +30,6 @@
 #include "ut_json/ut_json_tool.h"
 #include "passes/tile_graph_pass/graph_optimization/merge_view_assemble.h"
 #include "passes/pass_utils/graph_utils.h"
-#include <fstream>
-#include <vector>
-#include <string>
-#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -52,6 +52,73 @@ public:
     }
     void TearDown() override {}
 };
+
+static void ExpectTopologicalOrder(Function* function)
+{
+    auto ops = function->Operations().DuplicatedOpList();
+    std::unordered_map<Operation*, size_t> opToIndex;
+    opToIndex.reserve(ops.size());
+    for (size_t index = 0; index < ops.size(); ++index) {
+        opToIndex.emplace(ops[index], index);
+    }
+    for (auto* op : ops) {
+        for (const auto& input : op->GetIOperands()) {
+            for (auto* producer : input->GetProducers()) {
+                if (producer->BelongTo() == function && producer != op) {
+                    EXPECT_LT(opToIndex.at(producer), opToIndex.at(op));
+                }
+            }
+        }
+        for (const auto& depend : op->GetDependOperands()) {
+            for (auto* producer : depend->GetProducers()) {
+                if (producer->BelongTo() == function && producer != op) {
+                    EXPECT_LT(opToIndex.at(producer), opToIndex.at(op));
+                }
+            }
+        }
+    }
+}
+
+TEST_F(MergeViewAssembleTest, MergeViewAssembleKeepsTopologicalOrderForSharedTensorFanout)
+{
+    constexpr int producerNum = 4;
+    constexpr int consumerNum = 5;
+    std::vector<int64_t> shape{16, 16};
+    ComputationalGraphBuilder G;
+    ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, {"input", "shared"}));
+    for (int index = 0; index < consumerNum; ++index) {
+        auto indexStr = std::to_string(index);
+        ASSERT_TRUE(G.AddTensors(DataType::DT_FP32, shape, {"view_mid_" + indexStr, "view_out_" + indexStr}));
+        ASSERT_TRUE(
+            G.AddOp(Opcode::OP_VIEW, {"shared"}, {"view_mid_" + indexStr}, "view_mid_" + indexStr, true));
+        G.GetOp("view_mid_" + indexStr)
+            ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+        ASSERT_TRUE(G.AddOp(
+            Opcode::OP_VIEW, {"view_mid_" + indexStr}, {"view_out_" + indexStr}, "view_out_" + indexStr, true));
+        G.GetOp("view_out_" + indexStr)
+            ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    }
+    for (int index = 0; index < producerNum; ++index) {
+        auto indexStr = std::to_string(index);
+        ASSERT_TRUE(G.AddTensor(DataType::DT_FP32, shape, "producer_out_" + indexStr));
+        ASSERT_TRUE(G.AddOp(Opcode::OP_ABS, {"input"}, {"producer_out_" + indexStr}, "producer_" + indexStr, true));
+        ASSERT_TRUE(
+            G.AddOp(Opcode::OP_ASSEMBLE, {"producer_out_" + indexStr}, {"shared"}, "assemble_" + indexStr, true));
+        G.GetOp("assemble_" + indexStr)
+            ->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    }
+    std::vector<std::string> outcasts;
+    for (int index = 0; index < consumerNum; ++index) {
+        outcasts.emplace_back("view_out_" + std::to_string(index));
+    }
+    ASSERT_TRUE(G.SetInCast({"input"}));
+    ASSERT_TRUE(G.SetOutCast(outcasts));
+
+    MergeViewAssemble pass;
+    ASSERT_EQ(pass.RunOnFunction(*G.GetFunction()), SUCCESS);
+
+    ExpectTopologicalOrder(G.GetFunction());
+}
 
 TEST_F(MergeViewAssembleTest, TestMergeViewAssemble)
 {

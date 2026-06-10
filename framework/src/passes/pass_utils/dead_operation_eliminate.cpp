@@ -54,12 +54,12 @@ std::set<Operation*, LogicalTensor::CompareOp> FindProducers(
     return producerOps;
 }
 
-inline void EliminateOperationCommon(Function& function, bool sorted, bool sortAfterErase)
+void DeadOperationEliminator::EliminateOperation(Function& function, bool useSortedOperations, bool sortAfterErase)
 {
     std::queue<Operation*> q;
     std::unordered_set<Operation*> visited;
     std::unordered_set<std::shared_ptr<LogicalTensor>> visitedOperands;
-    for (auto& op : function.Operations(sorted)) {
+    for (auto& op : function.Operations(useSortedOperations)) {
         bool dontTouch = op.GetBoolAttribute(OpAttributeKey::dontTouch);
         if (dontTouch) {
             visited.emplace(&op);
@@ -88,21 +88,11 @@ inline void EliminateOperationCommon(Function& function, bool sorted, bool sortA
             q.emplace(producerOp);
         }
     }
-    for (auto& op : function.Operations(sorted)) {
+    for (auto& op : function.Operations(useSortedOperations)) {
         if (visited.count(&op) == 0) {
             op.SetAsDeleted();
         }
     }
     function.EraseOperations(false, sortAfterErase);
-}
-
-void DeadOperationEliminator::EliminateOperation(Function& function, bool sorted)
-{
-    EliminateOperationCommon(function, sorted, true);
-}
-
-void DeadOperationEliminator::EliminateOperationAndNotSortAfterErase(Function& function, bool sorted)
-{
-    EliminateOperationCommon(function, sorted, false);
 }
 } // namespace npu::tile_fwk

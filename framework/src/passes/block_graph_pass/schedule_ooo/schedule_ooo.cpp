@@ -478,7 +478,7 @@ Status OoOSchedule::RunOnFunction(Function& function)
                 return FAILED;
             }
             DeadOperationEliminator eliminator;
-            eliminator.EliminateOperationAndNotSortAfterErase(*program.second);
+            eliminator.EliminateOperation(*program.second, false, false);
             programRef.second = program.second;
             continue;
         }
@@ -487,7 +487,7 @@ Status OoOSchedule::RunOnFunction(Function& function)
             return FAILED;
         }
         DeadOperationEliminator eliminator;
-        eliminator.EliminateOperationAndNotSortAfterErase(*program.second);
+        eliminator.EliminateOperation(*program.second, false, false);
         programRef.second = program.second;
     }
     if (RecordLastUseMemory(function) == FAILED) {
