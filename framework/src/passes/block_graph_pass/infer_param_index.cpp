@@ -69,12 +69,6 @@ Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function& functi
         return SUCCESS;
     }
     for (auto outOperand : op.GetOOperands()) {
-        if ((op.GetOpcode() == Opcode::OP_INDEX_ADD || op.GetOpcode() == Opcode::OP_NCHW2NC1HWC0 ||
-             op.GetOpcode() == Opcode::OP_NC1HWC02NCHW || op.GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
-             op.GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 || op.GetOpcode() == Opcode::OP_NCDHW2FRACTAL_Z_3D ||
-             op.GetOpcode() == Opcode::OP_NDC1HWC02NCDHW) &&
-            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand))
-            continue;
         std::vector<SymbolicScalar> validShape;
         if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || setSymDimOps.count(op.GetOpcode())) {
             for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {

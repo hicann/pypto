@@ -1058,7 +1058,7 @@ void TiledTransData(Function& function, const TileShape& tileShape, TransDataPar
     }
 }
 
-LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] int group)
+LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] const LogicalTensorPtr& output, int group)
 {
     Shape resultShape = self->GetShape();
     int64_t C = resultShape[1];
@@ -1075,10 +1075,10 @@ LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPt
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
 
     std::vector<SymbolicScalar> resultValidShape(self->GetDynValidShape());
-    int64_t validShapeC = resultValidShape[1];
-    int perGroupValidShapeC = validShapeC / group;
-    int perGroupValidShapeC1 = (perGroupValidShapeC + C0 - 1) / C0;
-    int totalValidShapeC1 = perGroupValidShapeC1 * group;
+    SymbolicScalar validShapeC = resultValidShape[1];
+    SymbolicScalar perGroupValidShapeC = validShapeC / group;
+    SymbolicScalar perGroupValidShapeC1 = (perGroupValidShapeC + C0 - 1) / C0;
+    SymbolicScalar totalValidShapeC1 = perGroupValidShapeC1 * group;
     resultValidShape[1] = totalValidShapeC1;
     resultValidShape.push_back(SymbolicScalar(C0));
     auto result = std::make_shared<LogicalTensor>(
@@ -1100,7 +1100,7 @@ LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPt
     return result;
 }
 
-LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] int group)
+LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] const LogicalTensorPtr& output, int group)
 {
     int64_t N = self->GetShape()[0];
     int64_t C = self->GetShape()[1];
@@ -1147,7 +1147,7 @@ LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensor
     return result;
 }
 
-LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] int group)
+LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] const LogicalTensorPtr& output, int group)
 {
     int64_t N = self->GetShape()[0];
     int64_t C = self->GetShape()[1];
@@ -1201,7 +1201,7 @@ LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensor
     return result;
 }
 
-LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] int group)
+LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] const LogicalTensorPtr& output, int group)
 {
     int64_t N = self->GetShape()[0];
     int64_t C = self->GetShape()[1];
@@ -1253,7 +1253,7 @@ LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPt
     return result;
 }
 
-LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] int group)
+LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output, int group)
 {
     int64_t N = self->GetShape()[0];
     int64_t D = self->GetShape()[1];
@@ -1262,6 +1262,7 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
     int64_t W = self->GetShape()[4];
     int64_t C0 = self->GetShape()[5];
     Shape resultShape = {N, D, C1 * C0, H, W};
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, output->GetShape().size() == SHAPE_DIM6 || C1 * C0 == output->GetShape()[SHAPE_DIM1]) << "Not supported for pad scenarios!";
 
     SymbolicScalar validShapeN = self->GetDynValidShape()[0];
     SymbolicScalar validShapeD = self->GetDynValidShape()[1];
@@ -1300,10 +1301,10 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
     return tmpResult.GetStorage();
 }
 
-LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPtr& self, [[maybe_unused]] int group)
+LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output, int group)
 {
     if (self->GetShape().size() != 5) {
-        return TransDataNDC1HWC02NCDHW(function, self, group);
+        return TransDataNDC1HWC02NCDHW(function, self, output, group);
     }
     int64_t N = self->GetShape()[0];
     int64_t C1 = self->GetShape()[1];
@@ -1311,6 +1312,7 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPt
     int64_t W = self->GetShape()[3];
     int64_t C0 = self->GetShape()[4];
     Shape resultShape = {N, C1 * C0, H, W};
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, output->GetShape().size() == SHAPE_DIM5 || C1 * C0 == output->GetShape()[1]) << "Not supported for pad scenarios!";
     SymbolicScalar validShapeN = self->GetDynValidShape()[0];
     SymbolicScalar validShapeC1 = self->GetDynValidShape()[1];
     SymbolicScalar validShapeH = self->GetDynValidShape()[2];
@@ -1340,28 +1342,28 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPt
 }
 
 LogicalTensorPtr TensorTransData(
-    Function& function, const LogicalTensorPtr& self, TileOpFormat transDataType, [[maybe_unused]] int group)
+    Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output, TileOpFormat transDataType, int group)
 {
     switch (transDataType) {
         case TileOpFormat::TILEOP_NC1HWC0:
-            return TransDataNCHW2NC1HWC0(function, self, group);
+            return TransDataNCHW2NC1HWC0(function, self, output, group);
         case TileOpFormat::TILEOP_FRACTAL_Z:
-            return TransDataNCHW2Fractal_Z(function, self, group);
+            return TransDataNCHW2Fractal_Z(function, self, output, group);
         case TileOpFormat::TILEOP_NDC1HWC0:
-            return TransDataNCDHW2NDC1HWC0(function, self, group);
+            return TransDataNCDHW2NDC1HWC0(function, self, output, group);
         case TileOpFormat::TILEOP_FRACTAL_Z_3D:
-            return TransDataFRACTAL_Z_3D(function, self, group);
+            return TransDataFRACTAL_Z_3D(function, self, output, group);
         case TileOpFormat::TILEOP_ND:
-            return TransDataNC1HWC02NCHW(function, self, group); // 两种情况，NC1HWC0和NDC1HWC0
+            return TransDataNC1HWC02NCHW(function, self, output, group); // 两种情况，NC1HWC0和NDC1HWC0
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
-    return TransDataNCHW2NC1HWC0(function, self, group);
+    return TransDataNCHW2NC1HWC0(function, self, output, group);
 }
 
 LogicalTensorPtr TransData(
-    Function& function, const LogicalTensorPtr& self, [[maybe_unused]] const LogicalTensorPtr& output,
-    TileOpFormat transDataType, [[maybe_unused]] int group)
+    Function& function, const LogicalTensorPtr& self, const LogicalTensorPtr& output,
+    TileOpFormat transDataType, int group)
 {
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT8, DT_INT16, DT_FP32, DT_INT32};
@@ -1386,10 +1388,10 @@ LogicalTensorPtr TransData(
         default:
             ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
-    return TensorTransData(function, self, transDataType, group);
+    return TensorTransData(function, self, output, transDataType, group);
 }
 
-Tensor TransData(const Tensor& self, TileOpFormat transDataType, [[maybe_unused]] int group)
+Tensor TransData(const Tensor& self, TileOpFormat transDataType, int group)
 {
     DECLARE_TRACER();
     auto& function = *Program::GetInstance().GetCurrentFunction();

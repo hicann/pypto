@@ -37,16 +37,14 @@ protected:
         config::Reset();
     }
 
-    void TearDown() override
-    {
-        Program::GetInstance().Reset();
-    }
+    void TearDown() override { Program::GetInstance().Reset(); }
 
     int CountOpsByOpcode(Function* func, Opcode opcode)
     {
         int count = 0;
         for (auto& op : func->Operations()) {
-            if (op.GetOpcode() == opcode) count++;
+            if (op.GetOpcode() == opcode)
+                count++;
         }
         return count;
     }
@@ -68,6 +66,15 @@ protected:
             graph.GetTensor(name)->UpdateDynValidShape(validShape);
         }
     }
+
+    void SetFakeTransFormat(
+        ComputationalGraphBuilder& graph, const std::string& opName, TileOpFormat inFormat, TileOpFormat outFormat)
+    {
+        auto* fakeTrans = graph.GetOp(opName);
+        ASSERT_NE(fakeTrans, nullptr);
+        fakeTrans->SetAttribute(FAKE_TRANS_IN_FORMAT_ATTR, static_cast<int64_t>(inFormat));
+        fakeTrans->SetAttribute(FAKE_TRANS_OUT_FORMAT_ATTR, static_cast<int64_t>(outFormat));
+    }
 };
 
 // =============================================================================
@@ -79,8 +86,8 @@ TEST_F(InferTensorFormatTest, NDFormatPassThroughLocalAssemble)
 {
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape{16, 32};
-    ASSERT_TRUE(G.AddTensors(
-        DataType::DT_FP16, shape, {"incast0", "v1_out", "r1_out", "v2_out", "asm_out", "local_out"}));
+    ASSERT_TRUE(
+        G.AddTensors(DataType::DT_FP16, shape, {"incast0", "v1_out", "r1_out", "v2_out", "asm_out", "local_out"}));
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast0"}, {"v1_out"}, "view1"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_RESHAPE, {"v1_out"}, {"r1_out"}, "reshape1"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"r1_out"}, {"v2_out"}, "view2"));
@@ -102,7 +109,7 @@ TEST_F(InferTensorFormatTest, NDFormatPassThroughLocalAssemble)
 // 场景 j2: 3×(view+abs) → conv2D → sub → assemble
 //   图: 三路 ND 输入分别经过 view+abs 进入 conv2D
 //       conv2D input[0]要求NC1HWC0, input[1]要求FRACTAL_Z, input[2]要求ND
-//       conv_out(NC1HWC0) → TransData(ND) → sub(要求ND) → assemble
+//       conv_out(NC1HWC0) → FakeTrans(ND) → sub(要求ND) → assemble
 //   预期: Path0 ND→NC1HWC0 (OP_NCHW2NC1HWC0×1)
 //         Path1 ND→FRACTAL_Z (OP_NCHW2Fractal_Z×1)
 //         conv_out NC1HWC0→ND (OP_NC1HWC02NCHW×1)
@@ -113,10 +120,10 @@ TEST_F(InferTensorFormatTest, Conv2DWithTransDataInsertion)
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
     std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
-    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d,
-        {"incast0", "incast1", "incast2", "incast3", "incast4",
-         "v0_out", "a0_out", "v1_out", "a1_out", "v2_out", "a2_out",
-         "sub_out", "asm_out", "outcast"}));
+    ASSERT_TRUE(G.AddTensors(
+        DataType::DT_FP16, shape4d,
+        {"incast0", "incast1", "incast2", "incast3", "incast4", "v0_out", "a0_out", "v1_out", "a1_out", "v2_out",
+         "a2_out", "conv_nd", "sub_out", "asm_out", "outcast"}));
     ASSERT_TRUE(G.AddTensor(DataType::DT_FP16, shape5d, "conv_out"));
 
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast0"}, {"v0_out"}, "view0"));
@@ -126,14 +133,17 @@ TEST_F(InferTensorFormatTest, Conv2DWithTransDataInsertion)
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast2"}, {"v2_out"}, "view2"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ABS, {"v2_out"}, {"a2_out"}, "abs2"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_CONV2D, {"a0_out", "a1_out", "a2_out"}, {"conv_out"}, "conv"));
-    ASSERT_TRUE(G.AddOp(Opcode::OP_SUB, {"conv_out", "incast3"}, {"sub_out"}, "sub"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"conv_out"}, {"conv_nd"}, "conv_to_nd"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_SUB, {"conv_nd", "incast3"}, {"sub_out"}, "sub"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"sub_out"}, {"outcast"}, "assemble0"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"incast4"}, {"outcast"}, "assemble1"));
     ASSERT_TRUE(G.SetInCast({"incast0", "incast1", "incast2", "incast3", "incast4"}));
     ASSERT_TRUE(G.SetOutCast({"outcast"}));
+    SetFakeTransFormat(G, "conv_to_nd", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
 
-    UpdateDynValidShapes(G, {"incast0", "incast1", "incast2", "incast3", "incast4", "v0_out", "a0_out", "v1_out",
-        "a1_out", "v2_out", "a2_out", "conv_out"});
+    UpdateDynValidShapes(
+        G, {"incast0", "incast1", "incast2", "incast3", "incast4", "v0_out", "a0_out", "v1_out", "a1_out", "v2_out",
+            "a2_out", "conv_out", "conv_nd"});
 
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
@@ -153,13 +163,14 @@ TEST_F(InferTensorFormatTest, Conv2DWithTransDataInsertion)
     auto* sub = G.GetOp("sub");
     ASSERT_NE(sub, nullptr);
     EXPECT_NE(sub->GetIOperands()[0], G.GetTensor("conv_out"));
+    EXPECT_NE(sub->GetIOperands()[0], G.GetTensor("conv_nd"));
     EXPECT_EQ(sub->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_ND);
 }
 
 // =============================================================================
 // 场景 j3: 共享输入分叉 —— t0,t1 同时喂给 conv2D 和 matmul
 //   图: 三路 ND→view→t0/t1/t2, t0/t1/t2 → conv2D, t0/t1 → matmul
-//       conv_out(NC1HWC0) → TransData(ND) → assemble0, mm_out(ND) → assemble1
+//       conv_out(NC1HWC0) → FakeTrans(ND) → assemble0, mm_out(ND) → assemble1
 //   预期: t0→conv2D[0](NC1HWC0): TransData×1
 //         t1→conv2D[1](FRACTAL_Z): TransData×1
 //         t0→matmul[0](ND), t1→matmul[1](ND): 匹配, 无转换
@@ -172,9 +183,9 @@ TEST_F(InferTensorFormatTest, SharedInputsConv2DAndMatmul)
     ComputationalGraphBuilder G;
     std::vector<int64_t> shape4d{2, 32, 14, 14};
     std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
-    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d,
-        {"incast0", "incast1", "incast2", "t0", "t1", "t2",
-         "mm_out", "asm_out", "outcast"}));
+    ASSERT_TRUE(G.AddTensors(
+        DataType::DT_FP16, shape4d,
+        {"incast0", "incast1", "incast2", "t0", "t1", "t2", "conv_nd", "mm_out", "asm_out", "outcast"}));
     ASSERT_TRUE(G.AddTensor(DataType::DT_FP16, shape5d, "conv_out"));
 
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast0"}, {"t0"}, "view0"));
@@ -182,12 +193,14 @@ TEST_F(InferTensorFormatTest, SharedInputsConv2DAndMatmul)
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast2"}, {"t2"}, "view2"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_CONV2D, {"t0", "t1", "t2"}, {"conv_out"}, "conv"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_A_MUL_B, {"t0", "t1"}, {"mm_out"}, "matmul"));
-    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"conv_out"}, {"outcast"}, "assemble0"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"conv_out"}, {"conv_nd"}, "conv_to_nd"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"conv_nd"}, {"outcast"}, "assemble0"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"mm_out"}, {"outcast"}, "assemble1"));
     ASSERT_TRUE(G.SetInCast({"incast0", "incast1", "incast2"}));
     ASSERT_TRUE(G.SetOutCast({"outcast"}));
+    SetFakeTransFormat(G, "conv_to_nd", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
 
-    UpdateDynValidShapes(G, {"incast0", "incast1", "incast2", "t0", "t1", "t2", "conv_out", "mm_out"});
+    UpdateDynValidShapes(G, {"incast0", "incast1", "incast2", "t0", "t1", "t2", "conv_out", "conv_nd", "mm_out"});
 
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
@@ -210,15 +223,17 @@ TEST_F(InferTensorFormatTest, SharedInputsConv2DAndMatmul)
     auto* assemble0 = G.GetOp("assemble0");
     ASSERT_NE(assemble0, nullptr);
     EXPECT_NE(assemble0->GetIOperands()[0], G.GetTensor("conv_out"));
+    EXPECT_NE(assemble0->GetIOperands()[0], G.GetTensor("conv_nd"));
     EXPECT_EQ(assemble0->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_ND);
 }
 
 // =============================================================================
 // 场景 j4: 3 路并行 view → assemble，第一路 NC1HWC0，后两路 ND
-//   图: incast0(NC1HWC0) → view0 → v0_out
+//   图: incast0(NC1HWC0)
 //       incast1(ND) → view1 → v1_out
 //       incast2(ND) → view2 → v2_out
-//       v0_out, v1_out, v2_out → assemble → outcast
+//       incast0(NC1HWC0) → FakeTrans(ND) → assemble0 → outcast
+//       v1_out, v2_out → assemble → outcast
 //   预期: 输出为 outcast 时固定 ND，不再由首个 assemble 决定
 //         incast0(NC1HWC0)→ND 支持 → OP_NC1HWC02NCHW×1
 //         v1_out/v2_out 已为 ND，不插入转换
@@ -230,23 +245,23 @@ TEST_F(InferTensorFormatTest, AssembleToOutcastRequiresND)
     std::vector<int64_t> shape4d{2, 32, 14, 14};
     std::vector<int64_t> shape5d{2, 2, 14, 14, 16};
     ASSERT_TRUE(G.AddTensor(DataType::DT_FP16, shape5d, "incast0"));
-    ASSERT_TRUE(G.AddTensor(DataType::DT_FP16, shape5d, "v0_out"));
-    ASSERT_TRUE(G.AddTensors(DataType::DT_FP16, shape4d, {"incast1", "incast2", "v1_out", "v2_out", "outcast"}));
-    ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast0"}, {"v0_out"}, "view0"));
+    ASSERT_TRUE(
+        G.AddTensors(DataType::DT_FP16, shape4d, {"incast1", "incast2", "v0_nd", "v1_out", "v2_out", "outcast"}));
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast1"}, {"v1_out"}, "view1"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_VIEW, {"incast2"}, {"v2_out"}, "view2"));
-    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"v0_out"}, {"outcast"}, "assemble0"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_FAKE_TRANS, {"incast0"}, {"v0_nd"}, "v0_to_nd"));
+    ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"v0_nd"}, {"outcast"}, "assemble0"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"v1_out"}, {"outcast"}, "assemble1"));
     ASSERT_TRUE(G.AddOp(Opcode::OP_ASSEMBLE, {"v2_out"}, {"outcast"}, "assemble2"));
     ASSERT_TRUE(G.SetInCast({"incast0", "incast1", "incast2"}));
     ASSERT_TRUE(G.SetOutCast({"outcast"}));
     G.GetTensor("incast0")->GetRawTensor()->format = TileOpFormat::TILEOP_NC1HWC0;
+    SetFakeTransFormat(G, "v0_to_nd", TileOpFormat::TILEOP_NC1HWC0, TileOpFormat::TILEOP_ND);
 
     Function* func = G.GetFunction();
     ASSERT_EQ(RunInferTensorFormat(func), SUCCESS);
 
     EXPECT_EQ(G.GetTensor("incast0")->Format(), TileOpFormat::TILEOP_NC1HWC0);
-    EXPECT_EQ(G.GetTensor("v0_out")->Format(), TileOpFormat::TILEOP_ND);
     EXPECT_EQ(G.GetTensor("outcast")->Format(), TileOpFormat::TILEOP_ND);
     EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NC1HWC02NCHW), 1);
     EXPECT_EQ(CountOpsByOpcode(func, Opcode::OP_NCHW2NC1HWC0), 0);
@@ -259,6 +274,7 @@ TEST_F(InferTensorFormatTest, AssembleToOutcastRequiresND)
     ASSERT_NE(assemble1, nullptr);
     ASSERT_NE(assemble2, nullptr);
     EXPECT_EQ(assemble0->GetIOperands()[0]->Format(), TileOpFormat::TILEOP_ND);
+    EXPECT_NE(assemble0->GetIOperands()[0], G.GetTensor("v0_nd"));
     EXPECT_EQ(assemble1->GetIOperands()[0], G.GetTensor("v1_out"));
     EXPECT_EQ(assemble2->GetIOperands()[0], G.GetTensor("v2_out"));
 }

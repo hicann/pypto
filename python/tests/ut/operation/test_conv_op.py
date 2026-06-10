@@ -149,7 +149,7 @@ def test_conv2d_bias_op():
 def test_conv1d_group_op():
     dtype = pypto.DT_FP32
     a = pypto.tensor((1, 16, 128), dtype, "fmap")
-    b = pypto.tensor((64, 1, 3), dtype, "weight")
+    b = pypto.tensor((64, 2, 3), dtype, "weight")
 
     with pypto.function("CONV", a, b):
         pypto.set_conv_tile_shapes(
@@ -170,7 +170,7 @@ def test_conv1d_group_op():
                 tileN=16
             )
         )
-        c = pypto.conv(a, b, dtype, [1], [1, 1], [1], extend_params={}, groups=16)
+        c = pypto.conv(a, b, dtype, [1], [1, 1], [1], extend_params={}, groups=8)
 
     assert isinstance(c, pypto.tensor)
     assert c.shape == [1, 64, 128]
