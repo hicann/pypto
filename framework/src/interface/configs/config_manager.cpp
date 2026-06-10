@@ -20,9 +20,7 @@
 #include <string>
 #include <sstream>
 #include <shared_mutex>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+#include <limits.h>
 
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
@@ -124,36 +122,12 @@ void ConfigManager::RefreshGlobalPassCfg()
     }
 }
 
-static std::string GetIpContext()
-{
-    struct ifaddrs* ifAddrStruct = nullptr;
-    struct ifaddrs* ifa = nullptr;
-    void* tmpAddrPtr = nullptr;
-    std::string hexIp;
-
-    if (getifaddrs(&ifAddrStruct) != 0) {
-        return "";
+static std::string GetHostName() {
+    char host[HOST_NAME_MAX] = {0};
+    if (gethostname(host, sizeof(host)) == 0) {
+        return std::string(host);
     }
-    for (ifa = ifAddrStruct; ifa != nullptr; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == nullptr) {
-            continue;
-        }
-        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
-            tmpAddrPtr = &((struct sockaddr_in*)ifa->ifa_addr)->sin_addr;
-            uint32_t ipInt = ntohl(*((uint32_t*)tmpAddrPtr));
-            std::ostringstream oss;
-            oss << std::uppercase << std::hex << std::setw(0x8) << std::setfill('0') << ipInt;
-            hexIp = oss.str();
-            break;
-        }
-    }
-    if (ifAddrStruct != nullptr) {
-        freeifaddrs(ifAddrStruct);
-    }
-    if (!hexIp.empty()) {
-        return hexIp;
-    }
-    return "";
+    return "unknown-host";
 }
 
 static std::string CreateLogTopFolder()
@@ -171,7 +145,7 @@ static std::string CreateLogTopFolder()
     bool ret = CreateDir(folderPath);
     CHECK(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
-    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid()) + "_" + GetIpContext();
+    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid()) + "_" + GetHostName(); 
     ret = CreateDir(folderPath);
     FE_ASSERT(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
     config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, RealPath(folderPath));
