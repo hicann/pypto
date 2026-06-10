@@ -5,7 +5,8 @@
 
 ## 错误码定义与使用说明
 
-相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 ConvOperationError、ConvExpandFuncError、ConvCodenGenError、ConvTileOpError 等）
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 ConvOperationError、ConvExpandFuncError、ConvCodegenError、ConvTileOpError 等）
+
 
 ## 错误码定义和场景说明
 
@@ -26,16 +27,16 @@
 | `EXPANDFUNC_TILE_OP_NULLPTR` | **FC6203** | `conv.expandfunc.tile_nullptr` | Tile图切分，tile图新生成节点空指针报错。 |
 | `EXPANDFUNC_PARAMS_INVALID` | **FC6204** | `conv.expandfunc.params_check` | Tile图切分，参数不匹配错误（维度，类型，Tile块配置）。 |
 | `EXPANDFUNC_INNER_STATUS_FAILED` | **FC6205** | `conv.expandfunc.check_status` | Tile图切分，内部功能函数返回值异常错误。 |
-| `UNKNOWN` | **FC6299** | `conv.operation.reserved` | ExpandFunc Tile图切分阶段未知报错预留错误码。 |
+| `UNKNOWN` | **FC6299** | `conv.expandfunc.reserved` | ExpandFunc Tile图切分阶段未知报错预留错误码。 |
 
-### 3. CodenGen
+### 3. Codegen
 
 | 场景枚举 | 错误码 | 报错阶段 | 场景说明 |
 |---------|------|----------|------|
 | `CODEGEN_GET_ATTR_FAILED` | **FC6301** | `conv.codegen.get_attr` | Codegen代码生成，tensor图节点属性获取失败。 |
 | `CODEGEN_CHECK_ATTR_INVALID` | **FC6302** | `conv.codegen.check_attr` | Codegen代码生成，tensor图节点属性校验非法。 |
-| `CODEGEN_CHECK_DIM_INVALID` | **FC6303** | `conv.codegen.check_dim` | TCodegen代码生成，shape/offset校验dim非法。 |
-| `UNKNOWN` | **FC6399** | `conv.operation.reserved` | Codegen代码生成阶段未知报错预留错误码。 |
+| `CODEGEN_CHECK_DIM_INVALID` | **FC6303** | `conv.codegen.check_dim` | Codegen代码生成，shape/offset校验dim非法。 |
+| `UNKNOWN` | **FC6399** | `conv.codegen.reserved` | Codegen代码生成阶段未知报错预留错误码。 |
 
 ### 4. TileOp
 
@@ -45,7 +46,7 @@
 | `TILEOP_SHAPE_SIZE_FAILED` | **FC6402** | `conv.tileop.check_shape_size` | TileOp，shape size校验失败。 |
 | `TILEOP_STC_SHAPE_INVALID` | **FC6403** | `conv.tileop.check_stc_shape` | TileOp，static shape非法。 |
 | `TILEOP_INDEX_INVALID` | **FC6404** | `conv.tileop.check_index` | TileOp，获取shape/stride的index校验非法。 |
-| `UNKNOWN` | **FC6499** | `conv.operation.reserved` | TileOp未知报错预留错误码。 |
+| `UNKNOWN` | **FC6499** | `conv.tileop.reserved` | TileOp未知报错预留错误码。 |
 
 ---
 
@@ -53,7 +54,7 @@
 
 ### Operation shape/TileShape 拦截编译报错
 
-可根据报错参考约束说明：`../api/config/pypto-set_conv_tile_shapes.md`
+可根据报错参考约束说明：`../api/config/PyPTO-set_conv_tile_shapes.md`
 
 ### Pass 图阶段 拦截编译报错
 
@@ -61,7 +62,7 @@
 
    ```python
    @pypto.frontend.jit(debug_options={"compile_debug_mode": 1})
-   def conv_kernel()
+   def conv_kernel():
    ```
 
-2. 复跑问题用例，在output下生成对应时间戳的dump结果，根据报错日志所示图阶段，使用pto-toolkit打开，查看执行图阶段之前的dump图，对conv operation 切成的 Tile子图进行排查；
+2. 重跑问题用例，在output下生成对应时间戳的dump结果，根据报错日志所示图阶段，使用pto-toolkit打开，查看执行图阶段之前的dump图，对conv operation 切成的 Tile子图进行排查；

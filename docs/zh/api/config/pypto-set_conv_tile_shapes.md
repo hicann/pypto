@@ -2,9 +2,9 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
+- Ascend 950PR：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
 ## 功能说明
 
@@ -63,9 +63,9 @@ TileShape需要满足以下约束条件：
 
     - tileL0Info各维度值需满足对齐约束：
 
-        - tileK `C0 <= tileK <= min(kAL1, kBL1)`
+        - tileK 需满足：`C0 <= tileK <= min(kAL1, kBL1)`
 
-        - tileK `tileK % C0 == 0`
+        - tileK 需满足：`tileK % C0 == 0`
 
         - tileK `kAL1 % tilek == 0`
 
@@ -73,13 +73,13 @@ TileShape需要满足以下约束条件：
 
         - tileW 需满足16元素对齐，即 `tileW % 16 == 0`
 
-        - tileW `1 <= tileW <= tileWout`
+        - tileW需满足： `1 <= tileW <= tileWout`
 
-        - tileH `1 <= tileH <= tileHout`
+        - tileH需满足： `1 <= tileH <= tileHout`
 
         - tileN（代表L0上的n的大小）需满足16元素对齐，即 `tileN % 16 == 0`
 
-        - tileN `1 <= tileN <= CeilAlign(tileL1Info.tileN, 16)`
+        - tileN需满足： `1 <= tileN <= CeilAlign(tileL1Info.tileN, 16)`
 
         其中：
 
@@ -174,7 +174,7 @@ l1_tile = pypto_impl.TileL1Info(
 l0_tile = pypto_impl.TileL0Info(
     tileH=2,   # 需满足 tileH <= tileL1Info.tileHout 且 tileL1Info.tileHout % tileH == 0
     tileW=8,   # 需满足 tileW <= tileL1Info.tileWout 且 tileL1Info.tileWout % tileW == 0
-    tileK=32,  # 需满足 tileK * sizeof(DT_FP16) % 32 == 0（32*2=64，64%32=0）
+    tileK=32,  # 需满足 tileK * sizeof(dtype) % 32 == 0（假设dtype为FP16，sizeof=2，则32*2=64，64%32=0）
     tileN=16   # 需满足 tileN % 16 == 0
 )
 
