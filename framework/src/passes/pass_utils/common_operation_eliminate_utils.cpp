@@ -86,9 +86,9 @@ void CommonOperationEliminateUtils::CollectProducerInfo(
                     shapeStr += curTensor->GetDynValidShape()[i].Dump();
                 }
                 ss << "[" << shapeStr << "]";
+                ss << "memoryType: [" << MemoryTypeToString(curTensor->GetMemoryTypeOriginal()) << "]";
             }
-            ss << ")";
-            ss << "]";
+            ss << ")]";
         }
         if (op->GetOpAttribute() != nullptr) {
             ss << " " << op->GetOpAttribute()->Dump();
