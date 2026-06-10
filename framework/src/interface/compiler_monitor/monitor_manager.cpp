@@ -879,7 +879,7 @@ void MonitorManager::EndStageInternal(
                            " | Stage: " + PadStageName("CodeGen[" + name + "]") +
                            "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
                            " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" +
-                           rootFuncName + "] Ops: " + std::to_string(rootFuncOpSize);
+                           rootFuncName + "] Ops: " + FormatOpCount(rootFuncOpSize);
     } else if (name == STAGE_HOST_MACHINE) {
         int pw = GetProgressWidth();
         const int denom = std::max(hostMachineTotalSteps_, std::max(1, rootFuncIndex));
@@ -889,7 +889,7 @@ void MonitorManager::EndStageInternal(
                            " | Stage: " + PadStageName(hostMachineStage) +
                            "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
                            " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) +
-                           " | Ops: " + std::to_string(rootFuncOpSize);
+                           " | Ops: " + FormatOpCount(rootFuncOpSize);
     } else if (name == "CodeGen") {
         stageFinishMsg = "[Compiler Monitor] Stage: " + name +
                            "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
@@ -901,7 +901,7 @@ void MonitorManager::EndStageInternal(
             PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
             " | Stage: " + PadStageName(name) + "(completed) | Stage elapsed: " + PadElapsed(FormatElapsed(elapsed)) +
             " | Total elapsed: " + PadElapsed(FormatElapsed(totalElapsed)) + " | Func:[" + functionName +
-            "] Ops: " + std::to_string(functionOpSize);
+            "] Ops: " + FormatOpCount(functionOpSize);
     }
 
     (void)fprintf(stdout, "%s\n", stageFinishMsg.c_str());
@@ -916,7 +916,7 @@ void MonitorManager::EndStageInternal(
                 PadRight(std::to_string(functionIndex) + "/" + std::to_string(totalFunctionCount_), pw) +
                 " | Stage [Pass] elapsed [" + FormatPassDuration(elapsed) +
                 "] exceeded the pass stage time threshold [" + FormatPassDuration(timeoutSec) +
-                "] | Func:[" + functionName + "] | Number of op: " + std::to_string(functionOpSize) +
+                "] | Func:[" + functionName + "] | Number of op: " + FormatOpCount(functionOpSize) +
                 " | Standard: 200000 ops / 90.0s linear scaled" +
                 ", you can terminate the process by pressing Ctrl+C !!!";
             stageTimeoutFlag_[name] = true;

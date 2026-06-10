@@ -200,7 +200,7 @@ inline std::string FormatProgressIndex(int index, int total, int pw)
 
 inline std::string FormatOpCountTail(int opCount, const std::string& extra = "")
 {
-    return " | Number of op: " + std::to_string(opCount) + extra;
+    return " | Number of op: " + FormatOpCount(opCount) + extra;
 }
 
 inline std::string FormatStageElapsedThreshold(double elapsed, double threshold)

@@ -58,4 +58,12 @@ inline std::string PadLabel(const std::string& label) { return PadRight(label, M
 
 inline std::string PadStageName(const std::string& stageName) { return PadRight(stageName, MONITOR_STAGE_NAME_WIDTH); }
 
+inline std::string FormatOpCount(int opCount)
+{
+    if (opCount < 0) {
+        return "N/A";
+    }
+    return std::to_string(opCount);
+}
+
 } // namespace npu::tile_fwk

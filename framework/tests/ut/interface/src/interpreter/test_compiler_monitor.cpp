@@ -20,6 +20,7 @@
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_impl.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
+#include "interface/compiler_monitor/monitor_util.h"
 
 namespace npu::tile_fwk {
 class CompilerMonitor : public testing::Test {
@@ -44,6 +45,14 @@ TEST_F(CompilerMonitor, CompilerMonitorInitial)
     MonitorManager::Instance().GetStageTimeoutFlag("Pass");
     MonitorManager::Instance().GetStageStartTime();
     MonitorManager::Instance().GetStageElapsedTotals();
+}
+
+TEST_F(CompilerMonitor, FormatUnknownOpCountAsNotAvailable)
+{
+    EXPECT_EQ(FormatOpCount(-1), "N/A");
+    EXPECT_EQ(FormatOpCount(-10), "N/A");
+    EXPECT_EQ(FormatOpCount(0), "0");
+    EXPECT_EQ(FormatOpCount(587), "587");
 }
 
 TEST_F(CompilerMonitor, CompilerMonitorImpl)
