@@ -283,49 +283,56 @@ def kernel_with_dynamic(
 
 - 错误码：`F2100A`（`Enum: OP_DEPENDENCY_CYCLE`）
 - 附加信息通常包含 `cycle detected:` 及首个未消减出度的 Operation dump
+- Python 侧常见前缀：`Record loop function <name> failed` 或 `Record function <name> failed`
+- 堆栈常见：`Function::GetSortedOperations` → `SortOperations` → `EndFunction` / `EndHiddenLoop` → `RecordLoopFunc::IterationEnd`
 
-**出现原因：**
+**根因：**
 
-- 前端构图阶段，Tensor 的 producer/consumer（`iOperand` / `dependOperand`）或 `AddOperationGroup` 顺序约束共同构成有向环
-- `GetTensorData` 相关的 incast/outcast 依赖与算子依赖叠加形成环
+同一 JIT Function 内，对**同一 Tensor 槽位**先**读**后**写**，依赖边首尾相接，图不再是 DAG。
+
+- **读**：`view`、`where`/`matmul` 等算子的输入、`x = op(..., x)` 中对 `x` 的引用
+- **写**：`assemble`、`out[:] = ...` 等写回同一槽位
+
+框架将 Tensor 视为整体节点，不区分局部切片；Python 变量改名不改变槽位。
+
+**合法写法**：同一槽位可**先写后读**（例如 `assemble` 填满分块缓冲后，再一次性 `op(..., buf)`），但**写完不得再写回该槽位**。
 
 **定位指导适用范围：**
 
 | 触发阶段 | 是否提供用户侧定位指导 |
 |----------|------------------------|
-| **进入 Pass 流水线之前**（如 `EndFunction` 内、用户代码触发的 `SortOperations()` 之前） | **是** — 属用户构图问题，按下方步骤排查 |
-| **Pass 执行之后**（堆栈来自 Pass 或框架内部图变换后的 `SortOperations`） | **否** — 属框架内部错误，请联系技术支持 |
+| **进入 Pass 流水线之前**（如 `EndFunction` 内、`SortOperations()` 之前） | **是** — 用户构图问题，按下方步骤排查 |
+| **Pass 执行之后**（堆栈含具体 Pass 名或 `pass.cpp`） | **否** — 联系技术支持 |
 
-判断方式：查看堆栈是否仅包含前端 `Function::GetSortedOperations` / `Function::SortOperations`（且发生在 Pass 入口之前）。若堆栈已包含具体 Pass 名称或 `pass.cpp` 等 Pass 路径，则不要按用户构图问题处理。
+#### 定位步骤
 
-**解决办法（仅适用于进入 Pass 之前触发）：**
+1. **确定范围**：`Record loop function <name> failed` 表示问题在该 `pypto.loop` 迭代体；否则在整个 `@jit` 函数体内。
+2. **找读点**：`cycle detected: /* <file>:<line> */` 多为**读操作**所在行（如 `VIEW`、`WHERE_ST`、`MATMUL`），不一定是写回行。
+3. **找写点**：从读点向**后**检查（含 `buf = op(..., buf)` 等同行读写），是否对**同一槽位**再有 `assemble` 或写回？存在「读 → 写回同一槽位」即命中根因。
+4. **验证**：修复后若仍报错但行号变化，说明还有另一处读后写，重复步骤 2–3。
 
-1. 在即将调用 `SortOperations()` 的位置**之前**，导出当前 Function 计算图 JSON（C++ 调试场景可在 `Function` 成员函数内调用）：
+#### 修复原则
 
-   ```cpp
-   this->DumpJsonFile("before_sort.json");
-   SortOperations();
-   ```
+消除「对同一槽位先读后写」即可，常用做法：
 
-   `DumpJsonFile` 传入非空路径时，JSON 写入该路径；未传参时默认写入 `LogTopFolder/<funcRawName>.json`。
+- **读写分槽**：读 `buf_rd`，写 `buf_wr`，结果落到第三个变量
+- **变换前置**：在 `assemble` 之前完成 `where` 等变换，写缓冲只 assemble、不再被读取
+- **拆图**：读写无法分离时，拆成两个 `@jit` 函数（见 [已知问题：view+assemble](../tutorials/appendix/issue.md)）
 
-2. 使用计算图分析脚本进行 **Op 级成环检测**（在仓库根目录执行）：
+```python
+# 错误：先读后写同一槽位
+tile = pypto.view(buf, ...)           # 读 buf
+pypto.assemble(result, [i, 0], buf)   # 写 buf → 成环
 
-   ```bash
-   python3 .agents/skills/pypto-pass-error-locator/scripts/computation_graph_analyzer.py \
-     --json-path before_sort.json \
-     --detect-op-cycle
-   ```
+# 正确：先写后读，且不再写回
+for i in pypto.loop(M, name="i_loop", idx_name="i"):
+    pypto.assemble(tile, [i, 0], buf) # 只写 buf
+out = pypto.mul(buf, scale)           # 只读 buf，写入新张量
+```
 
-3. 根据脚本输出的环路径（Op magic / 依赖边），回到用户 kernel 代码检查：
-   - 是否存在张量读写形成闭环（A 依赖 B 的输出，B 又依赖 A）
-   - `dependOperand` / `GetTensorData` 引入的额外依赖是否与 `AddOperationGroup` 顺序冲突
-   - 动态子图边界（incast/outcast）是否错误地连回同一 Function 内更早的 producer
+#### 深度定位（可选）
 
-**关联工具：**
-
-- 计算图查看：[查看计算图.md](../tools/computation_graph/查看计算图.md)
-- Pass 错误分析技能（含 `computation_graph_analyzer.py` 说明）：`pypto-pass-error-locator`
+源码中读后写关系不直观时，可 Dump 计算图 JSON 并用 `computation_graph_analyzer.py --detect-op-cycle` 找出环路径，再映射回读写点。详见 [查看计算图.md](../tools/computation_graph/查看计算图.md) 与 `pypto-pass-error-locator`。
 
 ---
 
