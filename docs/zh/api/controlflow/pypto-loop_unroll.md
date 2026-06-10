@@ -37,6 +37,6 @@ loop_unroll(start: SymInt = 0, stop: SymInt, step: SymInt = 1, *, name: str = No
 ## 调用示例
 
 ```python
-for _ in pypto.loop_unroll(0, 10, 1, name="LOOP_L0_bIdx_mla_prolog", idx_name="b_idx", unroll_list=[1, 2, 4]):
+for idx, unroll_factor in pypto.loop_unroll(0, 10, 1, name="LOOP_L0_bIdx_mla_prolog", idx_name="b_idx", unroll_list=[1, 2, 4]):
    ...
 ```
