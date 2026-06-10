@@ -194,6 +194,32 @@ TILEOP void TLoad(
     return;
 }
 
+// Copy data from DDR to L1
+template <CopyInMode copyMode, PaddingMode padMode, typename Coord, typename TileTensor, typename GlobalTensor>
+TILEOP void TReshapeLoad(
+    TileTensor& dst, GlobalTensor& src, const Coord& srcCoord, const int64_t& gShape0, const int64_t& gShape1)
+{
+    constexpr auto shapeSize = Std::tuple_size<typename TileTensor::Shape>::value;
+    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
+    if (!CheckShapeValid(dst, src)) {
+        return;
+    }
+    if (gShape0 == 0 || gShape1 == 0) {
+        return;
+    }
+    int64_t srcOffset0 = TileOp::GetTupleElement<Coord, DIM_1ST, shapeSize, 0>(srcCoord);
+    int64_t srcOffset1 = TileOp::GetTupleElement<Coord, DIM_2ND, shapeSize, 0>(srcCoord);
+    static_assert(
+        TileTensor::FORMAT == Hardware::L1 && GlobalTensor::FORMAT == Hardware::GM,
+        "[TReshapeLoad Error]: Dst format shoulde be L1 and Src format shoulde be GM");
+    static_assert(
+        copyMode == CopyInMode::ND2NZ, "[TReshapeLoad Error]: Reshape CopyIn L1 just support ND2NZ");
+    if constexpr (copyMode == CopyInMode::ND2NZ) {
+        TReshapeLoadND2NZ<padMode>(dst, src, srcOffset0, srcOffset1, gShape0, gShape1);
+    }
+    return;
+}
+
 // Copy data from L0C to L1 with quantization ability
 template <typename config, typename Coord, typename DstTileData, typename SrcTileData, typename FpTileData>
 TILEOP void TExtract(
@@ -297,6 +323,27 @@ TILEOP void TGatherInL1(
         return;
     }
     TGatherInL1Impl<blockSize>(dst, src, block, offset, srcCoord, offsetCoord, blockCoord);
+}
+
+// Copy data from L0C to DDR with quantization ability
+template <typename config, typename Coord, typename GlobalTensor, typename TileTensor, typename FpTileTensor>
+TILEOP void TReshapeStore(
+    GlobalTensor& dst, TileTensor& src, FpTileTensor& fixbuf, const Coord& coord, const int64_t& gShape0, const int64_t& gShape1,
+    uint64_t scaleValue = 0)
+{
+    if (!CheckShapeValid(dst, src)) {
+        return;
+    }
+    constexpr uint64_t shapeSize = Std::tuple_size<typename GlobalTensor::Shape>::value;
+    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
+    static_assert(config::kMode == CopyOutMode::NZ2ND, "OutPut format only support NZ2ND when using ReshapeCopyout.");
+    int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM2, 0>(coord);
+    int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM2, 0>(coord);
+    if constexpr (TileTensor::FORMAT == Hardware::L0C && GlobalTensor::FORMAT == Hardware::GM) {
+        if constexpr (config::kMode == CopyOutMode::NZ2ND) {
+            TReshapeStoreNZ2ND<config>(dst, src, fixbuf, offset0, offset1, gShape0, gShape1, scaleValue);
+        } 
+    }
 }
 
 #endif // TILEOP_TILE_OPERATOR_CUBE_PTO__H

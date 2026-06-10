@@ -2804,13 +2804,20 @@ static void MaybeNormalizeValue(
 static void NormalizeReshapeCopyDynValidShape(
     Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex, bool valueToIndex)
 {
+    Opcode opcode = op->GetOpcode();
+    if (opcode != Opcode::OP_RESHAPE_COPY_OUT && 
+        opcode != Opcode::OP_RESHAPE_COPY_IN && 
+        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT && 
+        opcode != Opcode::OP_L1_RESHAPE_COPY_IN) {
+        return;
+    }
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
     FE_ASSERT(FeError::INVALID_PTR, copyAttr != nullptr)
         << "Normalize reshape copy dyn valid shape failed: copyAttr is null.\n"
         << "Operation: " << op->Dump();
 
-    bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT;
-    const char* dynValidShapeName = useToDynValidShape ? "toDynValidShape" : "fromDynValidShape";
+    bool useToDynValidShape = op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op->GetOpcode() == Opcode::OP_L0C_RESHAPE_COPY_OUT;
+       const char* dynValidShapeName = useToDynValidShape ? "toDynValidShape" : "fromDynValidShape";
     auto opImmList = useToDynValidShape ? copyAttr->GetToDynValidShape() : copyAttr->GetFromDynValidShape();
     FE_ASSERT(FeError::INVALID_PTR, !opImmList.empty())
         << "Normalize reshape copy dyn valid shape failed: " << dynValidShapeName << " is empty.\n"
@@ -3203,8 +3210,6 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 coaLists.emplace_back(valueCoaList);
                 coaIndex += 1;
             }
-        } else if (op->GetOpcode() == Opcode::OP_RESHAPE_COPY_OUT || op->GetOpcode() == Opcode::OP_RESHAPE_COPY_IN) {
-            NormalizeReshapeCopyDynValidShape(op.get(), coaLists, coaIndex, valueToIndex);
         } else if (
             op->GetOpcode() == Opcode::OP_NCHW2NC1HWC0 || op->GetOpcode() == Opcode::OP_NCHW2Fractal_Z ||
             op->GetOpcode() == Opcode::OP_NC1HWC02NCHW || op->GetOpcode() == Opcode::OP_NCDHW2NDC1HWC0 ||
@@ -3221,6 +3226,7 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 op->SetAttribute(OpAttributeKey::transDataOffset, offsets);
             }
         }
+        NormalizeReshapeCopyDynValidShape(op.get(), coaLists, coaIndex, valueToIndex);
     }
 }
 

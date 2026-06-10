@@ -1176,6 +1176,7 @@ void ReshapeCopyInInferFunc(Operation* op, std::vector<std::vector<SymbolicScala
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_RESHAPE_COPY_IN, Opcode::OP_RESHAPE_COPY_IN, ReshapeCopyInInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L1_RESHAPE_COPY_IN, Opcode::OP_L1_RESHAPE_COPY_IN, ReshapeCopyInInferFunc);
 
 void ReshapeCopyOutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -1190,6 +1191,7 @@ void ReshapeCopyOutInferFunc(Operation* op, std::vector<std::vector<SymbolicScal
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_RESHAPE_COPY_OUT, Opcode::OP_RESHAPE_COPY_OUT, ReshapeCopyOutInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L0C_RESHAPE_COPY_OUT, Opcode::OP_L0C_RESHAPE_COPY_OUT, ReshapeCopyOutInferFunc);
 
 void ShmemPutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

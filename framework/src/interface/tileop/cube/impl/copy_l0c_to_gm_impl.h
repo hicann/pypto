@@ -171,4 +171,30 @@ INLINE void TStoreL1SpillImpl(GlobalData& dst, TileData& src, const Coord& coord
     pto::TSTORE<tileData, globalData>(dstGlobal, srcL1);
 }
 
+// Copy data from L0C to DDR with NZ -> ND format before reshape
+template <typename config, typename GlobalTensor, typename TileTensor, typename FpTileTensor>
+INLINE void TReshapeStoreNZ2ND(
+    GlobalTensor& dst, TileTensor& src, FpTileTensor& fixbuf, const int64_t& offset0, const int64_t& offset1,
+    const int64_t& gShape0, const int64_t& gShape1, uint64_t scaleValue = 0)
+{
+    constexpr auto shapeSize = Std::tuple_size<typename TileTensor::TileShape>::value;
+    int64_t srcShape0 = GetShape<0>(src);
+    int64_t srcShape1 = GetShape<1>(src);
+    constexpr auto staticL0CH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename TileTensor::TileShape>::type::value;
+    constexpr auto staticL0CW = Std::tuple_element<shapeSize - 1, typename TileTensor::TileShape>::type::value;
+    using shapeDim2 = pto::Shape<1, 1, 1, -1, -1>;
+    using strideDim2 = pto::Stride<1, 1, 1, -1, -1>;
+    int64_t gmOffset = offset1 + offset0 * gShape1;
+    using globalData = pto::GlobalTensor<typename GlobalTensor::Type, shapeDim2, strideDim2, pto::Layout::ND>;
+    using tileData = pto::Tile<
+        pto::TileType::Acc, typename TileTensor::Type, staticL0CH, staticL0CW, pto::BLayout::ColMajor, -1, -1,
+        pto::SLayout::RowMajor, pto::TileConfig::fractalCSize, pto::PadValue::Null, pto::CompactMode::Normal>;
+    globalData dstGlobal(
+        (__gm__ typename GlobalTensor::Type*)(dst.GetAddr() + gmOffset), shapeDim2(srcShape0, srcShape1),
+        strideDim2(gShape1, 1));
+    tileData srcL0C(srcShape0, srcShape1);
+    pto::TASSIGN(srcL0C, static_cast<uint64_t>(src.GetAddr()));
+    TStoreExecute<config, globalData, tileData, FpTileTensor>(dstGlobal, srcL0C, fixbuf, scaleValue);
+}
+
 #endif // TILEOP_TILE_OPERATOR_COPY_L0C_TO_GM_IMPL__H

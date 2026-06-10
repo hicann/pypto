@@ -553,7 +553,14 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1)
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize + 6);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
+    int l1ReshapeCopyInCount = 0;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L1_RESHAPE_COPY_IN) {
+            l1ReshapeCopyInCount++;
+        }
+    }
+    EXPECT_EQ(l1ReshapeCopyInCount, 2);
 }
 
 // in - COPYIN - COPYOUT - RESHAPE - COPYIN - COPYOUT - out
@@ -617,8 +624,6 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
 {
     auto currFunctionPtr =
         std::make_shared<Function>(Program::GetInstance(), "TestCopyToReshapeCopy", "TestCopyToReshapeCopy", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
     // Prepare the graph
     std::vector<int64_t> copyoutShape = {2, 4};
     std::vector<int64_t> reshapeShape = {4, 2};
@@ -647,7 +652,6 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
 
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor2});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {copyin_Tensor1});
-
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {copyout_Tensor1}, {reshape_Tensor});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor3});
     PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshape_Tensor}, {copyin_Tensor4});
@@ -663,8 +667,15 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curOpSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
-    int expOpSize = curOpSize + 6;
+    int expOpSize = curOpSize;
     EXPECT_EQ(currFunctionPtr->Operations().size(), expOpSize);
+    int l1ReshapeCopyInCount = 0;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_L1_RESHAPE_COPY_IN) {
+            l1ReshapeCopyInCount++;
+        }
+    }
+    EXPECT_EQ(l1ReshapeCopyInCount, 2);
 }
 
 // in - COPYIN - COPYOUT - RESHAPE - COPYIN   - COPYOUT - out1
@@ -1060,6 +1071,61 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL1OverUB)
     int curSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
+}
+
+
+TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL0CToL1)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestCopyToReshapeCopyOnL0CToL1", "TestCopyToReshapeCopyOnL0CToL1", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inShape = {4, 4};
+    std::vector<int64_t> reshapeShape = {2, 8};
+    auto incast = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    auto l0cTensor = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    l0cTensor->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    auto reshapeInput = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    reshapeInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    reshapeInput->UpdateDynValidShape({CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
+    auto reshapeOutput = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    reshapeOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    reshapeOutput->UpdateDynValidShape({CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
+    auto l1Tensor = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    l1Tensor->SetMemoryTypeBoth(MemoryType::MEM_L1, true);
+    auto outcast = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {l0cTensor});
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {l0cTensor}, {reshapeInput});
+    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        l0cTensor->GetMemoryTypeOriginal(), OpImmediate::Specified(reshapeInput->GetTensorOffset()),
+        OpImmediate::Specified(reshapeInput->GetShape()),
+        OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    auto& copyInOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput}, {l1Tensor});
+    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(reshapeOutput->GetTensorOffset()), l1Tensor->GetMemoryTypeOriginal(),
+        OpImmediate::Specified(reshapeOutput->GetShape()),
+        OpImmediate::Specified(reshapeOutput->GetRawTensor()->GetDynRawShape())));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {l1Tensor}, {outcast});
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    int curSize = currFunctionPtr->Operations().size();
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(copyOutOp.GetOpcode(), Opcode::OP_L0C_RESHAPE_COPY_OUT);
+    EXPECT_EQ(copyInOp.GetOpcode(), Opcode::OP_L1_RESHAPE_COPY_IN);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
+
+    auto copyOutAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyOutOp.GetOpAttribute());
+    ASSERT_NE(copyOutAttr, nullptr);
+    EXPECT_FALSE(copyOutAttr->GetToDynValidShape().empty());
+    auto copyInAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyInOp.GetOpAttribute());
+    ASSERT_NE(copyInAttr, nullptr);
+    EXPECT_FALSE(copyInAttr->GetFromDynValidShape().empty());
 }
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)

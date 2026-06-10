@@ -127,4 +127,41 @@ INLINE void TLoadND2ND(TileData& dst, GlobalData& src, const int64_t& offset0, c
     pto::TLOAD(dstL1, src0Global);
 }
 
+// Copy data from DDR to L1 with ND -> NZ format after reshape
+template <PaddingMode padMode, typename TileTensor, typename GlobalTensor>
+INLINE void TReshapeLoadND2NZ(
+    TileTensor& dst, GlobalTensor& src, const int64_t srcOffset0, const int64_t srcOffset1, const int64_t gShape0,
+    const int64_t gShape1)
+{
+    constexpr uint64_t shapeSize = Std::tuple_size<typename TileTensor::Shape>::value;
+    int64_t dstShape0 = GetShape<0>(dst);
+    int64_t dstShape1 = GetShape<1>(dst);
+    constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM2, typename TileTensor::TileShape>::type::value;
+    constexpr auto staticL1W = Std::tuple_element<shapeSize - 1, typename TileTensor::TileShape>::type::value;
+    using shapeDim2 = pto::Shape<1, 1, 1, -1, -1>;
+    using strideDim2 = pto::Stride<1, 1, 1, -1, -1>;
+    using globalData = pto::GlobalTensor<typename GlobalTensor::Type, shapeDim2, strideDim2, pto::Layout::ND>;
+    using tileData = pto::Tile<
+        pto::TileType::Mat, typename TileTensor::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
+        pto::SLayout::RowMajor, pto::TileConfig::fractalABSize, pto::PadValue::Null,
+        pto::CompactMode::RowAlignedPadding>;
+    int64_t gmOffset = srcOffset1 + srcOffset0 * gShape1;
+    // FP4数据类型数据宽度减半，地址偏移需要右移1位
+    if constexpr (CheckIsB4<TileTensor>()) {
+        gmOffset = gmOffset >> 1;
+    }
+    globalData srcGlobal(
+        (__gm__ typename GlobalTensor::Type*)(src.GetAddr() + gmOffset), shapeDim2(dstShape0, dstShape1),
+        strideDim2(gShape1, 1));
+    tileData dstL1(dstShape0, dstShape1);
+    pto::TASSIGN(dstL1, static_cast<uint64_t>(dst.GetAddr()));
+    pto::TLOAD(dstL1, srcGlobal);
+    // L1数据为NZ时，外轴非16元素对齐需要pad到16对齐
+#ifndef __LITE_NPU
+    if ((dstShape0 & 0xF) != 0) {
+        pto::TFILLPAD(dstL1, dstL1);
+    }
+#endif
+}
+
 #endif // TILEOP_TILE_OPERATOR_COPY_GM_TO_L1_IMPL__H
