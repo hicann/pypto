@@ -142,19 +142,16 @@ FunctionInterpreter::FunctionInterpreter()
     interpreter::SetLogFilePath(dumpPath + "interpreter.log");
     const std::string opResultFilePath = dumpPath + "verify_graph_data_metainfo.csv";
     execOpResultFile = fopen(opResultFilePath.c_str(), "w");
-    if (execOpResultFile == nullptr) {
-        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed", opResultFilePath.c_str());
-    }
+    ASSERT(OpDumpScene::DUMP_OPEN_FILE_FAILED, execOpResultFile != nullptr)
+        << "open file failed : "<< opResultFilePath.c_str();
     const std::string programeResultFilePath = dumpPath + "verify_graph_result_brief.csv";
     execProgrameResultFile = fopen(programeResultFilePath.c_str(), "w");
-    if (execProgrameResultFile == nullptr) {
-        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed", programeResultFilePath.c_str());
-    }
+    ASSERT(OpDumpScene::DUMP_OPEN_FILE_FAILED, execProgrameResultFile != nullptr)
+        << "open file failed : "<< programeResultFilePath.c_str();
     const std::string dumpErrorFilePath = dumpPath + "verify_graph_result_brief.log";
     execDumpErrorFile = fopen(dumpErrorFilePath.c_str(), "w");
-    if (execDumpErrorFile == nullptr) {
-        INTERPRETER_LOGE(OpDumpScene::DUMP_OPEN_FILE_FAILED, "open file %s failed", dumpErrorFilePath.c_str());
-    }
+    ASSERT(OpDumpScene::DUMP_OPEN_FILE_FAILED, execDumpErrorFile != nullptr)
+        << "open file failed : "<< dumpErrorFilePath.c_str();
     auto opCsvHeader = MakeOpInfoCsvHeader();
     auto programeCsvHeader = MakeProgrameInfoCsvHeader();
     WriteCsvRow(opCsvHeader, opInfoRowNum, execOpResultFile);
@@ -429,7 +426,10 @@ void FunctionInterpreter::FillOperationOutputInfo(
             std::string dumpTensorFileName = GetDumpTensorFileName(op->GetOOperands()[k], op, frame);
             bool isRaw = (op->GetOpcode() == Opcode::OP_COPY_OUT || op->GetOpcode() == Opcode::OP_ASSEMBLE);
             DumpTensorBinary(dataView, dumpTensorFileName, isRaw);
-            fprintf(execDumpFile, "<div class=\"detail indent_%d\">%s</a></div>\n", indent, dumpTensorFileName.c_str());
+            if (execDumpFile) {
+                fprintf(execDumpFile, "<div class=\"detail indent_%d\">%s</a></div>\n",
+                        indent, dumpTensorFileName.c_str());
+            }
             struct timeval tv;
             gettimeofday(&tv, nullptr);
             auto ts = tv.tv_sec * 1000000 + tv.tv_usec;
@@ -580,7 +580,7 @@ void FunctionInterpreter::DumpBegin()
 
 void FunctionInterpreter::DumpEnd()
 {
-    if (execDumpLevel < EXEC_DUMP_LEVEL_OPERATION)
+    if (execDumpLevel < EXEC_DUMP_LEVEL_OPERATION || execDumpFile == nullptr)
         return;
     fprintf(execDumpFile, R"HTML(
     </body>
