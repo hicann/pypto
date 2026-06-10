@@ -2,6 +2,7 @@
 
 ## 产品支持情况
 
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -31,7 +32,7 @@ set_pass_options(*,
 | cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构 AIC 子图的合并数量。 <br> 说明：该参数适用于结构相同的 AIC 子图合并，与 cube_l1_reuse_setting 同时配置时，先进行 cube_l1_reuse_setting 相关合并，再进行此项合并。<br><br>类型：dict[str, int]。支持两种 key 格式：<br> ① **函数粒度 key**：字符串 `"func{magic}_{order}"` 或 `"DEFAULT"`，可实现不同 root function 间的精细化配置。合图信息会直接展示在泳道图的 hashOrder-hint 字段中（含 subGraphCount，代表合并前的子图数量，可根据核心数匹配合并力度）。详情参见下方"函数粒度配置说明"。<br> ② **语义标签 key**：按语义标签控制（详见下方语义标签key配置说明）。<br> 取值：<br>{"DEFAULT": 1}：跳过 AIC 子图合并 <br> {} （空字典）：显式开启自动合并<br> {"DEFAULT": N, "func8_0": N2}：手动合并，默认粒度为 N<br>默认值：{"DEFAULT": 1}，即默认跳过 AIC 子图合并 <br> 影响Pass范围：L1CopyInReuseMerge |
 | sg_set_scope            | 输入      | 含义：手动控制子图切分参数。<br> 说明：通过为 Operation 分配 scope，使得相同 scope_id（非-1） 的相邻 Operation 强制合并归入同一子图，从而覆盖切分算法的自动划分结果。 <br> 类型：`Tuple[int, bool, bool]` 或 `int` <br> **tuple 格式**：`(scope_id, allow_parallel_merge, allow_cross_scope_merge)`，各字段含义如下： <br> - `scope_id`（int）：scope 标识，取值范围 -1~2147483647。相同 scope_id 的相邻 Operation 归入同一子图；-1 表示不参与 scope 合并，由切分算法决定子图划分。 <br> - `allow_parallel_merge`（bool）：控制同一 scope_id 下 Operation 的合并方式。取值 True/False。<br>&emsp;&emsp;False（默认）：仅允许存在上下游连接通路的 Operation 合并，即 Operation A 的输出作为 Operation B 的输入时才可合并到同一子图。<br>&emsp;&emsp;True：允许位于并行分支（无数据依赖）的相同 scope_id 的 Operation 也合并到同一子图。 <br> - `allow_cross_scope_merge`（bool）：控制带有 scope 的子图是否可与无 scope（scope_id=-1）的子图合并，扩大scope子图。取值 True/False。<br>&emsp;&emsp;False（默认）：带有 scope 的子图保持独立，不与其他子图合并。<br>&emsp;&emsp;True：允许带有 scope 的子图与 scope_id=-1 的子图合并。不同 scope_id 的子图之间不可合并。 <br> **int 格式**：传入单个 int 时等价于 `(scope_id, False, False)`，即仅设置 scope_id，不允许并行分支合并和跨 scope 合并。 <br> 默认值：(-1, False, False) <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的 scope_id。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
 | pg_partition_algorithm  | 输入      | 含义：指定切分算法。<br> 说明：配置GraphPartition环节进行子图切分所采用的算法。当同时配置了 `sg_set_scope` 时，无论选择哪种切分算法，都会优先遵从 `sg_set_scope` 的强制合图约束。<br> 类型：str <br> 取值范围："Iso", "OspSarkar", "OspBsp" <br> 默认值："Iso" <br> 影响Pass范围：GraphPartition <br> 算法选择指导：请参考下文。|
-| auto_mix_partition      | 输入      | 含义：控制ReduceCopyMerge Pass中的自动混合子图切分行为。<br> 说明：该参数用于控制CV混合场景下子图的自动合并策略。<br> 类型：int <br> 取值：0：不进行自动CV Mix合图；1： 进行自动CV Mix合图。<br> 默认值：0 <br> 影响Pass范围：ReduceCopyMerge |
+| auto_mix_partition      | 输入      | 含义：控制ReduceCopyMerge Pass中的自动混合子图切分行为。<br> 说明：该参数用于控制CV混合场景下子图的自动合并策略，值为 1 时编译器会评估相邻子图，若合并预估能带来性能收益且不会形成环，则会合并成MIX子图，否则不会进行合并。<br> 类型：int <br> 取值：0：不进行自动CV Mix合图；1： 进行自动CV Mix合图。<br> 默认值：0 <br> 影响Pass范围：ReduceCopyMerge |
 
 ## 返回值说明
 
@@ -46,7 +47,14 @@ set_pass_options(*,
 - sg_set_scope 一致性约束：同一 scope_id 的所有 Operation 必须设置相同的 `allow_parallel_merge` 和 `allow_cross_scope_merge`，否则编译报错。
 - scope_id 为 -1 时，`allow_parallel_merge` 和 `allow_cross_scope_merge` 必须为 False。
 - 不同 scope_id 的子图之间不可合并，`allow_cross_scope_merge` 仅控制带 scope 的子图与无 scope（scope_id=-1）的子图合并。
-- auto_mix_partition 为 1 时，编译器会评估相邻子图，若合并预估能带来性能收益且不会形成环，则会合并成MIX子图，否则不会进行合并。
+- auto_mix_partition使用说明：
+   - Ascend 950PR：支持。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持，不进行自动cv mix合图。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持，不进行自动cv mix合图。
+- sg_set_scope使用说明：
+   - Ascend 950PR：支持纯Vector、纯Cube以及CV混合场景的scope配置。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持纯Vector或纯Cube的scope配置，不支持CV混合场景的scope配置。
 
 ## 调用示例
 
@@ -118,8 +126,8 @@ Pass 在处理当前 function 的子图合并时，遵循 "func{magic}\_{order} 
 
 #### 字符串键值对含义
 
-Key (label): 语义标签名称, 必须与至少一个 operation 的 `semantic_label` 完全匹配.<br>
-Value (N): 表示合并粒度.<br>
+Key (label): 语义标签名称, 必须与至少一个 operation 的 `semantic_label` 完全匹配。<br>
+Value (N): 表示合并粒度。<br>
 
 #### 优先级机制
 
@@ -183,7 +191,7 @@ pypto.set_pass_options(sg_set_scope=-1)
 
 当需要将整个计算图保持不切分时，因数据切块会产生多条并行分支，这些分支之间无直接数据依赖，默认会被切分算法拆为独立子图。推荐设置 `sg_set_scope=(scope_id, True, False)`，通过 `allow_parallel_merge=True` 使相同 scope_id 的并行分支 Operation 合并到同一子图。
 
-##### 场景二：Ascend 950PR/Ascend 950DT CV 混合场景，构造 Mix 子图以减少 GM 搬运
+##### 场景二：CV 混合场景，构造 Mix 子图以减少 GM 搬运 （Ascend 950PR）
 
 当 Cube 操作的前后均有 Vec 操作时，目标是构造一个包含 Cube 和 Vec 的 Mix 子图，避免中间结果在 GM 上反复搬运。根据是否明确 scope 边界，分为以下两种情况：
 
