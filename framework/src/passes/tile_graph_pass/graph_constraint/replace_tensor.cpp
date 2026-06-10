@@ -152,13 +152,14 @@ Status ReplaceTensor::InplaceCheck(Function& function)
          {nullptr, [this](const Operation& op, Function& func) { return this->CheckReshapeConflict(op, func); },
           [](size_t inputCount) { return inputCount == OperandCount::RESHAPE_INPUT; },
           [](size_t outputCount) { return outputCount == OperandCount::RESHAPE_OUTPUT; }}},
-        {Opcode::OP_A_MULACC_B,
-         {[this](const Operation& op) { return this->CheckAMulAccBConflict(op); }, nullptr,
-          [](size_t inputCount) {
-              return inputCount == OperandCount::A_MULACC_B_MIN_INPUTS ||
-                     inputCount == OperandCount::A_MULACC_B_MAX_INPUTS;
-          },
-          [](size_t outputCount) { return outputCount == OperandCount::A_MULACC_B_OUTPUT; }}},
+         {Opcode::OP_A_MULACC_B,
+          {[this](const Operation& op) { return this->CheckAMulAccBConflict(op); }, nullptr,
+           [](size_t inputCount) {
+               size_t maxInputs = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510
+                                      ? OperandCount::A_MULACC_B_MAX_INPUTS_A5 : OperandCount::A_MULACC_B_MAX_INPUTS;
+               return inputCount >= OperandCount::A_MULACC_B_MIN_INPUTS && inputCount <= maxInputs;
+           },
+           [](size_t outputCount) { return outputCount == OperandCount::A_MULACC_B_OUTPUT; }}},
     };
 
     for (const auto& op : function.Operations()) {
@@ -166,12 +167,10 @@ Status ReplaceTensor::InplaceCheck(Function& function)
         if (it == opValidators.end())
             continue;
         const auto& validator = it->second;
-        size_t inputCount = op.GetInputOperandSize();
-        size_t outputCount = op.GetOutputOperandSize();
-        bool checkFaild = !validator.inputCountValidator(inputCount) || !validator.outputCountValidator(outputCount) ||
-                          (validator.validate && validator.validate(op)) ||
-                          (validator.validateWithFunc && validator.validateWithFunc(op, function));
-        if (checkFaild) {
+        if (!validator.inputCountValidator(op.GetInputOperandSize()) ||
+            !validator.outputCountValidator(op.GetOutputOperandSize()) ||
+            (validator.validate && validator.validate(op)) ||
+            (validator.validateWithFunc && validator.validateWithFunc(op, function))) {
             APASS_LOG_ERROR_F(
                 Elements::Operation, "%s op[%d] invalid or conflict.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
             return FAILED;

@@ -653,5 +653,38 @@ TEST_F(ReplaceTensorTest, TestShmemWaitUntilWithDiffAssembleOut)
     EXPECT_EQ(shmemOut->GetRawMagic(), outcast1->GetRawMagic());
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
+
+/*
+ * A5(DAV_3510)场景下A_MULACC_B支持最多5个输入
+ */
+TEST_F(ReplaceTensorTest, TestA_MULACC_B_5Inputs_A5)
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestA_MULACC_B_5Inputs_A5", "TestA_MULACC_B_5Inputs_A5", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    std::vector<int64_t> mulAccshape = {kNumEight, kNumEight};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, mulAccshape);
+    std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, mulAccshape);
+    auto inTensor0 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto inTensor1 = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto mulAccIn = npu::tile_fwk::IRBuilder().CreateTensorVar(inRawTensor, offset0, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto bias = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto deqScale = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto mulAccOut = npu::tile_fwk::IRBuilder().CreateTensorVar(outRawTensor, offset0, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    auto outTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, mulAccshape, CreateTestConstIntVector(mulAccshape));
+    PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_A_MULACC_B, {inTensor0, inTensor1, mulAccIn, bias, deqScale}, {mulAccOut});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {mulAccOut}, {outTensor});
+    ReplaceTensor pass;
+    currFunctionPtr->inCasts_.insert(
+        currFunctionPtr->inCasts_.end(), {inTensor0, inTensor1, mulAccIn, bias, deqScale});
+    currFunctionPtr->outCasts_.push_back(outTensor);
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(mulAccIn->GetRawMagic(), mulAccOut->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
 } // namespace tile_fwk
 } // namespace npu

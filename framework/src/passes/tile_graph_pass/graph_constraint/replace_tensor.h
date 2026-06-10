@@ -42,6 +42,7 @@ struct OperandCount {
     constexpr static size_t INDEX_OUTCAST_OUTPUT = 1;
     constexpr static size_t A_MULACC_B_MIN_INPUTS = 3;
     constexpr static size_t A_MULACC_B_MAX_INPUTS = 4;
+    constexpr static size_t A_MULACC_B_MAX_INPUTS_A5 = 5;
     constexpr static size_t A_MULACC_B_OUTPUT = 1;
 };
 
