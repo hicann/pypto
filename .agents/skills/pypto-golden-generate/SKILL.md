@@ -125,6 +125,72 @@ def safe_div_golden(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return result
 ```
 
+### `_make_inputs()` 输入工厂函数（强制导出）
+
+每个 golden 文件**必须**导出 `_make_inputs(device)` 函数，构造 P0 典型输入。该函数供 `_validate()` 验证和 `profile_golden.py --factory` 性能采集**共用**，确保两处使用完全一致的输入。
+
+**函数签名与返回值**：
+
+SPEC.md 中每个性能 P0 shape 都必须有对应的 case。返回值格式：
+
+```python
+# 单 P0 shape（向后兼容）
+def _make_inputs(device):
+    """构造 P0 典型输入。
+
+    Returns:
+        (args_list, kwargs_dict):
+          - args_list: 位置参数列表（tensor，按 golden 函数签名顺序）
+          - kwargs_dict: 关键字参数字典（scalar / 非 tensor 参数）
+    """
+    x = torch.randn(8, 1024, dtype=torch.bfloat16, device=device)
+    return [x], {}
+
+# 多 P0 shape（每个性能 P0 配置一组）
+def _make_inputs(device):
+    """构造所有 P0 典型输入。
+
+    Returns:
+        [(case_name, args_list, kwargs_dict), ...]:
+          - case_name: 配置名称（对应 SPEC.md 典型配置表中的名称）
+          - args_list: 位置参数列表（tensor，按 golden 函数签名顺序）
+          - kwargs_dict: 关键字参数字典（scalar / 非 tensor 参数）
+    """
+    cases = []
+    # 性能_P0 case 1: [2, 8, 512, 64]
+    q = torch.randn(2, 8, 512, 64, dtype=torch.bfloat16, device=device)
+    k = torch.randn(2, 8, 512, 64, dtype=torch.bfloat16, device=device)
+    v = torch.randn(2, 8, 512, 64, dtype=torch.bfloat16, device=device)
+    cases.append(("perf_p0_small", [q, k, v], {}))
+    # 性能_P0 case 2: [4, 16, 1024, 128]
+    q = torch.randn(4, 16, 1024, 128, dtype=torch.bfloat16, device=device)
+    k = torch.randn(4, 16, 1024, 128, dtype=torch.bfloat16, device=device)
+    v = torch.randn(4, 16, 1024, 128, dtype=torch.bfloat16, device=device)
+    cases.append(("perf_p0_large", [q, k, v], {}))
+    return cases
+```
+
+`profile_golden.py` 自动检测返回格式：`list[tuple[str, list, dict]]` 视为多 case，`tuple[list, dict]` 视为单 case。
+
+**语义约束分类与处理**：
+
+根据算子输入对随机值的容忍度，分为三类：
+
+| 类别 | 特征 | 示例 | `_make_inputs()` 要求 |
+|------|------|------|----------------------|
+| **无约束** | 所有 tensor 接受任意随机值 | silu, gelu, matmul, softmax | `torch.randn` 即可 |
+| **值域约束** | 部分 tensor 需要特定值域 | log（正数）、div（非零）、block_table（非负索引） | 对受限 tensor 使用 `torch.rand` / `torch.abs` / `torch.randint(low=0, ...)` |
+| **结构约束** | tensor 之间存在依赖关系，或需要特定初始化 | 状态缓存（需合法 block 索引）、位置编码（需匹配序列长度）、压缩比参数（需整除关系） | 必须手动构造所有关联 tensor，确保结构一致性 |
+
+**关键规则**：
+
+- 所有 tensor 必须带 `device=device` 创建
+- `_validate()` 内部调用 `_make_inputs(device)` 获取输入，不重复构造
+- scalar 参数（如 `eps`、`d`、`ratio`）放在 `kwargs_dict` 中
+- 使用 SPEC.md 的 `p0_shapes` 和 `default_params` 确定 shape 和参数值
+- **SPEC.md 中有多个性能 P0 shape 时，必须为每个 shape 生成一组 case**，case_name 对应典型配置表中的名称
+- 状态类 tensor（如 `kv_state`、`score_state`）使用 `torch.zeros` 初始化
+
 ---
 
 ## 5. 置信度系统
@@ -256,7 +322,8 @@ python3 {op}_golden.py
 - `import torch` + `import torch_npu` + NPU 设备初始化
 - 文件级 docstring（算子名、公式、置信度）
 - `{op}_golden()` 函数：torch + torch_npu 参考实现，计算在 NPU 上执行（含示例注释）
-- `_validate()` 函数：自动验证（典型 case、泛化 case、值域检查、数值稳定性、API 对比）
+- `_make_inputs(device)` 函数：构造 P0 典型输入，返回 `(args_list, kwargs_dict)`，供验证和性能采集共用（详见 §4 `_make_inputs()` 节）
+- `_validate()` 函数：自动验证（典型 case、泛化 case、值域检查、数值稳定性、API 对比），内部调用 `_make_inputs()` 获取输入
 - `if __name__ == "__main__": _validate()` 入口
 
 性能采集相关代码不进入 `{op}_golden.py`，统一使用 [scripts/profile_golden.py](scripts/profile_golden.py)，保证 golden 文件只包含可在 NPU 上运行的 PyTorch 参考实现和验证逻辑。
@@ -330,155 +397,9 @@ attention_golden 验证报告
 > PyPTO 友好的 golden。当用户没有提供参考实现而是直接通过规格信息生成 golden
 > 时，走 §1-§12 的从规格生成路径即可，本节不适用。
 
-### 13.1 选择最强参考
+### 执行指引（必读）
 
-参考实现选择优先级：
-
-1. PyTorch forward/backward 参考
-2. NumPy 参考
-3. 仅当无任何已有参考时，自行编写数学参考
-
-在编写新参考前，优先搜索现有实现：
-
-```bash
-grep -rn "<operator name>" examples/ custom/ models/ docs/zh/api/operation/
-```
-
-### 13.2 审计参考实现的 PyPTO 不友好模式
-
-主动扫描以下不友好模式：
-
-- 隐式多轴广播
-- 不透明的库操作
-- 复杂的复合调用
-- 隐藏的 layout 变化
-- 必须显式化的控制流
-- 4D/5D 操作（PyPTO 中可能脆弱）
-- 不能干净映射到 tile_fwk IR 的 host-side 便利
-
-对每个可疑模式，直接读取相应 op 文档：
-
-```bash
-cat docs/zh/api/operation/pypto-<op>.md
-```
-
-### 13.3 规范化 golden
-
-将参考改写为 PyPTO 友好的 golden。规范化强度取决于 Stage 3（DESIGN.md §0.3）
-选择的分解路径：
-
-> 路径在该步骤之后由 architect 通过 `count_golden_lines.py` 决定。但可以基于算法类型预判：
-> - 纯逐元素 / softmax / layernorm / 标准 attention / FlashAttention forward → 可能 **L0 路径**（轻量规范化）
-> - 多状态递归（gated_delta_rule / mamba）/ 复杂算子 backward → 可能 **L1 路径**（完整规范化）
->
-> 不确定时，默认 **L1（完整规范化）**——它是严格超集，architect 在 Stage 3 落到 L0 时可以忽略边界标记。
-
-**通用规则（L0 与 L1 均适用）**：
-
-- 保留语义，不保留源码语法
-- 显式化所有 shape
-- 显式化 dtype 转换
-- 隐式 broadcast 链改写为单轴形式
-- 窄向量 / 奇怪 layout 改写为对齐友好的表示
-- **禁用 `.T` / `.t()`**：使用 `torch.transpose(t, dim0, dim1)`。对 matmul `a @ b.T`，
-  写为 `torch.matmul(a, b.transpose(-2, -1))` 并注释 `# a @ b^T → pypto: b_trans=True`
-- 在每个中间 tensor 上加 shape 注释 `# [B, H, T, K]`
-
-**L1 路径专用（`module_count ≥ 2`）**：
-
-- 在每个未来 module 边界处给中间 tensor 起有意义的命名
-- 标记语义 module 边界（用 `# --- Module M1: <role> ---` 注释）——这些会成为 DESIGN.md §0.5 中的 breakpoint
-
-**L0 路径专用（`module_count == 1`）**：
-
-- 中间命名 + `# --- Module M1 ---` 标记**不要求**（kernel 是一个块）
-- golden 可以保留单个高层调用（例：`out = torch.softmax(x, dim=-1)`），**除非** Golden function inventory（§13.5）因 shape 变换追踪需要而要求展开
-
-### 13.4 Full vs Tiled 实现策略
-
-规范化 golden 可采用两种等价策略：
-
-**策略 1: Full computation（默认）**
-
-一次性处理整个 input tensor。最简单直接。
-
-```python
-def attention_golden(q, k, v):
-    scores = torch.matmul(q, k.transpose(-2, -1))
-    probs = torch.softmax(scores, dim=-1)
-    return torch.matmul(probs, v)
-```
-
-**策略 2: Tiled computation（可选，复杂 kernel 推荐）**
-
-将输入切成小 tile，每个 tile 独立计算，然后拼接 / 累积。该模式：
-
-- 映射 PyPTO kernel 的实际执行方式（tile-by-tile）
-- 允许早期验证边界处理、padding、accumulator 逻辑
-- 在 PyPTO 实现前暴露 tile-size 对数值精度的影响
-- 对有 tiling 结构的 kernel（window attention、blockwise matmul、FlashAttention）是必要的
-
-例（按 batch tiled）：
-
-```python
-def attention_golden_tiled(q, k, v, window_size=None):
-    """Tiled attention golden (matches PyPTO kernel tile-by-tile execution)."""
-    outputs = []
-    for b in range(q.shape[0]):
-        q_tile = q[b:b+1, ...]
-        k_tile = k[b:b+1, ...]
-        v_tile = v[b:b+1, ...]
-        scores = torch.matmul(q_tile, k_tile.transpose(-2, -1))
-        probs = torch.softmax(scores, dim=-1)
-        out_tile = torch.matmul(probs, v_tile)
-        outputs.append(out_tile)
-    return torch.cat(outputs, dim=0)
-```
-
-**何时选 Tiled**：
-
-- Kernel spec 明确描述 tiling 或 loop-based 计算
-- 算法涉及 split / partial results / state accumulation
-- 需要在完整 PyPTO 实现前验证 tile 边界的 edge case
-
-**两种策略必须产生相同的数值结果**（在浮点容差范围内）。若两者都实现，在
-`{op}_golden.py` 中包含两者并在验证套件中验证等价性。
-
-### 13.5 构建 Golden function inventory（强制）
-
-规范化 golden 写完后，在 `custom/<op>/MEMORY.md` → **Golden function inventory**
-中列出每个数学操作：
-
-```
-| # | Golden operation          | Shape transformation              | PyPTO implementation | Line | Status |
-|---|---------------------------|-----------------------------------|----------------------|------|--------|
-| 1 | matmul(q, k^T)            | [B,H,T,K]@[B,H,K,T]->[B,H,T,T]    | pypto.matmul(...)    | L.42 | ✅     |
-| 2 | softmax(scores, dim=-1)   | [B,H,T,T]->[B,H,T,T]              |                      |      | ❌     |
-```
-
-**门禁**：inventory 不存在不得进入 module 设计阶段。
-
-### 13.6 用原始 golden 验证规范化 golden
-
-总是用以下条件验证：
-
-- 同一 random seed
-- 小 shape
-- 代表性 shape
-- 边界 / edge shape
-- dtype-aware 比较
-- NaN / Inf 检查
-- `assert_allclose` 使用要求的 tolerance policy
-
-若规范化 golden 不匹配，**停止并修复**。不要开始 PyPTO 实现。
-
-### 13.7 Freeze 规范化 golden
-
-规范化 golden 匹配后：
-
-- 在 memory 中标记 frozen
-- 作为后续单一参考
-- 除非有证据表明规范化本身错误，否则**不**改动
+> **⚠️ 执行 §13 前必须先阅读** [references/reference-normalization.md](references/reference-normalization.md)。该文档包含强制规则、L0/L1 路径判断逻辑、Full vs Tiled 策略选择、PyPTO 不友好模式审计清单等**不可跳过的操作步骤**。
 
 ---
 
@@ -490,111 +411,10 @@ def attention_golden_tiled(q, k, v, window_size=None):
 
 ---
 
-## 15. NPU 性能 Profiling（验证通过后执行）
+## 15. NPU 性能 Profiling（验证通过后必须执行）
 
-### 说明
+> **⛔ 强制步骤**：验证通过后，**必须**使用通用脚本 `scripts/profile_golden.py` 采集 NPU 性能数据。**`GOLDEN_PERF_REPORT.md` 是 Stage 2 的强制交付物**，未生成不得进入 Stage 3。SPEC.md 中有多个性能 P0 shape 时，必须对每个 shape 分别 profiling 并在报告中注明对应关系。
 
-验证通过后，使用通用脚本 `scripts/profile_golden.py` 调用 `{op}_golden.py`，并通过 `torch_npu.profiler` 采集 golden 算子在 NPU 上的性能数据。golden 文件本身不包含 profiling 代码。
+### 执行指引（必读）
 
-### 执行方式
-
-```bash
-python3 .agents/skills/pypto-golden-generate/scripts/profile_golden.py \
-  custom/{op}/{op}_golden.py \
-  --function {op}_golden \
-  --input x:8x1024x4096:float32 \
-  --device <DEVICE_ID>   # 可选，指定 NPU 卡号；用户有要求时必须填入
-```
-
-参数说明：
-
-- `--function`：golden 函数名；缺省时脚本会优先使用文件名同名函数，或自动寻找唯一的 `*_golden` 函数
-- `--input NAME:SHAPE[:DTYPE]`：tensor 输入规格，可重复；多输入算子必须为每个 tensor 参数传入一条
-- `--arg NAME=JSON`：非 tensor 参数，可重复，如 `--arg eps=1e-5`、`--arg normalized_shape=[4096]`
-- `--device DEVICE_ID`：NPU 卡号（整数），默认为 0；若用户指定了卡号，必须传入对应值，如 `--device 3`
-- `--warmup` / `--iters`：默认分别为 5 / 5
-
-如果未提供 `--input`，脚本会按历史默认值为第一个必需参数生成一个 `(8, 1024, 4096)`、`torch.float32` 的 NPU tensor。
-
-### Profiling 流程
-
-1. **由 `profile_golden.py` 预分配输入 tensor**（避免 `randn` 开销混入 kernel 计时）
-2. **Warmup 5 轮 + 实测 5 轮**（profiler 模式），排除 JIT 编译和首次调度开销
-3. 用 `torch_npu.profiler` 记录 NPU + CPU 事件；Profiler 配置与 PyPTO kernel profiling 保持一致
-4. 输出两种数据：
-   - CANN 分析数据（`operator_memory.csv`、`memory_record.csv`、设备端原始数据）→ `prof/{op}_golden/`，由 `on_trace_ready` 回调生成
-   - Chrome Trace JSON（`trace_view.json`）→ `prof/{op}_golden/`，由 `tensorboard_trace_handler` 导出
-5. 解析 Chrome Trace：
-   - 按 `SynchronizeDevice` 边界将 AICore kernel 事件分组，每轮 golden 调用对应一组
-   - 过滤无效分组（总耗时过小或 kernel 数过少）和离群点
-   - 计算 `aicore_e2e`（平均 kernel 耗时）、`aicore_e2e_jitter`（后期抖动）、`aicpukernel_gap`
-6. 写入 GOLDEN_PERF_REPORT.md：op 级耗时表 + Golden Kernel Performance 章节
-
-### Profiling 配置
-
-| 项目 | 配置 |
-|------|------|
-| Profiler 等级 | `ProfilerLevel.Level1` |
-| AiC Metrics | `AiCMetrics.PipeUtilization` |
-| Activities | NPU + CPU（缺一不可，否则 CANN 分析数据为空） |
-| Warmup 轮数 | 5 |
-| 实测轮数 | 5 |
-| 输入 shape | 取自 spec 典型配置；若无则使用默认值 |
-| 输出目录 | `custom/{op}/prof/{op}_golden/` + `custom/{op}/GOLDEN_PERF_REPORT.md` |
-| 执行模型 | 直接调用 `{op}_golden()`；不使用 `NPUGraph` replay，不注入与 golden 无关的额外 kernel |
-
-### 产物
-
-| 产物 | 位置 | 说明 |
-|------|------|------|
-| `GOLDEN_PERF_REPORT.md` | `custom/{op}/` | 可直接阅读的性能报告（op 级耗时、device、shape、时间戳） |
-| `trace_view.json` | `custom/{op}/prof/{op}_golden/` | Chrome Trace 格式，可导入 chrome://tracing |
-| `operator_memory.csv` | 同上 | 每次调用的内存分配量+分配时长 |
-| `memory_record.csv` | 同上 | 内存分配/释放事件记录 |
-| 设备端原始数据 | 同上 | ffts/hbm/llc/stars_soc 等硬件计数器 |
-
-### GOLDEN_PERF_REPORT.md 示例
-
-```markdown
-# silu Golden NPU Performance Report
-
-- **Device**: npu
-- **Input Shape**: (8, 1024, 4096)
-- **dtype**: torch.float32
-- **Timestamp**: 2026-05-19T19:53:36
-- **Profiling Data**: `prof/silu_golden/`
-
-## Op Performance
-
-| op | warmup_avg | stable_avg | stable_min | stable_max |
-|----|-----------|-----------|-----------|-----------|
-| aten::mul | 504.0us | 12.1us | 9.2us | 29.8us |
-| aten::sigmoid | 16066.3us | 13.9us | 12.2us | 24.1us |
-| aclnnSigmoid | 6.6us | 4.3us | 3.7us | 5.4us |
-| ...
-
-## Golden Kernel Performance (from profiler trace)
-
-Per-call total AICore kernel time, grouped by `SynchronizeDevice`
-boundaries in `trace_view.json`.
-
-| metric | warmup_avg | stable_avg | stable_min | stable_max |
-|--------|-----------|-----------|-----------|-----------|
-| silu_golden (kernel E2E) | 234.5us | 45.2us | 42.1us | 51.3us |
-
-## Notes
-- `warmup_avg`: first 5 iterations (includes JIT/compile overhead)
-- `stable_avg/min/max`: subsequent iterations (steady-state kernel execution)
-- Kernel E2E extracted from profiler trace, not host-side wall-clock
-- Full trace: `prof/silu_golden/trace_view.json` (chrome://tracing)
-- CANN analysis: `prof/silu_golden/` (operator_memory.csv, device counters)
-```
-
-### 注意事项
-
-- 仅 NPU 环境下生效；无 NPU 硬件时 `profile_golden.py` 跳过采集
-- 若 torch_npu 未安装，profiling 阶段返回 `npu_import_error`，引导调用 `pypto-environment-setup`
-- golden 文件只负责 `{op}_golden()` 和 `_validate()`，不包含 profiling 逻辑
-- `profile_golden.py` 会按 `--input` 生成 floating/complex/int/bool tensor；需要特殊数值分布的算子必须在命令中补齐必要 `--arg`，或在 golden 自验证中覆盖该分布
-- Chrome Trace JSON 末尾可能被 CANN profiler 截断（缺闭合 `]`），`profile_golden.py` 内置修复逻辑
-- **Kernel E2E** 从 profiler trace 中提取：按 `SynchronizeDevice` 边界将 AICore kernel 事件分组，逐轮计算总耗时，过滤无效分组和离群点后取平均，作为 golden 算子在 AICore 上的 kernel 执行时间基准
+> **⚠️ 执行 profiling 前必须先阅读** [references/profiling.md](references/profiling.md)。该文档包含输入模式决策树、多 case `_make_inputs()` 返回格式、参数构造步骤、约束类型表（6 种崩溃场景）、E2E 双路径提取逻辑、故障排查决策树等**不可跳过的操作步骤**。

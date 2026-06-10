@@ -51,7 +51,7 @@ kernel code. The orchestrator never edits kernel code itself.
   `custom/<op>/GOLDEN_PERF_REPORT.md` (NPU profiling via
   `pypto-golden-generate/scripts/profile_golden.py` §15).
 - **Gate:** shape comments on all intermediates; inventory recorded;
-  `allclose(original, normalized)` passes; profiling report exists.
+  `allclose(original, normalized)` passes; **`GOLDEN_PERF_REPORT.md` exists with Op Performance section** (mandatory — generated via `pypto-golden-generate/scripts/profile_golden.py` §15; do NOT defer to orchestrator).
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-architect`.
 
 ### 3. pypto-op-architect — Stage 3

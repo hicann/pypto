@@ -11,6 +11,7 @@ import subprocess
 from ..core import (
     API_REPORT_FILE,
     DESIGN_FILE,
+    GOLDEN_PERF_REPORT_FILE,
     PYTHON_BIN,
     SPEC_FILE,
     CheckContext,
@@ -486,3 +487,32 @@ def check_ol24(ctx: CheckContext) -> Finding:
             "artifact_hashes 必须是字典",
         )
     return ctx.make_finding("OL24", "PASS", "状态文件结构合法 (schema v2.0)")
+
+
+@register("OL59")
+def check_ol59(ctx: CheckContext) -> Finding:
+    """Stage 2 完成时 GOLDEN_PERF_REPORT.md 必须存在且包含 Op Performance 表头"""
+    if not ctx.file_exists(GOLDEN_PERF_REPORT_FILE):
+        return ctx.make_finding(
+            "OL59",
+            "FAIL",
+            f"{GOLDEN_PERF_REPORT_FILE} 不存在 — 请按照 pypto-golden-generate SKILL.md §15 的指引，"
+            f"使用 profile_golden.py 采集真实 NPU 性能数据并生成报告。"
+            f"对于有语义约束的算子，使用 --factory _make_inputs 模式。",
+            file=GOLDEN_PERF_REPORT_FILE,
+        )
+    content = ctx.read_file(GOLDEN_PERF_REPORT_FILE)
+    if "| op | count | mean_duration | total |" not in content:
+        return ctx.make_finding(
+            "OL59",
+            "FAIL",
+            f"{GOLDEN_PERF_REPORT_FILE} 缺少 Op Performance 表头 — 报告格式不符合要求，"
+            f"请按照 pypto-golden-generate SKILL.md §15 重新生成。",
+            file=GOLDEN_PERF_REPORT_FILE,
+        )
+    return ctx.make_finding(
+        "OL59",
+        "PASS",
+        f"{GOLDEN_PERF_REPORT_FILE} 存在且包含 Op Performance 表头",
+        file=GOLDEN_PERF_REPORT_FILE,
+    )

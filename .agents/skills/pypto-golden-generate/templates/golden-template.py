@@ -73,6 +73,45 @@ def {op}_golden(x: torch.Tensor) -> torch.Tensor:
 
 
 # ==========================================
+# 输入构造（供 profiling --factory 使用）
+# ==========================================
+
+def _make_inputs(device):
+    """构造 P0 典型输入，供验证和性能采集共用。
+
+    对于有语义约束的算子（block table 索引、状态缓存、位置编码等），
+    必须在此函数中构造合法值，不能使用随机值。
+
+    SPEC.md 中有多个性能 P0 shape 时，必须为每个 shape 生成一组 case。
+
+    Returns:
+        单 P0 shape:
+            (args_list, kwargs_dict)
+        多 P0 shape:
+            [(case_name, args_list, kwargs_dict), ...]
+    """
+    # TODO: 根据算子规格构造合法输入
+    #   注意: 所有 tensor 必须带 device=device
+    #   示例（单 P0 shape）:
+    #     x = torch.randn(8, 1024, dtype=torch.bfloat16, device=device)
+    #     return [x], {}
+    #   示例（多 P0 shape）:
+    #     cases = []
+    #     x = torch.randn(8, 1024, dtype=torch.bfloat16, device=device)
+    #     cases.append(("perf_p0_small", [x], {}))
+    #     x = torch.randn(16, 2048, dtype=torch.bfloat16, device=device)
+    #     cases.append(("perf_p0_large", [x], {}))
+    #     return cases
+    #   示例（复杂算子，有语义约束）:
+    #     x = torch.randn(2, 2, 64, dtype=torch.bfloat16, device=device)
+    #     block_table = _gen_block_table(2, device)  # 合法索引
+    #     state = torch.zeros(5, 128, 32, dtype=torch.float32, device=device)
+    #     return [x, block_table, state], {"eps": 1e-6}
+    x = torch.randn(8, 1024, dtype=torch.bfloat16, device=device)
+    return [x], {}
+
+
+# ==========================================
 # 验证
 # ==========================================
 

@@ -691,6 +691,17 @@
       "target": "impl",
       "rule": "禁止使用 PyPTO 中不存在的 `pypto.<attr>` — 通过对比 AST 中的属性访问与 `dir(pypto)` 校验, 在 DESIGN.md (代码块内) 与 `<op>_impl.py` / `modules/<op>_module*_impl.py` 上 post-edit 即时拒绝, 防止 typo (如 `pypto.empty` / `pypto.empty_like`) 走到 runtime",
       "check_function": "check_ol55"
+    },
+    {
+      "id": "OL59",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        2
+      ],
+      "target": "gate",
+      "rule": "Stage 2 完成时 GOLDEN_PERF_REPORT.md 必须存在且包含 Op Performance section（由 pypto-golden-generate/scripts/profile_golden.py §15 生成）",
+      "check_function": "check_ol59"
     }
   ]
 }

@@ -2,819 +2,780 @@
 # coding: utf-8
 # Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
 
-"""Profile a PyTorch NPU golden script and write the standard golden report."""
+"""Profile a PyTorch NPU golden and write GOLDEN_PERF_REPORT.md.
+
+E2E method: noise-injection profiling loop + kernel_details.csv extraction.
+Each iteration injects ``torch.randn(480MB).npu()`` + ``torch.max(a)`` before
+the golden call, creating inter-iteration boundaries.  Performance is
+extracted from ``kernel_details.csv`` by grouping kernels by ``Type``,
+filtering noise (``ReduceMax``), and computing ``mean(Duration(us))`` per
+op type.
+"""
 
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime
 import importlib.util
 import inspect
 import json
 import logging
-import math
 import os
 import re
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 from typing import Any, Callable
 
-_EMPTY = inspect.Parameter.empty
-_PARAM_KINDS = {
+logger = logging.getLogger(__name__)
+
+DEFAULT_SHAPE = (8, 1024, 4096)
+DEFAULT_DTYPE = "float32"
+DEFAULT_ITERS = 1
+NOISE_SIZE = int(192 * 1024 * 1024 * 2.5)
+NOISE_OPS = {"ReduceMax"}
+
+_REQUIRED_KINDS = {
     inspect.Parameter.POSITIONAL_ONLY,
     inspect.Parameter.POSITIONAL_OR_KEYWORD,
     inspect.Parameter.KEYWORD_ONLY,
 }
-logger = logging.getLogger(__name__)
 
-DEFAULT_INPUT_SHAPE = (8, 1024, 4096)
-DEFAULT_DTYPE = "float32"
-DEFAULT_WARMUP = 5
-DEFAULT_ITERS = 5
 
+# ---------------------------------------------------------------------------
+# Tensor spec & CLI parsing
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class TensorSpec:
     name: str
     shape: tuple[int, ...]
-    dtype_name: str
+    dtype: str
+
+
+@dataclass
+class CaseResult:
+    case_name: str
+    specs: list[TensorSpec]
+    per_op: dict[str, dict[str, Any]]
+    e2e_a: float
+    e2e_b: float
+    prof_dir: Path
+
+
+@dataclass
+class ReportConfig:
+    golden_path: Path
+    output_dir: Path
+    device: Any
+    iters: int
+    cases: list[CaseResult]
 
 
 @dataclass
 class ProfileConfig:
     golden_path: Path
-    function_name: str | None
-    tensor_specs: list[TensorSpec]
+    fn_name: str | None
+    specs: list[TensorSpec]
     scalar_args: dict[str, Any]
     output_dir: Path | None
-    warmup: int
     iters: int
-    device_id: int | None = None
+    device_id: int | None
+    factory_name: str | None = None
 
 
-@dataclass
-class PerfReportConfig:
-    golden_path: Path
-    output_dir: Path
-    trace_path: Path | None
-    n_warmup: int
-    tensor_specs: list[TensorSpec]
-    device: Any
-    prof_dir: Path
-    kernel_e2e: dict[str, float]
-
-
-def _is_bracketed(value: str) -> bool:
-    for open_b, close_b in [("(", ")"), ("[", "]")]:
-        if value.startswith(open_b) and value.endswith(close_b):
-            return True
-    return False
-
-
-def parse_shape(text: str) -> tuple[int, ...]:
-    value = text.strip()
-    if _is_bracketed(value):
-        value = value[1:-1].strip()
-    if value in {"", "()", "scalar"}:
+def _parse_shape(text: str) -> tuple[int, ...]:
+    v = text.strip()
+    if v.startswith(("(", "[")) and v.endswith((")", "]")):
+        v = v[1:-1].strip()
+    if v in {"", "()", "scalar"}:
         return ()
-    parts = [p for p in re.split(r"[xX,]", value) if p]
-    try:
-        shape = tuple(int(p) for p in parts)
-    except ValueError as exc:
-        raise ValueError(f"invalid shape: {text!r}") from exc
-    if any(dim <= 0 for dim in shape):
-        raise ValueError(f"shape dimensions must be positive: {text!r}")
+    parts = [p for p in re.split(r"[xX,]", v) if p]
+    shape = tuple(int(p) for p in parts)
+    if any(d <= 0 for d in shape):
+        raise ValueError(f"invalid shape: {text!r}")
     return shape
 
 
-def parse_tensor_spec(text: str, default_dtype: str = DEFAULT_DTYPE) -> TensorSpec:
+def _parse_tensor_spec(text: str) -> TensorSpec:
     parts = text.split(":")
     if len(parts) == 1:
-        name, shape_text, dtype_name = "", parts[0], default_dtype
-    elif len(parts) == 2:
-        name, shape_text = parts
-        dtype_name = default_dtype
-    elif len(parts) == 3:
-        name, shape_text, dtype_name = parts
-    else:
-        raise ValueError(
-            "input spec must be SHAPE, NAME:SHAPE, or NAME:SHAPE:DTYPE"
-        )
-    return TensorSpec(name=name.strip(), shape=parse_shape(shape_text),
-                      dtype_name=dtype_name.strip() or default_dtype)
+        return TensorSpec("", _parse_shape(parts[0]), DEFAULT_DTYPE)
+    if len(parts) == 2:
+        return TensorSpec(parts[0].strip(), _parse_shape(parts[1]), DEFAULT_DTYPE)
+    if len(parts) == 3:
+        return TensorSpec(parts[0].strip(), _parse_shape(parts[1]),
+                          parts[2].strip() or DEFAULT_DTYPE)
+    raise ValueError(f"input spec must be SHAPE, NAME:SHAPE, or NAME:SHAPE:DTYPE")
 
 
-def parse_named_json(text: str) -> tuple[str, Any]:
+def _parse_arg(text: str) -> tuple[str, Any]:
     if "=" not in text:
-        raise ValueError(f"argument must use NAME=VALUE format: {text!r}")
-    name, raw_value = text.split("=", 1)
+        raise ValueError(f"--arg must use NAME=VALUE format: {text!r}")
+    name, raw = text.split("=", 1)
     name = name.strip()
     if not name:
-        raise ValueError(f"argument name is empty: {text!r}")
+        raise ValueError(f"empty argument name: {text!r}")
     try:
-        value = json.loads(raw_value)
+        return name, json.loads(raw)
     except json.JSONDecodeError:
-        value = raw_value
-    return name, value
+        return name, raw
 
 
-def import_npu_stack() -> tuple[ModuleType, ModuleType]:
-    try:
-        import torch
-        import torch_npu
-    except ImportError as exc:
-        raise RuntimeError(
-            "npu_import_error: torch_npu is not installed. Install torch_npu or run the "
-            "pypto-environment-setup skill before profiling."
-        ) from exc
-    return torch, torch_npu
+# ---------------------------------------------------------------------------
+# Module loading & call building
+# ---------------------------------------------------------------------------
 
-
-def has_npu_hardware(torch: ModuleType) -> bool:
-    try:
-        return bool(torch.npu.is_available() and torch.npu.device_count() > 0)
-    except Exception:
-        return False
-
-
-def load_python_module(path: Path) -> ModuleType:
-    module_name = f"_pypto_golden_{path.stem}"
-    spec = importlib.util.spec_from_file_location(module_name, path)
+def _load_module(path: Path):
+    name = f"_pypto_golden_{path.stem}"
+    spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load Python module from {path}")
-    module = importlib.util.module_from_spec(spec)
+        raise RuntimeError(f"cannot load {path}")
+    mod = importlib.util.module_from_spec(spec)
     sys.path.insert(0, str(path.parent))
     try:
-        spec.loader.exec_module(module)
+        spec.loader.exec_module(mod)
     finally:
         try:
             sys.path.remove(str(path.parent))
         except ValueError:
             pass
-    return module
+    return mod
 
 
-def find_golden_function(module: ModuleType, path: Path,
-                         function_name: str | None) -> Callable[..., Any]:
-    if function_name:
-        fn = getattr(module, function_name, None)
+def _find_fn(mod, path: Path, fn_name: str | None) -> Callable:
+    if fn_name:
+        fn = getattr(mod, fn_name, None)
         if callable(fn):
             return fn
-        raise RuntimeError(f"function {function_name!r} not found in {path}")
-
-    stem_fn = getattr(module, path.stem, None)
+        raise RuntimeError(f"{fn_name!r} not found in {path}")
+    stem_fn = getattr(mod, path.stem, None)
     if callable(stem_fn):
         return stem_fn
-
     candidates = [
-        obj for name, obj in vars(module).items()
-        if callable(obj) and name.endswith("_golden") and not name.startswith("_")
+        (n, o) for n, o in vars(mod).items()
+        if callable(o) and n.endswith("_golden") and not n.startswith("_")
     ]
     if len(candidates) == 1:
-        return candidates[0]
-    names = [
-        name for name, obj in vars(module).items()
-        if callable(obj) and name.endswith("_golden") and not name.startswith("_")
-    ]
+        return candidates[0][1]
+    names = [n for n, _ in candidates]
     raise RuntimeError(
-        "cannot infer golden function; pass --function. "
-        f"Candidates: {', '.join(names) or '(none)'}"
-    )
+        f"cannot infer golden function; pass --function. "
+        f"Candidates: {', '.join(names) or '(none)'}")
 
 
-def resolve_dtype(torch: ModuleType, dtype_name: str) -> Any:
+def _resolve_dtype(torch, dtype_name: str):
     attr = dtype_name.strip().replace("torch.", "")
     dtype = getattr(torch, attr, None)
     if dtype is None:
-        raise ValueError(f"unsupported torch dtype: {dtype_name!r}")
+        raise ValueError(f"unsupported dtype: {dtype_name!r}")
     return dtype
 
 
-def make_tensor(torch: ModuleType, spec: TensorSpec, device: Any) -> Any:
-    dtype = resolve_dtype(torch, spec.dtype_name)
-    size = spec.shape if spec.shape else ()
-    if (
-        getattr(dtype, "is_floating_point", False)
-        or getattr(dtype, "is_complex", False)
-    ):
+def _make_tensor(torch, spec: TensorSpec, device):
+    dtype = _resolve_dtype(torch, spec.dtype)
+    size = spec.shape or ()
+    if getattr(dtype, "is_floating_point", False) or getattr(dtype, "is_complex", False):
         return torch.randn(size, dtype=dtype, device=device)
     if dtype is torch.bool:
         return torch.randint(0, 2, size, device=device).to(dtype)
-    low = 0 if str(dtype).replace("torch.", "").startswith("uint") else -3
+    low = 0 if "uint" in str(dtype) else -3
     return torch.randint(low, 4, size, dtype=dtype, device=device)
 
 
-def default_tensor_specs(fn: Callable[..., Any]) -> list[TensorSpec]:
+def _build_call(torch, fn: Callable, specs: list[TensorSpec],
+                scalar_args: dict[str, Any], device) -> Callable:
     sig = inspect.signature(fn)
-    for param in sig.parameters.values():
-        if param.kind in _PARAM_KINDS and param.default is _EMPTY:
-            return [TensorSpec(param.name, DEFAULT_INPUT_SHAPE, DEFAULT_DTYPE)]
-    return [TensorSpec("x", DEFAULT_INPUT_SHAPE, DEFAULT_DTYPE)]
+    values: dict[str, Any] = dict(scalar_args)
 
+    required = [p for p in sig.parameters.values()
+                if p.default is inspect.Parameter.empty and p.kind in _REQUIRED_KINDS]
 
-def build_call(
-    torch: ModuleType,
-    fn: Callable[..., Any],
-    tensor_specs: list[TensorSpec],
-    scalar_args: dict[str, Any],
-    device: Any,
-) -> Callable[[], Any]:
-    sig = inspect.signature(fn)
-    values = dict(scalar_args)
-    specs = tensor_specs or default_tensor_specs(fn)
+    named = [s for s in specs if s.name]
+    unnamed = iter(s for s in specs if not s.name)
 
-    unnamed_specs = [spec for spec in specs if not spec.name]
-    named_specs = [spec for spec in specs if spec.name]
-    required_params = []
-    for p in sig.parameters.values():
-        if p.default is _EMPTY and p.kind in _PARAM_KINDS:
-            required_params.append(p)
-
-    for spec in named_specs:
-        values[spec.name] = make_tensor(torch, spec, device)
-
-    unnamed_iter = iter(unnamed_specs)
-    for param in required_params:
-        if param.name in values:
+    for s in named:
+        values[s.name] = _make_tensor(torch, s, device)
+    for p in required:
+        if p.name in values:
             continue
         try:
-            spec = next(unnamed_iter)
+            s = next(unnamed)
         except StopIteration:
             continue
-        values[param.name] = make_tensor(
-            torch,
-            TensorSpec(param.name, spec.shape, spec.dtype_name),
-            device,
-        )
+        values[p.name] = _make_tensor(torch, TensorSpec(p.name, s.shape, s.dtype), device)
 
-    missing = [p.name for p in required_params if p.name not in values]
+    missing = [p.name for p in required if p.name not in values]
     if missing:
         raise RuntimeError(
-            "missing required golden arguments: "
-            f"{', '.join(missing)}. Use --input NAME:SHAPE[:DTYPE] or "
-            "--arg NAME=JSON_VALUE."
-        )
+            f"missing required arguments: {', '.join(missing)}. "
+            f"Use --input NAME:SHAPE[:DTYPE] or --arg NAME=VALUE.")
 
-    positional_args: list[Any] = []
-    keyword_args: dict[str, Any] = {}
-    for param in sig.parameters.values():
-        if param.name not in values:
+    if not specs and not scalar_args:
+        for p in required:
+            if p.name not in values:
+                values[p.name] = _make_tensor(
+                    torch, TensorSpec(p.name, DEFAULT_SHAPE, DEFAULT_DTYPE), device)
+
+    pos, kw = [], {}
+    for p in sig.parameters.values():
+        if p.name not in values:
             continue
-        if param.kind is inspect.Parameter.POSITIONAL_ONLY:
-            positional_args.append(values[param.name])
-        elif param.kind in {
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        }:
-            keyword_args[param.name] = values[param.name]
-        elif param.kind is inspect.Parameter.VAR_POSITIONAL:
-            extra = values[param.name]
-            if not isinstance(extra, (list, tuple)):
-                raise RuntimeError(f"*{param.name} must be a list or tuple")
-            positional_args.extend(extra)
-        elif param.kind is inspect.Parameter.VAR_KEYWORD:
-            extra = values[param.name]
-            if not isinstance(extra, dict):
-                raise RuntimeError(f"**{param.name} must be a dict")
-            keyword_args.update(extra)
+        if p.kind is inspect.Parameter.POSITIONAL_ONLY:
+            pos.append(values[p.name])
+        elif p.kind in {inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        inspect.Parameter.KEYWORD_ONLY}:
+            kw[p.name] = values[p.name]
 
-    return lambda: fn(*positional_args, **keyword_args)
+    return lambda: fn(*pos, **kw)
 
 
-def repair_trace_json_if_truncated(trace_path: Path) -> None:
-    if not trace_path.exists():
-        return
-    try:
-        json.loads(trace_path.read_text())
-        return
-    except json.JSONDecodeError:
-        pass
-
-    content = trace_path.read_bytes().rstrip()
-    if not content:
-        return
-
-    candidates: list[bytes] = []
-    stripped = content.lstrip()
-    if stripped.startswith(b"[") and not content.endswith(b"]"):
-        candidates.append(content + b"]")
-    elif stripped.startswith(b"{"):
-        candidates.extend([content + b"]}", content + b"}", content + b"]"])
-
-    for candidate in candidates:
-        try:
-            json.loads(candidate.decode())
-        except json.JSONDecodeError:
-            continue
-        trace_path.write_bytes(candidate + b"\n")
-        return
+def _is_multi_case_list(result) -> bool:
+    if not isinstance(result, list) or len(result) == 0:
+        return False
+    first = result[0]
+    return isinstance(first, tuple) and len(first) == 3 and isinstance(first[0], str)
 
 
-def load_trace_events(trace_path: Path) -> list[dict[str, Any]]:
-    data = json.loads(trace_path.read_text())
-    events = data.get("traceEvents", data) if isinstance(data, dict) else data
-    if not isinstance(events, list):
-        return []
-    return [event for event in events if isinstance(event, dict)]
+def _normalize_factory_result(result, fn: Callable) -> list[tuple[str, list, dict]]:
+    """Normalize factory function result to a list of (case_name, args, kwargs).
 
+    Detects two formats:
+      - Single case: (args_list, kwargs_dict) or args_list
+      - Multi case:  [(case_name, args_list, kwargs_dict), ...]
 
-def extract_e2e_from_trace(trace_path: Path) -> dict[str, float]:
-    perf_data: dict[str, list[dict]] = {"aicore_e2e": [], "aicpu_kernel": []}
-    sync_events: list[float] = []
-    events = load_trace_events(trace_path)
-    for event in events:
-        name = event.get("name", "")
-        dur = event.get("dur")
-        ts = event.get("ts")
-        if dur is None or ts is None:
-            continue
-        event["end_time"] = float(ts) + float(dur)
-        ts_f = float(ts)
-        args = event.get("args")
-        task_type = ""
-        if isinstance(args, dict):
-            task_type = args.get("Task Type", "")
+    Returns:
+        List of (case_name, args_list, kwargs_dict) tuples.
+    """
+    if _is_multi_case_list(result):
+        return [(name, args, kw) for name, args, kw in result]
 
-        if "SynchronizeDevice" in name:
-            sync_events.append(ts_f)
-        elif name == "KERNEL_AICPU":
-            perf_data["aicpu_kernel"].append(event)
-        elif task_type and task_type not in ("PROFILING_ENABLE", "PROFILING_DISABLE"):
-            perf_data["aicore_e2e"].append(event)
-
-    if not perf_data["aicore_e2e"]:
-        return {"aicore_e2e": 0.0, "aicore_e2e_jitter": 0.0, "aicpukernel_gap": 0.0}
-
-    perf_data["aicore_e2e"].sort(key=lambda e: float(e["ts"]))
-    sync_events.sort()
-
-    groups: list[list[dict]] = []
-    if sync_events:
-        ai = 0
-        aicores_sorted = perf_data["aicore_e2e"]
-        for sync_ts in sync_events:
-            group: list[dict] = []
-            while ai < len(aicores_sorted) and float(aicores_sorted[ai]["ts"]) < sync_ts:
-                group.append(aicores_sorted[ai])
-                ai += 1
-            if group:
-                groups.append(group)
-        remaining = aicores_sorted[ai:]
-        if remaining:
-            groups.append(remaining)
+    if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict):
+        args_list, kwargs = result
     else:
-        groups = [perf_data["aicore_e2e"]]
+        args_list, kwargs = result, {}
 
-    per_iter_totals = [sum(evt["dur"] for evt in g) for g in groups if g]
-    per_iter_sizes = [len(g) for g in groups if g]
-
-    if per_iter_totals and len(per_iter_totals) > 1:
-        median_total = sorted(per_iter_totals)[len(per_iter_totals) // 2]
-        min_total = median_total * 0.2
-        min_size = max(2, int(sum(per_iter_sizes) / len(per_iter_sizes) * 0.4))
-        valid_indices = [
-            i for i, (t, s) in enumerate(zip(per_iter_totals, per_iter_sizes))
-            if t >= min_total and s >= min_size
-        ]
-        if valid_indices:
-            per_iter_totals = [per_iter_totals[i] for i in valid_indices]
-            groups = [groups[i] for i in valid_indices]
-
-    if len(per_iter_totals) > 1:
-        min_total = min(per_iter_totals)
-        threshold = 1.5 * min_total
-        filtered = [t for t in per_iter_totals if (t - min_total) < threshold]
-    else:
-        filtered = list(per_iter_totals)
-    aicore_e2e = round(sum(filtered) / len(filtered), 2) if filtered else 0.0
-
-    n_stable = max(min(5, len(per_iter_totals)), len(per_iter_totals) * 2 // 5)
-    jitter_samples = per_iter_totals[-n_stable:]
-    aicore_e2e_jitter = (
-        (max(jitter_samples) - min(jitter_samples)) / min(jitter_samples)
-        if min(jitter_samples) > 0 else 0.0
-    )
-
-    aicore_e2e_time_list: list[list[float]] = [
-        [float(g[0]["ts"]), g[-1]["end_time"]] for g in groups if g
-    ]
-    for ak in perf_data["aicpu_kernel"]:
-        s = float(ak["ts"])
-        e = ak["end_time"]
-        for et in aicore_e2e_time_list:
-            if s <= et[0] and e >= et[-1]:
-                et.append(e)
-                break
-    gap_list: list[float] = []
-    for et in aicore_e2e_time_list:
-        gap = 0.0 if len(et) == 2 else max(et[-1] - et[-2], 0.0)
-        gap_list.append(gap)
-    aicpukernel_gap = round(sum(gap_list) / len(gap_list), 2) if gap_list else 0.0
-
-    return {
-        "per_iter_totals": per_iter_totals,
-        "aicore_e2e": aicore_e2e,
-        "aicore_e2e_jitter": round(aicore_e2e_jitter, 2),
-        "aicpukernel_gap": aicpukernel_gap,
-    }
+    fn_name = getattr(fn, "__name__", "golden")
+    return [(fn_name, args_list, kwargs)]
 
 
-def summarize_input_shapes(specs: list[TensorSpec]) -> str:
+def _build_call_from_args(torch, fn: Callable, args_list: list,
+                          kwargs: dict) -> tuple[Callable, list[TensorSpec]]:
+    """Build a zero-arg callable from one set of args/kwargs.
+
+    Returns:
+        (callable, specs) — the zero-arg callable and inferred TensorSpec list.
+    """
+    sig = inspect.signature(fn)
+    param_names = list(sig.parameters.keys())
+
+    specs = []
+    for i, arg in enumerate(args_list):
+        name = param_names[i] if i < len(param_names) else f"arg{i}"
+        if isinstance(arg, torch.Tensor):
+            shape = tuple(arg.shape)
+            dtype = str(arg.dtype).replace("torch.", "")
+            specs.append(TensorSpec(name, shape, dtype))
+
+    def call():
+        fresh_args = []
+        for arg in args_list:
+            if isinstance(arg, torch.Tensor):
+                fresh_args.append(arg.clone())
+            else:
+                fresh_args.append(arg)
+        fresh_kwargs = {
+            k: v.clone() if isinstance(v, torch.Tensor) else v
+            for k, v in kwargs.items()
+        }
+        return fn(*fresh_args, **fresh_kwargs)
+
+    return call, specs
+
+
+def _build_call_from_factory(torch, fn: Callable, factory_fn: Callable,
+                              device) -> tuple[Callable, list[TensorSpec]]:
+    """Build callable from a factory function (single-case backward compat).
+
+    Returns:
+        (callable, specs) — the zero-arg callable and inferred TensorSpec list.
+    """
+    result = factory_fn(device)
+    cases = _normalize_factory_result(result, fn)
+    _, args_list, kwargs = cases[0]
+    return _build_call_from_args(torch, fn, args_list, kwargs)
+
+
+# ---------------------------------------------------------------------------
+# kernel_details.csv reading & E2E extraction
+# ---------------------------------------------------------------------------
+
+def _find_ascend_output(prof_dir: Path) -> Path | None:
+    candidates = []
+    for root, dirs, _ in os.walk(prof_dir):
+        if "ASCEND_PROFILER_OUTPUT" in dirs:
+            candidates.append(Path(root) / "ASCEND_PROFILER_OUTPUT")
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def _read_kernel_details(path: Path) -> dict[str, list[float]]:
+    results: dict[str, list[float]] = {}
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            try:
+                results.setdefault(row["Type"].strip(), []).append(
+                    float(row["Duration(us)"]))
+            except (KeyError, ValueError):
+                continue
+    return results
+
+
+def _extract_e2e(op_durs: dict[str, list[float]]) -> tuple[dict[str, dict[str, Any]], float, float]:
+    """Extract per-op stats and E2E via two independent paths.
+    
+    Path A (subtraction): E2E = total_all - total_noise
+    Path B (summation):   E2E = sum of each non-noise kernel duration
+    
+    Returns:
+        (per_op, e2e_a, e2e_b)
+        - per_op: {op_type: {"mean": float, "count": int, "total": float}}
+        - e2e_a: total - noise (subtraction path)
+        - e2e_b: direct sum of non-noise kernels (summation path)
+    """
+    total_all = sum(sum(d) for d in op_durs.values())
+    total_noise = sum(
+        sum(d) for t, d in op_durs.items() if t in NOISE_OPS)
+
+    per_op = {}
+    e2e_b = 0.0
+    for t, d in op_durs.items():
+        if t in NOISE_OPS or not d:
+            continue
+        t_sum = sum(d)
+        per_op[t] = {"mean": t_sum / len(d), "count": len(d), "total": t_sum}
+        e2e_b += t_sum
+
+    e2e_a = total_all - total_noise
+    return per_op, e2e_a, e2e_b
+
+
+# ---------------------------------------------------------------------------
+# Report
+# ---------------------------------------------------------------------------
+
+def _fmt(v: float) -> str:
+    if v < 1.0:
+        return f"{v:.3f}us"
+    if v < 10.0:
+        return f"{v:.2f}us"
+    return f"{v:.1f}us"
+
+
+def _shape_str(specs: list[TensorSpec]) -> str:
     if len(specs) == 1:
         return str(specs[0].shape)
     return "{" + ", ".join(f"{s.name or '?'}: {s.shape}" for s in specs) + "}"
 
 
-def summarize_dtypes(specs: list[TensorSpec]) -> str:
+def _dtype_str(specs: list[TensorSpec]) -> str:
     if len(specs) == 1:
-        return f"torch.{specs[0].dtype_name.replace('torch.', '')}"
+        return f"torch.{specs[0].dtype.replace('torch.', '')}"
     return "{" + ", ".join(
-        f"{s.name or '?'}: torch.{s.dtype_name.replace('torch.', '')}"
-        for s in specs
-    ) + "}"
+        f"{s.name or '?'}: torch.{s.dtype.replace('torch.', '')}" for s in specs) + "}"
 
 
-def write_perf_report(config: PerfReportConfig) -> Path:
-    op_durs: dict[str, list[float]] = {}
-    parse_error: str | None = None
-    if config.trace_path is not None:
-        try:
-            events = load_trace_events(config.trace_path)
-            for event in events:
-                name = event.get("name", "")
-                dur = event.get("dur")
-                args = event.get("args")
-                task_type = ""
-                if isinstance(args, dict):
-                    task_type = args.get("Task Type", "")
-                if not task_type or task_type in ("PROFILING_ENABLE", "PROFILING_DISABLE"):
-                    continue
-                if name and dur is not None:
-                    op_durs.setdefault(name, []).append(float(dur))
-        except (json.JSONDecodeError, FileNotFoundError) as exc:
-            parse_error = str(exc)
-    else:
-        parse_error = "trace_view.json not found"
-
-    op_name = config.golden_path.stem.replace("_golden", "")
-    report_path = config.output_dir / "GOLDEN_PERF_REPORT.md"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+def _write_report(cfg: ReportConfig) -> Path:
+    op_name = cfg.golden_path.stem.replace("_golden", "")
+    path = cfg.output_dir / "GOLDEN_PERF_REPORT.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
         f"# {op_name} Golden NPU Performance Report",
         "",
-        f"- **Device**: {config.device}",
-        f"- **Input Shape**: {summarize_input_shapes(config.tensor_specs)}",
-        f"- **dtype**: {summarize_dtypes(config.tensor_specs)}",
+        f"- **Device**: {cfg.device}",
         f"- **Timestamp**: {datetime.datetime.now(tz=datetime.timezone.utc).isoformat()}",
-        f"- **Profiling Data**: `prof/{config.prof_dir.name}/`",
+        f"- **Iterations**: {cfg.iters}",
         "",
-        "## Op Performance",
-        "",
-        "| op | warmup_avg | stable_avg | stable_min | stable_max |",
-        "|----|-----------|-----------|-----------|-----------|",
     ]
 
-    for name in sorted(op_durs):
-        durs = op_durs[name]
-        if len(durs) <= config.n_warmup:
-            continue
-        warm = durs[:config.n_warmup]
-        stable = durs[config.n_warmup:]
-        lines.append(
-            f"| {name} "
-            f"| {sum(warm)/len(warm):.1f}us "
-            f"| {sum(stable)/len(stable):.1f}us "
-            f"| {min(stable):.1f}us "
-            f"| {max(stable):.1f}us |"
-        )
+    multi = len(cfg.cases) > 1
 
-    if parse_error:
-        lines += ["", f"Trace parse warning: {parse_error}"]
-
-    fn_name = config.golden_path.stem
-    per_iter = config.kernel_e2e.get("per_iter_totals", [])
-
-    e2e_lines: list[str] = []
-    if per_iter:
-        warm = per_iter[:config.n_warmup]
-        stable = per_iter[config.n_warmup:]
-        e2e_lines = [
+    if multi:
+        lines += [
+            "## Performance Summary",
             "",
-            "## Golden Kernel Performance (from profiler trace)",
-            "",
-            "Per-call total AICore kernel time, grouped by `SynchronizeDevice` "
-            "boundaries in `trace_view.json`.",
-            "",
-            "| metric | warmup_avg | stable_avg | stable_min | stable_max |",
-            "|--------|-----------|-----------|-----------|-----------|",
-            f"| {fn_name} (kernel E2E) "
-            f"| {sum(warm)/len(warm):.1f}us "
-            f"| {sum(stable)/len(stable):.1f}us "
-            f"| {min(stable):.1f}us "
-            f"| {max(stable):.1f}us |"
-            if warm and stable else (
-            f"| {fn_name} (kernel E2E) "
-            f"| {sum(per_iter)/len(per_iter):.1f}us "
-            f"| {sum(per_iter)/len(per_iter):.1f}us "
-            f"| {min(per_iter):.1f}us "
-            f"| {max(per_iter):.1f}us |"
-            ),
+            "| case | Input Shape | dtype | E2E (us) |",
+            "|------|------------|-------|----------|",
         ]
-    else:
-        e2e_lines = [
-            "",
-            "## Golden Kernel Performance (from profiler trace)",
-            "",
-            "No AICore kernel events found.",
-        ]
+        for c in cfg.cases:
+            lines.append(
+                f"| {c.case_name} | {_shape_str(c.specs)} | "
+                f"{_dtype_str(c.specs)} | {_fmt(c.e2e_a)} |"
+            )
+        lines.append("")
 
-    lines += e2e_lines
+    for c in cfg.cases:
+        if multi:
+            lines += [
+                f"## Case: {c.case_name}",
+                "",
+                f"- **Input Shape**: {_shape_str(c.specs)}",
+                f"- **dtype**: {_dtype_str(c.specs)}",
+                f"- **Profiling Data**: `prof/{c.prof_dir.name}/`",
+                "",
+            ]
+        else:
+            lines += [
+                f"- **Input Shape**: {_shape_str(c.specs)}",
+                f"- **dtype**: {_dtype_str(c.specs)}",
+                f"- **Profiling Data**: `prof/{c.prof_dir.name}/`",
+                "",
+            ]
+
+        lines += [
+            "### E2E Performance",
+            "",
+            f"**Total kernel duration**: {_fmt(c.e2e_a)} (total - noise)",
+            f"- Cross-check (Σ per-op total): {_fmt(c.e2e_b)}",
+            "",
+            "### Op Performance",
+            "",
+            "| op | count | mean_duration | total |",
+            "|----|-------|--------------|-------|",
+        ]
+        for t in sorted(c.per_op, key=lambda k: -c.per_op[k]["total"]):
+            lines.append(
+                f"| {t} | {c.per_op[t]['count']} | "
+                f"{_fmt(c.per_op[t]['mean'])} | {_fmt(c.per_op[t]['total'])} |"
+            )
+        if not c.per_op:
+            lines.append("| (no data) | — | — | — |")
+        lines.append("")
+
     lines += [
-        "",
         "## Notes",
         "",
-        f"- `warmup_avg`: first {config.n_warmup} iterations "
-        "(includes JIT/compile overhead)",
-        "- `stable_avg/min/max`: subsequent iterations "
-        "(steady-state kernel execution)",
-        "- Kernel E2E extracted from profiler trace, not host-side wall-clock",
-        f"- Full trace: `prof/{config.prof_dir.name}/trace_view.json` "
-        "(chrome://tracing)",
-        f"- CANN analysis: `prof/{config.prof_dir.name}/` "
-        "(operator_memory.csv, device counters)",
+        "- Data source: `ASCEND_PROFILER_OUTPUT/kernel_details.csv`",
+        "- Noise ops (ReduceMax) filtered out",
+        "- Each iteration: noise injection (480MB randn + max) → golden call → sync",
     ]
+    path.write_text("\n".join(lines) + "\n")
+    return path
 
-    report_path.write_text("\n".join(lines) + "\n")
-    return report_path
 
+# ---------------------------------------------------------------------------
+# Profiling entry
+# ---------------------------------------------------------------------------
 
-def profile_golden(config: ProfileConfig) -> int:
-    torch, torch_npu = import_npu_stack()
-    if not has_npu_hardware(torch):
-        logger.info("NPU profiling skipped: no NPU hardware available.")
-        return 0
-
-    golden_path = config.golden_path.resolve()
-    output_dir = (config.output_dir or golden_path.parent).resolve()
-    prof_dir = output_dir / "prof" / golden_path.stem
-    prof_dir.mkdir(parents=True, exist_ok=True)
-
-    module = load_python_module(golden_path)
-    fn = find_golden_function(module, golden_path, config.function_name)
-    specs = config.tensor_specs or default_tensor_specs(fn)
-    device = torch.device(f"npu:{config.device_id}") if config.device_id is not None else torch.device("npu")
-    call_golden = build_call(torch, fn, specs, config.scalar_args, device)
-
-    experimental_config_cls = getattr(torch_npu.profiler, "_ExperimentalConfig")
-    experimental_config = experimental_config_cls(
+def _profile_one_case(torch, torch_npu, call, prof_dir: Path,
+                      iters: int) -> tuple[dict, float, float]:
+    """Profile a single case and return (per_op, e2e_a, e2e_b)."""
+    exp_cfg_cls = getattr(torch_npu.profiler, "_ExperimentalConfig")
+    exp_cfg = exp_cfg_cls(
         profiler_level=torch_npu.profiler.ProfilerLevel.Level1,
         aic_metrics=torch_npu.profiler.AiCMetrics.PipeUtilization,
     )
-
-    profiler = torch_npu.profiler.profile(
-        activities=[
-            torch_npu.profiler.ProfilerActivity.NPU,
-            torch_npu.profiler.ProfilerActivity.CPU,
-        ],
-        with_stack=False,
-        record_shapes=False,
-        profile_memory=True,
-        experimental_config=experimental_config,
+    prof = torch_npu.profiler.profile(
+        activities=[torch_npu.profiler.ProfilerActivity.NPU,
+                     torch_npu.profiler.ProfilerActivity.CPU],
+        with_stack=False, record_shapes=False, profile_memory=True,
+        experimental_config=exp_cfg,
         on_trace_ready=torch_npu.profiler.tensorboard_trace_handler(
-            str(prof_dir), analyse_flag=True
-        ),
+            str(prof_dir), analyse_flag=True),
     )
 
-    with profiler as prof:
-        for _ in range(config.warmup + config.iters):
-            _ = call_golden()
-            torch.npu.synchronize()
+    with prof:
+        for i in range(iters):
+            a = torch.randn(NOISE_SIZE).to(torch.float32).npu()
+            _ = torch.max(a)
+            try:
+                call()
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Golden function crashed on iteration {i}. "
+                    f"Random tensor values may violate semantic constraints "
+                    f"(e.g. block table indices, sequence lengths). "
+                    f"Fix: (1) add _make_inputs(device) to the golden file "
+                    f"and use --factory _make_inputs, or "
+                    f"(2) use --input NAME:SHAPE[:DTYPE] and --arg NAME=VALUE "
+                    f"to provide valid inputs. Original error: {exc}"
+                ) from exc
+            torch_npu.npu.synchronize()
             prof.step()
-
-    trace_view_path: Path | None = None
-    for root, _, files in os.walk(prof_dir):
-        for name in files:
-            if name == "trace_view.json":
-                trace_view_path = Path(root) / name
-                break
-        if trace_view_path:
-            break
-
-    if trace_view_path:
-        repair_trace_json_if_truncated(trace_view_path)
 
     logger.info(f"Profiling output: {prof_dir}")
 
-    kernel_e2e = extract_e2e_from_trace(trace_view_path) if trace_view_path else {
-        "per_iter_totals": [], "aicore_e2e": 0.0, "aicore_e2e_jitter": 0.0, "aicpukernel_gap": 0.0,
-    }
+    ascend = _find_ascend_output(prof_dir)
+    kd = ascend / "kernel_details.csv" if ascend else None
+    per_op: dict[str, dict[str, Any]] = {}
+    e2e_a: float = 0.0
+    e2e_b: float = 0.0
 
-    report_config = PerfReportConfig(
-        golden_path=golden_path,
-        output_dir=output_dir,
-        trace_path=trace_view_path,
-        n_warmup=config.warmup,
-        tensor_specs=specs,
-        device=device,
-        prof_dir=prof_dir,
-        kernel_e2e=kernel_e2e,
-    )
-    report_path = write_perf_report(report_config)
-    logger.info(f"Performance report: {report_path}")
+    if kd and kd.exists():
+        op_durs = _read_kernel_details(kd)
+        per_op, e2e_a, e2e_b = _extract_e2e(op_durs)
+        n_kernels = sum(len(v) for v in op_durs.values())
+        logger.info(
+            f"{n_kernels} kernels, {len(op_durs)} op types, "
+            f"{len(per_op)} after noise filter, "
+            f"E2E_A={_fmt(e2e_a)}, E2E_B={_fmt(e2e_b)}"
+        )
+        if abs(e2e_a - e2e_b) > 0.01:
+            logger.warning(
+                f"E2E mismatch: path_A={_fmt(e2e_a)}, path_B={_fmt(e2e_b)}"
+            )
+    else:
+        logger.warning("kernel_details.csv not found — report will have no data")
+
+    return per_op, e2e_a, e2e_b
+
+
+def profile_golden(cfg: ProfileConfig) -> int:
+    try:
+        import torch
+        import torch_npu
+    except ImportError as exc:
+        raise RuntimeError(
+            "torch_npu not installed. Run pypto-environment-setup skill."
+        ) from exc
+
+    if not (torch.npu.is_available() and torch.npu.device_count() > 0):
+        logger.info("No NPU hardware — profiling skipped.")
+        return 0
+
+    golden_path = cfg.golden_path.resolve()
+    out = (cfg.output_dir or golden_path.parent).resolve()
+    base_prof_dir = out / "prof" / golden_path.stem
+    base_prof_dir.mkdir(parents=True, exist_ok=True)
+
+    mod = _load_module(golden_path)
+    fn = _find_fn(mod, golden_path, cfg.fn_name)
+    device = (torch.device(f"npu:{cfg.device_id}") if cfg.device_id is not None
+              else torch.device("npu"))
+
+    cases: list[CaseResult] = []
+
+    if cfg.factory_name:
+        factory_fn = getattr(mod, cfg.factory_name, None)
+        if factory_fn is None or not callable(factory_fn):
+            raise RuntimeError(
+                f"Factory function {cfg.factory_name!r} not found in {golden_path}. "
+                f"Add a _make_inputs(device) function that returns "
+                f"(args_list, kwargs_dict) or [(case_name, args_list, kwargs_dict), ...]."
+            )
+        result = factory_fn(device)
+        normalized = _normalize_factory_result(result, fn)
+        multi = len(normalized) > 1
+
+        for case_name, args_list, kwargs in normalized:
+            call, specs = _build_call_from_args(torch, fn, args_list, kwargs)
+            logger.info(
+                f"Case {case_name}: {len(specs)} tensor args, "
+                f"shapes={[s.shape for s in specs]}"
+            )
+            if multi:
+                prof_dir = base_prof_dir / case_name
+            else:
+                prof_dir = base_prof_dir
+            prof_dir.mkdir(parents=True, exist_ok=True)
+
+            per_op, e2e_a, e2e_b = _profile_one_case(
+                torch, torch_npu, call, prof_dir, cfg.iters)
+            cases.append(CaseResult(
+                case_name=case_name, specs=specs,
+                per_op=per_op, e2e_a=e2e_a, e2e_b=e2e_b,
+                prof_dir=prof_dir,
+            ))
+    else:
+        specs = cfg.specs
+        call = _build_call(torch, fn, specs, cfg.scalar_args, device)
+        prof_dir = base_prof_dir
+
+        per_op, e2e_a, e2e_b = _profile_one_case(
+            torch, torch_npu, call, prof_dir, cfg.iters)
+
+        report_specs = specs or [
+            TensorSpec(p.name, DEFAULT_SHAPE, DEFAULT_DTYPE)
+            for p in inspect.signature(fn).parameters.values()
+            if p.default is inspect.Parameter.empty and p.kind in _REQUIRED_KINDS
+        ][:1] or [TensorSpec("x", DEFAULT_SHAPE, DEFAULT_DTYPE)]
+        fn_name = cfg.fn_name or getattr(fn, "__name__", "golden")
+        cases.append(CaseResult(
+            case_name=fn_name, specs=report_specs,
+            per_op=per_op, e2e_a=e2e_a, e2e_b=e2e_b,
+            prof_dir=prof_dir,
+        ))
+
+    report = _write_report(ReportConfig(
+        golden_path=golden_path, output_dir=out,
+        device=device, iters=cfg.iters, cases=cases,
+    ))
+    logger.info(f"Report: {report}")
     return 0
 
 
-def run_self_test() -> None:
-    def _check(condition: bool, msg: str = "") -> None:
-        if not condition:
+# ---------------------------------------------------------------------------
+# Self-test
+# ---------------------------------------------------------------------------
+
+def _self_test():
+    def _ok(cond: bool, msg: str = ""):
+        if not cond:
             raise AssertionError(msg)
 
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
-        trace = base / "chrome_trace.json"
-        trace.write_text(
-            json.dumps({
-                "traceEvents": [
-                    {"name": "aten::mul", "dur": 10,
-                     "args": {"Task Type": "AI_VECTOR_CORE"}},
-                    {"name": "aten::mul", "dur": 20,
-                     "args": {"Task Type": "AI_VECTOR_CORE"}},
-                    {"name": "aten::mul", "dur": 30,
-                     "args": {"Task Type": "AI_VECTOR_CORE"}},
-                ]
-            })
-        )
-        _check(len(load_trace_events(trace)) == 3,
-               f"expected 3 trace events, got {len(load_trace_events(trace))}")
 
-        truncated = base / "trace_view.json"
-        truncated.write_text('[{"name":"aten::add","dur":1}')
-        repair_trace_json_if_truncated(truncated)
-        _check(len(load_trace_events(truncated)) == 1,
-               f"expected 1 trace event, got {len(load_trace_events(truncated))}")
+        kd = base / "kernel_details.csv"
+        kd.write_text(
+            "Device_id,Name,Type,Start Time(us),Duration(us)\n"
+            "0,aclnnMul,Mul,1000.0,5.0\n"
+            "0,aclnnReduceMax,ReduceMax,1050.0,100.0\n"
+            "0,aclnnMul,Mul,2000.0,4.0\n"
+            "0,aclnnReduceMax,ReduceMax,2050.0,95.0\n"
+            "0,aclnnAdd,Add,3000.0,3.0\n"
+            "0,aclnnAdd,Add,3100.0,3.5\n")
 
-        obj_truncated = base / "trace_object.json"
-        obj_truncated.write_text('{"traceEvents":[{"name":"aten::sub","dur":2}')
-        repair_trace_json_if_truncated(obj_truncated)
-        _check(len(load_trace_events(obj_truncated)) == 1,
-               f"expected 1 trace event, got {len(load_trace_events(obj_truncated))}")
+        op_durs = _read_kernel_details(kd)
+        _ok(len(op_durs) == 3, f"expected 3 types, got {len(op_durs)}")
 
-        e2e_trace = base / "e2e_trace.json"
-        e2e_trace.write_text(json.dumps([
-            {"name": "kernel1", "dur": 100, "ts": 0,
-             "args": {"Task Type": "AI_VECTOR_CORE"}},
-            {"name": "kernel2", "dur": 110, "ts": 200,
-             "args": {"Task Type": "AI_VECTOR_CORE"}},
-            {"name": "kernel3", "dur": 105, "ts": 400,
-             "args": {"Task Type": "AI_CORE"}},
-            {"name": "kernel4", "dur": 500, "ts": 600,
-             "args": {"Task Type": "AI_VECTOR_CORE"}},
-        ]))
-        result = extract_e2e_from_trace(e2e_trace)
-        _check(result["per_iter_totals"] == [815.0],
-               f"expected [815.0], got {result['per_iter_totals']}")
-        _check(math.isclose(result["aicore_e2e"], 815.0),
-               f"expected 815.0, got {result['aicore_e2e']}")
+        per_op, e2e_a, e2e_b = _extract_e2e(op_durs)
+        _ok("ReduceMax" not in per_op, "ReduceMax not filtered")
+        _ok(abs(per_op["Mul"]["mean"] - 4.5) < 0.01, f"Mul: {per_op['Mul']}")
+        _ok(per_op["Mul"]["count"] == 2, f"Mul count: {per_op['Mul']['count']}")
+        _ok(abs(per_op["Add"]["mean"] - 3.25) < 0.01, f"Add: {per_op['Add']}")
+        _ok(per_op["Add"]["count"] == 2, f"Add count: {per_op['Add']['count']}")
+        # E2E = 5.0 + 4.0 + 3.0 + 3.5 = 15.5 (ReduceMax filtered)
+        _ok(abs(e2e_a - 15.5) < 0.01, f"E2E_A: {e2e_a}")
+        _ok(abs(e2e_b - 15.5) < 0.01, f"E2E_B: {e2e_b}")
+        _ok(abs(e2e_a - e2e_b) < 0.01, f"E2E mismatch: A={e2e_a}, B={e2e_b}")
 
-        e2e_trace2 = base / "e2e_trace2.json"
-        e2e_trace2.write_text(json.dumps([
-            {"name": "aclnnCast_CastAiCore_Cast", "dur": 5, "ts": 0,
-             "args": {"Task Type": "AI_VECTOR_CORE"}},
-            {"name": "aclnnMatmul_BatchMatMulNd_BatchMatMulV2", "dur": 35, "ts": 50,
-             "args": {"Task Type": "AI_CORE"}},
-            {"name": "AscendCL@aclrtSynchronizeDeviceWithTimeout", "dur": 1, "ts": 100},
-            {"name": "aclnnCast_CastAiCore_Cast", "dur": 3, "ts": 200,
-             "args": {"Task Type": "AI_VECTOR_CORE"}},
-            {"name": "aclnnMatmul_BatchMatMulNd_BatchMatMulV2", "dur": 38, "ts": 250,
-             "args": {"Task Type": "AI_CORE"}},
-            {"name": "AscendCL@aclrtSynchronizeDeviceWithTimeout", "dur": 1, "ts": 300},
-            {"name": "aclnnCast_CastAiCore_Cast", "dur": 6, "ts": 400,
-             "args": {"Task Type": "AI_VECTOR_CORE"}},
-            {"name": "aclnnMatmul_BatchMatMulNd_BatchMatMulV2", "dur": 34, "ts": 450,
-             "args": {"Task Type": "AI_CORE"}},
-        ]))
-        result2 = extract_e2e_from_trace(e2e_trace2)
-        _check(result2["per_iter_totals"] == [40.0, 41.0, 40.0],
-               f"expected [40.0, 41.0, 40.0], got {result2['per_iter_totals']}")
-
-        spec = parse_tensor_spec("x:2x3:float32")
-        _check(spec == TensorSpec("x", (2, 3), "float32"),
-               f"expected TensorSpec('x', (2, 3), 'float32'), got {spec}")
-        _check(parse_shape("(2, 3)") == (2, 3),
-               f"expected (2, 3), got {parse_shape('(2, 3)')}")
-        _check(parse_named_json("eps=1e-5") == ("eps", 1e-5),
-               f"expected ('eps', 1e-5), got {parse_named_json('eps=1e-5')}")
+        s = _parse_tensor_spec("x:2x3:float32")
+        _ok(s == TensorSpec("x", (2, 3), "float32"), f"spec: {s}")
+        _ok(_parse_shape("(2, 3)") == (2, 3))
+        _ok(_parse_arg("eps=1e-5") == ("eps", 1e-5))
 
         import torch
-        _check(make_tensor(
-            torch, TensorSpec("idx", (2, 3), "int64"), torch.device("cpu")
-        ).dtype == torch.int64, "expected torch.int64")
-        _check(make_tensor(
-            torch, TensorSpec("mask", (2, 3), "bool"), torch.device("cpu")
-        ).dtype == torch.bool, "expected torch.bool")
+        _ok(_make_tensor(torch, TensorSpec("i", (2, 3), "int64"),
+                         torch.device("cpu")).dtype == torch.int64)
+        _ok(_make_tensor(torch, TensorSpec("b", (2, 3), "bool"),
+                         torch.device("cpu")).dtype == torch.bool)
 
-        golden_path = base / "sample_golden.py"
-        golden_path.write_text("def sample_golden(x):\n    return x\n")
-        report_config = PerfReportConfig(
-            golden_path=golden_path,
-            output_dir=base,
-            trace_path=trace,
-            n_warmup=1,
-            tensor_specs=[spec],
-            device="npu",
-            prof_dir=base / "prof" / "sample_golden",
-            kernel_e2e={"per_iter_totals": [180.0, 170.0, 175.0, 172.0, 168.0,
-                           160.0, 162.0, 158.0, 161.0, 159.0],
-                       "aicore_e2e": 165.0, "aicore_e2e_jitter": 0.02, "aicpukernel_gap": 0.0},
-        )
-        report = write_perf_report(report_config)
-        content = report.read_text()
-        _check("Golden Kernel Performance" in content,
-               "'Golden Kernel Performance' not in report")
-        _check("| aten::mul | 10.0us | 25.0us | 20.0us | 30.0us |" in content,
-               "expected table row not in report")
+        r = _write_report(ReportConfig(
+            golden_path=base / "sample_golden.py", output_dir=base,
+            device="npu", iters=1,
+            cases=[CaseResult(
+                case_name="sample",
+                specs=[TensorSpec("x", (8, 1024, 4096), "float32")],
+                per_op={"Mul": {"mean": 4.5, "count": 2, "total": 9.0},
+                        "Add": {"mean": 3.25, "count": 2, "total": 6.5}},
+                e2e_a=15.5, e2e_b=15.5,
+                prof_dir=base / "prof" / "sample",
+            )],
+        ))
+        content = r.read_text()
+        _ok("Op Performance" in content)
+        _ok("E2E Performance" in content)
+        _ok("Mul" in content and "Add" in content)
+        _ok("mean_duration" in content)
+        _ok("count" in content)
+        _ok("total" in content)
+        _ok("15.5" in content, "E2E total not in report")
+        _ok("Total kernel duration" in content, "E2E primary not in report")
+        _ok("Cross-check" in content, "E2E cross-check not in report")
 
-    logger.info("profile_golden self-test ok")
+        prof_dir_a = base / "prof" / "case_a"
+        prof_dir_b = base / "prof" / "case_b"
+        r2 = _write_report(ReportConfig(
+            golden_path=base / "multi_golden.py", output_dir=base,
+            device="npu", iters=1,
+            cases=[
+                CaseResult(
+                    case_name="perf_p0_small",
+                    specs=[TensorSpec("x", (8, 1024), "bfloat16")],
+                    per_op={"Mul": {"mean": 2.0, "count": 1, "total": 2.0}},
+                    e2e_a=2.0, e2e_b=2.0, prof_dir=prof_dir_a,
+                ),
+                CaseResult(
+                    case_name="perf_p0_large",
+                    specs=[TensorSpec("x", (16, 2048), "bfloat16")],
+                    per_op={"Mul": {"mean": 8.0, "count": 1, "total": 8.0}},
+                    e2e_a=8.0, e2e_b=8.0, prof_dir=prof_dir_b,
+                ),
+            ],
+        ))
+        content2 = r2.read_text()
+        _ok("Performance Summary" in content2, "multi-case summary missing")
+        _ok("perf_p0_small" in content2, "case name missing")
+        _ok("perf_p0_large" in content2, "case name missing")
+        _ok("Case: perf_p0_small" in content2, "case section missing")
+        _ok("Case: perf_p0_large" in content2, "case section missing")
+
+        def dummy_fn(x):
+            return x
+        single = _normalize_factory_result(([1], {}), dummy_fn)
+        _ok(len(single) == 1 and single[0][0] == "dummy_fn")
+        multi = _normalize_factory_result(
+            [("a", [1], {}), ("b", [2], {"e": 1})], dummy_fn)
+        _ok(len(multi) == 2 and multi[0][0] == "a" and multi[1][0] == "b")
+
+    logger.info("self-test ok")
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Profile a PyTorch NPU golden script and write "
-                    "GOLDEN_PERF_REPORT.md plus prof/<golden_stem>/ data."
-    )
-    parser.add_argument("golden", nargs="?", help="Path to *_golden.py")
-    parser.add_argument("--function", help="Golden function name")
-    parser.add_argument(
-        "--input",
-        action="append",
-        default=[],
-        metavar="NAME:SHAPE[:DTYPE]",
-        help="Tensor input spec. Example: x:8x1024x4096:float32. "
-             "Repeat for multiple tensor inputs.",
-    )
-    parser.add_argument(
-        "--arg",
-        action="append",
-        default=[],
-        metavar="NAME=JSON",
-        help="Non-tensor golden argument. Example: eps=1e-5 or axis=-1.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        help="Directory for GOLDEN_PERF_REPORT.md and prof/. "
-             "Defaults to the golden file directory.",
-    )
-    parser.add_argument(
-        "--device",
-        type=int,
-        default=None,
-        metavar="DEVICE_ID",
-        help="NPU device ID (integer). Defaults to 0 (system default). "
-             "Use this to target a specific NPU card, e.g. --device 3.",
-    )
-    parser.add_argument("--warmup", type=int, default=DEFAULT_WARMUP)
-    parser.add_argument("--iters", type=int, default=DEFAULT_ITERS)
-    parser.add_argument("--self-test", action="store_true",
-                        help="Run built-in helper tests without NPU.")
-    return parser
-
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    p = argparse.ArgumentParser(
+        description="Profile a golden script on NPU and write GOLDEN_PERF_REPORT.md.")
+    p.add_argument("golden", nargs="?", help="Path to *_golden.py")
+    p.add_argument("--function", help="Golden function name")
+    p.add_argument("--input", action="append", default=[],
+                   metavar="NAME:SHAPE[:DTYPE]",
+                   help="Tensor input spec (repeatable)")
+    p.add_argument("--arg", action="append", default=[],
+                   metavar="NAME=JSON",
+                   help="Non-tensor argument (repeatable)")
+    p.add_argument("--factory", metavar="FUNC_NAME",
+                   help="Name of a factory function in the golden module that "
+                        "returns (args_list, kwargs_dict) for single case, or "
+                        "[(case_name, args_list, kwargs_dict), ...] for multi-case. "
+                        "Use for operators with semantic constraints on tensor "
+                        "values (block tables, state caches, index tensors, etc.) "
+                        "where random values would crash. "
+                        "When set, --input and --arg are ignored.")
+    p.add_argument("--output-dir", type=Path,
+                   help="Output directory (default: golden file dir)")
+    p.add_argument("--device", type=int, default=None,
+                   help="NPU device ID")
+    p.add_argument("--iters", type=int, default=DEFAULT_ITERS)
+    p.add_argument("--self-test", action="store_true")
+    args = p.parse_args(argv)
 
     if args.self_test:
-        run_self_test()
+        _self_test()
         return 0
-
     if not args.golden:
-        parser.error("golden path is required unless --self-test is used")
-    if args.warmup <= 0:
-        parser.error("--warmup must be > 0")
+        p.error("golden path is required")
     if args.iters <= 0:
-        parser.error("--iters must be > 0")
+        p.error("--iters must be > 0")
 
     try:
-        tensor_specs = [parse_tensor_spec(item) for item in args.input]
-        scalar_args = dict(parse_named_json(item) for item in args.arg)
-        config = ProfileConfig(
-            golden_path=Path(args.golden),
-            function_name=args.function,
-            tensor_specs=tensor_specs,
-            scalar_args=scalar_args,
-            output_dir=args.output_dir,
-            warmup=args.warmup,
-            iters=args.iters,
-            device_id=args.device,
-        )
-        return profile_golden(config)
+        specs = [_parse_tensor_spec(t) for t in args.input]
+        scalars = dict(_parse_arg(a) for a in args.arg)
+        return profile_golden(ProfileConfig(
+            golden_path=Path(args.golden), fn_name=args.function,
+            specs=specs, scalar_args=scalars,
+            output_dir=args.output_dir, iters=args.iters,
+            device_id=args.device, factory_name=args.factory,
+        ))
     except Exception as exc:
-        logger.error(f"{exc}")
+        logger.error(str(exc))
         return 2
 
 
