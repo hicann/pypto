@@ -174,6 +174,9 @@ def normal(shape, key, counter, alg, dtype) -> Tensor:
         The key for random number generation.
     counter: List[int]
         The counter for random number generation.
+        Note: counter[0] is hardcoded to 0 internally for alignment with
+        CANN ACLNN L2 API (aclnnNormalFloatFloat), which constructs the
+        Philox counter as [0, offset]. Only counter[1] (offset) is used.
     alg: List[int]
         The algorithm to use for random number generation, support 1(Philox) and 3(auto_select, select Philox).
     dtype: DataType
@@ -249,7 +252,7 @@ def normal(shape, key, counter, alg, dtype) -> Tensor:
     for dim_num in shape:
         shape_one_dim *= dim_num
 
-    counter0, counter1 = counter
+    counter0, counter1 = 0, counter[1]
     uniform_res = uniform_impl(key[0], counter0, counter1, [(shape_one_dim + 1) // 2 * 2], rounds=10,
                                dtype=pypto.DT_FP32)
 
