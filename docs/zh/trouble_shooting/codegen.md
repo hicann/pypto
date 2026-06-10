@@ -75,7 +75,24 @@ CodeGen需要以来Operation中的need_alloc属性生成变量定义语句，若
 
 #### 错误码 F63001：COMPILE_CODE_FAILED
 
-kernel代码编译错误可能有多种原因导致，后续将根据不同场景完善排查指导。
+一般为bisheng编译kernel代码报错导致，编译错误可能有多种原因，后续将根据不同场景完善排查指导。
+如果bisheng编译器报错日志存在丢失或不完整，可能尝试如下方法复现：
+
+1. 在日志中找到类似如下报错信息，包含报错的make命令：
+
+   ```log
+   Caught exception: 'ErrCode: F63001! Enum: CmpCodeErr::COMPILE_CODE_FAILED. kernel compilation failed, ret = 512
+   compile cmd is:
+   make -j112 -f /pypto/build/output/bin/output/output_20260609_193402_089005_981941_6466CEB1/kernel_aicore/Makefile_14_9752067179483835610.compile
+   ```
+
+2. 手工执行make命令
+
+   ```bash
+   make -j112 -f /pypto/build/output/bin/output/output_20260609_193402_089005_981941_6466CEB1/kernel_aicore/Makefile_14_9752067179483835610.compile
+   ```
+
+3. 获取完整的报错信息
 
 ##### 场景1: 堆栈溢出
 
