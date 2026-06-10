@@ -108,6 +108,9 @@ bool AutoCastChecker::SupportBF16(Operation* op)
 
 bool AutoCastChecker::SupportFP16(Operation* op)
 {
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        return UNSUPPORT_FP16_ARCH35_OPS.count(op->GetOpcode()) == 0;
+    }
     if (UNSUPPORT_FP16_OPS.count(op->GetOpcode()) > 0) {
         return false;
     }

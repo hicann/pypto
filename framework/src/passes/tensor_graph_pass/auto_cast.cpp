@@ -149,7 +149,10 @@ bool AutoCast::SupportBF16(Operation* op)
 
 bool AutoCast::SupportFP16(Operation* op)
 {
-    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        if (UNSUPPORT_FP16_ARCH35_OPS.count(op->GetOpcode()) > 0)
+            return false;
+    } else {
         if (UNSUPPORT_FP16_OPS.count(op->GetOpcode()) > 0) {
             APASS_LOG_INFO_F(Elements::Operation, "Op[%d] can find in UNSUPPORT_FP16_OPS.", op->GetOpMagic());
             return false;
