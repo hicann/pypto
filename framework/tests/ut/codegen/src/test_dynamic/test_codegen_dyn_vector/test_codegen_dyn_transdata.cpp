@@ -30,126 +30,91 @@ public:
     TestCodegenDynTransData() : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION}) {}
 
     static void TearDownTestCase() {}
+
+    struct TransDataTestCase {
+        std::string caseName;
+        std::vector<int64_t> inputShape;
+        std::vector<int64_t> vecTile;
+        DataType dtype;
+        std::vector<int64_t> outputShape;
+        int tileOpFormat;
+        std::string expect;
+    };
+
+    void RunTransDataTest(const TransDataTestCase& tc)
+    {
+        TileShape::Current().SetVecTile(tc.vecTile);
+
+        Tensor inputSrc(tc.dtype, tc.inputShape, "input");
+        Tensor output(tc.dtype, tc.outputShape, "output");
+        ConfigManager::Instance();
+        FUNCTION(tc.caseName, {inputSrc, output})
+        {
+            LOOP(tc.caseName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+            {
+                (void)i;
+                output = TransData(inputSrc, TileOpFormat(tc.tileOpFormat), 1);
+            }
+        }
+        auto function = Program::GetInstance().GetFunctionByRawName(
+            FUNCTION_PREFIX + tc.caseName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+        std::string res = GenCodeByFunction(*function);
+        CheckStringExist(tc.expect, res);
+    }
 };
 
 TEST_F(TestCodegenDynTransData, TestTransData2)
 {
-    constexpr const int N = 1;
-    constexpr const int C = 7;
-    constexpr const int H = 1;
-    constexpr const int W = 8;
-    std::vector<int64_t> shape = {N, C, H, W};
-    TileShape::Current().SetVecTile({N, 8, H, W});
-
-    Tensor inputSrc(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, {1, 1, 1, 8, 8}, "output");
-    ConfigManager::Instance();
-    std::string funcName = "TRANSDATA";
-    FUNCTION(funcName, {inputSrc, output})
-    {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
-        {
-            (void)i;
-            output = TransData(inputSrc, TileOpFormat(2), 1);
-        }
-    }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TTransDataNCHW2NC1HWC0<(int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_3, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 4))), ubTensor_4, ubTensor_5, (int)(0), (int)(0), (int)(0), (int)(0));)!!!";
-    CheckStringExist(expect, res);
+    RunTransDataTest(
+        {.caseName = "TestTransData2",
+         .inputShape = {1, 7, 1, 8},
+         .vecTile = {1, 8, 1, 8},
+         .dtype = DT_FP32,
+         .outputShape = {1, 1, 1, 8, 8},
+         .tileOpFormat = 2,
+         .expect =
+             R"!!!(TTransDataNCHW2NC1HWC0<(int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_3, Coord5Dim((RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(5, 18, 4))), ubTensor_4, ubTensor_5, (int)(0), (int)(0), (int)(0), (int)(0));)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData4)
 {
-    constexpr const int N = 15;
-    constexpr const int C = 15;
-    constexpr const int H = 2;
-    constexpr const int W = 16;
-    std::vector<int64_t> shape = {N, C, H, W};
-    TileShape::Current().SetVecTile({16, 16, 2, 16});
-
-    Tensor inputSrc(DT_FP16, shape, "input");
-    Tensor output(DT_FP16, {32, 1, 16, 16}, "output");
-    ConfigManager::Instance();
-    std::string funcName = "TRANSDATA";
-    FUNCTION(funcName, {inputSrc, output})
-    {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
-        {
-            (void)i;
-            output = TransData(inputSrc, TileOpFormat(4), 1);
-        }
-    }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TTransDataNCHW2Fractal_Z<(int)(16), (int)(16), (int)(2), (int)(16)>(gmTensor_4, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 3))), ubTensor_5, ubTensor_6, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));
-)!!!";
-    CheckStringExist(expect, res);
+    RunTransDataTest(
+        {.caseName = "TestTransData4",
+         .inputShape = {15, 15, 2, 16},
+         .vecTile = {16, 16, 2, 16},
+         .dtype = DT_FP16,
+         .outputShape = {32, 1, 16, 16},
+         .tileOpFormat = 4,
+         .expect =
+             R"!!!(TTransDataNCHW2Fractal_Z<(int)(16), (int)(16), (int)(2), (int)(16)>(gmTensor_4, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 18, 3))), ubTensor_5, ubTensor_6, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));
+)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData3)
 {
-    constexpr const int N = 1;
-    constexpr const int C = 7;
-    constexpr const int D = 1;
-    constexpr const int H = 1;
-    constexpr const int W = 8;
-    std::vector<int64_t> shape = {N, C, D, H, W};
-    TileShape::Current().SetVecTile({1, 8, 1, 1, 8});
-
-    Tensor inputSrc(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, {1, 1, 1, 1, 8, 8}, "output");
-    ConfigManager::Instance();
-    std::string funcName = "TRANSDATA";
-    FUNCTION(funcName, {inputSrc, output})
-    {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
-        {
-            (void)i;
-            output = TransData(inputSrc, TileOpFormat(3), 1);
-        }
-    }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_3, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_4, ubTensor_5, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
-)!!!";
-    CheckStringExist(expect, res);
+    RunTransDataTest(
+        {.caseName = "TestTransData3",
+         .inputShape = {1, 7, 1, 1, 8},
+         .vecTile = {1, 8, 1, 1, 8},
+         .dtype = DT_FP32,
+         .outputShape = {1, 1, 1, 1, 8, 8},
+         .tileOpFormat = 3,
+         .expect =
+             R"!!!(TTransDataNCDHW2NDC1HWC0<(int)(1), (int)(1), (int)(8), (int)(1), (int)(8)>(gmTensor_3, Coord6Dim((RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 3)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 4)), (RUNTIME_COA_GET_PARAM_OFFSET(6, 22, 5))), ubTensor_4, ubTensor_5, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0));
+)!!!"});
 }
 
 TEST_F(TestCodegenDynTransData, TestTransData5)
 {
-    constexpr const int N = 15;
-    constexpr const int C = 7;
-    constexpr const int D = 1;
-    constexpr const int H = 1;
-    constexpr const int W = 8;
-    std::vector<int64_t> shape = {N, C, D, H, W};
-    TileShape::Current().SetVecTile({16, 8, 1, 1, 8});
-
-    Tensor inputSrc(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, {8, 1, 16, 8}, "output");
-    ConfigManager::Instance();
-    std::string funcName = "TRANSDATA";
-    FUNCTION(funcName, {inputSrc, output})
-    {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
-        {
-            (void)i;
-            output = TransData(inputSrc, TileOpFormat(5), 1);
-        }
-    }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    std::string res = GenCodeByFunction(*function);
-    std::string expect =
-        R"!!!(TTransDataNCDHW2FRACTAL_Z_3D<(int)(16), (int)(8), (int)(1), (int)(1), (int)(8)>(gmTensor_4, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 3))), ubTensor_5, ubTensor_6, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));
-)!!!";
-    CheckStringExist(expect, res);
+    RunTransDataTest(
+        {.caseName = "TestTransData5",
+         .inputShape = {15, 7, 1, 1, 8},
+         .vecTile = {16, 8, 1, 1, 8},
+         .dtype = DT_FP32,
+         .outputShape = {8, 1, 16, 8},
+         .tileOpFormat = 5,
+         .expect =
+             R"!!!(TTransDataNCDHW2FRACTAL_Z_3D<(int)(16), (int)(8), (int)(1), (int)(1), (int)(8)>(gmTensor_4, Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 1)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 2)), (RUNTIME_COA_GET_PARAM_OFFSET(4, 22, 3))), ubTensor_5, ubTensor_6, (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(0), (int)(1));
+)!!!"});
 }
 } // namespace npu::tile_fwk
