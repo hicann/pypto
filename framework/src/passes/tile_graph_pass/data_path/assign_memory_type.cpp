@@ -392,6 +392,17 @@ bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(
     return false;
 }
 
+// 特殊进阶数据通路，不满足特定条件时回退到通过DDR搬运：L0C2L1, L0C2UB, UB2L1
+bool AssignMemoryType::IsAdvancedMemoryPath(MemoryType from, MemoryType to) const
+{
+    if (from == MemoryType::MEM_L0C && to == MemoryType::MEM_L1) {
+        return true;
+    }
+    bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    return isA5 && ((from == MemoryType::MEM_L0C && to == MemoryType::MEM_UB) ||
+                    (from == MemoryType::MEM_UB && to == MemoryType::MEM_L1));
+}
+
 bool AssignMemoryType::CanUseDirectViewPath(Operation& operation, MemoryType from, MemoryType to)
 {
     if (from == MemoryType::MEM_UNKNOWN || to == MemoryType::MEM_UNKNOWN)
@@ -571,7 +582,8 @@ bool AssignMemoryType::AreAssembleDirectPathsSupported(const LogicalTensorPtr& o
         MemoryType fromType = GetAssembleInputType(*producerOp);
         if (fromType == MemoryType::MEM_UNKNOWN)
             return false;
-        if (!IsAssembleToOffsetAligned(*producerOp, output) ||
+        bool checkOffsetAlignment = !IsAdvancedMemoryPath(fromType, targetOriginal);
+        if ((checkOffsetAlignment && !IsAssembleToOffsetAligned(*producerOp, output)) ||
             !CanUseDirectAssemblePath(*producerOp, fromType, targetOriginal)) {
             return false;
         }

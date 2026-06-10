@@ -1858,6 +1858,57 @@ TEST_F(AssignMemoryTypeTest, TestUB2L1SmallToLarge)
     Platform::Instance().ReloadMemoryPaths("2201");
 }
 
+TEST_F(AssignMemoryTypeTest, TestHf8CastRightMatmulUB2L1)
+{
+    // FP32 -> HF8 cast is only supported on A5, and this case verifies the A5 UB->L1 path.
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> castInputShape = {NUM_64, NUM_1};
+    std::vector<int64_t> leftMatrixShape = {NUM_8, NUM_1};
+    std::vector<int64_t> outputShape = {NUM_8, NUM_64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor castInput(DataType::DT_FP32, castInputShape, "castInput");
+        Tensor leftMatrix(DataType::DT_HF8, leftMatrixShape, "leftMatrix");
+        Tensor out(DataType::DT_FP32, outputShape, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+        config::SetBuildStatic(true);
+        FUNCTION("TestHf8CastRightMatmulUB2L1", {castInput, leftMatrix, out})
+        {
+            TileShape::Current().SetVecTile(NUM_16, NUM_1);
+            Tensor castRightMatrix = Cast(castInput, DataType::DT_HF8);
+            // HF8 kL0=1 fails frontend 32-byte alignment checks before AssignMemoryType.
+            TileShape::Current().SetCubeTile({NUM_8, NUM_8}, {NUM_32, NUM_32}, {NUM_32, NUM_32});
+            out = Matrix::Matmul(out.GetDataType(), leftMatrix, castRightMatrix, false, true);
+        }
+        originFunction =
+            Program::GetInstance().GetFunctionByRawName("TENSOR_TestHf8CastRightMatmulUB2L1");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+
+        bool hasUb2L1 = false;
+        for (auto& op : originFunction->Operations()) {
+            if (op.GetOpcode() != Opcode::OP_CONVERT && op.GetOpcode() != Opcode::OP_VIEW &&
+                op.GetOpcode() != Opcode::OP_ASSEMBLE) {
+                continue;
+            }
+            if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
+                continue;
+            }
+            auto input = op.GetIOperands().front();
+            auto output = op.GetOOperands().front();
+            if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+                output->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+                hasUb2L1 = true;
+            }
+        }
+        EXPECT_TRUE(hasUb2L1) << "Cast result should use UB->L1 before feeding right matrix into matmul.";
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
 void BuildConvertDynShapeGraph(std::shared_ptr<Function>& currFunctionPtr)
 {
     currFunctionPtr =

@@ -23,6 +23,15 @@
 
 namespace npu {
 namespace tile_fwk {
+const std::unordered_set<Opcode> AssignMemoryTypeChecker::kValidProducerOpcodes = {
+    Opcode::OP_L1_TO_L0A, Opcode::OP_L1_TO_L0B,
+    Opcode::OP_L1_TO_L0_AT, Opcode::OP_L1_TO_L0_BT,
+    Opcode::OP_VIEW, Opcode::OP_VEC_DUP};
+const std::unordered_set<MemoryType> AssignMemoryTypeChecker::kValidViewToTypes = {
+    MemoryType::MEM_BT, MemoryType::MEM_FIX_QUANT_PRE,
+    MemoryType::MEM_L0A, MemoryType::MEM_L0B,
+    MemoryType::MEM_L0AMX, MemoryType::MEM_L0BMX,
+    MemoryType::MEM_UNKNOWN};
 Status AssignMemoryTypeChecker::DoPreCheck(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start Precheck for AssignMemoryType.");
@@ -68,9 +77,7 @@ Status AssignMemoryTypeChecker::CheckAmulBInputProducers(Operation& operation)
     auto producerOps = operation.ProducerOps();
     for (auto& producerOp : producerOps) {
         auto producerOpcode = producerOp->GetOpcode();
-        if (producerOpcode != Opcode::OP_L1_TO_L0A && producerOpcode != Opcode::OP_L1_TO_L0B &&
-            producerOpcode != Opcode::OP_L1_TO_L0_AT && producerOpcode != Opcode::OP_L1_TO_L0_BT &&
-            producerOpcode != Opcode::OP_VIEW && producerOpcode != Opcode::OP_VEC_DUP) {
+        if (!kValidProducerOpcodes.count(producerOpcode)) {
             APASS_LOG_ERROR_C(
                 OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation,
                 "Memory error, %s[%d] has invalid input producer; "
@@ -82,9 +89,7 @@ Status AssignMemoryTypeChecker::CheckAmulBInputProducers(Operation& operation)
         if (producerOpcode == Opcode::OP_VIEW) {
             auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(producerOp->GetOpAttribute().get());
             MemoryType attrToType = viewOpAttribute->GetTo();
-            if (attrToType != MemoryType::MEM_BT && attrToType != MemoryType::MEM_FIX_QUANT_PRE &&
-                attrToType != MemoryType::MEM_L0A && attrToType != MemoryType::MEM_L0B &&
-                attrToType != MemoryType::MEM_UNKNOWN) {
+            if (!kValidViewToTypes.count(attrToType)) {
                 APASS_LOG_ERROR_C(
                     OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation,
                     "View attribute error, %s[%d] has invalid input OP_VIEW(toType: %d); "

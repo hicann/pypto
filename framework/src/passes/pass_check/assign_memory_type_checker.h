@@ -17,6 +17,7 @@
 #define ASSIGN_MEMORY_TYPE_CHECKER_H
 
 #include <queue>
+#include <unordered_set>
 #include "checker.h"
 #include "interface/operation/opcode.h"
 #include "interface/function/function.h"
@@ -38,6 +39,9 @@ private:
     Status CheckAmulBInputProducers(Operation& operation);
     Status CheckTensorNotMemUnknown(Function& function);
     Status CheckMoveOpReachable(Function& function);
+
+    static const std::unordered_set<Opcode> kValidProducerOpcodes;
+    static const std::unordered_set<MemoryType> kValidViewToTypes;
 };
 } // namespace tile_fwk
 } // namespace npu

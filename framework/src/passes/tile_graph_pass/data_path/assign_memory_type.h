@@ -79,6 +79,8 @@ private:
 
     bool TryHandleSpecialDirectMemoryPath(Operation& operation, MemoryType from, MemoryType to, bool& directPath);
 
+    bool IsAdvancedMemoryPath(MemoryType from, MemoryType to) const;
+
     bool IsViewFromOffsetAligned(Operation& operation) const;
 
     Status InferAssembleMemoryType(
