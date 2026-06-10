@@ -419,15 +419,14 @@ void RecordLoopFunc::GenDefaultUnrollTimes(const std::set<int>& unrollList)
 {
     unrollTimes_.clear();
     visited_.clear();
-    if (config::GetPlatformConfig("ONLY_MANUAL_UNROLL", false) || unrollList.empty()) {
-        unrollTimes_.emplace(1);
-        visited_.emplace(1);
-    } else {
+    if (!config::GetPlatformConfig("ONLY_MANUAL_UNROLL", false) && !unrollList.empty()) {
         for (auto n : unrollList) {
             unrollTimes_.emplace(n);
             visited_.emplace(n);
         }
     }
+    unrollTimes_.emplace(1);
+    visited_.emplace(1);
 }
 
 void RecordLoopFunc::VisitUnroll(int unrollTimes)
