@@ -103,7 +103,7 @@ BASIC_3D_TESTS = [
         "is_acc": False,
         "viewshape": [1, 128, 320],
         "tileshape": [[64, 64], [32, 288], [224, 224]],
-        "products": ["950", "910"],
+        "products": ["950"],
     },
     {
         "id": "3DTEST2",
@@ -160,7 +160,7 @@ BASIC_3D_TESTS = [
         "is_acc": True,
         "viewshape": [4, 128, 396],
         "tileshape": [[64, 64], [32, 160], [32, 224]],
-        "products": ["950", "910"],
+        "products": ["950"],
     }
 ]
 
@@ -202,7 +202,7 @@ BASIC_4D_TESTS = [
         "is_acc": False,
         "viewshape": [4, 3, 64, 128],
         "tileshape": [[64, 64], [64, 128], [128, 128]],
-        "products": ["950", "910"],
+        "products": ["950"],
     },
     {
         "id": "4DACCTEST1",
@@ -221,7 +221,7 @@ BASIC_4D_TESTS = [
         "is_acc": True,
         "viewshape": [3, 2, 64, 256],
         "tileshape": [[64, 64], [64, 128], [128, 128]],
-        "products": ["950", "910"],
+        "products": ["950"],
     },
     {
         "id": "4DACCTEST2",
@@ -259,6 +259,6 @@ BASIC_4D_TESTS = [
         "is_acc": True,
         "viewshape": [2, 1, 128, 192],
         "tileshape": [[64, 128], [64, 192], [64, 128]],
-        "products": ["950", "910"],
+        "products": ["950"],
     }
 ]

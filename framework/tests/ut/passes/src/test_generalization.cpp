@@ -250,7 +250,7 @@ TEST_F(GeneralizetionTest, TestTransposeTranspose)
     FUNCTION("B")
     {
         auto tmp = Transpose(input, {1, 2});
-        output = Transpose(tmp, {0, 1});
+        output = Transpose(tmp, {0, 2});
     }
 }
 

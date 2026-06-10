@@ -243,6 +243,29 @@ enum class TransposeOpType {
     TRANSPOSE_VNCHWCONV,
 };
 
+void CheckTransposeAxisCombination(int shapeSize, const std::vector<int>& perm)
+{
+    if (shapeSize == 4) {
+        std::vector<std::pair<int, int>> supported4D = {{0, 2}, {1, 2}, {1, 3}, {2, 3}};
+        bool isSupported = false;
+        for (const auto& axisPair : supported4D) {
+            if (perm[0] == axisPair.first && perm[1] == axisPair.second) {
+                isSupported = true;
+                break;
+            }
+        }
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, isSupported)
+            << "4D tensor transpose only supports: (0,2), (1,2), (1,3), (2,3). "
+            << "Current dim0=" << perm[0] << ", dim1=" << perm[1] << " is not supported.";
+    }
+    
+    if (shapeSize == 5) {
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm[0] == 3 && perm[1] == 4)
+            << "5D tensor transpose only supports: (3,4). "
+            << "Current dim0=" << perm[0] << ", dim1=" << perm[1] << " is not supported.";
+    }
+}
+
 template <TransposeOpType T>
 Opcode GetTransposeOpName()
 {
@@ -473,6 +496,7 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm[1] < shapeSize && perm[1] >= 0) << "Transpose dim 1 is invalid.";
 
     std::sort(perm.begin(), perm.end());
+    CheckTransposeAxisCombination(shapeSize, perm);
     if ((self.GetShape()[perm[0]] == 1 && self.GetShape()[perm[1]] == 1) || perm[0] == perm[1]) {
         return self;
     }
@@ -1531,8 +1555,8 @@ void CheckCastTypeSupport(DataType srcType, DataType dstType, const std::string&
             {DT_FP32, {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT64, DT_FP8E4M3, DT_FP8E5M2, DT_HF8}},
             {DT_FP16, {DT_FP32, DT_INT32, DT_INT16, DT_INT8, DT_UINT8, DT_HF8}},
             {DT_BF16, {DT_FP32, DT_INT32, DT_FP16}},
-            {DT_UINT8, {DT_FP16, DT_UINT16, DT_INT16, DT_INT32}},
-            {DT_INT8, {DT_FP16, DT_UINT16, DT_INT16, DT_INT32}},
+            {DT_UINT8, {DT_FP16, DT_UINT16}},
+            {DT_INT8, {DT_FP16, DT_INT16, DT_INT32}},
             {DT_INT16, {DT_UINT8, DT_FP16, DT_FP32, DT_UINT32, DT_INT32}},
             {DT_INT32, {DT_FP32, DT_INT16, DT_UINT16, DT_INT64, DT_UINT8, DT_FP16}},
             {DT_UINT32, {DT_UINT8, DT_UINT16, DT_INT16}},
