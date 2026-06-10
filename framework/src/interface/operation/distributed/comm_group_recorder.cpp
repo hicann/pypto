@@ -32,7 +32,10 @@ uint32_t CommGroupRecorder::Input(const std::string& hcclGroupName)
 
     // 新组：记录映射关系
     uint32_t newIndex = index2Name_.size();
-    ASSERT(DistributedErrorCode::INVALID_GROUP_INDEX, newIndex < HCCL_GROUP_NUM) << "Invalid comm group";
+    ASSERT(DistributedErrorCode::INVALID_GROUP_INDEX, newIndex < HCCL_GROUP_NUM)
+        << "Failed to create communication group '" << hcclGroupName << "': maximum number of groups ("
+        << HCCL_GROUP_NUM << ") exceeded. Current index: " << newIndex
+        << ", existing groups: " << PrintString(index2Name_);
 
     index2Name_.push_back(hcclGroupName);
     name2Index_[hcclGroupName] = newIndex;

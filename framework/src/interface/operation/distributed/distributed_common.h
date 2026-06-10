@@ -228,7 +228,7 @@ inline std::tuple<int64_t, int64_t, std::vector<int64_t>, std::vector<int64_t>, 
         << " tileShape dim must >= " << MIN_TILE_SHAPE_DIM << ", but got dimensional=" << tileShape.size();
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, dataShape.size() == (tileShape.size() + 1))
         << "Invalid dimensional: "
-        << " shape parameter dim must = tileShape dim, but got shape parameter dim=" << dataShape.size() - 1
+        << " shape parameter dim must = tileShape dim, but got shape parameter dim=" << (dataShape.size() - 1)
         << ", tileShape dim=" << tileShape.size();
 
     size_t vecTileDim = tileShape.size();
