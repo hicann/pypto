@@ -28,6 +28,22 @@
 
 namespace npu::tile_fwk::dynamic {
 
+inline bool CheckStitchCacheDuplicate(
+    uint64_t* stitchCache, uint32_t rootFuncMaxCallOpsize, uint32_t producerFuncIdx, uint32_t producerOpIdx,
+    uint32_t consumerFuncIdx, uint32_t consumerOpIdx, uint64_t devTaskId)
+{
+    if (stitchCache == nullptr || rootFuncMaxCallOpsize == 0) {
+        return false;
+    }
+    uint64_t& entry = stitchCache[consumerOpIdx * rootFuncMaxCallOpsize + producerOpIdx];
+    uint64_t expected = (devTaskId << 32) | (static_cast<uint64_t>(producerFuncIdx) << 16) | consumerFuncIdx;
+    if (entry == expected) {
+        return true;
+    }
+    entry = expected;
+    return false;
+}
+
 inline void EstablishDependenciesWithType(
     uint64_t cellMemBase, uint64_t* cellMatchTableData, uint32_t opType, uint32_t opCount,
     DevAscendFunctionDupped* stitchingList, int stitchingSize, DevAscendFunctionDupped* currDup, uint64_t tagId,
@@ -50,14 +66,15 @@ inline void EstablishDependenciesWithType(
 
             (*matchCount)++;
             DeviceStitchContext::HandleOneStitch(
-                stitchingList[funcIdx], *currDup, opIdx, devCurrIdx, operationIdx, workspace,
-                DeviceStitchContext::StitchKind::StitchDefault, slotIdx);
+                stitchingList[funcIdx], *currDup, funcIdx, opIdx, devCurrIdx, operationIdx, workspace,
+                DeviceStitchContext::StitchKind::StitchDefault, slotIdx, static_cast<uint64_t>(CellMatchGetDevTaskIdFromTagId(tagId)));
 
             DEV_VERBOSE_DEBUG(
                 "Stitch dependency: (%u!%u) -> (%zu!%u), cellopType=%u, cellopCount=%u, "
-                "slotIdx=%d, opTagid=%x, curOpTagid=%lx", funcIdx, opIdx,
-                devCurrIdx, operationIdx, opType, opCount, slotIdx,
+                "slotIdx=%d, opTagid=%x, curOpTagid=%lx",
+                funcIdx, opIdx, devCurrIdx, operationIdx, opType, opCount, slotIdx,
                 static_cast<uint32_t>(opId >> CELL_MATCH_META_TAGID_SHIFT32), tagId);
+
         }
     }
 }

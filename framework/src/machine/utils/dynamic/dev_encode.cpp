@@ -3010,6 +3010,21 @@ static uint64_t LeafDumpWorkspace()
     }
 }
 
+static uint64_t CalcStitchCacheSize(DevAscendProgram* devProg)
+{
+    for (uint32_t i = 0; i < static_cast<uint32_t>(devProg->GetFunctionSize()); i++) {
+        DevAscendFunction* func = devProg->GetFunction(static_cast<int>(i));
+        uint32_t callOpsize = static_cast<uint32_t>(func->GetOperationSize());
+        if (callOpsize > devProg->rootFuncMaxCallOpsize) {
+            devProg->rootFuncMaxCallOpsize = callOpsize;
+        }
+    }
+    uint64_t cacheSize =
+        static_cast<uint64_t>(devProg->rootFuncMaxCallOpsize) * devProg->rootFuncMaxCallOpsize * sizeof(uint64_t);
+    MACHINE_LOGI("stitchCacheSize: %lu, maxCallOpsize: %u", cacheSize, devProg->rootFuncMaxCallOpsize);
+    return cacheSize;
+}
+
 void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base)
 {
     EncodeDevAscendProgramInfo encodeInfo(func);
@@ -3044,6 +3059,8 @@ void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* 
         base->stitchFunctionsize = MAX_STITCH_LEAFFUNC_NUM;
         base->memBudget.metadata.general = CalcGeneralMetadataSlotWorkspace(base);
         base->memBudget.metadata.general += CalcGeneralMetadataSlabWorkspace(base);
+        base->memBudget.metadata.stitchCacheSize = CalcStitchCacheSize(base);
+        base->memBudget.metadata.general += base->memBudget.metadata.stitchCacheSize;
         base->memBudget.metadata.dynamicCellMatch = 0;
         base->memBudget.metadata.stitchPool = CalcStitchWorkspace(*base);
         base->memBudget.debug.dumpTensor = DumpTensorWorkspace();

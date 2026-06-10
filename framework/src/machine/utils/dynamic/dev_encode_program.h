@@ -75,6 +75,7 @@ struct DevAscendProgram {
             uint64_t stitchPool;
             uint64_t maxDynamicCellMatchTableMem{0};
             uint64_t dynamicCellMatchSlotNum{0};
+            uint64_t stitchCacheSize{0};
             uint32_t generalSlabSize;
             uint32_t stitchSlabSize;
 
@@ -94,6 +95,7 @@ struct DevAscendProgram {
     uint32_t stitchMaxFunctionNum{0};
     uint32_t ctrlFlowCacheSize{0};
     uint32_t disableCtrlFlowCache{0};
+    uint32_t rootFuncMaxCallOpsize{0};
     DevRelocVector<DevAscendProgramSymbol> symbolTable;
     DevRelocVector<char> symbolTableNameList;
     uint64_t expressionTableSize;

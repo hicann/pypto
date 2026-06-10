@@ -63,6 +63,8 @@ int DeviceExecuteContext::RunInit(DevStartArgs* startArgs, PushTaskEntry tPushTa
         DEV_INFO("Param %d Symbol Table %d = %ld.", index, inputSymbolIndex, param.value);
     }
 
+    workspace.AllocateStitchCache();
+
     /* This initialization must only occur after all other AICPU workspace meta memory allocations have completed.
         The remaining portion of AICPU workspace meta memory must support reclamation. */
     workspace.InitMetadataSlabAllocator();

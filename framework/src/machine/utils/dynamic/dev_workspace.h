@@ -70,6 +70,18 @@ public:
     uintdevptr_t StackWorkspaceAddr() const { return stackWorkspaceBase_; }
     uint64_t StandardStackWorkspacePerCore() const { return standardStackWorkspacePerCore_; }
 
+    void AllocateStitchCache()
+    {
+        stitchCacheAddr_ = metadataAllocators_.general.Malloc(devProg_->memBudget.metadata.stitchCacheSize).ptr;
+        rootFuncMaxCallOpsize_ = devProg_->rootFuncMaxCallOpsize;
+        if (stitchCacheAddr_ != 0) {
+            (void)memset_s(reinterpret_cast<void*>(stitchCacheAddr_), devProg_->memBudget.metadata.stitchCacheSize, 0,
+                devProg_->memBudget.metadata.stitchCacheSize);
+        }
+    }
+    uint64_t* StitchCacheAddr() const { return reinterpret_cast<uint64_t*>(stitchCacheAddr_); }
+    uint32_t RootFuncMaxCallOpsize() const { return rootFuncMaxCallOpsize_; }
+
 #if DEBUG_INFINITE_LIFETIME
     uintdevptr_t DumpTensorWsBaseAddr() const { return dumpTensorWsAllocator_.MemBaseAddr(); }
     uint64_t DumpTensorWsSize() const { return dumpTensorWsAllocator_.Capacity(); }
@@ -1226,6 +1238,9 @@ private:
     SPSCQueue<DynDeviceTask*, SUBMMIT_TASK_QUE_SIZE> submmitTaskQueue_;
 
     ItemPool<RuntimeOutcastTensor> runtimeOutcastTensorPool_;
+
+    uint64_t stitchCacheAddr_{0};
+    uint32_t rootFuncMaxCallOpsize_{0};
 };
 } // namespace npu::tile_fwk::dynamic
 #endif

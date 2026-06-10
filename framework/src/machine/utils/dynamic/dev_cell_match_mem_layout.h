@@ -134,6 +134,11 @@ inline uint32_t CellMatchBuildTagId(uint32_t slotAllocIterId, uint32_t devTaskId
     return (static_cast<uint32_t>(slotAllocIterId) << CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT) | devTaskId;
 }
 
+inline uint32_t CellMatchGetDevTaskIdFromTagId(uint32_t tagId)
+{
+    return (uint32_t)CELL_MATCH_GET_BITS(tagId, 0, CELL_MATCH_META_TAG_SLOT_ALLOC_ITER_ID_SHIFT - 1);
+}
+
 inline uint64_t CellMatchGetTagId(uint64_t meta)
 {
     return CELL_MATCH_GET_BITS(meta, CELL_MATCH_BIT_TAG_ID_START, CELL_MATCH_BIT_TAG_ID_END);

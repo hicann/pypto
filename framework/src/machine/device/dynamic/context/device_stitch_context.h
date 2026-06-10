@@ -102,13 +102,14 @@ public:
 
     static void HandleOneStitch(
         DevAscendFunctionDupped& producerDup, DevAscendFunctionDupped& consumerDup,
-        DevAscendFunctionDuppedStitchList& producerStitchList, size_t producerOperationIdx, size_t consumerIdx,
-        size_t consumerOperationIdx, DeviceWorkspaceAllocator* workspace, StitchKind debugStitchKind, int debugSlotIdx);
+        DevAscendFunctionDuppedStitchList& producerStitchList, uint32_t producerFuncIndex, size_t producerOperationIdx, size_t consumerIdx,
+        size_t consumerOperationIdx, DeviceWorkspaceAllocator* workspace, StitchKind debugStitchKind, int debugSlotIdx,
+        uint64_t devTaskId);
 
     static void HandleOneStitch(
-        DevAscendFunctionDupped& producerDup, DevAscendFunctionDupped& consumerDup, size_t producerOperationIdx,
+        DevAscendFunctionDupped& producerDup, DevAscendFunctionDupped& consumerDup, uint32_t producerFuncIndex, size_t producerOperationIdx,
         size_t consumerIdx, size_t consumerOperationIdx, DeviceWorkspaceAllocator* workspace,
-        StitchKind debugStitchKind, int debugSlotIdx);
+        StitchKind debugStitchKind, int debugSlotIdx, uint64_t devTaskId);
 
     template <typename T>
     static inline std::string IntVecToStr(DevAscendFunctionDupped& dup, DevLocalVector<T>& vec)
@@ -150,7 +151,7 @@ public:
         DevAscendFunctionDupped& nextDup, size_t devTaskId, size_t devNextIdx, DeviceExecuteSlot& slot, int slotIdx,
         DevAscendFunctionOutcast& outcast);
 
-    void ReuseStitch(DevAscendFunctionDupped& nextDup, size_t devNextIdx);
+    void ReuseStitch(DevAscendFunctionDupped& nextDup, size_t devNextIdx, size_t devTaskId);
 
     uint64_t FastStitchConsumer(
         DeviceExecuteSlot* slotList, size_t slotSize, DevAscendFunctionDupped& nextDup, size_t devTaskId,
@@ -174,6 +175,7 @@ private:
 
     static void StitchForWorkspaceReuse(
         DevAscendFunctionDupped* stitchingList, int stitchingSize, DevAscendFunctionDupped& prevDup,
-        DevAscendFunctionDupped& currDup, size_t devCurrIdx, DeviceWorkspaceAllocator* workspace);
+        DevAscendFunctionDupped& currDup, size_t devCurrIdx, DeviceWorkspaceAllocator* workspace,
+        uint64_t devTaskId, uint32_t preFuncIndex);
 };
 } // namespace npu::tile_fwk::dynamic
