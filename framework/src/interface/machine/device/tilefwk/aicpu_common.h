@@ -224,15 +224,30 @@ enum AicorePerfTrace {
     PERF_TRACE_CORE_MAX
 };
 
+struct AicoreDevTaskPerf {
+    uint64_t type = 0;
+    uint64_t devTaskIdx = 0;
+    uint64_t aicoreDevTimeStamp = 0;
+    AicoreDevTaskPerf() = default;
+    AicoreDevTaskPerf(const AicoreDevTaskPerf&) = default;
+    AicoreDevTaskPerf& operator=(const AicoreDevTaskPerf&) = default;
+};
+
+struct AicoreMetric {
+    uint64_t cnt = 0;
+    AicoreDevTaskPerf aicoreEveryDevTypeTimeStamp[PERF_TRACE_CORE_MAX * PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
+    AicoreMetric() = default;
+    AicoreMetric(const AicoreMetric&) = default;
+    AicoreMetric& operator=(const AicoreMetric&) = default;
+};
+
 struct Metrics {
     int16_t isMetricStop;
     int16_t scheCpuIdx;
     int32_t coreType = -1;
     int64_t taskCount;
     int64_t turnNum;
-    int64_t perfTrace[MAX_ROUND_NUM][PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
-    uint32_t perfTraceDevTaskId[MAX_ROUND_NUM][PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
-    uint32_t perfTraceCnt[MAX_ROUND_NUM][PERF_TRACE_CORE_MAX];
+    AicoreMetric aicoreDevTaskInfo[MAX_ROUND_NUM];
     TaskStat tasks[];
 };
 

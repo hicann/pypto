@@ -222,24 +222,30 @@ inline void SparateCore(int total, int idx, int part, const int& offset, std::ve
 inline void ConstructAicorePerfInfo(json& tasksArr, Metrics* aicoreMetric, const uint32_t& turnNum)
 {
     uint64_t curCycle = 0;
-    for (uint32_t type = 0; type < PERF_TRACE_CORE_MAX; type++) {
-        for (uint32_t turnIdx = g_last_round_num; turnIdx < turnNum; turnIdx++) {
-            for (uint32_t cnt = 0; cnt < aicoreMetric->perfTraceCnt[turnIdx][type]; cnt++) {
-                json aicoreTaskType;
-                curCycle = aicoreMetric->perfTrace[turnIdx][type][cnt];
-                if (curCycle == 0) {
-                    break;
-                }
-                std::string name = AicorePerfTraceName[type];
-                name = name + "_" + std::to_string(turnIdx);
-                if (aicoreMetric->perfTraceDevTaskId[turnIdx][type][cnt] != INVALID_DEV_TASK_ID) {
-                    name = name + "(" + std::to_string(aicoreMetric->perfTraceDevTaskId[turnIdx][type][cnt]) + ")";
-                }
-                aicoreTaskType["name"] = name;
-                aicoreTaskType["end"] = curCycle;
-                tasksArr.push_back(aicoreTaskType);
+    for (uint32_t turnIdx = g_last_round_num; turnIdx < turnNum; turnIdx++) {
+        AicoreMetric* aicoreMetricPref = &(aicoreMetric->aicoreDevTaskInfo[turnIdx]);
+        for (uint64_t cnt = 0; cnt < aicoreMetricPref->cnt; cnt++) {
+            AicoreDevTaskPerf perf = aicoreMetricPref->aicoreEveryDevTypeTimeStamp[cnt];
+            
+            curCycle = perf.aicoreDevTimeStamp;
+            if (curCycle == 0) {
+                continue;
             }
-            aicoreMetric->perfTraceCnt[turnIdx][type] = 0;
+            
+            uint32_t type = static_cast<uint32_t>(perf.type);
+            if (type >= PERF_TRACE_CORE_MAX) {
+                continue;
+            }
+            
+            json aicoreTaskType;
+            std::string name = AicorePerfTraceName[type];
+            name = name + "_" + std::to_string(turnIdx);
+            if (perf.devTaskIdx != INVALID_DEV_TASK_ID) {
+                name = name + "(" + std::to_string(perf.devTaskIdx) + ")";
+            }
+            aicoreTaskType["name"] = name;
+            aicoreTaskType["end"] = curCycle;
+            tasksArr.push_back(aicoreTaskType);
         }
     }
 }

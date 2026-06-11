@@ -111,6 +111,11 @@ enum DFX_STAGE_STATUS {
     STAGE_GET_FUNCDATA_STOP = 16
 };
 
+struct AicoreDevTaskMetric {
+    bool devTaskMetricEnable{false};
+    __gm__ AicoreMetric* devTaskMetric{nullptr};
+};
+
 struct ExecuteContext {
     __gm__ KernelArgs* args;
     int32_t blockIdx;
@@ -124,7 +129,7 @@ struct ExecuteContext {
         __gm__ DynFuncBin* cceBinary{nullptr};
     } cachedDevTasks[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM];
     uint64_t lastTaskFinishCycle{0};
-    bool openDumpPerfTrace{false};
+    AicoreDevTaskMetric aicoreDevTaskMetric;
 #if ENABLE_AICORE_PRINT
     AicoreLogger logger;
 #endif
@@ -225,19 +230,19 @@ INLINE void SendRegFinish(uint32_t curTaskIdx) { set_cond(curTaskIdx | AICORE_FI
 INLINE void SendRegAck(uint32_t taskIdx) { set_cond(taskIdx); }
 
 INLINE void PerfTraceRecord(
-    uint32_t devTaskId, __gm__ Metrics* metric, AicorePerfTrace type, __gm__ KernelArgs* args,
-    bool openDumpPerfTrace, uint64_t cycle = 0)
+    uint32_t devTaskId, __gm__ AicoreMetric* metric, AicorePerfTrace type, uint64_t cycle = 0)
 {
-    if (unlikely(openDumpPerfTrace) && metric->turnNum < MAX_ROUND_NUM) {
-        uint32_t turn = metric->turnNum;
-        uint32_t cnt = metric->perfTraceCnt[turn][type];
-        if (cnt < PERF_TRACE_INST_MAX_NUM_EVERY_TYPE) {
-            metric->perfTrace[turn][type][cnt] = cycle == 0 ? get_sys_cnt() : cycle;
-            metric->perfTraceDevTaskId[turn][type][cnt] = devTaskId;
-            metric->perfTraceCnt[turn][type]++;
+    if (metric != nullptr) {
+        uint64_t cnt = metric->cnt;
+        if (cnt < PERF_TRACE_CORE_MAX * PERF_TRACE_INST_MAX_NUM_EVERY_TYPE) {
+            __gm__ AicoreDevTaskPerf* perf = &(metric->aicoreEveryDevTypeTimeStamp[cnt]);
+            perf->type = static_cast<uint64_t>(type);
+            perf->aicoreDevTimeStamp = (cycle == 0) ? get_sys_cnt() : cycle;
+            perf->devTaskIdx = static_cast<uint64_t>(devTaskId);
+            
+            metric->cnt = cnt + 1;
         }
     }
-    (void)args;
 }
 
 INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t taskId, int32_t subGraphId, int64_t t1)
@@ -272,10 +277,10 @@ INLINE void FlushMetricStatistic(__gm__ volatile KernelArgs* args)
 
 INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
 {
-    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY, args, ctx->openDumpPerfTrace);
+    PerfTraceRecord(INVALID_DEV_TASK_ID, ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY);
     if (unlikely(
             args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||
-            ctx->openDumpPerfTrace)) {
+            ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
         metric->turnNum++;
         FlushMetricStatistic(args);
     }
@@ -285,9 +290,10 @@ INLINE void DfxProcWhenDevTaskStop(ExecuteContext *ctx, __gm__ KernelArgs *args,
 {
     if (ctx->lastTaskFinishCycle > 0) {
         PerfTraceRecord(
-            ctx->SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC, args, ctx->openDumpPerfTrace,
-            ctx->lastTaskFinishCycle);
+            ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC, ctx->lastTaskFinishCycle);
     }
+    (void)metric;
+    (void)args;
 }
 
 INLINE void UpdateCacheDevTask(ExecuteContext *ctx, uint32_t parallelIdx, int64_t devTaskPtr)
@@ -432,7 +438,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
     if (unlikely(ctx->args->taskEntry.reserved[0] == PRO_LEVEL2 || ctx->args->taskEntry.reserved[0] == PRO_LEVEL1)) {
         AddMetricStatistic(ctx, ctx->SeqNo(), taskId, opAttrs[0], t1);
     }
-    if (unlikely(ctx->openDumpPerfTrace)) {
+    if (unlikely(ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
         ctx->lastTaskFinishCycle = get_sys_cnt();
     }
 }
@@ -442,7 +448,7 @@ INLINE void InitCtx(ExecuteContext *ctx, __gm__ Metrics* metric, volatile __gm__
 {
     ctx->curLeafTaskParallelIdx = 0; // default init first devtask 
     PerfTraceRecord(
-        ctx->SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL, ctx->args, ctx->openDumpPerfTrace);
+        ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
     ctx->lastTaskFinishCycle = 0;
     ctx->parallelDevTask = prallelDevTask;
 #if ENABLE_AICORE_PRINT
@@ -451,6 +457,7 @@ INLINE void InitCtx(ExecuteContext *ctx, __gm__ Metrics* metric, volatile __gm__
         ctx->logger.Init(buffer, PRINT_BUFFER_SIZE);
     }
 #endif
+    (void)metric;
     dcci((__gm__ void*)0, ENTIRE_DATA_CACHE, CACHELINE_OUT);
     return;
 }
@@ -541,8 +548,9 @@ INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs *args, ExecuteContext *
 
     // start new devtask
     PerfTraceRecord(
-        ctx->SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL, ctx->args, ctx->openDumpPerfTrace);
+        ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
     ctx->lastTaskFinishCycle = 0;
+    (void)metric;
     return 0;
 }
 
@@ -566,8 +574,14 @@ INLINE void KernelEntry(
     ExecuteContext ctx = {};
     ctx.args = args;
     ctx.blockIdx = blockIdx;
-    ctx.openDumpPerfTrace = (((__gm__ DevDfxArgs*)devArgs->devDfxArgAddr)->isOpenPerfTrace != 0);
-    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_BEGIN, args, ctx.openDumpPerfTrace, start);
+    ctx.aicoreDevTaskMetric.devTaskMetricEnable = 
+        (((__gm__ DevDfxArgs*)devArgs->devDfxArgAddr)->isOpenPerfTrace != 0);
+    if (ctx.aicoreDevTaskMetric.devTaskMetricEnable  && metric->turnNum < MAX_ROUND_NUM) {
+        uint64_t round = metric->turnNum;
+        ctx.aicoreDevTaskMetric.devTaskMetric = &(metric->aicoreDevTaskInfo[round]);
+        PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_BEGIN, start);
+    }
+    
     bool isFirstTask = true;
     SetStatus(args, STAGE_HANDSHAKE_START);
     HandshakeClient(args->shakeBuffer);
@@ -577,7 +591,7 @@ INLINE void KernelEntry(
     uint32_t lastTaskIdx = AICORE_TASK_INIT;
     uint32_t lastRegHighVal = 0;
 
-    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_INIT, args, ctx.openDumpPerfTrace);
+    PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
 
     volatile __gm__ ParallelDevTask* parallelDevTask = GetCoreFunctionData(&ctx, args);
     if (parallelDevTask == nullptr) {
@@ -593,7 +607,7 @@ INLINE void KernelEntry(
         if (curTaskIdx == AICORE_TASK_STOP) {
             DfxProcWhenDevTaskStop(&ctx, args, metric);
             SetStatus(args, STAGE_CORE_EXIT);
-            (void)WaitWaveSignal(args); // no data exit
+            WaitWaveSignal(args); // no data exit
             DfxProcWhenCoreExit(&ctx, args, metric);
             return;
         }
@@ -620,8 +634,7 @@ INLINE void KernelEntry(
         ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
 
         if (isFirstTask) {
-            PerfTraceRecord(ctx.SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK, args,
-                ctx.openDumpPerfTrace);
+            PerfTraceRecord(ctx.SeqNo(), ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK);
             isFirstTask = false;
         }
 

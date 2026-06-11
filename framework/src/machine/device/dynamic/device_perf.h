@@ -236,7 +236,7 @@ struct PerfEvtMgr {
             }
 
             perfSlot.timeStamp[devCnt] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
-           devCnt++;
+            devCnt++;
         } else {
             aicpuMetrics->perfAicpuTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
         }
