@@ -19,6 +19,20 @@ from ..tensor import Tensor
 from .._element import Element
 
 
+_FLOAT_DTYPES = {DataType.DT_FP32, DataType.DT_FP16, DataType.DT_BF16}
+
+
+def _check_pad_value(x: Tensor, value: Union[float, int]) -> None:
+    if not isinstance(value, float):
+        return
+    if x.dtype in _FLOAT_DTYPES:
+        return
+    raise PyptoError(0xF00002, ValueError(
+        f"value type mismatch: tensor dtype is {repr(x.dtype)} but value is float. "
+        f"Integer tensor requires int value."
+    ))
+
+
 def _check_where_scalar_dtype(arg_name: str, scalar_val, tensor_arg, tensor_name: str):
     if isinstance(scalar_val, float) and isinstance(tensor_arg, Tensor):
         tensor_dtype = tensor_arg.dtype
@@ -190,6 +204,7 @@ def pad(x: Tensor, padding: Sequence[int], mode: str = "constant", value: Union[
     """
 
     pad_list = list(padding)
+    _check_pad_value(x, value)
     if isinstance(value, int):
         return pypto_impl.Pad(
             x, pad_list, mode, pypto_impl.Element(x.dtype, value)
@@ -253,6 +268,7 @@ def fillpad(x: Tensor, mode: str = "constant", value: Union[float, int] = 0) -> 
 
     """
 
+    _check_pad_value(x, value)
     if isinstance(value, int):
         return pypto_impl.FillPad(x, mode, pypto_impl.Element(x.dtype, value))
     else:
