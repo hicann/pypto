@@ -249,8 +249,8 @@ std::string CodeGenOpNPU::GenMemL1ToL0() const
     std::vector<int64_t> l0Shape = rawShape[ID0];
     CODEGEN_LOGI("GenMemL1ToL0 %s, l0Shape is %s", tileOpName.c_str(), IntVecToStr(l0Shape).c_str());
 
-    unsigned srcOffset0 = 0;
-    unsigned srcOffset1 = 0;
+    SymbolicScalar srcOffset0 = 0;
+    SymbolicScalar srcOffset1 = 0;
     auto dynoffset = offsetFromAttr[ID1];
     if (!dynoffset.empty()) {
         ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, dynoffset.size() == SHAPE_DIM2)
@@ -270,7 +270,8 @@ std::string CodeGenOpNPU::GenMemL1ToL0() const
 
     std::ostringstream oss;
     if (isDynamicFunction) {
-        oss << tileOpName << "<" << dtypeStr << ", " << srcOffset0 << ", " << srcOffset1 << ">"
+        oss << tileOpName << "<" << dtypeStr << ", " << SymbolicExpressionTable::BuildExpression(srcOffset0) << ", "
+            << SymbolicExpressionTable::BuildExpression(srcOffset1) << ">"
             << "(" << paramStr << ", " << SymbolicExpressionTable::BuildExpression(l0ShapeDyn[ID0]) << ", "
             << SymbolicExpressionTable::BuildExpression(l0ShapeDyn[ID1]) << ", "
             << SymbolicExpressionTable::BuildExpression(l1ShapeDyn[ID0]) << ", "

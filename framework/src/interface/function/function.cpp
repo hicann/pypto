@@ -3225,6 +3225,14 @@ void Function::NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar
                 }
                 op->SetAttribute(OpAttributeKey::transDataOffset, offsets);
             }
+        } else if (
+            op->GetOpcode() == Opcode::OP_L1_TO_L0A || op->GetOpcode() == Opcode::OP_L1_TO_L0B ||
+            op->GetOpcode() == Opcode::OP_L1_TO_L0_AT || op->GetOpcode() == Opcode::OP_L1_TO_L0_BT ||
+            op->GetOpcode() == Opcode::OP_L1_TO_FIX_QUANT_PRE || op->GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE ||
+            op->GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE || op->GetOpcode() == Opcode::OP_L1_TO_BT) {
+            auto operandCoaList = NormalizeCopyIn(op.get(), coaIndex, valueToIndex);
+            coaIndex += operandCoaList.size();
+            coaLists.emplace_back(std::move(operandCoaList));
         }
         NormalizeReshapeCopyDynValidShape(op.get(), coaLists, coaIndex, valueToIndex);
     }
