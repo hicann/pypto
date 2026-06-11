@@ -35,7 +35,7 @@ ceil_div(self: Tensor, other: Tensor) -> Tensor
 
 1. input 和 other 类型应该相同。
 2. 只支持单轴广播。
-3. input 和 other 中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32。
+3. input 和 other 中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32, **other 不能为 0**，整数除法为 0 时结果由芯片决定，可能为 INT32_MAX 或 INT32_MIN。
 
 ## 调用示例
 
