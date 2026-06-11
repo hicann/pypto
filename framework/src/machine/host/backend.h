@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <sstream>
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
 namespace npu::tile_fwk {
@@ -114,6 +115,14 @@ struct Linker {
         }
     }
 
+    SymbolicExpressionTable* LookupLoopBes(Function* func)
+    {
+        if (exprTableDictGroup_.loopBesDict.count(func)) {
+            return &exprTableDictGroup_.loopBesDict[func];
+        }
+        return nullptr;
+    }
+
     SymbolicSymbolTable* GetSymbolTable() { return &symbolTable_; }
 
 private:
@@ -128,4 +137,8 @@ struct ValDependTensorMeta {
     std::unordered_map<RawSymbolicScalarPtr, bool> valDependMap;
     bool disableCtrlFlowCache{false};
 };
+
+void InsertWaitCoreStart(
+    SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta,
+    int indent);
 } // namespace npu::tile_fwk

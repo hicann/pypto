@@ -111,11 +111,11 @@ TEST_F(TestExprBatchGenerator, CheckExprDependCoreTest)
     std::string testTensorName = "test_tensor";
     ValDependTensorMeta valDependTensorMeta;
     valDependTensorMeta.tensorNameToDependCore[testTensorName] = true;
-
-    // Create a GetInputData call expression to test CheckExprDependCore
-    RawSymbolicScalarPtr callee = RawSymbolicSymbol::Create("RUNTIME_GetInputData");
     RawSymbolicScalarPtr arg1 = RawSymbolicSymbol::Create(testTensorName);
     RawSymbolicScalarPtr arg2 = RawSymbolicImmediate::Create(0);
+    // Create a GetInputData call expression to test CheckExprDependCore
+    RawSymbolicScalarPtr callee = RawSymbolicSymbol::Create("RUNTIME_GetInputData");
+
     std::vector<RawSymbolicScalarPtr> operands = {callee, arg1, arg2};
     RawSymbolicScalarPtr getInputDataExpr =
         std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL, operands);
@@ -128,6 +128,48 @@ TEST_F(TestExprBatchGenerator, CheckExprDependCoreTest)
     dependsCore = SymbolicExpressionTable::CheckExprDependCore(
         getInputDataExpr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap);
     ASSERT_FALSE(dependsCore);
+}
+
+// Test InsertWaitCoreStart skips invalid primary expressions (e.g. unset mainBlockScalar_ after Normalize)
+TEST_F(TestExprBatchGenerator, InsertWaitCoreStartSkipsNullPrimaryExprTest)
+{
+    ValDependTensorMeta valDependTensorMeta;
+    SymbolicExpressionTable exprTable;
+    SymbolicSymbolTable symTable;
+    exprTable.NormalizeForSymbolTable(symTable);
+
+    std::ostringstream controlFlowOss;
+    InsertWaitCoreStart(&exprTable, controlFlowOss, valDependTensorMeta, 1);
+    ASSERT_TRUE(controlFlowOss.str().find("WaitAicoreStart") == std::string::npos);
+}
+
+// Test InsertWaitCoreStart for loop Begin/End/Step expression table (loopBesDict)
+TEST_F(TestExprBatchGenerator, InsertWaitCoreStartLoopBesTest)
+{
+    std::string testTensorName = "test_tensor";
+    ValDependTensorMeta valDependTensorMeta;
+    valDependTensorMeta.tensorNameToDependCore[testTensorName] = true;
+
+    RawSymbolicScalarPtr callee = RawSymbolicSymbol::Create("RUNTIME_GetInputData");
+    RawSymbolicScalarPtr arg1 = RawSymbolicSymbol::Create(testTensorName);
+    RawSymbolicScalarPtr arg2 = RawSymbolicImmediate::Create(0);
+    std::vector<RawSymbolicScalarPtr> operands = {callee, arg1, arg2};
+    RawSymbolicScalarPtr getInputDataExpr =
+        std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL, operands);
+
+    SymbolicExpressionTable exprTable;
+    exprTable.AddPrimaryExpression(SymbolicScalar(getInputDataExpr));
+
+    std::ostringstream controlFlowOss;
+    InsertWaitCoreStart(&exprTable, controlFlowOss, valDependTensorMeta, 1);
+    ASSERT_TRUE(controlFlowOss.str().find("WaitAicoreStart(startArgs)") != std::string::npos);
+
+    valDependTensorMeta.tensorNameToDependCore[testTensorName] = false;
+    valDependTensorMeta.valDependMap.clear();
+    controlFlowOss.str("");
+    controlFlowOss.clear();
+    InsertWaitCoreStart(&exprTable, controlFlowOss, valDependTensorMeta, 1);
+    ASSERT_TRUE(controlFlowOss.str().find("WaitAicoreStart") == std::string::npos);
 }
 
 // Test GenerateBatchFile method

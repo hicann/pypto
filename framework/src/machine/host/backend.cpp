@@ -464,13 +464,19 @@ static ParallelMode GetFunctionParallelMode(Function* func)
     return ParallelMode::DEFAULT;
 }
 
-static void InsertWaitCoreStart(
+void InsertWaitCoreStart(
     SymbolicExpressionTable* exprTable, std::ostringstream& controlFlowOss, ValDependTensorMeta& valDependTensorMeta,
     int indent)
 {
+    if (exprTable == nullptr) {
+        return;
+    }
     bool needSync = false;
     const auto& primaryExprs = exprTable->GetPrimaryExpressionSet();
     for (const auto& expr : primaryExprs) {
+        if (expr == nullptr) {
+            continue;
+        }
         if (exprTable->CheckExprDependCore(
                 expr, valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap)) {
             needSync = true;
@@ -479,6 +485,23 @@ static void InsertWaitCoreStart(
     }
     if (needSync) {
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
+    }
+}
+
+static void InsertWaitCoreStartForLoopBounds(
+    const std::shared_ptr<DynloopFunctionAttribute>& attr, std::ostringstream& controlFlowOss,
+    ValDependTensorMeta& valDependTensorMeta, int indent)
+{
+    const SymbolicScalar* loopBounds[] = {&attr->Begin(), &attr->End(), &attr->Step()};
+    for (const SymbolicScalar* boundExpr : loopBounds) {
+        if (!boundExpr->IsValid() || boundExpr->IsImmediate()) {
+            continue;
+        }
+        if (SymbolicExpressionTable::CheckExprDependCore(
+                boundExpr->Raw(), valDependTensorMeta.tensorNameToDependCore, valDependTensorMeta.valDependMap)) {
+            controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "WaitAicoreStart(startArgs);\n";
+            return;
+        }
     }
 }
 
@@ -642,6 +665,7 @@ static void BuildControlFlow(
         std::string iterEnd = SymbolicExpressionTable::BuildExpression(attr->End());
         std::string iterStep = SymbolicExpressionTable::BuildExpression(attr->Step());
         std::string iterVar = "VAR_" + attr->iterSymbolName;
+        InsertWaitCoreStartForLoopBounds(attr, controlFlowOss, valDependTensorMeta, indent);
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "LOOP(" << iterVar << ", " << iterBegin << ", "
                        << iterEnd << ", " << iterStep << ") {\n";
         controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "VALUE_" << attr->iterSymbolName << " = "
