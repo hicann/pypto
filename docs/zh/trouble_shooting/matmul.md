@@ -85,9 +85,9 @@ Matmul 相关错误码的枚举与码值统一定义在 `framework/include/tilef
    export ASCEND_PROCESS_LOG_PATH=./my_log
    ```
 
-2. **检查入参**：查阅对应算子或 API 文档（如 `../api/operation/pypto-matmul.md`、算子说明），确认输入及输出Tesnor是否符合Matmul约束规格，包括Shape，Dtype，Format等。
+2. **检查入参**：查阅对应算子或 API 文档（如 `../api/operation/pypto-matmul.md或者../api/operation/pypto-scaled_mm.md`、算子说明），确认输入及输出Tensor是否符合Matmul约束规格，包括Shape，Dtype，Format等。
 
-3. **检查切分设置**：调用Matmul算子前，会执行`set_cube_tile_shapes()`设置切分大小，检查设置的TileShape大小是否符合Tiling的切分约束，可通过以下方式查看：
+3. **检查切分设置**：调用pypto-matmul/pypto-scaled_mm接口前，会执行`set_cube_tile_shapes()`设置切分大小，检查设置的TileShape大小是否符合Tiling的切分约束，可通过以下方式查看：
 
 ```py
 pypto.set_cube_tile_shapes([32, 32], [16, 16], [32, 32])   #[mL0, mL1], [kL0, kL1], [nL0, nL1]
