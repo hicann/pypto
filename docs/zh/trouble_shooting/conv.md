@@ -54,7 +54,7 @@
 
 ### Operation shape/TileShape 拦截编译报错
 
-可根据报错参考约束说明：`../api/config/PyPTO-set_conv_tile_shapes.md`
+可根据报错参考约束说明：`../api/config/pypto-set_conv_tile_shapes.md`
 
 ### Pass 图阶段 拦截编译报错
 

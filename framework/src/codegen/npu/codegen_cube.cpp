@@ -24,6 +24,9 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(
 {
     std::ostringstream oss;
     bool hasBias = tensorWithMemType.count(OperandType::BUF_BT);
+    bool isConv = false;
+    GetOpAttr(OpAttributeKey::isConv, isConv);
+    bool kAlignFlag = !isConv;
     int64_t transModeNum = 0;
     GetOpAttr(OpAttributeKey::transMode, transModeNum);
     TransMode transMode = static_cast<TransMode>(transModeNum);
@@ -43,7 +46,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(
         oss << WrapParamByParentheses(paramList) << ";\n";
         return oss.str();
     }
-    oss << WrapParamByAngleBrackets({std::to_string(isAcc), transModeStr});
+    oss << WrapParamByAngleBrackets({std::to_string(isAcc), transModeStr, std::to_string(kAlignFlag)});
     oss << WrapParamByParentheses(paramList) << ";\n";
     return oss.str();
 }

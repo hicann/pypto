@@ -26,7 +26,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
 | input_conv       | 输入      | 输入特征图 Tensor。<br>不支持空 Tensor。<br>支持维度：3D（1D conv）、4D（2D conv）、5D（3D conv）。<br>支持格式：NCL、NCHW、NCDHW。<br>支持数据类型：DT_FP16、DT_BF16、DT_FP32。<br>shape 约束：各维度取值范围 [1, 1000000]。input_conv 的cin需满足：weight的cin * groups = input_conv的cin。 |
-| weight            | 输入      | 卷积核 Tensor。<br>维度必须与 input_conv 一致（3D/4D/5D）。<br>数据类型必须与 input_conv 一致。<br>shape 约束：各维度取值范围 [1, 1000000]。（注意：对于Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品，当 groups > 1 时，weight 的 N 轴需为 C0 的整数倍。） |
+| weight            | 输入      | 卷积核 Tensor。<br>维度必须与 input_conv 一致（3D/4D/5D）。<br>数据类型必须与 input_conv 一致。<br>shape 约束：各维度取值范围 [1, 1000000]。（注意：对于Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品，weight 的 N 轴（cout）除以 groups 后必须为 C0 的整数倍，如果配置 cout 动态轴切分，那么切分后的 cout 除以 groups 后也必须为 C0 的整数倍。） |
 | out_dtype         | 输入      | 输出 Tensor 数据类型。<br>支持：DT_FP16、DT_BF16、DT_FP32。<br>必须与 input_conv 一致；fixpipe 量化场景可单独指定。 |
 | strides           | 输入      | 卷积步长，单向参数。<br>- 1D（1D conv）<br>- 2D（2D conv）<br>- 3D（3D conv）<br>取值范围：[1, 63]。 |
 | paddings          | 输入      | 卷积填充，双向参数。<br>- 2D（1D conv）<br>- 4D（2D conv）<br>- 6D（3D conv）<br>取值范围：[0, 255]，且每维填充值 < 对应卷积核大小。 |
@@ -91,11 +91,11 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | 维度       | 是否支持 | 切分方式                           | 说明                                                                 |
 |:-----------|:--------:|:-----------------------------------|:---------------------------------------------------------------------|
 | Batch      |    √     | 前端循环切分                        | TileL1Info.tileBatch 必须为 1（硬件约束），通过前端循环实现动态切分   |
-| Cout       |    √     | TileShape 动态切分 + 前端循环       | 支持 TileShape 配置的动态切分，配合前端循环实现完整 Cout 维度覆盖      |
+| Cout       |    √     | TileShape 动态切分 + 前端循环       | 支持 TileShape 配置的动态切分，配合前端循环实现完整 Cout 维度覆盖（当groups > 1时不允许切分）      |
 | Dout       |    √     | TileShape 动态切分 + 前端循环       | 仅 3D 卷积支持，Dout 维度动态切分                                     |
 | Hout       |    √     | TileShape 动态切分 + 前端循环       | Hout 维度动态切分，配合前端循环实现完整覆盖                           |
 | Wout       |    √     | TileShape 动态切分 + 前端循环       | Wout 维度动态切分，配合前端循环实现完整覆盖                           |
-| Cin        |    √     | 前端循环切分 + pypto.add 累加       | Cin 维度动态切分需使用 pypto.add 累加多个 tile 结果                   |
+| Cin        |    √     | 前端循环切分 + pypto.add 累加       | Cin 维度动态切分需使用 pypto.add 累加多个 tile 结果（当groups > 1时不允许切分）                   |
 
 ### 6. 数据类型约束
 

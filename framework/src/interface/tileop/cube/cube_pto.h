@@ -258,7 +258,7 @@ TILEOP void TExtract(DstTileData& dst, SrcTileData& src, const Coord& coord)
     }
 }
 
-template <bool isZeroC, TransMode transMode, typename TileAcc, typename TileLeft, typename TileRight>
+template <bool isZeroC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
 TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b)
 {
     constexpr uint64_t shapeSizeA = Std::tuple_size<typename TileLeft::Shape>::value;
@@ -267,7 +267,7 @@ TILEOP void TMatmul(TileAcc& c, TileLeft& a, TileRight& b)
     static_assert(
         shapeSizeA == SHAPE_DIM2 && shapeSizeB == SHAPE_DIM2 && shapeSizeC == SHAPE_DIM2,
         "[Matmul ERROR]: Shape dim size should be 2");
-    TMatmulImpl<isZeroC, transMode>(c, a, b);
+    TMatmulImpl<isZeroC, transMode, kAlignFlag>(c, a, b);
 }
 
 template <TransMode transMode, typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>

@@ -18,7 +18,7 @@
 
 #include "cube_utils.h"
 
-template <bool isZeroC, TransMode transMode, typename TileAcc, typename TileLeft, typename TileRight>
+template <bool isZeroC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>
 INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
 {
     int64_t validM = GetShape<0>(a);
@@ -45,7 +45,7 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b)
     tileL0CTensor l0c(validM, validN);
     if constexpr (std::is_same<typename tileL0ATensor::DType, float>::value) {
         l0a.ResetMadMode();
-        l0a.SetKAligned(true);
+        l0a.SetKAligned(kAlignFlag);
     }
     if constexpr (transMode != TransMode::CAST_NONE) {
         l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));

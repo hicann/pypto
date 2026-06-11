@@ -153,6 +153,7 @@ public:
     static const std::string l0cValidMN;
     static const std::string rmwMode;
     static const std::string transDataOffset;
+    static const std::string isConv;
 };
 
 const std::string CONV_GROUPS_ATTR = "op_attr_groups";
