@@ -83,6 +83,8 @@ private:
 
     bool IsViewFromOffsetAligned(Operation& operation) const;
 
+    bool HasDynOffsetViewAndReshape(Operation& operation, const LogicalTensorPtr& output) const;
+
     Status InferAssembleMemoryType(
         Function& function, Operation& operation, std::unordered_set<LogicalTensorPtr>& inferredAssembleOutputs);
 

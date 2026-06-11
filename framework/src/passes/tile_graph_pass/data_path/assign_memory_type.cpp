@@ -291,13 +291,17 @@ Status AssignMemoryType::InferViewMemoryType(Operation& operation)
     MemoryType inputOriginal = input->GetMemoryTypeOriginal();
     MemoryType outputOriginal = output->GetMemoryTypeOriginal();
     RETURN_IF_NOT_SUCCESS(InferViewOutputFromRequirement(output, outputOriginal));
-    if (TryHandleUnalignedView(operation, input, inputOriginal, outputOriginal))
-        return SUCCESS;
-    if (inputOriginal != MemoryType::MEM_UNKNOWN && outputOriginal != MemoryType::MEM_UNKNOWN) {
-        return InferViewKnownInputOutput(operation, input, inputOriginal, outputOriginal);
+    bool forceInputDdr = HasDynOffsetViewAndReshape(operation, output);
+    bool handled = TryHandleUnalignedView(operation, input, inputOriginal, outputOriginal);
+    if (!handled && inputOriginal != MemoryType::MEM_UNKNOWN && outputOriginal != MemoryType::MEM_UNKNOWN) {
+        RETURN_IF_NOT_SUCCESS(InferViewKnownInputOutput(operation, input, inputOriginal, outputOriginal));
+        handled = true;
     }
-    if (inputOriginal != MemoryType::MEM_UNKNOWN && outputOriginal == MemoryType::MEM_UNKNOWN) {
-        return InferViewKnownInputUnknownOutput(operation, input, output, inputOriginal);
+    if (!handled && inputOriginal != MemoryType::MEM_UNKNOWN && outputOriginal == MemoryType::MEM_UNKNOWN) {
+        RETURN_IF_NOT_SUCCESS(InferViewKnownInputUnknownOutput(operation, input, output, inputOriginal));
+    }
+    if (forceInputDdr) {
+        ForceSetRequirement(input, operation, MemoryType::MEM_DEVICE_DDR, "InferDynamicOffsetViewInputDdr");
     }
     return SUCCESS;
 }
@@ -434,6 +438,39 @@ bool AssignMemoryType::IsViewFromOffsetAligned(Operation& operation) const
     static constexpr int VIEW_ALIGN_BYTES = 32;
     auto output = operation.oOperand.front();
     return (BytesOf(output->Datatype()) * fromOffset.back()) % VIEW_ALIGN_BYTES == 0;
+}
+
+bool AssignMemoryType::HasDynOffsetViewAndReshape(Operation& operation, const LogicalTensorPtr& output) const
+{
+    if (operation.GetOpcode() != Opcode::OP_VIEW) {
+        return false;
+    }
+    auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
+    if (viewOpAttribute == nullptr || viewOpAttribute->GetFromDynOffset().empty()) {
+        return false;
+    }
+    const auto& fromOffset = viewOpAttribute->GetFromOffset();
+    const auto& fromDynOffset = viewOpAttribute->GetFromDynOffset();
+    bool hasDynamicOffset = false;
+    if (fromOffset.size() != fromDynOffset.size()) {
+        hasDynamicOffset = true;
+    } else {
+        for (size_t i = 0; i < fromDynOffset.size(); ++i) {
+            if (!fromDynOffset[i].ConcreteValid() || fromDynOffset[i].Concrete() != fromOffset[i]) {
+                hasDynamicOffset = true;
+                break;
+            }
+        }
+    }
+    if (!hasDynamicOffset || output == nullptr) {
+        return false;
+    }
+    for (const auto& consumerOp : output->GetConsumers()) {
+        if (consumerOp != nullptr && consumerOp->GetOpcode() == Opcode::OP_RESHAPE) {
+            return true;
+        }
+    }
+    return false;
 }
 
 Status AssignMemoryType::AssignAssembleToOutCastRequirement(Operation& operation)
