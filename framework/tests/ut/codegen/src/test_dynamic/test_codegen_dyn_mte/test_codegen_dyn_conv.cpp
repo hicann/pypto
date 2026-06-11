@@ -241,10 +241,7 @@ std::string TestConvL0COutBody(
         MEM_L1, OpImmediate::Specified(offset), OpImmediate::Specified(gmShape), OpImmediate::Specified(gmShape),
         shapeImme));
 
-    CodeGenCtx ctx;
-    CodeGenCloudNPU codegen(ctx);
-    codegen.GenCode(*function, {});
-    return GetResultFromCpp(*function);
+    return GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynConv, L0COutTileTensorConv2D)

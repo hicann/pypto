@@ -20,9 +20,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/data_type.h"
-#include "codegen/codegen.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
-#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
@@ -116,10 +114,7 @@ TEST_F(TestCodegenDynUna, TestAtanFP32)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TAtan(ubTensor_2, ubTensor_3, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
@@ -151,10 +146,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamic)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
@@ -185,10 +177,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamicFP16)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TPad<pto::PadValue::Max>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
@@ -219,10 +208,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
@@ -253,10 +239,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamic)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }

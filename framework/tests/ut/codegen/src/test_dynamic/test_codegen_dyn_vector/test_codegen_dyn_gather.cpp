@@ -70,9 +70,7 @@ TEST_F(TestCodegenDynGather, TestGather)
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 #endif
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 TEST_F(TestCodegenDynGather, TestGatherLayout)
 {
@@ -108,9 +106,7 @@ TEST_F(TestCodegenDynGather, TestGatherLayout)
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 #endif
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynGather, GatherFromUB)

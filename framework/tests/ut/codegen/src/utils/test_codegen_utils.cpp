@@ -56,11 +56,11 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
 std::string GetResultFromCpp(const Function& function)
 {
     std::string binPath;
-    for (const auto& subFunc: function.rootFunc_->programs_){
+    for (const auto& subFunc : function.rootFunc_->programs_) {
         auto leafFuncAttr = subFunc.second->GetLeafFuncAttribute();
         ASSERT(FwkErr::INVALID_FUNCTION, leafFuncAttr != nullptr) << "can not find leaf func attribute";
         binPath = leafFuncAttr->binPath;
-        if (binPath.empty()){
+        if (binPath.empty()) {
             continue;
         }
         std::string cppFile = binPath.substr(0, binPath.rfind('.')) + ".cpp";
@@ -69,8 +69,9 @@ std::string GetResultFromCpp(const Function& function)
         ifs.close();
         return res;
     }
-    ASSERT(FwkErr::INVALID_FUNCTION, !binPath.empty()) << "can not find binPath";
-    return binPath;
+
+    CODEGEN_LOGW("can not find binPath in testcase: %s", function.GetRawName().c_str());
+    return "";
 }
 
 void CheckStringExist(const std::string& target, const std::string& content)

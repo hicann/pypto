@@ -102,10 +102,7 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor)
     op2.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     op2.SetAttribute(OP_ATTR_PREFIX + "copy_in_mode", 0);
 
-    CodeGenCtx ctx;
-    CodeGenCloudNPU codegen(ctx);
-    codegen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_9, l1Tensor_10, Coord2Dim(0, 0));)!!!";
     CheckStringExist(expect, res);

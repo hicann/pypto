@@ -23,7 +23,6 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
-#include "codegen/codegen.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_common.h"
 #include "tilefwk/tilefwk_op.h"
@@ -99,9 +98,7 @@ TEST_F(TestDistributedShmemImpl, TestAllGather)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestDistributedShmemImpl, TestReduceScatter)
@@ -126,9 +123,7 @@ TEST_F(TestDistributedShmemImpl, TestReduceScatter)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestDistributedShmemImpl, TestTwoShotAllReduce)
@@ -153,9 +148,7 @@ TEST_F(TestDistributedShmemImpl, TestTwoShotAllReduce)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestDistributedShmemImpl, TestOneShotAllReduce)
@@ -182,9 +175,7 @@ TEST_F(TestDistributedShmemImpl, TestOneShotAllReduce)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestDistributedShmemImpl, TestShmemDataSet)
@@ -264,8 +255,8 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
 
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    std::string res = GenCodeByFunction(*function);	 
-    std::string expect = R"!!!(TileOp::Distributed::ShmemSignal<1, 8, TileOp::Distributed::AtomicType::ADD)!!!"; 
+    std::string res = GenCodeByFunction(*function);
+    std::string expect = R"!!!(TileOp::Distributed::ShmemSignal<1, 8, TileOp::Distributed::AtomicType::ADD)!!!";
     CheckStringExist(expect, res);
 }
 

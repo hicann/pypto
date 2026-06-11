@@ -21,10 +21,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/data_type.h"
-#include "codegen/codegen.h"
-#include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
-#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
 
@@ -44,9 +41,7 @@ TEST_F(TestCodegenDynPrelu, PreluNormal)
     auto function = GenMockFuncDynBinary(
         "PRELU_NORMAL", config, [](Tensor& input, Tensor& weight, Tensor& output) { output = PReLU(input, weight); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynPrelu, PreluFP16)
@@ -59,9 +54,7 @@ TEST_F(TestCodegenDynPrelu, PreluFP16)
     auto function = GenMockFuncDynBinary(
         "PRELU_FP16", config, [](Tensor& input, Tensor& weight, Tensor& output) { output = PReLU(input, weight); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynPrelu, PreluBF16)
@@ -74,9 +67,7 @@ TEST_F(TestCodegenDynPrelu, PreluBF16)
     auto function = GenMockFuncDynBinary(
         "PRELU_BF16", config, [](Tensor& input, Tensor& weight, Tensor& output) { output = PReLU(input, weight); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynPrelu, Prelu4D)
@@ -88,9 +79,7 @@ TEST_F(TestCodegenDynPrelu, Prelu4D)
     auto function = GenMockFuncDynBinary(
         "PRELU_4D", config, [](Tensor& input, Tensor& weight, Tensor& output) { output = PReLU(input, weight); });
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 } // namespace npu::tile_fwk

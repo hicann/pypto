@@ -52,11 +52,8 @@ void TestExpandExpDif(const Shape& shape_x, const Shape& shape_y, const std::str
 
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
 
-    CheckStringExist(expect, GetResultFromCpp(*function));
+    CheckStringExist(expect, GenCodeByFunction(*function));
 }
 
 TEST_F(TestCodegenDynExpandExpDif, TestExpandExpDifLastAxis)

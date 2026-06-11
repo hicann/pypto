@@ -18,9 +18,9 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
-#include "codegen/codegen.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_common.h"
+#include "test_codegen_utils.h"
 #include "interface/operation/distributed/distributed_common.h"
 #include <vector>
 #include <string>
@@ -80,9 +80,7 @@ TEST_F(TestMoeDistributed, MoeDistributedDispatchV2)
 
     auto functionRawName = MoeDistributedGetFunctionRawName("MoeDistributedDispatchPrepare");
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestMoeDistributed, MoeDistributedDispatch)
@@ -121,9 +119,7 @@ TEST_F(TestMoeDistributed, MoeDistributedDispatch)
 
     auto functionRawName = MoeDistributedGetFunctionRawName("L0");
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 void TestMoeDistributedCombineFunc(
@@ -155,9 +151,7 @@ void TestMoeDistributedCombineFunc(
 
     auto functionRawName = MoeDistributedGetFunctionRawName(loopName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestMoeDistributed, TestMoeDistributedCombine)

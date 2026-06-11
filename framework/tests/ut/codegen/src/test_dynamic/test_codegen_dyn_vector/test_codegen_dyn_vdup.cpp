@@ -21,10 +21,9 @@
 #include "interface/configs/config_manager.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/data_type.h"
-#include "codegen/codegen.h"
-#include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_common.h"
+#include "test_codegen_utils.h"
 
 namespace npu::tile_fwk {
 
@@ -54,9 +53,7 @@ TEST_F(TestCodegenDynVdup, TestDynVdupUnaligned)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynVdup, TestDynVdupInt16)
@@ -80,9 +77,7 @@ TEST_F(TestCodegenDynVdup, TestDynVdupInt16)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynVdup, TestDynVdupUInt16)
@@ -106,9 +101,7 @@ TEST_F(TestCodegenDynVdup, TestDynVdupUInt16)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 
 TEST_F(TestCodegenDynVdup, TestDynVdupUInt32)
@@ -132,8 +125,6 @@ TEST_F(TestCodegenDynVdup, TestDynVdupUInt32)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    (void)GenCodeByFunction(*function);
 }
 } // namespace npu::tile_fwk

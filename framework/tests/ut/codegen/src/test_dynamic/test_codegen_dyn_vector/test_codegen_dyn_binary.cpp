@@ -90,11 +90,7 @@ void TestAddSDynBody(
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     for (auto& e : expect) {
         CheckStringExist(e, res);
     }
@@ -221,10 +217,7 @@ TEST_F(TestCodegenDynBinary, TestAtan2FP32)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TAtan2(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
 )!!!";
     CheckStringExist(expect, res);
@@ -408,11 +401,7 @@ TEST_F(TestCodegenDynBinary, TestDivHighPrecisionFP16)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TDiv<pto::DivAlgorithm::HIGH_PRECISION, LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);
 )!!!";
@@ -442,11 +431,7 @@ TEST_F(TestCodegenDynBinary, TestDivIntrinsicPrecision)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TDiv<pto::DivAlgorithm::DEFAULT, LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);
 )!!!";
@@ -475,11 +460,7 @@ TEST_F(TestCodegenDynBinary, TestPowHighPrecision)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TPow<pto::PowAlgorithm::HIGH_PRECISION>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
 )!!!";
@@ -508,11 +489,7 @@ TEST_F(TestCodegenDynBinary, TestPowIntrinsicPrecision)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-
-    const std::string res = GetResultFromCpp(*function);
+    const std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TPow<pto::PowAlgorithm::DEFAULT>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
 )!!!";
