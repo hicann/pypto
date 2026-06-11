@@ -47,11 +47,11 @@ TEST_F(TestMoeDistributed, MoeDistributedDispatchV2)
 {
     const char* groupName = "hcom123";
     DataType dType = DT_BF16;
-    int routingExpertNum = 160;
-    int topK = 8;
-    int batchSize = 8;
+    int routingExpertNum = 4;
+    int topK = 4;
+    int batchSize = 2;
     int hiddenSize = 5120;
-    int rankSize = 4;
+    int rankSize = 2;
 
     int32_t expandXRowShape = topK * rankSize < routingExpertNum ?
                                   static_cast<int32_t>(batchSize) * static_cast<int32_t>(topK) * rankSize :
@@ -89,9 +89,9 @@ TEST_F(TestMoeDistributed, MoeDistributedDispatch)
 {
     const char* group = "hcom123";
     DataType dType = DT_BF16;
-    int routingExpertNum = 160;
-    int topK = 8;
-    int bs = 8;
+    int routingExpertNum = 4;
+    int topK = 4;
+    int bs = 2;
     int hiddenSize = 5120;
     int rankSize = 4;
 

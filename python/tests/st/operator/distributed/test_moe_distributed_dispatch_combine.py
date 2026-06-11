@@ -31,7 +31,6 @@ import torch
 import torch.nn.functional as F
 from torch._dynamo import allow_in_graph
 from torch._subclasses import fake_tensor
-from ml_dtypes import bfloat16
 
 import pypto
 
@@ -691,7 +690,7 @@ def moe_distributed_dispatch(
 
     run_dispatch_kernel(moe_case, groups[0], input_operands, actual_output_operands)
 
-    recv_count = actual_output_operands.recv_counts.item()
+    recv_count = golden_output_operands.recv_counts.item()
     assert_allcolse_whit_rtol_and_atol(
         actual_output_operands.expand_x[:recv_count],
         golden_output_operands.expand_x[:recv_count]
