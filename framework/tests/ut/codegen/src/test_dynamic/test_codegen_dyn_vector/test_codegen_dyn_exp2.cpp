@@ -42,12 +42,6 @@ TEST_F(TestCodegenDynExp2, TestDynOpExp2)
     std::vector<int64_t> shape = {64, 64};
     auto function =
         GenMockFuncDynUnary("TestDynOpExp2", {shape}, [](Tensor& input, Tensor& output) { output = Exp2(input); });
-
-    std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TExp2(ubTensor_0, ubTensor_3, ubTensor_4, ubTensor_0);)!!!";
     CheckStringExist(expect, res);

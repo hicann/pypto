@@ -53,11 +53,7 @@ TEST_F(TestCodegenDynErfc, ErfcFP32)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     std::vector<SymbolicScalar> dynValidShape = {16, 16};
-    auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     std::string res = GenCodeByFunction(*function);
-
     std::string expect = R"(TErfc(ubTensor_2, ubTensor_3, ubTensor_0);)";
     CheckStringExist(expect, res);
 }

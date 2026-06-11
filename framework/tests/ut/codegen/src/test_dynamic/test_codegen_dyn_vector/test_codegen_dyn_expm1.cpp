@@ -46,12 +46,6 @@ TEST_F(TestCodegenDynExpm1, TestDynOpExpm1)
     std::vector<int64_t> shape = {64, 64};
     auto function =
         GenMockFuncDynUnary("TestDynOpExpm1", {shape}, [](Tensor& input, Tensor& output) { output = Expm1(input); });
-
-    std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-
     std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TExpm1(ubTensor_0, ubTensor_3, ubTensor_0);
