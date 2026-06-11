@@ -1067,7 +1067,7 @@ private:
     {
         if (devProg_->devArgs.archInfo == ArchInfo::DAV_3510) {
             uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + devProg_->stitchFunctionsize * sizeof(uint64_t);
-            return (MAX_SCHEDULE_AICPU_NUM - 1) * size;
+            return MAX_SCHEDULE_AICPU_NUM * size;
         } else {
             return 0;
         }

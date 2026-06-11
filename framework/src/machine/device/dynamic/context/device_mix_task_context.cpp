@@ -88,7 +88,7 @@ WrapInfoQueue* DeviceTaskContext::AllocWrapQueue(DynDeviceTask* dyntask)
 void DeviceTaskContext::InitWrapQueueForThread(DynDeviceTask* dyntask)
 {
     uint32_t size = sizeof(StaticReadyCoreFunctionQueue) + dyntask->devTask.mixTaskData.wrapIdNum * sizeof(uint64_t);
-    for (size_t i = 0; i < MAX_SCHEDULE_AICPU_NUM - 1; i++) {
+    for (size_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
         WsAllocation qalloc = ControlFlowAllocateSlab(
             devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_QUEUE_FOR_THREAD));
         StaticReadyCoreFunctionQueue* q = qalloc.As<StaticReadyCoreFunctionQueue>();

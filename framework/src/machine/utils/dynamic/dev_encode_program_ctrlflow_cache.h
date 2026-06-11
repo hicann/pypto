@@ -53,7 +53,7 @@ struct MixTaskDataCache {
     uint64_t wrapIdNum;
     uint64_t opWrapList[MAX_STITCH_FUNC_NUM];
     uint16_t* opWrapOffsetList[MAX_STITCH_FUNC_NUM];
-    StaticReadyCoreFunctionQueue wrapQueueForThread[MAX_SCHEDULE_AICPU_NUM - 1];
+    StaticReadyCoreFunctionQueue wrapQueueForThread[MAX_SCHEDULE_AICPU_NUM];
 };
 
 struct DynFuncDataCache {
@@ -568,7 +568,7 @@ struct DevControlFlowCache {
         memcpy_s(mixTaskDataBackup->queue.elem, wrapInfoBackupSize, wrapInfoQueue->elem, wrapInfoBackupSize);
 
         size_t wrapPtrBackupSize = sizeof(uint64_t) * wrapInfoQueue->capacity; // 与wrapInfoQueue元素数量相同
-        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM - 1; i++) {
+        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
             StaticReadyCoreFunctionQueue* wrapQueueForThread =
                 reinterpret_cast<StaticReadyCoreFunctionQueue*>(base->devTask.mixTaskData.wrapQueueForThread[i]);
             uint64_t* wrapPtrQueueBackupElem = reinterpret_cast<uint64_t*>(AllocateCache(wrapPtrBackupSize));
@@ -610,7 +610,7 @@ struct DevControlFlowCache {
         memcpy_s(wrapInfoQueue->elem, wrapInfoBackupSize, mixTaskDataBackup->queue.elem, wrapInfoBackupSize);
 
         size_t wrapPtrBackupSize = sizeof(uint64_t) * wrapInfoQueue->capacity; // 与wrapInfoQueue元素数量相同
-        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM - 1; i++) {
+        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
             StaticReadyCoreFunctionQueue* wrapQueueForThread =
                 reinterpret_cast<StaticReadyCoreFunctionQueue*>(base->devTask.mixTaskData.wrapQueueForThread[i]);
             wrapQueueForThread->head = mixTaskDataBackup->wrapQueueForThread[i].head;
@@ -1085,7 +1085,7 @@ struct DevControlFlowCache {
         WrapInfo* wrapInfoBackupElem = RelocControlFlowCachePointer(wrapInfoBackupElemRef, relocCtrlCache);
         (void)wrapInfoBackupElem;
 
-        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM - 1; i++) {
+        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
             StaticReadyCoreFunctionQueue* tmpWrapQueueForThread =
                 reinterpret_cast<StaticReadyCoreFunctionQueue*>(dynTaskBase->devTask.mixTaskData.wrapQueueForThread[i]);
             StaticReadyCoreFunctionQueue*& wrapQueueForThreadRef = tmpWrapQueueForThread;
