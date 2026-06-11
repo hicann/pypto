@@ -55,7 +55,8 @@ private:
     Status SortAndLatencyEstimate(std::vector<Operation*>& opList, std::vector<Operation*>& taskOpList, int& latency);
     void CollectStatistic(
         OoOScheduleStatistic& oooHealthCheck, Function& function, std::pair<uint64_t, Function*>& program);
-    Status RecordLastUseMemory(Function& function);
+    Status CollectLastUseInfo(Function& function);
+    void SetLastUseAttributes();
     Status NonMixSchedule(
         std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
         int64_t& maxWorkeSpaceSize);

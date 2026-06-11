@@ -398,10 +398,10 @@ Status OoOSchedule::SortAndLatencyEstimate(
     return SUCCESS;
 }
 
-Status OoOSchedule::RecordLastUseMemory(Function& function)
+Status OoOSchedule::CollectLastUseInfo(Function& function)
 {
     lastUseMap_.clear();
-    APASS_LOG_INFO_F(Elements::Function, "===> Start RecordLastUseMemory.");
+    APASS_LOG_INFO_F(Elements::Function, "===> Start CollectLastUseInfo.");
     for (auto& program : function.rootFunc_->programs_) {
         auto opList = program.second->Operations(false);
         for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
@@ -417,6 +417,13 @@ Status OoOSchedule::RecordLastUseMemory(Function& function)
             }
         }
     }
+    APASS_LOG_INFO_F(Elements::Function, "===> End CollectLastUseInfo.");
+    return SUCCESS;
+}
+
+void OoOSchedule::SetLastUseAttributes()
+{
+    APASS_LOG_INFO_F(Elements::Function, "===> Start SetLastUseAttributes.");
     std::unordered_map<Operation*, std::vector<int>> opInputIdxMap;
     std::unordered_set<Opcode> reduceOp = {
         Opcode::OP_ROWSUM_SINGLE, Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ROWMIN_SINGLE};
@@ -424,7 +431,7 @@ Status OoOSchedule::RecordLastUseMemory(Function& function)
         auto lastUseOp = entry.second;
         auto lastUseTensor = entry.first;
         if (LASTUSE_OPS.find(lastUseOp->GetOpcode()) == LASTUSE_OPS.end()) {
-            continue; // 针对非LASTUSE_OPS中的op不做处理，仅处理LASTUSE_OPS中的op
+            continue;
         }
         if (opInputIdxMap.find(lastUseOp) == opInputIdxMap.end()) {
             int tensorSize = lastUseOp->GetIOperands().size() + lastUseOp->GetOOperands().size();
@@ -443,10 +450,14 @@ Status OoOSchedule::RecordLastUseMemory(Function& function)
     }
     for (auto& entry : opInputIdxMap) {
         auto op = entry.first;
+        if (op->HasAttribute(OpAttributeKey::brcOperand) || op->GetOpcode() == Opcode::OP_EXPAND) {
+            APASS_LOG_INFO_F(Elements::Operation, "Skip Process OP_%s[%d] LastUse Attribute",
+                op->GetOpcodeStr().c_str(), op->GetOpMagic());
+            continue;
+        }
         op->SetAttribute(OpAttributeKey::lastUse, opInputIdxMap[op]);
     }
-    APASS_LOG_INFO_F(Elements::Function, "===> End RecordLastUseMemory.");
-    return SUCCESS;
+    APASS_LOG_INFO_F(Elements::Function, "===> End SetLastUseAttributes.");
 }
 
 Status OoOSchedule::RunOnFunction(Function& function)
@@ -490,10 +501,11 @@ Status OoOSchedule::RunOnFunction(Function& function)
         eliminator.EliminateOperation(*program.second, false, false);
         programRef.second = program.second;
     }
-    if (RecordLastUseMemory(function) == FAILED) {
-        APASS_LOG_ERROR_F(Elements::Function, "Run RecordLastUseMemory Failed.");
+    if (CollectLastUseInfo(function) == FAILED) {
+        APASS_LOG_ERROR_F(Elements::Function, "Run CollectLastUseInfo Failed.");
         return FAILED;
     }
+    SetLastUseAttributes();
     for (auto& [programId, tracer] : tracerMap_) {
         (void)programId;
         tracer.Flush(GetPassFolder());
