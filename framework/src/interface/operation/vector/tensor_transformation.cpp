@@ -502,10 +502,11 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm[1] < shapeSize && perm[1] >= 0) << "Transpose dim 1 is invalid.";
 
     std::sort(perm.begin(), perm.end());
-    CheckTransposeAxisCombination(shapeSize, perm);
     if ((self.GetShape()[perm[0]] == 1 && self.GetShape()[perm[1]] == 1) || perm[0] == perm[1]) {
         return self;
     }
+    CheckTransposeAxisCombination(shapeSize, perm);
+
     auto oldVecTileShapes = TileShape::Current().GetVecTile();
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, (int)oldVecTileShapes.size() == shapeSize)
         << "TileShape dim num should same to input.";
