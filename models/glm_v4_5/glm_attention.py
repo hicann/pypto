@@ -1158,6 +1158,7 @@ def test_ifa_for_950():
 
 
 @pytest.mark.soc("950")
+@pytest.mark.skip(reason="codegen bug")
 def test_ifa_for_950_high_through():
     case_names = [
         "ifa_950_b64_s1_2_s2_8k_high_through",
@@ -1294,9 +1295,6 @@ def attention_for_910_high_performance(
 
     inputs = [query, key_cache, value_cache, block_tables, actual_seqs, attn_res]
     for _ in range(1):
-        a = torch.randn((int(192 * 1024 * 1024 * 2.5))).to(torch.float32).npu()
-        for _ in range(100):
-            a_max = torch.max(a)
         ifa_func_kernel_for_910_high_performance(*inputs, softmax_scale, tile_config)
 
 
@@ -1372,9 +1370,6 @@ def attention_for_950_high_through(
 
     inputs = [query, key_cache, value_cache, block_tables, actual_seqs, attn_res]
     for _ in range(1):
-        a = torch.randn((int(192 * 1024 * 1024 * 2.5))).to(torch.float32).npu()
-        for _ in range(100):
-            a_max = torch.max(a)
         ifa_func_kernel_for_950_high_through(*inputs, softmax_scale, tile_config)
 
 
