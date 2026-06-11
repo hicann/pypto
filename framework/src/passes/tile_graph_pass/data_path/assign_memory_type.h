@@ -81,6 +81,8 @@ private:
 
     bool IsAdvancedMemoryPath(MemoryType from, MemoryType to) const;
 
+    bool HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
+
     bool IsViewFromOffsetAligned(Operation& operation) const;
 
     bool HasDynOffsetViewAndReshape(Operation& operation, const LogicalTensorPtr& output) const;

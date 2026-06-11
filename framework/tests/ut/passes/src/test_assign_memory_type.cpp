@@ -1047,6 +1047,39 @@ int CountL0c2l1Num(Function* originFunction)
     return l0c2l1Count;
 }
 
+int CountMemoryPath(Function* originFunction, MemoryType from, MemoryType to)
+{
+    int pathCount = 0;
+    for (auto& op : originFunction->Operations()) {
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_CONVERT &&
+            op.GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        if (op.GetIOperands().empty() || op.GetOOperands().empty()) {
+            continue;
+        }
+        if (op.GetIOperands().front()->GetMemoryTypeOriginal() == from &&
+            op.GetOOperands().front()->GetMemoryTypeOriginal() == to) {
+            ++pathCount;
+        }
+    }
+    return pathCount;
+}
+
+struct L0C2UBTestShapes {
+    std::vector<int64_t> shapeA = {NUM_64, NUM_128};
+    std::vector<int64_t> shapeB = {NUM_128, NUM_64};
+    std::vector<int64_t> shapeC = {NUM_64, NUM_64};
+};
+
+L0C2UBTestShapes PrepareL0C2UBTest()
+{
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().ReloadMemoryPaths("3510");
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    return {};
+}
+
 TEST_F(AssignMemoryTypeTest, TestL0C2L1EqualShape)
 {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
@@ -1079,6 +1112,42 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1EqualShape)
     }
 }
 
+TEST_F(AssignMemoryTypeTest, TestL0C2L1ParallelDdrFallback)
+{
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> shapeA1 = {NUM_64, NUM_32};
+    std::vector<int64_t> shapeA2 = {NUM_128, NUM_64};
+    std::vector<int64_t> shapeB1 = {NUM_32, NUM_16};
+    std::vector<int64_t> shapeC1 = {NUM_64, NUM_16};
+    std::vector<int64_t> shapeC2 = {NUM_128, NUM_16};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA1(DataType::DT_FP16, shapeA1, "A1");
+        Tensor inputA2(DataType::DT_FP16, shapeA2, "A2");
+        Tensor inputB1(DataType::DT_FP16, shapeB1, "B1");
+        Tensor outC1(DataType::DT_FP16, shapeC1, "C1");
+        Tensor outC2(DataType::DT_FP16, shapeC2, "C2");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestL0C2L1ParallelDdrFallback", {inputA1, inputB1, inputA2, outC1, outC2})
+        {
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_16, NUM_16}, {NUM_16, NUM_16});
+            Tensor inputB2 = Matrix::Matmul(outC1.GetDataType(), inputA1, inputB1);
+            Assemble(inputB2, {0, 0}, outC1);
+            TileShape::Current().SetCubeTile({NUM_128, NUM_128}, {NUM_32, NUM_32}, {NUM_16, NUM_16});
+            outC2 = Matrix::Matmul(outC2.GetDataType(), inputA2, inputB2);
+        }
+
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1ParallelDdrFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_L1), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 1);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
+    }
+}
+
 TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmall)
 {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
@@ -1107,7 +1176,9 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmall)
         originFunction =
             Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1LargeToSmall"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
-        EXPECT_EQ(CountL0c2l1Num(originFunction), 4);
+        EXPECT_EQ(CountL0c2l1Num(originFunction), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 1);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
     }
 }
 
@@ -1741,19 +1812,13 @@ TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
 
 TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
 {
-    // 设置为 A5 平台
-    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
-    Platform::Instance().ReloadMemoryPaths("3510");
-    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
-    std::vector<int64_t> shapeA = {NUM_64, NUM_128};
-    std::vector<int64_t> shapeB = {NUM_128, NUM_64};
-    std::vector<int64_t> shapeC = {NUM_64, NUM_64};
+    auto shapes = PrepareL0C2UBTest();
     PROGRAM("AssignMemoryTest")
     {
-        Tensor inputA(DataType::DT_FP16, shapeA, "A");
-        Tensor inputB(DataType::DT_FP16, shapeB, "B");
-        Tensor inputC(DataType::DT_FP32, shapeC, "C");
-        Tensor out(DataType::DT_FP32, shapeC, "output");
+        Tensor inputA(DataType::DT_FP16, shapes.shapeA, "A");
+        Tensor inputB(DataType::DT_FP16, shapes.shapeB, "B");
+        Tensor inputC(DataType::DT_FP32, shapes.shapeC, "C");
+        Tensor out(DataType::DT_FP32, shapes.shapeC, "output");
         SetFullTestStrategy();
         Function* originFunction = nullptr;
         config::SetBuildStatic(true);
@@ -1792,6 +1857,39 @@ TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
         EXPECT_TRUE(hasL0C2UB) << "Should have L0C->UB data path for matmul then add";
     }
     // 恢复平台设置
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+TEST_F(AssignMemoryTypeTest, TestL0C2UBParallelDdrFallback)
+{
+    auto shapes = PrepareL0C2UBTest();
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA(DataType::DT_FP16, shapes.shapeA, "A");
+        Tensor inputB(DataType::DT_FP16, shapes.shapeB, "B");
+        Tensor inputC(DataType::DT_FP32, shapes.shapeC, "C");
+        Tensor ddrOut(DataType::DT_FP32, shapes.shapeC, "DdrOut");
+        Tensor out(DataType::DT_FP32, shapes.shapeC, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestL0C2UBParallelDdrFallback", {inputA, inputB, inputC, ddrOut, out})
+        {
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            Tensor ab = Matrix::Matmul(out.GetDataType(), inputA, inputB);
+            Assemble(ab, {0, 0}, ddrOut);
+            TileShape::Current().SetVecTile(NUM_64, NUM_64);
+            out = Add(ab, inputC);
+        }
+
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2UBParallelDdrFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_UB), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 1);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB), 1);
+    }
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
     Platform::Instance().ReloadMemoryPaths("2201");
 }

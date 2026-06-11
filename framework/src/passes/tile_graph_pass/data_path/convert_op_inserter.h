@@ -159,6 +159,9 @@ public:
     // 检查是否适合 UB2L1 小搬大
     bool FitUB2L1(const LogicalTensorPtr &tensor) const;
 
+    // 判断同一源 tensor 是否有并行 consumer 需要不同的 memory 去向
+    bool HasParallelDifferentConsumerRequirement(const LogicalTensorPtr& tensor, MemoryType targetType) const;
+
     // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
     void ProcessSpecialProducersOrConsumers(
         Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,

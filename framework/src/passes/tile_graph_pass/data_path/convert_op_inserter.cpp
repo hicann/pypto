@@ -14,6 +14,7 @@
  */
 #include "convert_op_inserter.h"
 
+#include <algorithm>
 #include <unordered_set>
 
 #include "interface/tensor/irbuilder.h"
@@ -21,6 +22,7 @@
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/tile_graph_pass/data_path/memory_path_utils.h"
 
 #define MODULE_NAME "AssignMemoryType"
 
@@ -392,11 +394,37 @@ bool ConvertInserter::FitUB2L1(const LogicalTensorPtr& tensor) const
     return true;
 }
 
+bool ConvertInserter::HasParallelDifferentConsumerRequirement(
+    const LogicalTensorPtr& tensor, MemoryType targetType) const
+{
+    if (tensor == nullptr || tensor->GetConsumers().size() <= 1) {
+        return false;
+    }
+    auto tensorIt = tensorTobeMap.find(tensor);
+    if (tensorIt == tensorTobeMap.end()) {
+        return false;
+    }
+    return std::any_of(tensorIt->second.begin(), tensorIt->second.end(), [targetType](const auto& item) {
+        return MemoryPathUtils::IsDifferentKnownRequirement(item.second.second, targetType);
+    });
+}
+
 Status ConvertInserter::ProcessConvertPath(
     const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, MemoryType requiredMemoryType,
     std::vector<MemoryType>& paths)
 {
     auto currTensorMemOri = oOperand->GetMemoryTypeOriginal();
+    bool useDdrForSpecialPath = MemoryPathUtils::IsSpecialDirectMemoryPath(currTensorMemOri, requiredMemoryType) &&
+        HasParallelDifferentConsumerRequirement(oOperand, requiredMemoryType);
+    if (useDdrForSpecialPath) {
+        paths = {currTensorMemOri, MemoryType::MEM_DEVICE_DDR, requiredMemoryType};
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor,
+            "Use DDR fallback path for tensor %d because %s -> %s has parallel different requirements.",
+            oOperand->magic, BriefMemoryTypeToString(currTensorMemOri).c_str(),
+            BriefMemoryTypeToString(requiredMemoryType).c_str());
+        return SUCCESS;
+    }
     if (currTensorMemOri == MemoryType::MEM_L0C && requiredMemoryType == MemoryType::MEM_L1) {
         // 特殊处理L0C2L1：针对不支持的数据类型场景路径中插入DDR
         bool needDDRTrans = IsNotValidDataType(oOperand) || !FitL0C2L1(op);

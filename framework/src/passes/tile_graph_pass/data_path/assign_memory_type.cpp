@@ -18,15 +18,17 @@
 #include <algorithm>
 #include <map>
 #include <set>
+
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
-#include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/checker_utils.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/tile_graph_pass/data_path/memory_path_utils.h"
+#include "tilefwk/tilefwk.h"
 
 #define MODULE_NAME "AssignMemoryType"
 
@@ -380,6 +382,17 @@ bool AssignMemoryType::TryHandleUnalignedView(
 bool AssignMemoryType::TryHandleSpecialDirectMemoryPath(
     Operation& operation, MemoryType from, MemoryType to, bool& directPath)
 {
+    LogicalTensorPtr input = operation.iOperand.empty() ? nullptr : operation.iOperand.front();
+    if (MemoryPathUtils::IsSpecialDirectMemoryPath(from, to) &&
+        HasParallelDifferentConsumerRequirement(input, to)) {
+        directPath = false;
+        APASS_LOG_DEBUG_F(
+            Elements::Operation,
+            "Disable direct %s -> %s path for %s[%d] because source tensor has parallel different requirements.",
+            BriefMemoryTypeToString(from).c_str(), BriefMemoryTypeToString(to).c_str(),
+            operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        return true;
+    }
     if (from == MemoryType::MEM_L0C && to == MemoryType::MEM_L1) {
         directPath = inserter.FitL0C2L1(operation);
         return true;
@@ -405,6 +418,18 @@ bool AssignMemoryType::IsAdvancedMemoryPath(MemoryType from, MemoryType to) cons
     bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     return isA5 && ((from == MemoryType::MEM_L0C && to == MemoryType::MEM_UB) ||
                     (from == MemoryType::MEM_UB && to == MemoryType::MEM_L1));
+}
+
+bool AssignMemoryType::HasParallelDifferentConsumerRequirement(
+    const LogicalTensorPtr& tensor, MemoryType targetType) const
+{
+    if (tensor == nullptr || tensor->GetConsumers().size() <= 1) {
+        return false;
+    }
+    auto requirements = inserter.GetConsumerRequirements(tensor);
+    return std::any_of(requirements.begin(), requirements.end(), [targetType](const auto& item) {
+        return MemoryPathUtils::IsDifferentKnownRequirement(item.second, targetType);
+    });
 }
 
 bool AssignMemoryType::CanUseDirectViewPath(Operation& operation, MemoryType from, MemoryType to)
@@ -1567,7 +1592,8 @@ void AssignMemoryType::ProcessL0C2L1SmallToLarge(Function& function)
             continue;
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
-        if (!AreAllConsumerRequirements(oOperand, MemoryType::MEM_L1) ||
+        if (HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_L1) ||
+            !AreAllConsumerRequirements(oOperand, MemoryType::MEM_L1) ||
             !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple) {
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             DowngradeConsumerRequirements(oOperand, MemoryType::MEM_L0C);
@@ -1590,6 +1616,11 @@ void AssignMemoryType::ProcessL0C2L1LargeToSmall(Function& function)
         }
         auto iOperand = op.GetIOperands().front();
         auto oOperand = op.GetOOperands().front();
+        if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
+            HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_L1)) {
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+            continue;
+        }
         if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
             !IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
@@ -1676,7 +1707,8 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
         bool isVecTileShapeValid = CheckUBTileShape(oOperand);
-        bool canUseUb = AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
+        bool canUseUb = !HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB) &&
+            AreAllConsumerRequirementsTowardsUb(inserter, oOperand) &&
             IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) && isConsumerOutputMultiple &&
             isVecTileShapeValid && FitsAssembleOutputMemoryLimit(oOperand, MemoryType::MEM_UB);
         if (!canUseUb) {
@@ -1711,6 +1743,11 @@ void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function& function)
         auto oOperand = op.GetOOperands().front();
         bool isVecTileShapeValid = CheckUBTileShape(oOperand);
         if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
+            HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_UB)) {
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+            continue;
+        }
+        if (iOperand->GetMemoryTypeOriginal() == MEM_L0C &&
             (!IsDimMultiple(iOperand->GetShape(), oOperand->GetShape()) || !isVecTileShapeValid)) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
@@ -1737,7 +1774,8 @@ void AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             continue;
         }
-        if (!AreAllConsumerRequirements(oOperand, MemoryType::MEM_L1) ||
+        if (HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_L1) ||
+            !AreAllConsumerRequirements(oOperand, MemoryType::MEM_L1) ||
             !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) ||
             !CheckConsumerViewShapeMultiple(oOperand, iOperand)) {
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
@@ -1781,6 +1819,10 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
         auto iOperand = op.GetIOperands().front();
         auto oOperand = op.GetOOperands().front();
         if (iOperand->GetMemoryTypeOriginal() != MEM_UB) {
+            continue;
+        }
+        if (HasParallelDifferentConsumerRequirement(iOperand, MemoryType::MEM_L1)) {
+            inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
         if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
