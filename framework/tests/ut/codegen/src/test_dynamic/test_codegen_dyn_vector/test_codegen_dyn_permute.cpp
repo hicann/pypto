@@ -63,7 +63,6 @@ TEST_F(TestCodegenDynPermute, TestPermuteLayout)
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 #endif
-    function->SetUnderDynamicFunction(true);
     std::string res = GenCodeByFunction(*function);
     std::string expect = "TPermute<1, 0, 2, -1, -1, 3>";
     CheckStringExist(expect, res);
@@ -98,7 +97,6 @@ TEST_F(TestCodegenDynPermute, TestPermuteElementLayout)
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 #endif
-    function->SetUnderDynamicFunction(true);
     std::string res = GenCodeByFunction(*function);
     std::string expect = "TPermuteElewise<0, 2, 1, -1, -1, 3>";
     CheckStringExist(expect, res);

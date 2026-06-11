@@ -52,7 +52,6 @@ void TestExpandExpDif(const Shape& shape_x, const Shape& shape_y, const std::str
 
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
@@ -64,8 +63,7 @@ TEST_F(TestCodegenDynExpandExpDif, TestExpandExpDifLastAxis)
 {
     const Shape shape_x = {16, 128};
     const Shape shape_y = {16, 1};
-    std::string expect =
-        R"!!!(TExpandExpDif<0, 0, 0, 0, 2>(ubTensor_4, ubTensor_4, ubTensor_2);)!!!";
+    std::string expect = R"!!!(TExpandExpDif<0, 0, 0, 0, 2>(ubTensor_4, ubTensor_4, ubTensor_2);)!!!";
     TestExpandExpDif(shape_x, shape_y, expect);
 }
 

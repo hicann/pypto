@@ -60,8 +60,6 @@ TEST_F(TestCodegenDynScalar, TestScalarAdds)
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 
-    function->SetUnderDynamicFunction(true);
-
     std::string res = GenCodeByFunction(*function);
     std::string expect =
         R"!!!(TileOp::DynTSadds<float, /*DstRawShape*/ 2, 40, /*Src0RawShape*/ 2, 40, 1>((__ubuf__ float*)UB_S0_E320, (__ubuf__ float*)UB_S0_E320, 127,)!!!";
@@ -91,7 +89,6 @@ TEST_F(TestCodegenDynScalar, TestScalarDivs)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect =

@@ -40,11 +40,11 @@ class TestCodegenDynConv : public CodegenTestBase {
 public:
     TestCodegenDynConv()
         : CodegenTestBase(
-            {.compileStage = CS_CODEGEN_INSTRUCTION,
-            .setTileTensor = true,
-            .tileTensorValue = true,
-            .setIdGen = true,
-            .resetTileTensorOnTearDown = true})
+              {.compileStage = CS_CODEGEN_INSTRUCTION,
+               .setTileTensor = true,
+               .tileTensorValue = true,
+               .setIdGen = true,
+               .resetTileTensorOnTearDown = true})
     {}
 };
 
@@ -56,12 +56,10 @@ Function* GetFunctionConv(const std::string& funcName)
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
 
     auto function = GenMockFuncDyn(funcName, shape);
-    function->SetUnderDynamicFunction(true);
     return function;
 }
 
-std::vector<int64_t> GetDstL1ShapeDN2NZ(
-    const std::vector<int64_t>& gmShape, bool isFmap, bool isConv3D, DataType dtype)
+std::vector<int64_t> GetDstL1ShapeDN2NZ(const std::vector<int64_t>& gmShape, bool isFmap, bool isConv3D, DataType dtype)
 {
     std::map<DataType, int64_t> k0Map = {{DataType::DT_FP16, 16}, {DataType::DT_BF16, 16}, {DataType::DT_FP32, 8}};
     int64_t k0 = k0Map[dtype];
@@ -77,8 +75,7 @@ std::vector<int64_t> GetDstL1ShapeDN2NZ(
         if (isFmap) {
             dstL1Shape = {gmShape[0], CeilDiv(gmShape[1], k0), gmShape[2], gmShape[3], k0};
         } else {
-            dstL1Shape = {
-                CeilDiv(gmShape[1], k0) * gmShape[2] * gmShape[3], CeilDiv(gmShape[0], N0), N0, k0};
+            dstL1Shape = {CeilDiv(gmShape[1], k0) * gmShape[2] * gmShape[3], CeilDiv(gmShape[0], N0), N0, k0};
         }
     }
     return dstL1Shape;
@@ -103,8 +100,9 @@ std::vector<int64_t> GetOffsetForCopyInNZ2NZ(bool isFmap, bool isConv3D)
     return {0, 0, 0, 0};
 }
 
-void SetConvL1CopyInOpAttr(Operation& op, const std::vector<int64_t>& offset,
-    const std::vector<int64_t>& gmShape, const std::vector<int64_t>& dstL1Shape)
+void SetConvL1CopyInOpAttr(
+    Operation& op, const std::vector<int64_t>& offset, const std::vector<int64_t>& gmShape,
+    const std::vector<int64_t>& dstL1Shape)
 {
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(offset), MemoryType::MEM_L1, OpImmediate::Specified(gmShape),
@@ -113,9 +111,9 @@ void SetConvL1CopyInOpAttr(Operation& op, const std::vector<int64_t>& offset,
     op.SetAttribute(OpAttributeKey::srcGmConvValidShape, SymbolicScalar::FromConcrete(gmShape));
 }
 
-std::string TestConvL1CopyInBody(const std::string& funcName, const std::vector<int64_t>& gmShape,
-    bool isFmap = true, int64_t copyInMode = COPY_IN_MODE_DN2NZ, bool isConv3D = false,
-    DataType dtype = DataType::DT_FP16)
+std::string TestConvL1CopyInBody(
+    const std::string& funcName, const std::vector<int64_t>& gmShape, bool isFmap = true,
+    int64_t copyInMode = COPY_IN_MODE_DN2NZ, bool isConv3D = false, DataType dtype = DataType::DT_FP16)
 {
     auto function = GetFunctionConv(funcName);
     auto gmTensor = CreateConvTensor(*function, dtype, gmShape, MemoryType::MEM_DEVICE_DDR);
@@ -182,7 +180,8 @@ TEST_F(TestCodegenDynConv, L1CopyInTileTensorWeightConv3D)
 
 TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv2D)
 {
-    std::string res = TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv2D", {1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ, false);
+    std::string res =
+        TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv2D", {1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ, false);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::NZ2NZ, 0, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 1, 16, 16, 16);
 )!!!";
@@ -191,7 +190,8 @@ TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv2D)
 
 TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv3D)
 {
-    std::string res = TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv3D", {1, 1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ, true);
+    std::string res =
+        TestConvL1CopyInBody("L1CopyInNZ2NZFmapConv3D", {1, 1, 1, 16, 16, 16}, true, COPY_IN_MODE_NZ2NZ, true);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::NZ2NZ, 1, 1>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 1, 1, 16, 16);
 )!!!";
@@ -200,7 +200,8 @@ TEST_F(TestCodegenDynConv, L1CopyInNZ2NZFmapConv3D)
 
 TEST_F(TestCodegenDynConv, L1CopyInNZ2NZWeightConv2D)
 {
-    std::string res = TestConvL1CopyInBody("L1CopyInNZ2NZWeightConv2D", {1, 1, 16, 16}, false, COPY_IN_MODE_NZ2NZ, false);
+    std::string res =
+        TestConvL1CopyInBody("L1CopyInNZ2NZWeightConv2D", {1, 1, 16, 16}, false, COPY_IN_MODE_NZ2NZ, false);
     std::string expect =
         R"!!!(TLoadConv<CopyInMode::NZ2NZ, 0, 0>(l1Tensor_0, gmTensor_1, 0, 0, 0, 0, 0, 1, 1, 16, 16, 0);
 )!!!";
@@ -216,9 +217,10 @@ TEST_F(TestCodegenDynConv, L1CopyInNZ2NZWeightConv3D)
     EXPECT_EQ(res, expect);
 }
 
-std::string TestConvL0COutBody(const std::string& funcName, const std::vector<int64_t>& l0cShape,
-    std::vector<int64_t>& gmShape, int64_t copyOutMode = COPY_OUT_MODE_NZ2DN, bool isConv3D = false,
-    DataType dtype = DataType::DT_FP32, int64_t cutW = 16)
+std::string TestConvL0COutBody(
+    const std::string& funcName, const std::vector<int64_t>& l0cShape, std::vector<int64_t>& gmShape,
+    int64_t copyOutMode = COPY_OUT_MODE_NZ2DN, bool isConv3D = false, DataType dtype = DataType::DT_FP32,
+    int64_t cutW = 16)
 {
     std::vector<int64_t> offset = {0, 0, 0, 0};
     if (isConv3D) {
@@ -235,9 +237,9 @@ std::string TestConvL0COutBody(const std::string& funcName, const std::vector<in
     op.SetAttribute("CUT_W", cutW);
     op.SetAttribute(OpAttributeKey::l0cValidMN, SymbolicScalar::FromConcrete(l0cShape));
     op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
-    op.SetOpAttribute(
-        std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified(offset),
-        OpImmediate::Specified(gmShape), OpImmediate::Specified(gmShape), shapeImme));
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        MEM_L1, OpImmediate::Specified(offset), OpImmediate::Specified(gmShape), OpImmediate::Specified(gmShape),
+        shapeImme));
 
     CodeGenCtx ctx;
     CodeGenCloudNPU codegen(ctx);

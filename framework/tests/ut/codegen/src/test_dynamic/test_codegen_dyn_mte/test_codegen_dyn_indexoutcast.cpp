@@ -71,7 +71,6 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     auto ddrTensor =
         CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape0, "IndexOutCast"});

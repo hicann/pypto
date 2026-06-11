@@ -60,7 +60,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowSumLine)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     std::string res = GenCodeByFunction(*function);
     std::string expect = R"!!!(TRowSumLine<3>(ubTensor_2, ubTensor_0, ubTensor_3);)!!!";
@@ -222,7 +221,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMinReduceAxisTile)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMinWithValueSingle(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";
@@ -284,7 +282,6 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationArgMinReduceAxisTileLine)
     }
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     std::string res = GenCodeByFunction(*function);
     const std::string expect = R"(TRowArgMinWithValueLine<3>(ubTensor_2, ubTensor_3, ubTensor_0, ubTensor_4);)";

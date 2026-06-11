@@ -119,8 +119,9 @@ protected:
 TEST_F(TestCodegenDynQuantize, QuantizeSymmetricToInt8)
 {
     RunQuantizeTestSymmetric(
-        "QUANTIZE_SYMMETRIC_INT8", R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);)!!!",
-        DataType::DT_FP32, DataType::DT_INT8, {8, 128}, {8}, {8, 128}, {8, 128}, -1);
+        "QUANTIZE_SYMMETRIC_INT8",
+        R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);)!!!", DataType::DT_FP32,
+        DataType::DT_INT8, {8, 128}, {8}, {8, 128}, {8, 128}, -1);
 }
 
 // Asymmetric quantization: FP32 -> UINT8, axis=-1 (per-row)
@@ -136,8 +137,9 @@ TEST_F(TestCodegenDynQuantize, QuantizeAsymmetricToUInt8)
 TEST_F(TestCodegenDynQuantize, QuantizeSymmetricAxisM2)
 {
     RunQuantizeTestSymmetric(
-        "QUANTIZE_SYMMETRIC_AXIS_M2", R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_7, ubTensor_2, ubTensor_5, ubTensor_8);)!!!",
-        DataType::DT_FP32, DataType::DT_INT8, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
+        "QUANTIZE_SYMMETRIC_AXIS_M2",
+        R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_7, ubTensor_2, ubTensor_5, ubTensor_8);)!!!", DataType::DT_FP32,
+        DataType::DT_INT8, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
 // Asymmetric quantization with axis=-2 (per-column)
@@ -209,7 +211,6 @@ TEST_F(TestCodegenDynQuantize, QuantMXDefaultRoundDownFp8Output)
 
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -243,7 +244,6 @@ TEST_F(TestCodegenDynQuantize, QuantMXRoundUpFp8Output)
 
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);

@@ -83,7 +83,6 @@ Function* GatherInUBUT(Config& cfg)
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funName);
 #endif
-    function->SetUnderDynamicFunction(true);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

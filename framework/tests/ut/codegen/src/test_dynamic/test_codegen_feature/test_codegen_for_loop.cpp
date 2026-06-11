@@ -104,7 +104,6 @@ TEST_F(TestCodegenForLoop, TestForLoop)
 
     auto function =
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
     LoopaxesProc lpPass;
     lpPass.RunOnFunction(*function);
     CodegenPreproc cpPass;
