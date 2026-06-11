@@ -20,7 +20,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32。<br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。<br> 算子对不同 Shape 支持不同，详见约束说明。 |
+| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。<br> 算子对不同 Shape 支持不同，详见约束说明。 |
 | dim0    | 输入      | 源操作数，要交换的第一个维度的索引，从0开始计数。 |
 | dim1    | 输入      | 源操作数，要交换的第二个维度的索引，从0开始计数。 |
 
@@ -52,6 +52,11 @@ dim0: 2
 dim1: 3
 
 预留的临时空间为：t0 \* t1 \* align\(t2, 16\) \* align\(t3, 32 / sizeof\(DT\_FP32\)\)
+
+5. Tensor数据类型说明：
+- Ascend 950PR/Ascend 950DT：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32, DT_HF8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0。
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32。
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32。
 
 ## 调用示例
 

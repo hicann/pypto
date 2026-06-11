@@ -1253,6 +1253,410 @@
                 "second_dim": 1,
                 "func_id": -1
             }
+        },
+        {
+            "case_index": 23,
+            "case_name": "Transpose_test_23",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "hf8",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "hf8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                32,
+                32,
+                512
+            ],
+            "tile_shape": [
+                2,
+                2,
+                512
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0,
+                    2
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 24,
+            "case_name": "Transpose_test_24",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "fp8e4m3",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "fp8e4m3",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                32,
+                32,
+                512
+            ],
+            "tile_shape": [
+                2,
+                2,
+                512
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0,
+                    2
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 25,
+            "case_name": "Transpose_test_25",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "fp8e5m2",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "fp8e5m2",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                32,
+                32,
+                512
+            ],
+            "tile_shape": [
+                2,
+                2,
+                512
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0,
+                    2
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 26,
+            "case_name": "Transpose_test_26",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "fp8e8m0",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32,
+                        512
+                    ],
+                    "dtype": "fp8e8m0",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                32,
+                32,
+                512
+            ],
+            "tile_shape": [
+                2,
+                2,
+                512
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0,
+                    2
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 27,
+            "case_name": "Transpose_test_27",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "hf8",
+                    "data_range": {
+                        "min": 0,
+                        "max": 1
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "hf8",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                128,
+                128
+            ],
+            "tile_shape": [
+                32,
+                32
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 28,
+            "case_name": "Transpose_test_28",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "fp8e4m3",
+                    "data_range": {
+                        "min": 0,
+                        "max": 1
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "fp8e4m3",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                128,
+                128
+            ],
+            "tile_shape": [
+                32,
+                32
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 29,
+            "case_name": "Transpose_test_29",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "fp8e5m2",
+                    "data_range": {
+                        "min": 0,
+                        "max": 1
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "fp8e5m2",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                128,
+                128
+            ],
+            "tile_shape": [
+                32,
+                32
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
+        },
+        {
+            "case_index": 30,
+            "case_name": "Transpose_test_30",
+            "operation": "Transpose",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "fp8e8m0",
+                    "data_range": {
+                        "min": 0,
+                        "max": 1
+                    },
+                    "format": "ND"
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        128,
+                        128
+                    ],
+                    "dtype": "fp8e8m0",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                128,
+                128
+            ],
+            "tile_shape": [
+                32,
+                32
+            ],
+            "params": {
+                "dims": [
+                    1,
+                    0
+                ],
+                "first_dim": 0,
+                "second_dim": 1,
+                "func_id": -1
+            }
         }
     ]
 }

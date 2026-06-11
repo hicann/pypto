@@ -288,8 +288,8 @@ inline void UnalignPadTmpBufTile(std::vector<int64_t>& shape, int blockElem, Dat
     auto size = shape.size();
     if (size >= NUM_VALUE_2) {
         int64_t alignSize = VNCHWCONV_REPEAT;
-        if (dtype == DT_INT8 || dtype == DT_UINT8) {
-            alignSize = BLOCK_SIZE; // int8 特判 按 32 对齐
+        if (BytesOf(dtype) == 1) {
+            alignSize = BLOCK_SIZE;  // 1字节dtype按32对齐
         }
         shape[size - NUM_VALUE_2] = AlignUp(shape[size - NUM_VALUE_2], alignSize);
         shape[size - 1] = AlignUp(shape[size - 1], blockElem);
@@ -478,8 +478,14 @@ bool MergeTransposeAxis(
 Tensor Transpose(const Tensor& self, std::vector<int> perm)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16,   DT_BF16, DT_UINT8, DT_INT8,  DT_INT16,
-                                                   DT_UINT16, DT_FP32, DT_INT32, DT_UINT32};
+    
+    static const std::unordered_set<DataType> TRANSPOSE_A2A3_TYPES = 
+        {DT_FP16, DT_BF16, DT_UINT8, DT_INT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32};
+    static const std::unordered_set<DataType> TRANSPOSE_A5_TYPES = 
+        {DT_FP16, DT_BF16, DT_UINT8, DT_INT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32,
+         DT_HF8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
+    
+    const auto& supportedTypes = GetSupportedDataTypesByArch(TRANSPOSE_A2A3_TYPES, TRANSPOSE_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "TRANSPOSE");
     CheckTensorDimRange(self.GetStorage(), 1, 5, "TRANSPOSE");
     CheckTensorShapeSize(self.GetStorage(), "TRANSPOSE");
