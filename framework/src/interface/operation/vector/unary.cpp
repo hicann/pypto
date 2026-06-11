@@ -183,6 +183,10 @@ Tensor Ceil(const Tensor& self)
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Ceil");
 
+    if (self.GetDataType() == DataType::DT_INT16 || self.GetDataType() == DataType::DT_INT32) {
+        RETURN_CALL(UnaryOperation<UnaryOpType::CEIL>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    }
+
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
         castSelf = CALL(

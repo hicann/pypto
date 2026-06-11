@@ -409,7 +409,13 @@ TILEOP void TLog(T0 dst, T1 src)
 template <typename Ttemp, typename T0, typename T1>
 TILEOP void CeilComputeImpl(T0 dst, T1 src)
 {
-    pto::TCVT(dst, src, pto::RoundMode::CAST_CEIL);
+    if constexpr (std::is_integral_v<typename T1::DType>) {
+        if (dst.GetAddr() != src.GetAddr()) {
+            pto::TMOV(dst, src);
+        }
+    } else {
+        pto::TCVT(dst, src, pto::RoundMode::CAST_CEIL);
+    }
 }
 #define OP_TILE_OP_CEIL TCEIL
 template <typename T0, typename T1>
