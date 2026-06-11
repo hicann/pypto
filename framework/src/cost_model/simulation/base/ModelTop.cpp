@@ -31,6 +31,8 @@
 
 namespace CostModel {
 
+constexpr uint64_t L0C_THRESHOLD_MULTIPLIER = 2;
+
 SimSys::SimSys()
 {
     globalCycles = 0;
@@ -863,7 +865,7 @@ void SimSys::InitBufferThreshold(PipeConfig& pipeConfig)
     bufferSizeThreshold[CorePipeType::PIPE_CUBE_BMU_L1] = pipeConfig.l1SizeThreshold;
     bufferSizeThreshold[CorePipeType::PIPE_CUBE_BMU_L0A] = pipeConfig.l0aSizeThreshold;
     bufferSizeThreshold[CorePipeType::PIPE_CUBE_BMU_L0B] = pipeConfig.l0bSizeThreshold;
-    bufferSizeThreshold[CorePipeType::PIPE_CUBE_BMU_L0C] = pipeConfig.l0cSizeThreshold * 2;
+    bufferSizeThreshold[CorePipeType::PIPE_CUBE_BMU_L0C] = pipeConfig.l0cSizeThreshold * L0C_THRESHOLD_MULTIPLIER;
 }
 
 uint64_t SimSys::GetBufferThreshold(CorePipeType pType) { return bufferSizeThreshold.at(pType); }

@@ -24,7 +24,7 @@
 
 #### INVALID_CONFIG_NAME
 
-1. 检查配置名称是否符合要求，仿真配置详情参见`framework/src/cost_model/simulation/config/xxx.h`中
+1. 检查配置名称是否符合要求，仿真配置详情参见`framework/src/cost_model/simulation/config/xxx.h`。
 
 #### PERMISSION_CHECK_ERROR
 
@@ -48,7 +48,7 @@
 2. 确认文件路径是否正确
 3. 确认文件是否已损坏
 
-### INTERNEL_ERROR 内部错误
+### INTERNAL_ERROR 内部错误
 
 内部错误请联系仿真的oncall解决
 
@@ -96,7 +96,7 @@
 
 #### DEAD_LOCK
 
-1. 请在`output/output_xxx/CostModelSimulationOutput/graphs`下的找到报错对应的dot文件进行分析
+1. 请在`output/output_xxx/CostModelSimulationOutput/graphs`下找到报错对应的dot文件进行分析
 2. 如果还无法定位到根因请联系管理员解决
 
 ### PRECISION_SIM
