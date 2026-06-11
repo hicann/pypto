@@ -698,6 +698,7 @@ void Program::VerifyTensorGraph()
     flowVerifier.VerifyTensorGraph(
         func, inputDataViewList, outputDataViewList, goldenDataViewList, GetTensorSlotManager());
     FE_LOGI("VerifyTensorGraph end.");
+    ProgramData::GetInstance().Reset();
 }
 
 void Program::VerifyPass(Function* func, int passIndex, const std::string& passIdentifier)
