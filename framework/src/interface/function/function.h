@@ -483,6 +483,11 @@ struct DynParamInfo {
     bool isBaseParam{false};
     std::string replacedSymbol;
 };
+// cubeL1ReuseSetting packs the L1-reuse matrix-side preference into the merge-count value as
+// side * L1_REUSE_SIDE_BASE + count (side 0=auto / 1=left(L0A) / 2=right(L0B)). The frontend
+// encodes it; L1CopyInReuseMerge decodes it. Must stay in sync with python config.py.
+constexpr int64_t L1_REUSE_SIDE_BASE = 1000000;
+
 struct ParamConfigs {
     bool dynamicAlignedOps;
     int sgPgLowerBound{1};

@@ -354,6 +354,133 @@ TEST_F(L1CopyInReuseTest, TestParallelAssembleEnableParallelMatmulL1ReuseMerge)
     EXPECT_EQ(matmulSubgraphIdsAfterL1Reuse.size(), 1UL);
 }
 
+// Helper: run GraphPartition (COE dedup) then L1CopyInReuseMerge with a given matrix-side
+// preference and merge count, returning the number of distinct matmul subgraphs after L1
+// reuse. mergeCount <= 0 means "use branchNum" (i.e. allow merging all branches into one).
+static size_t RunMatmulSideMerge(int branchNum, int64_t side, int mergeCount = 0)
+{
+    int count = mergeCount > 0 ? mergeCount : branchNum;
+    auto func = std::make_shared<Function>(
+        Program::GetInstance(), "TestL1ReuseSide", "TestL1ReuseSide", nullptr);
+    ComputationalGraphBuilder graph(func.get());
+    BuildParallelMatmulGraph(graph, branchNum);
+
+    Function* function = graph.GetFunction();
+    function->paramConfigs_.sgPartitionAlgorithm = "Iso";
+    GraphPartition graphPartition;
+    EXPECT_EQ(graphPartition.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(graphPartition.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(graphPartition.PostCheck(*function), SUCCESS);
+
+    // Matrix-side is packed into the merge-count value: side * L1_REUSE_SIDE_BASE + count
+    // (side 1=left/L0A, 2=right/L0B).
+    function->paramConfigs_.cubeL1ReuseSetting = {{-1, side * L1_REUSE_SIDE_BASE + count}};
+    function->paramConfigs_.cubeNBufferSetting = {{-1, 1}};
+    L1CopyInReuseMerge l1CopyInReuse;
+    EXPECT_EQ(l1CopyInReuse.RunOnFunction(*function), SUCCESS);
+    return GetMatmulSubgraphIds(graph, branchNum).size();
+}
+
+// In this graph every branch shares both the A and B GM tensors after COE dedup, so
+// biasing the merge towards the left(L0A) matrix still finds the shared-A copy-in and
+// merges all branches into a single subgraph.
+TEST_F(L1CopyInReuseTest, TestL1ReuseSideLeftMatmulMerge)
+{
+    EXPECT_EQ(RunMatmulSideMerge(4, 1), 1UL);
+}
+
+// Symmetric to the left case: biasing towards the right(L0B) matrix finds the shared-B
+// copy-in and merges all branches into a single subgraph.
+TEST_F(L1CopyInReuseTest, TestL1ReuseSideRightMatmulMerge)
+{
+    EXPECT_EQ(RunMatmulSideMerge(4, 2), 1UL);
+}
+
+// Partial merge: with a merge count (2) smaller than the branch count (4), the side-preferred
+// subgraphs merge in groups rather than all into one, so the final subgraph count stays > 1
+// (and <= branchNum). This exercises the per-group anchor + capacity-limited merge path.
+TEST_F(L1CopyInReuseTest, TestL1ReuseSidePartialMerge)
+{
+    size_t merged = RunMatmulSideMerge(4, 2, 2);  // side=right, merge count=2
+    EXPECT_GT(merged, 1UL);
+    EXPECT_LE(merged, 4UL);
+}
+
+// Hard restriction (no fall-back): the InitGraphBuilder graph has no cube matmul (consumers
+// are EXP, not L0A/L0B), so a left-matrix side preference matches nothing AND does not fall
+// back -> nothing is merged on the L1-reuse side. With cube_nbuffer set to skip, the total
+// subgraph count therefore stays at subGraphNum (whereas the unfiltered/auto merge would
+// reduce it, cf. TestNormal). This verifies that side is a hard restriction.
+TEST_F(L1CopyInReuseTest, TestL1ReuseSideHardRestrictNonMatmul)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int subGraphNum = 20;
+    InitGraphBuilder(G, tileShape, subGraphNum);
+    Function* function = G.GetFunction();
+    function->paramConfigs_.cubeNBufferSetting = {{-1, 1}};  // skip the cube-nbuffer merge
+    // global side=left (1) packed into the -1 entry's value: 1 * L1_REUSE_SIDE_BASE + 2.
+    function->paramConfigs_.cubeL1ReuseSetting = {{-1, 1 * L1_REUSE_SIDE_BASE + 2}};
+    function->SetTotalSubGraphCount(subGraphNum);
+    L1CopyInReuseMerge LCRM;
+    EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
+    // No L0A consumer anywhere -> left side finds no partner -> no merge -> count unchanged.
+    EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
+}
+
+// Deterministic assertion of the side-detection itself: a GM->L1 copy-in is classified as
+// left/right by whether its L1 buffer is consumed by a copy into L0A / L0B. This isolates
+// the new logic from the merge/fallback machinery (which subgraph-count tests cannot do).
+TEST_F(L1CopyInReuseTest, TestIsLeftRightMatrixCopy)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{128, 128};
+    // GM (DDR) sources
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, "gmA"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, "gmB"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_DEVICE_DDR, "gmC"), true);
+    // L1 copy-in outputs
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L1, "l1A"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L1, "l1B"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L1, "l1C"), true);
+    // Consumers' outputs: L0A (left), L0B (right), UB (non-cube)
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L0A, "l0A"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_L0B, "l0B"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, tileShape, MemoryType::MEM_UB, "ubC"), true);
+
+    // GM -> L1 copy-ins
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"gmA"}, {"l1A"}, "viewA"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"gmB"}, {"l1B"}, "viewB"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"gmC"}, {"l1C"}, "viewC"), true);
+    // L1 -> L0A / L0B / UB consumers
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"l1A"}, {"l0A"}, "toL0A"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"l1B"}, {"l0B"}, "toL0B"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"l1C"}, {"ubC"}, "expC"), true);
+
+    // Register the consumer links explicitly so GetConsumers() is deterministic.
+    G.GetTensor("l1A")->AddConsumer(G.GetOp("toL0A"));
+    G.GetTensor("l1B")->AddConsumer(G.GetOp("toL0B"));
+    G.GetTensor("l1C")->AddConsumer(G.GetOp("expC"));
+
+    auto* viewA = G.GetOp("viewA");
+    auto* viewB = G.GetOp("viewB");
+    auto* viewC = G.GetOp("viewC");
+    ASSERT_NE(viewA, nullptr);
+    ASSERT_NE(viewB, nullptr);
+    ASSERT_NE(viewC, nullptr);
+
+    // Left-matrix copy-in: consumer outputs to L0A.
+    EXPECT_TRUE(L1CopyInReuseRunner::IsLeftMatrixCopy(*viewA));
+    EXPECT_FALSE(L1CopyInReuseRunner::IsRightMatrixCopy(*viewA));
+    // Right-matrix copy-in: consumer outputs to L0B.
+    EXPECT_FALSE(L1CopyInReuseRunner::IsLeftMatrixCopy(*viewB));
+    EXPECT_TRUE(L1CopyInReuseRunner::IsRightMatrixCopy(*viewB));
+    // Non-cube copy-in (consumer outputs UB): neither side -> this is exactly the case
+    // where a left/right preference finds no candidate and falls back.
+    EXPECT_FALSE(L1CopyInReuseRunner::IsLeftMatrixCopy(*viewC));
+    EXPECT_FALSE(L1CopyInReuseRunner::IsRightMatrixCopy(*viewC));
+}
+
 TEST_F(L1CopyInReuseTest, TestNoL1Num)
 {
     ComputationalGraphBuilder G;

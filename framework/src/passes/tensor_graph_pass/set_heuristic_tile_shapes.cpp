@@ -712,9 +712,10 @@ void SetHeuristicCubeTiles(Function& function, std::unordered_set<Operation*> cu
     std::pair<std::vector<int64_t>, std::vector<DataType>> curShapeAndType = {
         {0, 0, 0}, {DataType::DT_FP16, DataType::DT_FP16}}; // shapeM, shapeK, shapeN, InputType, OutputType
 
+    // cubeL1ReuseSetting value packs (count, side); strip the matrix-side part to get count.
     int64_t cubeL1Reuse = (function.paramConfigs_.cubeL1ReuseSetting.size() == 1 &&
                            function.paramConfigs_.cubeL1ReuseSetting.begin()->first == -1) ?
-                              function.paramConfigs_.cubeL1ReuseSetting.begin()->second :
+                              (function.paramConfigs_.cubeL1ReuseSetting.begin()->second % L1_REUSE_SIDE_BASE) :
                               1;
     int64_t cubeNBuffer = (function.paramConfigs_.cubeNBufferSetting.size() == 1 &&
                            function.paramConfigs_.cubeNBufferSetting.begin()->first == -1) ?

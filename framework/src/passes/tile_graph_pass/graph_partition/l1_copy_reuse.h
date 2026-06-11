@@ -16,6 +16,7 @@
 #ifndef PASS_L1_COPY_REUSE_H_
 #define PASS_L1_COPY_REUSE_H_
 
+#include <functional>
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_utils/reschedule_utils.h"
@@ -43,6 +44,10 @@ public:
     ~L1CopyInReuseRunner() {}
     Status Run(Function& func, int color, std::vector<std::vector<int>>& colorNode);
     static bool CanReuse(const Operation& op);
+    // Returns true if op's L1 output is consumed by a copy into the left(L0A)/right(L0B)
+    // matrix of a downstream cube op. Public+static so unit tests can assert side detection.
+    static bool IsLeftMatrixCopy(const Operation& op);
+    static bool IsRightMatrixCopy(const Operation& op);
     static int GetModeBySetting(
         const std::map<int64_t, int64_t>& setting,
         const std::map<std::string, int64_t>& settingByFunc);
@@ -74,10 +79,30 @@ private:
         int maxInColor, std::vector<int>& mergedNum, int maxMergeNum, int& tmpColor, int i,
         std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<uint64_t>& vec, std::vector<int>& colorCopyIn,
         std::map<uint64_t, int>& mgRem, uint64_t idx);
+    // Build the per-subgraph matrix-side list (0=auto, 1=left, 2=right) from the
+    // global / by-func / by-label side settings, mirroring numLRList expansion.
+    Status BuildMatrixSideList(
+        const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRSideList,
+        const std::vector<uint64_t>& hashColor, int color);
+    // Resolve the per-subgraph merge-count list (numLRList) from the global/func/label settings.
+    Status BuildMergeCountList(
+        const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRList,
+        const std::vector<uint64_t>& hashColor, int color);
+    // DEBUG-log one side-tagged subgraph's per-step outcome (merged on the requested side, or
+    // no same-side partner yet / merge anchor). Aggregate numbers are summarised after the loop.
+    void RecordSideMergeOutcome(int subgraphIdx, int side, int tmpColor);
+    // Search colorNode[subgraphIdx] for a merge candidate, optionally restricted by
+    // `filter` (e.g. left/right matrix). Sets tmpColor when a candidate is found.
+    Status FindMergeCandidate(
+        const OperationsViewer& opOriList, int subgraphIdx, int maxInColor, std::vector<int>& mergedNum,
+        std::vector<int>& numLRList, int& tmpColor, std::vector<std::vector<int>>& colorNode,
+        std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<int>& colorCopyIn,
+        std::map<uint64_t, int>& mgRem, std::vector<uint64_t>& hashColor,
+        const std::function<bool(const Operation&)>& filter);
     Status L1MergeProcess(
         OperationsViewer& opOriList, std::vector<std::vector<int>>& colorNode, std::vector<uint64_t>& hashColor,
         std::vector<int>& colorCopyIn, std::map<std::vector<uint64_t>, int>& l1InputList, int& tmpColor,
-        std::vector<int>& mergedNum, int& i);
+        std::vector<int>& mergedNum, int& i, int side);
     void CubeMergeProcess(
         std::vector<std::vector<int>>& colorNode, OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap,
         std::vector<int>& colorCopyIn);
@@ -95,8 +120,8 @@ private:
         Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
         std::vector<std::vector<int>>& colorNode);
     Status ApplySemanticLabelSettingsL1Reuse(
-        const OperationsViewer& opOriList, std::vector<int>& numLRList, const std::vector<uint64_t>& hashColor,
-        int color);
+        const OperationsViewer& opOriList, const std::map<std::string, int64_t>& labelMap, std::vector<int>& numLRList,
+        const std::vector<uint64_t>& hashColor, int color);
     Status ApplySemanticLabelSettingsCubeNBuffer(
         const OperationsViewer& opOriList, std::map<int, int>& hashMergeNumMap, const std::vector<uint64_t>& hashColor,
         int color);
@@ -111,6 +136,10 @@ private:
     std::map<std::string, int64_t> numDBMapByFunc_;
     std::map<std::string, int64_t> numLRMapByLabel_;
     std::map<std::string, int64_t> numDBMapByLabel_;
+    // L1 reuse matrix-side preference (1=left/L0A, 2=right/L0B), shares keys with numLR*.
+    std::map<int64_t, int64_t> numLRSideMap_;
+    std::map<std::string, int64_t> numLRSideMapByFunc_;
+    std::map<std::string, int64_t> numLRSideMapByLabel_;
     int mgCopyInUpperBound_;
     int L1ReuseMode_;
     int cubeNBufferMode_;

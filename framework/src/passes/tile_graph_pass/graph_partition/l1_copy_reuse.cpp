@@ -19,6 +19,26 @@
 
 namespace npu::tile_fwk {
 
+// cubeL1ReuseSetting packs (count, side) into one int as side * L1_REUSE_SIDE_BASE + count
+// (side 0=auto/1=left/2=right). Split a raw config map into a pure merge-count map (consumed
+// by the existing logic) and a matrix-side map (only 1/2 are kept). side=0 / count-only
+// values pass through unchanged, so legacy int configs are fully backward compatible.
+template <typename K>
+static void DecodeL1ReuseSide(
+    const std::map<K, int64_t>& raw, std::map<K, int64_t>& countMap, std::map<K, int64_t>& sideMap)
+{
+    countMap.clear();
+    sideMap.clear();
+    for (const auto& [key, value] : raw) {
+        int64_t side = value / L1_REUSE_SIDE_BASE;
+        int64_t count = value % L1_REUSE_SIDE_BASE;
+        countMap[key] = count;
+        if (side == 1 || side == 2) {
+            sideMap[key] = side;
+        }
+    }
+}
+
 inline std::vector<uint64_t> GetGMInputFeature(const Operation& op)
 { // 提取GM tensor的特征
     auto ioperand = op.GetIOperands()[0];
@@ -65,6 +85,40 @@ bool L1CopyInReuseRunner::CanReuse(const Operation& op)
         }
     }
     return false;
+}
+
+// Whether the L1 buffer produced by `op` is consumed by a copy into the given L0 memory
+// type, i.e. it feeds the left(L0A) or right(L0B) matrix of a downstream cube op.
+static bool L1OutputFeedsL0(const Operation& op, MemoryType l0Type)
+{
+    if (op.GetOOperands().empty()) {
+        return false;
+    }
+    auto l1Tensor = op.GetOOperands()[0];
+    if (l1Tensor == nullptr) {
+        return false;
+    }
+    for (auto* consumer : l1Tensor->GetConsumers()) {
+        if (consumer == nullptr || consumer->IsDeleted()) {
+            continue;
+        }
+        for (auto& oOperand : consumer->GetOOperands()) {
+            if (oOperand != nullptr && oOperand->GetMemoryTypeOriginal() == l0Type) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool L1CopyInReuseRunner::IsLeftMatrixCopy(const Operation& op)
+{
+    return L1OutputFeedsL0(op, MemoryType::MEM_L0A);
+}
+
+bool L1CopyInReuseRunner::IsRightMatrixCopy(const Operation& op)
+{
+    return L1OutputFeedsL0(op, MemoryType::MEM_L0B);
 }
 
 int L1CopyInReuseRunner::GetModeBySetting(
@@ -445,7 +499,7 @@ Status L1CopyInReuseRunner::SetNumFromConfig(
 Status L1CopyInReuseRunner::L1MergeProcess(
     OperationsViewer& opOriList, std::vector<std::vector<int>>& colorNode, std::vector<uint64_t>& hashColor,
     std::vector<int>& colorCopyIn, std::map<std::vector<uint64_t>, int>& l1InputList, int& tmpColor,
-    std::vector<int>& mergedNum, int& i)
+    std::vector<int>& mergedNum, int& i, int side)
 {
     for (auto opIdx : colorNode[i]) {
         if (opOriList[opIdx].HasAttribute(OpAttributeKey::isCube) &&
@@ -453,6 +507,13 @@ Status L1CopyInReuseRunner::L1MergeProcess(
             return SUCCESS;
         }
         if (!CanReuse(opOriList[opIdx])) {
+            continue;
+        }
+        // Side is a hard restriction: a side-tagged subgraph only advertises its own side's
+        // copy-ins into l1InputList, so it can never become a cross-side anchor that a
+        // different-side (or auto) subgraph merges onto. side==0 (auto) advertises all.
+        if ((side == 1 && !IsLeftMatrixCopy(opOriList[opIdx])) ||
+            (side == 2 && !IsRightMatrixCopy(opOriList[opIdx]))) {
             continue;
         }
         auto vec = GetGMInputFeature(opOriList[opIdx]);
@@ -534,6 +595,122 @@ bool L1CopyInReuseRunner::GetMergedL1(
     return false;
 }
 
+Status L1CopyInReuseRunner::FindMergeCandidate(
+    const OperationsViewer& opOriList, int subgraphIdx, int maxInColor, std::vector<int>& mergedNum,
+    std::vector<int>& numLRList, int& tmpColor, std::vector<std::vector<int>>& colorNode,
+    std::map<std::vector<uint64_t>, int>& l1InputList, std::vector<int>& colorCopyIn, std::map<uint64_t, int>& mgRem,
+    std::vector<uint64_t>& hashColor, const std::function<bool(const Operation&)>& filter)
+{
+    size_t j = 0;
+    while (colorCopyIn[subgraphIdx] <= mgCopyInUpperBound_ && j < colorNode[subgraphIdx].size()) {
+        auto opIdx = colorNode[subgraphIdx][j];
+        if (!CanReuse(opOriList[opIdx]) || (filter && !filter(opOriList[opIdx]))) {
+            j++;
+            continue;
+        }
+        auto vec = GetGMInputFeature(opOriList[opIdx]);
+        if (vec.size() == 0) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation, "Phase1: op %s %d GetGMInputFeature failed. %s",
+                opOriList[opIdx].GetOpcodeStr().c_str(), opOriList[opIdx].GetOpMagic(),
+                GetFormatBacktrace(opOriList[opIdx]).c_str());
+            return FAILED;
+        }
+        if (GetMergedL1(
+                maxInColor, mergedNum, numLRList[subgraphIdx], tmpColor, subgraphIdx, l1InputList, vec, colorCopyIn,
+                mgRem, hashColor[subgraphIdx])) {
+            break;
+        }
+        j++;
+    }
+    return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::BuildMatrixSideList(
+    const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRSideList,
+    const std::vector<uint64_t>& hashColor, int color)
+{
+    // Side codes carried by the config are 1(left)/2(right); "auto" is dropped on the
+    // frontend so values stay >=1 and the existing count-resolution can be reused as-is.
+    std::map<int, int> sideMap;
+    if (SetNumFromConfig(func, numLRSideMap_, numLRSideMapByFunc_, sideMap, "cubeL1ReuseSettingSide") == FAILED) {
+        APASS_LOG_ERROR_F(Elements::Config, "Invalid configuration: %s.", "cubeL1ReuseSettingSide");
+        return FAILED;
+    }
+    for (int i = 0; i < color; i++) {
+        int order = hashOrder_[hashColor[i]];
+        auto it = sideMap.find(order);
+        // SetNumFromConfig defaults unspecified orders to -1; treat anything but 1/2 as auto(0).
+        numLRSideList[i] = (it != sideMap.end() && (it->second == 1 || it->second == 2)) ? it->second : 0;
+    }
+    // Semantic-label side overrides only the specific subgraphs containing the labeled ops.
+    if (ApplySemanticLabelSettingsL1Reuse(opOriList, numLRSideMapByLabel_, numLRSideList, hashColor, color) == FAILED) {
+        APASS_LOG_ERROR_F(
+            Elements::Config,
+            "ApplySemanticLabelSettingsL1Reuse(side) failed; Please check the semantic labels in cube_l1_reuse_setting.");
+        return FAILED;
+    }
+    int leftCnt = 0;
+    int rightCnt = 0;
+    for (int i = 0; i < color; i++) {
+        leftCnt += (numLRSideList[i] == 1);
+        rightCnt += (numLRSideList[i] == 2);
+    }
+    if (leftCnt != 0 || rightCnt != 0) {
+        APASS_LOG_INFO_F(
+            Elements::Function,
+            "L1 reuse matrix-side preference: %d subgraph(s) prefer LEFT(L0A) matrix, %d prefer RIGHT(L0B) matrix.",
+            leftCnt, rightCnt);
+    }
+    return SUCCESS;
+}
+
+Status L1CopyInReuseRunner::BuildMergeCountList(
+    const Function& func, const OperationsViewer& opOriList, std::vector<int>& numLRList,
+    const std::vector<uint64_t>& hashColor, int color)
+{
+    // Resolve global + function-granularity merge counts, expand to per-subgraph, then apply
+    // higher-priority semantic-label overrides. numLRList is pre-filled with -1 (auto).
+    std::map<int, int> numLRMap;
+    if (SetNumFromConfig(func, numLRMap_, numLRMapByFunc_, numLRMap, "cubeL1ReuseSetting") == FAILED) {
+        APASS_LOG_ERROR_F(Elements::Config, "Invalid configuration: %s.", "cubeL1ReuseSetting");
+        return FAILED;
+    }
+    for (int i = 0; i < color; i++) {
+        auto it = numLRMap.find(hashOrder_[hashColor[i]]);
+        if (it != numLRMap.end()) {
+            numLRList[i] = it->second;
+        }
+    }
+    if (ApplySemanticLabelSettingsL1Reuse(opOriList, numLRMapByLabel_, numLRList, hashColor, color) == FAILED) {
+        APASS_LOG_ERROR_F(
+            Elements::Config,
+            "ApplySemanticLabelSettingsL1Reuse failed; Please check the semantic labels in cube_l1_reuse_setting.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+void L1CopyInReuseRunner::RecordSideMergeOutcome(int subgraphIdx, int side, int tmpColor)
+{
+    if (side != 1 && side != 2) {
+        return;  // no side preference -> went through the default(unfiltered) merge, nothing to log here
+    }
+    const char* sideStr = (side == 1) ? "LEFT(L0A)" : "RIGHT(L0B)";
+    // Side is a hard restriction (no fall-back). tmpColor != subgraphIdx means it merged onto a
+    // same-side partner; otherwise it is a group anchor (a later subgraph may still merge into
+    // it) or a lonely singleton -- which of the two is reported by the post-loop summary.
+    if (tmpColor != subgraphIdx) {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "L1 reuse: subgraph %d merged into subgraph %d on the %s matrix.", subgraphIdx,
+            tmpColor, sideStr);
+    } else {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "L1 reuse: subgraph %d found no %s partner yet (merge anchor for this side).",
+            subgraphIdx, sideStr);
+    }
+}
+
 Status L1CopyInReuseRunner::Phase1(
     Function& func, int color, std::vector<std::vector<int>>& colorNode, std::vector<int>& colorCopyIn,
     std::vector<uint64_t>& hashColor)
@@ -541,26 +718,14 @@ Status L1CopyInReuseRunner::Phase1(
     // 针对matmul的L1 copy reuse进行子图合并
     auto opOriList = func.Operations();
     std::map<std::vector<uint64_t>, int> l1InputList;
-    std::map<int, int> numLRMap;
-    // CubeL1ReuseMode - apply global and function-granularity settings
-    if (SetNumFromConfig(func, numLRMap_, numLRMapByFunc_, numLRMap, "cubeL1ReuseSetting") == FAILED) {
-        APASS_LOG_ERROR_F(Elements::Config, "Invalid configuration: %s.", "cubeL1ReuseSetting");
+    // Per-subgraph merge count (-1 = auto), from global/func/label settings.
+    std::vector<int> numLRList(color, -1);
+    if (BuildMergeCountList(func, opOriList, numLRList, hashColor, color) == FAILED) {
         return FAILED;
     }
-    // Expand hashOrder-granularity numLRMap to subgraph-granularity numLRList
-    std::vector<int> numLRList(color, -1);
-    for (int i = 0; i < color; i++) {
-        int order = hashOrder_[hashColor[i]];
-        auto it = numLRMap.find(order);
-        if (it != numLRMap.end()) {
-            numLRList[i] = it->second;
-        }
-    }
-    // Apply semantic label settings for L1 reuse (higher priority than hashorder settings)
-    if (ApplySemanticLabelSettingsL1Reuse(opOriList, numLRList, hashColor, color) == FAILED) {
-        APASS_LOG_ERROR_F(
-            Elements::Config,
-            "ApplySemanticLabelSettingsL1Reuse failed; Please check the semantic labels in cube_l1_reuse_setting.");
+    // Per-subgraph matrix-side preference (0=auto, 1=left, 2=right).
+    std::vector<int> numLRSideList(color, 0);
+    if (BuildMatrixSideList(func, opOriList, numLRSideList, hashColor, color) == FAILED) {
         return FAILED;
     }
     std::vector<int> mergedNum(color, 1);
@@ -571,46 +736,67 @@ Status L1CopyInReuseRunner::Phase1(
         int i = opOrder[ii].second;
         int tmpColor = -1;
         auto maxInColor = GetMaxInColor(colorNode[i], opOriList, i);
-        size_t j = 0;
-        while (colorCopyIn[i] <= mgCopyInUpperBound_ && j < colorNode[i].size()) {
-            auto opIdx = colorNode[i][j];
-            if (!CanReuse(opOriList[opIdx])) {
-                j++;
-                continue;
-            }
-            auto vec = GetGMInputFeature(opOriList[opIdx]);
-            if (vec.size() == 0) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Phase1: op %s %d GetGMInputFeature failed. %s",
-                    opOriList[opIdx].GetOpcodeStr().c_str(), opOriList[opIdx].GetOpMagic(),
-                    GetFormatBacktrace(opOriList[opIdx]).c_str());
+        int side = numLRSideList[i];
+        // Side is a HARD restriction: a side-tagged subgraph only searches copy-ins on that
+        // matrix (no fall-back to the other side). side==0 (auto) keeps the original unfiltered
+        // merge.
+        if (side == 1 || side == 2) {
+            auto sideFilter = [side](const Operation& op) {
+                return side == 1 ? IsLeftMatrixCopy(op) : IsRightMatrixCopy(op);
+            };
+            if (FindMergeCandidate(
+                    opOriList, i, maxInColor, mergedNum, numLRList, tmpColor, colorNode, l1InputList, colorCopyIn,
+                    mgRem, hashColor, sideFilter) == FAILED) {
                 return FAILED;
             }
-            if (GetMergedL1(
-                    maxInColor, mergedNum, numLRList[i], tmpColor, i, l1InputList, vec, colorCopyIn, mgRem,
-                    hashColor[i])) {
-                break;
-            }
-            j++;
+        } else if (FindMergeCandidate(
+                       opOriList, i, maxInColor, mergedNum, numLRList, tmpColor, colorNode, l1InputList, colorCopyIn,
+                       mgRem, hashColor, nullptr) == FAILED) {
+            return FAILED;
         }
         if (tmpColor == -1) {
             tmpColor = i;
         }
-        if (L1MergeProcess(opOriList, colorNode, hashColor, colorCopyIn, l1InputList, tmpColor, mergedNum, i) ==
+        RecordSideMergeOutcome(i, side, tmpColor);
+        if (L1MergeProcess(opOriList, colorNode, hashColor, colorCopyIn, l1InputList, tmpColor, mergedNum, i, side) ==
             FAILED) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "L1MergeProcess failed; Please check the L1MergeProcess method.");
+            APASS_LOG_ERROR_F(Elements::Operation, "L1MergeProcess failed; Please check the L1MergeProcess method.");
             return FAILED;
         }
+    }
+    // Summarise from the final group sizes (mergedNum): a side-tagged color either merged into a
+    // group (mergedNum==0, counted as one of the followers), leads a group (mergedNum>1), or is a
+    // lonely singleton (mergedNum==1 -> the only real "not merged" under the hard restriction).
+    int mergedCnt = 0;    // followers merged onto a same-side anchor
+    int groupCnt = 0;     // resulting groups (anchors with >=1 follower)
+    int singletonCnt = 0; // side-tagged but no same-side partner at all
+    for (int c = 0; c < color; c++) {
+        if (numLRSideList[c] != 1 && numLRSideList[c] != 2) {
+            continue;
+        }
+        if (mergedNum[c] == 0) {
+            mergedCnt++;
+        } else if (mergedNum[c] == 1) {
+            singletonCnt++;
+        } else {
+            groupCnt++;
+        }
+    }
+    if (mergedCnt != 0 || groupCnt != 0 || singletonCnt != 0) {
+        APASS_LOG_INFO_F(
+            Elements::Function,
+            "L1 reuse matrix-side outcome: %d subgraph(s) merged on the requested side into %d group(s); "
+            "%d left unmerged (no same-side partner). (per-subgraph detail at DEBUG)",
+            mergedCnt, groupCnt, singletonCnt);
     }
     return SUCCESS;
 }
 
 Status L1CopyInReuseRunner::ApplySemanticLabelSettingsL1Reuse(
-    const OperationsViewer& opOriList, std::vector<int>& numLRList, const std::vector<uint64_t>& /* hashColor */,
-    int color)
+    const OperationsViewer& opOriList, const std::map<std::string, int64_t>& labelMap, std::vector<int>& numLRList,
+    const std::vector<uint64_t>& /* hashColor */, int color)
 {
-    if (numLRMapByLabel_.empty()) {
+    if (labelMap.empty()) {
         return SUCCESS;
     }
 
@@ -622,7 +808,7 @@ Status L1CopyInReuseRunner::ApplySemanticLabelSettingsL1Reuse(
     // First step: collect override per subgraph color. If multiple labels target the same
     // subgraph, take the max among them.
     std::map<int, int> subgraphOverrides;
-    for (const auto& [label, mergeNum] : numLRMapByLabel_) {
+    for (const auto& [label, mergeNum] : labelMap) {
         auto it = labelToColors.find(label);
         if (it == labelToColors.end()) {
             APASS_LOG_ERROR_F(
@@ -799,11 +985,14 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
     APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
     auto colorCopyIn = GetCopyIn(opOriList, color, colorNode); // 记录各子图的大小
     mgCopyInUpperBound_ = func.paramConfigs_.sgMgCopyInUpperBound;
-    numLRMap_ = func.paramConfigs_.cubeL1ReuseSetting;
+    // cubeL1ReuseSetting reuses the existing keys; each value packs (count, side) as
+    // side * L1_REUSE_SIDE_BASE + count (side 0=auto/1=left/2=right). Decode here into the
+    // merge-count maps (fed to the existing logic) and the matrix-side maps.
+    DecodeL1ReuseSide(func.paramConfigs_.cubeL1ReuseSetting, numLRMap_, numLRSideMap_);
+    DecodeL1ReuseSide(func.paramConfigs_.cubeL1ReuseSettingByFunc, numLRMapByFunc_, numLRSideMapByFunc_);
+    DecodeL1ReuseSide(func.paramConfigs_.cubeL1ReuseSettingByLabel, numLRMapByLabel_, numLRSideMapByLabel_);
     numDBMap_ = func.paramConfigs_.cubeNBufferSetting; // 合并阈值参数设置
-    numLRMapByFunc_ = func.paramConfigs_.cubeL1ReuseSettingByFunc;
     numDBMapByFunc_ = func.paramConfigs_.cubeNBufferSettingByFunc;
-    numLRMapByLabel_ = func.paramConfigs_.cubeL1ReuseSettingByLabel;
     numDBMapByLabel_ = func.paramConfigs_.cubeNBufferSettingByLabel;
     L1ReuseMode_ = GetModeBySetting(numLRMap_, numLRMapByFunc_);
     cubeNBufferMode_ = GetModeBySetting(numDBMap_, numDBMapByFunc_);

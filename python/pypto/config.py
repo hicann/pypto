@@ -12,8 +12,9 @@
 """
 import sys
 import enum
+import logging
 import re
-from typing import List, Union, Dict, Optional
+from typing import List, Tuple, Union, Dict, Optional
 from functools import wraps
 
 from . import pypto_impl
@@ -31,6 +32,69 @@ class CompStage(enum.Enum):
 
 _FUNC_HASH_ORDER_PATTERN = re.compile(r'^func\d+_\d+$')
 _DEFAULT_KEY = 'DEFAULT'
+
+# cube_l1_reuse_setting matrix-side encoding. The (count, side) value is packed into the
+# existing cube_l1_reuse_setting int value as side * _L1_REUSE_SIDE_BASE + count, so no extra
+# config keys are needed; L1CopyInReuseMerge decodes it. "auto" packs to just count (fully
+# backward compatible). _L1_REUSE_SIDE_BASE MUST match L1_REUSE_SIDE_BASE in function.h.
+_MATRIX_SIDE_TO_CODE = {'auto': 0, 'left': 1, 'right': 2}
+_MATRIX_SIDE_FROM_CODE = {1: 'left', 2: 'right'}
+_L1_REUSE_SIDE_BASE = 1000000
+
+
+def _encode_cube_l1_reuse_side(setting: dict) -> dict:
+    """Encode a cube_l1_reuse_setting dict whose value may be an int merge count or a
+    (count, side) tuple into a plain {key: int} dict, packing side into the value as
+    side * _L1_REUSE_SIDE_BASE + count. Plain int values pass through unchanged.
+    """
+    encoded = {}
+    for key, val in setting.items():
+        if isinstance(val, (tuple, list)):
+            if len(val) != 2:
+                raise FeError(ValueError(
+                    f"cube_l1_reuse_setting[{key!r}] tuple must be (count, side), "
+                    f"but got length {len(val)}."
+                ))
+            count, side = val
+            # count is the merge granularity (>=1; 1 means no merge). Reject <1 here so the
+            # user gets a clear message instead of C++'s "Invalid merge count" after decoding.
+            if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count < _L1_REUSE_SIDE_BASE:
+                raise FeError(ValueError(
+                    f"cube_l1_reuse_setting[{key!r}] merge count must be an int in [1, {_L1_REUSE_SIDE_BASE}), "
+                    f"but got {count!r}."
+                ))
+            if not isinstance(side, str) or side.lower() not in _MATRIX_SIDE_TO_CODE:
+                raise FeError(ValueError(
+                    f"cube_l1_reuse_setting[{key!r}] side must be one of "
+                    f"{sorted(_MATRIX_SIDE_TO_CODE)}, but got {side!r}."
+                ))
+            encoded[key] = _MATRIX_SIDE_TO_CODE[side.lower()] * _L1_REUSE_SIDE_BASE + count
+        elif isinstance(val, int) and not isinstance(val, bool):
+            encoded[key] = val
+        else:
+            raise FeError(TypeError(
+                f"cube_l1_reuse_setting[{key!r}] value must be int or (count, side) tuple, "
+                f"but got {type(val).__name__}."
+            ))
+    return encoded
+
+
+def _decode_cube_l1_reuse_side(value: int):
+    """Inverse of the packing: int -> int (count only) or (count, side) tuple."""
+    if not isinstance(value, int) or value < _L1_REUSE_SIDE_BASE:
+        return value
+    side_code = value // _L1_REUSE_SIDE_BASE
+    count = value % _L1_REUSE_SIDE_BASE
+    side = _MATRIX_SIDE_FROM_CODE.get(side_code)
+    if side is None:
+        # Should not happen on the normal path (encode validates side). A stray code here
+        # usually means _L1_REUSE_SIDE_BASE is out of sync with C++ L1_REUSE_SIDE_BASE.
+        logging.warning(
+            "cube_l1_reuse_setting: cannot decode matrix side from packed value %d "
+            "(side code %d not in %s); returning merge count %d only.",
+            value, side_code, sorted(_MATRIX_SIDE_FROM_CODE), count)
+        return count
+    return (count, side)
 
 
 def _validate_hash_order_setting(setting_dict: Optional[Dict[Union[int, str], int]], param_name: str):
@@ -125,7 +189,8 @@ def set_print_options(*,
 
 def set_pass_options(*,
                      vec_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
-                     cube_l1_reuse_setting: Optional[Dict[Union[int, str], int]] = None,
+                     cube_l1_reuse_setting: Optional[
+                         Dict[Union[int, str], Union[int, Tuple[int, str]]]] = None,
                      cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
                      sg_set_scope: Optional[Union[int, tuple[int, bool, bool]]] = None,
                      auto_mix_partition: Optional[int] = None,
@@ -145,11 +210,20 @@ def set_pass_options(*,
           Function-granularity setting, only applies to the specified function
           with functionMagic=magic and local hashOrder=order
 
-    cube_l1_reuse_setting : Dict[Union[int, str], int]
+    cube_l1_reuse_setting : Dict[Union[int, str], Union[int, Tuple[int, str]]]
         Merged graph parameter, used to configure
         the merging quantity of subgraphs with the same structure
         and repeated transfer of the same GM data.
         Supports same key formats as vec_nbuffer_setting.
+
+        The value may be either an int merge count (current behavior) or a
+        (count, side) tuple, where side is "left" / "right" / "auto":
+        - "left"  bias the L1 reuse merge towards the left  matrix (consumer -> L0A)
+        - "right" bias the L1 reuse merge towards the right matrix (consumer -> L0B)
+        - "auto"  (default) keep the existing merge-axis selection
+        The side bias is applied per matched subgraph; if no candidate exists on
+        the chosen side, it falls back to the default selection. Example:
+        cube_l1_reuse_setting={"DEFAULT": 4, "func8_0": (1, "left"), "MM1": (2, "right")}
 
     cube_nbuffer_setting : Dict[Union[int, str], int]
         Merged graph parameter, used to configure
@@ -221,6 +295,11 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     result = {}
     for base_key in ('vec_nbuffer_setting', 'cube_l1_reuse_setting', 'cube_nbuffer_setting'):
         result[base_key] = _merge_split_settings(rst, base_key)
+    # Decode the packed (count, side) values of cube_l1_reuse_setting back to tuples so the
+    # round-trip mirrors what the user passed in.
+    result['cube_l1_reuse_setting'] = {
+        key: _decode_cube_l1_reuse_side(val) for key, val in result['cube_l1_reuse_setting'].items()
+    }
     val = rst.get("sg_set_scope", (-1, False, False))
     result['sg_set_scope'] = (int(val[0]), bool(val[1]), bool(val[2]))
     result['auto_mix_partition'] = rst.get('auto_mix_partition', 0)
@@ -470,6 +549,14 @@ class _Options:
 
         if self.matrix_size is not None:
             opts["matrix_size"] = self.matrix_size
+
+        # Encode cube_l1_reuse_setting (count | (count, side)) into the existing key by
+        # packing side into the int value. Done here so every entry path (jit / options
+        # decorator / context manager / set_options / set_pass_options) is covered by the
+        # single chokepoint. No extra config key is introduced; the pass decodes it.
+        l1_key = "pass.cube_l1_reuse_setting"
+        if l1_key in opts and isinstance(opts[l1_key], dict):
+            opts[l1_key] = _encode_cube_l1_reuse_side(opts[l1_key])
 
         return opts
 
