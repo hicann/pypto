@@ -119,8 +119,6 @@ public:
 
     Function* GetFunction() const { return func_.get(); }
 
-    int64_t AlignUp(int64_t x) const { return (x + 511) & (!511); } // 511 cacheline mask
-
     uint64_t GetWorkSpaceSize(
         const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs) const
     {

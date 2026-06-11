@@ -49,7 +49,7 @@ public:
     void InitMetaData(DeviceArgs& devArgs) const;
     bool GetEnableDumpDevPref() const;
     void ResetPerData() const;
-    void SyncProfData(const bool forceSync = false);
+    void SyncProfData();
     void SetDebugEnable();
 private:
     DeviceRunner() = default;

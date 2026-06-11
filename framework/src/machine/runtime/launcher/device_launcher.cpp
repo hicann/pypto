@@ -20,12 +20,11 @@
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/adump_api.h"
-#include "machine/runtime/context/device_launcher_context.h"
 #include "interface/utils/op_info_manager.h"
-#include "machine/runtime/launcher/device_launcher_driver_gate.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/runtime/runner/runtime_utils.h"
+#include "machine/runtime/launcher/device_launcher_driver_gate.h"
 #include "machine/host/perf_analysis.h"
 
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
@@ -465,7 +464,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
             return rc;
         }
-        devRunner.SyncProfData(true);
+        devRunner.SyncProfData();
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {

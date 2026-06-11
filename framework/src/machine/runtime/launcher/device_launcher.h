@@ -207,7 +207,7 @@ public:
             devProg->devArgs.hostPid = GetProcessId();
         }
         if (isDevice) {
-            devProg->devArgs.validGetPgMask = RuntimeAgent::GetAgent()->GetValidGetPgMask();
+            devProg->devArgs.validGetPgMask = RuntimeAgent::GetAgent().GetValidGetPgMask();
         }
 
         MACHINE_LOGD("Set aicore blockdim=%d, aicpu blockdim=%d.", config.blockdim, config.aicpuNum);

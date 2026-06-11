@@ -653,6 +653,7 @@ class JitCallableWrapper:
     ) -> None:
         """Run kernel on NPU or CPU (SIM)."""
         if self._runtime_options.get("run_mode", None) == RunMode.NPU:
+            self._set_config_option()
             pypto_impl.LaunchKernelTorch(
                 self, _current_stream(), torch_tensors, tensor_defs
             )

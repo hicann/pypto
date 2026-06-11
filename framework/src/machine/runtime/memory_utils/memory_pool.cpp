@@ -149,8 +149,7 @@ DevMemoryPool::~DevMemoryPool()
 void DevMemoryPool::AllocDevAddr(uint8_t** devAddr, const uint64_t size)
 {
     if (!AllocDevAddrInPool(devAddr, size)) {
-        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "RuntimeAgent::AllocDevAddrInPool failed for size %lu", size);
-        devAddr = nullptr;
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "AllocDevAddrInPool failed for size %lu", size);
     } else {
         MACHINE_LOGI("RuntimeAgentMemory: Alloc success %p", *devAddr);
     }

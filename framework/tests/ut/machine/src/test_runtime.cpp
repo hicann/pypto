@@ -42,5 +42,5 @@ TEST(RuntimeTest, Runtime01)
     std::cout << "start to test runtime" << std::endl;
     std::vector<int64_t> aiv;
     std::vector<int64_t> aic;
-    EXPECT_EQ(RuntimeAgent::GetAgent()->GetAicoreRegInfo(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL), 0);
+    EXPECT_EQ(RuntimeAgent::GetAgent().GetAicoreRegInfo(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL), 0);
 }

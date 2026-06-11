@@ -217,13 +217,13 @@ void DeviceRunner::InitAicpuPerfAddr(DeviceArgs& args)
 void DeviceRunner::GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t> &regs, std::vector<int64_t> &regsPmu)
 {
     if (archInfo == ArchInfo::DAV_3510) {
-        RuntimeAgent::GetAgent()->GetAicoreRegInfoForDAV3510(regs, regsPmu);
+        RuntimeAgent::GetAicoreRegInfoForDAV3510(regs, regsPmu);
         return;
     }
     if (archInfo == ArchInfo::DAV_2201) {
         std::vector<int64_t> aiv;
         std::vector<int64_t> aic;
-        if (RuntimeAgent::GetAgent()->GetAicoreRegInfo(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL) != 0) {
+        if (RuntimeAgent::GetAgent().GetAicoreRegInfo(aic, aiv, ADDR_MAP_TYPE_REG_AIC_CTRL) != 0) {
             return;
         }
         regs.insert(regs.end(), aic.begin(), aic.end());
@@ -231,7 +231,7 @@ void DeviceRunner::GetAicoreRegs(const ArchInfo archInfo, std::vector<int64_t> &
 
         std::vector<int64_t> aivPmu;
         std::vector<int64_t> aicPmu;
-        if (RuntimeAgent::GetAgent()->GetAicoreRegInfo(aicPmu, aivPmu, ADDR_MAP_TYPE_REG_AIC_PMU_CTRL) != 0) {
+        if (RuntimeAgent::GetAgent().GetAicoreRegInfo(aicPmu, aivPmu, ADDR_MAP_TYPE_REG_AIC_PMU_CTRL) != 0) {
             return;
         }
         regsPmu.insert(regsPmu.end(), aicPmu.begin(), aicPmu.end());
@@ -257,7 +257,7 @@ int DeviceRunner::InitDeviceArgs(DeviceArgs& args)
     return InitDeviceArgsCore(args);
 }
 
-void DeviceRunner::SyncProfData(const bool forceSync) { devicePerf_.SyncProfData(forceSync); }
+void DeviceRunner::SyncProfData() { devicePerf_.SyncProfData(); }
 
 /**************************** DynamicFunction *****************************/
 int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream)

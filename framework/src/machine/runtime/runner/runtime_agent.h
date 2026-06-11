@@ -30,10 +30,10 @@ public:
 
     void operator=(const RuntimeAgent& other) = delete;
 
-    static RuntimeAgent* GetAgent()
+    static RuntimeAgent& GetAgent()
     {
         static RuntimeAgent inst;
-        return &inst;
+        return inst;
     }
     int GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_t>& aiv, const int addrType);
     static void GetAicoreRegInfoForDAV3510(std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu);
