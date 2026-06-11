@@ -1982,6 +1982,45 @@ struct VecDupViewMatmulGraph {
     Operation* viewOp = nullptr;
 };
 
+TEST_F(AssignMemoryTypeTest, ReshapeOutputUsesUbWithMixedViewConsumers)
+{
+    ComputationalGraphBuilder G;
+    Shape shape{NUM_16, NUM_32};
+    Shape reshapeShape{NUM_32, NUM_16};
+    G.AddTensor(DataType::DT_FP16, shape, MemoryType::MEM_UNKNOWN, "vec_dup_out");
+    G.AddTensor(DataType::DT_FP16, reshapeShape, MemoryType::MEM_UNKNOWN, "reshape_out");
+    G.AddTensor(DataType::DT_FP16, reshapeShape, MemoryType::MEM_UNKNOWN, "mul_out");
+    G.AddTensor(DataType::DT_FP16, reshapeShape, MemoryType::MEM_UNKNOWN, "view_l1_out");
+    G.AddTensor(DataType::DT_FP16, reshapeShape, MemoryType::MEM_UNKNOWN, "l0a_out");
+
+    G.AddOp(Opcode::OP_VEC_DUP, {}, {"vec_dup_out"}, "vec_dup");
+    G.AddOp(Opcode::OP_RESHAPE, {"vec_dup_out"}, {"reshape_out"}, "reshape");
+    G.AddOp(Opcode::OP_MUL, {"reshape_out", "reshape_out"}, {"mul_out"}, "mul");
+    G.AddOp(Opcode::OP_VIEW, {"reshape_out"}, {"view_l1_out"}, "view_l1");
+    G.GetOp("view_l1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(Offset{0, 0}, MemoryType::MEM_L1));
+    G.AddOp(Opcode::OP_L1_TO_L0A, {"view_l1_out"}, {"l0a_out"}, "l1_to_l0a");
+
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+
+    auto reshapeInput = G.GetTensor("vec_dup_out");
+    auto reshapeOutput = G.GetTensor("reshape_out");
+    auto mulOutput = G.GetTensor("mul_out");
+    auto l1ViewOutput = G.GetTensor("view_l1_out");
+    auto l0aOutput = G.GetTensor("l0a_out");
+    EXPECT_EQ(reshapeInput->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(reshapeOutput->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(mulOutput->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(l1ViewOutput->GetMemoryTypeOriginal(), MemoryType::MEM_L1);
+    EXPECT_EQ(l0aOutput->GetMemoryTypeOriginal(), MemoryType::MEM_L0A);
+
+    auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(G.GetOp("view_l1")->GetOpAttribute());
+    ASSERT_NE(viewOpAttr, nullptr);
+    EXPECT_EQ(viewOpAttr->GetTo(), MemoryType::MEM_L1);
+}
+
 static void BuildVecDupViewMatmulNoAssembleGraph(
     std::shared_ptr<Function>& currFunctionPtr, VecDupViewMatmulGraph& graph)
 {

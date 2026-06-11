@@ -876,6 +876,12 @@ Status AssignMemoryType::InferReshapeOutputFromRequirement(const LogicalTensorPt
     }
     MemoryType outputRequirement = InferUniqueRequirementThroughViewConsumers(output);
     if (outputRequirement == MemoryType::MEM_UNKNOWN) {
+        std::unordered_set<const LogicalTensor*> visitedTensors;
+        if (HasRequirementThroughViewConsumers(output, MemoryType::MEM_UB, visitedTensors)) {
+            outputRequirement = MemoryType::MEM_UB;
+        }
+    }
+    if (outputRequirement == MemoryType::MEM_UNKNOWN) {
         return SUCCESS;
     }
     RETURN_IF_NOT_SUCCESS(SetOriginalChecked(output, outputRequirement, "InferReshapeOutputRequirement"));
@@ -923,6 +929,39 @@ MemoryType AssignMemoryType::InferUniqueRequirementThroughViewConsumers(
         return *candidates.begin();
     }
     return MemoryType::MEM_UNKNOWN;
+}
+
+bool AssignMemoryType::HasRequirementThroughViewConsumers(
+    const LogicalTensorPtr& tensor, MemoryType targetRequirement,
+    std::unordered_set<const LogicalTensor*>& visitedTensors) const
+{
+    if (tensor == nullptr || targetRequirement == MemoryType::MEM_UNKNOWN ||
+        !visitedTensors.insert(tensor.get()).second) {
+        return false;
+    }
+    auto consumerRequirements = inserter.GetConsumerRequirements(tensor);
+    for (const auto& item : consumerRequirements) {
+        Operation* consumerOp = item.first;
+        if (item.second == targetRequirement) {
+            return true;
+        }
+        if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
+        if (viewOpAttribute != nullptr && viewOpAttribute->GetTo() == targetRequirement) {
+            return true;
+        }
+        if (consumerOp->oOperand.empty() || consumerOp->oOperand.front() == nullptr) {
+            continue;
+        }
+        auto viewOutput = consumerOp->oOperand.front();
+        if (viewOutput->GetMemoryTypeOriginal() == targetRequirement ||
+            HasRequirementThroughViewConsumers(viewOutput, targetRequirement, visitedTensors)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool AssignMemoryType::CanUseUbForReshape(

@@ -140,6 +140,10 @@ private:
     MemoryType InferUniqueRequirementThroughViewConsumers(
         const LogicalTensorPtr& tensor, std::unordered_set<const LogicalTensor*>& visitedTensors) const;
 
+    bool HasRequirementThroughViewConsumers(
+        const LogicalTensorPtr& tensor, MemoryType targetRequirement,
+        std::unordered_set<const LogicalTensor*>& visitedTensors) const;
+
     bool CanUseUbForReshape(
         const LogicalTensorPtr& input, const LogicalTensorPtr& output, MemoryType inputRequirement,
         MemoryType outputOriginal) const;
