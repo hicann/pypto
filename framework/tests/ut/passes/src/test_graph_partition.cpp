@@ -1441,5 +1441,181 @@ TEST_F(GraphPartitionTest, TestUbToUbAssembleWithoutDynOffsetMergeable)
 
     EXPECT_EQ(mergeable, true);
 }
+
+/**
+ * Test case for PostCheck: VIEW op must not be the end node of a subgraph.
+ *
+ * After L1CopyInCombine, a L0C→L1 VIEW should be merged with its consumer ops
+ * (not just producers), ensuring the VIEW's output tensor has at least one
+ * consumer in the same subgraph.
+ *
+ * This graph contains multiple L0C→L1 VIEWs (VIEW_c1, VIEW_c2, VIEW_e1, VIEW_e2)
+ * whose outputs feed into L1_TO_L0A ops. The PostCheck verifies that each VIEW
+ * and its successor L1_TO_L0A are placed in the same subgraph.
+ *
+ * Graph structure:
+ *   Branch1: a1/b1 DDR→L1→L0A/L0B → MUL + 2xMULACC → acc2_l0c
+ *   Branch2: a2/b2 DDR→L1→L0A/L0B → MUL + 2xMULACC → acc2_l0c
+ *   Shared s: s_ddr→VIEW→L1 → fan-out to both branches' L0B
+ *   Stage2: acc2→VIEW→L1→L0A → MUL(s_l0b) → e1/e2_l0c
+ *   Reduce: e1/e2_l0c→VIEW→UB → ADD → ASSEMBLE→out_ddr
+ */
+static void AddBranch1Matmul(ComputationalGraphBuilder& G, DataType dtype, const Shape& shape)
+{
+    std::vector<std::string> a1Names{"a1_ddr", "a1_l1", "a1_l0a"};
+    std::vector<MemoryType> a1Mems{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    EXPECT_EQ(G.AddTensors(dtype, shape, a1Mems, a1Names, 0), true);
+    std::vector<std::string> b1Names{"b1_ddr", "b1_l1", "b1_l0b"};
+    std::vector<MemoryType> b1Mems{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_L0B};
+    EXPECT_EQ(G.AddTensors(dtype, shape, b1Mems, b1Names, 0), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"a1_ddr"}, {"a1_l1"}, "VIEW_a1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"b1_ddr"}, {"b1_l1"}, "VIEW_b1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"a1_l1"}, {"a1_l0a"}, "L1TO0A_a1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"b1_l1"}, {"b1_l0b"}, "L1TO0B_b1", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "br1_acc0_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {"a1_l0a", "b1_l0b"}, {"br1_acc0_l0c"}, "MUL1", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0A, "br1_a1_l0a"), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0B, "br1_b1_l0b"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"a1_l1"}, {"br1_a1_l0a"}, "L1TO0A_a1_iter2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"b1_l1"}, {"br1_b1_l0b"}, "L1TO0B_b1_iter2", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "br1_acc1_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MULACC_B, {"br1_a1_l0a", "br1_b1_l0b", "br1_acc0_l0c"}, {"br1_acc1_l0c"}, "MULACC1", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0A, "br1_a2_l0a"), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0B, "br1_b2_l0b"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"a1_l1"}, {"br1_a2_l0a"}, "L1TO0A_a1_iter3", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"b1_l1"}, {"br1_b2_l0b"}, "L1TO0B_b1_iter3", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "br1_acc2_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MULACC_B, {"br1_a2_l0a", "br1_b2_l0b", "br1_acc1_l0c"}, {"br1_acc2_l0c"}, "MULACC2", true), true);
+}
+
+static void AddBranch2Matmul(ComputationalGraphBuilder& G, DataType dtype, const Shape& shape)
+{
+    std::vector<std::string> a2Names{"a2_ddr", "a2_l1", "a2_l0a"};
+    std::vector<MemoryType> a2Mems{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    EXPECT_EQ(G.AddTensors(dtype, shape, a2Mems, a2Names, 0), true);
+    std::vector<std::string> b2Names{"b2_ddr", "b2_l1", "b2_l0b"};
+    std::vector<MemoryType> b2Mems{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_L0B};
+    EXPECT_EQ(G.AddTensors(dtype, shape, b2Mems, b2Names, 0), true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"a2_ddr"}, {"a2_l1"}, "VIEW_a2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"b2_ddr"}, {"b2_l1"}, "VIEW_b2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"a2_l1"}, {"a2_l0a"}, "L1TO0A_a2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"b2_l1"}, {"b2_l0b"}, "L1TO0B_b2", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "br2_acc0_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {"a2_l0a", "b2_l0b"}, {"br2_acc0_l0c"}, "MUL3", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0A, "br2_a1_l0a"), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0B, "br2_b1_l0b"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"a2_l1"}, {"br2_a1_l0a"}, "L1TO0A_a2_iter2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"b2_l1"}, {"br2_b1_l0b"}, "L1TO0B_b2_iter2", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "br2_acc1_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MULACC_B, {"br2_a1_l0a", "br2_b1_l0b", "br2_acc0_l0c"}, {"br2_acc1_l0c"}, "MULACC3", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0A, "br2_a2_l0a"), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0B, "br2_b2_l0b"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"a2_l1"}, {"br2_a2_l0a"}, "L1TO0A_a2_iter3", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"b2_l1"}, {"br2_b2_l0b"}, "L1TO0B_b2_iter3", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "br2_acc2_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MULACC_B, {"br2_a2_l0a", "br2_b2_l0b", "br2_acc1_l0c"}, {"br2_acc2_l0c"}, "MULACC4", true), true);
+}
+
+static void AddSharedAndReduce(ComputationalGraphBuilder& G, DataType dtype, const Shape& shape)
+{
+    std::vector<std::string> sNames{"s_ddr", "s_l1"};
+    std::vector<MemoryType> sMems{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1};
+    EXPECT_EQ(G.AddTensors(dtype, shape, sMems, sNames, 0), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0B, "s_l0b_1"), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0B, "s_l0b_2"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"s_ddr"}, {"s_l1"}, "VIEW_s", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"s_l1"}, {"s_l0b_1"}, "L1TO0B_s1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0B, {"s_l1"}, {"s_l0b_2"}, "L1TO0B_s2", true), true);
+
+    std::vector<std::string> c1Names{"c1_l1_new", "c1_l0a_new"};
+    std::vector<MemoryType> c1Mems{MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    EXPECT_EQ(G.AddTensors(dtype, shape, c1Mems, c1Names, 0), true);
+    std::vector<std::string> c2Names{"c2_l1_new", "c2_l0a_new"};
+    std::vector<MemoryType> c2Mems{MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    EXPECT_EQ(G.AddTensors(dtype, shape, c2Mems, c2Names, 0), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"br1_acc2_l0c"}, {"c1_l1_new"}, "VIEW_c1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"br2_acc2_l0c"}, {"c2_l1_new"}, "VIEW_c2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"c1_l1_new"}, {"c1_l0a_new"}, "L1TO0A_c1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_L1_TO_L0A, {"c2_l1_new"}, {"c2_l0a_new"}, "L1TO0A_c2", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "e1_l0c"), true);
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_L0C, "e2_l0c"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {"c1_l0a_new", "s_l0b_1"}, {"e1_l0c"}, "MUL5", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_A_MUL_B, {"c2_l0a_new", "s_l0b_2"}, {"e2_l0c"}, "MUL6", true), true);
+
+    std::vector<std::string> addNames{"e1_ub", "e2_ub", "add_ub"};
+    EXPECT_EQ(G.AddTensors(dtype, shape, addNames), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"e1_l0c"}, {"e1_ub"}, "VIEW_e1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_VIEW, {"e2_l0c"}, {"e2_ub"}, "VIEW_e2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ADD, {"e1_ub", "e2_ub"}, {"add_ub"}, "ADD1", true), true);
+
+    EXPECT_EQ(G.AddTensor(dtype, shape, MemoryType::MEM_DEVICE_DDR, "out_ddr"), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_ASSEMBLE, {"add_ub"}, {"out_ddr"}, "ASSEMBLE_out", true), true);
+}
+
+void GetDualBranchMatmulGraph(ComputationalGraphBuilder& G)
+{
+    DataType dtype = DataType::DT_FP16;
+    Shape shape{32, 32};
+
+    AddBranch1Matmul(G, dtype, shape);
+    AddBranch2Matmul(G, dtype, shape);
+    AddSharedAndReduce(G, dtype, shape);
+
+    EXPECT_EQ(G.SetInCast({"a1_ddr", "b1_ddr", "a2_ddr", "b2_ddr", "s_ddr"}), true);
+    EXPECT_EQ(G.SetOutCast({"out_ddr"}), true);
+}
+
+static bool HasConsumerInSameSubgraph(const Operation* op, const std::shared_ptr<LogicalTensor>& oTensor)
+{
+    for (auto& consumer : oTensor->GetConsumers()) {
+        if (consumer->GetSubgraphID() == op->GetSubgraphID()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void VerifyViewNotEndNode(const std::unordered_map<std::string, Operation*>& operations)
+{
+    for (auto& opPair : operations) {
+        Operation* op = opPair.second;
+        EXPECT_NE(op, nullptr);
+        EXPECT_GE(op->GetSubgraphID(), 0);
+        if (op->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        for (auto oTensor : op->GetOOperands()) {
+            EXPECT_TRUE(HasConsumerInSameSubgraph(op, oTensor))
+                << "VIEW op " << opPair.first << " (opmagic: " << op->GetOpMagic()
+                << ") is end node in subgraph " << op->GetSubgraphID();
+        }
+    }
+}
+
+TEST_F(GraphPartitionTest, TestDualBranchMatmulPostCheck)
+{
+    ComputationalGraphBuilder G;
+    GetDualBranchMatmulGraph(G);
+    Function* function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(gpp.PostCheck(*function), SUCCESS);
+    VerifyViewNotEndNode(G.operations_);
+}
+
 } // namespace tile_fwk
 } // namespace npu
