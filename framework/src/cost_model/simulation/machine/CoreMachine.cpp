@@ -15,6 +15,7 @@
 
 #include "cost_model/simulation/machine/CoreMachine.h"
 #include "cost_model/simulation/base/ModelTop.h"
+#include "cost_model/simulation/machine/DeviceMachine.h"
 #include "cost_model/simulation/common/ISA.h"
 #include "cost_model/simulation/arch/TileAllocPipeImpl.h"
 #include "cost_model/simulation/value/TileCalculator.h"
@@ -225,6 +226,14 @@ void CoreMachine::PushCompletion(uint64_t taskId)
     packet.currentType = machineType;
     packet.cycleInfo.taskExecuteStartCycle = executionStartCycle;
     packet.cycleInfo.taskExecuteEndCycle = GetSim()->GetCycles();
+    auto devicePtr = std::dynamic_pointer_cast<DeviceMachine>(
+        GetSim()->machineGroup[int(MachineType::DEVICE)][0]);
+    if (devicePtr != nullptr) {
+        auto it = devicePtr->savedTaskMap.find(taskId);
+        if (it != devicePtr->savedTaskMap.end() && it->second != nullptr) {
+            it->second->taskEndCycle = GetSim()->GetCycles();
+        }
+    }
     completionQueue.Enqueue(packet);
     GetSim()->taskCompleteSeq[taskId] = GetSim()->taskCompleteSeqIndex++;
     GetSim()->GetCalendarGenerator()->LogTaskComplete(taskId, machineId, executionStartCycle, GetSim()->GetCycles());
@@ -315,6 +324,9 @@ void CoreMachine::ProcessDeviceTaskPacket(const TaskPack& packet)
     executingFunctionName = function->funcName;
     executingFunctionPtr = function;
     executionStartCycle = GetSim()->GetCycles();
+    if (packet.task.taskPtr != nullptr) {
+        packet.task.taskPtr->taskStartCycle = executionStartCycle;
+    }
     GetSim()->taskToCounter[packet.taskId].push_back(GetSim()->globalCounter++);
 }
 

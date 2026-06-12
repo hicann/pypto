@@ -381,6 +381,8 @@ public:
     int psgId = -1;
     uint64_t rootIndex = 0;
     uint64_t uniqueKey = 0;
+    uint64_t taskStartCycle = 0;
+    uint64_t taskEndCycle = 0;
 
     std::string GetColorLabel(uint64_t mode)
     {

@@ -51,6 +51,7 @@ public:
     std::set<uint64_t> readySet; // For replay mode
 
     TaskMap taskMap;
+    TaskMap savedTaskMap;
     std::deque<TaskMap> taskMapQueue;
     std::map<uint64_t, uint64_t> executingTaskMap;
 

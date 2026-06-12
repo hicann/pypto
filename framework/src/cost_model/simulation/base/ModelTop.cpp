@@ -15,6 +15,8 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <deque>
+#include <set>
 #include "cost_model/simulation/base/ModelTop.h"
 
 #include "cost_model/simulation/base/Machine.h"
@@ -28,6 +30,125 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
 #include "tilefwk/file.h"
+
+namespace {
+
+using namespace CostModel;
+
+static const std::unordered_map<std::string, PerfOpType> VEC_OPCODE_MAP = {
+    // elem-binary: arithmetic
+    {"ADD", PERF_ELEM_BINARY}, {"SUB", PERF_ELEM_BINARY}, {"MUL", PERF_ELEM_BINARY},
+    {"DIV", PERF_ELEM_BINARY}, {"ADD_BRC", PERF_ELEM_BINARY}, {"SUB_BRC", PERF_ELEM_BINARY},
+    {"MUL_BRC", PERF_ELEM_BINARY}, {"DIV_BRC", PERF_ELEM_BINARY}, {"MAX_BRC", PERF_ELEM_BINARY},
+    {"MIN_BRC", PERF_ELEM_BINARY}, {"S_ADD", PERF_ELEM_BINARY}, {"S_SUB", PERF_ELEM_BINARY},
+    {"S_MUL", PERF_ELEM_BINARY}, {"S_DIV", PERF_ELEM_BINARY}, {"S_MAX", PERF_ELEM_BINARY},
+    {"S_MIN", PERF_ELEM_BINARY}, {"ADDS", PERF_ELEM_BINARY}, {"SUBS", PERF_ELEM_BINARY},
+    {"MULS", PERF_ELEM_BINARY}, {"DIVS", PERF_ELEM_BINARY}, {"MAXS", PERF_ELEM_BINARY},
+    {"MINS", PERF_ELEM_BINARY}, {"S_ADDS", PERF_ELEM_BINARY}, {"S_SUBS", PERF_ELEM_BINARY},
+    {"S_MULS", PERF_ELEM_BINARY}, {"S_DIVS", PERF_ELEM_BINARY}, {"S_MAXS", PERF_ELEM_BINARY},
+    {"S_MINS", PERF_ELEM_BINARY}, {"MAXIMUM", PERF_ELEM_BINARY}, {"MINIMUM", PERF_ELEM_BINARY},
+    {"POW", PERF_ELEM_BINARY},
+    // elem-unary: math / transform
+    {"EXP", PERF_ELEM_UNARY}, {"SQRT", PERF_ELEM_UNARY}, {"RSQRT", PERF_ELEM_UNARY},
+    {"RECIPROCAL", PERF_ELEM_UNARY}, {"NEG", PERF_ELEM_UNARY}, {"LN", PERF_ELEM_UNARY},
+    {"EXPM1", PERF_ELEM_UNARY}, {"ABS", PERF_ELEM_UNARY}, {"FLOOR", PERF_ELEM_UNARY},
+    {"CEIL", PERF_ELEM_UNARY}, {"ROUND", PERF_ELEM_UNARY}, {"TRUNC", PERF_ELEM_UNARY},
+    {"SIGN", PERF_ELEM_UNARY}, {"SIGNBIT", PERF_ELEM_UNARY}, {"CAST", PERF_ELEM_UNARY},
+    {"CONVERT", PERF_ELEM_UNARY}, {"BITWISENOT", PERF_ELEM_UNARY}, {"LOGICALNOT", PERF_ELEM_UNARY},
+    {"ISFINITE", PERF_ELEM_UNARY}, {"LOGICALAND", PERF_ELEM_UNARY},
+    {"TRANSPOSE_VNCHWCONV", PERF_ELEM_UNARY}, {"BRCB", PERF_ELEM_UNARY},
+    // elem-relu: activation
+    {"RELU", PERF_ELEM_RELU}, {"HUB", PERF_ELEM_RELU},
+    // elem-reduce: dimension reduction
+    {"ROWMAX", PERF_ELEM_REDUCE}, {"ROWSUM", PERF_ELEM_REDUCE},
+    {"ROWEXPMAX", PERF_ELEM_REDUCE}, {"ROWEXPSUM", PERF_ELEM_REDUCE},
+    {"ROWSUMLINE", PERF_ELEM_REDUCE}, {"ROWMAXLINE", PERF_ELEM_REDUCE},
+    {"ROWMINLINE", PERF_ELEM_REDUCE}, {"ROWMAX_SINGLE", PERF_ELEM_REDUCE},
+    {"ROWMIN_SINGLE", PERF_ELEM_REDUCE}, {"ROWSUM_SINGLE", PERF_ELEM_REDUCE},
+    {"REDUCE_ACC", PERF_ELEM_REDUCE}, {"CUM_SUM", PERF_ELEM_REDUCE},
+    {"PAIRMAX", PERF_ELEM_REDUCE}, {"PAIRMIN", PERF_ELEM_REDUCE},
+    {"PAIRSUM", PERF_ELEM_REDUCE},
+    // elem-sort: sort / topk
+    {"TOPK", PERF_ELEM_SORT}, {"TOPK_SORT", PERF_ELEM_SORT}, {"TOPK_MERGE", PERF_ELEM_SORT},
+    {"TOPK_EXTRACT", PERF_ELEM_SORT}, {"TILEDMRGSORT", PERF_ELEM_SORT},
+    {"BITSORT", PERF_ELEM_SORT}, {"MRGSORT", PERF_ELEM_SORT}, {"ARGSORT", PERF_ELEM_SORT},
+    {"SORT", PERF_ELEM_SORT}, {"EXTRACT", PERF_ELEM_SORT}, {"COMP_SWAP", PERF_ELEM_SORT},
+    {"MERGE", PERF_ELEM_SORT},
+    // elem-select: compare / gather / scatter / concat / reshape-like-in-vec
+    {"CMP", PERF_ELEM_SELECT}, {"CMPS", PERF_ELEM_SELECT},
+    {"WHERE_TT", PERF_ELEM_SELECT}, {"WHERE_TS", PERF_ELEM_SELECT},
+    {"WHERE_ST", PERF_ELEM_SELECT}, {"WHERE_SS", PERF_ELEM_SELECT},
+    {"GATHER", PERF_ELEM_SELECT}, {"GATHER_FROM_UB", PERF_ELEM_SELECT},
+    {"GATHER_ELEMENT", PERF_ELEM_SELECT}, {"SCATTER", PERF_ELEM_SELECT},
+    {"SCATTER_ELEMENT", PERF_ELEM_SELECT}, {"SCATTER_UPDATE", PERF_ELEM_SELECT},
+    {"SCATTER_SCALAR", PERF_ELEM_SELECT}, {"INDEX_PUT", PERF_ELEM_SELECT},
+    {"INDEX_ADD", PERF_ELEM_SELECT}, {"INDEX_OUTCAST", PERF_ELEM_SELECT},
+    {"CONCAT", PERF_ELEM_SELECT}, {"DUPLICATE", PERF_ELEM_SELECT},
+    {"EXPAND", PERF_ELEM_SELECT}, {"ONEHOT", PERF_ELEM_SELECT},
+    {"COMPACT", PERF_ELEM_SELECT}, {"REGISTER_COPY", PERF_ELEM_SELECT},
+    {"VEC_DUP", PERF_ELEM_SELECT}, {"UB_TO_UB", PERF_ELEM_SELECT},
+    {"UB_COPY_ND2NZ", PERF_ELEM_SELECT}, {"FILLPAD", PERF_ELEM_SELECT},
+    {"MAX_POOL", PERF_ELEM_SELECT}, {"RANGE", PERF_ELEM_SELECT},
+    {"FUSED_OP", PERF_ELEM_SELECT}, {"CALL_NOT_EXPAND", PERF_ELEM_SELECT},
+};
+
+int GetOpTypeIndex(const TileOpPtr& tileOp)
+{
+    const auto& opcode = tileOp->opcode;
+    auto pipeType = tileOp->pipeType;
+
+    switch (pipeType) {
+        case CorePipeType::PIPE_CUBE:
+            return PERF_MATMUL;
+
+        case CorePipeType::PIPE_VECTOR_ALU:
+            {
+                auto it = VEC_OPCODE_MAP.find(opcode);
+                if (it != VEC_OPCODE_MAP.end())
+                    return it->second;
+            }
+            return -1;
+
+        case CorePipeType::PIPE_MTE_IN:
+            if (opcode.find("L1_COPY_IN") != std::string::npos || opcode == "GATHER_IN_L1")
+                return PERF_L1_COPY_IN;
+            return PERF_UB_COPY_IN;
+
+        case CorePipeType::PIPE_MTE_OUT:
+            if (opcode == "L0C_COPY_OUT")
+                return PERF_L0C_COPY_OUT;
+            return PERF_UB_COPY_OUT;
+
+        default:
+            return -1;
+    }
+}
+
+uint64_t TileShapeElements(const TileOpPtr& tileOp)
+{
+    if (!tileOp || tileOp->iOperand.empty())
+        return 0;
+    auto& tile = tileOp->iOperand[0];
+    if (!tile)
+        return 0;
+    return static_cast<uint64_t>(tile->SizeinBytes());
+}
+
+std::vector<uint64_t> ComputeComputeAmount(const FunctionPtr& func)
+{
+    std::vector<uint64_t> result(PERF_OP_TYPE_COUNT, 0);
+    for (const auto& kv : func->tileOpMap) {
+        if (!kv.second)
+            continue;
+        int typeIdx = GetOpTypeIndex(kv.second);
+        if (typeIdx < 0)
+            continue;
+        result[typeIdx] += TileShapeElements(kv.second);
+    }
+    return result;
+}
+
+} // anonymous namespace
 
 namespace CostModel {
 
@@ -172,7 +293,7 @@ void SimSys::CalendarDispatchTasksToCore(int key, std::shared_ptr<CoreMachine> c
         TaskPack packet;
         packet.taskId = task.first;
         packet.task.taskPtr = calendarTaskMap[task.first];
-        ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, packet.task.taskPtr != nullptr) 
+        ASSERT(CostModel::ForwardSimErrorScene::SCHEDULE_TASK_ERROR, packet.task.taskPtr != nullptr)
             << "[SIMULATION]: "
             << "task does not exist. taskId=" << packet.taskId;
         packet.task.functionHash = task.second;
@@ -246,7 +367,9 @@ void SimSys::BuildAICPU(DevicePtr device, uint64_t idInDevice)
     uint64_t aicNum = config.cubeMachineNumberPerAICPU;
     uint64_t aivNum = config.vecMachineNumberPerAICPU;
     uint64_t mixedCoreNum = 0;
-    ASSERT(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG), config.coreMachineNumberPerAICPU == (aicNum + aivNum))
+    ASSERT(
+        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG),
+        config.coreMachineNumberPerAICPU == (aicNum + aivNum))
         << "[SIMULATION]: "
         << "The number of cores must be equal to the sum of the aic and aiv. Please reconfigure them.";
     if (config.cubeVecMixMode) {
@@ -433,8 +556,8 @@ bool SimSys::IsTerminate() const { return terminate; }
 void SimSys::ReportDeadlock(size_t machineId)
 {
     deadlock = true;
-    SIMULATION_LOGE(CostModel::ForwardSimErrorScene::DEAD_LOCK,
-        "[ReportDeadlock] Machine %zu is deadlock at cycle %lu", machineId,
+    SIMULATION_LOGE(
+        CostModel::ForwardSimErrorScene::DEAD_LOCK, "[ReportDeadlock] Machine %zu is deadlock at cycle %lu", machineId,
         static_cast<unsigned long>(globalCycles));
 }
 
@@ -572,9 +695,9 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
     SIMULATION_LOGW("Pipe SwimLane Graph Generated (PNG & HTML): %s", pipeDetailPath.c_str());
     std::string drawScriptPath = GetCurrentSharedLibPath() + "/scripts/draw_pipe_swim_lane.py";
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(drawScriptPath))
-         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
+        << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(pipeDetailPath))
-         << "pipe.swim.json does not exist. pipeDetailPath: " << pipeDetailPath;
+        << "pipe.swim.json does not exist. pipeDetailPath: " << pipeDetailPath;
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
     auto args = SplitString(cmd);
     int ret = SafeExecCommand(args);
@@ -607,9 +730,9 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     SIMULATION_LOGW("SwimLane Graph Generated (PNG): %s", outSwimPath.c_str());
     std::string drawScriptPath = GetCurrentSharedLibPath() + "/scripts/print_swim_lane.py";
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(drawScriptPath))
-         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
+        << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
     CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(outSwimPath))
-         << "swim.json does not exist. outSwimPath: " << outSwimPath;
+        << "swim.json does not exist. outSwimPath: " << outSwimPath;
     std::string cmd = "python3 " + drawScriptPath + " " + outSwimPath + " -t";
     auto args1 = SplitString(cmd);
     int result1 = SafeExecCommand(args1);
@@ -626,12 +749,15 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     SIMULATION_LOGI("program_json_path: %s", program_json_path.c_str());
     std::string label_type = "--label_type=1 --time_convert_denominator=1800"; // default 1.8GHz
     SIMULATION_LOGI("label_type: %s", label_type.c_str());
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(mergeScriptPath)) 
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(mergeScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << mergeScriptPath;
     if (devicePtr->config.submitTopo) {
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(topo_txt_path))
+        CHECK(
+            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(topo_txt_path))
             << "dyn_topo.txt does not exist. topo_txt_path: " << topo_txt_path;
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(program_json_path))
+        CHECK(
+            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
+            npu::tile_fwk::FileExist(program_json_path))
             << "program.json does not exist. program_json_path: " << program_json_path;
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topo_txt_path + " " + program_json_path + " " +
               label_type;
@@ -656,6 +782,148 @@ void SimSys::OutputCalendarScheduleCpp(std::string prefix)
     std::string outPath = GetFileName(outdir, jsonPath, prefix, ".calendar.cpp");
     calendarGenerator->GenCalendarCpp(outPath);
     SIMULATION_LOGW("Genearte Calendar File: %s", outPath.c_str());
+}
+
+std::map<uint64_t, std::vector<uint64_t>> SimSys::ComputeTaskAmounts(const TaskMap& taskMap)
+{
+    std::map<uint64_t, std::vector<uint64_t>> computeAmountMap;
+    for (const auto& [taskId, task] : taskMap) {
+        FunctionPtr func = nullptr;
+        try {
+            func = functionCache.GetFunction(task->functionHash);
+        } catch (const std::out_of_range&) {
+            func = nullptr;
+        }
+        if (func) {
+            computeAmountMap[taskId] = ComputeComputeAmount(func);
+            continue;
+        }
+        computeAmountMap[taskId] = std::vector<uint64_t>(PERF_OP_TYPE_COUNT, 0);
+    }
+    return computeAmountMap;
+}
+
+SimSys::LongestPathResult SimSys::ComputeLongestPaths(
+    const TaskMap& taskMap,
+    const std::map<uint64_t, std::vector<uint64_t>>& computeAmountMap)
+{
+    const uint64_t NO_PRED = static_cast<uint64_t>(-1);
+
+    std::map<uint64_t, std::vector<uint64_t>> longestPath;
+    std::map<uint64_t, std::vector<uint64_t>> chosenPred;
+    for (const auto& kv : taskMap) {
+        longestPath[kv.first] = computeAmountMap.at(kv.first);
+        chosenPred[kv.first] = std::vector<uint64_t>(PERF_OP_TYPE_COUNT, NO_PRED);
+    }
+
+    std::map<uint64_t, int> inDegree;
+    for (const auto& [taskId, task] : taskMap) {
+        inDegree[taskId] = static_cast<int>(task->predecessors.size());
+    }
+
+    std::deque<uint64_t> queue;
+    for (const auto& [taskId, deg] : inDegree) {
+        if (deg == 0) {
+            queue.push_back(taskId);
+        }
+    }
+
+    while (!queue.empty()) {
+        auto vId = queue.front();
+        queue.pop_front();
+
+        auto& task = taskMap.at(vId);
+        for (auto succId : task->successors) {
+            if (taskMap.find(succId) == taskMap.end())
+                continue;
+
+            auto& vLp = longestPath[vId];
+            auto& succLp = longestPath[succId];
+            auto& succComputeAmount = computeAmountMap.at(succId);
+            auto& succChosenPred = chosenPred[succId];
+
+            for (int i = 0; i < PERF_OP_TYPE_COUNT; i++) {
+                uint64_t candidate = vLp[i] + succComputeAmount[i];
+                if (candidate > succLp[i]) {
+                    succLp[i] = candidate;
+                    succChosenPred[i] = vId;
+                }
+            }
+
+            inDegree[succId]--;
+            if (inDegree[succId] == 0) {
+                queue.push_back(succId);
+            }
+        }
+    }
+
+    return {longestPath, chosenPred};
+}
+
+Json SimSys::FormatPerfMetricsJson(
+    const std::map<uint64_t, std::vector<uint64_t>>& longestPath,
+    const std::map<uint64_t, std::vector<uint64_t>>& chosenPred)
+{
+    const uint64_t NO_PRED = static_cast<uint64_t>(-1);
+    Json tileOpLongestPaths;
+    for (int i = 0; i < PERF_OP_TYPE_COUNT; i++) {
+        uint64_t maxLp = 0;
+        uint64_t endTaskId = NO_PRED;
+        for (const auto& [taskId, lp] : longestPath) {
+            if (lp[i] > maxLp) {
+                maxLp = lp[i];
+                endTaskId = taskId;
+            }
+        }
+
+        if (maxLp == 0)
+            continue;
+
+        std::vector<uint64_t> chain;
+        uint64_t curId = endTaskId;
+        while (curId != NO_PRED) {
+            chain.push_back(curId);
+            curId = chosenPred.at(curId)[i];
+        }
+        std::reverse(chain.begin(), chain.end());
+
+        Json entry;
+        entry["longestPathChain"] = chain;
+        entry["amountLp"] = maxLp;
+        tileOpLongestPaths[PERF_OP_TYPE_NAMES[i]] = entry;
+    }
+    return tileOpLongestPaths;
+}
+
+void SimSys::OutputPerfMetrics(std::string prefix)
+{
+    if (machineGroup[int(MachineType::DEVICE)].empty()) {
+        SIMULATION_LOGW("[PerfMetrics] No device machine, skipping.");
+        return;
+    }
+    auto devicePtr = std::dynamic_pointer_cast<DeviceMachine>(machineGroup[int(MachineType::DEVICE)][0]);
+    auto& taskMap = devicePtr->savedTaskMap;
+
+    if (taskMap.empty()) {
+        SIMULATION_LOGW("[PerfMetrics] Empty task map, skipping.");
+        return;
+    }
+
+    auto computeAmountMap = ComputeTaskAmounts(taskMap);
+    auto [longestPath, chosenPred] = ComputeLongestPaths(taskMap, computeAmountMap);
+    auto tileOpLongestPaths = FormatPerfMetricsJson(longestPath, chosenPred);
+
+    Json output;
+    Json summary;
+    summary["totalCycles"] = globalCycles;
+    summary["tileOpLongestPaths"] = tileOpLongestPaths;
+    output["summary"] = summary;
+
+    std::string outPath = GetFileName(outdir, jsonPath, prefix, "perf.metrics.json");
+    std::ofstream os(outPath);
+    os << output.dump(1) << std::endl;
+    os.close();
+    SIMULATION_LOGW("[PerfMetrics] Output path: %s", outPath.c_str());
 }
 
 void SimSys::OutputConfig(std::string prefix)
@@ -810,9 +1078,10 @@ uint64_t SimSys::GetCycles() const { return globalCycles; }
 
 void SimSys::UpdateNextCycles(uint64_t nextCycle)
 {
-    ASSERT(CostModel::ForwardSimErrorScene::CYCLES_ERROR, nextCycle > globalCycles) << "[SIMULATION]: "
-                                     << "nextCycle is less than or equels to globalCycles. nextCycles=" << nextCycle
-                                     << ", globalCycles=" << globalCycles;
+    ASSERT(CostModel::ForwardSimErrorScene::CYCLES_ERROR, nextCycle > globalCycles)
+        << "[SIMULATION]: "
+        << "nextCycle is less than or equels to globalCycles. nextCycles=" << nextCycle
+        << ", globalCycles=" << globalCycles;
     nextSimulationCycles = std::min(nextSimulationCycles, nextCycle);
 }
 

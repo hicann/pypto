@@ -37,6 +37,28 @@
 #include "cost_model/simulation/pv/PvModel.h"
 
 namespace CostModel {
+
+// Op types for performance metrics (longest-path per-op-type computation amount)
+constexpr int PERF_OP_TYPE_COUNT = 11;
+enum PerfOpType {
+    PERF_MATMUL = 0,
+    PERF_ELEM_BINARY = 1,
+    PERF_ELEM_UNARY = 2,
+    PERF_ELEM_RELU = 3,
+    PERF_ELEM_REDUCE = 4,
+    PERF_ELEM_SORT = 5,
+    PERF_ELEM_SELECT = 6,
+    PERF_UB_COPY_IN = 7,
+    PERF_UB_COPY_OUT = 8,
+    PERF_L1_COPY_IN = 9,
+    PERF_L0C_COPY_OUT = 10,
+};
+inline const char* PERF_OP_TYPE_NAMES[] = {
+    "matmul", "elem-binary", "elem-unary", "elem-relu", "elem-reduce",
+    "elem-sort", "elem-select", "ub-copyin", "ub-copyout", "l1-copyin",
+    "l0c-copyout"
+};
+
 using MachinePtr = std::shared_ptr<Machine>;
 using DevicePtr = std::shared_ptr<DeviceMachine>;
 using AICPUPtr = std::shared_ptr<AICPUMachine>;
@@ -168,6 +190,7 @@ public:
     void OutputLogForSwimLane(std::string prefix = "");
     void OutputLogForPipeSwimLane(std::string prefix = "");
     void OutputCalendarScheduleCpp(std::string prefix = "");
+    void OutputPerfMetrics(std::string prefix = "");
     void ProcessTaskMap(TaskMap& taskMap, std::string prefix = "");
     void DrawTasks(const TaskMap& taskMap, std::string prefix = "");
     void DebugDrawFunc(
@@ -179,9 +202,21 @@ public:
     uint64_t RegisterQueuePid(std::string key);
     void GetDeviceReadyQueueInfo(size_t& devicePid, std::set<uint64_t>& readyQueueTidSet);
 
-    // For output files
     static std::string GetFileName(const std::string& file);
     static std::string GetFileName(
         const std::string& dir, const std::string& inputFile, const std::string& preFix, const std::string& suffix);
+
+private:
+    std::map<uint64_t, std::vector<uint64_t>> ComputeTaskAmounts(const TaskMap& taskMap);
+    struct LongestPathResult {
+        std::map<uint64_t, std::vector<uint64_t>> longestPath;
+        std::map<uint64_t, std::vector<uint64_t>> chosenPred;
+    };
+    LongestPathResult ComputeLongestPaths(
+        const TaskMap& taskMap,
+        const std::map<uint64_t, std::vector<uint64_t>>& computeAmountMap);
+    Json FormatPerfMetricsJson(
+        const std::map<uint64_t, std::vector<uint64_t>>& longestPath,
+        const std::map<uint64_t, std::vector<uint64_t>>& chosenPred);
 };
 } // namespace CostModel

@@ -187,6 +187,7 @@ void CostModelInterface::Report()
         sim->OutputPerfettoTrace();
         sim->OutputLogForSwimLane();
         sim->OutputCalendarScheduleCpp();
+        sim->OutputPerfMetrics();
     } else if (sim->mode == SimMode::LEAF_FUNCTION) {
         sim->OutputTrace();
         sim->OutputPerfettoTrace();
@@ -195,6 +196,7 @@ void CostModelInterface::Report()
     if (sim->mode != SimMode::EMULATOR) {
         sim->OutputConfig();
         sim->PrintStat();
+        sim->OutputPerfMetrics();
     }
     if (sim->IsDeadlock() && !sim->config.testDeadLock) {
         throw std::invalid_argument("Simulation Deadlock Error");

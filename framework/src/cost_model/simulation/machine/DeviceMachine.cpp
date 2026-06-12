@@ -82,6 +82,7 @@ void DeviceMachine::SubmitDeviceTask()
     }
     SetReplayPreEnd();
     taskMap = std::move(taskMapQueue.front()), taskMapQueue.pop_front();
+    savedTaskMap.insert(taskMap.begin(), taskMap.end());
     SetReplayPreStart();
     for (const auto& [taskId, task] : taskMap) {
         currentSeq = task->seqNo;
