@@ -96,7 +96,7 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
 
     // memcpy D2H
     std::vector<void*> kernelArg(MAX_AICPU_ARG_NUM, nullptr);
-    int rc = RuntimeMemcpy(kernelArg.data(), argsSize, kernelArgAddr, argsSize, RtMemcpyKind::DEVICE_TO_HOST);
+    int rc = RuntimeMemcpyDirect(kernelArg.data(), argsSize, kernelArgAddr, argsSize, RtMemcpyKind::DEVICE_TO_HOST);
     if (rc != 0) {
         MACHINE_LOGW("GetDeviceExceptionDumpInfo D2H memcpy failed: ret=%d", rc);
         return rc;

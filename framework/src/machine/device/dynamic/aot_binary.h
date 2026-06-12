@@ -78,12 +78,7 @@ struct AOTBinary {
             return;
         }
         PerfBegin(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
-        int ret = memcpy_s(reinterpret_cast<void*>(pool.base), size, data, size);
-        if (ret != 0) {
-            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "AOTBinary memcpy_s failed, ret %d", ret);
-            DEV_ASSERT(DevCommonErr::MEMCPY_FAILED, false);
-            return;
-        }
+        DevMemcpyS(reinterpret_cast<void*>(pool.base), size, data, size);
         __builtin___clear_cache(reinterpret_cast<char*>(pool.base), reinterpret_cast<char*>(pool.base) + size);
         PerfEnd(PERF_EVT_CONTROL_FLOW_MAPEXE_MEMCPY);
     }

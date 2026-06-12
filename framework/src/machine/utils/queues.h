@@ -118,9 +118,7 @@ struct LockableQueueGeneric : public QueueGeneric<T> {
 
     __attribute__((always_inline)) inline void UnsafeEnqueue(T* x, uint32_t count)
     {
-        errno_t err =
-            memcpy_s(this->elem_ + this->tail_, sizeof(T) * (this->Capacity() - this->tail_), x, sizeof(T) * count);
-        ASSERT(SchedErr::READY_QUEUE_OVERFLOW, err == 0);
+        DevMemcpyS(this->elem_ + this->tail_, sizeof(T) * (this->Capacity() - this->tail_), x, sizeof(T) * count);
         this->tail_ += count;
     }
 
@@ -153,8 +151,7 @@ struct LockableQueueGeneric : public QueueGeneric<T> {
             __atomic_store_n(&this->tail_, t, std::memory_order_release); // Is release order necessary here?
             return false;
         }
-        errno_t err = memcpy_s(this->elem_ + t, sizeof(T) * count, x, sizeof(T) * count);
-        ASSERT(SchedErr::READY_QUEUE_OVERFLOW, err == 0); // allways True; here just to pass codecheck
+        DevMemcpyS(this->elem_ + t, sizeof(T) * count, x, sizeof(T) * count);
         return true;
     }
 
@@ -189,8 +186,7 @@ struct LockableQueueGeneric : public QueueGeneric<T> {
             return DataRange(nullptr, nullptr);
         }
         __atomic_store_n(&this->tail_, t - cnt, std::memory_order_release); // Is release order necessary here?
-        errno_t err = memcpy_s(out, sizeof(T) * max_count, this->elem_ + t - cnt, sizeof(T) * cnt);
-        ASSERT(SchedErr::READY_QUEUE_OVERFLOW, err == 0); // allways True; here just to pass codecheck
+        DevMemcpyS(out, sizeof(T) * max_count, this->elem_ + t - cnt, sizeof(T) * cnt);
         return DataRange(out, out + cnt);
     }
 

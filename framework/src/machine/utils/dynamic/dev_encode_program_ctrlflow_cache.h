@@ -419,7 +419,7 @@ struct DevControlFlowCache {
                 return;
             }
             dynDataBackup->predCountBackup = predCountBackup;
-            memcpy_s(dynDataBackup->predCountBackup, backupSize, &duppedData->GetOperationCurrPredCount(0), backupSize);
+            DevMemcpyS(dynDataBackup->predCountBackup, backupSize, &duppedData->GetOperationCurrPredCount(0), backupSize);
 
             BitmapDataBackup(dynDataCache, dynDataBackup);
         }
@@ -435,7 +435,7 @@ struct DevControlFlowCache {
             DynFuncDataBackup* dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
             DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
             size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
-            memcpy_s(&duppedData->GetOperationCurrPredCount(0), backupSize, dynDataBackup->predCountBackup, backupSize);
+            DevMemcpyS(&duppedData->GetOperationCurrPredCount(0), backupSize, dynDataBackup->predCountBackup, backupSize);
 
             BitmapDataRestore(dynDataCache, dynDataBackup);
         }
@@ -538,7 +538,7 @@ struct DevControlFlowCache {
             }
             mixTaskDataBackup->opWrapOffsetList[dupIndex] = wrapOffsetBackupElem;
             uint16_t* list = base->devTask.mixTaskData.opWrapOffsetList[dupIndex];
-            memcpy_s(wrapOffsetBackupElem, wrapOffsetBackupSize, list, wrapOffsetBackupSize);
+            DevMemcpyS(wrapOffsetBackupElem, wrapOffsetBackupSize, list, wrapOffsetBackupSize);
         }
         return true;
     }
@@ -565,7 +565,7 @@ struct DevControlFlowCache {
         mixTaskDataBackup->queue.tail = wrapInfoQueue->tail;
         mixTaskDataBackup->queue.capacity = wrapInfoQueue->capacity;
         mixTaskDataBackup->queue.elem = wrapQueueBackupElem;
-        memcpy_s(mixTaskDataBackup->queue.elem, wrapInfoBackupSize, wrapInfoQueue->elem, wrapInfoBackupSize);
+        DevMemcpyS(mixTaskDataBackup->queue.elem, wrapInfoBackupSize, wrapInfoQueue->elem, wrapInfoBackupSize);
 
         size_t wrapPtrBackupSize = sizeof(uint64_t) * wrapInfoQueue->capacity; // 与wrapInfoQueue元素数量相同
         for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
@@ -578,13 +578,13 @@ struct DevControlFlowCache {
             mixTaskDataBackup->wrapQueueForThread[i].head = wrapQueueForThread->head;
             mixTaskDataBackup->wrapQueueForThread[i].tail = wrapQueueForThread->tail;
             mixTaskDataBackup->wrapQueueForThread[i].elem = wrapPtrQueueBackupElem;
-            memcpy_s(
+            DevMemcpyS(
                 mixTaskDataBackup->wrapQueueForThread[i].elem, wrapPtrBackupSize, wrapQueueForThread->elem,
                 wrapPtrBackupSize);
         }
 
         constexpr size_t arrSize = sizeof(uint64_t) * MAX_STITCH_FUNC_NUM;
-        memcpy_s(mixTaskDataBackup->opWrapList, arrSize, base->devTask.mixTaskData.opWrapList, arrSize);
+        DevMemcpyS(mixTaskDataBackup->opWrapList, arrSize, base->devTask.mixTaskData.opWrapList, arrSize);
 
         if (!BackupOpWrapOffsetList(base, mixTaskDataBackup)) {
             return;
@@ -607,7 +607,7 @@ struct DevControlFlowCache {
         wrapInfoQueue->capacity = mixTaskDataBackup->queue.capacity;
 
         size_t wrapInfoBackupSize = sizeof(WrapInfo) * wrapInfoQueue->capacity;
-        memcpy_s(wrapInfoQueue->elem, wrapInfoBackupSize, mixTaskDataBackup->queue.elem, wrapInfoBackupSize);
+        DevMemcpyS(wrapInfoQueue->elem, wrapInfoBackupSize, mixTaskDataBackup->queue.elem, wrapInfoBackupSize);
 
         size_t wrapPtrBackupSize = sizeof(uint64_t) * wrapInfoQueue->capacity; // 与wrapInfoQueue元素数量相同
         for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
@@ -615,13 +615,13 @@ struct DevControlFlowCache {
                 reinterpret_cast<StaticReadyCoreFunctionQueue*>(base->devTask.mixTaskData.wrapQueueForThread[i]);
             wrapQueueForThread->head = mixTaskDataBackup->wrapQueueForThread[i].head;
             wrapQueueForThread->tail = mixTaskDataBackup->wrapQueueForThread[i].tail;
-            memcpy_s(
+            DevMemcpyS(
                 wrapQueueForThread->elem, wrapPtrBackupSize, mixTaskDataBackup->wrapQueueForThread[i].elem,
                 wrapPtrBackupSize);
         }
 
         constexpr size_t arrSize = sizeof(uint64_t) * MAX_STITCH_FUNC_NUM;
-        memcpy_s(base->devTask.mixTaskData.opWrapList, arrSize, mixTaskDataBackup->opWrapList, arrSize);
+        DevMemcpyS(base->devTask.mixTaskData.opWrapList, arrSize, mixTaskDataBackup->opWrapList, arrSize);
 
         for (uint32_t dupIndex = 0; dupIndex < base->dynFuncDataList->funcNum; dupIndex++) {
             auto funcWrapIdNum = base->dynFuncDataCacheList[dupIndex].devFunc->wrapIdNum_;
@@ -631,7 +631,7 @@ struct DevControlFlowCache {
                 continue;
             }
             size_t wrapOffsetBackupSize = funcWrapIdNum * sizeof(uint16_t);
-            memcpy_s(list, wrapOffsetBackupSize, mixTaskDataBackup->opWrapOffsetList[dupIndex], wrapOffsetBackupSize);
+            DevMemcpyS(list, wrapOffsetBackupSize, mixTaskDataBackup->opWrapOffsetList[dupIndex], wrapOffsetBackupSize);
         }
     }
 
@@ -725,7 +725,7 @@ struct DevControlFlowCache {
                 return;
             }
             dynDataBackup->rawTensorAddrBackup = rawTensorAddrBackup;
-            memcpy_s(dynDataBackup->rawTensorAddrBackup, backupSize, dynData->rawTensorAddr, backupSize);
+            DevMemcpyS(dynDataBackup->rawTensorAddrBackup, backupSize, dynData->rawTensorAddr, backupSize);
         }
     }
 
@@ -741,7 +741,7 @@ struct DevControlFlowCache {
             DevAscendFunctionDuppedData* duppedData = dynDataCache->duppedData;
             size_t backupSize = sizeof(uint64_t) * (duppedData->GetIncastSize() + duppedData->GetOutcastSize());
 
-            memcpy_s(dynData->rawTensorAddr, backupSize, dynDataBackup->rawTensorAddrBackup, backupSize);
+            DevMemcpyS(dynData->rawTensorAddr, backupSize, dynDataBackup->rawTensorAddrBackup, backupSize);
         }
     }
 

@@ -20,6 +20,7 @@
 #include <optional>
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/runtime_api.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
 #include "interface/utils/file_utils.h"
@@ -43,7 +44,7 @@ inline RtError NormalizedRtMemcpy(
     if (DeviceLauncher::IsCaptureMode()) {
         captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
     }
-    return RuntimeMemcpy(dst, destMax, src, cnt, kind);
+    return RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
 }
 } // namespace
 

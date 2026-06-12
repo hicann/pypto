@@ -46,13 +46,13 @@ void EslModelLauncher::CopyInputOutputData()
     for (size_t k = 0; k < inputDataList.size(); k++) {
         auto &inputData = inputDataList[k];
         if (inputData) {
-            memcpy_s(inputData->GetDevPtr(), inputData->size(), (uint8_t *)inputData->data(), inputData->size());
+            MemcpyS(inputData->GetDevPtr(), inputData->size(), (uint8_t *)inputData->data(), inputData->size());
         }
     }
     for (size_t k = 0; k < outputDataList.size(); k++) {
         auto &outputData = outputDataList[k];
         if (outputData) {
-            memcpy_s(outputData->GetDevPtr(), outputData->size(), (uint8_t *)outputData->data(), outputData->size());
+            MemcpyS(outputData->GetDevPtr(), outputData->size(), (uint8_t *)outputData->data(), outputData->size());
         }
     }
 }

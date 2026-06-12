@@ -20,6 +20,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "machine/device/dynamic/device_utils.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "test_suite_stest_ops.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "operator/models/nsa/gen_Attention.h"

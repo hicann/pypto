@@ -244,6 +244,23 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
 
 #endif
 
+#define DevMemcpyS(dest, destMax, src, count) \
+    npu::tile_fwk::DevMemcpySWithCheck((dest), (destMax), (src), (count), __func__, __FILE__, __LINE__)
+
+inline void DevMemcpySWithCheck(void *dest, size_t destMax, const void *src, size_t count,
+                                 const char *func, const char *file, int line)
+{
+    if (count > 0) {
+        const errno_t ret = memcpy_s(dest, destMax, src, count);
+        if (ret != EOK) {
+            DEV_ERROR(DevCommonErr::MEMCPY_FAILED,
+                    "memcpy_s failed: func=%s, file=%s:%d, ret=%d, dest=%p, destMax=%zu, src=%p, count=%zu",
+                    func, file, line, ret, dest, destMax, src, count);
+            DEV_ASSERT(DevCommonErr::MEMCPY_FAILED, false);
+        }
+    }
+}
+
 #define BACKTRACE_STACK_COUNT 64
 
 static inline void PrintBacktrace [[maybe_unused]] (

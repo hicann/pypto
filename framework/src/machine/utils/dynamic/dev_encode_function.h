@@ -359,16 +359,16 @@ public:
         if (byteSize == 0) {
             return;
         }
-        memcpy_s(deadEndBuf, byteSize, &At(deadEndHubBitmap_, 0), byteSize);
-        memcpy_s(tailBuf, byteSize, &At(tailTaskBitmap_, 0), byteSize);
+        DevMemcpyS(deadEndBuf, byteSize, &At(deadEndHubBitmap_, 0), byteSize);
+        DevMemcpyS(tailBuf, byteSize, &At(tailTaskBitmap_, 0), byteSize);
     }
     inline void RestoreBitmapFrom(const uint64_t* deadEndBuf, const uint64_t* tailBuf, size_t byteSize)
     {
         if (byteSize == 0) {
             return;
         }
-        memcpy_s(&At(deadEndHubBitmap_, 0), byteSize, deadEndBuf, byteSize);
-        memcpy_s(&At(tailTaskBitmap_, 0), byteSize, tailBuf, byteSize);
+        DevMemcpyS(&At(deadEndHubBitmap_, 0), byteSize, deadEndBuf, byteSize);
+        DevMemcpyS(&At(tailTaskBitmap_, 0), byteSize, tailBuf, byteSize);
     }
     inline uint32_t GetOperationStitchIndex(int operationIndex) const
     {

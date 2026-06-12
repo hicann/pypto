@@ -90,22 +90,12 @@ TEST_F(TestAdapterApi, test_runtime_api)
 {
     EXPECT_EQ(RuntimeMalloc(nullptr, 0, 0, 0), RT_SUCCESS);
     EXPECT_EQ(RuntimeMemset(nullptr, 0, 0, 0), RT_SUCCESS);
-    EXPECT_EQ(RuntimeMemcpy(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST), RT_SUCCESS);
-    EXPECT_EQ(
-        RuntimeMemcpyWithLocation(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, "ut_scene", __FILE__, __LINE__),
-        RT_SUCCESS);
+    EXPECT_EQ(RuntimeMemcpyDirect(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST), RT_SUCCESS);
 
     RuntimeCaptureContext::SetCaptureMode(true);
     RuntimeCaptureContext::SetTestThreadCaptureMode(AclMdlRICaptureMode::RELAXED, true);
-    EXPECT_EQ(RuntimeMemcpy(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST), RT_SUCCESS);
-    EXPECT_EQ(
-        RuntimeMemcpyWithLocation(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, __func__, __FILE__, __LINE__),
-        RT_SUCCESS);
-    EXPECT_EQ(RuntimeMemcpyAsync(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, nullptr), RT_SUCCESS);
-    EXPECT_EQ(
-        RuntimeMemcpyAsyncWithLocation(
-            nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, nullptr, __func__, __FILE__, __LINE__),
-        RT_SUCCESS);
+    EXPECT_EQ(RuntimeMemcpyDirect(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST), RT_SUCCESS);
+    EXPECT_EQ(RuntimeMemcpyDirectAsync(nullptr, 0, nullptr, 0, RtMemcpyKind::HOST_TO_HOST, nullptr), RT_SUCCESS);
     RuntimeCaptureContext::SetTestThreadCaptureMode(AclMdlRICaptureMode::RELAXED, false);
     RuntimeCaptureContext::SetCaptureMode(false);
     EXPECT_EQ(RuntimeFree(nullptr), RT_SUCCESS);

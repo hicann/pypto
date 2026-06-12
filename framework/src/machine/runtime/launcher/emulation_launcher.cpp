@@ -16,8 +16,10 @@
 #include "machine/runtime/launcher/emulation_launcher.h"
 #include <thread>
 #include "tilefwk/error_code.h"
+#include "tilefwk/error.h"
 #include "machine/host/backend.h"
 #include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
@@ -113,7 +115,7 @@ int EmulationLauncher::EmulationRunOnce(
         launchCtrlFlowCache =
             reinterpret_cast<DevControlFlowCache*>(memUtils.AllocZero(inputCtrlCache->usedCacheSize, nullptr));
         if (launchCtrlFlowCache != nullptr) {
-            memcpy_s(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
+            MemcpyS(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
         }
     }
     int rc = EmulationLaunchOnceWithHostTensorData(

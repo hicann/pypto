@@ -553,9 +553,9 @@ void DevAscendFunction::InitOperationNoPredNoSuccIndices(
 
     ONFILLCONTENT
     {
-        memcpy_s(
+        DevMemcpyS(
             &At(noPredOpList_, 0), noPredOpList_.ByteSize(), noPredOpList.data(), noPredOpList.size() * sizeof(int));
-        memcpy_s(
+        DevMemcpyS(
             &At(noSuccOpList_, 0), noSuccOpList_.ByteSize(), noSuccOpList.data(), noSuccOpList.size() * sizeof(int));
 
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, noPredOpList_.size() == noPredOpList.size())
@@ -985,7 +985,7 @@ void DevAscendFunction::InitIncastOutcast(
     rawName_.HostInitDataSizeOffset(initOffset, (initRawName.size() / 8 + 1) * 8); // 8 byte align
     ONFILLCONTENT
     {
-        memcpy_s(&At(rawName_, 0), rawName_.size(), initRawName.c_str(), initRawName.size());
+        DevMemcpyS(&At(rawName_, 0), rawName_.size(), initRawName.c_str(), initRawName.size());
         memset_s(
             &At(rawName_, initRawName.size()), rawName_.size() - initRawName.size(), 0,
             rawName_.size() - initRawName.size());
@@ -2030,7 +2030,7 @@ void DevAscendProgram::InitSymbolTable(
         ONFILLCONTENT
         {
             symbolTable[index].name.HostAssignRangeOffsetSize(symbolTableNameList, offset, name.size());
-            memcpy_s(symbolTable[index].name.Data(), symbolTable[index].name.size(), name.c_str(), name.size());
+            DevMemcpyS(symbolTable[index].name.Data(), symbolTable[index].name.size(), name.c_str(), name.size());
         }
         offset += AlignUp(name.size(), sizeof(uint64_t));
     }
@@ -2049,7 +2049,7 @@ void DevAscendProgram::InitExpressionTableBinary(
         ONFILLCONTENT { expressionTableOffsetList[i] = offset; }
         ONFILLCONTENT
         {
-            memcpy_s(
+            DevMemcpyS(
                 expressionTableBinary.Data() + offset, expressionTableBinaryListInput[i].size(),
                 expressionTableBinaryListInput[i].data(), expressionTableBinaryListInput[i].size());
         }
@@ -2065,7 +2065,7 @@ void DevAscendProgram::InitControlFlowBinary(
     hostControlFlowBinary.HostInitDataSizeOffset(initOffset, alignedHostControlFlowBinaryInputSize);
     ONFILLCONTENT
     {
-        memcpy_s(
+        DevMemcpyS(
             hostControlFlowBinary.Data(), hostControlFlowBinaryInput.size(), hostControlFlowBinaryInput.data(),
             hostControlFlowBinaryInput.size());
     }
@@ -2074,7 +2074,7 @@ void DevAscendProgram::InitControlFlowBinary(
     devControlFlowBinary.HostInitDataSizeOffset(initOffset, alignedDevControlFlowBinaryInputSize);
     ONFILLCONTENT
     {
-        memcpy_s(
+        DevMemcpyS(
             devControlFlowBinary.Data(), devControlFlowBinaryInput.size(), devControlFlowBinaryInput.data(),
             devControlFlowBinaryInput.size());
     }
@@ -2093,7 +2093,7 @@ void DevAscendProgram::InitDevEncodeList(
         };
         ONFILLCONTENT
         {
-            memcpy_s(
+            DevMemcpyS(
                 devEncodeList[index].Data(), devEncodeList[index].size(), devEncodeListInput[index].data(),
                 devEncodeListInput[index].size());
         };
@@ -2132,7 +2132,10 @@ void DevAscendProgram::InitPrefetchInfoList(
 {
     prefetchInfoList.HostInitDataSizeOffset(initOffset, l2InfoList.size());
     for (size_t index = 0; index < l2InfoList.size(); index++) {
-        ONFILLCONTENT { memcpy_s(&prefetchInfoList[index], sizeof(PrefetchInfo), &l2InfoList[index], sizeof(L2Info)); };
+        ONFILLCONTENT
+        {
+            DevMemcpyS(&prefetchInfoList[index], sizeof(PrefetchInfo), &l2InfoList[index], sizeof(L2Info));
+        };
     }
     return;
 }

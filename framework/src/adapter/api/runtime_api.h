@@ -21,14 +21,10 @@
 namespace npu::tile_fwk {
 RtError RuntimeMalloc(void **devPtr, uint64_t size, RtMemType type, const uint16_t moduleId);
 RtError RuntimeMemset(void *devPtr, uint64_t destMax, uint32_t val, uint64_t cnt);
-RtError RuntimeMemcpy(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind);
+RtError RuntimeMemcpyDirect(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind);
+RtError RuntimeMemcpyDirectAsync(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
+                                 RtStream stm);
 
-RtError RuntimeMemcpyAsync(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
-                           RtStream stm);
-RtError RuntimeMemcpyWithLocation(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
-                                  const char *scene, const char *file, int line);
-RtError RuntimeMemcpyAsyncWithLocation(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
-                                       RtStream stm, const char *scene, const char *file, int line);
 RtError RuntimeFree(void *devPtr);
 
 RtError RuntimeSetDevice(int32_t devId);
@@ -70,10 +66,3 @@ RtError RuntimeKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args,
 RtError RuntimeGeExceptionRegInfo(RtExceptionInfo* exceptionInfo, RtExceptionRegInfo* execptionReg);
 }
 
-#ifndef PYPTO_RUNTIME_API_IMPL
-#define RuntimeMemcpy(dst, destMax, src, cnt, kind) \
-    npu::tile_fwk::RuntimeMemcpyWithLocation((dst), (destMax), (src), (cnt), (kind), __func__, __FILE__, __LINE__)
-#define RuntimeMemcpyAsync(dst, destMax, src, cnt, kind, stm) \
-    npu::tile_fwk::RuntimeMemcpyAsyncWithLocation(                                                             \
-        (dst), (destMax), (src), (cnt), (kind), (stm), __func__, __FILE__, __LINE__)
-#endif

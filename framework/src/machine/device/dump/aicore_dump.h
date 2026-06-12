@@ -84,26 +84,20 @@ struct DumpTensorData {
                 TraverseAllAhapeIndexCombinations(shape, stride, offset, idx + 1, dims, newAddr);
             }
         } else {
-            auto ret = memcpy_s(
+            DevMemcpyS(
                 reinterpret_cast<uint8_t*>(data) + dataOffset, shape[idx] * dataByte,
                 reinterpret_cast<const uint8_t*>(tensorAddr) + offset[idx] * dataByte, shape[idx] * dataByte);
-            if (ret != 0) {
-                DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.dump.prep: memcpy_s failed, ret=%d.", ret);
-            }
             dataOffset = dataOffset + shape[idx] * dataByte;
         }
     }
 
     DumpTensorData(DumpTensorInfo info, uint64_t dataAddr)
     {
-        auto ret = memcpy_s(
-            reinterpret_cast<uint8_t*>(dataAddr), 
-            sizeof(DumpTensorInfo), 
-            reinterpret_cast<const uint8_t*>(&info), 
+        DevMemcpyS(
+            reinterpret_cast<uint8_t*>(dataAddr),
+            sizeof(DumpTensorInfo),
+            reinterpret_cast<const uint8_t*>(&info),
             sizeof(DumpTensorInfo));
-        if (ret != 0) {
-            DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.dump.prep: memcpy_s failed, ret=%d.", ret);
-        }
         dataOffset = sizeof(DumpTensorInfo);
         dataByte = BytesOf(static_cast<DataType>(info.dataType));
         datasize = dataByte;
@@ -134,11 +128,8 @@ struct DumpTensorData {
         if (is_contiguous) {
             // Copy the tensor data in one shot
             uint64_t copy_size = datasize - sizeof(DumpTensorInfo);
-            ret = memcpy_s(reinterpret_cast<uint8_t*>(data) + dataOffset, copy_size,
+            DevMemcpyS(reinterpret_cast<uint8_t*>(data) + dataOffset, copy_size,
                     reinterpret_cast<const uint8_t*>(info.tensorAddr), copy_size);
-            if (ret != 0) {
-                DEV_ERROR(DevCommonErr::MEMCPY_FAILED, "#sche.dump.prep: memcpy_s failed, ret=%d.", ret);
-            }
             dataOffset += copy_size;
         } else {
             TraverseAllAhapeIndexCombinations(info.shape, stride, info.offset, 0, info.dims, info.tensorAddr);

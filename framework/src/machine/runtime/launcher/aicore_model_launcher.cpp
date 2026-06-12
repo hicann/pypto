@@ -17,6 +17,7 @@
 #include <vector>
 #include <unistd.h>
 #include "machine/utils/device_log.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "tilefwk/aicpu_perf.h"
 #if defined(__linux__)
 #include <sched.h>
@@ -242,7 +243,7 @@ int AicoreModelLauncher::AicoreModelRunOnce(
         launchCtrlFlowCache =
             reinterpret_cast<DevControlFlowCache*>(memUtils.AllocZero(inputCtrlCache->usedCacheSize, nullptr));
         if (launchCtrlFlowCache) {
-            memcpy_s(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
+            MemcpyS(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
         }
     }
     int rc = AicoreModelLaunchOnceWithHostTensorData(

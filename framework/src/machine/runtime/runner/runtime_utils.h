@@ -19,10 +19,84 @@
 #include "tilefwk/error.h"
 #include "tilefwk/error_code.h"
 #include "adapter/api/runtime_api.h"
+#include "adapter/api/runtime_capture_context.h"
 #include "adapter/api/acl_api.h"
 #include "machine/runtime/context/stream_context.h"
+#include "securec.h"
+
+#define MemcpyS(dest, destMax, src, count) \
+    npu::tile_fwk::MemcpySWithCheck((dest), (destMax), (src), (count), __func__, __FILE__, __LINE__)
+#define RuntimeMemcpy(dst, destMax, src, cnt, kind) \
+    npu::tile_fwk::RuntimeMemcpyWithCheck((dst), (destMax), (src), (cnt), (kind), __func__, __FILE__, __LINE__)
+#define RuntimeMemcpyAsync(dst, destMax, src, cnt, kind, stm) \
+    npu::tile_fwk::RuntimeMemcpyAsyncWithCheck((dst), (destMax), (src), (cnt), (kind), (stm), \
+                                                __func__, __FILE__, __LINE__)
 
 namespace npu::tile_fwk {
+inline void MemcpySWithCheck(void *dest, size_t destMax, const void *src, size_t count,
+                              const char *func, const char *file, int line)
+{
+    const errno_t ret = memcpy_s(dest, destMax, src, count);
+    if (ret != EOK) {
+        MACHINE_LOGE(DevCommonErr::MEMCPY_FAILED,
+                     "memcpy_s failed: func=%s, file=%s:%d, ret=%d, dest=%p, destMax=%zu, src=%p, count=%zu",
+                     func, file, line, ret, dest, destMax, src, count);
+        MACHINE_ASSERT(false) << "memcpy_s failed, ret=" << ret;
+    }
+}
+
+inline void CheckCaptureRelaxedBeforeMemcpy(const char *api, const char *func, const char *file, int line)
+{
+    if (!RuntimeCaptureContext::IsCaptureMode()) {
+        return;
+    }
+    AclMdlRICaptureMode currentMode = AclMdlRICaptureMode::GLOBAL;
+    const bool queryOk = RuntimeCaptureContext::QueryThreadCaptureMode(currentMode);
+    if (!queryOk) {
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
+                     "cannot query ACL capture thread mode before %s, func=%s, file=%s:%d",
+                     api, func, file, line);
+        MACHINE_ASSERT(false) << api << ": cannot query ACL capture thread mode";
+    }
+    if (currentMode != AclMdlRICaptureMode::RELAXED) {
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
+                     "%s requires RELAXED capture mode on this thread, "
+                     "func=%s, file=%s:%d, currentMode=%d, required=RELAXED(%d), "
+                     "fix: switch to RELAXED before %s "
+                     "(AclMdlRICaptureThreadExchangeMode or AclModeGuard)",
+                     api, func, file, line, static_cast<int>(currentMode),
+                     static_cast<int>(AclMdlRICaptureMode::RELAXED), api);
+        MACHINE_ASSERT(false) << api << " requires RELAXED capture mode";
+    }
+}
+
+inline void RuntimeMemcpyWithCheck(void *dst, uint64_t destMax, const void *src, uint64_t cnt, RtMemcpyKind kind,
+                                    const char *func, const char *file, int line)
+{
+    CheckCaptureRelaxedBeforeMemcpy("RuntimeMemcpy", func, file, line);
+    const RtError ret = RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
+    if (ret != RT_SUCCESS) {
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
+                     "RuntimeMemcpy failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p",
+                     func, file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
+        MACHINE_ASSERT(false) << "RuntimeMemcpy failed, ret=" << static_cast<int>(ret);
+    }
+}
+
+inline void RuntimeMemcpyAsyncWithCheck(void *dst, uint64_t destMax, const void *src, uint64_t cnt,
+                                         RtMemcpyKind kind, RtStream stm,
+                                         const char *func, const char *file, int line)
+{
+    CheckCaptureRelaxedBeforeMemcpy("RuntimeMemcpyAsync", func, file, line);
+    const RtError ret = RuntimeMemcpyDirectAsync(dst, destMax, src, cnt, kind, stm);
+    if (ret != RT_SUCCESS) {
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
+                     "RuntimeMemcpyAsync failed: func=%s, file=%s:%d, ret=%d, kind=%d, size=%lu, dst=%p, src=%p",
+                     func, file, line, static_cast<int>(ret), static_cast<int>(kind), cnt, dst, src);
+        MACHINE_ASSERT(false) << "RuntimeMemcpyAsync failed, ret=" << static_cast<int>(ret);
+    }
+}
+
 inline void CheckDeviceId()
 {
     int32_t devId = 0;

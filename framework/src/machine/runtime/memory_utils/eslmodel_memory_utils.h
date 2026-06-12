@@ -180,10 +180,7 @@ struct EslModelMemoryUtils {
 
     void MemCopytoMapAddr(uint8_t *dst, uint8_t *src, uintptr_t size)
     {
-        errno_t result = memcpy_s(dst, size, src, size);
-        if (result != 0) {
-            std::cerr << "Memory copy failed with error code: " << result << std::endl;
-        }
+        MemcpyS(dst, size, src, size);
     }
 };
 }

@@ -74,7 +74,7 @@ void* CopyDataToDevice(const void *dataPtr, const uint64_t dataSize)
         MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to alloc dev memory of size %lu", dataSize);
         return nullptr;
     }
-    if (RuntimeMemcpy(devAddr, dataSize, dataPtr, dataSize, RtMemcpyKind::HOST_TO_DEVICE) != RT_SUCCESS) {
+    if (RuntimeMemcpyDirect(devAddr, dataSize, dataPtr, dataSize, RtMemcpyKind::HOST_TO_DEVICE) != RT_SUCCESS) {
         DevMemoryPool::Instance().FreeDevAddr(devAddr);
         MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Failed to copy data to dev of size %lu", dataSize);
         return nullptr;

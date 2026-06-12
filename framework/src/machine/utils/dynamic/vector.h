@@ -43,7 +43,7 @@ public:
         }
         ExpandCapacity(oth.size_);
         if constexpr (std::is_trivially_copyable_v<value_type>) {
-            memcpy_s(data(), sizeof(value_type) * oth.size_, oth.data(), sizeof(value_type) * oth.size_);
+            DevMemcpyS(data(), sizeof(value_type) * oth.size_, oth.data(), sizeof(value_type) * oth.size_);
         } else {
             for (size_type i = 0; i < oth.size_; i++) {
                 new (data() + i) value_type(oth[i]);
@@ -223,7 +223,7 @@ private:
             value_type* newData = alloc.As<value_type>();
             value_type* oldData = data();
             if constexpr (std::is_trivially_copyable_v<value_type>) {
-                memcpy_s(newData, sizeof(value_type) * size_, oldData, sizeof(value_type) * size_);
+                DevMemcpyS(newData, sizeof(value_type) * size_, oldData, sizeof(value_type) * size_);
             } else {
                 for (size_type i = 0; i < size_; i++) {
                     new (newData + i) value_type(std::move(oldData[i]));

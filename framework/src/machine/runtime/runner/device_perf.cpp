@@ -104,7 +104,7 @@ void DevicePerf::SetDebugEnable()
 {
     for (uint32_t i = 0; i < GetPerfDataSize(); i++) {
         ResetMetrics(i);
-        RuntimeMemcpy(
+        RuntimeMemcpyDirect(
             (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +
                 i * SHARED_BUFFER_SIZE,
             sizeof(uint64_t), reinterpret_cast<uint8_t*>(&perfData_[i]), sizeof(uint64_t),
@@ -118,7 +118,7 @@ bool DevicePerf::RunPrepare() const
     bool ret = true;
     if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL || ENABLE_PERF_TRACE || PMU_COLLECT) {
         for (uint32_t i = 0; i < GetPerfDataSize(); i++) {
-            ret = RuntimeMemcpy(
+            ret = RuntimeMemcpyDirect(
                 (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +
                     i * SHARED_BUFFER_SIZE,
                     sizeof(uint64_t), reinterpret_cast<const uint8_t*>(&perfData_[i]), sizeof(uint64_t),

@@ -222,7 +222,7 @@ void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat)
     MsprofAicpuPyPtoLogHead* logHead = logHead_[coreIdx];
     PyPtoMsprofAdditionalInfo& logMsg = logMsg_[coreIdx];
     if (logHead->cnt < logDataMaxNum_ - 1) {
-        memcpy_s(
+        DevMemcpyS(
             reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(logData_[coreIdx]) + logDataSize_ * logHead->cnt),
             logDataSize_, taskStat, logDataSize_);
         logMsg.dataLen += logDataSize_;
@@ -231,15 +231,15 @@ void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat)
             "aicore profiling gen log mesg, taskid: %d core id: %d, task start: %ld, end: %ld.", taskStat->taskId,
             coreIdx, taskStat->execStart, taskStat->execEnd);
     } else if (logHead->cnt == logDataMaxNum_ - 1) {
-        memcpy_s(
+        DevMemcpyS(
             reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(logData_[coreIdx]) + logDataSize_ * logHead->cnt),
             logDataSize_, taskStat, logDataSize_);
         logHead->cnt++;
         logMsg.dataLen += logDataSize_;
-        int32_t ret = profReportAdditionalInfoFunc_(1, &logMsg, sizeof(PyPtoMsprofAdditionalInfo));
-        DEV_DEBUG("aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx, logHead->cnt, ret);
+        int32_t reportRet = profReportAdditionalInfoFunc_(1, &logMsg, sizeof(PyPtoMsprofAdditionalInfo));
+        DEV_DEBUG("aicore profiling send log mesg, core id: %d, task num: %d, ret: %d.", coreIdx, logHead->cnt, reportRet);
         // reset
-        (void)(ret);
+        (void)(reportRet);
         logHead->cnt = 0;
         logMsg.dataLen = logHeadSize_;
     }
@@ -488,12 +488,12 @@ void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskI
         pmuHead_[coreIdx]->dataType = PROF_DATATYPE_PMU;
         pmuHead_[coreIdx]->taskId = 0;
         pmuHead_[coreIdx]->streamId = 0;
-        memcpy_s(pmuData_[coreIdx], pmuDataSize_, &data, pmuDataSize_);
+        DevMemcpyS(pmuData_[coreIdx], pmuDataSize_, &data, pmuDataSize_);
         pmuMsg_[coreIdx].dataLen = pmuHeadSize_ + pmuDataSize_;
         pmuHead_[coreIdx]->cnt++;
     } else if (pmuHead_[coreIdx]->cnt == pmuDataMaxNum_ - 1) {
         pmuMsg_[coreIdx].timeStamp = ProfGetCurCpuTimestamp();
-        memcpy_s(
+        DevMemcpyS(
             reinterpret_cast<void*>(
                 (reinterpret_cast<uintptr_t>(pmuData_[coreIdx]) + pmuDataSize_ * pmuHead_[coreIdx]->cnt)),
             pmuDataSize_, &data, pmuDataSize_);
@@ -506,7 +506,7 @@ void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskI
         (void)(ret);
         memset_s(&pmuMsg_[coreIdx], pmuMsgSize_, 0, pmuMsgSize_);
     } else {
-        memcpy_s(
+        DevMemcpyS(
             reinterpret_cast<void*>(
                 (reinterpret_cast<uintptr_t>(pmuData_[coreIdx]) + pmuDataSize_ * pmuHead_[coreIdx]->cnt)),
             pmuDataSize_, &data, pmuDataSize_);

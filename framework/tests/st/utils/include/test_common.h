@@ -535,10 +535,7 @@ void* readToDev(const std::string& path, int size)
             return devPtr;
         }
     }
-    if (RuntimeMemcpy(devPtr, bytes, data.data(), bytes, RtMemcpyKind::HOST_TO_DEVICE) != 0) {
-        std::cout << "RuntimeMalloc failed" << std::endl;
-        return nullptr;
-    }
+    RuntimeMemcpy(devPtr, bytes, data.data(), bytes, RtMemcpyKind::HOST_TO_DEVICE);
     CostModel::PvData::Instance().Put(devPtr, data);
     return devPtr;
 }

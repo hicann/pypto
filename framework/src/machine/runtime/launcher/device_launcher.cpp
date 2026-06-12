@@ -319,7 +319,8 @@ uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
     }
 
     for (int i = 0; i < bufNum; ++i) {
-        ret = RuntimeMemcpy(devCache + i * cacheSize, cacheSize, ctrlCache, cacheSize, RtMemcpyKind::HOST_TO_DEVICE);
+        ret = static_cast<int>(RuntimeMemcpyDirect(devCache + i * cacheSize, cacheSize, ctrlCache, cacheSize,
+                                                   RtMemcpyKind::HOST_TO_DEVICE));
         if (ret != 0) {
             MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED, "control flow cache memcpy failed, ret: %d", ret);
             RuntimeFree(devCache);

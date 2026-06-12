@@ -21,8 +21,10 @@
 #include <string>
 #include <vector>
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/runner/runtime_utils.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -57,13 +59,9 @@ struct AicoreModelMemoryUtils {
         return devPtr;
     }
 
-    uint8_t* CopyToDev(uint8_t* data, uint64_t size, uint8_t** cachedDevAddrHolder)
+    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size)
     {
-        uint8_t* devPtr = AllocDev(size, cachedDevAddrHolder);
-        if (devPtr != nullptr) {
-            memcpy_s(devPtr, size, data, size);
-        }
-        return devPtr;
+        MemcpyS(data, size, devPtr, size);
     }
 
     template <typename T>
@@ -73,7 +71,19 @@ struct AicoreModelMemoryUtils {
         return (T*)CopyToDev((uint8_t*)data.data(), data.size() * sizeof(T), nullptr);
     }
 
-    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size) { memcpy_s(data, size, devPtr, size); }
+    uint8_t* CopyToDev(uint8_t* data, uint64_t size, uint8_t** cachedDevAddrHolder)
+    {
+        uint8_t* devPtr = AllocDev(size, cachedDevAddrHolder);
+        if (devPtr != nullptr) {
+            MemcpyS(devPtr, size, data, size);
+        }
+        return devPtr;
+    }
+
+    void CopyFromDev(RawTensorData& t) 
+    {
+        CopyFromDev(t.data(), t.GetDevPtr(), t.size());
+    }
 
     uint8_t* CopyToDev(RawTensorData& data)
     {
@@ -83,8 +93,6 @@ struct AicoreModelMemoryUtils {
         }
         return data.GetDevPtr();
     }
-
-    void CopyFromDev(RawTensorData& t) { CopyFromDev(t.data(), t.GetDevPtr(), t.size()); }
 
     uint64_t GetL2Offset() { return 0; }
 

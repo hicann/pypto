@@ -18,6 +18,7 @@
 #include "operator/models/deepseek/page_attention.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime//context/stream_context.h"
 #include "machine/runtime//context/device_launcher_context.h"
 

@@ -40,6 +40,7 @@
 #include "machine/runtime/launcher/eslmodel_launcher.h"
 #include "machine/runtime/launcher/aicore_model_launcher.h"
 #include "machine/runtime/launcher/device_launcher.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/runtime/launcher/launcher_router.h"
@@ -651,14 +652,12 @@ public:
                 *addrSlot = runtimeDynamicCellMatchHostAddr_;
                 *capSlot = runtimeDynamicCellMatchCapacity_;
             } else {
-                int ret = RuntimeMemcpy(
+                RuntimeMemcpy(
                     cfgBytes + devAddrOffset, sizeof(uint64_t), &runtimeDynamicCellMatchAddr_, sizeof(uint64_t),
                     RtMemcpyKind::HOST_TO_DEVICE);
-                ASSERT(ret == RT_SUCCESS) << "patch dynamicCellMatch addr to cfg failed, ret=" << ret;
-                ret = RuntimeMemcpy(
+                RuntimeMemcpy(
                     cfgBytes + devCapacityOffset, sizeof(uint64_t), &runtimeDynamicCellMatchCapacity_, sizeof(uint64_t),
                     RtMemcpyKind::HOST_TO_DEVICE);
-                ASSERT(ret == RT_SUCCESS) << "patch dynamicCellMatch capacity to cfg failed, ret=" << ret;
             }
         };
         patchOneCfg(hostCfgdata);
@@ -965,12 +964,8 @@ public:
             std::vector<uint8_t> hostCacheVec;
             hostCacheVec.resize(ctrlCacheSize);
             AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-            if (RuntimeMemcpy(
-                    hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST) !=
-                RT_SUCCESS) {
-                MACHINE_ASSERT(false) << "RuntimeMemcpy cache failed!";
-                return nullptr;
-            }
+            RuntimeMemcpy(
+                hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST);
             AddHostCtrlFlowCache(tensors, std::move(hostCacheVec));
             ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);
         }

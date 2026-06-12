@@ -38,7 +38,7 @@ inline RtError NormalizedRtMemcpy(
     if (dynamic::DeviceLauncher::IsCaptureMode()) {
         captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
     }
-    return RuntimeMemcpy(dst, destMax, src, cnt, kind);
+    return RuntimeMemcpyDirect(dst, destMax, src, cnt, kind);
 }
 }
 

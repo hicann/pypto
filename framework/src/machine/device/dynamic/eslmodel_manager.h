@@ -172,7 +172,7 @@ private:
                 continue;
 
             DumpTensorInfo dumpHeader;
-            memcpy_s(&dumpHeader, sizeof(DumpTensorInfo), fileData.data(), sizeof(DumpTensorInfo));
+            DevMemcpyS(&dumpHeader, sizeof(DumpTensorInfo), fileData.data(), sizeof(DumpTensorInfo));
 
             uint64_t stride[DEV_SHAPE_DIM_MAX];
             if (dumpHeader.dims > 0) {
@@ -215,7 +215,7 @@ private:
             uint64_t newAddr = tensorAddr + info.offset[idx] * dataByte;
             uint32_t dataSize = info.shape[idx] * dataByte;
 
-            RuntimeMemcpy(
+            RuntimeMemcpyDirect(
                 reinterpret_cast<void*>(newAddr), dataSize, fileData + bufferOffset, dataSize,
                 RtMemcpyKind::HOST_TO_DEVICE);
 

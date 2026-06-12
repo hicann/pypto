@@ -19,6 +19,7 @@
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/launcher/emulation_launcher.h"
+#include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/context/device_launcher_context.h"
 
 using namespace npu::tile_fwk;

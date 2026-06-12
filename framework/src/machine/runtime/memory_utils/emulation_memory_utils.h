@@ -17,9 +17,11 @@
 
 #include <memory>
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error.h"
 #include "tilefwk/error_code.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "securec.h"
+#include "machine/runtime/runner/runtime_utils.h"
 
 namespace npu::tile_fwk::dynamic {
 struct EmulationMemoryUtils {
@@ -54,7 +56,7 @@ struct EmulationMemoryUtils {
     {
         uint8_t* devPtr = AllocDev(size, cachedDevAddrHolder);
         if (devPtr != nullptr) {
-            memcpy_s(devPtr, size, data, size);
+            MemcpyS(devPtr, size, data, size);
         }
         return devPtr;
     }
@@ -66,7 +68,10 @@ struct EmulationMemoryUtils {
         return (T*)CopyToDev((uint8_t*)data.data(), data.size() * sizeof(T), nullptr);
     }
 
-    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size) { memcpy_s(data, size, devPtr, size); }
+    void CopyFromDev(uint8_t* data, uint8_t* devPtr, uint64_t size)
+    {
+        MemcpyS(data, size, devPtr, size);
+    }
 
     uint8_t* CopyToDev(RawTensorData& data)
     {

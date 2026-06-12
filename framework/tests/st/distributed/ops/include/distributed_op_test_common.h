@@ -130,7 +130,7 @@ class HcclWin {
 public:
     HcclWin(uint64_t addr)
     {
-        (void)RuntimeMemcpy(&param_, sizeof(param_), (uint8_t*)addr, sizeof(param_), RtMemcpyKind::DEVICE_TO_HOST);
+        RuntimeMemcpy(&param_, sizeof(param_), (uint8_t*)addr, sizeof(param_), RtMemcpyKind::DEVICE_TO_HOST);
     }
 
     template <typename T>
@@ -144,7 +144,7 @@ public:
             count = maxDataCnt - offset;
         }
         std::vector<T> result(count, 0);
-        (void)RuntimeMemcpy(
+        RuntimeMemcpy(
             result.data(), count * sizeof(T), (uint8_t*)devAddr + offset * sizeof(T), count * sizeof(T),
             RtMemcpyKind::DEVICE_TO_HOST);
         return result;

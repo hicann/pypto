@@ -12,6 +12,8 @@
 
 #include <sys/syscall.h>
 #include "tilefwk/pypto_fwk_log.h"
+#include "machine/runtime/runner/runtime_utils.h"
+#include "tilefwk/error.h"
 #include "adapter/api/msprof_api.h"
 #include "adapter/api/acl_api.h"
 #include "interface/tensor/logical_tensor.h"
@@ -111,7 +113,7 @@ void HostProf::HostProfReportContextInfo(const uint64_t& endTime) const
     ctxId.opName = MspfGetHashId(opName_.c_str(), opName_.length());
     ctxId.ctxIdNum = 1;
     ctxId.ctxIds[0] = 0;
-    memcpy_s(contextInfo.data, MSPF_ADDTIONAL_INFO_DATA_LENGTH, &ctxId, sizeof(MspfContextIdInfo));
+    MemcpyS(contextInfo.data, MSPF_ADDTIONAL_INFO_DATA_LENGTH, &ctxId, sizeof(MspfContextIdInfo));
     auto ret = MspfReportAdditionalInfo(false, reinterpret_cast<void*>(&contextInfo), sizeof(MspfAdditionalInfo));
     if (ret != 0) {
         MACHINE_LOGW("Op[%s] Msprof report context info not success", opName_.c_str());
