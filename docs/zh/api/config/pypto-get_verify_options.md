@@ -7,7 +7,7 @@
 
 ## 功能说明
 
-获取当前已配置的精度调试 Verify 特性选项。
+获取当前已配置的精度调试Verify特性选项。
 
 ## 函数原型
 
@@ -21,7 +21,7 @@ get_verify_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
 
 ## 返回值说明
 
-获取精度调试 Verify 特性的当前设定值。
+获取精度调试Verify特性的当前设定值。
 
 ## 约束说明
 

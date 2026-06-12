@@ -25,7 +25,7 @@ function(name: str, *args, **kwargs) -> Iterator
 
 ## 返回值说明
 
-返回一个上下文管理器，在 with 语句中使用
+返回一个上下文管理器，在with语句中使用
 
 ## 约束说明
 

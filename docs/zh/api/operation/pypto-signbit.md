@@ -12,8 +12,8 @@
 
 逻辑：
 
-- 如果元素是负数（包括 −∞ 和 −0.0），返回 True。
-- 如果元素是正数（包括 +∞ 和 +0.0）或 NaN，返回 False。
+- 如果元素是负数（包括 −∞ 和 −0.0），返回True。
+- 如果元素是正数（包括 +∞ 和 +0.0）或NaN，返回False。
 
 ## 函数原型
 
@@ -44,7 +44,7 @@ signbit(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

@@ -27,18 +27,18 @@ index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT16，DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | int 类型，加法作用到 input 的维度； <br> 支持任意不超过 input 维数的值，详见约束说明。 |
-| index   | 输入      | 源操作数，值代表 input 所在 dim 轴的索引； <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64； <br> 不支持空 Tensor，Shape只支持1维，索引与 source 的 dim 轴索引一一对应，Shape大小与 source 所在 dim 轴的Shape大小相同。 |
-| source  | 输入      | 需要加到 input 的源操作数； <br> 支持的类型为：Tensor。 <br> Tensor的数据类型 与 input 相同。 <br> Shape支持1-5维，所在 dim 轴的Shape大小与 index 相同，其他维度的Shape大小与 input 相同。 |
-| alpha   | 输入      | 标量，关键字参数； <br> 表示累加时的缩放因子，默认为 1。 |
+| dim     | 输入      | int类型，加法作用到input的维度； <br> 支持任意不超过input维数的值，详见约束说明。 |
+| index   | 输入      | 源操作数，值代表input所在dim轴的索引； <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32，DT_INT64； <br> 不支持空Tensor，Shape只支持1维，索引与source的dim轴索引一一对应，Shape大小与source所在dim轴的Shape大小相同。 |
+| source  | 输入      | 需要加到input的源操作数； <br> 支持的类型为：Tensor。 <br> Tensor的数据类型与input相同。 <br> Shape支持1-5维，所在dim轴的Shape大小与index相同，其他维度的Shape大小与input相同。 |
+| alpha   | 输入      | 标量，关键字参数； <br> 表示累加时的缩放因子，默认为1。 |
 
 ## 返回值说明
 
-原地操作返回 input
+原地操作返回input
 
 ## 约束说明
 
-1. index必须是整数类型（DT\_INT32 或 DT\_INT64），值不超过input在dim维度上的Shape大小，维数为1，Shape大小与source所在dim轴的Shape大小相同；
+1. index必须是整数类型（DT\_INT32或DT\_INT64），值不超过input在dim维度上的Shape大小，维数为1，Shape大小与source所在dim轴的Shape大小相同；
 
 2. dim为int类型，取值范围：$-input.dim\leq dim < input.dim$；
 
@@ -46,7 +46,7 @@ index_add__ub(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: 
 
 4. input.shape和source.shape的dim轴viewshape不可切，要求 $viewshape[dim]\geq\max (input.shape[dim], source.shape[dim])$，其余维度的Shape大小不做限制；
 
-5. TileShape的维度与input相同，input, source 的 dim 轴以及 index 均不可切，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
+5. TileShape的维度与input相同，input, source的dim轴以及index均不可切，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 
 ## 调用示例
 
@@ -75,12 +75,12 @@ y = pypto.index_add__ub(x, dim, index, source)
 结果示例如下：
 
 ```python
-输入数据 x:   [[0 0 0],
+输入数据x:   [[0 0 0],
                [0 0 0]]
       source: [[1 1 1],
                [1 1 1],
                [1 1 1]]
       index:   [0 1 0]
-输出数据 y:   [[2 2 2],
+输出数据y:   [[2 2 2],
                [1 1 1]]               # shape (2, 3)
 ```

@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-计算输入Tensor中每个元素的 2 的指数，逐元素运算，返回与输入形状相同的Tensor。
+计算输入Tensor中每个元素的2的指数，逐元素运算，返回与输入形状相同的Tensor。
 
 ## 函数原型
 
@@ -28,7 +28,7 @@ exp2(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input 中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32。
+1. input中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为float32。
 
 ## 调用示例
 
@@ -38,7 +38,7 @@ exp2(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

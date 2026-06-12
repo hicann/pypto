@@ -21,7 +21,7 @@ eq(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other  | 输入      | 源操作数。 <br> 支持的类型为：Tensor\float\Element。 <br> 当为float类型时会自动转换为 Element 类型，float 对应 DT_FP32。当需要使用其他数据类型时，可以通过 Element 构建。不同型号支持的Tensor和Element的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other  | 输入      | 源操作数。 <br> 支持的类型为：Tensor\float\Element。 <br> 当为float类型时会自动转换为Element类型，float对应DT_FP32。当需要使用其他数据类型时，可以通过Element构建。不同型号支持的Tensor和Element的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br>两个源操作数的数据类型必须保持一致。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -29,7 +29,7 @@ eq(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 
 ## 约束说明
 
-1. input 和 other 类型须保持一致。
+1. input和other类型须保持一致。
 2. 支持一维广播。
 3. Tensor和Element数据类型说明：
    - Ascend 950PR/Ascend 950DT：DT_FP16，DT_FP32, DT_INT16。

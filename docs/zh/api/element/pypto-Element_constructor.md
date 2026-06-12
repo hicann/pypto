@@ -1,4 +1,4 @@
-# pypto.Element 构造函数
+# pypto.Element构造函数
 
 ## 产品支持情况
 

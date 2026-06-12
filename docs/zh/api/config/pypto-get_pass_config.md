@@ -19,7 +19,7 @@ get_pass_config(strategy: str, identifier: str, key: PassConfigKey, default_valu
 
 | 参数名          | 输入/输出 | 说明                                                                 |
 |-----------------|-----------|----------------------------------------------------------------------|
-| strategy        | 输入      | Pass 策略名称，如"PVC2_OOO"。 |
+| strategy        | 输入      | Pass策略名称，如"PVC2_OOO"。 |
 | identifier      | 输入      | Pass名称，如"ExpandFunction"。 |
 | key             | 输入      | PassConfigKey枚举。 <br> KEY_DUMP_GRAPH Dump Pass计算图。 |
 | default_value   | 输入      | 若未找到指定key的配置值，则返回该默认值。 |

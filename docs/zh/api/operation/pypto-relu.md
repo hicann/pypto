@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-对 input 的每个元素进行整流线性单元（Rectified Linear Unit）运算，即只保留正数部分，负数变为0。计算公式如下：
+对input的每个元素进行整流线性单元（Rectified Linear Unit）运算，即只保留正数部分，负数变为0。计算公式如下：
 
 $$
 res_i = \max(0, input_i)
@@ -32,7 +32,7 @@ relu(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input 不支持 nan、inf 等特殊值。
+1. input不支持nan、inf等特殊值。
 
 ## 调用示例
 
@@ -42,7 +42,7 @@ relu(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

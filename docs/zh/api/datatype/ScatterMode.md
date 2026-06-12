@@ -7,7 +7,7 @@
 
 ## 功能说明
 
-ScatterMode 定义了 scatter 函数 reduce 模式
+ScatterMode定义了scatter函数reduce模式
 
 ## 原型定义
 

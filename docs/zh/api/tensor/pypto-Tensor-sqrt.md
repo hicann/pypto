@@ -15,7 +15,7 @@ sqrt(self, precision_type: PrecisionType = PrecisionType.INTRINSIC) -> 'Tensor'
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：PrecisionType。 <br> 默认值为 PrecisionType.INTRINSIC。 <br> INTRINSIC 直接使用芯片指令进行计算，速度更快；HIGH_PRECISION 使用更高精度的计算以减少精度损失。 |
+| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：PrecisionType。 <br> 默认值为PrecisionType.INTRINSIC。 <br> INTRINSIC直接使用芯片指令进行计算，速度更快；HIGH_PRECISION使用更高精度的计算以减少精度损失。 |
 
 ## 详细说明
 

@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-对 input 的每个元素进行带参数的整流线性单元运算，当元素值大于等于0时保持不变，小于0时乘以权重系数。计算公式如下：
+对input的每个元素进行带参数的整流线性单元运算，当元素值大于等于0时保持不变，小于0时乘以权重系数。计算公式如下：
 
 $$
 res_i = \begin{cases}
@@ -17,10 +17,10 @@ weight_i \times input_i & \text{if } input_i < 0
 \end{cases}
 $$
 
-其中 weight 为一维张量：
+其中weight为一维张量：
 
-- 当 input 为1维时，weight 长度为1，按元素共享权重
-- 当 input 为2-4维时，weight 长度与 input 的第二维（通道维）大小相同，按通道共享权重
+- 当input为1维时，weight长度为1，按元素共享权重
+- 当input为2-4维时，weight长度与input的第二维（通道维）大小相同，按通道共享权重
 
 ## 函数原型
 
@@ -41,9 +41,9 @@ prelu(input: Tensor, weight: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input 和 weight 类型应该相同。
-2. weight 的Shape必须为一维，当input为1维时长度为1；当input为2-4维时长度等于input的第二维大小。
-3. input 和 weight 不支持 nan、inf 等特殊值。
+1. input和weight类型应该相同。
+2. weight的Shape必须为一维，当input为1维时长度为1；当input为2-4维时长度等于input的第二维大小。
+3. input和weight不支持nan、inf等特殊值。
 4. 由于存在临时内存使用，输入维度为二维时，TileShape大小有额外约束，假设TileShape为\[a,b\]，那么a*b*sizeof(self) + b/8 + 8KB < UB。
 
 ## 调用示例
@@ -56,7 +56,7 @@ TileShape维度应和输出一致。
 
 示例1（1D输入）：输入input与weight，shape分别为[n] [1]。输出为[n], TileShape设置为[n1]，则n1用于切分n轴。
 
-示例2（2D输入）：输入input与weight，shape分别为[m, n] [n\]。输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例2（2D输入）：输入input与weight，shape分别为[m, n] [n\]。输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

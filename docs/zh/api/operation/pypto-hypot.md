@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-逐元素计算 input 和 other 的平方和的平方根（即直角三角形的斜边长）。计算公式如下：
+逐元素计算input和other的平方和的平方根（即直角三角形的斜边长）。计算公式如下：
 
 $$
 res_i = \sqrt{input_i^2 + other_i^2}
@@ -33,9 +33,9 @@ hypot(input: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input 和 other 类型应该相同。
-2. other 不支持nan、inf等特殊值。
-3. 对于 BF16 和 FP16 类型，内部计算可能会提升精度以避免中间溢出。
+1. input和other类型应该相同。
+2. other不支持nan、inf等特殊值。
+3. 对于BF16和FP16类型，内部计算可能会提升精度以避免中间溢出。
 
 ## 调用示例
 
@@ -45,7 +45,7 @@ hypot(input: Tensor, other: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

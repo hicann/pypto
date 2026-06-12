@@ -41,9 +41,9 @@ void
 
     | 约束项 | 要求 |
     |:-------|:-----|
-    | mL0 与 mL1 | `mL0 > 0` 且 `mL0 ≤ mL1` 且 `mL1 % mL0 == 0` |
-    | kL0 与 kL1 | `kL0 > 0` 且 `kL0 ≤ kL1` 且 `kL1 % kL0 == 0` |
-    | nL0 与 nL1 | `nL0 > 0` 且 `nL0 ≤ nL1` 且 `nL1 % nL0 == 0` |
+    | mL0与mL1 | `mL0 > 0` 且 `mL0 ≤ mL1` 且 `mL1 % mL0 == 0` |
+    | kL0与kL1 | `kL0 > 0` 且 `kL0 ≤ kL1` 且 `kL1 % kL0 == 0` |
+    | nL0与nL1 | `nL0 > 0` 且 `nL0 ≤ nL1` 且 `nL1 % nL0 == 0` |
 
     - ND格式特有约束
 
@@ -106,6 +106,6 @@ void
 # 基本配置
 pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 
-# 启用多核切K（便捷开关，不保证性能最优；性能调优见 Matmul高性能编程）
+# 启用多核切K（便捷开关，不保证性能最优；性能调优见Matmul高性能编程）
 pypto.set_cube_tile_shapes([128, 128], [64, 256], [128, 128], enable_split_k=True)
 ```

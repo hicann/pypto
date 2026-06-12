@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-计算输入 Tensor 中每个元素的截断取整值，逐元素运算。截断取整的规则是直接去除数字的小数部分，仅保留整数部分。
+计算输入Tensor中每个元素的截断取整值，逐元素运算。截断取整的规则是直接去除数字的小数部分，仅保留整数部分。
 
 ## 函数原型
 
@@ -24,7 +24,7 @@ trunc(input: Tensor) -> Tensor
 
 ## 返回值说明
 
-返回 Tensor 类型。其 Shape、数据类型与输入 Tensor 一致，其元素为输入 Tensor 对应元素的截断取整结果。
+返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的截断取整结果。
 
 ## 调用示例
 
@@ -34,7 +34,7 @@ trunc(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

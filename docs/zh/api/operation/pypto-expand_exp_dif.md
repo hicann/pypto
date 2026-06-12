@@ -33,8 +33,8 @@ expand_exp_dif(input: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input 和 other 类型应该相同。
-2. other 的尾轴或次尾轴的值为1。
+1. input和other类型应该相同。
+2. other的尾轴或次尾轴的值为1。
 
 ## TileShape设置示例
 

@@ -18,7 +18,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
-| key         | 输入      | Tensor索引，用于获取Tensor对应位置的数据。<br> 支持类型：<br> - int 或 SymbolicScalar（符号标量）: 单个整数索引。<br> - slice: 切片对象。<br> - tuple: 多维索引的组合，类型包括：int 或 SymbolicScalar，slice，Ellipsis(...)。 |
+| key         | 输入      | Tensor索引，用于获取Tensor对应位置的数据。<br> 支持类型：<br> - int或SymbolicScalar（符号标量）: 单个整数索引。<br> - slice: 切片对象。<br> - tuple: 多维索引的组合，类型包括：int或SymbolicScalar，slice，Ellipsis(...)。 |
 | valid_shape | 输入      | 表示输出Tensor有效数据的大小。 |
 
 ## 返回值说明
@@ -27,13 +27,13 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 
 ## 约束说明
 
-1.对于slice（切片对象，格式为 start:end:step），当前功能暂时不支持step设置, 值默认固定为1。
+1.对于slice（切片对象，格式为start:end:step），当前功能暂时不支持step设置,值默认固定为1。
 
-未支持示例：a\[1:2:2, :\] 。
+未支持示例：a\[1:2:2, :\]。
 
 2.当前功能暂时不支持bool类型索引。
 
-未支持示例：a\[True, False, True, False\] 。
+未支持示例：a\[True, False, True, False\]。
 
 3.当前功能暂时不支持Tensor类型索引。
 
@@ -82,7 +82,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 
 3. 负数索引
 
-    支持 Python 风格的负索引，从末尾开始计数。
+    支持Python风格的负索引，从末尾开始计数。
 
     ```python
     a = pypto.tensor([4, 4], pypto.DT_FP32)
@@ -99,7 +99,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
     输出数据b: [14, 15]
     ```
 
-4. 省略号（ ...）
+4. 省略号（...）
 
    使用 \`...\` 自动填充中间的所有维度，简化多维索引。
 
@@ -123,7 +123,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 
 5. 单元素访问
 
-   整数索引，取出Tensor的单个元素（仅支持 DT\_INT32 类型）。
+   整数索引，取出Tensor的单个元素（仅支持DT\_INT32类型）。
 
    ```python
    a = pypto.tensor([4, 4], pypto.DT_INT32)
@@ -140,7 +140,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
    输出数据b: 1
    ```
 
-6. Gather 操作
+6. Gather操作
 
    当索引为\[int:Tensor\]的形式时，执行gather操作，索引中int类型对应dim，Tensor类型对应index，该切片语法等价于Tensor.gather\(dim, index\)。
 
@@ -177,7 +177,7 @@ def __setitem__(self, key, value)
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| key     | 输入      | Tensor索引，用于获取Tensor对应位置的数据。<br> 支持类型：<br> - int 或 SymbolicScalar（符号标量）: 单个整数索引。<br> - slice: 切片对象。<br> - tuple: 多维索引的组合，类型包括：int 或 SymbolicScalar，slice，Ellipsis(...)。 |
+| key     | 输入      | Tensor索引，用于获取Tensor对应位置的数据。<br> 支持类型：<br> - int或SymbolicScalar（符号标量）: 单个整数索引。<br> - slice: 切片对象。<br> - tuple: 多维索引的组合，类型包括：int或SymbolicScalar，slice，Ellipsis(...)。 |
 | value   | 输入      | 需要设置的值，类型支持Tensor或标量（float/int）。 |
 
 ## 返回值说明
@@ -186,13 +186,13 @@ def __setitem__(self, key, value)
 
 ## 约束说明
 
-1.对于slice（切片对象，格式为 start:end:step），当前功能暂时不支持step设置, 值默认固定为1。
+1.对于slice（切片对象，格式为start:end:step），当前功能暂时不支持step设置,值默认固定为1。
 
-未支持示例：a\[1:2:2, :\] 。
+未支持示例：a\[1:2:2, :\]。
 
 2.当前功能暂时不支持bool类型索引。
 
-未支持示例：a\[True, False, True, False\] 。
+未支持示例：a\[True, False, True, False\]。
 
 3.当前功能暂时不支持Tensor类型索引。
 
@@ -251,7 +251,7 @@ def __setitem__(self, key, value)
 
 3. 负索引
 
-   支持 Python 风格的负索引，从末尾开始计数。
+   支持Python风格的负索引，从末尾开始计数。
 
    ```python
    a = pypto.Tensor([4, 4], pypto.DT_FP32)
@@ -273,9 +273,9 @@ def __setitem__(self, key, value)
                [0, 10, 10, 0]]
    ```
 
-4. 省略号（ ...）
+4. 省略号（...）
 
-   使用 ... 可以自动填充中间维度。
+   使用... 可以自动填充中间维度。
 
    ```python
    a = pypto.Tensor([4, 4], pypto.DT_FP32)
@@ -300,7 +300,7 @@ def __setitem__(self, key, value)
 
 5. 单元素赋值
 
-   整数索引，对单个元素赋值（仅支持 DT\_INT32 类型）。
+   整数索引，对单个元素赋值（仅支持DT\_INT32类型）。
 
    ```python
    a = pypto.Tensor([4, 4], pypto.DT_INT32)
@@ -320,9 +320,9 @@ def __setitem__(self, key, value)
                [0, 0, 0, 0]]
    ```
 
-6. Scatter 操作
+6. Scatter操作
 
-   当key为slice，key.start为int， key.stop 为 Tensor时\(a\[start:stop\]   \)，执行 scatter 操作。
+   当key为slice，key.start为int， key.stop为Tensor时\(a\[start:stop\]   \)，执行scatter操作。
 
    ```python
    a = pypto.Tensor([4, 4], pypto.DT_FP32)

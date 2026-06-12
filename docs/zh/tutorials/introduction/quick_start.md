@@ -8,7 +8,7 @@ Softmax算子实现的example代码位于：[softmax.py](../../../../examples/02
 
 ## 算子设计规格
 
-**表 1**  Softmax算子设计规格
+**表1**  Softmax算子设计规格
 
 | name                | shape            | data type | format |
 | ------------------- | ---------------- | --------- | ------ |
@@ -113,10 +113,10 @@ def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = T
 切换到示例代码所在目录，在已安装PyPTO的环境中运行：
 
 ```bash
-# 配置 CANN 环境变量
+# 配置CANN 环境变量
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
-# 设置设备 ID
+# 设置设备ID
 export TILE_FWK_DEVICE_ID=0
 
 #执行脚本
@@ -181,7 +181,7 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
 
     右键单击merged\_swimlane.json，在弹出的菜单中选择“使用PyPTO Toolkit打开”，如下图所示。
 
-    **图 1**  泳道图界面
+    **图1**  泳道图界面
     ![](../figures/swimlane_graph.png "泳道图界面")
 
     上图中带有色块的部分即为泳道，展示了每个AIC/AIV上的任务执行情况。泳道条目的长度对应任务的耗时，能够直观地反映计算的密集程度。用户可以通过观察相邻泳道之间的空闲间隔（如图中的黑色区域，或称气泡）以及耗时较长的泳道条目，来分析可能存在的性能瓶颈问题。

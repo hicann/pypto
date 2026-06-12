@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-对输入Tensor在指定维度上应用 softmax 函数，将该维度的元素归一化为取值在 \[0, 1\] 之间的概率分布（所有元素之和为 1），计算公式为：
+对输入Tensor在指定维度上应用softmax函数，将该维度的元素归一化为取值在 \[0, 1\] 之间的概率分布（所有元素之和为1），计算公式为：
 
 $$
 \text{softmax}(input)_i = \frac{e^{input_i - \text{max}(input)}}{\sum_{j=1}^{k} e^{input_j - \text{max}(input)}}
@@ -25,11 +25,11 @@ softmax(input: Tensor, dim: int) -> Tensor
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32 <br> 不支持空Tensor；Shape大小不大于2147483647（即INT32_MAX）。 |
-| dim     | 输入      | 指定归一化的维度。 <br> 支持负索引（如 -1 表示最后一个维度）。 <br> 需在 [-input.dim, input.dim-1] 范围内。 |
+| dim     | 输入      | 指定归一化的维度。 <br> 支持负索引（如 -1表示最后一个维度）。 <br> 需在 [-input.dim, input.dim-1] 范围内。 |
 
 ## 返回值说明
 
-返回Tensor类型。其Shape、数据类型与输入Tensor一致，dim指定维度上的元素之和为 1。
+返回Tensor类型。其Shape、数据类型与输入Tensor一致，dim指定维度上的元素之和为1。
 
 ## 调用示例
 

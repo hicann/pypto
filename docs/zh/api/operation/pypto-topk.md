@@ -28,7 +28,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 | k       | 输入      | 返回元素的数量。<br> k的大小应该满足：1 <= k <= input.shape[dim]。 |
 | dim     | 输入      | 指定排序的维度。<br> 目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
 | largest | 输入      | 如果为True，返回最大元素。如果为False，返回最小元素。 |
-| algo    | 输入      | 算法枚举类型，用以控制TopK计算的流程，具体定义为：[TopKAlgo](../datatype/TopKAlgo.md) 。<br> 默认为 MERGE_SORT（归并排序算法）。 |
+| algo    | 输入      | 算法枚举类型，用以控制TopK计算的流程，具体定义为：[TopKAlgo](../datatype/TopKAlgo.md)。<br> 默认为MERGE_SORT（归并排序算法）。 |
 
 ## 返回值说明
 
@@ -51,7 +51,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 TileShape维度应和输入input一致。
 
-示例1：输入input shape为[m, n, p]，dim为2，largest为True，输出为[m, n, k], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。p1必须大于等于k，k轴不支持切分，必须保证全载。
+示例1：输入input shape为[m, n, p]，dim为2，largest为True，输出为[m, n, k], TileShape设置为[m1, n1, p1],则m1, n1, p1分别用于切分m, n, p轴。p1必须大于等于k，k轴不支持切分，必须保证全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

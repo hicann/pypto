@@ -29,9 +29,9 @@ gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor:
 
 ## 约束说明
 
-1. input 和 other 类型应该相同。
-2. other 为数字的时候，不支持隐式转化。
-3. other 不支持nan、inf等特殊值
+1. input和other类型应该相同。
+2. other为数字的时候，不支持隐式转化。
+3. other不支持nan、inf等特殊值
 
 ## 调用示例
 
@@ -41,13 +41,13 @@ gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor:
 
 TileShape维度应和输出一致。
 
-示例1：非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
 ```
 
-示例2：广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例2：广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

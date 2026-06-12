@@ -13,7 +13,7 @@ PTO编程范式的核心设计理念包括：
 
 PyPTO提供了三种层次的编程接口：
 
-- Tensor层次编程：直接使用Tensor 和 Tensor Operation 构建计算图。
+- Tensor层次编程：直接使用Tensor 和Tensor Operation 构建计算图。
 - Tile层次编程：以Tile 和Tile Operation表达完整的计算，显式体现访存与依赖。
 - Block层次编程：定义单个处理器核执行的计算图，并通过多次实例化实现整体计算。
 
@@ -53,14 +53,14 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
     ```python
     import pypto
 
-    # 1. 配置 Tiling（可选，框架会提供默认值）
+    # 1. 配置Tiling（可选，框架会提供默认值）
     pypto.set_vec_tile_shapes(64)
 
     # 2. 定义计算函数
     @pypto.frontend.jit
     def my_operator(a: pypto.Tensor(shape, dtype), b:  pypto.Tensor(shape, dtype), output:  pypto.Tensor(shape, dtype)):
         # Tensor 操作
-        result = a + b  # 或使用 pypto.add(a, b)
+        result = a + b  # 或使用pypto.add(a, b)
         output[:] = result
 
     # 3. 执行
@@ -171,7 +171,7 @@ MPMD执行模型的优势包括：
     ```python
     import pypto
 
-    # 配置 Tiling
+    # 配置Tiling
     pypto.set_vec_tile_shapes(64)
 
     # 定义计算函数
@@ -189,7 +189,7 @@ MPMD执行模型的优势包括：
     ```python
     import pypto
 
-    # 配置 Cube Tiling（用于矩阵乘法）
+    # 配置Cube Tiling（用于矩阵乘法）
     pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
 
     @pypto.frontend.jit
@@ -224,10 +224,10 @@ MPMD执行模型的优势包括：
             offset = idx * tile_size
             end = (idx + 1) * tile_size
 
-            # 提取当前 Tile
+            # 提取当前Tile
             x_view = input_tensor[offset:end, :]
 
-            # 计算 Softmax
+            # 计算Softmax
             softmax_out = softmax_core(x_view)
 
             # 组装结果
@@ -248,7 +248,7 @@ MPMD执行模型的优势包括：
         result = pypto.matmul(x, weight)
         output[:] = result
 
-    # 使用 PyTorch Tensor
+    # 使用PyTorch Tensor
     input_torch = torch.randn(32, 128, device='npu')
     output_torch = torch.zeros(32, 64, device='npu')
 

@@ -4,11 +4,11 @@
 
 ### 问题现象描述
 
-使用pypto.tensor声明了一个Tensor，误以为它与torch.empty类似。会申请一块未初始化的内存。在再次写入前直接读取它（如使用 view），会导致框架校验错误或精度问题。
+使用pypto.tensor声明了一个Tensor，误以为它与torch.empty类似。会申请一块未初始化的内存。在再次写入前直接读取它（如使用view），会导致框架校验错误或精度问题。
 
 ### 问题原因
 
-在PyPTO中，除了使用pypto.full、pypto.zeros等显式包含初始化行为的Tensor声明外，还可以使用pypto.tensor声明 Tensor，但该接口不包含初始化行为。在PyPTO中，每个Tensor必须先写后读，即必须先有producer，然后才能有consumer，未初始化的Tensor不申请内存。框架中通常会校验直接使用no producer Tensor并报错，但有时因校验遗漏，可能会导致上板精度错误。
+在PyPTO中，除了使用pypto.full、pypto.zeros等显式包含初始化行为的Tensor声明外，还可以使用pypto.tensor声明Tensor，但该接口不包含初始化行为。在PyPTO中，每个Tensor必须先写后读，即必须先有producer，然后才能有consumer，未初始化的Tensor不申请内存。框架中通常会校验直接使用no producer Tensor并报错，但有时因校验遗漏，可能会导致上板精度错误。
 
 ### 处理步骤
 
@@ -100,7 +100,7 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
         return handler(in_shape_256)
 
     @pypto.frontend.jit
-    def adder_1024(in_shape_1024): # 定义处理 in 轴大小是 1024 的算子
+    def adder_1024(in_shape_1024): # 定义处理in 轴大小是1024 的算子
         return handler(in_shape_1024)
 
     adder_256(in_256)
@@ -124,7 +124,7 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
 
 ### 问题现象描述
 
-两层或者两层以上循环嵌套下，在父循环中定义了一个 tensor，在一个子循环中写入该 tensor，在另一个子循环中使用该 tensor 时，存在精度错误。
+两层或者两层以上循环嵌套下，在父循环中定义了一个tensor，在一个子循环中写入该tensor，在另一个子循环中使用该tensor 时，存在精度错误。
 
 ### 可能原因
 
@@ -140,8 +140,8 @@ for outer in pypto.loop(...): # 父循环，执行至少两次，如果只执行
     for inner0 in pypto.loop(...): # 第一个子循环，对临时tensor t赋值
         ...
         t[...] = ...
-    # 添加 submit_before_loop，确保父循环多次迭代不在同一个并行执行块中
-    for inner1 in pypto.loop(..., submit_before_loop=True): # 第二个子循环，使用了临时 tensor t，
+    # 添加submit_before_loop，确保父循环多次迭代不在同一个并行执行块中
+    for inner1 in pypto.loop(..., submit_before_loop=True): # 第二个子循环，使用了临时tensor t，
         x[:] = t[:] + t[:]
 ```
 
@@ -179,7 +179,7 @@ ImportError: libhccl.so: cannot open shared object file: No such file or directo
 
 ### 问题原因
 
-当程序启动时，torch（版本\>2.5）会自动加载所有名为“torch.backends”的扩展（例如 torch npu）。如果环境中已安装了torch\_npu但未安装CANN，由于找不到依赖项，将会引发异常。
+当程序启动时，torch（版本\>2.5）会自动加载所有名为“torch.backends”的扩展（例如torch npu）。如果环境中已安装了torch\_npu但未安装CANN，由于找不到依赖项，将会引发异常。
 
 ### 处理步骤
 

@@ -198,10 +198,10 @@ FUnction[TENSOR_b_loop_Unroll1_PATH0_hiddenfunc0]
 当输入的validShape依赖别的tensor标识，必须传入dynValidShape。如下所示场景，q0的validshape  curSeq来自于另外一个tensor，无法通过推导得到
 
 ```python
-# 输入 input [B, S, H]
-# 输入 act_seqs [B]
-# 输出 out [B, S, H]
-# 计算过程  AddS
+# 输入input [B, S, H]
+# 输入act_seqs [B]
+# 输出out [B, S, H]
+# 计算过程AddS
 # 代码如下：
 for b_idx in pypto.loop(B, name="b_loop", idx_name="b"):
     cur_seq = act_seqs[b_idx]
@@ -310,18 +310,18 @@ i = 1
 
 N/A
 
-## local Tensor 无 producer 时被读取触发device侧断言
+## local Tensor 无producer 时被读取触发device侧断言
 
 ### 问题现象描述
 
-在算子编写过程中，如果 local Tensor 仅创建但未写入，就在 loop 内被读取，编译/执行到设备路径时可能触发设备侧断言或异常。典型报错如下：
+在算子编写过程中，如果local Tensor 仅创建但未写入，就在loop 内被读取，编译/执行到设备路径时可能触发设备侧断言或异常。典型报错如下：
 
 ```text
 ASSERTION FAILED: WORKSPACE_ITER_INVALID
 Root[...] incast ... slotIndex ... read from empty address.
 ```
 
-该现象通常对应读取到的 slot 没有 producer，即 Tensor 对应 slot 未被任何 operation 写入。
+该现象通常对应读取到的slot 没有producer，即Tensor 对应slot 未被任何operation 写入。
 
 最小示例（语义示意）：
 
@@ -334,14 +334,14 @@ def kernel(x):
 
 ### 可能原因
 
-local Tensor（如 `t`）仅被创建，但在被读取前没有任何写操作（如切片赋值、`move`、`assemble` 或其他能建立 producer 的写入），导致读取路径访问到空地址并触发断言。
+local Tensor（如 `t`）仅被创建，但在被读取前没有任何写操作（如切片赋值、`move`、`assemble` 或其他能建立producer 的写入），导致读取路径访问到空地址并触发断言。
 
 ### 处理步骤
 
 可采用以下任一方式规避：
 
-1. 在读取前先对 local Tensor 执行有效写入（例如切片赋值、`move`、`assemble` 等），确保其存在 producer。
-2. 将该 local Tensor 写在 loop 内，作为 loop 内 Tensor 使用，使其在当前 loop 作用域内，pypto内存管理策略会为其申请内存地址
+1. 在读取前先对local Tensor 执行有效写入（例如切片赋值、`move`、`assemble` 等），确保其存在producer。
+2. 将该local Tensor 写在loop 内，作为loop 内Tensor 使用，使其在当前loop 作用域内，pypto内存管理策略会为其申请内存地址
 
 ## Loop 原理及其描述
 
@@ -361,7 +361,7 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
 
 ### 描述
 
-1. start, end, step 分别可以表示循环的起始值、结束值和步长，类型可以为 SymbolicScalar 或者 int, 和Python中的range语法基本保持一致
+1. start, end, step 分别可以表示循环的起始值、结束值和步长，类型可以为SymbolicScalar 或者int, 和Python中的range语法基本保持一致
 
 2. name 表示循环的名称，默认值为loop_{id}, 对实际使用运行效果无影响，仅用于调试和生成代码中注释信息
 
@@ -394,7 +394,7 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
 
 5. submit_before_loop 表示是否在循环开始前提交任务，默认值为False。如果设置为True，则循环前的任务会先提交到调度队列中，等待后续任务完成后再开始执行， *过多的设置submit_before_loop会增加调度开销*， 建议仅在必要时设置为True
 
-6. unroll_list 对 `pypto.cond` 影响， 通常一个循环中有一个 `pypto.cond`, 会产生两个分支，当unroll次数为4次时，会产生 2 ** 4 16个路径分支，通常上每个分支都需要单独编译， 因此会大量增加编译时间和编译出的代码量. 为了支持关键算子FA的编译优化，提供了两个特殊的函数 `pypto.is_loop_begin()` 和 `pypto.is_loop_end()` 用于优化条件分支
+6. unroll_list 对 `pypto.cond` 影响， 通常一个循环中有一个 `pypto.cond`, 会产生两个分支，当unroll次数为4次时，会产生2 ** 4 16个路径分支，通常上每个分支都需要单独编译， 因此会大量增加编译时间和编译出的代码量. 为了支持关键算子FA的编译优化，提供了两个特殊的函数 `pypto.is_loop_begin()` 和 `pypto.is_loop_end()` 用于优化条件分支
 
 7. 考虑到对外层loop进行loop_unroll不能提升loop body的大小， 当前仅支持最内侧循环进行unroll
 

@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-将 self 的每个元素除以 other 中对应位置的元素并向下取整，计算公式如下：
+将self的每个元素除以other中对应位置的元素并向下取整，计算公式如下：
 
 $$
 res_i = floor(\frac{input_{i}}{other_{i}})
@@ -33,7 +33,7 @@ def floor_div(input: Tensor, other: Union[Tensor, int]) -> Tensor
 
 ## 约束说明
 
-1. input 和 other 数据类型应该相同。
+1. input和other数据类型应该相同。
 2. 只支持单轴广播。
 
 ## 调用示例

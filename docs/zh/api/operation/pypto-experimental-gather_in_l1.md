@@ -25,8 +25,8 @@ gather_in_l1(src: Tensor, indices: Tensor, block_table: Tensor, block_size: int,
 |--------------|-----------|----------------------------------------------------------------------|
 | src          | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT8。 <br> 不支持空Tensor，支持两维。 |
 | indices      | 输入      | 源操作数的行偏移。 <br> 支持的数据类型为：DT_INT32, DT_INT64。 <br> 不支持空Tensor，支持两维。 <br> Shape形状为[1,n]。 |
-| block_table  | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为 Page Attention 中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
-| block_size   | 输入      | 源操作数。 <br> int 类型。 <br> 表示 Page Attention 中一个块可以放多少个token。 |
+| block_table  | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为Page Attention中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
+| block_size   | 输入      | 源操作数。 <br> int类型。 <br> 表示Page Attention中一个块可以放多少个token。 |
 | size         | 输入      | 每行搬运的数据数。 <br> 数据数要小于源操作数的列数。 |
 | is_b_matrix  | 输入      | 搬运后的结果，即输出Tensor是否作为matmul的B矩阵。 |
 | is_trans     | 输入      | 搬运后的结果，即输出Tensor是否转置。 |

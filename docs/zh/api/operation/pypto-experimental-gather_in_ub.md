@@ -10,7 +10,7 @@
 
 该接口为定制接口，约束较多。不保证稳定性。
 
-该算子支撑稀疏注意力机制，能力为将选中的 token 的 kv cache 从 GM（Global Memory）加载到UB（Unified Buffer）中，支持Page Attention。
+该算子支撑稀疏注意力机制，能力为将选中的token的kv cache从GM（Global Memory）加载到UB（Unified Buffer）中，支持Page Attention。
 
 ## 函数原型
 
@@ -25,13 +25,13 @@ gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 |--------------|-----------|----------------------------------------------------------------------|
 | param        | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP32, DT_FP16。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示kv cache，形状为[token_size,hidden_dim]。 |
 | indices      | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为topk输出结果，形状为[1,k]。 |
-| block_table  | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为 Page Attention 中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
-| block_size   | 输入      | 源操作数。 <br> int 类型。 <br> 表示 Page Attention 中一个块可以放多少个token。 |
-| axis         | 输入      | 源操作数。 <br> int 类型。 <br> 只支持-2轴。 |
+| block_table  | 输入      | 源操作数。 <br> 支持的数据类型为DT_INT32。 <br> 不支持空Tensor，支持两维。 <br> 在实际使用中表示为Page Attention中的页表，形状为[1,block_table_size]，其中block_table_size表示页表的长度。 |
+| block_size   | 输入      | 源操作数。 <br> int类型。 <br> 表示Page Attention中一个块可以放多少个token。 |
+| axis         | 输入      | 源操作数。 <br> int类型。 <br> 只支持-2轴。 |
 
 ## 返回值说明
 
-返回输出 Tensor，Tensor的数据类型和 param 相同，Shape 为\[k, hidden\_dim\]，即 选中 token kv cache。
+返回输出Tensor，Tensor的数据类型和param相同，Shape为\[k, hidden\_dim\]，即选中token kv cache。
 
 ## 调用示例
 
@@ -39,19 +39,19 @@ gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 
 调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
-TileShape 的维度设置须与输出张量保持一致，用于控制输出 Tile 块的大小。
+TileShape的维度设置须与输出张量保持一致，用于控制输出Tile块的大小。
 
 以输入$ param[token_size,hidden_dim]$ 、索引 $indices[1,k]$ 、轴 $\text{axis}=-2$ 、输出 $output[k,hidden_dim]$  为例：
 
-设 TileShape 为$[k_1, hidden_dim_1]$，该配置直接作用于输出 output 的各维度，同时映射至输入与索引。其中 $k_1$ 切分 indices 的 k 维 ，$ hidden_dim_1$ 切分 param 的特征维 $hidden_dim$ 。Tile 内存占用须满足约束 $b_1 \cdot k_1 \cdot hidden_dim_1 \cdot \text{sizeof}(\mathbf{output}) < \text{UB_Size}$
+设TileShape为$[k_1, hidden_dim_1]$，该配置直接作用于输出output的各维度，同时映射至输入与索引。其中 $k_1$ 切分indices的k维，$ hidden_dim_1$ 切分param的特征维 $hidden_dim$ 。Tile内存占用须满足约束 $b_1 \cdot k_1 \cdot hidden_dim_1 \cdot \text{sizeof}(\mathbf{output}) < \text{UB_Size}$
 
 ### 接口调用示例
 
 ![](../figures/zh-cn_image_0000002524825989.png)
 
-考虑以上场景，indices为topk结果，block\_table为Page Attention的页表，param 为 kv cache，block\_size为2。最终的结果是将token的kv cache 收集起来。
+考虑以上场景，indices为topk结果，block\_table为Page Attention的页表，param为kv cache，block\_size为2。最终的结果是将token的kv cache收集起来。
 
-以 token id 4为例（在图中标红），根据blockSize计算出实际偏移：
+以token id 4为例（在图中标红），根据blockSize计算出实际偏移：
 
 blockIdx = 4 / 2; //计算对应的逻辑块，第2个逻辑块
 

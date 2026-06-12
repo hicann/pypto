@@ -12,8 +12,8 @@
 
 ## 注意事项
 
-- **不支持 SymbolicScalar 参数**：如果需要对 SymbolicScalar 进行比较，请使用 [SymbolicScalar.min()](../symbolic/pypto-SymbolicScalar-min.md) 方法
-- 两个参数中至少一个为 Tensor 类型
+- **不支持SymbolicScalar参数**：如果需要对SymbolicScalar进行比较，请使用 [SymbolicScalar.min()](../symbolic/pypto-SymbolicScalar-min.md)方法
+- 两个参数中至少一个为Tensor类型
 
 ## 函数原型
 
@@ -40,11 +40,11 @@ minimum(
 
 ## 约束说明
 
-1. 两个输入均为 Tensor 类型时，支持的数据类型如下：
+1. 两个输入均为Tensor类型时，支持的数据类型如下：
    - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
-2. 一个输入为 Tensor，另一个输入为 Element 类型时，支持的数据类型如下：
+2. 一个输入为Tensor，另一个输入为Element类型时，支持的数据类型如下：
    - Ascend 950PR/Ascend 950DT：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
@@ -57,9 +57,9 @@ minimum(
 
 TileShape维度应和输出一致。
 
-如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+如非广播场景，输入input shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
-广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+广播场景，输入input shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

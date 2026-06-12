@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-计算输入Tensor中每个元素的 e 的指数，逐元素运算，返回与输入形状相同的Tensor。
+计算输入Tensor中每个元素的e的指数，逐元素运算，返回与输入形状相同的Tensor。
 
 ## 接口原型
 
@@ -21,7 +21,7 @@ pypto.exp(input, precision_type=pypto.PrecisionType.INTRINSIC) -> Tensor
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | input | Tensor | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；支持的维度：1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | PrecisionType, 可选 | 指数操作的精度模式。默认值为 `PrecisionType.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
+| precision_type | PrecisionType,可选 | 指数操作的精度模式。默认值为 `PrecisionType.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
 
 ## 返回值说明
 

@@ -12,7 +12,7 @@
 
 ## 注意事项
 
-- **需要 valid_shape 时必须用 pypto.view**：当需要指定 `valid_shape`（动态有效数据大小）时，不能使用 `[]` 切片语法，必须使用显式的 `pypto.view` 接口
+- **需要valid_shape时必须用pypto.view**：当需要指定 `valid_shape`（动态有效数据大小）时，不能使用 `[]` 切片语法，必须使用显式的 `pypto.view` 接口
 - 输入张量input和输入shape的维度数量需要一致。
 
 ## 函数原型
@@ -27,7 +27,7 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
 | input       | 输入      | 源操作数。<br> 支持的数据类型为：PyPto支持的数据类型<br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
-| shape       | 输入      | 获取出视图的大小，需要和input的维度数量一致。<br> Shape Size不大于2147483647（即INT32_MAX）, **shape 仅支持 List [int] 类型，不支持 SymbolicScalar 类型。** |
+| shape       | 输入      | 获取出视图的大小，需要和input的维度数量一致。<br> Shape Size不大于2147483647（即INT32_MAX）, **shape仅支持List [int] 类型，不支持SymbolicScalar类型。** |
 | offsets     | 输入      | 获取视图时每个维度相对于input的偏移。<br> 需要保证offsets小于input的Shape |
 | valid_shape | 输入      | 取出示意图块的有效数据大小。<br> 需要保证valid_shape小于input的Shape；在类似page_attention场景下，当输入的kv_cache等张量包含无效数据时，无法正确推导输出的validshape，需要手动传入； |
 | dtype       | 输入      | 返回值的数据类型，允许将输入数据解读为不同数据类型 |

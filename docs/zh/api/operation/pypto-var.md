@@ -48,7 +48,7 @@ keepdim为True时，对应dim的shape规约为1，其他轴的shape不变；keep
 
 TileShape维度应和输入input一致。
 
-示例1：输入input shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
@@ -64,8 +64,8 @@ y = pypto.var(x, 1, correction=1, keepdim=True)
 结果示例如下：
 
 ```txt
-输入数据 x: [[1., 2., 3.],
+输入数据x: [[1., 2., 3.],
             [4., 5., 6.]]
-输出数据 y: [[1.],
+输出数据y: [[1.],
             [1.]]
 ```

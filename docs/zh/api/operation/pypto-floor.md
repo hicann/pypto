@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-计算输入 Tensor 中每个元素的向下取整，逐元素运算。对整数型数值直接返回其本身，对浮点型数值进行向下舍入处理。
+计算输入Tensor中每个元素的向下取整，逐元素运算。对整数型数值直接返回其本身，对浮点型数值进行向下舍入处理。
 
 ## 函数原型
 
@@ -34,7 +34,7 @@ floor(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

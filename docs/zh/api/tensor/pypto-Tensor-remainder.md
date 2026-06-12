@@ -16,7 +16,7 @@ remainder(self, other: 'Tensor | int | float', precision_type: PrecisionType = P
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | other   | 输入      | 除数。 <br> 支持的类型为：Tensor、int、float。 |
-| precision_type | 输入 | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
+| precision_type | 输入 | 精度模式枚举类型，用以控制取余计算的精度模式，具体定义为：[PrecisionType](../datatype/PrecisionType.md)。<br> 默认为HIGH_PRECISION（高精度模式）。 |
 
 ## 详细说明
 

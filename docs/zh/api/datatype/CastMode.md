@@ -34,29 +34,29 @@ class CastMode(enum.Enum):
 | CAST_TRUNC | 截断舍入，向零方向舍入 | 全部支持 | 全部支持 |
 | CAST_ODD | 舍入到奇数，Von Neumann舍入方式 | FP32→FP16 | FP32→FP16 |
 
-> **注意**：CAST_NONE 不是硬件支持的舍入模式，而是框架层面的概念，表示"不指定舍入模式，由框架自动选择默认值"。
+> **注意**：CAST_NONE不是硬件支持的舍入模式，而是框架层面的概念，表示"不指定舍入模式，由框架自动选择默认值"。
 
 ## 使用说明
 
-### 默认 CastMode 规则
+### 默认CastMode规则
 
-当用户使用 CAST_NONE 或指定了硬件不支持的 CastMode 时，框架会自动采用以下默认 CastMode：
+当用户使用CAST_NONE或指定了硬件不支持的CastMode时，框架会自动采用以下默认CastMode：
 
-| 转换类型 | 默认 CastMode |
+| 转换类型 | 默认CastMode |
 |----------|---------------|
 | 浮点数转整数（FP→INT） | CAST_TRUNC（向零截断） |
 | 其他转换场景 | CAST_RINT（舍入到最近偶数） |
 
 ### 类型扩展转换
 
-类型扩展转换（如 FP16→FP32、INT8→FP16、INT16→INT32 等）本身就是无损转换，不需要舍入处理，此时用户传入的 CastMode 参数会被忽略。
+类型扩展转换（如FP16→FP32、INT8→FP16、INT16→INT32等）本身就是无损转换，不需要舍入处理，此时用户传入的CastMode参数会被忽略。
 
-### 不支持的 CastMode 处理
+### 不支持的CastMode处理
 
-当用户为某个转换指定了硬件不支持的 CastMode 时：
+当用户为某个转换指定了硬件不支持的CastMode时：
 
 1. 框架不会报错
-2. 框架自动采用该转换的默认 CastMode（遵循上述默认规则）
+2. 框架自动采用该转换的默认CastMode（遵循上述默认规则）
 
 ## 二进制舍入规则说明
 

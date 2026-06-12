@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-用于清除当前 pe 对应的 shared memory tensor 的部分视图
+用于清除当前pe对应的shared memory tensor的部分视图
 
 ## 函数原型
 
@@ -26,14 +26,14 @@ shmem_clear_data(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| src   | 输入      |  要清除的 shared memory tensor。|
-| shape   | 输入      | 需要清除的视图大小。 <br> 参数类型为 list[int] 类型。 |
-| offsets   | 输入      | 需要清除的视图的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
+| src   | 输入      |  要清除的shared memory tensor。|
+| shape   | 输入      | 需要清除的视图大小。 <br> 参数类型为list[int] 类型。 |
+| offsets   | 输入      | 需要清除的视图的偏移量。 <br> 支持int或SymbolicScalar类型的列表。 <br> offsets的维度应与src的维度一致，且每个维度的偏移量值应小于src对应维度的大小。 |
 | pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 |
 
 ## 返回值说明
 
-返回一个 Tensor，用于表示操作完成的依赖关系。
+返回一个Tensor，用于表示操作完成的依赖关系。
 
 ## 约束说明
 
@@ -41,7 +41,7 @@ shmem_clear_data(
 
 ## 调用示例
 
-- 示例：创建了一个 shape = [128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的部分视图的数据。该部分视图的 shape 为 [128, 128], offsets 为 [0, 0]。
+- 示例：创建了一个shape = [128, 256] 的shared memory tensor，清除当前pe对应的shared memory tensor的部分视图的数据。该部分视图的shape为 [128, 128], offsets为 [0, 0]。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])
@@ -52,7 +52,7 @@ shmem_clear_data(
     )
     ```
 
-- 示例：创建了一个 shape = [128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的全部视图的数据。
+- 示例：创建了一个shape = [128, 256] 的shared memory tensor，清除当前pe对应的shared memory tensor的全部视图的数据。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])

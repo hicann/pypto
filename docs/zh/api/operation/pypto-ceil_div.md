@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-将 self 的每个元素除以 other 中对应位置的元素并向上取整，计算公式如下：
+将self的每个元素除以other中对应位置的元素并向上取整，计算公式如下：
 
 $$
 res_i = ceil(self_i \div other_i)
@@ -33,9 +33,9 @@ ceil_div(self: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input 和 other 类型应该相同。
+1. input和other类型应该相同。
 2. 只支持单轴广播。
-3. input 和 other 中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为 float32, **other 不能为 0**，整数除法为 0 时结果由芯片决定，可能为 INT32_MAX 或 INT32_MIN。
+3. input和other中的值域范围需要在\[-2^24, 2^24\]范围内，以确保在计算过程中能精确转换为float32, **other不能为0**，整数除法为0时结果由芯片决定，可能为INT32_MAX或INT32_MIN。
 
 ## 调用示例
 

@@ -12,9 +12,9 @@
 
 ## 注意事项
 
-- **PyPTO Tensor 不支持 `.to()` 方法**：PyPTO Tensor 没有 `.to(dtype)` 方法，必须使用 `pypto.cast(tensor, dtype)` 进行数据类型转换
+- **PyPTO Tensor不支持 `.to()` 方法**：PyPTO Tensor没有 `.to(dtype)` 方法，必须使用 `pypto.cast(tensor, dtype)` 进行数据类型转换
 
-- **舍入模式详细说明**：浮点数表示方式、二进制舍入规则及各 CastMode 的具体行为，请参考 [CastMode](../datatype/CastMode.md)。
+- **舍入模式详细说明**：浮点数表示方式、二进制舍入规则及各CastMode的具体行为，请参考 [CastMode](../datatype/CastMode.md)。
 
 ## 函数原型
 
@@ -29,14 +29,14 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 |------------|-----------|----------------------------------------------------------------------|
 | input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dtype      | 输入      | 精度转换后的数据类型。 <br> 支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64，DT_INT4，DT_FP8E4M3，DT_FP8E5M2，DT_HF8。 |
-| CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md) 。<br> 默认为 CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
-| SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md) 。<br> 默认为 OFF（截断模式），当设置为 ON 时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
+| CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md)。<br> 默认为CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
+| SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md)。<br> 默认为OFF（截断模式），当设置为ON时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
 
 ## 约束说明
 
-> **CastMode 舍入模式详细说明请参考**：[CastMode](../datatype/CastMode.md)
+> **CastMode舍入模式详细说明请参考**：[CastMode](../datatype/CastMode.md)
 
-### A2A3 架构支持的转换
+### A2A3架构支持的转换
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -45,11 +45,11 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 | DT_FP32 | DT_BF16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_INT64 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
 | DT_FP32 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP32 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持 inf/-inf 等边缘情况 |
+| DT_FP32 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
 | DT_FP16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
 | DT_FP16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP16 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持 inf/-inf 等边缘情况 |
-| DT_FP16 | DT_INT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持 inf/-inf 等边缘情况 |
+| DT_FP16 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
+| DT_FP16 | DT_INT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
 | DT_FP16 | DT_UINT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
 | DT_FP16 | DT_INT4 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 打包类型，每字节包含2个元素 |
 | DT_BF16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展 |
@@ -57,7 +57,7 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 | DT_INT32 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_INT32 | DT_INT64 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT32 | DT_INT16 | 不支持舍入模式 | - | 仅饱和控制 |
-| DT_INT32 | DT_FP16 | 不支持舍入模式 | - | deq 模式，需设置 deqscale |
+| DT_INT32 | DT_FP16 | 不支持舍入模式 | - | deq模式，需设置deqscale |
 | DT_INT16 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_INT16 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_INT64 | DT_FP32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
@@ -68,9 +68,9 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 ---
 
-### Ascend 950PR/Ascend 950DT 支持的转换
+### Ascend 950PR/Ascend 950DT支持的转换
 
-Ascend 950PR/Ascend 950DT使用不同的 CastMode 体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的 CastMode enum。
+Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的CastMode enum。
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -79,16 +79,16 @@ Ascend 950PR/Ascend 950DT使用不同的 CastMode 体系，内部实现基于 `R
 | DT_FP32 | DT_BF16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_INT64 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
 | DT_FP32 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | - |
-| DT_FP32 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持 inf/-inf 等边缘情况 |
+| DT_FP32 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况 |
 | DT_FP32 | DT_FP8E4M3 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
 | DT_FP32 | DT_FP8E5M2 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | - |
-| DT_FP32 | DT_HF8 | **仅支持 ROUND** | CAST_ROUND | H8必须使用ROUND_A，不支持其他模式 |
+| DT_FP32 | DT_HF8 | **仅支持ROUND** | CAST_ROUND | H8必须使用ROUND_A，不支持其他模式 |
 | DT_FP16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展（PART_EVEN） |
 | DT_FP16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | ROUND_PART模式 |
-| DT_FP16 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持 inf/-inf 等边缘情况，ROUND_SAT模式 |
-| DT_FP16 | DT_INT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持 inf/-inf 等边缘情况，ROUND_SAT_PART模式 |
+| DT_FP16 | DT_INT16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况，ROUND_SAT模式 |
+| DT_FP16 | DT_INT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | 支持inf/-inf等边缘情况，ROUND_SAT_PART模式 |
 | DT_FP16 | DT_UINT8 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | ROUND_SAT_PART模式 |
-| DT_FP16 | DT_HF8 | **仅支持 ROUND** | CAST_ROUND | H8必须使用ROUND_A，不支持其他模式 |
+| DT_FP16 | DT_HF8 | **仅支持ROUND** | CAST_ROUND | H8必须使用ROUND_A，不支持其他模式 |
 | DT_BF16 | DT_FP32 | 不支持舍入模式 | - | 类型扩展（PART_EVEN） |
 | DT_BF16 | DT_INT32 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_TRUNC | ROUND_SAT_PART模式 |
 | DT_BF16 | DT_FP16 | RINT, ROUND, FLOOR, CEIL, TRUNC | CAST_RINT | SAT_ROUND模式（先饱和后舍入） |
@@ -107,7 +107,7 @@ Ascend 950PR/Ascend 950DT使用不同的 CastMode 体系，内部实现基于 `R
 | DT_INT32 | DT_UINT16 | 不支持舍入模式 | - | 仅饱和控制 |
 | DT_INT32 | DT_INT64 | 不支持舍入模式 | - | 类型扩展 |
 | DT_INT32 | DT_UINT8 | 不支持舍入模式 | - | SAT_PART模式 |
-| DT_INT32 | DT_FP16 | 不支持舍入模式 | - | deq 模式，需设置 deqscale |
+| DT_INT32 | DT_FP16 | 不支持舍入模式 | - | deq模式，需设置deqscale |
 | DT_UINT32 | DT_UINT8 | 不支持舍入模式 | - | SAT_PART模式 |
 | DT_UINT32 | DT_UINT16 | 不支持舍入模式 | - | 仅饱和控制 |
 | DT_UINT32 | DT_INT16 | 不支持舍入模式 | - | 仅饱和控制 |
@@ -132,22 +132,22 @@ Ascend 950PR/Ascend 950DT使用不同的 CastMode 体系，内部实现基于 `R
 
 ### 其他约束
 
-1. 当 cast 前后类型相同的时候，某些场景下会产生空操作，不保证精度。
+1. 当cast前后类型相同的时候，某些场景下会产生空操作，不保证精度。
 
-2. **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与 DT_FP16 的相互转换。
+2. **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与DT_FP16的相互转换。
 
-3. **DT_HF8 (hifloat8) 特殊说明**：
+3. **DT_HF8 (hifloat8)特殊说明**：
     - 仅Ascend 950PR/Ascend 950DT支持
-    - 必须使用 CAST_ROUND 舍入模式（对应硬件的 ROUND_A）
-    - 如果指定其他 CastMode，会自动回退到 CAST_ROUND
+    - 必须使用CAST_ROUND舍入模式（对应硬件的ROUND_A）
+    - 如果指定其他CastMode，会自动回退到CAST_ROUND
 
-4. **不支持的 CastMode 处理**：
-    - 当用户为某个转换指定了硬件不支持的 CastMode 时，框架不会报错
-    - 框架会自动采用该转换的默认 CastMode：
-      - 浮点→整数：采用 CAST_TRUNC
-      - 其他场景：采用 CAST_RINT
+4. **不支持的CastMode处理**：
+    - 当用户为某个转换指定了硬件不支持的CastMode时，框架不会报错
+    - 框架会自动采用该转换的默认CastMode：
+      - 浮点→整数：采用CAST_TRUNC
+      - 其他场景：采用CAST_RINT
 
-5. **deq 模式说明**：INT32→FP16 转换使用 deq 模式，需要通过 `set_deqscale` 设置缩放因子，默认值为 1.0。
+5. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过 `set_deqscale` 设置缩放因子，默认值为1.0。
 
 ## 调用示例
 
@@ -181,12 +181,12 @@ y = pypto.cast(x, pypto.DT_FP16)
 #### 使用饱和模式（推荐用于浮点数转整数）
 
 ```python
-# 示例 1：FP16 转 INT8，使用饱和模式防止溢出
+# 示例1：FP16转INT8，使用饱和模式防止溢出
 x = pypto.tensor([300.0, -300.0, 50.0], pypto.DT_FP16)
 y = pypto.cast(x, pypto.DT_INT8, satmode=pypto.SaturationMode.ON)
 # 输出：[127, -128, 50]
 
-# 示例 2：FP16 转 INT8，使用饱和模式防止溢出
+# 示例2：FP16转INT8，使用饱和模式防止溢出
 x = pypto.tensor([300.0, -300.0, 50.0], pypto.DT_FP16)
 y = pypto.cast(x, pypto.DT_INT8, satmode=pypto.SaturationMode.OFF)
 # 输出：[44, -44, 50]

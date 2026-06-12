@@ -31,7 +31,7 @@ __init__(self,
 | dtype      | 输入      | Tensor的数据类型。 |
 | name       | 输入      | Tensor的名称。 |
 | format     | 输入      | Tensor的格式，可选值包括：<br> - TileOpFormat.TILEOP_ND(默认)<br> - TileOpFormat.TILEOP_NZ |
-| data_ptr   | 输入      | 数据指针，默认为None, 当前仅前端框架内部使用，算子开发人员可忽略 |
+| data_ptr   | 输入      | 数据指针，默认为None,当前仅前端框架内部使用，算子开发人员可忽略 |
 | device     | 输入      | 设备信息，默认为None |
 | ori_shape  | 输入      | 原始形状，用于保存Tensor的原始形状信息，默认为None |
 
@@ -68,7 +68,7 @@ dynamic_shape = [pypto.SymbolicScalar("N"), 4, 8]
 dynamic_tensor = pypto.Tensor(shape=dynamic_shape,
                               dtype=pypto.DT_FP32 )
 
-# 使用 pypto.tensor 便捷函数创建（推荐方式）
+# 使用pypto.tensor便捷函数创建（推荐方式）
 tensor3 = pypto.tensor((4, 4), pypto.DT_FP32)
 tensor4 = pypto.tensor((4, 4), pypto.DT_FP32, name="my_tensor")
 ```

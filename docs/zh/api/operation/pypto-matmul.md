@@ -10,16 +10,16 @@
 
 实现input 、mat2矩阵的矩阵乘运算，计算公式为：out = input @ mat2
 
-- input 、mat2为源操作数，input 为左矩阵；mat2为右矩阵
-- out 为目的操作数，存放矩阵乘结果的矩阵
+- input 、mat2为源操作数，input为左矩阵；mat2为右矩阵
+- out为目的操作数，存放矩阵乘结果的矩阵
 
 ## 注意事项
 
-- **左右矩阵数据类型必须一致**：matmul 的左右矩阵数据类型必须相同（如 BF16+BF16、FP16+FP16），不支持混合输入（如 BF16+FP32），FP8数据类型除外
-- **推荐使用低精度输入**：BF16/FP16 输入直接 matmul 输出 FP32，比先 cast 到 FP32 再 matmul 性能更好，且精度相当
-- **避免不必要的 cast**：将 BF16 升级到 FP32 再进行 matmul 计算不会有精度提升，反而会产生额外的数据搬移开销
-- **利用随路 transpose**：matmul 支持 `a_trans` 和 `b_trans` 参数，可以在矩阵乘时随路完成转置，避免额外调用 transpose 操作
-- **必须先设置 TileShape**：调用 matmul 接口前需要通过 `set_cube_tile_shapes` 设置 M、N、K 轴上的切分大小
+- **左右矩阵数据类型必须一致**：matmul的左右矩阵数据类型必须相同（如BF16+BF16、FP16+FP16），不支持混合输入（如BF16+FP32），FP8数据类型除外
+- **推荐使用低精度输入**：BF16/FP16输入直接matmul输出FP32，比先cast到FP32再matmul性能更好，且精度相当
+- **避免不必要的cast**：将BF16升级到FP32再进行matmul计算不会有精度提升，反而会产生额外的数据搬移开销
+- **利用随路transpose**：matmul支持 `a_trans` 和 `b_trans` 参数，可以在矩阵乘时随路完成转置，避免额外调用transpose操作
+- **必须先设置TileShape**：调用matmul接口前需要通过 `set_cube_tile_shapes` 设置M、N、K轴上的切分大小
 
 ## 函数原型
 
@@ -46,7 +46,7 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 | 参数名            | 说明                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | scale             | 表示per-tensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵反量化的参数。 <br> 输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4,表5。 <br> 不支持叠加多核切k功能。|
-| scale_tensor      | 表示per-channel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵反量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t 的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4、表5。 <br> scale_tensor的倒数第二维度的形状必须置1，且N维度需要与mat2矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
+| scale_tensor      | 表示per-channel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵反量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4、表5。 <br> scale_tensor的倒数第二维度的形状必须置1，且N维度需要与mat2矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
 | bias_tensor       | 表示偏置矩阵。<br> 输入为Tensor类型。<br> 输入输出数据类型支持情况详见表3。<br> bias_tensor只支持ND格式。<br> bias_tensor的倒数第二维度的形状应置1，且N维度需要与mat2矩阵的N维度相等。<br> 矩阵维度为4维场景下，bias仅允许2维输入。<br> 不支持叠加多核切k功能。 |
 | relu_type         | 表示输出矩阵是否进行ReLu操作。 <br> 输入为[ReLuType](../datatype/ReLuType.md)类型。 <br> 支持RELU和NO_RELU两种模式。 |
 | trans_mode        | 表示是否使能TF32计算及TF32舍入模式。 <br> 输入为[TransMode](../datatype/TransMode.md)类型，支持以下三种模式：<br>     • CAST_NONE：不使能float数据类型转换为TF32数据类型。<br>     • CAST_RINT：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时舍入到偶数。<br>     • CAST_ROUND：使能float数据类型转换为TF32数据类型，舍入规则：舍入到最近整数，中间值时远离零舍入。<br> 仅支持输入左右矩阵和输出矩阵数据类型均为DT_FP32时设置。 |
@@ -64,13 +64,13 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 | DT_FP8E4M3 | DT_FP8E5M2/DT_FP8E4M3 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
 | DT_HF8 | DT_HF8 | DT_FP16/DT_BF16/DT_FP32 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
 
-表4： 反量化支持的数据类型
+表4：反量化支持的数据类型
 
 | input | mat2 | out_dtype | 产品支持 |
 |:------|:-----|:----------|:----------|
 | DT_INT8 | DT_INT8 | DT_FP16 | Ascend 950PR <br> Atlas A2 训练系列产品/Atlas A2 推理系列产品 <br> Atlas A3 训练系列产品/Atlas A3 推理系列产品 |
 
-表5： 量化支持的数据类型
+表5：量化支持的数据类型
 
 | input | mat2 | out_dtype | 产品支持 |
 |:------|:-----|:----------|:----------|
@@ -84,7 +84,7 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 ## 返回值说明
 
-返回值为out 矩阵（Tensor）。
+返回值为out矩阵（Tensor）。
 
 ### 约束说明
 

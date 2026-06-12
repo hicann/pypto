@@ -19,17 +19,17 @@ get_pass_configs(strategy: str, identifier: str) -> PassConfigs
 
 | 参数名     | 输入/输出 | 说明                                                                 |
 |------------|-----------|----------------------------------------------------------------------|
-| strategy   | 输入      | Pass 策略名称，如"PVC2_OOO"。 |
-| identifier | 输入      | Pass 名称，如"ExpandFunction"。 |
+| strategy   | 输入      | Pass策略名称，如"PVC2_OOO"。 |
+| identifier | 输入      | Pass名称，如"ExpandFunction"。 |
 
 ## 返回值说明
 
-PassConfigs 对象，该对象含有以下属性，属性只读：
+PassConfigs对象，该对象含有以下属性，属性只读：
 
 | 属性               | 说明                                                                 |
 |--------------------|----------------------------------------------------------------------|
 | printGraph         | dump计算图ir。 |
-| dumpGraph          | dump 计算图。 |
+| dumpGraph          | dump计算图。 |
 | dumpPassTimeCost   | dump Pass耗时。 |
 | preCheck           | Pass执行前进行校验。 |
 | postCheck          | Pass执行后进行校验。 |

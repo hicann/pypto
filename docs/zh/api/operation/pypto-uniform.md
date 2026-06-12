@@ -44,7 +44,7 @@ uniform(shape: List[int], key: List[int], counter: List[int], alg: List[int], dt
 
 TileShape维度应和输入一致。
 
-如输入shape为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+如输入shape为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 4)

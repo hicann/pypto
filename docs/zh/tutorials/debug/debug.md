@@ -10,7 +10,7 @@
 
 具体Pass列表请参见：framework/src/passes/pass\_mgr/pass\_manager.cpp文件。
 
-**图 1**  计算图编译流程
+**图1**  计算图编译流程
 ![](../figures/computation_graph_compilation_process.png "计算图编译流程")
 
 计算图编译各阶段生成的图分别为Tensor Graph、Tile Graph、Block Graph，Execute Graph，这些图是编译过程中的关键产物，表征了PyPTO程序从抽象计算描述到硬件执行的完整编译流程。
@@ -32,17 +32,17 @@
 
 在执行前，可以启用泳道图的采集和输出，利用PyPTO Toolkit可视化工具，直观查看各个子任务在AIC/AIV上的核间并行关系及前后执行顺序，从而帮助开发者更便捷地了解整体流水线分布，并进行针对性的算子性能优化。
 
-**图 2**  计算图执行流程
+**图2**  计算图执行流程
 ![](../figures/computation_graph_execution_process.png)
 
 下图展示了PyPTO任务在硬件运行时的AI CPU与AI Core的关系，以及详细的运行流程。主要过程概括为：HostMachine初始化资源\>DeviceMachine通过Stitch生成DeviceTask并调度CallTask\>CoreMachine执行CallTask\>DeviceProgram协调整个流程。
 
 - HostMachine：运行在Host侧，负责实际的硬件任务执行，包括资源准备、任务组装等。
 - DeviceMachine：运行在AI CPU侧，基于Execute Graph等执行态数据，负责AI Core执行子任务的分发和调度。具体流程为：Control-AICPU通过Stitch（字面意为“缝合”）将多个无依赖关系的Loop内的CallTask整合到一个DeviceTask中，以打破循环边界并最大化CallTask的并行度；Schedule-AICPU基于DeviceTask完成AI Core-CallTask的分发和管理。每个DeviceTask在3个Schedule-AICPU之间共享，各Schedule-AICPU根据所管理的AIC/AIV核的空闲状态，从DeviceTask中提取就绪的CallTask下发执行。
-- CoreMachine：运行在AI Core侧，负责接收来自AI CPU分发的CallTask并完成执行。CallTask是在 AIC/AIV 上运行的最小单元，由一系列CCE指令组成，用于在AI Core上执行具体的搬运和计算任务。
+- CoreMachine：运行在AI Core侧，负责接收来自AI CPU分发的CallTask并完成执行。CallTask是在AIC/AIV 上运行的最小单元，由一系列CCE指令组成，用于在AI Core上执行具体的搬运和计算任务。
 - DeviceProgram：DeviceProgram是每个PyPTO算子在Device侧运行的核心数据，由Execute Graph中描述的信息结合硬件资源管理生成。
 
-**图 3**  执行态运行示意图
+**图3**  执行态运行示意图
 ![](../figures/execution_state_runtime_diagram.png)
 
 ## NPU上板调试

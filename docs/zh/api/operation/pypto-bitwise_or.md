@@ -33,9 +33,9 @@ bitwise_or(input: Tensor, other: Union[Tensor, int]) -> Tensor
 
 ## 约束说明
 
-1. input 和 other 类型应该相同。
-2. other 为数字的时候，不支持隐式转化。
-3. other 不支持nan、inf等特殊值。
+1. input和other类型应该相同。
+2. other为数字的时候，不支持隐式转化。
+3. other不支持nan、inf等特殊值。
 4. Tensor数据类型说明：
    - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。

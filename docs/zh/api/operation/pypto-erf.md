@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-计算输入Tensor中每个元素的误差函数，逐元素运算, 计算公式如下：
+计算输入Tensor中每个元素的误差函数，逐元素运算,计算公式如下：
 $$
 \text{erf}(x) = \frac{2}{\sqrt{\pi}} \int_{0}^{x} e^{-t^2} dt
 $$
@@ -31,7 +31,7 @@ erf(input: Tensor) -> Tensor
 
 ## 约束说明
 
-1. 输入Tensor 和 输出Tensor 类型应该相同。
+1. 输入Tensor和输出Tensor类型应该相同。
 2. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么5\*a\*b\*c\*d\*sizeof\(DT_FP32\) < UB。
 
 ## 调用示例

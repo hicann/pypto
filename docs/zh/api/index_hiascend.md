@@ -68,7 +68,7 @@
 - [标量](element/index.md)
   - [pypto.Element.dtype](element/pypto-Element-dtype.md)
   - [pypto.Element.value](element/pypto-Element-value.md)
-  - [pypto.Element 构造函数](element/pypto-Element_constructor.md)
+  - [pypto.Element构造函数](element/pypto-Element_constructor.md)
   - [pypto.Element简介](element/pypto-Element_introduction.md)
 
 - [操作](operation/index.md)

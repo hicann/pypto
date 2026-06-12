@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-从输入的 shared memory tensor 中提取一个部分视图，以供后续计算。
+从输入的shared memory tensor中提取一个部分视图，以供后续计算。
 
 ## 函数原型
 
@@ -26,14 +26,14 @@ shmem_view(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| src   | 输入      |  要提取局部视图的 shared memory tensor。 |
+| src   | 输入      |  要提取局部视图的shared memory tensor。 |
 | shape   | 输入      | 需要获取的视图大小。 |
-| offsets   | 输入      | 需要获取的视图偏移量。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
-| valid_shape  | 输入      | 用于指定需要获取的有效数据大小。 <br> 需要保证 valid_shape 小于参数 shape。 |
+| offsets   | 输入      | 需要获取的视图偏移量。 <br> offsets的维度应与src的维度一致，且每个维度的偏移量值应小于src对应维度的大小。 |
+| valid_shape  | 输入      | 用于指定需要获取的有效数据大小。 <br> 需要保证valid_shape小于参数shape。 |
 
 ## 返回值说明
 
-返回一个 从 src 中提取的部分视图，形状为 shape 参数，如果指定了 valid_shape，则实际形状为 valid_shape。
+返回一个从src中提取的部分视图，形状为shape参数，如果指定了valid_shape，则实际形状为valid_shape。
 
 ## 约束说明
 
@@ -41,7 +41,7 @@ shmem_view(
 
 ## 调用示例
 
-- 示例：从 shared memory tensor 的提取一个部分视图，该部分视图的 shape 为 [64, 64]，offset 为 [0, 0]，实际获取的数据有效大小为 [64, 32]。
+- 示例：从shared memory tensor的提取一个部分视图，该部分视图的shape为 [64, 64]，offset为 [0, 0]，实际获取的数据有效大小为 [64, 32]。
 
     ```python
     x = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])

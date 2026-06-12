@@ -16,7 +16,7 @@ div(self, other: 'Tensor | int | float', precision_type: PrecisionType = Precisi
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | other   | 输入      | 除数。 <br> 支持的类型为：Tensor、int、float。 |
-| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：PrecisionType。 <br> 默认值为 PrecisionType.HIGH_PRECISION。 <br> HIGH_PRECISION 使用更高精度的计算以减少精度损失；INTRINSIC 直接使用芯片指令。 |
+| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：PrecisionType。 <br> 默认值为PrecisionType.HIGH_PRECISION。 <br> HIGH_PRECISION使用更高精度的计算以减少精度损失；INTRINSIC直接使用芯片指令。 |
 
 ## 详细说明
 

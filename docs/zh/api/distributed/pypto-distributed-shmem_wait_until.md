@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-根据 offsets 指定的索引位置，从 src_pe 对应的 shared memory tensor 的部分视图中等待，直到该视图的值达到目标数值 cmp_value。当条件满足时，当前 pe 会接收到信号。
+根据offsets指定的索引位置，从src_pe对应的shared memory tensor的部分视图中等待，直到该视图的值达到目标数值cmp_value。当条件满足时，当前pe会接收到信号。
 
 ## 函数原型
 
@@ -30,14 +30,14 @@ shmem_wait_until(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| src   | 输入      | 触发信号的 shared memory tensor。 |
-| src_pe  | 输入      | shared memory tensor 所属的 pe。 <br> 支持的数据类型为：int 或 SymbolicScalar。 <br> 0 <= src_pe < n_pes。 |
-| cmp_value   | 输入      | 要等待的目标数值。 <br> 支持的数据类型为 int 类型。 |
-| shape   | 输入      | 需要等待信号的 shared memory tensor 的视图大小。 <br> 参数类型为 list[int] 类型。 |
-| offsets   | 输入      | 需要等待信号的 shared memory tensor 的视图的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 src 的维度一致，且每个维度的偏移量值应小于 src 对应维度的大小。 |
-| cmp   | 输入      | 用于条件判断的比较操作类型。 <br> 目前仅支持 EQ（等于）类型。 |
-| clear_signal   | 输入      | 是否在等待完成后重置信号（true/false）。 <br>支持的数据类型为: bool类型。 <br> 默认为 false。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor。 |
+| src   | 输入      | 触发信号的shared memory tensor。 |
+| src_pe  | 输入      | shared memory tensor所属的pe。 <br> 支持的数据类型为：int或SymbolicScalar。 <br> 0 <= src_pe < n_pes。 |
+| cmp_value   | 输入      | 要等待的目标数值。 <br> 支持的数据类型为int类型。 |
+| shape   | 输入      | 需要等待信号的shared memory tensor的视图大小。 <br> 参数类型为list[int] 类型。 |
+| offsets   | 输入      | 需要等待信号的shared memory tensor的视图的偏移量。 <br> 支持int或SymbolicScalar类型的列表。 <br> offsets的维度应与src的维度一致，且每个维度的偏移量值应小于src对应维度的大小。 |
+| cmp   | 输入      | 用于条件判断的比较操作类型。 <br> 目前仅支持EQ（等于）类型。 |
+| clear_signal   | 输入      | 是否在等待完成后重置信号（true/false）。 <br>支持的数据类型为: bool类型。 <br> 默认为false。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空Tensor。 |
 
 ## 返回值说明
 
@@ -45,16 +45,16 @@ shmem_wait_until(
 
 ## 约束说明
 
-1. shmem_signal 和 shmem_wait_until必须配合使用，且设置 TileShape 时，切块大小保持一致。
+1. shmem_signal和shmem_wait_until必须配合使用，且设置TileShape时，切块大小保持一致。
 
 ## 调用示例
 
-### TileShape 设置示例
+### TileShape设置示例
 
 > [!NOTE]说明
-> 调用 shmem_wait_until 前，应通过set_vec_tile_shapes设置TileShape。TileShape 维度应和参数 shape 保持一致。
+> 调用shmem_wait_until前，应通过set_vec_tile_shapes设置TileShape。TileShape维度应和参数shape保持一致。
 
-- 示例：参数 shape 为 [m, n]，TileShape设置为 [m1, n1]，则 m1，n1 分别用于切分 m，n 轴。
+- 示例：参数shape为 [m, n]，TileShape设置为 [m1, n1]，则m1，n1分别用于切分m，n轴。
 
     ```python
     pypto.set_vec_tile_shapes(4, 8)
@@ -62,7 +62,7 @@ shmem_wait_until(
 
 ### 接口调用示例
 
-- 示例：当前 pe = 1 在给定的 pe = 1 的 shared memory tensor 全部视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，不重置该视图的值。注意，shmem_signal 和 shmem_wait_until必须配合使用，且设置的切块大小保持一致。
+- 示例：当前pe = 1在给定的pe = 1的shared memory tensor全部视图上等待，直到该视图的值达到目标值cmp_value = 4。一旦条件满足，当前pe收到信号。等待完成后，不重置该视图的值。注意，shmem_signal和shmem_wait_until必须配合使用，且设置的切块大小保持一致。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -87,7 +87,7 @@ shmem_wait_until(
     )
     ```
 
-- 示例：当前 pe = 1 在给定的 pe = 1 的 shared memory tensor 部分视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，不重置该视图的值。
+- 示例：当前pe = 1在给定的pe = 1的shared memory tensor部分视图上等待，直到该视图的值达到目标值cmp_value = 4。一旦条件满足，当前pe收到信号。等待完成后，不重置该视图的值。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
@@ -113,7 +113,7 @@ shmem_wait_until(
     )
     ```
 
-- 示例：当前 pe = 5 在给定的 pe = 3 的 shared memory tensor 部分视图上等待，直到该视图的值达到目标值 cmp_value = 4。一旦条件满足，当前 pe 收到信号。等待完成后，该视图的值重置为0。
+- 示例：当前pe = 5在给定的pe = 3的shared memory tensor部分视图上等待，直到该视图的值达到目标值cmp_value = 4。一旦条件满足，当前pe收到信号。等待完成后，该视图的值重置为0。
 
     ```python
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])

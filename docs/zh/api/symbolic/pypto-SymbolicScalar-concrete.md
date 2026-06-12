@@ -26,8 +26,8 @@ concrete(self) -> int
 
 ## 约束说明
 
-- 只有在 is\_concrete\(\) 返回 True 时才能调用此方法
-- 如果符号标量不是具体的，将抛出 ValueError 异常
+- 只有在is\_concrete\(\)返回True时才能调用此方法
+- 如果符号标量不是具体的，将抛出ValueError异常
 
 ## 调用示例
 
@@ -44,5 +44,5 @@ out2 = s2.concrete()
 
 ```python
 输出数据out1: 10
-输出数据out2: 抛出异常 ValueError: Not concrete value
+输出数据out2: 抛出异常ValueError: Not concrete value
 ```

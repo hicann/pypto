@@ -15,7 +15,7 @@ pypto.reciprocal(input, precision_type=pypto.PrecisionType.HIGH_PRECISION) -> Te
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | input | Tensor | 输入张量。<br>支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。<br>不支持空Tensor；支持的维度：1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| precision_type | PrecisionType, 可选 | 倒数操作的精度模式。默认值为 `PrecisionType.HIGH_PRECISION`。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。 |
+| precision_type | PrecisionType,可选 | 倒数操作的精度模式。默认值为 `PrecisionType.HIGH_PRECISION`。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。 |
 
 ## 返回值
 
@@ -25,7 +25,7 @@ pypto.reciprocal(input, precision_type=pypto.PrecisionType.HIGH_PRECISION) -> Te
 
 ## 代码示例
 
-### 示例 1：基本使用
+### 示例1：基本使用
 
 ```python
 import pypto
@@ -37,12 +37,12 @@ y = pypto.reciprocal(x)
 # Output y: [-2.1763, -0.4713, -0.6986,  1.3702]
 ```
 
-### 示例 2：使用高精度模式
+### 示例2：使用高精度模式
 
 ```python
 import pypto
 
-# 使用高精度模式进行 FP16 计算
+# 使用高精度模式进行FP16计算
 x = pypto.tensor([4], pypto.DT_FP16)
 y = pypto.reciprocal(x, pypto.PrecisionType.HIGH_PRECISION)
 
@@ -50,7 +50,7 @@ y = pypto.reciprocal(x, pypto.PrecisionType.HIGH_PRECISION)
 # Output y: [0.25]
 ```
 
-### 示例 3：使用指令模式
+### 示例3：使用指令模式
 
 ```python
 import pypto

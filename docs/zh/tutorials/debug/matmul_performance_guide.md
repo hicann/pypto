@@ -81,7 +81,7 @@ MTE2\_LOAD\_SIZE = M \cdot K \cdot \frac{N}{nL1} \cdot aByte + K \cdot N \cdot \
 $$
 综上，此时的Tile配置求解就转化为一个约束条件下的极值求解问题。
 
-举例，对于输入规格为 M = 96，K = 1536，N = 3072，数据类型为FP16的场景。
+举例，对于输入规格为M = 96，K = 1536，N = 3072，数据类型为FP16的场景。
 为了避免B矩阵的MTE2重复载入，一种较好的切分方式是设置mL1 = M = 96；另外，为了分满核，推荐设置nL1 = N / coreNum = 128。在此基础上，进一步考虑MTE2、MTE1的流水并行以及MTE2带宽利用率，设置kL1 = 4kL0。
 综上，一个较好的Tile配置是：
 
@@ -128,7 +128,7 @@ def matmul_demo_kernel(
     out: pypto.Tensor([], pypto.DT_FP32),
 ):
     pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256])
-    pypto.set_vec_tile_shapes(32, 256) # 配置 add 切分大小
+    pypto.set_vec_tile_shapes(32, 256) # 配置add 切分大小
 
     partial_sum = []
     k_loop = (k_size + k_view_size - 1) // k_view_size # 配置单核累加长度

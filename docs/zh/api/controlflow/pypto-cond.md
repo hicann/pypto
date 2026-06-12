@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-定义一个if 条件操作，实现python中的if功能。
+定义一个if条件操作，实现python中的if功能。
 
 ## 函数原型
 
@@ -24,26 +24,26 @@ cond(scalar: SymInt) -> pypto_impl.RecordIfBranch
 
 ## 返回值说明
 
-pypto\_impl.RecordIfBranch: 返回一个条件分支对象，用于 Python 的 if 语句
+pypto\_impl.RecordIfBranch: 返回一个条件分支对象，用于Python的if语句
 
 ## 约束说明
 
-- 必须与 Python 的 if、elif、else 语句配合使用
+- 必须与Python的if、elif、else语句配合使用
 - 条件表达式会被记录到计算图中
 - 支持嵌套的条件语句
-- 当函数未使用 @pypto.frontend.jit 或 @pypto.frontend.function 装饰器修饰时，条件表达式需要用 pypto.cond 包装
+- 当函数未使用 @pypto.frontend.jit或 @pypto.frontend.function装饰器修饰时，条件表达式需要用pypto.cond包装
 
 ## 调用示例
 
 ```python
-# 未使用装饰器，需要用 pypto.cond 包装条件表达式
+# 未使用装饰器，需要用pypto.cond包装条件表达式
 def kernel():
     ...
     for s2_idx in pypto.loop(0, 10, 1, power_of_2(max_unroll_times), name="LOOP_L0_bIdx_mla_prolog", idx_name="b_idx"):
         if pypto.cond(pypto.is_loop_end(s2_idx, bn_per_batch)):
             ...
 
-# 使用装饰器，无需 pypto.cond 包装
+# 使用装饰器，无需pypto.cond包装
 @pypto.frontend.jit
 def kernel():
     ...

@@ -10,8 +10,8 @@
 
 对两个输入的Tensor行逐元素逻辑与（AND）运算。运算规则：
 
-- 如果输入的Tensor为 bool 则 True and True -\> True，其余情况皆为 False。
-- 如果输入的Tensor数值，会自动转换成 True/False，0 为 False，非 0 为 True。
+- 如果输入的Tensor为bool则True and True -\> True，其余情况皆为False。
+- 如果输入的Tensor数值，会自动转换成True/False，0为False，非0为True。
 
 ## 函数原型
 

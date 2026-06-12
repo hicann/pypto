@@ -30,15 +30,15 @@ argmax(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 返回输出Tensor，输出Tensor的数据类型为DT_INT32，Shape与keepdim参数相关。
 
-若keepdim参数为 True，则在执行归约操作后保留被归约的维度。输出Tensor在除dim指定的维度外，其他维度的Shape与输入Tensor的Shape一致，而在dim指定的维度上的大小为 1。
+若keepdim参数为True，则在执行归约操作后保留被归约的维度。输出Tensor在除dim指定的维度外，其他维度的Shape与输入Tensor的Shape一致，而在dim指定的维度上的大小为1。
 
-若keepdim参数为False（默认），则被归约的维度会从输出Tensor中移除，而tileshape中对应的维度不变, 所以建议在调其他operation前重设tileshape。
+若keepdim参数为False（默认），则被归约的维度会从输出Tensor中移除，而tileshape中对应的维度不变,所以建议在调其他operation前重设tileshape。
 
 ## 约束说明
 
-1. TileShape大小不超过 64KB；
+1. TileShape大小不超过64KB；
 
-2. 尾轴要 32bytes 对齐；
+2. 尾轴要32bytes对齐；
 
 ## 调用示例
 
@@ -48,13 +48,13 @@ argmax(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 TileShape维度应和输入input一致。
 
-如输入input shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
 ```
 
-注意：如果keepdim设置为false，则被归约的维度会从输出Tensor中移除，而tileshape中对应的维度不变, 所以建议在调其他operation前重设tileshape。
+注意：如果keepdim设置为false，则被归约的维度会从输出Tensor中移除，而tileshape中对应的维度不变,所以建议在调其他operation前重设tileshape。
 
 ### 接口调用示例
 
@@ -66,8 +66,8 @@ y = pypto.argmax(x, -1, True)
 结果示例如下：
 
 ```python
-输入数据 x: [[1.0 2.0 3.0],
+输入数据x: [[1.0 2.0 3.0],
              [1.0 2.0 3.0]]
-输出数据 y: [[2],
+输出数据y: [[2],
              [2]]
 ```

@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-计算输入 Tensor 中每个元素的向上取整（返回不小于该元素的最小整数），逐元素运算。对整数型数值直接返回其本身，对浮点型数值进行向上舍入处理。
+计算输入Tensor中每个元素的向上取整（返回不小于该元素的最小整数），逐元素运算。对整数型数值直接返回其本身，对浮点型数值进行向上舍入处理。
 
 ## 函数原型
 
@@ -24,7 +24,7 @@ ceil(input: Tensor) -> Tensor
 
 ## 返回值说明
 
-返回 Tensor 类型。其 Shape、数据类型与输入 Tensor 一致，其元素为输入 Tensor 对应元素的向上取整值。
+返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的向上取整值。
 
 ## 调用示例
 
@@ -34,7 +34,7 @@ ceil(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

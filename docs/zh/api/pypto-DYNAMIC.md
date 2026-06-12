@@ -8,31 +8,31 @@
 
 ## 功能说明
 
-`pypto.DYNAMIC` 用于定义动态维度（Dynamic Dimension），允许张量的某些维度在运行时变化。这对于处理可变的 batch size、序列长度等场景非常有用。动态维度通常在模块级别定义，然后在 JIT 编译的内核函数的类型注解中使用。
+`pypto.DYNAMIC` 用于定义动态维度（Dynamic Dimension），允许张量的某些维度在运行时变化。这对于处理可变的batch size、序列长度等场景非常有用。动态维度通常在模块级别定义，然后在JIT编译的内核函数的类型注解中使用。
 
 主要应用场景：
 
-- **动态 Batch Size**: 推理时 batch size 可能随请求数量变化
-- **动态序列长度**: NLP 任务中文本序列长度不固定
+- **动态Batch Size**: 推理时batch size可能随请求数量变化
+- **动态序列长度**: NLP任务中文本序列长度不固定
 - **动态图结构**: 图神经网络中节点数量可变
 - **条件计算**: 根据输入形状决定计算流程
 
-## Shape 标记方式
+## Shape标记方式
 
 | 标记 | 含义 |
 | --- | --- |
-| `pypto.DYNAMIC` 或 `pypto.DYN` | 动态轴，传入 torch tensor 该维变化时**无需重编译** |
-| `pypto.STATIC` | 静态轴，传入 torch tensor 该维变化时**触发重编译** |
+| `pypto.DYNAMIC` 或 `pypto.DYN` | 动态轴，传入torch tensor该维变化时**无需重编译** |
+| `pypto.STATIC` | 静态轴，传入torch tensor该维变化时**触发重编译** |
 | `64` | 固定轴，只允许传入该固定大小，传入其他大小会报错(runtime_debug_mode为3，开启校验) |
 | `...` | 剩余轴都作为静态轴处理 |
 
 ## 约束说明
 
-1. 动态维度必须在 JIT 函数的类型注解中使用
+1. 动态维度必须在JIT函数的类型注解中使用
 
 ## 调用示例
 
-### 示例1: 基础用法 - 动态 Batch Size
+### 示例1: 基础用法 - 动态Batch Size
 
 ```python
 import pypto
@@ -46,11 +46,11 @@ def add_bias(
     bias: pypto.Tensor([HIDDEN_SIZE], pypto.DT_FP32),
     out: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)
 ):
-    # 实现 add 逻辑
+    # 实现add逻辑
     # [pypto.DYNAMIC, ...]第一维是动态的，省略号表示剩余维度是静态的
     ...
 
-# 可以用不同的 batch size 调用
+# 可以用不同的batch size调用
 x1 = torch.randn(2, 128, dtype=torch.float32, device='npu:0')
 out1 = torch.randn(2, 128, dtype=torch.float32, device='npu:0')
 result1 = add_bias(x1, bias, out1)  # batch=2
@@ -72,12 +72,12 @@ def attention_kernel(
     v: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, HIDDEN], pypto.DT_FP32),
     out: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC, HIDDEN], pypto.DT_FP32),
 ):
-    # 实现 attention 逻辑
+    # 实现attention逻辑
     # 前两维（batch、序列长度）都是动态的
     ...
     return output
 
-# 可以处理不同的 batch 和序列长度
+# 可以处理不同的batch和序列长度
 attention_kernel(q_4_128, k_4_128, v_4_128, out)  # B=4, SEQ=128
 attention_kernel(q_2_256, k_2_256, v_2_256, out)  # B=2, SEQ=256，无需重编译
 ```

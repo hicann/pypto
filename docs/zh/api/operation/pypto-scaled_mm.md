@@ -8,8 +8,8 @@
 
 实现mat_a 、mat_b矩阵的mx量化矩阵乘运算，计算公式为：out = (mat_a *scale_a) @ (mat_b* scale_b)
 
-- mat_a 、mat_b 、scale_a 、scale_b为源操作数，mat_a 为左矩阵；mat_b为右矩阵；scale_a为左矩阵量化参数；scale_b为右矩阵量化参数
-- out 为目的操作数，存放矩阵乘结果的矩阵
+- mat_a 、mat_b 、scale_a 、scale_b为源操作数，mat_a为左矩阵；mat_b为右矩阵；scale_a为左矩阵量化参数；scale_b为右矩阵量化参数
+- out为目的操作数，存放矩阵乘结果的矩阵
 
 ## 函数原型
 
@@ -38,7 +38,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 | 参数名            | 说明                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | scale             | 表示pertensor量化场景（使用同一个缩放因子将高精度数映射到低精度数）输出矩阵量化的参数。 <br> 输入为float类型，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> 不支持叠加多核切k功能。|
-| scale_tensor      | 表示perchannel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t 的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> scale_tensor的第一维度必须置1，且N维度需要与mat_b矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 仅支持矩阵维度为2维场景。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要在function外提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
+| scale_tensor      | 表示perchannel量化场景（对每一个输出通道独立计算一套量化参数）输出矩阵量化的矩阵。 <br> scale_tensor输入固定为uint64_t或int64_t的Tensor。计算时会转换64位bit为float类型的低32位bit后，取1位符号位 + 8位指数位 + 10位尾数位参与运算。<br> 输入输出数据类型支持情况详见表4。 <br> scale_tensor的第一维度必须置1，且N维度需要与mat_b矩阵的N维度相等。 <br> scale_tensor只支持ND格式。 <br> 仅支持矩阵维度为2维场景。 <br> 不支持叠加多核切k功能。 <br> 量化输出类型为DT_INT8场景时，需要在function外提前调用torch_npu.npu_trans_quant_param并传入float32类型的torch.tensor来获取int64数据类型的scale_tensor。|
 | bias_tensor       | 表示偏置矩阵。 <br> 输入为Tensor类型。 <br> Bias矩阵数据类型可选DT_FP16、DT_BF16和DT_FP32。 <br> bias_tensor只支持ND格式。<br> 仅支持矩阵维度为2/3/4维场景。 <br> 当输入矩阵为3维时，Bias维度可以为[B, 1, N]或[1, N]，且N维度需要与mat_b矩阵的N维度相等。<br> 当输入矩阵为4维时，Bias维度只能为[1, N]，且N维度需要与mat_b矩阵的N维度相等。<br> 不支持叠加多核切K功能。|
 
 表3： scaled_mm支持的数据类型
@@ -50,7 +50,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 | DT_FP4_E2M1 | DT_FP4_E2M1 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
 | DT_FP4_E1M2 | DT_FP4_E1M2 | DT_FP16/DT_BF16/DT_FP32 | DT_FP8E8M0 | DT_FP8E8M0 | DT_FP16/DT_BF16/DT_FP32 | Ascend 950PR |
 
-表4： 量化支持的数据类型
+表4：量化支持的数据类型
 
 | mat_a | mat_b | out_dtype | 产品支持 |
 |:------|:-----|:----------|:----------|
@@ -61,7 +61,7 @@ scaled_mm(mat_a, mat_b, out_dtype, scale_a, scale_b, *, a_trans = False, b_trans
 
 ## 返回值说明
 
-返回值为out 矩阵（Tensor）。
+返回值为out矩阵（Tensor）。
 
 ## 约束说明
 

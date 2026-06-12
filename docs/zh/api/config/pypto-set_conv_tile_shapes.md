@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-设置卷积（conv）计算中 L1/L0 缓存层级下各维度的 TileShape（切片形状）大小，同时控制 L0TileInfo 配置开关的使能状态。
+设置卷积（conv）计算中L1/L0缓存层级下各维度的TileShape（切片形状）大小，同时控制L0TileInfo配置开关的使能状态。
 
 ## 函数原型
 
@@ -39,9 +39,9 @@ TileShape需要满足以下约束条件：
 
         - 1 <= tileHin <= Hin（Hin为输入特征图实际高度）
 
-        - wout % 16 = 0 时， 1 <= tileHout <= Hout（Hout为输出特征图实际高度）
+        - wout % 16 = 0时， 1 <= tileHout <= Hout（Hout为输出特征图实际高度）
 
-        - wout % 16 != 0 时， tileHout = 1
+        - wout % 16 != 0时， tileHout = 1
 
         - 1 <= tileWin <= Win（Win为输入特征图实际宽度）
 
@@ -63,15 +63,15 @@ TileShape需要满足以下约束条件：
 
     - tileL0Info各维度值需满足对齐约束：
 
-        - tileK 需满足：`C0 <= tileK <= min(kAL1, kBL1)`
+        - tileK需满足：`C0 <= tileK <= min(kAL1, kBL1)`
 
-        - tileK 需满足：`tileK % C0 == 0`
+        - tileK需满足：`tileK % C0 == 0`
 
         - tileK `kAL1 % tilek == 0`
 
         - tilek `kBL1 % tilek == 0`
 
-        - tileW 需满足16元素对齐，即 `tileW % 16 == 0`
+        - tileW需满足16元素对齐，即 `tileW % 16 == 0`
 
         - tileW需满足： `1 <= tileW <= tileWout`
 
@@ -93,9 +93,9 @@ TileShape需要满足以下约束条件：
 
     - L0与L1维度层级约束：
 
-        - 1 <= tileL0Info.tileH <= tileL1Info.tileHout 且 tileL1Info.tileHout % tileL0Info.tileH == 0
+        - 1 <= tileL0Info.tileH <= tileL1Info.tileHout且tileL1Info.tileHout % tileL0Info.tileH == 0
 
-        - 1 <= tileL0Info.tileW <= tileL1Info.tileWout 且 tileL1Info.tileWout % tileL0Info.tileW == 0
+        - 1 <= tileL0Info.tileW <= tileL1Info.tileWout且tileL1Info.tileWout % tileL0Info.tileW == 0
 
         - 1 <= tileL0Info.tileN <= tileL1Info.tileN
 
@@ -160,22 +160,22 @@ TileShape需要满足以下约束条件：
 ```python
 # 构造L1 Tile配置（确保各值在合法范围）
 l1_tile = pypto_impl.TileL1Info(
-    tileHin=4,        # 需满足 1 <= tileHin <= Hin
-    tileHout=4,       # 需满足 1 <= tileHout <= Hout
-    tileWin=8,        # 需满足 1 <= tileWin <= Win
-    tileWout=8,       # 需满足 1 <= tileWout <= Wout
-    tileCinFmap=16,   # 需满足 1 <= tileCinFmap <= Cin
-    tileCinWeight=32, # 需满足 1 <= tileCinWeight <= Cin
-    tileN=16,         # 需满足 1 <= tileN <= Cout
-    tileBatch=1       # 需满足 tileBatch = 1
+    tileHin=4,        # 需满足1 <= tileHin <= Hin
+    tileHout=4,       # 需满足1 <= tileHout <= Hout
+    tileWin=8,        # 需满足1 <= tileWin <= Win
+    tileWout=8,       # 需满足1 <= tileWout <= Wout
+    tileCinFmap=16,   # 需满足1 <= tileCinFmap <= Cin
+    tileCinWeight=32, # 需满足1 <= tileCinWeight <= Cin
+    tileN=16,         # 需满足1 <= tileN <= Cout
+    tileBatch=1       # 需满足tileBatch = 1
 )
 
 # 构造L0 Tile配置（满足对齐约束）
 l0_tile = pypto_impl.TileL0Info(
-    tileH=2,   # 需满足 tileH <= tileL1Info.tileHout 且 tileL1Info.tileHout % tileH == 0
-    tileW=8,   # 需满足 tileW <= tileL1Info.tileWout 且 tileL1Info.tileWout % tileW == 0
-    tileK=32,  # 需满足 tileK * sizeof(dtype) % 32 == 0（假设dtype为FP16，sizeof=2，则32*2=64，64%32=0）
-    tileN=16   # 需满足 tileN % 16 == 0
+    tileH=2,   # 需满足tileH <= tileL1Info.tileHout且tileL1Info.tileHout % tileH == 0
+    tileW=8,   # 需满足tileW <= tileL1Info.tileWout且tileL1Info.tileWout % tileW == 0
+    tileK=32,  # 需满足tileK * sizeof(dtype) % 32 == 0（假设dtype为FP16，sizeof=2，则32*2=64，64%32=0）
+    tileN=16   # 需满足tileN % 16 == 0
 )
 
 # 设置卷积TileShape（开启L0TileInfo）

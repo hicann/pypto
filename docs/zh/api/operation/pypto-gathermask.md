@@ -28,16 +28,16 @@ gathermask(self: Tensor, pattern_mode: int) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| self   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_INT32, DT_UINT32，DT_FP16，DT_BF16, DT_FP32。 <br> 不支持空 Tensor，Shape 支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
-| pattern_mode | 输入      | 源操作数。 <br> int类型 ，取值范围为：1~7。 |
+| self   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT16，DT_UINT16，DT_INT32, DT_UINT32，DT_FP16，DT_BF16, DT_FP32。 <br> 不支持空Tensor，Shape支持1-4维，且shape size不大于2147483647（即INT32_MAX）。 |
+| pattern_mode | 输入      | 源操作数。 <br> int类型，取值范围为：1~7。 |
 
 ## 返回值说明
 
-返回输出 Tensor，输出Tensor数据类型与 self 数据类型一致，输出 Tensor的Shape如下：
+返回输出Tensor，输出Tensor数据类型与self数据类型一致，输出Tensor的Shape如下：
 
 - pattern_mode <= 2，输出shape尾轴=self.shape尾轴/2，其它轴和输入shape一致；
-- 2 < pattern_mode < 7, 输出shape尾轴=self.shape尾轴/4，其它轴和输入shape一致；
-- pattern_mode = 7, 输出shape=输入shape
+- 2 < pattern_mode < 7,输出shape尾轴=self.shape尾轴/4，其它轴和输入shape一致；
+- pattern_mode = 7,输出shape=输入shape
 
 ## 约束说明
 
@@ -77,11 +77,11 @@ y = pypto.gathermask(x, pattern_mode)
 结果示例如下：
 
 ```python
-输入数据 x: [[0,  1,  2,  3,  4,  5],
+输入数据x: [[0,  1,  2,  3,  4,  5],
              [6,  7,  8,  9,  10,  11],
              [12,  13,  14,  15,  16,  17]]
      pattern_mode: 1
-输出数据 y: [[0,  2,  4],
+输出数据y: [[0,  2,  4],
              [6,  8,  10],
              [12,  14,  16]]
 ```

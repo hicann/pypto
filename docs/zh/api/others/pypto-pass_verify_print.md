@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-在精度调试 Verify 特性使能时，使用该接口保存指定TTensor计算的结果到数据文件。
+在精度调试Verify特性使能时，使用该接口保存指定TTensor计算的结果到数据文件。
 
 ## 函数原型
 
@@ -29,7 +29,7 @@ pass_verify_print(*values, cond: Union[int, SymbolicScalar] = 1) -> None
 
 ## 约束说明
 
-该函数需设置 pypto.set_verify_options(enable_pass_verify=True) 后生效。
+该函数需设置pypto.set_verify_options(enable_pass_verify=True)后生效。
 
 ## 调用示例
 

@@ -8,7 +8,7 @@
 ## 静态条件分支
 
 ```python
-# 使用入参 add1_flag=False 生成 kernel
+# 使用入参add1_flag=False 生成kernel
 @pypto.frontend.jit
 def add_kernel_false(
     input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),

@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-对输入Tensor的每个元素应用 sigmoid 激活函数，计算公式为：
+对输入Tensor的每个元素应用sigmoid激活函数，计算公式为：
 
 $$
 sigmoid(input) = \frac{1}{1 + e^{-input}}
@@ -28,7 +28,7 @@ sigmoid(input: Tensor) -> Tensor
 
 ## 返回值说明
 
-返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入元素经sigmoid 函数映射到 \(0, 1\) 区间的结果。
+返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入元素经sigmoid函数映射到 \(0, 1\)区间的结果。
 
 ## 调用示例
 
