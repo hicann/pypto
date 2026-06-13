@@ -163,7 +163,8 @@ Status ExpandFunction::RunOnFunction(Function& function)
     }
     APASS_LOG_INFO_F(
         Elements::Function, "Function[%s] operation size is: %zu after expansion.", function.GetMagicName().c_str(),
-        function.Operations().size());
+        function.Operations(false).size());
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     APASS_LOG_INFO_F(Elements::Function, "End ExpandFunction function [%s].", function.GetRawName().c_str());
     return SUCCESS;
 }
