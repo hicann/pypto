@@ -744,7 +744,6 @@ void TanOperationTileFunc(
 struct CumOperationTileInfoPara {
     TileInfo inputTileInfo;
     TileInfo dstTileInfo;
-    LogicalTensorPtr lastAxisTileFromPrev{nullptr};
 };
 
 struct CumOperationPara {
@@ -754,69 +753,118 @@ struct CumOperationPara {
     const bool is_sum;
 };
 
-void InnerTiledCumOperation(
-    size_t cur, Function& function, const TileShape& tileShape, const CumOperationPara& cumOperationPara,
-    CumOperationTileInfoPara& cumOperationTileInfo)
+// CumSum/CumProd tiling (rank 1-4):
+//   Phase 1 — loop and tile every non-cum dimension (0..rank-1 except axis).
+//   Phase 2 — within each fixed non-cum fiber, tile only along axis and propagate
+//             carry (last cum-axis element) between consecutive tiles on that axis.
+// Carry is scoped per non-cum fiber so higher-rank slices do not clobber each other.
+
+namespace {
+
+std::vector<int> BuildNonCumDimIndices(int rank, int axis)
+{
+    std::vector<int> dims;
+    dims.reserve(rank > 0 ? static_cast<size_t>(rank - 1) : 0);
+    for (int d = 0; d < rank; ++d) {
+        if (d != axis) {
+            dims.push_back(d);
+        }
+    }
+    return dims;
+}
+
+void EmitCumAxisTile(
+    Function& function, const CumOperationPara& cumOperationPara, CumOperationTileInfoPara& tileInfo,
+    LogicalTensorPtr& lastCarry)
 {
     const LogicalTensorPtr& input = cumOperationPara.input;
     const LogicalTensorPtr& dstTensor = cumOperationPara.dstTensor;
     const int axis = cumOperationPara.axis;
     const bool is_sum = cumOperationPara.is_sum;
-    auto& vecTile = tileShape.GetVecTile();
 
-    if (cur == dstTensor->shape.size()) {
-        auto dstTile =
-            dstTensor->View(function, cumOperationTileInfo.dstTileInfo.shape, cumOperationTileInfo.dstTileInfo.offset);
-        auto inputTile =
-            input->View(function, cumOperationTileInfo.inputTileInfo.shape, cumOperationTileInfo.inputTileInfo.offset);
+    auto dstTile = dstTensor->View(function, tileInfo.dstTileInfo.shape, tileInfo.dstTileInfo.offset);
+    auto inputTile = input->View(function, tileInfo.inputTileInfo.shape, tileInfo.inputTileInfo.offset);
 
-        LogicalTensorPtr srcTile = std::make_shared<LogicalTensor>(
-            function, dstTile->Datatype(), dstTile->GetShape(), inputTile->GetDynValidShape());
-        if (is_sum) {
-            auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputTile}, {srcTile});
-            op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
-            op.SetAttribute(OP_ATTR_PREFIX + "flag", is_sum);
-        } else {
-            auto& op = function.AddOperation(Opcode::OP_CUM_PROD, {inputTile}, {srcTile});
-            op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
-            op.SetAttribute(OP_ATTR_PREFIX + "flag", is_sum);
-        }
-        std::vector<int64_t> offset = cumOperationTileInfo.dstTileInfo.offset;
-        if (offset[axis] > 0) {
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, cumOperationTileInfo.lastAxisTileFromPrev != nullptr)
-                << "lastAxisTileFromPrev must be set when cum axis tile offset > 0";
-            LogicalTensorPtr lastTile = std::make_shared<LogicalTensor>(
-                function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
-            auto& eop = function.AddOperation(
-                "TILE_EXPAND", {cumOperationTileInfo.lastAxisTileFromPrev}, {lastTile});
-            eop.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{axis});
-            if (is_sum) {
-                function.AddOperation(Opcode::OP_ADD, {srcTile, lastTile}, {dstTile});
-            } else {
-                function.AddOperation(Opcode::OP_MUL, {srcTile, lastTile}, {dstTile});
-            }
-        } else {
-            function.AddOperation(Opcode::OP_REGISTER_COPY, {srcTile}, {dstTile});
-        }
-        // Carry for next tile: last element of current dstTile (global cumulative at tile end).
-        // Use tile-local dstTile view instead of dstTensor view to avoid dependency cycles.
-        std::vector<int64_t> lastShape = cumOperationTileInfo.dstTileInfo.shape;
-        lastShape[axis] = 1;
-        std::vector<int64_t> lastViewOffset(lastShape.size(), 0);
-        lastViewOffset[axis] = cumOperationTileInfo.dstTileInfo.shape[axis] - 1;
-        cumOperationTileInfo.lastAxisTileFromPrev = dstTile->View(function, lastShape, lastViewOffset);
-        return;
+    LogicalTensorPtr srcTile = std::make_shared<LogicalTensor>(
+        function, dstTile->Datatype(), dstTile->GetShape(), inputTile->GetDynValidShape());
+    if (is_sum) {
+        auto& op = function.AddOperation(Opcode::OP_CUM_SUM, {inputTile}, {srcTile});
+        op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        op.SetAttribute(OP_ATTR_PREFIX + "flag", is_sum);
+    } else {
+        auto& op = function.AddOperation(Opcode::OP_CUM_PROD, {inputTile}, {srcTile});
+        op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        op.SetAttribute(OP_ATTR_PREFIX + "flag", is_sum);
     }
-    int64_t tmpTile = vecTile[cur];
 
-    for (int i = 0; i < input->GetShape()[cur]; i += tmpTile) {
-        cumOperationTileInfo.dstTileInfo.offset[cur] = i;
-        cumOperationTileInfo.dstTileInfo.shape[cur] = std::min(input->shape[cur] - i, tmpTile);
-        cumOperationTileInfo.inputTileInfo.offset[cur] = i;
-        cumOperationTileInfo.inputTileInfo.shape[cur] = std::min(input->shape[cur] - i, tmpTile);
-        InnerTiledCumOperation(cur + 1, function, tileShape, cumOperationPara, cumOperationTileInfo);
+    if (tileInfo.dstTileInfo.offset[axis] > 0) {
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, lastCarry != nullptr)
+            << "carry must be set when cum axis tile offset > 0";
+        LogicalTensorPtr lastTile = std::make_shared<LogicalTensor>(
+            function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
+        auto& eop = function.AddOperation("TILE_EXPAND", {lastCarry}, {lastTile});
+        eop.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{axis});
+        if (is_sum) {
+            function.AddOperation(Opcode::OP_ADD, {srcTile, lastTile}, {dstTile});
+        } else {
+            function.AddOperation(Opcode::OP_MUL, {srcTile, lastTile}, {dstTile});
+        }
+    } else {
+        function.AddOperation(Opcode::OP_REGISTER_COPY, {srcTile}, {dstTile});
+    }
+
+    std::vector<int64_t> lastShape = tileInfo.dstTileInfo.shape;
+    lastShape[axis] = 1;
+    std::vector<int64_t> lastViewOffset(lastShape.size(), 0);
+    lastViewOffset[axis] = tileInfo.dstTileInfo.shape[axis] - 1;
+    lastCarry = dstTile->View(function, lastShape, lastViewOffset);
+}
+
+void TiledCumAlongAxis(
+    Function& function, const TileShape& tileShape, const CumOperationPara& cumOperationPara,
+    CumOperationTileInfoPara& tileInfo)
+{
+    const int axis = cumOperationPara.axis;
+    const auto& input = cumOperationPara.input;
+    auto& vecTile = tileShape.GetVecTile();
+    const int64_t cumTileSize = vecTile[axis];
+    const int64_t cumDim = input->GetShape()[axis];
+
+    LogicalTensorPtr lastCarry = nullptr;
+    for (int64_t i = 0; i < cumDim; i += cumTileSize) {
+        tileInfo.dstTileInfo.offset[axis] = i;
+        tileInfo.dstTileInfo.shape[axis] = std::min(cumDim - i, cumTileSize);
+        tileInfo.inputTileInfo.offset[axis] = i;
+        tileInfo.inputTileInfo.shape[axis] = std::min(cumDim - i, cumTileSize);
+        EmitCumAxisTile(function, cumOperationPara, tileInfo, lastCarry);
     }
 }
+
+void InnerTiledCumNonAxisDims(
+    size_t idx, const std::vector<int>& nonAxisDims, Function& function, const TileShape& tileShape,
+    const CumOperationPara& cumOperationPara, CumOperationTileInfoPara& tileInfo)
+{
+    if (idx == nonAxisDims.size()) {
+        TiledCumAlongAxis(function, tileShape, cumOperationPara, tileInfo);
+        return;
+    }
+
+    const int dim = nonAxisDims[idx];
+    const auto& input = cumOperationPara.input;
+    auto& vecTile = tileShape.GetVecTile();
+    const int64_t dimSize = input->GetShape()[dim];
+    const int64_t tileSize = vecTile[dim];
+
+    for (int64_t i = 0; i < dimSize; i += tileSize) {
+        tileInfo.dstTileInfo.offset[dim] = i;
+        tileInfo.dstTileInfo.shape[dim] = std::min(dimSize - i, tileSize);
+        tileInfo.inputTileInfo.offset[dim] = i;
+        tileInfo.inputTileInfo.shape[dim] = std::min(dimSize - i, tileSize);
+        InnerTiledCumNonAxisDims(idx + 1, nonAxisDims, function, tileShape, cumOperationPara, tileInfo);
+    }
+}
+
+} // namespace
 
 void TiledCumOperation(Function& function, const TileShape& tileShape, const CumOperationPara& cumOperationPara)
 {
@@ -825,12 +873,17 @@ void TiledCumOperation(Function& function, const TileShape& tileShape, const Cum
         cumOperationPara.input->GetShape().size() == cumOperationPara.input->GetOffset().size())
         << "Shape size and offset size should be equal";
 
-    CumOperationTileInfoPara cumOperationTileInfo{
+    const int rank = static_cast<int>(cumOperationPara.input->GetShape().size());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, rank >= static_cast<int>(MIN_TENSOR_DIM) &&
+        rank <= static_cast<int>(MAX_TENSOR_DIM))
+        << "CumSum/CumProd tiling supports rank 1-4";
+
+    CumOperationTileInfoPara tileInfo{
         TileInfo(cumOperationPara.input->GetShape().size(), cumOperationPara.input->GetOffset().size()),
         TileInfo(cumOperationPara.dstTensor->GetShape().size(), cumOperationPara.dstTensor->GetOffset().size())};
 
-    InnerTiledCumOperation(0, function, tileShape, cumOperationPara, cumOperationTileInfo);
-    return;
+    const std::vector<int> nonAxisDims = BuildNonCumDimIndices(rank, cumOperationPara.axis);
+    InnerTiledCumNonAxisDims(0, nonAxisDims, function, tileShape, cumOperationPara, tileInfo);
 }
 
 void TensorCumOperation(Function& function, const CumOperationPara& cumOperationPara)
