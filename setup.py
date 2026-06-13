@@ -32,8 +32,9 @@ import sys
 import site
 import sysconfig
 import warnings
+import dataclasses
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from importlib import metadata
 
 from setuptools import setup, Extension
@@ -233,6 +234,30 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
         return Path(whl_file_lst[0])
 
 
+@dataclasses.dataclass
+class Py3Desc:
+    """Python3 描述
+    """
+    exe: str    # Interpreter 路径
+    minor: int  # Minor 版本
+
+
+@dataclasses.dataclass
+class CMakeCmdParams:
+    """CMake 命令参数
+    """
+    src: Path  # 源码根目录
+    build_dir: Path  # CMake 构建目录
+    cmake_install_prefix: Path  # CMake 安装前缀
+    py3_exe: str  # Python3 可执行文件路径
+    env: Optional[Dict[str, str]] = None  # 环境变量字典
+    build_targets: Optional[List[str]] = None  # 构建时的目标组件
+    install_components: Optional[List[str]] = None  # 安装组件列表(若数量>1, 则会拆分成多个 cmake --install 命令执行)
+
+    def __post_init__(self):
+        self.env = self.env if self.env else {}
+
+
 class CMakeUserOption:
     """CMake 用户选项配置类
 
@@ -243,6 +268,7 @@ class CMakeUserOption:
         - cmake-build-type: 构建类型 (如 "Debug" 或 "Release")
         - cmake-options: 额外的 CMake 选项
         - cmake-verbose: 是否启用 CMake 详细输出
+        - multi-py3-exe: 额外 Python3 可执行文件路径列表, 用于多版本 pypto_impl.so 编译
 
     配置来源:
         1. 命令行参数
@@ -258,6 +284,7 @@ class CMakeUserOption:
         ('cmake-build-type=', None, 'CMake Build Type', None),
         ('cmake-options=', None, 'CMake Options', None),
         ('cmake-verbose', None, 'Enable CMake Verbose Output', None),
+        ('multi-py3-exe=', None, 'Extra Python3 executables (comma-separated) for multi-version pypto_impl.so', None),
     ]
 
     def __init__(self):
@@ -266,6 +293,8 @@ class CMakeUserOption:
         self.cmake_build_type: Optional[str] = None
         self.cmake_options: Optional[str] = None
         self.cmake_verbose: bool = False
+        self.multi_py3_exe: Optional[str] = None
+        self.multi_py3_cfg: Optional[List[Py3Desc]] = None
         # 获取 CMake 路径
         self.cmake: Optional[Path] = None
 
@@ -290,6 +319,10 @@ class CMakeUserOption:
         desc += f"\n    cmake_build_type      : {self.cmake_build_type}"
         desc += f"\n    cmake-options         : {self.cmake_options}"
         desc += f"\n    cmake-verbose         : {self.cmake_verbose}"
+        if self.multi_py3_cfg:
+            desc += f"\n    multi_py3_cfg         :"
+            for cfg in self.multi_py3_cfg:
+                desc += f"\n                          3.{cfg.minor} -> {cfg.exe}"
         desc += f"\n"
         return desc
 
@@ -340,6 +373,8 @@ class CMakeUserOption:
         self.cmake_build_type = None
         self.cmake_options = None
         self.cmake_verbose = False
+        self.multi_py3_exe = None
+        self.multi_py3_cfg = None
         self.cmake: Optional[Path] = self.which_cmake()
         if not self.cmake:
             raise RuntimeError(f"Can't find cmake")
@@ -355,11 +390,14 @@ class CMakeUserOption:
         parser.add_argument("--cmake-build-type", nargs="?", type=str, default=None, dest="cmake_build_type")
         parser.add_argument("--cmake-options", nargs="?", type=str, default="", dest="cmake_options")
         parser.add_argument("--cmake-verbose", action="store_true", default=False, dest="cmake_verbose")
+        parser.add_argument("--multi-py3-exe", nargs="?", type=str, default=None, dest="multi_py3_exe")
         args, _ = parser.parse_known_args(env_build_ext_args_split)
         self.cmake_generator = args.cmake_generator
         self.cmake_build_type = args.cmake_build_type
         self.cmake_options = args.cmake_options
         self.cmake_verbose = args.cmake_verbose
+        self.multi_py3_exe = args.multi_py3_exe
+        self.multi_py3_cfg = None
 
     def finalize_options_cmake(self):
         """处理并修正 CMake 选项
@@ -376,6 +414,8 @@ class CMakeUserOption:
         self.cmake_build_type = None if not self.cmake_build_type else self.cmake_build_type
         self.cmake_options = self.cmake_options.replace("'", "").replace('"', "") if self.cmake_options else None
         self.cmake_verbose = True if self.cmake_verbose else False
+        self.multi_py3_exe = self.multi_py3_exe.strip() if self.multi_py3_exe else None
+        self.multi_py3_cfg = self._init_get_multi_py3_cfg()
         # CMake Options 修正
         cmake_option_lst = [o.replace(" ", "") for o in (self.cmake_options.split(" ") if self.cmake_options else [])]
         if self.cmake_generator:
@@ -391,6 +431,26 @@ class CMakeUserOption:
                     logging.warning("Configuration via --cmake-build-type has higher priority than --cmake-options; "
                                     "in case of conflict, the former prevails.")
         self.cmake_options = " ".join(cmake_option_lst) if cmake_option_lst else self.cmake_options
+
+    def _init_get_multi_py3_cfg(self):
+        cfg_list = []
+        if not self.multi_py3_exe:
+            return cfg_list
+        for e in self.multi_py3_exe.replace(",", ":").split(":"):
+            e = e.strip()
+            if not e:
+                continue
+            ret = subprocess.run(
+                [e, "-c", "import sys; print(sys.version_info.minor)"],
+                capture_output=True, check=True, text=True, encoding='utf-8'
+            )
+            minor = int(ret.stdout.strip())
+            if minor == int(sys.version_info.minor):
+                continue
+            cfg_list.append(Py3Desc(exe=e, minor=minor))
+        if cfg_list:
+            logging.info("Multi-Py3 pre-build is EXPERIMENTAL")
+        return cfg_list
 
 
 class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
@@ -472,10 +532,10 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         """执行构建流程
 
         执行完整的 CMake 构建流程:
-        1. CMake Configure: 配置构建参数
-        2. CMake Build: 执行编译
-        3. CMake Install: 安装文件到目标目录
-        4. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
+        1. 主版本 CMake Configure/Build/Install (使用当前 Python)
+        2. 对每个额外 Python 版本, 独立 CMake Configure/Build/Install(pypto_impl_lib component)
+           将对应版本的 pypto_impl.so 安装到主版本的 staging 目录
+        3. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
         """
         logging.info("%s", self)
         # 源码根目录
@@ -487,33 +547,22 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         # 获取 cmake install prefix
         cmake_install_prefix = self._get_cmake_install_prefix()
 
-        # CMake Configure
-        cmd = f"{self.cmake} -S {src} -B {build_dir}"
-        cmd += f" -G {self.cmake_generator}" if self.cmake_generator else ""
-        cmd += f" -DCMAKE_BUILD_TYPE={self.cmake_build_type}" if self.cmake_build_type else ""
-        cmd += f" -DPython3_EXECUTABLE={sys.executable} -DCMAKE_INSTALL_PREFIX={cmake_install_prefix}"
-        cmd += f" {self.cmake_options}" if self.cmake_options else ""
-        logging.info("CMake Configure, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=env)
-        ret.check_returncode()
+        params = CMakeCmdParams(src=src, build_dir=build_dir, cmake_install_prefix=cmake_install_prefix,
+                                py3_exe=sys.executable, env=env)
 
-        # CMake Build
-        job_num = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
-        cmd = f"{self.cmake} --build {build_dir}" + (f" -j {job_num}" if job_num else "")
-        cmd += f" --verbose" if self.cmake_verbose else ""
-        logging.info("CMake Build, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=env)
-        ret.check_returncode()
-
-        # CMake Install
-        cmake_install_prefix: Path = self._get_cmake_install_prefix()  # 重复获取触发提示
-        cmd = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix}"
-        logging.info("CMake Install, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
-        ret.check_returncode()
-
+        # 主版本构建
+        self._run_cmake(params=params)
         # 写入 build_dir 标记文件 (供覆盖率生成使用)
-        self._write_build_dir_marker(src_root=src, build_dir=build_dir)
+        self._write_build_dir_marker(src_root=params.src, build_dir=params.build_dir)
+
+        # 额外 Python 版本构建
+        for py3_cfg in self.multi_py3_cfg or []:
+            extra_build_dir = Path(f"{build_dir}_py3{py3_cfg.minor}")
+            extra_build_dir.mkdir(parents=True, exist_ok=True)
+            extra_params = CMakeCmdParams(src=src, build_dir=extra_build_dir,
+                                          cmake_install_prefix=cmake_install_prefix, py3_exe=py3_cfg.exe, env=env,
+                                          build_targets=["pypto_impl"], install_components=["pypto_impl_lib"])
+            self._run_cmake(params=extra_params)
 
         if self._edit_mode():
             installed_files = self._get_cmake_install_manifest(build_dir=build_dir)
@@ -523,6 +572,47 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
                 editable_wheel_cmd.pypto_install_manifest_lst = installed_files
                 logging.info("Command build_ext passes %s CMake install files to editable_wheel command",
                              len(editable_wheel_cmd.pypto_install_manifest_lst))
+
+    def _run_cmake(self, params: CMakeCmdParams):
+        """执行完整的 CMake Configure/Build/Install 流程
+
+        :param params: CMake 构建参数
+        """
+        # CMake Configure
+        cmd = f"{self.cmake} -S {params.src} -B {params.build_dir}"
+        cmd += f" -G {self.cmake_generator}" if self.cmake_generator else ""
+        cmd += f" -DCMAKE_BUILD_TYPE={self.cmake_build_type}" if self.cmake_build_type else ""
+        cmd += f" -DPython3_EXECUTABLE={params.py3_exe} -DCMAKE_INSTALL_PREFIX={params.cmake_install_prefix}"
+        cmd += f" {self.cmake_options}" if self.cmake_options else ""
+        logging.info("CMake Configure, Cmd: %s", cmd)
+        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8',
+                             env=params.env)
+        ret.check_returncode()
+
+        # CMake Build
+        job_num = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
+        cmd = f"{self.cmake} --build {params.build_dir}" + (f" -j {job_num}" if job_num else "")
+        cmd += (" --target " + " ".join(params.build_targets)) if params.build_targets else ""
+        cmd += f" --verbose" if self.cmake_verbose else ""
+        logging.info("CMake Build, Cmd: %s", cmd)
+        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8',
+                             env=params.env)
+        ret.check_returncode()
+
+        # CMake Install
+        cmd_list = []
+        cmd = f"{self.cmake} --install {params.build_dir} --prefix {params.cmake_install_prefix}"
+        if params.install_components:
+            for comp in params.install_components:
+                if not comp:
+                    continue
+                cmd_list.append(f"{cmd} --component {comp}")
+        else:
+            cmd_list.append(cmd)
+        for cmd in cmd_list:
+            logging.info("CMake Install, Cmd: %s", cmd)
+            ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
+            ret.check_returncode()
 
     def _edit_mode(self) -> bool:
         """判断是否为可编辑安装模式
