@@ -64,6 +64,9 @@ struct DeviceLauncherConfig {
     bool controlFlowCache{false};
     bool cpuSeparate{false};
     uint64_t workspaceAddr{0};
+    // When true, workspace is allocated per launch by Python (torch.empty on NPU); skip AllocDev in
+    // FillKernelMeta. Used by FillDeviceKernelArgs during KernelBinary init; Launch() sets kArgs.workspace.
+    bool workspaceAllocByTorch{false};
     bool isCacheOriginShape{true}; // infer cache shape or origin shape
 
     DeviceLauncherConfig() = default;

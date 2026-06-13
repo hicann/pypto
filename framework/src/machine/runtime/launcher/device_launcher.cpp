@@ -301,6 +301,8 @@ void DeviceLauncher::FillDeviceKernelArgs(
     CachedOperator cache;
     DeviceLauncherConfigFillDeviceInfo(config);
     DeviceInitLauncherConfigForUser(devProgData);
+    // KernelBinary init only; workspace is allocated per launch via module.alloc() (torch on NPU).
+    config.workspaceAllocByTorch = true;
     DeviceMemoryUtils deviceMemoryUtils;
     DeviceInitTilingData(deviceMemoryUtils, kargs, devProgData, nullptr, config, &cache);
     DeviceInitDistributedContext(deviceMemoryUtils, groupNames, kargs);

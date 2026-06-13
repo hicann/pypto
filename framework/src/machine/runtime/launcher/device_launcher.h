@@ -249,7 +249,8 @@ public:
         devProg->l2CacheOffset = devMem.GetL2Offset();
         if (config.workspaceAddr) {
             kArgs.workspace = (int64_t*)config.workspaceAddr;
-        } else if (kArgs.workspace == nullptr && (devProg->workspaceSize != 0)) {
+        } else if (
+            !config.workspaceAllocByTorch && kArgs.workspace == nullptr && (devProg->workspaceSize != 0)) {
             kArgs.workspace = (int64_t*)devMem.AllocDev(
                 devProg->workspaceSize, CachedOperator::GetWorkspaceDevAddrHolder(cachedOperator));
         }
