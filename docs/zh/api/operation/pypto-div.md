@@ -34,10 +34,9 @@ div(input: Tensor, other: Union[Tensor, float], precision_type: PrecisionType = 
 
 ## 约束说明
 
-1. input和other类型应该相同。
-2. other为数字的时候，不支持隐式转化。
-3. other不支持nan、inf等特殊值
-4. **精度模式说明**：
+1. input和other都为Tensor时，数据类型应该相同。
+2. other为scalar时，若input为浮点类型，则scalar支持整型（自动转为浮点）；若input为整型，则scalar不支持浮点类型（会报错）。
+3. **精度模式说明**：
     - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式，当前仅在Ascend 950PR/Ascend 950DT上有效。
     - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 

@@ -29,9 +29,7 @@ gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor:
 
 ## 约束说明
 
-1. input和other类型应该相同。
-2. other为数字的时候，不支持隐式转化。
-3. other不支持nan、inf等特殊值
+1. input和other都为Tensor时，数据类型应该相同。
 
 ## 调用示例
 

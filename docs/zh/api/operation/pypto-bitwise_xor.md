@@ -33,11 +33,9 @@ bitwise_xor(input: Tensor, other: Union[Tensor, int]) -> Tensor
 
 ## 约束说明
 
-1. input和other类型应该相同。
-2. other为数字的时候，不支持隐式转化。
-3. other不支持nan、inf等特殊值
-4. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(other\) + a\*b\*c\*d\*sizeof\(self\) < UB。
-5. Tensor数据类型说明：
+1. input和other都为Tensor时，数据类型应该相同。
+2. 由于存在临时内存使用，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + a\*b\*c\*d\*sizeof\(other\) + a\*b\*c\*d\*sizeof\(self\) < UB。
+3. Tensor数据类型说明：
    - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8，DT_INT32。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。

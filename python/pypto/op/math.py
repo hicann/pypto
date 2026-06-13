@@ -24,9 +24,21 @@ from ..enum import (
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
 
+_FLOAT_DTYPES = {DataType.DT_FP32, DataType.DT_FP16, DataType.DT_BF16}
+
+
+def _check_scalar_type(op_name, tensor_dtype, other):
+    if not isinstance(other, (int, float)):
+        return
+    if isinstance(other, float) and tensor_dtype not in _FLOAT_DTYPES:
+        raise PyptoError(0xF00001, TypeError(
+            f"{op_name}(): float scalar incompatible with integer tensor dtype {tensor_dtype.name}. "
+            "Use an integer scalar or cast the tensor to float type."))
+
+
 @op_wrapper
 def add(
-    input_tensor: Tensor, other: Union[Tensor, float]
+    input_tensor: Tensor, other: Union[Tensor, float, int]
 ) -> Tensor:
     """Computes the element-wise addition of `input_tensor` and `other`.
 
@@ -68,6 +80,7 @@ def add(
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Add(input_tensor, other)
     else:
+        _check_scalar_type("add", input_tensor.dtype, other)
         return pypto_impl.Add(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
@@ -132,7 +145,7 @@ def axpy_(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
 
 @op_wrapper
 def sub(
-    input_tensor: Tensor, other: Union[Tensor, float]
+    input_tensor: Tensor, other: Union[Tensor, float, int]
 ) -> Tensor:
     """Computes the element-wise subtraction of `input_tensor` and `other`.
 
@@ -172,11 +185,12 @@ def sub(
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Sub(input_tensor, other)
     else:
+        _check_scalar_type("sub", input_tensor.dtype, other)
         return pypto_impl.Sub(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
 @op_wrapper
-def mul(input: Tensor, other: Union[Tensor, float]) -> Tensor:
+def mul(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
     """Computes the element-wise multiplication of `input` and `other`.
 
     This function calculates the formula: `out = input * other`.
@@ -213,9 +227,10 @@ def mul(input: Tensor, other: Union[Tensor, float]) -> Tensor:
               [1.0 4.0 9.0]]
     """
     if isinstance(other, pypto_impl.Tensor):	 
-        return pypto_impl.Mul(input, other)	 
-    else:	 
-        return pypto_impl.Mul(input, pypto_impl.Element(input.dtype, other))
+        return pypto_impl.Mul(input_tensor, other)	 
+    else:
+        _check_scalar_type("mul", input_tensor.dtype, other)
+        return pypto_impl.Mul(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
 @op_wrapper
@@ -270,6 +285,7 @@ def div(
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Div(input, other, precision_type)
     else:
+        _check_scalar_type("div", input.dtype, other)
         return pypto_impl.Div(input, pypto_impl.Element(input.dtype, other), precision_type)
 
 

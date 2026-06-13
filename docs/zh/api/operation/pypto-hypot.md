@@ -33,9 +33,8 @@ hypot(input: Tensor, other: Tensor) -> Tensor
 
 ## 约束说明
 
-1. input和other类型应该相同。
-2. other不支持nan、inf等特殊值。
-3. 对于BF16和FP16类型，内部计算可能会提升精度以避免中间溢出。
+1. input和other都为Tensor时，数据类型应该相同。
+2. 对于BF16和FP16类型，内部计算可能会提升精度以避免中间溢出。
 
 ## 调用示例
 
