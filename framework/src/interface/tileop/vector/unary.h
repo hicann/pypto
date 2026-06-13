@@ -410,9 +410,7 @@ template <typename Ttemp, typename T0, typename T1>
 TILEOP void CeilComputeImpl(T0 dst, T1 src)
 {
     if constexpr (std::is_integral_v<typename T1::DType>) {
-        if (dst.GetAddr() != src.GetAddr()) {
-            pto::TMOV(dst, src);
-        }
+        pto::TMOV(dst, src);
     } else {
         pto::TCVT(dst, src, pto::RoundMode::CAST_CEIL);
     }
@@ -421,6 +419,12 @@ TILEOP void CeilComputeImpl(T0 dst, T1 src)
 template <typename T0, typename T1>
 TILEOP void TCeil(T0 dst, T1 src)
 {
+    if constexpr (std::is_integral_v<typename T1::Type>) {
+        if ((uint64_t)dst.GetAddr() == (uint64_t)src.GetAddr()) {
+            return;
+        }
+    }
+
     if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
