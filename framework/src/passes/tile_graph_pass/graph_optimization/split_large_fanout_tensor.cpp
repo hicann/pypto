@@ -102,7 +102,7 @@ Status SplitLargeFanoutTensor::CalLcmShape(const Shape& toShape, const Shape& fr
                 i, toShape[i], fromShape[i]);
             return FAILED;
         } else {
-            APASS_LOG_INFO_F(
+            APASS_LOG_DEBUG_F(
                 Elements::Tensor, "Shape's dim %zu, shape: %ld and %ld, LCM is %ld.", i, toShape[i], fromShape[i],
                 lcmShape[i]);
         }
@@ -121,7 +121,7 @@ Status SplitLargeFanoutTensor::CalGcdShape(const Shape& toShape, const Shape& fr
     }
     for (size_t i = 0; i < toShape.size(); i++) {
         lcmShape[i] = GCD(toShape[i], fromShape[i]);
-        APASS_LOG_INFO_F(
+        APASS_LOG_DEBUG_F(
             Elements::Tensor, "Shape's dim is %zu, toShape is %ld, fromShape is %ld, GCD is %ld.", i, toShape[i],
             fromShape[i], lcmShape[i]);
     }
@@ -207,7 +207,7 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
     for (const auto& dualOverlap : dualOverlaps) {
         auto viewOp = *dualOverlap->GetProducers().begin();
         if (viewOp->GetIOperands().front()->tensor->rawmagic != largeTensor->tensor->rawmagic) {
-            APASS_LOG_INFO_F(
+            APASS_LOG_DEBUG_F(
                 Elements::Tensor, "ViewOp[%d]'s input has been replaced, don't deal with this ViewOp.",
                 viewOp->GetOpMagic());
         } else {
@@ -219,7 +219,7 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
             }
             auto assembleOp = *newTensor->GetProducers().begin();
             addedOps_.push_back(assembleOp);
-            APASS_LOG_INFO_F(
+            APASS_LOG_DEBUG_F(
                 Elements::Operation,
                 "In one-to-multiple situation, create an AssembleOp[%d], input is a "
                 "overlap[%d], output is a newTensor[%d].",
@@ -232,7 +232,7 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
             viewOpAttr->SetFromOffset(newViewOffset);
             GraphUtils::UpdateViewAttr(function, *viewOp);
             viewOp->ReplaceInput(newTensor, largeTensor);
-            APASS_LOG_INFO_F(
+            APASS_LOG_DEBUG_F(
                 Elements::Operation,
                 "In one-to-multiple situation, "
                 "viewOp[%d]'s input[%d] has been replaced to newTensor[%d].",
@@ -558,7 +558,7 @@ void SplitLargeFanoutTensor::CollectLargeTensor(Function& function)
             }
             CollectLargeTensorToInfo(logicalTensor);
             CollectLargeTensorFromInfo(logicalTensor);
-            APASS_LOG_INFO_F(Elements::Tensor, "Large tensor magic is %d.", logicalTensor->GetMagic());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Large tensor magic is %d.", logicalTensor->GetMagic());
         }
     }
 }
@@ -696,7 +696,7 @@ void SplitLargeFanoutTensor::GetOffsets(
         tileOffsets.insert(std::move(offset));
     }
     if (!tileOffsets.empty()) {
-        APASS_LOG_WARN_F(
+        APASS_LOG_DEBUG_F(
             Elements::Tensor, "Skip offset processing for large tensor [%d] due to empty offsets.",
             largeTensor->GetMagic());
     }
@@ -789,7 +789,7 @@ void SplitLargeFanoutTensor::RemoveOps(Function& function, std::vector<Operation
         function.UpdateOperandBeforeRemoveOp(*op, false);
     }
     for (const auto op : opList) {
-        APASS_LOG_INFO_F(Elements::Operation, "Remove %s[%d].", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Remove %s[%d].", op->GetOpcodeStr().c_str(), op->GetOpMagic());
         if (!op->IsDeleted()) {
             op->SetAsDeleted();
         }

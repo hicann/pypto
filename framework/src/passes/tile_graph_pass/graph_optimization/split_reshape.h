@@ -31,7 +31,6 @@ using InputMaigc = int;
 using OutputMaigc = int;
 using OverlaprawMagic = int;
 
-
 struct UpdatePara {
     int64_t ShapeVal;
     int64_t OffsetVal;
@@ -111,7 +110,9 @@ struct CalcOverlapPara {
     std::vector<int64_t> newInputViewTileOffset;
     std::vector<int64_t> newInputViewTileShape;
     std::vector<SymbolicScalar> oriViewDynShape;
+    // 原始 copy-out source，保留 reshape 前的 offset/shape，用于后续回填 assemble 和改图。
     LogicalTensors overlaps;
+    // overlaps 映射到 aligned/reshape 后坐标系里的 tile，用于 overlap 判断和 tile 推导。
     LogicalTensors newOverlaps;
     LogicalTensorPtr input;
     LogicalTensorPtr inputView;
@@ -145,14 +146,17 @@ private:
     Status RunOnFunction(Function& function) override;
     Status Init();
     Status CollectCopyOut(Function& function);
+    Status CollectReshapeInfo(const Operation& op);
+    Status CollectAssembleInfo(const Operation& op);
+    void DeduplicateCopySources();
     Status CheckCopyIn(Function& function);
     Status AddOperation(Function& function);
-    Status EraseReshape(Function& function);
     Status SetMemoryType(Function& function);
 
     Status ObtainReshapeSource(Function& function, const OpPara& para, LogicalTensorPtr& newReshapeSource);
     Status ObtainCopyOutTile(
-        Function& function, const copyOutTilePara& copyOutTile, LogicalTensors& overlaps, LogicalTensors& newOverlaps);
+        Function& function, const copyOutTilePara& copyOutTile, LogicalTensors& overlaps, LogicalTensors& newOverlaps,
+        OverlapStatus& overlapStatus);
     Status ConstructShapeOffset(
         const ReshapeTilePara& shapePara, size_t& i, size_t j, std::vector<int64_t>& newOffset,
         std::vector<int64_t>& newShape);
@@ -206,7 +210,7 @@ private:
     Status DefaultEnabledPreCheck(Function& function) override;
     SplitReshapeChecker checker_;
 
-    std::unordered_map<int, std::set<LogicalTensorPtr, TensorPtrComparator>> assembleOutToInput_;
+    std::unordered_map<int, std::vector<LogicalTensorPtr>> assembleOutToInput_;
     std::unordered_map<std::pair<int, int>, std::vector<int64_t>, PairHash> mapOffset_;
     std::unordered_map<std::pair<int, int>, int, PairHash> mapAssembleOpMagic_;
     std::unordered_map<int, LogicalTensorPtr> reshapeSources_;
@@ -215,15 +219,13 @@ private:
     std::unordered_map<unsigned long, std::shared_ptr<ReshapeOp>> reshapes_;
     std::unordered_map<std::shared_ptr<ReshapeOp>, std::vector<int64_t>> viewOffset_;
     std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> reshapeOffset_;
-    std::unordered_set<Operation*> redundantViewops_;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs_;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs_;
     IRBuilder irBuilder_;
     // 记录所有op_reshape的指针，键值为reshape的输出Operand的magic。
     std::unordered_map<int, const Operation*> reshapeOpPtrs_;
-    // 记录满足后续op为reshape的op_assemble的指针，第一个map的键值为assemble输入Operand的magic,
-    // 第二个map的键值为后续op_reshape的输出Operand的magic。
-    std::unordered_map<int, std::unordered_map<int, const Operation*>> assembleOpPtrs_;
+    // 记录assemble输入Operand和输出Operand对应的op_assemble指针。
+    std::unordered_map<std::pair<int, int>, const Operation*, PairHash> assembleOpPtrs_;
     std::unordered_map<std::pair<int, int>, AlignResult, PairHash> rawToAlignCache_;
     std::unordered_map<LogicalTensorPtr, bool> sameRawInputCache_;
 };

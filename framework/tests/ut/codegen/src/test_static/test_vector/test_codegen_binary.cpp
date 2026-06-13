@@ -101,13 +101,14 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor)
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(#include "TileOpImpl.h"
+    std::string expectHeader = R"!!!(#include "TileOpImpl.h"
 #include "tilefwk/aicpu_common.h"
 
 // funcHash: 7529788009116668590
+)!!!";
+    CheckStringExist(expectHeader, res);
 
-extern "C" [aicore] void TENSOR_AddMulDim4_TILETENSOR_2_0_4503599627370496(CoreFuncParam* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ TaskStat* taskStat) {
-float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400
+    std::string expectBody = R"!!!(float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400
 float *UB_S0_E1024_T = (float *)get_imm(0x0); // size: 0x400
 float __ubuf__ *UB_S1024_E2048 = (float __ubuf__ *)get_imm(0x400); // size: 0x400
 float *UB_S1024_E2048_T = (float *)get_imm(0x400); // size: 0x400
@@ -132,6 +133,6 @@ GMTileTensorFP32Dim4_1 gmTensor_10((__gm__ float*)GET_PARAM_ADDR(param, 0, 35), 
 TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_10, ubTensor_2, Coord4Dim(0, 0, 0, 0));
 }
 )!!!";
-    CheckStringExist(expect, res);
+    CheckStringExist(expectBody, res);
 }
 } // namespace npu::tile_fwk

@@ -14,6 +14,7 @@
  */
 
 #include "gtest/gtest.h"
+#include <chrono>
 #include "symbolic_scalar_test_utils.h"
 #include "interface/program/program.h"
 #include "passes/pass_check/assemble_checker.h"
@@ -221,6 +222,32 @@ TEST_F(TestAssembleChecker, TestAssembleHighDimInputNoOverlap)
     EXPECT_EQ(checker.CheckAssembleOverlap(*function), SUCCESS);
 }
 
+TEST_F(TestAssembleChecker, TestAssembleManyInputsNoOverlap)
+{
+    constexpr int64_t inputCount = 16384;
+    constexpr int64_t maxElapsedMs = 200;
+    ComputationalGraphBuilder G;
+    TensorInfos outTensors = {{"out1", {1, inputCount}}};
+    G.AddTensor(DataType::DT_FP32, {1, inputCount}, "out1");
+    G.GetTensor("out1")->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.SetOutCast({"out1"});
+    for (int64_t i = 0; i < inputCount; ++i) {
+        const std::string inputName = "in" + std::to_string(i);
+        const std::string opName = "assemble" + std::to_string(i);
+        G.AddTensor(DataType::DT_FP32, {1, 1}, inputName);
+        G.GetTensor(inputName)->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+        G.AddOp(Opcode::OP_ASSEMBLE, {inputName}, {"out1"}, opName);
+        auto assembleOp = G.GetOp(opName);
+        assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, Shape{0, i}));
+    }
+    Function* function = G.GetFunction();
+
+    auto start = std::chrono::steady_clock::now();
+    EXPECT_EQ(checker.CheckAssembleOverlap(*function), SUCCESS);
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    EXPECT_LT(elapsed.count(), maxElapsedMs);
+}
+
 TEST_F(TestAssembleChecker, TestAssembleHighDimInputHasOverlap)
 {
     ComputationalGraphBuilder G;
@@ -237,46 +264,34 @@ TEST_F(TestAssembleChecker, TestAssembleHighDimInputHasOverlap)
     EXPECT_EQ(checker.CheckAssembleOverlap(*function), FAILED);
 }
 
-TEST_F(TestAssembleChecker, TestAssembleOffsetShapeDimNotMatch) {
+TEST_F(TestAssembleChecker, TestAssembleOffsetShapeDimNotMatch)
+{
     ComputationalGraphBuilder G;
-    TensorInfos inTensors = {
-        {"in1", {2, 2}}
-    };
-    TensorInfos outTensors = {
-        {"out1", {8, 8}}
-    };
-    AssembleOpInfos assembleOps = {
-        {"in1", "out1", "assemble1", {0}}
-    };
+    TensorInfos inTensors = {{"in1", {2, 2}}};
+    TensorInfos outTensors = {{"out1", {8, 8}}};
+    AssembleOpInfos assembleOps = {{"in1", "out1", "assemble1", {0}}};
     BuildAssembleGraph(G, inTensors, outTensors, assembleOps);
-    Function *function = G.GetFunction();
+    Function* function = G.GetFunction();
 
     EXPECT_EQ(checker.CheckAssembleOverlap(*function), FAILED);
 }
 
-TEST_F(TestAssembleChecker, CheckAssembleOverlap_AssembleAttrNull) {
-    auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), 
-        "TestAssembleAttrNull", 
-        "TestAssembleAttrNull", 
-        nullptr
-    );
+TEST_F(TestAssembleChecker, CheckAssembleOverlap_AssembleAttrNull)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestAssembleAttrNull", "TestAssembleAttrNull", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
     std::vector<int64_t> shape = {16, 32};
     auto t1Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
     auto t2Tensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
 
-    auto &assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, 
-        Opcode::OP_ASSEMBLE, 
-        {t1Tensor}, 
-        {t2Tensor}
-    );
+    auto& assembleOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {t1Tensor}, {t2Tensor});
     currFunctionPtr->inCasts_.push_back(t1Tensor);
     currFunctionPtr->outCasts_.push_back(t2Tensor);
     Status status = checker.CheckAssembleOverlap(*currFunctionPtr);
 
-    EXPECT_EQ(status, FAILED);                 
-    EXPECT_EQ(assembleOp.GetOpAttribute(), nullptr); 
+    EXPECT_EQ(status, FAILED);
+    EXPECT_EQ(assembleOp.GetOpAttribute(), nullptr);
 }
 } // namespace tile_fwk
 } // namespace npu
