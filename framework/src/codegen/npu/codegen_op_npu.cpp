@@ -881,8 +881,7 @@ std::string CodeGenOpNPU::QueryTileTensorTypeByIdx(int paramIdx) const
 
 std::string CodeGenOpNPU::GenGmCheck() const
 {
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_GM_OUT_OF_BOUNDS &&
-        config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_ALL) {
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_GM_OUT_OF_BOUNDS) {
         return "";
     }
 
