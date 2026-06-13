@@ -28,10 +28,12 @@ struct CompareTmpBuffers {
     __ubuf__ T* vselResult;
 };
 
-template <typename T>
+template <typename T0, typename T1 = T0>
 struct CompareTileTypes {
     static constexpr int64_t COUNT_MAX = 1024;
-    using SrcTile = pto::Tile<pto::TileType::Vec, typename T::Type, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
+    using SrcTile0 = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
+    using SrcTile1 = pto::Tile<pto::TileType::Vec, typename T1::Type, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
+    using SrcTile = SrcTile0;
     using DstTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
     using CmpTile = pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
     using TmpTile = pto::Tile<pto::TileType::Vec, half, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
@@ -107,8 +109,8 @@ TILEOP CompareLayoutInfo ExtractLayoutInfo(const T& src, const TDst& dst)
     return info;
 }
 
-template <int64_t cmpOp, typename DstTileType, typename SrcTileType>
-TILEOP void ExecuteCompare(DstTileType& dst0, SrcTileType& src0Tile, SrcTileType& src1Tile)
+template <int64_t cmpOp, typename DstTileType, typename SrcTileType0, typename SrcTileType1>
+TILEOP void ExecuteCompare(DstTileType& dst0, SrcTileType0& src0Tile, SrcTileType1& src1Tile)
 {
     switch (static_cast<pto::CmpMode>(cmpOp)) {
         case pto::CmpMode::EQ:
@@ -215,23 +217,26 @@ TILEOP void InitCommonTiles(
     pto::TASSIGN(cmpResTile, reinterpret_cast<uint64_t>(buffers.vcmpBitResult));
 }
 
-template <int64_t cmpOp, int64_t mode, typename T, typename TDst, typename TTmp>
-TILEOP void TCompare(TDst dst, T src0, T src1, TTmp tmpbuf)
+template <int64_t cmpOp, int64_t mode, typename T0, typename T1, typename TDst, typename TTmp>
+TILEOP void TCompare(TDst dst, T0 src0, T1 src1, TTmp tmpbuf)
 {
     auto info = ExtractLayoutInfo(src0, dst);
-    auto buffers = InitCompareTmpBuffers<T>(tmpbuf);
+    auto buffers = InitCompareTmpBuffers<T0>(tmpbuf);
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
-    constexpr auto srcTypeSize = sizeof(typename T::Type);
+    constexpr auto src0TypeSize = sizeof(typename T0::Type);
+    constexpr auto src1TypeSize = sizeof(typename T1::Type);
     constexpr unsigned alignUint8 = 32;
     constexpr unsigned addressUsed = 4;
-    using Types = CompareTileTypes<T>;
+    using Types = CompareTileTypes<T0, T1>;
+    using SrcTile0 = typename Types::SrcTile0;
+    using SrcTile1 = typename Types::SrcTile1;
     using SrcTile = typename Types::SrcTile;
     using DstTile = typename Types::DstTile;
     using CmpTile = typename Types::CmpTile;
     using TmpTile = typename Types::TmpTile;
     using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
 
-    constexpr uint64_t countBy4096 = 4096 / sizeof(typename T::Type);
+    constexpr uint64_t countBy4096 = 4096 / sizeof(typename T0::Type);
     constexpr uint64_t elementsPerCount =
         (countBy4096 < static_cast<uint64_t>(Types::COUNT_MAX)) ? countBy4096 : static_cast<uint64_t>(Types::COUNT_MAX);
     constexpr uint64_t dstElementsPerCount = (mode == 0) ? elementsPerCount : ((elementsPerCount + 7) / 8);
@@ -255,25 +260,26 @@ TILEOP void TCompare(TDst dst, T src0, T src1, TTmp tmpbuf)
 
                         uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
 
-                        SrcTile src0Tile(1, curShape4), src1Tile(1, curShape4);
+                        SrcTile0 src0Tile(1, curShape4);
+                        SrcTile1 src1Tile(1, curShape4);
                         SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
                         DstTile bitResTile;
                         CmpTile cmpResTile;
                         TileStartAddrUB startAddrUBTile(1, addressUsed);
                         TmpTile tmpTile(1, curShape4);
 
-                        InitCommonTiles<T, Types>(
+                        InitCommonTiles<T0, Types>(
                             vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile, bitResTile,
                             cmpResTile, buffers, dstAddr, curShape4, curDstShape);
 
-                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * srcTypeSize));
-                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * srcTypeSize));
+                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * src0TypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * src1TypeSize));
 
                         auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
                         ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);
 
                         if constexpr (mode == 0) {
-                            PostProcessMode0<T>(
+                            PostProcessMode0<T0>(
                                 bitResTile, cmpResTile, vselResultTile, oneConditionTile, zeroConditionTile,
                                 startAddrUBTile, tmpTile, buffers.zeroCondition);
                         }
@@ -288,25 +294,26 @@ TILEOP void TCompare(TDst dst, T src0, T src1, TTmp tmpbuf)
 
                         uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
 
-                        SrcTile src0Tile(1, curShape4), src1Tile(1, curShape4);
+                        SrcTile0 src0Tile(1, curShape4);
+                        SrcTile1 src1Tile(1, curShape4);
                         SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
                         DstTile bitResTile;
                         CmpTile cmpResTile;
                         TileStartAddrUB startAddrUBTile(1, addressUsed);
                         TmpTile tmpTile(1, curShape4);
 
-                        InitCommonTiles<T, Types>(
+                        InitCommonTiles<T0, Types>(
                             vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile, bitResTile,
                             cmpResTile, buffers, dstAddr, curShape4, curDstShape);
 
-                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * srcTypeSize));
-                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * srcTypeSize));
+                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * src0TypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * src1TypeSize));
 
                         auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
                         ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);
 
                         if constexpr (mode == 0) {
-                            PostProcessMode0<T>(
+                            PostProcessMode0<T0>(
                                 bitResTile, cmpResTile, vselResultTile, oneConditionTile, zeroConditionTile,
                                 startAddrUBTile, tmpTile, buffers.zeroCondition);
                         }
@@ -318,7 +325,7 @@ TILEOP void TCompare(TDst dst, T src0, T src1, TTmp tmpbuf)
 }
 
 template <int64_t cmpOp, int64_t mode, typename TVal, typename T, typename TDst, typename TTmp>
-TILEOP void TCompare(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
+TILEOP void TCompareScalar(TDst dst, T src, TTmp tmpbuf, TVal scalarVal)
 {
     auto buffers = InitCompareTmpBuffers<T>(tmpbuf);
     auto info = ExtractLayoutInfo(src, dst);

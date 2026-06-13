@@ -1466,7 +1466,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_WHERE_ST, "TWhereST"},
     {Opcode::OP_WHERE_SS, "TWhereSS"},
     {Opcode::OP_CMP, "TCompare"},
-    {Opcode::OP_CMPS, "TCompare"},
+    {Opcode::OP_CMPS, "TCompareScalar"},
     {Opcode::OP_HYPOT, "THypot"},
     {Opcode::OP_PRELU, "TPRelu"},
     {Opcode::OP_ADDS, "TAddS"},
