@@ -1,8 +1,8 @@
 # PASS组件错误码说明文档
 
-- 范围：F40000-F44002
-- 本文档说明PASS组件的错误码定义、场景说明与排查建议。
-- 补充错误码时，可注明关联Skill（链接至.agents/skills下对应技能）。
+- 范围：F40000-F4FFFF
+- 本文档说明 PASS 组件的错误码定义、场景说明与排查建议。
+- 补充错误码时，可注明关联 Skill（链接至 .agents/skills 下对应技能）。
 
 ## 错误码定义与使用说明
 
@@ -346,7 +346,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 - 内存类型不匹配
 
-#### F44003 CONFIG_TENSOR_MEMORY_TYPE
+#### F44003 CONFIG_FILE_FAILED
 
 描述：配置文件读取、解析或加载失败 
  行为： 
