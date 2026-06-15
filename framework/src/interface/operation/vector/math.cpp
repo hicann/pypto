@@ -397,7 +397,7 @@ void TiledTanOperation(
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
 
-        int64_t tmpSize = 7 * MultiplyLastTwoDims<float>(input.tileInfo.shape);
+        int64_t tmpSize = 9 * MultiplyLastTwoDims<float>(input.tileInfo.shape);
         std::vector<int64_t> tmpShape({tmpSize});
         auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
         function.AddOperation(Opcode::OP_TAN, {tile}, {resultTile, tmpTensor});
