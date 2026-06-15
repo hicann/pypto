@@ -17,6 +17,7 @@
 #define SRC_MACHINE_DEVICE_LAUNCHER_H
 
 #include <cinttypes>
+#include <unordered_map>
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -35,6 +36,11 @@
 #include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
+// 基于 DAV3510 架构硬件约束：aiCpuNum 与 die0MaxCpuid 的固定映射关系
+constexpr uint32_t DAV3510_AICPU_NUM_6 = 6;       // DAV3510 6 个 AICPU 配置
+constexpr uint32_t DAV3510_AICPU_NUM_7 = 7;       // DAV3510 7 个 AICPU 配置
+constexpr uint32_t DAV3510_DIE0_MAX_CPUID_4 = 4;  // 对应 aiCpuNum=6 的 die0 最大 CPU ID
+constexpr uint32_t DAV3510_DIE0_MAX_CPUID_5 = 5;  // 对应 aiCpuNum=7 的 die0 最大 CPU ID
 class DeviceGuard {
 public:
     DeviceGuard(int32_t devId) : nDevId(devId)
@@ -160,6 +166,19 @@ public:
         }
     }
 
+    static uint32_t GetDav3510DieMaxCpuid(uint32_t aiCpuNum)
+    {
+        // DAV3510 架构约束：aiCpuNum 与 die0MaxCpuid 的固定映射关系
+        if (aiCpuNum == DAV3510_AICPU_NUM_6) {
+            return DAV3510_DIE0_MAX_CPUID_4;
+        } else if (aiCpuNum == DAV3510_AICPU_NUM_7) {
+            return DAV3510_DIE0_MAX_CPUID_5;
+        }
+
+        // 默认返回 0：不启用 die 分离机制
+        return 0;
+    }
+
     static void PrepareDevProgArgsCpuInfo(DevAscendProgram* devProg, DeviceLauncherConfig& config)
     {
         uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
@@ -176,13 +195,10 @@ public:
             }
         }
 
-        const uint32_t needChangeAicpuNum = 6; // 6 : need change
-        if (devProg->devArgs.archInfo != ArchInfo::DAV_3510) {
-            devProg->devArgs.maxAicpuNum = aiCpuNum;
-        } else {
-            // 8 : when aiCpuNum is 6, max cpu id is 8 at new driver
-            devProg->devArgs.maxAicpuNum = aiCpuNum == needChangeAicpuNum ? 8 : aiCpuNum;
+        if (devProg->devArgs.archInfo == ArchInfo::DAV_3510) {
+            devProg->devArgs.die0MaxCpuid = GetDav3510DieMaxCpuid(aiCpuNum);
         }
+
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
         config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo, devProg->devArgs.launchSchedSameCluster);

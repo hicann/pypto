@@ -340,7 +340,7 @@ struct DevAscendProgram {
         uint32_t nrAicpu;
         uint32_t nrValidAic;
         uint32_t scheCpuNum;
-        uint32_t maxAicpuNum;
+        uint32_t die0MaxCpuid;
         uint32_t launchSchedAicpuNum;
         ArchInfo archInfo;
         uint64_t dynamicCellMatchAddr;
@@ -357,7 +357,7 @@ struct DevAscendProgram {
         params.nrAicpu = src.nrAicpu;
         params.nrValidAic = src.nrValidAic;
         params.scheCpuNum = src.scheCpuNum;
-        params.maxAicpuNum = src.maxAicpuNum;
+        params.die0MaxCpuid = src.die0MaxCpuid;
         params.launchSchedAicpuNum = src.launchSchedAicpuNum;
         params.archInfo = src.archInfo;
         params.dynamicCellMatchAddr = src.dynamicCellMatchAddr;
@@ -374,7 +374,7 @@ struct DevAscendProgram {
         dst.nrAicpu = params.nrAicpu;
         dst.nrValidAic = params.nrValidAic;
         dst.scheCpuNum = params.scheCpuNum;
-        dst.maxAicpuNum = params.maxAicpuNum;
+        dst.die0MaxCpuid = params.die0MaxCpuid;
         dst.launchSchedAicpuNum = params.launchSchedAicpuNum;
         dst.archInfo = params.archInfo;
         dst.dynamicCellMatchAddr = params.dynamicCellMatchAddr;

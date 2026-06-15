@@ -324,8 +324,9 @@
                         "zh": "指定启动的Schdule线程AICPU数量, 当指定的数量大于硬件最大可用aicpu数量或者小于等于0时, 将启用硬件自动计算值",
                         "en": "Specifies the number of AICPUs for the scheduled startup thread, if the specified number is greater than the maximum available AICPUs in the hardware or less than or equal to 0, the hardware's automatic calculation value will be used"
                     },
-                    "minimum": 0,
-                    "maximum": 6
+                    "default": 7,
+                    "minimum": 1,
+                    "maximum": 7
                 },
                 "launch_early_mode": {
                     "type": "integer",

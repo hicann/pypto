@@ -67,7 +67,8 @@ constexpr uint64_t US_PER_SEC = 1000000;
 constexpr uint64_t NSEC_PER_USEC = 1000;
 constexpr uint64_t NSEC_PER_SEC = 1000000000;
 constexpr uint64_t HAND_SHAKE_TIMEOUT_A2A3_CYCLES = 48000000000ULL;  // 48G cycles, 16分钟 @50MHz
-constexpr uint64_t HAND_SHAKE_TIMEOUT_A5_CYCLES   = 960000000000ULL;  // 960G cycles, 16分钟 @1000MHz
+constexpr uint64_t HAND_SHAKE_TIMEOUT_A5_CYCLES = 960000000000ULL;  // 960G cycles, 16分钟 @1000MHz
+constexpr uint64_t TIMEOUT_A5_50US = 50000ULL;     // 50μs @1000MHz (1000 cycles per μs)
 constexpr int32_t MAX_MNG_AICORE_AVG_NUM = 8;
 constexpr uint32_t CORE_IDX_AIV = 0;
 constexpr uint32_t CORE_IDX_AIC = 1;
@@ -342,6 +343,16 @@ static constexpr uint64_t TIMEOUT_MAP_A5[5] = {
         (void)warn_interval; \
         if ((GetCycles() - start) > timeout_cycles) { \
             DEV_ERROR(error_code, fmt " timeout.", ##__VA_ARGS__); \
+            action; \
+        } \
+    } while (0)
+
+// Warn and exit - for arbitration scenarios where failure is normal degradation (uses timeout_cycles from TIMEOUT_CHECK_INIT)
+#define __PYPTO_TIMEOUT_CHECK_WARN_EXIT(action, fmt, ...) \
+    do { \
+        (void)warn_interval; \
+        if ((GetCycles() - start) > timeout_cycles) { \
+            DEV_WARN(fmt " timeout.", ##__VA_ARGS__); \
             action; \
         } \
     } while (0)

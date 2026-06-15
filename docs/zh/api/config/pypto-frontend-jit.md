@@ -53,7 +53,7 @@ def kernel_function(...):
 | valid_shape_optimize            | 含义：动态shape场景，validshape编译优化选项，打开该选项后，动态轴的Loop循环中，主块（shape与validshape相等）采用静态shape编译，尾块采用动态shape编译 <br> 说明：<br> 0：默认值，表示关闭validshape编译优化选项，所有Loop循环均采用动态shape进行编译 <br> 1：表示打开validshape编译优化选项 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：0 <br> 影响pass范围：NA |
 | ready_on_host_tensors           | 含义：标记在Host端准备好的Kernel入口函数的输入tensor名称列表，格式为["tensor1", "tensor2", ...]。<br> 说明：如果算子的计算逻辑对某输入tensor有值依赖(即获取了tensor的值)，且此tensor的device数据在Host端已提前准备好，那么cpu的控制流可以提前发射以提升性能。<br> 类型：list of string <br> 默认值：空列表 <br> 影响pass范围：NA |
 | device_sched_parallelism        | 含义：当算子中pypto.loop设置了可并行标记(parallel=True)时,此配置项用于指定pypto.loop在调度执行时的并行度 <br> 说明：使用此配置项前，请确保标记为可并行的pypto.loop的各个迭代之间不存在任何依赖关系，满足并行调度的条件。当并行度大于1时，该pypto.loop的多个迭代任务将被并发调度执行。需要注意的是，并行度数值越大，所需的workspace内存使用量也越大，通常与设置的并行度成倍数关系。<br> 类型：int <br> 取值范围:1 ~ 8 <br> 默认值： 1 <br> 影响pass范围：NA |
-| launch_sched_aicpu_num        | 含义：指定启动的Schedule AICPU线程数量 <br> 说明：当指定的数量大于硬件最大可用aicpu数量或者小于等于0时,将启用硬件自动计算值，当前硬件类型为DAV2201时，最大可用aicpu数量为5，硬件类型为DAV3510时，最大可用aicpu数量为6（多款DAV3510芯片的最大值，具体最大数量取决于具体的型号）。<br> 类型：int <br> 取值范围:1 ~ 6 <br> 默认值： 6 <br> 影响pass范围：NA |
+| launch_sched_aicpu_num        | 含义：指定启动的Schedule AICPU线程数量 <br> 说明：当指定的数量大于硬件最大可用aicpu数量或者小于等于0时,将启用硬件自动计算值，当前硬件类型为DAV2201时，最大可用aicpu数量为5，硬件类型为DAV3510时，最大可用aicpu数量为7（多款DAV3510芯片的最大值，具体最大数量取决于具体的型号）。<br> 类型：int <br> 取值范围:1 ~ 7 <br> 默认值： 7 <br> 影响pass范围：NA |
 | launch_early_mode        | 含义：aicpu提前发射模式，支持aicpu不等待aicore启动后再启动 <br> 说明：当开启提前发射后，可以减少aicpu启动头开销，提升性能，但是aicpu提前发射会提前占用aicpu资源，在接入整网或者hccl用aicpu做通信域展开时会存在aicpu由于竞争而资源不够的情况，可能会导致功能问题。0：仅capture模式提前发射； <br> 1：所有模式都提前发射； <br> 2：所有模式都不提前发射 <br> 类型：int <br> 取值范围:0 ~ 2 <br> 默认值： 0 <br> 影响pass范围：NA |
 
 ## 返回值说明
