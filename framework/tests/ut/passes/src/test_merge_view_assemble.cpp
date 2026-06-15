@@ -30,6 +30,11 @@
 #include "ut_json/ut_json_tool.h"
 #include "passes/tile_graph_pass/graph_optimization/merge_view_assemble.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/tile_graph_pass/graph_optimization/process_atomic.h"
+#include <fstream>
+#include <vector>
+#include <string>
+#include "interface/tensor/irbuilder.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -1165,6 +1170,107 @@ TEST_F(MergeViewAssembleTest, AssembleChainDifferentScopeIdsShouldNotMerge)
     ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
 
     // Verify: 2 ASSEMBLEs remain (not merged due to different scopeIds)
+    int assembleCount = 0;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && !op.IsDeleted()) {
+            assembleCount++;
+        }
+    }
+    EXPECT_EQ(assembleCount, 2);
+}
+
+TEST_F(MergeViewAssembleTest, MergeAssembleChainShouldInheritAtomicAddAttr)
+{
+    ComputationalGraphBuilder G;
+
+    std::vector<std::string> tensorNames = {"input", "view_out", "assemble1_out", "assemble2_out", "final_out"};
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, tensorNames));
+
+    std::vector<Opcode> opCodes = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ABS};
+    std::vector<std::vector<std::string>> ioperands = {{"input"}, {"view_out"}, {"assemble1_out"}, {"assemble2_out"}};
+    std::vector<std::vector<std::string>> ooperands = {
+        {"view_out"}, {"assemble1_out"}, {"assemble2_out"}, {"final_out"}};
+    std::vector<std::string> opNames = {"view1", "assemble1", "assemble2", "abs"};
+
+    EXPECT_TRUE(G.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"final_out"}));
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto* view1 = G.GetOp("view1");
+    ASSERT_NE(view1, nullptr);
+    view1->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{}));
+
+    auto* assemble1 = G.GetOp("assemble1");
+    ASSERT_NE(assemble1, nullptr);
+    assemble1->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}, std::vector<SymbolicScalar>{}));
+    assemble1->SetAttribute(RMW_MODE_ATTR_ADD, 1L);
+
+    auto* assemble2 = G.GetOp("assemble2");
+    ASSERT_NE(assemble2, nullptr);
+    assemble2->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 2}, std::vector<SymbolicScalar>{}));
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
+
+    int assembleCount = 0;
+    Operation* mergedAssemble = nullptr;
+    for (auto& op : function->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && !op.IsDeleted()) {
+            assembleCount++;
+            mergedAssemble = &op;
+        }
+    }
+    ASSERT_EQ(assembleCount, 1);
+    ASSERT_NE(mergedAssemble, nullptr);
+    EXPECT_TRUE(mergedAssemble->HasAttr(RMW_MODE_ATTR_ADD));
+}
+
+TEST_F(MergeViewAssembleTest, AssembleChainWithDifferentRmwModeAttrsShouldNotMerge)
+{
+    ComputationalGraphBuilder G;
+
+    std::vector<std::string> tensorNames = {"input", "view_out", "assemble1_out", "assemble2_out", "final_out"};
+    EXPECT_TRUE(G.AddTensors(DataType::DT_FP32, {10, 10}, tensorNames));
+
+    std::vector<Opcode> opCodes = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_ASSEMBLE, Opcode::OP_ABS};
+    std::vector<std::vector<std::string>> ioperands = {{"input"}, {"view_out"}, {"assemble1_out"}, {"assemble2_out"}};
+    std::vector<std::vector<std::string>> ooperands = {
+        {"view_out"}, {"assemble1_out"}, {"assemble2_out"}, {"final_out"}};
+    std::vector<std::string> opNames = {"view1", "assemble1", "assemble2", "abs"};
+
+    EXPECT_TRUE(G.AddOps(opCodes, ioperands, ooperands, opNames, true));
+    EXPECT_TRUE(G.SetInCast({"input"}));
+    EXPECT_TRUE(G.SetOutCast({"final_out"}));
+
+    Function* function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+
+    auto* view1 = G.GetOp("view1");
+    ASSERT_NE(view1, nullptr);
+    view1->SetOpAttribute(std::make_shared<ViewOpAttribute>(
+        std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{}));
+
+    auto* assemble1 = G.GetOp("assemble1");
+    ASSERT_NE(assemble1, nullptr);
+    assemble1->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{1, 0}, std::vector<SymbolicScalar>{}));
+    assemble1->SetAttribute(RMW_MODE_ATTR_ADD, 1L);
+
+    auto* assemble2 = G.GetOp("assemble2");
+    ASSERT_NE(assemble2, nullptr);
+    assemble2->SetOpAttribute(
+        std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 2}, std::vector<SymbolicScalar>{}));
+    assemble2->SetAttribute(RMW_MODE_ATTR_MIN, 1L);
+
+    MergeViewAssemble mergePass;
+    ASSERT_EQ(mergePass.RunOnFunction(*function), SUCCESS);
+
     int assembleCount = 0;
     for (auto& op : function->Operations()) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE && !op.IsDeleted()) {

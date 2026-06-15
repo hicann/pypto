@@ -30,10 +30,6 @@
 
 namespace npu::tile_fwk {
 
-const std::string RMW_MODE_ATTR_ADD = OP_ATTR_PREFIX + "atomic_add";
-const std::string RMW_MODE_ATTR_MIN = OP_ATTR_PREFIX + "atomic_min";
-const std::string RMW_MODE_ATTR_MAX = OP_ATTR_PREFIX + "atomic_max";
-
 class ProcessAtomic : public Pass {
 public:
     ProcessAtomic() : Pass("ProcessAtomic") {}
@@ -44,6 +40,7 @@ public:
     Status PostCheck(Function& function) override;
     Status EliminateReduceAcc(Function& function);
     Status EliminateAtomicRMW(Function& function);
+    Status EliminateVecDupBranch(Function& function);
 
 private:
     Status CheckAtomicRMWUnsupportedMode(Function& function);
@@ -55,7 +52,17 @@ private:
     Status ProcessAssembleProducer(
         Operation& producerOp, std::shared_ptr<LogicalTensor> rmwOut, AtomicRMWMode rmwMode,
         const std::vector<int64_t>& rmwOffset, const std::vector<SymbolicScalar>& rmwDynOffset);
+    bool HasAssembleProducer(const std::shared_ptr<LogicalTensor>& input) const;
+    bool HasConsumerExcept(const std::shared_ptr<LogicalTensor>& input, const Operation& op) const;
+    Status PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const;
+    std::shared_ptr<LogicalTensor> PrepareExclusiveAtomicInput(
+        Function& function, Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input) const;
     Status ProcessSingleAtomicRMW(Operation& op);
+    void CollectReduceAccUpstream(Operation& op, std::set<int>& visited,
+        std::vector<Operation*>& result) const;
+    Status TraceBackAndRemoveVecDup(Function& function, Operation& op, std::set<int>& visited, bool& anyRemoved);
+    Status RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyRemoved);
+    bool IsVecDupAssembleInput(const Operation& assembleOp) const;
 };
 } // namespace npu::tile_fwk
 #endif // PROCESS_ATOMIC_H
