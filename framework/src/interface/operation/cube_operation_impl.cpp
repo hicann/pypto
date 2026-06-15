@@ -316,10 +316,9 @@ Status CheckOperandShape(const Tensor& operand1, const Tensor& operand2, const M
             << "operand2 dim[" << i << "] = " << shape2[i] << ", must be > 0";
     }
 
-    // 检查FP4输入场景A矩阵K轴是否/2
-    if (operand1.GetDataType() == DataType::DT_FP4_E2M1 || operand1.GetDataType() == DataType::DT_FP4_E1M2) {
-        const int64_t operand1DimK = attrParam.transA ? operand1.GetShape()[0] : operand1.GetShape()[1];
-        const int64_t operand2DimK = attrParam.transB ? operand2.GetShape()[1] : operand2.GetShape()[0];
+    if (operand1.GetDataType() == DataType::DT_FP4_E2M1) {
+        const int64_t operand1DimK = attrParam.transA ? shape1[shape1.size() - SHAPE_DIM2] : shape1[shape1.size() - 1];
+        const int64_t operand2DimK = attrParam.transB ? shape2[shape2.size() - 1] : shape2[shape2.size() - SHAPE_DIM2];
         ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, operand1DimK == operand2DimK)
             << "when the input is FP4E2M1/E1M2, the K-axis of the A matrix needs to be divided by 2.";
     }
@@ -841,6 +840,12 @@ Status CheckMXMatmulOperands(
     const int64_t kL0 = cubeTile.k[0];
     ASSERT(MatmulErrorCode::ERR_CONFIG_ALIGNMENT, kL0 % ALIGN_SIZE_64 == 0)
         << "Current length of kL0: " << kL0 << ", the length of kL0 for mx matmul must be aligned to 64 elements";
+
+    if (aTensor.GetShape().size() == SHAPE_DIM3 || aTensor.GetShape().size() == SHAPE_DIM4) {
+        ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, !cubeTile.enableSplitK)
+            << "When the input dimension is 3 or 4 and the data type is DT_FP8E4M3, DT_FP8E5M2 or DT_FP4_E2M1, "
+               "enableSplitK is not supported.";
+    }
     CheckOperandShape(aScaleTensor, bScaleTensor, attrParam);
     CheckMXMatmulShape(aTensor, aScaleTensor, bTensor, bScaleTensor, attrParam);
     return SUCCESS;
