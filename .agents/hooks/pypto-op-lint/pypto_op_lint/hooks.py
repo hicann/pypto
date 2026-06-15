@@ -84,7 +84,7 @@ def hook_post_edit() -> int:
         except ValueError:
             ctx.file_scope = basename
 
-    findings = _run_checks(ctx, rule_ids)
+    findings, _ = _run_checks(ctx, rule_ids)
     fails = [f for f in findings if f.status == "FAIL"]
     error_fails = [f for f in fails if f.severity in ("S0", "S1")]
     warns = [f for f in findings if f.status == "WARN"]
@@ -285,7 +285,7 @@ def hook_stop() -> int:
             return 0
     ctx = _build_context(op_dir, stage)
     applicable = [r["id"] for r in ctx.rules if ctx.stage in r.get("stages", [])]
-    findings = _run_checks(ctx, applicable)
+    findings, invocation_id = _run_checks(ctx, applicable)
     error_fails = []
     for finding in findings:
         if finding.status == "FAIL" and finding.severity in ("S0", "S1"):
@@ -295,7 +295,8 @@ def hook_stop() -> int:
         blocking_rules = [f.rule_id for f in error_fails]
         lines = [_format_finding(f) for f in error_fails]
         hint_lines = [f"  - {f.rule_id}: {_rule_fix_hint(f.rule_id)}" for f in error_fails]
-        _emit_gate_event(ctx, blocked=True, blocking_rules=blocking_rules)
+        _emit_gate_event(ctx, blocked=True, blocking_rules=blocking_rules,
+                         invocation_id=invocation_id)
         _output_hook_json(
             "Stop",
             decision="block",
@@ -310,7 +311,7 @@ def hook_stop() -> int:
             "修复后重新运行即可。**",
         )
         return 2
-    _emit_gate_event(ctx, blocked=False, blocking_rules=[])
+    _emit_gate_event(ctx, blocked=False, blocking_rules=[], invocation_id=invocation_id)
     return 0
 
 

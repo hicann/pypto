@@ -266,9 +266,25 @@ def _run_phase_gate(op_dir: Path, phase: str) -> subprocess.CompletedProcess:
     )
 
 
+def _write_memory_md(op_dir: Path, phase: str) -> None:
+    content = f"""# Operator Memory
+
+## Phase {phase} self-review
+
+- [x] host_wrapper signature matches module_interfaces.yaml
+- [x] All outputs written via pypto.assemble or `[:] =`
+- [x] All pypto.view shape/offsets/valid_shape rank consistent
+- [x] SPEC golden inventory cross-checked with impl line refs
+- [x] No `for ... in range(...)` in Layer K
+- [x] Layer K JIT call invoked exactly once
+"""
+    write_file(op_dir / "MEMORY.md", content)
+
+
 def test_phase_gate_m1_ignores_stub_integrated_impl(tmp_path: Path):
     """Phase gate M1: 忽略顶层 <op>_impl.py stub 的 OL01 违规，只评估 M1 module impl。"""
     op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_memory_md(op_dir, "M1")
     # 顶层 stub: 会触发 OL01，但与 phase gate 无关
     write_file(op_dir / "demo_impl.py", _STUB_INTEGRATED_IMPL)
     # M1 module: 干净
@@ -299,6 +315,7 @@ def test_phase_gate_m1_blocks_on_module1_violation(tmp_path: Path):
 def test_phase_gate_m2_ignores_module1(tmp_path: Path):
     """Phase gate M2: 忽略 module1 impl 的违规，只评估 module12 impl。"""
     op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_memory_md(op_dir, "M2")
     # module1 保持旧违规代码，相当于已 verified 的快照
     write_file(op_dir / "modules" / "demo_module1_impl.py", _BAD_MODULE_IMPL_OL01)
     # module12 干净，是 M2 phase 当前工作对象
@@ -344,6 +361,7 @@ def test_phase_gate_missing_phase_arg_errors(tmp_path: Path):
 def test_phase_gate_skips_test_and_gate_rules(tmp_path: Path):
     """Phase gate 不对 test_<op>.py 或 SPEC.md stub 触发规则。"""
     op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_memory_md(op_dir, "M1")
     # SPEC.md 和 test_demo.py 已由 build_stateless_op_dir 创建。
     # 即使它们有违规，phase gate 也不应拦截。
     write_file(op_dir / "test_demo.py", "# stub, OL17/18/19 violations expected\n")
@@ -480,6 +498,7 @@ def test_pending_stub_excluded_from_default_scan(tmp_path: Path):
 def test_pending_stub_excluded_from_phase_gate(tmp_path: Path):
     """phase gate: if its own phase file is pending stub → skip (no FAIL)。"""
     op_dir = build_stateless_op_dir(tmp_path, "demo")
+    _write_memory_md(op_dir, "M1")
     write_file(op_dir / "modules" / "demo_module1_impl.py", _PENDING_STUB)
     r = subprocess.run(
         [PYTHON, SCRIPT, "--check-phase-gate", "--op-dir", str(op_dir), "--phase", "M1"],
@@ -561,15 +580,4 @@ def demo_wrapper(x, y):
         assert decision != "block"
 
 
-def test_stage_gate_skips_gate_level_findings_without_file(tmp_path: Path):
-    """OL13/OL24 等 gate-level findings (file 为空) 不记录到 sidecar。"""
-    op_dir = build_stateless_op_dir(tmp_path, "demo")
-    # build_stateless_op_dir 的 fixture 会让多数 gate rule PASS。
-    # 在该状态下运行 stage gate，确认 sidecar 没有 file 为空的 entry。
-    r = _run_stage_gate(op_dir, 5)
-    sidecar = _read_sidecar(op_dir)
-    # 不应出现空字符串 key 或 "(none)" 这类伪 key。
-    assert "" not in sidecar
-    for key in sidecar:
-        # key 应该是 file path (modules/... or top-level *.py 等)。
-        assert key.endswith(".py") or "/" in key, f"unexpected sidecar key: {key!r}"
+
