@@ -95,8 +95,8 @@ void DistributedContext::FillCommCtxAttr<npu::tile_fwk::HcclOpResParamHead>(
     ctxHost->statusIndex = hcclParamhost->rankSize;
     ctxHost->debugIndex = hcclParamhost->rankSize * 2;
     ctxHost->winDataSize = hcclParamhost->winSize;
-    ctxHost->winStatusSize = hcclParamhost->winSize;
-    ctxHost->winDebugSize = hcclParamhost->winExpSize;
+    ctxHost->winStatusSize = hcclParamhost->winExpSize;
+    ctxHost->winDebugSize = hcclParamhost->winSize;
     ctxHost->totalWinNum = hcclParamhost->rankSize * WIN_TYPE_NUM;
 }
 
