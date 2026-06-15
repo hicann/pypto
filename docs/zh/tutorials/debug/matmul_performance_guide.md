@@ -128,7 +128,7 @@ def matmul_demo_kernel(
     out: pypto.Tensor([], pypto.DT_FP32),
 ):
     pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256])
-    pypto.set_vec_tile_shapes(32, 256) # 配置add 切分大小
+    pypto.set_vec_tile_shapes(32, 256) # 配置add切分大小
 
     partial_sum = []
     k_loop = (k_size + k_view_size - 1) // k_view_size # 配置单核累加长度

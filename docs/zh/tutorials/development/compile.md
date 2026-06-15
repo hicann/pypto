@@ -26,7 +26,7 @@ PyPTO通过函数定义在NPU硬件上构建可编译的计算图结构，并利
 
 ## JIT编译
 
-当通过PyPTO函数完成kernel的计算流及数据流的编写，可以加上pypto.frontend.jit的装饰器， 标记该函数为JIT编译目标，触发PyPTO的编译流程。
+当通过PyPTO函数完成kernel的计算流及数据流的编写，可以加上pypto.frontend.jit的装饰器，标记该函数为JIT编译目标，触发PyPTO的编译流程。
 
 ```python
 @pypto.frontend.jit
@@ -70,10 +70,10 @@ JIT配置选项说明如下：
 - host\_options：主机端选项。
 - pass\_options：编译器PASS传递选项。
 - runtime\_options：运行时执行选项。
-- verify\_options: 精度检验工具选项。
-- debug\_options: 性能数据采集功能配置选项。
+- verify\_options:精度检验工具选项。
+- debug\_options:性能数据采集功能配置选项。
 
-除了使用JIT装饰器启用不同配置外， 还可以直接在代码中调用pypto.set\_codegen\_options、pypto.set\_host\_options、pypto.set\_pass\_options、pypto.set\_runtime\_options，pypto.set\_verify\_options, pypto.set\_debug\_options接口进行配置，例如：
+除了使用JIT装饰器启用不同配置外，还可以直接在代码中调用pypto.set\_codegen\_options、pypto.set\_host\_options、pypto.set\_pass\_options、pypto.set\_runtime\_options，pypto.set\_verify\_options, pypto.set\_debug\_options接口进行配置，例如：
 
 ```python
 pypto.set_codegen_options(support_dynamic_aligned=True)

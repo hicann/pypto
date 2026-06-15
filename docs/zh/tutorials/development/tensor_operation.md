@@ -127,10 +127,10 @@ PyPTO为张量计算提供了一套全面的操作，旨在为用户提供高效
     许多操作支持广播，这使得操作更加灵活和高效。
 
     ```python
-    # 张量 + 标量（张量为标量）
+    # 张量+标量（张量为标量）
     result = pypto.add(tensor, 2.0)
 
-    # 张量 + 一维张量（一维张量）
+    # 张量+一维张量（一维张量）
     bias = pypto.tensor([features], pypto.DT_BF16, "bias")
     result = pypto.add(tensor, bias)
     ```
@@ -155,7 +155,7 @@ result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16)
 bias = pypto.tensor([1, N], pypto.DT_BF16, "bias")
 result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16, extend_params={'bias_tensor': bias})
 
-# 用转置，其中A: [M, K], B: [N, K], 输出为NZ格式
+# 用转置，其中A: [M, K], B: [N, K],输出为NZ格式
 result = pypto.matmul(A, B, out_dtype=pypto.DT_BF16, a_trans=False, b_trans=True， c_matrix_nz=True)
 ```
 

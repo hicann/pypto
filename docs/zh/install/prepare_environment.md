@@ -47,7 +47,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
 根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入算子一站式开发平台，开源项目的源码资源默认在`/mnt/workspace`目录下。
 
- ![启动并连接 WebIDE](../tutorials/figures/webide2.png)
+ ![启动并连接WebIDE](../tutorials/figures/webide2.png)
 
 #### 3-安装pto-isa
 
@@ -168,10 +168,10 @@ ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
     # 创建并进入用于存放第三方开源软件源码包的目录path-to-your-thirdparty
     mkdir -p <path-to-your-thirdparty> && cd $_
 
-    # 下载 JSON for Modern C++ 三方库
+    # 下载JSON for Modern C++ 三方库
     wget https://gitcode.com/cann-src-third-party/json/releases/download/v3.11.3/json-3.11.3.tar.gz
 
-    # 下载 libboundscheck 三方库
+    # 下载libboundscheck三方库
     wget https://gitcode.com/cann-src-third-party/libboundscheck/releases/download/v1.1.16/libboundscheck-v1.1.16.tar.gz
     ```
 
@@ -212,7 +212,7 @@ ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
 示例命令如下：
 
 ```bash
-# 自动安装 CANN toolkit / ops / pto-isa
+# 自动安装CANN toolkit / ops / pto-isa
 bash tools/prepare_env.sh --type=cann --device-type=a2
 
 # 如需额外下载驱动与固件安装包，可增加如下参数

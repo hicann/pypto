@@ -1,13 +1,13 @@
-# CODEGEN 组件错误码
+# CODEGEN组件错误码
 
 - **范围**：F6XXXX
-- 本文档说明 CODEGEN 组件的错误码定义、场景说明与排查建议。
+- 本文档说明CODEGEN组件的错误码定义、场景说明与排查建议。
 
 ---
 
 ## 错误码定义
 
-相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 FwkErr、OperErr、GenCodeErr、CmpCodeErr 等）。
+相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（见FwkErr、OperErr、GenCodeErr、CmpCodeErr等）。
 
 ---
 
@@ -31,7 +31,7 @@
    - 重新编译并安装pyPTO包，参考[编译安装](../install/build_and_install.md)。
 
 3. **再次执行用例，获取日志及kernel代码文件**
-   日志路径一般为：   *{用户指定日志路径}*/debug/plog/pypto-log***.log
+   日志路径一般为：*{用户指定日志路径}*/debug/plog/pypto-log***.log
    kernel代码文件路径一般为：   pyPTO工程路径或测试框架执行路径下，搜索kernel_aicore文件夹，文件夹内的TENSOR***.cpp即kernel代码文件。
 
 4. **分析日志**
@@ -62,7 +62,7 @@
    其中!10010即该OP的唯一标识码，可以此为关键字在PASS的图或日志中搜索获取相关信息，PASS定位指导详见[pass trouble shooting](./pass.md)
 <br>
 
-#### 错误码 F62014：SYMBOL_NOT_FOUND
+#### 错误码F62014：SYMBOL_NOT_FOUND
 
 该错误码表示kernel代码中调用了未定义的变量，常见错误场景如下：
 
@@ -73,7 +73,7 @@ CodeGen需要以来Operation中的need_alloc属性生成变量定义语句，若
 可结合前文[生成kernel代码中某个tileop调用参数不符合预期](#生成kernel代码中某个tileop调用参数不符合预期)步骤，找到缺失属性的Operation联合PASS继续定位。
 <br>
 
-#### 错误码 F63001：COMPILE_CODE_FAILED
+#### 错误码F63001：COMPILE_CODE_FAILED
 
 一般为bisheng编译kernel代码报错导致，编译错误可能有多种原因，后续将根据不同场景完善排查指导。
 如果bisheng编译器报错日志存在丢失或不完整，可能尝试如下方法复现：
@@ -94,7 +94,7 @@ CodeGen需要以来Operation中的need_alloc属性生成变量定义语句，若
 
 3. 获取完整的报错信息
 
-##### 场景1: 堆栈溢出
+##### 场景1:堆栈溢出
 
 报错关键字样例：
 
@@ -102,7 +102,7 @@ CodeGen需要以来Operation中的need_alloc属性生成变量定义语句，若
 error: stack frame size (*****) exceeds limit (32768) in function
 ```
 
-可参考：  [算子编译报堆栈溢出错误](../tutorials/appendix/faq.md#算子编译报堆栈溢出错误)
+可参考：[算子编译报堆栈溢出错误](../tutorials/appendix/faq.md#算子编译报堆栈溢出错误)
 
 ##### 场景2: PTO指令数据类型不匹配
 
@@ -118,7 +118,7 @@ copy_matrix_cc_to_gm(dstGlobalAddr, srcTileAddr, xmReg, xtReg);
 - 前端调用Operation接口参数传递错误，参考：[执行代码有pto相关报错](https://gitcode.com/cann/pypto/issues/705)
 - 使用了PTO-ISA不支持的数据类型，需要重新分析用例场景，使用硬件支持的数据类型
 
-##### 场景3: 生成PTO指令和二进制编译参数指定的硬件平台不匹配
+##### 场景3:生成PTO指令和二进制编译参数指定的硬件平台不匹配
 
 报错关键字"does not support the given target feature"，样例：
 
@@ -134,7 +134,7 @@ error: function type 'void (__cbuf__ void *, __gm__ void *, unsigned char, unsig
   该类问题一般为PASS将Vector和Cube的Operation在CodeGen阶段前仍然混合到一张子图导致，需要PASS进一步分析子图切分逻辑。CodeGen阶段看到的必须是独立的纯Vector或纯Cube子图。
 - CodeGen使用Cube或Vector的编译参数依据为Function::IsCube()接口，需要PASS确认对不同子图，该接口设置的值是否正确。
 
-##### 场景4: 变量未定义
+##### 场景4:变量未定义
 
 1. 报错关键字包含sym_***：
 
@@ -182,7 +182,7 @@ CodeGen模块耗时可通过执行算子后在屏幕输出中观察Compiler Moni
   3. cd {前置路径}
      确认当前在output文件夹上一层
   4. 执行刚刚复制的bisheng命令，确认可执行成功，若报bisheng命令找不到则参考:
-  [prepare_environment](../../../.agents/skills/pypto-environment-setup/references/prepare_environment.md)  "CANN 环境加载（通用模板）"章节
+  [prepare_environment](../../../.agents/skills/pypto-environment-setup/references/prepare_environment.md)  "CANN环境加载（通用模板）"章节
   . 利用系统自带如time、perf或其他shell命令结合bisheng命令统计时长，例如：
 
   ```bash

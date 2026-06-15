@@ -18,7 +18,7 @@ $$
 \end{cases}
 $$
 
-其中 `negative_slope` 为负斜率参数，默认值为 `0.01`。
+其中`negative_slope`为负斜率参数，默认值为`0.01`。
 
 ## 函数原型
 
@@ -31,7 +31,7 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 | 参数名         | 输入/输出 | 说明                                                                 |
 |----------------|-----------|----------------------------------------------------------------------|
 | input          | 输入      | 源操作数。<br>支持的类型为：Tensor。<br>Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。<br>不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| negative_slope | 输入      | 负区间的斜率系数。<br>支持的类型为float\Element类型。默认值为 `0.01`（float类型），当为float类型时会自动转换为Element类型，float对应DT_FP32。当需要使用其他数据类型时，可以通过Element构建。<br>必须为非负实数（≥ 0），不支持 `nan`、`inf` 等特殊值。 |
+| negative_slope | 输入      | 负区间的斜率系数。<br>支持的类型为float\Element类型。默认值为`0.01`（float类型），当为float类型时会自动转换为Element类型，float对应DT_FP32。当需要使用其他数据类型时，可以通过Element构建。<br>必须为非负实数（≥ 0），不支持`nan`、`inf`等特殊值。 |
 
 ## 返回值说明
 
@@ -40,7 +40,7 @@ lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 ## 约束说明
 
 1. input数据类型必须为DT_FP16、DT_BF16或DT_FP32。
-2. negative_slope必须为非负浮点数（≥ 0），且不能为 `nan` 或 `inf`。
+2. negative_slope必须为非负浮点数（≥ 0），且不能为`nan`或`inf`。
 3. negative_slope建议优先使用Element，传入float标量，对于fp16场景，不保证正确性。
 4. 不支持in-place操作（即输出不能与输入共享内存）。
 

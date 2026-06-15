@@ -96,11 +96,11 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
         return pypto.add(in, in)
 
     @pypto.frontend.jit
-    def adder_256(in_shape_256): # 定义处理in 轴大小是256的场景
+    def adder_256(in_shape_256): # 定义处理in轴大小是256的场景
         return handler(in_shape_256)
 
     @pypto.frontend.jit
-    def adder_1024(in_shape_1024): # 定义处理in 轴大小是1024 的算子
+    def adder_1024(in_shape_1024): # 定义处理in轴大小是1024的算子
         return handler(in_shape_1024)
 
     adder_256(in_256)
@@ -111,7 +111,7 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
 
     ```python
     @pypto.frontend.jit
-    def adder(in_shape): # 定义处理in 轴大小是256的场景
+    def adder(in_shape): # 定义处理in轴大小是256的场景
         out = Tensor(in_shape.shape[0])
         for k in pypto.loop(in_shape.shape[0] / 256):
             out[k * 256: k *256 + 256] = pypto.add(
@@ -124,7 +124,7 @@ libtile_fwk_interface.so(npu::tile_fwk::RecordLoopFunc::Iterator::operator!=(npu
 
 ### 问题现象描述
 
-两层或者两层以上循环嵌套下，在父循环中定义了一个tensor，在一个子循环中写入该tensor，在另一个子循环中使用该tensor 时，存在精度错误。
+两层或者两层以上循环嵌套下，在父循环中定义了一个tensor，在一个子循环中写入该tensor，在另一个子循环中使用该tensor时，存在精度错误。
 
 ### 可能原因
 

@@ -8,14 +8,14 @@
 
 ## 功能说明
 
-`pypto.frontend.jit` 是前端架构中的核心装饰器，用于将Python函数即时编译（JIT）为高效的计算图并在NPU上执行。前端不支持返回值，仅支持in-place修改；支持传入torch张量及其他类型的变量。
+`pypto.frontend.jit`是前端架构中的核心装饰器，用于将Python函数即时编译（JIT）为高效的计算图并在NPU上执行。前端不支持返回值，仅支持in-place修改；支持传入torch张量及其他类型的变量。
 
 主要特性：
 
 - **In-place修改**: 内核函数通过in-place修改输出张量传递计算结果，不支持返回值
 - **类型注解**: 在函数签名中明确指定张量的形状和数据类型
 - **直接调用**: 测试时可直接传入torch张量及其他类型的变量，无需显式转换
-- **动态形状支持**: 配合 `pypto.DYNAMIC` 支持运行时变化的维度
+- **动态形状支持**: 配合`pypto.DYNAMIC`支持运行时变化的维度
 - **多运行模式**: 支持NPU和SIM（模拟器）两种运行模式
 
 ## 函数原型
@@ -36,12 +36,12 @@ def kernel_function(...):
 | 参数名 | 输入/输出 | 说明 |
 |--------|----------|------|
 | func | 输入 | frontend.jit修饰的函数，kernel入口，描述计算过程，用于构建计算图。 |
-| host_options | 输入 | 类型为 `dict[str, any]`，用于设置host配置项，配置项参数见[参数说明](./pypto-set_host_options.md) |
-| runtime_options | 输入 | 类型为 `dict[str, any]`，用于设置runtime配置项，配置项参数见[runtime_options参数说明](#runtime_options_detail) |
-| codegen_options | 输入 | 类型为 `dict[str, any]`，用于设置codegen配置项，配置项参数见[参数说明](./pypto-set_codegen_options.md)  |
-| pass_options | 输入 | 类型为 `dict[str, any]`，用于设置Pass配置项，配置项参数见[参数说明](./pypto-set_pass_options.md)  |
-| verify_options | 输入 | 类型为 `dict[str, any]`，用于设置Verify配置项，配置项参数见[参数说明](./pypto-set_verify_options.md) |
-| debug_options | 输入 | 类型为 `dict[str, any]`，用于设置debug配置项，配置项参数见[参数说明](./pypto-set_debug_options.md) |
+| host_options | 输入 | 类型为`dict[str, any]`，用于设置host配置项，配置项参数见[参数说明](./pypto-set_host_options.md) |
+| runtime_options | 输入 | 类型为`dict[str, any]`，用于设置runtime配置项，配置项参数见[runtime_options参数说明](#runtime_options_detail) |
+| codegen_options | 输入 | 类型为`dict[str, any]`，用于设置codegen配置项，配置项参数见[参数说明](./pypto-set_codegen_options.md)  |
+| pass_options | 输入 | 类型为`dict[str, any]`，用于设置Pass配置项，配置项参数见[参数说明](./pypto-set_pass_options.md)  |
+| verify_options | 输入 | 类型为`dict[str, any]`，用于设置Verify配置项，配置项参数见[参数说明](./pypto-set_verify_options.md) |
+| debug_options | 输入 | 类型为`dict[str, any]`，用于设置debug配置项，配置项参数见[参数说明](./pypto-set_debug_options.md) |
 
 ### runtime_options参数说明 <a id="runtime_options_detail"></a>
 
@@ -62,18 +62,18 @@ def kernel_function(...):
 
 ## 约束说明
 
-1. 张量参数，必须使用类型注解指定为 `pypto.Tensor` 类型
-2. 动态维度必须使用 `pypto.DYNAMIC` 或 `pypto.DYN` 在参数注解中标记，未标记时，默认按静态维度处理
+1. 张量参数，必须使用类型注解指定为`pypto.Tensor`类型
+2. 动态维度必须使用`pypto.DYNAMIC`或`pypto.DYN`在参数注解中标记，未标记时，默认按静态维度处理
 3. tensor format用format标记，format支持非显式标记(参考示例1中的a),默认为pypto.TileOpFormat.TILEOP_ND;
    format显式标记时,性能更优,要求传入的torch tensor与pypto.Tensor声明的format一致，能获得更优的性能;
-4. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后
+4. 张量参数在前，非张量参数（如`scalar`、`tiling`）在后
 5. 非张量参数支持keyword传参、位置参数、使用默认值
 
 **pypto.Tensor[...]说明**：
 
-- kernel函数里申明推荐使用 `pypto.Tensor[[shape], dtype]` 方括号语法，符合Python类型注解规范
-- 也兼容旧的小括号语法 `pypto.Tensor([shape], dtype)`
-- 方括号内不支持 `key=value` 形式的关键字参数（Python语法限制），只能按位置传递或使用字典
+- kernel函数里申明推荐使用`pypto.Tensor[[shape], dtype]`方括号语法，符合Python类型注解规范
+- 也兼容旧的小括号语法`pypto.Tensor([shape], dtype)`
+- 方括号内不支持`key=value`形式的关键字参数（Python语法限制），只能按位置传递或使用字典
 - `pypto.Tensor[]`（空参数）不支持
 
 ## 调用示例

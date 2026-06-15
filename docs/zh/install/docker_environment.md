@@ -34,14 +34,14 @@
 > **说明**：若上述信息与实际硬件及驱动不匹配，将导致CANN包安装失败，从而导致镜像构建失败。
 
 ```dockerfile
-# step1: 指定 CANN 基础镜像版本
+# step1: 指定CANN基础镜像版本
 ARG CANN_VERSION=9.0.0-a3-ubuntu22.04-py3.11
 FROM quay.io/ascend/cann:$CANN_VERSION
 
 # 指定目标平台架构
 ARG TARGETPLATFORM=linux/amd64
 
-# [Optional] 设置 HTTP/HTTPS 代理（按需配置）
+# [Optional] 设置HTTP/HTTPS代理（按需配置）
 ARG PROXY=""
 ENV https_proxy=$PROXY
 ENV http_proxy=$PROXY
@@ -50,7 +50,7 @@ ENV GIT_SSL_NO_VERIFY=1
 # 工作目录
 WORKDIR /tmp
 
-# step2: 安装 PyPTO 项目构建/运行所需依赖
+# step2: 安装PyPTO项目构建/运行所需依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git gdb gawk wget curl tar lcov openssl ca-certificates \
     gcc g++ make cmake zlib1g zlib1g-dev libsqlite3-dev \
@@ -65,7 +65,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
     tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
 
-# 安装指定版本 torch / torch-npu（CPU 源 + NPU 插件）
+# 安装指定版本torch / torch-npu（CPU源 + NPU插件）
 RUN python -m pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu \
     && python -m pip install --no-cache-dir torch-npu==2.8.0.post4
 
@@ -90,13 +90,13 @@ ENV http_proxy=$PROXY
 ARG PY_VERSION=3.11-ubuntu22.04
 FROM quay.io/ascend/python:$PY_VERSION
 
-# [Optional] 设置 HTTP/HTTPS 代理
+# [Optional] 设置HTTP/HTTPS代理
 ARG PROXY=""
 ENV https_proxy=$PROXY
 ENV http_proxy=$PROXY
 ENV GIT_SSL_NO_VERIFY=1
 
-# 安装系统依赖并清理 APT 缓存索引
+# 安装系统依赖并清理APT缓存索引
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git gdb gawk wget curl tar lcov openssl ca-certificates \
     gcc g++ make cmake zlib1g zlib1g-dev libsqlite3-dev \
@@ -105,17 +105,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-is-python3 python3-pip python3-venv ninja-build python3-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# 安装 Python 依赖
+# 安装Python依赖
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
  && python -m pip install --no-cache-dir \
     attrs cython numpy decorator sympy cffi pyyaml pathlib2 psutil>=5.9.0 protobuf scipy requests absl-py \
     tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
     tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
 
-# 升级 setuptools，满足 pypto 要求
+# 升级setuptools，满足pypto要求
 RUN pip install --no-cache-dir --upgrade setuptools
 
-# 安装 torch / torch-npu
+# 安装torch / torch-npu
 RUN pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir torch-npu==2.8.0.post4
 

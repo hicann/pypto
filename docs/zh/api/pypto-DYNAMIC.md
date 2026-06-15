@@ -8,7 +8,7 @@
 
 ## 功能说明
 
-`pypto.DYNAMIC` 用于定义动态维度（Dynamic Dimension），允许张量的某些维度在运行时变化。这对于处理可变的batch size、序列长度等场景非常有用。动态维度通常在模块级别定义，然后在JIT编译的内核函数的类型注解中使用。
+`pypto.DYNAMIC`用于定义动态维度（Dynamic Dimension），允许张量的某些维度在运行时变化。这对于处理可变的batch size、序列长度等场景非常有用。动态维度通常在模块级别定义，然后在JIT编译的内核函数的类型注解中使用。
 
 主要应用场景：
 
@@ -21,7 +21,7 @@
 
 | 标记 | 含义 |
 | --- | --- |
-| `pypto.DYNAMIC` 或 `pypto.DYN` | 动态轴，传入torch tensor该维变化时**无需重编译** |
+| `pypto.DYNAMIC`或`pypto.DYN` | 动态轴，传入torch tensor该维变化时**无需重编译** |
 | `pypto.STATIC` | 静态轴，传入torch tensor该维变化时**触发重编译** |
 | `64` | 固定轴，只允许传入该固定大小，传入其他大小会报错(runtime_debug_mode为3，开启校验) |
 | `...` | 剩余轴都作为静态轴处理 |

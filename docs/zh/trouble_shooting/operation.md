@@ -1,12 +1,12 @@
-# OPERATION 组件错误码
+# OPERATION组件错误码
 
-- **范围**：FCXXXX（含 VECTOR/MATMUL/CONV/视图类OP 子范围）
-- 本文档说明 OPERATION 组件的错误码定义、场景说明与排查建议。
-- 补充错误码时，可注明 **关联 Skill**（链接至 [.agents/skills](../../../.agents/skills) 下对应技能，便于排查时加载）。
+- **范围**：FCXXXX（含VECTOR/MATMUL/CONV/视图类OP子范围）
+- 本文档说明OPERATION组件的错误码定义、场景说明与排查建议。
+- 补充错误码时，可注明**关联Skill**（链接至 [.agents/skills](../../../.agents/skills)下对应技能，便于排查时加载）。
 
 ## 错误码定义
 
-相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（OPERATION 大类见 VectorErrorCode、MatmulErrorCode、Conv* 等；子范围说明见下文链接）。
+相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（OPERATION大类见VectorErrorCode、MatmulErrorCode、Conv*等；子范围说明见下文链接）。
 
 ## 子范围拆分
 

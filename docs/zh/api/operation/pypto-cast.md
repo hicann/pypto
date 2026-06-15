@@ -12,7 +12,7 @@
 
 ## 注意事项
 
-- **PyPTO Tensor不支持 `.to()` 方法**：PyPTO Tensor没有 `.to(dtype)` 方法，必须使用 `pypto.cast(tensor, dtype)` 进行数据类型转换
+- **PyPTO Tensor不支持`.to()`方法**：PyPTO Tensor没有`.to(dtype)`方法，必须使用`pypto.cast(tensor, dtype)`进行数据类型转换
 
 - **舍入模式详细说明**：浮点数表示方式、二进制舍入规则及各CastMode的具体行为，请参考 [CastMode](../datatype/CastMode.md)。
 
@@ -70,7 +70,7 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 ### Ascend 950PR/Ascend 950DT支持的转换
 
-Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的CastMode enum。
+Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于`RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType`等模板参数，用户接口层面仍使用统一的CastMode enum。
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -126,7 +126,7 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
 - **OFF（默认）**：截断模式，超出目标类型范围的数值按二进制截断
 - **ON**：饱和模式，超出目标类型范围的数值被截断到最大值或最小值
 
-对于量化等场景，建议设置 `satmode=SaturationMode.ON`，避免溢出导致的精度问题。其他场景使用默认值即可。
+对于量化等场景，建议设置`satmode=SaturationMode.ON`，避免溢出导致的精度问题。其他场景使用默认值即可。
 
 ---
 
@@ -147,7 +147,7 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于 `Rou
       - 浮点→整数：采用CAST_TRUNC
       - 其他场景：采用CAST_RINT
 
-5. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过 `set_deqscale` 设置缩放因子，默认值为1.0。
+5. **deq模式说明**：INT32→FP16转换使用deq模式，需要通过`set_deqscale`设置缩放因子，默认值为1.0。
 
 ## 调用示例
 
