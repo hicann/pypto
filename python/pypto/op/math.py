@@ -745,7 +745,10 @@ def exp2(input: Tensor) -> Tensor:
     Output y:[1.0000 2.0000 4.0000]
     """
     valid_shape = input.GetValidShape()
-    if input.dtype == pypto.DT_INT16 or input.dtype == pypto.DT_INT32:
+    if input.dtype in (pypto.DT_INT8, pypto.DT_UINT8):
+        input = pypto.cast(input, pypto.DT_FP16)
+        input = pypto.cast(input, pypto.DT_FP32)
+    elif input.dtype in (pypto.DT_INT16, pypto.DT_INT32):
         input = pypto.cast(input, pypto.DT_FP32)
 
     two_element = pypto_impl.Element(input.dtype, 2)
