@@ -141,7 +141,45 @@ void ReduceCopyMerge::CombineForkSubgraph(Function& function, MergeInput& mergeI
     }
 }
 
-Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
+static void MarkCrossSubgraph(Function& function, std::unordered_set<int>& noMergeSubgraph)
+{
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        int src = op.GetSubgraphID();
+        bool hasSameConsumerId = false;
+        bool hasOtherConsumerId = false;
+        for (auto& consumerOp : op.ConsumerOps()) {
+            if (consumerOp->GetSubgraphID() == src) {
+                hasSameConsumerId = true;
+            } else {
+                hasOtherConsumerId = true;
+            }
+        }
+        if (hasSameConsumerId && hasOtherConsumerId) {
+            noMergeSubgraph.insert(src);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "Subgraph %d is not mergeable because it has inner tensor used by other subgraph.", src);
+        }
+        bool hasSameProducerId = false;
+        bool hasOtherProducerId = false;
+        for (auto& producerOp : op.ProducerOps()) {
+            if (producerOp->GetSubgraphID() == src) {
+                hasSameProducerId = true;
+            } else {
+                hasOtherProducerId = true;
+            }
+        }
+        if (hasSameProducerId && hasOtherProducerId) {
+            noMergeSubgraph.insert(src);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "Subgraph %d is not mergeable because it has inner tensor used by other subgraph.", src);
+        }
+    }
+}
+
+Status ReduceCopyMerge::MarkNoMergeSubgraph(Function& function)
 {
     noMergeSubgraph.clear();
     noMergeSubgraphEnforce.clear();
@@ -173,6 +211,7 @@ Status ReduceCopyMerge::MarkNoMergeSubgraph(Function &function)
             }
         }
     }
+    MarkCrossSubgraph(function, noMergeSubgraph);
     for (int i = 0; i < subgraphNum; i++) {
         if (subgraphOpNum[i] == 1 && subgraphHasReshape[i] == true) {
             noMergeSubgraph.insert(i);
