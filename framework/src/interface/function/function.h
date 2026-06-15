@@ -828,6 +828,9 @@ public:
 
     bool IsDummyFunction() const
     {
+        if (GetLeafFuncAttribute()->mixId != LeafFuncAttribute::INVALID_MIX_ID) {
+            return false;
+        }
         return std::all_of(operations_.begin(), operations_.end(), [](auto& op) {
             Opcode opcode = op->GetOpcode();
             // 扩展支持的算子类型：RESHAPE、VIEW、ASSEMBLE
