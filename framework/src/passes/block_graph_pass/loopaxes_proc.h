@@ -28,6 +28,8 @@ public:
     LoopaxesProc() : Pass("LoopaxesProc") { SetSupportedArches({NPUArch::DAV_3510}); }
     ~LoopaxesProc() override = default;
     Status RunOnFunction(Function& function) override;
+    Status DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
+    Status PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
 
 private:
     Status UpdateFuncLoopAxes(Function& function);

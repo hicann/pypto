@@ -15,6 +15,7 @@
 
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
 #include "interface/tensor/irbuilder.h"
+#include "passes/pass_utils/dump_function_utils.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -604,59 +605,28 @@ Status DynAttrToStatic::RunOnFunction(Function& function)
 
 Status DynAttrToStatic::GetTileFunction(Function* function, std::unordered_set<Function*>& tileFunctionSet)
 {
-    for (auto callop : function->GetCallopList()) {
-        Function* nextFunc = nullptr;
-        if (GetCallee(*callop, nextFunc) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "GetTileFunction, currFunc: %s, %s[%d] GetCallee failed.",
-                function->GetRawName().c_str(), callop->GetOpcodeStr().c_str(), callop->GetOpMagic());
-            return FAILED;
-        }
-        APASS_LOG_DEBUG_F(
-            Elements::Function, "GetTileFunction, %s --%s[%d]--> %s", function->GetRawName().c_str(),
-            callop->GetOpcodeStr().c_str(), callop->GetOpMagic(), nextFunc->GetRawName().c_str());
-        if (nextFunc->GetGraphType() == GraphType::TILE_GRAPH) {
-            tileFunctionSet.emplace(nextFunc);
-        } else {
-            if (GetTileFunction(nextFunc, tileFunctionSet) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "GetTileFunction, currFunc: %s, nextFunc: %s, recursive search failed",
-                    function->GetRawName().c_str(), nextFunc->GetRawName().c_str());
-                return FAILED;
-            }
-        }
-    }
-    return SUCCESS;
+    DumpFunctionUtils utils;
+    return utils.GetTileFunction(function, tileFunctionSet);
 }
 
 Status DynAttrToStatic::DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction)
 {
-    std::unordered_set<Function*> tileFunctionSet;
-    if (GetTileFunction(&function, tileFunctionSet) != SUCCESS) {
-        return FAILED;
-    }
-    APASS_LOG_DEBUG_F(Elements::Function, "Obtained a total of %zu tileFunctions", tileFunctionSet.size());
-    for (auto tileFunc : tileFunctionSet) {
-        APASS_LOG_DEBUG_F(Elements::Function, "Dump tileFunction[%s] json", tileFunc->GetRawName().c_str());
-        Pass::DumpFunctionJson(*tileFunc, logFolder, beforeFunction);
-    }
-    APASS_LOG_DEBUG_F(Elements::Function, "Dump function[%s] json finished.", function.GetRawName().c_str());
-    return SUCCESS;
+    DumpFunctionUtils utils;
+    return utils.DumpTileFunctionsJson(
+        function, logFolder, beforeFunction,
+        [this](Function& f, const std::string& folder, bool before) {
+            return Pass::DumpFunctionJson(f, folder, before);
+        });
 }
 
 Status DynAttrToStatic::PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction)
 {
-    std::unordered_set<Function*> tileFunctionSet;
-    if (GetTileFunction(&function, tileFunctionSet) != SUCCESS) {
-        return FAILED;
-    }
-    APASS_LOG_DEBUG_F(Elements::Function, "Obtained a total of %zu tileFunctions", tileFunctionSet.size());
-    for (auto tileFunc : tileFunctionSet) {
-        APASS_LOG_DEBUG_F(Elements::Function, "Print tileFunction[%s]", tileFunc->GetRawName().c_str());
-        Pass::PrintFunction(*tileFunc, logFolder, beforeFunction);
-    }
-    APASS_LOG_DEBUG_F(Elements::Function, "Print function[%s] finished.", function.GetRawName().c_str());
-    return SUCCESS;
+    DumpFunctionUtils utils;
+    return utils.PrintTileFunctions(
+        function, logFolder, beforeFunction,
+        [this](Function& f, const std::string& folder, bool before) {
+            return Pass::PrintFunction(f, folder, before);
+        });
 }
 } // namespace tile_fwk
 } // namespace npu

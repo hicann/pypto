@@ -23,6 +23,7 @@
 #include "loopaxes_proc.h"
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
 #include "tilefwk/error_code.h"
+#include "passes/pass_utils/dump_function_utils.h"
 
 #undef MODULE_NAME
 #define MODULE_NAME "LoopaxesProc"
@@ -512,6 +513,26 @@ bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxe
     }
 
     return allReplacedSymbolsMatch || allExprsMatch;
+}
+
+Status LoopaxesProc::DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction)
+{
+    DumpFunctionUtils utils;
+    return utils.DumpTileFunctionsJson(
+        function, logFolder, beforeFunction,
+        [this](Function& f, const std::string& folder, bool before) {
+            return Pass::DumpFunctionJson(f, folder, before);
+        });
+}
+
+Status LoopaxesProc::PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction)
+{
+    DumpFunctionUtils dfUtils;
+    return dfUtils.PrintTileFunctions(
+        function, logFolder, beforeFunction,
+        [this](Function& f, const std::string& folder, bool before) {
+            return Pass::PrintFunction(f, folder, before);
+        });
 }
 
 } // namespace tile_fwk
