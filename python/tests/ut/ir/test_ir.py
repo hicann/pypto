@@ -28,6 +28,12 @@ def test_error_types():
         pypto.raise_error("AssertionError", "test assertion error")
     with pytest.raises(pypto.InternalError):
         pypto.raise_error("InternalError", "test internal error")
+    # Error -> Python Exception (base)
+    with pytest.raises(Exception, match="base error"):
+        pypto.raise_error("Error", "base error")
+    # Unknown type -> falls back to Error -> Python Exception
+    with pytest.raises(Exception, match="Unknown error type"):
+        pypto.raise_error("UnknownType", "should fail")
 
 
 def test_dtypes():
@@ -97,6 +103,22 @@ def test_logging(capfd):
     assert "warn" in captured.err
     assert "info" in captured.err
     assert "debug" not in captured.err
+
+    # Test C++ log functions directly (pypto_impl.log_debug etc.)
+    from pypto import pypto_impl
+    pypto_impl.log_debug("cpp debug msg")
+    pypto_impl.log_info("cpp info msg")
+    pypto_impl.log_warn("cpp warn msg")
+    pypto_impl.log_error("cpp error msg")
+    pypto_impl.log_event("cpp event msg")
+    pypto_impl.log_fatal("cpp fatal msg")
+    captured = capfd.readouterr()
+    # Note: C++ logger may filter DEBUG level, so we only assert INFO and above
+    assert "cpp info msg" in captured.err
+    assert "cpp warn msg" in captured.err
+    assert "cpp error msg" in captured.err
+    assert "cpp event msg" in captured.err
+    assert "cpp fatal msg" in captured.err
 
 
 def test_check():
@@ -351,3 +373,34 @@ def test_basic_stmt():
         "    x: ir.Scalar[ir.INT32] = 42",
     ])
     assert prog["test_func"] is not None
+
+
+def test_call_kwargs_conversion():
+    """
+    Test ConvertKwargsDict via ir.Call kwargs parameter.
+    Covers: DataType, bool, int, string, float, error case.
+    Note: MemorySpace/PipeType/CoreType/list types are converted but not readable via kwargs getter.
+    """
+    span = ir.Span("test", 1, 1)
+    a = ir.ConstInt(1, ir.INT32, span)
+    
+    # Normal cases: types that work end-to-end (convert + read back)
+    kwargs = {
+        "dtype": ir.FP16,              # DataType
+        "flag": True,                  # bool
+        "axis": 0,                     # int
+        "mode": "fast",                # string
+        "scale": 0.5,                  # float
+    }
+    call = ir.Call("test_op", [a], kwargs, span)
+    assert call.kwargs["dtype"] == ir.FP16
+    assert call.kwargs["flag"] is True
+    assert call.kwargs["axis"] == 0
+    assert call.kwargs["mode"] == "fast"
+    assert call.kwargs["scale"] == 0.5
+    
+    # Error case: unsupported type
+    with pytest.raises(TypeError):
+        ir.Call("test_op", [a], {"bad": object()}, span)
+
+

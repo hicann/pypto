@@ -883,3 +883,34 @@ def test_builder_create_function():
     prog = b.create_program([func_a, func_b], "multi_prog", sp)
     assert isinstance(prog, ir.Program)
     assert len(prog.functions) == 2
+
+
+# ---------- type_equal ----------
+
+
+def test_builder_type_equal():
+    """Verify type_equal for both ScalarType and LogicalTensorType."""
+    sp = _span()
+
+    # ScalarType: same type
+    x = ir.Var("x", ir.ScalarType(ir.INT32), sp)
+    y = ir.Var("y", ir.ScalarType(ir.INT32), sp)
+    assert ir.type_equal(x, y)
+
+    # ScalarType: different type
+    z = ir.Var("z", ir.ScalarType(ir.FP32), sp)
+    assert not ir.type_equal(x, z)
+
+    # LogicalTensorType: same shape and dtype
+    b = ir.IRBuilder()
+    t1 = b.create_tensor_var(pypto.DT_FP32, [16, 32], name="t1")
+    t2 = b.create_tensor_var(pypto.DT_FP32, [16, 32], name="t2")
+    assert ir.type_equal(t1, t2)
+
+    # LogicalTensorType: different shape
+    t3 = b.create_tensor_var(pypto.DT_FP32, [8, 16], name="t3")
+    assert not ir.type_equal(t1, t3)
+
+    # LogicalTensorType: same shape, different dtype
+    t4 = b.create_tensor_var(pypto.DT_FP16, [16, 32], name="t4")
+    assert not ir.type_equal(t1, t4)

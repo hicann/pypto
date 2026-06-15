@@ -27,6 +27,7 @@
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/memref.h"
+#include "ir/pipe.h"
 #include "ir/program.h"
 #include "ir/scalar_expr.h"
 #include "ir/stmt.h"
@@ -560,6 +561,41 @@ TEST_F(IRStructuralTest, TestEqualNestedStatements)
 
     ASSERT_TRUE(
         structural_equal(std::static_pointer_cast<const IRNode>(seq1), std::static_pointer_cast<const IRNode>(seq2)));
+}
+
+// ============================================================================
+// FunctionType conversion tests
+// ============================================================================
+
+TEST_F(IRCheckTest, TestFunctionTypeToString)
+{
+    ASSERT_EQ(FunctionTypeToString(FunctionType::OPAQUE), "Opaque");
+    ASSERT_EQ(FunctionTypeToString(FunctionType::ORCHESTRATION), "Orchestration");
+    ASSERT_EQ(FunctionTypeToString(FunctionType::IN_CORE), "InCore");
+    ASSERT_EQ(FunctionTypeToString(FunctionType::HELPER), "Helper");
+    ASSERT_EQ(FunctionTypeToString(static_cast<FunctionType>(999)), "Unknown");
+}
+
+TEST_F(IRCheckTest, TestStringToFunctionType)
+{
+    ASSERT_EQ(StringToFunctionType("Opaque"), FunctionType::OPAQUE);
+    ASSERT_EQ(StringToFunctionType("Orchestration"), FunctionType::ORCHESTRATION);
+    ASSERT_EQ(StringToFunctionType("InCore"), FunctionType::IN_CORE);
+    ASSERT_EQ(StringToFunctionType("Helper"), FunctionType::HELPER);
+    ASSERT_THROW(StringToFunctionType("Invalid"), std::invalid_argument);
+}
+
+TEST_F(IRCheckTest, TestPipeTypeToString)
+{
+    ASSERT_EQ(PipeTypeToString(PipeType::MTE1), "MTE1");
+    ASSERT_EQ(PipeTypeToString(PipeType::MTE2), "MTE2");
+    ASSERT_EQ(PipeTypeToString(PipeType::MTE3), "MTE3");
+    ASSERT_EQ(PipeTypeToString(PipeType::M), "M");
+    ASSERT_EQ(PipeTypeToString(PipeType::V), "V");
+    ASSERT_EQ(PipeTypeToString(PipeType::S), "S");
+    ASSERT_EQ(PipeTypeToString(PipeType::FIX), "FIX");
+    ASSERT_EQ(PipeTypeToString(PipeType::ALL), "ALL");
+    ASSERT_THROW(PipeTypeToString(static_cast<PipeType>(999)), TypeError);
 }
 
 } // namespace ir
