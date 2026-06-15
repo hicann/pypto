@@ -107,7 +107,7 @@ public:
     {
         auto* devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
         devProg->devArgs.launchSchedAicpuNum = config::GetRuntimeOption<uint32_t>(LAUNCH_SCHED_AICPU_NUM);
-        devProg->devArgs.launchSchedSameCluster = config::GetRuntimeOption<int64_t>(LAUNCH_SCHED_SAME_CLUSTER) == 1;
+        devProg->devArgs.launchSchedSameCluster = GetEnvVar("LAUNCH_SCHED_SAME_CLUSTER") == "true";
     }
 
     template <typename DeviceMemoryTy>

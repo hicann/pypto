@@ -54,7 +54,6 @@ constexpr int64_t CFG_RUN_MODE_SIM = 1;
 constexpr const char* READY_ON_HOST_TENSORS = "ready_on_host_tensors";
 constexpr const char* DEVICE_SCHED_PARALLELISM = "device_sched_parallelism";
 constexpr const char* LAUNCH_SCHED_AICPU_NUM = "launch_sched_aicpu_num";
-constexpr const char* LAUNCH_SCHED_SAME_CLUSTER = "launch_sched_same_cluster";
 constexpr const char* LAUNCH_EARLY_MODE = "launch_early_mode";
 
 // host
