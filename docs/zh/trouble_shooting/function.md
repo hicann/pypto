@@ -60,9 +60,7 @@ export ASCEND_PROCESS_LOG_PATH=./debug_logs # 指定日志落盘路径
 
 #### 2. 开启图编译阶段调试模式开关
 
-Function作为前端，需要根据开发者用法/语法总结出上下文，提供给后续组件使用，比如计算图，当开发者的计算图出问题时，使用该调试开关，可查看Function Dump出来的program.json是否符合预期。
-
-开启方法: [查看计算图.md](../tools/computation_graph/查看计算图.md)
+Function作为前端，需要根据开发者用法/语法总结出上下文，提供给后续组件使用，比如计算图，当开发者的计算图出问题时，使用该调试开关，可查看Function Dump出来的program.json是否符合预期。开启方法请参考[查看计算图](../tutorials/introduction/quick_start.md#查看计算图)。
 
 ---
 
@@ -332,7 +330,7 @@ out = pypto.mul(buf, scale)           # 只读buf，写入新张量
 
 #### 深度定位（可选）
 
-源码中读后写关系不直观时，可Dump计算图JSON并用`computation_graph_analyzer.py --detect-op-cycle`找出环路径，再映射回读写点。详见 [查看计算图.md](../tools/computation_graph/查看计算图.md)与`pypto-pass-error-locator`。
+源码中读后写关系不直观时，可Dump计算图JSON并用`computation_graph_analyzer.py --detect-op-cycle`找出环路径，再映射回读写点。详见[查看计算图](../tutorials/introduction/quick_start.md#查看计算图)与`pypto-pass-error-locator`。
 
 ---
 
