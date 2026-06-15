@@ -42,6 +42,7 @@ private:
     void PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum);
     void PadMatmul(Operation& op, LogicalTensorPtr& in);
     bool TryPadMatmulMXScene(Operation& op, LogicalTensorPtr& in);
+    void TryPadMatmulIsMXScene(Operation& op, LogicalTensorPtr& in);
     int64_t GetMatmulPaddingValue(Operation& op, LogicalTensorPtr& in) const;
     void PadMatmulHighLow(LogicalTensorPtr& in, size_t highIndex, size_t lowIndex, int64_t padValue);
     void PadVector(Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw);

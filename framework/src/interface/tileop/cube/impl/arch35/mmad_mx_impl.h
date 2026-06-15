@@ -53,6 +53,7 @@ INLINE void MatmulMXImpl(TileRes& c, TileLeft& a, TileLeftScale& aScale, TileRig
     using tileL0BScaleTensor =
         pto::TileRightScale<typename TileRight::Type, staticL0BScaleH * SHAPE_DIM2, staticL0BW, -1, -1>;
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
+    validK = (validK + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
     tileL0ATensor l0a(validM, validK);
     tileL0AScaleTensor l0aScale(validM, validScaleK);
     tileL0BTensor l0b(validK, validN);
@@ -108,6 +109,7 @@ INLINE void MatmulMXImpl(
     using tileBiasTensor =
         pto::Tile<pto::TileType::Bias, typename TileBias::Type, 1, staticL0BW, pto::BLayout::RowMajor, -1, -1>;
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
+    validK = (validK + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
     tileL0ATensor l0a(validM, validK);
     tileL0AScaleTensor l0aScale(validM, validScaleK);
     tileL0BTensor l0b(validK, validN);

@@ -36,6 +36,8 @@ public:
         MemoryType toType = MemoryType::MEM_UNKNOWN;
         bool hasCopyInMode;                 // 是否有copy_in_mode属性
         npu::tile_fwk::Any copyInModeValue; // copy_in_mode属性值
+        bool hasL1PaddingMode;                 // 是否有copy_in_l1_padding_mode属性
+        npu::tile_fwk::Any l1PaddingMode; // copy_in_l1_padding_mode属性值
         ir::Span span;                      // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
     };

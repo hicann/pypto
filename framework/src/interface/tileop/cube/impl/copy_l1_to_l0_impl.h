@@ -18,7 +18,7 @@
 
 #include "cube_utils.h"
 
-template <bool isTrans, typename DstTileData, typename SrcTileData>
+template <bool isTrans, bool isMX, typename DstTileData, typename SrcTileData>
 INLINE void TExtractL1ToL0Impl(DstTileData& dst, SrcTileData& src, const int64_t& offset0, const int64_t& offset1)
 {
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
@@ -30,6 +30,14 @@ INLINE void TExtractL1ToL0Impl(DstTileData& dst, SrcTileData& src, const int64_t
     int64_t dstShape1 = GetShape<1>(dst);
     int64_t srcShape0 = GetShape<0>(src);
     int64_t srcShape1 = GetShape<1>(src);
+    // MX Matmul场景，L0的k轴需要保证64对齐，非对齐输入场景需要对validshapeK对齐到64
+    if constexpr(isMX) {
+        if constexpr (DstTileData::FORMAT == Hardware::L0A) {
+            dstShape1 = (dstShape1 + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
+        } else {
+            dstShape0 = (dstShape0 + MX_BLOCK_ALIGN_BYTE - 1) / MX_BLOCK_ALIGN_BYTE * MX_BLOCK_ALIGN_BYTE;
+        }
+    }
     // L1 Tile内模板参数对应含义：
     // Tile类型为Cube用于Matmul，矩阵数据类型，TileShape0，TileShape1，大分型RowMajor表明Z，ColMajor表明N,
     // validShape0, validShape1, 小分型

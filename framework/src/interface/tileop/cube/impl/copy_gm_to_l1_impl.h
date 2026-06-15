@@ -18,6 +18,20 @@
 
 #include "cube_utils.h"
 
+template <PaddingMode padMode, typename l1TileData>
+INLINE void TLoadFillPad(l1TileData &l1Tile, int64_t l1Shape0, int64_t l1Shape1)
+{
+    // NORMAL_PADDING_MODE场景只对外轴进行补零操作，补齐到ceilalign(l1Shape0, 16)
+    if constexpr (padMode == PaddingMode::NORMAL_PADDING_MODE) {
+        if ((l1Shape0 & 0xF) != 0) {
+            pto::TFILLPAD(l1Tile, l1Tile);
+        }
+    // MX_PADDING_MODE场景为MXMatmul场景下，对内外轴同时补零，补齐到对应的tileshape大小
+    } else if constexpr (padMode == PaddingMode::MX_PADDING_MODE){
+        pto::TFILLPAD(l1Tile, l1Tile);
+    }
+}
+
 // Copy data from DDR to L1 with ND -> NZ format
 template <PaddingMode padMode, typename TileData, typename GlobalData>
 INLINE void TLoadND2NZ(TileData& dst, GlobalData& src, const int64_t& offset0, const int64_t& offset1)
@@ -37,7 +51,7 @@ INLINE void TLoadND2NZ(TileData& dst, GlobalData& src, const int64_t& offset0, c
     using tileData = pto::Tile<
         pto::TileType::Mat, typename TileData::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
         pto::SLayout::RowMajor, pto::TileConfig::fractalABSize, pto::PadValue::Null,
-        pto::CompactMode::RowAlignedPadding>;
+        padMode == PaddingMode::NORMAL_PADDING_MODE ? pto::CompactMode::RowAlignedPadding : pto::CompactMode::Null>;
     int64_t gmOffset = offset1 + offset0 * srcShape1;
     // FP4数据类型数据宽度减半，地址偏移需要右移1位
     if constexpr (CheckIsB4<TileData>()) {
@@ -51,9 +65,7 @@ INLINE void TLoadND2NZ(TileData& dst, GlobalData& src, const int64_t& offset0, c
     pto::TLOAD(dstL1, src0Global);
     // L1数据为NZ时，外轴非16元素对齐需要pad到16对齐
 #ifndef __LITE_NPU
-    if ((dstShape0 & 0xF) != 0) {
-        pto::TFILLPAD(dstL1, dstL1);
-    }
+    TLoadFillPad<padMode>(dstL1, dstShape0, dstShape1);
 #endif
 }
 
@@ -93,9 +105,7 @@ INLINE void TLoadNZ2NZ(
     pto::TLOAD(dstL1, src0Global);
     // L1数据为NZ时，外轴非16元素对齐需要pad到16对齐
 #ifndef __LITE_NPU
-    if ((dstShape0 & 0xF) != 0) {
-        pto::TFILLPAD(dstL1, dstL1);
-    }
+    TLoadFillPad<padMode>(dstL1, dstShape0, dstShape1);
 #endif
 }
 

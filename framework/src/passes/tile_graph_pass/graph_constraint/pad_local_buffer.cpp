@@ -26,6 +26,7 @@ constexpr size_t MATMUL_MIN_SHAPE_SIZE = 2;
 constexpr int64_t CUBE_PAD_VALUE = 16;
 constexpr int64_t CUBE_PAD_B8_VALUE = 32;
 constexpr int64_t CUBE_PAD_B4_VALUE = 64;
+constexpr int64_t MX_K_AXIS_PAD_VALUE = 64;
 constexpr int64_t BT_PAD_BASE = 64;
 constexpr int64_t mxHighAxis = 0;
 constexpr int64_t mxLowAxis = 1;
@@ -137,6 +138,39 @@ void PadLocalBuffer::PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum
     in->tensor->rawshape[axisNum] = AlignmentUtils::Pad(oriRawshape[axisNum], CUBE_PAD_B8_VALUE);
 }
 
+void PadLocalBuffer::TryPadMatmulIsMXScene(Operation& op, LogicalTensorPtr& in)
+{
+    if (in == nullptr || in->tensor == nullptr || in->tensor->rawshape.size() < MATMUL_MIN_SHAPE_SIZE) {
+        return;
+    }
+    const auto& producers = in->GetProducers();
+    if (producers.empty() || *producers.begin() == nullptr ||
+        (!op.GetBoolAttribute("op_attr_is_mx") && !(*producers.begin())->GetBoolAttribute("op_attr_is_mx"))) {
+        return;
+    }
+    size_t highIndex = in->tensor->rawshape.size() - 2;
+    size_t lowIndex = in->tensor->rawshape.size() - 1;
+    auto memType = in->GetMemoryTypeOriginal();
+    auto opcode = op.GetOpcode();
+    size_t kAxis = [&]() -> size_t {
+        switch (memType) {
+            case MemoryType::MEM_L0A: return lowIndex;
+            case MemoryType::MEM_L0B: return highIndex;
+            case MemoryType::MEM_L1:
+                switch (opcode) {
+                    case Opcode::OP_L1_TO_L0A: case Opcode::OP_L1_TO_L0_BT: return lowIndex;
+                    case Opcode::OP_L1_TO_L0_AT: case Opcode::OP_L1_TO_L0B: return highIndex;
+                    default: return -1; // invalid case
+                }
+            default: return -1; // invalid case
+        }
+    }();
+    if (kAxis == static_cast<size_t>(-1)) {
+        return;
+    }
+    in->tensor->rawshape[kAxis] = AlignmentUtils::Pad(in->tensor->rawshape[kAxis], MX_K_AXIS_PAD_VALUE);
+}
+
 bool PadLocalBuffer::TryPadMatmulMXScene(Operation& op, LogicalTensorPtr& in)
 {
     const auto& producers = in->GetProducers();
@@ -235,6 +269,7 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
         PadMatmulL1ConvertScene(op, in, lowIndex);
     } else {
         PadMatmulHighLow(in, highIndex, lowIndex, GetMatmulPaddingValue(op, in));
+        TryPadMatmulIsMXScene(op, in);
     }
     if (isUB2L1Scene) {
         // 针对UB2L1场景下，做vec2vecND2NZ操作时，通过在外轴增加一行，来解决bank冲突，提高搬运性能

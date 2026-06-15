@@ -228,7 +228,9 @@ std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
     std::ostringstream oss;
     oss << tileOpName;
     if (opCode != Opcode::OP_L1_TO_L0A_SCALE && opCode != Opcode::OP_L1_TO_L0B_SCALE) {
-        oss << WrapParamByAngleBrackets({std::to_string(isTrans)});
+        bool isMX = false;
+        GetOpAttr(OP_ATTR_PREFIX + "is_mx", isMX);
+        oss << WrapParamByAngleBrackets({std::to_string(isTrans), std::to_string(isMX)});
     }
     oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;

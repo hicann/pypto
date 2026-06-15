@@ -805,12 +805,9 @@ void CheckMXMatmulShape(
     ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, nSize == nScaleSize)
         << "Scale Matrix N dimension mismatch, nScaleSize: " << nScaleSize << ", nSize: " << nSize;
 
-    ASSERT(MatmulErrorCode::ERR_CONFIG_ALIGNMENT, kSize % ALIGN_SIZE_64 == 0)
-        << "Current kSize: " << kSize << ", kSize must be aligned to 64 element when using MX Matmul";
-
-    ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, kAScaleSize0 == kSize / ALIGN_SIZE_64)
-        << "Matrix K dimension is not a multiple of 64. Expected: ksize / 64 = " << kAScaleSize0
-        << ", but got ksize / 64: " << kSize / ALIGN_SIZE_64;
+    ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, kAScaleSize0 == CeilDiv(kSize, ALIGN_SIZE_64))
+        << "Scale Matrix K dimension does not match Input Matrix K. Expected: Scale Matrix K size = "
+        << CeilDiv(kSize, ALIGN_SIZE_64) << ", but got: " << kAScaleSize0;
 }
 
 Status CheckMXMatmulOperands(
@@ -967,14 +964,8 @@ LogicalTensorPtr LinkTensorA(
         MatmulTensorInfo aL1TensorInfo{
             "aL1Tensor",     tensorGraphNodes.aTensorPtr->Datatype(), aL1Shape,          aL1Offset,
             NodeType::LOCAL, tensorGraphNodes.aTensorPtr->Format(),   MemoryType::MEM_L1};
-        int64_t paddingMode = 0;
         // 根据是否使用了MXScale标志来决定Padding模式
-        if (attrParam.hasMXScale) {
-            // 如果启用了MXScale且需要进行转置，则使用外轴填充模式(PADDING_OUTER)，
-            // 否则使用内轴填充模式(PADDING_INNER)
-            paddingMode = attrParam.transA ? static_cast<int64_t>(PaddingMode::PADDING_OUTER) :
-                                             static_cast<int64_t>(PaddingMode::PADDING_INNER);
-        }
+        int64_t paddingMode = attrParam.hasMXScale ? static_cast<int64_t>(PaddingMode::MX_PADDING_MODE) : 0;
         aL1TensorPtr = AddOpView<int64_t>(
             function, tensorGraphNodes.aTensorPtr, aL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}});
     }
@@ -995,8 +986,8 @@ LogicalTensorPtr LinkTensorA(
     std::vector<SymbolicScalar> l1ToL0Offset = SymbolicScalar::FromConcrete(aL0Offset);
     std::vector<SymbolicScalar> l1ToL0Tile = SymbolicScalar::FromConcrete(aL0Shape);
     LogicalTensorPtr aL0TensorPtr = AddOpView<bool, std::vector<SymbolicScalar>>(
-        function, aL1TensorPtr, aL0TensorInfo, {{L1_TO_L0_TRANSPOSE, attrParam.transA}},
-        {{L1_TO_L0_OFFSET, l1ToL0Offset}, {L1_TO_L0_TILE, l1ToL0Tile}});
+        function, aL1TensorPtr, aL0TensorInfo, {{L1_TO_L0_TRANSPOSE, attrParam.transA},
+        {A_MUL_B_MX_ATTR, attrParam.hasMXScale}}, {{L1_TO_L0_OFFSET, l1ToL0Offset}, {L1_TO_L0_TILE, l1ToL0Tile}});
     return aL0TensorPtr;
 }
 
@@ -1012,14 +1003,8 @@ LogicalTensorPtr LinkTensorB(
         MatmulTensorInfo bL1TensorInfo{
             "bL1Tensor",     tensorGraphNodes.bTensorPtr->Datatype(), bL1Shape,          bL1Offset,
             NodeType::LOCAL, tensorGraphNodes.bTensorPtr->Format(),   MemoryType::MEM_L1};
-        int64_t paddingMode = 0;
         // 根据是否使用了MXScale标志来决定Padding模式
-        if (attrParam.hasMXScale) {
-            // 如果启用了MXScale且需要进行转置，则使用内轴填充模式(PADDING_INNER)，
-            // 否则使用外轴填充模式(PADDING_OUTER)
-            paddingMode = attrParam.transB ? static_cast<int64_t>(PaddingMode::PADDING_INNER) :
-                                             static_cast<int64_t>(PaddingMode::PADDING_OUTER);
-        }
+        int64_t paddingMode = attrParam.hasMXScale ? static_cast<int64_t>(PaddingMode::MX_PADDING_MODE) : 0;
         bL1TensorPtr = AddOpView<int64_t>(
             function, tensorGraphNodes.bTensorPtr, bL1TensorInfo, {{COPY_IN_L1_PADDING_MODE, paddingMode}});
     }
@@ -1040,8 +1025,8 @@ LogicalTensorPtr LinkTensorB(
     std::vector<SymbolicScalar> l1ToL0Offset = SymbolicScalar::FromConcrete(bL0Offset);
     std::vector<SymbolicScalar> l1ToL0Tile = SymbolicScalar::FromConcrete(bL0Shape);
     LogicalTensorPtr bL0TensorPtr = AddOpView<bool, std::vector<SymbolicScalar>>(
-        function, bL1TensorPtr, bL0TensorInfo, {{L1_TO_L0_TRANSPOSE, attrParam.transB}},
-        {{L1_TO_L0_OFFSET, l1ToL0Offset}, {L1_TO_L0_TILE, l1ToL0Tile}});
+        function, bL1TensorPtr, bL0TensorInfo, {{L1_TO_L0_TRANSPOSE, attrParam.transB},
+        {A_MUL_B_MX_ATTR, attrParam.hasMXScale}}, {{L1_TO_L0_OFFSET, l1ToL0Offset}, {L1_TO_L0_TILE, l1ToL0Tile}});
     return bL0TensorPtr;
 }
 
@@ -1358,7 +1343,7 @@ static Tensor ConstructGmAccumulationTensorGraph(
     int64_t mSize = attrParam.transA ? aMatrix.GetShape()[1] : aMatrix.GetShape()[0];
     int64_t kSize = attrParam.transA ? aMatrix.GetShape()[0] : aMatrix.GetShape()[1];
     int64_t nSize = attrParam.transB ? bMatrix.GetShape()[0] : bMatrix.GetShape()[1];
-    
+
     SetVecTileBasedOnUbSize(outType, cubeTile);
     Tensor gmAccumulationTensor =
         (outType == DT_INT32) ?
