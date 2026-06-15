@@ -3032,7 +3032,7 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(
 
 static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
 {
-    if (op->GetOpcode() != Opcode::OP_VIEW) {
+    if (op->GetOpcode() != Opcode::OP_VIEW && op->GetOpcode() != Opcode::OP_RESHAPE) {
         return false;
     }
     LogicalTensorPtr data = op->GetOOperands()[0];
@@ -3071,9 +3071,19 @@ void Function::NormalizeCoaForInCasts(
             auto& consOp = *(op->GetOOperands()[0])->GetConsumers().begin();
             if (!this->IsFromOutCast(op->GetOOperands().front()) && IsCopyIn(consOp->GetOpcode()) &&
                 IsInplaceIncast(op, copyInList)) {
+                bool isReshape = op->GetOpcode() == Opcode::OP_RESHAPE;
                 for (auto copyIn : copyInList) {
                     operandCoaList = NormalizeCopyIn(copyIn, coaIndex, valueToIndex);
-                    copyIn->SetIOpAtt(k, coaIndex);
+                    copyIn->SetIOpAtt(isReshape ? 0 : k, coaIndex);
+                    if (!isReshape) {
+                        iOpAttr.emplace_back(coaIndex);
+                    }
+                    coaIndex += operandCoaList.size();
+                    coaLists.emplace_back(std::move(operandCoaList));
+                }
+                if (isReshape) {
+                    operandCoaList = NormalizeTensor(op->GetInputOperand(k), coaIndex, false);
+                    op->SetIOpAtt(k, coaIndex);
                     iOpAttr.emplace_back(coaIndex);
                     coaIndex += operandCoaList.size();
                     coaLists.emplace_back(std::move(operandCoaList));
