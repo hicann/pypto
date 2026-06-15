@@ -136,6 +136,7 @@ const std::string OpAttributeKey::l0cValidMN = "L0C_VALID_MN";
 const std::string OpAttributeKey::rmwMode = "op_attr_rmw_mode";
 const std::string OpAttributeKey::transDataOffset = "TRANSDATA_OFFSET";
 const std::string OpAttributeKey::isConv = "isConv";
+const std::string OpAttributeKey::writeConflict = "write_conflict";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";
@@ -285,7 +286,7 @@ void Operation::InitLatency(Opcode opcode)
         latency_ = GetLatencyByOperands(latencyOperands, GetOpcodeStr());
     }
 }
- 
+
 std::string Operation::GetStringAttribute(const std::string& key) const
 {
     FE_ASSERT(FeError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;

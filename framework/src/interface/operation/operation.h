@@ -154,6 +154,7 @@ public:
     static const std::string rmwMode;
     static const std::string transDataOffset;
     static const std::string isConv;
+    static const std::string writeConflict;
 };
 
 const std::string CONV_GROUPS_ATTR = "op_attr_groups";

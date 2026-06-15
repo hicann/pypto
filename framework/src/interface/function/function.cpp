@@ -2805,9 +2805,9 @@ static void NormalizeReshapeCopyDynValidShape(
     Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex, bool valueToIndex)
 {
     Opcode opcode = op->GetOpcode();
-    if (opcode != Opcode::OP_RESHAPE_COPY_OUT && 
-        opcode != Opcode::OP_RESHAPE_COPY_IN && 
-        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT && 
+    if (opcode != Opcode::OP_RESHAPE_COPY_OUT &&
+        opcode != Opcode::OP_RESHAPE_COPY_IN &&
+        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT &&
         opcode != Opcode::OP_L1_RESHAPE_COPY_IN) {
         return;
     }
@@ -3008,8 +3008,6 @@ void Function::GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel)
     }
 }
 
-static bool isAtomicOp(Operation* op) { return op->HasAttr("op_attr_atomic_add"); }
-
 std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(
     std::vector<OperandAttribute>& iOpAttr, std::vector<OperandAttribute>& oOpAttr)
 {
@@ -3111,7 +3109,7 @@ void Function::NormalizeCoaForOutCasts(
         if (op->GetOOpAttrOffset(k) != -1) {
             continue;
         }
-        bool isAtomic = isAtomicOp(op);
+        bool isAtomic = op->GetOOperands()[0]->HasAttr(OpAttributeKey::writeConflict);
         std::vector<SymbolicScalar> operandCoaList;
         if (IsCopyOut(op->GetOpcode()) && k == 0) {
             operandCoaList = NormalizeCopyOut(op, coaIndex, valueToIndex);
@@ -3174,13 +3172,13 @@ void Function::NormalizeCoaForNormalOperands(
             }
             auto it = processedOperands.find(oOperand);
             if (it != processedOperands.end()) {
-                op->SetOOpAtt(i, it->second, isAtomicOp(op.get()));
+                op->SetOOpAtt(i, it->second, false);
                 continue;
             }
             if (!oOperand->GetDynOffset().empty() || !oOperand->GetDynValidShape().empty()) {
                 auto operandCoaList = NormalizeTensor(oOperand, coaIndex, valueToIndex);
                 processedOperands.emplace(oOperand, coaIndex);
-                op->SetOOpAtt(i, coaIndex, isAtomicOp(op.get()));
+                op->SetOOpAtt(i, coaIndex, false);
                 coaIndex += operandCoaList.size();
                 coaLists.emplace_back(std::move(operandCoaList));
             }

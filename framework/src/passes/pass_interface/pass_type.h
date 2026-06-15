@@ -31,6 +31,7 @@ enum class PassType : int32_t {
 enum class PassName {
     LOOP_UNROLL,
     INFER_TENSOR_FORMAT,
+    INFER_WRITE_CONFLICT,
     AUTO_CAST,
     REMOVE_REDUNDANT_RESHAPE,
     INFER_MEMORY_CONFLICT,
@@ -80,6 +81,7 @@ enum class PassName {
 inline const std::map<PassName, const char*> kPassNameStringMap = {
     {PassName::LOOP_UNROLL, "LoopUnroll"},
     {PassName::INFER_TENSOR_FORMAT, "InferTensorFormat"},
+    {PassName::INFER_WRITE_CONFLICT, "InferWriteConflict"},
     {PassName::AUTO_CAST, "AutoCast"},
     {PassName::REMOVE_REDUNDANT_RESHAPE, "RemoveRedundantReshape"},
     {PassName::INFER_MEMORY_CONFLICT, "InferMemoryConflict"},
