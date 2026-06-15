@@ -176,7 +176,7 @@ TEST_F(TestCodegenUnary, CastDim1TileTensor)
 {
     Function& func = TestCastBody({128}, {128}, {64}, "CastDim1TileTensor", true);
     std::string res = GetResultFromCpp(func);
-    std::string expect = R"!!!(TCast<LastUse2Dim<0, 1>, 0, pto::SaturationMode::OFF>(ubTensor_2, ubTensor_0);
+    std::string expect = R"!!!(TCast<LastUse2Dim<0, 0>, 0, pto::SaturationMode::OFF>(ubTensor_2, ubTensor_0);
 )!!!";
     CheckStringExist(expect, res);
 }

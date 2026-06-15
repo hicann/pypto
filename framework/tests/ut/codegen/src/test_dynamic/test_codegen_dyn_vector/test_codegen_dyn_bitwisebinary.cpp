@@ -103,13 +103,13 @@ void TestBitwiseScalarDynBody(
 
 TEST_F(TestCodegenDynBitwiseBinary, BitwiseAndLayout)
 {
-    const std::string expect = R"(TBitwiseAnd<LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);)";
+    const std::string expect = R"(TBitwiseAnd<LastUse3Dim<0, 0, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);)";
     TestBitwiseTensorDynBody({32, 32}, {16, 16}, "BitwiseAnd", expect);
 }
 
 TEST_F(TestCodegenDynBitwiseBinary, BitwiseOrLayout)
 {
-    const std::string expect = R"(TBitwiseOr<LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);)";
+    const std::string expect = R"(TBitwiseOr<LastUse3Dim<0, 0, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);)";
     TestBitwiseTensorDynBody({32, 32}, {16, 16}, "BitwiseOr", expect);
 }
 

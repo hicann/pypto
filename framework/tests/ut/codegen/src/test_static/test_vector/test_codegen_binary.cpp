@@ -124,9 +124,9 @@ TLoad(ubTensor_2, gmTensor_3, Coord4Dim(0, 0, 0, 0));
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TAdd<LastUse3Dim<0, 0, 1>>(ubTensor_2, ubTensor_0, ubTensor_2);
+TAdd<LastUse3Dim<0, 0, 0>>(ubTensor_2, ubTensor_0, ubTensor_2);
 pipe_barrier(PIPE_V);
-TMul<LastUse3Dim<0, 1, 1>>(ubTensor_2, ubTensor_0, ubTensor_2);
+TMul<LastUse3Dim<0, 1, 0>>(ubTensor_2, ubTensor_0, ubTensor_2);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 GMTileTensorFP32Dim4_1 gmTensor_10((__gm__ float*)GET_PARAM_ADDR(param, 0, 35), DynLayout4Dim(Shape4Dim(1, 1, 16, 16), Stride4Dim(256, 256, 16, 1)));
