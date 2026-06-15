@@ -295,7 +295,7 @@ void ValidateConfigValueType(const std::string& key, const Any& value)
     std::stringstream os;
     os << "Option '" << key << "' has invalid type. Expected " << GetReadableTypeName(expectedType) << ", but got "
        << GetReadableTypeName(value.Type());
-    CHECK(FeError::INVALID_TYPE, false) << os.str();
+    CHECK(ExternalError::INVALID_TYPE, false) << os.str();
 }
 
 std::string ConfigScope::ToString() const
@@ -340,7 +340,7 @@ void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
         DumpValues(os, node, "");
         os << "its value doesn't within the value range. ";
         DumpRange(os, value.Type(), key, rangeInfos);
-        CHECK(FeError::INVALID_VAL, false) << os.str();
+        CHECK(ExternalError::INVALID_VAL, false) << os.str();
     }
     std::stringstream oss;
     DumpValue(oss, key, value, "");
@@ -428,7 +428,7 @@ struct ConfigManagerImpl {
             scope = scopes.top();
         }
         for (auto& it : values) {
-            CHECK(FeError::INVALID_VAL, scope->HasConfig(it.first))
+            CHECK(ExternalError::INVALID_VAL, scope->HasConfig(it.first))
                 << "key: " << it.first.c_str() << " does not exist.";
             scope->UpdateValueWithAny(it.first, it.second);
         }
@@ -531,7 +531,7 @@ private:
             confPath = GetConfDir() + "tile_fwk_config.json";
         }
         std::ifstream ifs(confPath);
-        CHECK(FeError::BAD_FD, ifs.is_open()) << "Open file: " << confPath << " failed";
+        CHECK(ExternalError::BAD_FD, ifs.is_open()) << "Open file: " << confPath << " failed";
         nlohmann::json jData;
         ifs >> jData;
         LoadConf(jData, "");

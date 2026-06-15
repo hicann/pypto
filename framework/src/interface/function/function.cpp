@@ -2279,7 +2279,7 @@ void Function::DumpJsonFile(std::string fileName)
         filePath = fileName;
     }
     std::ofstream file(filePath);
-    CHECK(FeError::BAD_FD, file.is_open()) << "Failed to open file: " << filePath;
+    CHECK(ExternalError::BAD_FD, file.is_open()) << "Failed to open file: " << filePath;
     Json progDump;
     progDump["version"] = T_VERSION;
     progDump["functions"].push_back(DumpJson());
@@ -3393,7 +3393,7 @@ std::string Function::Dump() const { return DumpSSA(); }
 void Function::DumpFile(const std::string& filePath) const
 {
     std::ofstream fout(filePath);
-    CHECK(FeError::BAD_FD, fout.is_open()) << "Failed to open file: " << filePath;
+    CHECK(ExternalError::BAD_FD, fout.is_open()) << "Failed to open file: " << filePath;
     fout << Dump();
     fout.close();
 }
