@@ -293,7 +293,6 @@ OL47 is INFO-level — it does not block the gate. Treat it as an optimization h
 Full reference material in skill `pypto-op-develop`'s `references/pypto-kernel-design-format.md` and skill `pypto-op-design`'s `references/quick_ref.md`. Before returning the staged file, verify ALL of these:
 
 **Per-file code invariants:**
-- `torch.npu.set_device(device_id)` at module top before any tensor ops
 - JIT decorator options minimal: `runtime_options={"run_mode": pypto.RunMode.NPU}`
 - Explicit `pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)` annotations on every tensor param; never use empty `pypto.Tensor()` / `pypto.Tensor([], dtype)`
 - No `-> None` return annotation on JIT functions

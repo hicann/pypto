@@ -53,7 +53,7 @@ Related reference material:
 ```python
 import os, torch, pypto, torch_npu
 
-DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", "8"))
+DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", "0"))
 torch.npu.set_device(DEVICE_ID)
 DEVICE = f"npu:{DEVICE_ID}"
 
