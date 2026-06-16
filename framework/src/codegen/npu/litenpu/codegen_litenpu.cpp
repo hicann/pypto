@@ -218,7 +218,8 @@ std::string CodeGenLiteNPU::GetCoreArch([[maybe_unused]] const CompileInfo& comp
     }
 }
 
-void CodeGenLiteNPU::BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const
+void CodeGenLiteNPU::BuildExtraOptions(
+    std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo, const std::string& compileOptions) const
 {
     oss << "-mllvm -cce-aicore-jump-expand=true "
         << "-mllvm -cce-aicore-function-stack-size=16384 "

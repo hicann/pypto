@@ -53,7 +53,8 @@ private:
 
     std::string GetCoreArch(const CompileInfo& compileInfo) const override;
 
-    void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const override;
+    void BuildExtraOptions(
+        std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const override;
 
     void BuildIncludes(std::ostringstream& oss) const override;
 
