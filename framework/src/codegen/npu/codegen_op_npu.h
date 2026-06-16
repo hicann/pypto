@@ -259,20 +259,20 @@ protected:
     int GetCacheModeFlag(const std::string& cacheMode) const;
 
     template <typename T>
-    bool GetAttrFromMap(const std::map<std::string, Any>& attrMap, const std::string& key, T& value) const
+    bool GetAttrFromMap(const std::map<std::string, std::any>& attrMap, const std::string& key, T& value) const
     {
         auto it = attrMap.find(key);
         if (it == attrMap.end()) {
             CODEGEN_LOGI("can not find key: %s in attrMap", key.c_str());
             return false;
         }
-        if (it->second.Type() == typeid(T)) {
+        if (it->second.type() == typeid(T)) {
             value = AnyCast<T>(it->second);
             return true;
         }
         CODEGEN_LOGE(
             GenCodeErr::DATA_TYPE_MISMATCHED, "Type of attribute %s from PASS is mismatch: %s != %s", key.c_str(),
-            it->second.Type().name(), typeid(T).name());
+            it->second.type().name(), typeid(T).name());
         return false;
     }
 

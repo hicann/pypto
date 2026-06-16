@@ -368,8 +368,7 @@ void ExecutePrint(ExecuteOperationContext* ctx)
         return;
     }
 
-    std::vector<SymbolicScalar>* scalars = nullptr;
-    scalars = ctx->op->GetAttr<std::vector<SymbolicScalar> >(OP_ATTR_PREFIX + "scalars");
+    auto scalars = ctx->op->GetAttr<std::vector<SymbolicScalar>>(OP_ATTR_PREFIX + "scalars");
     if (ctx->op->HasAttribute(OP_ATTR_PREFIX + "fname")) {
         auto fname = ctx->op->GetStringAttribute(OP_ATTR_PREFIX + "fname");
         uint64_t ts = 0;

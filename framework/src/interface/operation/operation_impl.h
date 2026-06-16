@@ -377,12 +377,4 @@ void ConstructTileGraph(
     const LogicalTensorPtr& cTensorPtr, const Operation& op);
 
 } // namespace Conv
-
-namespace FakeTrans {
-
-void ConstructTileGraph(
-    Function& function, const std::vector<LogicalTensorPtr>& operandVec, const LogicalTensorPtr& cTensorPtr);
-
-} // namespace FakeTrans
-
 } // namespace npu::tile_fwk

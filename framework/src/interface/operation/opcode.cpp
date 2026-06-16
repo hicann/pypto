@@ -19,7 +19,6 @@
 #include <sstream>
 #include <unordered_set>
 #include "interface/operation/operation.h"
-#include "interface/operation/verifier.h"
 #include "interface/utils/common.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error.h"

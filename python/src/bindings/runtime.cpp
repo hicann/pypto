@@ -1240,7 +1240,7 @@ private:
         if (kbinary)
             return kbinary;
 
-        jitScopeGuard.emplace("jit_scope", std::map<std::string, Any>{});
+        jitScopeGuard.emplace("jit_scope", std::map<std::string, std::any>{});
         Program::GetInstance().Reset();
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
 #if ENABLE_VERBOSE_LOG

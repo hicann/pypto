@@ -603,12 +603,6 @@ Tensor Conv(
 
 } // namespace Conv
 
-namespace FakeTrans {
-
-Tensor FakeTrans(const Tensor& input, const Tensor& output);
-
-} // namespace FakeTrans
-
 namespace Distributed {
 enum class DistReduceType {
     DIST_REDUCE_ADD,
