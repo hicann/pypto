@@ -86,7 +86,7 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 
 ### 5. 动态轴切分支持
 
-卷积算子支持以下维度的动态轴切分：
+卷积算子支持的动态轴切分维度如下：
 
 | 维度       | 是否支持 | 切分方式                           | 说明                                                                 |
 |:-----------|:--------:|:-----------------------------------|:---------------------------------------------------------------------|
@@ -95,26 +95,16 @@ conv(input_conv, weight, out_dtype, strides, paddings, dilations, *, groups=1, t
 | Dout       |    √     | TileShape动态切分 + 前端循环       | 仅3D卷积支持，Dout维度动态切分                                     |
 | Hout       |    √     | TileShape动态切分 + 前端循环       | Hout维度动态切分，配合前端循环实现完整覆盖                           |
 | Wout       |    √     | TileShape动态切分 + 前端循环       | Wout维度动态切分，配合前端循环实现完整覆盖                           |
-| Cin        |    √     | 前端循环切分 + pypto.add累加       | Cin维度动态切分需使用pypto.add累加多个tile结果（当groups > 1时不允许切分）                   |
+| Cin        |    ×     | -       | Cin维度暂不支持动态轴切分，请使用set_conv_tile_shapes()进行k的tile切分实现                   |
+
+**注意：**
+- Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品的 1D 卷积，需要设置vec_tile_shapes，且当前的vec_tile_shapes只支持设置为：{1, C0, 16}，其中 C0 = ALIGN_SIZE_32 / sizeof(dtype)，ALIGN_SIZE_32 = 32。
+- Ascend 950PR产品的 1D 卷积只有动态轴切分时才需要设置vec_tile_shapes，且没有 {1, C0, 16} 的限制。
 
 ### 6. 数据类型约束
 
 - Ascend 950PR产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。input、weight、bias和output的数据类型需要相同。
 - Atlas A2/A3 训练系列产品/Atlas A2/A3 推理系列产品支持的数据类型为：DT_FP16、DT_BF16、DT_FP32。对于DT_FP16和DT_FP32类型，input、weight、bias和output的数据类型需要相同；对于DT_BF16类型，input、weight和output为BF16类型，bias需为DT_FP32类型。
-
-**Cin维度动态切分精度说明**：
-
-Cin维度的动态轴切分会影响计算精度，原因如下：
-
-- Cin切分后需要对多个tile的卷积结果进行累加（通过pypto.add实现）
-- 累加过程中存在两次cast操作（FP16/BF16 → FP32 → FP16/BF16）
-- 这两次精度转换会引入精度损失，在Cin切分场景下需要评估精度需求
-
-**建议**：
-
-- 如果精度要求较高，建议避免Cin维度的动态切分
-- 如果必须进行Cin切分，建议使用FP32数据类型以减少精度损失
-- Cin切分的tile大小需满足32字节对齐约束（FP16/BF16: %16==0, FP32: %8==0）
 
 ## 调用示例
 

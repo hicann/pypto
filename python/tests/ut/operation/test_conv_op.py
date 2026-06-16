@@ -48,6 +48,7 @@ def test_conv1d_op():
                 tileN=32
             )
         )
+        pypto.set_vec_tile_shapes(1, 8, 16)
         c = pypto.conv(a, b, dtype, [1], [1, 1], [1], extend_params={}, groups=1)
 
     assert isinstance(c, pypto.tensor)
@@ -170,6 +171,7 @@ def test_conv1d_group_op():
                 tileN=16
             )
         )
+        pypto.set_vec_tile_shapes(1, 8, 16)
         c = pypto.conv(a, b, dtype, [1], [1, 1], [1], extend_params={}, groups=8)
 
     assert isinstance(c, pypto.tensor)
