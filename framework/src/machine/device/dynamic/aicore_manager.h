@@ -1778,7 +1778,7 @@ private:
         aicValidNum_ = deviceArgs->nrValidAic;
         hasAicpuTask_ = deviceArgs->hasAicpuTask;
         enableEslModel_ = deviceArgs->enableEslModel;
-        disableControlCore_ = (startArgs->devProg->GetParallelism() > 1);
+        disableControlCore_ = true;
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
         validGetPgMask_ = deviceArgs->validGetPgMask;
         runningIds_.fill(AICORE_STATUS_INIT);
