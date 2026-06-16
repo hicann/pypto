@@ -298,6 +298,21 @@ public:
     }
 
     template <typename DeviceMemoryTy>
+    static void FillDeviceKernelArgs(
+        DeviceMemoryTy& memUtils, std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs,
+        const std::vector<std::string>& groupNames)
+    {
+        DeviceLauncherConfig config;
+        CachedOperator cache;
+        DeviceLauncherConfigFillDeviceInfo(config);
+        DeviceInitLauncherConfigForUser(devProgData);
+        // KernelBinary init only; workspace is allocated per launch via module.alloc() (torch on NPU).
+        config.workspaceAllocByTorch = true;
+        DeviceInitTilingData(memUtils, kargs, devProgData, nullptr, config, &cache);
+        DeviceInitDistributedContext(memUtils, groupNames, kargs);
+    }
+
+    template <typename DeviceMemoryTy>
     static void DeviceInitDistributedContext(
         DeviceMemoryTy& devMem, const std::vector<std::string>& groupNames, DeviceKernelArgs& kArgs)
     {
@@ -467,8 +482,6 @@ public:
         DevControlFlowCache* ctrlCache = nullptr, const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
     static int DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStream);
-    static void FillDeviceKernelArgs(
-        std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames);
     static uint8_t* CopyControlFlowCache(DevControlFlowCache* ctrlCache);
     static void FreeControlFlowCache(uint8_t* ctrlCache);
     static bool IsCaptureMode();

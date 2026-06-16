@@ -41,7 +41,8 @@
 #include "machine/runtime/launcher/aicore_model_launcher.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/runner/runtime_utils.h"
-#include "machine/runtime/memory_utils/memory_pool.h"
+#include "machine/runtime/memory_utils/device_memory_utils.h"
+#include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
 #include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/runtime/launcher/launcher_router.h"
 #include "machine/host/perf_analysis.h"
@@ -468,7 +469,13 @@ public:
         workspaceSize = devProg->memBudget.Total();
         InitCachedArgs();
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
-        DeviceLauncher::FillDeviceKernelArgs(dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
+            EslModelMemoryUtils eslMemoryUtils;
+            DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        } else {
+            DeviceMemoryUtils deviceMemoryUtils;
+            DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        }
         runtimeDynamicCellMatchAddr_ = devProg->devArgs.dynamicCellMatchAddr;
         runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
         lastPreparedDynamicCellMatchBytes_ = runtimeDynamicCellMatchCapacity_;

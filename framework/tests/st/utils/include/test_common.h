@@ -24,7 +24,6 @@
 #include "machine/runtime/memory_utils/memory_pool.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "interface/tensor/logical_tensor.h"
-#include "cost_model/simulation/pv/PvData.h"
 #include "cost_model/simulation/emulator/SoftMemory.h"
 #include "interface/configs/config_manager.h"
 #include "test_common_types.h"
@@ -531,12 +530,10 @@ void* readToDev(const std::string& path, int size)
             std::cout << "SoftMemory RuntimeMalloc failed" << std::endl;
             return nullptr;
         } else {
-            CostModel::PvData::Instance().Put(devPtr, data);
             return devPtr;
         }
     }
     RuntimeMemcpy(devPtr, bytes, data.data(), bytes, RtMemcpyKind::HOST_TO_DEVICE);
-    CostModel::PvData::Instance().Put(devPtr, data);
     return devPtr;
 }
 
@@ -552,7 +549,6 @@ void* readToDev(const std::string& path, int size)
             std::cout << "SoftMemory RuntimeMalloc failed" << std::endl;
             return nullptr;
         } else {
-            CostModel::PvData::Instance().Put(devPtr, data);
             return devPtr;
         }
         return nullptr;

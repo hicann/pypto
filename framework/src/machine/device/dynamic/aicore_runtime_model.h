@@ -21,6 +21,7 @@
 #include "machine/device/dynamic/eslmodel_manager.h"
 #include "machine/simulation/aicore_hardware.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
+#include "adapter/api/runtime_api.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -40,6 +41,14 @@ public:
     virtual uint64_t GetFinishedTask(int coreIdx, int phyId) = 0;
 
     virtual void ResetShakeBuf(volatile KernelArgs* arg) = 0;
+
+    virtual bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId)
+    {
+        (void)arg;
+        (void)dotStatus;
+        (void)phyId;
+        return false;
+    }
 
     virtual void InitKernelArgs(volatile KernelArgs*& arg, int coreIdx, int64_t sharedBuffer, int64_t buffer)
     {
@@ -87,6 +96,18 @@ public:
         arg->shakeBuffer[0] = 0;
         arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
         arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
+    }
+
+    bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId) override
+    {
+        volatile int64_t* shakeBuffer = arg->shakeBuffer;
+        if ((*shakeBuffer & 0xFFFFFFFF) != AICORE_SAY_HELLO) {
+            return false;
+        }
+        arg->taskEntry.reserved[0] = static_cast<uint32_t>(dotStatus);
+        phyId = (*shakeBuffer >> NUM_THIRTY_TWO) & AICORE_COREID_MASK;
+        arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
+        return true;
     }
 
     void SetParallelDevTask(
@@ -177,6 +198,33 @@ public:
         eslModel_.WriteEslMem(
             reinterpret_cast<uint64_t>(&arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX]),
             sizeof(uint64_t), &valToSend);
+    }
+
+    bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId) override
+    {
+        KernelArgs hostArgs;
+        RuntimeMemcpyDirect(&hostArgs, sizeof(KernelArgs), reinterpret_cast<uint8_t*>(PtrToValue((const volatile void*)arg)), sizeof(KernelArgs),
+                      RtMemcpyKind::DEVICE_TO_HOST);
+        if ((hostArgs.shakeBuffer[0] & 0xFFFFFFFF) != AICORE_SAY_HELLO) {
+            return false;
+        }
+        hostArgs.taskEntry.reserved[0] = static_cast<uint32_t>(dotStatus);
+        phyId = static_cast<int32_t>((hostArgs.shakeBuffer[0] >> NUM_THIRTY_TWO) & AICORE_COREID_MASK);
+        hostArgs.waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
+        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(arg)), sizeof(KernelArgs), &hostArgs, sizeof(KernelArgs),
+                      RtMemcpyKind::HOST_TO_DEVICE);
+        return true;
+    }
+
+    void InitKernelArgs(volatile KernelArgs*& arg, int coreIdx, int64_t sharedBuffer, int64_t buffer) override
+    {
+        (void)buffer;
+        if (arg == nullptr) {
+            arg = GetKernelArgsByCore(coreIdx, sharedBuffer);
+        }
+        int64_t valToSend = 0;
+        RuntimeMemcpyDirect(reinterpret_cast<uint8_t*>(PtrToValue(&arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX])),
+                      sizeof(valToSend), &valToSend, sizeof(valToSend), RtMemcpyKind::HOST_TO_DEVICE);
     }
 
     void SetParallelDevTask(
@@ -275,6 +323,14 @@ public:
     void ResetShakeBuf(volatile KernelArgs* arg) override
     {
         (void)arg;
+    }
+
+    bool TryHandShakeByGm(volatile KernelArgs* arg, int64_t dotStatus, int32_t& phyId) override
+    {
+        (void)arg;
+        (void)dotStatus;
+        (void)phyId;
+        return false;
     }
 
     void InitKernelArgs(volatile KernelArgs*& arg, int coreIdx, int64_t sharedBuffer, int64_t buffer) override

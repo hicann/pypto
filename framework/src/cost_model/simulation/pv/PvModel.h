@@ -17,7 +17,6 @@
 
 #include <string>
 #include "interface/function/function.h"
-#include "PvData.h"
 #include "tilefwk/core_func_data.h"
 
 namespace CostModel {

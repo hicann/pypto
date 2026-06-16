@@ -104,13 +104,7 @@ public:
                 FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
             });
         } else {
-            if (enableEslModel_) {
-                ForEachManageAicore([&](int coreIdx) {
-                    auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
-                    aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
-                    FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
-                });
-            } else if (aicoreHal_.IsHostSimMode()) {
+            if (aicoreHal_.IsHostSimMode()) {
                 ForEachManageAicore([&](int coreIdx) {
                     auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
                     aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
@@ -2103,7 +2097,7 @@ private:
         DEV_IF_DEVICE {
             return true;
         }
-        return enableEslModel_ || aicoreHal_.IsHostSimMode();
+        return aicoreHal_.IsHostSimMode();
     }
 
     void BatchStopAllManagedCores()
@@ -2269,6 +2263,7 @@ private:
     inline void CalcAdjAicoreEnd(SchDeviceTaskContext* devTaskCtx, bool isNeedUpdateCoreNum = true)
     {
         if constexpr (!IsDeviceMode()) {
+            if (!enableEslModel_)
             return;
         }
 
