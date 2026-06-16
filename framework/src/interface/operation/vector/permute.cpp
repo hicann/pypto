@@ -49,8 +49,8 @@ std::vector<int64_t> PermuteTileVector(const std::vector<int64_t>& values, const
 void PermuteOperationOperandCheck(
     const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "Permute input operand count should be 1";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "Permute output operand count should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "Permute input operand count should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "Permute output operand count should be 1";
 }
 
 std::vector<int64_t> PermuteResultShape(const std::vector<int64_t>& inputShape, const std::vector<int>& perm)
@@ -87,14 +87,14 @@ void NormalizePermutation(std::vector<int>& perm, int shapeSize)
 
 void ValidatePermutation(const std::vector<int>& perm, int shapeSize)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == static_cast<size_t>(shapeSize))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == static_cast<size_t>(shapeSize))
         << "Permute dim num should match input dim num. Expected: " << shapeSize << ", Got: " << perm.size();
 
     std::vector<bool> used(shapeSize, false);
     for (int p : perm) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, p >= 0 && p < shapeSize)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, p >= 0 && p < shapeSize)
             << "Permute dim is invalid: " << p << ". Should be in range [0, " << shapeSize << ")";
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, !used[p]) << "Permute dims contain duplicate values at index " << p;
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, !used[p]) << "Permute dims contain duplicate values at index " << p;
         used[p] = true;
     }
 }
@@ -237,20 +237,20 @@ Tensor Permute(Function& function, const Tensor& self, std::vector<int> perm)
     
     DataType dtype = self.GetDataType();
     if (dtype == DT_FP8E4M3 || dtype == DT_FP8E5M2 || dtype == DT_HF8 || dtype == DT_FP8E8M0) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, 
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, 
                Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
             << "PERMUTE: FP8 types (DT_FP8E4M3, DT_FP8E5M2, DT_HF8, DT_FP8E8M0) are only supported on DAV_3510 architecture.";
     }
     
     if (dtype == DT_INT64 || dtype == DT_UINT64) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.Format() != TileOpFormat::TILEOP_NZ)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, self.Format() != TileOpFormat::TILEOP_NZ)
             << "PERMUTE: INT64/UINT64 do not support NZ format.";
     }
     CheckTensorDimRange(self.GetStorage(), 1, 5, "PERMUTE");
 
     const int shapeSize = static_cast<int>(self.GetShape().size());
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == static_cast<size_t>(shapeSize))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == static_cast<size_t>(shapeSize))
         << "Permute dim num should match input dim num. Expected: " << shapeSize << ", Got: " << perm.size();
 
     if (shapeSize == 1) {

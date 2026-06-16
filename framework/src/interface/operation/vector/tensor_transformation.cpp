@@ -46,7 +46,7 @@ void CheckExpandTensorValid(const LogicalTensorPtr& operand, const LogicalTensor
         oss << "The number of dimensions must match! "
             << "Operand shape: " << operand_shape.size() << "D (" << operand_shape << ") "
             << "Result shape: " << result_shape.size() << "D (" << result_shape << ")";
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << oss.str();
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << oss.str();
     }
 
     for (size_t i = 0; i < result_shape.size(); ++i) {
@@ -56,7 +56,7 @@ void CheckExpandTensorValid(const LogicalTensorPtr& operand, const LogicalTensor
                 << result_shape[i] << ") at non-singleton dimension " << i << ". "
                 << "Operand shape: (" << operand_shape << ") "
                 << "Result shape: (" << result_shape << ")";
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << oss.str();
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << oss.str();
         }
     }
 }
@@ -104,7 +104,7 @@ void Expand(
     const std::vector<LogicalTensorPtr>& other, const LogicalTensorPtr& result)
 {
     CheckExpandTensorValid(operand, result);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, function.GetGraphType() == GraphType::TILE_GRAPH)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, function.GetGraphType() == GraphType::TILE_GRAPH)
         << "The GetGraphType of function is incorrect";
     std::vector<int64_t> offset(result->shape.size(), 0);
     std::vector<int64_t> viewShape(result->shape.size(), 1);
@@ -142,7 +142,7 @@ void ExpandWithResultValidShape(
     const std::vector<SymbolicScalar> resultValidShape)
 {
     CheckExpandTensorValid(operand, result);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, function.GetGraphType() == GraphType::TILE_GRAPH)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, function.GetGraphType() == GraphType::TILE_GRAPH)
         << "The GetGraphType of function is incorrect";
     std::vector<int64_t> offset(result->shape.size(), 0);
     std::vector<int64_t> viewShape(result->shape.size(), 1);
@@ -162,7 +162,7 @@ void TiledExpand(
     const std::vector<SymbolicScalar>& validShape)
 {
     CheckExpandTensorValid(operand, result);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, function.GetGraphType() == GraphType::TILE_GRAPH)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, function.GetGraphType() == GraphType::TILE_GRAPH)
         << "The GetGraphType of function is incorrect";
 
     std::vector<int64_t> offset(result->shape.size(), 0);
@@ -210,7 +210,7 @@ Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vec
     CheckTensorDimRange(self.GetStorage(), 1, 4, "EXPAND");
     CheckTensorShapeSize(self.GetStorage(), "EXPAND");
     CheckDstShapeSize(dstShape, "EXPAND");
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == dstShape.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == dstShape.size())
         << "The shape size of self and dst should be equal";
     if (validShape.empty()) {
         for (size_t i = 0; i < dstShape.size(); ++i) {
@@ -254,13 +254,13 @@ void CheckTransposeAxisCombination(int shapeSize, const std::vector<int>& perm)
                 break;
             }
         }
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, isSupported)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, isSupported)
             << "4D tensor transpose only supports: (0,2), (1,2), (1,3), (2,3). "
             << "Current dim0=" << perm[0] << ", dim1=" << perm[1] << " is not supported.";
     }
     
     if (shapeSize == 5) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm[0] == 3 && perm[1] == 4)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, perm[0] == 3 && perm[1] == 4)
             << "5D tensor transpose only supports: (3,4). "
             << "Current dim0=" << perm[0] << ", dim1=" << perm[1] << " is not supported.";
     }
@@ -277,7 +277,7 @@ Opcode GetTransposeOpName()
         CASE(TRANSPOSE_MOVEIN);
         CASE(TRANSPOSE_VNCHWCONV);
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown transpose op type";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown transpose op type";
     }
 #undef CASE
 }
@@ -357,7 +357,7 @@ void TensorInnerTranspose(
         return;
     }
 
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_INVALID,
         self->shape.size() == 3 || self->shape.size() == 4) // input should be 3 or 4 dims
         << "Transpose shape should be [A1,T1,A2,T2] or [T1,A2,T2]";
@@ -489,7 +489,7 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "TRANSPOSE");
     CheckTensorDimRange(self.GetStorage(), 1, 5, "TRANSPOSE");
     CheckTensorShapeSize(self.GetStorage(), "TRANSPOSE");
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == 2)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == 2)
         << "Transpose dim num should be 2."; // perm should be 2 dims
     int shapeSize = self.GetShape().size();
     if (perm[0] < 0) {
@@ -498,8 +498,8 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
     if (perm[1] < 0) {
         perm[1] += shapeSize;
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm[0] < shapeSize && perm[0] >= 0) << "Transpose dim 0 is invalid.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm[1] < shapeSize && perm[1] >= 0) << "Transpose dim 1 is invalid.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, perm[0] < shapeSize && perm[0] >= 0) << "Transpose dim 0 is invalid.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, perm[1] < shapeSize && perm[1] >= 0) << "Transpose dim 1 is invalid.";
 
     std::sort(perm.begin(), perm.end());
     if ((self.GetShape()[perm[0]] == 1 && self.GetShape()[perm[1]] == 1) || perm[0] == perm[1]) {
@@ -508,13 +508,13 @@ Tensor Transpose(const Tensor& self, std::vector<int> perm)
     CheckTransposeAxisCombination(shapeSize, perm);
 
     auto oldVecTileShapes = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, (int)oldVecTileShapes.size() == shapeSize)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, (int)oldVecTileShapes.size() == shapeSize)
         << "TileShape dim num should same to input.";
     auto oldValidShapes = self.GetStorage()->GetDynValidShape();
     if (oldValidShapes.empty()) {
         oldValidShapes = SymbolicScalar::FromConcrete(self.GetShape());
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, (int)oldValidShapes.size() == shapeSize)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, (int)oldValidShapes.size() == shapeSize)
         << "ValidShape dim num should same to input.";
 
     std::vector<int64_t> newInputShape;
@@ -558,7 +558,7 @@ std::shared_ptr<LogicalTensor> transDataPadNC1HWC0(
     auto inputShape = inputTile->GetShape();
     int64_t N = inputShape[0];
     int64_t C = inputShape[1];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[2];
@@ -594,7 +594,7 @@ std::shared_ptr<LogicalTensor> transDataPadFractalZ(
     auto inputShape = inputTile->GetShape();
     int64_t N = inputShape[0];
     int64_t C = inputShape[1];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[2];
@@ -651,7 +651,7 @@ std::shared_ptr<LogicalTensor> transDataPadFractalZ3D(
     int64_t N = inputShape[0];
     int64_t C = inputShape[1];
     int64_t D = inputShape[2];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[3];
@@ -708,7 +708,7 @@ std::shared_ptr<LogicalTensor> transDataPadNDC1HWC0(
     int64_t N = inputShape[0];
     int64_t D = inputShape[1];
     int64_t C = inputShape[2];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
     int64_t C1 = (C + C0 - 1) / C0;
     int64_t padC = C1 * C0 - C;
     int64_t H = inputShape[3];
@@ -758,7 +758,7 @@ std::shared_ptr<LogicalTensor> transDataPad(
         case TileOpFormat::TILEOP_FRACTAL_Z_3D:
             return transDataPadFractalZ3D(function, inputTile, C0);
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
     return inputTile;
 }
@@ -915,7 +915,7 @@ void InnerTransDataND5Dim(
 
     std::unordered_map<int64_t, int64_t> format2InputAxis = {{5, 1}, {6, 2}};
     int64_t inputGroupAxis = format2InputAxis[inputSize];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t inputPerGroup = input->GetShape()[inputGroupAxis] / group;
 
     if (cur == input->GetShape().size()) {
@@ -932,7 +932,7 @@ void InnerTransDataND5Dim(
                 HandleNCDHW6DimFormat(function, dstTensor, inputTile, tileParams, transDataTileInfoPara);
                 return;
             default:
-                ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+                CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
         }
     }
 
@@ -1009,7 +1009,7 @@ void InnerTransData(
         {TileOpFormat::TILEOP_NDC1HWC0, 2},
         {TileOpFormat::TILEOP_FRACTAL_Z_3D, 1}};
     int64_t outputGroupAxis = format2OutputAxis[T];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t inputPerGroup = input->GetShape()[inputGroupAxis] / group;
     int64_t factor = (T == TileOpFormat::TILEOP_FRACTAL_Z || T == TileOpFormat::TILEOP_FRACTAL_Z_3D) ? N0 : C0;
     bool isFractalZ = T == TileOpFormat::TILEOP_FRACTAL_Z || T == TileOpFormat::TILEOP_FRACTAL_Z_3D;
@@ -1038,7 +1038,7 @@ void InnerTransData(
                     function, dstTensor, inputTile, tileParams, transDataTileInfoPara, transDataPara);
                 return;
             default:
-                ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+                CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
         }
     }
 
@@ -1070,8 +1070,8 @@ LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPt
     Shape resultShape = self->GetShape();
     int64_t C = resultShape[1];
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int perGroupC = C / group;
     int perGroupC1 = (perGroupC + C0 - 1) / C0;
     int totalC1 = perGroupC1 * group;
@@ -1079,7 +1079,7 @@ LogicalTensorPtr TransDataNCHW2NC1HWC0(Function& function, const LogicalTensorPt
     resultShape.push_back(C0);
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
 
     std::vector<SymbolicScalar> resultValidShape(self->GetDynValidShape());
     SymbolicScalar validShapeC = resultValidShape[1];
@@ -1114,7 +1114,7 @@ LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensor
     int64_t H = self->GetShape()[2];
     int64_t W = self->GetShape()[3];
     int64_t N0 = 16;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t perGroupN = N / group;
     int64_t perGroupN1 = (perGroupN + N0 - 1) / N0;
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
@@ -1130,8 +1130,8 @@ LogicalTensorPtr TransDataNCHW2Fractal_Z(Function& function, const LogicalTensor
         group * validShapeC1 * validShapeH * validShapeW, vSPerGroupN1, N0, C0};
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N  is not valid!";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
 
     auto result = std::make_shared<LogicalTensor>(
         function, self->Datatype(), resultShape, resultValidShape, TileOpFormat::TILEOP_FRACTAL_Z);
@@ -1162,8 +1162,8 @@ LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensor
     int64_t H = self->GetShape()[3];
     int64_t W = self->GetShape()[4];
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, C0 > 0) << "The C0 is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t perGroupC = C / group;
     int64_t perGroupC1 = (perGroupC + C0 - 1) / C0;
     int64_t totalC1 = perGroupC1 * group;
@@ -1186,7 +1186,7 @@ LogicalTensorPtr TransDataNCDHW2NDC1HWC0(Function& function, const LogicalTensor
     auto tmpInput = Permute(function, Tensor(self), {0, 2, 1, 3, 4});
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C  is not valid!";
     VecTile tmpVectile = TileShape::Current().GetVecTile();
     std::swap(tmpVectile.tile[1], tmpVectile.tile[2]);
     TileShape::Current().SetVecTile(tmpVectile);
@@ -1216,7 +1216,7 @@ LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPt
     int64_t H = self->GetShape()[3];
     int64_t W = self->GetShape()[4];
     int64_t N0 = 16;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, group > 0) << "The group is not valid !";
     int64_t perGroupN = N / group;
     int64_t perGroupN1 = (perGroupN + N0 - 1) / N0;
     int64_t C0 = BLOCK_SIZE / BytesOf(self->Datatype());
@@ -1235,8 +1235,8 @@ LogicalTensorPtr TransDataFRACTAL_Z_3D(Function& function, const LogicalTensorPt
         group * validShapeD * validShapeC1 * validShapeH * validShapeW, validShapePerGroupN1, N0, C0};
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N  is not valid!";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[0] % N0 == 0) << "The tileShape N  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[1] % C0 == 0) << "The tileShape C is not valid!";
 
     auto result = std::make_shared<LogicalTensor>(
         function, self->Datatype(), resultShape, resultValidShape, TileOpFormat::TILEOP_FRACTAL_Z_3D);
@@ -1269,7 +1269,7 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
     int64_t W = self->GetShape()[4];
     int64_t C0 = self->GetShape()[5];
     Shape resultShape = {N, D, C1 * C0, H, W};
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, output->GetShape().size() == SHAPE_DIM6 || C1 * C0 == output->GetShape()[SHAPE_DIM1]) << "Not supported for pad scenarios!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, output->GetShape().size() == SHAPE_DIM6 || C1 * C0 == output->GetShape()[SHAPE_DIM1]) << "Not supported for pad scenarios!";
 
     SymbolicScalar validShapeN = self->GetDynValidShape()[0];
     SymbolicScalar validShapeD = self->GetDynValidShape()[1];
@@ -1281,8 +1281,8 @@ LogicalTensorPtr TransDataNDC1HWC02NCDHW(Function& function, const LogicalTensor
         validShapeN, validShapeD, validShapeC1 * C0, validShapeH, validShapeW};
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[4] % C0 == 0) << "The tileShape W  is not valid!";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[5] == C0) << "The tileShape C0 is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[4] % C0 == 0) << "The tileShape W  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[5] == C0) << "The tileShape C0 is not valid!";
 
     auto result =
         std::make_shared<LogicalTensor>(function, self->Datatype(), resultShape, resultValidShape, self->Format());
@@ -1319,7 +1319,7 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPt
     int64_t W = self->GetShape()[3];
     int64_t C0 = self->GetShape()[4];
     Shape resultShape = {N, C1 * C0, H, W};
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, output->GetShape().size() == SHAPE_DIM5 || C1 * C0 == output->GetShape()[1]) << "Not supported for pad scenarios!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, output->GetShape().size() == SHAPE_DIM5 || C1 * C0 == output->GetShape()[1]) << "Not supported for pad scenarios!";
     SymbolicScalar validShapeN = self->GetDynValidShape()[0];
     SymbolicScalar validShapeC1 = self->GetDynValidShape()[1];
     SymbolicScalar validShapeH = self->GetDynValidShape()[2];
@@ -1327,7 +1327,7 @@ LogicalTensorPtr TransDataNC1HWC02NCHW(Function& function, const LogicalTensorPt
     std::vector<SymbolicScalar> resultValidShape = {validShapeN, validShapeC1 * C0, validShapeH, validShapeW};
 
     VecTile oriVectile = TileShape::Current().GetVecTile();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[3] % C0 == 0) << "The tileShape W  is not valid!";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oriVectile.tile[3] % C0 == 0) << "The tileShape W  is not valid!";
     oriVectile.tile[4] = C0;
 
     auto result = std::make_shared<LogicalTensor>(
@@ -1363,7 +1363,7 @@ LogicalTensorPtr TensorTransData(
         case TileOpFormat::TILEOP_ND:
             return TransDataNC1HWC02NCHW(function, self, output, group); // 两种情况，NC1HWC0和NDC1HWC0
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
     return TransDataNCHW2NC1HWC0(function, self, output, group);
 }
@@ -1393,7 +1393,7 @@ LogicalTensorPtr TransData(
             CheckTensorDimRange(self, SHAPE_DIM5, SHAPE_DIM6, "TRANSDATA ND");
             break;
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
     return TensorTransData(function, self, output, transDataType, group);
 }
@@ -1540,7 +1540,7 @@ void TiledCastOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
     const CastMode& mode, const SaturationMode& satmode)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -1575,7 +1575,7 @@ void CheckCastTypeSupport(DataType srcType, DataType dstType, const std::string&
             {DT_HF8, {DT_FP32}}};
 
         if (a5SupportedConversions.count(srcType) == 0 || a5SupportedConversions[srcType].count(dstType) == 0) {
-            ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
+            CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
                 << "A5 architecture does not support cast from " << npu::tile_fwk::DataType2String(srcType) << " to "
                 << npu::tile_fwk::DataType2String(dstType) << " in " << opName;
         }
@@ -1593,7 +1593,7 @@ void CheckCastTypeSupport(DataType srcType, DataType dstType, const std::string&
             {DT_INT4, {DT_FP16}}};
 
         if (a2a3SupportedConversions.count(srcType) == 0 || a2a3SupportedConversions[srcType].count(dstType) == 0) {
-            ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
+            CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
                 << "A2A3 architecture does not support cast from " << npu::tile_fwk::DataType2String(srcType) << " to "
                 << npu::tile_fwk::DataType2String(dstType) << " in " << opName;
         }
@@ -1606,7 +1606,7 @@ Tensor Cast(const Tensor& self, DataType dstDataType, CastMode mode, SaturationM
     CheckCastTypeSupport(self.GetDataType(), dstDataType, "CAST");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "CAST");
     CheckTensorShapeSize(self.GetStorage(), "CAST");
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == self.GetStorage()->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == self.GetStorage()->offset.size())
         << "The shape size of self and offset should be equal";
     // Cast to same dType with no mode will do nothing
     if (self.GetStorage()->tensor->datatype == dstDataType && (mode == CAST_NONE || mode == CAST_RINT)) {
@@ -1648,7 +1648,7 @@ void CheckCat(const std::vector<Tensor>& tensors, int axis)
             if (i == axis) {
                 continue;
             }
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape[i] == tensor.GetShape()[i])
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape[i] == tensor.GetShape()[i])
                 << "The shape of all tensors should be equal except at axis";
         }
     }
@@ -1721,8 +1721,8 @@ void ExpandOperationTileFunc(
 inline void CastOperationOperandCheck(
     const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "The input operand size should be 1";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "The input operand size should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
 }
 
 void CastOperationTileFunc(
@@ -1779,7 +1779,7 @@ void TransDataTileFunc(
             TiledTransData<TileOpFormat::TILEOP_ND>(function, tileShape, transDataPara);
             break;
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "The transDataType is not supported";
     }
 }
 

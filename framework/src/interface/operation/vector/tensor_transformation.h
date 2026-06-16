@@ -48,7 +48,7 @@ Opcode GetCastOpName()
     switch (T) {
         CASE(CAST);
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown cast op type";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown cast op type";
     }
 #undef CASE
 }

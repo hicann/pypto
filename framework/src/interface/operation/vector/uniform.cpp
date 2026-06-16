@@ -83,7 +83,7 @@ void UniformOperationTileFunc(
 {
     auto& vecTile = tileShape.GetVecTile();
     for (size_t i = 0; i < vecTile.size(); ++i) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, vecTile[i] % 4 == 0)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[i] % 4 == 0)
             << "Uniform: tileShape[" << i << "] must be a multiple of 4, but got " << vecTile[i];
     }
 
@@ -124,9 +124,9 @@ Tensor Uniform(
     DECLARE_TRACER();
     CheckSupportedNPUArch(UNIFORM_SUPPORTED_ARCHITECTURES, "Uniform");
     uint16_t roundsVal = rounds.Cast<uint16_t>();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape.size() == 1) << "Uniform: shape must be 1-dimensional";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, roundsVal == 7 || roundsVal == 10) << "Uniform: rounds must be 7 or 10";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dtype == DT_FP32 || dtype == DT_FP16 || dtype == DT_BF16)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape.size() == 1) << "Uniform: shape must be 1-dimensional";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, roundsVal == 7 || roundsVal == 10) << "Uniform: rounds must be 7 or 10";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dtype == DT_FP32 || dtype == DT_FP16 || dtype == DT_BF16)
         << "Uniform: dtype must be DT_FP32, DT_FP16 or DT_BF16";
     CheckDstShapeSize(shape, "UNIFORM");
 
