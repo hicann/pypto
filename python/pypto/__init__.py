@@ -63,6 +63,9 @@ def _load_shared_libs():
 
 _load_shared_libs()
 
+from ._build_online import ensure_pypto_impl
+ensure_pypto_impl()
+
 from . import experimental
 
 from .config import *  # noqa

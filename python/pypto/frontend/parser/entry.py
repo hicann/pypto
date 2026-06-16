@@ -30,7 +30,8 @@ from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.runtime import _pto_verify_datas
-from pypto._utils import BuildOnlineManager, get_torch_npu, get_npu_tensor_format
+from pypto._build_online import BuildOnlineCalculatorManager
+from pypto._utils import get_torch_npu, get_npu_tensor_format
 from pypto.error import FeError, _catch_and_wrap_error
 
 
@@ -511,8 +512,7 @@ class JitCallableWrapper:
             return
 
         # Compile and load calculator
-        mgr = BuildOnlineManager()
-        mgr.build_and_load_calculator()
+        BuildOnlineCalculatorManager().build_and_load_calculator()
 
         # Fallback (e.g. SIM compile with PTO tensors only, source torch tensors unavailable/mismatched,
         # non-ND PTO formats, or NPU NZ source tensors): explicit staging + CopyToHost.

@@ -171,6 +171,9 @@ class FeatureParam(CMakeParam):
     whl_name: str = "pypto"
     frontend_type: Optional[str] = None  # 前端类型, 支持 python3, cpp
     backend_type: Optional[str] = None  # 后端类型, 支持 npu, cost_model
+    # whl 包 py_abi_tag 数字部分 (如 39/310), 由 --py_abi 显式指定;
+    # 同时指定 --multi_py3_exe 时, 低于此值的额外 Python 版本将被过滤
+    whl_py3_abi: Optional[int] = None
     whl_plat_name: Optional[str] = None  # python3 whl 包 plat-name
     whl_isolation: bool = False  # 以 isolation 模式编译 whl 包
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
@@ -190,6 +193,7 @@ class FeatureParam(CMakeParam):
         if not os.environ.get("ASCEND_HOME_PATH") and self.backend_type in ["npu"]:
             logging.warning("Environment variable ASCEND_HOME_PATH is unset/empty, falling back to cost_model backend.")
             self.backend_type = "cost_model"
+        self.whl_py3_abi = args.py_abi
         self.whl_plat_name = f"{args.plat_name}_{CMakeParam.get_system_processor()}" if args.plat_name else ""
         self.whl_isolation = args.isolation
         self.whl_editable = args.editable
@@ -197,7 +201,6 @@ class FeatureParam(CMakeParam):
         self.multi_py3_cfg = None
         if args.multi_py3_exe:
             self._init_multi_py3_cfg(multi_py3_exe=args.multi_py3_exe)
-
 
     def __str__(self) -> str:
         """返回特性参数的字符串表示
@@ -209,6 +212,8 @@ class FeatureParam(CMakeParam):
         desc += f"\nFeature"
         desc += f"\n    Frontend                : {self.frontend_type}"
         if self.frontend_type_python3:
+            if self.whl_py3_abi_tag:
+                desc += f"\n    Py3ABI                  : {self.whl_py3_abi_tag}"
             if self.whl_plat_name:
                 desc += f"\n    PlatName                : {self.whl_plat_name}"
             desc += f"\n    Isolation               : {self.whl_isolation}"
@@ -216,7 +221,6 @@ class FeatureParam(CMakeParam):
             desc += f"\n    BreakSystemPackages     : {self.whl_break_system_packages}"
             if self.multi_py3_cfg:
                 desc += f"\n    MultiPy3                : {[f'{c.exe}(3.{c.minor})' for c in self.multi_py3_cfg]}"
-                desc += f"\n    MultiPy3MinMinor        : {self.multi_py3_min_minor}"
         desc += f"\n    Backend                 : {self.backend_type}"
         return desc
 
@@ -230,10 +234,16 @@ class FeatureParam(CMakeParam):
         return self.frontend_type in ["python", "python3"]
 
     @property
-    def multi_py3_min_minor(self) -> Optional[int]:
-        minor_list = [int(c.minor) for c in (self.multi_py3_cfg or [])]
+    def whl_py3_abi_tag(self) -> Optional[str]:
+        """whl 包 python abi tag 数字部分, 用于 --py-limited-api 参数构造 (如 "39" 对应 cp39).
+
+        优先级: --py_abi 显式指定 > 从 --multi_py3_cfg 中最低 minor 版本推导; 两者均未指定时返回 None.
+        """
+        if self.whl_py3_abi:
+            return str(self.whl_py3_abi)
+        minor_list = [c.minor for c in (self.multi_py3_cfg or [])]
         if minor_list:
-            return min(minor_list)
+            return f"3{min(minor_list)}"
         else:
             return None
 
@@ -257,6 +267,10 @@ class FeatureParam(CMakeParam):
         parser.add_argument("-f", "--frontend", nargs="?", type=str, default="python3",
                             choices=["python3", "cpp"],
                             help="frontend, such as python3/cpp etc.")
+        parser.add_argument("--py_abi", type=int, default=None,
+                            choices=[37, 38, 39, 310, 311, 312, 313, 314],
+                            help="whl py abi tag numeric part, "
+                                 "e.g. 39 for cp39(Python 3.9), 310 for cp310(Python 3.10)")
         parser.add_argument("--plat_name", nargs="?", type=str, default="",
                             choices=["manylinux2014", "manylinux_2_24", "manylinux_2_28"],
                             help="whl plat_name, such as manylinux2014/manylinux_2_24/manylinux_2_28 etc.")
@@ -287,6 +301,8 @@ class FeatureParam(CMakeParam):
         cmd = ""
         cmd += self._cfg_require(opt="ENABLE_FEATURE_PYTHON_FRONT_END", ctr=self.frontend_type_python3)
         cmd += self._cfg_require(opt="BUILD_WITH_CANN", ctr=self.backend_type in ["npu"])
+        cmd += self._cfg_require(opt="ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE",
+                                 ctr=self.frontend_type_python3 and self.whl_py3_abi)
         return cmd
 
     def _init_multi_py3_cfg(self, multi_py3_exe):
@@ -308,6 +324,8 @@ class FeatureParam(CMakeParam):
             if minor == int(sys.version_info.minor):
                 logging.info("Multi-Py3 detected: %s -> Python 3.%d same as call Python3.%d, skip",
                              exe, minor, sys.version_info.minor)
+            elif self.whl_py3_abi and int(f"3{minor}") < self.whl_py3_abi:
+                logging.info("Multi-Py3 detected: Python3.%d < py_abi %d, skip", minor, self.whl_py3_abi)
             else:
                 cfg_lst.append(Py3Desc(exe=exe, minor=minor))
                 logging.info("Multi-Py3 detected: %s -> Python 3.%d", exe, minor)
@@ -1687,7 +1705,7 @@ class BuildCtrl(CMakeParam):
         return None if self._use_pip_install_mode() and self.feature.whl_editable else self.install_root
 
     def _get_setuptools_build_ext_config_setting(self) -> Tuple[str, str]:
-        cmake_args = f"{self.build.get_cfg_cmd(ext=False)}"
+        cmake_args = f"{self.feature.get_cfg_cmd()} {self.build.get_cfg_cmd(ext=False)}"
         env_setting = ""
         env_setting += f" --cmake-generator={self.build.generator}" if self.build.generator else ""
         env_setting += f" --cmake-build-type={self.build.build_type}" if self.build.build_type else ""
@@ -1703,9 +1721,9 @@ class BuildCtrl(CMakeParam):
 
     def _get_setuptools_bdist_wheel_config_setting(self) -> str:
         cmd = f" bdist_wheel --plat-name={self.feature.whl_plat_name}" if self.feature.whl_plat_name else ""
-        multi_py3_min_minor = self.feature.multi_py3_min_minor
-        if multi_py3_min_minor:
-            cmd += f" --py-limited-api=cp{sys.version_info.major}{multi_py3_min_minor}"
+        whl_py3_abi = self.feature.whl_py3_abi_tag
+        if whl_py3_abi:
+            cmd += f" --py-limited-api=cp{whl_py3_abi}"
         cmd += f" build --build-base={self.build_root.name}"
         cmd += f" --parallel={self.build.job_num}" if self.build.job_num else ""
         _, ext = self._get_setuptools_build_ext_config_setting()

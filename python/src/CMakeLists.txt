@@ -8,6 +8,51 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+cmake_minimum_required(VERSION 3.16.3)
+
+project(PTO_Framework_PyPTO_Impl LANGUAGES C CXX)
+
+if (NOT DEFINED PTO_FWK_SRC_ROOT)  # 在线编译
+    # 路径配置
+    get_filename_component(_WhlLibDir    "${CMAKE_CURRENT_SOURCE_DIR}/../../"    REALPATH)
+    get_filename_component(_WhlLibFwkDir "${_WhlLibDir}/framework"               REALPATH)
+
+    # 参数检查
+    if ("${Python3_EXECUTABLE}x" STREQUAL "x")
+        message(FATAL_ERROR "Python3 interpreter path not defined, can't build pypto_impl online")
+    endif ()
+    get_filename_component(_Python3__EXECUTABLE "${Python3_EXECUTABLE}"     REALPATH)
+    get_filename_component(_Python3_ROOT_DIR    "${_Python3__EXECUTABLE}"   DIRECTORY)
+    get_filename_component(_Python3_ROOT_DIR    "${_Python3_ROOT_DIR}/../"  REALPATH)
+    set(Python3_ROOT_DIR "${_Python3_ROOT_DIR}" CACHE INTERNAL "Python3 root path" FORCE)
+    message(STATUS "Python3_ROOT_DIR=${Python3_ROOT_DIR}")
+
+    if ("${Python3_EXECUTABLE_VERSION}x" STREQUAL "x")
+        message(FATAL_ERROR "Python3 interpreter version not defined, can't build pypto_impl online")
+    endif ()
+    find_package(Python3 ${Python3_EXECUTABLE_VERSION} EXACT COMPONENTS Development)
+    if (NOT Python3_Development_FOUND)
+        message(FATAL_ERROR "Can't get python3-dev, can't build pypto_impl online.")
+    endif ()
+
+    if ("${Python3_MOD_PYBIND11_CMAKE_DIR}x" STREQUAL "x")
+        message(FATAL_ERROR "Can't get pybind11 cmake dir, can't build pypto_impl online")
+    endif ()
+    find_package(pybind11 CONFIG REQUIRED PATHS ${Python3_MOD_PYBIND11_CMAKE_DIR} NO_DEFAULT_PATH)
+
+    # 构建阶段(Build)
+    #   语言标准
+    set(CMAKE_C_STANDARD 11)  # 指定 C 语言使用 ISO C11 标准
+    set(CMAKE_C_STANDARD_REQUIRED ON)  # 要求严格支持 C11 标准
+    set(CMAKE_C_EXTENSIONS OFF)  # 禁用 C 编译器扩展, 使用纯 ISO C 标准
+    set(CMAKE_CXX_STANDARD 17)  # 指定 C++ 语言使用 ISO C++17 标准
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)  # 要求严格支持 C++17 标准
+    set(CMAKE_CXX_EXTENSIONS OFF)  # 禁用 C 编译器扩展, 使用纯 ISO C++17 标准
+    include("${_WhlLibFwkDir}/cmake/intf.cmake")
+
+    option(BUILD_WITH_CANN "Build with CANN." ON)  # 在线编译场景仅会出现在内置 CANN 包场景
+endif ()
+
 pybind11_add_module(pypto_impl
         MODULE
             pybind11.cpp
@@ -31,6 +76,11 @@ pybind11_add_module(pypto_impl
 )
 target_include_directories(pypto_impl
         PRIVATE
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/3rd/include>
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/include>
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src>
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src/interface>
+            $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src/interface/machine/device>
             ${CMAKE_CURRENT_LIST_DIR}
 )
 target_compile_definitions(pypto_impl
@@ -41,13 +91,21 @@ target_compile_definitions(pypto_impl
 # 所依赖的本项目 so 均在 pypto 包 __init__.py 中加载, 此处不再 link
 target_link_libraries(pypto_impl
         PRIVATE
-            json
+            $<$<BOOL:${PTO_FWK_SRC_ROOT}>:json>
             c_sec
             intf_pub_cxx17
             tile_fwk_intf_pub
 )
-if (TARGET c_sec_shared)
-    add_dependencies(pypto_impl c_sec_shared)
-endif ()
+target_link_directories(pypto_impl
+        PRIVATE
+           $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibDir}>
+)
+if (DEFINED PTO_FWK_SRC_ROOT)
+    if (TARGET c_sec_shared)
+        add_dependencies(pypto_impl c_sec_shared)
+    endif ()
 
-PTO_Fwk_GenerateGCovConfigJson(TARGET pypto_impl)
+    PTO_Fwk_GenerateGCovConfigJson(TARGET pypto_impl)
+else ()
+    install(TARGETS pypto_impl LIBRARY DESTINATION ".")
+endif ()

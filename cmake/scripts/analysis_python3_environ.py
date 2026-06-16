@@ -118,7 +118,7 @@ class Analysis:
             self.py_mod_torch_root_dir = str(Path(torch.__file__).parent)
             self.py_mod_torch_cmake_dir = str(Path(torch.utils.cmake_prefix_path).resolve())
             self.py_mod_torch_c_use_cxx11_abi = int(torch._C._GLIBCXX_USE_CXX11_ABI)
-        except (ModuleNotFoundError or ImportError):
+        except ImportError:
             pass
         finally:
             os.environ = os_env
