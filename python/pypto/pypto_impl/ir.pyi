@@ -2152,6 +2152,25 @@ class IRBuilder:
             The created continue statement
         """
 
+    @overload
+    def create_function(
+        self,
+        name: str,
+        params: list[Var],
+        body: Stmt,
+    ) -> Function:
+        """Create a function with variable parameters.
+
+        Args:
+            name: Function name
+            params: Parameter variables
+            body: Function body statement
+
+        Returns:
+            The created function
+        """     
+
+    @overload
     def create_function(
         self,
         name: str,

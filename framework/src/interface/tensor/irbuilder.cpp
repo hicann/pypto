@@ -8,15 +8,20 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "irbuilder.h"
+#include "ir_func_builder.h"
 
 #include "logical_tensor.h"
 #include "raw_tensor.h"
 #include "interface/function/function.h"
+#include "interface/operation/opcode.h"
 #include "interface/program/program.h"
 #include "interface/utils/id_gen.h"
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/transforms/printer.h" // for test
+#include "ir/transforms/merge_stmts_pass.h"
+#include "ir/transforms/infer_token_pass.h"
 
 using namespace pypto;
 
@@ -121,8 +126,43 @@ ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(
 }
 
 /* create function */
-std::shared_ptr<Function> CreateFunction(
-    std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span = ir::Span::Unknown());
+
+std::shared_ptr<Function> IRBuilder::CreateFunction(
+    std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span)
+{
+    auto& program = Program::GetInstance();
+    auto funcMagicName = name + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
+    auto parentFunc = program.GetCurrentFunction();
+
+    auto func = std::make_shared<Function>(program, funcMagicName, name, parentFunc);
+    func->SetFunctionType(FunctionType::DYNAMIC);
+    func->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    for (auto& param : params) {
+        func->AddOriginIncast(param);
+        func->inCasts_.push_back(param);
+        func->GetTensorMap().Insert(param);
+    }
+
+    std::vector<std::string> externalVarNames;
+    for (auto& param : params) {
+        if (param) {
+            externalVarNames.push_back(param->name_);
+        }
+    }
+
+    auto seq = ir::SeqStmts::AsMut(body);
+    auto mergedBody = ir::MergeStmtsIntoIfStmt(seq, externalVarNames);
+    func->originalBody_ = mergedBody;
+  
+    auto StmtsWithCall = CreateFunctionByStmt(mergedBody, *func, externalVarNames);
+    func->ir::Function::body_ = ir::SeqStmts::Wrap(StmtsWithCall, span);
+    func->ComputeHash();
+    
+    BuildDynFuncSlotScope(func, params);
+
+    return func;
+}
 
 /* create symbolic scalar */
 SymbolicScalar IRBuilder::CreateConstInt(int64_t value) { return SymbolicScalar(value); }
@@ -236,7 +276,7 @@ ir::IterArgPtr IRBuilder::CreateIterArg(ir::VarPtr var, ir::ExprPtr initValue)
 void IRBuilder::EmitTensorStmts()
 {
     auto func = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "__entry__");
-    for (auto &op : func->Operations(false)) {
+    for (auto& op : func->Operations(false)) {
         Emit(std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this()));
     }
     func->ResetOperations();

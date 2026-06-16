@@ -16,6 +16,7 @@
 #include "interface/configs/config_manager.h"
 #include "logical_tensor.h"
 
+#include "irbuilder.h"
 #include "raw_tensor.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/symbolic_scalar.h"
@@ -128,6 +129,14 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool crea
     newTensor->dynOffset_ = dynOffset_;
     dstFunc.GetTensorMap().Insert(newTensor, false);
     return newTensor;
+}
+
+ir::VarPtr LogicalTensor::Clone() const
+{
+    static thread_local int cloneCounter = 0;
+    auto cloned = Clone(*function_, true);
+    cloned->name_ = name_ + "_" + std::to_string(++cloneCounter);
+    return std::static_pointer_cast<const ir::Var>(cloned);
 }
 
 Json LogicalTensor::DumpJson(Function& func, bool dumpRawTensor) const

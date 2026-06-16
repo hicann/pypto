@@ -39,7 +39,7 @@ def pil2ir(func: Function, args: dict):
             except ReturnSignal:
                 pass
 
-    return ctx.create_function(func.name, func_args, [], body, func.span)
+    return ctx.create_function(func.name, func_args, body, func.span)
 
 
 def compile(pyfunc, *args, **kwargs):

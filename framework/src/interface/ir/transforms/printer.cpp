@@ -793,6 +793,8 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
                 stream_ << values[i].Dump();
             }
             stream_ << "]";
+        } else if (value.type() == typeid(uint64_t)) {
+            stream_ << AnyCast<uint64_t>(value);
         } else {
             INTERNAL_CHECK(false) << "Unsupported function attrs value type: " << DemangleTypeName(value.type().name());
         }

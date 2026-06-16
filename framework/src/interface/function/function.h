@@ -102,7 +102,8 @@ class OperationsViewer {
     friend class VFFusionPass;
 
 public:
-    class IteratorDelimiter {};
+    class IteratorDelimiter {
+    };
     class Iterator {
     public:
         explicit Iterator(const std::vector<std::shared_ptr<Operation>>& operations) : operations_(operations) {}
@@ -590,6 +591,7 @@ public:
 
     std::vector<std::shared_ptr<LogicalTensor>> inCasts_;  // Input tensors
     std::vector<std::shared_ptr<LogicalTensor>> outCasts_; // Output tensors
+    ir::SeqStmtsPtr originalBody_;
 
     int opSeed_{FUNCTION_MAX_INCASTS};
     SubfuncTopologyInfoTy topoInfo_;         // root function持有，对应1.0的SubgraphTopologyInfoTy
@@ -736,6 +738,8 @@ public:
 
     const std::vector<std::shared_ptr<LogicalTensor>>& GetOriginIncast() const { return originInCasts_; }
     const std::vector<std::shared_ptr<LogicalTensor>>& GetOriginOutcast() const { return originOutCasts_; }
+    void AddOriginIncast(const std::shared_ptr<LogicalTensor>& tensor);
+    void AddOriginOutcast(const std::shared_ptr<LogicalTensor>& tensor);
     const std::vector<std::shared_ptr<LogicalTensor>>& GetIncast() const { return inCasts_; }
     const std::vector<std::shared_ptr<LogicalTensor>>& GetOutcast() const { return outCasts_; }
     FunctionHash GetFunctionHash() const { return functionHash_; }
@@ -802,6 +806,7 @@ public:
     void SetSlotScope(const std::shared_ptr<TensorSlotScope>& slotScope) { slotScope_ = slotScope; }
     const std::shared_ptr<TensorSlotScope>& GetSlotScope() const { return slotScope_; }
     std::shared_ptr<TensorSlotScope>& GetSlotScope() { return slotScope_; }
+    std::vector<std::unique_ptr<Tensor>>& GetSlotTensors() { return slotTensors_; }
     std::vector<int> GetInCastSlot(const std::shared_ptr<LogicalTensor>& incast);
     std::vector<int> GetOutCastSlot(const std::shared_ptr<LogicalTensor>& outcast);
 
@@ -1022,7 +1027,7 @@ private:
     std::vector<std::vector<Operation*>> operationGroups_;
     std::vector<std::shared_ptr<Operation>>
         operations_; // operation的获取必须要使用Operations函数，来获取到符合拓扑序的List
-    std::unordered_map<const Operation*, int> opPosition_;         // position of operation in Operation.operations_
+    std::unordered_map<const Operation*, int> opPosition_; // position of operation in Operation.operations_
     std::vector<std::shared_ptr<Operation>> operationsAfterOOO_;
     std::unordered_map<const Operation*, int> opPositionAfterOOO_; // position of operation sequence after OOO schedule
     const Program& belongTo_;
@@ -1044,10 +1049,11 @@ private:
     static bool enableMagicLookupRecord_;
     static std::map<std::pair<int, int>, std::set<Operation*, LogicalTensor::CompareOp>> tensorAndSubgraphToProducer_;
     std::shared_ptr<Tensor> getTensorDataOutcast_;
+    std::vector<std::unique_ptr<Tensor>> slotTensors_;
     ir::Span span_;
     bool hiddenFunction_{false};
     VarDependency varDependency_;
-    std::unordered_map<LogicalTensorPtr, bool>  outcastNeedAllocMap_;
+    std::unordered_map<LogicalTensorPtr, bool> outcastNeedAllocMap_;
 
 private:
     std::vector<std::shared_ptr<Operation>> GetLightweightSortedOperations() const;

@@ -1873,6 +1873,26 @@ Operation& Function::AddRawOperation(
     return *operations_.back();
 }
 
+void Function::AddOriginIncast(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    for (auto& ele : originInCasts_) {
+        if (ele == tensor) {
+            return;
+        }
+    }
+    originInCasts_.push_back(tensor);
+}
+
+void Function::AddOriginOutcast(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    for (auto& ele : originOutCasts_) {
+        if (ele == tensor) {
+            return;
+        }
+    }
+    originOutCasts_.push_back(tensor);
+}
+
 void Function::SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst)
 {
     FE_ASSERT(FeError::INVALID_TYPE, operand->Datatype() == dst->Datatype()) << "Check Dtype failed!";
