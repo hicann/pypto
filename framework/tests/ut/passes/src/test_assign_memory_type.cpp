@@ -40,6 +40,8 @@ const int NUM_48 = 48;
 const int NUM_64 = 64;
 const int NUM_128 = 128;
 const int NUM_256 = 256;
+const int NUM_512 = 512;
+const int NUM_1024 = 1024;
 constexpr float F_1 = 1.0;
 constexpr float F_3 = 3.0;
 
@@ -151,6 +153,21 @@ public:
             convertNum++;
         }
         return convertNum;
+    }
+
+    bool HasViewMemoryPath(Function* function, MemoryType from, MemoryType to)
+    {
+        for (const auto& op : function->Operations()) {
+            if (op.GetOpcode() != Opcode::OP_VIEW || op.GetIOperands().empty() || op.GetOOperands().empty()) {
+                continue;
+            }
+            auto input = op.GetIOperands().front();
+            auto output = op.GetOOperands().front();
+            if (input->GetMemoryTypeOriginal() == from && output->GetMemoryTypeOriginal() == to) {
+                return true;
+            }
+        }
+        return false;
     }
 };
 
@@ -1807,6 +1824,32 @@ TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
             }
         }
         EXPECT_EQ(afterViewNum, beforeViewNum + 2);
+    }
+}
+
+TEST_F(AssignMemoryTypeTest, OversizedViewInputRequirementFallback)
+{
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> fullShape = {NUM_1024, NUM_1024};
+    std::vector<int64_t> viewShape = {NUM_1024, NUM_512};
+    PROGRAM("OversizedViewInputRequirementFallback")
+    {
+        Tensor input(DataType::DT_FP32, fullShape, "input");
+        Tensor output(DataType::DT_FP32, viewShape, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+        config::SetBuildStatic(true);
+        FUNCTION("OversizedViewInputRequirementFallback", {input, output})
+        {
+            TileShape::Current().SetVecTile(NUM_1024, NUM_1024);
+            Tensor expOut = Exp(input);
+            Tensor viewOut = View(expOut, viewShape, {0, 0});
+            output = Exp(viewOut);
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_OversizedViewInputRequirementFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_FALSE(HasViewMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR))
+            << "Oversized view should not represent UB->DDR movement.";
     }
 }
 
