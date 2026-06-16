@@ -168,6 +168,64 @@ MultiConsumerReshapeTensors BuildMultiConsumerReshapeGraph(
     return t;
 }
 
+struct SiblingCopyInReshapeGraph {
+    Operation* copyOutOp;
+    Operation* outputCopyInOp;
+    Operation* siblingCopyInOp;
+};
+
+SiblingCopyInReshapeGraph BuildDDRReshapeGraphWithSiblingCopyIn(
+    const std::shared_ptr<Function>& currFunctionPtr, MemoryType siblingCopyInOutputMemType)
+{
+    std::vector<int64_t> inShape = {8, 8};
+    std::vector<int64_t> reshapeShape = {4, 16};
+    auto incast = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto ubTensor = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    ubTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto reshapeInput = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    reshapeInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    reshapeInput->UpdateDynValidShape({CreateTestScalarVar("Input_0_Dim_0"), CreateTestScalarVar("Input_0_Dim_1")});
+    auto reshapeOutput = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    reshapeOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    reshapeOutput->UpdateDynValidShape({CreateTestScalarVar("Input_1_Dim_0"), CreateTestScalarVar("Input_1_Dim_1")});
+    auto outputCopyInTensor = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    outputCopyInTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto siblingCopyInTensor = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    siblingCopyInTensor->SetMemoryTypeBoth(siblingCopyInOutputMemType, true);
+    auto outcast = IRBuilder().CreateTensorVar(DT_FP32, reshapeShape, CreateTestConstIntVector(reshapeShape));
+    outcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto siblingOutcast = IRBuilder().CreateTensorVar(DT_FP32, inShape, CreateTestConstIntVector(inShape));
+    siblingOutcast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_IN, {incast}, {ubTensor});
+    auto& copyOutOp = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {ubTensor}, {reshapeInput});
+    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_UB, OpImmediate::Specified(reshapeInput->GetTensorOffset()),
+        OpImmediate::Specified(reshapeInput->GetShape()),
+        OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_RESHAPE, {reshapeInput}, {reshapeOutput});
+    auto& outputCopyInOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_COPY_IN, {reshapeOutput}, {outputCopyInTensor});
+    outputCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(reshapeOutput->GetTensorOffset()), MemoryType::MEM_UB,
+        OpImmediate::Specified(reshapeOutput->GetShape()),
+        OpImmediate::Specified(reshapeOutput->GetRawTensor()->GetDynRawShape())));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {outputCopyInTensor}, {outcast});
+    auto& siblingCopyInOp = PassOperationUtils::AddOperation(
+        *currFunctionPtr, Opcode::OP_COPY_IN, {reshapeInput}, {siblingCopyInTensor});
+    siblingCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(reshapeInput->GetTensorOffset()), siblingCopyInOutputMemType,
+        OpImmediate::Specified(reshapeInput->GetShape()),
+        OpImmediate::Specified(reshapeInput->GetRawTensor()->GetDynRawShape())));
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_COPY_OUT, {siblingCopyInTensor}, {siblingOutcast});
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+    currFunctionPtr->outCasts_.push_back(siblingOutcast);
+    return {&copyOutOp, &outputCopyInOp, &siblingCopyInOp};
+}
+
 inline void ConstructGraphWithCopyInAndReshape(
     std::shared_ptr<Function>& currFunctionPtr, const std::vector<int64_t>& shape,
     const std::vector<int64_t>& reshape_shape)
@@ -1126,6 +1184,48 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeCopyOnL0CToL1)
     auto copyInAttr = std::dynamic_pointer_cast<CopyOpAttribute>(copyInOp.GetOpAttribute());
     ASSERT_NE(copyInAttr, nullptr);
     EXPECT_FALSE(copyInAttr->GetFromDynValidShape().empty());
+}
+
+TEST_F(TestRemoveUnalignedReshapeOp, TestSiblingCopyInConsumerToReshapeCopyInOnUB)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestSiblingCopyInConsumerToReshapeCopyInOnUB",
+        "TestSiblingCopyInConsumerToReshapeCopyInOnUB", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    auto ops = BuildDDRReshapeGraphWithSiblingCopyIn(currFunctionPtr, MemoryType::MEM_UB);
+
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    int curSize = currFunctionPtr->Operations().size();
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize + 1);
+    EXPECT_EQ(ops.copyOutOp->GetOpcode(), Opcode::OP_COPY_OUT);
+    EXPECT_EQ(ops.outputCopyInOp->GetOpcode(), Opcode::OP_RESHAPE_COPY_IN);
+    EXPECT_EQ(ops.siblingCopyInOp->GetOpcode(), Opcode::OP_RESHAPE_COPY_IN);
+
+    auto siblingCopyInAttr = std::dynamic_pointer_cast<CopyOpAttribute>(ops.siblingCopyInOp->GetOpAttribute());
+    ASSERT_NE(siblingCopyInAttr, nullptr);
+    EXPECT_FALSE(siblingCopyInAttr->GetFromDynValidShape().empty());
+}
+
+TEST_F(TestRemoveUnalignedReshapeOp, TestSiblingCopyInConsumerToL1ReshapeCopyIn)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestSiblingCopyInConsumerToL1ReshapeCopyIn",
+        "TestSiblingCopyInConsumerToL1ReshapeCopyIn", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    auto ops = BuildDDRReshapeGraphWithSiblingCopyIn(currFunctionPtr, MemoryType::MEM_L1);
+
+    RemoveUnalignedReshape removeUnalignedReshapeOpTest;
+    int curSize = currFunctionPtr->Operations().size();
+    EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize + 1);
+    EXPECT_EQ(ops.copyOutOp->GetOpcode(), Opcode::OP_COPY_OUT);
+    EXPECT_EQ(ops.outputCopyInOp->GetOpcode(), Opcode::OP_RESHAPE_COPY_IN);
+    EXPECT_EQ(ops.siblingCopyInOp->GetOpcode(), Opcode::OP_L1_RESHAPE_COPY_IN);
+
+    auto siblingCopyInAttr = std::dynamic_pointer_cast<CopyOpAttribute>(ops.siblingCopyInOp->GetOpAttribute());
+    ASSERT_NE(siblingCopyInAttr, nullptr);
+    EXPECT_FALSE(siblingCopyInAttr->GetFromDynValidShape().empty());
 }
 
 TEST_F(TestRemoveUnalignedReshapeOp, TestValidShapeInfer)
