@@ -2034,31 +2034,20 @@ Tensor ConstructBatchMatmulMXTensorGraph3D(
     auto bScaleValidShape4D = bScale.GetStorage()->GetDynValidShape();
     auto aValidShape3D = aMatrix.GetStorage()->GetDynValidShape();
     auto bValidShape3D = bMatrix.GetStorage()->GetDynValidShape();
+
     const auto mValid = attrParam.transA ? aValidShape3D[SHAPE_DIM2] : aValidShape3D[1];
     const auto nValid = attrParam.transB ? bValidShape3D[1] : bValidShape3D[SHAPE_DIM2];
 
     for (int64_t bIdx = 0; bIdx < batchSize; bIdx++) {
-        int64_t offsetBatchA = batchSizeA == 1 ? 0 : bIdx;
-        int64_t offsetBatchB = batchSizeB == 1 ? 0 : bIdx;
 
-        Tensor aTensorSingleBatch = View(
-            aMatrix, {1, aMatrix.GetShape()[1], aMatrix.GetShape()[SHAPE_DIM2]},
-            std::vector<SymbolicScalar>({1, aValidShape3D[1], aValidShape3D[SHAPE_DIM2]}), {offsetBatchA, 0, 0});
+        auto [aTensor, aTensorSingleBatch] = GetBatchTensor3D(batchSizeA, bIdx, aMatrix, aValidShape3D);
+        auto [bTensor, bTensorSingleBatch] = GetBatchTensor3D(batchSizeB, bIdx, bMatrix, bValidShape3D);
 
-        Tensor bTensorSingleBatch = View(
-            bMatrix, {1, bMatrix.GetShape()[1], bMatrix.GetShape()[SHAPE_DIM2]},
-            std::vector<SymbolicScalar>({1, bValidShape3D[1], bValidShape3D[SHAPE_DIM2]}), {offsetBatchB, 0, 0});
-
-        Tensor aTensor = Reshape(
-            aTensorSingleBatch, {aMatrix.GetShape()[1], aMatrix.GetShape()[SHAPE_DIM2]},
-            std::vector<SymbolicScalar>({aValidShape3D[1], aValidShape3D[SHAPE_DIM2]}));
-
-        Tensor bTensor = Reshape(
-            bTensorSingleBatch, {bMatrix.GetShape()[1], bMatrix.GetShape()[SHAPE_DIM2]},
-            std::vector<SymbolicScalar>({bValidShape3D[1], bValidShape3D[SHAPE_DIM2]}));
+        const auto bValid = batchSizeA == 1 ? bTensorSingleBatch.GetStorage()->GetDynValidShape()[0] :
+                                          aTensorSingleBatch.GetStorage()->GetDynValidShape()[0];
 
         Tensor cTensor(dataType, {mView, nView}, "cTensorSingleBatch");
-        cTensor.GetStorage()->UpdateDynValidShape({mValid, nValid});
+        cTensor.GetStorage()->UpdateDynValidShape({bValid * mValid, nValid});
         MatmulExtendParam batchParam = param;
         if (biasOperand.GetStorage() != nullptr && biasOperand.GetShape().size() == SHAPE_DIM3) {
             int64_t offsetBatchBias = biasOperand.GetShape()[0] == 1 ? 0 : bIdx;
@@ -2085,10 +2074,10 @@ Tensor ConstructBatchMatmulMXTensorGraph3D(
         auto cValidShape2D = cTensor.GetStorage()->GetDynValidShape();
         Tensor cTensor3D = Reshape(
             cTensor, {1, cTensor.GetShape()[0], cTensor.GetShape()[1]},
-            std::vector<SymbolicScalar>({1, cValidShape2D[0], cValidShape2D[1]}));
+            std::vector<SymbolicScalar>({bValid, mValid, nValid}));
         Assemble(cTensor3D, {bIdx, 0, 0}, result);
         result.GetStorage()->UpdateDynValidShape(
-            {std::max(aValidShape3D[0], bValidShape3D[0]), cValidShape2D[0], cValidShape2D[1]});
+            {std::max(aValidShape3D[0], bValidShape3D[0]), mValid, nValid});
     }
     TileShape::Current().SetVecTile(oriVecTile);
     return result;
@@ -2116,40 +2105,28 @@ Tensor ConstructBatchMatmulMXTensorGraph4D(
     auto bValidShape4D = bMatrix.GetStorage()->GetDynValidShape();
     auto aScaleValidShape5D = aScale.GetStorage()->GetDynValidShape();
     auto bScaleValidShape5D = bScale.GetStorage()->GetDynValidShape();
+    const auto mValid = attrParam.transA ? aValidShape4D[SHAPE_DIM3] : aValidShape4D[SHAPE_DIM2];
+    const auto nValid = attrParam.transB ? bValidShape4D[SHAPE_DIM2] : bValidShape4D[SHAPE_DIM3];
 
     for (int64_t bIdx1 = 0; bIdx1 < batchSize1; bIdx1++) {
-        int64_t offsetBatchA1 = batchSizeA1 == 1 ? 0 : bIdx1;
-        int64_t offsetBatchB1 = batchSizeB1 == 1 ? 0 : bIdx1;
         for (int64_t bIdx2 = 0; bIdx2 < batchSize2; bIdx2++) {
-            int64_t offsetBatchA2 = batchSizeA2 == 1 ? 0 : bIdx2;
-            int64_t offsetBatchB2 = batchSizeB2 == 1 ? 0 : bIdx2;
 
-            Tensor aTensorSingleBatch = View(
-                aMatrix, {1, 1, aMatrix.GetShape()[SHAPE_DIM2], aMatrix.GetShape()[SHAPE_DIM3]},
-                std::vector<SymbolicScalar>({1, 1, aValidShape4D[SHAPE_DIM2], aValidShape4D[SHAPE_DIM3]}),
-                {offsetBatchA1, offsetBatchA2, 0, 0});
+            auto [aTensor, aTensorSingleBatch] =
+                GetBatchTensor4D(batchSizeA1, batchSizeA2, bIdx1, bIdx2, aMatrix, aValidShape4D);
+            auto [bTensor, bTensorSingleBatch] =
+                GetBatchTensor4D(batchSizeB1, batchSizeB2, bIdx1, bIdx2, bMatrix, bValidShape4D);
 
-            Tensor bTensorSingleBatch = View(
-                bMatrix, {1, 1, bMatrix.GetShape()[SHAPE_DIM2], bMatrix.GetShape()[SHAPE_DIM3]},
-                std::vector<SymbolicScalar>({1, 1, bValidShape4D[SHAPE_DIM2], bValidShape4D[SHAPE_DIM3]}),
-                {offsetBatchB1, offsetBatchB2, 0, 0});
-
-            Tensor aTensor = Reshape(
-                aTensorSingleBatch, {aMatrix.GetShape()[SHAPE_DIM2], aMatrix.GetShape()[SHAPE_DIM3]},
-                std::vector<SymbolicScalar>({aValidShape4D[SHAPE_DIM2], aValidShape4D[SHAPE_DIM3]}));
-
-            Tensor bTensor = Reshape(
-                bTensorSingleBatch, {bMatrix.GetShape()[SHAPE_DIM2], bMatrix.GetShape()[SHAPE_DIM3]},
-                std::vector<SymbolicScalar>({bValidShape4D[SHAPE_DIM2], bValidShape4D[SHAPE_DIM3]}));
+            const auto b0Valid = batchSizeA1 == 1 ? bTensorSingleBatch.GetStorage()->GetDynValidShape()[0] :
+                                                    aTensorSingleBatch.GetStorage()->GetDynValidShape()[0];
+            const auto b1Valid = batchSizeA2 == 1 ? bTensorSingleBatch.GetStorage()->GetDynValidShape()[1] :
+                                                    aTensorSingleBatch.GetStorage()->GetDynValidShape()[1];
 
             MatmulExtendParam batchParam = param;
             if (biasOperand.GetStorage() != nullptr) {
                 batchParam.biasTensor = biasOperand;
             }
-            const auto mValid = attrParam.transA ? aValidShape4D[SHAPE_DIM3] : aValidShape4D[SHAPE_DIM2];
-            const auto nValid = attrParam.transB ? bValidShape4D[SHAPE_DIM2] : bValidShape4D[SHAPE_DIM3];
             Tensor cTensor(dataType, {mView, nView}, "cTensorSingleBatch");
-            cTensor.GetStorage()->UpdateDynValidShape({mValid, nValid});
+            cTensor.GetStorage()->UpdateDynValidShape({b0Valid * b1Valid * mValid, nValid});
             MatmulGraphNodes tensorGraphNodes(
                 aTensor.GetStorage(), aScale.GetStorage(), bTensor.GetStorage(), bScale.GetStorage());
             tensorGraphNodes.outTensorPtr = cTensor.GetStorage();
@@ -2159,16 +2136,17 @@ Tensor ConstructBatchMatmulMXTensorGraph4D(
             auto cValidShape2D = cTensor.GetStorage()->GetDynValidShape();
             Tensor cTensor4D = Reshape(
                 cTensor, {1, 1, cTensor.GetShape()[0], cTensor.GetShape()[1]},
-                std::vector<SymbolicScalar>({1, 1, cValidShape2D[0], cValidShape2D[1]}));
+                std::vector<SymbolicScalar>({b0Valid, b1Valid, mValid, nValid}));
             Assemble(cTensor4D, {bIdx1, bIdx2, 0, 0}, result);
             result.GetStorage()->UpdateDynValidShape(
                 {std::max(aValidShape4D[0], bValidShape4D[0]), std::max(aValidShape4D[1], bValidShape4D[1]),
-                 cValidShape2D[0], cValidShape2D[1]});
+                 mValid, nValid});
         }
     }
     TileShape::Current().SetVecTile(oriVecTile);
     return result;
 }
+
 
 Tensor BatchMatmulMX(
     DataType dataType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
