@@ -21,8 +21,8 @@
 
 #### 触发方式
 
-```
-我的测试用例出现了aicore error，测试命令是python3 test_my_op.py，路径在./
+```text
+我的测试用例出现了 aicore error，测试命令是 python3 test_my_op.py，路径在 ./
 ```
 
 #### 三条执行路径
@@ -39,24 +39,24 @@ AI agent根据用户输入自动分流：
 
 **模式A**（已知CCE文件）：
 
-```
-帮我定位aicore error的问题代码行，CCE文件是 /path/to/TENSOR_xxx.cpp，
-测试命令是python3 test_my_op.py
+```text
+帮我定位 aicore error 的问题代码行，CCE 文件是 /path/to/TENSOR_xxx.cpp，
+测试命令是 python3 test_my_op.py
 ```
 
 **模式B**（已知CCE文件+行号）：
 
-```
-帮我映射aicore error的源码位置，CCE文件是 /path/to/TENSOR_xxx.cpp，
-问题行号是42
+```text
+帮我映射 aicore error 的源码位置，CCE 文件是 /path/to/TENSOR_xxx.cpp，
+问题行号是 42
 ```
 
 #### Pypto_Test框架适配
 
 在描述中提及"Pypto_Test框架"，AI agent自动识别（不区分大小写、下划线/中划线），并为所有步骤传递适配参数：
 
-```
-我的测试用例出现了aicore error，用的是Pypto_Test框架，测试命令是python3 test_my_op.py
+```text
+我的测试用例出现了 aicore error，用的是 Pypto_Test 框架，测试命令是 python3 test_my_op.py
 ```
 
 **关联SKILL**：[pypto-aicore-error-locator](../../../.agents/skills/pypto-aicore-error-locator/SKILL.md)
@@ -305,9 +305,9 @@ python3 tools/schema/schema_memory_check.py -d /path/to/my_log/debug/device-8/ -
 如存在异常，提示内存重叠的device task以及leaf function。
 
 注：
-（1）如果报错emory reuse must happen for full match. 则两个需要内存复用的rawtensor范围不一致；
-（2）如果报错memory reuse must happen for same dimension. 则两个内存复用的rawtensor的shape不一致；
-上述两种情况非内存重叠，脚本内存检查依赖不会发生上述情况，因此脚本会断言，直接提示日志信息错误。
+（1）如果报错 memory reuse must happen for full match. 则两个需要内存复用的 rawtensor 范围不一致；
+（2）如果报错 memory reuse must happen for same dimension. 则两个内存复用的 rawtensor 的 shape 不一致；
+上述两种情况非内存重叠，脚本内存检查依赖不会发生上述情况 ，因此脚本会断言，直接提示日志信息错误。
 
 **关联Skill**：[pypto-memory-overlap-detector](../../../.agents/skills/pypto-memory-overlap-detector/SKILL.md)
 
@@ -722,27 +722,29 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 
 #### 对外接口
 
-| 接口名称 | 功能 | 适用场景 |
-|---------|------|---------|
-| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 |
-| **AiCorePrintShape** | 打印Shape信息 | 查看tensor shape维度 |
-| **AiCorePrintGmTensor** | 打印GM Tensor | 查看Global Memory数据 |
-| **AiCorePrintUbTensor** | 打印UB Tensor | 查看Unified Buffer数据（仅AIV kernel） |
-| **AiCorePrintL1Tensor** | 打印L1 Tensor | 查看Circular Buffer数据（仅AIC kernel，且仅支持A2/A3平台） |
-| **AiCorePrintL0CTensor** | 打印L0C Tensor | 查看Accumulator Buffer数据（仅AIC kernel） |
+| 接口名称 | 功能 | 适用场景 | Ascend 950PR |
+|---------|------|---------|:---:|
+| **AiCoreLogF** | 格式化日志打印 | 打印地址、标量、提示信息 | 支持 |
+| **AiCorePrintShape** | 打印 Shape 信息 | 查看 tensor shape 维度 | 支持 |
+| **AiCorePrintGmTensor** | 打印 GM Tensor | 查看 Global Memory 数据 | 支持 |
+| **AiCorePrintUbTensor** | 打印 UB Tensor | 查看 Unified Buffer 数据（仅 AIV kernel） | 支持 |
+| **AiCorePrintL1Tensor** | 打印 L1 Tensor | 查看 Circular Buffer 数据（仅 AIC kernel） | 不支持 |
+| **AiCorePrintL0CTensor** | 打印 L0C Tensor | 查看 Accumulator Buffer 数据（仅 AIC kernel） | 支持 |
 
 #### 支持的数据类型
 
 AiCore Print支持以下数据类型：
 
-**浮点类型**（所有平台支持）：
+**浮点类型**：
 
+- Ascend 950PR：支持
 - **fp32**：`float`
 - **fp16**：`half`
 - **bf16**：`bfloat16_t`
 
-**整数类型**（所有平台支持）：
+**整数类型**：
 
+- Ascend 950PR：支持
 - **int8**：`int8_t`
 - **uint8**：`uint8_t`
 - **int16**：`int16_t`
@@ -754,14 +756,13 @@ AiCore Print支持以下数据类型：
 
 **FP8类型**（平台限制）：
 
+- Ascend 950PR：支持
 - **fp8_e4m3**：`float8_e4m3_t`
 - **fp8_e5m2**：`float8_e5m2_t`
 - **fp8_e8m0**：`float8_e8m0_t`
 - **hifloat8**：`hifloat8_t`
 
-**平台限制说明**：FP8和HiFloat8类型仅在以下平台支持（`SUPPORT_FP8_HF8_PRINT=1`）：
-
-- `__NPU_ARCH__ == 3510`
+**平台限制说明**：FP8 和 HiFloat8 类型仅在 Ascend 950PR 上支持（`SUPPORT_FP8_HF8_PRINT=1`，对应 `__NPU_ARCH__ == 3510`）。
 
 其他平台不支持FP8/HiFloat8打印功能。
 
@@ -953,13 +954,13 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 2. **打印数量控制**：PRINT_BUFFER_SIZE当前为128KB（定义于`framework/src/interface/machine/device/tilefwk/aicpu_common.h`），若触发overflow warning，需增大该值后重新编译。
 
-3. **FP8/HiFloat8支持平台**：仅`A5`平台支持（见`SUPPORT_FP8_HF8_PRINT`宏定义）。
+3. **FP8/HiFloat8 支持平台**：仅 Ascend 950PR（`__NPU_ARCH__ == 3510`）支持（见 `SUPPORT_FP8_HF8_PRINT` 宏定义）。
 
-4. **AiCorePrintL1Tensor支持平台**：仅`A2/A3`平台支持（见`SUPPORT_L1_COPY`宏定义）。
+4. **AiCorePrintL1Tensor 支持平台**：Ascend 950PR 不支持；Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品支持（见 `SUPPORT_L1_COPY` 宏定义）。
 
 5. **AIC (Cube核)中不能使用AiCorePrintUbTensor**：AIC (Cube核)的标量处理器(SP)没有到UB地址空间的物理通路，无法从UB标量读取数据。编译期已通过`static_assert`拦截，在AIC kernel中调用`AiCorePrintUbTensor`会触发编译报错：
 
-   ```
+   ```text
    error: static assertion failed: [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
    ```
 
@@ -967,7 +968,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 6. **AiCoreLogF在AIC中打印UB数据值会触发运行时错误**：`AiCoreLogF`在AIC kernel中使用`%f`、`%d`等格式打印UB数据值时（如`((__ubuf__ float*)addr)[521]`），编译器会生成一条从UB地址空间的标量load指令，AIC SP不支持此操作，触发MPU error 271：
 
-   ```
+   ```text
    error from aicore error exception, core id is 0, error code = 271
    errorStr: The MPU address access is invalid
    ```
@@ -976,7 +977,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 7. **不可通过DMA将UB数据搬到GM再打印**：AIC (Cube核)上没有MTE3 DMA引擎（`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2`等intrinsic不支持cube target），`TStoreVec`（`OP_UB_COPY_OUT`）的`OpCoreType`为`AIV`，属于Vector核专用。在AIC kernel中调用这些接口会编译报错：
 
-   ```
+   ```text
    error: function type '...' of 'copy_ubuf_to_gm' does not support the given target feature
    ```
 
@@ -996,7 +997,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 ##### 4. FP8/HiFloat8无法打印
 
-当前平台不支持（检查SUPPORT_FP8_HF8_PRINT宏）。
+当前平台不支持（检查 `SUPPORT_FP8_HF8_PRINT` 宏；仅 Ascend 950PR / `__NPU_ARCH__ == 3510` 时为 1）。
 
 ##### 5. AiCorePrintL1Tensor找不到接口定义
 
@@ -1006,9 +1007,9 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 编译时出现`ld.lld: error: undefined symbol`链接错误，导致编译失败。
 
-**原因**：并行编译（`parallel_compile`）模式下，编译单元之间的符号依赖未正确处理。
+**原因**：`parallel_compile` 配置值大于 1 时，CodeGen 会并行编译多个子图；在此模式下，部分编译单元之间的符号依赖未正确处理，导致链接失败。
 
-**解决方案**：修改`framework/src/interface/configs/tile_fwk_config.json`，将`parallel_compile`改为`1`（单线程编译），重新运行即可解决。
+**解决方案**：修改 `framework/src/interface/configs/tile_fwk_config.json`，将 `parallel_compile` 设为 `1`（编译线程数为 1，即串行编译）。注意：该配置项表示**并行编译线程数**，而非布尔开关（`1` 表示单线程，`128` 等为多线程并行）。修改后重新运行即可解决。
 
 ```json
 "parallel_compile": 1
@@ -1018,7 +1019,7 @@ AiCoreLogF(param->ctx, "INT8 input loaded");
 
 AIC (Cube核) kernel中使用`AiCorePrintUbTensor`时，编译器会触发`static_assert`：
 
-```
+```text
 error: static assertion failed due to requirement '!std::is_same_v<float, float>':
   [AIC UB Print Error] AiCorePrintUbTensor is not supported on AIC (Cube) kernel.
   AIC Scalar Processor cannot scalar-load from UB address space.
@@ -1040,7 +1041,7 @@ AiCoreLogF(param->ctx, "ubTensor val=%f", ((__ubuf__ float*)ubTensor.GetAddr())[
 
 运行时触发aicore error：
 
-```
+```text
 error from aicore error exception, core id is 0, error code = 271
 errorStr: The MPU address access is invalid
 ```
@@ -1057,7 +1058,7 @@ errorStr: The MPU address access is invalid
 
 在AIC kernel中调用`TStoreVec`、`copy_ubuf_to_gm`、`copy_ubuf_to_gm_align_v2`等接口编译报错：
 
-```
+```text
 error: function type 'void (__gm__ void *, __ubuf__ void *, ...)' of 'copy_ubuf_to_gm' does not support the given target feature
 ```
 

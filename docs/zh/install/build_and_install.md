@@ -23,6 +23,8 @@ git clone -b ${tag_version} https://gitcode.com/cann/pypto.git
 如果您的开发环境可以正常访问[cann-src-third-party](https://gitcode.com/cann-src-third-party)，PyPTO编译所需的第三方开源软件将在编译过程中自动下载及编译。
 如果无法访问，请参考[手动安装 - 前提条件](./prepare_environment.md#前提条件)中"准备第三方开源软件源码包"的相关章节完成源码包准备，并在编译前设置如下环境变量：
 
+芯片型号自检请参考[环境验证 - 芯片型号自检](./prepare_environment.md#环境验证)章节。
+
 ```bash
 export PYPTO_THIRD_PARTY_PATH=<path-to-thirdparty>
 ```
@@ -125,10 +127,10 @@ PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改
 python3 -m pip install pypto==${pypto_version}
 ```
 
-例如，CANN版本为`8.5.0`时，对应安装PyPTO `0.1.0`：
+例如，CANN版本为`8.5.0`时，对应安装PyPTO `0.1.2`：
 
 ```bash
-python3 -m pip install pypto==0.1.0
+python3 -m pip install pypto==0.1.2
 ```
 
 ## 安装验证
