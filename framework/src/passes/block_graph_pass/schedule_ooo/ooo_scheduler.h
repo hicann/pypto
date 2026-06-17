@@ -342,6 +342,8 @@ private:
     Status SpillMultiProducerBufferFor3510(int spillMemid, Operation* spillOp, LogicalTensorPtr spillTensor, Operation* spillAllocOp, SpillContext &ctx, SingleSpillCreatedOps& created);
     Status CopyoutParticalBuffer(LogicalTensorPtr spillTensor, LogicalTensorPtr gmTensor, SpillContext &ctx);
     Status CreateParticalBuffer(int spillMemid, Operation* producerOp, LogicalTensorPtr assembleOOperand, Operation* copyoutOp, Operation* spillAllocOp);
+    Status FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor, LogicalTensorPtr assembleTensor,
+        Operation* copyoutOp, LogicalTensorPtr gmTensor, Operation* spillAllocOp, Operation*& wholeCopyinOut);
     LogicalTensorPtr CreateLocalTensor(LogicalTensorPtr spillTensor);
     LogicalTensorPtr CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor, int spillMemId);
     LogicalTensorPtr CreateParticalTensor(LogicalTensorPtr iOperand, LogicalTensorPtr oriOperand, LogicalTensorPtr spillTensor, std::vector<int64_t> toOffset);
