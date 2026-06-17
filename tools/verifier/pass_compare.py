@@ -87,43 +87,44 @@ class PassComparator:
 
         self.pass_dict = {
             "tensor_graph": 0,
-            "RemoveRedundantReshape": 0,
-            "AutoCast": 1,
-            "InferMemoryConflict": 2,
-            "RemoveUndrivenView": 3,
-            "ExpandFunction": 4,
-            "MergeViewAssemble": 5,
-            "SplitReshape": 6,
-            "SplitRawTensor": 7,
-            "SplitLargeFanoutTensor": 8,
-            "DuplicateOp": 9,
-            "AssignMemoryType": 10,
-            "InferDiscontinuousInput": 11,
-            "RemoveRedundantOp": 12,
-            "InsertOpForViewAssemble": 13,
-            "ProcessAtomic": 14,
-            "GraphPartition": 15,
-            "NBufferMerge": 16,
-            "L1CopyInReuseMerge": 17,
-            "IntraSubgraphAdapter": 18,
-            "GenerateMoveOp": 19,
-            "CommonOperationEliminate": 20,
-            "AxisCombine": 21,
-            "PadLocalBuffer": 22,
-            "RemoveUnalignedReshape": 23,
-            "ReplaceTensor": 24,
-            "PreGraphProcess": 25,
-            "InferDynShape": 26,
-            "SubgraphToFunction": 27,
-            "InferParamIndex": 28,
-            "SrcDstBufferMerge": 29,
-            "AddAlloc": 30,
-            "OoOSchedule": 31,
-            "RemoveAlloc": 32,
-            "CopyOutResolve": 33,
-            "InsertSync": 34,
-            "GlobalMemoryReuse": 35,
-            "CodegenPreproc": 36
+            "InferWriteConflict": 1,
+            "RemoveRedundantReshape": 2,
+            "AutoCast": 3,
+            "InferMemoryConflict": 4,
+            "RemoveUndrivenView": 5,
+            "ExpandFunction": 6,
+            "MergeViewAssemble": 7,
+            "SplitReshape": 8,
+            "SplitRawTensor": 9,
+            "SplitLargeFanoutTensor": 10,
+            "DuplicateOp": 11,
+            "AssignMemoryType": 12,
+            "InferDiscontinuousInput": 13,
+            "RemoveRedundantOp": 14,
+            "InsertOpForViewAssemble": 15,
+            "ProcessAtomic": 16,
+            "GraphPartition": 17,
+            "NBufferMerge": 18,
+            "L1CopyInReuseMerge": 19,
+            "IntraSubgraphAdapter": 20,
+            "GenerateMoveOp": 21,
+            "CommonOperationEliminate": 22,
+            "AxisCombine": 23,
+            "PadLocalBuffer": 24,
+            "RemoveUnalignedReshape": 25,
+            "ReplaceTensor": 26,
+            "PreGraphProcess": 27,
+            "InferDynShape": 28,
+            "SubgraphToFunction": 29,
+            "InferParamIndex": 30,
+            "SrcDstBufferMerge": 31,
+            "AddAlloc": 32,
+            "OoOSchedule": 33,
+            "RemoveAlloc": 34,
+            "CopyOutResolve": 35,
+            "InsertSync": 36,
+            "GlobalMemoryReuse": 37,
+            "CodegenPreproc": 38
         }
 
         self.opcode_dict = {
@@ -198,6 +199,7 @@ class PassComparator:
         record["B>:opmagic"] = a[":opmagic"]
         record["B>:opcode"] = a[":opcode"]
         record["B>:rawmagic"] = a[":rawmagic"]
+        record["B>:magic"] = a[":magic"]
         record["B>:rawshape"] = a[":rawshape"]
         record["B>:format"] = a[":format"]
         record["B>:shape"] = a[":shape"]
@@ -214,6 +216,7 @@ class PassComparator:
             record["A>:opmagic"] = b[":opmagic"]
             record["A>:opcode"] = b[":opcode"]
             record["A>:rawmagic"] = b[":rawmagic"]
+            record["A>:magic"] = b[":magic"]
             record["A>:rawshape"] = b[":rawshape"]
             record["A>:format"] = b[":format"]
             record["A>:shape"] = b[":shape"]
@@ -471,15 +474,15 @@ class PassComparator:
         self.result_file = f'verify_graph_result_cmp~Pass_{self.pass_dict[self.golden_pass]:02d}_{self.golden_pass}~' \
                 f'Pass_{self.pass_dict[self.output_pass]:02d}_{self.output_pass}~{int(time.time() * 1_000_000)}.csv'
         
-        if self.pass_dict[pass_a] >= 4 and self.pass_dict[pass_b] >= 4:
+        if self.pass_dict[pass_a] >= 6 and self.pass_dict[pass_b] >= 6:
             self.key = ":magic"
         # 判断是否需要使用 codegen 的特殊逻辑
         is_codegen = False
-        if self.pass_dict[pass_a] >= 28 and self.pass_dict[pass_b] >= 4 and self.pass_dict[pass_b] < 28:
+        if self.pass_dict[pass_a] >= 30 and self.pass_dict[pass_b] >= 6 and self.pass_dict[pass_b] < 30:
             self.key = "ROOT_CALL:rawmagic"
             is_codegen = True
         is_leaf = False
-        if self.pass_dict[pass_a] >= 28 and self.pass_dict[pass_b] >= 28:
+        if self.pass_dict[pass_a] >= 30 and self.pass_dict[pass_b] >= 30:
             is_leaf = True
         logging.info(f"key  : {self.key}")
 
