@@ -521,9 +521,6 @@ def _loop_function(
                             unroll_set, submit_before_loop, parallel)
         clear_source_location()
         yield rlf
-    except Exception as e:
-        logging.error("Record loop function %s failed: %s", name, e)
-        raise FeError(f"Record loop function {name} failed") from e
     finally:
         del rlf
         pypto_impl.EndScope()
