@@ -1517,7 +1517,9 @@ void TiledCastOperation(
             size_t shapeSize = input.tileInfo.shape.size();
             int64_t shapeW = (shapeSize >= 1) ? input.tileInfo.shape[shapeSize - 1] : 1;
             shapeW = AlignUp(shapeW + ALIGN_SIZE_64, static_cast<int64_t>(BLOCK_SIZE / BytesOf(DT_INT32)));
-            std::vector<int64_t> tmpShape = {1, shapeW};
+            int64_t shapeH = (shapeSize >= 2) ? input.tileInfo.shape[shapeSize - 2] : 1;
+            shapeH = std::min(shapeH, static_cast<int64_t>(MAX_REPEAT));
+            std::vector<int64_t> tmpShape = {shapeH, shapeW};
             auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_INT32, tmpShape);
             op = &function.AddOperation(GetCastOpName<T>(), {tile}, {resultTile, tmpTensor});
         } else {
