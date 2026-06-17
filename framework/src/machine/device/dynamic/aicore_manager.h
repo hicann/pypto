@@ -43,6 +43,7 @@
 #include "machine/device/dynamic/wrap_manager.h"
 #include "machine/device/dynamic/eslmodel_manager.h"
 #include "machine/device/dump/aicore_dump.h"
+#include "machine/device/debug/schema_trace_utils.h"
 #include "device_trace.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -1059,7 +1060,7 @@ private:
             LUid(devTaskCtx->TaskId(), FuncID(newTask), GetRootIndex(devTaskCtx, newTask),
             TaskID(newTask), GetLeafIndex(devTaskCtx, newTask)), LActStart(coreIdx)));
 #if ENABLE_DUMP_OPERATION
-        SchemaDumpUtil::DumpSchemaOperationInfo(devTaskCtx, coreIdx, newTask);
+        SchemaDumpUtil::DumpSchemaOperationInfo(devTaskCtx, newTask);
 #endif
 
 #if ENABLE_TENSOR_DUMP
