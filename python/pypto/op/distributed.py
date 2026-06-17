@@ -482,7 +482,7 @@ def my_symbolic_pe(group_name: str) -> SymbolicScalar:
 
 def __normalize_pred(pred: Union[list[Tensor], None]) -> Tensor:
     if pred is None:
-        return Tensor([1, 1], DataType.DT_INT32).base()
+        return pypto_impl.Full(pypto_impl.Element(DataType.DT_INT32, 1), DataType.DT_INT32, [1, 1], to_syms([]))
     if len(pred) == 1:
         return pred[0]
     return pypto_impl.Nop(pred)
