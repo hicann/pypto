@@ -245,12 +245,12 @@ INLINE uint64_t GetTensorAddr(CoreFuncParam* ctx, int idx)
 }
 
 template <int mode, int64_t constval>
-INLINE uint64_t GetCoa(CoreFuncParam* ctx, int idx)
+INLINE int64_t GetCoa(CoreFuncParam* ctx, int idx)
 {
     if constexpr (mode == 1) { // 常量值
         return constval;
     }
-    uint64_t val = ctx->opAttrs[idx];
+    int64_t val = static_cast<int64_t>(ctx->opAttrs[idx]);
     if constexpr (mode == 2) {        // 全变量
         return ctx->exprTbl[SYM_VALUE(val)];
     } else if constexpr (mode == 3) { //  全常量，但是每次取值不一样
@@ -368,15 +368,15 @@ int64_t RuntimeGetViewValidShapeDim(int64_t validshape, int64_t viewOffset, int6
 #define GET_PARAM_STRIDE_DIM_6(s0, s1, s2, s3, s4, s5) \
     (s1) * (s2) * (s3) * (s4) * (s5), (s2) * (s3) * (s4) * (s5), (s3) * (s4) * (s5), (s4) * (s5), (s5), 1
 
-INLINE uint64_t RUNTIME_Min(uint64_t input1, uint64_t input2) { return input1 < input2 ? input1 : input2; }
+INLINE int64_t RUNTIME_Min(uint64_t input1, uint64_t input2) { return input1 < input2 ? input1 : input2; }
 
-INLINE uint64_t RUNTIME_Max(uint64_t input1, uint64_t input2) { return input1 > input2 ? input1 : input2; }
+INLINE int64_t RUNTIME_Max(uint64_t input1, uint64_t input2) { return input1 > input2 ? input1 : input2; }
 
-INLINE uint64_t RUNTIME_Eq(uint64_t input1, uint64_t input2) { return input1 == input2; }
+INLINE int64_t RUNTIME_Eq(uint64_t input1, uint64_t input2) { return input1 == input2; }
 
-INLINE uint64_t RUNTIME_Ne(uint64_t input1, uint64_t input2) { return input1 != input2; }
+INLINE int64_t RUNTIME_Ne(uint64_t input1, uint64_t input2) { return input1 != input2; }
 
-INLINE uint32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
+INLINE int32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 {
     UNUSED(ctx);
     dcci((__gm__ uint32_t*)address, ENTIRE_DATA_CACHE, CACHELINE_OUT);
