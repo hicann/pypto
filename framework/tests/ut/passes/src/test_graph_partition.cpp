@@ -1617,5 +1617,60 @@ TEST_F(GraphPartitionTest, TestDualBranchMatmulPostCheck)
     VerifyViewNotEndNode(G.operations_);
 }
 
+/**
+ * sum_update path: 4 SUB→EXP chains share a max tensor. Each EXP feeds CAST and
+ * PAIRSUM. Chains 0-2 create CAST before PAIRSUM; chain 3 creates PAIRSUM before
+ * CAST, reversing the consumer index order in nodeOutGraph_.
+ */
+void GetSumUpdatePathGraph(ComputationalGraphBuilder& G)
+{
+    std::vector<int64_t> shape{16, 16};
+    EXPECT_EQ(
+        G.AddTensors(
+            DataType::DT_FP32, shape,
+            {"mx", "d0", "d1", "d2", "d3", "s0", "s1", "s2", "s3", "e0", "e1", "e2", "e3", "c0", "c1", "c2", "c3",
+             "p01", "p23"}),
+        true);
+
+    EXPECT_EQ(G.AddOp(Opcode::OP_SUB, {"d0", "mx"}, {"s0"}, "SUB0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"s0"}, {"e0"}, "EXP0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"e0"}, {"c0"}, "CAST0", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SUB, {"d1", "mx"}, {"s1"}, "SUB1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"s1"}, {"e1"}, "EXP1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"e1"}, {"c1"}, "CAST1", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_PAIRSUM, {"e0", "e1"}, {"p01"}, "PS01", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SUB, {"d2", "mx"}, {"s2"}, "SUB2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"s2"}, {"e2"}, "EXP2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"e2"}, {"c2"}, "CAST2", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_SUB, {"d3", "mx"}, {"s3"}, "SUB3", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_EXP, {"s3"}, {"e3"}, "EXP3", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_PAIRSUM, {"e2", "e3"}, {"p23"}, "PS23", true), true);
+    EXPECT_EQ(G.AddOp(Opcode::OP_CAST, {"e3"}, {"c3"}, "CAST3", true), true);
+
+    EXPECT_EQ(G.SetInCast({"mx", "d0", "d1", "d2", "d3"}), true);
+    EXPECT_EQ(G.SetOutCast({"c0", "c1", "c2", "c3", "p01", "p23"}), true);
+}
+
+TEST_F(GraphPartitionTest, TestSumUpdatePathMerge)
+{
+    ComputationalGraphBuilder G;
+    GetSumUpdatePathGraph(G);
+    Function* function = G.GetFunction();
+    IsoPartitioner partitioner;
+    EXPECT_EQ(partitioner.SetParameter(20, 100000, true), SUCCESS);
+    EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
+
+    // All EXPs get the same supernode hash despite different consumer order
+    int e0Node =
+        partitioner.superNodeInfo_->op2Node_[partitioner.operationInfo_->magic2Idx_[G.GetOp("EXP0")->GetOpMagic()]];
+    int e3Node =
+        partitioner.superNodeInfo_->op2Node_[partitioner.operationInfo_->magic2Idx_[G.GetOp("EXP3")->GetOpMagic()]];
+    EXPECT_EQ(partitioner.superNodeInfo_->nodeHashList_[e0Node], partitioner.superNodeInfo_->nodeHashList_[e3Node]);
+
+    // PAIRSUMs merge with their EXP predecessors into the same subgraph
+    EXPECT_EQ(G.GetOp("PS01")->GetSubgraphID(), G.GetOp("EXP0")->GetSubgraphID());
+    EXPECT_EQ(G.GetOp("PS23")->GetSubgraphID(), G.GetOp("EXP3")->GetSubgraphID());
+}
+
 } // namespace tile_fwk
 } // namespace npu

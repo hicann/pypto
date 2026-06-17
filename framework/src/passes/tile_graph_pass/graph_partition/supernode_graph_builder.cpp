@@ -1162,6 +1162,33 @@ std::vector<std::pair<int32_t, int32_t>> SuperNodeGraphBuilder::GetReduceNodeMer
     return mergePair;
 }
 
+void SuperNodeGraphBuilder::ComputeDirectionalNodeHash(
+    std::shared_ptr<NodeGraphInfo> reduceNodeInfo,
+    const std::vector<uint64_t>& reduceNodeHashList, std::vector<uint64_t>& hashList,
+    bool reverse)
+{
+    const auto& neighbourGraph = reverse ? reduceNodeInfo->nodeOutGraph_ : reduceNodeInfo->nodeInGraph_;
+    int32_t start = reverse ? static_cast<int32_t>(operationInfo_->opList_.size()) - 1 : 0;
+    int32_t end = reverse ? -1 : static_cast<int32_t>(operationInfo_->opList_.size());
+    int32_t step = reverse ? -1 : 1;
+    for (int32_t i = start; i != end; i += step) {
+        int32_t nodeIdx = reduceNodeInfo->op2Node_[i];
+        if (hashList[nodeIdx] != 0) {
+            continue;
+        }
+        hashList[nodeIdx] = reduceNodeHashList[nodeIdx];
+        std::vector<uint64_t> neighbourHashes;
+        neighbourHashes.reserve(neighbourGraph[nodeIdx].size());
+        for (int32_t j : neighbourGraph[nodeIdx]) {
+            neighbourHashes.push_back(hashList[j]);
+        }
+        std::sort(neighbourHashes.begin(), neighbourHashes.end());
+        for (uint64_t h : neighbourHashes) {
+            hashList[nodeIdx] = CombineHash(hashList[nodeIdx], h);
+        }
+    }
+}
+
 Status SuperNodeGraphBuilder::BuildReduceNodeHash(std::shared_ptr<NodeGraphInfo> reduceNodeInfo)
 {
     std::vector<uint64_t> reduceNodeHashListFront(reduceNodeInfo->node2Op_.size(), 0);
@@ -1177,30 +1204,8 @@ Status SuperNodeGraphBuilder::BuildReduceNodeHash(std::shared_ptr<NodeGraphInfo>
             reduceNodeHashList[i] = CombineHash(reduceNodeHashList[i], operationInfo_->opHashList_[opInNode]);
         }
     }
-
-    for (size_t i = 0; i < operationInfo_->opList_.size(); i++) {
-        int32_t nodeIdx = reduceNodeInfo->op2Node_[i];
-        if (reduceNodeHashListFront[nodeIdx] != 0) {
-            continue;
-        }
-        reduceNodeHashListFront[nodeIdx] = reduceNodeHashList[nodeIdx];
-        for (int32_t j : reduceNodeInfo->nodeInGraph_[nodeIdx]) {
-            reduceNodeHashListFront[nodeIdx] =
-                CombineHash(reduceNodeHashListFront[nodeIdx], reduceNodeHashListFront[j]);
-        }
-    }
-
-    for (int32_t i = static_cast<int32_t>(operationInfo_->opList_.size()) - 1; i >= 0; i--) {
-        int32_t nodeIdx = reduceNodeInfo->op2Node_[i];
-        if (reduceNodeHashListBack[nodeIdx] != 0) {
-            continue;
-        }
-        reduceNodeHashListBack[nodeIdx] = reduceNodeHashList[nodeIdx];
-        for (int32_t j : reduceNodeInfo->nodeOutGraph_[nodeIdx]) {
-            reduceNodeHashListBack[nodeIdx] = CombineHash(reduceNodeHashListBack[nodeIdx], reduceNodeHashListBack[j]);
-        }
-    }
-
+    ComputeDirectionalNodeHash(reduceNodeInfo, reduceNodeHashList, reduceNodeHashListFront, false);
+    ComputeDirectionalNodeHash(reduceNodeInfo, reduceNodeHashList, reduceNodeHashListBack, true);
     for (size_t i = 0; i < reduceNodeInfo->node2Op_.size(); i++) {
         reduceNodeHashList[i] = CombineHash(reduceNodeHashListFront[i], reduceNodeHashListBack[i]);
     }
