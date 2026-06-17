@@ -1115,6 +1115,26 @@ bool Operation::IsNeedStackGM() const
            (OpcodeManager::Inst().IsCopyOut(opcode_) && std::any_of(oOperand.cbegin(), oOperand.cend(), isStack));
 }
 
+static void AppendFromDynValidShapeRefs(CopyOpAttribute& copyAttr,
+    std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
+{
+    for (auto& shape : copyAttr.GetFromDynValidShape()) {
+        if (shape.IsSpecified()) {
+            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+        }
+    }
+}
+
+static void AppendToDynValidShapeRefs(CopyOpAttribute& copyAttr,
+    std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
+{
+    for (auto& shape : copyAttr.GetToDynValidShape()) {
+        if (shape.IsSpecified()) {
+            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+        }
+    }
+}
+
 std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttributeList()
 {
     std::vector<std::reference_wrapper<SymbolicScalar>> dynamicAttributeList;
@@ -1164,12 +1184,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                             std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
                     }
                 }
-                for (auto& shape : copyAttr->GetToDynValidShape()) {
-                    if (shape.IsSpecified()) {
-                        dynamicAttributeList.push_back(
-                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                    }
-                }
+                AppendToDynValidShapeRefs(*copyAttr, dynamicAttributeList);
             }
         } break;
         case Opcode::OP_COPY_OUT:
@@ -1183,12 +1198,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                             std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
                     }
                 }
-                for (auto& shape : copyAttr->GetFromDynValidShape()) {
-                    if (shape.IsSpecified()) {
-                        dynamicAttributeList.push_back(
-                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                    }
-                }
+                AppendFromDynValidShapeRefs(*copyAttr, dynamicAttributeList);
             }
         } break;
         case Opcode::OP_VEC_DUP: {
@@ -1256,6 +1266,19 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                     continue;
                 }
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
+            }
+        } break;
+        case Opcode::OP_L1_RESHAPE_COPY_IN: 
+            [[fallthrough]];
+        case Opcode::OP_L0C_RESHAPE_COPY_OUT: 
+            [[fallthrough]];
+        case Opcode::OP_RESHAPE_COPY_OUT: 
+            [[fallthrough]];
+        case Opcode::OP_RESHAPE_COPY_IN: {
+            auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
+            if (copyAttr) {
+                AppendFromDynValidShapeRefs(*copyAttr, dynamicAttributeList);
+                AppendToDynValidShapeRefs(*copyAttr, dynamicAttributeList);
             }
         } break;
         default:
