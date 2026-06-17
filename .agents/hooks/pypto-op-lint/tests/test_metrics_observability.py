@@ -85,7 +85,7 @@ def test_report_uses_summary_events_when_available(tmp_path: Path):
         {"event_type": "run_check_summary", "invocation_id": "abc123",
          "total": 2, "pass": 1, "fail": 1, "warn": 0, "skip": 0,
          "s0_fails": ["OL01"], "s1_fails": [], "total_duration_ms": 3.0,
-         "op_dir": "/tmp/op1", "stage": 5, "mode": "cli"},
+         "op_dir": "custom/op1", "stage": 5, "mode": "cli"},
     ]
     summary = mod.build_summary(events)
     assert summary["data_source"] == "run_check_summary"
@@ -121,11 +121,11 @@ def test_report_invocation_breakdown(tmp_path: Path):
         {"event_type": "run_check_summary", "invocation_id": "inv1",
          "total": 5, "pass": 3, "fail": 2, "warn": 0, "skip": 0,
          "s0_fails": ["OL01"], "s1_fails": [], "total_duration_ms": 10.0,
-         "op_dir": "/tmp/op1", "stage": 5, "mode": "cli"},
+         "op_dir": "custom/op1", "stage": 5, "mode": "cli"},
         {"event_type": "run_check_summary", "invocation_id": "inv2",
          "total": 5, "pass": 5, "fail": 0, "warn": 0, "skip": 0,
          "s0_fails": [], "s1_fails": [], "total_duration_ms": 8.0,
-         "op_dir": "/tmp/op1", "stage": 5, "mode": "post-edit"},
+         "op_dir": "custom/op1", "stage": 5, "mode": "post-edit"},
     ]
     summary = mod.build_summary(events)
     invs = summary["invocations"]
@@ -153,13 +153,13 @@ def test_report_op_dir_filter(tmp_path: Path):
     mod = _load_report_mod()
     events_file = tmp_path / "lint_events.jsonl"
     events_file.write_text(
-        json.dumps({"event_type": "rule_check", "op_dir": "/tmp/op1", "rule_id": "OL01", "status": "PASS"}) + "\n"
-        + json.dumps({"event_type": "rule_check", "op_dir": "/tmp/op2", "rule_id": "OL01", "status": "FAIL"}) + "\n",
+        json.dumps({"event_type": "rule_check", "op_dir": "custom/op1", "rule_id": "OL01", "status": "PASS"}) + "\n"
+        + json.dumps({"event_type": "rule_check", "op_dir": "custom/op2", "rule_id": "OL01", "status": "FAIL"}) + "\n",
         encoding="utf-8",
     )
-    events = mod.load_events(path=events_file, op_dir_filter="/tmp/op1")
+    events = mod.load_events(path=events_file, op_dir_filter="custom/op1")
     assert len(events) == 1
-    assert events[0]["op_dir"] == "/tmp/op1"
+    assert events[0]["op_dir"] == "custom/op1"
 
 
 def test_report_since_filter(tmp_path: Path):
@@ -181,17 +181,17 @@ def test_report_per_op_breakdown(tmp_path: Path):
         {"event_type": "run_check_summary", "invocation_id": "a1",
          "total": 3, "pass": 2, "fail": 1, "warn": 0, "skip": 0,
          "s0_fails": [], "s1_fails": [], "total_duration_ms": 1.0,
-         "op_dir": "/tmp/op1", "stage": 5, "mode": "cli"},
+         "op_dir": "custom/op1", "stage": 5, "mode": "cli"},
         {"event_type": "run_check_summary", "invocation_id": "a2",
          "total": 3, "pass": 3, "fail": 0, "warn": 0, "skip": 0,
          "s0_fails": [], "s1_fails": [], "total_duration_ms": 1.0,
-         "op_dir": "/tmp/op2", "stage": 5, "mode": "cli"},
+         "op_dir": "custom/op2", "stage": 5, "mode": "cli"},
     ]
     summary = mod.build_summary(events)
     per_op = summary["per_op"]
-    assert "/tmp/op1" in per_op
-    assert per_op["/tmp/op1"]["fail"] == 1
-    assert per_op["/tmp/op2"]["fail"] == 0
+    assert "custom/op1" in per_op
+    assert per_op["custom/op1"]["fail"] == 1
+    assert per_op["custom/op2"]["fail"] == 0
 
 
 def test_report_md_output_has_tables(tmp_path: Path):
@@ -201,7 +201,7 @@ def test_report_md_output_has_tables(tmp_path: Path):
          "total": 3, "pass": 1, "fail": 1, "warn": 1, "skip": 0,
          "s0_fails": ["OL01"], "s1_fails": [], "total_duration_ms": 5.0,
          "effort_stats": {"E1": {"fails": ["OL01"], "warns": ["OL23"]}},
-         "op_dir": "/tmp/op1", "stage": 5, "mode": "cli"},
+         "op_dir": "custom/op1", "stage": 5, "mode": "cli"},
     ]
     summary = mod.build_summary(events)
     out_md = tmp_path / "summary.md"
