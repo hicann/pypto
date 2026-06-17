@@ -668,5 +668,15 @@ private:
         const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& incastOpAttrDict,
         const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& outcastOpAttrDict,
         const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent);
+
+    void FillIncastUseList(
+        DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
+        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent);
+
+    void FillOutcastUseList(
+        DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
+        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent);
 };
 } // namespace npu::tile_fwk::dynamic

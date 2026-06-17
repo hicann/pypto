@@ -14,6 +14,7 @@
  */
 
 #include "machine/utils/dynamic/dev_encode_function.h"
+#include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 
 namespace npu::tile_fwk::dynamic {
 namespace {
@@ -172,7 +173,8 @@ std::string DevAscendFunction::DumpOutcast(
             int offsetAttrIdx = producer.offsetAttrIdx;
             int shapeAttrIdx = producer.shapeAttrIdx;
             oss << indent;
-            oss << " | #producerIdx:!" << producerIdx;
+            oss << " | #opIdx:!" << producerIdx;
+            oss << " | #opType:" << (producer.opType == CellMatchOpType::READ ? "consumer" : "producer");
             oss << " | #offsetAttrIdx:" << offsetAttrIdx;
             oss << " | #shapeAttrIdx:" << shapeAttrIdx;
             oss << " | #offsetAttr:"
@@ -191,8 +193,7 @@ std::string DevAscendFunction::DumpOutcast(
             oss << AddressDescriptor::DumpAddress(slotAddrList[slot]);
         }
     }
-    oss << "\n";
-    oss << indent;
+    oss << "\n" << indent;
     oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(outcast.cellMatchTableDesc);
     oss << " | #cellMatchFullUpdateTable:" << outcast.cellMatchRuntimeFullUpdateTable.size();
     oss << "\n";
@@ -206,12 +207,13 @@ std::string DevAscendFunction::DumpOutcast(
 
     oss << indent << " | #stitchPolicyFullCoverProducerHubOpIdx:" << outcast.stitchPolicyFullCoverProducerHubOpIdx
         << "\n";
-    oss << indent << " | #stitchPolicyFullCoverProducerAllOpIdxList:[";
-    for (size_t j = 0; j < outcast.stitchPolicyFullCoverProducerAllOpIdxList.size(); j++) {
-        oss << Delim(j != 0, ",") << At(outcast.stitchPolicyFullCoverProducerAllOpIdxList, j);
+    oss << indent << " | #stitchPolicyFullCoverAllOpIdxList:[";
+    for (size_t j = 0; j < outcast.stitchPolicyFullCoverAllOpIdxList.size(); j++) {
+        oss << Delim(j != 0, ",") << At(outcast.stitchPolicyFullCoverAllOpIdxList, j);
     }
     oss << "]\n";
-    dumpProducer(outcast.producerList);
+    dumpProducer(outcast.producerConsumerList);
+
     return oss.str();
 }
 

@@ -128,12 +128,12 @@ void DumpProducerCellAccess(
         : outcast.cellMatchTableDesc;
     const DevAscendFunctionCallOperandUse* useList = nullptr;
     size_t useSize = 0;
-    if (slot.isPartialUpdateStitch && outcast.producerList.size() == 0) {
+    if (slot.isPartialUpdateStitch && outcast.producerConsumerList.size() == 0) {
         useList = &devRootSrc.At(outcast.stitchPolicyFullCoverProducerList, 0);
         useSize = outcast.stitchPolicyFullCoverProducerList.size();
     } else {
-        useList = &devRootSrc.At(outcast.producerList, 0);
-        useSize = outcast.producerList.size();
+        useList = &devRootSrc.At(outcast.producerConsumerList, 0);
+        useSize = outcast.producerConsumerList.size();
     }
     for (size_t i = 0; i < useSize; ++i) {
         std::vector<int> cellIdxList;

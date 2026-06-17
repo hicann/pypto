@@ -94,7 +94,7 @@ static uint32_t UpdateSlotsForOutCastPartialStitch(
     }
     auto& cellMatchTableDesc = slot.partialUpdate->cellMatchTableDesc;
     auto tableData = &slot.partialUpdate->cellMatchRuntimePartialUpdateTable[0];
-    auto producerSize = outcast.producerList.size();
+    auto producerSize = outcast.producerConsumerList.size();
     uint32_t errCode = 0;
 
     if (cellMatchTableDesc.MaybeHaveAtomic()) {
@@ -113,19 +113,21 @@ static uint32_t UpdateSlotsForOutCastPartialStitch(
         errCode = CellMatchFillIncastOutcast<false>(
             devRootSrc, producerList, producerSize, expressionList, cellMatchTableDesc, tableData, cellMatchTagId,
             devNextIdx);
+        DEV_VERBOSE_DEBUG("Fill cell match table slot %d outcastIndex %u, "
+            "outcast producer list, size = %zu.", slotIdx, slot.stitchOutcastIdx, producerSize);
     } else {
         errCode = CellMatchFillIncastOutcast<false>(
             devRootSrc, &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0),
             outcast.stitchPolicyFullCoverProducerList.size(), expressionList, cellMatchTableDesc, tableData,
             cellMatchTagId, devNextIdx);
+        DEV_VERBOSE_DEBUG("Fill cell match table slot %d outcastIndex %u, "
+            "outcast full cover producer list.", slotIdx, slot.stitchOutcastIdx);
     }
 
-    DEV_VERBOSE_DEBUG_SPLIT(
-        "[UpdateSlots]  slot %d, cellMatchTagId=%x, ret=0x%x, CellMatchPartial=%s.\n",
+    DEV_VERBOSE_DEBUG_SPLIT("[UpdateSlots]  slot %d, cellMatchTagId=%x, ret=0x%x, CellMatchPartial=%s.\n",
         slotIdx, cellMatchTagId, errCode,
         DumpCellMatchPartialUpdateTable(
-            tableData, slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size(), cellMatchTableDesc)
-            .c_str());
+            tableData, slot.partialUpdate->cellMatchRuntimePartialUpdateTable.size(), cellMatchTableDesc).c_str());
     return errCode;
 }
 
@@ -139,7 +141,7 @@ static uint32_t UpdateSlotsForOutCastStitch(
     UNUSED(slotIdx);
     topo_dump::DumpProducerCellAccess(devTaskId, slotIdx, devNextIdx, *devRootSrc, outcast, slot, expressionList);
     uint32_t cellMatchTagId = CellMatchBuildTagId(slot.slotAllocIterId, devTaskId);
-    auto producerList = &devRootSrc->At(outcast.producerList, 0);
+    auto producerList = &devRootSrc->At(outcast.producerConsumerList, 0);
 
     if (slot.isPartialUpdateStitch) {
         return UpdateSlotsForOutCastPartialStitch(
@@ -149,7 +151,7 @@ static uint32_t UpdateSlotsForOutCastStitch(
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
     auto tableData = &devRootSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
     uint32_t errCode = CellMatchFillIncastOutcast<false>(
-        devRootSrc, producerList, outcast.producerList.size(), expressionList, cellMatchTableDesc, tableData);
+        devRootSrc, producerList, outcast.producerConsumerList.size(), expressionList, cellMatchTableDesc, tableData);
     DEV_VERBOSE_DEBUG(
         "[UpdateSlots] slot %d  CellMatchFull=%s cellMatchTagId=%x, ret=0x%x\n", slotIdx,
         DevAscendFunctionDuppedStitchList::DumpTask(tableData, outcast.cellMatchRuntimeFullUpdateTable.size())
