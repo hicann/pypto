@@ -133,28 +133,100 @@ Status MergeViewAssembleUtils::Initialize()
     visitedOp_.clear();
     viewOpToAppend_.clear();
     assembleOpToAppend_.clear();
+    consumerCache_.clear();
+    tensorConsumerCache_.clear();
+    candidateOps_.clear();
     return SUCCESS;
+}
+
+const MergeViewAssembleUtils::ConsumerCacheEntry& MergeViewAssembleUtils::BuildTensorConsumerCache(
+    Function& function, const LogicalTensorPtr& tensor)
+{
+    static const ConsumerCacheEntry emptyEntry;
+    if (tensor == nullptr) {
+        return emptyEntry;
+    }
+    auto tensorMagic = tensor->GetMagic();
+    auto cached = tensorConsumerCache_.find(tensorMagic);
+    if (cached != tensorConsumerCache_.end()) {
+        return cached->second;
+    }
+
+    auto iter = tensorConsumerCache_.emplace(tensorMagic, ConsumerCacheEntry{}).first;
+    auto& cacheEntry = iter->second;
+    for (auto* consumer : tensor->GetConsumers()) {
+        if (consumer == nullptr || consumer->BelongTo() != &function || consumer->IsDeleted()) {
+            continue;
+        }
+        if (consumer->GetOpcode() == Opcode::OP_VIEW) {
+            cacheEntry.viewConsumers.emplace_back(consumer);
+            cacheEntry.hasAssembleChainStopper = true;
+        } else if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            cacheEntry.assembleConsumers.emplace_back(consumer);
+        } else {
+            cacheEntry.hasAssembleChainStopper = true;
+        }
+    }
+    return cacheEntry;
+}
+
+Status MergeViewAssembleUtils::BuildConsumerCache(Function& function)
+{
+    auto operations = function.Operations(false);
+    consumerCache_.reserve(operations.size());
+    tensorConsumerCache_.reserve(operations.size());
+    candidateOps_.reserve(operations.size());
+    for (auto& operation : operations) {
+        if (operation.GetOpcode() != Opcode::OP_VIEW && operation.GetOpcode() != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        candidateOps_.emplace_back(&operation);
+        if (operation.oOperand.empty()) {
+            continue;
+        }
+        consumerCache_[operation.GetOpMagic()] = &BuildTensorConsumerCache(function, operation.oOperand.front());
+    }
+    return SUCCESS;
+}
+
+const MergeViewAssembleUtils::ConsumerCacheEntry& MergeViewAssembleUtils::GetConsumers(const Operation& operation) const
+{
+    static const ConsumerCacheEntry emptyEntry;
+    auto iter = consumerCache_.find(operation.GetOpMagic());
+    if (iter == consumerCache_.end() || iter->second == nullptr) {
+        return emptyEntry;
+    }
+    return *iter->second;
 }
 
 Status MergeViewAssembleUtils::ProcessOperations(Function& function)
 {
-    for (auto& op : function.Operations()) {
-        if (visitedOp_.count(op.GetOpMagic()) != 0) {
+    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
+    Status status = BuildConsumerCache(function);
+    if (status != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "BuildConsumerCache failed.");
+        return status;
+    }
+    for (auto* op : candidateOps_) {
+        if (op == nullptr || op->IsDeleted()) {
+            continue;
+        }
+        if (visitedOp_.count(op->GetOpMagic()) != 0) {
             continue;
         }
         Status processStatus = SUCCESS;
         std::vector<Operation*> chain;
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            processStatus = MergeViewChain(function, op, chain);
-        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            processStatus = MergeAssembleChain(function, op, chain);
+        if (op->GetOpcode() == Opcode::OP_VIEW) {
+            processStatus = MergeViewChain(function, *op, chain);
+        } else if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+            processStatus = MergeAssembleChain(function, *op, chain);
         }
         if (processStatus != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Function, "ProcessOperations failed.");
             return processStatus;
         }
     }
-    Status status = AppendMergedViewOperations(function);
+    status = AppendMergedViewOperations(function);
     if (status != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "AppendMergedViewOperations phase failed.");
         return status;
@@ -261,7 +333,7 @@ Status MergeViewAssembleUtils::MergeViewChain(
     }
 
     // 2. 处理消费者链
-    auto consumers = function.FindConsumers(operation);
+    const auto& consumers = GetConsumers(operation);
     bool chainEnd = true;
     Status status = ProcessConsumerChain(function, consumers, chain, chainEnd, effectiveScopeId);
     if (status != SUCCESS) {
@@ -283,10 +355,10 @@ void MergeViewAssembleUtils::InitOperationChain(Operation& operation, std::vecto
 }
 
 Status MergeViewAssembleUtils::ProcessConsumerChain(
-    Function& function, const std::set<Operation*, LogicalTensor::CompareOp>& consumers, std::vector<Operation*>& chain,
-    bool& chainEnd, int effectiveScopeId)
+    Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain, bool& chainEnd,
+    int effectiveScopeId)
 {
-    if (consumers.empty()) {
+    if (consumers.viewConsumers.empty()) {
         return SUCCESS;
     }
     Operation* currentOp = chain.back();
@@ -296,38 +368,36 @@ Status MergeViewAssembleUtils::ProcessConsumerChain(
         return FAILED;
     }
     MemoryType currentMemType = currentViewAttr->GetTo();
-    for (auto& op : consumers) {
+    for (auto& op : consumers.viewConsumers) {
         if (!op) {
             return FAILED;
         }
-        if (op->GetOpcode() == Opcode::OP_VIEW) {
-            auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
-            if (viewOpAttribute == nullptr) {
-                APASS_LOG_ERROR_F(Elements::Function, "View operation has null viewOpAttribute.");
-                return FAILED;
-            }
-            auto memoryTo = viewOpAttribute->GetTo();
-            // 根据新的合并原则判断是否可以合并
-            bool canMerge = false;
-            if (currentMemType == MemoryType::MEM_UNKNOWN || currentMemType == memoryTo) {
-                // 1.unknown memType 可以向它之后的view合并 2.相同memType的view可以合并
-                canMerge = true;
-            }
-            if (canMerge) {
-                int consumerScopeId = op->GetScopeId();
-                if (effectiveScopeId != -1 && consumerScopeId != -1 && effectiveScopeId != consumerScopeId) {
-                    chainEnd = true;
-                    continue;
-                }
-                chainEnd = false;
-                Status status = MergeViewChain(function, *op, chain, effectiveScopeId);
-                if (status != SUCCESS) {
-                    return status;
-                }
-                chain.pop_back();
-            } else {
+        auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
+        if (viewOpAttribute == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Function, "View operation has null viewOpAttribute.");
+            return FAILED;
+        }
+        auto memoryTo = viewOpAttribute->GetTo();
+        // 根据新的合并原则判断是否可以合并
+        bool canMerge = false;
+        if (currentMemType == MemoryType::MEM_UNKNOWN || currentMemType == memoryTo) {
+            // 1.unknown memType 可以向它之后的view合并 2.相同memType的view可以合并
+            canMerge = true;
+        }
+        if (canMerge) {
+            int consumerScopeId = op->GetScopeId();
+            if (effectiveScopeId != -1 && consumerScopeId != -1 && effectiveScopeId != consumerScopeId) {
                 chainEnd = true;
+                continue;
             }
+            chainEnd = false;
+            Status status = MergeViewChain(function, *op, chain, effectiveScopeId);
+            if (status != SUCCESS) {
+                return status;
+            }
+            chain.pop_back();
+        } else {
+            chainEnd = true;
         }
     }
     return SUCCESS;
@@ -453,26 +523,16 @@ Status MergeViewAssembleUtils::MergeAssembleChain(
     }
 
     // 2. 处理消费者
-    bool chainEnd = false;
-    bool hasAssembleConsumer = false;
-    if (assembleWithoutAssembleConsumer_.count(operation.opmagic) == 0) {
-        auto consumers = function.FindConsumers(operation);
-        chainEnd = consumers.empty();
-        Status status =
-            ProcessAssembleConsumers(function, consumers, chain, chainEnd, hasAssembleConsumer, effectiveScopeId);
-        if (status != SUCCESS) {
-            return status;
-        }
-        if (!hasAssembleConsumer) {
-            assembleWithoutAssembleConsumer_.insert(operation.opmagic);
-        }
-    } else {
-        chainEnd = true;
+    const auto& consumers = GetConsumers(operation);
+    bool chainEnd = consumers.assembleConsumers.empty() || consumers.hasAssembleChainStopper;
+    Status status = ProcessAssembleConsumers(function, consumers, chain, chainEnd, effectiveScopeId);
+    if (status != SUCCESS) {
+        return status;
     }
 
     // 3. 处理链尾情况
     if (chainEnd && chain.size() > 1) {
-        Status status = ProcessAssembleChainEnd(function, chain, operation);
+        status = ProcessAssembleChainEnd(function, chain, operation);
         if (status != SUCCESS) {
             return status;
         }
@@ -489,36 +549,31 @@ void MergeViewAssembleUtils::InitAssembleChain(Operation& operation, std::vector
 }
 
 Status MergeViewAssembleUtils::ProcessAssembleConsumers(
-    Function& function, const std::set<Operation*, LogicalTensor::CompareOp>& consumers, std::vector<Operation*>& chain,
-    bool& chainEnd, bool& hasAssembleConsumer, int effectiveScopeId)
+    Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain, bool& chainEnd,
+    int effectiveScopeId)
 {
-    if (consumers.empty()) {
+    if (consumers.assembleConsumers.empty()) {
         return SUCCESS;
     }
-    for (auto& op : consumers) {
+    for (auto& op : consumers.assembleConsumers) {
         if (!op) {
             APASS_LOG_ERROR_F(Elements::Function, "Null consumer operation found.");
             return FAILED;
         }
-        if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
-            int consumerScopeId = op->GetScopeId();
-            if (effectiveScopeId != -1 && consumerScopeId != -1 && effectiveScopeId != consumerScopeId) {
-                chainEnd = true;
-                continue;
-            }
-            if (!IsRmwModeAttrCompatible(chain, *op)) {
-                chainEnd = true;
-                continue;
-            }
-            hasAssembleConsumer = true;
-            Status status = MergeAssembleChain(function, *op, chain, effectiveScopeId);
-            if (status != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Function, "Run MergeAssembleChain failed.");
-                return status;
-            }
+        int consumerScopeId = op->GetScopeId();
+        if (effectiveScopeId != -1 && consumerScopeId != -1 && effectiveScopeId != consumerScopeId) {
+            chainEnd = true;
             continue;
         }
-        chainEnd = true;
+        if (!IsRmwModeAttrCompatible(chain, *op)) {
+            chainEnd = true;
+            continue;
+        }
+        Status status = MergeAssembleChain(function, *op, chain, effectiveScopeId);
+        if (status != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "Run MergeAssembleChain failed.");
+            return status;
+        }
     }
     return SUCCESS;
 }

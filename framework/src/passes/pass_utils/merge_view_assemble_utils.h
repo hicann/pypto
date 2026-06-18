@@ -16,6 +16,8 @@
 #ifndef PASS_MERGE_VIEW_ASSEMBLE_UTILS_H_
 #define PASS_MERGE_VIEW_ASSEMBLE_UTILS_H_
 
+#include <unordered_map>
+
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/tensor/irbuilder.h"
@@ -50,6 +52,12 @@ public:
         Operation::ScopeInfo scopeInfo;
         std::string rmwModeAttr;
     };
+    struct ConsumerCacheEntry {
+        std::vector<Operation*> viewConsumers;
+        std::vector<Operation*> assembleConsumers;
+        // Any non-assemble consumer stops an assemble chain at this tensor.
+        bool hasAssembleChainStopper = false;
+    };
 
     static Status MergeViewAssemble(Function& function);
 
@@ -79,8 +87,8 @@ public:
      * @return Status indicating success or failed.
      */
     Status ProcessConsumerChain(
-        Function& function, const std::set<Operation*, LogicalTensor::CompareOp>& consumers,
-        std::vector<Operation*>& chain, bool& chainEnd, int effectiveScopeId);
+        Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain, bool& chainEnd,
+        int effectiveScopeId);
 
     Status ProcessChainEnd(Function& function, std::vector<Operation*>& chain);
 
@@ -134,12 +142,11 @@ public:
      * @param consumers the consumers for the assemble to be processed.
      * @param chain the list of operations in the assemble chain.
      * @param chainEnd a flag indicating whether the chain has ended.
-     * @param hasAssembleConsumer a flag indicating whether the assemble's consumer is empty.
      * @return Status indicating success or failed.
      */
     Status ProcessAssembleConsumers(
-        Function& function, const std::set<Operation*, LogicalTensor::CompareOp>& consumers,
-        std::vector<Operation*>& chain, bool& chainEnd, bool& hasAssembleConsumer, int effectiveScopeId);
+        Function& function, const ConsumerCacheEntry& consumers, std::vector<Operation*>& chain, bool& chainEnd,
+        int effectiveScopeId);
 
     Status ProcessAssembleChainEnd(Function& function, std::vector<Operation*>& chain, Operation& operation);
 
@@ -153,6 +160,9 @@ public:
 
     // Common methods
     Status Initialize();
+    Status BuildConsumerCache(Function& function);
+    const ConsumerCacheEntry& BuildTensorConsumerCache(Function& function, const LogicalTensorPtr& tensor);
+    const ConsumerCacheEntry& GetConsumers(const Operation& operation) const;
     static ir::Span GetFirstSpan(const std::vector<Operation*>& chain);
     static Operation::ScopeInfo GetChainScopeInfo(const std::vector<Operation*>& chain);
 
@@ -167,7 +177,9 @@ public:
     Status CleanUp(Function& function);
     Status EraseRedundantAssemble(Function& function) const;
     std::unordered_set<int> visitedOp_;
-    std::unordered_set<int> assembleWithoutAssembleConsumer_;
+    std::unordered_map<int, const ConsumerCacheEntry*> consumerCache_;
+    std::unordered_map<int, ConsumerCacheEntry> tensorConsumerCache_;
+    std::vector<Operation*> candidateOps_;
     std::vector<ViewOp> viewOpToAppend_;
     std::vector<AssembleOp> assembleOpToAppend_;
     IRBuilder irBuilder_;
