@@ -53,7 +53,7 @@ __aicore__ inline void TLoad(T dst, U src, C coordinate)
         }
 
         auto dstTile = PtoTile<T>(dst);
-        auto srcGlobal = PtoGlobal<T, typename T::Shape, typename U::Stride, true>(dst.GetShape(), src.GetStride());
+        auto srcGlobal = PtoGlobal<U, typename T::Shape, typename U::Stride, true>(dst.GetShape(), src.GetStride());
         for (LoopVar index0 = 0; index0 < dstShape0; ++index0) {
             for (LoopVar index1 = 0; index1 < dstShape1; ++index1) {
                 for (LoopVar index2 = 0; index2 < dstShape2; ++index2) {
