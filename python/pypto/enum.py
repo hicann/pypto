@@ -36,16 +36,13 @@ AtomicType = pypto_impl.AtomicType
 DequantScaleRoundingMode = pypto_impl.DequantScaleRoundingMode
 PrecisionType = pypto_impl.PrecisionType
 
-DataType.__repr__ = _enum_repr
-TileOpFormat.__repr__ = _enum_repr
-CachePolicy.__repr__ = _enum_repr
-ReduceMode.__repr__ = _enum_repr
-CastMode.__repr__ = _enum_repr
-OpType.__repr__ = _enum_repr
-OutType.__repr__ = _enum_repr
-TopKAlgo.__repr__ = _enum_repr
-SaturationMode.__repr__ = _enum_repr
-DequantScaleRoundingMode.__repr__ = _enum_repr
+_ENUM_CLASSES = [
+    DataType, TileOpFormat, CachePolicy, ReduceMode, CastMode,
+    OpType, OutType, TopKAlgo, SaturationMode, DequantScaleRoundingMode,
+]
+for cls in _ENUM_CLASSES:
+    cls.__repr__ = _enum_repr
+    cls.__str__ = _enum_repr
 
 DT_INT4 = DataType.DT_INT4
 DT_INT8 = DataType.DT_INT8
