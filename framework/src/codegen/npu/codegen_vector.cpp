@@ -240,8 +240,8 @@ std::string CodeGenOpNPU::PrintTransDataLayout(const std::vector<std::string>& p
             {Opcode::OP_NCHW2NC1HWC0, 4},
             {Opcode::OP_NCHW2Fractal_Z, 6},
             {Opcode::OP_NCDHW2NDC1HWC0, 5},
-            {Opcode::OP_NC1HWC02NCHW, 5},
-            {Opcode::OP_NDC1HWC02NCDHW, 6},
+            {Opcode::OP_NC1HWC02NCHW, 8},
+            {Opcode::OP_NDC1HWC02NCDHW, 9},
             {Opcode::OP_NCDHW2FRACTAL_Z_3D, 7}
     };
     auto iter = opParamPos.find(opCode);

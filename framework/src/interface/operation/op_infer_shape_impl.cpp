@@ -1017,31 +1017,17 @@ void TransDataNCDHW2NDC1HWC0InferFunc(Operation* op, std::vector<std::vector<Sym
 
 void TransDataNC1HWC02NCHWInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeN = inputValidShape[0];
-    SymbolicScalar validShapeC1 = inputValidShape[1];
-    SymbolicScalar validShapeH = inputValidShape[2];
-    SymbolicScalar validShapeW = inputValidShape[3];
-    SymbolicScalar validShapeC0 = inputValidShape[4];
-
-    std::vector<SymbolicScalar> outputValidShape = {validShapeN, validShapeC1 * validShapeC0, validShapeH, validShapeW};
-    outValidShapes.push_back(outputValidShape);
+    std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
+    outValidShapes.push_back(validShape);
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
     outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
 }
 
 void TransDataNDC1HWC02NCDHWInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeD = inputValidShape[0];
-    SymbolicScalar validShapeC1 = inputValidShape[1];
-    SymbolicScalar validShapeH = inputValidShape[2];
-    SymbolicScalar validShapeW = inputValidShape[3];
-    SymbolicScalar validShapeC0 = inputValidShape[4];
-
-    std::vector<SymbolicScalar> outputValidShape = {
-        1, validShapeD, validShapeC1 * validShapeC0, validShapeH, validShapeW};
-    outValidShapes.push_back(outputValidShape);
+    std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
+    validShape.insert(validShape.begin(), SymbolicScalar(1));
+    outValidShapes.push_back(validShape);
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
     outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
 }
