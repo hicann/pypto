@@ -40,7 +40,7 @@ public:
     Status PostCheck(Function& function) override;
     Status EliminateReduceAcc(Function& function);
     Status EliminateAtomicRMW(Function& function);
-    Status EliminateVecDupBranch(Function& function);
+    Status EliminateVecDupBranch(Function& function, bool& hasReduceAccCascade);
 
 private:
     Status CheckAtomicRMWUnsupportedMode(Function& function);

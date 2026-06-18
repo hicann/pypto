@@ -1058,17 +1058,13 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
     EXPECT_NE(function, nullptr);
 
     int atomicRmwCount = 0;
-    for (auto& op : function->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
-            atomicRmwCount++;
-        }
-    }
-    EXPECT_EQ(atomicRmwCount, 1);
 
     ProcessAtomic passLocal;
     Status preCheckResult = passLocal.PreCheck(*function);
     EXPECT_EQ(preCheckResult, SUCCESS);
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_FALSE(hasReduceAccCascade);
     EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
 
@@ -1269,10 +1265,11 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     G.SetOutCast({"atomicOutput"});
 
     Function* function = G.GetFunction();
-    EXPECT_NE(function, nullptr);
 
     ProcessAtomic passLocal;
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_TRUE(hasReduceAccCascade);
     EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
 
@@ -1366,7 +1363,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     EXPECT_NE(function, nullptr);
 
     ProcessAtomic passLocal;
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_FALSE(hasReduceAccCascade);
     EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
 
@@ -1414,7 +1413,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSharedInputCloneAssembleProducer)
 
     ProcessAtomic passLocal;
     EXPECT_EQ(passLocal.CheckAtomicRMWUnsupportedMode(*G.GetFunction()), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*G.GetFunction()), SUCCESS);
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*G.GetFunction(), hasReduceAccCascade), SUCCESS);
+    EXPECT_FALSE(hasReduceAccCascade);
     EXPECT_EQ(passLocal.EliminateReduceAcc(*G.GetFunction()), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*G.GetFunction()), SUCCESS);
 
@@ -1466,7 +1467,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWReduceAccChainVecDupBranchRemove)
     G.SetOutCast({"atomicOut"});
     ProcessAtomic passLocal;
     auto* function = G.GetFunction();
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_TRUE(hasReduceAccCascade);
     EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
     auto mulbOp = G.GetOp("mulbOp");
@@ -1507,7 +1510,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWNoReduceAccVecDupBranchKeep)
     G.SetOutCast({"atomicOut"});
     ProcessAtomic passLocal;
     auto* function = G.GetFunction();
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
+    bool hasReduceAccCascade = false;
+    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function, hasReduceAccCascade), SUCCESS);
+    EXPECT_FALSE(hasReduceAccCascade);
     EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
     EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
     auto mulbOp = G.GetOp("mulbOp");

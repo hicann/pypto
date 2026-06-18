@@ -46,7 +46,8 @@ Status ProcessAtomic::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Unsupported AtomicRMW mode detected.");
         return FAILED;
     }
-    if (EliminateVecDupBranch(function) != SUCCESS) {
+    bool hasReduceAccCascade = false;
+    if (EliminateVecDupBranch(function, hasReduceAccCascade) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate VecDup branch failed.");
         return FAILED;
     }
@@ -58,10 +59,12 @@ Status ProcessAtomic::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate AtomicRMW failed.");
         return FAILED;
     }
-    Status status = MergeViewAssembleUtils::MergeViewAssemble(function);
-    if (status != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
-        return status;
+    if (hasReduceAccCascade) {
+        Status status = MergeViewAssembleUtils::MergeViewAssemble(function);
+        if (status != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
+            return status;
+        }
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End ProcessAtomic.");
     return SUCCESS;
@@ -442,7 +445,7 @@ bool ProcessAtomic::IsVecDupAssembleInput(const Operation& assembleOp) const
     return false;
 }
 
-Status ProcessAtomic::EliminateVecDupBranch(Function& function)
+Status ProcessAtomic::EliminateVecDupBranch(Function& function, bool& hasReduceAccCascade)
 {
     std::vector<Operation*> reduceAccOps;
     std::set<int> collectVisited;
@@ -451,6 +454,7 @@ Status ProcessAtomic::EliminateVecDupBranch(Function& function)
             CollectReduceAccUpstream(op, collectVisited, reduceAccOps);
         }
     }
+    hasReduceAccCascade = !reduceAccOps.empty();
     if (reduceAccOps.empty()) {
         return SUCCESS;
     }
