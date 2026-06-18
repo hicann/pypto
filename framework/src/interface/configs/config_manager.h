@@ -76,6 +76,7 @@ const std::string KEY_POST_CHECK = "post_check";
 const std::string KEY_EXPECTED_VALUE_CHECK = "expected_value_check";
 const std::string KEY_DISABLE_PASS = "disable_pass";
 const std::string KEY_HEALTH_CHECK = "health_check";
+const std::string KEY_ADDR_CHECK = "addr_check";
 const std::string KEY_RESUME_PARH = "RESUME_PATH";
 const std::string KEY_EXEC_VERIFIER = "EXEC_VERIFIER";
 const std::string KEY_SET_SCOPE = "SCOPE";
@@ -102,6 +103,7 @@ struct PassConfigs {
     bool expectedValueCheck{false};
     bool disablePass{false};
     bool healthCheck{false};
+    bool addrCheck{false};
     std::string resumePath{""};
 };
 
