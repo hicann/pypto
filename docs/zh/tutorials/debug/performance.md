@@ -144,13 +144,73 @@ msprof --task-time=l3 [--output=<数据存放路径>] python xxx.py
 
 **步骤4：数据解析**
 
-PMU数据采集完成后，会落盘在`output/PROF*/device_*/data/`目录下。根据所选的`PMU_EVENT_TYPE`，执行解析脚本：
+PMU 数据采集完成后，会落盘在 `output/PROF*/device_*/data/` 目录下。根据所选的 `PROF_PMU_EVENT_TYPE`，执行解析脚本：
 
 ```bash
-python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PROF_EVENT_TYPE --arch [dav_2201, dav_3510]
+python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PROF_PMU_EVENT_TYPE --arch [dav_2201, dav_3510]
 ```
 
 解析完成后，会在项目根目录下生成`tilefwk_prof_pmu.csv`文件。
+
+### PMU Trace
+
+PMU Trace 用于核内流水分析，是算子深度性能调优的重要工具。开启该能力后，开发者可以直观地观察 kernel 在 AI Core 上执行时，各硬件流水线（如 MTE2、MTE3、Vector、Cube 等）的时序排布与重叠情况。通过分析流水排布，可以识别搬运与计算之间的空闲等待、判断各流水线的利用率是否充分，从而有针对性地调整 Tiling 配置或计算编排策略，提升算子性能。
+
+**限制说明**：
+- 当前仅支持 Ascend 950PR / Ascend 950DT。
+- 当前仅支持单算子采集，不支持整网场景。
+- 当前最多只能采集 6 个核的数据。
+
+#### 开启 PMU Trace
+
+通过 `codegen_options` 中的 `enable_pmu_trace` 参数开启。开启后，codegen 会在每个 leaf function 对应 CCE 代码的首尾插入 `bisheng::cce::mark_stamp` 打点，并为其分配 PMU ID，用于在核内流水中定位对应 kernel。
+
+**PMU ID 生成规则**
+
+PMU ID 由 `CodeGenCloudNPU::GenPMUId()` 生成（`codegen_cloudnpu.cpp`），用于标识不同 kernel 函数。
+
+生成方式：`PMU ID = [主块标记] + funcHash 后三位`，再对 4096 取模后作为 stamp 值。
+
+| 组成部分 | 规则 | 示例 |
+|---|---|---|
+| 主块标记 | `ctx.isMainBlock == true` 时前缀加 `"1"`，否则为空 | 主块：`"1"`，非主块：无 |
+| funcHash 后三位 | 取 `subFunc.GetFunctionHash()` 的最后 3 个字符 | `"123"` |
+
+**约束**：bisheng 编译器 stamp 值上限为 4096。为区分主块与尾块，当前仅使用 funcHash 后三位；子图数量超过约 1000 时，跨 kernel 的 PMU ID 可能重复。
+
+
+支持两种配置方式：
+
+**方式一：在 `@pypto.frontend.jit` 装饰器中配置**
+
+```python
+@pypto.frontend.jit(
+    codegen_options={"enable_pmu_trace": True}
+)
+```
+
+**方式二：通过 `set_codegen_options` 接口配置**
+
+```python
+pypto.set_codegen_options(enable_pmu_trace=True)
+```
+
+#### 采集 PMU Trace 数据
+
+开启 PMU Trace 后，还需在运行时通过 `msprof` 开启指令级采集：
+
+```bash
+msprof --instr-profiling=on [--output=<数据存放路径>] python xxx.py
+```
+
+其中：
+- `--instr-profiling=on`：开启指令级 Profiling 采集
+- `--output`：手动指定落盘路径，默认落盘在当前工作目录下
+
+#### 采集结果
+
+采集完成后，数据文件落盘在 `PROF_*/mindstudio_profiler_output/msprof_*.json` 中。开发者可在 PyPTO Toolkit 中加载该文件，进行核内流水分析。在 PyPTO Toolkit 的核内流水视图中，每对 `mark_stamp` 会显示为流水线上的尖峰标记，NOP 填充使其在时间轴上形成可辨识的间隔。开发者通过匹配相同的 PMU ID，即可将时间轴上的流水片段定位到对应的 leaf function，从而分析该计算阶段内各流水线（MTE2、MTE3、Vector、Cube 等）的时序排布与利用率。
+
 
 ## 开箱性能调优
 
