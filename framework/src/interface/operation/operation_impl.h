@@ -249,6 +249,7 @@ public:
     static const std::string isFmap;
     static const std::string isConv3D;
     static const std::string cutW; // L0C M方向(hw合轴)的w大小
+    static const std::string realCutW; // L0C M方向(hw合轴)的w的validshape
 };
 
 enum class CopyInMode : int {
@@ -274,6 +275,7 @@ struct ConvAttrParam {
     std::vector<int64_t> oriFmapShape = {0, 0, 0, 0};
     std::vector<int64_t> oriWeightShape = {0, 0, 0, 0};
     std::vector<int64_t> oriResShape = {0, 0, 0, 0};
+    std::vector<SymbolicScalar> dynValidResShape;
     int64_t groups = 0;
     int64_t offsetX = 0;
     bool isConv1D = false;
@@ -330,6 +332,12 @@ struct ConvTileInfo {
     int64_t wL0 = 0;
     int64_t nL0 = 0;
     int64_t cin0 = 0;
+    SymbolicScalar dynValidCout = SymbolicScalar(0);
+    SymbolicScalar dynValidHout = SymbolicScalar(0);
+    SymbolicScalar dynValidWout = SymbolicScalar(0);
+    SymbolicScalar dynValidHoutL0 = SymbolicScalar(0);
+    SymbolicScalar dynValidWoutL0 = SymbolicScalar(0);
+    SymbolicScalar dynValidCoutL0 = SymbolicScalar(0);
 };
 
 struct ConvIterInfo {

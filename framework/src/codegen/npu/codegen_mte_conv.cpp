@@ -103,7 +103,8 @@ std::vector<std::string> CodeGenOpNPU::BuildCopyInParamList(
 
 std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(
     const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
-    const std::vector<int64_t>& staticOffsets, const std::string& realM, const std::string& realN, int64_t cutW) const
+    const std::vector<int64_t>& staticOffsets, const std::string& realM, const std::string& realN,
+    const std::string& realCutW, const std::string& cutW) const
 {
     std::vector<std::string> tileOpCopyOutParamList;
     tileOpCopyOutParamList.emplace_back(dstTensor);
@@ -123,7 +124,8 @@ std::vector<std::string> CodeGenOpNPU::BuildCopyOutParamList(
 
     tileOpCopyOutParamList.emplace_back(realM);
     tileOpCopyOutParamList.emplace_back(realN);
-    tileOpCopyOutParamList.emplace_back(std::to_string(cutW));
+    tileOpCopyOutParamList.emplace_back(realCutW);
+    tileOpCopyOutParamList.emplace_back(cutW);
 
     return tileOpCopyOutParamList;
 }
@@ -267,6 +269,8 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
     int64_t cutW = 0;
     GetOpAttr(Conv::LoadStoreConvOpAttributeKey::cutW, cutW);
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_ATTR_INVALID, cutW != 0) << "GenMemL0CCopyOutConv cutW should not be 0!";
+    SymbolicScalar cutWValidShape = 0;
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::realCutW, cutWValidShape);
 
     std::vector<SymbolicScalar> srcShapeVec;
     GetOpAttr(OpAttributeKey::l0cValidMN, srcShapeVec);
@@ -274,6 +278,7 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
         << "GenMemL0CCopyOutConv valid shape should be 2-dim!";
     std::string realM = SymbolicExpressionTable::BuildExpression(srcShapeVec[ID0]);
     std::string realN = SymbolicExpressionTable::BuildExpression(srcShapeVec[ID1]);
+    std::string realCutW = SymbolicExpressionTable::BuildExpression(cutWValidShape);
 
     auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::DST_IDX)];
     size_t expectedDim = isConv3D ? SHAPE_DIM5 : SHAPE_DIM4;
@@ -286,7 +291,7 @@ std::string CodeGenOpNPU::GenMemL0CCopyOutConv() const
 
     std::vector<std::string> tileOpParamList = BuildCopyOutParamList(
         tileOpParams[ToUnderlying(MISOIdx::DST_IDX)], tileOpParams[ToUnderlying(MISOIdx::SRC0_IDX)], gmOffsetExpr,
-        staticOffsets, realM, realN, cutW);
+        staticOffsets, realM, realN, realCutW, std::to_string(cutW));
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByAngleBrackets({copyOutModeStr, std::to_string(isConv3D)});

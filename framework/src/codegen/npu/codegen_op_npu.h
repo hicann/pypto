@@ -212,7 +212,7 @@ protected:
     std::vector<std::string> BuildCopyOutParamList(
         const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
         const std::vector<int64_t>& staticOffsets, const std::string& realM, const std::string& realN,
-        int64_t cutW) const;
+        const std::string& realCutW, const std::string& cutW) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForLoad() const;

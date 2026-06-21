@@ -368,13 +368,13 @@ int64_t RuntimeGetViewValidShapeDim(int64_t validshape, int64_t viewOffset, int6
 #define GET_PARAM_STRIDE_DIM_6(s0, s1, s2, s3, s4, s5) \
     (s1) * (s2) * (s3) * (s4) * (s5), (s2) * (s3) * (s4) * (s5), (s3) * (s4) * (s5), (s4) * (s5), (s5), 1
 
-INLINE int64_t RUNTIME_Min(uint64_t input1, uint64_t input2) { return input1 < input2 ? input1 : input2; }
+INLINE int64_t RUNTIME_Min(int64_t input1, int64_t input2) { return input1 < input2 ? input1 : input2; }
 
-INLINE int64_t RUNTIME_Max(uint64_t input1, uint64_t input2) { return input1 > input2 ? input1 : input2; }
+INLINE int64_t RUNTIME_Max(int64_t input1, int64_t input2) { return input1 > input2 ? input1 : input2; }
 
-INLINE int64_t RUNTIME_Eq(uint64_t input1, uint64_t input2) { return input1 == input2; }
+INLINE int64_t RUNTIME_Eq(int64_t input1, int64_t input2) { return input1 == input2; }
 
-INLINE int64_t RUNTIME_Ne(uint64_t input1, uint64_t input2) { return input1 != input2; }
+INLINE int64_t RUNTIME_Ne(int64_t input1, int64_t input2) { return input1 != input2; }
 
 INLINE int32_t GetTensorDataInt32(CoreFuncParam* ctx, uint64_t address)
 {
