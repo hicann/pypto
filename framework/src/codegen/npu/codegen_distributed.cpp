@@ -24,24 +24,6 @@ namespace npu::tile_fwk {
 
 using AtomicType = Distributed::AtomicType;
 
-static bool HasGetTensorDataInOffsetAttr(
-    const std::vector<int64_t>& shape, const std::vector<SymbolicScalar>& offsetAttr)
-{
-    for (size_t index = 0; index < shape.size(); ++index) {
-        if (!offsetAttr[index].IsValid()) {
-            continue;
-        }
-        auto callList = LookupExpressionByOpcode(offsetAttr[index].Raw(), SymbolicOpcode::T_MOP_CALL);
-        for (auto& call : callList) {
-            auto caller = call->GetExpressionOperandList()[0];
-            if (caller->IsSymbol() && CallIsGetTensorData(caller->GetSymbolName())) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 std::string CodeGenOpNPU::GetTemplateDType() const
 {
     static const std::unordered_map<Opcode, int32_t> dTypeOperandIndexMap = {
@@ -284,12 +266,6 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapes(int32_t operandIndex) const
 std::string CodeGenOpNPU::GenDynOffCoord(int32_t operandIndex) const
 {
     size_t dim = shape[operandIndex].size();
-
-    // 如果 offset 没有任何 GetTensorData 类型，则从Coa中获取
-    if (!HasGetTensorDataInOffsetAttr(shape[operandIndex], offsetFromAttr[operandIndex])) {
-        return GenOffCoord(operandIndex);
-    }
-
     // 如果 offset 有 GetTensorData 类型，则从 copyOpAttribute 获取
     std::ostringstream oss;
     for (size_t index = 0; index < dim; ++index) {

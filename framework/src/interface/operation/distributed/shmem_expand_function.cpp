@@ -377,10 +377,11 @@ void TiledShmemGet(
         distOpAttr.copyBufferShape = copyBufferShape;
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
-        tileOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified(nonShmemDataTileOffset),
-            OpImmediate::Specified(nonShmemDataTileShape), OpImmediate::Specified(out->shape),
-            OpImmediate::Specified(shmemDataTile->dynValidShape_)));
+        auto toOffset = OpImmediate::Specified(Offset(nonShmemDataTileOffset.size(), 0));
+        tileOp.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(
+                MemoryType::MEM_DEVICE_DDR, toOffset, OpImmediate::Specified(nonShmemDataTileShape),
+                OpImmediate::Specified(out->shape), OpImmediate::Specified(shmemDataTile->dynValidShape_)));
         tileOp.SetAttr(OpAttributeKey::isDistCopyOut, true);
     });
 }
