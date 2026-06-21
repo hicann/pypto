@@ -54,7 +54,7 @@ public:
 
 TEST_F(TestCompileControlBin, GenCustomOpInfo_DumpFileFails)
 {
-    GenCustomOpInfo("test_func", "/nonexistent_dir/aicpu", "libtest_control");
+    EXPECT_THROW(GenCustomOpInfo("test_func", "/nonexistent_dir/aicpu", "libtest_control"), npu::tile_fwk::Error);
 }
 
 TEST_F(TestCompileControlBin, GenCustomOpInfo_Success)
@@ -96,8 +96,7 @@ TEST_F(TestCompileControlBin, GenTilingFunc_DumpFileFails)
 
 TEST_F(TestCompileControlBin, TileFwkAiCpuCompile_GenTilingFuncFails)
 {
-    bool result = TileFwkAiCpuCompile("test_func", "/proc/fake_aicpu_dir");
-    EXPECT_FALSE(result);
+    EXPECT_THROW(TileFwkAiCpuCompile("test_func", "/proc/fake_aicpu_dir"), npu::tile_fwk::Error);
 }
 
 TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_CompileFails)
@@ -112,8 +111,7 @@ TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_CompileFails)
 
     std::string preCompileO;
     std::string dirPath = compileDir;
-    bool result = TieFwkAicpuPreCompile(preCompileO, dirPath);
-    EXPECT_FALSE(result);
+    EXPECT_THROW(TieFwkAicpuPreCompile(preCompileO, dirPath), npu::tile_fwk::Error);
 }
 
 TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_NoFiles)
@@ -134,6 +132,5 @@ TEST_F(TestCompileControlBin, SharedAicpuCompile_CompileFails)
     CreateMultiLevelDir(aicpuDir);
 
     std::string preCompile0 = "/nonexistent_ut_fake.o";
-    bool result = SharedAicpuCompile("test_func", aicpuDir, preCompile0);
-    EXPECT_FALSE(result);
+    EXPECT_THROW(SharedAicpuCompile("test_func", aicpuDir, preCompile0), npu::tile_fwk::Error);
 }

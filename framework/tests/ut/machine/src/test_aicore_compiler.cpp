@@ -55,8 +55,7 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_EmptyCcePath)
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
 
-    int ret = CompileAICoreKernel(leafDict, param, "", "test_hash", kernelPath);
-    EXPECT_EQ(ret, -1);
+    EXPECT_THROW(CompileAICoreKernel(leafDict, param, "", "test_hash", kernelPath), npu::tile_fwk::Error);
 }
 
 TEST_F(TestAicoreCompiler, CompileAICoreKernel_GenSrcFileFails)
@@ -64,8 +63,9 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_GenSrcFileFails)
     std::map<uint64_t, Function*> leafDict;
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
-    int ret = CompileAICoreKernel(leafDict, param, "/nonexistent_dir/cce_path/", "test_hash", kernelPath);
-    EXPECT_EQ(ret, -1);
+    EXPECT_THROW(
+        CompileAICoreKernel(leafDict, param, "/nonexistent_dir/cce_path/", "test_hash", kernelPath),
+        npu::tile_fwk::Error);
 }
 
 TEST_F(TestAicoreCompiler, GenSubFuncCall_EmptyLeafDict)

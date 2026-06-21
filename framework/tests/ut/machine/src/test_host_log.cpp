@@ -174,6 +174,7 @@ TEST_F(TestHostLog, test_tilefwk_log_case1)
 
 TEST_F(TestHostLog, test_log_manager_case0)
 {
+    LogManager::Instance().SetLogLevel(LogLevel::ERROR);
     EXPECT_EQ(LogManager::Instance().CheckLevel(LogLevel::ERROR), true);
     EXPECT_EQ(LogManager::Instance().CheckLevel(LogLevel::WARN), false);
     EXPECT_EQ(LogManager::Instance().CheckLevel(LogLevel::INFO), false);
