@@ -829,7 +829,7 @@ public:
         return nullptr;
     }
 
-    uint8_t* FindCtrlFlowCache(KernelBinary* kernel, py::object& module, std::vector<DeviceTensorData>& tensors)
+    uint8_t* FindCtrlFlowCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
     {
         if (kernel->DisableHostCtrlFlowCacheBuild()) {
             COMPILER_LOGI("Skip host control flow cache build due to RUNTIME_FUNCKEY_CACHESTOP.");
@@ -841,8 +841,6 @@ public:
             if (DeviceLauncher::IsCaptureMode()) { // KernelModule
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
                 devCache = kernel->BuildControlFlowCache(tensors, true);
-            } else if (InferCacheShape(module, tensors, shape)) {
-                devCache = kernel->FindCtrlFlowCache(shape, false);
             } else {
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
                 devCache = kernel->BuildControlFlowCache(tensors, true);
@@ -869,10 +867,10 @@ public:
             compileMonitorEnable, intervalSec, timeoutSec, totalTimeoutSec, compileMonitorPassDetailEnable);
         auto compile = py::getattr(module, "compile");
         compile(torch_tensors, tensor_defs);
-        return RegisterLastCompiledKernel(module);
+        return RegisterLastCompiledKernel();
     }
 
-    KernelBinary* RegisterLastCompiledKernel(py::object& module)
+    KernelBinary* RegisterLastCompiledKernel()
     {
         auto func = Program::GetInstance().GetLastFunction();
         auto attr = func->GetDyndevAttribute();
@@ -881,12 +879,6 @@ public:
         }
         auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func));
         kernels.push_back(kernel);
-        if (inferCacheShape) {
-#if ENABLE_VERBOSE_LOG
-            COMPILER_LOGI("build default cache");
-#endif
-            BuildDefaultCache(kernel, module);
-        }
         return kernel;
     }
 
@@ -1058,9 +1050,6 @@ private:
                 isDebugMode = (debugMode == CFG_DEBUG_ALL);
             }
         }
-        if (!module.attr("_infer_controlflow_shape").is_none()) {
-            inferCacheShape = true;
-        }
 
         if (!module.attr("_host_options").is_none()) {
             auto host_options = module.attr("_host_options").cast<py::dict>();
@@ -1085,51 +1074,6 @@ private:
                 totalTimeoutSec = host_options["compile_timeout"].cast<int>();
             }
         }
-#if ENABLE_VERBOSE_LOG
-        COMPILER_LOGI("infer_cache_shape: %d", inferCacheShape);
-#endif
-    }
-
-    void BuildDefaultCache(KernelBinary* kernel, py::object& module)
-    {
-        auto infershape = py::getattr(module, "_infer_controlflow_shape");
-        auto cfshapes = infershape().cast<py::list>();
-        auto tensors = kernel->GetArgTypes();
-        for (auto& pyshape : cfshapes) {
-            auto inputShapes = pyshape.cast<std::vector<std::vector<int64_t>>>();
-            if (inputShapes.size() != tensors.size()) {
-                COMPILER_LOGI("Invalid input size, expect: %zu, get: %zu.", tensors.size(), inputShapes.size());
-                continue;
-            }
-            std::vector<DeviceTensorData> inputs;
-            for (size_t i = 0; i < tensors.size(); i++) {
-                inputs.emplace_back(tensors[i].GetDataType(), nullptr, inputShapes[i]);
-            }
-            if (kernel->CheckArgs(inputs)) {
-                kernel->BuildControlFlowCache(inputs, false);
-            } else {
-                COMPILER_LOGI("Invalid cache shape, skip it");
-            }
-        }
-    }
-
-    bool InferCacheShape(
-        py::object& module, std::vector<DeviceTensorData>& tensors, std::vector<std::vector<int64_t>>& shapes)
-    {
-        auto infershape = py::getattr(module, "_infer_controlflow_shape", py::none());
-        if (infershape.is_none()) {
-            return false;
-        }
-        py::list oriShapes;
-        for (auto& t : tensors) {
-            oriShapes.append(py::cast(t.GetShape()));
-        }
-        auto cfshape = infershape(*oriShapes);
-        if (cfshape.is_none()) {
-            return false;
-        }
-        shapes = cfshape.cast<std::vector<std::vector<int64_t>>>();
-        return true;
     }
 
     DevControlFlowCache* FindHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>& hostCache)
@@ -1161,7 +1105,6 @@ private:
         }
     };
 
-    bool inferCacheShape{false};
     bool isDebugMode{false};
     bool compileStageAllComplete{true};
     LaunchMode launchMode_{LaunchMode::DEVICE_RT};
@@ -1277,7 +1220,7 @@ private:
         DeviceLauncher::AddAicpuStream(DeviceLauncher::IsCaptureMode(), rtModel);
         HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
 
-        uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, tensors);
+        uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, tensors);
         HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
 
         kmodule->EmulationLaunch(kbinary, tensors, ctrlFlowCache);
