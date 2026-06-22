@@ -38,6 +38,7 @@ IMPL_RULE_IDS = [
     "OL56",  # Stage 6 之前 unroll_list 只能含单一值 (默认 [1])
     "OL57",  # JIT 图代码内允许 pypto.loop / pypto.loop_unroll / range 循环 (禁止 while 和非 range 的 for)
     "OL58",  # Layer K wrapper output buffer 必须 torch.* 预分配 (禁止 host pypto.zeros)
+    "OL61",  # Preflight code scan: cast path / Element wrap / scalar arg / zeros dtype
 ]
 
 # DESIGN.md post-edit 适用规则 (在 Stage 4 Designer 编辑 DESIGN.md 时即时校验)。

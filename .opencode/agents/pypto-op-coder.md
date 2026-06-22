@@ -58,8 +58,9 @@ When MEMORY.md says `module_count == 1`, the orchestrator dispatches you **once*
 2. Produce `custom/<op>/<op>_impl.py` directly using skill `pypto-op-develop`'s `templates/impl_template.py`. The kernel covers the entire algorithm in one `@pypto.frontend.jit` body. No stub modules, no `_module<k>` files.
 3. Produce `custom/<op>/README.md` (same content schema as the L1 cleanup variant — see below).
 4. Consult DEBUG §9 subsections before writing JIT code / `pypto.view` / `pypto.matmul` / reductions.
-5. Append a Development log line stating "L0 single-shot impl + README produced".
-6. **Return control to pypto-op-orchestrator.** Test writing and E2E happen in a later stage.
+5. **Preflight self-check** — read `MEMORY.md` → `## Experience Preflight` section. Skip rules with `🤖`（OL61 AST 自动扫描）or `🔧`（其他 OL 规则自动扫描）marker. For each remaining S0 rule, verify the impl file has no violation. If a violation is found, fix it in place and re-check. Do NOT maintain a separate rule list — always use the checklist from MEMORY.md.
+6. Append a Development log line stating "L0 single-shot impl + README produced".
+7. **Return control to pypto-op-orchestrator.** Test writing and E2E happen in a later stage.
 
 ## L1 cleanup dispatch (one-shot integration + README)
 
@@ -86,8 +87,9 @@ Cap active skills at 5. Do NOT load any debug sub-skill yourself.
 1. Read `active_module: M_k` and the module contract from `custom/<op>/MEMORY.md`. If `active_module` is unset or already in `modules_pypto_verified`, reject the dispatch and ask pypto-op-orchestrator to clarify.
 2. Generate ONLY `custom/<op>/modules/<op>_module<suffix_k>_impl.py` for `M_k`. Downstream modules remain stubbed with `# STUB: until M_{k+1} verified; golden-fed tensor`. Wrapper name MUST be `<op>_module<suffix_k>_wrapper` — the verifier-emitted test imports this exact symbol.
 3. Consult DEBUG §9 subsections before writing JIT code / `pypto.view` / `pypto.matmul` / reductions.
-4. Append a Development log line to `custom/<op>/MEMORY.md` stating "M_k impl produced; awaiting Phase M_k verification".
-5. **Phase M_k self-review** — mandatory before returning control. As soon as you return, pypto-op-orchestrator will call `state_transition(action=submit_for_verify, phase=M_k)`, which runs the phase-scoped lint gate (OL54 included). That gate enforces that `MEMORY.md` contains a `## Phase M_k self-review` section with the 6 structural items marked `- [x]`. In addition, you must record the Coder-owned valid-shape audit item below before returning; it is a required implementation handoff, not a new lint/code rule. Fill in (template in skill `pypto-memory-template`'s `templates/MEMORY.template.md`):
+4. **Preflight self-check** — read `MEMORY.md` → `## Experience Preflight` section. Skip rules with `🤖`（OL61 AST 自动扫描）or `🔧`（其他 OL 规则自动扫描） marker. For each remaining S0 rule, verify the impl file has no violation. If a violation is found, fix it in place and re-check. Do NOT maintain a separate rule list — always use the checklist from MEMORY.md.
+5. Append a Development log line to `custom/<op>/MEMORY.md` stating "M_k impl produced; awaiting Phase M_k verification".
+6. **Phase M_k self-review** — mandatory before returning control. As soon as you return, pypto-op-orchestrator will call `state_transition(action=submit_for_verify, phase=M_k)`, which runs the phase-scoped lint gate (OL54 included). That gate enforces that `MEMORY.md` contains a `## Phase M_k self-review` section with the 6 structural items marked `- [x]`. In addition, you must record the Coder-owned valid-shape audit item below before returning; it is a required implementation handoff, not a new lint/code rule. Fill in (template in skill `pypto-memory-template`'s `templates/MEMORY.template.md`):
 
    1. host_wrapper **signature** matches `eval/module_interfaces.yaml` `primary_inputs` order — caught statically by OL50 if mismatched
    2. All declared **output** tensors written via `pypto.assemble(...)` / `name[:] = ...` — caught statically by OL51
@@ -99,7 +101,7 @@ Cap active skills at 5. Do NOT load any debug sub-skill yourself.
 
    The 6 structural items are gate-enforced by OL54. The valid-shape audit is a mandatory Coder evidence item and must also be `- [x]` with a line reference or one-line code note before you return. Treat empty checkboxes as "not done — go back and fix before returning". This is the cheapest way to catch transcription mistakes / rule misunderstandings that would otherwise surface during verification and trigger a re-dispatch round-trip.
 
-6. **Return control to pypto-op-orchestrator.** Do NOT advance to M_{k+1}. Do NOT run end-to-end tests. Do NOT write or edit any `test_*.py` (they are produced in a separate scaffolding step). Do NOT attempt to debug if local validation flagged something — return to the orchestrator with the failing module path and full log.
+7. **Return control to pypto-op-orchestrator.** Do NOT advance to M_{k+1}. Do NOT run end-to-end tests. Do NOT write or edit any `test_*.py` (they are produced in a separate scaffolding step). Do NOT attempt to debug if local validation flagged something — return to the orchestrator with the failing module path and full log.
 
 Production wrapper ABI policy: `<op>_module<suffix_k>_wrapper(...)` exposes only the `primary_inputs` listed in `eval/module_interfaces.yaml`, in the same order. Runtime/debug controls must stay in the JIT decorator config, `**kwargs`-based internal tooling, or `_debug/` artifacts; do not add explicit `runtime_options`, `debug_options`, or other non-primary parameters to the production wrapper signature.
 

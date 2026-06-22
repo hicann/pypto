@@ -93,6 +93,7 @@ for M_k in [M1, M12, M123, …, M123…N]:
 
 ### 调试与精度定位
 
+- `pypto-op-knowledge`：知识库查询（经验表 + 问题查找表）；包含 `experience_classified/` 8 类历史反模式、`experience_preflight.md` 预检指南
 - `pypto-general-debug`：debug router；包含 `DEBUG_GUIDEBOOK.md` §1–§9 故障排查 playbook；tile shape / L0/L1 / alignment / `set_cube_tile_shapes` 问题由 `DEBUG_GUIDEBOOK.md` 路由到 `references/tile-shapes.md`
 - `pypto-precision-debug`：精度问题定位与修复
 - `pypto-precision-compare`：精度对比与二分定位

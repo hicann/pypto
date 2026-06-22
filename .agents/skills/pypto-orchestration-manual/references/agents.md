@@ -87,7 +87,7 @@ kernel code. The orchestrator never edits kernel code itself.
 Stage 5 is a per-module loop. The coder is dispatched once per phase
 M_k, and once more for the cleanup step after the last phase.
 
-- **Inputs:** `DESIGN.md`, `module_interfaces.yaml`, current phase `M_k`.
+- **Inputs:** `DESIGN.md`, `module_interfaces.yaml`, `MEMORY.md`, current phase `M_k`.
 - **Per-phase deliverable (M_k):**
   `custom/<op>/modules/<op>_module<suffix_k>_impl.py` — one new file,
   exactly the cumulative scope through M_k.

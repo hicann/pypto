@@ -34,6 +34,7 @@ Then load **exactly ONE** sub-skill matching the failure category (see router ta
 
 | Failure signal from verification | Sub-skill to load |
 |---|---|
+| **Any failure** — query `pypto-op-knowledge` first using error code / message / symptoms. **Hit**: form patch proposal, write to `MEMORY.md` → Development & debug log, return to orchestrator. **Miss**: log search keywords to `MEMORY.md`, proceed to next matching row. | `pypto-op-knowledge` |
 | **`divergence_fingerprint: "kernel_ok_npu_only"`** (`sim=PASS`, `npu=FAIL`) | Load a **device-side** sub-skill based on the secondary signal: `pypto-general-debug` → `DEBUG_GUIDEBOOK.md` → `references/tile-shapes.md`, `pypto-aicore-error-locator`, `pypto-memory-overlap-detector`, or `pypto-machine-workspace`. Do NOT load `pypto-precision-debug` — the math is confirmed correct by sim. |
 | **`divergence_fingerprint: "ir_divergence"`** (`sim=FAIL`, `npu=PASS`) | Inspect pass / graph output first (use `pypto-pass-error-locator` or the graph-dump guidance in `DEBUG_GUIDEBOOK.md §2d`) before loading any debug sub-skill. The issue is in IR generation or simulator approximation. |
 | **`divergence_fingerprint: "all_fail"`** (`sim=FAIL`, `npu=FAIL`) AND `failure_category: precision` | Load `pypto-precision-debug`. The kernel is wrong at the algorithmic level. |
