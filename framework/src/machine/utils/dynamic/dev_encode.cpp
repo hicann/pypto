@@ -2468,14 +2468,62 @@ static int InitSinglePartialUpdateSlot(
     return static_cast<int>(actualTableSize);
 }
 
+static void MarkOutputTensorStitchSlotsInPartialUpdateList(
+    DevAscendProgram* prog, const std::vector<int>& tInputSlotIndexList,
+    const std::vector<int>& tAssembleSlotIndexList, const std::unordered_map<Function*, int>& rootFuncKeyDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict)
+{
+    std::unordered_set<int> assembleSlots(tAssembleSlotIndexList.begin(), tAssembleSlotIndexList.end());
+    for (int slotIndex : tInputSlotIndexList) {
+        if (assembleSlots.count(slotIndex) == 0) {
+            continue;
+        }
+        std::unordered_set<int> funcKeys;
+        auto slotIncastIt = slotRootIncastDict.find(slotIndex);
+        if (slotIncastIt != slotRootIncastDict.end()) {
+            for (const auto& rootEntry : slotIncastIt->second) {
+                Function* root = rootEntry.first;
+                auto rootIt = rootFuncKeyDict.find(root);
+                if (rootIt != rootFuncKeyDict.end()) {
+                    funcKeys.insert(rootIt->second);
+                }
+            }
+        }
+        auto slotOutcastIt = slotRootOutcastDict.find(slotIndex);
+        if (slotOutcastIt != slotRootOutcastDict.end()) {
+            for (const auto& rootEntry : slotOutcastIt->second) {
+                Function* root = rootEntry.first;
+                auto rootIt = rootFuncKeyDict.find(root);
+                if (rootIt != rootFuncKeyDict.end()) {
+                    funcKeys.insert(rootIt->second);
+                }
+            }
+        }
+        if (funcKeys.size() < 2) {
+            continue;
+        }
+        auto& partialUpdate = prog->At(prog->partialUpdateList, slotIndex);
+        partialUpdate.isOutputTensorStitchSlot = true;
+    }
+}
+
 void DevAscendProgram::InitPartialUpdateSlot(
     uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
     const std::unordered_map<Function*, int>& rootFuncKeyDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+    const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
     const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent)
 {
     this->partialUpdateList.HostInitDataSizeOffset(initOffset, slotSize);
+
+    ONFILLCONTENT
+    {
+        MarkOutputTensorStitchSlotsInPartialUpdateList(
+            this, tInputSlotIndexList, tAssembleSlotIndexList, rootFuncKeyDict, slotRootIncastDict,
+            slotRootOutcastDict);
+    }
 
     this->cellMatchRuntimePartialUpdateTableList.HostInitDataSizeOffset(initOffset, 0);
     int totalCellMatchSize = 0;
@@ -2621,7 +2669,9 @@ struct EncodeDevAscendProgramInfo {
             dyndevAttr->inoutLink.inplaceSlotIndexList, fillContent);
         devProg->InitPartialUpdateSlot(
             initOffset, dyndevAttr->devEncodeList, dyndevAttr->rootFuncKeyDict, dyndevAttr->slotRootIncastDict,
-            dyndevAttr->slotRootOutcastDict, dyndevAttr->inoutLink.partialUpdateSlotIdexList, fillContent);
+            dyndevAttr->slotRootOutcastDict, dyndevAttr->inoutLink.inputSlotIndexList,
+            dyndevAttr->inoutLink.assembleSlotIndexList, dyndevAttr->inoutLink.partialUpdateSlotIdexList,
+            fillContent);
         devProg->InitPrefetchInfoList(initOffset, dyndevAttr->l2InfoList, fillContent);
         devProg->InitDisableL2List(initOffset, dyndevAttr->disableL2List, fillContent);
 
@@ -2906,7 +2956,7 @@ static bool IsRuntimeDynamicPartialNeedAlloc(
     const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
     return IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr) &&
-           constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0;
+           (constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0 || partial.isOutputTensorStitchSlot);
 }
 
 static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(

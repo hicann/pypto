@@ -131,15 +131,45 @@ void WriteDynamicCellMatchStridePatchesToLaunchArgs(
     }
 }
 
+static bool IsOutputTensorStitchSlot(const DevAscendProgram* hostDevProg, int slotIndex)
+{
+    if (hostDevProg == nullptr || slotIndex < 0) {
+        return false;
+    }
+    const auto& partialUpdateList = hostDevProg->partialUpdateList;
+    if (static_cast<size_t>(slotIndex) >= partialUpdateList.size() || partialUpdateList.Data() == nullptr) {
+        return false;
+    }
+    const auto* partialUpdates = reinterpret_cast<const DevAscendProgramPartialUpdate*>(
+        reinterpret_cast<const uint8_t*>(hostDevProg) +
+        reinterpret_cast<uintptr_t>(partialUpdateList.Data()));
+    return partialUpdates[slotIndex].isOutputTensorStitchSlot;
+}
+
+static bool HasAnyOutputTensorStitchSlot(const DevAscendProgram* hostDevProg)
+{
+    if (hostDevProg == nullptr) {
+        return false;
+    }
+    for (size_t i = 0; i < hostDevProg->partialUpdateList.size(); ++i) {
+        if (IsOutputTensorStitchSlot(hostDevProg, static_cast<int>(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void ValidateDynamicCellMatchTableMemBudget(
     const DyndevFunctionAttribute& dynAttr, DevAscendProgram* hostDevProg)
 {
-    if (hostDevProg == nullptr || dynAttr.constructAssembleNeedAllocRuntimeSlots.empty()) {
+    if (hostDevProg == nullptr ||
+        (dynAttr.constructAssembleNeedAllocRuntimeSlots.empty() && !HasAnyOutputTensorStitchSlot(hostDevProg))) {
         return;
     }
     const auto* cfgBytes = reinterpret_cast<const uint8_t*>(hostDevProg);
     for (const auto& launchMeta : dynAttr.dynamicCellMatchLaunchMetaList) {
-        if (dynAttr.constructAssembleNeedAllocRuntimeSlots.count(launchMeta.slotIndex) == 0) {
+        if (dynAttr.constructAssembleNeedAllocRuntimeSlots.count(launchMeta.slotIndex) == 0 &&
+            !IsOutputTensorStitchSlot(hostDevProg, launchMeta.slotIndex)) {
             continue;
         }
         const auto* desc = reinterpret_cast<const DevCellMatchTableDesc*>(cfgBytes + launchMeta.descOffset);

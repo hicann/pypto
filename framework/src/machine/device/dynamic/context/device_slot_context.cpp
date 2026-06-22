@@ -284,6 +284,10 @@ static void MarkPartialUpdateSlots(DeviceExecuteSlot* slotList, size_t slotSize,
         DEV_ASSERT_MSG(
             ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, slotIndex >= 0 && slotIndex < static_cast<int>(slotSize),
             "Invalid slot index %d", slotIndex);
+        if (partialUpdate.isOutputTensorStitchSlot) {
+            slotList[slotIndex].isOutputTensorNeedCellMatch = true;
+            DEV_VERBOSE_DEBUG("Output Tensor Stitch Slot %d.", slotIndex);
+        }
         bool hasPartialUpdateTable = !partialUpdate.Empty();
         bool isRuntimeDynamicPartialUpdate = dynamicCellMatchBudgetReady &&
                                              partialUpdate.cellMatchRuntimePartialUpdateTable.size() == 0 &&

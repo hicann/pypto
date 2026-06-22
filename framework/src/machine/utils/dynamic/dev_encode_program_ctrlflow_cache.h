@@ -145,6 +145,7 @@ struct DeviceExecuteSlot {
     bool isOutputSlot{false};
     bool isAssembleSlot{false};
     bool isAssembleSlotNeedAlloc{false};
+    bool isOutputTensorNeedCellMatch{false};
     bool isPartialUpdateStitch{false};
     uint32_t stitchDupIdx{INVALID_STITCH_IDX};
     uint32_t stitchOutcastIdx;

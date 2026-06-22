@@ -529,6 +529,7 @@ private:
         const std::unordered_map<Function*, int>& rootFuncKeyDict,
         const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
         const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+        const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
         const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent);
     void InitControlFlowCache(
         uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent);
