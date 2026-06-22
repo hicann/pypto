@@ -21,6 +21,7 @@
 #include <nlohmann/json.hpp>
 #define private public
 #include "platform/parser/platform_parser.h"
+#include "platform/parser/simulation_platform/simulation_platform.h"
 
 using namespace npu::tile_fwk;
 
@@ -45,7 +46,7 @@ public:
 private:
     void CleanupTempConfig()
     {
-        std::string libPath = SimulationPlatform::GetCurrentSharedLibPath();
+        std::string libPath = GetPyptoLibPath();
         if (!libPath.empty()) {
             std::string configPath = libPath + "/tile_fwk_config.json";
             std::remove(configPath.c_str());

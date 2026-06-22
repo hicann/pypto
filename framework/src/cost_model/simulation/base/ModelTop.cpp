@@ -25,11 +25,10 @@
 #include "cost_model/simulation/arch/PipeFactory.h"
 #include "cost_model/simulation/pv/PvModelFactory.h"
 #include "tilefwk/error_code.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
-#include "tilefwk/file.h"
 
 namespace {
 
@@ -693,10 +692,10 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
     osPipeSwim.close();
 
     SIMULATION_LOGW("Pipe SwimLane Graph Generated (PNG & HTML): %s", pipeDetailPath.c_str());
-    std::string drawScriptPath = GetCurrentSharedLibPath() + "/scripts/draw_pipe_swim_lane.py";
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(drawScriptPath))
+    std::string drawScriptPath = GetPyptoLibPath() + "/scripts/draw_pipe_swim_lane.py";
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(drawScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(pipeDetailPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(pipeDetailPath))
         << "pipe.swim.json does not exist. pipeDetailPath: " << pipeDetailPath;
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
     auto args = SplitString(cmd);
@@ -728,10 +727,10 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
         return;
     }
     SIMULATION_LOGW("SwimLane Graph Generated (PNG): %s", outSwimPath.c_str());
-    std::string drawScriptPath = GetCurrentSharedLibPath() + "/scripts/print_swim_lane.py";
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(drawScriptPath))
+    std::string drawScriptPath = GetPyptoLibPath() + "/scripts/print_swim_lane.py";
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(drawScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << drawScriptPath;
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(outSwimPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(outSwimPath))
         << "swim.json does not exist. outSwimPath: " << outSwimPath;
     std::string cmd = "python3 " + drawScriptPath + " " + outSwimPath + " -t";
     auto args1 = SplitString(cmd);
@@ -740,7 +739,7 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
         SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "draw swim lane cmd error.");
     }
 
-    std::string mergeScriptPath = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
+    std::string mergeScriptPath = GetPyptoLibPath() + "/scripts/draw_swim_lane.py";
     auto devicePtr = std::dynamic_pointer_cast<DeviceMachine>(machineGroup[int(MachineType::DEVICE)][0]);
     SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
     std::string topo_txt_path = outdir + "/../" + "dyn_topo.txt";
@@ -749,20 +748,20 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     SIMULATION_LOGI("program_json_path: %s", program_json_path.c_str());
     std::string label_type = "--label_type=1 --time_convert_denominator=1800"; // default 1.8GHz
     SIMULATION_LOGI("label_type: %s", label_type.c_str());
-    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(mergeScriptPath))
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(mergeScriptPath))
         << "draw_pipe_swim_lane.py does not exist. drawScriptPath: " << mergeScriptPath;
     if (devicePtr->config.submitTopo) {
         CHECK(
-            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(topo_txt_path))
+            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(topo_txt_path))
             << "dyn_topo.txt does not exist. topo_txt_path: " << topo_txt_path;
         CHECK(
             static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH),
-            npu::tile_fwk::FileExist(program_json_path))
+            npu::tile_fwk::IsPathExist(program_json_path))
             << "program.json does not exist. program_json_path: " << program_json_path;
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topo_txt_path + " " + program_json_path + " " +
               label_type;
     } else {
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(topoOutFile))
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(topoOutFile))
             << "topo.json does not exist. topoOutFile: " << topoOutFile;
         SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topoOutFile;

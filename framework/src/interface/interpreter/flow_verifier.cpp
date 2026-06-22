@@ -490,7 +490,7 @@ void FlowVerifier::VerifyTensorGraph(
     }
 
     auto tensorDir = config::LogTopFolder() + "/tensor";
-    CreateMultiLevelDir(tensorDir);
+    CreateDir(tensorDir, true);
 
     try {
         controlFlowExecution_ = functionInterpreter_->RunForControlFlow(

@@ -20,7 +20,7 @@
 
 #include "codegen/utils/parallel_execute.h"
 #include "codegen_op_npu.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/function/function.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
@@ -358,7 +358,7 @@ bool CodeGenNPU::IsNeedDumpCode(const std::string& inputFile) const
         return true;
     }
     // not force dump
-    if (FileExist(inputFile)) {
+    if (IsPathExist(inputFile)) {
         return false;
     }
     return true;
@@ -469,7 +469,7 @@ void CodeGenNPU::CompileCode(const std::string& compileCmd) const
 
 std::string GetIncludePathByLib()
 {
-    std::string libPath = GetCurrentSharedLibPath();
+    std::string libPath = GetPyptoLibPath();
     if (libPath.empty()) {
         return "";
     }

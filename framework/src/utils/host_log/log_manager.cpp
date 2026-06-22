@@ -24,9 +24,8 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
-#include <map>
 #include "securec.h"
-#include "host_log/log_file_utils.h"
+#include "file_utils.h"
 
 namespace npu::tile_fwk {
 namespace {
@@ -41,7 +40,6 @@ constexpr const char* kModuleName = "PYPTO";
 constexpr const char* kModulePrefix = "PYPTO=";
 constexpr const char* kHostLogFilePrefix = "pypto-log-";
 constexpr const char* kDevLogFilePrefix = "pypto-simulation-";
-constexpr const char* kLogFileSuffix = ".log";
 constexpr int64_t kMaxLogFileSize = 20 * 1024 * 1024; // 10MB
 
 const std::string kLogLevelNoneStr = "[NONE] ";
@@ -52,6 +50,12 @@ uint64_t GetTid()
 {
     thread_local uint64_t tid = static_cast<uint64_t>(syscall(__NR_gettid));
     return tid;
+}
+
+static bool StartWith(const std::string& s, const std::string& prefix)
+{
+    return s.size() >= prefix.size() &&
+           s.compare(0, prefix.size(), prefix) == 0;
 }
 
 int64_t GetPid() { return getpid(); }
@@ -132,7 +136,7 @@ void RemoveRedundantLogFiles(const size_t maxLogFileNum, std::queue<std::string>
         return;
     }
     while (logFilesQueue.size() > maxLogFileNum) {
-        RemoveFile(logFilesQueue.front());
+        DeleteFile(logFilesQueue.front().c_str());
         logFilesQueue.pop();
     }
 }
@@ -143,6 +147,7 @@ LogManager& LogManager::Instance()
     return instance;
 }
 
+// take care to use file api in file_utils.h, ensue it does not use PYPTO_LOGX
 LogManager::LogManager()
 {
     std::string envGlobalLogLevel;
@@ -187,17 +192,26 @@ LogManager::LogManager()
         }
     }
 
+    auto getLogFiles = [](const std::string& path, const std::string& prefix, const std::string& ext) {
+        std::queue<std::string> files;
+        for (auto file: GetFiles(path, ext)) {
+            if (StartWith(file, prefix)) {
+                files.push(RealPath(path + "/" + file));
+            }
+        }
+        return files;
+    };
+
     hostLogDir_ = envLogDirPath + "/debug/plog";
-    deviceLogDir_ = envLogDirPath + "/debug/device-" + std::to_string(attr_.deviceId);
-    if (CreateMultiLevelDirectory(hostLogDir_) && CreateMultiLevelDirectory(deviceLogDir_)) {
-        hostLogDir_ = GetRealPath(hostLogDir_);
-        deviceLogDir_ = GetRealPath(deviceLogDir_);
-        LoadFileFromDir(hostLogDir_, kHostLogFilePrefix, kLogFileSuffix, hostLogFiles_);
+    if (CreateDir(hostLogDir_, true)) {
+        hostLogFiles_ = getLogFiles(hostLogDir_, kHostLogFilePrefix, "log");
         RemoveRedundantLogFiles(maxLogFileNum_, hostLogFiles_);
-        LoadFileFromDir(deviceLogDir_, kDevLogFilePrefix, kLogFileSuffix, devLogFiles_);
+    }
+
+    deviceLogDir_ = envLogDirPath + "/debug/device-" + std::to_string(attr_.deviceId);
+    if (CreateDir(deviceLogDir_, true)) {
+        devLogFiles_ = getLogFiles(deviceLogDir_, kDevLogFilePrefix, "log");
         RemoveRedundantLogFiles(maxLogFileNum_, devLogFiles_);
-    } else {
-        std::cerr << "Fail to create directory: " << envLogDirPath << std::endl;
     }
 }
 
@@ -206,8 +220,6 @@ LogManager::~LogManager()
     level_ = LogLevel::ERROR;
     enableStdOut_ = true;
     maxLogFileNum_ = MAX_LOG_FILES_NUM;
-    hostLogDir_.clear();
-    deviceLogDir_.clear();
     if (hostFileStream_.is_open()) {
         hostFileStream_.flush();
         hostFileStream_.close();
@@ -328,7 +340,7 @@ void LogManager::CreateAndOpenNewLogFile()
 {
     std::ostringstream oss;
     const std::string& logFilePrefix = attr_.isDevice ? kDevLogFilePrefix : kHostLogFilePrefix;
-    oss << GetLogDir() << "/" << logFilePrefix << GetPid() << "_" << GetCurrentTimeStr() << kLogFileSuffix;
+    oss << GetLogDir() << "/" << logFilePrefix << GetPid() << "_" << GetCurrentTimeStr() << ".log";
     std::string newLogFileName = oss.str();
     GetCurrentFileStream().open(newLogFileName);
     AddNewLogFile(newLogFileName);
@@ -339,7 +351,7 @@ void LogManager::AddNewLogFile(const std::string& newLogFileName)
     std::queue<std::string>& logFilesQueue = GetLogFilesQueue();
     logFilesQueue.push(newLogFileName);
     while (logFilesQueue.size() > maxLogFileNum_) {
-        RemoveFile(logFilesQueue.front()); // remove file
+        DeleteFile(logFilesQueue.front().c_str()); // remove file
         logFilesQueue.pop();
     }
 }

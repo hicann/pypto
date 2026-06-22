@@ -17,7 +17,7 @@
 #include "interface/interpreter/flow_verifier.h"
 #include "interface/interpreter/interpreter_log.h"
 #include "interface/configs/config_manager.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 
 #include <chrono>
 #include <cstdio>
@@ -138,7 +138,7 @@ FunctionInterpreter::FunctionInterpreter()
         dumpPath = config::LogTopFolder();
     }
     dumpPath = dumpPath + "/" + "verify_" + MakeVerifyRunTimestampTag() + "/";
-    CreateMultiLevelDir(dumpPath);
+    CreateDir(dumpPath, true);
     interpreter::SetLogFilePath(dumpPath + "interpreter.log");
     const std::string opResultFilePath = dumpPath + "verify_graph_data_metainfo.csv";
     execOpResultFile = fopen(opResultFilePath.c_str(), "w");
@@ -313,7 +313,7 @@ void FunctionInterpreter::DumpTensorBinary(
 std::shared_ptr<LogicalTensorData> FunctionInterpreter::LoadTensorBinary(
     const std::shared_ptr<LogicalTensor>& tensor, const std::string filepath)
 {
-    if (!FileExist(filepath)) {
+    if (!IsPathExist(filepath)) {
         return nullptr;
     }
     std::vector<int64_t> shape = tensor->GetShape();
@@ -540,7 +540,7 @@ void FunctionInterpreter::DumpBegin()
 {
     frameCount = 0;
     execDumpDir = dumpPath + execDumpFuncKey;
-    CreateMultiLevelDir(execDumpDir);
+    CreateDir(execDumpDir, true);
 
     if (execDumpLevel < EXEC_DUMP_LEVEL_OPERATION)
         return;

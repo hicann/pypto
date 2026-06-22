@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <vector>
 #include "codegen/utils/parallel_execute.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/compile/gen_aicore_code.h"
 #include "machine/host/main_block.h"
@@ -53,7 +53,7 @@ static int CompileCoreMachine(
         config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1)) ? "-D__ENABLE_MAIN_BLOCK" : "";
     std::string ccecCmd;
     ccecCmd.resize(CMD_SIZE_2K);
-    std::string includePath = GetCurrentSharedLibPath() + "/../include/tile_fwk";
+    std::string includePath = GetPyptoLibPath() + "/../include/tile_fwk";
     int ret = snprintf_s(
         ccecCmd.data(), CMD_SIZE_2K, CMD_SIZE_2K - 1,
         "%s -c -O3 -g -x cce -Wall -Werror -std=c++17 "
@@ -74,7 +74,7 @@ static int CompileCoreMachine(
         "-I%s/include/ " "-o %s %s %s %s",
         BISHENG_PROGRAM_CMD, cc_opt.c_str(), std::to_string(tilingKey).c_str(), opType.c_str(), headFile.c_str(),
         hasSubFunc.c_str(), coreType.c_str(), includePath.c_str(), includePath.c_str(),
-        GetCurrentSharedLibPath().c_str(), GetCurrentSharedLibPath().c_str(), objFile.c_str(),
+        GetPyptoLibPath().c_str(), GetPyptoLibPath().c_str(), objFile.c_str(),
         aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore construct cmd failed.");

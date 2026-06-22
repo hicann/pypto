@@ -25,7 +25,7 @@
 #include "passes/pass_mgr/pass_registry.h"
 #include "ut_json/ut_json_tool.h"
 #include "computational_graph_builder.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 
 namespace npu::tile_fwk {
 class PassTestCast : public Pass {

@@ -17,7 +17,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "interface/program/program.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/utils/common.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/op_info_manager.h"
@@ -45,7 +45,7 @@ std::string GetMachineCompilerPath()
     }
     const std::string compiler =
         homePath + "/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++";
-    if (!npu::tile_fwk::FileExist(compiler)) {
+    if (!npu::tile_fwk::IsPathExist(compiler)) {
         MACHINE_LOGE(npu::tile_fwk::DevCommonErr::FILE_ERROR,
             "%s is set but aarch64 toolchain g++ was not found at \"%s\" (canonical path must exist).",
             kAscendHomeEnv, compiler.c_str());
@@ -75,8 +75,8 @@ void GenCustomOpInfo(
 
     GenAicpuOpInfoJson(customOp, {costomInit, costomRun});
     std::string fileName = controlAicpuPath + "/" + constrolSoName + ".json";
-    if (!DumpFile(customOp.dump(DUMP_LEVEL_FOUR), fileName)) {
-        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Contrust custom op json failed");
+    if (!SaveFile(fileName, customOp.dump(DUMP_LEVEL_FOUR))) {
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Save custom op json failed");
         return;
     }
     OpInfoManager::GetInstance().GetCustomOpJsonPath() = fileName;
@@ -102,7 +102,7 @@ bool GenTilingFunc(const std::string& funcName, const std::string& controlAicpuP
     oss << "}\n";
     oss << "}\n";
     std::string fileName = controlAicpuPath + "/control_flow_kernel.cpp";
-    return DumpFile(oss.str(), fileName);
+    return SaveFile(fileName, oss.str());
 }
 
 bool TieFwkAicpuPreCompile(std::string& preCompileO, std::string& controlAicpuPath)
@@ -110,12 +110,12 @@ bool TieFwkAicpuPreCompile(std::string& preCompileO, std::string& controlAicpuPa
     std::stringstream preCompileStream;
     std::string ext = "cpp";
     auto files = GetFiles(controlAicpuPath, ext);
-    std::string includePath = GetCurrentSharedLibPath() + "/../include/tilefwk";
+    std::string includePath = GetPyptoLibPath() + "/../include/tilefwk";
     for (auto file : files) {
         std::string objFile = controlAicpuPath + file.substr(0, file.find(".")) + ".o";
         std::string compileCmd = DeviceMahineCompiler + " -Wall -O2 -fPIC -c -std=gnu++17 -fno-common " +
                                  controlAicpuPath + file + " -I" + includePath + " -I" + includePath + "/include/" +
-                                 " -I" + GetCurrentSharedLibPath() + "/include/" + " -o " + objFile;
+                                 " -I" + GetPyptoLibPath() + "/include/" + " -o " + objFile;
         MACHINE_LOGD("PreCompileCmd is %s, file is %s.\n", compileCmd.c_str(), file.c_str());
         int ret = Checkinject(compileCmd.c_str(), compileCmd.size());
         if (ret != 0) {
@@ -138,7 +138,7 @@ bool SharedAicpuCompile(const std::string& funcName, const std::string& aicpuDir
     std::string cmdGccCompile = "LD_PRELOAD= " + DeviceMahineCompiler +
                                 " -std=gnu++17 -fno-common -shared -fPIC -O2 -Wl,--no-warn-rwx-segments -o " +
                                 aicpuDirPath + "/lib" + funcName + "_control.so " + preCompileO +
-                                " -Wl,--whole-archive " + GetCurrentSharedLibPath() + "/libpypto_ctrl_server.a" +
+                                " -Wl,--whole-archive " + GetPyptoLibPath() + "/libpypto_ctrl_server.a" +
                                 " -Wl,--no-whole-archive";
     int ret = Checkinject(cmdGccCompile.c_str(), cmdGccCompile.size());
     if (ret != 0) {
@@ -153,7 +153,9 @@ bool SharedAicpuCompile(const std::string& funcName, const std::string& aicpuDir
     std::string srcSoPath = aicpuDirPath + "/lib" + funcName + "_control.so";
     std::string constrolSoName = "lib" + funcName + "_control";
     GenCustomOpInfo(funcName, aicpuDirPath, constrolSoName);
-    return ReadBytesFromFile(srcSoPath, OpInfoManager::GetInstance().GetControlBuffer());
+    bool succ = false;
+    OpInfoManager::GetInstance().SetControlBuffer(ReadFile(srcSoPath, &succ));
+    return succ;
 }
 
 bool TileFwkAiCpuCompile(const std::string& funcName, const std::string& aicpuDirPath)

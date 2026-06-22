@@ -27,7 +27,7 @@
 #include <nlohmann/json.hpp>
 
 #include "interface/utils/common.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/utils/string_utils.h"
 
 #include "config_manager_ng.h"
@@ -476,7 +476,7 @@ struct ConfigManagerImpl {
     }
 
 private:
-    std::string GetConfDir() { return GetCurrentSharedLibPath() + "/configs/"; }
+    std::string GetConfDir() { return GetPyptoLibPath() + "/configs/"; }
 
     void LoadConf(const nlohmann::json& jData, const std::string& prefix)
     {

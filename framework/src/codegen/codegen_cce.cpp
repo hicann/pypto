@@ -18,7 +18,7 @@
 #include "codegen_cce.h"
 #include "interface/configs/config_manager.h"
 #include "interface/program/program.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 
 namespace npu::tile_fwk {
 void CodeGenCCE::PrepareOutputPath()
@@ -33,7 +33,7 @@ void CodeGenCCE::PrepareDefaultOutputPath()
     if (ctx.IsCCEPathEmpty()) {
         ctx.cceDir = config::GetEmitPath("kernel_aicore");
     };
-    CreateMultiLevelDir(ctx.cceDir);
+    CreateDir(ctx.cceDir, true);
 }
 
 std::map<int, int> GenRealizeIdMap(const SubfuncParam& subFuncParam)

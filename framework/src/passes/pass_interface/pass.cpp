@@ -18,7 +18,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "Pass"
@@ -52,7 +52,7 @@ Status Pass::CreateLogFolder(const std::string& topFolder, const std::string& st
     }
     if (!strategy.empty()) {
         passFolder_ = passFolder_ + "/" + kComputationGraphFolder + "/" + strategy;
-        if (!CreateMultiLevelDir(passFolder_)) {
+        if (!CreateDir(passFolder_, true)) {
             APASS_LOG_ERROR_F(Elements::Function, "Failed to create strategy directory: [%s].", passFolder_.c_str());
             return FAILED;
         }
@@ -204,7 +204,7 @@ Status Pass::CreateGraphFolder(Function& function)
             graphFolder_ = graphFolder_ + '/' + kComputationGraphFolder + '/' + strategy_;
         }
         graphFolder_ = graphFolder_ + '/' + function.GetMagicName();
-        bool res = CreateMultiLevelDir(graphFolder_);
+        bool res = CreateDir(graphFolder_, true);
         if (res == false) {
             APASS_LOG_ERROR_F(Elements::Function, "Failed to create directory: [%s].", graphFolder_.c_str());
             return FAILED;

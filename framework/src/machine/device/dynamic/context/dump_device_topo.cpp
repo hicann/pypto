@@ -10,7 +10,7 @@
 
 /*!
  * \file dump_device_topo.cpp
- * \brief 
+ * \brief
  */
 #include "machine/device/dynamic/context/dump_device_topo.h"
 
@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 #include "interface/configs/config_manager.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "machine/utils/dynamic/dev_encode_function_stitch.h"
 #endif
 

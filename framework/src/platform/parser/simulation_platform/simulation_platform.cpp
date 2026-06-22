@@ -52,23 +52,9 @@ std::string DPlatformToSocVersion(DPlatform platform)
 }
 }
 
-std::string SimulationPlatform::GetCurrentSharedLibPath()
-{
-    std::string currentLibPath;
-    Dl_info info;
-    if (dladdr(reinterpret_cast<void*>(&GetCurrentSharedLibPath), &info)) {
-        currentLibPath = std::string(info.dli_fname);
-        int32_t pos = currentLibPath.rfind('/');
-        if (pos >= 0) {
-            currentLibPath = currentLibPath.substr(0, pos);
-        }
-    }
-    return currentLibPath;
-}
-
 std::string SimulationPlatform::GetDevicePlatform()
 {
-    const std::string configPath = RealPath(GetCurrentSharedLibPath() + PLATFORM_INFO_RELATIVE_PATH + FWK_CONFIG_RELATIVE_PATH);
+    const std::string configPath = RealPath(GetPyptoLibPath() + PLATFORM_INFO_RELATIVE_PATH + FWK_CONFIG_RELATIVE_PATH);
     if (configPath.empty()) {
         PLATFORM_LOGW("Failed to open tile_fwk_config.json, use default platform.");
         return DEFAULT_SOC_VERSION;
@@ -100,7 +86,7 @@ bool SimulationPlatform::GetCostModelPlatformRealPath(const std::string& socVers
         platformSocVersion = GetDevicePlatform();
         PLATFORM_LOGD("Config specified SoC version:%s.", platformSocVersion.c_str());
     }
-    realPath = RealPath(GetCurrentSharedLibPath() + PLATFORM_INFO_RELATIVE_PATH + platformSocVersion + INI_EXTENSION);
+    realPath = RealPath(GetPyptoLibPath() + PLATFORM_INFO_RELATIVE_PATH + platformSocVersion + INI_EXTENSION);
     if (realPath.empty()) {
         return false;
     }

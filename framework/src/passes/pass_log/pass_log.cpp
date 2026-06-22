@@ -20,7 +20,7 @@
 
 #include "interface/configs/config_manager.h"
 #include "interface/program/program.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "utils/host_log/log_manager.h"
 
 #undef MODULE_NAME
@@ -48,7 +48,7 @@ void DeleteDirIfEmpty(const std::string& folder)
 std::string ResolveExtractPassLogScriptPath()
 {
     // Installed layout: <lib>/scripts/extract_pass_log.py
-    const std::string installedScriptPath = GetCurrentSharedLibPath() + "/scripts/" + kExtractPassLogScriptName;
+    const std::string installedScriptPath = GetPyptoLibPath() + "/scripts/" + kExtractPassLogScriptName;
     if (IsFileAccessible(installedScriptPath)) {
         return installedScriptPath;
     }
@@ -124,7 +124,7 @@ void ExtractPassLogByFunction(const Function& function, const std::string& strat
     if (scriptPath.empty()) {
         APASS_LOG_WARN_F(
             Elements::Function, "%s not found under install(%s/scripts), or source(%s).", kExtractPassLogScriptName,
-            GetCurrentSharedLibPath().c_str(), kExtractPassLogScriptInSource);
+            GetPyptoLibPath().c_str(), kExtractPassLogScriptInSource);
         return;
     }
 

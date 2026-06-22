@@ -26,7 +26,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "interface/configs/config_manager.h"
 #include "interface/machine/host/host_machine.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "machine/runtime/runner/runtime_agent.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/context/stream_context.h"
@@ -320,9 +320,9 @@ int DeviceRunner::LaunchDynamicAiCpu(RtStream aicpuStream, uint32_t aicpuNum, De
 
 void DeviceRunner::InitAiCpuSoBin(DeviceArgs& devArgs)
 {
-    std::vector<char> buffer;
-    std::string fileName = GetCurrentSharedLibPath() + "/libtilefwk_backend_server.so";
-    if (!ReadBytesFromFile(fileName, buffer)) {
+    std::string fileName = GetPyptoLibPath() + "/libtilefwk_backend_server.so";
+    auto buffer = ReadFile(fileName);
+    if (buffer.empty()) {
         MACHINE_LOGE(
             DevCommonErr::FILE_ERROR, "Read bin form tilefwk_backend_server.so failed, please check the so[%s]",
             fileName.c_str());
@@ -527,7 +527,7 @@ int DeviceRunner::DynamicRun(const KernelLaunchInfo &launchInfo, DeviceKernelArg
 int DeviceRunner::Init()
 {
     std::string builtInOpPath = config::LogTopFolder() + "/built_in";
-    CreateMultiLevelDir(builtInOpPath);
+    CreateDir(builtInOpPath, true);
     LoadAicpuOp::GetInstance().GenBuiltInOpInfo(builtInOpPath);
     if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle() != 0) {
         MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Get builtInOp Funchandle failed\n");

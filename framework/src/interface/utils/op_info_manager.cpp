@@ -57,7 +57,7 @@ void OpInfoManager::SetOpType(const std::string& opType)
 
 const std::string& OpInfoManager::GetOpType() const { return opType_; }
 
-std::vector<char>& OpInfoManager::GetControlBuffer() { return controlBuffer_; }
+void OpInfoManager::SetControlBuffer(std::vector<uint8_t>&& buffer) { controlBuffer_ = std::move(buffer); }
 
 std::vector<char>& OpInfoManager::GetCustomJson() { return customJson_; }
 

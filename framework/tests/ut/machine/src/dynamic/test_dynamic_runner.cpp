@@ -29,7 +29,7 @@
 #include "machine/device/machine_interface/pypto_aicpu_interface.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "interface/program/program.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "tilefwk/aicpu_common.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/runtime/runner/dump_device_perf.h"

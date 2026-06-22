@@ -13,7 +13,7 @@
  * \brief
  */
 #include <gtest/gtest.h>
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "test_suite_stest_ops.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "operator/models/deepseek/page_attention.h"

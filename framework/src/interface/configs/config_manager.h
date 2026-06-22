@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <type_traits>
 #include <set>
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/configs/config_manager_ng.h"
 #include "tilefwk/config.h"
 #include "tilefwk/function.h"

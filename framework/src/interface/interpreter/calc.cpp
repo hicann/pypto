@@ -13,7 +13,7 @@
 
 #include "tilefwk/error.h"
 #include "interface/interpreter/interpreter_log.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk::calc {
@@ -34,8 +34,8 @@ struct CalcOps* GetCalcOps()
             return;
         }
 #else
-        std::string path = GetCurrentSharedLibPath() + "/libtile_fwk_calculator.so";
-        if (!FileExist(path)) {
+        std::string path = GetPyptoLibPath() + "/libtile_fwk_calculator.so";
+        if (!IsPathExist(path)) {
             return;
         }
         auto handle = dlopen(path.c_str(), RTLD_LAZY);
