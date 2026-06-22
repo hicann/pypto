@@ -1141,7 +1141,7 @@ private:
         int32_t ret = DEVICE_MACHINE_OK;
         uint32_t resloveParallelIdx = 0;
         PerfMtBegin(static_cast<int>(PERF_EVT_RESOLVE_DEPENDENCE), aicpuIdx_);
-        ResolveTaskContext resolveCtx[MAX_MANAGER_AIV_NUM];
+        ResolveTaskContext resolveCtx[MAX_RESOLVE_TASK_NUM];
         uint32_t finishCnt = 0;
         for (int i = coreIdxStart; i < coreIdxEnd; i++) {
             if (pendingIds_[i] != AICORE_TASK_INIT || runningIds_[i] != AICORE_TASK_INIT) {
@@ -1305,6 +1305,14 @@ private:
     inline void RecordResolveTask(
         ResolveTaskContext* ctx, uint32_t& finishCnt, int coreIdx, uint32_t taskId, int indexBase)
     {
+        if (unlikely(finishCnt >= MAX_RESOLVE_TASK_NUM)) {
+            DEV_ERROR(SchedErr::CORE_INFO_INVALID,
+                "#sche.resolve.overflow: resolveCtx overflow guarded: aicpu[%d] schedIdx=%d aicpuNum=%d "
+                "finishCnt=%u cap=%u coreIdx=%d taskId=%#x aic[%d,%d) aiv[%d,%d). DROPPED.",
+                aicpuIdx_, schedIdx_, aicpuNum_, finishCnt, static_cast<uint32_t>(MAX_RESOLVE_TASK_NUM),
+                coreIdx, taskId, aicStart_, aicEnd_, aivStart_, aivEnd_);
+            return;
+        }
         ctx[finishCnt].finishIds = taskId;
         ctx[finishCnt].resolveIndexBase = indexBase;
         ctx[finishCnt].finishCoreIdx = coreIdx;
