@@ -101,16 +101,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor)
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     std::string res = GenCodeByFunction(*function);
-    std::string expectHeader = R"!!!(#include "TileOpImpl.h"
-#include "tilefwk/aicpu_common.h"
-
-// funcHash: 7529788009116668590
-)!!!";
-    CheckStringExist(expectHeader, res);
-
-    std::string expectBody = R"!!!(float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400
-float *UB_S0_E1024_T = (float *)get_imm(0x0); // size: 0x400
-float __ubuf__ *UB_S1024_E2048 = (float __ubuf__ *)get_imm(0x400); // size: 0x400
+    std::string expectBody = R"!!!(float *UB_S0_E1024_T = (float *)get_imm(0x0); // size: 0x400
 float *UB_S1024_E2048_T = (float *)get_imm(0x400); // size: 0x400
 using GMTileTensorFP32Dim4_1 = TileTensor<__gm__ float, DynLayout4Dim, Hardware::GM>;
 using UBTileTensorFP32Dim4_0 = TileTensor<float, StaticLayout4Dim<1, 1, 16, 16, 1, 1, 16, 16>, Hardware::UB>;

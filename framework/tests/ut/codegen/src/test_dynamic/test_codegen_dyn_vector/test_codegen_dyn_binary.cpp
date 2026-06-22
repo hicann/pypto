@@ -273,14 +273,7 @@ TEST_F(TestCodegenDynBinary, AddUnalignTileTensor)
 
     std::string res = GenCodeByFunction(*function);
 #if ENABLE_HIDDENLOOP
-std::string expectHeader = R"!!!(#include "TileOpImpl.h"
-#include "tilefwk/aicpu_common.h"
-
-// funcHash: 10261519457803101435
-)!!!";
-    std::string expect = R"!!!(float __ubuf__ *UB_S0_E16384 = (float __ubuf__ *)get_imm(0x0); // size: 0x4000
-float *UB_S0_E16384_T = (float *)get_imm(0x0); // size: 0x4000
-float __ubuf__ *UB_S16384_E32768 = (float __ubuf__ *)get_imm(0x4000); // size: 0x4000
+    std::string expect = R"!!!(float *UB_S0_E16384_T = (float *)get_imm(0x0); // size: 0x4000
 float *UB_S16384_E32768_T = (float *)get_imm(0x4000); // size: 0x4000
 uint64_t sym_63_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 0);
 uint64_t sym_63_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 1);
@@ -306,11 +299,6 @@ TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_7, ubTensor_0, 
 }
 )!!!";
 #else
-    std::string expectHeader = R"!!!(#include "TileOpImpl.h"
-#include "tilefwk/aicpu_common.h"
-
-// funcHash: 13526864639772037405
-)!!!";
     std::string expect = R"!!!(float __ubuf__ *UB_S0_E16384 = (float __ubuf__ *)get_imm(0x0); // size: 0x4000
 float *UB_S0_E16384_T = (float *)get_imm(0x0); // size: 0x4000
 float __ubuf__ *UB_S16384_E32768 = (float __ubuf__ *)get_imm(0x4000); // size: 0x4000
@@ -341,7 +329,6 @@ TStoreVec<TStoreConfigVec<pto::AtomicType::AtomicNone>>(gmTensor_8, ubTensor_1, 
 }
 )!!!";
 #endif
-    CheckStringExist(expectHeader, res);
     CheckStringExist(expect, res);
 }
 

@@ -141,6 +141,7 @@ enum class CodeGenErrorCategory {
 enum class FwkErr : uint32_t {
     PLATFORM_NOT_SUPPORTED = static_cast<uint32_t>(CodeGenErrorCategory::FRAMEWORK) + 1U,
     INVALID_FUNCTION,
+    TASK_RUN_FAILED
 };
 
 enum class OperErr : uint32_t {

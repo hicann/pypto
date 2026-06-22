@@ -166,32 +166,25 @@ void CodeGenNPU::GenFuncBodyBefore(
 
 void CodeGenNPU::GenFuncEnd(std::ostringstream& oss) const { oss << "}\n"; }
 
-std::string CodeGenNPU::GenAllocForLocalBuffer(
-    const Operation& op, const std::shared_ptr<SymbolManager>& symbolMgr) const
+void CodeGenNPU::GenAllocForLocalBuffer(const Operation& op, const std::shared_ptr<SymbolManager>& symbolMgr)
 {
-    std::string allocSourceCode;
-    auto genExtraAllocForTensor = [this, &symbolMgr](const std::shared_ptr<LogicalTensor>& operand) -> std::string {
+    auto genExtraAllocForTensor = [this, &symbolMgr](const std::shared_ptr<LogicalTensor>& operand) -> void {
         if (HasAllocAttr(operand)) {
             CODEGEN_LOGI("operand has an alloc attr, need to gen extra alloc, operand is: %s", operand->Dump().c_str());
-            std::optional<std::string> allocCodeMaybe = GenExtraAlloc(symbolMgr, operand);
-            if (allocCodeMaybe.has_value()) {
-                return allocCodeMaybe.value();
-            }
+            GenExtraAlloc(symbolMgr, operand);
         }
-        return "";
     };
+
     for (const std::shared_ptr<LogicalTensor>& operand : op.GetIOperands()) {
         symbolMgr->AddToTensorMap(operand->GetMagic(), operand);
         PrintOperand("IOperand", operand);
-        allocSourceCode.append(genExtraAllocForTensor(operand));
+        genExtraAllocForTensor(operand);
     }
     for (const std::shared_ptr<LogicalTensor>& operand : op.GetOOperands()) {
         symbolMgr->AddToTensorMap(operand->GetMagic(), operand);
         PrintOperand("OOperand", operand);
-        allocSourceCode.append(genExtraAllocForTensor(operand));
+        genExtraAllocForTensor(operand);
     }
-
-    return allocSourceCode;
 }
 
 std::string BuildDynParamInfo(const DynParamInfo& info)
@@ -205,12 +198,12 @@ std::string BuildDynParamInfo(const DynParamInfo& info)
 
 // GET_PARAM_OFFSET_BY_IDX(param, n, base, dim, idx)
 // GET_PARAM_VALID_SHAPE_BY_IDX(param, n, base, dim, idx)
-std::string CodeGenNPU::GenDynParamForExpr(const Function& func) const
+void CodeGenNPU::GenDynParamForExpr(std::ostringstream& oss, const Function& func) const
 {
     if (!func.IsUnderDynamicFunction()) {
-        return {};
+        return;
     }
-    std::string dynParamList;
+
     for (const auto& dynParam : func.GetDynParamTable()) {
         if (dynParam.second.replacedSymbol.empty()) {
             std::string dynParamExpr = "uint64_t " + dynParam.first + " = ";
@@ -225,17 +218,17 @@ std::string CodeGenNPU::GenDynParamForExpr(const Function& func) const
             }
             std::string params = BuildDynParamInfo(info);
             dynParamExpr.append(params).append(STMT_END);
-            dynParamList.append(dynParamExpr);
+            oss << dynParamExpr;
         }
     }
+
     for (const auto& dynParam : func.GetDynParamTable()) {
         if (!dynParam.second.replacedSymbol.empty()) {
             std::string dynParamExpr = "uint64_t " + dynParam.first + " = ";
             dynParamExpr.append(dynParam.second.replacedSymbol).append(STMT_END);
-            dynParamList.append(dynParamExpr);
+            oss << dynParamExpr;
         }
     }
-    return dynParamList;
 }
 
 void CodeGenNPU::GenCode(
@@ -387,21 +380,21 @@ void CodeGenNPU::DumpCode(const std::string& fileName, std::ostringstream& code)
     }
 }
 
-std::optional<std::string> CodeGenNPU::GenExtraAlloc(
-    const std::shared_ptr<SymbolManager>& symbolMgr, const std::shared_ptr<LogicalTensor>& tensor) const
+void CodeGenNPU::GenExtraAlloc(
+    const std::shared_ptr<SymbolManager>& symbolMgr, const std::shared_ptr<LogicalTensor>& tensor)
 {
     auto memType = tensor->GetMemoryTypeOriginal();
-    if (OPERAND_TYPE_TO_MEMORY_TYPE.find(memType) == OPERAND_TYPE_TO_MEMORY_TYPE.end()) {
+    auto iter = OPERAND_TYPE_TO_MEMORY_TYPE.find(memType);
+    if (iter == OPERAND_TYPE_TO_MEMORY_TYPE.end()) {
         CODEGEN_LOGE(
             OperErr::OPERAND_TYPE_UNSUPPORTED, " memory type(%u) of tensor from PASS is invalid, tensor is: %s",
             ToUnderlying(memType), tensor->Dump().c_str());
-        return std::nullopt;
+        return;
     }
 
-    const TileRange& memRange = tensor->memoryrange;
-    auto bufferType = OPERAND_TYPE_TO_MEMORY_TYPE.at(memType);
+    auto bufferType = iter->second;
 
-    return GenAlloc(symbolMgr, bufferType, tensor->Datatype(), memRange);
+    GenAlloc(symbolMgr, bufferType, tensor);
 }
 
 // NEXTNEXT: After TileTensor mode is applied to all TileOp, retain just one
@@ -418,41 +411,41 @@ std::pair<std::string, std::string> GenAllocVarName(const std::string& prefix, c
     return std::make_pair(varName, varName + "_T");
 }
 
-std::string CodeGenNPU::GenAlloc(
-    const std::shared_ptr<SymbolManager>& sm, BufferType bufferType, DataType dataType, const TileRange& range) const
+void CodeGenNPU::GenAlloc(
+    const std::shared_ptr<SymbolManager>& sm, BufferType bufferType, const std::shared_ptr<LogicalTensor>& tensor)
 {
     if ((BUFFER_TYPE_TO_PREFIX.count(bufferType) == 0) || (OPERAND_TYPE_TO_ADDR_TYPE.count(bufferType) == 0)) {
         ASSERT(OperErr::OPERAND_TYPE_UNSUPPORTED, false) << "invalid bufferType: " << static_cast<size_t>(bufferType);
-        return "";
+        return;
     }
 
     const std::string prefix = BUFFER_TYPE_TO_PREFIX.at(bufferType);
-    const std::string& addrSpaceQualifier = OPERAND_TYPE_TO_ADDR_TYPE.at(bufferType);
+    const TileRange& range = tensor->memoryrange;
     auto [allocVarName, allocVarNameTileTensor] = GenAllocVarName(prefix, range);
 
     // must conform to CodeGenOpNPU::createAllocKey
     AllocKey key = AllocKey(bufferType, range.start, range.end);
     bool reuse = sm->BindAddrWithVariableName(key, allocVarName, allocVarNameTileTensor);
     if (reuse) {
-        return "";
+        return;
     }
 
     CODEGEN_LOGI("bind key to name: %s->%s", sm->FormatAllocKey(key).c_str(), allocVarName.c_str());
 
-    std::string dataTypeStr = DataType2CCEStr(dataType);
+    std::string dataTypeStr = DataType2CCEStr(tensor->Datatype());
+    const std::string& addrSpaceQualifier = OPERAND_TYPE_TO_ADDR_TYPE.at(bufferType);
 
-    std::ostringstream oss;
-    oss << dataTypeStr << " " << addrSpaceQualifier << " *" << allocVarName << " = (" << dataTypeStr << " "
-        << addrSpaceQualifier << " *)get_imm(0x" << std::hex << static_cast<unsigned>(range.start) << "); // size: 0x"
-        << std::hex << static_cast<unsigned>(range.Size()) << "\n";
+    std::ostringstream allocNormal;
+    allocNormal << dataTypeStr << " " << addrSpaceQualifier << " *" << allocVarName << " = (" << dataTypeStr << " "
+                << addrSpaceQualifier << " *)get_imm(0x" << std::hex << static_cast<unsigned>(range.start)
+                << "); // size: 0x" << std::hex << static_cast<unsigned>(range.Size()) << "\n";
 
-    if (ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false)) {
-        oss << dataTypeStr << " *" << allocVarNameTileTensor << " = (" << dataTypeStr << " *)get_imm(0x" << std::hex
-            << static_cast<unsigned>(range.start) << "); // size: 0x" << std::hex << static_cast<unsigned>(range.Size())
-            << "\n";
-    }
+    std::ostringstream allocForTileTensor;
+    allocForTileTensor << dataTypeStr << " *" << allocVarNameTileTensor << " = (" << dataTypeStr << " *)get_imm(0x"
+                       << std::hex << static_cast<unsigned>(range.start) << "); // size: 0x" << std::hex
+                       << static_cast<unsigned>(range.Size()) << "\n";
 
-    return oss.str();
+    sm->RecordTensorAddrAlloc(AddrAlloc{key, allocNormal.str(), allocForTileTensor.str()});
 }
 
 void CodeGenNPU::CompileCode(const std::string& compileCmd) const
@@ -824,13 +817,7 @@ void CodeGenNPU::ExecuteParallelCompile(const Function& topFunc)
         topFunc.GetFunctionHash().c_str(), parallelJobs, compileTasks_.size());
     CODEGEN_LOGI("Execute: %s", makeCmd.str().c_str());
 
-    auto startTime = std::chrono::high_resolution_clock::now();
     int ret = DoCompileCmd(makeCmd.str());
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration<double, std::milli>(endTime - startTime);
-    CODEGEN_LOGI(
-        "Top Function magic: %d, hash: %s: Parallel compilation finished in %f ms", topFunc.GetFuncMagic(),
-        topFunc.GetFunctionHash().c_str(), duration.count());
 
     ASSERT(CmpCodeErr::COMPILE_CODE_FAILED, ret == 0) << "Parallel compilation failed with return code: " << ret;
 

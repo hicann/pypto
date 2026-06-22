@@ -295,9 +295,7 @@ std::string CodeGenOpNPU::GenDynValidShape(int32_t operandIndex) const
     auto dynValidShape = dynValidShapeFromOpAttr[operandIndex];
     FillVecWithDummyInHead<SymbolicScalar>(dynValidShape, SHAPE_DIM5 - dynValidShape.size(), 1);
     std::vector<std::string> paramList;
-    for (auto dynShape : dynValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynValidShape);
     std::string tileOpCallParam = JoinString(paramList, CONN_COMMA);
     return tileOpCallParam;
 }
@@ -333,8 +331,7 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemStore() const
     int32_t shmemDataIndex = 2;
 
     oss << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex) << ", "
-        << GenOffCoord(nonShmemDataIndex) << ", " << GenDynOffCoord(shmemDataIndex) << ", "
-        << GenDynValidShape(0);
+        << GenOffCoord(nonShmemDataIndex) << ", " << GenDynOffCoord(shmemDataIndex) << ", " << GenDynValidShape(0);
     return oss.str();
 }
 
@@ -346,7 +343,7 @@ std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemLoad() const
 
     oss << QueryTileTensorNameByIdx(nonShmemDataIndex) << ", " << QueryTileTensorNameByIdx(shmemDataIndex) << ", "
         << GenDynOffCoord(shmemDataIndex);
-     return oss.str();
+    return oss.str();
 }
 
 std::string CodeGenOpNPU::GenOffsetsAndRawShapesForShmemSignal() const

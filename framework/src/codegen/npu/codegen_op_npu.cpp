@@ -529,9 +529,7 @@ std::vector<std::string> CodeGenOpNPU::GenGetParamMacroPacked(
 std::vector<std::string> CodeGenOpNPU::GenDynRawShapePacked(unsigned paramIdx) const
 {
     std::vector<std::string> paramExpr;
-    for (const auto& s : dynamicRawShape[paramIdx]) {
-        paramExpr.emplace_back(SymbolicExpressionTable::BuildExpression(s));
-    }
+    FillParamWithFullInput(paramExpr, dynamicRawShape[paramIdx]);
     return paramExpr;
 }
 
@@ -561,10 +559,7 @@ std::vector<std::string> CodeGenOpNPU::GenParamIdxExprByIndex(
 std::vector<std::string> CodeGenOpNPU::GenSymbolicArgument(const std::vector<SymbolicScalar>& exprList) const
 {
     std::vector<std::string> argList;
-    for (auto& expr : exprList) {
-        std::string exprStr = SymbolicExpressionTable::BuildExpression(expr);
-        argList.push_back(exprStr);
-    }
+    FillParamWithFullInput(argList, exprList);
 
     CODEGEN_LOGI("argList is %s", IntVecToStr(argList).c_str());
     return argList;
@@ -632,9 +627,7 @@ void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
             tileTensor.shape.emplace_back(std::to_string(s));
         }
     } else {
-        for (const auto& s : newDynValidShape) {
-            tileTensor.shape.emplace_back(SymbolicExpressionTable::BuildExpression(s));
-        }
+        FillParamWithFullInput(tileTensor.shape, newDynValidShape);
     }
     tileTensor.stride = BuildStride(newRawShape);
 }
@@ -805,13 +798,9 @@ std::string CodeGenOpNPU::PrintCoord(size_t dim, const std::string& coord) const
 std::pair<std::string, std::string> CodeGenOpNPU::PrintDstSrcCoordFromAttr(int dstIdx, int srcIdx) const
 {
     std::vector<std::string> dstOffset;
-    for (const auto& tmpOffset : offsetFromAttr[dstIdx]) {
-        dstOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
-    }
+    FillParamWithFullInput(dstOffset, offsetFromAttr[dstIdx]);
     std::vector<std::string> srcOffset;
-    for (const auto& tmpOffset : offsetFromAttr[srcIdx]) {
-        srcOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
-    }
+    FillParamWithFullInput(srcOffset, offsetFromAttr[srcIdx]);
     std::string coordCpDst = WrapParamByParentheses(dstOffset);
     std::string coordDst = PrintCoord(rawShape[dstIdx].size(), coordCpDst);
     std::string coordCpSrc = WrapParamByParentheses(srcOffset);

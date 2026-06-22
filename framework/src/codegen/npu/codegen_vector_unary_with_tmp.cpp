@@ -85,9 +85,7 @@ std::string CodeGenOpNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuffPara
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     std::string tmp = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
     paramList.insert(paramList.end(), {dst, src, tmp});
-    for (auto dynShape : newDynSrcValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, newDynSrcValidShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -219,9 +217,7 @@ std::string CodeGenOpNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpB
     std::string srcName = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     std::string tmpName = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
     paramList.insert(paramList.end(), {dstName, srcName, tmpName});
-    for (auto dynShape : newDynSrcValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, newDynSrcValidShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "_<" << templateParam << ">"
@@ -372,9 +368,7 @@ std::string CodeGenOpNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuf
     paramList.emplace_back(dst);
     paramList.emplace_back(src);
     paramList.emplace_back(tmp);
-    for (auto dynShape : dynSrcShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -470,9 +464,6 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
     return CG_ERROR;
 }
 
-std::string CodeGenOpNPU::GenArgReduceWithValue() const
-{
-    return PrintArgReduceTileTensor();
-}
+std::string CodeGenOpNPU::GenArgReduceWithValue() const { return PrintArgReduceTileTensor(); }
 
 } // namespace npu::tile_fwk

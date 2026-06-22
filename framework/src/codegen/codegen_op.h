@@ -67,9 +67,14 @@ public:
           isMainBlock(ctx.isMainBlock),
           isDynamicAligned(ctx.isDynamicAligned)
     {
+        operandWithMagic.reserve(MAX_OPERANDS);
         for (size_t i = 0; i < MAX_OPERANDS; i++) {
             operand[i] = NULL_OPERAND;
+            operandWithMagic[i] = INVALID_TENSOR_MAGIC;
             operandType[i] = BUF_UNKNOWN;
+            operandDtype[i] = DataType::DT_BOTTOM;
+            // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.
+            paramLocation[i] = 1;
         }
         sm = ctx.symbolManager;
     }
@@ -89,10 +94,9 @@ protected:
     std::string aliasOp;            // alias op name
 
     int operand[MAX_OPERANDS] = {}; // buffer id
-    int operandWithMagic[MAX_OPERANDS] = {};
-    OperandType operandType[MAX_OPERANDS] = {BUF_UNKNOWN, BUF_UNKNOWN, BUF_UNKNOWN, BUF_UNKNOWN};
-    DataType operandDtype[MAX_OPERANDS] = {
-        DataType::DT_BOTTOM, DataType::DT_BOTTOM, DataType::DT_BOTTOM, DataType::DT_BOTTOM};
+    std::vector<int> operandWithMagic;
+    OperandType operandType[MAX_OPERANDS] = {};
+    DataType operandDtype[MAX_OPERANDS] = {};
     Element extOperandVal;
     SymbolicScalar extSymbolicScalar;
     std::vector<Element> extScalarVec;
@@ -109,8 +113,7 @@ protected:
     std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {};    // for spilling to GM scene
     std::vector<SymbolicScalar> dynValidShapeFromOpAttr[MAX_OPERANDS] = {};
     // if operand is an variable, record its related argument location
-    // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.
-    int paramLocation[MAX_OPERANDS] = {1, 1, 1, 1, 1, 1};
+    int paramLocation[MAX_OPERANDS] = {};
     int GmTensorParamIdxInCallFunc{0};
     OpSyncQueue syncQueue;
 
@@ -157,6 +160,7 @@ private:
     void CombineAxisOffset(const Operation& oper, int operandIdx);
     void UpdateDynValidShapeFromAttr(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
     void SetDynValidShapeFromAttr(const std::vector<OpImmediate>& toValidShape, int operandIdx);
+    bool IsNeedUseNormalAddrAlloc(const Operation& ops) const;
 };
 } // namespace npu::tile_fwk
 

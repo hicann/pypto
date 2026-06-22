@@ -40,6 +40,12 @@ const std::string COORD = "Coord";
 using BufferType = enum OperandType;
 using AllocKey = std::tuple<BufferType, int64_t /*RangeStart*/, int64_t /*RangeEnd*/>;
 
+struct AddrAlloc {
+    AllocKey allocKey;
+    std::string allocNormal;
+    std::string allocForTileTensor;
+};
+
 struct TileTensorShape {
     bool isInLoop{false};
     std::vector<int64_t> shape;
@@ -297,7 +303,7 @@ public:
     void InsertTensorNameInLoopToFullDim(const std::string& tensorName, const std::string& fullDimTensorName);
     std::string QueryTileTensorFullDimByTensorInLoop(const std::string& tensorName);
 
-    std::string GenUsingList();
+    void GenUsingList(std::ostringstream& oss);
     std::string GenTileTensorDefList();
     std::string GenNewTileTensorDefs();
 
@@ -312,6 +318,13 @@ public:
         tileTensorByMagicInLoop_.clear();
         tensorNameInLoopToFullDim_.clear();
     }
+
+    void AddTensorUseNormalAlloc(const std::shared_ptr<LogicalTensor>& tensor)
+    {
+        tensorUseNormalAlloc_.insert(CreateAllocKey(tensor));
+    }
+    void RecordTensorAddrAlloc(const AddrAlloc& addrAlloc) { addrAllocs_.emplace_back(addrAlloc); }
+    void PrintAddrAllocs(std::ostringstream& oss) const;
 
 private:
     std::string GenTensorUsingName(const TileTensorUsing& tileTensorUsing)
@@ -347,5 +360,7 @@ private:
     std::unordered_map<std::string, TileTensorUsing> tileTensorUsing_;
     SymbolIdGenMgr idGenMgr_;
     size_t tileTensorOutputIdx_{0};
+    std::vector<AddrAlloc> addrAllocs_;
+    std::set<AllocKey> tensorUseNormalAlloc_;
 };
 } // namespace npu::tile_fwk

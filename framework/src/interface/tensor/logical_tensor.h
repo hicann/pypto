@@ -211,7 +211,7 @@ private:
     std::set<Operation*, CompareOp> dependOps_;
 };
 
-enum EmuOpcode {
+enum EmuOpcode : int64_t {
     EMUOP_TENSOR_EXTRACT,
     EMUOP_TENSOR_INSERT,
     EMUOP_TENSOR_GETDATA_DEPEND,
