@@ -1398,6 +1398,22 @@ static std::vector<int64_t> CheckAndInferShape(
     return newShape;
 }
 
+bool MatchInputTailProductOutputLastDim(const std::vector<int64_t>& inputShape, const std::vector<int64_t>& outputShape)
+{
+    if (outputShape.empty() || inputShape.size() != outputShape.size() + 1 || outputShape.back() <= 0) {
+        return false;
+    }
+
+    int64_t tailProduct = 1;
+    for (size_t i = 1; i < inputShape.size(); ++i) {
+        if (inputShape[i] <= 0 || tailProduct > LLONG_MAX / inputShape[i]) {
+            return false;
+        }
+        tailProduct *= inputShape[i];
+    }
+    return tailProduct == outputShape.back();
+}
+
 // batch MatMul优化pattern，不插入register copy
 bool MatchBatchMatMulPattern(const std::vector<int64_t>& inputShape, const std::vector<int64_t>& outputShape)
 {
@@ -1444,7 +1460,7 @@ bool MatchBatchMatMulPattern(const std::vector<int64_t>& inputShape, const std::
         }
     }
 
-    return false;
+    return MatchInputTailProductOutputLastDim(inputShape, outputShape);
 }
 
 static bool ReshapeNeedCopy(const Tensor& operand)

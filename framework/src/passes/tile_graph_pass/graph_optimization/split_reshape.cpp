@@ -136,31 +136,14 @@ Status SplitReshape::ObtainChangingAxis(
 // SUCCESS: 动态特征合法，可以执行屏蔽操作
 // FAILED: 不合法的validShape，存在构图问题，需要报错
 // WARNING：动态shape涉及变轴，跳过该reshapeOp的pass
-Status SplitReshape::CheckDynStatus(
-    std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<int64_t> output,
-    std::vector<SymbolicScalar> dynOutput)
+Status SplitReshape::CheckDynOutputAlignment(
+    const std::vector<int64_t>& alignedShape, const std::vector<int64_t>& output,
+    const std::vector<SymbolicScalar>& dynOutput, const std::vector<bool>& changingAxis)
 {
-    if (dynOutput.empty()) {
-        return SUCCESS;
-    }
-    if (output.size() != dynOutput.size()) {
-        APASS_LOG_ERROR_F(
-            Elements::Tensor,
-            "The dim of output %zu does not equal to dynOutput %zu; Make sure the dim of output equal to dynOutput.",
-            output.size(), dynOutput.size());
-        return FAILED;
-    }
-    int64_t curVal;
     size_t alignIdx = 0;
-    input.erase(std::remove(input.begin(), input.end(), 1), input.end());
-    std::vector<bool> ChangingAxis(alignedShape.size());
-    if (ObtainChangingAxis(alignedShape, input, ChangingAxis) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "ObtainChangingAxis failed.");
-        return FAILED;
-    }
     for (size_t i = 0; i < output.size(); ++i) {
         if (alignIdx < alignedShape.size() && alignedShape[alignIdx] == output[i]) {
-            if (ChangingAxis[alignIdx] && !dynOutput[i].IsImmediate()) {
+            if (changingAxis[alignIdx] && !dynOutput[i].IsImmediate()) {
                 APASS_LOG_DEBUG_F(
                     Elements::Tensor, "Found undetermined axis from dynOutput[%zu], which is also a merged/split axis.",
                     i);
@@ -177,7 +160,7 @@ Status SplitReshape::CheckDynStatus(
                 Elements::Tensor, "Found undetermined axis from dynOutput[%zu], which is also a merged/split axis.", i);
             return WARNING;
         }
-        curVal = output[i];
+        int64_t curVal = output[i];
         while (curVal > 1) {
             if (alignedShape[alignIdx] == 0) {
                 APASS_LOG_ERROR_F(
@@ -191,6 +174,38 @@ Status SplitReshape::CheckDynStatus(
         }
     }
     return SUCCESS;
+}
+
+Status SplitReshape::CheckDynStatus(
+    std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<int64_t> output,
+    std::vector<SymbolicScalar> dynOutput)
+{
+    if (dynOutput.empty()) {
+        return SUCCESS;
+    }
+    if (std::any_of(input.begin(), input.end(), [](int64_t s) { return s == -1; }) ||
+        std::any_of(output.begin(), output.end(), [](int64_t s) { return s == -1; })) {
+        APASS_LOG_WARN_F(
+            Elements::Tensor,
+            "Found -1 in input or output shape, input shape is %s, output shape is %s, "
+            "this scenario cannot be handled by split reshape pass.",
+            GetStr(input).c_str(), GetStr(output).c_str());
+        return WARNING;
+    }
+    if (output.size() != dynOutput.size()) {
+        APASS_LOG_ERROR_F(
+            Elements::Tensor,
+            "The dim of output %zu does not equal to dynOutput %zu; Make sure the dim of output equal to dynOutput.",
+            output.size(), dynOutput.size());
+        return FAILED;
+    }
+    input.erase(std::remove(input.begin(), input.end(), 1), input.end());
+    std::vector<bool> changingAxis(alignedShape.size());
+    if (ObtainChangingAxis(alignedShape, input, changingAxis) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "ObtainChangingAxis failed.");
+        return FAILED;
+    }
+    return CheckDynOutputAlignment(alignedShape, output, dynOutput, changingAxis);
 }
 
 bool SplitReshape::CheckSameRawInput(const LogicalTensorPtr& reshapeSource)
