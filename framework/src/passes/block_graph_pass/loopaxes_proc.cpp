@@ -23,7 +23,6 @@
 #include "loopaxes_proc.h"
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
 #include "tilefwk/error_code.h"
-#include "passes/pass_utils/dump_function_utils.h"
 
 #undef MODULE_NAME
 #define MODULE_NAME "LoopaxesProc"
@@ -108,27 +107,21 @@ Status LoopaxesProc::RunOnFunction(Function& function)
 
 void LoopaxesProc::ClearStatus()
 {
+    lastGroupIdx = INVALID_LOOP_GROUPID;
+    previousOutputMagic = INVALID_LOOP_GROUPID;
+    previousLoopAxes.clear();
     if (lastOpInLoop != nullptr) {
         SetOpLoopEnd(lastOpInLoop);
         lastOpInLoop = nullptr;
     }
-    lastGroupIdx = INVALID_LOOP_GROUPID;
-    previousOutputMagic = INVALID_LOOP_GROUPID;
-    previousLoopAxes.clear();
-    sameStaticLoopOpGroup.clear();
-    addrStaticConflictIdx.clear();
-    addrStaticRecordMap.clear();
 
+    dynLastGroupIdx = INVALID_LOOP_GROUPID;
+    dynPreviousOutputMagic = INVALID_LOOP_GROUPID;
+    dynPreviousLoopAxes.clear();
     if (dynLastOpInLoop != nullptr) {
         SetOpDynLoopEnd(dynLastOpInLoop);
         dynLastOpInLoop = nullptr;
     }
-    dynLastGroupIdx = INVALID_LOOP_GROUPID;
-    dynPreviousOutputMagic = INVALID_LOOP_GROUPID;
-    dynPreviousLoopAxes.clear();
-    sameDynLoopOpGroup.clear();
-    addrDynConflictIdx.clear();
-    addrDynRecordMap.clear();
 }
 
 Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
@@ -220,9 +213,43 @@ std::vector<Interval> BuildIntervals(const std::set<std::pair<int, int>>& confli
     }
     return intervals;
 }
+
+bool IsIntervalCovered(const Interval& inv, const std::vector<int>& cuts)
+{
+    for (int cut : cuts) {
+        if (cut >= inv.l && cut <= inv.r)
+            return true;
+    }
+    return false;
+}
+
+int CalculateMaxSegment(const std::vector<int>& sortedCuts, int groupSize)
+{
+    int prev = 0, maxSeg = 0;
+    for (int cut : sortedCuts) {
+        int segSize = cut - prev + 1;
+        maxSeg = std::max(maxSeg, segSize);
+        prev = cut + 1;
+    }
+    return std::max(maxSeg, groupSize - prev);
+}
+
+void UpdateBestSolution(
+    const std::vector<int>& cuts, int groupSize, std::vector<int>& bestCuts, int& bestCutCount, int& bestMaxSeg)
+{
+    int curCutCount = static_cast<int>(cuts.size());
+    std::vector<int> sortedCuts = cuts;
+    std::sort(sortedCuts.begin(), sortedCuts.end());
+    int maxSeg = CalculateMaxSegment(sortedCuts, groupSize);
+    if (curCutCount < bestCutCount || (curCutCount == bestCutCount && maxSeg > bestMaxSeg)) {
+        bestCutCount = curCutCount;
+        bestMaxSeg = maxSeg;
+        bestCuts = cuts;
+    }
+}
 } // namespace
 
-std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int groupSize)
+std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int& groupSize)
 {
     if (groupSize <= 1)
         return {};
@@ -230,45 +257,47 @@ std::vector<int> FindCuts(const std::set<std::pair<int, int>>& conflicts, int gr
     if (intervals.empty())
         return {};
 
-    std::sort(intervals.begin(), intervals.end(), [](const Interval& a, const Interval& b) {
-        return a.r < b.r;
-    });
+    int totalPos = groupSize - 1;
+    int bestCutCount = INT_MAX, bestMaxSeg = -1;
+    std::vector<int> bestCuts;
 
-    std::vector<int> cuts;
-    for (const auto& inv : intervals) {
-        bool covered = false;
-        for (int cut : cuts) {
-            if (cut >= inv.l && cut <= inv.r) {
-                covered = true;
+    for (int mask = 0; mask < (1 << totalPos); ++mask) {
+        std::vector<int> cuts;
+        for (int i = 0; i < totalPos; ++i) {
+            if (mask & (1 << i))
+                cuts.push_back(i);
+        }
+        bool allCovered = true;
+        for (const auto& inv : intervals) {
+            if (!IsIntervalCovered(inv, cuts)) {
+                allCovered = false;
                 break;
             }
         }
-        if (!covered) {
-            int newCut = inv.r;
-            cuts.push_back(newCut);
-        }
+        if (allCovered)
+            UpdateBestSolution(cuts, groupSize, bestCuts, bestCutCount, bestMaxSeg);
     }
-
-    std::sort(cuts.begin(), cuts.end());
-    return cuts;
+    return bestCutCount == INT_MAX ? std::vector<int>{} : bestCuts;
 }
 
-void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange,
+void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
                              std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap,
                              std::set<std::pair<int, int>>& addrConflictIdx, int& idx)
 {
     for (auto& entry : addrRecordMap) {
-        if (entry.first == idx) {
-            continue;
-        }
-        
-        for (auto& existingRange : entry.second) {
-            bool hasOverlap = !(addrRange[1] <= existingRange[0] || existingRange[1] <= addrRange[0]);
-            if (hasOverlap) {
-                std::pair<int, int> conflictPair(entry.first, idx);
-                addrConflictIdx.insert(conflictPair);
-                break;
-            }
+        if (addrRange[0] >= entry.second[1][1] || addrRange[1] <= entry.second[0][0]) {
+            isAdd = true;
+            conflictIdx = INVALID_LOOP_GROUPID;
+        } else if (
+            (addrRange[0] >= entry.second[0][0] && addrRange[1] <= entry.second[0][1]) ||
+            (addrRange[0] >= entry.second[1][0] && addrRange[1] <= entry.second[1][1])) {
+            isAdd = false;
+            conflictIdx = INVALID_LOOP_GROUPID;
+        } else {
+            isAdd = true;
+            conflictIdx = entry.first;
+            std::pair<int, int> conflictPair(conflictIdx, idx);
+            addrConflictIdx.insert(conflictPair);
         }
     }
 }
@@ -276,32 +305,24 @@ void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange,
 void LoopaxesProc::RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair<int, int>>& addrConflictIdx,
                                      std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap)
 {
-    auto inputs = op->GetIOperands();
-    auto outputs = op->GetOOperands();
-    
-    std::vector<std::vector<size_t>> currentRanges;
-    
-    for (auto& input : inputs) {
-        std::vector<size_t> addrRange;
-        addrRange.push_back(input->memoryrange.start);
-        addrRange.push_back(input->memoryrange.end);
-        currentRanges.push_back(addrRange);
+    std::vector<size_t> inAddrRange;
+    std::vector<size_t> outAddrRange;
+    inAddrRange.push_back(op->GetIOperands().front()->memoryrange.start);
+    inAddrRange.push_back(op->GetIOperands().front()->memoryrange.end);
+    outAddrRange.push_back(op->GetOOperands().front()->memoryrange.start);
+    outAddrRange.push_back(op->GetOOperands().front()->memoryrange.end);
+    if (addrRecordMap.empty()) {
+        addrRecordMap[idx].push_back(inAddrRange);
+        addrRecordMap[idx].push_back(outAddrRange);
+        return;
     }
-    
-    for (auto& output : outputs) {
-        std::vector<size_t> addrRange;
-        addrRange.push_back(output->memoryrange.start);
-        addrRange.push_back(output->memoryrange.end);
-        currentRanges.push_back(addrRange);
-    }
-    
-    if (idx > 0) {
-        for (auto& range : currentRanges) {
-            IsOverLap(range, addrRecordMap, addrConflictIdx, idx);
-        }
-    }
-    
-    addrRecordMap[idx] = currentRanges;
+    bool isAdd{false};
+    int conflictIdx = INVALID_LOOP_GROUPID;
+    addrRecordMap[idx].push_back(inAddrRange);
+    addrRecordMap[idx].push_back(outAddrRange);
+    IsOverLap(inAddrRange, isAdd, conflictIdx, addrRecordMap, addrConflictIdx, idx);
+    IsOverLap(outAddrRange, isAdd, conflictIdx, addrRecordMap, addrConflictIdx, idx);
+    return;
 }
 
 void LoopaxesProc::CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
@@ -439,9 +460,9 @@ void LoopaxesProc::ResetGroupState()
 
 void LoopaxesProc::FinalizeLoopGroups()
 {
-    CheckAddrOverLap(true, sameStaticLoopOpGroup, addrStaticConflictIdx, addrStaticRecordMap);
     CheckAddrOverLap(false, sameDynLoopOpGroup, addrDynConflictIdx, addrDynRecordMap);
-    
+    CheckAddrOverLap(true, sameStaticLoopOpGroup, addrStaticConflictIdx, addrStaticRecordMap);
+
     if (lastGroupIdx != INVALID_LOOP_GROUPID && lastOpInLoop != nullptr) {
         SetOpLoopEnd(lastOpInLoop);
     }
@@ -494,26 +515,6 @@ bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxe
     }
 
     return allReplacedSymbolsMatch || allExprsMatch;
-}
-
-Status LoopaxesProc::DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction)
-{
-    DumpFunctionUtils utils;
-    return utils.DumpTileFunctionsJson(
-        function, logFolder, beforeFunction,
-        [this](Function& f, const std::string& folder, bool before) {
-            return Pass::DumpFunctionJson(f, folder, before);
-        });
-}
-
-Status LoopaxesProc::PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction)
-{
-    DumpFunctionUtils dfUtils;
-    return dfUtils.PrintTileFunctions(
-        function, logFolder, beforeFunction,
-        [this](Function& f, const std::string& folder, bool before) {
-            return Pass::PrintFunction(f, folder, before);
-        });
 }
 
 } // namespace tile_fwk
