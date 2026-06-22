@@ -405,6 +405,16 @@ def __validate_bias_dimension(input_dim, bias_tensor):
             ))
 
 
+def __validate_scale_dimension(input_dim, scale_tensor):
+    if scale_tensor is None:
+        return
+    scale_dim = scale_tensor.Dim()
+    if scale_dim != 2:
+        raise PyptoError(0xF00003, RuntimeError(
+            f"{input_dim}D scaled_mm only supports 2D scale tensor, but got {scale_dim}D scale tensor."
+        ))
+
+
 def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_scale2, extend_params) -> None:
     input_dim = input_tensor1.Dim()
     other_dim = input_tensor2.Dim()
@@ -438,6 +448,7 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
 
     if extend_params is not None:
         __validate_bias_dimension(input_dim, extend_params.get('bias_tensor'))
+        __validate_scale_dimension(input_dim, extend_params.get('scale_tensor'))
 
 
 def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_scale2, optional_param) -> None:
