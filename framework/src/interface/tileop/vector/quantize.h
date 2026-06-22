@@ -89,6 +89,7 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr int paddedRow_src = PTO_CEIL(srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));  // vbrcb processes in groups of 8 rows
 
     constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
@@ -110,8 +111,8 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
                                     pto::BLayout::RowMajor, -1, -1>;
     using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
                                     pto::BLayout::ColMajor, -1, -1>;
-    // tmpbuf: same size as src, with int32_t type
-    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, srcTileH, paddedCol_src,
+    // tmpbuf: aligned size with int32_t type
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src,
                                     pto::BLayout::RowMajor, -1, -1>;
 
     // 遍历所有 Tile
@@ -201,6 +202,7 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr int paddedRow_src = PTO_CEIL(srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));  // vbrcb processes in groups of 8 rows
 
     constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
@@ -225,8 +227,8 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
                                     pto::BLayout::RowMajor, -1, -1>;
     using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
                                     pto::BLayout::ColMajor, -1, -1>;
-    // tmpbuf: same size as src, with int32_t type
-    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, srcTileH, paddedCol_src,
+    // tmpbuf: aligned size with int32_t type
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src,
                                     pto::BLayout::RowMajor, -1, -1>;
 
     // 遍历所有 Tile
