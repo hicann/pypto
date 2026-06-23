@@ -168,7 +168,7 @@ TEST_F(IRBuilderTest, TestAssign)
     b.EndFunction(sp);
 
     ASSERT_NE(stmt, nullptr);
-    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(stmt)), "x: pl.Scalar[pl.INT32] = 42");
+    ASSERT_EQ(PythonPrint(std::static_pointer_cast<const IRNode>(stmt)), "x: ir.Scalar[ir.INT32] = 42");
 }
 
 TEST_F(IRBuilderTest, TestReturnWithValues)

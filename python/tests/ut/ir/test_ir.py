@@ -36,6 +36,22 @@ def test_error_types():
         pypto.raise_error("UnknownType", "should fail")
 
 
+def test_assert_structural_equal_raises_runtime_error_with_fe_code():
+    from pypto import pypto_impl
+
+    span = ir.Span("test", 1, 1)
+    lhs = ir.ConstInt(1, ir.INT32, span)
+    rhs = ir.ConstInt(2, ir.INT32, span)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        pypto_impl.ir.assert_structural_equal(lhs, rhs)
+
+    msg = str(exc_info.value)
+    assert "ASSERT FAILED" in msg
+    assert "INVALID_VAL" in msg
+    assert "Structural equality assertion failed" in msg
+
+
 def test_dtypes():
     dtypes = [
         # bits, is_signed, is_unsigned, is_float, name, c_type
@@ -83,6 +99,9 @@ def test_span():
     assert span.end_line == -1
     assert span.end_column == -1
     assert not span.is_unknown()
+
+    span = ir.Span.unknown()
+    assert span.is_unknown()
 
 
 def test_logging(capfd):
@@ -172,6 +191,22 @@ def test_basic_types():
     lt = ir.LogicalTensorType()
     assert str(lt) == "ir.Tensor"
 
+    # Struct debug info
+    from pypto import pypto_impl
+    span = ir.Span("test", 1, 1)
+    struct_type = ir.TupleType([ir.ScalarType(ir.INT64), ir.ScalarType(ir.INT32)])
+    debug_info = pypto_impl.ir.IRDebugInfo()
+    debug_info.register_tuple_fields(struct_type, ["cursor", "limit"])
+    debug_info.register_tuple_name(struct_type, "BufferState")
+    assert debug_info.get_tuple_fields(struct_type) == ["cursor", "limit"]
+    assert debug_info.get_tuple_name(struct_type) == "BufferState"
+    assert debug_info.get_tuple_fields(ir.TupleType([ir.ScalarType(ir.INT32)])) is None
+
+    prog = ir.Program([], "test_prog", span, debug_info)
+    assert prog.debug_info.get_tuple_fields(struct_type) == ["cursor", "limit"]
+    assert prog.debug_info.get_tuple_name(struct_type) == "BufferState"
+    assert ir.Program([], "empty_prog", span).debug_info is None
+
 
 def test_basic_expr():
     span = ir.Span("test", 1, 1)
@@ -248,6 +283,9 @@ def test_basic_expr():
     not_expr = ir.Not(cb, ir.BOOL, span)
     assert str(not_expr) == "not True"
 
+    bit_not = ir.BitNot(a, ir.INT32, span)
+    assert str(bit_not) == "~1"
+
     abs_expr = ir.Abs(a, ir.INT32, span)
     assert str(abs_expr) == "ir.abs(1)"
 
@@ -259,6 +297,8 @@ def test_basic_expr():
     assert str(mt) == "[1, 2]"
     tgi = ir.TupleGetItem(mt, 0, span)
     assert str(tgi) == "[1, 2][0]"
+    get_item = ir.GetItemExpr(mt, ir.ConstInt(1, ir.INDEX, span), span)
+    assert str(get_item) == "[1, 2][1]"
 
     # Call with Op
     call = ir.Call("my_op", [a, b], span)
@@ -271,6 +311,8 @@ def test_basic_expr():
 
 
 def test_basic_stmt():
+    from pypto import pypto_impl
+
     span = ir.Span("test", 1, 1)
     st = ir.ScalarType(ir.INT32)
 
@@ -330,6 +372,18 @@ def test_basic_stmt():
         "    x: ir.Scalar[ir.INT32] = 42"
     ])
 
+    # SectionStmt
+    for section_kind, section_name in [
+        (pypto_impl.ir.SectionKind.Vector, "section_vector"),
+        (pypto_impl.ir.SectionKind.Cube, "section_cube"),
+        (pypto_impl.ir.SectionKind.VF, "section_vf"),
+    ]:
+        section = pypto_impl.ir.SectionStmt(section_kind, assign_x, span)
+        assert str(section) == "\n".join([
+            f"with ir.{section_name}():",
+            "    x: ir.Scalar[ir.INT32] = 42",
+        ])
+
     # YieldStmt and ReturnStmt
     yield_stmt = ir.YieldStmt([val42], span)
     assert str(yield_stmt) == "ir.yield_(42)"
@@ -344,13 +398,24 @@ def test_basic_stmt():
     # BreakStmt and ContinueStmt
     break_stmt = ir.BreakStmt(span)
     assert str(break_stmt) == "break"
+    break_with_value = ir.BreakStmt([val1], span)
+    assert str(break_with_value) == "break 1"
     continue_stmt = ir.ContinueStmt(span)
     assert str(continue_stmt) == "continue"
+    continue_with_value = ir.ContinueStmt([val1], span)
+    assert str(continue_with_value) == "continue 1"
 
     # EvalStmt
     call = ir.Call("some_op", [val42], span)
     eval_stmt = ir.EvalStmt(call, span)
     assert str(eval_stmt) == "ir.eval(ir.call @some_op(42))"
+
+    # ScalarOpStmt and TensorOpStmt
+    token = ir.Var("tok", st, span)
+    scalar_op = pypto_impl.ir.ScalarOpStmt(x, token, "add", [val1], span)
+    assert str(scalar_op) == "x, tok = add(1)"
+    tensor_op = ir.TensorOpStmt([x], token, "matmul", [val1], [], {}, span)
+    assert str(tensor_op) == "x, tok = matmul(1)"
 
     # Function
     func = ir.Function("test_func", [x], [st], assign_x, span)
@@ -358,6 +423,12 @@ def test_basic_stmt():
         "@ir.function",
         "def test_func(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
         "    x: ir.Scalar[ir.INT32] = 42"
+    ])
+    helper_func = ir.Function("helper", [x], [st], ir.YieldStmt([x], span), span, ir.FunctionType.Helper)
+    assert str(helper_func) == "\n".join([
+        "@ir.function(type=ir.FunctionType.Helper)",
+        "def helper(x: ir.Scalar[ir.INT32]) -> ir.Scalar[ir.INT32]:",
+        "    return x",
     ])
 
     # Program

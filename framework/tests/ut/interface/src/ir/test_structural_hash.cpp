@@ -31,11 +31,11 @@ class IRStructHashTest : public testing::Test {};
 // Var hashing
 // ============================================================================
 
-TEST_F(IRStructHashTest, TestHashVarDeterministicAndNonZero)
+TEST_F(IRStructHashTest, TestHashVarDeterministic)
 {
     auto a = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
-    EXPECT_EQ(structural_hash(Node(a)), structural_hash(Node(a)));
-    EXPECT_NE(structural_hash(Node(a)), 0u);
+    auto b = std::make_shared<Var>("x", Scalar(DataType::INT32), Sp());
+    EXPECT_EQ(structural_hash(Node(a)), structural_hash(Node(b)));
 }
 
 TEST_F(IRStructHashTest, TestHashDifferentVarsDifferentHash)
@@ -117,34 +117,28 @@ TEST_F(IRStructHashTest, TestHashCallWithKwargs)
 TEST_F(IRStructHashTest, TestHashCallKwargsAllTypes)
 {
     auto a = std::make_shared<ConstInt>(1, DataType::INT32, Sp());
+    auto expect_hash_contract = [&](std::any value, std::any same_value, std::any different_value) {
+        auto make_call = [&](std::any kwarg_value) {
+            std::vector<std::pair<std::string, std::any>> kwargs = {{"x", std::move(kwarg_value)}};
+            return std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kwargs, Scalar(DataType::INT32), Sp());
+        };
+        auto lhs = make_call(std::move(value));
+        auto equal_rhs = make_call(std::move(same_value));
+        auto different_rhs = make_call(std::move(different_value));
+        EXPECT_EQ(structural_hash(Node(lhs)), structural_hash(Node(equal_rhs)));
+        EXPECT_NE(structural_hash(Node(lhs)), structural_hash(Node(different_rhs)));
+    };
 
-    std::vector<std::pair<std::string, std::any>> kw_int = {{"x", std::any(int(1))}};
-    auto ci = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_int, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(ci)), 0u);
-
-    std::vector<std::pair<std::string, std::any>> kw_bool = {{"x", std::any(true)}};
-    auto cb = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_bool, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(cb)), 0u);
-
-    std::vector<std::pair<std::string, std::any>> kw_str = {{"x", std::any(std::string("a"))}};
-    auto cs = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_str, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(cs)), 0u);
-
-    std::vector<std::pair<std::string, std::any>> kw_dbl = {{"x", std::any(1.5)}};
-    auto cd = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_dbl, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(cd)), 0u);
-
-    std::vector<std::pair<std::string, std::any>> kw_flt = {{"x", std::any(1.5f)}};
-    auto cf = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_flt, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(cf)), 0u);
-
-    std::vector<std::pair<std::string, std::any>> kw_dt = {{"x", std::any(DataType::FP32)}};
-    auto cdt = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_dt, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(cdt)), 0u);
-
-    std::vector<std::pair<std::string, std::any>> kw_vec = {{"x", std::any(std::vector<int>{1, 2, 3})}};
-    auto cv = std::make_shared<Call>("op", std::vector<ExprPtr>{a}, kw_vec, Scalar(DataType::INT32), Sp());
-    EXPECT_NE(structural_hash(Node(cv)), 0u);
+    expect_hash_contract(int(1), int(1), int(2));
+    expect_hash_contract(true, true, false);
+    expect_hash_contract(std::string("a"), std::string("a"), std::string("b"));
+    expect_hash_contract(1.5, 1.5, 2.5);
+    expect_hash_contract(1.5f, 1.5f, 2.5f);
+    expect_hash_contract(DataType::FP32, DataType::FP32, DataType::FP16);
+    expect_hash_contract(std::vector<int>{1, 2, 3}, std::vector<int>{1, 2, 3}, std::vector<int>{1, 2, 4});
+    expect_hash_contract(
+        std::vector<std::string>{"a", "b"}, std::vector<std::string>{"a", "b"},
+        std::vector<std::string>{"a", "c"});
 }
 
 TEST_F(IRStructHashTest, TestHashMakeTuple)
@@ -354,7 +348,6 @@ TEST_F(IRStructHashTest, TestHashScalarTypeDeterministicAndDifferent)
     auto t1 = std::make_shared<ScalarType>(DataType::INT32);
     auto t2 = std::make_shared<ScalarType>(DataType::INT32);
     auto t3 = std::make_shared<ScalarType>(DataType::FP32);
-    EXPECT_NE(structural_hash(t1), 0u);
     EXPECT_EQ(structural_hash(t1), structural_hash(t2));
     EXPECT_NE(structural_hash(t1), structural_hash(t3));
 }
@@ -363,8 +356,6 @@ TEST_F(IRStructHashTest, TestHashTensorTypeWithVarShape)
 {
     auto d = std::make_shared<Var>("N", Scalar(DataType::INT64), Sp());
     auto t = std::make_shared<TensorType>(std::vector<ExprPtr>{d}, DataType::FP32);
-    EXPECT_NE(structural_hash(t), 0u);
-
     auto d2 = std::make_shared<Var>("N", Scalar(DataType::INT64), Sp());
     auto t2 = std::make_shared<TensorType>(std::vector<ExprPtr>{d2}, DataType::FP32);
     EXPECT_EQ(structural_hash(t, false), structural_hash(t2, false));
@@ -375,7 +366,6 @@ TEST_F(IRStructHashTest, TestHashTileType)
     auto d = std::make_shared<Var>("T", Scalar(DataType::INT64), Sp());
     auto t1 = std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP32);
     auto t2 = std::make_shared<TileType>(std::vector<ExprPtr>{d}, DataType::FP16);
-    EXPECT_NE(structural_hash(t1), 0u);
     EXPECT_NE(structural_hash(t1), structural_hash(t2));
 }
 
@@ -418,15 +408,19 @@ TEST_F(IRStructHashTest, TestHashTupleType)
     auto t1 = std::make_shared<TupleType>(std::vector<TypePtr>{Scalar(DataType::INT32)});
     auto t2 = std::make_shared<TupleType>(std::vector<TypePtr>{Scalar(DataType::INT32)});
     auto t3 = std::make_shared<TupleType>(std::vector<TypePtr>{Scalar(DataType::FP32)});
-    EXPECT_NE(structural_hash(t1), 0u);
     EXPECT_EQ(structural_hash(t1), structural_hash(t2));
     EXPECT_NE(structural_hash(t1), structural_hash(t3));
 }
 
 TEST_F(IRStructHashTest, TestHashMemRefAndUnknownType)
 {
-    EXPECT_NE(structural_hash(GetMemRefType()), 0u);
-    EXPECT_NE(structural_hash(std::make_shared<UnknownType>()), 0u);
+    auto memref1 = GetMemRefType();
+    auto memref2 = GetMemRefType();
+    auto unknown1 = std::make_shared<UnknownType>();
+    auto unknown2 = std::make_shared<UnknownType>();
+    EXPECT_EQ(structural_hash(memref1), structural_hash(memref2));
+    EXPECT_EQ(structural_hash(unknown1), structural_hash(unknown2));
+    EXPECT_NE(structural_hash(memref1), structural_hash(unknown1));
 }
 
 // ============================================================================

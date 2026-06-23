@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "ir/core.h"
+#include "ir/debug_info.h"
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/reflection/field_traits.h"
@@ -37,16 +38,24 @@ namespace ir {
  */
 class Program : public IRNode {
 public:
-    Program(std::map<std::string, FunctionPtr> functions, std::string name, Span span)
-        : IRNode(std::move(span)), name_(std::move(name)), functions_(std::move(functions))
+    Program(std::map<std::string, FunctionPtr> functions, std::string name, Span span,
+            IRDebugInfoPtr debugInfo = nullptr)
+        : IRNode(std::move(span)), name_(std::move(name)), functions_(std::move(functions)),
+          debugInfo_(std::move(debugInfo))
     {}
 
-    Program(const std::vector<FunctionPtr>& functions, std::string name, Span span);
+    Program(const std::vector<FunctionPtr>& functions, std::string name, Span span,
+            IRDebugInfoPtr debugInfo = nullptr);
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Program; }
     [[nodiscard]] std::string TypeName() const override { return "Program"; }
 
     [[nodiscard]] FunctionPtr GetFunction(const std::string& name) const;
+
+    /// Tuple/struct field-name side table; owned by the Program, supplied by the parser.
+    /// May be null when a Program is built without one (e.g. rebuilt by a pass). Excluded
+    /// from GetFieldDescriptors -> not part of structural equality / hash / serialization.
+    [[nodiscard]] const IRDebugInfo* GetDebugInfo() const { return debugInfo_.get(); }
 
     /**
      * \brief Get field descriptors for reflection-based visitation
@@ -64,6 +73,8 @@ public:
 public:
     std::string name_;
     std::map<std::string, FunctionPtr> functions_;
+    /// Codegen-level annotation; excluded from reflection (see GetDebugInfo).
+    IRDebugInfoPtr debugInfo_;
 };
 
 using ProgramPtr = std::shared_ptr<const Program>;

@@ -115,8 +115,9 @@ public:
         static_assert(
             std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, std::string> ||
                 std::is_same_v<T, double> || std::is_same_v<T, DataType> || std::is_same_v<T, MemorySpace> ||
-                std::is_same_v<T, std::vector<int>>,
-            "SetAttrType only accepts: bool, int, std::string, double, DataType, MemorySpace, std::vector<int>");
+                std::is_same_v<T, std::vector<int>> || std::is_same_v<T, std::vector<std::string>>,
+            "SetAttrType only accepts: bool, int, std::string, double, DataType, MemorySpace, "
+            "std::vector<int>, std::vector<std::string>");
 
         attrs_.emplace(key, std::type_index(typeid(T)));
     }

@@ -55,7 +55,7 @@ DataType CanonicalizeForSyntaxScalarDtype(const DataType& dtype)
 /**
  * \brief Hash combine using Boost-inspired algorithm
  */
-inline uint64_t hash_combine(uint64_t seed, uint64_t value)
+inline uint64_t HashCombine(uint64_t seed, uint64_t value)
 {
     return seed ^ (value + 0x9e3779b9 + (seed << 0x6) + (seed >> 0x2));
 }
@@ -104,7 +104,7 @@ public:
         ResultType h = 0;
         for (size_t i = 0; i < fields.size(); ++i) {
             INTERNAL_CHECK(fields[i]) << "structural_hash encountered null IR node in vector at index " << i;
-            h = hash_combine(h, HashNode(fields[i]));
+            h = HashCombine(h, HashNode(fields[i]));
         }
         return h;
     }
@@ -117,9 +117,9 @@ public:
             INTERNAL_CHECK(key) << "structural_hash encountered null key in map";
             INTERNAL_CHECK(value) << "structural_hash encountered null value in map";
             // Hash key by name (keys are Op types, not IRNode)
-            h = hash_combine(h, static_cast<ResultType>(std::hash<std::string>{}(key->name_)));
+            h = HashCombine(h, static_cast<ResultType>(std::hash<std::string>{}(key->name_)));
             // Hash value (values are IRNode types)
-            h = hash_combine(h, HashNode(value));
+            h = HashCombine(h, HashNode(value));
         }
         return h;
     }
@@ -131,9 +131,9 @@ public:
         for (const auto& [key, value] : field) {
             INTERNAL_CHECK(value) << "structural_hash encountered null value in map";
             // Hash key string
-            h = hash_combine(h, static_cast<ResultType>(std::hash<std::string>{}(key)));
+            h = HashCombine(h, static_cast<ResultType>(std::hash<std::string>{}(key)));
             // Hash value (values are IRNode types)
-            h = hash_combine(h, HashNode(value));
+            h = HashCombine(h, HashNode(value));
         }
         return h;
     }
@@ -214,7 +214,16 @@ public:
         ResultType h = 0;
         for (size_t i = 0; i < fields.size(); ++i) {
             INTERNAL_CHECK(fields[i]) << "structural_hash encountered null TypePtr in vector at index " << i;
-            h = hash_combine(h, HashType(fields[i]));
+            h = HashCombine(h, HashType(fields[i]));
+        }
+        return h;
+    }
+
+    ResultType VisitLeafField(const std::vector<std::string>& fields)
+    {
+        ResultType h = static_cast<ResultType>(fields.size());
+        for (const auto& s : fields) {
+            h = HashCombine(h, std::hash<std::string>{}(s));
         }
         return h;
     }
@@ -225,25 +234,30 @@ public:
         ResultType h = 0;
         // Hash keys and values in order (no need to sort since order is preserved)
         for (const auto& [key, value] : kwargs) {
-            h = hash_combine(h, std::hash<std::string>{}(key));
+            h = HashCombine(h, std::hash<std::string>{}(key));
 
             // Hash value based on type
             if (value.type() == typeid(int)) {
-                h = hash_combine(h, std::hash<int>{}(AnyCast<int>(value, "hashing kwarg: " + key)));
+                h = HashCombine(h, std::hash<int>{}(AnyCast<int>(value, "hashing kwarg: " + key)));
             } else if (value.type() == typeid(bool)) {
-                h = hash_combine(h, std::hash<bool>{}(AnyCast<bool>(value, "hashing kwarg: " + key)));
+                h = HashCombine(h, std::hash<bool>{}(AnyCast<bool>(value, "hashing kwarg: " + key)));
             } else if (value.type() == typeid(std::string)) {
-                h = hash_combine(h, std::hash<std::string>{}(AnyCast<std::string>(value, "hashing kwarg: " + key)));
+                h = HashCombine(h, std::hash<std::string>{}(AnyCast<std::string>(value, "hashing kwarg: " + key)));
             } else if (value.type() == typeid(double)) {
-                h = hash_combine(h, std::hash<double>{}(AnyCast<double>(value, "hashing kwarg: " + key)));
+                h = HashCombine(h, std::hash<double>{}(AnyCast<double>(value, "hashing kwarg: " + key)));
             } else if (value.type() == typeid(float)) {
-                h = hash_combine(h, std::hash<float>{}(AnyCast<float>(value, "hashing kwarg: " + key)));
+                h = HashCombine(h, std::hash<float>{}(AnyCast<float>(value, "hashing kwarg: " + key)));
             } else if (value.type() == typeid(DataType)) {
-                h = hash_combine(h, std::hash<uint8_t>{}(AnyCast<DataType>(value, "hashing kwarg: " + key).Code()));
+                h = HashCombine(h, std::hash<uint8_t>{}(AnyCast<DataType>(value, "hashing kwarg: " + key).Code()));
             } else if (value.type() == typeid(std::vector<int>)) {
                 const auto& vec = AnyCast<std::vector<int>>(value, "hashing kwarg: " + key);
                 for (int v : vec) {
-                    h = hash_combine(h, std::hash<int>{}(v));
+                    h = HashCombine(h, std::hash<int>{}(v));
+                }
+            } else if (value.type() == typeid(std::vector<std::string>)) {
+                const auto& vec = AnyCast<std::vector<std::string>>(value, "hashing kwarg: " + key);
+                for (const auto& s : vec) {
+                    h = HashCombine(h, std::hash<std::string>{}(s));
                 }
             } else {
                 CHECK(false) << "Invalid kwarg type for key: " << key
@@ -266,8 +280,8 @@ public:
         ResultType h = 0;
         for (const auto& ia : fields) {
             INTERNAL_CHECK(ia) << "structural_hash encountered null IterArgPtr in vector";
-            h = hash_combine(h, HashNode(std::static_pointer_cast<const IRNode>(ia->iterVar_)));
-            h = hash_combine(h, HashNode(std::static_pointer_cast<const IRNode>(ia->initValue_)));
+            h = HashCombine(h, HashNode(std::static_pointer_cast<const IRNode>(ia->iterVar_)));
+            h = HashCombine(h, HashNode(std::static_pointer_cast<const IRNode>(ia->initValue_)));
         }
         return h;
     }
@@ -275,7 +289,7 @@ public:
     template <typename Desc>
     void CombineResult(ResultType& accumulator, ResultType field_hash, [[maybe_unused]] const Desc& descriptor)
     {
-        accumulator = hash_combine(accumulator, field_hash);
+        accumulator = HashCombine(accumulator, field_hash);
     }
 
 private:
@@ -332,7 +346,7 @@ StructuralHasher::ResultType StructuralHasher::HashNodeImpl(const NodePtr& node)
     transparent_depth_ = saved_depth;
     node_type_stack_.pop_back();
 
-    return hash_combine(h, fields_hash);
+    return HashCombine(h, fields_hash);
 }
 
 StructuralHasher::ResultType StructuralHasher::HashType(const TypePtr& type)
@@ -344,58 +358,58 @@ StructuralHasher::ResultType StructuralHasher::HashType(const TypePtr& type)
         if (IsLoopVarFieldContext() || IsConstIntTypeContext()) {
             dtype = CanonicalizeForSyntaxScalarDtype(dtype);
         }
-        h = hash_combine(h, static_cast<ResultType>(std::hash<uint8_t>{}(dtype.Code())));
+        h = HashCombine(h, static_cast<ResultType>(std::hash<uint8_t>{}(dtype.Code())));
     } else if (auto tensor_type = As<TensorType>(type)) {
-        h = hash_combine(h, static_cast<ResultType>(std::hash<uint8_t>{}(tensor_type->dtype_.Code())));
-        h = hash_combine(h, static_cast<ResultType>(tensor_type->shape_.size()));
+        h = HashCombine(h, static_cast<ResultType>(std::hash<uint8_t>{}(tensor_type->dtype_.Code())));
+        h = HashCombine(h, static_cast<ResultType>(tensor_type->shape_.size()));
         for (const auto& dim : tensor_type->shape_) {
             INTERNAL_CHECK(dim) << "structural_hash encountered null shape dimension in TypePtr";
-            h = hash_combine(h, HashNode(dim));
+            h = HashCombine(h, HashNode(dim));
         }
     } else if (auto tile_type = As<TileType>(type)) {
         // Hash dtype
-        h = hash_combine(h, static_cast<ResultType>(std::hash<uint8_t>{}(tile_type->dtype_.Code())));
+        h = HashCombine(h, static_cast<ResultType>(std::hash<uint8_t>{}(tile_type->dtype_.Code())));
         // Hash shape size and dimensions
-        h = hash_combine(h, static_cast<ResultType>(tile_type->shape_.size()));
+        h = HashCombine(h, static_cast<ResultType>(tile_type->shape_.size()));
         for (const auto& dim : tile_type->shape_) {
             INTERNAL_CHECK(dim) << "structural_hash encountered null shape dimension in TileType";
-            h = hash_combine(h, HashNode(dim));
+            h = HashCombine(h, HashNode(dim));
         }
         // Hash tile_view if present
         if (tile_type->tileView_.has_value()) {
             const auto& tv = tile_type->tileView_.value();
-            h = hash_combine(h, static_cast<ResultType>(1)); // indicate presence
-            h = hash_combine(h, static_cast<ResultType>(tv.validShape.size()));
+            h = HashCombine(h, static_cast<ResultType>(1)); // indicate presence
+            h = HashCombine(h, static_cast<ResultType>(tv.validShape.size()));
             for (const auto& dim : tv.validShape) {
                 INTERNAL_CHECK(dim) << "structural_hash encountered null valid_shape dimension in TileView";
-                h = hash_combine(h, HashNode(dim));
+                h = HashCombine(h, HashNode(dim));
             }
-            h = hash_combine(h, static_cast<ResultType>(tv.stride.size()));
+            h = HashCombine(h, static_cast<ResultType>(tv.stride.size()));
             for (const auto& dim : tv.stride) {
                 INTERNAL_CHECK(dim) << "structural_hash encountered null stride dimension in TileView";
-                h = hash_combine(h, HashNode(dim));
+                h = HashCombine(h, HashNode(dim));
             }
             INTERNAL_CHECK(tv.startOffset) << "structural_hash encountered null start_offset in TileView";
-            h = hash_combine(h, HashNode(tv.startOffset));
+            h = HashCombine(h, HashNode(tv.startOffset));
         } else {
-            h = hash_combine(h, static_cast<ResultType>(0)); // indicate absence
+            h = HashCombine(h, static_cast<ResultType>(0)); // indicate absence
         }
         // Hash hardware_info if present
         if (tile_type->hardwareInfo_.has_value()) {
             const auto& hw = tile_type->hardwareInfo_.value();
-            h = hash_combine(h, static_cast<ResultType>(1));
-            h = hash_combine(h, static_cast<ResultType>(hw.blayout));
-            h = hash_combine(h, static_cast<ResultType>(hw.slayout));
-            h = hash_combine(h, static_cast<ResultType>(hw.fractal));
-            h = hash_combine(h, static_cast<ResultType>(hw.pad));
+            h = HashCombine(h, static_cast<ResultType>(1));
+            h = HashCombine(h, static_cast<ResultType>(hw.blayout));
+            h = HashCombine(h, static_cast<ResultType>(hw.slayout));
+            h = HashCombine(h, static_cast<ResultType>(hw.fractal));
+            h = HashCombine(h, static_cast<ResultType>(hw.pad));
         } else {
-            h = hash_combine(h, static_cast<ResultType>(0));
+            h = HashCombine(h, static_cast<ResultType>(0));
         }
     } else if (auto tuple_type = As<TupleType>(type)) {
-        h = hash_combine(h, static_cast<ResultType>(tuple_type->types_.size()));
+        h = HashCombine(h, static_cast<ResultType>(tuple_type->types_.size()));
         for (const auto& t : tuple_type->types_) {
             INTERNAL_CHECK(t) << "structural_hash encountered null type in TupleType";
-            h = hash_combine(h, HashType(t));
+            h = HashCombine(h, HashType(t));
         }
     } else if (IsA<MemRefType>(type) || IsA<UnknownType>(type)) {
         // MemRefType and UnknownType have no fields, only hash type name (already done above)
@@ -459,9 +473,9 @@ StructuralHasher::ResultType StructuralHasher::HashNode(const IRNodePtr& node)
     // here we add the variable identity hash.
     auto hash_var_identity = [&](const Var* var) {
         if (enable_auto_mapping_) {
-            hash_value = hash_combine(hash_value, free_var_counter_++);
+            hash_value = HashCombine(hash_value, free_var_counter_++);
         } else {
-            hash_value = hash_combine(hash_value, std::hash<std::string>{}(var->name_));
+            hash_value = HashCombine(hash_value, std::hash<std::string>{}(var->name_));
         }
     };
 

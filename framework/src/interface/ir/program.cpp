@@ -27,8 +27,8 @@ namespace pypto {
 namespace ir {
 
 // Vector-based constructor: creates string-keyed map from function names
-Program::Program(const std::vector<FunctionPtr>& functions, std::string name, Span span)
-    : IRNode(std::move(span)), name_(std::move(name))
+Program::Program(const std::vector<FunctionPtr>& functions, std::string name, Span span, IRDebugInfoPtr debugInfo)
+    : IRNode(std::move(span)), name_(std::move(name)), debugInfo_(std::move(debugInfo))
 {
     std::set<std::string> function_names;
     for (const auto& func : functions) {

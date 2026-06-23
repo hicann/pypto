@@ -380,11 +380,11 @@ void BindTypeClass(py::module_& ir)
             "__str__", [](const IRNodePtr& self) { return PythonPrint(self, "ir"); },
             "IR string representation")
         .def(
-            "as_python", [](const IRNodePtr& self, const std::string& prefix) { return PythonDslPrint(self, prefix); },
-            py::arg("prefix") = "pl",
+            "as_python", [](const IRNodePtr& self, const std::string& prefix) { return PythonPrint(self, prefix); },
+            py::arg("prefix") = "ir",
             "Convert to Python-style string representation.\n\n"
             "Args:\n"
-            "    prefix: Module prefix (default 'pl' for 'import pypto.language as pl')");
+            "    prefix: Module prefix (default 'ir' for 'import pypto_pro.ir as ir')");
 
     // Expr - abstract base, const shared_ptr
     auto expr_class = py::class_<Expr, IRNode, std::shared_ptr<Expr>>(
@@ -640,6 +640,10 @@ void BindExpr(py::module_& ir)
         .def_readonly("memory_space", &MemRef::memorySpace_, "Memory space (DDR, Vec, Mat, Left, Right, Scaling, Acc)")
         .def_readonly("addr", &MemRef::addr_, "Starting address expression")
         .def_readonly("size", &MemRef::size_, "Size in bytes (64-bit unsigned)")
+        .def_readwrite(
+            "memory_space_", &MemRef::memorySpace_, "Memory space (DDR, Vec, Mat, Left, Right, Scaling, Acc)")
+        .def_readwrite("addr_", &MemRef::addr_, "Starting address expression")
+        .def_readwrite("size_", &MemRef::size_, "Size in bytes (64-bit unsigned)")
         .def_static(
             "same_allocation", &MemRef::SameAllocation, py::arg("a"), py::arg("b"),
             "Check if two MemRefs share the same allocation (same base pointer)")
@@ -881,7 +885,8 @@ void BindExpr(py::module_& ir)
         static_cast<void (*)(const IRNodePtr&, const IRNodePtr&, bool)>(&assert_structural_equal), py::arg("lhs"),
         py::arg("rhs"), py::arg("enable_auto_mapping") = false,
         "Assert two IR nodes are structurally equal. "
-        "Raises ValueError with detailed error message showing the first mismatch location if they differ. "
+        "Raises RuntimeError with FE error code and detailed error message showing the first mismatch location "
+        "if they differ. "
         "Ignores source location (Span). "
         "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
         "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
@@ -891,7 +896,8 @@ void BindExpr(py::module_& ir)
         static_cast<void (*)(const TypePtr&, const TypePtr&, bool)>(&assert_structural_equal), py::arg("lhs"),
         py::arg("rhs"), py::arg("enable_auto_mapping") = false,
         "Assert two types are structurally equal. "
-        "Raises ValueError with detailed error message showing the first mismatch location if they differ. "
+        "Raises RuntimeError with FE error code and detailed error message showing the first mismatch location "
+        "if they differ. "
         "Ignores source location (Span). "
         "If enable_auto_mapping=True, automatically map variables (e.g., x+1 equals y+1). "
         "If enable_auto_mapping=False (default), variable objects must be exactly the same (not just same "
@@ -968,6 +974,7 @@ void BindStmt(py::module_& ir)
     py::enum_<SectionKind>(ir, "SectionKind", "Section kind classification")
         .value("Vector", SectionKind::Vector, "Vector section for vector operations")
         .value("Cube", SectionKind::Cube, "Cube section for cube operations")
+        .value("VF", SectionKind::VF, "VF section for A5 VF API code (__VEC_SCOPE__)")
         .export_values();
 
     // SectionStmt - const shared_ptr
@@ -1080,16 +1087,55 @@ void BindProgram(py::module_& ir)
         py::arg("type") = FunctionType::OPAQUE, "Create a function definition");
     BindFields<Function>(function_class);
 
+    // IRDebugInfo - compilation-session side table for tuple/struct field names.
+    auto debug_info_class = py::class_<IRDebugInfo, std::shared_ptr<IRDebugInfo>>(
+        ir, "IRDebugInfo",
+        "Side table mapping a tuple type to its ordered field-name list. "
+        "Populated by the parser, carried on Program, read by codegen.");
+    debug_info_class.def(py::init<>());
+    debug_info_class.def(
+        "register_tuple_fields", &IRDebugInfo::RegisterTupleFields, py::arg("type"), py::arg("fields"),
+        "Record the ordered field-name list for a named tuple / struct type.");
+    debug_info_class.def(
+        "get_tuple_fields",
+        [](const IRDebugInfo& self, const TupleTypePtr& type) -> py::object {
+            const auto* fields = self.GetTupleFields(type.get());
+            if (fields == nullptr) {
+                return py::none();
+            }
+            return py::cast(*fields);
+        },
+        py::arg("type"), "Look up field names by type, returns None if not registered.");
+    debug_info_class.def(
+        "register_tuple_name", &IRDebugInfo::RegisterTupleName, py::arg("type"), py::arg("name"),
+        "Record the C++ struct type name for a named tuple / struct type.");
+    debug_info_class.def(
+        "get_tuple_name",
+        [](const IRDebugInfo& self, const TupleTypePtr& type) -> py::object {
+            const auto* name = self.GetTupleName(type.get());
+            if (name == nullptr) {
+                return py::none();
+            }
+            return py::cast(*name);
+        },
+        py::arg("type"), "Look up struct type name by type, returns None if not registered.");
+
     // Program - const shared_ptr
     auto program_class = py::class_<Program, IRNode, std::shared_ptr<Program>>(
         ir, "Program",
         "Program definition with functions mapped by name. "
         "Functions are automatically sorted by name for deterministic ordering.");
     program_class.def(
-        py::init<const std::vector<FunctionPtr>&, const std::string&, const Span&>(), py::arg("functions"),
-        py::arg("name"), py::arg("span"),
+        py::init([](const std::vector<FunctionPtr>& functions, const std::string& name, const Span& span,
+                    IRDebugInfoPtr debug_info) {
+            return std::make_shared<Program>(functions, name, span, std::move(debug_info));
+        }),
+        py::arg("functions"), py::arg("name"), py::arg("span"), py::arg("debug_info") = nullptr,
         "Create a program from a list of functions. "
         "Functions are keyed by their names automatically.");
+    program_class.def_property_readonly(
+        "debug_info", [](const ProgramPtr& self) { return self->debugInfo_; },
+        "Tuple/struct field-name side table; None if the Program was built without one.");
     program_class.def(
         "get_function", &Program::GetFunction, py::arg("name"), "Get a function by name, returns None if not found");
     program_class.def(
@@ -1111,22 +1157,22 @@ void BindProgram(py::module_& ir)
 
     // Python-style printer function - unified API for IRNode
     ir.def(
-        "python_print", [](const IRNodePtr& node, const std::string& prefix) { return PythonDslPrint(node, prefix); },
-        py::arg("node"), py::arg("prefix") = "pl",
+        "python_print", [](const IRNodePtr& node, const std::string& prefix) { return PythonPrint(node, prefix); },
+        py::arg("node"), py::arg("prefix") = "ir",
         "Print IR node (Expr, Stmt, Function, or Program) in Python IR syntax.\n\n"
         "Args:\n"
         "    node: IR node to print\n"
-        "    prefix: Module prefix (default 'pl' for 'import pypto.language as pl')");
+        "    prefix: Module prefix (default 'ir' for 'import pypto_pro.ir as ir')");
 
     // Python-style printer function for Type objects
     ir.def(
         "python_print_type",
-        [](const TypePtr& type, const std::string& prefix) { return PythonDslPrint(type, prefix); }, py::arg("type"),
-        py::arg("prefix") = "pl",
+        [](const TypePtr& type, const std::string& prefix) { return PythonPrint(type, prefix); }, py::arg("type"),
+        py::arg("prefix") = "ir",
         "Print Type object in Python IR syntax.\n\n"
         "Args:\n"
         "    type: Type to print\n"
-        "    prefix: Module prefix (default 'pl' for 'import pypto.language as pl')");
+        "    prefix: Module prefix (default 'ir' for 'import pypto_pro.ir as ir')");
 }
 
 void BindHelpers(py::module_& ir)

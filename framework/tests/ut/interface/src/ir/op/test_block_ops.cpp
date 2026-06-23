@@ -266,45 +266,80 @@ TEST_F(BlockOpsMemoryTest, SetVal_NonScalarValue_Throws)
 }
 
 // ============================================================================
-// struct_ops.cpp: struct.declare, struct.get, struct.set, struct.ref
+// struct_ops.cpp: struct.create, struct.set
 // ============================================================================
 
 class BlockOpsStructTest : public testing::Test {};
 
-TEST_F(BlockOpsStructTest, StructDeclare_NoArgs_ReturnsIndexScalar)
+TEST_F(BlockOpsStructTest, StructCreate_ReturnsTupleType)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("struct.declare", {}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
+    std::vector<std::pair<std::string, std::any>> kwargs = {
+        {"name", std::string("BufferState")},
+        {"fields", std::vector<std::string>{"cursor", "limit"}},
+    };
+    auto call = reg.Create(
+        "struct.create",
+        {MakeScalarVar("cursor", DataType::INT64), MakeScalarVar("limit", DataType::INT32)}, kwargs, Sp());
+    auto rt = As<TupleType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    ASSERT_EQ(rt->types_.size(), 2u);
+    auto cursor_type = As<ScalarType>(rt->types_[0]);
+    ASSERT_NE(cursor_type, nullptr);
+    EXPECT_EQ(cursor_type->dtype_, DataType::INT64);
+    auto limit_type = As<ScalarType>(rt->types_[1]);
+    ASSERT_NE(limit_type, nullptr);
+    EXPECT_EQ(limit_type->dtype_, DataType::INT32);
 }
 
-TEST_F(BlockOpsStructTest, StructGet_ReturnsIndexScalar)
+TEST_F(BlockOpsStructTest, StructCreate_FieldCountMismatch_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("struct.get", {MakeScalarVar("idx", DataType::INT64)}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    std::vector<std::pair<std::string, std::any>> kwargs = {
+        {"name", std::string("BufferState")},
+        {"fields", std::vector<std::string>{"cursor", "limit"}},
+    };
+    EXPECT_THROW(
+        (void)reg.Create("struct.create", {MakeScalarVar("cursor", DataType::INT64)}, kwargs, Sp()),
+        npu::tile_fwk::Error);
 }
 
-TEST_F(BlockOpsStructTest, StructSet_ReturnsIndexScalar)
+TEST_F(BlockOpsStructTest, StructSet_ReturnsTupleType)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("struct.set", {MakeScalarVar("idx", DataType::INT64), MakeScalarVar("val", DataType::INT64)}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
+    auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+        std::make_shared<ScalarType>(DataType::INT32),
+    });
+    auto base = std::make_shared<Var>("state", struct_type, Sp());
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"field", std::string("cursor")}};
+    auto call = reg.Create("struct.set", {base, MakeScalarVar("cursor", DataType::INT64)}, kwargs, Sp());
+    auto rt = As<TupleType>(call->GetType());
     ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    EXPECT_EQ(rt->types_.size(), 2u);
 }
 
-TEST_F(BlockOpsStructTest, StructRef_ReturnsIndexScalar)
+TEST_F(BlockOpsStructTest, StructSet_MissingFieldKwarg_Throws)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("struct.ref", {MakeScalarVar("idx", DataType::INT64)}, Sp());
-    auto rt = As<ScalarType>(call->GetType());
-    ASSERT_NE(rt, nullptr);
-    EXPECT_EQ(rt->dtype_, DataType::INDEX);
+    auto struct_type = std::make_shared<TupleType>(std::vector<TypePtr>{
+        std::make_shared<ScalarType>(DataType::INT64),
+    });
+    auto base = std::make_shared<Var>("state", struct_type, Sp());
+    EXPECT_THROW(
+        (void)reg.Create("struct.set", {base, MakeScalarVar("cursor", DataType::INT64)}, Sp()),
+        npu::tile_fwk::Error);
+}
+
+TEST_F(BlockOpsStructTest, StructSet_NonTupleBase_Throws)
+{
+    auto& reg = OpRegistry::GetInstance();
+    std::vector<std::pair<std::string, std::any>> kwargs = {{"field", std::string("cursor")}};
+    EXPECT_THROW(
+        (void)reg.Create(
+            "struct.set", {MakeScalarVar("state", DataType::INT64), MakeScalarVar("cursor", DataType::INT64)}, kwargs,
+            Sp()),
+        npu::tile_fwk::Error);
 }
 
 // ============================================================================
@@ -1092,7 +1127,10 @@ TEST_F(BlockOpsOutMemoryTest, BlockFull_ScalarOut_ReturnsOutType)
 TEST_F(BlockOpsOutMemoryTest, BlockSsbufStore_ReturnsIndexScalar)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("block.ssbuf_store", {MakeScalarVar("off", DataType::INT32)}, Sp());
+    auto struct_type = std::make_shared<TupleType>(
+        std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::INT64)});
+    auto struct_var = std::make_shared<Var>("state", struct_type, Sp());
+    auto call = reg.Create("block.ssbuf_store", {struct_var, MakeScalarVar("off", DataType::INT32)}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::INDEX);
@@ -1101,7 +1139,10 @@ TEST_F(BlockOpsOutMemoryTest, BlockSsbufStore_ReturnsIndexScalar)
 TEST_F(BlockOpsOutMemoryTest, BlockSsbufLoad_ReturnsIndexScalar)
 {
     auto& reg = OpRegistry::GetInstance();
-    auto call = reg.Create("block.ssbuf_load", {MakeScalarVar("off", DataType::INT32)}, Sp());
+    auto struct_type = std::make_shared<TupleType>(
+        std::vector<TypePtr>{std::make_shared<ScalarType>(DataType::INT64)});
+    auto struct_var = std::make_shared<Var>("state", struct_type, Sp());
+    auto call = reg.Create("block.ssbuf_load", {struct_var, MakeScalarVar("off", DataType::INT32)}, Sp());
     auto rt = As<ScalarType>(call->GetType());
     ASSERT_NE(rt, nullptr);
     EXPECT_EQ(rt->dtype_, DataType::INDEX);
