@@ -259,8 +259,9 @@ void CheckL0TileTiling(
     int64_t kAL1 = ConvAlignB(tileCinFmap, k0) * kh * kw, oriK = ConvAlignB(cin, k0) * kh * kw;
     int64_t kBL1 = ConvAlignB(tileCinWeight, k0) * kh * kw;
     int64_t batch = inputTensor.GetShape()[NCHW_N_IDX], groups = attrParam.groups;
-    int numTileL0 =
-        batch * groups * CeilDiv(cout / groups, tileN) * CeilDiv(tileHout, tileH) * CeilDiv(tileWout, tileW);
+    int64_t hOut = ConvComputeHo(inputTensor, weightTensor, attrParam);
+    int64_t wOut = ConvComputeWo(inputTensor, weightTensor, attrParam);
+    int numTileL0 = batch * groups * CeilDiv(cout / groups, tileN) * CeilDiv(hOut, tileH) * CeilDiv(wOut, tileW);
     if (attrParam.isConv3D) {
         int64_t kd = weightTensor.GetShape()[NCDHW_D_IDX];
         int64_t dout = ConvComputeDo(inputTensor, weightTensor, attrParam);
@@ -572,6 +573,30 @@ std::vector<LogicalTensorPtr> GetOperandVecIn(
     return {inputNzTensor.GetStorage(), weightFzTensor.GetStorage()};
 }
 
+Tensor GetFinalResTensorNZ2NZ(
+    std::vector<LogicalTensorPtr> operandVecIn, const Tensor& resTensor, const ConvAttrParam& convAttrParam)
+{
+    std::vector<int64_t> orgOutShape = {resTensor.GetShape()[NC1HWC0_N_IDX],
+        operandVecIn[INPUT_WEIGHT_IDX]->GetShape()[NCHW_N_IDX], resTensor.GetShape()[NC1HWC0_H_IDX],
+        resTensor.GetShape()[NC1HWC0_W_IDX]};
+    if (convAttrParam.isConv3D) {
+        orgOutShape = {resTensor.GetShape()[NDC1HWC0_N_IDX], operandVecIn[INPUT_WEIGHT_IDX]->GetShape()[NCHW_N_IDX],
+            resTensor.GetShape()[NDC1HWC0_D_IDX], resTensor.GetShape()[NDC1HWC0_H_IDX],
+            resTensor.GetShape()[NDC1HWC0_W_IDX]};
+    }
+    Tensor finalResTensor(resTensor.GetStorage()->Datatype(), orgOutShape, "TensorOut");
+    std::vector<SymbolicScalar> resValidShape = resTensor.GetValidShape();
+    SymbolicScalar validCout = operandVecIn[INPUT_WEIGHT_IDX]->GetDynValidShape()[NCHW_N_IDX];
+    std::vector<SymbolicScalar> finalResValidShape = {resValidShape[NC1HWC0_N_IDX], validCout,
+        resValidShape[NC1HWC0_H_IDX], resValidShape[NC1HWC0_W_IDX]};
+    if (convAttrParam.isConv3D) {
+        finalResValidShape = {resValidShape[NDC1HWC0_N_IDX], validCout, resValidShape[NDC1HWC0_D_IDX],
+            resValidShape[NDC1HWC0_H_IDX], resValidShape[NDC1HWC0_W_IDX]};
+    }
+    finalResTensor.GetStorage()->UpdateDynValidShape(finalResValidShape);
+    return finalResTensor;
+}
+
 Tensor ConstructTensorGraphNZ2NZ(
     Function* functionPtr, std::vector<LogicalTensorPtr> operandVecIn, const Tensor& resTensor,
     const ConvAttrParam& convAttrParam)
@@ -607,7 +632,7 @@ Tensor ConstructTensorGraphNZ2NZ(
             resTensor.GetShape()[NDC1HWC0_D_IDX], resTensor.GetShape()[NDC1HWC0_H_IDX],
             resTensor.GetShape()[NDC1HWC0_W_IDX]};
     }
-    Tensor finalResTensor(resTensor.GetStorage()->Datatype(), orgOutShape, "TensorOut");
+    Tensor finalResTensor = GetFinalResTensorNZ2NZ(operandVecIn, resTensor, convAttrParam);
     auto& orgResOp = functionPtr->AddOperation(Opcode::OP_FAKE_TRANS, operandVecOut, {finalResTensor.GetStorage()});
     orgResOp.SetAttribute(FAKE_TRANS_IN_FORMAT_ATTR, static_cast<int64_t>(resTensor.Format()));
     orgResOp.SetAttribute(FAKE_TRANS_OUT_FORMAT_ATTR, static_cast<int64_t>(finalResTensor.Format()));
@@ -617,6 +642,9 @@ Tensor ConstructTensorGraphNZ2NZ(
         orgOutShape = {resTensor.GetShape()[NC1HWC0_N_IDX], operandVecIn[INPUT_WEIGHT_IDX]->GetShape()[NCHW_N_IDX],
             resTensor.GetShape()[NC1HWC0_W_IDX]};
         Tensor finalRes3DimTensor(resTensor.GetStorage()->Datatype(), orgOutShape, "TensorOut3Dim");
+        std::vector<SymbolicScalar> resValidShape = resTensor.GetValidShape();
+        finalRes3DimTensor.GetStorage()->UpdateDynValidShape({resValidShape[NC1HWC0_N_IDX],
+            operandVecIn[INPUT_WEIGHT_IDX]->GetDynValidShape()[NCHW_N_IDX], resValidShape[NC1HWC0_W_IDX]});
         auto& reshapeResOp = functionPtr->AddOperation(Opcode::OP_RESHAPE, {finalResTensor.GetStorage()},
             {finalRes3DimTensor.GetStorage()});
         reshapeResOp.SetAttribute(OpAttributeKey::isConv, true);
@@ -642,6 +670,9 @@ Tensor ConstructTensorGraph(
         std::vector<int64_t> weight4DimShape{weightTensor.GetShape()[NCHW_N_IDX], weightTensor.GetShape()[NCHW_C_IDX],
             1, weightTensor.GetShape()[NCHW_H_IDX]};
         Tensor weigth4DimTensor(weightTensor.GetStorage()->Datatype(), weight4DimShape, "", weightTensor.Format());
+        std::vector<SymbolicScalar> weightValidShape = weightTensor.GetValidShape();
+        weigth4DimTensor.GetStorage()->UpdateDynValidShape({weightValidShape[NCL_N_IDX], weightValidShape[NCL_C_IDX],
+            1, weightValidShape[NCL_L_IDX]});
         auto& reshapeFmapOp =
             functionPtr->AddOperation(Opcode::OP_RESHAPE, {inputTensor.GetStorage()}, {fmap4DimTensor.GetStorage()});
         auto& reshapeWeightOp =
@@ -1243,13 +1274,11 @@ void ConstrucCopyOutTile(
     if (IsArch32Platform()) {
         fixpipeOpRes.SetAttribute(
             LoadStoreConvOpAttributeKey::copyOutMode, static_cast<int64_t>(CopyOutMode::COPY_MOD_NZ2NZ));
-        fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN,
-            SymbolicScalar::FromConcrete({iterInfo.mL0Size, ConvAlignB(iterInfo.nL0Size, MKN_N_VALUE)}));
     } else {
         fixpipeOpRes.SetAttribute(
             LoadStoreConvOpAttributeKey::copyOutMode, static_cast<int64_t>(CopyOutMode::COPY_MOD_NZ2DN));
-        fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN, dstCL0DynValidShape);
-    }
+        }
+    fixpipeOpRes.SetAttribute(OpAttributeKey::l0cValidMN, dstCL0DynValidShape);
 
     std::vector<int64_t> dstResGmOffset = GetCopyOutDstOffset(convAttrParam, convTileInfo, iterInfo);
     auto copyAttr = std::make_shared<CopyOpAttribute>(
@@ -1500,8 +1529,8 @@ std::vector<SymbolicScalar> GetResTensorDynValidShape(
     SymbolicScalar wOut = ConvComputeValidWo(inputTensor, weightTensor, convAttrParam);
     std::vector<SymbolicScalar> resTensorDynValidShape;
     if (IsArch32Platform()) {
-        SymbolicScalar cOut0 = SymbolicScalar(ALIGN_SIZE_32 / BytesOf(outType));
-        SymbolicScalar cOut1 = SymbolicScalar(convAttrParam.groups * CeilDiv(cOut / convAttrParam.groups, cOut0));
+        int64_t cOut0 = static_cast<int64_t>(ALIGN_SIZE_32 / BytesOf(outType));
+        SymbolicScalar cOut1 = convAttrParam.groups * ((cOut / convAttrParam.groups + cOut0 - 1) / cOut0);
         resTensorDynValidShape = {batchOut, cOut1, hOut, wOut, cOut0};
         if (convAttrParam.isConv3D) {
             SymbolicScalar dOut = ConvComputeValidDo(inputTensor, weightTensor, convAttrParam);
