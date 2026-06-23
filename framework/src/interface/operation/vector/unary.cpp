@@ -276,7 +276,9 @@ Tensor Reciprocal(const Tensor& operand, PrecisionType precisionType)
 Tensor Abs(const Tensor& self)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    static const std::unordered_set<DataType> ABS_A2A3_TYPES = {DT_FP16, DT_BF16, DT_FP32};
+    static const std::unordered_set<DataType> ABS_A5_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT8, DT_INT16, DT_INT32};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(ABS_A2A3_TYPES, ABS_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Abs");
     RETURN_CALL(UnaryOperation<UnaryOpType::ABS>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
