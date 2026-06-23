@@ -252,6 +252,19 @@ public:
             devProg->memBudget.tensor.MaxOutcastMem(), devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
     }
 
+    static void FillSwimLaneEnableInfo(ToSubMachineConfig &toSubMachineConfig) {
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_FUNC, false)) {
+            toSubMachineConfig.profConfig.Add(ProfConfig::AICPU_FUNC);
+        }
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) ||
+            config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+            toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_TIME);
+        }
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {
+            toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
+        }
+    }
+
     // Fill metadata and kArgs (templated because it uses DeviceMemoryTy) (keeps <= 50 lines)
     template <typename DeviceMemoryTy>
     static void FillKernelMeta(
@@ -280,19 +293,6 @@ public:
                 (int64_t*)devMem.CopyToDev(devProgData, CachedOperator::GetCfgDataDevAddrHolder(cachedOperator));
         }
         kArgs.machineConfig = devProg->devArgs.machineConfig;
-        if (!IsCaptureMode()) {
-            if (config::GetPlatformConfig(KEY_ENABLE_PROF_FUNC, false)) {
-                kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICPU_FUNC);
-            }
-            if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) ||
-                config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
-                kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_TIME);
-            }
-            if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {
-                kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
-            }
-        }
-        devProg->devArgs.toSubMachineConfig = kArgs.toSubMachineConfig;
     }
 
     template <typename DeviceMemoryTy>
