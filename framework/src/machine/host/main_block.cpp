@@ -126,7 +126,8 @@ bool MainBlockCondBulider::CheckReshapeCopy(Function* func)
     return false;
 }
 
-void MainBlockCondBulider::CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>>& argList, Function* func)
+void MainBlockCondBulider::CollectCoaMainBlockConds(
+    const std::vector<std::vector<SymbolicScalar>>& argList, Function* func)
 {
     bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
     enableVF = enableVF && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
@@ -188,7 +189,7 @@ void MainBlockCondBulider::Gencode(Function* function)
         bool isDynamicAligned = function->paramConfigs_.dynamicAlignedOps;
         npu::tile_fwk::CodeGenCtx codeGenCtxMainBlock("", config::GetEmitPath("kernel_aicore"), true, isDynamicAligned);
         npu::tile_fwk::CodeGen codeGenMainBlock(codeGenCtxMainBlock);
-        codeGenMainBlock.GenCode(*function, {});
+        codeGenMainBlock.GenCode(*function);
     }
 }
 

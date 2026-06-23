@@ -47,8 +47,7 @@ enum ParallelMode {
 };
 constexpr uint32_t STITCH_FUNCTION_MAX_SIZE = 65535;
 const std::set<FunctionType> DYNAMIC_FUNC_TYPE_SET = {
-    FunctionType::DYNAMIC, FunctionType::DYNAMIC_LOOP, FunctionType::DYNAMIC_LOOP_PATH
-};
+    FunctionType::DYNAMIC, FunctionType::DYNAMIC_LOOP, FunctionType::DYNAMIC_LOOP_PATH};
 constexpr const char* STAGE_DYNDEV_BUILD_CONTROL_FLOW = "DynDev:BuildControlFlow";
 constexpr const char* STAGE_DYNDEV_CONTROL_FLOW_COMPILE = "DynDev:ControlFlowCompile";
 constexpr const char* STAGE_DYNDEV_AICORE_KERNEL_COMPILE = "DynDev:AICoreKernelCompile";
@@ -713,8 +712,8 @@ static void BuildControlFlow(
             if (dynAttr->constructAssembleNeedAllocRuntimeSlots.count(runtimeSlot) == 0) {
                 continue;
             }
-            controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SlotMarkNeedAlloc("
-                           << runtimeSlot << ");\n";
+            controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SlotMarkNeedAlloc(" << runtimeSlot
+                           << ");\n";
         }
         for (auto& callee : GetCalleeList(cache, func)) {
             BuildControlFlow(
@@ -1058,9 +1057,8 @@ int GetRootFuncNum(std::shared_ptr<DyndevFunctionAttribute> attr)
 }
 
 static void RunBuildControlFlowStage(
-    FunctionCache& cache, Linker& linker, Function* function,
-    const std::shared_ptr<DyndevFunctionAttribute>& attr, const std::string& expName,
-    std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
+    FunctionCache& cache, Linker& linker, Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr,
+    const std::string& expName, std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta,
     std::string& controlFlowSource, std::string& expressionSource)
 {
     const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
@@ -1116,9 +1114,8 @@ static void RunBuildControlFlowStage(
 }
 
 static void RunCompileControlFlowStage(
-    Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr,
-    const std::string& aicpuDirPath, const std::string& controlFlowSource,
-    const std::string& expressionSource, std::vector<std::string>& exprSrcFiles)
+    Function* function, const std::shared_ptr<DyndevFunctionAttribute>& attr, const std::string& aicpuDirPath,
+    const std::string& controlFlowSource, const std::string& expressionSource, std::vector<std::string>& exprSrcFiles)
 {
 #ifdef __x86_64__
     std::string cflags = "-mno-sse2 -mno-sse";
@@ -1149,8 +1146,8 @@ static void RunCompileControlFlowStage(
             "Compile control flow src file[%s] with arm64 target tool[%s].", controlFlowDevFilePath.c_str(),
             arm64TargetToolPath.c_str());
         attr->devControlFlowBinary = CompileAndLoadSection(
-            controlFlowSource, controlFlowDevFilePath, aicpuDirPath, exprSrcFiles, arm64TargetToolPath,
-            BISHENG_LD_CMD, Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
+            controlFlowSource, controlFlowDevFilePath, aicpuDirPath, exprSrcFiles, arm64TargetToolPath, BISHENG_LD_CMD,
+            Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
     } else {
         // brk #0
         MACHINE_LOGW("Arm64 target tool is not found.");
@@ -1162,8 +1159,7 @@ static void RunCompileControlFlowStage(
 #ifdef BUILD_WITH_CANN
 static bool RunCompileAicoreKernelStage(
     Function* function, std::map<uint64_t, Function*>& leafDict,
-    EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam,
-    const std::string& ccePath, std::string& kernelPath)
+    EncodeDevAscendFunctionParam& encodeDevAscendFunctionParam, const std::string& ccePath, std::string& kernelPath)
 {
     const int hmStep = MonitorManager::Instance().AllocHostMachineStepIndex();
     MonitorStageScope aicoreKernelCompileScope(
@@ -1248,7 +1244,7 @@ static void RunCodeGenStage(
             npu::tile_fwk::CodeGen codeGen(codeGenCtx);
             COMPILER_LOGI(
                 "Function :[%s] starts executing codegen and binary compilation", devTile->GetMagicName().c_str());
-            codeGen.GenCode(*devTile, {});
+            codeGen.GenCode(*devTile);
             MainBlockCondBulider::Gencode(devTile);
 
             std::lock_guard<std::mutex> lock(leafDictMutex);
@@ -1292,13 +1288,13 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
 #endif
     // Each *StepCount is the number of HostMachine sub-stages (always 1 here), not op/workload.
     // Must match Run*Stage order and AllocHostMachineStepIndex() call count (3 without AICore link, 4 with).
-    constexpr int buildControlFlowStepCount = 1;    // DynDev:BuildControlFlow
-    constexpr int controlFlowCompileStepCount = 1;  // DynDev:ControlFlowCompile
-    constexpr int aicoreKernelStepCount = 1;      // DynDev:AICoreKernelCompile (when hasAicoreKernelLink)
-    constexpr int encodeStepCount = 1;              // DynDev:Encode (MonitorStageScope opSize = devRoot count)
+    constexpr int buildControlFlowStepCount = 1;   // DynDev:BuildControlFlow
+    constexpr int controlFlowCompileStepCount = 1; // DynDev:ControlFlowCompile
+    constexpr int aicoreKernelStepCount = 1;       // DynDev:AICoreKernelCompile (when hasAicoreKernelLink)
+    constexpr int encodeStepCount = 1;             // DynDev:Encode (MonitorStageScope opSize = devRoot count)
     MonitorManager::Instance().BeginHostMachineCompileGroup(
-        buildControlFlowStepCount + controlFlowCompileStepCount +
-        (hasAicoreKernelLink ? aicoreKernelStepCount : 0) + encodeStepCount);
+        buildControlFlowStepCount + controlFlowCompileStepCount + (hasAicoreKernelLink ? aicoreKernelStepCount : 0) +
+        encodeStepCount);
     uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     std::string aicpuDirPath = config::GetEmitPath("kernel_aicpu");
     npu::tile_fwk::CreateDir(aicpuDirPath, true);
@@ -1309,8 +1305,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::string expressionSource;
 
     RunBuildControlFlowStage(
-        cache, linker, function, attr, expName, exprSrcFiles, valDependTensorMeta,
-        controlFlowSource, expressionSource);
+        cache, linker, function, attr, expName, exprSrcFiles, valDependTensorMeta, controlFlowSource, expressionSource);
 
     std::string expressionFilePath = aicpuDirPath + "/" + expName;
     if (IsNeedDumpAicpuKernel(expressionFilePath)) {
@@ -1356,8 +1351,7 @@ MachineTask* GenCode(MachineTask* task, FunctionCache& cache)
         MonitorManager::Instance().SwitchStageReset();
         MonitorManager::Instance().PrintCurrentTotalElapsed("Stage CodeGen start for TILE_GRAPH");
         COMPILER_LOGI("Start (TILE_GRAPH) CodeGen stage...");
-        std::map<uint64_t, std::list<InvokeParaOffset>> invokeParaOffset;
-        codeGen.GenCode(*function, {});
+        codeGen.GenCode(*function);
         MainBlockCondBulider::Gencode(function);
     } else {
         if (function->IsFunctionType(FunctionType::DYNAMIC)) {

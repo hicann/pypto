@@ -38,7 +38,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_002()
@@ -53,7 +53,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_003()
@@ -68,7 +68,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_004()
@@ -83,7 +83,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_005()
@@ -98,7 +98,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_006()
@@ -113,7 +113,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_007()
@@ -128,7 +128,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_008()
@@ -143,7 +143,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp16_010()
@@ -158,7 +158,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp16_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP16_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_001()
@@ -173,7 +173,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_002()
@@ -188,7 +188,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_003()
@@ -203,7 +203,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_004()
@@ -218,7 +218,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_005()
@@ -233,7 +233,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_006()
@@ -248,7 +248,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_007()
@@ -263,7 +263,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_008()
@@ -278,7 +278,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_fp32_010()
@@ -293,7 +293,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_fp32_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_FP32_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int8_001()
@@ -308,7 +308,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int8_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT8_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int8_002()
@@ -323,7 +323,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int8_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT8_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int8_003()
@@ -338,7 +338,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int8_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT8_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int8_004()
@@ -353,7 +353,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int8_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT8_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int8_005()
@@ -368,7 +368,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int8_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT8_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int16_001()
@@ -383,7 +383,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int16_002()
@@ -398,7 +398,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int16_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT16_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int16_003()
@@ -413,7 +413,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int16_004()
@@ -428,7 +428,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int16_005()
@@ -443,7 +443,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int32_001()
@@ -458,7 +458,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int32_002()
@@ -473,7 +473,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int32_003()
@@ -488,7 +488,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int32_004()
@@ -503,7 +503,7 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenUnsqueeze::test_unsqueeze_int32_005()
@@ -518,5 +518,5 @@ void TestCodeGenUnsqueeze::test_unsqueeze_int32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "UNSQUEEZE_INT32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }

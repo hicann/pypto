@@ -39,7 +39,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_002()
@@ -55,7 +55,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_003()
@@ -71,7 +71,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_004()
@@ -87,7 +87,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_005()
@@ -103,7 +103,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_006()
@@ -119,7 +119,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_007()
@@ -135,7 +135,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_008()
@@ -151,7 +151,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_009()
@@ -167,7 +167,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_010()
@@ -183,7 +183,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_011()
@@ -199,7 +199,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_012()
@@ -215,7 +215,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_013()
@@ -231,7 +231,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_014()
@@ -247,7 +247,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_015()
@@ -263,7 +263,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_016()
@@ -279,7 +279,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_017()
@@ -295,7 +295,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_018()
@@ -311,7 +311,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_019()
@@ -327,7 +327,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_019()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_019");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_020()
@@ -343,7 +343,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_020()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_020");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_021()
@@ -359,7 +359,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_021()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_021");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_022()
@@ -375,7 +375,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_022()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_022");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp16_023()
@@ -391,7 +391,7 @@ void TestCodeGenCompare::test_compare_eq_fp16_023()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP16_023");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_001()
@@ -407,7 +407,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_002()
@@ -423,7 +423,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_003()
@@ -439,7 +439,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_004()
@@ -455,7 +455,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_005()
@@ -471,7 +471,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_006()
@@ -487,7 +487,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_007()
@@ -503,7 +503,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_008()
@@ -519,7 +519,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_009()
@@ -535,7 +535,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_010()
@@ -551,7 +551,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_011()
@@ -567,7 +567,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_012()
@@ -583,7 +583,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_013()
@@ -599,7 +599,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_014()
@@ -615,7 +615,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_015()
@@ -631,7 +631,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_016()
@@ -647,7 +647,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_017()
@@ -663,7 +663,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_018()
@@ -679,7 +679,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_019()
@@ -695,7 +695,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_019()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_019");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_020()
@@ -711,7 +711,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_020()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_020");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_021()
@@ -727,7 +727,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_021()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_021");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_022()
@@ -743,7 +743,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_022()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_022");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_023()
@@ -759,7 +759,7 @@ void TestCodeGenCompare::test_compare_eq_fp32_023()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_023");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenCompare::test_compare_eq_fp32_024()
@@ -775,5 +775,5 @@ void TestCodeGenCompare::test_compare_eq_fp32_024()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "COMPARE_EQ_FP32_024");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }

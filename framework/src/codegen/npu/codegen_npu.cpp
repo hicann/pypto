@@ -231,8 +231,7 @@ void CodeGenNPU::GenDynParamForExpr(std::ostringstream& oss, const Function& fun
     }
 }
 
-void CodeGenNPU::GenCode(
-    Function& topFunc, [[maybe_unused]] const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset)
+void CodeGenNPU::GenCode(Function& topFunc)
 {
     COMPILER_LOGI(
         "Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),

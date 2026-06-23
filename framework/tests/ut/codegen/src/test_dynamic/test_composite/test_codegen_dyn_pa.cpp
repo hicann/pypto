@@ -70,7 +70,7 @@ void testPa(PaTileShapeConfig& tileConfig, int maxUnrollTimes = 1)
         if (isRootExist) {
             npu::tile_fwk::CodeGenCtx ctx;
             npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-            codeGen.GenCode(*ele.second.get(), {});
+            codeGen.GenCode(*ele.second.get());
         }
     }
 }

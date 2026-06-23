@@ -40,7 +40,7 @@ void TestCodeGenWhere::test_where_fp16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_002()
@@ -57,7 +57,7 @@ void TestCodeGenWhere::test_where_fp16_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_003()
@@ -74,7 +74,7 @@ void TestCodeGenWhere::test_where_fp16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_004()
@@ -91,7 +91,7 @@ void TestCodeGenWhere::test_where_fp16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_005()
@@ -108,7 +108,7 @@ void TestCodeGenWhere::test_where_fp16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_006()
@@ -125,7 +125,7 @@ void TestCodeGenWhere::test_where_fp16_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_007()
@@ -142,7 +142,7 @@ void TestCodeGenWhere::test_where_fp16_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_008()
@@ -159,7 +159,7 @@ void TestCodeGenWhere::test_where_fp16_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_009()
@@ -176,7 +176,7 @@ void TestCodeGenWhere::test_where_fp16_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_010()
@@ -193,7 +193,7 @@ void TestCodeGenWhere::test_where_fp16_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_011()
@@ -210,7 +210,7 @@ void TestCodeGenWhere::test_where_fp16_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_012()
@@ -227,7 +227,7 @@ void TestCodeGenWhere::test_where_fp16_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_013()
@@ -244,7 +244,7 @@ void TestCodeGenWhere::test_where_fp16_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_014()
@@ -261,7 +261,7 @@ void TestCodeGenWhere::test_where_fp16_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_015()
@@ -278,7 +278,7 @@ void TestCodeGenWhere::test_where_fp16_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_016()
@@ -295,7 +295,7 @@ void TestCodeGenWhere::test_where_fp16_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_017()
@@ -312,7 +312,7 @@ void TestCodeGenWhere::test_where_fp16_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_018()
@@ -329,7 +329,7 @@ void TestCodeGenWhere::test_where_fp16_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_019()
@@ -346,7 +346,7 @@ void TestCodeGenWhere::test_where_fp16_019()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_019");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_020()
@@ -363,7 +363,7 @@ void TestCodeGenWhere::test_where_fp16_020()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_020");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_021()
@@ -380,7 +380,7 @@ void TestCodeGenWhere::test_where_fp16_021()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_021");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_022()
@@ -397,7 +397,7 @@ void TestCodeGenWhere::test_where_fp16_022()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_022");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_023()
@@ -414,7 +414,7 @@ void TestCodeGenWhere::test_where_fp16_023()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_023");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_024()
@@ -431,7 +431,7 @@ void TestCodeGenWhere::test_where_fp16_024()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_024");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_025()
@@ -448,7 +448,7 @@ void TestCodeGenWhere::test_where_fp16_025()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_025");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_026()
@@ -465,7 +465,7 @@ void TestCodeGenWhere::test_where_fp16_026()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_026");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_027()
@@ -482,7 +482,7 @@ void TestCodeGenWhere::test_where_fp16_027()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_027");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_028()
@@ -499,7 +499,7 @@ void TestCodeGenWhere::test_where_fp16_028()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_028");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_029()
@@ -516,7 +516,7 @@ void TestCodeGenWhere::test_where_fp16_029()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_029");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_030()
@@ -533,7 +533,7 @@ void TestCodeGenWhere::test_where_fp16_030()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_030");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_031()
@@ -550,7 +550,7 @@ void TestCodeGenWhere::test_where_fp16_031()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_031");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp16_032()
@@ -567,7 +567,7 @@ void TestCodeGenWhere::test_where_fp16_032()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP16_032");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_001()
@@ -584,7 +584,7 @@ void TestCodeGenWhere::test_where_fp32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_002()
@@ -601,7 +601,7 @@ void TestCodeGenWhere::test_where_fp32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_003()
@@ -618,7 +618,7 @@ void TestCodeGenWhere::test_where_fp32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_004()
@@ -635,7 +635,7 @@ void TestCodeGenWhere::test_where_fp32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_005()
@@ -652,7 +652,7 @@ void TestCodeGenWhere::test_where_fp32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_006()
@@ -669,7 +669,7 @@ void TestCodeGenWhere::test_where_fp32_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_007()
@@ -686,7 +686,7 @@ void TestCodeGenWhere::test_where_fp32_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_008()
@@ -703,7 +703,7 @@ void TestCodeGenWhere::test_where_fp32_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_009()
@@ -720,7 +720,7 @@ void TestCodeGenWhere::test_where_fp32_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_010()
@@ -737,7 +737,7 @@ void TestCodeGenWhere::test_where_fp32_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_011()
@@ -754,7 +754,7 @@ void TestCodeGenWhere::test_where_fp32_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_012()
@@ -771,7 +771,7 @@ void TestCodeGenWhere::test_where_fp32_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_013()
@@ -788,7 +788,7 @@ void TestCodeGenWhere::test_where_fp32_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_014()
@@ -805,7 +805,7 @@ void TestCodeGenWhere::test_where_fp32_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_015()
@@ -822,7 +822,7 @@ void TestCodeGenWhere::test_where_fp32_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_016()
@@ -839,7 +839,7 @@ void TestCodeGenWhere::test_where_fp32_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_017()
@@ -856,7 +856,7 @@ void TestCodeGenWhere::test_where_fp32_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_018()
@@ -873,7 +873,7 @@ void TestCodeGenWhere::test_where_fp32_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_019()
@@ -890,7 +890,7 @@ void TestCodeGenWhere::test_where_fp32_019()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_019");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_020()
@@ -907,7 +907,7 @@ void TestCodeGenWhere::test_where_fp32_020()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_020");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_021()
@@ -924,7 +924,7 @@ void TestCodeGenWhere::test_where_fp32_021()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_021");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_022()
@@ -941,7 +941,7 @@ void TestCodeGenWhere::test_where_fp32_022()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_022");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_023()
@@ -958,7 +958,7 @@ void TestCodeGenWhere::test_where_fp32_023()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_023");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_024()
@@ -975,7 +975,7 @@ void TestCodeGenWhere::test_where_fp32_024()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_024");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_025()
@@ -992,7 +992,7 @@ void TestCodeGenWhere::test_where_fp32_025()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_025");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_026()
@@ -1009,7 +1009,7 @@ void TestCodeGenWhere::test_where_fp32_026()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_026");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_027()
@@ -1026,7 +1026,7 @@ void TestCodeGenWhere::test_where_fp32_027()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_027");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_028()
@@ -1043,7 +1043,7 @@ void TestCodeGenWhere::test_where_fp32_028()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_028");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_029()
@@ -1060,7 +1060,7 @@ void TestCodeGenWhere::test_where_fp32_029()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_029");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_030()
@@ -1077,7 +1077,7 @@ void TestCodeGenWhere::test_where_fp32_030()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_030");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_031()
@@ -1094,7 +1094,7 @@ void TestCodeGenWhere::test_where_fp32_031()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_031");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_032()
@@ -1111,7 +1111,7 @@ void TestCodeGenWhere::test_where_fp32_032()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_032");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_033()
@@ -1128,7 +1128,7 @@ void TestCodeGenWhere::test_where_fp32_033()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_033");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenWhere::test_where_fp32_034()
@@ -1145,5 +1145,5 @@ void TestCodeGenWhere::test_where_fp32_034()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "WHERE_FP32_034");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }

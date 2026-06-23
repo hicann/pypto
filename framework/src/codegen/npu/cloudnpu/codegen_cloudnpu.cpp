@@ -105,7 +105,6 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     FloatSpecValMgr floatSpecValMgr;
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
-    auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
     for (const auto& op : operationList) {
         CODEGEN_LOGI(
             "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
@@ -117,8 +116,7 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
         GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
 
-        CodeGenOpCloudNPU cop(
-            {symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
+        CodeGenOpCloudNPU cop({symbolMgr, topFunc, subFunc, op, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
         std::string tileOpSourceCode = cop.GenOpCode();
         ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find(CG_ERROR) == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();

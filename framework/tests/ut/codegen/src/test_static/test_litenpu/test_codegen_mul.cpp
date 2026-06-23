@@ -42,7 +42,7 @@ void TestCodeGenMul::test_mul_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_002()
@@ -61,7 +61,7 @@ void TestCodeGenMul::test_mul_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_003()
@@ -80,7 +80,7 @@ void TestCodeGenMul::test_mul_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_004()
@@ -99,7 +99,7 @@ void TestCodeGenMul::test_mul_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_005()
@@ -118,7 +118,7 @@ void TestCodeGenMul::test_mul_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_006()
@@ -137,7 +137,7 @@ void TestCodeGenMul::test_mul_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_007()
@@ -156,7 +156,7 @@ void TestCodeGenMul::test_mul_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_008()
@@ -175,7 +175,7 @@ void TestCodeGenMul::test_mul_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_009()
@@ -194,7 +194,7 @@ void TestCodeGenMul::test_mul_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_010()
@@ -213,7 +213,7 @@ void TestCodeGenMul::test_mul_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_011()
@@ -232,7 +232,7 @@ void TestCodeGenMul::test_mul_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_012()
@@ -251,7 +251,7 @@ void TestCodeGenMul::test_mul_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_013()
@@ -270,7 +270,7 @@ void TestCodeGenMul::test_mul_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_014()
@@ -289,7 +289,7 @@ void TestCodeGenMul::test_mul_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_015()
@@ -308,7 +308,7 @@ void TestCodeGenMul::test_mul_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_016()
@@ -327,7 +327,7 @@ void TestCodeGenMul::test_mul_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_017()
@@ -346,7 +346,7 @@ void TestCodeGenMul::test_mul_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_018()
@@ -365,7 +365,7 @@ void TestCodeGenMul::test_mul_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_019()
@@ -384,7 +384,7 @@ void TestCodeGenMul::test_mul_019()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_019");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_020()
@@ -403,7 +403,7 @@ void TestCodeGenMul::test_mul_020()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_020");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_021()
@@ -422,7 +422,7 @@ void TestCodeGenMul::test_mul_021()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_021");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_022()
@@ -441,7 +441,7 @@ void TestCodeGenMul::test_mul_022()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_022");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_023()
@@ -460,7 +460,7 @@ void TestCodeGenMul::test_mul_023()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_023");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_024()
@@ -479,7 +479,7 @@ void TestCodeGenMul::test_mul_024()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_024");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_025()
@@ -498,7 +498,7 @@ void TestCodeGenMul::test_mul_025()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_025");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_026()
@@ -517,7 +517,7 @@ void TestCodeGenMul::test_mul_026()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_026");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_027()
@@ -536,7 +536,7 @@ void TestCodeGenMul::test_mul_027()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_027");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_028()
@@ -555,7 +555,7 @@ void TestCodeGenMul::test_mul_028()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_028");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_029()
@@ -574,7 +574,7 @@ void TestCodeGenMul::test_mul_029()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_029");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_030()
@@ -593,7 +593,7 @@ void TestCodeGenMul::test_mul_030()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_030");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_031()
@@ -612,7 +612,7 @@ void TestCodeGenMul::test_mul_031()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_031");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_032()
@@ -631,7 +631,7 @@ void TestCodeGenMul::test_mul_032()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_032");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_033()
@@ -650,7 +650,7 @@ void TestCodeGenMul::test_mul_033()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_033");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_034()
@@ -669,7 +669,7 @@ void TestCodeGenMul::test_mul_034()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_034");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_035()
@@ -688,7 +688,7 @@ void TestCodeGenMul::test_mul_035()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_035");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_036()
@@ -707,7 +707,7 @@ void TestCodeGenMul::test_mul_036()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_036");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_037()
@@ -726,7 +726,7 @@ void TestCodeGenMul::test_mul_037()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_037");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_038()
@@ -745,7 +745,7 @@ void TestCodeGenMul::test_mul_038()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_038");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_039()
@@ -764,7 +764,7 @@ void TestCodeGenMul::test_mul_039()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_039");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_040()
@@ -783,7 +783,7 @@ void TestCodeGenMul::test_mul_040()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_040");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_041()
@@ -802,7 +802,7 @@ void TestCodeGenMul::test_mul_041()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_041");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_042()
@@ -821,7 +821,7 @@ void TestCodeGenMul::test_mul_042()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_042");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_043()
@@ -840,7 +840,7 @@ void TestCodeGenMul::test_mul_043()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_043");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_044()
@@ -859,7 +859,7 @@ void TestCodeGenMul::test_mul_044()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_044");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_045()
@@ -878,7 +878,7 @@ void TestCodeGenMul::test_mul_045()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_045");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_046()
@@ -897,7 +897,7 @@ void TestCodeGenMul::test_mul_046()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_046");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_047()
@@ -916,7 +916,7 @@ void TestCodeGenMul::test_mul_047()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_047");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenMul::test_mul_048()
@@ -935,5 +935,5 @@ void TestCodeGenMul::test_mul_048()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MUL_048");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }

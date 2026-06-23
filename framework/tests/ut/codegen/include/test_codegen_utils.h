@@ -142,7 +142,6 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
     const bool& isCopyIn = true);
 
 struct GenOpCodeOptions {
-    std::map<int, int> lto = {};
     bool isMainBlk = false;
 };
 

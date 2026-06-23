@@ -64,7 +64,7 @@ TEST_F(TestCodegenStaticUnderDyn, TestStaticFuncUnderDyn)
         if (isRootExist) {
             npu::tile_fwk::CodeGenCtx ctx;
             npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-            codeGen.GenCode(*ele.second.get(), {});
+            codeGen.GenCode(*ele.second.get());
         }
     }
 }

@@ -42,7 +42,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_002()
@@ -61,7 +61,7 @@ void TestCodeGenSigmoid::test_sigmoid_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_003()
@@ -80,7 +80,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_004()
@@ -99,7 +99,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_005()
@@ -118,7 +118,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_006()
@@ -137,7 +137,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_007()
@@ -156,7 +156,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_008()
@@ -175,7 +175,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_009()
@@ -194,7 +194,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_010()
@@ -213,7 +213,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_011()
@@ -232,7 +232,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_012()
@@ -251,7 +251,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_013()
@@ -270,7 +270,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_014()
@@ -289,7 +289,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp16_015()
@@ -308,7 +308,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp16_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP16_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_001()
@@ -327,7 +327,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_002()
@@ -346,7 +346,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_003()
@@ -365,7 +365,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_004()
@@ -384,7 +384,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_005()
@@ -403,7 +403,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_006()
@@ -422,7 +422,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_007()
@@ -441,7 +441,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_008()
@@ -460,7 +460,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_009()
@@ -479,7 +479,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_010()
@@ -498,7 +498,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_011()
@@ -517,7 +517,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_012()
@@ -536,7 +536,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_013()
@@ -555,7 +555,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_014()
@@ -574,7 +574,7 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenSigmoid::test_sigmoid_fp32_015()
@@ -593,5 +593,5 @@ void TestCodeGenSigmoid::test_sigmoid_fp32_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "SIGMOID_FP32_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }

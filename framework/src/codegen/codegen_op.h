@@ -41,18 +41,16 @@ struct CodeGenOpCtx {
     Function& topFunc;
     Function& subFunc;
     const Operation& operation;
-    const std::map<int, int>& locToOffset = {};
     bool isMainBlock{false};
     bool isDynamicAligned{false};
 
     CodeGenOpCtx(
-        std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op,
-        const std::map<int, int>& lto = {}, bool isMainBlk = false, bool isDynAligned = false)
+        std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op, bool isMainBlk = false,
+        bool isDynAligned = false)
         : symbolManager(std::move(sm)),
           topFunc(tf),
           subFunc(sf),
           operation(op),
-          locToOffset(lto),
           isMainBlock(isMainBlk),
           isDynamicAligned(isDynAligned)
     {}
@@ -63,7 +61,6 @@ public:
     explicit CodeGenOp(const CodeGenOpCtx& ctx)
         : originalOp(ctx.operation),
           functionType(ctx.topFunc.GetFunctionType()),
-          paramLocToParamListOffset(ctx.locToOffset),
           isMainBlock(ctx.isMainBlock),
           isDynamicAligned(ctx.isDynamicAligned)
     {
@@ -126,7 +123,6 @@ protected:
     std::map<std::string, std::any> tensorAttrs[MAX_OPERANDS];
 
     std::shared_ptr<SymbolManager> sm{nullptr};
-    const std::map<int, int>& paramLocToParamListOffset{};
 
     std::string tileOpName;
     bool isInputForceCombineAxis{false};

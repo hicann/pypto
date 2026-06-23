@@ -125,7 +125,7 @@ public:
     };
     ~CodeGenNPU() override = default;
 
-    void GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset) override;
+    void GenCode(Function& topFunc) override;
     std::string PrepareCmd(const CompileInfo& compileInfo, const std::string& compileOptions) const;
     // only used to compile code directly when running under simulation mode.
     void CompileCode(const std::string& compileCmd) const;

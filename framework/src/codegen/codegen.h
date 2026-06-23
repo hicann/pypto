@@ -20,14 +20,13 @@
 #include <utility>
 
 #include "interface/operation/operation.h"
-#include "interface/machine/host/machine_task.h"
 #include "codegen_common.h"
 namespace npu::tile_fwk {
 class CodeGen {
 public:
     explicit CodeGen(const CodeGenCtx& ctx) : ctx_(ctx.includePath, ctx.cceDir, ctx.isMainBlock){};
 
-    void GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset);
+    void GenCode(Function& topFunc);
 
 private:
     CodeGenCtx ctx_;
