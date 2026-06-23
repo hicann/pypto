@@ -100,11 +100,14 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
 
                 pto::TDIV(tmp2Tile, dstTile, tmp1Tile);
                 SyncV();
+                
+                pto::TABS(dstTile, srcTile);
+                SyncV();
 
                 // Handle x = 0 case
                 pto::TCMPS(tmpMaskTile, tmp0Tile, 1.0f, pto::CmpMode::EQ);
                 SyncV();
-                pto::TSEL(tmp1Tile, tmpMaskTile, srcTile, tmp2Tile, tmp0Tile);
+                pto::TSEL(tmp1Tile, tmpMaskTile, dstTile, tmp2Tile, tmp0Tile);
                 SyncV();
 
                 // Handle sign: atanh(-x) = -atanh(x)
