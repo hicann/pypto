@@ -288,11 +288,6 @@ void LoopaxesProc::IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& c
         if (addrRange[0] >= entry.second[1][1] || addrRange[1] <= entry.second[0][0]) {
             isAdd = true;
             conflictIdx = INVALID_LOOP_GROUPID;
-        } else if (
-            (addrRange[0] >= entry.second[0][0] && addrRange[1] <= entry.second[0][1]) ||
-            (addrRange[0] >= entry.second[1][0] && addrRange[1] <= entry.second[1][1])) {
-            isAdd = false;
-            conflictIdx = INVALID_LOOP_GROUPID;
         } else {
             isAdd = true;
             conflictIdx = entry.first;
