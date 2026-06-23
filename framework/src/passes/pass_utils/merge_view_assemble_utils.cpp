@@ -201,7 +201,6 @@ const MergeViewAssembleUtils::ConsumerCacheEntry& MergeViewAssembleUtils::GetCon
 
 Status MergeViewAssembleUtils::ProcessOperations(Function& function)
 {
-    function.SortOperations(SortOperationsMode::LIGHTWEIGHT);
     Status status = BuildConsumerCache(function);
     if (status != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "BuildConsumerCache failed.");
