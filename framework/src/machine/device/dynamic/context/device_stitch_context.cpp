@@ -391,8 +391,11 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(
     auto* nextSrc = nextDup.GetSource();
     auto expressionList = &nextDup.GetExpression(0);
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
-    auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
     size_t tableSize = outcast.cellMatchRuntimeFullUpdateTable.size();
+    if(tableSize == 0) {
+        return 0;
+    }
+    auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
 
     DEV_VERBOSE_DEBUG(
         "[FullCoverDefaultStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu producerFuncKey=%d "
