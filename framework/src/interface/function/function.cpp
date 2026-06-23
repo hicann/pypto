@@ -966,10 +966,7 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
         outArgumentList = MakeOutcasts(scope);
         auto iodescDict = GetTensorDataForTensorGraph();
         GetTensorDataRefreshIO(iodescDict);
-        /* tensor graph function should keep the order of operations */
-        AddOperationGroup(operationList);
-        SortOperations();
-        ClearOperationGroups();
+        sorted_ = true;
         if (Program::GetInstance().GetCurrentDynamicFunction()) {
             DyndevFunctionAttribute::ValueDependDesc desc = LookupValueDepend();
             auto currDynFuncAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
@@ -2108,9 +2105,26 @@ void Function::CreateFromIncast(
     newIncast->CopyMemoryType(origin);
 }
 
+void Function::MoveNewlyInsertedOpsToFront(size_t operationCountBefore)
+{
+    if (operations_.size() <= operationCountBefore) {
+        return;
+    }
+    // CreateFromIncast 在尾部追加 VIEW op；将其移到最前面，保证 incast view 位于程序开头，前端无需额外排序。
+    std::vector<std::shared_ptr<Operation>> newlyInsertedOps;
+    newlyInsertedOps.reserve(operations_.size() - operationCountBefore);
+    for (size_t i = operationCountBefore; i < operations_.size(); ++i) {
+        newlyInsertedOps.push_back(operations_[i]);
+    }
+    operations_.resize(operationCountBefore);
+    operations_.insert(operations_.begin(), newlyInsertedOps.begin(), newlyInsertedOps.end());
+    RefreshOpPosition();
+}
+
 LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& scope)
 {
     LogicalTensors inArgumentList;
+    size_t operationCountBefore = operations_.size();
 
     for (size_t idx = 0; idx < originInCasts_.size(); idx++) {
         auto origin = originInCasts_[idx];
@@ -2137,6 +2151,8 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
         originInCasts_[idx] = newIncast;
         RemoveOriginIncastConsumer(origin);
     }
+
+    MoveNewlyInsertedOpsToFront(operationCountBefore);
 
     return inArgumentList;
 }
