@@ -65,6 +65,12 @@ struct SubgraphScheduleContext {
     int numSubgraph;
 };
 
+struct BoundaryTensorInfo {
+    int tensorMagic;
+    std::vector<int> producerSubgraphs;
+    std::vector<int> consumerSubgraphs;
+};
+
 class EstimateExecTime {
 public:
     int Estimate(const EstimateInput& input, const std::vector<std::set<int>>& estimateCandidate);
@@ -95,6 +101,8 @@ struct MergeInput {
     std::vector<std::vector<int>> mergeGroup;
     std::vector<bool> isEnforceMergeGroup;
     std::vector<bool> isValidMergeGroup;
+    std::vector<BoundaryTensorInfo> boundaryTensors;
+    std::vector<std::vector<int>> subgraphToBoundaryTensorIds;
 };
 
 struct MergeOutput {
@@ -114,16 +122,23 @@ private:
     EstimateInput estimateInput;
     std::vector<int> mParent;
     std::vector<int> mRank;
+    std::vector<std::vector<int>> mRootToBoundaryTensorIds;
+    std::vector<int> mTensorVisitStamp;
+    int mVisitStamp{0};
 
     void Initialize(const MergeInput& input);
+    void InitBoundaryTensorIndex();
     int FindParent(int x);
     void UnionSets(int x, int y);
     bool CanMergeWithoutCycle(const std::vector<int>& actualGroup);
     bool CanMergeWithConstraints(const std::vector<int>& actualGroup);
     void PerformMerge(const std::vector<int>& actualGroup);
+    void UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup);
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
     bool CheckMergeBenefit(const std::vector<int>& actualGroup);
+    bool CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup);
+    bool IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots);
     std::vector<int> GetActualGroup(const std::vector<int>& group);
     void BuildMergedGraph(std::vector<std::set<int>>& outGraph, std::vector<std::set<int>>& inGraph);
     bool HasCycle(const std::vector<std::set<int>>& outGraph, const std::vector<std::set<int>>& inGraph);
@@ -141,7 +156,10 @@ private:
     Status BuildMergeGroup(Function& function, MergeInput& mergeInput);
     void CombineForkSubgraph(Function& function, MergeInput& mergeInput);
     Status MarkNoMergeSubgraph(Function& function);
-    void UpdateConnectRecord(Function& function);
+    void UpdateConnectRecord(Function& function, MergeInput& mergeInput);
+    void UpdateBoundaryTensorSize(LogicalTensorPtr& tensor, int tensorSize);
+    void RecordBoundaryTensorInfo(
+        LogicalTensorPtr& tensor, MergeInput& mergeInput, const std::set<int>& connectGraphs);
     void UpdateMergeInput(MergeInput& mergeInput, std::multimap<int, std::vector<int>>& sortedMergeGroup);
     bool IsEnforceMergeBoundary(LogicalTensorPtr& tensor);
     Status RunOnFunction(Function& function) override;
