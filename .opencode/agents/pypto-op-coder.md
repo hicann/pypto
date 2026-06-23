@@ -320,7 +320,7 @@ Full reference material in skill `pypto-op-develop`'s `references/pypto-kernel-d
 
 **Numerical stability:**
 - Read architecture's **Numerical Stability Profile** in `DESIGN.md` before writing. Follow the chosen reformulation pattern exactly.
-- Preserve Safeguard-B `numerical_notes` from `module_interfaces.yaml` inside a single module body.
+- Preserve `numerical_notes` from `module_interfaces.yaml` inside a single module body.
 
 **Snapshot marker responsibility:**
 - Embed 8 marker pairs on first kernel write: `SIG_IMPL`, `SIG_JIT`, `CALL_IMPL`, `HOST_WRAPPER_INSPECT_ALLOC`, `HOST_WRAPPER_INSPECT_PASS`, plus probe-point pairs (`before_nt_loop` / `inside_nt_loop` / `after_nt_loop`). Empty markers ready for the snapshot generator. See skill `pypto-op-verify`'s `references/intermediate-snapshot-automation.md`.

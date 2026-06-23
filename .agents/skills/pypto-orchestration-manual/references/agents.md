@@ -80,7 +80,7 @@ kernel code. The orchestrator never edits kernel code itself.
   `pypto.<attr>` existence in fenced code blocks). FAIL throws →
   re-dispatch designer with the failure details.
 - **Handoff:** On `submit_design` PASS → dispatch `pypto-op-verifier` in
-  **Stage 4 scaffolding mode (Step B)** to produce the adversarial harness.
+  **Scaffolding mode (Step B)** to produce the adversarial harness.
 
 ### 5. pypto-op-coder — Stage 5
 
@@ -107,7 +107,7 @@ loading any debug sub-skill, calling `pypto_op_lint.py` manually.
 Verifier is dispatched in distinct **modes**, never as a general "review
 everything" agent. The orchestrator chooses the mode per dispatch.
 
-- **Stage 4 scaffolding mode (Step B):**
+- **Scaffolding mode (Step B):**
   Produce `custom/<op>/eval/test_inputs.py`,
   `custom/<op>/eval/adversarial_suite.json` (≥ 2 cases per level L1–L5),
   `custom/<op>/eval/adversarial_runner.py` (with `--up-to-module`). Run
