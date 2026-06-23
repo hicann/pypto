@@ -83,7 +83,8 @@ public:
     LogicalTensor& operator=(LogicalTensor&&) = delete;
     LogicalTensor& operator=(const LogicalTensor&) = delete;
 
-    std::shared_ptr<LogicalTensor> Clone(Function& dstFunc, bool create = false) const;
+    LogicalTensorPtr Clone(Function& dstFunc, bool create = false) const;
+    LogicalTensorPtr NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const;
 
     ir::VarPtr Clone() const override;
 

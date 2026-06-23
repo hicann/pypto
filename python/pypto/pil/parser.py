@@ -22,7 +22,7 @@ class Source:
         source_lines, lineno = inspect.getsourcelines(pyfunc)
         self.filename = inspect.getfile(pyfunc)
 
-        source = "if True:\n" + " ".join(source_lines)
+        source = "if True:\n " + " ".join(source_lines)
         mod = ast.parse(source)
         if not isinstance(mod.body[0], ast.If):
             raise ValueError("Top level must be if statement")

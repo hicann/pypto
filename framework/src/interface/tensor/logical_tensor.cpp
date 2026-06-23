@@ -139,6 +139,23 @@ ir::VarPtr LogicalTensor::Clone() const
     return std::static_pointer_cast<const ir::Var>(cloned);
 }
 
+LogicalTensorPtr LogicalTensor::NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const
+{
+    IRBuilder builder;
+
+    auto zeroOffset = std::vector<int64_t>(shape.size(), 0);
+    auto newTensor = builder.CreateTensorVar(func, tensor, zeroOffset, shape, dynValidShape_);
+
+    for (auto prod : producers_) {
+        if (!prod->result_token_) {
+            prod->result_token_ = builder.CreateTokenVar(ir::Span());
+            builder.AddDependToken(shared_from_this(), prod->result_token_);
+        }
+        tokens.push_back(prod->result_token_);
+    }
+    return newTensor;
+}
+
 Json LogicalTensor::DumpJson(Function& func, bool dumpRawTensor) const
 {
     Json result;

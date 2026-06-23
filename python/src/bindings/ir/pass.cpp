@@ -7,23 +7,25 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
-#include <any>
-#include <utility>
-#include <vector>
 
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
-namespace py = pybind11;
+
+#include "bindings/ir/bindings.h"
+#include "ir/transforms/passes.h"
 
 namespace pypto {
-void BindIR(py::module_& m);
-void BindError(py::module_& m);
-void BindLogging(py::module_& m);
-
 namespace ir {
-void BindIRBuilder(py::module_& m);
-void BindPasses(py::module_& m);
-std::vector<std::pair<std::string, std::any>> ConvertAttrDict(const py::dict& attrs);
+
+void BindPasses(py::module_& m)
+{
+    py::class_<Pass>(m, "Pass", "Opaque pass object. Do not instantiate directly - use factory functions.")
+        .def("__call__", &Pass::operator(), py::arg("program"), "Execute pass on program")
+        .def_static("convert_to_ssa", &pass::ConvertToSSA, "Create an SSA conversion pass")
+        .def_static("init_mem_ref", &pass::InitMemRef, "Create a memory reuse pass")
+        .def_static("aggressive_dce", &pass::AggressiveDCE, "Eliminate dead code")
+        .def_static("canonicalize", &pass::Canonicalize, "Canonicalize IR");
+}
 } // namespace ir
 } // namespace pypto

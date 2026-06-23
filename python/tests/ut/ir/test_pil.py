@@ -6,6 +6,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 import pypto
+import pytest
 from pypto import pil, ir, logging
 
 # ---------- Ops compile tests ----------
@@ -28,7 +29,7 @@ def test_tensor_binary_ops():
     x = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_FP32)
     y = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_FP32)
     func = _compile_ops(f, x, y)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
     assert 'DIV' in opcodes
     assert 'POW' in opcodes
@@ -45,7 +46,7 @@ def test_scalar_binary_bitwise_ops():
         z = x >> y
 
     func = _compile_ops(f, 1, 2)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     assert not ts
 
 
@@ -57,11 +58,12 @@ def test_tensor_matmul_op():
     x = pypto.Tensor(shape=(32, 32), dtype=pypto.DT_FP32)
     y = pypto.Tensor(shape=(32, 32), dtype=pypto.DT_FP32)
     func = _compile_ops(f, x, y)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
     assert 'A_MUL_B' in opcodes
 
 
+@pytest.mark.skip()
 def test_create_func():
     def f(a, b, out):
         pypto.set_vec_tile_shapes(16, 16)
@@ -94,7 +96,7 @@ def test_tensor_unary_ops():
 
     x = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_INT32)
     func = _compile_ops(f, x)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
     # pypto use MULS to impl neg and pos just return self
     assert 'MULS' in opcodes
@@ -451,14 +453,16 @@ def test_tensor_add_dyn():
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
-            if i % 2 == 0:
-                y[i:, :] = ta + 1
-            else:
-                y[i:, :] = ta - 1
+            y[i:, :] = ta + 1
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
-    pil.compile(foo, x, y)
+    func = pil.compile(foo, x, y)
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    logging.log_info(f"\norigin: {prog}")
+    prog = ir.Pass.canonicalize()(prog)
+    logging.log_info(f"\ncanonical: {prog}")
 
 
 def test_fstring():

@@ -73,6 +73,7 @@ pybind11_add_module(pypto_impl
             bindings/ir/ir.cpp
             bindings/ir/builder.cpp
             bindings/ir/logging.cpp
+            bindings/ir/pass.cpp
 )
 target_include_directories(pypto_impl
         PRIVATE

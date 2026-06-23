@@ -23,7 +23,8 @@
       ],
       "Area": [
         "framework/src/cann_host_runtime/",
-        "framework/src/utils"
+        "framework/src/utils",
+        "framework/src/interface/utils/"
       ],
       "Include": [
         "framework/include/"

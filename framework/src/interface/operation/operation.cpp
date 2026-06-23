@@ -709,17 +709,30 @@ std::string Operation::DumpSSA(const std::string& prefix) const
         }
     }
 
+    bool hasResult = false;
     oss << prefix;
     for (size_t i = 0; i < oOperand.size(); i++) {
         oss << ((i != 0) ? ", " : "");
         oss << oOperand[i]->DumpSSA(false, true, true);
-        oss << ((i == oOperand.size() - 1) ? " = " : "");
+        hasResult = true;
     }
+    if (result_token_ != nullptr) {
+        oss << ((hasResult) ? ", " : "") << "Token(" << result_token_->name_ << ")";
+        hasResult = true;
+    }
+    oss << ((hasResult) ? " = " : "");
     oss << "!" << GetOpMagic() << " " << GetOpcodeStr(true);
     oss << "(g:" << GetSubgraphID() << ", s:" << GetScopeId() << ")";
     for (size_t i = 0; i < iOperand.size(); i++) {
         oss << ((i == 0) ? " " : ", ");
         oss << iOperand[i]->DumpSSA(false, true, false);
+    }
+    if (!tokens_.empty()) {
+        oss << " #tokens{";
+        for (size_t i = 0; i < tokens_.size(); i++) {
+            oss << ((i == 0) ? "" : ", ") << tokens_[i]->name_;
+        }
+        oss << "}";
     }
     if (opAttribute_ != nullptr) {
         oss << " " << opAttribute_->Dump();

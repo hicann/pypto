@@ -30,6 +30,8 @@
 #include "interface/utils/common.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/tensor/irbuilder.h"
+
 
 using namespace npu::tile_fwk;
 
@@ -1109,7 +1111,7 @@ Tensor Assemble(const std::vector<std::pair<Tensor, std::vector<int64_t>>>& tens
     return result;
 }
 
-void TensorDInnerAssemble(
+Operation& TensorDInnerAssemble(
     Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
     const std::vector<SymbolicScalar>& dynOffset)
 {
@@ -1118,13 +1120,7 @@ void TensorDInnerAssemble(
     op.SetAssembleOpAttribute(offset, dynOffset);
     op.SetAttribute("dassemble", true);
     function.UpdateTensorDataUsage(op);
-}
-
-void DInnerAssemble(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<SymbolicScalar>& dynOffset)
-{
-    CALL(DInnerAssemble, function, operand, result, dynOffset);
+    return op;
 }
 
 void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest)
@@ -1136,8 +1132,9 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
     CHECK_OP(dest.GetShape().size() == tensor.GetShape().size()) << "Assemble: src and dest requires same shape";
     CHECK_OP(dest.GetShape().size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
-    DInnerAssemble(*Program::GetInstance().GetCurrentFunction(), tensor.GetStorage(), dest.GetStorage(), dynOffset);
 
+    auto &func = *Program::GetInstance().GetCurrentFunction();
+    TensorDInnerAssemble(func, tensor.GetStorage(), dest.GetStorage(), dynOffset);
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
 
