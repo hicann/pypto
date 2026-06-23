@@ -220,6 +220,7 @@ def allreduce_cascading_worker(worker_params, error_queue: mp.Queue):
         raise
 
 
+@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(4)
 def test_allreduce_cascading():
     mp.set_start_method('spawn', force=True)

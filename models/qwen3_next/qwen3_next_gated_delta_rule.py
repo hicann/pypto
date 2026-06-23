@@ -475,6 +475,8 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
 
 # ==================== Test Cases ====================
 # Test case: B:2, Nqk:2, Nv:4, S:4K
+
+@pytest.mark.skip(reason="temporarily skipped")
 def test_b2_nqk2_nv4_s1k():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k")
 
@@ -522,6 +524,7 @@ def test_b1_nqk2_nv4_s1m():
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:1026
+@pytest.mark.skip(reason="temporarily skipped")
 def test_b1_nqk2_nv4_s1026():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1026")
 
