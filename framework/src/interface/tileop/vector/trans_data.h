@@ -21,34 +21,34 @@
 TILEOP void Sync23_VS()
 {
 #ifdef __DAV_V220
-    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    set_flag(PIPE_MTE3, PIPE_V, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_V, EVENT_ID0);
-    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
+    set_flag(PIPE_MTE3, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_MTE3, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
+    wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
 #endif
 }
 
 TILEOP void Sync2_VS()
 {
 #ifdef __DAV_V220
-    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
+    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID7);
+    set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
+    wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);
 #endif
 }
 
 TILEOP void SyncVS_3()
 {
 #ifdef __DAV_V220
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
+    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
+    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
 #endif
 }
 

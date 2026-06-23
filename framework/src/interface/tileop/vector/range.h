@@ -35,8 +35,8 @@ TILEOP inline void TRangePropagate(__ubuf__ T* base, int32_t loopN, int32_t tail
 #ifdef __DAV_V220
             pipe_barrier(PIPE_V);
 #else
-            set_flag(PIPE_V, PIPE_S, EVENT_ID0);
-            wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
+            set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+            wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
 #endif
         }
     }
