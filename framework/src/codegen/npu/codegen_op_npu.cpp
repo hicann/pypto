@@ -230,6 +230,9 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_S_MINS, [this]() { return GenVectorScalarOpScalarMode(); }},
       }),
       compositeOps_({
+          {Opcode::OP_ONLINE_SOFTMAX, [this]() { return GenOnlineSoftmaxOp(); }},
+          {Opcode::OP_ONLINE_SOFTMAX_UPDATE, [this]() { return GenOnlineSoftmaxUpdateOp(); }},
+
           // range op
           {Opcode::OP_RANGE, [this]() { return GenRangeOp(); }},
           // uniform op

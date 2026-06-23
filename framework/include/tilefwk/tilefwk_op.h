@@ -17,6 +17,7 @@
 
 #include <array>
 #include <sstream>
+#include <tuple>
 
 #include "tilefwk/tensor.h"
 #include "tilefwk/element.h"
@@ -252,6 +253,10 @@ Tensor ArgMax(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor ArgMin(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor Amin(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor Prod(const Tensor& self, int axis = -1, bool keepDim = false);
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmax(const Tensor& scores, float scale);
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(
+    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
+    const Tensor& currentSum, const Tensor& currentOutput);
 
 Tensor Compact(const Tensor& operand);
 

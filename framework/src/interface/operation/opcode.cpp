@@ -628,6 +628,18 @@ void OpcodeManager::RegisterVectorReduction()
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Trowargminwithvalueline", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::REDUCE,
         {OP_ATTR_PREFIX + "AXIS", OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_ONLINE_SOFTMAX, OpCoreType::AIV, "ONLINE_SOFTMAX", {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TOnlineSoftmax", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::BROADCAST,
+        {OpAttributeKey::scalar, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_ONLINE_SOFTMAX_UPDATE, OpCoreType::AIV, "ONLINE_SOFTMAX_UPDATE",
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB,
+            MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TOnlineSoftmaxUpdate", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::BROADCAST,
+        {OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
 
     RegisterInfo(
         Opcode::OP_ROWSUMLINE, OpCoreType::AIV, "ROWSUMLINE", {MemoryType::MEM_UB},
@@ -1455,6 +1467,8 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_ROWMAX_SINGLE, "TRowMaxSingle"},
     {Opcode::OP_ROWMIN_SINGLE, "TRowMinSingle"},
     {Opcode::OP_ROWPROD_SINGLE, "TRowProdSingle"},
+    {Opcode::OP_ONLINE_SOFTMAX, "TOnlineSoftmax"},
+    {Opcode::OP_ONLINE_SOFTMAX_UPDATE, "TOnlineSoftmaxUpdate"},
     {Opcode::OP_ROWSUMLINE, "TRowSumLine"},
     {Opcode::OP_ROWMAXLINE, "TRowMaxLine"},
     {Opcode::OP_ROWMINLINE, "TRowMinLine"},
@@ -1594,6 +1608,8 @@ std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{
     Opcode::OP_MINIMUM,
     Opcode::OP_ROWSUM_SINGLE,
     Opcode::OP_ROWMAX_SINGLE,
+    Opcode::OP_ONLINE_SOFTMAX,
+    Opcode::OP_ONLINE_SOFTMAX_UPDATE,
     Opcode::OP_ROWMIN_SINGLE,
     Opcode::OP_ROWPROD_SINGLE,
     Opcode::OP_CAST,

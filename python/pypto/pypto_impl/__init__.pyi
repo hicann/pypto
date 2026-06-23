@@ -656,6 +656,19 @@ def Minimum(a: Tensor, b: Tensor) -> Tensor: ...
 def Minimum(a: Tensor, b: Element) -> Tensor: ...
 
 
+def OnlineSoftmax(scores: Tensor, scale: float) -> Tuple[Tensor, Tensor, Tensor]: ...
+
+
+def OnlineSoftmaxUpdate(
+    previous_max: Tensor,
+    previous_sum: Tensor,
+    previous_output: Tensor,
+    current_max: Tensor,
+    current_sum: Tensor,
+    current_output: Tensor,
+) -> Tuple[Tensor, Tensor, Tensor]: ...
+
+
 def Unsqueeze(a: Tensor, axis: int) -> Tensor: ...
 
 
