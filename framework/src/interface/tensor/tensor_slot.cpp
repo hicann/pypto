@@ -96,6 +96,14 @@ std::unordered_set<TensorSlot> TensorSlotScope::LookupIncastReadFrom(const std::
     return tensorSlot;
 }
 
+void TensorSlotScope::InitAliveSlot()
+{
+    aliveSlots.clear();
+    for (auto tensor : Program::GetInstance().GetAliveTensors()) {
+        aliveSlots.insert(tensor->Id());
+    }
+}
+
 std::unordered_set<TensorSlot> TensorSlotScope::LookupOutcastWriteTo(const std::shared_ptr<LogicalTensor>& tensor) const
 {
     std::unordered_set<TensorSlot> tensorSlot;
@@ -240,6 +248,7 @@ void TensorSlotManager::BeginScope(Function* tensorFunc)
     std::shared_ptr<TensorSlotScope> scope = std::make_shared<TensorSlotScope>(tensorFunc);
     scopeList.push_back(scope);
     currScope = scope;
+    scope->InitAliveSlot();
     tensorFunc->SetSlotScope(scope);
 }
 
