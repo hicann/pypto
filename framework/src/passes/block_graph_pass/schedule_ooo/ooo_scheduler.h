@@ -357,7 +357,7 @@ private:
     const std::vector<int64_t>& GetLargerShape(const std::vector<int64_t> &shape1, const std::vector<int64_t> &shape2);
 
     bool IsSmallShapeSpill(Operation* op);
-    bool HasUnexecutedProducer(LogicalTensorPtr spillTensor);
+    bool HasUnexecutedProducer(Operation* spillOp);
     void UpdateSuccessorDependencies(Operation* succOp, Operation* spillOp,
         Operation* reloadCopyin, int spillMemId, int reloadMemId);
     void UpdatePredecessorAllocDependencies(Operation* succOp, Operation* reloadAlloc, int spillMemId);
@@ -370,7 +370,9 @@ private:
     void CollectProducerChainForDeletion(
         LogicalTensorPtr spillTensor, std::vector<Operation*>& opsToDelete,
         std::vector<LogicalTensorPtr>& tensorsToDelete);
-    size_t CleanupCollectedOperations(const std::vector<Operation*>& opsToDelete);
+    void ReleaseDeletedOpBufRefs(Operation* op, const std::vector<LogicalTensorPtr>& tensorsToDelete);
+    size_t CleanupCollectedOperations(
+        const std::vector<Operation*>& opsToDelete, const std::vector<LogicalTensorPtr>& tensorsToDelete);
     void CleanupCollectedTensors(
         const std::vector<LogicalTensorPtr>& tensorsToDelete);
     void EraseOrphanedTensors(
