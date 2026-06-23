@@ -586,6 +586,29 @@ static bool RunLocalSearch(TaskGraph& taskGraph, double baselineTotalCost)
     return solver.Solve(taskGraph, baselineTotalCost);
 }
 
+void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
+{
+    bool hasAIV0 = false;
+    bool hasAIV1 = false;
+    std::vector<int> aiv1TaskIds;
+    for (const auto& task : taskGraph.tasks) {
+        if (task.coreType != ScheduleCoreType::AIV) { continue; }
+        if (task.targetCoreType == TargetCoreType::AIV0) { hasAIV0 = true; }
+        if (task.targetCoreType == TargetCoreType::AIV1) {
+            hasAIV1 = true;
+            aiv1TaskIds.push_back(task.idx);
+        }
+    }
+    if (!hasAIV0 && hasAIV1) {
+        for (int taskId : aiv1TaskIds) {
+            taskGraph.tasks[taskId].targetCoreType = TargetCoreType::AIV0;
+            taskGraph.tasks[taskId].targetCoreTypeCandidate = TargetCoreType::AIV0;
+        }
+        APASS_LOG_INFO_F(Elements::Operation,
+            "Normalize single-AIV: all %d AIV1 tasks changed to AIV0.", static_cast<int>(aiv1TaskIds.size()));
+    }
+}
+
 void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph)
 {
     taskGraph.ClearSchedule();
@@ -606,6 +629,9 @@ void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph)
 
     // Step 2: in-process local-search refinement (deterministic, no external solver)
     RunLocalSearch(taskGraph, baselineTotalCost);
+
+    // Step 3: normalize single-AIV branches — if no task is assigned to AIV0, reassign all AIV1 tasks to AIV0
+    NormalizeSingleAIVBranches(taskGraph);
 }
 
 // 根据节点数量，判断是否遍历所有拓扑序进行任务排布

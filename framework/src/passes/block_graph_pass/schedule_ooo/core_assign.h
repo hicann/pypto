@@ -142,6 +142,7 @@ public:
         std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, std::set<int>& scheduledTasks,
         std::function<bool(TargetCoreType)> isAicCore,
         std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    void NormalizeSingleAIVBranches(TaskGraph& taskGraph);
 };
 
 } // namespace npu::tile_fwk
