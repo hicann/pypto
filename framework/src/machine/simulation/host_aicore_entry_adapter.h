@@ -45,6 +45,14 @@ typedef uint64_t mem_dsb_t;
 #define set_mask_norm(...) std::atomic_thread_fence(std::memory_order_seq_cst)
 #endif
 
+#ifndef ffts_cross_core_sync
+#define ffts_cross_core_sync(...) std::atomic_thread_fence(std::memory_order_seq_cst)
+#endif
+
+#ifndef wait_flag_dev
+#define wait_flag_dev(...) std::atomic_thread_fence(std::memory_order_seq_cst)
+#endif
+
 static inline uint64_t get_sys_cnt()
 {
     auto now = std::chrono::steady_clock::now().time_since_epoch();

@@ -169,7 +169,7 @@ public:
             deviceTaskCtx, deviceTaskCtx->GetDeviceTask(), context_->coreRunReadyCnt_,
             context_->runReadyCoreIdx_[CORE_IDX_AIV], context_->runReadyCoreIdx_[CORE_IDX_AIC],
             context_->corePendReadyCnt_, pendingIds_.data(), runningIds_.data(), aicValidNum_,
-            context_->coreIdxPosition_, context_->wrapCoreAvail_,
+            context_->coreIdxPosition_, context_->wrapCoreAvail_, aicStart_, adjAicEnd_,
             [&](SchDeviceTaskContext* devTaskCtx, CoreType coreType, int arg1, uint64_t arg2)
             { SendTaskToAiCore(devTaskCtx, coreType, arg1, arg2); });
 
@@ -1353,6 +1353,10 @@ private:
             context_->corePendReadyCnt_[static_cast<int>(type)]++;
             if (runningIdValue != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
+                if (isMixPending_) { // only mix pending can in this way
+                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValue));
+                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValue, type, coreIdx);
+                }
             }
             RecordResolveTask(ctx, finishCnt, coreIdx, pendingIdValue, pendingResolveIndexBaseValue);
             SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(finTaskId));
@@ -1371,11 +1375,15 @@ private:
             runningResolveIndexBaseRef = copyOutResolveCounter + 1;
             pendingIdRef = AICORE_TASK_INIT; // ResolveDepWithDfx depend this line
             pendingResolveIndexBaseRef = 0;
-            if (context_->wrapCoreAvail_[coreIdx]) {
+            if (context_->wrapCoreAvail_[coreIdx] || isMixPending_) {
                 context_->corePendReadyCnt_[static_cast<int>(type)]++;
             }
             if (runningIdValueCopyout != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValueCopyout, runningResolveIndexBaseValueCopyout);
+                if (isMixPending_) { // only mix pending can in this way
+                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValueCopyout));
+                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValueCopyout, type, coreIdx);
+                }
             }
             ret = ResolveCopyOutDepDyn(copyOutResolveCounter, pendingIdValue, pendingResolveIndexBaseValue, resloveParallelIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -1389,7 +1397,7 @@ private:
             DEV_IF_VERBOSE_DEBUG { recvAckTask_[coreIdx].push_back(TaskInfo(coreIdx, finTaskId, 0xFFFFFFFF)); }
             uint32_t runningIdValueAck = runningIdRef;
             int runningResolveIndexBaseValueAck = runningResolveIndexBaseRef;
-            if (context_->wrapCoreAvail_[coreIdx]) {
+            if (context_->wrapCoreAvail_[coreIdx] || isMixPending_) {
                 runningIdRef = finTaskId;
                 runningResolveIndexBaseRef = pendingResolveIndexBaseRef;
                 pendingIdRef = AICORE_TASK_INIT; // ResolveDepWithDfx depend this line
@@ -1398,6 +1406,10 @@ private:
             }
             if (runningIdValueAck != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValueAck, runningResolveIndexBaseValueAck);
+                if (isMixPending_) { // only mix pending can in this way
+                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValueAck));
+                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValueAck, type, coreIdx);
+                }
             }
         } else if (finTaskId == runningIdRef && finTaskState == TASK_FIN_STATE) {
             // running task is finished, resolve running task. Pending task is unmodified
@@ -1412,6 +1424,10 @@ private:
                 AddReadyCoreIdx(coreIdx, static_cast<int>(type));
             }
             RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
+            if (isMixPending_) { // only mix pending can in this way
+                SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValue));
+                deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValue, type, coreIdx);
+            }
         } else if (unlikely(finTaskId == runningIdRef && aicpuCallCode != 0)) {
             // running task is copyout, resolve running task. Pending task is unmodified
             DEV_VERBOSE_DEBUG(
@@ -1786,6 +1802,7 @@ private:
         schedIdx_ = schedIdx;
         aicValidNum_ = deviceArgs->nrValidAic;
         hasAicpuTask_ = deviceArgs->hasAicpuTask;
+        isMixPending_ = deviceArgs->all1c2vMixTask;
         enableEslModel_ = deviceArgs->enableEslModel;
         disableControlCore_ = true;
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
@@ -2420,5 +2437,6 @@ private:
     bool enableEslModel_;
     bool disableControlCore_{false};
     bool hasAicpuTask_{false};
+    bool isMixPending_{false};
 };
 } // namespace npu::tile_fwk::dynamic
