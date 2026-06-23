@@ -22,7 +22,9 @@
 #include "utils/tile_tensor.h"
 
 template <typename Type>
-using CVT_TYPE = std::conditional_t<std::is_same_v<Type, float> || std::is_same_v<Type, int32_t>, float, half>;
+using CVT_TYPE = std::conditional_t<std::is_same_v<Type, float>
+                                 || std::is_same_v<Type, int32_t>
+                                 || std::is_same_v<Type, int64_t>, float, half>;
 
 template <typename T, typename U>
 using FINAL_TYPE = std::conditional_t<std::is_same_v<CVT_TYPE<T>, CVT_TYPE<U>>, CVT_TYPE<T>, float>;
