@@ -41,26 +41,15 @@ constexpr uint32_t DAV3510_AICPU_NUM_6 = 6;       // DAV3510 6 个 AICPU 配置
 constexpr uint32_t DAV3510_AICPU_NUM_7 = 7;       // DAV3510 7 个 AICPU 配置
 constexpr uint32_t DAV3510_DIE0_MAX_CPUID_4 = 4;  // 对应 aiCpuNum=6 的 die0 最大 CPU ID
 constexpr uint32_t DAV3510_DIE0_MAX_CPUID_5 = 5;  // 对应 aiCpuNum=7 的 die0 最大 CPU ID
-class DeviceGuard {
-public:
-    DeviceGuard(int32_t devId) : nDevId(devId)
-    {
-        (void)RuntimeGetDevice(&oDevId);
-        if (nDevId != oDevId) {
-            RuntimeSetDevice(nDevId);
-        }
-    }
-    ~DeviceGuard()
-    {
-        if (nDevId != oDevId) {
-            RuntimeSetDevice(oDevId);
-        }
-    }
-
-private:
-    int32_t oDevId{0};
-    int32_t nDevId{0};
-};
+inline void ValidateRuntimeDevice(int32_t targetDevId)
+{
+    int32_t currentDevId = 0;
+    FE_ASSERT(FeError::INVALID_VAL, RuntimeGetDevice(&currentDevId) == RT_SUCCESS)
+        << "Failed to get current device ID.";
+    FE_ASSERT(FeError::INVALID_VAL, targetDevId == currentDevId)
+        << "Device mismatch: torch.npu.set_device(device_id) must use the same device ID as the input tensors. "
+        << "Current device ID: " << currentDevId << ", input tensor device ID: " << targetDevId << ".";
+}
 
 class AclModeGuard {
 public:

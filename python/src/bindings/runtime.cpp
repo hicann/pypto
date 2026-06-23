@@ -1149,7 +1149,6 @@ private:
     KernelModulePtr kmodule;
     AclMdlRI rtModel;
 
-    DeviceGuard devGuard;
     std::optional<ConfigManagerNg::JitScopeGuard> jitScopeGuard;
 
 public:
@@ -1160,9 +1159,9 @@ public:
           torchTensors(torch_tensors),
           tensorDefs(tensor_defs),
           aicoreStream((AclRtStream)stream),
-          tensors(tensors_ref),
-          devGuard(devId)
+          tensors(tensors_ref)
     {
+        ValidateRuntimeDevice(devId);
         kmodule = py::getattr(module, "kmodule").cast<KernelModulePtr>();
         DeviceLauncher::SaveStream(aicoreStream);
         DeviceLauncher::GetCaptureInfo(aicoreStream, rtModel);
