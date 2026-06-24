@@ -38,7 +38,6 @@
 #include "machine/device/dynamic/aicpu_instrumentation.h"
 #else
 #include "tilefwk/pypto_fwk_log.h"
-#include "tilefwk/error.h"
 #endif
 
 namespace npu::tile_fwk {
@@ -233,7 +232,7 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
     do {                                                      \
         if (!(expr)) {                                        \
             DEV_ERROR(errCode, "%s :" fmt, #expr, ##args);    \
-            MACHINE_ASSERT(false);                            \
+            abort();                                          \
         }                                                     \
     } while (0)
 
@@ -241,7 +240,7 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
     do {                                        \
         if (!(expr)) {                          \
             DEV_ERROR(errCode, "%s", #expr);    \
-            MACHINE_ASSERT(false);              \
+            abort();                            \
         }                                       \
     } while (0)
 
