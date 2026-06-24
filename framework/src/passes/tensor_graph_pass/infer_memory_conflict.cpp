@@ -16,7 +16,6 @@
 #include "infer_memory_conflict.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
-#include <limits>
 
 #define MODULE_NAME "InferMemoryConflict"
 
@@ -31,16 +30,10 @@ constexpr size_t DIMENSIONS_3D = 3;
 constexpr size_t DIMENSIONS_4D = 4;
 constexpr size_t DIMENSIONS_5D = 5;
 
-int64_t GetPowerOfTwo(int64_t cur)
+uint32_t GetPowerOfTwo(uint32_t cur)
 {
-    if (cur <= 1) {
-        return 1;
-    }
-    int64_t ret = 1;
+    uint32_t ret = 1;
     while (ret < cur) {
-        if (ret > (std::numeric_limits<int64_t>::max() >> 1)) {
-            break;
-        }
         ret <<= 1;
     }
     return ret;
@@ -523,22 +516,16 @@ Status InferMemoryConflict::SetDefaultShape(const LogicalTensorPtr& tensor, std:
     size_t shapeDim = shape.size();
     int64_t curTile;
     defaultTile.clear();
-    if (shapeDim == 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SetDefaultShape failed because tensor shape is empty.");
-        return FAILED;
-    }
     for (size_t i = 0; i < shape.size(); ++i) {
         defaultTile.emplace_back(1);
     }
-    int64_t lastDim = shape[shapeDim - 1];
-    curTile = lastDim < alignTailSize ? alignTailSize : GetPowerOfTwo(lastDim);
+    curTile = shape[shapeDim - 1] < alignTailSize ? alignTailSize : GetPowerOfTwo(shape[shapeDim - 1]);
     defaultTile[shapeDim - 1] = maximalTileSize < curTile ? maximalTileSize : curTile;
-    for (size_t i = shapeDim - 1; i > 0; --i) {
-        size_t dimIndex = i - 1;
-        maximalTileSize /= defaultTile[dimIndex + 1];
-        curTile = shape[dimIndex] <= 0 ? 1 : GetPowerOfTwo(shape[dimIndex]);
-        defaultTile[dimIndex] = maximalTileSize < curTile ? maximalTileSize : curTile;
-        defaultTile[dimIndex] = defaultTile[dimIndex] == 0 ? 1 : defaultTile[dimIndex];
+    for (int i = shapeDim - 2; i >= 0; --i) {
+        maximalTileSize /= defaultTile[i + 1];
+        curTile = GetPowerOfTwo(shape[i]);
+        defaultTile[i] = maximalTileSize < curTile ? maximalTileSize : curTile;
+        defaultTile[i] = defaultTile[i] == 0 ? 1 : defaultTile[i];
     }
     return SUCCESS;
 }
