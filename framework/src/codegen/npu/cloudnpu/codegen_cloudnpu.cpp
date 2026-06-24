@@ -103,6 +103,8 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
     std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
     FloatSpecValMgr floatSpecValMgr;
+    std::string allocSourceRegion;
+    allocSourceRegion.reserve(CODE_RESERVED_SIZE);
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
     auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
@@ -114,7 +116,7 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
             continue;
         }
 
-        GenAllocForLocalBuffer(op, symbolMgr);
+        std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
 
         CodeGenOpCloudNPU cop(
@@ -123,16 +125,17 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
         ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find(CG_ERROR) == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();
 
+        allocSourceRegion.append(allocSourceCode);
         tileOpSourceRegion.append(symbolMgr->GenNewTileTensorDefs());
         tileOpSourceRegion.append(tileOpSourceCode);
+
+        if (!allocSourceCode.empty()) {
+            CODEGEN_LOGI(": extra alloc generated(moved up to alloc region): %s", allocSourceCode.c_str());
+        }
         CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
-
     floatSpecValMgr.PrintFloatSpecVal(oss);
-    symbolMgr->PrintAddrAllocs(oss);
-    GenDynParamForExpr(oss, subFunc);
-    symbolMgr->GenUsingList(oss);
-    oss << tileOpSourceRegion;
+    oss << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList() << tileOpSourceRegion;
 
     PrintPMUTraceAfter(oss);
 }
