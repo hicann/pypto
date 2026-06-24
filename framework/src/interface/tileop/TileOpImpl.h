@@ -48,7 +48,6 @@
 #include "vector/tan.h"
 #include "vector/atanh.h"
 #include "vector/reduce.h"
-#include "vector/softmax.h"
 #include "vector/mte.h"
 #include "vector/atan.h"
 #include "vector/logicalnot.h"
