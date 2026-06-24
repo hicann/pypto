@@ -1656,7 +1656,7 @@ void ExpandOperationInto(
             break;
         }
         case Opcode::OP_FAKE_TRANS: {
-            function.AddOperation(Opcode::OP_FAKE_TRANS, iOperand, oOperand);
+            FakeTrans::ConstructTileGraph(function, iOperand, oOperand[0]);
             break;
         }
         case Opcode::OP_TOPK_SORT: {
