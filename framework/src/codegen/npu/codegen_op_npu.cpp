@@ -529,7 +529,9 @@ std::vector<std::string> CodeGenOpNPU::GenGetParamMacroPacked(
 std::vector<std::string> CodeGenOpNPU::GenDynRawShapePacked(unsigned paramIdx) const
 {
     std::vector<std::string> paramExpr;
-    FillParamWithFullInput(paramExpr, dynamicRawShape[paramIdx]);
+    for (const auto& s : dynamicRawShape[paramIdx]) {
+        paramExpr.emplace_back(SymbolicExpressionTable::BuildExpression(s));
+    }
     return paramExpr;
 }
 
@@ -559,7 +561,10 @@ std::vector<std::string> CodeGenOpNPU::GenParamIdxExprByIndex(
 std::vector<std::string> CodeGenOpNPU::GenSymbolicArgument(const std::vector<SymbolicScalar>& exprList) const
 {
     std::vector<std::string> argList;
-    FillParamWithFullInput(argList, exprList);
+    for (auto& expr : exprList) {
+        std::string exprStr = SymbolicExpressionTable::BuildExpression(expr);
+        argList.push_back(exprStr);
+    }
 
     CODEGEN_LOGI("argList is %s", IntVecToStr(argList).c_str());
     return argList;
@@ -627,7 +632,9 @@ void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
             tileTensor.shape.emplace_back(std::to_string(s));
         }
     } else {
-        FillParamWithFullInput(tileTensor.shape, newDynValidShape);
+        for (const auto& s : newDynValidShape) {
+            tileTensor.shape.emplace_back(SymbolicExpressionTable::BuildExpression(s));
+        }
     }
     tileTensor.stride = BuildStride(newRawShape);
 }
@@ -798,9 +805,13 @@ std::string CodeGenOpNPU::PrintCoord(size_t dim, const std::string& coord) const
 std::pair<std::string, std::string> CodeGenOpNPU::PrintDstSrcCoordFromAttr(int dstIdx, int srcIdx) const
 {
     std::vector<std::string> dstOffset;
-    FillParamWithFullInput(dstOffset, offsetFromAttr[dstIdx]);
+    for (const auto& tmpOffset : offsetFromAttr[dstIdx]) {
+        dstOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
+    }
     std::vector<std::string> srcOffset;
-    FillParamWithFullInput(srcOffset, offsetFromAttr[srcIdx]);
+    for (const auto& tmpOffset : offsetFromAttr[srcIdx]) {
+        srcOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
+    }
     std::string coordCpDst = WrapParamByParentheses(dstOffset);
     std::string coordDst = PrintCoord(rawShape[dstIdx].size(), coordCpDst);
     std::string coordCpSrc = WrapParamByParentheses(srcOffset);
