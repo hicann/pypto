@@ -9,32 +9,48 @@
  */
 
 /*!
- * \file CallPipeImpl.h
+ * \file PvData.h
  * \brief
  */
 
 #pragma once
 
-#include "PipeMachineImpl.h"
+#include <unordered_map>
+#include <vector>
+#include <cstdint>
 
 namespace CostModel {
-class CallPipeImpl : public PipeMachineImpl {
-public:
-    uint64_t Simulate(const TileOpPtr& tileOp) override
-    {
-        if (tileOp->IsCall()) {
-            return 1;
-        }
-        return 1;
-    }
-    uint64_t PostSimulate(const TileOpPtr& tileOp) override
-    {
-        if (tileOp->IsCall()) {
-            return 1;
-        }
-        return 1;
-    }
-};
+class PvData {
+private:
+    std::unordered_map<void*, std::vector<uint8_t>> data_;
+    bool capture_ = false;
 
-inline UnifiedPipeMachinePtr CreateCallPipeImpl() { return UnifiedPipeMachinePtr(new CallPipeImpl()); }
+public:
+    static PvData& Instance()
+    {
+        static PvData instance;
+        return instance;
+    }
+
+    void Put(void* dev, std::vector<uint8_t>& cpu)
+    {
+        if (capture_) {
+            std::vector<uint8_t> copy(cpu);
+            data_[dev] = copy;
+        }
+    }
+
+    std::vector<uint8_t> Get(void* dev)
+    {
+        if (data_.find(dev) != data_.end()) {
+            return data_[dev];
+        } else {
+            return std::vector<uint8_t>();
+        }
+    }
+
+    void Enable() { capture_ = true; }
+
+    void Disable() { capture_ = false; }
+};
 } // namespace CostModel
