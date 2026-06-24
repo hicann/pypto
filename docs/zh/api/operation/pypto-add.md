@@ -17,7 +17,7 @@ $$
 ## 函数原型
 
 ```python
-add(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
+add(input: Tensor, other: Union[Tensor, float]) -> Tensor
 ```
 
 ## 参数说明
@@ -25,7 +25,7 @@ add(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 源操作数。 <br> 支持的类型为float、int以及Tensor类型。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。不同型号支持的数据类型有所差异，详细请参见[约束说明](#约束说明)。<br> 不支持空Tensor；Shape仅支持1-4维；支持多维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
@@ -36,7 +36,7 @@ add(input: Tensor, other: Union[Tensor, float, int]) -> Tensor
 1. input和other都为Tensor时，数据类型应该相同。
 2. other为scalar时，若input为浮点类型，则scalar支持整型（自动转为浮点）；若input为整型，则scalar不支持浮点类型（会报错）。
 3. Tensor数据类型说明：
-   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_FP32，DT_INT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
+   - Ascend 950PR/Ascend 950DT：DT_INT32，DT_UINT32，DT_FP32，DT_INT16，DT_UINT16，DT_FP16，DT_BF16，DT_UINT8，DT_INT8。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT32，DT_INT16，DT_FP16，DT_FP32，DT_BF16。
 
