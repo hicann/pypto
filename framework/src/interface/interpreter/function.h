@@ -488,7 +488,7 @@ struct FunctionControlFlowExecution {
 
 constexpr int EXEC_DUMP_LEVEL_OPERATION = 1;
 constexpr int EXEC_DUMP_LEVEL_TENSOR = 2;
-const std::unordered_set<Opcode> MIX_PATH_OPS = {Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_COPY_UB, Opcode::OP_COPY_OUT};
+const std::unordered_set<Opcode> MIX_PATH_OPS = {Opcode::OP_UB_COPY_L1, Opcode::OP_L0C_COPY_UB};
 
 enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
 enum class OpInfoCsvHeader {
