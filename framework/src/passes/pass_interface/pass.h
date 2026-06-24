@@ -35,7 +35,6 @@ public:
     virtual Status DefaultEnabledPostCheck(Function& function);
     virtual void Reset() {};
     const std::string& LogFolder(const std::string& topFolder, size_t i) const;
-    const std::string& LogFolder(const std::string& topFolder, const std::string& strategy, size_t i) const;
     const std::string& GetName() const { return name_; }
     const std::string& GetPassFolder() const { return passFolder_; }
     void SetPassConfigs(const PassConfigs& config) { passDfxconfigs_ = config; }
@@ -53,7 +52,7 @@ protected:
     {
         return config::GetPassConfig(strategy_, identifier_, key, defaultValue);
     }
-    virtual Status CreateLogFolder(const std::string& topFolder, const std::string& strategy, size_t i) const;
+    virtual Status CreateLogFolder(const std::string& topFolder, size_t i) const;
     virtual Status PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction);
     virtual Status DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction);
     virtual Status DumpGraphJson(Function& function, const std::string& fileName);

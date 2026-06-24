@@ -30,20 +30,8 @@ namespace npu::tile_fwk {
 namespace {
 const char* kExtractPassLogScriptName = "extract_pass_log.py";
 const char* kExtractPassLogScriptInSource = "tools/scripts/extract_pass_log.py";
-const char* kComputationGraphFolder = "computation_graph";
 
 bool IsFileAccessible(const std::string& path) { return !path.empty() && access(path.c_str(), F_OK) == 0; }
-
-void DeleteDirIfEmpty(const std::string& folder)
-{
-    if (folder.empty() || access(folder.c_str(), F_OK) != 0) {
-        return;
-    }
-    auto files = GetFiles(folder, "");
-    if (files.empty()) {
-        (void)DeleteDir(folder);
-    }
-}
 
 std::string ResolveExtractPassLogScriptPath()
 {
@@ -118,7 +106,7 @@ void LogPassRuntime(
         program.Name().c_str(), function.GetMagicName().c_str(), duration.count());
 }
 
-void ExtractPassLogByFunction(const Function& function, const std::string& strategy)
+void ExtractPassLogByFunction(const Function& function)
 {
     const std::string scriptPath = ResolveExtractPassLogScriptPath();
     if (scriptPath.empty()) {
@@ -131,10 +119,7 @@ void ExtractPassLogByFunction(const Function& function, const std::string& strat
     const std::string hostLogDir = LogManager::Instance().GetHostLogDir();
     const std::string logPattern = hostLogDir + "/pypto-log-" + std::to_string(getpid()) + "_*.log";
     const std::string functionName = function.GetMagicName();
-    std::string outputDir = config::LogTopFolder();
-    if (!strategy.empty()) {
-        outputDir = outputDir + "/" + kComputationGraphFolder + "/" + strategy;
-    }
+    const std::string outputDir = config::LogTopFolder();
     const std::string command = "python3 " + EscapeShellArg(scriptPath) + " " + EscapeShellArg(logPattern) + " -f " +
                                 EscapeShellArg(functionName) + " -o " + EscapeShellArg(outputDir) + " --silentmode";
     int ret = std::system(command.c_str());
@@ -144,25 +129,20 @@ void ExtractPassLogByFunction(const Function& function, const std::string& strat
 }
 
 PassLogUtil::PassLogUtil(Pass& pass, Function& function, size_t passIndex)
-    : PassLogUtil(pass, function, "", passIndex)
-{}
-
-PassLogUtil::PassLogUtil(Pass& pass, Function& function, const std::string& strategy, size_t passIndex)
 {
     originLogOutPath_ = config::LogFile();
-    if (!strategy.empty()) {
-        computationGraphFolder_ = config::LogTopFolder() + "/" + kComputationGraphFolder;
-        strategyFolder_ = computationGraphFolder_ + "/" + strategy;
-    }
-    logFolder_ = pass.LogFolder(config::LogTopFolder(), strategy, passIndex);
+    logFolder_ = pass.LogFolder(config::LogTopFolder(), passIndex);
     logFilePath_ = logFolder_ + "/" + (pass.GetName() + function.GetMagicName() + ".log");
 }
 
 PassLogUtil::~PassLogUtil()
 {
-    DeleteDirIfEmpty(logFolder_);
-    DeleteDirIfEmpty(strategyFolder_);
-    DeleteDirIfEmpty(computationGraphFolder_);
+    if (!logFolder_.empty()) {
+        auto files = GetFiles(logFolder_, "");
+        if (files.empty()) {
+            (void)DeleteDir(logFolder_);
+        }
+    }
 }
 
 } // namespace npu::tile_fwk
