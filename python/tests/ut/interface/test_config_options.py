@@ -67,7 +67,6 @@ def test_reset_option():
     assert host_option["compile_stage"] == pypto.CompStage.ALL_COMPLETE.value
 
 
-
 def test_operation_option():
     set_operation_options(combine_axis=True)
     option = get_operation_options()
@@ -115,6 +114,24 @@ def test_sg_set_scope_new_format():
     except pypto.error.FeError as e:
         assert "Expected bool" in str(e)
 
+
+def test_vf_options():
+    a = pypto.tensor([32, 32], pypto.DT_FP32, "a")
+    b = pypto.tensor([32, 32], pypto.DT_FP32, "b")
+    vf_options = "-mllvm -cce-vf-fusion-max-candidate-set-threshold=64"
+    with pypto.options("main"):
+        old_npuarch = pypto.platform.npuarch
+        pypto.platform.npuarch = "DAV_3510"
+        pypto.set_codegen_options(vf_options=vf_options)
+        with pypto.function("main", a, b):
+            for _ in pypto.loop(1):
+                pypto.set_vec_tile_shapes(32, 32)
+                b[:] = a + 1
+        pypto.platform.npuarch = old_npuarch
+        assert pypto.get_codegen_options()["vf_options"] == vf_options
+
+
 if __name__ == "__main__":
     test_option_map()
+    test_vf_options()
     test_sg_set_scope_new_format()

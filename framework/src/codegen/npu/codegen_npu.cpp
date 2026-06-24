@@ -585,8 +585,12 @@ void CodeGenNPU::AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool
         << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
         << "-mllvm --tile-fusion-skip-legality-check=false "
         << "-mllvm -cce-vf-fusion-max-candidate-set-threshold=32 ";
-    if (config::GetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, false)) {
-        oss << "-mllvm -enable-unroll-after-fused=true ";
+
+    auto vf_opts = config::GetCodeGenOption<std::string>(VF_OPTIONS);
+    if (CheckInjectStr(vf_opts.c_str(), vf_opts.length()) == 0) {
+        oss << vf_opts << " ";
+    } else {
+        CODEGEN_LOGE(CmpCodeErr::CMD_CHECK_FAILED, "vf_opts is %s, please check.", vf_opts.c_str());
     }
 }
 

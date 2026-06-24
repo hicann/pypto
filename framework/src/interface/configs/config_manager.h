@@ -84,7 +84,6 @@ const std::string KEY_ENABLE_CV_FUSE = "enable_cv_fuse";
 const std::string KEY_PASS_THREAD_NUM = "pass_thread_num";
 const std::string KEY_VF_OPT_MARK_FOR = "vf_opt_mark_for";
 const std::string KEY_ENABLE_VF = "enable_vf";
-const std::string KEY_ENABLE_VF_UNROLL = "enable_vf_unroll";
 
 /* CodeGen KEYs */
 const std::string KEY_PARALLEL_COMPILE = "parallel_compile";
