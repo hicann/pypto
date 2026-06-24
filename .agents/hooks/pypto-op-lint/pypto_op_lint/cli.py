@@ -30,26 +30,22 @@ def _cmd_run(findings: list[Finding]) -> int:
 
 def cmd_lint_impl(op_dir: str, stage: int) -> int:
     ctx = _build_context(op_dir, stage)
-    findings, _ = _run_checks(ctx, IMPL_RULE_IDS)
-    return _cmd_run(findings)
+    return _cmd_run(_run_checks(ctx, IMPL_RULE_IDS))
 
 
 def cmd_lint_golden(op_dir: str, stage: int) -> int:
     ctx = _build_context(op_dir, stage)
-    findings, _ = _run_checks(ctx, GOLDEN_RULE_IDS)
-    return _cmd_run(findings)
+    return _cmd_run(_run_checks(ctx, GOLDEN_RULE_IDS))
 
 
 def cmd_lint_test(op_dir: str, stage: int) -> int:
     ctx = _build_context(op_dir, stage)
-    findings, _ = _run_checks(ctx, TEST_RULE_IDS)
-    return _cmd_run(findings)
+    return _cmd_run(_run_checks(ctx, TEST_RULE_IDS))
 
 
 def cmd_lint_consistency(op_dir: str, stage: int) -> int:
     ctx = _build_context(op_dir, stage)
-    findings, _ = _run_checks(ctx, CONSISTENCY_RULE_IDS)
-    return _cmd_run(findings)
+    return _cmd_run(_run_checks(ctx, CONSISTENCY_RULE_IDS))
 
 
 def cmd_check_gate(op_dir: str, stage: int) -> int:
@@ -63,7 +59,7 @@ def cmd_check_gate(op_dir: str, stage: int) -> int:
         if stage not in rule.get("stages", []):
             continue
         gate_rules.append(rule["id"])
-    findings, _ = _run_checks(ctx, gate_rules)
+    findings = _run_checks(ctx, gate_rules)
     return _cmd_run(findings)
 
 
@@ -106,7 +102,7 @@ def cmd_check_phase_gate(op_dir: str, phase: str, stage: int = 5) -> int:
         if stage not in rule.get("stages", []):
             continue
         phase_rules.append(rid)
-    findings, _ = _run_checks(ctx, phase_rules)
+    findings = _run_checks(ctx, phase_rules)
     return _cmd_run(findings)
 
 
@@ -142,7 +138,7 @@ def cmd_check_design_gate(op_dir: str, stage: int = 4) -> int:
         if stage not in rule.get("stages", []):
             continue
         design_rules.append(rid)
-    findings, _ = _run_checks(ctx, design_rules)
+    findings = _run_checks(ctx, design_rules)
     return _cmd_run(findings)
 
 
