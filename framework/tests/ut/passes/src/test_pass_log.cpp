@@ -25,7 +25,7 @@
 #include <string>
 
 #include "interface/configs/config_manager.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "interface/program/program.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_log/pass_log.h"
@@ -74,8 +74,8 @@ TEST_F(PassLogTest, ExtractPassLogByFunctionCoverSystemReturnBranches)
 
     const std::string tmpDir = MakeTmpDir("/tmp/pypto_pass_log_ut_XXXXXX");
     ASSERT_FALSE(tmpDir.empty());
-    ASSERT_TRUE(CreateDir(tmpDir + "/tools/scripts", true));
-    ASSERT_TRUE(CreateDir(tmpDir + "/out", true));
+    ASSERT_TRUE(CreateMultiLevelDir(tmpDir + "/tools/scripts"));
+    ASSERT_TRUE(CreateMultiLevelDir(tmpDir + "/out"));
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
 
@@ -105,10 +105,10 @@ TEST_F(PassLogTest, PassLogUtilDeleteEmptyFolderOnDestruct)
 {
     const std::string tmpDir = MakeTmpDir("/tmp/pypto_pass_log_util_ut_XXXXXX");
     ASSERT_FALSE(tmpDir.empty());
-    ASSERT_TRUE(CreateDir(tmpDir + "/out"));
+    ASSERT_TRUE(CreateMultiLevelDir(tmpDir + "/out"));
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
-    ASSERT_TRUE(CreateDir(config::LogTopFolder(), true));
+    ASSERT_TRUE(CreateMultiLevelDir(config::LogTopFolder()));
 
     auto function =
         std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogUtil", "PassLogUtil", nullptr);
@@ -130,10 +130,10 @@ TEST_F(PassLogTest, PassLogUtilKeepFolderWhenNotEmpty)
 {
     const std::string tmpDir = MakeTmpDir("/tmp/pypto_pass_log_util_keep_ut_XXXXXX");
     ASSERT_FALSE(tmpDir.empty());
-    ASSERT_TRUE(CreateDir(tmpDir + "/out"));
+    ASSERT_TRUE(CreateMultiLevelDir(tmpDir + "/out"));
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
-    ASSERT_TRUE(CreateDir(config::LogTopFolder(), true));
+    ASSERT_TRUE(CreateMultiLevelDir(config::LogTopFolder()));
 
     auto function =
         std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogKeep", "PassLogKeep", nullptr);
@@ -158,7 +158,7 @@ TEST_F(PassLogTest, PassLogUtilCreatesStrategyScopedFolder)
 {
     const std::string tmpDir = MakeTmpDir("/tmp/pypto_pass_log_strategy_ut_XXXXXX");
     ASSERT_FALSE(tmpDir.empty());
-    ASSERT_TRUE(CreateDir(tmpDir + "/out", true));
+    ASSERT_TRUE(CreateMultiLevelDir(tmpDir + "/out"));
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
 
@@ -184,7 +184,7 @@ TEST_F(PassLogTest, PassLogUtilDeletesEmptyStrategyScopedParents)
 {
     const std::string tmpDir = MakeTmpDir("/tmp/pypto_pass_log_empty_strategy_ut_XXXXXX");
     ASSERT_FALSE(tmpDir.empty());
-    ASSERT_TRUE(CreateDir(tmpDir + "/out", true));
+    ASSERT_TRUE(CreateMultiLevelDir(tmpDir + "/out"));
     ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
     ConfigManager::Instance().ResetLog(tmpDir + "/out");
 
