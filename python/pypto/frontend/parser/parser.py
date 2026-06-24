@@ -146,10 +146,7 @@ def _catch_parser_errors(func):
                     if isinstance(arg, ast.AST):
                         node = arg
                         break
-            if node is None:
-                raise
-            else:
-                self.diag.error(node, err)
+            self.diag.bug(node, str(err))
 
     return wrapper
 
