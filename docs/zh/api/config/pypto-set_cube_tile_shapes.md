@@ -102,7 +102,7 @@ void
 
     - 仅支持2维/3维/4维矩阵多核切K。
     - 多核切K场景只支持out\_dtype数据类型为DT\_FP32或DT\_INT32。
-    - Bias/FixPipe(包含ReLU)场景不支持叠加多核切K功能。
+    - Bias、FixPipe反量化场景不支持叠加多核切K功能。
 
 ## 调用示例
 
