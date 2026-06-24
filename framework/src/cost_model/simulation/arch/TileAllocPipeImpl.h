@@ -37,7 +37,6 @@ public:
         }
         return 1;
     }
-
     uint64_t PostSimulate(const TileOpPtr& tileOp) override
     {
         if (tileOp->iOperand.empty()) {
