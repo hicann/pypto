@@ -1262,7 +1262,7 @@ struct EncodeDevAscendFunctionInfo {
                 outcastOpAttr.stitchPolicyFullCoverProducerList.push_back(stitchPolicyFullCoverProducer);
                 EncodeAnalysisOutCastConsumerByProducer(
                     o, outcastOpAttr.stitchPolicyFullCoverProducerList,  outcastOpAttr, outcastUseOpSet, i);
-            } else if (useList.size() > 0){
+            } else {
                 outcastOpAttr.useList.insert(outcastOpAttr.useList.end(), useList.begin(), useList.end());
                 for (auto& use : useList) {
                     UNUSED(use.operationIdx);
@@ -1299,19 +1299,12 @@ struct EncodeDevAscendFunctionInfo {
         size_t hubEntryLeast = 2;
         for (auto& i : outcastList) {
             auto& outcastOpAttr = outcastOpAttrDict[i];
-            std::vector<DevAscendFunctionCallOperandUse> producers;
-            for (auto& entry : outcastOpAttr.stitchPolicyFullCoverProducerList) {
-                if (entry.opType == CellMatchOpType::READ) {
-                    continue;
-                }
-                producers.push_back(entry);
-            }
-            if (producers.size() > hubEntryLeast) {
+            if (outcastOpAttr.stitchPolicyFullCoverProducerList.size() > hubEntryLeast) {
                 outcastOpAttr.stitchPolicyFullCoverProducerHubOpIdx = callList.size();
                 auto dummyOp = MakeDummyCall();
                 callList.Insert(dummyOp);
-                callOpPredDict[dummyOp] = producers.size();
-                for (auto& producer : producers) {
+                callOpPredDict[dummyOp] = outcastOpAttr.stitchPolicyFullCoverProducerList.size();
+                for (auto& producer : outcastOpAttr.stitchPolicyFullCoverProducerList) {
                     auto callOp = callList[producer.operationIdx];
                     callOpSuccDict[callOp].Insert(dummyOp);
                 }
