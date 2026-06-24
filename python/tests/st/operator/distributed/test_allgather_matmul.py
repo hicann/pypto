@@ -204,7 +204,6 @@ def allgather_matmul(
     return out_tensor
 
 
-@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(2)
 def test_allgather_matmul():
     mp.set_start_method('spawn', force=True)
