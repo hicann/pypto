@@ -26,12 +26,27 @@
 namespace pypto {
 
 // ============================================================================
+// Version Information
+// ============================================================================
+
+#define PYPTO_VERSION_MAJOR 0
+#define PYPTO_VERSION_MINOR 1
+#define PYPTO_VERSION_PATCH 0
+
+// ============================================================================
 // IR Constants
 // ============================================================================
 
 // Dynamic dimension constant for tensor/tile shapes
 // Use -1 to represent dimensions that are unknown at compile time
 constexpr int64_t kDynamicDim = -1;
+
+// ============================================================================
+// nanobind Module Configuration
+// ============================================================================
+
+// Default docstring for the nanobind module
+#define PYPTO_NANOBIND_MODULE_DOC "PyPTO core library"
 
 // ============================================================================
 // Compiler Hints and Attributes

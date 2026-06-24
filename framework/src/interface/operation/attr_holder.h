@@ -19,9 +19,8 @@
 #include <string>
 #include <any>
 
-#include "core/any_cast.h"
-
 #include "tilefwk/symbolic_scalar.h"
+#include "interface/inner/any.h"
 #include "interface/utils/common.h"
 #include "interface/utils/string_utils.h"
 #include "tilefwk/error_code.h"
@@ -33,11 +32,11 @@ const std::string OP_EMUOP_PREFIX = "op_emuop_";
 
 class AttrHolder {
 protected:
-    std::map<std::string, std::any> attributes;
+    std::map<std::string, npu::tile_fwk::Any> attributes;
 
 public:
-    const std::map<std::string, std::any>& GetAllAttr() const { return attributes; }
-    std::map<std::string, std::any>& GetAllAttr() { return attributes; }
+    const std::map<std::string, npu::tile_fwk::Any>& GetAllAttr() const { return attributes; }
+    std::map<std::string, npu::tile_fwk::Any>& GetAllAttr() { return attributes; }
 
     bool HasAttr(const std::string& key) const
     {
@@ -56,13 +55,13 @@ public:
         attributes[key] = value;
     }
 
-    std::any GetRawAttr(const std::string& key) const
+    npu::tile_fwk::Any GetRawAttr(const std::string& key) const
     {
         auto it = attributes.find(key);
         if (it != attributes.end()) {
             return it->second;
         }
-        return std::any();
+        return npu::tile_fwk::Any();
     }
 
     template <typename T>
@@ -72,10 +71,10 @@ public:
         static_assert(!std::is_same_v<T, std::vector<int>>);
         auto it = attributes.find(key);
         if (it != attributes.end()) {
-            if (it->second.type() == typeid(T)) {
-                value = pypto::AnyCast<T>(it->second);
+            if (it->second.Type() == typeid(T)) {
+                value = npu::tile_fwk::AnyCast<T>(it->second);
             } else {
-                std::cout << "Type mismatch: " << it->second.type().name() << " != " << typeid(T).name() << std::endl;
+                std::cout << "Type mismatch: " << it->second.Type().name() << " != " << typeid(T).name() << std::endl;
                 return false;
             }
         } else {
@@ -88,8 +87,8 @@ public:
     T* GetAttr(const std::string& key)
     {
         auto it = attributes.find(key);
-        if (it != attributes.end() && it->second.type() == typeid(T)) {
-            return &pypto::AnyCastRef<T>(it->second);
+        if (it != attributes.end() && it->second.Type() == typeid(T)) {
+            return AnyCast<T>(&it->second);
         }
         return nullptr;
     }
@@ -134,20 +133,20 @@ public:
         }
 
         std::string result;
-        if (it->second.type() == typeid(int64_t)) {
-            result = std::to_string(pypto::AnyCastRef<int64_t>(it->second));
-        } else if (it->second.type() == typeid(float)) {
-            result = std::to_string(pypto::AnyCastRef<float>(it->second));
-        } else if (it->second.type() == typeid(double)) {
-            result = std::to_string(pypto::AnyCastRef<double>(it->second));
-        } else if (it->second.type() == typeid(std::string)) {
-            result = pypto::AnyCastRef<std::string>(it->second);
-        } else if (it->second.type() == typeid(bool)) {
-            result = std::to_string(pypto::AnyCastRef<bool>(it->second));
-        } else if (it->second.type() == typeid(std::vector<int64_t>)) {
-            result = IntVecToStr(pypto::AnyCastRef<std::vector<int64_t>>(it->second));
-        } else if (it->second.type() == typeid(Element)) {
-            auto tensorElement = pypto::AnyCastRef<Element>(it->second);
+        if (it->second.Type() == typeid(int64_t)) {
+            result = std::to_string(npu::tile_fwk::AnyCast<int64_t>(it->second));
+        } else if (it->second.Type() == typeid(float)) {
+            result = std::to_string(npu::tile_fwk::AnyCast<float>(it->second));
+        } else if (it->second.Type() == typeid(double)) {
+            result = std::to_string(npu::tile_fwk::AnyCast<double>(it->second));
+        } else if (it->second.Type() == typeid(std::string)) {
+            result = npu::tile_fwk::AnyCast<std::string>(it->second);
+        } else if (it->second.Type() == typeid(bool)) {
+            result = std::to_string(npu::tile_fwk::AnyCast<bool>(it->second));
+        } else if (it->second.Type() == typeid(std::vector<int64_t>)) {
+            result = IntVecToStr(npu::tile_fwk::AnyCast<std::vector<int64_t>>(it->second));
+        } else if (it->second.Type() == typeid(Element)) {
+            auto tensorElement = npu::tile_fwk::AnyCast<Element>(it->second);
             if (tensorElement.IsSigned()) {
                 result = std::to_string(tensorElement.GetSignedData());
             } else if (tensorElement.IsUnsigned()) {
@@ -155,11 +154,11 @@ public:
             } else if (tensorElement.IsFloat()) {
                 result = std::to_string(tensorElement.GetFloatData());
             }
-        } else if (it->second.type() == typeid(SymbolicScalar)) {
-            auto scalar = pypto::AnyCastRef<SymbolicScalar>(it->second);
+        } else if (it->second.Type() == typeid(SymbolicScalar)) {
+            auto scalar = npu::tile_fwk::AnyCast<SymbolicScalar>(it->second);
             result = scalar.Dump();
-        } else if (it->second.type() == typeid(std::vector<SymbolicScalar>)) {
-            auto scalarList = pypto::AnyCastRef<std::vector<SymbolicScalar>>(it->second);
+        } else if (it->second.Type() == typeid(std::vector<SymbolicScalar>)) {
+            auto scalarList = npu::tile_fwk::AnyCast<std::vector<SymbolicScalar>>(it->second);
             std::ostringstream oss;
             oss << "[";
             for (size_t k = 0; k < scalarList.size(); k++) {
@@ -167,12 +166,12 @@ public:
             }
             oss << "]";
             result = oss.str();
-        } else if (it->second.type() == typeid(std::vector<bool>)) {
-            auto scalarList = pypto::AnyCastRef<std::vector<bool>>(it->second);
+        } else if (it->second.Type() == typeid(std::vector<bool>)) {
+            auto scalarList = npu::tile_fwk::AnyCast<std::vector<bool>>(it->second);
             result = IntVecToStr<bool>(scalarList);
         } else {
             result += "unsupported type ";
-            result += it->second.type().name();
+            result += it->second.Type().name();
         }
         return result;
     }
@@ -192,29 +191,29 @@ public:
         if (iter != attributes.end()) {
             auto& second = iter->second;
             try {
-                if (second.type() == typeid(int64_t)) {
-                    return nlohmann::json(pypto::AnyCastRef<int64_t>(second));
-                } else if (second.type() == typeid(std::vector<int64_t>)) {
-                    return nlohmann::json(pypto::AnyCastRef<std::vector<int64_t>>(second));
-                } else if (second.type() == typeid(std::vector<float>)) {
-                    return nlohmann::json(pypto::AnyCastRef<std::vector<float>>(second));
-                } else if (second.type() == typeid(std::vector<bool>)) {
-                    return nlohmann::json(pypto::AnyCastRef<std::vector<bool>>(second));
-                } else if (second.type() == typeid(double)) {
-                    return nlohmann::json(pypto::AnyCastRef<double>(second));
-                } else if (second.type() == typeid(float)) {
-                    return nlohmann::json(pypto::AnyCastRef<float>(second));
-                } else if (second.type() == typeid(std::string)) {
-                    return nlohmann::json(pypto::AnyCastRef<std::string>(second));
-                } else if (second.type() == typeid(bool)) {
-                    return nlohmann::json(pypto::AnyCastRef<bool>(second));
-                } else if (second.type() == typeid(Element)) {
-                    return ToJson(pypto::AnyCastRef<Element>(second));
+                if (second.Type() == typeid(int64_t)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<int64_t>(second));
+                } else if (second.Type() == typeid(std::vector<int64_t>)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<std::vector<int64_t>>(second));
+                } else if (second.Type() == typeid(std::vector<float>)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<std::vector<float>>(second));
+                } else if (second.Type() == typeid(std::vector<bool>)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<std::vector<bool>>(second));
+                } else if (second.Type() == typeid(double)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<double>(second));
+                } else if (second.Type() == typeid(float)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<float>(second));
+                } else if (second.Type() == typeid(std::string)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<std::string>(second));
+                } else if (second.Type() == typeid(bool)) {
+                    return nlohmann::json(npu::tile_fwk::AnyCast<bool>(second));
+                } else if (second.Type() == typeid(Element)) {
+                    return ToJson(npu::tile_fwk::AnyCast<Element>(second));
                 } else {
                     return nlohmann::json("Unsupported type");
                 }
             } catch (const std::bad_any_cast&) {
-                std::cout << "Bad any cast" << second.type().name();
+                std::cout << "Bad any cast" << second.Type().name();
             }
         }
         return nlohmann::json();
