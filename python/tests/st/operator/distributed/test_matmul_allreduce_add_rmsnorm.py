@@ -309,7 +309,6 @@ def _get_soc_version():
         return None
 
 
-@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(4)
 def test_matmul_allreduce_add_rmsnorm():
     mp.set_start_method('spawn', force=True)
