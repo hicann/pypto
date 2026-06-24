@@ -26,6 +26,7 @@
         "ready_on_host_tensors": [],
         "device_sched_parallelism": 1,
         "launch_sched_aicpu_num": 7,
+        "launch_sched_same_cluster": 1,
         "launch_early_mode": 0
     },
     "host": {
