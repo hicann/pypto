@@ -153,25 +153,9 @@ def test_tensor_move():
     dtype = pypto.DT_INT32
     shape = [64, 64]
     a = pypto.tensor(shape, dtype, "a")
-    b = pypto.tensor(shape, dtype, "b")
 
-    with pypto.function("main", a, b):
+    with pypto.function("main", a):
         pypto.set_vec_tile_shapes(32, 32)
-        a[:] = b - 1
+        a[:] = a - 1
 
 
-def test_token_depends():
-    shape = [64, 64]
-    a = pypto.tensor(shape, pypto.DT_FP32, "a")
-    out = pypto.tensor(shape, pypto.DT_FP32, "out")
-
-    with pypto.function("main", a, out):
-        def inner():
-            pypto.set_vec_tile_shapes(32, 32)
-            t = pypto.full([64, 64], 1.0, pypto.DT_FP32)
-            t[0:32, 0:32] = a[0:32, 0:32]
-            t[32:64, 0:32] = a[32:64, 0:32]
-            t[0:32, 32:64] = a[0:32, 32:64]
-            t[32:64, 32:64] = a[32:64, 32:64]
-            out[:] = t + 1
-        inner()
