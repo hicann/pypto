@@ -548,9 +548,10 @@ int DeviceRunner::Init()
     }
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
         LaunchAicpuServerInit(devArgsAddr);
-        devicePerf_.InitAndStartDumpThread(args_);
-        npu::tile_fwk::dynamic::AdumpRegExceptionDump();
     }
+
+    devicePerf_.InitAndStartDumpThread(args_);
+    npu::tile_fwk::dynamic::AdumpRegExceptionDump();
     return 0;
 }
 } // namespace npu::tile_fwk
