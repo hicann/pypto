@@ -570,14 +570,14 @@ private:
 
         // Coefficient folding
         SYM_TRY_REWRITE(x + x, x * 2);
-        SYM_TRY_REWRITE_IF(x * y + x, (y + 1) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(x + x * y, (y + 1) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(y * x + x, (y + 1) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(x + y * x, (y + 1) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(x * y + x * z, (y + z) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(y * x + x * z, (y + z) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(x * y + z * x, (y + z) * x, !x.Eval()->IsImmediate());
-        SYM_TRY_REWRITE_IF(y * x + z * x, (y + z) * x, !x.Eval()->IsImmediate());
+        SYM_TRY_REWRITE(x * y + x, (y + 1) * x);
+        SYM_TRY_REWRITE(x + x * y, (y + 1) * x);
+        SYM_TRY_REWRITE(y * x + x, (y + 1) * x);
+        SYM_TRY_REWRITE(x + y * x, (y + 1) * x);
+        SYM_TRY_REWRITE(x * y + x * z, (y + z) * x);
+        SYM_TRY_REWRITE(y * x + x * z, (y + z) * x);
+        SYM_TRY_REWRITE(x * y + z * x, (y + z) * x);
+        SYM_TRY_REWRITE(y * x + z * x, (y + z) * x);
 
         // Min/Max interactions
         SYM_TRY_REWRITE(sym_min(x, y - z) + z, sym_min(x + z, y));
