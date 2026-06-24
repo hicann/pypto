@@ -35,7 +35,7 @@ import ast
 import inspect
 import enum
 import typing
-from typing import NoReturn, Callable, Union
+from typing import NoReturn, Callable
 
 from pypto.error import RenderedParserError
 
@@ -307,11 +307,11 @@ class Diagnostics:
                     col_offset=column_position,
                     end_col_offset=ending_column,
                 ),
-                message=str(message),
+                message=message,
             )
         )
 
-    def bug(self, node: ast.AST, message: Union[str, Exception]) -> NoReturn:
+    def bug(self, node: ast.AST, message: str) -> NoReturn:
         """Generate a bug-level diagnostic and raise an exception.
 
         Parameters
@@ -327,11 +327,9 @@ class Diagnostics:
         RenderedParserError
             Always raises RenderedParserError after displaying the diagnostic.
         """
-        self.emit(node, str(message), DiagnosticLevel.BUG)
-        self._render()
         raise RenderedParserError(node, message) from None
 
-    def error(self, node: ast.AST, message: Union[str, Exception]) -> NoReturn:
+    def error(self, node: ast.AST, message: str) -> NoReturn:
         """Generate an error-level diagnostic and raise an exception.
 
         Parameters
@@ -349,7 +347,7 @@ class Diagnostics:
         """
         self.emit(node, message, DiagnosticLevel.ERROR)
         self._render()
-        raise RenderedParserError(node, message) from None
+        raise RenderedParserError(node, message)
 
     def warning(self, node: ast.AST, message: str) -> None:
         """Generate a warning-level diagnostic message.
