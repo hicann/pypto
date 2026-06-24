@@ -30,7 +30,6 @@ constexpr int16_t SHAPE_DIM3 = 3;
 constexpr uint16_t BLOCK_CUBE_M_N = 16;
 constexpr uint16_t BLOCK_ALIGN_BYTE = 32;
 constexpr int64_t FP4_BLOCK_ALIGN_BYTE = 64;
-constexpr int64_t MX_BLOCK_ALIGN_BYTE = 64;
 
 template <CopyOutMode mode, bool isAcc, uint8_t reluMode>
 struct TStoreConfig {
