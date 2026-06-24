@@ -404,13 +404,8 @@ bool ConvertInserter::HasParallelDifferentConsumerRequirement(
     if (tensorIt == tensorTobeMap.end()) {
         return false;
     }
-    return std::any_of(tensorIt->second.begin(), tensorIt->second.end(), [this, targetType](const auto& item) {
-        auto resolveOutputRequirement = [this](const LogicalTensorPtr& output) {
-            return TryGetUniqueKnownRequiredType(output);
-        };
-        MemoryType requirement = MemoryPathUtils::ResolveEffectiveConsumerRequirement(
-            item.second.first, item.second.second, targetType, resolveOutputRequirement);
-        return MemoryPathUtils::IsDifferentKnownRequirement(requirement, targetType);
+    return std::any_of(tensorIt->second.begin(), tensorIt->second.end(), [targetType](const auto& item) {
+        return MemoryPathUtils::IsDifferentKnownRequirement(item.second.second, targetType);
     });
 }
 
