@@ -117,10 +117,6 @@ struct DevCellMatchTableDesc {
         }
         cellUint64Size = offset;
     }
-
-    bool MaybeHaveAtomic() const {
-        return GetCacheOpMaxCount(1) > 0; // ATOMIC_WRITE
-    }
 };
 
 static inline std::string DumpMemLayOut(const DevCellMatchTableDesc& tableDesc)
