@@ -17,7 +17,6 @@
 #include "tilefwk/platform.h"
 #include "parser/platform_parser.h"
 #include "parser/internal_parser.h"
-#include "interface/utils/string_utils.h"
 
 namespace npu::tile_fwk {
 const std::string version = "version";
@@ -101,14 +100,7 @@ bool Die::HasDirectPath(MemoryType from, MemoryType to) const
     return memoryGraph_.HasDirectPath(from, to);
 }
 
-void SoC::SetNPUArch(const std::string& versionStr)
-{
-    if (StringUtils::StartsWith(versionStr, "DAV_")) {
-        version_ = StringToNPUArch(versionStr.substr(0x4));
-    } else {
-        version_ = StringToNPUArch(versionStr);
-    }
-}
+void SoC::SetNPUArch(const std::string& versionStr) { version_ = StringToNPUArch(versionStr); }
 
 void SoC::SetCCECVersion(const std::unordered_map<std::string, std::string>& ver)
 {
