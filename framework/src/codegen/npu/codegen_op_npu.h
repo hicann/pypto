@@ -84,8 +84,6 @@ public:
 
     std::string GenUnaryOp() const;
     std::string GenUnaryOpWithTmpBuff() const;
-    std::string GenOnlineSoftmaxOp() const;
-    std::string GenOnlineSoftmaxUpdateOp() const;
     std::string GenArgReduceWithValue() const;
     std::string GenQuantMXOp() const;
 
