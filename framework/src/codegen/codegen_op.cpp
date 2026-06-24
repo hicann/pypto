@@ -329,23 +329,12 @@ void CodeGenOp::Init(const Operation& ops)
     UpdateOpAttribute(ops);
 }
 
-bool CodeGenOp::IsNeedUseNormalAddrAlloc(const Operation& ops) const
-{
-    std::string opcKey = OP_EMUOP_PREFIX + "opc";
-    bool isTensorExtract = ops.HasAttr(opcKey) && (ops.GetIntAttribute(opcKey) == EMUOP_TENSOR_EXTRACT);
-    bool res = !isSupportLayout || OpcodeManager::Inst().IsSharedMemory(opCode) || isTensorExtract;
-    return res;
-}
-
 void CodeGenOp::UpdateCodegenOpInfoByTensor(
     const Operation& ops, bool isInput, const std::shared_ptr<LogicalTensor>& tensor, int& operandIdx, size_t ioIdx)
 {
     operand[operandIdx] = tensor->GetMemoryTypeOriginal() == MEM_DEVICE_DDR ? tensor->tensor->GetRawMagic() :
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
-    if (IsNeedUseNormalAddrAlloc(ops)) {
-        sm->AddTensorUseNormalAlloc(tensor);
-    }
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
     operandDtype[operandIdx] = tensor->tensor->datatype;
     UpdateShapeAndOffset(ops, *tensor, isInput, operandIdx, ioIdx);
