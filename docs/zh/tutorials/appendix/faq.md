@@ -310,18 +310,18 @@ i = 1
 
 N/A
 
-## local Tensor无producer时被读取触发device侧断言
+## local Tensor 无producer 时被读取触发device侧断言
 
 ### 问题现象描述
 
-在算子编写过程中，如果local Tensor仅创建但未写入，就在loop内被读取，编译/执行到设备路径时可能触发设备侧断言或异常。典型报错如下：
+在算子编写过程中，如果local Tensor 仅创建但未写入，就在loop 内被读取，编译/执行到设备路径时可能触发设备侧断言或异常。典型报错如下：
 
 ```text
 ASSERTION FAILED: WORKSPACE_ITER_INVALID
 Root[...] incast ... slotIndex ... read from empty address.
 ```
 
-该现象通常对应读取到的slot没有producer，即Tensor对应slot未被任何operation写入。
+该现象通常对应读取到的slot 没有producer，即Tensor 对应slot 未被任何operation 写入。
 
 最小示例（语义示意）：
 
@@ -334,19 +334,19 @@ def kernel(x):
 
 ### 可能原因
 
-local Tensor（如`t`）仅被创建，但在被读取前没有任何写操作（如切片赋值、`move`、`assemble`或其他能建立producer的写入），导致读取路径访问到空地址并触发断言。
+local Tensor（如 `t`）仅被创建，但在被读取前没有任何写操作（如切片赋值、`move`、`assemble` 或其他能建立producer 的写入），导致读取路径访问到空地址并触发断言。
 
 ### 处理步骤
 
 可采用以下任一方式规避：
 
-1. 在读取前先对local Tensor执行有效写入（例如切片赋值、`move`、`assemble`等），确保其存在producer。
-2. 将该local Tensor写在loop内，作为loop内Tensor使用，使其在当前loop作用域内，pypto内存管理策略会为其申请内存地址
+1. 在读取前先对local Tensor 执行有效写入（例如切片赋值、`move`、`assemble` 等），确保其存在producer。
+2. 将该local Tensor 写在loop 内，作为loop 内Tensor 使用，使其在当前loop 作用域内，pypto内存管理策略会为其申请内存地址
 
-## Loop原理及其描述
+## Loop 原理及其描述
 
 在编译阶段会将loop编译为控制流，将loop body转换为计算流，分别对应kernel_aicpu/kernel_aicore.
-kernel_aicpu负责控制流的执行，创建kernel_aicore任务，包括使用到的内存分配以及执行参数准备，
+kernel_aicpu 负责控制流的执行，创建kernel_aicore任务，包括使用到的内存分配以及执行参数准备，
 同时分析输入输出的依赖将kernel_aicore任务合并成一个更大的调度单元，然后提交给调度单元进行调度
 
 ### 原型介绍
@@ -361,13 +361,13 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
 
 ### 描述
 
-1. start, end, step分别可以表示循环的起始值、结束值和步长，类型可以为SymbolicScalar或者int,和Python中的range语法基本保持一致
+1. start, end, step 分别可以表示循环的起始值、结束值和步长，类型可以为SymbolicScalar 或者int, 和Python中的range语法基本保持一致
 
-2. name表示循环的名称，默认值为loop_{id},对实际使用运行效果无影响，仅用于调试和生成代码中注释信息
+2. name 表示循环的名称，默认值为loop_{id}, 对实际使用运行效果无影响，仅用于调试和生成代码中注释信息
 
-3. idx_name表示循环索引的名称，默认值为loop_idx_{id},对于嵌套累的Loop使用相同的idx会产生覆盖行为，目前会在前端进行检查报错
+3. idx_name 表示循环索引的名称，默认值为loop_idx_{id}, 对于嵌套累的Loop使用相同的idx会产生覆盖行为， 目前会在前端进行检查报错
 
-4. unroll_list主要用于循环展开，产生更大的loop body，降低调度开销。对于unroll_list=2, loop大概会产生如下代码
+4. unroll_list 主要用于循环展开，产生更大的loop body， 降低调度开销。对于unroll_list=2, loop大概会产生如下代码
 
     ```python
     new_start = start
@@ -379,7 +379,7 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
         new_start = stop - left
     ```
 
-    loop_unroll大概会产生如下代码
+    loop_unroll 大概会产生如下代码
 
     ```python
     new_start = start
@@ -390,15 +390,15 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
         new_start = stop - left
     ```
 
-    原则上如果可以一次处理多个i，使用loop_unroll会更高效；如果一次只能处理1个i，则需要使用loop
+    原则上如果可以一次处理多个i， 使用loop_unroll会更高效； 如果一次只能处理1个i， 则需要使用loop
 
-5. submit_before_loop表示是否在循环开始前提交任务，默认值为False。如果设置为True，则循环前的任务会先提交到调度队列中，等待后续任务完成后再开始执行，*过多的设置submit_before_loop会增加调度开销*，建议仅在必要时设置为True
+5. submit_before_loop 表示是否在循环开始前提交任务，默认值为False。如果设置为True，则循环前的任务会先提交到调度队列中，等待后续任务完成后再开始执行， *过多的设置submit_before_loop会增加调度开销*， 建议仅在必要时设置为True
 
-6. unroll_list对`pypto.cond`影响，通常一个循环中有一个`pypto.cond`,会产生两个分支，当unroll次数为4次时，会产生2 ** 4 16个路径分支，通常上每个分支都需要单独编译，因此会大量增加编译时间和编译出的代码量. 为了支持关键算子FA的编译优化，提供了两个特殊的函数`pypto.is_loop_begin()`和`pypto.is_loop_end()`用于优化条件分支
+6. unroll_list 对 `pypto.cond` 影响， 通常一个循环中有一个 `pypto.cond`, 会产生两个分支，当unroll次数为4次时，会产生2 ** 4 16个路径分支，通常上每个分支都需要单独编译， 因此会大量增加编译时间和编译出的代码量. 为了支持关键算子FA的编译优化，提供了两个特殊的函数 `pypto.is_loop_begin()` 和 `pypto.is_loop_end()` 用于优化条件分支
 
-7. 考虑到对外层loop进行loop_unroll不能提升loop body的大小，当前仅支持最内侧循环进行unroll
+7. 考虑到对外层loop进行loop_unroll不能提升loop body的大小， 当前仅支持最内侧循环进行unroll
 
-8. 为了写代码方便，可能有时看到前端算子并没有直接表达loop，是如何产生loop和loop body的呢. 实际是在构图阶段前端会隐式的在function开始的位置插入一个loop，循环次数为1. 循环直到下一个循环开始前结束，举例如下
+8. 为了写代码方便，可能有时看到前端算子并没有直接表达loop，是如何产生loop和loop body的呢. 实际是在构图阶段前端会隐式的在function开始的位置插入一个loop， 循环次数为1. 循环直到下一个循环开始前结束，举例如下
 
     ```python
     @pypto.frontend.jit
