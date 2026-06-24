@@ -729,7 +729,6 @@ void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &til
     // tmpbuf need 32-byte alignment
     constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
     tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
-    tmpRows = (tmpRows + alignElements - 1) / alignElements * alignElements;
 
     // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
     uint32_t workspaceSize = tmpRows * tmpCols;
@@ -752,7 +751,6 @@ void QuantizeAsymmetricOperationTileFunc(Function &function, const TileShape &ti
     // tmpbuf need 32-byte alignment
     constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
     tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
-    tmpRows = (tmpRows + alignElements - 1) / alignElements * alignElements;
 
     // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
     uint32_t workspaceSize = tmpRows * tmpCols;
