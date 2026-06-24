@@ -36,6 +36,32 @@ inline int64_t CalcShapeSizeFunc(const std::vector<int64_t>& shape)
     return size;
 }
 
+struct InvokeParaOffset {
+    uint8_t* rawTensorAddr{nullptr}; // 原始input output tensor基地址, 如果是子图间workspace incast outcast 则为null
+    uint64_t offset{0};
+    uint64_t rawTensorOffset{0};
+    bool isTensorParam{false};
+    uint64_t rawShapeSize{0};
+    int rawMagic{0};
+    std::string rawSymbol{""};
+    int opOriginArgsSeq{INVALID_IN_OUT_INDEX}; // map origin args seq no
+    int funcitonMagic{-1};
+    int8_t ioIndex{-1};
+    int8_t paramType{-1};
+    std::vector<int64_t> tensorShape;
+    int opMagic{0};
+    DataType datatype{DataType::DT_INT32};
+    std::vector<int64_t> rawTensorShape;
+    void LogRawTensorInfo(std::shared_ptr<RawTensor> rawTensor)
+    {
+        auto rawShape = rawTensor->GetRawShape();
+        rawShapeSize = CalcShapeSizeFunc(rawShape) * BytesOf(rawTensor->GetDataType());
+        rawMagic = rawTensor->GetRawMagic();
+        rawSymbol = rawTensor->GetSymbol();
+        datatype = rawTensor->GetDataType();
+    }
+};
+
 class MachineTask {
 public:
     MachineTask(uint64_t taskId, Function* function) : taskId_(taskId), function_(function) {}

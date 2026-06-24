@@ -43,7 +43,7 @@ void TestCodeGenMatmul::test_matmul_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_002()
@@ -66,7 +66,7 @@ void TestCodeGenMatmul::test_matmul_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_003()
@@ -86,7 +86,7 @@ void TestCodeGenMatmul::test_matmul_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_004()
@@ -109,7 +109,7 @@ void TestCodeGenMatmul::test_matmul_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_005()
@@ -129,7 +129,7 @@ void TestCodeGenMatmul::test_matmul_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_006()
@@ -150,7 +150,7 @@ void TestCodeGenMatmul::test_matmul_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_007()
@@ -170,7 +170,7 @@ void TestCodeGenMatmul::test_matmul_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_008()
@@ -190,7 +190,7 @@ void TestCodeGenMatmul::test_matmul_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_009()
@@ -210,7 +210,7 @@ void TestCodeGenMatmul::test_matmul_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_010()
@@ -230,7 +230,7 @@ void TestCodeGenMatmul::test_matmul_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_s8s8_001()
@@ -250,7 +250,7 @@ void TestCodeGenMatmul::test_matmul_s8s8_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_S8S8_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_s8s8_002()
@@ -273,7 +273,7 @@ void TestCodeGenMatmul::test_matmul_s8s8_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_S8S8_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_s8s8_003()
@@ -293,7 +293,7 @@ void TestCodeGenMatmul::test_matmul_s8s8_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_S8S8_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMatmul::test_matmul_s8s8_004()
@@ -313,5 +313,5 @@ void TestCodeGenMatmul::test_matmul_s8s8_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MATMUL_S8S8_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
