@@ -35,9 +35,9 @@ bitwise_left_shift(input: Union[Tensor, int], other: Union[Tensor, int]) -> Tens
 
 1. input和other类型应该相同。
 2. Tensor数据类型说明：
-   - Ascend 950PR/Ascend 950DT：DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT8, DT_UINT8。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16, DT_UINT16。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16, DT_UINT16。
+   - Ascend 950PR/Ascend 950DT：DT_INT16，DT_INT32，DT_INT8。
+   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_INT16。
+   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_INT16。
 
 ## 调用示例
 
