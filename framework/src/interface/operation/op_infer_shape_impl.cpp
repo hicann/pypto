@@ -537,39 +537,30 @@ void QuantizeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     std::vector<SymbolicScalar> dstValidShape(op->GetIOperands()[0]->GetDynValidShape());
     outValidShapes.push_back(dstValidShape);
 
-    // Second output (tmpbuf): same size as src, with int32_t type (4 bytes per element)
+    // Second output (tmpbuf): calculate size based on input rows
+    // tmpbuf size = rows * sizeof(half), where rows is from input's second last dimension
     auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
     if (!inputValidShape.empty()) {
-        // tmpbuf has same shape as input src
-        std::vector<SymbolicScalar> tmpValidShape = inputValidShape;
-
-        // For axis=-2, align the second-to-last dimension to 32 bytes (8 int32 elements)
-        int64_t axis = 0;
-        if (op->GetAttr(OP_ATTR_PREFIX + "axis", axis) && axis == -2 && tmpValidShape.size() >= 2) {
-            constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
-            size_t lastDimIndex = tmpValidShape.size() - 2;
-            tmpValidShape[lastDimIndex] =
-                (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements * alignElements;
+        // tmpbuf shape: one 32B block per row -> [rows, 1] in terms of half elements
+        // But for valid shape, we can represent it as a 1D size
+        // rows = inputValidShape[inputValidShape.size() - 2]
+        // tmpBufBytes = rows * 32
+        // tmpBufHalfElements = rows * 2 (since 32B = 16 half elements)
+        std::vector<SymbolicScalar> tmpValidShape;
+        if (inputValidShape.size() >= 2) {
+            // tmpbuf size in bytes: rows * 32 (one 32B block per row)
+            SymbolicScalar rows = inputValidShape[inputValidShape.size() - 2];
+            SymbolicScalar tmpBufSize = rows * 32;
+            tmpValidShape.push_back(tmpBufSize);
+        } else {
+            // Fallback: use a constant size
+            tmpValidShape.push_back(SymbolicScalar(256));  // 8 rows * 32B
         }
-
         outValidShapes.push_back(tmpValidShape);
     } else {
-        // No dynamic shape info, use input's static shape
+        // No dynamic shape info, use default size
         std::vector<SymbolicScalar> tmpValidShape;
-        auto inputShape = op->GetIOperands()[0]->GetShape();
-        for (auto dim : inputShape) {
-            tmpValidShape.push_back(SymbolicScalar(dim));
-        }
-
-        // For axis=-2, align the second-to-last dimension to 32 bytes (8 int32 elements)
-        int64_t axis = 0;
-        if (op->GetAttr(OP_ATTR_PREFIX + "axis", axis) && axis == -2 && tmpValidShape.size() >= 2) {
-            constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
-            size_t lastDimIndex = tmpValidShape.size() - 2;
-            tmpValidShape[lastDimIndex] =
-                (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements * alignElements;
-        }
-
+        tmpValidShape.push_back(SymbolicScalar(256));  // Default size
         outValidShapes.push_back(tmpValidShape);
     }
 }
