@@ -19,14 +19,12 @@ using namespace tile_fwk::test_operation;
 namespace {
 struct TransDataOpFuncArgs : public OpFuncArgs {
     TransDataOpFuncArgs(
-        const int& type, const int& group, const std::vector<int64_t>& validShape,
-        const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
-        : type_(type), group_(group), validShape_(validShape), viewShape_(viewShape), tileShape_(tileShape)
+        const int& type, const int& group, const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape)
+        : type_(type), group_(group), viewShape_(viewShape), tileShape_(tileShape)
     {}
 
     int type_;
     int group_;
-    std::vector<int64_t> validShape_;
     std::vector<int64_t> viewShape_;
     std::vector<int64_t> tileShape_;
 };
@@ -54,9 +52,7 @@ static void TransDataOperationExeFunc4Dims(
                  SymbolicScalar(inputs[0].GetShape()[2]), SymbolicScalar(inputs[0].GetShape()[3])},
                 {0, 0, 0, 0});
             TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-            auto res = TransData(
-                tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
+            auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
             Assemble(res, {0, 0, 0, 0, 0}, outputs[0]);
         } else if (transDataInfo->type_ == 4) {
             Tensor tileTensor0 = View(
@@ -66,9 +62,7 @@ static void TransDataOperationExeFunc4Dims(
                  SymbolicScalar(inputs[0].GetShape()[2]), SymbolicScalar(inputs[0].GetShape()[3])},
                 {0, 0, 0, 0});
             TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-            auto res = TransData(
-                tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
+            auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
             Assemble(res, {0, 0, 0, 0}, outputs[0]);
         }
     }
@@ -92,10 +86,8 @@ static void TransDataOperationExeFunc5Dims(
                      SymbolicScalar(inputs[0].GetShape()[4])},
                     {0, 0, 0, 0, 0});
                 TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-                auto res = TransData(
-                    tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                    outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_),
-                    transDataInfo->group_);
+                auto res =
+                    TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
                 Assemble(res, {0, 0, 0, 0}, outputs[0]);
             } else {
                 Tensor tileTensor0 = View(
@@ -107,10 +99,8 @@ static void TransDataOperationExeFunc5Dims(
                      SymbolicScalar(inputs[0].GetShape()[4]), SymbolicScalar(inputs[0].GetShape()[5])},
                     {0, 0, 0, 0, 0, 0});
                 TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-                auto res = TransData(
-                    tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                    outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_),
-                    transDataInfo->group_);
+                auto res =
+                    TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
                 Assemble(res, {0, 0, 0, 0, 0}, outputs[0]);
             }
         } else if (transDataInfo->type_ == 3) {
@@ -123,9 +113,7 @@ static void TransDataOperationExeFunc5Dims(
                  SymbolicScalar(inputs[0].GetShape()[4])},
                 {0, 0, 0, 0, 0});
             TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-            auto res = TransData(
-                tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
+            auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
             Assemble(res, {0, 0, 0, 0, 0, 0}, outputs[0]);
         } else if (transDataInfo->type_ == 5) {
             Tensor tileTensor0 = View(
@@ -137,9 +125,7 @@ static void TransDataOperationExeFunc5Dims(
                  SymbolicScalar(inputs[0].GetShape()[4])},
                 {0, 0, 0, 0, 0});
             TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-            auto res = TransData(
-                tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
+            auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
             Assemble(res, {0, 0, 0, 0}, outputs[0]);
         }
     }
@@ -162,9 +148,7 @@ static void TransDataOperationExeFunc6Dims(
                  SymbolicScalar(inputs[0].GetShape()[4]), SymbolicScalar(inputs[0].GetShape()[5])},
                 {0, 0, 0, 0, 0, 0});
             TileShape::Current().SetVecTile(transDataInfo->tileShape_);
-            auto res = TransData(
-                tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_),
-                outputs[0].GetShape(), SymbolicScalar::FromConcrete(transDataInfo->validShape_), transDataInfo->group_);
+            auto res = TransData(tileTensor0, static_cast<TileOpFormat>(transDataInfo->type_), transDataInfo->group_);
             Assemble(res, {0, 0, 0, 0, 0}, outputs[0]);
         }
     }
@@ -184,10 +168,8 @@ TEST_P(TransDataOperationTest, TestTransData)
     auto test_data = GetParam().test_data_;
     int type = GetValueByName<int>(test_data, "type");
     int group = GetValueByName<int>(test_data, "group");
-    std::vector<int> tmpValidShape = GetValueByName<std::vector<int>>(test_data, "valid_shape");
-    std::vector<int64_t> validShape = {tmpValidShape.begin(), tmpValidShape.end()};
 
-    auto args = TransDataOpFuncArgs(type, group, validShape, GetViewShape(test_data), GetTileShape(test_data));
+    auto args = TransDataOpFuncArgs(type, group, GetViewShape(test_data), GetTileShape(test_data));
     auto testCase = CreateTestCaseDesc<TransDataOpMetaData>(GetParam(), &args);
     TestExecutor::runTest(testCase);
 }

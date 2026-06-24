@@ -52,13 +52,6 @@
             "params": {
                 "type": 2,
                 "group": 1,
-                "valid_shape": [
-                    1,
-                    1,
-                    1,
-                    8,
-                    8
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -116,13 +109,6 @@
             "params": {
                 "type": 2,
                 "group": 4,
-                "valid_shape": [
-                    1,
-                    4,
-                    8,
-                    32,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -180,13 +166,6 @@
             "params": {
                 "type": 2,
                 "group": 1,
-                "valid_shape": [
-                    2,
-                    1,
-                    6,
-                    96,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -244,13 +223,6 @@
             "params": {
                 "type": 2,
                 "group": 3,
-                "valid_shape": [
-                    1,
-                    3,
-                    5,
-                    128,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -308,13 +280,6 @@
             "params": {
                 "type": 2,
                 "group": 3,
-                "valid_shape": [
-                    2,
-                    6,
-                    4,
-                    256,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -372,13 +337,6 @@
             "params": {
                 "type": 2,
                 "group": 9,
-                "valid_shape": [
-                    3,
-                    9,
-                    4,
-                    192,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -436,13 +394,6 @@
             "params": {
                 "type": 2,
                 "group": 1,
-                "valid_shape": [
-                    2,
-                    8,
-                    3,
-                    160,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -500,13 +451,6 @@
             "params": {
                 "type": 2,
                 "group": 12,
-                "valid_shape": [
-                    1,
-                    12,
-                    5,
-                    192,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -563,12 +507,6 @@
             "params": {
                 "type": 4,
                 "group": 1,
-                "valid_shape": [
-                    32,
-                    1,
-                    16,
-                    16
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -630,14 +568,6 @@
             "params": {
                 "type": 3,
                 "group": 1,
-                "valid_shape": [
-                    1,
-                    1,
-                    1,
-                    1,
-                    8,
-                    8
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -697,12 +627,6 @@
             "params": {
                 "type": 0,
                 "group": 1,
-                "valid_shape": [
-                    1,
-                    8,
-                    1,
-                    8
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -766,13 +690,6 @@
             "params": {
                 "type": 0,
                 "group": 1,
-                "valid_shape": [
-                    1,
-                    8,
-                    1,
-                    1,
-                    8
-                ],
                 "on_board": true,
                 "func_id": -1
             },
@@ -832,151 +749,10 @@
             "params": {
                 "type": 5,
                 "group": 1,
-                "valid_shape": [
-                    8,
-                    1,
-                    16,
-                    8
-                ],
                 "on_board": true,
                 "func_id": -1
             },
             "index": 12
-        },
-        {
-            "case_index": 13,
-            "case_name": "TransData_case1",
-            "operation": "TransData",
-            "input_tensors": [
-                {
-                    "name": "input0",
-                    "shape": [
-                        1,
-                        1,
-                        1,
-                        8,
-                        8
-                    ],
-                    "dtype": "fp32",
-                    "format": "ND",
-                    "need_trans": false,
-                    "data_range": {
-                        "min": -10,
-                        "max": 10
-                    }
-                }
-            ],
-            "output_tensors": [
-                {
-                    "name": "output0",
-                    "shape": [
-                        1,
-                        7,
-                        1,
-                        8
-                    ],
-                    "dtype": "fp32",
-                    "format": "ND",
-                    "need_trans": false
-                }
-            ],
-            "view_shape": [
-                1,
-                1,
-                1,
-                8,
-                8
-            ],
-            "tile_shape": [
-                1,
-                1,
-                1,
-                8,
-                8
-            ],
-            "params": {
-                "type": 0,
-                "group": 1,
-                "valid_shape": [
-                    1,
-                    7,
-                    1,
-                    8
-                ],
-                "on_board": true,
-                "func_id": -1
-            },
-            "index": 13
-        },
-        {
-            "case_index": 14,
-            "case_name": "TransData_case1",
-            "operation": "TransData",
-            "input_tensors": [
-                {
-                    "name": "input0",
-                    "shape": [
-                        1,
-                        1,
-                        1,
-                        1,
-                        8,
-                        8
-                    ],
-                    "dtype": "fp32",
-                    "format": "ND",
-                    "need_trans": false,
-                    "data_range": {
-                        "min": -10,
-                        "max": 10
-                    }
-                }
-            ],
-            "output_tensors": [
-                {
-                    "name": "output0",
-                    "shape": [
-                        1,
-                        7,
-                        1,
-                        1,
-                        8
-                    ],
-                    "dtype": "fp32",
-                    "format": "ND",
-                    "need_trans": false
-                }
-            ],
-            "view_shape": [
-                1,
-                1,
-                1,
-                1,
-                8,
-                8
-            ],
-            "tile_shape": [
-                1,
-                1,
-                1,
-                1,
-                8,
-                8
-            ],
-            "params": {
-                "type": 0,
-                "group": 1,
-                "valid_shape": [
-                    1,
-                    7,
-                    1,
-                    1,
-                    8
-                ],
-                "on_board": true,
-                "func_id": -1
-            },
-            "index": 14
         }
     ]
 }
