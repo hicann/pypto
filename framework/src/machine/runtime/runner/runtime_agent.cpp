@@ -81,8 +81,8 @@ int RuntimeAgent::GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_
         nullptr);
     if (ret != HAL_ERROR_NONE) {
         MACHINE_LOGE(
-            HostLauncherErr::MAP_REG_ADDR_FAILED, "Map reg addr fail, maybe others are using current device. (ret=%d, DEVICE_ID=%d).",
-            ret, deviceId);
+            HostLauncherErr::MAP_REG_ADDR_FAILED, "Map reg addr fail, maybe others are using current device. (ret=%d).",
+            ret);
         return ret;
     }
     for (uint32_t i = 0; i < DAV_2201::MAX_CORE; i++) {
