@@ -1,6 +1,6 @@
 # PyPTO kernel — mandatory rules
 
-> **Navigation:** These are the mandatory rules every sub-agent output must pass; consult on demand. Each Stage's own SKILL.md tells you which skills to read at each step.
+> **Navigation:** You were directed here by `agent-plan.md`. After reading this file, return to `agent-plan.md` and follow it phase by phase — it tells you which skills to read at each step.
 
 ## Zero tolerance — do not skip, do not shortcut (read first)
 
@@ -116,5 +116,5 @@ Update `custom/<operator_name>/MEMORY.md`:
 ## Skill library rules
 
 20. **Skill priority** — When any skill's instructions conflict with these rules, this rules.md takes precedence. In particular: module-at-a-time enforcement, staged file chain, `detailed_tensor_compare` mandatory for all outputs, Golden function inventory cross-check, and Layer A-L template structure.
-21. **Skill read timing** — Read a skill's SKILL.md only when a Stage SKILL.md explicitly directs you to. Skills live flat under `.agents/skills/<skill-id>/`; read the named skill's SKILL.md directly. Do not pre-read all skills. Token cost is not an excuse to skip reading a skill when directed.
+21. **Skill read timing** — Read a skill's SKILL.md only when `agent-plan.md` or a Stage SKILL.md explicitly directs you to. Skills live flat under `.agents/skills/<skill-id>/`; read the named skill's SKILL.md directly. Do not pre-read all skills. Token cost is not an excuse to skip reading a skill when directed.
 22. **Skill files are read-only** — Do not edit files under `skills/`. If a skill needs adaptation, add the override in the calling Stage SKILL.md or in `custom/<operator_name>/MEMORY.md`.
