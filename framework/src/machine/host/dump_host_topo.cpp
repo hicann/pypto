@@ -10,7 +10,7 @@
 
 /*!
  * \file dump_host_topo.cpp
- * \brief
+ * \brief 
  */
 #include "dump_host_topo.h"
 
@@ -24,7 +24,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "interface/tensor/tensor_slot.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "interface/utils/string_utils.h"
 #include "machine/utils/dynamic/dev_encode_function.h"
 #include "machine/utils/dynamic/dev_encode_operation.h"
