@@ -16,10 +16,8 @@
 #include "remove_redundant_reshape.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_check/remove_redundant_reshape_checker.h"
-#include "passes/pass_log/pass_log.h"
-#include "passes/pass_utils/merge_view_assemble_utils.h"
 #include "passes/pass_utils/pass_utils.h"
-#include "passes/pass_utils/view_reshape_assemble_reorder_utils.h"
+#include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "RemoveRedundantReshape"
 
@@ -59,12 +57,6 @@ Status CheckIOOperands(const Operation& op, LogicalTensorPtr& in, LogicalTensorP
 
 Status RemoveRedundantReshape::RunOnFunction(Function& function)
 {
-    if (ViewReshapeAssembleReorderUtils::ReorderViewReshapeAssemble(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "Failed to reorder view/reshape/assemble in function [%s].",
-            function.GetRawName().c_str());
-        return FAILED;
-    }
     APASS_LOG_INFO_F(
         Elements::Operation, "Start RemoveRedundantReshape for function [%s].", function.GetRawName().c_str());
     if (RemoveReshape(function) != SUCCESS) {
@@ -111,7 +103,7 @@ Status RemoveRedundantReshape::RemoveReshape(Function& function) const
             }
             consumerOp->ReplaceInput(in, out);
         }
-        if (allConsumersIsReshape == true && !function.IsFromOutCast(out)) {
+        if (allConsumersIsReshape == true) {
             APASS_LOG_DEBUG_F(
                 Elements::Operation, "All consummers of op [%d] are reshape and the shapes are not -1.",
                 op.GetOpMagic());
