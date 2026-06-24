@@ -85,8 +85,6 @@ public:
 
     std::shared_ptr<LogicalTensor> Clone(Function& dstFunc, bool create = false) const;
 
-    ir::VarPtr Clone() const override;
-
     Function& BelongFunction() { return *function_; }
     const Function& BelongFunction() const { return *function_; }
 
