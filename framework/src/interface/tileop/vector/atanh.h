@@ -80,25 +80,25 @@ TILEOP void TAtanh(T0 dst, T1 src, T2 tmp)
                 pto::TDIV(tmp2Tile, tmp2Tile, tmp1Tile);
                 SyncV();
 
-                pto::TMULS(tmp1Tile, tmp2Tile, 2.0f);
+                pto::TMULS(tmp0Tile, tmp2Tile, 2.0f);
                 SyncV();
 
-                pto::TADDS(tmp0Tile, tmp1Tile, 1.0f);
+                pto::TADDS(tmp1Tile, tmp0Tile, 1.0f);
                 SyncV();
 
-                pto::TADDS(tmp1Tile, tmp0Tile, -1.0f);
+                pto::TADDS(tmp0Tile, tmp1Tile, -1.0f);
                 SyncV();
 
-                pto::TMINS(tmp1Tile, tmp1Tile, ATANH_LIMIT);
+                pto::TMINS(tmp0Tile, tmp0Tile, ATANH_LIMIT);
                 SyncV();
 
-                pto::TLOG(dstTile, tmp0Tile);
+                pto::TLOG(tmp1Tile, tmp1Tile);
                 SyncV();
 
-                pto::TMUL(dstTile, dstTile, tmp2Tile);
+                pto::TMUL(tmp1Tile, tmp1Tile, tmp2Tile);
                 SyncV();
 
-                pto::TDIV(tmp2Tile, dstTile, tmp1Tile);
+                pto::TDIV(tmp2Tile, tmp1Tile, tmp0Tile);
                 SyncV();
 
                 // Handle x = 0 case
