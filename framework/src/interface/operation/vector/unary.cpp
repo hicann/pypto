@@ -172,7 +172,7 @@ Tensor Sqrt(const Tensor& self, PrecisionType precisionType)
 Tensor Relu(const Tensor& self)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32, DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Relu");
     RETURN_CALL(UnaryOperation<UnaryOpType::RELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
