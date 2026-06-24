@@ -1,11 +1,11 @@
-# CONV组件错误码
+# CONV 组件错误码
 
 - **范围**：FC6XXX - FC8XXX
-- 本文档说明CONV子类OP的错误码定义、场景说明与排查建议。
+- 本文档说明 CONV 子类 OP 的错误码定义、场景说明与排查建议。
 
 ## 错误码定义与使用说明
 
-相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（见ConvOperationError、ConvExpandFuncError、ConvCodegenError、ConvTileOpError等）
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 ConvOperationError、ConvExpandFuncError、ConvCodegenError、ConvTileOpError 等）
 
 
 ## 错误码定义和场景说明
@@ -52,17 +52,17 @@
 
 ## 排查建议
 
-### Operation shape/TileShape拦截编译报错
+### Operation shape/TileShape 拦截编译报错
 
 可根据报错参考约束说明：`../api/config/pypto-set_conv_tile_shapes.md`
 
-### Pass图阶段拦截编译报错
+### Pass 图阶段 拦截编译报错
 
-1. 打开编译debug模式，dump pass阶段图，配置`debug_options={"compile_debug_mode": 1}`
+1. 打开编译debug模式，dump pass阶段图，配置 `debug_options={"compile_debug_mode": 1}`
 
    ```python
    @pypto.frontend.jit(debug_options={"compile_debug_mode": 1})
    def conv_kernel():
    ```
 
-2. 重跑问题用例，在output下生成对应时间戳的dump结果，根据报错日志所示图阶段，使用pto-toolkit打开，查看执行图阶段之前的dump图，对conv operation切成的Tile子图进行排查；
+2. 重跑问题用例，在output下生成对应时间戳的dump结果，根据报错日志所示图阶段，使用pto-toolkit打开，查看执行图阶段之前的dump图，对conv operation 切成的 Tile子图进行排查；
