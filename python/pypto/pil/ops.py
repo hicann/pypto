@@ -31,8 +31,6 @@ def _to_ir_type(val: Any, ctx: BuildContext) -> ir.Expr:
         if (val.is_empty()):
             return ctx.none()
         return val.logical_tensor()
-    elif isinstance(val, (list, tuple)):
-        return ir.MakeTuple([_to_ir_type(v, ctx) for v in val], ir.Span.unknown())
     else:
         raise TypeError(f"Invalid type {type(val)} for wrap")
 
@@ -55,17 +53,17 @@ def _from_ir_type(val: Any):
 
 
 @impl("pil.const")
-def const_impl(ctx, value):
+def const_impl(value, ctx):
     return value
 
 
 @impl("pil.load")
-def load_impl(ctx, name):
+def load_impl(name, ctx):
     return Scope.load(name)
 
 
 @impl("pil.store")
-def store_impl(ctx, name, val):
+def store_impl(name: str, val: Any, ctx: BuildContext):
     Scope.store(name, val)
 
 
@@ -82,7 +80,7 @@ def store_impl(ctx, name, val):
 @impl(operator.lshift, partial=True)
 @impl(operator.rshift, partial=True)
 @impl(operator.matmul, partial=True)
-def binary_impl(ctx, op, x, y):
+def binary_impl(op, x, y, ctx: BuildContext):
     return op(x, y)
 
 
@@ -90,7 +88,7 @@ def binary_impl(ctx, op, x, y):
 @impl(operator.pos, partial=True)
 @impl(operator.invert, partial=True)
 @impl(operator.not_, partial=True)
-def unary_impl(ctx, op, x):
+def unary_impl(op, x, ctx: BuildContext):
     return op(x)
 
 
@@ -102,43 +100,43 @@ def unary_impl(ctx, op, x):
 @impl(operator.le, partial=True)
 @impl(operator.gt, partial=True)
 @impl(operator.ge, partial=True)
-def compare_impl(ctx, op, x, y):
+def compare_impl(op, x, y, ctx: BuildContext):
     return op(x, y)
 
 
 # ---- Attribute / index ----
 
 @impl(getattr)
-def getattr_impl(ctx, obj, attr):
+def getattr_impl(obj, attr, ctx):
     return getattr(obj, attr)
 
 
 # ---- Collection construction ----
 
 @impl(list)
-def list_impl(ctx, items):
+def list_impl(items, ctx):
     return list(items)
 
 
 @impl(tuple)
-def tuple_impl(ctx, items):
+def tuple_impl(items, ctx):
     return tuple(items)
 
 
 @impl(operator.getitem)
-def getitem_impl(ctx, obj, key):
+def getitem_impl(obj, key, ctx):
     return obj[key]
 
 
 @impl(min)
-def min_impl(ctx, *args):
+def min_impl(*args, ctx):
     if has_scalar(list(args)) and len(args) == 2:
         return pypto.min(args[0], args[1])
     return min(args)
 
 
 @impl(max)
-def max_impl(ctx, *args):
+def max_impl(*args, ctx):
     if has_scalar(list(args)) and len(args) == 2:
         return pypto.max(args[0], args[1])
     return max(args)
@@ -157,7 +155,7 @@ def _resolve(val, scope):
 
 
 @impl(pypto.loop)
-def pypto_loop_impl(ctx, *args, name: str = ""):
+def pypto_loop_impl(*args, ctx):
     nargs = len(args)
     if nargs == 1:
         start, stop, step = 0, args[0], 1
@@ -267,7 +265,7 @@ def _for_stmt(body: Block, iterator: LoopRange, ctx: BuildContext):
 
 
 @impl("pil.loop")
-def loop_impl(ctx, body: Block, iterator):
+def loop_impl(body: Block, iterator, ctx: BuildContext):
     if isinstance(iterator, LoopRange):
         _for_stmt(body, iterator, ctx)
     elif iterator is not None:
@@ -297,12 +295,12 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
 
     scope.locals = dict(saved)
     yield_vars = []
-    for i, name in enumerate(sorted(yield_var_names)):
+    for i, name in enumerate(yield_var_names):
         if ir.type_equal(then_yield_vars[i], else_yield_vars[i]):
             var = ctx.create_var_like(name, then_yield_vars[i])
-        elif isinstance(then_yield_vars[i].type, ir.UnknownType):
+        elif isinstance(then_yield_vars[i], ir.UnknownType):
             var = ctx.create_var_like(name, else_yield_vars[i])
-        elif isinstance(else_yield_vars[i].type, ir.UnknownType):
+        elif isinstance(else_yield_vars[i], ir.UnknownType):
             var = ctx.create_var_like(name, then_yield_vars[i])
         else:
             raise ValueError(f"Var({name}) then_type={then_yield_vars[i].type}, else_type={else_yield_vars[i].type}")
@@ -314,7 +312,7 @@ def _if_else_stmt(cond, then_block: Block, else_block: Block, ctx: BuildContext)
 
 
 @impl("pil.if_else")
-def if_else_impl(ctx, cond, then_block: Block, else_block: Block):
+def if_else_impl(cond, then_block: Block, else_block: Block, ctx: BuildContext):
     # Concrete condition: interpret one branch, return early
     if isinstance(cond, pypto.SymbolicScalar):
         cond = cond.simplify()
@@ -329,7 +327,7 @@ def if_else_impl(ctx, cond, then_block: Block, else_block: Block):
 
 
 @impl("pil.fstring")
-def format_impl(ctx, joined_str):
+def format_impl(joined_str, ctx: BuildContext):
     ss = []
     for val in joined_str:
         if isinstance(val, tuple):
@@ -349,7 +347,7 @@ def format_impl(ctx, joined_str):
 
 
 @impl("pil.assert")
-def assert_impl(ctx, cond, msg):
+def assert_impl(cond, msg, ctx: BuildContext):
     if msg:
         assert cond, msg
     else:
