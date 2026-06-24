@@ -214,11 +214,6 @@ public:
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Var; }
     [[nodiscard]] std::string TypeName() const override { return "Var"; }
 
-    virtual std::shared_ptr<const Var> Clone() const {
-        static thread_local int cloneCounter = 0;
-        return std::make_shared<const Var>(name_ + "_clone_" + std::to_string(++cloneCounter), type_, span_);
-    }
-
     /**
      * \brief Get field descriptors for reflection-based visitation
      *
