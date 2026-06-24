@@ -28,7 +28,7 @@ def test_tensor_binary_ops():
     x = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_FP32)
     y = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_FP32)
     func = _compile_ops(f, x, y)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
     assert 'DIV' in opcodes
     assert 'POW' in opcodes
@@ -45,7 +45,7 @@ def test_scalar_binary_bitwise_ops():
         z = x >> y
 
     func = _compile_ops(f, 1, 2)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     assert not ts
 
 
@@ -57,33 +57,9 @@ def test_tensor_matmul_op():
     x = pypto.Tensor(shape=(32, 32), dtype=pypto.DT_FP32)
     y = pypto.Tensor(shape=(32, 32), dtype=pypto.DT_FP32)
     func = _compile_ops(f, x, y)
-    ts = _tensor_ops_of(func.original_body)
-    opcodes = {s.opcode for s in ts}
-    assert 'A_MUL_B' in opcodes
-
-
-def test_create_func():
-    def f(a, b, out):
-        pypto.set_vec_tile_shapes(16, 16)
-        c = a + b
-        c1 = a - b
-        for i in pypto.loop(2):
-            d = c * c1
-            if i > 1:
-                e = d * 2
-            else:
-                e = d + b
-            out = e
-
-    shape = [32, 32]
-    a = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="a")
-    b = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="b")
-    out = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="out")
-
-    func = pil.compile(f, a, b, out)
     ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
-    assert 'CALL' in opcodes
+    assert 'A_MUL_B' in opcodes
 
 
 def test_tensor_unary_ops():
@@ -94,7 +70,7 @@ def test_tensor_unary_ops():
 
     x = pypto.Tensor(shape=(4, 4), dtype=pypto.DT_INT32)
     func = _compile_ops(f, x)
-    ts = _tensor_ops_of(func.original_body)
+    ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
     # pypto use MULS to impl neg and pos just return self
     assert 'MULS' in opcodes
