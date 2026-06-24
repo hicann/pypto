@@ -204,8 +204,7 @@ protected:
     void GetDynamicOffsetExpr(
         const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, std::vector<std::string>& gmOffsetExpr,
         std::vector<int64_t>& staticOffsets) const;
-    void GetNZ2NZDynamicOffsetExpr(
-        const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap,
+    void GetNZ2NZDynamicOffsetExpr(const std::vector<SymbolicScalar>& dynOffset, bool isConv3D, bool isFmap,
         std::vector<std::string>& gmOffsetExpr, std::vector<std::string>& staticOffsets) const;
     std::vector<std::string> BuildCopyInParamList(
         const std::string& dstTensor, const std::string& srcTensor, const std::vector<std::string>& gmOffsetExpr,
