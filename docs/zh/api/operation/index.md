@@ -53,8 +53,6 @@ pypto-experimental-gather_in_l1
 pypto-experimental-gather_in_ub
 pypto-experimental-get_operation_options
 pypto-experimental-set_operation_options
-pypto-experimental-online_softmax
-pypto-experimental-online_softmax_update
 pypto-experimental-transposed_batchmatmul
 pypto-fillpad
 pypto-floor
