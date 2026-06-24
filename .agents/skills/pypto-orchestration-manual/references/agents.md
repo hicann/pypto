@@ -9,10 +9,8 @@ declares its own active skills in its `.opencode/agents/<name>.md` →
 **Mandatory reads** section. The orchestrator dispatches by name and does
 not inspect what skills each agent loads.
 
-> **Reading order for the orchestrator:** `principles.md` → this file.
-> Inputs / deliverables / gate / handoff per agent live here; that is all
-> dispatch needs. `rules.md` is on-demand execution detail, not required
-> to dispatch.
+> **Reading order for the orchestrator:** `principles.md` → this file →
+> `agent-plan.md` → `rules.md`.
 
 ---
 
@@ -40,7 +38,6 @@ kernel code. The orchestrator never edits kernel code itself.
 
 ### 1. pypto-op-planner — Stage 1
 
-- **Inputs:** the user's natural-language operator request.
 - **Deliverables:** `custom/<op>/SPEC.md`, `custom/<op>/API_REPORT.md`,
   `custom/<op>/MEMORY.md` seeded with the API map.
 - **Gate:** API map has zero `unsupported` rows (or each has a documented
@@ -49,17 +46,16 @@ kernel code. The orchestrator never edits kernel code itself.
 
 ### 2. pypto-op-mathematician — Stage 2
 
-- **Inputs:** `SPEC.md`, `API_REPORT.md`.
-- **Deliverables:** `custom/<op>/<op>_golden.py` (PyPTO-friendly form),
+- **Deliverables:** `custom/<op>/golden.py` (PyPTO-friendly form),
   `MEMORY.md` → **Golden function inventory**,
-  `custom/<op>/GOLDEN_PERF_REPORT.md` (NPU profiling report).
+  `custom/<op>/GOLDEN_PERF_REPORT.md` (NPU profiling via
+  `pypto-golden-generate/scripts/profile_golden.py` §15).
 - **Gate:** shape comments on all intermediates; inventory recorded;
   `allclose(original, normalized)` passes; **`GOLDEN_PERF_REPORT.md` exists with Op Performance section** (mandatory — generated via `pypto-golden-generate/scripts/profile_golden.py` §15; do NOT defer to orchestrator).
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-architect`.
 
 ### 3. pypto-op-architect — Stage 3
 
-- **Inputs:** `SPEC.md`, `<op>_golden.py`, golden inventory.
 - **Deliverables:** `custom/<op>/DESIGN.md` (§0 decomposition decision,
   §1 API mapping + precision routing, §3 tiling, §4 loop / data flow, §5
   cross-validation).
@@ -72,7 +68,6 @@ kernel code. The orchestrator never edits kernel code itself.
 
 ### 4. pypto-op-designer — Stage 4
 
-- **Inputs:** `DESIGN.md` (§0 decomposition decision + breakpoints).
 - **Deliverables:** `custom/<op>/module_interfaces.yaml`, `MEMORY.md` →
   **Module decomposition**, **Module contracts**, **Staged module files**.
 - **Gate (Step 1, designer handoff):** `state_transition(submit_design)`
@@ -87,7 +82,6 @@ kernel code. The orchestrator never edits kernel code itself.
 Stage 5 is a per-module loop. The coder is dispatched once per phase
 M_k, and once more for the cleanup step after the last phase.
 
-- **Inputs:** `DESIGN.md`, `module_interfaces.yaml`, current phase `M_k`.
 - **Per-phase deliverable (M_k):**
   `custom/<op>/modules/<op>_module<suffix_k>_impl.py` — one new file,
   exactly the cumulative scope through M_k.
