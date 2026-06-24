@@ -49,7 +49,9 @@ std::string CodeGenOpNPU::PrintSortDynamicUnaligned(const SortParam& param) cons
     std::string srcParam = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     std::string tmpParam = "(__ubuf__ " + tmpDtypeStr + "*)" + tVar;
     paramList.insert(paramList.end(), {dstParam, srcParam, tmpParam});
-    FillParamWithFullInput(paramList, dynSrcShape);
+    for (int i = 0; i < SHAPE_DIM4; ++i) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrcShape[i]));
+    }
     std::string tileCallParam = JoinString(paramList, CONN_COMMA);
 
     std::ostringstream oss;
@@ -605,7 +607,9 @@ std::string CodeGenOpNPU::PrintSortUBDynamicUnaligned(bool containDstType) const
     std::string dstParam = "(__ubuf__ " + dstDtypeStr + "*)" + dstVar;
 
     paramList.insert(paramList.end(), {dstParam, srcParam});
-    FillParamWithInput(paramList, dynSrcShape, 0, SHAPE_DIM4);
+    for (int i = 0; i < SHAPE_DIM4; i++) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrcShape[i]));
+    }
 
     std::string tileOpParam = JoinString(paramList, CONN_COMMA);
 
