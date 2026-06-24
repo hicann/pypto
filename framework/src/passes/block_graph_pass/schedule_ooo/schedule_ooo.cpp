@@ -402,8 +402,8 @@ Status OoOSchedule::CollectLastUseInfo(Function& function)
 {
     lastUseMap_.clear();
     APASS_LOG_INFO_F(Elements::Function, "===> Start CollectLastUseInfo.");
+    std::map<std::pair<int, int>, std::pair<LogicalTensorPtr, Operation*>> recordMemMap;
     for (auto& program : function.rootFunc_->programs_) {
-        std::map<std::pair<int, int>, std::pair<LogicalTensorPtr, Operation*>> recordMemMap;
         auto opList = program.second->Operations(false);
         for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
             Operation* op = &opList[opIdx];
@@ -420,14 +420,14 @@ Status OoOSchedule::CollectLastUseInfo(Function& function)
                     inTensor->memoryrange.start, inTensor->memoryrange.end);
             }
         }
-        for (auto &entry : recordMemMap) {
-            auto& value = entry.second;
-            auto inTensor = value.first;
-            auto op = value.second;
-            lastUseMap_[inTensor] = op;
-            APASS_LOG_INFO_F(Elements::Operation, "Record lastUseMap Key: inTensor[%d], Value: OP_%s[%d]",
-                inTensor->GetMagic(), op->GetOpcodeStr().c_str(), op->GetOpMagic());
-        }
+    }
+    for (auto &entry : recordMemMap) {
+        auto& value = entry.second;
+        auto inTensor = value.first;
+        auto op = value.second;
+        lastUseMap_[inTensor] = op;
+        APASS_LOG_INFO_F(Elements::Operation, "Record lastUseMap Key: inTensor[%d], Value: OP_%s[%d]",
+            inTensor->GetMagic(), op->GetOpcodeStr().c_str(), op->GetOpMagic());
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End CollectLastUseInfo.");
     return SUCCESS;
