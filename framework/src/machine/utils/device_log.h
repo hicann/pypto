@@ -63,7 +63,6 @@ inline constexpr bool IsCompileVerboseLog()
 #define LOG_MOD_ID AICPU
 
 #define DEV_IF_DEBUG if (unlikely(!HardBranchTrue(verboseDebug) || IsLogEnableDebug()))
-#define DEV_IF_INFO if (unlikely(!HardBranchTrue(verboseInfo) || IsLogEnableInfo()))
 
 inline bool g_isLogEnableDebug = false;
 inline bool g_isLogEnableInfo = false;
@@ -210,7 +209,6 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
 
 #else // none device
 #define DEV_IF_DEBUG if (true)
-#define DEV_IF_INFO if (true)
 
 #define DEV_VERBOSE_DEBUG_SPLIT(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
 #define DEV_VERBOSE_DEBUG(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
