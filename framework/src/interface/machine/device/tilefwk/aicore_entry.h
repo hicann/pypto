@@ -179,32 +179,6 @@ INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegVal
     return highRegVal;
 }
 
-constexpr uint16_t SYNC_MODE_SHIFT_VALUE = 4;
-constexpr uint16_t SYNC_FLAG_SHIFT_VALUE = 8;
-enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };
-
-__aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
-{
-  return (0x1 + ((mode & 0x3) << SYNC_MODE_SHIFT_VALUE) + ((flagId & 0xf) << SYNC_FLAG_SHIFT_VALUE));
-}
-
-#ifdef __ENABLE_MIX_PENDING
-INLINE void PipeSyncPre(uint8_t mixResourceType, uint8_t lastMixResourceType)
-{
-    // only lastTask is mix should insert sync
-    if (lastMixResourceType == static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN) || mixResourceType != static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
-        return;
-    }
-#if defined(__AIV__)
-    wait_flag_dev(PIPE_S, EVENT_ID7);
-    ffts_cross_core_sync(PIPE_MTE3, GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
-#else
-    ffts_cross_core_sync(PIPE_FIX, GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
-    wait_flag_dev(PIPE_S, EVENT_ID7);
-#endif
-}
-#endif
-
 INLINE void PipeSync()
 {
 #if defined(__AIV__)
@@ -359,7 +333,7 @@ INLINE __gm__ TaskStat* InitTaskStat(ExecuteContext* ctx)
 #define FuncNum(id) TaskID(id)
 
 #ifdef __HAS_SUB_FUNC__
-INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint8_t& lastMixResourceType)
+INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
 {
     uint64_t t1 = get_sys_cnt();
     SetStatus(ctx->args, ((uint64_t)taskId << 32) | STAGE_PRE_EXEC_COREFUNC_KERNEL); // high 32 bits used for taskId
@@ -380,8 +354,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
 #ifdef __DAV_V310
    // for mix coretasks, use cube's stackworkspace
     int index = __MAIN_BLOCK ? (opAttrs[0] + 1) / 2 :opAttrs[0];
-    uint8_t mixResourceType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[index].mixResourceType;
-    int64_t blockIndex = (mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
+    int64_t blockIndex = (ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[index].mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
     int64_t gmStackAddr = funcData->stackWorkSpaceAddr + blockIndex * funcData->stackWorkSpaceSize;
 #else
     int64_t gmStackAddr = funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize;
@@ -390,12 +363,6 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint
     __gm__ TaskStat* taskStat = nullptr;
     taskStat = InitTaskStat(ctx);
 
-#ifdef __ENABLE_MIX_PENDING
-    PipeSyncPre(mixResourceType, lastMixResourceType);
-    lastMixResourceType = mixResourceType;
-#else
-    (void)lastMixResourceType;
-#endif
     CallSubFuncTask(
         opAttrs[0] + funcData->exprTbl[0], &param,
         gmStackAddr,
@@ -430,13 +397,12 @@ INLINE void InitCtx(ExecuteContext *ctx, __gm__ Metrics* metric, volatile __gm__
     return;
 }
 
-INLINE void ExecCoreFunctionKernel(ExecuteContext* ctx, uint32_t curTaskIdx, uint8_t& lastMixResourceType)
+INLINE void ExecCoreFunctionKernel(ExecuteContext* ctx, uint32_t curTaskIdx)
 {
     UNUSED(ctx);
     UNUSED(curTaskIdx);
-    UNUSED(lastMixResourceType);
 #ifdef __HAS_SUB_FUNC__
-    ExecDynCoreFunctionKernel(ctx, curTaskIdx, lastMixResourceType);
+    ExecDynCoreFunctionKernel(ctx, curTaskIdx);
     return;
 #endif
 }
@@ -559,7 +525,6 @@ INLINE void KernelEntry(
     uint32_t curTaskIdx;
     uint32_t lastTaskIdx = AICORE_TASK_INIT;
     uint32_t lastRegHighVal = 0;
-    uint8_t lastMixResourceType = static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN);
 
     PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
 
@@ -610,7 +575,7 @@ INLINE void KernelEntry(
 
         SendRegAck(curTaskIdx);
         PmuTestBegin(args);
-        ExecCoreFunctionKernel(&ctx, curTaskIdx, lastMixResourceType);
+        ExecCoreFunctionKernel(&ctx, curTaskIdx);
         PmuTestEnd(args);
         SendRegFinish(curTaskIdx);
         lastTaskIdx = curTaskIdx;

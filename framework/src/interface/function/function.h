@@ -328,24 +328,6 @@ struct CceCodeInfo {
     uint32_t mixResourceType{0};
 };
 
-static inline bool CheckAll1c2vMixTask(const std::vector<CceCodeInfo>& cceCodeInfo) {
-    if (cceCodeInfo.empty()) {
-        return false;
-    }
-    for (size_t i = 0; i < cceCodeInfo.size(); i++) {
-        if (cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::AIV) 
-            && cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::AIC)
-            && cceCodeInfo[i].coreType != static_cast<uint32_t>(CoreType::MIX)) {
-            continue;
-        }
-        if (cceCodeInfo[i].mixResourceType !=
-            static_cast<uint32_t>(MixResourceType::ONE_CUBE_TWO_VECTOR)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 struct OriArgInfo {
     uint64_t addr;
     uint64_t size;
