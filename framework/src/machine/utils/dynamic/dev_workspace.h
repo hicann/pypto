@@ -299,9 +299,6 @@ private:
         auto rawTensor = devRootSrc->GetOutcastRawTensor(outcastIdx);
         if (outputSlotIndex != -1) {
             /* Output tensor */
-            if (slotList[outputSlotIndex].isOutputTensorNeedCellMatch) {
-                TryAllocateDynamicCellMatchForAssembleSlot(slotList[outputSlotIndex]);
-            }
             outcastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[outputSlotIndex].rtOutcastIter);
             RuntimeOutcastTensorRef(outcastDesc.GetRtOutcastIter());
         } else if (rawTensor->linkedIncastId != -1) {

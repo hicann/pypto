@@ -140,7 +140,6 @@ static_assert(sizeof(DevAscendFunctionDuppedStitchList) == sizeof(void*));
 
 struct DevAscendProgramPartialUpdate {
     int slotIndex;
-    bool isOutputTensorStitchSlot{false};
 
     DevCellMatchTableDesc cellMatchTableDesc;
     DevRelocVector<uint64_t> cellMatchRuntimePartialUpdateTable;
