@@ -54,9 +54,6 @@ private:
         GmOutOfRangeCheckInfo::AccessType accessType) const;
     void GenGmOoRCheckInfoForOp(Operation& op) const;
     void GenGmOoRCheckInfo(Function& function) const;
-    Status CheckSingleTensorAddrRange(const Operation& op, LogicalTensorPtr tensor,
-                                      size_t tensorIdx, const std::string& tensorType) const;
-    Status CheckTensorAddrRange(Function& function) const;
     bool combineAxis{false};
 };
 
