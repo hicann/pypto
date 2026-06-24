@@ -14,6 +14,7 @@ import sys
 import json
 import logging
 import time
+import ast
 import traceback
 import argparse
 from dataclasses import dataclass, asdict
@@ -232,6 +233,21 @@ class PassComparator:
         return record
 
     @staticmethod
+    def should_skip_record(ai: Dict[str, Any], bi: Dict[str, Any]) -> bool:
+        """Check if a record pair should be skipped based on validshape and inputValidShape."""
+        ai_validshape = json.loads(ai[':validshape'])
+        bi_validshape = json.loads(bi[':validshape'])
+        if 0 in ai_validshape or 0 in bi_validshape:
+            return True
+        ai_opcode = ai[":opcode"]
+        bi_opcode = bi[":opcode"]
+        if ai_opcode in {"ASSEMBLE", "COPY_OUT"} and 0 in json.loads(ai[':inputValidShape']):
+            return True
+        if bi_opcode in {"ASSEMBLE", "COPY_OUT"} and 0 in json.loads(bi[':inputValidShape']):
+            return True
+        return False
+
+    @staticmethod
     def _process_loop_batch(args: ProcessLoopBatchArgs) -> List[Dict[str, Any]]:
         """
         Static method to process a batch of loops in multiprocessing context.
@@ -300,6 +316,8 @@ class PassComparator:
 
                     is_match = False
                     for bi in b_records:
+                        if PassComparator.should_skip_record(ai, bi):
+                            continue
                         if not PassComparator._compare_not_support_static(ai, bi, key,
                                             verify_path_pass1, verify_path_pass2, dtype_dict, opcode_dict, is_leaf):
                             continue
