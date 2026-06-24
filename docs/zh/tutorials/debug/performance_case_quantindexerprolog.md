@@ -8,8 +8,8 @@
 
 该算子呈现如下特点：
 
-- 该计算包括了Indexer Q, Indexer Cache和Indexer Weight三个部分，三个部分互相独立，且每个部分串行执行。
-- 三条独立的计算流中，Indexer Q的耗时最长，可以掩盖Indexer Cache和Indexer Weight。
+- 该计算包括了Indexer Q, Indexer Cache 和Indexer Weight 三个部分，三个部分互相独立，且每个部分串行执行。
+- 三条独立的计算流中，Indexer Q 的耗时最长，可以掩盖Indexer Cache 和Indexer Weight。
 - 在典型场景（Batch=4，MTP1，Kv Cache长度64k）下，计算量较小，并不会打满所有核进行计算，性能瓶颈在搬运上。
 
 ## 分析主要瓶颈点
