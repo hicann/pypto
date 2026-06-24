@@ -324,7 +324,7 @@ def test_op_registry():
     registry = OpRegistry()
 
     @registry.impl('pil.foo', partial=True)
-    def foo(ctx, s, x):
+    def foo(s, x, ctx=None):
         """
         Foo helper
         """
@@ -334,7 +334,7 @@ def test_op_registry():
     assert registry.dispatch('pil.foo', None, 2) == 'pil.foo 2'
 
     @registry.impl('pil.bar')
-    def bar(ctx, x):
+    def bar(x, ctx=None):
         """
         Bar helper
         """
