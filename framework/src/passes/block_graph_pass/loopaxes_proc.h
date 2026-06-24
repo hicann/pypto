@@ -28,6 +28,8 @@ public:
     LoopaxesProc() : Pass("LoopaxesProc") { SetSupportedArches({NPUArch::DAV_3510}); }
     ~LoopaxesProc() override = default;
     Status RunOnFunction(Function& function) override;
+    Status DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
+    Status PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
 
 private:
     Status UpdateFuncLoopAxes(Function& function);
@@ -41,7 +43,7 @@ private:
     void FinalizeLoopGroups();
     void RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair<int, int>>& addrConflictIdx,
                            std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap);
-    void IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
+    void IsOverLap(std::vector<size_t>& addrRange,
                    std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap,
                    std::set<std::pair<int, int>>& addrConflictIdx, int& idx);
     void CheckAddrOverLap(bool isStaticLoop, std::vector<Operation * > & sameLoopOpGroup,
