@@ -46,7 +46,7 @@ void TestCodeGenIndexPut::test_index_put_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_002()
@@ -69,7 +69,7 @@ void TestCodeGenIndexPut::test_index_put_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_003()
@@ -95,7 +95,7 @@ void TestCodeGenIndexPut::test_index_put_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_004()
@@ -118,7 +118,7 @@ void TestCodeGenIndexPut::test_index_put_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_005()
@@ -141,7 +141,7 @@ void TestCodeGenIndexPut::test_index_put_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_006()
@@ -164,7 +164,7 @@ void TestCodeGenIndexPut::test_index_put_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_007()
@@ -190,7 +190,7 @@ void TestCodeGenIndexPut::test_index_put_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_008()
@@ -218,7 +218,7 @@ void TestCodeGenIndexPut::test_index_put_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_009()
@@ -241,7 +241,7 @@ void TestCodeGenIndexPut::test_index_put_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_010()
@@ -267,7 +267,7 @@ void TestCodeGenIndexPut::test_index_put_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_011()
@@ -295,7 +295,7 @@ void TestCodeGenIndexPut::test_index_put_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenIndexPut::test_index_put_012()
@@ -325,5 +325,5 @@ void TestCodeGenIndexPut::test_index_put_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "INDEX_PUT_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }

@@ -35,4 +35,32 @@ void CodeGenCCE::PrepareDefaultOutputPath()
     };
     CreateDir(ctx.cceDir, true);
 }
+
+std::map<int, int> GenRealizeIdMap(const SubfuncParam& subFuncParam)
+{
+    auto& tensorInvokeArgs = subFuncParam.tensorsArgs_;
+    auto& incastInvokeArgs = subFuncParam.inCastArgs_;
+    auto& outcastInvokeArgs = subFuncParam.outCastArgs_;
+
+    std::map<int, int> idMap;
+    auto f = [&idMap](size_t offset, auto& invokeArgs) {
+        CODEGEN_LOGI("start offset is %zu, arg size is %zu", offset, invokeArgs.size());
+        for (size_t i = 0; i < invokeArgs.size(); i++) {
+            size_t paramOff = (offset + i);
+            uint32_t paramLoc = invokeArgs[i].paramLoc;
+            CODEGEN_LOGI(
+                " paramLoc is %u, paramOff is %zu, SymDDRId is %d, SymName is %s", paramLoc, paramOff,
+                invokeArgs[i].symDDRId, invokeArgs[i].symName.c_str());
+            idMap.insert({paramLoc, paramOff});
+        }
+    };
+
+    CODEGEN_LOGI("---  start tensorInvokeArgs paramLoc map ---- ");
+    f(0, tensorInvokeArgs);
+    CODEGEN_LOGI("---  start incastInvokeArgs paramLoc map ---- ");
+    f(tensorInvokeArgs.size(), incastInvokeArgs);
+    CODEGEN_LOGI("---  start outcastInvokeArgs paramLoc map ---- ");
+    f(tensorInvokeArgs.size() + incastInvokeArgs.size(), outcastInvokeArgs);
+    return idMap;
+}
 } // namespace npu::tile_fwk
