@@ -23,7 +23,6 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/error.h"
 #include "interface/utils/id_gen.h"
-#include "irbuilder.h"
 
 using namespace npu::tile_fwk;
 
@@ -364,12 +363,7 @@ static SymbolicScalar DoGetTensorDataInt32(
     SymbolicScalar getRuntimeHandler(getRuntimeName);
     std::vector<SymbolicScalar> argList = {getTensorDataIndex, -1, -1, -1};
     argList.insert(argList.end(), offset.begin(), offset.end());
-    auto scalar = getRuntimeHandler(argList);
-
-    auto builder = IRBuilder();
-    emuopAssemble->result_token_ = builder.CreateTokenVar(emuopAssemble->GetSpan());
-    builder.AddDependToken(scalar, emuopAssemble->result_token_);
-    return scalar;
+    return getRuntimeHandler(argList);
 }
 
 static std::vector<std::reference_wrapper<const Tensor>>::iterator FindTensor(
@@ -400,19 +394,6 @@ SymbolicScalar GetTensorData(const Tensor& t, const std::vector<SymbolicScalar>&
     SymbolHandlerId handlerId =
         static_cast<SymbolHandlerId>(static_cast<int>(SymbolHandlerId::GetTensorDataInt32Dim1) + offset.size() - 1);
     return DoGetTensorDataInt32(handlerId, t, offset);
-}
-
-void TensorMove(Tensor& src, Tensor& dst) {
-    auto func = Program::GetInstance().GetCurrentDynamicFunction();
-    if (func) {
-        auto inputs = func->GetDyndevAttribute()->startArgsInputTensorList;
-        if (FindTensor(dst, inputs) != inputs.end()) {
-            auto offsets = std::vector<SymbolicScalar>(src.Dim(), 0);
-            Assemble(src, offsets, dst);
-            return;
-        }
-    }
-    dst = std::move(src);
 }
 
 static void DoSetTensorDataInt32(const SymbolicScalar& v, const std::vector<SymbolicScalar>& off, Tensor& t)
