@@ -12,7 +12,7 @@
 
 ## 使用场景
 
-当需要对SymbolicScalar（如从`tensor.shape`获取的动态维度值）进行比较时，应使用此方法。
+当需要对SymbolicScalar（如从 `tensor.shape` 获取的动态维度值）进行比较时，应使用此方法。
 
 **与pypto.maximum的区别**：
 
