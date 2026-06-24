@@ -68,16 +68,15 @@
 3. 执行成功，在$\{work\_path\}/output/output\_\*/目录（\*代表时间戳）下生成不同阶段的计算图文件（.json格式）。
 
     ```txt
-    ├── Pass_<NNN>_ExpandFunction
-    │   ├── After_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化后的计算图文件
-    │   ├── After_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
-    │   ├── Before_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化前的计算图文件
-    │   ├── Before_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
+    ├── Pass_xx_xx
+    │   ├── After_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化后的计算图文件
+    │   ├── After_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
+    │   ├── Before_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化前的计算图文件
+    │   ├── Before_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
     │   └── ExpandFunctionTENSOR_s0_Unroll1_PATH0_4.log
     ├── program.json # 记录function name, semantic label等静态信息
     ├── ...
     ```
-    其中 `<NNN>` 表示 Pass 执行序号，不同版本下可能变化（例如 004、005 等），实际以生成结果为准。
 
 ### 查看计算图
 
