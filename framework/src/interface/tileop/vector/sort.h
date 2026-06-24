@@ -57,8 +57,8 @@ TILEOP void TBitSort(T0 dst, T1 src, T2 tmp)
                     pto::Tile<pto::TileType::Vec, uint32_t, 1, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
                 IdxTileDefine idxTile(1, srcShape4);
                 pto::TASSIGN(idxTile, (uint64_t)(tmp.GetAddr()));
-                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID6);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID6);
                 pto::TCI<IdxTileDefine, uint32_t, 0>(idxTile, offset);
                 set_flag(PIPE_S, PIPE_V, EVENT_ID7);
                 wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
