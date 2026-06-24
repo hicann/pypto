@@ -2641,14 +2641,12 @@ struct EncodeDevAscendProgramInfo {
         return false;
     }
 
-
     void Init(DevAscendProgram* devProg, bool fillContent)
     {
         uintdevptr_t initOffset = reinterpret_cast<uintdevptr_t>(devProg->data);
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.enableVFFusion = GetEnableVFFusion();
         devProg->devArgs.hasAicpuTask = HasAicpuTask();
-        devProg->devArgs.all1c2vMixTask = CheckAll1c2vMixTask(dyndevAttr->cceCodeInfo);
         devProg->slotSize = dyndevAttr->inoutLink.totalSlot;
         devProg->runtimeOutcastPoolSize =
             dyndevAttr->inoutLink.totalSlot * (ExpectedMaxCachedNum() + 1) * devProg->GetParallelism();
