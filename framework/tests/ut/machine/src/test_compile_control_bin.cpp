@@ -20,7 +20,7 @@
 #include <nlohmann/json.hpp>
 
 #include "machine/compile/compile_control_bin.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/utils/machine_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
@@ -40,7 +40,7 @@ class TestCompileControlBin : public testing::Test {
 public:
     void SetUp() override
     {
-        CreateDir(testDir_);
+        CreateMultiLevelDir(testDir_); 
         setenv("LC_ALL", "C", 1);
         setenv("LANG", "C", 1);
     }
@@ -60,7 +60,7 @@ TEST_F(TestCompileControlBin, GenCustomOpInfo_DumpFileFails)
 TEST_F(TestCompileControlBin, GenCustomOpInfo_Success)
 {
     std::string aicpuPath = testDir_ + "/gen_custom_op";
-    CreateDir(aicpuPath);
+    CreateMultiLevelDir(aicpuPath);
 
     GenCustomOpInfo("test_func", aicpuPath, "libtest_control");
 
@@ -77,7 +77,7 @@ TEST_F(TestCompileControlBin, GenCustomOpInfo_Success)
 TEST_F(TestCompileControlBin, GenTilingFunc_Success)
 {
     std::string controlPath = testDir_ + "/gen_tiling_func";
-    CreateDir(controlPath);
+    CreateMultiLevelDir(controlPath);
 
     bool result = GenTilingFunc("test_op", controlPath);
     EXPECT_TRUE(result);
@@ -102,7 +102,7 @@ TEST_F(TestCompileControlBin, TileFwkAiCpuCompile_GenTilingFuncFails)
 TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_CompileFails)
 {
     std::string compileDir = testDir_ + "/precompile_test/";
-    CreateDir(compileDir);
+    CreateMultiLevelDir(compileDir);
 
     std::string cppFile = compileDir + "dummy.cpp";
     std::ofstream ofs(cppFile);
@@ -117,7 +117,7 @@ TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_CompileFails)
 TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_NoFiles)
 {
     std::string emptyDir = testDir_ + "/empty_compile_dir/";
-    CreateDir(emptyDir);
+    CreateMultiLevelDir(emptyDir);
 
     std::string preCompileO;
     std::string dirPath = emptyDir;
@@ -129,7 +129,7 @@ TEST_F(TestCompileControlBin, TieFwkAicpuPreCompile_NoFiles)
 TEST_F(TestCompileControlBin, SharedAicpuCompile_CompileFails)
 {
     std::string aicpuDir = testDir_ + "/shared_compile_test";
-    CreateDir(aicpuDir);
+    CreateMultiLevelDir(aicpuDir);
 
     std::string preCompile0 = "/nonexistent_ut_fake.o";
     EXPECT_THROW(SharedAicpuCompile("test_func", aicpuDir, preCompile0), npu::tile_fwk::Error);
