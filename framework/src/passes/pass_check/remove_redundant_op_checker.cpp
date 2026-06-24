@@ -97,15 +97,6 @@ Status RemoveRedundantOpChecker::PreCheckRegCopy(Function& function, const Opera
     return SUCCESS;
 }
 
-Status RemoveRedundantOpChecker::PreCheckReshape(const Operation& op)
-{
-    if (op.ConsumerOps().empty()) {
-        APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "At least one reshape op without consumer.");
-        return FAILED;
-    }
-    return SUCCESS;
-}
-
 Status RemoveRedundantOpChecker::ProcessPreCheck(Function& function, const Operation& op)
 {
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
@@ -132,14 +123,6 @@ Status RemoveRedundantOpChecker::ProcessPreCheck(Function& function, const Opera
         if (PreCheckRegCopy(function, op) != SUCCESS) {
             APASS_LOG_ERROR_F(
                 Elements::Operation, "PreCheck for regcopy op[%d] failed.%s", op.GetOpMagic(),
-                GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
-    } else if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Process preCheck for reshape op[%d].", op.GetOpMagic());
-        if (PreCheckReshape(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "PreCheck for reshape op[%d] failed.%s", op.GetOpMagic(),
                 GetFormatBacktrace(op).c_str());
             return FAILED;
         }

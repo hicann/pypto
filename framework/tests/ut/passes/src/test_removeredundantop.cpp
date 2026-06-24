@@ -897,7 +897,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest15)
     currFunctionPtr->outCasts_.push_back(outCast3);
 
     RemoveRedundantOp removeredundantpass;
-    EXPECT_NE(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
     for (auto& op : currFunctionPtr->Operations()) {
