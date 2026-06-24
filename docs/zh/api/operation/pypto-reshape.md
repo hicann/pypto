@@ -12,9 +12,9 @@
 
 ## 注意事项
 
-- **静态shape支持`-1`**：当tensor所有轴都是静态维度时，shape参数支持使用`-1`自动推导一个维度
-- **动态shape不支持`-1`**：当tensor有轴标注为`pypto.DYNAMIC`时，shape参数不能使用`-1`，必须显式指定所有维度值，从动态轴`tensor.shape`获取的维度是SymbolicScalar类型，可用于reshape的shape参数
-- **推荐使用inplace参数**：当满足inplace的约束说明时，设置`inplace=True`可以避免额外的数据搬移
+- **静态shape支持 `-1`**：当tensor所有轴都是静态维度时，shape参数支持使用 `-1` 自动推导一个维度
+- **动态shape不支持 `-1`**：当tensor有轴标注为 `pypto.DYNAMIC` 时，shape参数不能使用 `-1`，必须显式指定所有维度值，从动态轴 `tensor.shape` 获取的维度是SymbolicScalar类型，可用于reshape的shape参数
+- **推荐使用inplace参数**：当满足inplace的约束说明时，设置 `inplace=True` 可以避免额外的数据搬移
 
 ## 函数原型
 
@@ -27,7 +27,7 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 | 参数名      | 输入/输出 | 说明                                                                 |
 |-------------|-----------|----------------------------------------------------------------------|
 | input       | 输入      | 源操作数。 <br> 支持的数据类型为：PyPTO支持的数据类型 <br> 不支持空Tensor，Shape Size不大于INT32_MAX。 |
-| shape       | 输入      | 目标Shape。 <br> Shape Size不大于INT32_MAX。<br> - **静态shape**：支持使用`-1`自动推导一个维度。<br> - **动态shape**：不支持`-1`，必须显式指定所有维度值。维度值可以是具体整数或SymbolicScalar（从动态轴获取）。 |
+| shape       | 输入      | 目标Shape。 <br> Shape Size不大于INT32_MAX。<br> - **静态shape**：支持使用 `-1` 自动推导一个维度。<br> - **动态shape**：不支持 `-1`，必须显式指定所有维度值。维度值可以是具体整数或SymbolicScalar（从动态轴获取）。 |
 | valid_shape | 输入      | 输出Tensor的有效数据的Shape，且valid_shape Size不大于INT32_MAX。 |
 | inplace     | 输入      | 是否为inplace，默认为False；参数为True时，不会为输出申请新地址； |
 
