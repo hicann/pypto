@@ -197,7 +197,8 @@ std::shared_ptr<Function> IRBuilder::CreateFunction(
     func->originalBody_ = mergedBody;
 
     auto StmtsWithCall = CreateFunctionByStmt(mergedBody, *func, externalVarNames);
-    func->ir::Function::body_ = ir::SeqStmts::Wrap(StmtsWithCall, span);
+    func->body_ = ir::SeqStmts::Wrap(StmtsWithCall, span);
+    func->name_ = name;
     func->ComputeHash();
 
     BuildDynFuncSlotScope(func, params);
@@ -325,15 +326,7 @@ void IRBuilder::EmitTensorStmts()
 {
     auto func = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "__entry__");
     for (auto& op : func->Operations(false)) {
-        std::set<ir::VarPtr> tokenSet;
-        for (auto& scalar : op.GetDynamicAttributeList()) {
-            auto token = irContext_.GetDependToken(scalar.get().AsExpr());
-            tokenSet.insert(token.begin(), token.end());
-        }
         auto stmt = std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this());
-        std::vector<ir::VarPtr> tokenList(tokenSet.begin(), tokenSet.end());
-        std::sort(tokenList.begin(), tokenList.end(), [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; });
-        stmt->tokens_ = tokenList;
         Emit(stmt);
     }
     func->ResetOperations();

@@ -662,78 +662,66 @@ void Function::BeginFunction(const std::vector<std::reference_wrapper<const Tens
     }
 }
 
-bool HasCalleeConsumer(Function& func, Function& calleeFunc, size_t outcastIdx)
-{
-    auto outcast = calleeFunc.GetOutcast()[outcastIdx];
-    auto outcastSlots = calleeFunc.GetOutCastSlot(outcast);
-    for (auto otherCallee : func.GetCalleeFunctionList()) {
-        FE_ASSERT(FeError::INVALID_PTR, otherCallee != nullptr) << func.GetRawName() << "has nullptr callee";
-        for (auto& incast : otherCallee->GetIncast()) {
-            auto incastSlots = otherCallee->GetInCastSlot(incast);
-            if (TensorSlotManager::HasSameSlot(incastSlots, outcastSlots)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static std::vector<int> GetOutcastSlots(Function& func, size_t outcastIdx)
+static bool IsAssembleOutcast(Function& func, size_t outcastIdx)
 {
     auto& outcasts = func.GetOutcast();
-    FE_ASSERT(FeError::INVALID_VAL, outcastIdx < outcasts.size())
-        << "Outcast index " << outcastIdx << " out of bounds for outcast size " << outcasts.size();
-    return func.GetOutCastSlot(outcasts[outcastIdx]);
-}
-
-static bool IsLinkedInplaceOutcast(Function& func, size_t outcastIdx)
-{
-    auto& outcasts = func.GetOutcast();
-    FE_ASSERT(FeError::INVALID_VAL, outcastIdx < outcasts.size())
-        << "Outcast index " << outcastIdx << " out of bounds for outcast size " << outcasts.size();
-    return func.outIncastLinkMap.count(outcasts[outcastIdx]->GetRawTensor()) != 0;
-}
-
-static bool IsLinkedInplaceAssembleDstOutcast(Function& func, size_t outcastIdx)
-{
-    auto outcastSlots = GetOutcastSlots(func, outcastIdx);
+    auto slots = func.GetOutCastSlot(outcasts[outcastIdx]);
     auto slotMngr = Program::GetInstance().GetTensorSlotManager();
-
-    // Condition 1: this outcast is used as an assemble destination.
-    bool isAssembleDst = false;
     for (const auto& slot : slotMngr->assembleSlotSet) {
         auto it = slotMngr->slotIndexDict.find(slot);
         if (it == slotMngr->slotIndexDict.end()) {
             continue;
         }
         std::vector<int> assembleSlot = {it->second};
-        if (TensorSlotManager::HasSameSlot(outcastSlots, assembleSlot)) {
-            isAssembleDst = true;
-            break;
-        }
-    }
-    if (!isAssembleDst) {
-        return false;
-    }
-
-    // Condition 2: the same slot is linked to a reshape(inplace=True) outcast somewhere in the function graph.
-    for (auto& [funcName, funcPtr] : Program::GetInstance().GetFunctionMap()) {
-        (void)funcName;
-        Function* curFunc = funcPtr.get();
-        if (curFunc == nullptr) {
-            continue;
-        }
-        auto& outcasts = curFunc->GetOutcast();
-        for (size_t i = 0; i < outcasts.size(); ++i) {
-            if (!IsLinkedInplaceOutcast(*curFunc, i)) {
-                continue;
-            }
-            if (TensorSlotManager::HasSameSlot(GetOutcastSlots(*curFunc, i), outcastSlots)) {
-                return true;
-            }
+        // output use as assemble later, it's not removable
+        if (TensorSlotManager::HasSameSlot(slots, assembleSlot)) {
+            return true;
         }
     }
     return false;
+}
+
+bool HasCalleeConsumer(Function& func, Function& calleeFunc, size_t outcastIdx)
+{
+    auto outcast = calleeFunc.GetOutcast()[outcastIdx];
+    auto outcastSlots = calleeFunc.GetOutCastSlot(outcast);
+    bool isAssemble = IsAssembleOutcast(calleeFunc, outcastIdx);
+
+    for (auto otherCallee : func.GetCalleeFunctionList()) {
+        if (otherCallee == &calleeFunc) {
+            continue;
+        }
+        for (auto& incast : otherCallee->GetIncast()) {
+            auto incastSlots = otherCallee->GetInCastSlot(incast);
+            if (TensorSlotManager::HasSameSlot(incastSlots, outcastSlots)) {
+                return true;
+            }
+        }
+        if (isAssemble) {
+            for (auto& out : otherCallee->GetOutcast()) {
+                auto outSlots = otherCallee->GetOutCastSlot(out);
+                if (TensorSlotManager::HasSameSlot(outSlots, outcastSlots)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool IsRemovableOutcast(Function& func, size_t outcastIdx)
+{
+    auto& outcasts = func.GetOutcast();
+    auto slots = func.GetOutCastSlot(outcasts[outcastIdx]);
+    for (auto& slot : slots) {
+        // outcast create before the function, it's not removable
+        if (func.GetSlotScope()->IsAliveSlot(slot)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void CalleeSlotNoConsumer(
@@ -839,9 +827,7 @@ void RedundantOutCastCheck(
                 FE_ASSERT(FeError::INVALID_VAL, outcastIdx2parent.count(outCastIdx) > 0)
                     << "Outcast index " << outCastIdx << " should be in outcastIdx2parent";
                 getTensorDataRecord[func].insert(outcastIdx2parent[outCastIdx]);
-            } else if (IsLinkedInplaceAssembleDstOutcast(*calleeFunc, outCastIdx)) {
-                continue;
-            } else {
+            } else if (IsRemovableOutcast(*calleeFunc, outCastIdx)) {
                 removeRecord[calleeFunc].insert(outCastIdx);
             }
         }
@@ -884,7 +870,7 @@ void Function::CleanRedundantOutCast()
                 << "outputMap does not contain outCastIdx " << outCastIdx;
             getTensorDataRecord[parent_].insert(outputMap[outCastIdx]);
         } else {
-            if (!IsLinkedInplaceAssembleDstOutcast(*this, outCastIdx)) {
+            if (IsRemovableOutcast(*this, outCastIdx)) {
                 removeRecord[this].insert(outCastIdx);
             }
         }
@@ -966,10 +952,7 @@ FunctionCallArgs Function::EndFunction(const std::shared_ptr<TensorSlotScope>& s
         outArgumentList = MakeOutcasts(scope);
         auto iodescDict = GetTensorDataForTensorGraph();
         GetTensorDataRefreshIO(iodescDict);
-        /* tensor graph function should keep the order of operations */
-        AddOperationGroup(operationList);
-        SortOperations();
-        ClearOperationGroups();
+        sorted_ = true;
         if (Program::GetInstance().GetCurrentDynamicFunction()) {
             DyndevFunctionAttribute::ValueDependDesc desc = LookupValueDepend();
             auto currDynFuncAttr = Program::GetInstance().GetCurrentDynamicFunction()->GetDyndevAttribute();
@@ -2108,9 +2091,26 @@ void Function::CreateFromIncast(
     newIncast->CopyMemoryType(origin);
 }
 
+void Function::MoveNewlyInsertedOpsToFront(size_t operationCountBefore)
+{
+    if (operations_.size() <= operationCountBefore) {
+        return;
+    }
+    // CreateFromIncast 在尾部追加 VIEW op；将其移到最前面，保证 incast view 位于程序开头，前端无需额外排序。
+    std::vector<std::shared_ptr<Operation>> newlyInsertedOps;
+    newlyInsertedOps.reserve(operations_.size() - operationCountBefore);
+    for (size_t i = operationCountBefore; i < operations_.size(); ++i) {
+        newlyInsertedOps.push_back(operations_[i]);
+    }
+    operations_.resize(operationCountBefore);
+    operations_.insert(operations_.begin(), newlyInsertedOps.begin(), newlyInsertedOps.end());
+    RefreshOpPosition();
+}
+
 LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& scope)
 {
     LogicalTensors inArgumentList;
+    size_t operationCountBefore = operations_.size();
 
     for (size_t idx = 0; idx < originInCasts_.size(); idx++) {
         auto origin = originInCasts_[idx];
@@ -2137,6 +2137,8 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope>& sco
         originInCasts_[idx] = newIncast;
         RemoveOriginIncastConsumer(origin);
     }
+
+    MoveNewlyInsertedOpsToFront(operationCountBefore);
 
     return inArgumentList;
 }

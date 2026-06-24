@@ -639,7 +639,9 @@ TEST_F(DynamicBasicTest, DynamicRawShapeUnalign)
     auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     DeviceTensorData argData0{arg0.GetDataType(), nullptr, arg0.GetShape()};
     DeviceTensorData outData0{arg0.GetDataType(), nullptr, arg0.GetShape()};
-    Evaluator eval{dynAttr->inputSymbolDict, {argData0}, {outData0}};
+    std::vector<DeviceTensorData> evalInputs{argData0};
+    std::vector<DeviceTensorData> evalOutputs{outData0};
+    Evaluator eval{dynAttr->inputSymbolDict, &evalInputs, &evalOutputs};
     EXPECT_EQ(eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem), s0 * s * BytesOf(arg0.GetDataType()));
 }
 

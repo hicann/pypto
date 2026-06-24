@@ -239,6 +239,22 @@ Pass AggressiveDCE();
 Pass Canonicalize();
 
 /**
+ * \brief Create a token-dependency pass
+ *
+ * Adds token edges (producer result_token_ -> consumer tokens_) to serialize
+ * memory hazards between operations whose LogicalTensors share the same
+ * RawTensor:
+ *   - WAW: two writes (Assemble/Assemble_SSA) to overlapping regions.
+ *   - WAR: a write that overlaps a prior read.
+ * Reads are full unless the operand is read through a View, in which case the
+ * partial region described by ViewOpAttribute is used. Overlap is decided with
+ * the same per-dimension symbolic check as InferWriteConflict::MayOverlap.
+ * Control flow is not considered; the function body is treated as a flat
+ * sequence of operations.
+ */
+Pass TokenPass();
+
+/**
  * \brief Create a pass that flattens nested call expressions
  */
 Pass FlattenCallExpr();

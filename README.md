@@ -109,9 +109,9 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 ## 📝相关信息
 
-- [贡献指南](https://gitcode.com/cann/pypto/blob/master/CONTRIBUTION.md)
-- [安全声明](https://gitcode.com/cann/pypto/blob/master/SECURITY.md)
-- [许可证](https://gitcode.com/cann/pypto/blob/master/LICENSE)
+- [贡献指南](./CONTRIBUTION.md)
+- [安全声明](./SECURITY.md)
+- [许可证](./LICENSE)
 
 ## 联系我们
 

@@ -259,7 +259,7 @@ echo $TILE_FWK_DEVICE_ID  # 必须有值
     ```
 
     **设计含义**：当 DESIGN.md 把 Layer I 设计为独立辅助函数（如 `_<op>_kernel_impl`），如果该 body 含 `pypto.is_loop_begin` / `pypto.is_loop_end`，Coder 必须把整个 body inline 到 Layer J 的 `@pypto.frontend.jit` 函数里，或在 Layer I 上加 `@pypto.frontend.function`。**这是模板 `impl_template.py` 默认 Layer I/J 切分的已知陷阱**。
-20. **直接采用 DESIGN.md tile**（Stage 5 默认）：第一次写 `<op>_module<k>_impl.py` 或集成 kernel 时，按 DESIGN.md §3.2.5 的 tile shape 原样落码。**禁止在 coder 阶段擅自引入训练/decode/核利用率等 cube-tile 分支**——性能调优是 Stage 7 `pypto-op-optimizer` 的工作。若 DESIGN.md §3.2.5 未填好，交回 pypto-op-orchestrator 而不要猜。
+20. **直接采用 DESIGN.md tile**（Stage 5 默认）：第一次写 `<op>_module<k>_impl.py` 或集成 kernel 时，按 DESIGN.md §3.2.5 的 tile shape 原样落码。**禁止在 coder 阶段擅自引入训练/decode/核利用率等 cube-tile 分支**——性能调优是 Stage 7 的工作。若 DESIGN.md §3.2.5 未填好，交回 pypto-op-orchestrator 而不要猜。
 
 ---
 

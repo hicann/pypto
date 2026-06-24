@@ -41,6 +41,24 @@ describe("init", () => {
     const state = makeState();
     expect(() => applyTransition(state, { action: "init", stage: 2 })).toThrow("stage 1");
   });
+
+  test("clears residual stage5_phases, rollback_history and artifact_hashes", () => {
+    const state = makeState({
+      stage5_phases: {
+        active_phase: "M1",
+        max_cycles_per_phase: 10,
+        phase_status: { M1: { status: "in_debug", cycles: 3 } },
+      },
+      rollback_history: [
+        { from_stage: 5, to_stage: 3, reason: "stale", timestamp: "2026-01-01T00:00:00Z" },
+      ],
+      artifact_hashes: { spec_md: "stale-hash" },
+    });
+    const next = applyTransition(state, { action: "init" });
+    expect(next.stage5_phases).toBeUndefined();
+    expect(next.rollback_history).toBeUndefined();
+    expect(next.artifact_hashes).toBeUndefined();
+  });
 });
 
 describe("complete_stage", () => {
@@ -169,6 +187,26 @@ describe("fail_stage", () => {
     expect(result.stage_status["2"]).toBe("failed");
     expect(result.stage_retry_count["2"]).toBe(1);
   });
+
+  test("rejects failing a stage other than current_stage", () => {
+    const state = makeState({
+      current_stage: 2,
+      stage_status: { ...makeState().stage_status, "1": "completed", "2": "in_progress" },
+    });
+    expect(() =>
+      applyTransition(state, { action: "fail_stage", stage: 1 }),
+    ).toThrow("current_stage is 2");
+  });
+
+  test("rejects failing a stage that is not in_progress", () => {
+    const state = makeState({
+      current_stage: 2,
+      stage_status: { ...makeState().stage_status, "1": "completed", "2": "completed" },
+    });
+    expect(() =>
+      applyTransition(state, { action: "fail_stage", stage: 2 }),
+    ).toThrow('status is "completed"');
+  });
 });
 
 describe("Stage 5 phase loop", () => {
@@ -231,6 +269,33 @@ describe("Stage 5 phase loop", () => {
     expect(() =>
       applyTransition(s, { action: "start_phase", stage: 5, phase: "M2" }),
     ).toThrow("already in_progress");
+  });
+
+  test("rejects fail_phase for a phase that was never started", () => {
+    expect(() =>
+      applyTransition(stage5Ready(), {
+        action: "fail_phase",
+        stage: 5,
+        phase: "M99",
+        failure_category: "precision",
+      }),
+    ).toThrow("phase not started");
+  });
+
+  test("rejects restarting a blocked phase", () => {
+    let s = applyTransition(stage5Ready(), { action: "start_phase", stage: 5, phase: "M1" });
+    for (let i = 0; i < 10; i++) {
+      s = applyTransition(s, {
+        action: "fail_phase",
+        stage: 5,
+        phase: "M1",
+        failure_category: "precision",
+      });
+    }
+    expect(s.stage5_phases?.phase_status.M1.status).toBe("blocked");
+    expect(() =>
+      applyTransition(s, { action: "start_phase", stage: 5, phase: "M1" }),
+    ).toThrow("blocked");
   });
 
   test("rejects starting an already-verified phase", () => {

@@ -430,7 +430,6 @@ def function(name: str, *args) -> Iterator:
     finally:
         if func is None:
             _raise_if_exception(first_exc)
-            raise FeError(RuntimeError(f"function {name} recording failed"))
         try:
             func.EndFunction()
         except Exception as e:

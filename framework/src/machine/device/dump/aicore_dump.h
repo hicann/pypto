@@ -164,7 +164,7 @@ public:
         if (enableDump_) {
             deviceId_ = deviceArgs->deviceId;
             uint64_t baseAddr = startArgs->contextWorkspaceAddr;
-            baseAddr += devProg->memBudget.aicoreSpilled + devProg->memBudget.tensor.Total() +
+            baseAddr += devProg->memBudget.aicoreSpilled.Total() + devProg->memBudget.tensor.Total() +
                         devProg->memBudget.debug.dumpTensor;
 
             dataAddr = baseAddr + schedIdx * DEV_DUMP_DATA_SIZE;
@@ -178,7 +178,7 @@ public:
     void DoDump(
         DeviceTask* devTask, std::string iOinfo, int32_t taskId, int32_t coreId, int64_t execStart = 0,
         int64_t execEnd = 0)
-    {      
+    {
         DumpInit(taskId, coreId, execStart, execEnd);
         DoDump(devTask, iOinfo);
 }
@@ -349,12 +349,12 @@ private:
         }
         auto exprList = dupData->GetExpressionAddr();
         const auto& symbolTable = devProg_->symbolTable;
-        
+
         for (const auto& symbol : symbolTable) {
             if (dumpTensorInfo.loopVarCount >= 8) {
                 break;
             }
-            
+
             std::string name(symbol.name.begin(), symbol.name.end());
             // 检测循环变量：包含loop_idx前缀
             if (name.find("loop_idx_") != std::string::npos) {
@@ -364,7 +364,7 @@ private:
                 strncpy_s(loopVarInfo.name, sizeof(loopVarInfo.name), name.c_str(), sizeof(loopVarInfo.name) - 1);
                 loopVarInfo.exprIdx = static_cast<int32_t>(exprListIdx);
                 loopVarInfo.value = static_cast<int32_t>(exprList[exprListIdx]);
-                
+
                 dumpTensorInfo.loopVarCount++;
             }
         }

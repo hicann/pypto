@@ -326,7 +326,7 @@ pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128])
 
 针对向量运算场景，应该按照Operation和芯片UB大小来确定合适的TileShape。
 
-- 首先，需要满足特定Operation对TileShape的规格约束。如scatter update要求尾轴TileShape和Shape一致，即不对尾轴进行切分。各个Operation的具体限制可以参考PyPTO文档的API介绍部分。
+- 首先，需要满足特定Operation对TileShape的规格约束。如scatter update要求尾轴TileShape和Shape一致，即不对尾轴进行切分。各个Operation的具体限制可以参考相关接口文档。
 
 - 其次，要保证Operation的输入与输出Tensor可以在UB中分配内存，因此TileShape不能过大。同时由于子图和搬运的数据块较小会导致性能劣化，因此TileShape又不能过小。以Atlas A3 训练系列产品为例，UB的缓存容量为192kb。因此合适的初始TileShape是既满足Operation的要求，又使得数据块大小在16到64KB之间，尾轴32B对齐。
 

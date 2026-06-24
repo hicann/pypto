@@ -420,7 +420,7 @@ struct DyndevFunctionAttribute {
 
     SymbolicSymbolTable symbolTable;
 
-    std::map<std::string, int64_t> inputSymbolDict;
+    std::unordered_map<std::string, ScalarImmediateType> inputSymbolDict;
 
     struct ExpressionTableDictGroup {
         std::unordered_map<Function*, SymbolicExpressionTable> loopBesDict;
@@ -1082,6 +1082,9 @@ private:
     std::shared_ptr<LogicalTensor> CreateIncastTensor(const std::shared_ptr<LogicalTensor>& inArgument);
     void CreateFromIncast(
         const LogicalTensorPtr& symbol, const LogicalTensorPtr& newIncast, const LogicalTensorPtr& originIncast);
+    // 将 operationCountBefore 之后新插入的 op 移到 operations_ 最前面。
+    // MakeIncasts 中 CreateFromIncast 会在尾部追加 VIEW op，提前到程序开头后前端无需再排序。
+    void MoveNewlyInsertedOpsToFront(size_t operationCountBefore);
     std::shared_ptr<LogicalTensor> CreateOutcastTensor(const std::shared_ptr<LogicalTensor>& outArgument);
     void CreateFromOutcast(
         const LogicalTensorPtr& symbol, const LogicalTensorPtr& newOutcast, const LogicalTensorPtr& originOutcast);

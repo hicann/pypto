@@ -425,6 +425,13 @@
                         "zh": "是否开启PMU trace",
                         "en": "Whether to enable PMU tracing"
                     }
+                },
+                "vf_options": {
+                    "type": "string",
+                    "label": {
+                        "zh": "VF选项",
+                        "en": "VF options"
+                    }
                 }
             }
         },

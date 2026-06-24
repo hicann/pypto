@@ -34,6 +34,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
+#include "interface/function/rebuildable_attribute.h"
 #include "machine/runtime/launcher/cell_match_dynamic.h"
 #include "machine/runtime/launcher/device_launcher_binding.h"
 #include "machine/runtime/launcher/emulation_launcher.h"
@@ -546,7 +547,8 @@ public:
     int64_t GetWorkspaceSize(const std::vector<DeviceTensorData>& tensors)
     {
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
-        Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
+        static const std::vector<DeviceTensorData> kEmptyOutputs;
+        Evaluator eval{dynAttr->inputSymbolDict, &tensors, &kEmptyOutputs};
         dynamicCellMatchDescPatches_ = PrepareDynamicCellMatchDescPatches(*dynAttr, eval);
         PatchHostDynamicCellMatchTableDesc(devProg, dynamicCellMatchDescPatches_);
         if (dynAttr->maxDynamicAssembleOutcastMem.IsValid() || dynAttr->maxDynamicCellMatchTableMem.IsValid()) {
@@ -568,6 +570,17 @@ public:
             }
             PatchRuntimeDynamicCellMatchAddrToCfgData(reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
             workspaceSize = devProg->memBudget.Total();
+
+            // check and pretty print total workspace consumption
+            auto *wsChecker =
+                RebuildableAttributeManager::GetInstance().GetAttr<RebuildableWorkspaceDesc>(dynFunc.get());
+            MACHINE_LOGI_FULL("Memory Consumption: size=%ld\n%s\n", workspaceSize, wsChecker->PrettyDumpSize(
+                    devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
+                    devProg->memBudget.debug.Total()).c_str());
+            MACHINE_ASSERT(uint64_t(workspaceSize) ==
+                wsChecker->GetSizeForCheckOnly(
+                    devProg->memBudget.tensor.maxDynamicAssembleOutcastMem,
+                    devProg->memBudget.debug.Total()));
         }
         return workspaceSize;
     }
@@ -1149,7 +1162,6 @@ private:
     KernelModulePtr kmodule;
     AclMdlRI rtModel;
 
-    DeviceGuard devGuard;
     std::optional<ConfigManagerNg::JitScopeGuard> jitScopeGuard;
 
 public:
@@ -1160,9 +1172,9 @@ public:
           torchTensors(torch_tensors),
           tensorDefs(tensor_defs),
           aicoreStream((AclRtStream)stream),
-          tensors(tensors_ref),
-          devGuard(devId)
+          tensors(tensors_ref)
     {
+        ValidateRuntimeDevice(devId);
         kmodule = py::getattr(module, "kmodule").cast<KernelModulePtr>();
         DeviceLauncher::SaveStream(aicoreStream);
         DeviceLauncher::GetCaptureInfo(aicoreStream, rtModel);

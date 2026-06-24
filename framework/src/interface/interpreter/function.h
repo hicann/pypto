@@ -1341,6 +1341,9 @@ struct FunctionInterpreter {
         EvaluateDynParam(dynParamTable, linearArgList);
 
         ExecuteHandleFunctionBegin(func, frame);
+        if (verifyType == VerifyType::TENSOR_GRAPH && func->GetCallopList().empty()) {
+            func->SortOperations();
+        }
         auto operations = func->Operations();
 
         bool hasWaitUntil = false;

@@ -63,6 +63,7 @@
         MACHINE_ASSERT(false);                                                                          \
     } while (0)
 #define MACHINE_EVENT(...) PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, MACHINE, __VA_ARGS__)
+#define MACHINE_LOGI_FULL(...) PYPTO_HOST_SPLIT_LOG(DLOG_INFO, MACHINE, __VA_ARGS__)
 #define MACHINE_LOGD_FULL(...) PYPTO_HOST_SPLIT_LOG(DLOG_DEBUG, MACHINE, __VA_ARGS__)
 
 #define DISTRIBUTED_LOGD(...) PYPTO_HOST_LOG(DLOG_DEBUG, DISTRIBUTED, __VA_ARGS__)

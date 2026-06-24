@@ -173,7 +173,7 @@ __aicore__ inline constexpr int GetValidWidth()
     }
 }
 
-template <typename T, bool Mergeable>
+template <typename T, bool Mergeable, bool MergeAll = true>
 struct PtoTileDimConfig {
     static constexpr auto tileH = TileOp::GetTensorTileShapeDim<T, DIM_4TH, MAX_DIMS>();
     static constexpr auto tileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
@@ -182,22 +182,30 @@ struct PtoTileDimConfig {
 };
 
 template <typename T>
-struct PtoTileDimConfig<T, true> {
+struct PtoTileDimConfig<T, true, true> {
     static constexpr auto tileH = size_t(1);
     static constexpr auto tileW = GetAllAxisProduct<T>();
     static constexpr auto validH = 1;
     static constexpr auto validW = GetAllAxisProduct<T>();
 };
 
+template <typename T>
+struct PtoTileDimConfig<T, true, false> {
+    static constexpr auto tileH = GetMergedAxisIfNeed<T, true>();
+    static constexpr auto tileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
+    static constexpr auto validH = GetValidHeight<T, true>();
+    static constexpr auto validW = GetValidWidth<T>();
+};
+
 template <typename T, pto::BLayout Layout = pto::BLayout::RowMajor, bool Mergeable = false,
-          typename DtypeOverride = void>
+           typename DtypeOverride = void, bool MergeAll = true>
 class PtoTile {
 private:
     static constexpr auto size = Std::tuple_size<typename T::Shape>::value;
-    static constexpr auto tileH = PtoTileDimConfig<T, Mergeable>::tileH;
-    static constexpr auto tileW = PtoTileDimConfig<T, Mergeable>::tileW;
-    static constexpr auto validH = PtoTileDimConfig<T, Mergeable>::validH;
-    static constexpr auto validW = PtoTileDimConfig<T, Mergeable>::validW;
+    static constexpr auto tileH = PtoTileDimConfig<T, Mergeable, MergeAll>::tileH;
+    static constexpr auto tileW = PtoTileDimConfig<T, Mergeable, MergeAll>::tileW;
+    static constexpr auto validH = PtoTileDimConfig<T, Mergeable, MergeAll>::validH;
+    static constexpr auto validW = PtoTileDimConfig<T, Mergeable, MergeAll>::validW;
 
 public:
     using DefaultDtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;

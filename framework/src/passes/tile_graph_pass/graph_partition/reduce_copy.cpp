@@ -283,7 +283,41 @@ bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr& tensor)
     return false;
 }
 
-void ReduceCopyMerge::UpdateConnectRecord(Function& function)
+void ReduceCopyMerge::UpdateBoundaryTensorSize(LogicalTensorPtr& tensor, int tensorSize)
+{
+    for (auto& op : tensor->GetProducers()) {
+        subgraphOutputSize[op->GetSubgraphID()] += tensorSize;
+        subgraphToOutputTensors[op->GetSubgraphID()].push_back(tensor->GetMagic());
+    }
+    for (auto& op : tensor->GetConsumers()) {
+        subgraphInputSize[op->GetSubgraphID()] += tensorSize;
+        subgraphToInputTensors[op->GetSubgraphID()].push_back(tensor->GetMagic());
+    }
+}
+
+void ReduceCopyMerge::RecordBoundaryTensorInfo(
+    LogicalTensorPtr& tensor, MergeInput& mergeInput, const std::set<int>& connectGraphs)
+{
+    BoundaryTensorInfo tensorInfo;
+    tensorInfo.tensorMagic = tensor->GetMagic();
+    std::set<int> producerSubgraphs;
+    std::set<int> consumerSubgraphs;
+    for (auto& op : tensor->GetProducers()) {
+        producerSubgraphs.insert(op->GetSubgraphID());
+    }
+    for (auto& op : tensor->GetConsumers()) {
+        consumerSubgraphs.insert(op->GetSubgraphID());
+    }
+    tensorInfo.producerSubgraphs.assign(producerSubgraphs.begin(), producerSubgraphs.end());
+    tensorInfo.consumerSubgraphs.assign(consumerSubgraphs.begin(), consumerSubgraphs.end());
+    int tensorId = static_cast<int>(mergeInput.boundaryTensors.size());
+    mergeInput.boundaryTensors.push_back(tensorInfo);
+    for (int subgraphId : connectGraphs) {
+        mergeInput.subgraphToBoundaryTensorIds[subgraphId].push_back(tensorId);
+    }
+}
+
+void ReduceCopyMerge::UpdateConnectRecord(Function& function, MergeInput& mergeInput)
 {
     for (auto tensor : GraphUtils::GetAllTensors(function)) {
         int tensorSize = tensor->MemorySize();
@@ -301,14 +335,8 @@ void ReduceCopyMerge::UpdateConnectRecord(Function& function)
             continue;
         }
         int tensorMagic = tensor->GetMagic();
-        for (auto& op : tensor->GetProducers()) {
-            subgraphOutputSize[op->GetSubgraphID()] += tensorSize;
-            subgraphToOutputTensors[op->GetSubgraphID()].push_back(tensorMagic);
-        }
-        for (auto& op : tensor->GetConsumers()) {
-            subgraphInputSize[op->GetSubgraphID()] += tensorSize;
-            subgraphToInputTensors[op->GetSubgraphID()].push_back(tensorMagic);
-        }
+        UpdateBoundaryTensorSize(tensor, tensorSize);
+        RecordBoundaryTensorInfo(tensor, mergeInput, connectGraphs);
         std::vector<int> mergeGroup(connectGraphs.begin(), connectGraphs.end());
         tensorToMergeGroup[tensorMagic] = mergeGroup;
         APASS_LOG_DEBUG_F(Elements::Operation, "Found boundary tensor %d of subgraphs %s.",
@@ -326,7 +354,10 @@ Status ReduceCopyMerge::BuildMergeGroup(Function& function, MergeInput& mergeInp
     APASS_LOG_DEBUG_F(Elements::Operation, "Build merge group before mix subgraph merge start.");
     subgraphInputSize.resize(mergeInput.numSubgraph, 0);
     subgraphOutputSize.resize(mergeInput.numSubgraph, 0);
-    UpdateConnectRecord(function);
+    mergeInput.boundaryTensors.clear();
+    mergeInput.subgraphToBoundaryTensorIds.clear();
+    mergeInput.subgraphToBoundaryTensorIds.resize(mergeInput.numSubgraph);
+    UpdateConnectRecord(function, mergeInput);
     std::multimap<int, std::vector<int>> sortedMergeGroup;
     for (auto& pair : mergeGroupToPriority) {
         std::vector<int> boundaryGroup = pair.first;
@@ -407,6 +438,10 @@ static bool ValidateInput(const MergeInput& input)
     if (input.mergeGroup.size() != input.isEnforceMergeGroup.size()) {
         return false;
     }
+    if (!input.subgraphToBoundaryTensorIds.empty() &&
+        static_cast<int>(input.subgraphToBoundaryTensorIds.size()) != n) {
+        return false;
+    }
     for (int i = 0; i < n; ++i) {
         if (input.subgraphAICLatency[i] < 0 || input.subgraphAIVLatency[i] < 0) {
             return false;
@@ -436,6 +471,18 @@ void MixGraphMerger::Initialize(const MergeInput& input)
         estimateInput.execTime[i] = input.subgraphAICLatency[i] + input.subgraphAIVLatency[i];
         estimateInput.isCube[i] = (input.subgraphAICLatency[i] > 0 ? true : false);
     }
+    InitBoundaryTensorIndex();
+}
+
+void MixGraphMerger::InitBoundaryTensorIndex()
+{
+    mRootToBoundaryTensorIds.assign(mInput.numSubgraph, std::vector<int>());
+    mTensorVisitStamp.assign(mInput.boundaryTensors.size(), 0);
+    mVisitStamp = 0;
+    if (mInput.subgraphToBoundaryTensorIds.empty()) {
+        return;
+    }
+    mRootToBoundaryTensorIds = mInput.subgraphToBoundaryTensorIds;
 }
 
 int MixGraphMerger::FindParent(int x)
@@ -628,6 +675,52 @@ bool MixGraphMerger::CheckMergeBenefit(const std::vector<int>& actualGroup)
     return true;
 }
 
+bool MixGraphMerger::IsInvalidMergedInnerTensor(int tensorId, const std::unordered_set<int>& mergedRoots)
+{
+    const auto& tensorInfo = mInput.boundaryTensors[tensorId];
+    bool hasProducerInMix = false;
+    bool hasConsumerInMix = false;
+    bool hasExternalEndpoint = false;
+    for (int subgraphId : tensorInfo.producerSubgraphs) {
+        int root = FindParent(subgraphId);
+        if (mergedRoots.count(root) > 0) {
+            hasProducerInMix = true;
+        } else {
+            hasExternalEndpoint = true;
+        }
+    }
+    for (int subgraphId : tensorInfo.consumerSubgraphs) {
+        int root = FindParent(subgraphId);
+        if (mergedRoots.count(root) > 0) {
+            hasConsumerInMix = true;
+        } else {
+            hasExternalEndpoint = true;
+        }
+    }
+    return hasProducerInMix && hasConsumerInMix && hasExternalEndpoint;
+}
+
+bool MixGraphMerger::CheckNoExternalUseOfMergedInnerTensor(const std::vector<int>& actualGroup)
+{
+    std::unordered_set<int> mergedRoots(actualGroup.begin(), actualGroup.end());
+    ++mVisitStamp;
+    for (int root : actualGroup) {
+        for (int tensorId : mRootToBoundaryTensorIds[root]) {
+            if (mTensorVisitStamp[tensorId] == mVisitStamp) {
+                continue;
+            }
+            mTensorVisitStamp[tensorId] = mVisitStamp;
+            if (IsInvalidMergedInnerTensor(tensorId, mergedRoots)) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                    "Merge skipped: tensor %d would become an inner tensor with external usage.",
+                    mInput.boundaryTensors[tensorId].tensorMagic);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup)
 {
     if (actualGroup.size() <= 1) {
@@ -635,6 +728,9 @@ bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup
         return false;
     }
     if (!CanMergeWithoutCycle(actualGroup)) {
+        return false;
+    }
+    if (!CheckNoExternalUseOfMergedInnerTensor(actualGroup)) {
         return false;
     }
     if (!CheckLatencyConstraint(actualGroup)) {
@@ -646,6 +742,18 @@ bool MixGraphMerger::CanMergeWithConstraints(const std::vector<int>& actualGroup
     return true;
 }
 
+void MixGraphMerger::UpdateBoundaryTensorIndex(const std::vector<int>& actualGroup)
+{
+    std::vector<int> mergedTensorIds;
+    for (int root : actualGroup) {
+        mergedTensorIds.insert(mergedTensorIds.end(), mRootToBoundaryTensorIds[root].begin(),
+            mRootToBoundaryTensorIds[root].end());
+        mRootToBoundaryTensorIds[root].clear();
+    }
+    int newRoot = FindParent(actualGroup[0]);
+    mRootToBoundaryTensorIds[newRoot].swap(mergedTensorIds);
+}
+
 void MixGraphMerger::PerformMerge(const std::vector<int>& actualGroup)
 {
     if (actualGroup.size() <= 1) {
@@ -655,6 +763,7 @@ void MixGraphMerger::PerformMerge(const std::vector<int>& actualGroup)
     for (size_t i = 1; i < actualGroup.size(); ++i) {
         UnionSets(root, actualGroup[i]);
     }
+    UpdateBoundaryTensorIndex(actualGroup);
 }
 
 void MixGraphMerger::UpdateOutput()

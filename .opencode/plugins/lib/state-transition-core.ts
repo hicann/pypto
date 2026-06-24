@@ -171,6 +171,11 @@ export function applyTransition(
       next.current_stage = stage;
       statusMap[String(stage)] = "in_progress";
       next.schema_version = next.schema_version ?? "2.0";
+      // Clear residual state from any previous run so a re-init cannot
+      // leak stale stage 5 phases, rollback history, or artifact hashes.
+      next.stage5_phases = undefined;
+      next.rollback_history = undefined;
+      next.artifact_hashes = undefined;
       break;
     }
 
@@ -240,6 +245,16 @@ export function applyTransition(
     case "fail_stage": {
       const stage = ensureStageNumber(input.stage, maxStage);
       const failKey = String(stage);
+      if (stage !== prev.current_stage) {
+        throw new Error(
+          `cannot fail_stage ${stage}: current_stage is ${prev.current_stage}`,
+        );
+      }
+      if (statusMap[failKey] !== "in_progress") {
+        throw new Error(
+          `cannot fail_stage ${stage}: status is "${statusMap[failKey]}", not "in_progress"`,
+        );
+      }
       retryMap[failKey] = (Number(retryMap[failKey]) || 0) + 1;
       statusMap[failKey] = "failed";
       break;
@@ -265,6 +280,11 @@ export function applyTransition(
       const existing = phases[input.phase];
       if (existing && existing.status === "verified") {
         throw new Error(`cannot start phase ${input.phase}: already verified`);
+      }
+      if (existing && existing.status === "blocked") {
+        throw new Error(
+          `cannot start phase ${input.phase}: already blocked (cycles exhausted; escalate or rollback_to_stage)`,
+        );
       }
       phases[input.phase] = existing
         ? { ...existing, status: "in_progress" }
@@ -378,7 +398,10 @@ export function applyTransition(
       }
       if (!next.stage5_phases) next.stage5_phases = emptyStage5Phases();
       const phases = next.stage5_phases.phase_status;
-      const entry = phases[input.phase] ?? { status: "in_progress" as PhaseStatus, cycles: 0 };
+      const entry = phases[input.phase];
+      if (!entry) {
+        throw new Error(`cannot fail_phase ${input.phase}: phase not started`);
+      }
       const cycles = entry.cycles + 1;
       const blocked = cycles >= next.stage5_phases.max_cycles_per_phase;
       phases[input.phase] = {

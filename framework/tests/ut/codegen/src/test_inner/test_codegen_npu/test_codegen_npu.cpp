@@ -39,20 +39,6 @@ TEST_F(TestCodeGenNPU, TestAppendVFOptions)
     CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
     CheckStringExist("--cce-simd-vf-fusion=false", oss.str());
 
-    // Case 3: platform == DAV_3510, KEY_ENABLE_VF=true, KEY_ENABLE_VF_UNROLL=false
-    oss.str("");
-    config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
-    config::SetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, false);
-    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
-    CheckStringExist("--enable-pto-tile-fusion", oss.str());
-    EXPECT_EQ(oss.str().find("-enable-unroll-after-fused=true"), std::string::npos);
-
-    // Case 4: platform == DAV_3510, KEY_ENABLE_VF=true, KEY_ENABLE_VF_UNROLL=true
-    oss.str("");
-    config::SetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, true);
-    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
-    CheckStringExist("-enable-unroll-after-fused=true", oss.str());
-
     // Case 5: platform == DAV_3510, isCube=true, output --cce-simd-vf-fusion=false
     oss.str("");
     config::SetPassGlobalConfig(KEY_ENABLE_VF, true);

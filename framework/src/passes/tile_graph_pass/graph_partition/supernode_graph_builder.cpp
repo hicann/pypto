@@ -35,19 +35,11 @@ uint64_t OperationGraphInfo::GetHash(const Operation* op) const
         hashString.append("IOperand-");
         hashString.append(std::to_string(tensor->GetMemoryTypeOriginal()));
         hashString.append(std::to_string(tensor->tensor->datatype));
-        for (const auto& tensorDim : tensor->shape) {
-            hashString.append(std::to_string(tensorDim));
-            hashString.append("-");
-        }
     }
     for (const auto& tensor : op->GetOOperands()) {
         hashString.append("OOperand-");
         hashString.append(std::to_string(tensor->GetMemoryTypeOriginal()));
         hashString.append(std::to_string(tensor->tensor->datatype));
-        for (const auto& tensorDim : tensor->shape) {
-            hashString.append(std::to_string(tensorDim));
-            hashString.append("-");
-        }
     }
     return std::hash<std::string>{}(hashString);
 }

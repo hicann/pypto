@@ -25,7 +25,8 @@ void BindPasses(py::module_& m)
         .def_static("convert_to_ssa", &pass::ConvertToSSA, "Create an SSA conversion pass")
         .def_static("init_mem_ref", &pass::InitMemRef, "Create a memory reuse pass")
         .def_static("aggressive_dce", &pass::AggressiveDCE, "Eliminate dead code")
-        .def_static("canonicalize", &pass::Canonicalize, "Canonicalize IR");
+        .def_static("canonicalize", &pass::Canonicalize, "Canonicalize IR")
+        .def_static("token_pass", &pass::TokenPass, "Add WAR/WAW token dependencies");
 }
 } // namespace ir
 } // namespace pypto

@@ -413,6 +413,7 @@ static Tensor ShmemSignalImpl(
     auto signalTensor = View(src.signal, signalShape, signalOffset);
     auto out = std::make_shared<LogicalTensor>(function, DT_INT32, pred.GetShape());
     auto& op = function.AddOperation(Opcode::OP_SHMEM_SIGNAL, {pred.GetStorage(), signalTensor.GetStorage()}, {out});
+    op.SetAttr(OpAttributeKey::dontTouch, true);
     ShmemSignalAttr distOpAttr;
     distOpAttr.group = src.group;
     distOpAttr.signalValue = signal;

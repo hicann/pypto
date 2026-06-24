@@ -6,25 +6,25 @@
 
 高级样例涵盖以下核心领域：
 
-### 1. 复杂神经网络架构 ([advanced_nn](advanced_nn/))
-- **Attention Mechanism ([attention](advanced_nn/attention/))**:
+### 1. 复杂神经网络架构 ([advanced_nn](./advanced_nn))
+- **Attention Mechanism ([attention](./advanced_nn/attention))**:
     - 实现缩放点积注意力（Scaled Dot-Product Attention）。
     - 支持多头注意力（Multi-head Attention）。
     - 支持动态 Batch 和动态序列长度（Sequence Length）。
     - 展示了复杂的矩阵转置与乘法组合。
 
-### 2. 设计模式 ([patterns](patterns/))
-- **Multi-Function Module ([function](patterns/function/))**:
+### 2. 设计模式 ([patterns](./patterns))
+- **Multi-Function Module ([function](patterns/function))**:
     - 展示如何组合多个独立的 JIT 函数。
     - 函数间的顺序组合、残差连接（Residual Connection）。
     - 构建完整的 Transformer Block。
 
-### 3. 系统级调优 ([cost_model](cost_model/))
-- **Cost Model ([cost_model.py](cost_model/cost_model.py))**:
+### 3. 系统级调优 ([cost_model](./cost_model))
+- **Cost Model ([cost_model.py](./cost_model/cost_model.py))**:
     - 演示如何使用成本模型来评估和优化算子的执行效率。
 
-### 4. 图捕获模式 ([aclgraph](aclgraph/))
-- **ACLGraph ([aclgraph.py](aclgraph/aclgraph.py))**:
+### 4. 图捕获模式 ([aclgraph](./aclgraph))
+- **ACLGraph ([aclgraph.py](./aclgraph/aclgraph.py))**:
    - 演示如何使用图捕获模式优化 Host 侧开销。
 
 ## 核心特性

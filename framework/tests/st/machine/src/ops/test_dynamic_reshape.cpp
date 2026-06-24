@@ -200,35 +200,22 @@ TEST_F(DynamicReshapeTest, test_dyn_reshape)
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
 
-TEST_F(DynamicReshapeTest, test_dyn_reshape2)
+static void SetupDynReshape2ProgramData(
+    const Tensor& q_real, const Tensor& out_real, const std::vector<float>& golden)
 {
-    SetInterpreterConfig();
-
-    int b = -1;
-    int sq = 128;
-    int d = 64;
-    int bSq = (b == -1) ? -1 : b * sq;
-    std::vector<int64_t> qShape = {b, sq, d};
-
-    Tensor q(DT_FP32, qShape, "q");
-    Tensor out(DT_FP32, {bSq, d}, "out");
-
-    b = 1;
-    Tensor q_real(DT_FP32, {b, sq, d});
-    Tensor out_real(DT_FP32, {b * sq, d});
-    std::vector<float> golden(b * sq * d, exp(1.0f) + 1.0f);
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateConstantTensor<float>(q_real, 1.0),
     });
-
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<float>(out_real, 0.001f),
     });
-
     ProgramData::GetInstance().AppendGoldens({
         RawTensorData::CreateTensor<float>(out_real, golden),
     });
+}
 
+static void BuildDynReshape2Function(Tensor& q, Tensor& out, int sq, int d)
+{
     FUNCTION("MAIN_FUNC", {q}, {out})
     {
         Tensor bfRes(DT_FP32, {GetInputShape(q, 0), sq, d}, "bfRes");
@@ -255,18 +242,43 @@ TEST_F(DynamicReshapeTest, test_dyn_reshape2)
             Assemble(tmp, {batchId * sq, 0}, out);
         }
     }
+}
 
+static void ExpectDynReshape2AssembleMem(const Tensor& q_real, const Tensor& out_real)
+{
     auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
     DeviceTensorData argData0{q_real.GetDataType(), nullptr, q_real.GetShape()};
     DeviceTensorData outData0{out_real.GetDataType(), nullptr, out_real.GetShape()};
-    Evaluator eval{dynAttr->inputSymbolDict, {argData0}, {outData0}};
-    std::cout << q_real.GetShape() << std::endl;
-    std::cout << dynAttr->maxDynamicAssembleOutcastMem.Dump() << std::endl;
+    std::vector<DeviceTensorData> evalInputs{argData0};
+    std::vector<DeviceTensorData> evalOutputs{outData0};
+    Evaluator eval{dynAttr->inputSymbolDict, &evalInputs, &evalOutputs};
     EXPECT_EQ(eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem), q_real.GetStorage()->GetDataSize());
-    // excute
+}
+
+TEST_F(DynamicReshapeTest, test_dyn_reshape2)
+{
+    SetInterpreterConfig();
+
+    int b = -1;
+    int sq = 128;
+    int d = 64;
+    int bSq = (b == -1) ? -1 : b * sq;
+    std::vector<int64_t> qShape = {b, sq, d};
+
+    Tensor q(DT_FP32, qShape, "q");
+    Tensor out(DT_FP32, {bSq, d}, "out");
+
+    b = 1;
+    Tensor q_real(DT_FP32, {b, sq, d});
+    Tensor out_real(DT_FP32, {b * sq, d});
+    std::vector<float> golden(b * sq * d, exp(1.0f) + 1.0f);
+    SetupDynReshape2ProgramData(q_real, out_real, golden);
+    BuildDynReshape2Function(q, out, sq, d);
+    ExpectDynReshape2AssembleMem(q_real, out_real);
+
     DevFuncRunner::Run(
         Program::GetInstance().GetLastFunction(), DeviceLauncherConfig(q_real.GetStorage()->GetDataSize()));
-    auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
+    auto outs = ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float*)outs->data(), 0.001f));
 }
 

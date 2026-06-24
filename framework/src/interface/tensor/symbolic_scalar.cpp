@@ -896,6 +896,12 @@ std::vector<SymbolicScalar> SymbolicScalar::FromConcrete(const std::vector<int64
     return result;
 }
 
+std::unordered_map<std::string, ScalarImmediateType> &SymbolicScalarTracker::GetSymbolDict()
+{
+    static std::unordered_map<std::string, ScalarImmediateType> symbolDict;
+    return symbolDict;
+}
+
 static void LookupExpressionByOpcode(
     std::vector<RawSymbolicScalarPtr>& exprList, SymbolicOpcode opcode, const RawSymbolicScalarPtr& raw)
 {

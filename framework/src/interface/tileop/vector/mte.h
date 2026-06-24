@@ -46,7 +46,7 @@ __aicore__ inline void TLoad(T dst, U src, C coordinate)
                 PtoGlobal<U, typename T::Shape, typename U::Stride>(
                     TileOp::GetPackedGmAddr<typename U::Type>(src.GetAddr(), gmOffset), dst.GetShape(), src.GetStride())
                     .Data();
-            auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true>().Data();
+            auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true, void, false>().Data();
             pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
             pto::TLOAD(dstTile, srcGlobal);
             return;
@@ -95,7 +95,7 @@ __aicore__ inline void TStoreVec(T dst, U src, C coordinate)
                 PtoGlobal<T, typename U::Shape, typename T::Stride>(
                     TileOp::GetPackedGmAddr<typename T::Type>(dst.GetAddr(), gmOffset), src.GetShape(), dst.GetStride())
                     .Data();
-            auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
+            auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true, void, false>().Data();
             pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
             CallStore<config>(dstGlobal, srcTile);
             return;
@@ -163,7 +163,7 @@ __aicore__ inline void TReshapeLoad(
                 PtoGlobal<U, typename T::Shape, Stride5Dim>(
                     TileOp::GetPackedGmAddr<typename U::Type>(src.GetAddr(), gmOffset), dst.GetShape(), reshapeStride)
                     .Data();
-            auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true>().Data();
+            auto dstTile = PtoTile<T, pto::BLayout::RowMajor, true, void, false>().Data();
             pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
             pto::TLOAD(dstTile, srcGlobal);
             return;
@@ -211,7 +211,7 @@ __aicore__ inline void TReshapeStore(
                 PtoGlobal<T, typename U::Shape, Stride5Dim>(
                     TileOp::GetPackedGmAddr<typename T::Type>(dst.GetAddr(), gmOffset), src.GetShape(), reshapeStride)
                     .Data();
-            auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true>().Data();
+            auto srcTile = PtoTile<U, pto::BLayout::RowMajor, true, void, false>().Data();
             pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
             pto::TSTORE(dstGlobal, srcTile);
             return;

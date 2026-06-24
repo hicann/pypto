@@ -29,7 +29,7 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
     InitMetadataAllocators(devProg, devStartArgs);
 
     InitAICoreSpilledMemory(baseAddr, devProg);
-    baseAddr += devProg->memBudget.aicoreSpilled;
+    baseAddr += devProg->memBudget.aicoreSpilled.Total();
 
     // dassembleDests contains dynamic workspace, put it to the end
     InitTensorAllocators(baseAddr, devProg->memBudget.tensor.Total(), devProg);
@@ -46,7 +46,7 @@ void DeviceWorkspaceAllocator::Init(DevStartArgs* devStartArgs)
     *dumpTensorWsAllocatorCounter_ = dumpTensorWsAllocator_.AllocatedSize();
 #endif
     SetupVector(rtBoundaryOutcastToBeFree_);
-    rtBoundaryOutcastToBeFree_.reserve(devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
+    rtBoundaryOutcastToBeFree_.reserve(devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum);
 
     SetupItemPool(
         runtimeOutcastTensorPool_, devProg->runtimeOutcastPoolSize, WsMemCategory::ITEMPOOL_RUNTIME_OUTCAST);
@@ -493,7 +493,7 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
     DEV_DEBUG("slotListMemory=%lu.", slotListMemory);
     // 3. rtBoundaryOutcastToBeFree_
     uint64_t boundaryOutcastToFreeListSize =
-        CalculateVectorCapacity(devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
+        CalculateVectorCapacity(devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum);
     uint64_t boundaryOutcastToFreeMemory = boundaryOutcastToFreeListSize * sizeof(RuntimeOutcastTensor);
     DEV_DEBUG("boundaryOutcastToFreeMemory=%lu.", boundaryOutcastToFreeMemory);
     // total
@@ -505,7 +505,7 @@ uint64_t DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(const DevAscendProg
 uint64_t DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(const DevAscendProgram* devProg)
 {
     size_t blockHeaderSize = sizeof(WsSlotAllocator::BlockHeader);
-    uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.devTaskBoundaryOutcastNum;
+    uint64_t boundaryOutcastSlotNum = devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum;
     uint64_t dynamicCellMatchSlotNum = devProg->memBudget.metadata.dynamicCellMatchSlotNum;
     DEV_DEBUG(
         "boundaryOutcastSlotNum=%lu, dynamicCellMatchSlotNum=%lu", boundaryOutcastSlotNum, dynamicCellMatchSlotNum);
@@ -711,11 +711,11 @@ void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, 
 
     // Initialize root function slotted outcast tensor memory
     auto devTaskBoundaryOutcastsBudget =
-        devProg->memBudget.tensor.devTaskBoundaryOutcastNum * devProg->memBudget.tensor.MaxOutcastMem();
+        devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum * devProg->memBudget.tensor.MaxOutcastMem();
     slotVerifier_.Init(baseAddr, paallelism * devTaskBoundaryOutcastsBudget);
     for (uint32_t parallelIdx = 0; parallelIdx < paallelism; parallelIdx++) {
         tensorAllocators_[parallelIdx].devTaskBoundaryOutcasts.InitTensorAllocator(
-            baseAddr, devProg->memBudget.tensor.devTaskBoundaryOutcastNum, devProg->memBudget.tensor.MaxOutcastMem(),
+            baseAddr, devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum, devProg->memBudget.tensor.MaxOutcastMem(),
             metadataAllocators_.general);
         DEV_TRACE_DEBUG(CtrlEvent(
             none(), WorkspaceCrossDeviceTaskOutcast(Range(baseAddr, baseAddr + devTaskBoundaryOutcastsBudget))));
@@ -723,7 +723,7 @@ void DeviceWorkspaceAllocator::InitTensorAllocators(uintdevptr_t workspaceAddr, 
     }
 
     // Initialize root function non-outcast tensor memory
-    auto rootInnerBudget = devProg->memBudget.tensor.rootInner;
+    auto rootInnerBudget = devProg->memBudget.tensor.rootInnerSpilledMem;
     rootInnerWsVerifier_.Init(baseAddr, paallelism * rootInnerBudget);
     for (uint32_t parallelIdx = 0; parallelIdx < paallelism; parallelIdx++) {
         tensorAllocators_[parallelIdx].rootInner.InitTensorAllocator(baseAddr, rootInnerBudget);
@@ -756,12 +756,12 @@ void DeviceWorkspaceAllocator::InitAICoreSpilledMemory(uintdevptr_t workspaceAdd
     // Compile time `aicoreSpilled` per single core is required to be aligned by 512.
     // This formula will never result into a value smaller than compile time one.
     uint64_t perCoreMem =
-        devProg->memBudget.aicoreSpilled / TENSOR_ADDR_ALIGNMENT / coreNum * TENSOR_ADDR_ALIGNMENT;
+        devProg->memBudget.aicoreSpilled.Total() / TENSOR_ADDR_ALIGNMENT / coreNum * TENSOR_ADDR_ALIGNMENT;
 
     // Initialize in-core stack memory
     stackWorkspaceBase_ = workspaceAddr;
     standardStackWorkspacePerCore_ = perCoreMem;
-    stackWorkspaceSize_ = devProg->memBudget.aicoreSpilled;
+    stackWorkspaceSize_ = devProg->memBudget.aicoreSpilled.Total();
     DEV_TRACE_DEBUG(CtrlEvent(
         none(),
         WorkspaceSpill(

@@ -66,7 +66,6 @@ public:
     {
         operandWithMagic.reserve(MAX_OPERANDS);
         for (size_t i = 0; i < MAX_OPERANDS; i++) {
-            operand[i] = NULL_OPERAND;
             operandWithMagic[i] = INVALID_TENSOR_MAGIC;
             operandType[i] = BUF_UNKNOWN;
             operandDtype[i] = DataType::DT_BOTTOM;
@@ -88,9 +87,8 @@ protected:
     const FunctionType functionType;
     std::string opCodeStr;
     Opcode opCode{Opcode::OP_UNKNOWN};
-    std::string aliasOp;            // alias op name
+    std::string aliasOp; // alias op name
 
-    int operand[MAX_OPERANDS] = {}; // buffer id
     std::vector<int> operandWithMagic;
     OperandType operandType[MAX_OPERANDS] = {};
     DataType operandDtype[MAX_OPERANDS] = {};
