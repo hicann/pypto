@@ -20,7 +20,7 @@
 #include <utility>
 
 #include "interface/operation/operation.h"
-#include "interface/function/function.h"
+#include "interface/machine/host/machine_task.h"
 #include "codegen_common.h"
 
 namespace npu::tile_fwk {
@@ -35,7 +35,8 @@ public:
     }
     virtual ~CodeGenCCE() = default;
 
-    virtual void GenCode(Function& topFunc) = 0;
+    virtual void GenCode(
+        Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset) = 0;
 
 protected:
     CodeGenCtx ctx;
@@ -44,6 +45,8 @@ private:
     void PrepareOutputPath();
     void PrepareDefaultOutputPath();
 };
+
+std::map<int, int> GenRealizeIdMap(const SubfuncParam& subFuncParam);
 
 } // namespace npu::tile_fwk
 
