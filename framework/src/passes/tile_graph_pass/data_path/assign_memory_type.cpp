@@ -427,13 +427,8 @@ bool AssignMemoryType::HasParallelDifferentConsumerRequirement(
         return false;
     }
     auto requirements = inserter.GetConsumerRequirements(tensor);
-    return std::any_of(requirements.begin(), requirements.end(), [this, targetType](const auto& item) {
-        auto resolveOutputRequirement = [this](const LogicalTensorPtr& output) {
-            return InferUniqueRequirementThroughViewConsumers(output);
-        };
-        MemoryType requirement = MemoryPathUtils::ResolveEffectiveConsumerRequirement(
-            item.first, item.second, targetType, resolveOutputRequirement);
-        return MemoryPathUtils::IsDifferentKnownRequirement(requirement, targetType);
+    return std::any_of(requirements.begin(), requirements.end(), [targetType](const auto& item) {
+        return MemoryPathUtils::IsDifferentKnownRequirement(item.second, targetType);
     });
 }
 
