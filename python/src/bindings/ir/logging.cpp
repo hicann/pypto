@@ -17,7 +17,6 @@
 
 #include "core/error.h"
 #include "bindings/ir/bindings.h"
-#include "tilefwk/error.h"
 
 namespace py = pybind11;
 
@@ -71,8 +70,6 @@ void BindError(py::module_& m)
             PyErr_SetString(exc_internal_error.ptr(), e.GetFullMessage().c_str());
         } catch (const ir::Error& e) {
             PyErr_SetString(PyExc_Exception, e.GetFullMessage().c_str());
-        } catch (const npu::tile_fwk::Error& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
         }
     });
 }

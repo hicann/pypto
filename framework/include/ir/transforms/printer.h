@@ -107,8 +107,10 @@ void PrintFunctionReturnAnnotation(
     std::ostream& stream, const std::vector<TypePtr>& return_types,
     const std::function<std::string(const TypePtr&)>& print_type);
 
-std::string PythonPrint(const IRNodePtr& node, const std::string& prefix = "ir", bool concise = false);
-std::string PythonPrint(const TypePtr& type, const std::string& prefix = "ir");
+std::string PythonPrint(const IRNodePtr& node, const std::string& prefix = "pl", bool concise = false);
+std::string PythonPrint(const TypePtr& type, const std::string& prefix = "pl");
+std::string PythonDslPrint(const IRNodePtr& node, const std::string& prefix = "pl");
+std::string PythonDslPrint(const TypePtr& type, const std::string& prefix = "pl");
 
 } // namespace ir
 } // namespace pypto
