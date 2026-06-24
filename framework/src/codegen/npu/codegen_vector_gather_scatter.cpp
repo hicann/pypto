@@ -269,7 +269,7 @@ std::string CodeGenOpNPU::GenGatherElementOp() const
     const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src0DtypeStr, src1DtypeStr};
     int gatherEleAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "axis");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         gatherEleAxis = AnyCast<int64_t>(axis);
     }
     if (isSupportLayout) {
