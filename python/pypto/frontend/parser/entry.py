@@ -658,10 +658,12 @@ class JitCallableWrapper:
                 self, _current_stream(), torch_tensors, tensor_defs
             )
         else:
+            # Run kernel on esl
             cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
-            if (os.environ.get("ENABLE_ESLMODEL") == "TRUE" and cann_is_configed):
+            if (pypto.get_global_config("simulation.accuracy_level") == 2 and cann_is_configed):
                 with pypto.options("jit_scope"):
                     self._set_config_option()
+                    get_torch_npu()
                     pypto_impl.LaunchKernelTorch(
                         self, _current_stream(), torch_tensors, tensor_defs
                 )
