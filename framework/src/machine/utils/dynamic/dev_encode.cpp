@@ -315,7 +315,7 @@ static bool ShouldDropBudget(
     }
 
     for (int slotIdx : slotInfo->outcastSlot[encoded.ioIndex]) {
-        if (runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::ADDRESS_EXPRESSION)) {
+        if (runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::ADDRESS_EXPRESSION)) {
             return true;
         }
     }
@@ -326,9 +326,9 @@ static bool HasInputOutputOrAssembleDst(
     const std::vector<int>& outcastSlots, const std::vector<npu::tile_fwk::RuntimeSlotKindSet>& runtimeSlotKindSetList)
 {
     for (int slotIdx : outcastSlots) {
-        if (runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::INPUT) ||
-            runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::OUTPUT) ||
-            runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+        if (runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::INPUT) ||
+            runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::OUTPUT) ||
+            runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
             return true;
         }
     }
@@ -2733,9 +2733,9 @@ static std::vector<SlotInfo> MarkInputOutputAssembleSlots(DevAscendProgram& devP
             bool isAssembleOutcastSlot = false;
             for (size_t j = 0; j < toSlotList.size(); j++) {
                 SlotInfo& slotInfo = slotInfoList[devFunc->At(toSlotList, j)];
-                if (slotInfo.kindSet.Contains(RuntimeSlotKind::INPUT) || slotInfo.kindSet.Contains(RuntimeSlotKind::OUTPUT)) {
+                if (slotInfo.kindSet.Count(RuntimeSlotKind::INPUT) || slotInfo.kindSet.Count(RuntimeSlotKind::OUTPUT)) {
                     isInputOutputSlot = true;
-                } else if (slotInfo.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+                } else if (slotInfo.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
                     isAssembleOutcastSlot = true;
                 }
             }
@@ -2767,8 +2767,8 @@ static bool IsInputOutputSlot(const std::vector<SlotInfo>& slotInfoList, DevAsce
     auto& toSlotList = func->GetOutcast(idx).toSlotList;
     for (size_t j = 0; j < toSlotList.size(); j++) {
         int slotIdx = func->At(toSlotList, j);
-        if (slotInfoList[slotIdx].kindSet.Contains(RuntimeSlotKind::INPUT) ||
-            slotInfoList[slotIdx].kindSet.Contains(RuntimeSlotKind::OUTPUT)) {
+        if (slotInfoList[slotIdx].kindSet.Count(RuntimeSlotKind::INPUT) ||
+            slotInfoList[slotIdx].kindSet.Count(RuntimeSlotKind::OUTPUT)) {
             return true;
         }
     }
@@ -2781,7 +2781,7 @@ static bool IsAssembleSlot(std::vector<SlotInfo>& slots, DevAscendFunction* func
     bool isAssemble = false;
     for (size_t j = 0; j < toSlotList.size(); j++) {
         int slotIdx = func->At(toSlotList, j);
-        if (slots[slotIdx].kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+        if (slots[slotIdx].kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
             isAssemble = true;
             break;
         }
@@ -2908,7 +2908,7 @@ static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::
     uint64_t maxStaticAssembleOutcastMem =
         std::accumulate(slots.begin(), slots.end(), UINT64_C(0), [](uint64_t acc, const SlotInfo& slot) {
             return std::max(
-                acc, (slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
+                acc, (slot.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
         });
 
     SymbolicScalar maxDynamicAssembleOutcastMem =
@@ -3050,10 +3050,10 @@ static TensorWorkspaceResult CalcTensorWorkspace(
     res.maxDynamicAssembleOutcastMem = maxDynamicAssembleOutcastMem;
 
     res.totalExclusiveOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const SlotInfo& slot) {
-        return slot.kindSet.Contains(RuntimeSlotKind::EXCLUSIVE_OUTCAST);
+        return slot.kindSet.Count(RuntimeSlotKind::EXCLUSIVE_OUTCAST);
     });
     res.totalAssembleOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const SlotInfo& slot) {
-        return slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST);
+        return slot.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST);
     });
     uint64_t dynamicCellMatchSlotNum = 0;
     for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {
