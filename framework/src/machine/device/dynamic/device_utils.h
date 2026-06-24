@@ -207,7 +207,6 @@ inline const TO* PtrToPtr(const TI* const ptr)
 }
 
 inline uint64_t PtrToValue(const void* const ptr) { return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ptr)); }
-inline uint64_t PtrToValue(const volatile void* const ptr) { return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(const_cast<const void*>(ptr))); }
 
 inline void* ValueToPtr(const uint64_t value) { return reinterpret_cast<void*>(static_cast<uintptr_t>(value)); }
 
