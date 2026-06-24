@@ -21,7 +21,7 @@ pass_verify_print(*values, cond: Union[int, SymbolicScalar] = 1) -> None
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
 | *values | 输入      | 含义：指定打印的数据或信息。 <br> 说明：pypto.Tensor：打印tensor的数据；int/pypto.SymbolicScalar：打印相应的值；其它Python对象：打印相应的字符串表示 <br> 类型：List[pypto.Tensor,int,pypto.SymbolicScalar,Object] <br> 取值范围：NA <br> 默认值：NA |
-| cond    | 输入      | 含义：指定打印数据的满足条件 <br> 说明：表达式计算结果为1：打印指定数据；表达式计算结果为0：不打印数据；该参数可省略，省略时使用默认值，不支持显式传入None。 <br> 类型：Union[int,pypto.SymbolicScalar] <br> 取值范围：0,1 <br> 默认值：1 |
+| cond    | 输入      | 含义：指定打印数据的满足条件 <br> 说明：表达式计算结果为1：打印指定数据；表达式计算结果为0：不打印数据 <br> 类型：Optional[int,pypto.SymbolicScalar] <br> 取值范围：0,1 <br> 默认值：1 |
 
 ## 返回值说明
 
