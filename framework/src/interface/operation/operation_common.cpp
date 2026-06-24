@@ -37,7 +37,7 @@ void CheckTensorDynamicShape(const LogicalTensors iOperands, const Opcode opCode
             continue;
         }
         for (size_t dimIdx = 0; dimIdx < iOperands[i]->shape.size(); ++dimIdx) {
-            CHECK(ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, iOperands[i]->shape[dimIdx] > 0)
+            ASSERT(FeError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED, iOperands[i]->shape[dimIdx] > 0)
                 << (!opName.empty() ? "Operation: " + opName : "")
                 << " Input operand (name: " << iOperands[i]->tensor->GetSymbol() << ") "
                 << " at dimension[" << dimIdx << "] has invalid shape value: " << iOperands[i]->shape[dimIdx]
