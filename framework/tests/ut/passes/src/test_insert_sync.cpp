@@ -542,13 +542,13 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     EXPECT_EQ(ps.depOps_[0].setPipe.size(), 0);           // copyin1 has no setPipe
 
     // InitCVEventIdQ
-    PipeSync::CoreTypeDetail setCore = {CoreType::AIC, AIVCore::UNSPECIFIED};
-    PipeSync::CoreTypeDetail waitCore = {CoreType::AIV, AIVCore::AIV1};
-    PipeSync::CorePair corePair = {setCore, waitCore};
-    PipeSync::CorePair corePairReverse = {waitCore, setCore};
-    ps.InitCVEventIdQ(corePair);
-    EXPECT_EQ(ps.crossCoreFreeEventId_[corePair].size(), IS_NUM16);
-    EXPECT_EQ(ps.crossCoreFreeEventId_[corePairReverse].size(), IS_NUM16);
+    PipeSync::PipeCoreRealEx setPipeEx(PIPE_MTE3, CoreType::AIV, AIVCore::AIV1);
+    PipeSync::PipeCoreRealEx waitPipeEx(PIPE_MTE1, CoreType::AIC, AIVCore::UNSPECIFIED);
+    PipeSync::PipePairEx pipePairEx = {setPipeEx, waitPipeEx};
+    PipeSync::PipePairEx pipePairExReverse = {waitPipeEx, setPipeEx};
+    ps.InitCVEventIdQ(pipePairEx);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pipePairEx].size(), IS_NUM2);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[pipePairExReverse].size(), 0);
 }
 
 TEST_F(InsertSyncTest, TestRelaxFakeDataDep)
