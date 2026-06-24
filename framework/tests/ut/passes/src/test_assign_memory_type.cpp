@@ -1193,7 +1193,9 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmall)
         originFunction =
             Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2L1LargeToSmall"); // Tensor_{Function名字}
         ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
-        EXPECT_EQ(CountL0c2l1Num(originFunction), 4);
+        EXPECT_EQ(CountL0c2l1Num(originFunction), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 1);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1), 1);
     }
 }
 
