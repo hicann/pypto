@@ -278,8 +278,6 @@ struct TensorSlotManager {
     int GetInputIndex(const Tensor& tensor);
     int GetOutputIndex(const Tensor& tensor);
     int GetSlotIndex(const Tensor& tensor);
-    int LookupSlotIndexByRawMagic(int rawMagic);
-    const Tensor* LookupTensorByRawMagic(int rawMagic);
 
     void Checkpoint();
     void Restore();
