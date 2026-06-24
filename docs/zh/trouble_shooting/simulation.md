@@ -1,17 +1,17 @@
-# SIMULATION组件错误码
+# SIMULATION 组件错误码
 
 - **范围**：F9XXXX
-- 本文档说明SIMULATION组件的错误码定义、场景说明与排查建议。
+- 本文档说明 SIMULATION 组件的错误码定义、场景说明与排查建议。
 
 ## 错误码定义与使用说明
 
-相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（仿真侧见`CostModel`命名空间下各枚举）。
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（仿真侧见 `CostModel` 命名空间下各枚举）。
 
 ## 排查建议
 
 根据日志中不同ErrorCode关联到下述排查建议：
 
-### EXTERNAL_ERROR外部错误
+### EXTERNAL_ERROR 外部错误
 
 #### INVALID_CONFIG
 
@@ -48,7 +48,7 @@
 2. 确认文件路径是否正确
 3. 确认文件是否已损坏
 
-### INTERNAL_ERROR内部错误
+### INTERNAL_ERROR 内部错误
 
 内部错误请联系仿真的oncall解决
 
@@ -117,7 +117,7 @@
 
 ### 1. 启用详细日志
 
-在遇到SIMULATION组件错误时，可以启用详细日志获取更多信息：
+在遇到 SIMULATION 组件错误时，可以启用详细日志获取更多信息：
 
 ```bash
 export ASCEND_GLOBAL_LOG_LEVEL=PYPTO=0 # 0：Debug，1：Info，2：Warning，3：Error(默认)
