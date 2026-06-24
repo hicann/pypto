@@ -221,13 +221,15 @@ std::string SymbolManager::QueryTileTensorFullDimByTensorInLoop(const std::strin
     return fullDimTensorName;
 }
 
-void SymbolManager::GenUsingList(std::ostringstream& oss)
+std::string SymbolManager::GenUsingList()
 {
+    std::ostringstream oss;
     for (const auto& usingPair : tileTensorUsing_) {
         const std::string& usingName = usingPair.first;
         const TileTensorUsing& tileTensorUsing = usingPair.second;
         oss << "using " << usingName << " = " << tileTensorUsing.ToString();
     }
+    return oss.str();
 }
 
 std::string SymbolManager::GenTileTensorDefList()
@@ -247,16 +249,6 @@ std::string SymbolManager::GenNewTileTensorDefs()
     }
     tileTensorOutputIdx_ = tileTensorStorage_.size();
     return oss.str();
-}
-
-void SymbolManager::PrintAddrAllocs(std::ostringstream& oss) const
-{
-    for (const auto& addrAlloc : addrAllocs_) {
-        if (tensorUseNormalAlloc_.find(addrAlloc.allocKey) != tensorUseNormalAlloc_.end()) {
-            oss << addrAlloc.allocNormal;
-        }
-        oss << addrAlloc.allocForTileTensor;
-    }
 }
 
 } // namespace npu::tile_fwk

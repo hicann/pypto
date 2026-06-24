@@ -55,13 +55,7 @@ void TaskRunner(ThreadSafeTaskQueue& taskQueue)
         }
 
         auto& task = taskMaybe.value();
-        try {
-            task();
-        } catch (const std::exception& e) {
-            CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task exception: %s", e.what());
-        } catch (...) {
-            CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task unknown exception");
-        }
+        task();
     }
 }
 }; // namespace
@@ -75,13 +69,7 @@ void ParallelExecuteAndWait(unsigned threadNum, std::deque<Task> tasks)
     if (threadNum == 1) {
         // no need to use extra thread if only one thread is needed
         for (auto& task : tasks) {
-            try {
-                task();
-            } catch (const std::exception& e) {
-                CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task exception: %s", e.what());
-            } catch (...) {
-                CODEGEN_LOGE(FwkErr::TASK_RUN_FAILED, "Parallel task unknown exception");
-            }
+            task();
         }
 
         return;
