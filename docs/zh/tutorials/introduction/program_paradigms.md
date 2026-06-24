@@ -13,8 +13,8 @@ PTO编程范式的核心设计理念包括：
 
 PyPTO提供了三种层次的编程接口：
 
-- Tensor层次编程：直接使用Tensor和Tensor Operation构建计算图。
-- Tile层次编程：以Tile和Tile Operation表达完整的计算，显式体现访存与依赖。
+- Tensor层次编程：直接使用Tensor 和Tensor Operation 构建计算图。
+- Tile层次编程：以Tile 和Tile Operation表达完整的计算，显式体现访存与依赖。
 - Block层次编程：定义单个处理器核执行的计算图，并通过多次实例化实现整体计算。
 
 当前版本仅开放Tensor层次编程，这是最常用和推荐的编程方式。
@@ -24,7 +24,7 @@ PyPTO提供了三种层次的编程接口：
 - Tensor：是PyPTO中最基本的数据结构，表示一个多维数组。Tensor包含以下信息：
 
     - 数据类型（dtype）：如FP32、FP16、INT32、BOOL等
-    - 形状（shape）：用一个整型数组描述各维度长度，例如\(32, 64\)、\(1, 32, 128\)等
+    - 形状（shape）：用一个整型数组描述各维度长度，例如\(32, 64\)、\(1, 32, 128\) 等
     - 格式（format）：数据在内存中的排布格式
     - 名称（name）：用于在计算图中标识该Tensor，便于调试与可视化
 
@@ -59,7 +59,7 @@ Tensor层次编程是PyPTO当前主要支持的编程方式，开发者直接使
     # 2. 定义计算函数
     @pypto.frontend.jit
     def my_operator(a: pypto.Tensor(shape, dtype), b:  pypto.Tensor(shape, dtype), output:  pypto.Tensor(shape, dtype)):
-        # Tensor操作
+        # Tensor 操作
         result = a + b  # 或使用pypto.add(a, b)
         output[:] = result
 
@@ -177,7 +177,7 @@ MPMD执行模型的优势包括：
     # 定义计算函数
     @pypto.frontend.jit
     def vector_add(a:  pypto.Tensor(shape, dtype), b:  pypto.Tensor(shape, dtype), output:  pypto.Tensor(shape, dtype)):
-        # Tensor操作：向量加法
+        # Tensor 操作：向量加法
         output[:] = a + b  # 输出结果
 
     # 执行
