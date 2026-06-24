@@ -28,7 +28,7 @@ acosh(input: Tensor) -> Tensor
 
 ## 返回值说明
 
-返回输出Tensor，Shape与`input`相同，数据类型与`input`相同，元素值为输入Tensor对应元素的反双曲余弦值。
+返回输出Tensor，Shape与 `input` 相同，数据类型与 `input` 相同，元素值为输入Tensor对应元素的反双曲余弦值。
 
 ## 约束说明
 
@@ -44,7 +44,7 @@ acosh(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入`input` shape为`[m, n]`，输出为`[m, n]`，TileShape设置为`[m1, n1]`，则`m1`、`n1`分别用于切分`m`、`n`轴。
+如输入 `input` shape为 `[m, n]`，输出为 `[m, n]`，TileShape设置为 `[m1, n1]`，则 `m1`、`n1` 分别用于切分 `m`、`n` 轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
