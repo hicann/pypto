@@ -21,8 +21,6 @@
 #include "adapter/api/acl_api.h"
 #include "adapter/api/adump_api.h"
 #include "interface/utils/op_info_manager.h"
-#include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
-#include "interface/configs/config_manager_ng.h"
 #include "machine/runtime/context/stream_context.h"
 #include "machine/runtime/context/device_launcher_context.h"
 #include "machine/runtime/runner/runtime_utils.h"
@@ -294,6 +292,20 @@ void DeviceLauncher::DumpIOTensorsWithCann(AclRtStream stream, std::vector<Devic
         }
         AdxDumpDumpTensorV2(funcName, funcName, dumpTensors, stream);
     }
+}
+
+void DeviceLauncher::FillDeviceKernelArgs(
+    std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames)
+{
+    DeviceLauncherConfig config;
+    CachedOperator cache;
+    DeviceLauncherConfigFillDeviceInfo(config);
+    DeviceInitLauncherConfigForUser(devProgData);
+    // KernelBinary init only; workspace is allocated per launch via module.alloc() (torch on NPU).
+    config.workspaceAllocByTorch = true;
+    DeviceMemoryUtils deviceMemoryUtils;
+    DeviceInitTilingData(deviceMemoryUtils, kargs, devProgData, nullptr, config, &cache);
+    DeviceInitDistributedContext(deviceMemoryUtils, groupNames, kargs);
 }
 
 uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
