@@ -22,6 +22,7 @@
 #include <string>
 
 #include "tilefwk/tilefwk.h"
+#include "interface/inner/any.h"
 #include "tilefwk/tile_shape.h"
 
 namespace npu::tile_fwk {
@@ -101,12 +102,12 @@ public:
      * \brief Get the config value with the specific key. throw runtime_error if
      * the key is not found.
      */
-    const std::any& GetAnyConfig(const std::string& key) const;
+    const Any& GetAnyConfig(const std::string& key) const;
 
     /**
      * \brief Returns a map of all configuration key-value pairs.
      */
-    const std::map<std::string, std::any> GetAllConfig() const;
+    const std::map<std::string, Any> GetAllConfig() const;
 
     /**
      * \brief Get the typed config value with the specific key.
@@ -182,8 +183,8 @@ public:
      */
     CubeTile GetCubeTile() const
     {
-        const std::any& value = GetAnyConfig("cube_tile_shapes");
-        return pypto::AnyCast<CubeTile>(value);
+        const Any& value = GetAnyConfig("cube_tile_shapes");
+        return AnyCast<CubeTile>(value);
     }
 
     /**
@@ -191,7 +192,8 @@ public:
      */
     ConvTile GetConvTile() const
     {
-        return pypto::AnyCast<ConvTile>(GetAnyConfig("conv_tile_shapes"));
+        const Any& value = GetAnyConfig("conv_tile_shapes");
+        return AnyCast<ConvTile>(value);
     }
 
     /**
@@ -199,8 +201,9 @@ public:
      */
     VecTile GetVecTile() const
     {
-        auto& value = GetAnyConfig("vec_tile_shapes");
-        return {pypto::AnyCastRef<std::vector<int64_t>>(value)};
+        const Any& value = GetAnyConfig("vec_tile_shapes");
+
+        return VecTile{AnyCast<std::vector<int64_t>>(value)};
     }
 
     /**
@@ -208,8 +211,8 @@ public:
      */
     std::vector<int64_t> GetMatrixSize() const
     {
-        auto& value = GetAnyConfig("matrix_size");
-        return pypto::AnyCast<std::vector<int64_t>>(value);
+        const Any& value = GetAnyConfig("matrix_size");
+        return AnyCast<std::vector<int64_t>>(value);
     }
 
     /**
@@ -235,9 +238,9 @@ public:
      * \param key The config key.
      * \param value The config value to set.
      */
-    void AddValue(const std::string& key, std::any value);
+    void AddValue(const std::string& key, Any value);
 
-    void UpdateValueWithAny(const std::string& key, std::any value);
+    void UpdateValueWithAny(const std::string& key, Any value);
 
     /**
      * \brief update a config value for the given key.
@@ -247,7 +250,7 @@ public:
     template <typename T>
     void UpdateValue(const std::string& key, T RawValue)
     {
-        std::any value = ConvertToAny(RawValue);
+        Any value = ConvertTtoAny(RawValue);
         UpdateValueWithAny(key, value);
     }
 
@@ -278,7 +281,7 @@ private:
 
     std::shared_ptr<ConfigScope> parent_;
     std::list<ConfigScope*> children_;
-    std::map<std::string, std::any> values_;
+    std::map<std::string, Any> values_;
 
     std::string name_;
     std::string begin_file_;
@@ -287,16 +290,16 @@ private:
     int end_lino_{0};
 
     template <typename T>
-    std::any ConvertToAny(T value)
+    Any ConvertTtoAny(T value)
     {
         if constexpr (std::is_same_v<T, bool>) {
-            return value;
+            return Any(value);
         } else if constexpr (std::is_integral_v<T>) {
-            return static_cast<int64_t>(value);
+            return Any(static_cast<int64_t>(value));
         } else if constexpr (std::is_same_v<T, const char*>) {
-            return std::string(value);
+            return Any(std::string(value));
         } else {
-            return value;
+            return Any(value);
         }
     }
 };
@@ -309,7 +312,7 @@ public:
      * \param values
      */
     void BeginScope(
-        const std::string& name, std::map<std::string, std::any>&& values, const char* file = __builtin_FILE(),
+        const std::string& name, std::map<std::string, Any>&& values, const char* file = __builtin_FILE(),
         int line = __builtin_LINE());
 
     /**
@@ -325,7 +328,7 @@ public:
     class JitScopeGuard {
     public:
         JitScopeGuard(
-            const std::string& name, std::map<std::string, std::any>&& values = {}, const char* file = __builtin_FILE(),
+            const std::string& name, std::map<std::string, Any>&& values = {}, const char* file = __builtin_FILE(),
             int line = __builtin_LINE());
         ~JitScopeGuard();
         JitScopeGuard(const JitScopeGuard&) = delete;
@@ -362,7 +365,7 @@ public:
      * @param values
      */
     void SetScope(
-        std::map<std::string, std::any>&& values, const char* file = __builtin_FILE(), int line = __builtin_LINE());
+        std::map<std::string, Any>&& values, const char* file = __builtin_FILE(), int line = __builtin_LINE());
 
     /**
      * @brief Get the Current Scope object
@@ -397,7 +400,7 @@ public:
     /**
      * \brief Check if the value is within the specified range.
      */
-    bool IsWithinRange(const std::string& properties, std::any& value) const;
+    bool IsWithinRange(const std::string& properties, Any& value) const;
 
     static ConfigManagerNg& GetInstance();
 
@@ -427,7 +430,7 @@ public:
      * @brief Set Global Config for python frontend
      *
      */
-    void SetGlobalConfig(std::map<std::string, std::any>&& values, const char* file, int lino);
+    void SetGlobalConfig(std::map<std::string, Any>&& values, const char* file, int lino);
 
     ~ConfigManagerNg();
 

@@ -30,7 +30,7 @@ std::string CodeGenOpNPU::PrintGatherInL1TileTensor() const
     int64_t blockSize = AnyCast<int64_t>(opAttrs.at("op_attr_blocksize"));
 
     auto startOffset = opAttrs.at(OpAttributeKey::startOffset);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, startOffset.has_value() && (startOffset.type() == typeid(int64_t)))
+    ASSERT(OperErr::ATTRIBUTE_INVALID, startOffset.HasValue() && (startOffset.Type() == typeid(int64_t)))
         << "GenGatherInL1 startOffset must be int64_t!";
     auto srcColumnStartOffset = AnyCast<int64_t>(startOffset);
     std::string srcCoordCp = WrapParamByParentheses({std::to_string(srcColumnStartOffset)});
@@ -96,7 +96,7 @@ std::string CodeGenOpNPU::GenGatherInL1() const
     const int64_t blockSize = AnyCast<int64_t>(opAttrs.at("op_attr_blocksize"));
 
     auto startOffset = opAttrs.at(OpAttributeKey::startOffset);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, startOffset.has_value() && (startOffset.type() == typeid(int64_t)))
+    ASSERT(OperErr::ATTRIBUTE_INVALID, startOffset.HasValue() && (startOffset.Type() == typeid(int64_t)))
         << "GenGatherInL1 startOffset must be int64_t!";
     auto srcColumnStartOffset = AnyCast<int64_t>(startOffset);
     auto blockTableGMStride = GenParamIdxExprByIndex(ID3, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
