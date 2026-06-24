@@ -17,7 +17,7 @@
 
 ## 版本1：安装CANN包的Dockerfile
 
-支持环境信息：OS支持Ubuntu22.04、OpenEuler24.03，架构支持x86_64和aarch64，Python 3.11，CANN 9.0.0，支持 Ascend 950PR、Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品。
+支持环境信息：OS支持Ubuntu22.04、OpenEuler24.03，架构支持x86_64和aarch64，Python 3.11，CANN 9.0.0，支持A2/A3。
 
 在使用前，请根据**操作系统 + 硬件类型**指定`CANN_VERSION`：
 
@@ -79,7 +79,7 @@ ENV http_proxy=$PROXY
 
 ## 版本2：不安装CANN包的Dockerfile
 
-支持环境信息：OS支持Ubuntu22.04、OpenEuler22.03，架构支持x86_64和aarch64，Python 3.11，支持 Ascend 950PR、Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品。
+支持环境信息：OS支持Ubuntu22.04、OpenEuler22.03，架构支持x86_64和aarch64，Python 3.11，支持A2/A3。
 
 根据操作系统指定`PY_VERSION`：
 
