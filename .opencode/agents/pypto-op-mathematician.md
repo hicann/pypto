@@ -1,6 +1,6 @@
 ---
 name: pypto-op-mathematician
-description: "Golden reference mathematician. Produces PyPTO-friendly <op>_golden.py using PyTorch/NumPy, plus the Golden function inventory. Invoked by pypto-op-orchestrator."
+description: "Golden reference mathematician. Produces PyPTO-friendly golden.py using PyTorch/NumPy, plus the Golden function inventory. Invoked by pypto-op-orchestrator."
 mode: subagent
 ---
 
@@ -19,7 +19,7 @@ Cap active skills at 2.
 
 | File | Purpose |
 |------|---------|
-| `custom/<op>/<op>_golden.py` | PyTorch or NumPy reference, PyPTO-friendly form |
+| `custom/<op>/golden.py` | PyTorch or NumPy reference, PyPTO-friendly form |
 | `custom/<op>/MEMORY.md` → **Golden function inventory** | List every function used, with confidence score |
 | `custom/<op>/GOLDEN_PERF_REPORT.md` | NPU profiling report (via `pypto-golden-generate/scripts/profile_golden.py`) |
 
