@@ -119,8 +119,8 @@ protected:
     std::vector<long> convParams;
     std::vector<int> poolParams;
 
-    std::map<std::string, std::any> opAttrs;
-    std::map<std::string, std::any> tensorAttrs[MAX_OPERANDS];
+    std::map<std::string, Any> opAttrs;
+    std::map<std::string, Any> tensorAttrs[MAX_OPERANDS];
 
     std::shared_ptr<SymbolManager> sm{nullptr};
     const std::map<int, int>& paramLocToParamListOffset{};
