@@ -318,8 +318,7 @@ enum class ServerKernelErr : uint32_t {
 
 enum class ThreadErr : uint32_t {
     SIGNAL_HANDLER_ABNORMAL = static_cast<uint32_t>(MachineError::THREAD_MACHINE) + 0x01U,
-    THREAD_CPU_ALLOC_FAILED = static_cast<uint32_t>(MachineError::THREAD_MACHINE),
-    THREAD_CPU_WAIT_FINISH_TIMEOUT = static_cast<uint32_t>(MachineError::THREAD_MACHINE),
+    THREAD_CPU_ALLOC_FAILED = static_cast<uint32_t>(MachineError::THREAD_MACHINE) + 0x03U,
 };
 
 enum class RtErr : uint32_t {
