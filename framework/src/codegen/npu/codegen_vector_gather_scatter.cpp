@@ -115,7 +115,9 @@ std::string CodeGenOpNPU::PrintGatherDynamicUnaligned(const PrintGatherParam& pa
     paramList.emplace_back(dst);
     paramList.emplace_back(src0);
     paramList.emplace_back(src1);
-    FillParamWithFullInput(paramList, dynIndexShape);
+    for (int i = 0; i < SHAPE_DIM4; i++) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynIndexShape[i]));
+    }
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -224,7 +226,9 @@ std::string CodeGenOpNPU::PrintGatherElementDynamicUnaligned(const PrintGatherEl
     paramList.insert(paramList.end(), {dst, src0, src1});
     auto dstValidShape = dynamicValidShape[ID0];
     FillVecWithDummyInHead<SymbolicScalar>(dstValidShape, SHAPE_DIM4 - dstValidShape.size(), 1);
-    FillParamWithInput(paramList, dstValidShape, 0, SHAPE_DIM4);
+    for (int i = 0; i < SHAPE_DIM4; i++) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstValidShape[i]));
+    }
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "<" << templateParam << ">"
         << "(" << tiloOpCallParam << ");\n";
@@ -367,7 +371,9 @@ std::string CodeGenOpNPU::PrintScatterElementSOpDynamicUnaligned(const PrintScat
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC1_IDX)] + "*)" + src1Var);
     std::string scalarTmpBuffer = FormatFloat(scala.Cast<float>());
     callParams.emplace_back("(" + scalarDtypeBuffer + ")" + scalarTmpBuffer);
-    FillParamWithInput(callParams, dynSrc1Shape, 0, SHAPE_DIM4);
+    for (size_t i = 0; i < SHAPE_DIM4; ++i) {
+        callParams.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrc1Shape[i]));
+    }
     std::string callParamStr = JoinString(callParams, ", ");
 
     std::ostringstream oss;
@@ -464,7 +470,9 @@ std::string CodeGenOpNPU::PrintScatterOpDynamicUnaligned(const PrintScatterParam
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ID0] + "*)" + dstVar);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ID1] + "*)" + src1Var);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ID2] + "*)" + src2Var);
-    FillParamWithFullInput(callParams, dynSrc1Shape);
+    for (size_t i = 0; i < SHAPE_DIM4; ++i) {
+        callParams.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrc1Shape[i]));
+    }
     std::string callParamStr = JoinString(callParams, ", ");
 
     std::ostringstream oss;
