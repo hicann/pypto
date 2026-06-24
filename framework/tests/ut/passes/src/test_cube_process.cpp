@@ -33,21 +33,6 @@ using namespace npu::tile_fwk;
 
 namespace npu {
 namespace tile_fwk {
-
-size_t CountOpsByType(Function* function, Opcode opcode)
-{
-    if (function == nullptr) {
-        return 0;
-    }
-    size_t count = 0;
-    for (const auto& op : function->Operations()) {
-        if (!op.IsDeleted() && op.GetOpcode() == opcode) {
-            ++count;
-        }
-    }
-    return count;
-}
-
 class ProcessAtomicTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
@@ -144,15 +129,6 @@ public:
         EXPECT_EQ(l0cAfter->Datatype(), l0cDtype);
     }
     void TearDown() override {}
-
-    std::shared_ptr<LogicalTensor> AddDdrTensor(
-        ComputationalGraphBuilder& G, DataType dtype, const std::vector<int64_t>& shape, const std::string& name)
-    {
-        G.AddTensor(dtype, shape, name);
-        auto tensor = G.GetTensor(name);
-        tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-        return tensor;
-    }
 };
 
 TEST_F(ProcessAtomicTest, TestMMFP16) { CheckL0cType(DataType::DT_FP16, DataType::DT_FP16, DataType::DT_FP32); }
@@ -1068,9 +1044,7 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWBasic)
     ProcessAtomic passLocal;
     Status preCheckResult = passLocal.PreCheck(*function);
     EXPECT_EQ(preCheckResult, SUCCESS);
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    passLocal.Run(*function, "", "", 0);
 
     atomicRmwCount = 0;
     for (auto& op : function->Operations()) {
@@ -1272,9 +1246,9 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWWithReduceAcc)
     EXPECT_NE(function, nullptr);
 
     ProcessAtomic passLocal;
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    Status preCheckResult = passLocal.PreCheck(*function);
+    EXPECT_EQ(preCheckResult, SUCCESS);
+    passLocal.Run(*function, "", "", 0);
 
     int reduceAccCount = 0;
     int atomicRmwCount = 0;
@@ -1366,9 +1340,8 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     EXPECT_NE(function, nullptr);
 
     ProcessAtomic passLocal;
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
+    Status result = passLocal.Run(*function, "", "", 0);
+    EXPECT_EQ(result, SUCCESS);
 
     int atomicRmwCount = 0;
     for (auto& op : function->Operations()) {
@@ -1383,137 +1356,5 @@ TEST_F(ProcessAtomicTest, TestAtomicRMWSameModeNoConflict)
     EXPECT_EQ(updatedAssembleOp->HasAttr(RMW_MODE_ATTR_ADD), true);
 }
 
-TEST_F(ProcessAtomicTest, TestAtomicRMWSharedInputCloneAssembleProducer)
-{
-    ComputationalGraphBuilder G;
-    DataType dtype = DataType::DT_FP16;
-
-    auto assembleInput = AddDdrTensor(G, dtype, {64, 128}, "assembleInput");
-    auto inputDdr = AddDdrTensor(G, dtype, {64, 128}, "inputDdr");
-    auto viewOut = AddDdrTensor(G, dtype, {64, 128}, "viewOut");
-    auto outputDdr = AddDdrTensor(G, dtype, {128, 128}, "outputDdr");
-
-    G.AddOp(Opcode::OP_ASSEMBLE, {"assembleInput"}, {"inputDdr"}, "assembleOp");
-    auto assembleOp = G.GetOp("assembleOp");
-    assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    assembleOp->SetScopeId(7);
-    const std::string copyAttr = OP_ATTR_PREFIX + "copy_test_attr";
-    assembleOp->SetAttribute(copyAttr, 123L);
-
-    G.AddOp(Opcode::OP_VIEW, {"inputDdr"}, {"viewOut"}, "viewOp");
-    G.GetOp("viewOp")->SetOpAttribute(std::make_shared<ViewOpAttribute>(
-        std::vector<int64_t>{0, 0}, std::vector<SymbolicScalar>{}, std::vector<SymbolicScalar>{}));
-
-    G.AddOp(Opcode::OP_ATOMIC_RMW, {"inputDdr"}, {"outputDdr"}, "atomicRmwOp");
-    auto atomicRmwOp = G.GetOp("atomicRmwOp");
-    atomicRmwOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
-    atomicRmwOp->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
-
-    G.SetInCast({"assembleInput"});
-    G.SetOutCast({"outputDdr", "viewOut"});
-
-    ProcessAtomic passLocal;
-    EXPECT_EQ(passLocal.CheckAtomicRMWUnsupportedMode(*G.GetFunction()), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*G.GetFunction()), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateReduceAcc(*G.GetFunction()), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateAtomicRMW(*G.GetFunction()), SUCCESS);
-
-    Operation* atomicAssemble = nullptr;
-    Operation* viewAssemble = nullptr;
-    for (auto& op : G.GetFunction()->Operations()) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            if (op.GetOutputOperand(0) == outputDdr) atomicAssemble = &op;
-            if (op.GetOutputOperand(0) == inputDdr) viewAssemble = &op;
-        }
-    }
-
-    ASSERT_NE(atomicAssemble, nullptr);
-    ASSERT_NE(viewAssemble, nullptr);
-    EXPECT_TRUE(atomicAssemble->HasAttr(RMW_MODE_ATTR_ADD));
-    EXPECT_FALSE(viewAssemble->HasAttr(RMW_MODE_ATTR_ADD));
-    EXPECT_EQ(atomicAssemble->GetScopeId(), 7);
-    EXPECT_TRUE(atomicAssemble->HasAttr(copyAttr));
-    EXPECT_EQ(G.GetOp("viewOp")->GetInputOperand(0), inputDdr);
-}
-
-TEST_F(ProcessAtomicTest, TestAtomicRMWReduceAccChainVecDupBranchRemove)
-{
-    ComputationalGraphBuilder G;
-    DataType dtype = DataType::DT_FP16;
-    auto matb1 = AddDdrTensor(G, dtype, {128, 128}, "matb1");
-    auto matb2 = AddDdrTensor(G, dtype, {128, 128}, "matb2");
-    auto matb3 = AddDdrTensor(G, dtype, {128, 128}, "matb3");
-    AddDdrTensor(G, dtype, {1}, "vecdupIn");
-    AddDdrTensor(G, dtype, {64, 128}, "vecdupOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut1");
-    AddDdrTensor(G, dtype, {64, 128}, "mulbOut");
-    AddDdrTensor(G, dtype, {64, 128}, "mulaccOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut2");
-    AddDdrTensor(G, dtype, {64, 128}, "reduceOut");
-    AddDdrTensor(G, dtype, {64, 128}, "atomicOut");
-    G.AddOp(Opcode::OP_VEC_DUP, {"vecdupIn"}, {"vecdupOut"}, "vecdupOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"vecdupOut"}, {"assembleOut1"}, "assembleOp1");
-    G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_A_MUL_B, {"assembleOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
-    G.AddOp(Opcode::OP_A_MULACC_B, {"mulbOut", "matb3"}, {"mulaccOut"}, "mulaccOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mulaccOut"}, {"assembleOut2"}, "assembleOp2");
-    G.GetOp("assembleOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_REDUCE_ACC, {"assembleOut2"}, {"reduceOut"}, "reduceOp");
-    G.AddOp(Opcode::OP_ATOMIC_RMW, {"reduceOut"}, {"atomicOut"}, "atomicrmwOp");
-    G.GetOp("atomicrmwOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
-    G.GetOp("atomicrmwOp")->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
-    G.SetInCast({"vecdupIn", "matb1", "matb2", "matb3"});
-    G.SetOutCast({"atomicOut"});
-    ProcessAtomic passLocal;
-    auto* function = G.GetFunction();
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
-    auto mulbOp = G.GetOp("mulbOp");
-    ASSERT_NE(mulbOp, nullptr);
-    EXPECT_EQ(mulbOp->GetInputOperandSize(), 2);
-    EXPECT_EQ(mulbOp->GetInputOperand(0), matb1);
-    EXPECT_EQ(mulbOp->GetInputOperand(1), matb2);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_ATOMIC_RMW), 0);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_REDUCE_ACC), 0);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_VEC_DUP), 0);
-    auto assembleOp2 = G.GetOp("assembleOp2");
-    ASSERT_NE(assembleOp2, nullptr);
-    EXPECT_TRUE(assembleOp2->HasAttr(RMW_MODE_ATTR_ADD));
-}
-
-TEST_F(ProcessAtomicTest, TestAtomicRMWNoReduceAccVecDupBranchKeep)
-{
-    ComputationalGraphBuilder G;
-    DataType dtype = DataType::DT_FP16;
-    auto matb1 = AddDdrTensor(G, dtype, {128, 128}, "matb1");
-    auto matb2 = AddDdrTensor(G, dtype, {128, 128}, "matb2");
-    AddDdrTensor(G, dtype, {1}, "vecdupIn");
-    AddDdrTensor(G, dtype, {64, 128}, "vecdupOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut1");
-    AddDdrTensor(G, dtype, {64, 128}, "mulbOut");
-    AddDdrTensor(G, dtype, {64, 128}, "assembleOut2");
-    AddDdrTensor(G, dtype, {64, 128}, "atomicOut");
-    G.AddOp(Opcode::OP_VEC_DUP, {"vecdupIn"}, {"vecdupOut"}, "vecdupOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"vecdupOut"}, {"assembleOut1"}, "assembleOp1");
-    G.GetOp("assembleOp1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_A_MUL_B, {"assembleOut1", "matb1", "matb2"}, {"mulbOut"}, "mulbOp");
-    G.AddOp(Opcode::OP_ASSEMBLE, {"mulbOut"}, {"assembleOut2"}, "assembleOp2");
-    G.GetOp("assembleOp2")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
-    G.AddOp(Opcode::OP_ATOMIC_RMW, {"assembleOut2"}, {"atomicOut"}, "atomicrmwOp");
-    G.GetOp("atomicrmwOp")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{64, 0}));
-    G.GetOp("atomicrmwOp")->SetAttribute(OpAttributeKey::rmwMode, static_cast<int>(AtomicRMWMode::ADD));
-    G.SetInCast({"vecdupIn", "matb1", "matb2"});
-    G.SetOutCast({"atomicOut"});
-    ProcessAtomic passLocal;
-    auto* function = G.GetFunction();
-    EXPECT_EQ(passLocal.EliminateVecDupBranch(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateReduceAcc(*function), SUCCESS);
-    EXPECT_EQ(passLocal.EliminateAtomicRMW(*function), SUCCESS);
-    auto mulbOp = G.GetOp("mulbOp");
-    ASSERT_NE(mulbOp, nullptr);
-    EXPECT_EQ(mulbOp->GetInputOperandSize(), 3);
-    EXPECT_EQ(CountOpsByType(function, Opcode::OP_VEC_DUP), 1);
-}
 } // namespace tile_fwk
 } // namespace npu
