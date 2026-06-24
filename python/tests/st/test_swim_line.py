@@ -13,7 +13,8 @@ profiling of aicpu pref  test for PyPTO
 """
 import json
 import multiprocessing as mp
-from typing import Dict, List
+from typing import List, Dict
+import contextlib
 import os
 
 import pypto
