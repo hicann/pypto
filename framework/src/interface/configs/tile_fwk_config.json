@@ -122,8 +122,7 @@
                 "expected_value_check": false,
                 "disable_pass": false,
                 "health_check": false,
-                "use_max_freq_label": false,
-                "addr_check": false
+                "use_max_freq_label": false
             }
         },
         "pass_strategies": {

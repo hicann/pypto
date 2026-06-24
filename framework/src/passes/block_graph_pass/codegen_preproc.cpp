@@ -629,53 +629,6 @@ inline void EstimateCVCores(Function& function)
     }
 }
 
-Status CodegenPreproc::CheckSingleTensorAddrRange(
-    const Operation& op, LogicalTensorPtr tensor, size_t tensorIdx, const std::string& tensorType) const
-{
-    const auto& shape = tensor->GetShape();
-    const auto& rawShape = tensor->tensor->rawshape;
-    const auto& offset = tensor->GetOffset();
-
-    if (shape.size() != rawShape.size() || shape.size() != offset.size()) {
-        APASS_LOG_ERROR_F(Elements::Operation,
-            "CheckTensorAddrRange: op[%d] %s tensor[%zu] dimension mismatch: "
-            "shape.size=%zu, rawshape.size=%zu, offset.size=%zu",
-            op.GetOpMagic(), tensorType.c_str(), tensorIdx, shape.size(), rawShape.size(), offset.size());
-        return FAILED;
-    }
-
-    for (size_t dimIdx = 0; dimIdx < shape.size(); dimIdx++) {
-        if (shape[dimIdx] + offset[dimIdx] > rawShape[dimIdx]) {
-            APASS_LOG_ERROR_F(Elements::Operation,
-                "CheckTensorAddrRange: op[%d] %s tensor[%zu] dim[%zu] overflow: "
-                "shape[%zu]=%ld + offset[%zu]=%ld > rawshape[%zu]=%ld",
-                op.GetOpMagic(), tensorType.c_str(), tensorIdx, dimIdx, dimIdx, shape[dimIdx],
-                dimIdx, offset[dimIdx], dimIdx, rawShape[dimIdx]);
-            return FAILED;
-        }
-    }
-    return SUCCESS;
-}
-
-Status CodegenPreproc::CheckTensorAddrRange(Function& function) const
-{
-    for (auto& subProgram : function.rootFunc_->programs_) {
-        for (auto& op : subProgram.second->Operations(false)) {
-            for (size_t inputIdx = 0; inputIdx < op.GetIOperands().size(); inputIdx++) {
-                if (CheckSingleTensorAddrRange(op, op.GetInputOperand(inputIdx), inputIdx, "input") != SUCCESS) {
-                    return FAILED;
-                }
-            }
-            for (size_t outputIdx = 0; outputIdx < op.GetOOperands().size(); outputIdx++) {
-                if (CheckSingleTensorAddrRange(op, op.GetOutputOperand(outputIdx), outputIdx, "output") != SUCCESS) {
-                    return FAILED;
-                }
-            }
-        }
-    }
-    return SUCCESS;
-}
-
 Status CodegenPreproc::RunOnFunction(Function& function)
 {
     EstimateCVCores(function);
@@ -703,14 +656,6 @@ Status CodegenPreproc::RunOnFunction(Function& function)
 
     GenGmOoRCheckInfo(function);
     SetNeedAllocAttr(function);
-
-    if (passDfxconfigs_.addrCheck) {
-        if (CheckTensorAddrRange(function) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "CodegenPreproc RunOnFunction failed at function CheckTensorAddrRange.");
-            return FAILED;
-        }
-    }
 
     APASS_LOG_INFO_F(
         Elements::Operation, "===============================================================> Finish CodegenPreproc.");
