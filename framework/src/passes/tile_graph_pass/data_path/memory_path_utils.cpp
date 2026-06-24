@@ -15,10 +15,6 @@
 
 #include "memory_path_utils.h"
 
-#include <set>
-
-#include "interface/operation/attribute.h"
-
 namespace npu::tile_fwk {
 
 bool MemoryPathUtils::IsSpecialDirectMemoryPath(MemoryType from, MemoryType to)
@@ -37,39 +33,6 @@ bool MemoryPathUtils::ShouldUseDdrForSpecialPath(
     bool hasParallelDifferentRequirement, MemoryType from, MemoryType to)
 {
     return hasParallelDifferentRequirement && IsSpecialDirectMemoryPath(from, to);
-}
-
-MemoryType MemoryPathUtils::ResolveEffectiveConsumerRequirement(
-    Operation* consumerOp, MemoryType directRequirement, MemoryType targetType,
-    const OutputRequirementResolver& resolveOutputRequirement)
-{
-    if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_VIEW) {
-        return directRequirement;
-    }
-    std::set<MemoryType> branchRequirements;
-    auto addRequirement = [&branchRequirements](MemoryType requirement) {
-        if (requirement != MemoryType::MEM_UNKNOWN) {
-            branchRequirements.insert(requirement);
-        }
-    };
-    auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
-    if (viewOpAttribute != nullptr) {
-        addRequirement(viewOpAttribute->GetTo());
-    }
-    if (!consumerOp->oOperand.empty() && consumerOp->oOperand.front() != nullptr) {
-        auto viewOutput = consumerOp->oOperand.front();
-        addRequirement(viewOutput->GetMemoryTypeOriginal());
-        if (resolveOutputRequirement) {
-            addRequirement(resolveOutputRequirement(viewOutput));
-        }
-    }
-    if (branchRequirements.count(targetType) > 0) {
-        return targetType;
-    }
-    if (branchRequirements.size() == 1) {
-        return *branchRequirements.begin();
-    }
-    return directRequirement;
 }
 
 } // namespace npu::tile_fwk
