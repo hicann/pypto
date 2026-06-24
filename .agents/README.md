@@ -76,7 +76,6 @@ Stage 1 规划 → 2 算法 → 3 架构 → 4 设计
 | [`pypto-op-coder`](../.opencode/agents/pypto-op-coder.md) | subagent | 5 | 每次调度只写一个 impl 文件。先 per-module 累计构建 (`modules/<op>_module<k>_impl.py`)，最后一个模块通过 verify 后做 cleanup 把累计 impl 整理成 `<op>_impl.py` 并写 `README.md`。从不写测试，从不调试。 |
 | [`pypto-op-verifier`](../.opencode/agents/pypto-op-verifier.md) | subagent | 4–7 | 仅评判。运行 `detailed_tensor_compare`、布局检查、prefix-eval、回归检查。分类失败原因。从不调查、从不修复。 |
 | [`pypto-op-debugger`](../.opencode/agents/pypto-op-debugger.md) | subagent | 5（按需） | 一次加载一个调试子技能，定位根因，给出补丁建议。补丁由 coder 应用。 |
-| [`pypto-op-optimizer`](../.opencode/agents/pypto-op-optimizer.md) | subagent | 7 | 在精度冻结后做三阶段性能调优（frontend → swimlane → incore）。 |
 
 Agent 之间通过两个产物交换信息：
 - `custom/<op>/MEMORY.md` — 共享叙事（所有 agent 读写）

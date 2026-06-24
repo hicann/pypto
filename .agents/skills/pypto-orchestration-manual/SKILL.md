@@ -15,7 +15,7 @@ the team as a set of progressive-disclosure references.
 > documents (`principles.md`, `agents.md`, `rules.md`)
 > — is loaded **only by `pypto-op-orchestrator`**. No
 > sub-agent (planner / mathematician / architect / designer / coder /
-> verifier / debugger / optimizer) reads this skill, and no sub-agent
+> verifier / debugger) reads this skill, and no sub-agent
 > Mandatory-reads list references any file under this directory.
 >
 > **Stage vocabulary is intentional here.** Every other skill in the
@@ -41,7 +41,7 @@ the team as a set of progressive-disclosure references.
 | # | Reference | Purpose | Load when |
 |--:|-----------|---------|-----------|
 | 1 | `references/principles.md` | 4 behavioral guidelines (Think, Simplify, Surgical, Goal-Driven) | Always load before the first dispatch of any session |
-| 2 | `references/agents.md` | Sub-agent dispatch contract: roster (stage column), per-agent deliverables / gates / handoff, verifier modes, `failure_category` enum, debugger iteration cap, optimizer regression loop. Sub-agent-internal skill loading lives in each `.opencode/agents/<name>.md` Mandatory reads. | Load before the first sub-agent dispatch; keep it at hand across the whole session |
+| 2 | `references/agents.md` | Sub-agent dispatch contract: roster (stage column), per-agent deliverables / gates / handoff, verifier modes, `failure_category` enum, debugger iteration cap. Sub-agent-internal skill loading lives in each `.opencode/agents/<name>.md` Mandatory reads. | Load before the first sub-agent dispatch; keep it at hand across the whole session |
 | 3 | `references/rules.md` | mandatory rules, module-at-a-time enforcement, 3 prohibitions. Every sub-agent output must pass these | On demand — sub-agents enforce these via their own skills + lint |
 
 These references were previously top-level files under `.agents/`. They

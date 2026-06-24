@@ -27,12 +27,11 @@ not inspect what skills each agent loads.
 | 5 | `pypto-op-coder` | Stage 5 (per-module + cleanup) |
 | 6 | `pypto-op-verifier` | Stage 4 scaffolding (Step B) + Stage 5 phase scaffolding + Stage 5 composition + Stage 6 E2E + Stage 7 regression |
 | 7 | `pypto-op-debugger` | Stage 5 failure investigation |
-| 8 | `pypto-op-optimizer` | Stage 7 |
 
 **Separation of concerns in Stage 5 phase failure:** verifier = judge
 (pass / fail with `failure_category`); debugger = investigator (proposes a
 patch in `MEMORY.md`); coder = the only agent that writes production
-kernel code. The orchestrator never edits kernel code itself.
+kernel code. The orchestrator does not edit kernel code in Stage 1–6.
 
 ---
 
@@ -67,7 +66,7 @@ kernel code. The orchestrator never edits kernel code itself.
   `module_count - 1` data-flow breakpoints; Layers A–L populated; vec
   tile axes ∈ [16, 64] (or rationale for going below 16); cube tile by
   the M-based recommendation table. **Performance target sheet is NOT
-  produced here** — it is the optimizer's Stage 7 entry deliverable.
+  produced here** — it is produced at Stage 7 entry by the orchestrator (via skill `pypto-op-perf-tune`).
 - **Handoff:** Returns to orchestrator → dispatch `pypto-op-designer`.
 
 ### 4. pypto-op-designer — Stage 4
@@ -125,7 +124,7 @@ everything" agent. The orchestrator chooses the mode per dispatch.
 - **Stage 6 final E2E mode:** Run `detailed_tensor_compare` on every
   output of `<op>_impl.py` plus the final layout / structure lint gate.
 - **Stage 7 regression mode:** Re-run E2E + layout + perf-analyzer delta
-  for each optimizer change. Reports adopt / regression / no-gain.
+  for each tuning change applied by the orchestrator. Reports adopt / regression / no-gain.
 
 **Verdict format — always one of:**
 
@@ -161,32 +160,4 @@ retrying checks without a prior debugger → coder cycle.
   failure of the same module, stop and surface the blocker to the
   orchestrator with all collected evidence.
 
-### 8. pypto-op-optimizer — Stage 7
 
-- **Activation precondition:** Stage 6 completion has passed (E2E
-  `all_close: true` on every output; layout check exit 0). The optimizer
-  is dormant until then.
-- **Entry deliverable:** the **Performance target sheet** in
-  `MEMORY.md` — concrete baseline (measured on a representative P0
-  shape), target (from `SPEC.md` performance budget or torch-eager
-  comparable), required speedup. The tile-shape upper bound (≤ 64 from
-  Stage 3) is lifted here based on profiling.
-- **Per-change deliverable:** a kernel modification + the verifier's
-  regression report logged to `MEMORY.md`.
-
-**Regression loop (per optimizer change):**
-
-```
-optimizer: apply change N
-  ↓
-verifier (Stage 7 mode):
-  (1) detailed_tensor_compare → all_close?
-  (2) layout / structure lint  → exit 0?
-  (3) perf-analyzer            → delta vs baseline
-  ↓
-optimizer:
-  - regression       → rollback, log, try next idea
-  - no gain          → log, try next idea
-  - gain, no regress → adopt, move on
-  - target reached   → stop, hand back to orchestrator
-```
