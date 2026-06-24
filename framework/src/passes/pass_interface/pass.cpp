@@ -25,37 +25,21 @@
 
 static constexpr size_t PASS_NUM_DIGITS = 2;
 namespace npu::tile_fwk {
-namespace {
-const char* kComputationGraphFolder = "computation_graph";
-}
-
 Pass::Pass(std::string name) : name_(std::move(name)) {}
 
 const std::string& Pass::LogFolder(const std::string& topFolder, size_t i) const
 {
-    return LogFolder(topFolder, "", i);
-}
-
-const std::string& Pass::LogFolder(const std::string& topFolder, const std::string& strategy, size_t i) const
-{
-    if (CreateLogFolder(topFolder, strategy, i) == FAILED) {
+    if (CreateLogFolder(topFolder, i) == FAILED) {
         APASS_LOG_WARN_F(Elements::Function, "Create log folder failed.");
         passFolder_ = topFolder;
     }
     return passFolder_;
 }
 
-Status Pass::CreateLogFolder(const std::string& topFolder, const std::string& strategy, size_t i) const
+Status Pass::CreateLogFolder(const std::string& topFolder, size_t i) const
 {
     if (!topFolder.empty()) {
         passFolder_ = topFolder;
-    }
-    if (!strategy.empty()) {
-        passFolder_ = passFolder_ + "/" + kComputationGraphFolder + "/" + strategy;
-        if (!CreateMultiLevelDir(passFolder_)) {
-            APASS_LOG_ERROR_F(Elements::Function, "Failed to create strategy directory: [%s].", passFolder_.c_str());
-            return FAILED;
-        }
     }
     std::stringstream ss;
     ss << std::setw(PASS_NUM_DIGITS) << std::setfill('0') << i;
@@ -199,12 +183,8 @@ Status Pass::DumpGraphJson(Function& function, const std::string& fileName)
 Status Pass::CreateGraphFolder(Function& function)
 {
     if (passDfxconfigs_.dumpGraph) {
-        graphFolder_ = config::LogTopFolder();
-        if (!strategy_.empty()) {
-            graphFolder_ = graphFolder_ + '/' + kComputationGraphFolder + '/' + strategy_;
-        }
-        graphFolder_ = graphFolder_ + '/' + function.GetMagicName();
-        bool res = CreateMultiLevelDir(graphFolder_);
+        graphFolder_ = config::LogTopFolder() + '/' + function.GetMagicName();
+        bool res = CreateDir(graphFolder_);
         if (res == false) {
             APASS_LOG_ERROR_F(Elements::Function, "Failed to create directory: [%s].", graphFolder_.c_str());
             return FAILED;
