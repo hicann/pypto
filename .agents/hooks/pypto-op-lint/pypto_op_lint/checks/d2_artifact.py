@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 
-import ast
 import json
 import os
-import re
+import re as _re_ol54
 import subprocess
 
 from ..core import (
@@ -23,7 +22,6 @@ from ..utils import (
     _extract_markdown_headings,
     _extract_section_text,
     _has_heading_like,
-    _impl_files_to_scan,
     _parse_front_matter,
     _phase_to_module_suffix,
     _validate_doc_schema,
@@ -115,13 +113,13 @@ def check_ol09(ctx: CheckContext) -> Finding:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-_SELF_REVIEW_HEADING_TMPL = re.compile(
+_SELF_REVIEW_HEADING_TMPL = _re_ol54.compile(
     r"^\s*##\s+Phase\s+(M\d+)\s+self-review.*$",
-    re.IGNORECASE | re.MULTILINE,
+    _re_ol54.IGNORECASE | _re_ol54.MULTILINE,
 )
-_CHECKLIST_ITEM_RE = re.compile(
+_CHECKLIST_ITEM_RE = _re_ol54.compile(
     r"^\s*[-*]\s+\[([ xX✓✗❌])\]\s+(.+?)(?:\s*$)",
-    re.MULTILINE,
+    _re_ol54.MULTILINE,
 )
 
 
@@ -180,7 +178,7 @@ def check_ol54(ctx: CheckContext) -> Finding:
             file=memory_file,
         )
     start = target.end()
-    next_h_match = re.search(r"^\s*##\s+", text[start:], re.MULTILINE)
+    next_h_match = _re_ol54.search(r"^\s*##\s+", text[start:], _re_ol54.MULTILINE)
     body = text[start: start + next_h_match.start()] if next_h_match else text[start:]
 
     items = _CHECKLIST_ITEM_RE.findall(body)
@@ -518,377 +516,3 @@ def check_ol59(ctx: CheckContext) -> Finding:
         f"{GOLDEN_PERF_REPORT_FILE} 存在且包含 Op Performance 表头",
         file=GOLDEN_PERF_REPORT_FILE,
     )
-
-
-_PREFLIGHT_TABLE_RE = re.compile(
-    r"^\s*\|.{2,}\|",
-    re.MULTILINE,
-)
-_PREFLIGHT_CHECKLIST_ITEM_RE = re.compile(
-    r"^\s*-\s+\[([ xX✓✗❌\-])\]",
-    re.MULTILINE,
-)
-_PREFLIGHT_PENDING_RE = re.compile(
-    r"^\s*-\s+\[-\]",
-    re.MULTILINE,
-)
-_PREFLIGHT_WARNING_ANNOTATION_RE = re.compile(
-    r"^\s*>\s*⚠️\s*待验证",
-    re.MULTILINE,
-)
-_PREFLIGHT_ACCEPTED_ANNOTATION_RE = re.compile(
-    r"^\s*>\s*✅\s*已知风险",
-    re.MULTILINE,
-)
-
-
-@register("OL61")
-def check_ol61(ctx: CheckContext) -> Finding:
-    """Experience Preflight 门禁检查。
-
-    Design 阶段 (complete_stage(3)):
-      1. MEMORY.md preflight section 存在性（非占位符）
-      2. Preflight checklist 格式合规（markdown checklist，非表格；[-] 项有 ⚠️ 待验证）
-
-    Impl 阶段 (coder dispatch 前):
-      3. 所有 [-] 项已消除（改为 [x] 或标注 > ✅ 已知风险，接受）
-      4. AST code scan (F1/F2/F4/F8)
-    """
-    failures = []
-
-    if not ctx.file_exists(DESIGN_FILE):
-        if ctx.file_scope and ctx.stage in (5, 6):
-            _ol61_code_scan(ctx, failures)
-            if failures:
-                return ctx.make_finding(
-                    "OL61", "FAIL",
-                    f"Stage 5 OL61 AST code scan 失败 ({len(failures)} 项):\n"
-                    + "\n".join(failures),
-                    file=DESIGN_FILE,
-                )
-            return ctx.make_finding("OL61", "PASS", "AST code scan 通过", file=DESIGN_FILE)
-        return ctx.make_finding(
-            "OL61",
-            "SKIP",
-            f"{DESIGN_FILE} 不存在",
-            file=DESIGN_FILE,
-        )
-
-    # ── Check 1 + 2: Preflight section (design 阶段) ──
-    memory_file = "MEMORY.md"
-    section = ""
-    if ctx.file_exists(memory_file):
-        memory_text = ctx.read_file(memory_file)
-        section = _extract_section_text(memory_text, "Experience Preflight")
-
-        if ctx.stage == 3 or ctx.stage is None:
-            placeholders = (
-                "This section is created by the preflight process",
-                "no placeholder content needed here",
-                "no specific preflight items found",
-            )
-            if not section or any(p in (section or "") for p in placeholders):
-                failures.append(
-                    "[R5 Experience Preflight 未执行]: MEMORY.md → "
-                    "'## Experience Preflight' 仍为占位符或不存在。\n"
-                    "修正方针: Orchestrator 必须先 dispatch preflight scan subagent "
-                    "(pypto-op-knowledge → references/experience_preflight.md)，"
-                    "将 checklist 写入 MEMORY.md 后才能 complete_stage(3)。"
-                )
-            elif section:
-                # Check 3a: 禁止表格格式
-                if _PREFLIGHT_TABLE_RE.search(section):
-                    failures.append(
-                        "[Preflight 格式违规]: MEMORY.md → "
-                        "'## Experience Preflight' 使用了表格格式（| ... |）。\n"
-                        "修正方针: 必须使用标准 markdown checklist 格式 "
-                        "（`- [x]`/`- [-]`/`- [ ]`），表格无法承载 "
-                        "`> ⚠️ 待验证` 子注释且无法被门禁解析。"
-                    )
-                # Check 3b: 必须有 checklist 条目
-                checklist_items = _PREFLIGHT_CHECKLIST_ITEM_RE.findall(section)
-                if not checklist_items:
-                    failures.append(
-                        "[Preflight 格式违规]: MEMORY.md → "
-                        "'## Experience Preflight' 未检测到 checklist 条目。\n"
-                        "修正方针: 每个条目必须独占一行 "
-                        "`- [x]/[-] [S0/S1/S2] {描述}`。"
-                    )
-                # Check 3c: 条数上限 20 条
-                elif len(checklist_items) > 20:
-                    failures.append(
-                        f"[Preflight 条数超限]: MEMORY.md → "
-                        f"'## Experience Preflight' 包含 {len(checklist_items)} 条，超过上限 20 条。\n"
-                        f"修正方针: 精简 checklist，删除 N/A 项（算子不使用的 API 规则）、"
-                        f"与固定清单重复项、S2/S3 项、DEBUG_GUIDEBOOK 独立条目。"
-                    )
-                # Check 3d: [-] 项必须有 ⚠️ 待验证 子注释
-                pending_count = len(_PREFLIGHT_PENDING_RE.findall(section))
-                warning_count = len(_PREFLIGHT_WARNING_ANNOTATION_RE.findall(section))
-                if pending_count > 0 and warning_count < pending_count:
-                    failures.append(
-                        f"[Preflight [-] 项缺少待验证注释]: "
-                        f"检测到 {pending_count} 个 `[-]` 条目，但仅有 "
-                        f"{warning_count} 个 `> ⚠️ 待验证` 子注释。\n"
-                        "修正方针: 每个 `[-]` 条目下方必须紧跟 "
-                        "`> ⚠️ 待验证：{具体待确认项}` 子注释行。"
-                    )
-
-    # ── Check 3: Stage 5 [-] 消除门禁 (skip in post-edit / file-scope) ──
-    if ctx.stage == 5 and not ctx.file_scope:
-        if not section:
-            failures.append(
-                "[OL61 Impl 阶段]: MEMORY.md → "
-                "'## Experience Preflight' 不存在。\n"
-                "修正方针: Preflight checklist 必须在 design 阶段生成。"
-            )
-        else:
-            pending_items = _PREFLIGHT_PENDING_RE.findall(section)
-            pending_count = len(pending_items)
-            # Count [-] items that are NOT followed by ✅ 已知风险
-            # A [-] is "eliminated" if it was changed to [x], or if it has
-            # > ✅ 已知风险 annotation. Remaining [-] without annotation = unresolved.
-            lines = section.splitlines()
-            unresolved = 0
-            i = 0
-            while i < len(lines):
-                if re.match(r"^\s*-\s+\[-\]", lines[i]):
-                    # Check if next non-empty line is an accepted annotation
-                    resolved = False
-                    j = i + 1
-                    while j < len(lines) and not lines[j].strip():
-                        j += 1
-                    if j < len(lines):
-                        if _PREFLIGHT_ACCEPTED_ANNOTATION_RE.match(lines[j]):
-                            resolved = True
-                        elif _PREFLIGHT_WARNING_ANNOTATION_RE.match(lines[j]):
-                            # Still has ⚠️ 待验证 = not yet resolved
-                            resolved = False
-                    if not resolved:
-                        unresolved += 1
-                i += 1
-            if unresolved > 0:
-                failures.append(
-                    f"[OL61 Stage 5 Preflight [-] 未消除]: "
-                    f"MEMORY.md → '## Experience Preflight' 中仍有 "
-                    f"{unresolved} 个未消除的 `[-]` 条目。\n"
-                    "修正方针: 每个 `[-]` 必须在 coder dispatch 前消除：\n"
-                    "  (a) 改为 `- [x]`（已验证合规），或\n"
-                    "  (b) 将 `> ⚠️ 待验证` 改为 `> ✅ 已知风险，接受`（确认风险后保留）。"
-                )
-
-    # ── Check 4: Impl 阶段 preflight code scan (AST) ──
-    if ctx.stage in (5, 6):
-        _ol61_code_scan(ctx, failures)
-
-    if failures:
-        stage_label = f"Stage {ctx.stage}" if ctx.stage else "Design"
-        return ctx.make_finding(
-            "OL61",
-            "FAIL",
-            f"{stage_label} OL61 检查失败 ({len(failures)} 项):\n"
-            + "\n".join(failures),
-            file=DESIGN_FILE,
-        )
-
-    if ctx.stage in (5, 6):
-        return ctx.make_finding(
-            "OL61",
-            "PASS",
-            "Stage 5 Preflight [-] 消除 + AST code scan 通过",
-            file=DESIGN_FILE,
-        )
-    return ctx.make_finding(
-        "OL61",
-        "PASS",
-        "Experience Preflight 已执行且格式合规",
-        file=DESIGN_FILE,
-    )
-
-
-_LEGAL_CAST_PATHS: dict[str, set[str]] = {
-    "DT_FP16": {"DT_FP32", "DT_INT32", "DT_INT16", "DT_INT8", "DT_UINT8", "DT_INT4"},
-    "DT_BF16": {"DT_FP32", "DT_INT32"},
-    "DT_INT32": {"DT_FP32", "DT_INT16", "DT_INT64", "DT_FP16"},
-    "DT_FP32": {"DT_BF16", "DT_FP16", "DT_INT16", "DT_INT32", "DT_INT64"},
-    "DT_UINT8": {"DT_FP16"},
-    "DT_INT8": {"DT_FP16"},
-    "DT_INT4": {"DT_FP16"},
-    "DT_INT16": {"DT_FP32", "DT_FP16"},
-    "DT_INT64": {"DT_FP32", "DT_INT32"},
-}
-
-_ARITH_OPS = {"div", "mul", "add", "sub"}
-
-_ALLOC_OPS = {"zeros", "ones"}
-
-
-def _is_pypto_attr(node: ast.AST, aliases: set[str], attr: str | None = None) -> bool:
-    if not isinstance(node, ast.Attribute):
-        return False
-    if not isinstance(node.value, ast.Name):
-        return False
-    if node.value.id not in aliases:
-        return False
-    if attr is not None:
-        return node.attr == attr
-    return True
-
-
-def _get_pypto_call_name(node: ast.Call, aliases: set[str]) -> str | None:
-    if isinstance(node.func, ast.Attribute):
-        if isinstance(node.func.value, ast.Name) and node.func.value.id in aliases:
-            return node.func.attr
-    return None
-
-
-def _is_pypto_cast_result(node: ast.AST, aliases: set[str]) -> bool:
-    if not isinstance(node, ast.Call):
-        return False
-    return _get_pypto_call_name(node, aliases) == "cast"
-
-
-def _get_jit_param_dtypes(tree: ast.Module, aliases: set[str]) -> dict[str, str]:
-    from ..ast_helpers import _get_jit_functions
-    result: dict[str, str] = {}
-    for func in _get_jit_functions(tree, aliases):
-        for arg in func.args.args:
-            ann = arg.annotation
-            if ann is None:
-                continue
-            target = ann
-            if isinstance(target, ast.Call):
-                target = target.func
-            if not _is_pypto_attr(target, aliases, "Tensor"):
-                continue
-            if isinstance(ann, ast.Call):
-                for a in ann.args:
-                    if isinstance(a, ast.Attribute) and a.attr.startswith("DT_"):
-                        result[arg.arg] = a.attr
-                        break
-    return result
-
-
-def _ol61_code_scan(ctx: CheckContext, failures: list[str]) -> None:
-    impl_files = _impl_files_to_scan(ctx)
-    for impl_file in impl_files:
-        tree = ctx.parse_file(impl_file)
-        if tree is None:
-            continue
-        aliases = ctx.pypto_aliases(impl_file)
-        param_dtypes = _get_jit_param_dtypes(tree, aliases)
-        _ol61_5a_cast_path(tree, aliases, param_dtypes, impl_file, failures)
-        _ol61_5b_element_wrap(tree, aliases, impl_file, failures)
-        _ol61_5c_scalar_first_arg(tree, aliases, impl_file, failures)
-        _ol61_5d_alloc_dtype(tree, aliases, impl_file, failures)
-
-
-def _ol61_5a_cast_path(
-    tree: ast.Module, aliases: set[str],
-    param_dtypes: dict[str, str], impl_file: str,
-    failures: list[str],
-) -> None:
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        if _get_pypto_call_name(node, aliases) != "cast":
-            continue
-        if len(node.args) < 2:
-            continue
-        target_dt = None
-        for arg in node.args[1:]:
-            if isinstance(arg, ast.Attribute) and arg.attr.startswith("DT_"):
-                target_dt = arg.attr
-                break
-        if target_dt is None:
-            continue
-        src = node.args[0]
-        src_is_cast = _is_pypto_cast_result(src, aliases)
-        if src_is_cast:
-            continue
-        src_dt = None
-        if isinstance(src, ast.Name) and src.id in param_dtypes:
-            src_dt = param_dtypes[src.id]
-        if src_dt is None:
-            continue
-        legal = _LEGAL_CAST_PATHS.get(src_dt, set())
-        if target_dt not in legal:
-            failures.append(
-                f"[OL61 Preflight F4 非法 cast 路径] {impl_file}: "
-                f"pypto.cast({src_dt} → {target_dt}) 不在合法直转路径表中。\n"
-                f"修正方针: 使用跳板 cast，如 INT8→FP32 须经 FP16: "
-                f"pypto.cast(pypto.cast(x, pypto.DT_FP16), pypto.DT_FP32)。\n"
-                f"合法直转: {src_dt} → {{{', '.join(sorted(legal))}}}"
-            )
-
-
-def _ol61_5b_element_wrap(
-    tree: ast.Module, aliases: set[str],
-    impl_file: str, failures: list[str],
-) -> None:
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        call_name = _get_pypto_call_name(node, aliases)
-        if call_name is None:
-            continue
-        for arg in node.args:
-            if (isinstance(arg, ast.Call)
-                    and _is_pypto_attr(arg.func, aliases, "Element")):
-                failures.append(
-                    f"[OL61 Preflight F2 Element 双重包装] {impl_file}: "
-                    f"pypto.{call_name}(..., pypto.Element(...), ...) — "
-                    f"pypto.Element() 作为参数传入其他 pypto 运算会导致二次封装崩溃。\n"
-                    f"修正方针: 直接用 Python 标量，如 pypto.mul(tensor, 127.0)，"
-                    f"不要构造 pypto.Element(DT_FP32, 127.0)。"
-                )
-                break
-
-
-def _ol61_5c_scalar_first_arg(
-    tree: ast.Module, aliases: set[str],
-    impl_file: str, failures: list[str],
-) -> None:
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        call_name = _get_pypto_call_name(node, aliases)
-        if call_name not in _ARITH_OPS:
-            continue
-        if not node.args:
-            continue
-        first = node.args[0]
-        if isinstance(first, ast.Constant) and isinstance(first.value, (int, float)):
-            failures.append(
-                f"[OL61 Preflight F1 scalar 首参] {impl_file}: "
-                f"pypto.{call_name}({first.value!r}, ...) — "
-                f"第一参数是 Python 标量，必须是 Tensor。\n"
-                f"修正方针: 交换参数顺序，如 pypto.{call_name}(tensor, {first.value!r})，"
-                f"或用 pypto.full() 构造标量 Tensor。"
-            )
-
-
-def _ol61_5d_alloc_dtype(
-    tree: ast.Module, aliases: set[str],
-    impl_file: str, failures: list[str],
-) -> None:
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        call_name = _get_pypto_call_name(node, aliases)
-        if call_name not in _ALLOC_OPS:
-            continue
-        if any(kw.arg == "dtype" for kw in node.keywords):
-            continue
-        for _, arg in enumerate(node.args):
-            if isinstance(arg, ast.Attribute) and arg.attr.startswith("DT_"):
-                failures.append(
-                    f"[OL61 Preflight F8 {call_name} dtype 位置] {impl_file}: "
-                    f"pypto.{call_name}(..., {arg.attr}) — "
-                    f"dtype 被位置参数 *size 吞掉，必须用关键字参数。\n"
-                    f"修正方针: pypto.{call_name}(shape, dtype={arg.attr})"
-                )
-                break
-
-
-
