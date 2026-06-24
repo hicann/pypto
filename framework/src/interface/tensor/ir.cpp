@@ -9,15 +9,17 @@
  */
 #include "ir.h"
 #include "ir/kind_traits.h"
+#include "ir/type.h"
 #include "ir/transforms/passes.h"
 #include "ir/transforms/utils/dead_code_elimination.h"
 
 #include "symbolic_scalar.h"
 #include "logical_tensor.h"
+#include "token_pass.h"
 
 using npu::tile_fwk::LogicalTensor;
-using npu::tile_fwk::RawTensor;
 using npu::tile_fwk::RawSymbolicExpression;
+using npu::tile_fwk::RawTensor;
 
 namespace pypto::ir {
 std::string DumpScalarExpr(const ScalarExprPtr& op)
@@ -39,7 +41,7 @@ Pass pass::AggressiveDCE()
     return pass::CreateFunctionPass(
         [](const FunctionPtr& func) -> FunctionPtr {
             // Collect RawTensors from function input parameters.
-            std::unordered_set<RawTensor *> rawTensors;
+            std::unordered_set<RawTensor*> rawTensors;
             for (const auto& param : func->params_) {
                 if (auto type = ir::As<LogicalTensorType>(param->GetType())) {
                     auto t = std::dynamic_pointer_cast<const LogicalTensor>(param);
@@ -85,4 +87,13 @@ Pass pass::AggressiveDCE()
         "AggressiveDCE");
 }
 
+Pass pass::TokenPass()
+{
+    return pass::CreateFunctionPass(
+        [](const FunctionPtr& func) -> FunctionPtr {
+            npu::tile_fwk::TokenPass transform;
+            return transform(func);
+        },
+        "TokenPass");
+}
 } // namespace pypto::ir

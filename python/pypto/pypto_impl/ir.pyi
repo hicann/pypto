@@ -2339,3 +2339,11 @@ class Pass:
         Returns:
             None
         """
+
+    @staticmethod
+    def token_pass() -> Pass:
+        """Add WAR/WAW token dependencies.
+
+        Returns:
+            None
+        """
