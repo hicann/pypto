@@ -63,12 +63,12 @@ def shmem_store(
     )
     """
     if pred is None:
-        dummy = pypto_impl.Full(pypto_impl.Element(DataType.DT_INT32, 1), DataType.DT_INT32, [1, 1], to_syms([]))
+        dummy = pypto_impl.Tensor(DataType.DT_INT32, [1, 1], "", pypto_impl.TileOpFormat.TILEOP_ND)
     else:
         src_id = src.Id()
         valid_pred = [p for p in pred if p.Id() != src_id]
         if len(valid_pred) == 0:
-            dummy = pypto_impl.Full(pypto_impl.Element(DataType.DT_INT32, 1), DataType.DT_INT32, [1, 1], to_syms([]))
+            dummy = pypto_impl.Tensor(DataType.DT_INT32, [1, 1], "", pypto_impl.TileOpFormat.TILEOP_ND)
         elif len(valid_pred) == 1:
             dummy = valid_pred[0]
         else:
@@ -135,7 +135,7 @@ def shmem_load(
     result = pypto.exp(tile)
     """
     if pred is None:
-        dummy = pypto_impl.Full(pypto_impl.Element(DataType.DT_INT32, 1), DataType.DT_INT32, [1, 1], to_syms([]))
+        dummy = Tensor([1, 1], DataType.DT_INT32).base()
     else:
         dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
     if shape is not None and offsets is not None:
