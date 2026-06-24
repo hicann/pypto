@@ -183,15 +183,6 @@ Status SplitReshape::CheckDynStatus(
     if (dynOutput.empty()) {
         return SUCCESS;
     }
-    if (std::any_of(input.begin(), input.end(), [](int64_t s) { return s == -1; }) ||
-        std::any_of(output.begin(), output.end(), [](int64_t s) { return s == -1; })) {
-        APASS_LOG_WARN_F(
-            Elements::Tensor,
-            "Found -1 in input or output shape, input shape is %s, output shape is %s, "
-            "this scenario cannot be handled by split reshape pass.",
-            GetStr(input).c_str(), GetStr(output).c_str());
-        return WARNING;
-    }
     if (output.size() != dynOutput.size()) {
         APASS_LOG_ERROR_F(
             Elements::Tensor,
@@ -1170,11 +1161,9 @@ Status SplitReshape::UpdateReshapeOp(
     return SUCCESS;
 }
 
-Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& checkOutputParam)
+Status SplitReshape::CheckReshapeSkip(
+    const LogicalTensorPtr& input, const LogicalTensorPtr& output, CheckOutputParam& checkOutputParam)
 {
-    auto input = para.input;
-    auto output = para.output;
-    auto inputView = para.inputView;
     if (input->shape == output->shape) {
         APASS_LOG_DEBUG_F(
             Elements::Tensor, "The input and output of view op have the same shape, no need to split reshape (if "
@@ -1188,6 +1177,29 @@ Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& chec
         return WARNING;
     }
     checkOutputParam.reshapeSource = reshapeSourceIter->second;
+    const auto& reshapeInputShape = checkOutputParam.reshapeSource->GetRawTensor()->GetRawShape();
+    const auto& reshapeOutputShape = input->GetRawTensor()->GetRawShape();
+    if (CommonUtils::ContainsNegativeOne(reshapeInputShape) ||
+        CommonUtils::ContainsNegativeOne(reshapeOutputShape)) {
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor,
+            "Found -1 in reshape input or output shape, input shape is %s, output shape is %s, "
+            "this scenario cannot be handled by split reshape pass.",
+            GetStr(reshapeInputShape).c_str(), GetStr(reshapeOutputShape).c_str());
+        return WARNING;
+    }
+    return SUCCESS;
+}
+
+Status SplitReshape::CheckValidOp(const CheckParam& para, CheckOutputParam& checkOutputParam)
+{
+    auto input = para.input;
+    auto output = para.output;
+    auto inputView = para.inputView;
+    if (CheckReshapeSkip(input, output, checkOutputParam) == WARNING) {
+        return WARNING;
+    }
+    const int inputRawMagic = input->GetRawTensor()->GetRawMagic();
     if (ShapeAlign(
             checkOutputParam.reshapeSource->GetRawTensor()->GetRawShape(), input->GetRawTensor()->GetRawShape(),
             checkOutputParam.alignedShape) == WARNING) {
