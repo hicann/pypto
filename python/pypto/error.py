@@ -27,23 +27,17 @@ import ast
 from functools import wraps
 from typing import Union, Optional, Callable
 
-from . import pypto_impl
 
-
-def _to_py_error_code(err_code) -> int:
-    return 0xF00000 | int(err_code)
-
-
-_ERROR_CODE_UNKNOWN = _to_py_error_code(pypto_impl.ExternalError.UNKNOWN)
+_ERROR_CODE_UNKNOWN = 0xF0FFFF
 
 _error_mapping = {
-    TypeError: _to_py_error_code(pypto_impl.ExternalError.INVALID_TYPE),
-    ValueError: _to_py_error_code(pypto_impl.ExternalError.INVALID_VAL),
-    RuntimeError: _to_py_error_code(pypto_impl.ExternalError.RUNTIME_ERROR),
-    NameError: _to_py_error_code(pypto_impl.ExternalError.NAME_ERROR),
-    NotImplementedError: _to_py_error_code(pypto_impl.ExternalError.NOT_IMPLEMENTED_ERROR),
-    KeyError: _to_py_error_code(pypto_impl.ExternalError.KEY_ERROR),
-    IndexError: _to_py_error_code(pypto_impl.ExternalError.OUT_OF_RANGE),
+    TypeError: 0xF00001,
+    ValueError: 0xF00002,
+    RuntimeError: 0xF00003,
+    NameError: 0xF00004,
+    NotImplementedError: 0xF00005,
+    KeyError: 0xF00006,
+    IndexError: 0xF00007,
 }
 
 
