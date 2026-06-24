@@ -14,7 +14,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
-import uuid
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_COMMAND_PATTERN = re.compile(r"python3?\s+.*test_\w+\.py")
@@ -71,7 +70,6 @@ class Finding:
     rule_id: str = ""
     severity: str = ""
     dimension: str = ""
-    fix_effort: str = ""
     status: str = "SKIP"
     message: str = ""
     file: str = ""
@@ -160,7 +158,6 @@ class CheckContext:
             rule_id=rule_id,
             severity=rule.get("severity", "S2"),
             dimension=rule.get("dimension", ""),
-            fix_effort=rule.get("fix_effort", ""),
             status=status,
             message=message,
             file=file,
@@ -190,49 +187,30 @@ def _load_rules() -> list[dict[str, Any]]:
     return data.get("rules", [])
 
 
-def _run_checks(ctx: CheckContext, rule_ids: list[str]) -> tuple[list[Finding], str]:
-    from .observability import (
-        _emit_metric_event_buffered,
-        _flush_metrics_batch,
-        _emit_summary_event,
-        _RunMeta,
-    )
-    invocation_id = uuid.uuid4().hex[:8]
+def _run_checks(ctx: CheckContext, rule_ids: list[str]) -> list[Finding]:
+    """执行指定规则的检查"""
+    from .observability import _emit_metric_event  # noqa: PLC0415
     findings = []
-    run_meta = _RunMeta(
-        mode=os.environ.get(MODE_ENV, "cli"),
-        strict=os.environ.get(STRICT_ENV, "1") == "1",
-        invocation_id=invocation_id,
-    )
-    total_duration_ms = 0.0
-    try:
-        for rid in rule_ids:
-            start = time.perf_counter()
-            rule = ctx.get_rule(rid)
-            if ctx.stage not in rule.get("stages", []):
-                finding = ctx.make_finding(rid, "SKIP", "当前阶段不适用")
-                findings.append(finding)
-                dur = (time.perf_counter() - start) * 1000
-                total_duration_ms += dur
-                _emit_metric_event_buffered(ctx, finding, run_meta, dur)
-                continue
-            checker = CHECKERS.get(rid)
-            if not checker:
-                finding = ctx.make_finding(rid, "SKIP", "检查函数未注册")
-                findings.append(finding)
-                dur = (time.perf_counter() - start) * 1000
-                total_duration_ms += dur
-                _emit_metric_event_buffered(ctx, finding, run_meta, dur)
-                continue
-            finding = checker(ctx)
+    mode = os.environ.get(MODE_ENV, "cli")
+    strict = os.environ.get(STRICT_ENV, "1") == "1"
+    for rid in rule_ids:
+        start = time.perf_counter()
+        rule = ctx.get_rule(rid)
+        if ctx.stage not in rule.get("stages", []):
+            finding = ctx.make_finding(rid, "SKIP", "当前阶段不适用")
             findings.append(finding)
-            dur = (time.perf_counter() - start) * 1000
-            total_duration_ms += dur
-            _emit_metric_event_buffered(ctx, finding, run_meta, dur)
-    finally:
-        _flush_metrics_batch()
-    _emit_summary_event(ctx, findings, run_meta, total_duration_ms)
-    return findings, invocation_id
+            _emit_metric_event(ctx, finding, mode, strict, (time.perf_counter() - start) * 1000)
+            continue
+        checker = CHECKERS.get(rid)
+        if not checker:
+            finding = ctx.make_finding(rid, "SKIP", "检查函数未注册")
+            findings.append(finding)
+            _emit_metric_event(ctx, finding, mode, strict, (time.perf_counter() - start) * 1000)
+            continue
+        finding = checker(ctx)
+        findings.append(finding)
+        _emit_metric_event(ctx, finding, mode, strict, (time.perf_counter() - start) * 1000)
+    return findings
 
 
 def _has_error_fail(findings: list[Finding]) -> bool:
