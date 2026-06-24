@@ -656,45 +656,6 @@ Status OoOScheduler::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp
     if (InsertOps({{allocOp, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid) != SUCCESS) {
         return FAILED;
     }
-    Operation* wholeCopyinOp = nullptr;
-    if (FillSpillAssembleBuffer(spillMemid, spillTensor, assembleTensor, copyoutOp, gmTensor, spillAllocOp,
-            wholeCopyinOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "FillSpillAssembleBuffer failed.");
-        return FAILED;
-    }
-
-    if (UpdateRemainMemid(spillMemid, assembleTensor->memoryrange.memId) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainMemid failed.");
-        return FAILED;
-    }
-    depManager_.InitDependencies(orderedOps, false);
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(copyoutOp, allocOp, wholeCopyinOp, gmTensor);
-    return SUCCESS;
-}
-
-// 全生产者已 retired：整块 CopyIn 回填；否则逐个 copyIn+Assemble。
-Status OoOScheduler::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor,
-    LogicalTensorPtr assembleTensor, Operation* copyoutOp, LogicalTensorPtr gmTensor, Operation* spillAllocOp,
-    Operation*& wholeCopyinOut)
-{
-    wholeCopyinOut = nullptr;
-    bool allRetired = true;
-    for (auto &op : spillTensor->GetProducers()) {
-        if (opIsAllocMap[op]) {
-            continue;
-        }
-        if (!opIsRetiredMap[op]) {
-            allRetired = false;
-            break;
-        }
-    }
-    if (allRetired) {
-        wholeCopyinOut = CreateCopyinOp(gmTensor, assembleTensor, OpImmediate::Specified(gmTensor->GetOffset()));
-        UpdateOpScheduleInfo(wholeCopyinOut, {assembleTensor->memoryrange.memId}, spillAllocOp);
-        return InsertOps({{wholeCopyinOut, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid);
-    }
     std::vector<Operation*> replaceOps;
     for (auto &op : spillTensor->GetProducers()) {
         if (opIsAllocMap[op]) {
@@ -709,6 +670,15 @@ Status OoOScheduler::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr sp
     for (auto &op : replaceOps) {
         op->ReplaceOutput(assembleTensor, spillTensor);
     }
+
+    if (UpdateRemainMemid(spillMemid, assembleTensor->memoryrange.memId) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainMemid failed.");
+        return FAILED;
+    }
+    depManager_.InitDependencies(orderedOps, false);
+    ctx.newCopyoutOps.push_back(copyoutOp);
+    ctx.newAllocOps.push_back(allocOp);
+    created.Record(copyoutOp, allocOp, nullptr, gmTensor);
     return SUCCESS;
 }
 
@@ -757,7 +727,7 @@ Status OoOScheduler::CreateParticalBuffer(int spillMemid, Operation* producerOp,
  	    return FAILED;
  	}
 
-    LogicalTensorPtr copyinTensor = CreateParticalTensor(producerOp->GetInputOperand(0), assembleTensor, producerOp->GetInputOperand(0), toOffset);
+    LogicalTensorPtr copyinTensor = CreateParticalTensor(gmTensor, assembleTensor, producerOp->GetInputOperand(0), toOffset);
     Operation* copyinOp = CreateCopyinOp(gmTensor, copyinTensor, OpImmediate::Specified(toOffset));
     Operation* assembleOp = CreateAssembleOp(copyinTensor, assembleTensor, toOffset, toDynOffset, fromDynValidShape);
 
