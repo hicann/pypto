@@ -1850,12 +1850,6 @@ def gen_transpose_op_golden(
     return gen_op_golden("Transpose", golden_func, output, case_index)
 
 
-@TestCaseLoader.reg_params_handler(ops=["TransData"])
-def permute_params_func(params: dict):
-    params["valid_shape"] = parse_list_str(params.get("valid_shape"))
-    return params
-
-
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestTransData/TransDataOperationTest.TestTransData",
@@ -1899,17 +1893,13 @@ def gen_transpose_op_golden(
             if len(input_tensor.shape) == 5:
                 input_n, input_c1, input_h, input_w, c0 = input_tensor.shape
                 total_c = c0 * input_c1
-                output_c = config["output_tensors"][0]["shape"][1]
-                res = torch.zeros(input_n, output_c, input_h, input_w)
+                res = torch.zeros(input_n, total_c, input_h, input_w)
                 per_group_c1 = input_c1 // group
                 per_group_c = per_group_c1 * c0
-                per_output_group_c = output_c // group
                 for i in range(group):
                     tmp_input_tensor = input_tensor[:, i * per_group_c1:(i + 1) * per_group_c1, :, :, :]
-                    tmp_res = tmp_input_tensor.permute(0, 1, 4, 2, 3).reshape(
-                        input_n, per_group_c, input_h, input_w)
-                    res[:, i * per_output_group_c:(i + 1) * per_output_group_c, :, :] = \
-                        tmp_res[:, :per_output_group_c, :, :]
+                    tmp_res = tmp_input_tensor.permute(0, 1, 4, 2, 3).reshape(input_n, per_group_c, input_h, input_w)
+                    res[:, i * per_group_c:(i + 1) * per_group_c, :, :] = tmp_res
 
                 if inputs[0].dtype == bfloat16:
                     res = res.to(torch.float32).numpy().astype(bfloat16)
@@ -1919,17 +1909,13 @@ def gen_transpose_op_golden(
             elif len(input_tensor.shape) == 6:
                 input_n, input_d, input_c1, input_h, input_w, c0 = input_tensor.shape
                 total_c = c0 * input_c1
-                output_c = config["output_tensors"][0]["shape"][1]
-                res = torch.zeros(input_n, output_c, input_d, input_h, input_w)
+                res = torch.zeros(input_n, total_c, input_d, input_h, input_w)
                 per_group_c1 = input_c1 // group
                 per_group_c = per_group_c1 * c0
-                per_output_group_c = output_c // group
                 for i in range(group):
                     tmp_input_tensor = input_tensor[:, :, i * per_group_c1:(i + 1) * per_group_c1, :, :, :]
-                    tmp_res = tmp_input_tensor.permute(0, 2, 5, 1, 3, 4).reshape(
-                        input_n, per_group_c, input_d, input_h, input_w)
-                    res[:, i * per_output_group_c:(i + 1) * per_output_group_c, :, :, :] = \
-                        tmp_res[:, :per_output_group_c, :, :, :]
+                    tmp_res = tmp_input_tensor.permute(0, 2, 5, 1, 3, 4).reshape(input_n, per_group_c, input_d, input_h, input_w)
+                    res[:, i * per_group_c:(i + 1) * per_group_c, :, :, :] = tmp_res
 
                 if inputs[0].dtype == bfloat16:
                     res = res.to(torch.float32).numpy().astype(bfloat16)
