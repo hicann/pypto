@@ -101,7 +101,7 @@ def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScal
 
 4. 省略号（...）
 
-   使用 \`...\`自动填充中间的所有维度，简化多维索引。
+   使用 \`...\` 自动填充中间的所有维度，简化多维索引。
 
    ```python
    a = pypto.tensor([4, 4], pypto.DT_FP32)
