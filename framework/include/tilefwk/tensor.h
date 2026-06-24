@@ -323,6 +323,4 @@ SymbolicScalar IsLoopBegin(const SymbolicScalar& symbol, const SymbolicScalar& b
 SymbolicScalar IsLoopEnd(const SymbolicScalar& symbol, const SymbolicScalar& end);
 
 void SetTensorData(const SymbolicScalar& v, const std::vector<SymbolicScalar>& off, Tensor& dst);
-
-void TensorMove(Tensor& src, Tensor& dst);
 } // namespace npu::tile_fwk

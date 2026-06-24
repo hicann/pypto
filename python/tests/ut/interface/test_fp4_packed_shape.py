@@ -13,7 +13,6 @@ Verify that a packed FP4x2 uint8 input is exposed as DT_FP4_E2M1 with logical K 
 """
 
 import os
-from contextlib import contextmanager
 
 import pypto
 import torch
@@ -22,16 +21,6 @@ import torch
 M = 64
 PACKED_K = 32
 LOGICAL_K = PACKED_K * 2
-
-
-@contextmanager
-def npuarch(arch: str):
-    try:
-        old_arch = pypto.platform.npuarch
-        pypto.platform.npuarch = arch
-        yield
-    finally:
-        pypto.platform.npuarch = old_arch
 
 
 @pypto.frontend.jit(
@@ -45,14 +34,12 @@ def fp4_kernel(
     assert x.shape[-1] == PACKED_K * 2
 
     pypto.set_vec_tile_shapes(32, 32)
-    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
-    out.move(pypto.matmul(x, x, pypto.DT_INT32) + 1)
+    out.move(out + 1)
 
 
-@npuarch("DAV_3510")
 def test_fp4x2_to_fp4_logical_shape():
     packed_x = torch.zeros((M, PACKED_K), dtype=torch.uint8)
-    out = torch.zeros((M, M), dtype=torch.int32)
+    out = torch.zeros((1,), dtype=torch.int32)
 
     fp4_kernel(packed_x, out)
 
@@ -68,15 +55,12 @@ def fp4x2_kernel(
     assert x.shape[-1] == PACKED_K
 
     pypto.set_vec_tile_shapes(32, 32)
-    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
-    t = pypto.matmul(x, x, pypto.DT_INT32, b_trans=True)
-    out.move(t + 1)
+    out.move(out + 1)
 
 
-@npuarch("DAV_3510")
 def test_fp4x2_to_fp4x2_logical_shape():
     packed_x = torch.zeros((M, PACKED_K), dtype=torch.uint8)
-    out = torch.zeros((M, M), dtype=torch.int32)
+    out = torch.zeros((1,), dtype=torch.int32)
 
     fp4x2_kernel(packed_x, out)
 

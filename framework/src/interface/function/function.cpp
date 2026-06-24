@@ -39,7 +39,6 @@
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
-#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk;
 
@@ -1781,7 +1780,6 @@ Operation& Function::AddOperation(const std::string& opName, LogicalTensors iOpe
 
 Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands)
 {
-    IRBuilder builder;
     CheckTensorDynamicShape(iOperands, opCode);
 
     auto ClearOffset = [](LogicalTensorPtr t) {
@@ -1790,10 +1788,6 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
         t->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
     };
 
-    auto cmp = [](ir::VarPtr a, ir::VarPtr b) {
-        return a->name_ < b->name_;
-    };
-    std::set<ir::VarPtr, decltype(cmp)> tokenSets(cmp);
     for (auto& iOp : iOperands) {
         LogicalTensorPtr parent = nullptr;
         if (iOp->GetAttr("SLICE_PARENT", parent)) {
@@ -1803,14 +1797,11 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
             ClearOffset(iOp);
             iOp->RemoveAttr("SLICE_PARENT");
             iOp->tensor = newRaw;
-            auto tokens = builder.GetDependToken(parent);
-            tokenSets.insert(tokens.begin(), tokens.end());
         }
     }
 
     auto& ret = AddRawOperation(opCode, iOperands, oOperands);
 
-    std::vector<ir::VarPtr> tokenList(tokenSets.begin(), tokenSets.end());
     for (auto& oOp : oOperands) {
         LogicalTensorPtr parent = nullptr;
         if (oOp->GetAttr("SLICE_PARENT", parent)) {
@@ -1820,11 +1811,6 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
             ClearOffset(oOp);
             oOp->RemoveAttr("SLICE_PARENT");
             oOp->tensor = newRaw;
-            auto deps = builder.GetDependToken(parent);
-            if (!deps.empty()) {
-                op.result_token_ = deps[0];
-            }
-            op.tokens_ = tokenList;
         }
     }
     return ret;
