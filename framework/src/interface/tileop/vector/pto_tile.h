@@ -83,7 +83,7 @@ __aicore__ inline __gm__ DType* GetPackedGmAddr(__gm__ DType* addr, Offset offse
 template <typename T, typename Shape, typename Stride, bool need_mask = false>
 class PtoGlobal {
 public:
-    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, __gm__ bool>, __gm__ uint8_t, typename T::Type>;
+    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;
     using Type = pto::GlobalTensor<Dtype, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
 
     __aicore__ inline PtoGlobal(__gm__ typename T::Type* addr, const Shape& shape, const Stride& stride)
