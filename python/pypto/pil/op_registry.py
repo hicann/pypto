@@ -30,8 +30,8 @@ class OpRegistry:
             return stub(*args, **kwargs)
 
         if self.partials[stub]:
-            return self.ops[stub](ctx, stub, *args, **kwargs)
-        return self.ops[stub](ctx, *args, **kwargs)
+            return self.ops[stub](stub, *args, **kwargs, ctx=ctx)
+        return self.ops[stub](*args, **kwargs, ctx=ctx)
 
 
 _op_registry = OpRegistry()

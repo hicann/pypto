@@ -22,9 +22,5 @@ class _Platform:
         """Get the NPU architecture"""
         return pypto_impl.GetNPUArch()
 
-    @npuarch.setter
-    def npuarch(self, value):
-        """Set the NPU architecture"""
-        pypto_impl.SetNPUArch(value)
 
 platform = _Platform()
