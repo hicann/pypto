@@ -383,7 +383,7 @@ void Operation::SetAttribute(const std::string& key, const std::vector<Element>&
 
 void Operation::SetAttribute(const std::string& key, Element value) { SetAttr(key, value); }
 
-std::map<std::string, std::any> Operation::GetAllAttribute() const { return GetAllAttr(); }
+std::map<std::string, npu::tile_fwk::Any> Operation::GetAllAttribute() const { return GetAllAttr(); }
 
 void DebugJson(const Json& j)
 {
@@ -1213,7 +1213,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
             auto& attrDict = GetAllAttr();
             auto it = attrDict.find(OpAttributeKey::bindTensor);
             if (it != attrDict.end()) {
-                auto& value = pypto::AnyCastRef<SymbolicScalar>(it->second);
+                auto& value = *npu::tile_fwk::AnyCast<SymbolicScalar>(&it->second);
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
             }
         } break;
