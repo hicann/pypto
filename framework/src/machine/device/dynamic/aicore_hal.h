@@ -24,6 +24,13 @@
 #include "machine/simulation/aicore_hardware.h"
 
 namespace npu::tile_fwk::dynamic {
+constexpr uint32_t NUM_ONE = 1;
+constexpr uint32_t NUM_TWO = 2;
+constexpr uint32_t NUM_THREE = 3;
+constexpr uint32_t NUM_FOUR = 4;
+constexpr uint32_t NUM_FIVE = 5;
+constexpr uint32_t NUM_THIRTY_TWO = 32;
+constexpr uint32_t SHIFT_NUM_FORTYEIGHT = 48;
 
 const int32_t CORE_QUEUE_MODE_NUM_8 = 8;
 const int32_t CORE_QUEUE_MODE_NUM_7 = 7;
@@ -35,6 +42,8 @@ const int32_t CORE_QUEUE_MODE_NUM_2 = 2;
 const int32_t CORE_QUEUE_MODE_NUM_1 = 1;
 
 const uint32_t REG_SPR_MAGIC = 0x78;
+constexpr int32_t AICORE_COREID_MASK = 0x0FFF;
+constexpr int32_t AICORE_BLOCKID_MASK = 0x0FFF;
 
 namespace DAV_2201 {
 const uint32_t REG_SPR_DATA_MAIN_BASE = 0xA0;
@@ -105,7 +114,7 @@ public:
         if constexpr (IsDeviceMode()) {
             return false;
         } else {
-            return enableEslModel_ || AicoreHardware::Global().CoreNum() > 0;
+            return !enableEslModel_ && AicoreHardware::Global().CoreNum() > 0;
         }
     }
 
@@ -461,38 +470,24 @@ public:
 
     bool TryHandShakeByGm(int coreIdx, int64_t dotStatus)
     {
-        if constexpr (IsDeviceMode()) {
-            auto args =
-                reinterpret_cast<KernelArgs*>((static_cast<uint64_t>(sharedBuffer_)) + SHARED_BUFFER_SIZE * coreIdx);
-            volatile int64_t* shakeBuffer = args->shakeBuffer;
-            if ((*shakeBuffer & 0xFFFFFFFF) != AICORE_SAY_HELLO) {
-                return false;
-            }
-
-            args_[coreIdx] = args;
-            args->taskEntry.reserved[0] = static_cast<uint32_t>(dotStatus);
-            GetPhyIdByBlockId(coreIdx) = (*shakeBuffer >> NUM_THIRTY_TWO) & AICORE_COREID_MASK;
-            if (isNeedWriteRegForFastPath_) {
-                WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_OPEN);
-            }
-            SetReadyQueue(coreIdx, (uint64_t)0);
-            // make sure reset wave goodbye flag after hand shake ,orelse impact last aicore exit through wavegoodbye flag
-            args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
-            DEV_VERBOSE_DEBUG("hand shake success coreidex:%d", coreIdx);
-            return true;
-        } else {
-            int32_t phyId = -1;
-            volatile KernelArgs* arg = reinterpret_cast<KernelArgs*>(sharedBuffer_ + coreIdx * SHARED_BUFFER_SIZE);
-            args_[coreIdx] = arg;
-            bool handShakeSuccess = GetActiveModel()->TryHandShakeByGm(arg, dotStatus, phyId);
-            if (!handShakeSuccess) {
-                return false;
-            }
-            args_[coreIdx] = arg;
-            GetPhyIdByBlockId(coreIdx) = phyId;
-            SetReadyQueue(coreIdx, (uint64_t)0);
-            return true;
+        auto args =
+            reinterpret_cast<KernelArgs*>((static_cast<uint64_t>(sharedBuffer_)) + SHARED_BUFFER_SIZE * coreIdx);
+        volatile int64_t* shakeBuffer = args->shakeBuffer;
+        if ((*shakeBuffer & 0xFFFFFFFF) != AICORE_SAY_HELLO) {
+            return false;
         }
+
+        args_[coreIdx] = args;
+        args->taskEntry.reserved[0] = static_cast<uint32_t>(dotStatus);
+        GetPhyIdByBlockId(coreIdx) = (*shakeBuffer >> NUM_THIRTY_TWO) & AICORE_COREID_MASK;
+        if (isNeedWriteRegForFastPath_) {
+            WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_OPEN);
+        }
+        SetReadyQueue(coreIdx, (uint64_t)0);
+        // make sure reset wave goodbye flag after hand shake ,orelse impact last aicore exit through wavegoodbye flag
+        args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
+        DEV_VERBOSE_DEBUG("hand shake success coreidex:%d", coreIdx);
+        return true;
     }
 
     // We must makesure close 0x18 before aicore exit.
