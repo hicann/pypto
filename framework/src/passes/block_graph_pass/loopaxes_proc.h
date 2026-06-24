@@ -43,7 +43,7 @@ private:
     void FinalizeLoopGroups();
     void RecordAddrOverLap(Operation* op, int& idx, std::set<std::pair<int, int>>& addrConflictIdx,
                            std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap);
-    void IsOverLap(std::vector<size_t>& addrRange,
+    void IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
                    std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap,
                    std::set<std::pair<int, int>>& addrConflictIdx, int& idx);
     void CheckAddrOverLap(bool isStaticLoop, std::vector<Operation * > & sameLoopOpGroup,
