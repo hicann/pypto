@@ -763,26 +763,6 @@ void BindOperation(py::module_& m)
     m.def("Maximum", [](const Tensor& operand1, const Element& operand2) {
         return npu::tile_fwk::Maximum(operand1, operand2);
     });
-    m.def(
-        "OnlineSoftmax",
-        [](const Tensor& scores, float scale) {
-            auto result = npu::tile_fwk::OnlineSoftmax(scores, scale);
-            return py::make_tuple(std::get<0>(result), std::get<1>(result), std::get<2>(result));
-        },
-        py::arg("scores"), py::arg("scale"),
-        "OnlineSoftmax(scores, scale) -> (exp_scores_bf16, column_max, column_sum).");
-    m.def(
-        "OnlineSoftmaxUpdate",
-        [](const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput,
-           const Tensor& currentMax, const Tensor& currentSum, const Tensor& currentOutput) {
-            auto result = npu::tile_fwk::OnlineSoftmaxUpdate(
-                previousMax, previousSum, previousOutput, currentMax, currentSum, currentOutput);
-            return py::make_tuple(std::get<0>(result), std::get<1>(result), std::get<2>(result));
-        },
-        py::arg("previous_max"), py::arg("previous_sum"), py::arg("previous_output"), py::arg("current_max"),
-        py::arg("current_sum"), py::arg("current_output"),
-        "OnlineSoftmaxUpdate(previous_max, previous_sum, previous_output, current_max, current_sum, current_output) "
-        "-> (updated_max, updated_sum, updated_output).");
     m.def("Minimum", [](const Tensor& operand1, const Element& operand2) {
         return npu::tile_fwk::Minimum(operand1, operand2);
     });
