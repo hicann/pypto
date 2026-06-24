@@ -81,7 +81,7 @@ grep -i "ERROR" $ASCEND_PROCESS_LOG_PATH/debug/plog/pypto-*.log
 | `RunTask "#sche.dtask.leave: Aicpu[X] proc finish: finishedFunctionCnt=%X, coreFunctionCnt=%X, ..., but timeout` | Task超时 |
 
 > [!NOTE]说明
-> 建议同时开启泳道图，方便检查任务间的执行顺序，参考[查看泳道图](../introduction/quick_start.md#查看泳道图)，OUTPUT目录下dyn_topo.txt在定位中可能会多次用到。
+> 建议同时开启泳道图，方便检查任务间的执行顺序，参考《快速入门》../../tools/introduction/快速入门.md中查看泳道图，OUTPUT目录下dyn_topo.txt在定位中可能会多次用到。
 
 #### Device初始化检查
 
