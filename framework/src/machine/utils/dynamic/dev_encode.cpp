@@ -56,6 +56,7 @@ constexpr int64_t MAX_SHAPE_WARN_THRESHOLE = 512 * 512;
 constexpr int64_t DEFAULT_CACHE_DEVICE_TASK_NUM = 10000;
 static constexpr uint64_t GENERAL_METADATA_SIZE_MIN = 2 * MEBI;
 constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
+static uint32_t MAX_UNROLL_TIMES = 1;                 // the max num of unroll_list
 constexpr size_t CALC_STITCH_NUM =
     ToUnderlying(WsAicpuSlabMemType::DUPPED_STITCH) - ToUnderlying(WsAicpuSlabMemType::READY_QUE);
 void DevAscendFunction::InitIncastOutcastAttr(
@@ -2408,8 +2409,6 @@ struct ControlFlowCacheFactor {
     {}
 };
 
-static uint32_t maxUnrollTimes = 1;
-
 static int ParseUnrollTimes(const std::string& rawName)
 {
     const static std::string UNROLL_MARKS[2] = {"_LoopUnroll", "_Unroll"};
@@ -2436,13 +2435,13 @@ static int ParseUnrollTimes(const std::string& rawName)
 static int EstimatedStitchingCount()
 {
     uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
-    return stitchNum * maxUnrollTimes;
+    return stitchNum * MAX_UNROLL_TIMES;
 }
 
 static int WorkspaceRecyclePeriod()
 {
     uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
-    return stitchNum * maxUnrollTimes;
+    return stitchNum * MAX_UNROLL_TIMES;
 }
 
 static uint32_t ExpectedMaxCachedNum()
@@ -2470,12 +2469,11 @@ struct EncodeDevAscendProgramInfo {
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, func->GetDyndevAttribute() != nullptr)
             << "DyndevAttribute is null for function: " << func;
         dyndevAttr = func->GetDyndevAttribute();
-        maxUnrollTimes = 1;
         for (auto& devRoot : dyndevAttr->funcGroup.devRootList) {
             int unroll = ParseUnrollTimes(devRoot->GetRawName());
-            maxUnrollTimes = std::max(maxUnrollTimes, (uint32_t)unroll);
+            MAX_UNROLL_TIMES = std::max(MAX_UNROLL_TIMES, (uint32_t)unroll);
         }
-        MACHINE_LOGD("maxUnrollTimes user set is %u.", maxUnrollTimes);
+        MACHINE_LOGD("MAX_UNROLL_TIMES user set is %u.", MAX_UNROLL_TIMES);
     }
 
     bool GetEnableVFFusion()
@@ -2647,7 +2645,7 @@ static uint64_t CalcUnrolledRootBudget(uint64_t budget, int unrollTimes, int con
     if (unrollTimes >= configMultiplier) {
         return budget;
     }
-    uint32_t expectedConfigMultiplier = ExpectedMaxCachedNum() * maxUnrollTimes;
+    uint32_t expectedConfigMultiplier = ExpectedMaxCachedNum() * MAX_UNROLL_TIMES;
     if (static_cast<uint32_t>(configMultiplier) > expectedConfigMultiplier) {
         configMultiplier = expectedConfigMultiplier;
     }
