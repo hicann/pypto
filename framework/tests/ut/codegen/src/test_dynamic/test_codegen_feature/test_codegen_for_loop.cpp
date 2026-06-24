@@ -129,7 +129,7 @@ TEST_F(TestCodegenForLoop, TestForLoop)
         auto tileOffsets = TileOffset(0, idx1, idx2);
         ubTensor_10_low2DimInLoop.SetAddr(ubTensor_10.GetLinearAddr(tileOffsets));
         ubTensor_4_low2DimInLoop.SetAddr(ubTensor_4.GetLinearAddr(tileOffsets));
-        TMul<LastUse3Dim<0, 0, 1>>(ubTensor_4_low2DimInLoop, ubTensor_4_low2DimInLoop, ubTensor_10_low2DimInLoop);
+        TMul<LastUse3Dim<0, 1, 1>>(ubTensor_4_low2DimInLoop, ubTensor_4_low2DimInLoop, ubTensor_10_low2DimInLoop);
     }
   }
 })";
