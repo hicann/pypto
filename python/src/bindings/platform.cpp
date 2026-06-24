@@ -25,9 +25,6 @@ void BindPlatform(py::module_& m)
     m.def("GetNPUArch", []() -> std::string {
         auto npuArch = Platform::Instance().GetSoc().GetNPUArch();
         return NPUArchToString(npuArch);
-    })
-    .def("SetNPUArch", [](const std::string& value) {
-        Platform::Instance().GetSoc().SetNPUArch(value);
     });
 }
 } // namespace pypto

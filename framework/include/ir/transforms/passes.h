@@ -220,25 +220,6 @@ Pass LowerBreakContinue();
 Pass ConstFoldAndSimplify();
 
 /**
- * \brief Create an aggressive dead code elimination pass
- *
- * Removes statements whose defined variables are not transitively used by
- * any side-effect operation (e.g., OP_ASSEMBLE writing to input-argument
- * memory), return, yield, or control-flow statement.
- * Iterates to a fixed point so dead chains collapse fully.
- */
-Pass AggressiveDCE();
-
-/**
- * \brief Create a loop/if canonicalization pass
- *
- * Removes unused IterArgs/returnVars from ForStmt/WhileStmt and
- * unused returnVars from IfStmt. Also filters corresponding
- * YieldStmt/BreakStmt/ContinueStmt values.
- */
-Pass Canonicalize();
-
-/**
  * \brief Create a pass that flattens nested call expressions
  */
 Pass FlattenCallExpr();
