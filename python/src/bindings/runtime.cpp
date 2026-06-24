@@ -469,7 +469,6 @@ public:
         workspaceSize = devProg->memBudget.Total();
         InitCachedArgs();
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
-        DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
         if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
             EslModelMemoryUtils eslMemoryUtils;
             DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
@@ -481,10 +480,6 @@ public:
         runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
         lastPreparedDynamicCellMatchBytes_ = runtimeDynamicCellMatchCapacity_;
         kernelName_ = "PyPTO_" + dynFunc->GetOriginalRawName();
-    }
-
-    ToSubMachineConfig& GetMachineConfig() {
-        return toSubMachineConfig_;
     }
 
     uint8_t* FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape)
@@ -757,7 +752,6 @@ private:
     bool runtimeDynamicCellMatchOwned_{false};
     bool runtimeDynamicCellMatchHostOwned_{false};
     std::string kernelName_;
-    ToSubMachineConfig toSubMachineConfig_;
 
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     {
@@ -944,9 +938,6 @@ public:
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
 
         DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
-        if (!isCaptureMode) {
-           args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
-        }
         ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction(), tensors);
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
 
