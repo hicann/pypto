@@ -2029,7 +2029,6 @@ Tensor ConstructBatchMatmulMXTensorGraph3D(
     Tensor result = Tensor(dataType, {batchSize, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
     const Tensor biasOperand = param.biasTensor;
-    const Tensor scaleOperand = param.scaleTensor;
     TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     auto aScaleValidShape4D = aScale.GetStorage()->GetDynValidShape();
     auto bScaleValidShape4D = bScale.GetStorage()->GetDynValidShape();
@@ -2066,11 +2065,6 @@ Tensor ConstructBatchMatmulMXTensorGraph3D(
         } else if (biasOperand.GetStorage() != nullptr && biasOperand.GetShape().size() == SHAPE_DIM2) {
             batchParam.biasTensor = biasOperand;
         }
-        if (scaleOperand.GetStorage() != nullptr) {
-            batchParam.scaleTensor = scaleOperand;
-        }
-        batchParam.reluType = param.reluType;
-        batchParam.scaleValue = param.scaleValue;
         MatmulGraphNodes tensorGraphNodes(
             aTensor.GetStorage(), aScale.GetStorage(), bTensor.GetStorage(), bScale.GetStorage());
         tensorGraphNodes.outTensorPtr = cTensor.GetStorage();
@@ -2105,7 +2099,6 @@ Tensor ConstructBatchMatmulMXTensorGraph4D(
     Tensor result = Tensor(dataType, {batchSize1, batchSize2, mView, nView});
 
     const Tensor biasOperand = param.biasTensor;
-    const Tensor scaleOperand = param.scaleTensor;
     auto oriVecTile = TileShape::Current().GetVecTile();
     TileShape::Current().SetVecTile({1, 1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     auto aValidShape4D = aMatrix.GetStorage()->GetDynValidShape();
@@ -2132,11 +2125,6 @@ Tensor ConstructBatchMatmulMXTensorGraph4D(
             if (biasOperand.GetStorage() != nullptr) {
                 batchParam.biasTensor = biasOperand;
             }
-            if (scaleOperand.GetStorage() != nullptr) {
-                batchParam.scaleTensor = scaleOperand;
-            }
-            batchParam.reluType = param.reluType;
-            batchParam.scaleValue = param.scaleValue;
             Tensor cTensor(dataType, {mView, nView}, "cTensorSingleBatch");
             cTensor.GetStorage()->UpdateDynValidShape({b0Valid * b1Valid * mValid, nValid});
             MatmulGraphNodes tensorGraphNodes(
@@ -2185,7 +2173,7 @@ Tensor BatchMatmulMX(
 {
     MATMUL_LOGD("BatchMatmulMX[Basic]: Start.");
     MatmulAttrParam attrParam(isTransA, isAScaleTrans, isTransB, isBScaleTrans, isCMatrixNZ);
-    Status checkStatus = CheckMatmulOperands(dataType, aMatrix, bMatrix, attrParam, param);
+    Status checkStatus = CheckMatmulOperands(dataType, aMatrix, bMatrix, attrParam);
     ASSERT(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkStatus == SUCCESS) << "MXMatmul operands check failed";
     Status checkMXStatus = CheckMXMatmulOperands(aMatrix, aScale, bMatrix, bScale, attrParam);
     ASSERT(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkMXStatus == SUCCESS) << "MXMatmul operands check failed";
