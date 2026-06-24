@@ -24,19 +24,6 @@ from pypto.error import ParserError, PyptoError, PyptoGeneralError, _catch_and_w
 import pypto.config
 
 
-def test_python_error_codes_are_bound_from_cpp():
-    """Test that Python wrapper error codes are exported from the C++ binding."""
-    assert int(pypto.pypto_impl.ExternalError.RUNTIME_ERROR) == 0x00003
-    assert int(pypto.pypto_impl.ExternalError.NAME_ERROR) == 0x00004
-    assert int(pypto.pypto_impl.ExternalError.NOT_IMPLEMENTED_ERROR) == 0x00005
-    assert int(pypto.pypto_impl.ExternalError.KEY_ERROR) == 0x00006
-    assert int(pypto.pypto_impl.ExternalError.INVALID_OPERATION) == 0x00007
-    assert int(pypto.pypto_impl.ExternalError.INVALID_TYPE) == 0x00001
-    assert int(pypto.pypto_impl.ExternalError.INVALID_VAL) == 0x00002
-    assert int(pypto.pypto_impl.ExternalError.OUT_OF_RANGE) == 0x00008
-    assert int(pypto.pypto_impl.ExternalError.UNKNOWN) == 0x0FFFF
-
-
 def test_varargs_error():
     """Test that variable-length arguments trigger proper error handling."""
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})

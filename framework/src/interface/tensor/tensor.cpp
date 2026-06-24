@@ -58,7 +58,7 @@ static std::vector<SymbolicScalar> ToDynShape(const std::string& tname, const Sh
 {
     auto dynShape = SymbolicScalar::FromConcrete(shape);
     for (size_t dim = 0; dim < shape.size(); dim++) {
-        CHECK(ExternalError::INVALID_VAL, shape[dim] >= -1) << "Invalid shape " << shape[dim];
+        CHECK(FeError::INVALID_VAL, shape[dim] >= -1) << "Invalid shape " << shape[dim];
         if (shape[dim] == -1) {
             auto name = SymbolHandler::GetNameByHandlerId(SymbolHandlerId::GetInputShapeDim);
             auto handler = SymbolicScalar(AddRuntimePrefix(name));
@@ -157,7 +157,7 @@ void AssignTensorData(Tensor& lhs, const Tensor& rhs)
 {
     if (lhs.GetData() != nullptr) {
         if (rhs.GetData() != nullptr) {
-            CHECK(ExternalError::INVALID_OPERATION, lhs.GetData() == rhs.GetData())
+            CHECK(FeError::INVALID_OPERATION, lhs.GetData() == rhs.GetData())
                 << "Assign data to a tensor that already contains data is prohibited.";
         }
     } else {
@@ -388,8 +388,8 @@ SymbolicScalar GetTensorData(const Tensor& t, const std::vector<SymbolicScalar>&
             return GetInputData(t, offset);
         }
     }
-    CHECK(ExternalError::INVALID_TYPE, t.GetDataType() == DT_INT32) << "Tensor dtype must be DT_INT32.";
-    CHECK(ExternalError::OUT_OF_RANGE, offset.size() <= MAX_GET_TENSOR_DATA_DIM)
+    CHECK(FeError::INVALID_TYPE, t.GetDataType() == DT_INT32) << "Tensor dtype must be DT_INT32.";
+    CHECK(FeError::OUT_OF_RANGE, offset.size() <= MAX_GET_TENSOR_DATA_DIM)
         << "Offset.size() must be less than " << MAX_GET_TENSOR_DATA_DIM;
     SymbolHandlerId handlerId =
         static_cast<SymbolHandlerId>(static_cast<int>(SymbolHandlerId::GetTensorDataInt32Dim1) + offset.size() - 1);
@@ -398,7 +398,7 @@ SymbolicScalar GetTensorData(const Tensor& t, const std::vector<SymbolicScalar>&
 
 static void DoSetTensorDataInt32(const SymbolicScalar& v, const std::vector<SymbolicScalar>& off, Tensor& t)
 {
-    CHECK(ExternalError::INVALID_VAL, t.GetShape().size() == off.size())
+    CHECK(FeError::INVALID_VAL, t.GetShape().size() == off.size())
         << "Mismatch dimen:" << t.GetShape().size() << " vs " << off.size() << "\n";
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(t);
 
@@ -412,7 +412,7 @@ static void DoSetTensorDataInt32(const SymbolicScalar& v, const std::vector<Symb
 
 void SetTensorData(const SymbolicScalar& v, const std::vector<SymbolicScalar>& off, Tensor& dst)
 {
-    CHECK(ExternalError::INVALID_TYPE, dst.GetDataType() == DT_INT32) << "Tensor dtype must be DT_INT32.";
+    CHECK(FeError::INVALID_TYPE, dst.GetDataType() == DT_INT32) << "Tensor dtype must be DT_INT32.";
     FE_LOGD("Set tensor[%s] data.", dst.GetName().c_str());
     return DoSetTensorDataInt32(v, off, dst);
 }
