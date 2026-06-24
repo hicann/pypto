@@ -37,8 +37,7 @@
     },
     "codegen": {
         "support_dynamic_aligned": false,
-        "soc_version": "",
-        "enable_pmu_trace": false
+        "soc_version": ""
     },
     "verify": {
         "enable_pass_verify": false,
@@ -96,7 +95,8 @@
             "soc_version": "",
             "fixed_output_path": false,
             "force_overwrite": true,
-            "codegen_support_tile_tensor": true
+            "codegen_support_tile_tensor": true,
+            "enable_pmu_trace" : false
         },
         "tensor_print": {
             "edgeitems": 3,
