@@ -165,24 +165,24 @@ std::string CodeGenOpNPU::GenDupOp() const
     std::string dupV;
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalar = opAttrs.at(OpAttributeKey::dynScalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(SymbolicScalar)))
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(SymbolicScalar)))
             << "SCALAR attribute has to be symbolic value: " << AnyCast<SymbolicScalar>(scalar).IsValid();
         auto scalarExpr = AnyCast<SymbolicScalar>(scalar);
         dupV = SymbolicExpressionTable::BuildExpression(scalarExpr);
     } else if (dstDtypeStr == "float" || dstDtypeStr == "half" || dstDtypeStr == "bfloat16_t") {
         auto scalar = opAttrs.at(OpAttributeKey::scalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(Element)))
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(Element)))
             << "SCALAR attribute must be float value: " << AnyCast<Element>(scalar).IsFloat();
         dupV = FormatFloat(AnyCast<Element>(scalar).Cast<float>(), operandDtype[ToUnderlying(MISOIdx::DST_IDX)]);
     } else if (
         dstDtypeStr == "bool" || dstDtypeStr == "int8_t" || dstDtypeStr == "int16_t" || dstDtypeStr == "int32_t") {
         auto scalar = opAttrs.at(OpAttributeKey::scalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(Element)))
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(Element)))
             << "SCALAR attribute has to be int value: " << AnyCast<Element>(scalar).IsSigned();
         dupV = std::to_string(AnyCast<Element>(scalar).Cast<int64_t>());
     } else if (dstDtypeStr == "uint8_t" || dstDtypeStr == "uint16_t" || dstDtypeStr == "uint32_t") {
         auto scalar = opAttrs.at(OpAttributeKey::scalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(Element)))
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(Element)))
             << "SCALAR attribute has to be uint value: " << AnyCast<Element>(scalar).IsUnsigned();
         dupV = std::to_string(AnyCast<Element>(scalar).Cast<uint64_t>());
     } else {
@@ -592,7 +592,7 @@ std::string CodeGenOpNPU::GenUniformOp() const
     SymbolicScalar counter0 = AnyCast<SymbolicScalar>(counter0Attr);
 
     std::vector<int64_t> randomShape;
-    if (shapeAttr.has_value()) {
+    if (shapeAttr.HasValue()) {
         randomShape = AnyCast<std::vector<int64_t>>(shapeAttr);
     }
 
@@ -613,7 +613,7 @@ std::string CodeGenOpNPU::GenRangeOp() const
     auto start = opAttrs.at(OP_ATTR_PREFIX + "START");
     auto step = opAttrs.at(OP_ATTR_PREFIX + "STEP");
     std::string startVal, stepVal, tileIdxExpr;
-    ASSERT(OperErr::ATTRIBUTE_INVALID, start.has_value() && step.has_value()) << "GenRangeOp failed ";
+    ASSERT(OperErr::ATTRIBUTE_INVALID, start.HasValue() && step.HasValue()) << "GenRangeOp failed ";
 
     switch (operandDtype[ID0]) {
         case DataType::DT_FP32:
@@ -636,7 +636,7 @@ std::string CodeGenOpNPU::GenRangeOp() const
     }
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAny.has_value()) && (scalarAny.type() == typeid(SymbolicScalar)))
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
             << AnyCast<SymbolicScalar>(scalarAny).IsValid() << "SCALAR attribute has to have symbolic value.";
         auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
         tileIdxExpr = "((int64_t)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + "))";
@@ -873,7 +873,7 @@ std::string CodeGenOpNPU::GenTriULOp() const
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::dynScalar)) << "cannot get diagonal attr";
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::isUpper)) << "cannot get isUpper attr";
     auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAny.has_value()) && (scalarAny.type() == typeid(SymbolicScalar)))
+    ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
         << AnyCast<SymbolicScalar>(scalarAny).IsValid() << "diagonal must have symbolic value.";
     auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
 
