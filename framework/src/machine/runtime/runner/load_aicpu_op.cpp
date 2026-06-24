@@ -19,7 +19,7 @@
 #include <fstream>
 #include <limits.h>
 #include "tilefwk/pypto_fwk_log.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/utils/machine_utils.h"
@@ -65,7 +65,7 @@ void LoadAicpuOp::GenBuiltInOpInfo(const std::string& jsonPath)
     GenAicpuOpInfoJson(builtInOp, {pyptoInit, pyptoRun, pyptoNull});
     builtInOp.dump(DUMP_LEVEL_FOUR);
     builtInOpJsonPath_ = jsonPath + "/pypto_op_info.json";
-    if (!SaveFile(builtInOpJsonPath_, builtInOp.dump(DUMP_LEVEL_FOUR))) {
+    if (!DumpFile(builtInOp.dump(DUMP_LEVEL_FOUR), builtInOpJsonPath_)) {
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Contrust custom op json failed");
         return;
     }
