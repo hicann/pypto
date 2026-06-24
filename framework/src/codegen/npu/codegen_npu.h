@@ -132,7 +132,7 @@ public:
         const std::shared_ptr<SymbolManager>& sm, const std::shared_ptr<LogicalTensor>& tensor) const;
     std::string GenAllocForLocalBuffer(const Operation& op, const std::shared_ptr<SymbolManager>& sm) const;
     virtual std::string GetCoreArch(const CompileInfo& compileInfo) const;
-    static void AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool isCube);
+    static void AppendVFOptions(NPUArch platform, std::ostringstream& oss);
 
 protected:
     void GenFuncBodyBefore(
@@ -155,8 +155,7 @@ protected:
     void Prepare(const Function& topFunc);
 
     virtual void BuildIncludes(std::ostringstream& oss) const;
-    virtual void BuildExtraOptions(
-        std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const;
+    virtual void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const;
 
     std::string GenAlloc(
         const std::shared_ptr<SymbolManager>& manager, BufferType bufferType, DataType dataType,
