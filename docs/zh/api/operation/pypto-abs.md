@@ -20,18 +20,11 @@ abs(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> 不同型号支持的Tensor数据类型有所差异，详细请参见[约束说明](#约束说明)。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
 返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的绝对值。
-
-## 约束说明
-
-1. Tensor 支持的数据类型如下：
-   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_INT16，DT_INT32。
-   - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32。
-   - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32。
 
 ## 调用示例
 
