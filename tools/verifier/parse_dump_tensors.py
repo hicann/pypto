@@ -27,7 +27,7 @@ from tensor_diff import compare_tensors_result_dict, IsCloseConfig
 
 
 # ===================== 核心配置（需和C/C++端一致）=====================
-DEV_SHAPE_DIM_MAX = 6  # 替换为实际值
+DEV_SHAPE_DIM_MAX = 5  # 替换为实际值
 BYTE_ORDER = "<"       # 小端：< ；大端：> ；本机字节序：=
 RESULT_FILE = ""
 
