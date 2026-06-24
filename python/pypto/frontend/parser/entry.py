@@ -172,6 +172,8 @@ class JitCallableWrapper:
         Options for debugging (including runtime_debug_mode).
     _captured_locals : Optional[dict[str, Any]]
         Captured local variables from the original function's scope (copied to avoid reference issues).
+    _infer_controlflow_shape : Optional[type]
+        Class type for inferring control flow shape during compilation (None to use default logic).
     _kernel_module_cache : dict[tuple, Any]
         Class-level global cache for KernelModule instances, keyed by compilation cache key.
     kmodule : Any
@@ -236,6 +238,7 @@ class JitCallableWrapper:
         verify_options: Optional[dict[str, Any]] = None,
         debug_options: Optional[dict[str, Any]] = None,
         captured_locals: Optional[dict[str, Any]] = None,
+        infer_controlflow_shape: Optional[type] = None,
     ):
         """Initialize the JIT callable wrapper with compilation and runtime configurations.
 
@@ -262,6 +265,9 @@ class JitCallableWrapper:
         captured_locals : Optional[dict[str, Any]], optional
             Local variables captured from the original function's scope (copied to a new dict
             to prevent external modification). Defaults to None.
+        infer_controlflow_shape : Optional[type], optional
+            Class type used for inferring control flow shape during compilation (None uses default inference logic).
+            Defaults to None.
         """
         self._pto_function = pto_function
         self._original_func = original_func
@@ -281,6 +287,7 @@ class JitCallableWrapper:
         self._pass_options = None if pass_options is None else dict(pass_options)
         self._verify_options = None if verify_options is None else dict(verify_options)
         self._debug_options = None if debug_options is None else dict(debug_options)
+        self._infer_controlflow_shape = infer_controlflow_shape
 
         self._set_run_mode()
         self.kwargs = None
@@ -1144,6 +1151,7 @@ def jit(
     runtime_options: Optional[dict[str, Any]] = None,
     verify_options: Optional[dict[str, Any]] = None,
     debug_options: Optional[dict[str, Any]] = None,
+    infer_controlflow_shape: Optional[Any] = None,
 ) -> Union[Callable, Callable[[Callable], JitCallableWrapper]]:
     """JIT decorator for compiling Python functions to PTO IR.
 
@@ -1226,6 +1234,7 @@ def jit(
             verify_options=verify_options,
             debug_options=debug_options,
             captured_locals=captured_locals,
+            infer_controlflow_shape=infer_controlflow_shape,
         )
         return wrapper
 
