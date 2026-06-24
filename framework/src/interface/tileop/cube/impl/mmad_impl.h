@@ -93,6 +93,7 @@ INLINE void TMatmulImpl(TileAcc& c, TileLeft& a, TileRight& b, TileBias& bias)
     tileBiasTensor biasT(1, validN);
     if constexpr (std::is_same<typename tileL0ATensor::DType, float>::value) {
         l0a.ResetMadMode();
+        l0a.SetKAligned(true);
     }
     if constexpr (transMode != TransMode::CAST_NONE) {
         l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));

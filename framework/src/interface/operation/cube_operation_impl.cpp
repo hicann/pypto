@@ -1439,10 +1439,10 @@ static Tensor ConstructMXGmAccumulationTensorGraph(
     ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, kL1TileShape != 0) << "kL1TileShape can not be 0";
     const int64_t kLoop = (kSize + kL1TileShape - 1) / kL1TileShape;
     const int64_t kL1Size = std::min(kSize, kL1TileShape);
-    const int64_t kScaleL1Size = kL1Size / ALIGN_SIZE_64;
+    const int64_t kScaleL1Size = CeilDiv(kL1Size, ALIGN_SIZE_64);
     for (int64_t kIdx = 0; kIdx < kLoop; ++kIdx) {
         int64_t kValidShape = std::min(kSize - kL1Size * kIdx, kL1Size);
-        int64_t kScaleValidShape = kValidShape / ALIGN_SIZE_64;
+        int64_t kScaleValidShape = CeilDiv(kValidShape, ALIGN_SIZE_64);
         Tensor tensorA;
         if (attrParam.transA) {
             tensorA = View(aMatrix, {kValidShape, mSize}, {kValidShape, mValidShape}, {kL1Size * kIdx, 0});
