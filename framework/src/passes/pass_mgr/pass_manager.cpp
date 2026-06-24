@@ -300,7 +300,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
             APASS_LOG_ERROR_F(Elements::Function, "Pass [%s] does not exist.", PassNameStr(passName));
             return FAILED;
         }
-        PassLogUtil logUtil(*pass, function, strategy, i);
+        PassLogUtil logUtil(*pass, function, i);
         auto passDfxCfg = ConfigManager::Instance().GetPassConfigs(strategy, identifier);
         if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL) {
             passDfxCfg.printGraph = true;
@@ -334,7 +334,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         }
     }
     if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL && pass != nullptr) {
-        ExtractPassLogByFunction(function, strategy);
+        ExtractPassLogByFunction(function);
     }
     return SUCCESS;
 }
