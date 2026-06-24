@@ -174,10 +174,9 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
 }
 
 /*
- * View->Reshape reorder with MatMul present.
+ * View->Reshape reorder with MatMul present but no cascaded view pattern.
  * Before: input{32,64} -> view -> middle{16,64} -> reshape -> output{1024}
- * After:  input{32,64} -> reshape -> newMid{2048} -> view -> output{1024}
- * A separate OP_A_MUL_B is present to trigger HasTargetMatmulOp.
+ * The pass skips non-cascaded View->Reshape reorder; original graph should remain unchanged.
  */
 TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
 {
@@ -216,31 +215,26 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
     auto ops = currFunctionPtr->Operations();
-    EXPECT_TRUE(IsOpRemoved(ops, viewMagic)) << "Original view should be deleted after reorder";
-    EXPECT_TRUE(IsOpRemoved(ops, reshapeMagic)) << "Original reshape should be deleted after reorder";
+    EXPECT_FALSE(IsOpRemoved(ops, viewMagic))
+        << "Without cascaded pattern, original view should not be deleted";
+    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic))
+        << "Without cascaded pattern, original reshape should not be deleted";
 
     int viewCount = 0, reshapeCount = 0, matmulCount = 0;
-    Operation* newReshape = nullptr;
-    Operation* newView = nullptr;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) { viewCount++; newView = const_cast<Operation*>(&op); }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; newReshape = const_cast<Operation*>(&op); }
+        if (op.GetOpcode() == Opcode::OP_VIEW) { viewCount++; }
+        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
         else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
     }
-    EXPECT_EQ(reshapeCount, 1) << "Should have exactly one new reshape after reorder";
-    EXPECT_EQ(viewCount, 1) << "Should have exactly one new view after reorder";
+    EXPECT_EQ(viewCount, 1) << "Original View should be preserved";
+    EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
     EXPECT_EQ(matmulCount, 1) << "MatMul should be preserved";
-
-    ASSERT_NE(newReshape, nullptr);
-    EXPECT_EQ(newReshape->GetIOperands()[0], input) << "New reshape should consume the original view input";
-    ASSERT_NE(newView, nullptr);
-    EXPECT_EQ(newView->GetOOperands()[0], output) << "New view should produce the original reshape output";
 }
 
 /*
- * Reshape->Assemble reorder with MatMul present.
+ * Reshape->Assemble reorder with MatMul present but no cascaded assemble pattern.
  * Before: input{2048} -> reshape -> middle{32,64} -> assemble -> output{32,64}
- * After:  input{2048} -> assemble -> newAsmOut{2048} -> reshape -> output{32,64}
+ * The pass skips non-cascaded Reshape->Assemble reorder; original graph should remain unchanged.
  */
 TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
 {
@@ -279,25 +273,20 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
 
     auto ops = currFunctionPtr->Operations();
-    EXPECT_TRUE(IsOpRemoved(ops, reshapeMagic)) << "Original reshape should be deleted after reorder";
-    EXPECT_TRUE(IsOpRemoved(ops, assembleMagic)) << "Original assemble should be deleted after reorder";
+    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic))
+        << "Without cascaded pattern, original reshape should not be deleted";
+    EXPECT_FALSE(IsOpRemoved(ops, assembleMagic))
+        << "Without cascaded pattern, original assemble should not be deleted";
 
     int assembleCount = 0, reshapeCount = 0, matmulCount = 0;
-    Operation* newAssemble = nullptr;
-    Operation* newReshape = nullptr;
     for (auto& op : ops) {
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; newAssemble = const_cast<Operation*>(&op); }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; newReshape = const_cast<Operation*>(&op); }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; }
+        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
         else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
     }
-    EXPECT_EQ(assembleCount, 1) << "Should have exactly one new assemble after reorder";
-    EXPECT_EQ(reshapeCount, 1) << "Should have exactly one new reshape after reorder";
+    EXPECT_EQ(assembleCount, 1) << "Original Assemble should be preserved";
+    EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
     EXPECT_EQ(matmulCount, 1) << "MatMul should be preserved";
-
-    ASSERT_NE(newAssemble, nullptr);
-    EXPECT_EQ(newAssemble->GetIOperands()[0], input) << "New assemble should consume the original reshape input";
-    ASSERT_NE(newReshape, nullptr);
-    EXPECT_EQ(newReshape->GetOOperands()[0], output) << "New reshape should produce the original assemble output";
 }
 
 struct FanoutGraphInfo {
@@ -358,14 +347,11 @@ static FanoutGraphInfo BuildViewReshapeFanoutGraph()
 }
 
 /*
- * View->Reshape fanout reorder with MatMul present.
+ * View->Reshape fanout with MatMul present but no cascaded view pattern.
  * Before: input{4,32} -> view(offset={0,8}) -> middle{4,16} -> reshape -> reshapeOut{64}
  *         reshapeOut -> fanoutView1(offset={0})  -> fanout1{32}
  *         reshapeOut -> fanoutView2(offset={32}) -> fanout2{32}
- * After:  input{4,32} -> reshape -> newMid{128}
- *         newMid -> fanoutView1' -> fanout1{32}
- *         newMid -> fanoutView2' -> fanout2{32}
- * Non-contiguous collapsed groups trigger the fanout path.
+ * The pass skips non-cascaded View->Reshape reorder; original graph should remain unchanged.
  */
 TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
 {
@@ -376,22 +362,22 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
     EXPECT_EQ(pass.RunOnFunction(*info.func), SUCCESS);
 
     auto ops = info.func->Operations();
-    EXPECT_TRUE(IsOpRemoved(ops, info.viewMagic)) << "Original view should be deleted after fanout reorder";
-    EXPECT_TRUE(IsOpRemoved(ops, info.reshapeMagic)) << "Original reshape should be deleted after fanout reorder";
-    EXPECT_TRUE(IsOpRemoved(ops, info.fanoutView1Magic)) << "Original fanout view1 should be deleted";
-    EXPECT_TRUE(IsOpRemoved(ops, info.fanoutView2Magic)) << "Original fanout view2 should be deleted";
+    EXPECT_FALSE(IsOpRemoved(ops, info.viewMagic))
+        << "Without cascaded pattern, original view should not be deleted";
+    EXPECT_FALSE(IsOpRemoved(ops, info.reshapeMagic))
+        << "Without cascaded pattern, original reshape should not be deleted";
+    EXPECT_FALSE(IsOpRemoved(ops, info.fanoutView1Magic))
+        << "Without cascaded pattern, original fanout view1 should not be deleted";
+    EXPECT_FALSE(IsOpRemoved(ops, info.fanoutView2Magic))
+        << "Without cascaded pattern, original fanout view2 should not be deleted";
 
     int viewCount = 0, reshapeCount = 0, matmulCount = 0;
-    Operation* newReshape = nullptr;
     for (auto& op : ops) {
         if (op.GetOpcode() == Opcode::OP_VIEW) { viewCount++; }
-        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; newReshape = const_cast<Operation*>(&op); }
+        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
         else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
     }
-    EXPECT_EQ(reshapeCount, 1) << "Should have exactly one new reshape after fanout reorder";
-    EXPECT_EQ(viewCount, 2) << "Should have two new fanout views after reorder";
+    EXPECT_EQ(viewCount, 3) << "Three original Views should be preserved";
+    EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
     EXPECT_EQ(matmulCount, 1) << "MatMul should be preserved";
-
-    ASSERT_NE(newReshape, nullptr);
-    EXPECT_EQ(newReshape->GetIOperands()[0], info.input) << "New reshape should consume the original view input";
 }
