@@ -433,26 +433,6 @@ void CheckOriginShape(const Tensor& inputTensor, const Tensor& weightTensor, con
         << "Input illegal bias shape:" << biasTensor.GetShape()[0] << ", which must equal to Cout:" << cOut << ".";
 }
 
-void CheckVecTileShape(DataType dataType)
-{
-    int64_t c0 = ALIGN_SIZE_32 / BytesOf(dataType);
-    std::vector<int64_t> expectVecTile = {NUM1, c0, NUM16};
-    auto vecTile = TileShape::Current().GetVecTile();
-    bool matchFlag = true;
-    if (vecTile.size() == 0 || vecTile.size() != expectVecTile.size()) {
-        matchFlag = false;
-    } else {
-        for (size_t i = 0; i < vecTile.size(); i++) {
-            if (vecTile[i] != expectVecTile[i]) {
-                matchFlag = false;
-                break;
-            }
-        }
-    }
-    ASSERT(ConvOperationError::INPUT_INVALID, matchFlag)
-        << "Input invalid vec tile shapes: " << vecTile.tile << ", which must be: " << expectVecTile << ".";
-}
-
 void CheckConvOperands(
     DataType outType, const Tensor& inputTensor, const Tensor& weightTensor, const Tensor& biasTensor,
     ConvAttrParam& attrParam)
@@ -471,9 +451,6 @@ void CheckConvOperands(
     CheckAttrShape(outType, inputTensor, weightTensor, attrParam);
     CheckTileTiling(outType, inputTensor, weightTensor, attrParam);
     CheckL1SizeTiling(outType, inputTensor, weightTensor, biasTensor, attrParam);
-    if (IsArch32Platform() && attrParam.isConv1D) {
-        CheckVecTileShape(outType);
-    }
 }
 
 void SetTensorOpAttr(
