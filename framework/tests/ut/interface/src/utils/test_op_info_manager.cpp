@@ -77,6 +77,14 @@ TEST_F(TestOpInfoManager, SetAndGetOpType)
     EXPECT_EQ(mgr.GetOpType(), "tilefwk");
 }
 
+TEST_F(TestOpInfoManager, GetControlBufferDefault)
+{
+    auto& mgr = OpInfoManager::GetInstance();
+    auto& buf = mgr.GetControlBuffer();
+    EXPECT_EQ(buf.size(), 1u);
+    EXPECT_EQ(buf[0], '0');
+}
+
 TEST_F(TestOpInfoManager, GetCustomJsonDefault)
 {
     auto& mgr = OpInfoManager::GetInstance();
