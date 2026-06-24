@@ -440,12 +440,12 @@ Tensor Remainder(const Tensor& self, const Tensor& other, PrecisionType precisio
     auto selfDtype = self.GetDataType();
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if ((!isA5Architecture && selfDtype == DT_INT16) || selfDtype == DT_FP16) {
-        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
-        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
+        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE);
         auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::REM>(
             *Program::GetInstance().GetCurrentFunction(), castSelf, castOther);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
-        Tensor castedResult = Cast(Tensor(result), selfDtype, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castedResult = Cast(Tensor(result), selfDtype);
         return castedResult;
     }
     auto [result, op] =
@@ -913,11 +913,11 @@ Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisi
     Element castOther = Element(selfDtype, other.Cast<float>());
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if ((!isA5Architecture && selfDtype == DT_INT16) || selfDtype == DT_FP16) {
-        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
         auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REM>(
             *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), castOther);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
-        Tensor castedResult = Cast(Tensor(result), selfDtype, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castedResult = Cast(Tensor(result), selfDtype);
         return castedResult;
     }
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REM>(
@@ -935,12 +935,12 @@ Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisi
     Element castSelf = Element(otherDtype, self.Cast<float>());
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if ((!isA5Architecture && otherDtype == DT_INT16) || otherDtype == DT_FP16) {
-        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE);
         auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REMR>(
             *Program::GetInstance().GetCurrentFunction(), castOther.GetStorage(), castSelf);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
         op->SetAttribute(OP_ATTR_PREFIX + "reverseOperand", true);
-        Tensor castedResult = Cast(Tensor(result), otherDtype, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castedResult = Cast(Tensor(result), otherDtype);
         return castedResult;
     }
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REMR>(
