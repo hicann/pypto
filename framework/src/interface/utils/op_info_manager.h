@@ -37,7 +37,7 @@ public:
     void SetOpType(const std::string& opType);
     const std::string& GetOpType() const;
     bool IsNotFabinCompile();
-    void SetControlBuffer(std::vector<uint8_t>&& buffer);
+    std::vector<char>& GetControlBuffer();
     std::vector<char>& GetCustomJson();
     std::string& GetCustomOpJsonPath();
     std::string& GetOpFuncName();
@@ -49,7 +49,7 @@ private:
     std::string opType_ = "tilefwk";
     uint64_t opTilingKey_{0};
     uint64_t subTilingKey_{0};
-    std::vector<uint8_t> controlBuffer_ = {'0'};
+    std::vector<char> controlBuffer_ = {'0'};
     std::vector<char> customJson_ = {'0'};
     std::string controlFlowSoPath_;
     std::string funcName_;

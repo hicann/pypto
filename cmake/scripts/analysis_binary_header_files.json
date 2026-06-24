@@ -22,8 +22,7 @@
         "framework/src/platform/"
       ],
       "Area": [
-        "framework/src/cann_host_runtime/",
-        "framework/src/utils"
+        "framework/src/cann_host_runtime/"
       ],
       "Include": [
         "framework/include/"
@@ -81,8 +80,7 @@
       ],
       "Area": [
         "framework/src/interface/",
-        "framework/src/passes/",
-        "framework/src/utils"
+        "framework/src/passes/"
       ],
       "Include": [
         "framework/include/"
@@ -101,8 +99,7 @@
       "Area": [
         "framework/src/interface/",
         "framework/src/passes/",
-        "framework/src/codegen/",
-        "framework/src/utils"
+        "framework/src/codegen/"
       ],
       "Include": [
         "framework/include/"
@@ -124,8 +121,7 @@
         "framework/src/interface/",
         "framework/src/passes/",
         "framework/src/machine/",
-        "framework/src/cost_model/simulation/",
-        "framework/src/utils"
+        "framework/src/cost_model/simulation"
       ],
       "Include": [
         "framework/include/"
@@ -143,8 +139,7 @@
       ],
       "Area": [
         "framework/src/interface/",
-        "framework/src/passes/",
-        "framework/src/utils"
+        "framework/src/passes/"
       ],
       "Include": [
         "framework/include/"
@@ -165,8 +160,7 @@
         "framework/src/interface/",
         "framework/src/passes/",
         "framework/src/codegen/",
-        "framework/src/cost_model/simulation/",
-        "framework/src/utils"
+        "framework/src/cost_model/simulation/"
       ],
       "Include": [
         "framework/include/"

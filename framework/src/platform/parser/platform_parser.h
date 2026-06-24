@@ -16,7 +16,14 @@
 #define PLATFORM_PARSER_H_
 
 #include <map>
+#include <set>
+#include <vector>
+#include <fstream>
+#include <unordered_map>
+#include "tilefwk/file.h"
 #include "tilefwk/platform.h"
+#include "tilefwk/pypto_fwk_log.h"
+#include "simulation_platform/simulation_platform.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -40,8 +47,6 @@ public:
     ~CmdParser() = default;
     bool GetStringVal(const std::string& column, const std::string& key, std::string& val) const override;
 };
-
-std::string TrimLine(std::string_view s);
 } // namespace tile_fwk
 } // namespace npu
 #endif

@@ -16,7 +16,7 @@
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #define private public
 #include "platform/parser/platform_parser.h"
 #include "platform/parser/internal_parser.h"
@@ -63,7 +63,7 @@ TEST_F(TestPlatform, TestParser)
     const size_t expectubSize = 253952UL;
 
     std::unique_ptr<INIParser> parser = std::make_unique<INIParser>();
-    std::string iniPath = RealPath(GetPyptoLibPath() + INI_PATH);
+    std::string iniPath = RealPath(GetCurrentSharedLibPath() + INI_PATH);
     EXPECT_TRUE(parser->Initialize(iniPath));
 
     std::string socVersion;
@@ -108,7 +108,7 @@ TEST_F(TestPlatform, AbnormalTest)
     std::unordered_map<std::string, std::string> ccecVersion;
     EXPECT_FALSE(parser->GetCCECVersion(ccecVersion));
 
-    std::string iniPath = RealPath(GetPyptoLibPath() + INI_PATH);
+    std::string iniPath = RealPath(GetCurrentSharedLibPath() + INI_PATH);
     EXPECT_TRUE(parser->Initialize(iniPath));
 
     std::string test;
