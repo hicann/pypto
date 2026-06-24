@@ -41,9 +41,9 @@ void
 
     | 约束项 | 要求 |
     |:-------|:-----|
-    | mL0与mL1 | `mL0 > 0`且`mL0 ≤ mL1`且`mL1 % mL0 == 0` |
-    | kL0与kL1 | `kL0 > 0`且`kL0 ≤ kL1`且`kL1 % kL0 == 0` |
-    | nL0与nL1 | `nL0 > 0`且`nL0 ≤ nL1`且`nL1 % nL0 == 0` |
+    | mL0与mL1 | `mL0 > 0` 且 `mL0 ≤ mL1` 且 `mL1 % mL0 == 0` |
+    | kL0与kL1 | `kL0 > 0` 且 `kL0 ≤ kL1` 且 `kL1 % kL0 == 0` |
+    | nL0与nL1 | `nL0 > 0` 且 `nL0 ≤ nL1` 且 `nL1 % nL0 == 0` |
 
     - ND格式特有约束
 
@@ -92,7 +92,7 @@ void
     其中：
     - aDtype、bDtype为输入矩阵数据类型
     - cDtype为输出矩阵数据类型，当输入为DT_INT8时cDtype为DT_INT32，其余场景cDtype为DT_FP32
-    - `CeilAlign(value, align)`元素对齐实现为：`(value + align - 1) / align * align`
+    - `CeilAlign(value, align)` 元素对齐实现为：`(value + align - 1) / align * align`
 
 - 多核切K约束
 
