@@ -15,7 +15,7 @@
 
 #include "test_suite_stest_ops.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 
 namespace npu::tile_fwk {
 
@@ -23,7 +23,7 @@ class TestTileOpAdd : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 int CompileCCEForSingleOpTest(const std::string& srcFile, const std::string& objFile, bool isCube)
 {
-    std::string curPath = GetCwd();
+    std::string curPath = GetCurRunningPath();
     std::string codeSrcPath = curPath.append("/../../../../");
 
     std::string coreType = isCube ? "dav-c220-cube" : "dav-c220-vec";
@@ -62,7 +62,7 @@ void CompileTestCCE(const std::string& cceFileName)
 {
     CodeGenCtx ctx;
     CodeGenCloudNPU codegen(ctx); // used to PrepareDefaultOutputPath
-    std::string cwd = GetCwd();
+    std::string cwd = GetCurRunningPath();
     std::string testDir = "test_add";
     std::string cceFilePath = cwd + "/../../../../" + TEST_TILE_OP_PATH + testDir + "/" + cceFileName + ".cce";
 

@@ -19,7 +19,7 @@
 #include <fstream>
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "tilefwk/error_code.h"
 #include "topo_processor.h"
 #include "securec.h"
@@ -99,10 +99,10 @@ std::vector<uint8_t> LoadBinData(const std::string& binPath)
 {
     std::vector<uint8_t> text;
 
-    uint64_t fileSize = GetFileSize(binPath);
+    uint32_t fileSize = GetFileSize(binPath);
     std::vector<char> buf(fileSize);
     std::ifstream file(binPath);
-    file.read(buf.data(), static_cast<std::streamsize>(fileSize));
+    file.read(buf.data(), fileSize);
 
     auto elfHeader = reinterpret_cast<Elf64_Ehdr*>(buf.data());
     if (elfHeader->e_ident[EI_MAG0] != ELFMAG0 || elfHeader->e_ident[EI_MAG1] != ELFMAG1 ||

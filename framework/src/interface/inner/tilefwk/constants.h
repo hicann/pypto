@@ -9,31 +9,10 @@
  */
 
 /*!
- * \file internal_parser.h
+ * \file constants.h
  * \brief
  */
 
 #pragma once
 
-#include <map>
-#include <vector>
-#include <limits>
-#include <fstream>
-#include <sys/stat.h>
-#include "tilefwk/file.h"
-#include "tilefwk/data_type.h"
-
-namespace npu {
-namespace tile_fwk {
-class InternalParser {
-public:
-    InternalParser(const std::string& archType) : archType_(archType) {}
-    bool LoadInternalInfo();
-    bool GetDataPath(std::vector<std::pair<MemoryType, MemoryType>>& dataPath);
-
-private:
-    std::string archType_;
-    std::map<std::string, std::string> data_;
-};
-} // namespace tile_fwk
-} // namespace npu
+constexpr int NOT_IN_SUBGRAPH = -1;
