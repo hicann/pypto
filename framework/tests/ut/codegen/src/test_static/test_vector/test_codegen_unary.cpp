@@ -47,7 +47,7 @@ void TestRowMaxSingleBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, RowMaxSingleDim2) { TestRowMaxSingleBody({8, 128}, {8, 1}, {2, 64}, "ROWMAXSINGLE_DIM2"); }
@@ -72,7 +72,7 @@ void TestRowSumSingleBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, RowSumSingleDim2) { TestRowSumSingleBody({8, 128}, {8, 1}, {2, 64}, "ROWSUMSINGLE_DIM2"); }
@@ -101,7 +101,7 @@ void TestTransposeVnchwconvBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, TransposeVnchwconvDim2)
@@ -140,7 +140,7 @@ Function& TestFullBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
     return *function;
 }
 
@@ -166,7 +166,7 @@ Function& TestCastBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
     return *function;
 }
 
@@ -198,7 +198,7 @@ Function& TestExpandBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
     return *function;
 }
 
@@ -236,7 +236,7 @@ void TestRowSumBody(
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, RowSumDim4Axis2)
@@ -261,7 +261,7 @@ TEST_F(TestCodegenUnary, TestVecDup)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, TestVecDupUnaligned)
@@ -277,7 +277,7 @@ TEST_F(TestCodegenUnary, TestVecDupUnaligned)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, TestVecDupInt16)
@@ -293,7 +293,7 @@ TEST_F(TestCodegenUnary, TestVecDupInt16)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, TestVecDupUInt16)
@@ -309,7 +309,7 @@ TEST_F(TestCodegenUnary, TestVecDupUInt16)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, TestVecDupUInt32)
@@ -325,7 +325,7 @@ TEST_F(TestCodegenUnary, TestVecDupUInt32)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenUnary, TestRowMaxLine)
