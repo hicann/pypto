@@ -57,8 +57,8 @@ inline std::vector<MmapRecord> MmapGlobalManager::records_;
 inline std::mutex MmapGlobalManager::mutex_;
 
 struct EslModelMemoryUtils {
-    EslModelMemoryUtils(bool isHugePage = true, bool isDevice = true) :isUseHugePage_(isHugePage), isDevice_(isDevice) {}
-    bool IsDevice() { return isDevice_; }
+    EslModelMemoryUtils(bool isHugePage = true) :isUseHugePage_(isHugePage) {}
+    static bool IsDevice() { return false; }
 
     static void UnmapAllMappings()
     {
@@ -88,10 +88,32 @@ struct EslModelMemoryUtils {
     uint8_t *AllocZero(uint64_t size, uint8_t **cachedDevAddrHolder)
     {
         uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
-        std::vector<uint8_t> zeroBuffer(static_cast<size_t>(size), 0);
-        RuntimeMemcpy(devPtr, size, zeroBuffer.data(), size, RtMemcpyKind::HOST_TO_DEVICE);
-        memset_s(devPtr, size, 0, size);
+        (void)RuntimeMemset(devPtr, size, 0, size);
         return devPtr;
+    }
+
+    uint8_t *CopyToDev(uint8_t *data, uint64_t size, uint8_t **cachedDevAddrHolder)
+    {
+        uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
+        RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
+        MemCopytoMapAddr(devPtr, data, size);
+        return devPtr;
+    }
+
+    void CopyToDev(uint8_t *devPtr, uint8_t *data, uint64_t size)
+    {
+        RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
+    }
+
+    template <typename T>
+    T *CopyToDev(std::vector<T> data, uint8_t **cachedDevAddrHolder)
+    {
+        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T), cachedDevAddrHolder);
+    }
+
+    void CopyFromDev(uint8_t *data, uint8_t *devPtr, uint64_t size)
+    {
+        RuntimeMemcpy(data, size, devPtr, size, RtMemcpyKind::DEVICE_TO_HOST);
     }
 
     uint8_t *CopyToDev(RawTensorData &data)
@@ -109,33 +131,9 @@ struct EslModelMemoryUtils {
         return data.GetDevPtr();
     }
 
-    template <typename T>
-    T *CopyToDev(std::vector<T> data, uint8_t **cachedDevAddrHolder)
-    {
-        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T), cachedDevAddrHolder);
-    }
-
-    void CopyToDev(uint8_t *devPtr, uint8_t *data, uint64_t size)
-    {
-        RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
-    }
-
-    uint8_t *CopyToDev(uint8_t *data, uint64_t size, uint8_t **cachedDevAddrHolder)
-    {
-        uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
-        RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
-        memcpy_s(devPtr, size, data, size);
-        return devPtr;
-    }
-
     void CopyFromDev(RawTensorData &data)
     {
         CopyFromDev(data.data(), data.GetDevPtr(), data.size());
-    }
-
-    void CopyFromDev(uint8_t *data, uint8_t *devPtr, uint64_t size)
-    {
-        RuntimeMemcpy(data, size, devPtr, size, RtMemcpyKind::DEVICE_TO_HOST);
     }
 
     void Free(uint8_t* mem)
@@ -145,10 +143,14 @@ struct EslModelMemoryUtils {
         }
     }
 
+    void FreeTensor(uint8_t *devAddr)
+    {
+        DevMemoryPool::Instance().FreeDevAddr(devAddr);
+    }
+
     static uint64_t GetL2Offset() { return GetRuntimeL2Offset(); }
 
     bool isUseHugePage_{true};
-    bool isDevice_{true};
 
     uintptr_t AlignAddress(uintptr_t addr, size_t size, bool alignUp)
     {
