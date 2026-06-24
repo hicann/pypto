@@ -414,12 +414,9 @@ void CheckAttrShape(
     if (IsArch32Platform()) {
         // 由于transdata对于output的转换没有实现消除多余pad，所以当前cout只支持coutPerGroup % c0 = 0
         int64_t c0 = ALIGN_SIZE_32 / BytesOf(weightTensor.GetStorage()->Datatype());
-        int64_t coutPerGroup = weightTensor.GetShape()[NCHW_N_IDX] / groups;
-        ASSERT(ConvOperationError::INPUT_INVALID, coutPerGroup % c0 == 0)
-            << "The tiled Cout per group (" << coutPerGroup << ") must be a multiple of "
-            << c0 << " (c0 = 32 / sizeof(dtype)). "
-            << "Current tiled Cout(" << weightTensor.GetShape()[NCHW_N_IDX] << ") / groups(" << groups
-            << ") = " << coutPerGroup << " is not divisible by " << c0 << ".";
+        ASSERT(ConvOperationError::INPUT_INVALID, (weightTensor.GetShape()[NCHW_N_IDX] / groups) % c0 == 0)
+            << "Input illegal weight shape N:" << weightTensor.GetShape()[NCHW_N_IDX]
+            << ", which must be a multiple of C0:" << c0 << " after dividing by groups:" << groups << ".";
     }
 }
 
