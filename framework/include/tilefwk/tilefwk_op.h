@@ -160,9 +160,7 @@ Tensor Full(
     const SymbolicScalar& src, DataType dtype, const std::vector<int64_t>& dstShape,
     std::vector<SymbolicScalar> validShape = {});
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
-Tensor TransData(
-    const Tensor& self, TileOpFormat transDataType, const std::vector<int64_t>& outputShape,
-    const std::vector<SymbolicScalar>& validShape, int group = 1);
+Tensor TransData(const Tensor& self, TileOpFormat transDataType, int group = 1);
 std::shared_ptr<LogicalTensor> TransData(
     Function& function, const std::shared_ptr<LogicalTensor>& self, const std::shared_ptr<LogicalTensor>& fakeDstTensor, TileOpFormat transDataType, int group = 1);
 Tensor Cast(
