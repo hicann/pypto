@@ -85,7 +85,6 @@ void BindSymbolicScalar(py::module_& m)
             }),
             py::arg("expr"), "Create SymbolicScalar from expression")
         .def("__str__", &SymbolicScalar::Dump)
-        .def("__repr__", &SymbolicScalar::Dump)
         // clang-format off
         DEFINE_BINARY_OP("__eq__", ==)
         DEFINE_BINARY_OP("__ne__", !=)
