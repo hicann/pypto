@@ -18,7 +18,7 @@
 
 namespace npu::tile_fwk {
 
-TEST(PassTest, InferWriteConflict)
+TEST(PassTest, InferMemoryConflictInferOutputWriteConflict)
 {
     std::vector<int64_t> shape{-1, 32};
     Tensor a(DT_FP32, shape, "a");
@@ -43,6 +43,10 @@ TEST(PassTest, InferWriteConflict)
         }
     }
     int cnt = 0;
+    PassManager::Instance().RegisterStrategy(
+        "InferOutputWriteConflictTestStrategy", {{"InferMemoryConflict", PassName::INFER_MEMORY_CONFLICT}});
+    EXPECT_EQ(PassManager::Instance().RunPass(
+        Program::GetInstance(), *loopFunc, "InferOutputWriteConflictTestStrategy"), SUCCESS);
     for (auto out : loopFunc->GetOriginOutcast()) {
         if (out->tensor->GetSymbol() == "a") {
             EXPECT_FALSE(out->HasAttr(OpAttributeKey::writeConflict));

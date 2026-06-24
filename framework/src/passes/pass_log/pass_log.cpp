@@ -14,7 +14,10 @@
  */
 
 #include <iostream>
+#include <cctype>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
 #include <unistd.h>
 #include "passes/pass_log/pass_log.h"
 
@@ -31,6 +34,23 @@ namespace {
 const char* kExtractPassLogScriptName = "extract_pass_log.py";
 const char* kExtractPassLogScriptInSource = "tools/scripts/extract_pass_log.py";
 const char* kComputationGraphFolder = "computation_graph";
+constexpr size_t STRATEGY_NUM_DIGITS = 2;
+
+bool IsNumberedStrategyLogFolder(const std::string& strategy)
+{
+    constexpr const char* prefix = "Strategy_";
+    constexpr size_t prefixLen = 9; // std::strlen("Strategy_")
+    constexpr size_t minLen = prefixLen + STRATEGY_NUM_DIGITS + 1;
+    if (strategy.size() < minLen || strategy.rfind(prefix, 0) != 0) {
+        return false;
+    }
+    for (size_t i = 0; i < STRATEGY_NUM_DIGITS; ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(strategy[prefixLen + i]))) {
+            return false;
+        }
+    }
+    return strategy[prefixLen + STRATEGY_NUM_DIGITS] == '_';
+}
 
 bool IsFileAccessible(const std::string& path) { return !path.empty() && access(path.c_str(), F_OK) == 0; }
 
@@ -60,6 +80,19 @@ std::string ResolveExtractPassLogScriptPath()
     return "";
 }
 } // namespace
+
+std::string BuildStrategyLogFolderName(const std::string& strategy, size_t strategyIndex)
+{
+    if (strategy.empty()) {
+        return "";
+    }
+    if (IsNumberedStrategyLogFolder(strategy)) {
+        return strategy;
+    }
+    std::stringstream ss;
+    ss << "Strategy_" << std::setw(STRATEGY_NUM_DIGITS) << std::setfill('0') << strategyIndex << "_" << strategy;
+    return ss.str();
+}
 
 std::string EscapeShellArg(const std::string& arg)
 {
@@ -133,7 +166,7 @@ void ExtractPassLogByFunction(const Function& function, const std::string& strat
     const std::string functionName = function.GetMagicName();
     std::string outputDir = config::LogTopFolder();
     if (!strategy.empty()) {
-        outputDir = outputDir + "/" + kComputationGraphFolder + "/" + strategy;
+        outputDir = outputDir + "/" + kComputationGraphFolder + "/" + BuildStrategyLogFolderName(strategy, 0);
     }
     const std::string command = "python3 " + EscapeShellArg(scriptPath) + " " + EscapeShellArg(logPattern) + " -f " +
                                 EscapeShellArg(functionName) + " -o " + EscapeShellArg(outputDir) + " --silentmode";
@@ -152,7 +185,7 @@ PassLogUtil::PassLogUtil(Pass& pass, Function& function, const std::string& stra
     originLogOutPath_ = config::LogFile();
     if (!strategy.empty()) {
         computationGraphFolder_ = config::LogTopFolder() + "/" + kComputationGraphFolder;
-        strategyFolder_ = computationGraphFolder_ + "/" + strategy;
+        strategyFolder_ = computationGraphFolder_ + "/" + BuildStrategyLogFolderName(strategy, 0);
     }
     logFolder_ = pass.LogFolder(config::LogTopFolder(), strategy, passIndex);
     logFilePath_ = logFolder_ + "/" + (pass.GetName() + function.GetMagicName() + ".log");

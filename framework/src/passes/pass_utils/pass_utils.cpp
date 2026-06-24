@@ -16,7 +16,9 @@
 #include "pass_utils.h"
 
 #include <climits>
+#include "interface/operation/attribute.h"
 #include "interface/tensor/irbuilder.h"
+#include "tilefwk/error.h"
 #include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
@@ -184,5 +186,77 @@ int CommonUtils::GetTensorSubgraphID(const LogicalTensor* tensor)
     return NOT_IN_SUBGRAPH;
 }
 
+
+namespace {
+bool MayOverlap(const Operation* op0, const Operation* op1)
+{
+    auto attr0 = std::dynamic_pointer_cast<AssembleOpAttribute>(op0->GetOpAttribute());
+    auto attr1 = std::dynamic_pointer_cast<AssembleOpAttribute>(op1->GetOpAttribute());
+    ASSERT(attr0 != nullptr && attr1 != nullptr) << "missing assemble attribute";
+
+    auto getOffset = [](auto attr) {
+        auto dynOffset = attr->GetToDynOffset();
+        if (dynOffset.empty()) {
+            dynOffset = SymbolicScalar::FromConcrete(attr->GetToOffset());
+        }
+        return dynOffset;
+    };
+
+    auto check = [](SymbolicScalar cond) {
+        cond = cond.Simplify();
+        return cond.ConcreteValid() && cond.Concrete() == true;
+    };
+
+    auto offset0 = getOffset(attr0);
+    auto offset1 = getOffset(attr1);
+    auto& shape0 = op0->GetIOperands()[0]->GetShape();
+    auto& shape1 = op1->GetIOperands()[0]->GetShape();
+    ASSERT(shape0.size() == shape1.size()) << "shape0 and shape1 must have the same size";
+
+    for (size_t i = 0; i < shape0.size(); i++) {
+        if (check(offset0[i] + shape0[i] <= offset1[i]) || check(offset1[i] + shape1[i] <= offset0[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool MayOverlap(const std::vector<Operation*>& prods)
+{
+    for (size_t i = 0; i < prods.size(); i++) {
+        for (size_t j = i + 1; j < prods.size(); j++) {
+            if (MayOverlap(prods[i], prods[j])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+} // namespace
+
+Status FunctionUtils::InferOutcastWriteConflict(Function& function)
+{
+    for (auto& outcast : function.GetOutcast()) {
+        auto& prodSet = outcast->GetProducers();
+        bool hasConflict = std::any_of(prodSet.begin(), prodSet.end(), [](auto& prod) {
+            return prod->GetOpcode() == Opcode::OP_ATOMIC_RMW;
+        });
+        if (hasConflict) {
+            outcast->SetAttr(OpAttributeKey::writeConflict, true);
+            continue;
+        }
+
+        std::vector<Operation*> prods;
+        for (auto& prod : prodSet) {
+            if (prod->GetOpcode() == Opcode::OP_ASSEMBLE || prod->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) {
+                prods.push_back(prod);
+            }
+        }
+        if (MayOverlap(prods)) {
+            outcast->SetAttr(OpAttributeKey::writeConflict, true);
+        }
+    }
+    return SUCCESS;
+}
 
 } // namespace npu::tile_fwk

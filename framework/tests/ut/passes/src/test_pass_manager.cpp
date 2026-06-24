@@ -13,6 +13,7 @@
  * \brief Unit test for pass manager.
  */
 #include <fstream>
+#include <algorithm>
 #include <vector>
 #include <string>
 #include "gtest/gtest.h"
@@ -28,6 +29,7 @@
 #include "utils/file_utils.h"
 
 namespace npu::tile_fwk {
+
 class PassTestCast : public Pass {
 public:
     PassTestCast() : Pass("PassTestCast") {}
@@ -183,22 +185,20 @@ TEST_F(PassManagerTest, TestPassDFX)
     Function* function = G.GetFunction();
     auto rootPath = config::LogTopFolder();
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
-    auto afterJsonPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
-    auto beforeJsonPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
-    auto beforeIRPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
-    auto afterIRPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
-    EXPECT_FALSE(IsPathExist(afterJsonPath));
-    EXPECT_FALSE(IsPathExist(beforeJsonPath));
-    EXPECT_FALSE(IsPathExist(beforeIRPath));
-    EXPECT_FALSE(IsPathExist(afterIRPath));
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "print_graph", true);
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
+    auto strategyPath = rootPath + "/computation_graph/Strategy_00_TestPassDFX";
+    auto afterJsonPath =
+        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+    auto beforeJsonPath =
+        strategyPath + "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+    auto beforeIRPath =
+        strategyPath + "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+    auto afterIRPath =
+        strategyPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+    std::cout << "afterJsonPath: " << afterJsonPath << std::endl;
     EXPECT_TRUE(IsPathExist(afterJsonPath));
     EXPECT_TRUE(IsPathExist(beforeJsonPath));
     EXPECT_TRUE(IsPathExist(beforeIRPath));

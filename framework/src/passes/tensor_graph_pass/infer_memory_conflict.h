@@ -47,6 +47,7 @@ private:
     Status InsertPrecededCopys(Function& function);
     Status InsertPostCopys(Function& function);
     Status InsertCopys(Function& function);
+    Status UpdateViewTypeTileShape(Function& function);
     Status ObtainReshapeTile(Operation& op, Shape& inTileShape, Shape& outTileShape);
     Status InferTileShape(Operation& op, const LogicalTensorPtr& tensor, TileShape parentTile, Shape& reshapeTile);
     Status SetDefaultShape(const LogicalTensorPtr& tensor, std::vector<int64_t>& defaultTile);

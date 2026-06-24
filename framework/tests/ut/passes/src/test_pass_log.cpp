@@ -165,7 +165,8 @@ TEST_F(PassLogTest, PassLogUtilCreatesStrategyScopedFolder)
     auto function =
         std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogStrategy", "PassLogStrategy", nullptr);
     DummyPass pass;
-    const std::string expectedFolder = config::LogTopFolder() + "/computation_graph/UTStrategy/Pass_11_UTDummyPass";
+    const std::string expectedFolder =
+        config::LogTopFolder() + "/computation_graph/Strategy_00_UTStrategy/Pass_11_UTDummyPass";
 
     {
         PassLogUtil util(pass, *function, "UTStrategy", 11);
@@ -192,7 +193,7 @@ TEST_F(PassLogTest, PassLogUtilDeletesEmptyStrategyScopedParents)
         Program::GetInstance(), "TENSOR_PassLogEmptyStrategy", "PassLogEmptyStrategy", nullptr);
     DummyPass pass;
     const std::string computationGraphFolder = config::LogTopFolder() + "/computation_graph";
-    const std::string strategyFolder = computationGraphFolder + "/UTEmptyStrategy";
+    const std::string strategyFolder = computationGraphFolder + "/Strategy_00_UTEmptyStrategy";
     const std::string passFolder = strategyFolder + "/Pass_12_UTDummyPass";
 
     {
@@ -202,6 +203,34 @@ TEST_F(PassLogTest, PassLogUtilDeletesEmptyStrategyScopedParents)
 
     EXPECT_NE(access(passFolder.c_str(), F_OK), 0);
     EXPECT_NE(access(strategyFolder.c_str(), F_OK), 0);
+    EXPECT_EQ(unsetenv("TILE_FWK_OUTPUT_DIR"), 0);
+    EXPECT_EQ(std::system((std::string("rm -rf ") + tmpDir).c_str()), 0);
+}
+
+TEST_F(PassLogTest, PassRunDeletesEmptyFunctionGraphFolder)
+{
+    const std::string tmpDir = MakeTmpDir("/tmp/pypto_pass_log_empty_graph_ut_XXXXXX");
+    ASSERT_FALSE(tmpDir.empty());
+    ASSERT_TRUE(CreateDir(tmpDir + "/out"));
+    ASSERT_EQ(setenv("TILE_FWK_OUTPUT_DIR", (tmpDir + "/out").c_str(), 1), 0);
+    ConfigManager::Instance().ResetLog(tmpDir + "/out");
+
+    auto function =
+        std::make_shared<Function>(Program::GetInstance(), "TENSOR_PassLogEmptyGraph", "PassLogEmptyGraph", nullptr);
+    DummyPass pass;
+    PassConfigs cfg;
+    cfg.dumpGraph = true;
+    pass.SetPassConfigs(cfg);
+
+    const std::string graphFolder = config::LogTopFolder() + "/computation_graph/Strategy_00_UTEmptyGraph/" +
+                                    function->GetMagicName();
+
+    {
+        PassLogUtil util(pass, *function, "UTEmptyGraph", 0);
+        EXPECT_EQ(pass.Run(*function, "UTEmptyGraph", "UTDummyPass", 0), SUCCESS);
+        EXPECT_NE(access(graphFolder.c_str(), F_OK), 0);
+    }
+
     EXPECT_EQ(unsetenv("TILE_FWK_OUTPUT_DIR"), 0);
     EXPECT_EQ(std::system((std::string("rm -rf ") + tmpDir).c_str()), 0);
 }

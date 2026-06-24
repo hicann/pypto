@@ -16,6 +16,7 @@
 #include "infer_memory_conflict.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 #include <limits>
 
 #define MODULE_NAME "InferMemoryConflict"
@@ -187,41 +188,56 @@ Status InferMemoryConflict::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Operation, "InsertCopys failed.");
         return FAILED;
     }
-    for (auto& op : function.Operations()) {
-        if (op.GetOpcode() == Opcode::OP_VIEW_TYPE) {
-            auto output = op.GetOOperands()[0];
-            auto outOp = *output->GetConsumers().begin();
-            if (outOp == nullptr || outOp->GetOpcode() != Opcode::OP_REGISTER_COPY) {
-                continue;
-            }
-            TileShape viewTypeTile;
-            auto vecTypeTile = op.GetTileShape().GetVecTile();
-            auto viewTypeIn = op.GetIOperands()[0];
-            auto viewTypeOut = op.GetOOperands()[0];
-            auto inType = viewTypeIn->tensor->datatype;
-            auto outType = viewTypeOut->tensor->datatype;
-            auto inEntry = viewTypeTable.find(inType);
-            auto outEntry = viewTypeTable.find(outType);
-            if (inEntry == viewTypeTable.end() || outEntry == viewTypeTable.end()) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation,
-                    "ViewType Input Tensor OR Output Tensor DataType is not in viewType, Please check it!");
-                return FAILED;
-            }
-            if (inEntry->second < outEntry->second) {
-                if (vecTypeTile.tile[vecTypeTile.tile.size() - 1] % (outEntry->second / inEntry->second) != 0) {
-                    APASS_LOG_ERROR_F(Elements::Operation, "vecTypeTile tile dim n is not even.");
-                    return FAILED;
-                }
-                vecTypeTile.tile[vecTypeTile.tile.size() - 1] /= (outEntry->second / inEntry->second);
-            } else {
-                vecTypeTile.tile[vecTypeTile.tile.size() - 1] *= (inEntry->second / outEntry->second);
-            }
-            viewTypeTile.SetVecTile(vecTypeTile);
-            outOp->UpdateTileShape(viewTypeTile);
-        }
+    if (UpdateViewTypeTileShape(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "UpdateViewTypeTileShape failed.");
+        return FAILED;
+    }
+    //Mark outcast memory conflict for machine.
+    if (FunctionUtils::InferOutcastWriteConflict(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "InferOutcastWriteConflict failed.");
+        return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Operation, "End InferMemoryConflict for function [%s].", function.GetRawName().c_str());
+    return SUCCESS;
+}
+
+Status InferMemoryConflict::UpdateViewTypeTileShape(Function& function)
+{
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_VIEW_TYPE) {
+            continue;
+        }
+        auto output = op.GetOOperands()[0];
+        auto outOp = *output->GetConsumers().begin();
+        if (outOp == nullptr || outOp->GetOpcode() != Opcode::OP_REGISTER_COPY) {
+            continue;
+        }
+        TileShape viewTypeTile;
+        auto vecTypeTile = op.GetTileShape().GetVecTile();
+        auto viewTypeIn = op.GetIOperands()[0];
+        auto viewTypeOut = op.GetOOperands()[0];
+        auto inType = viewTypeIn->tensor->datatype;
+        auto outType = viewTypeOut->tensor->datatype;
+        auto inEntry = viewTypeTable.find(inType);
+        auto outEntry = viewTypeTable.find(outType);
+        if (inEntry == viewTypeTable.end() || outEntry == viewTypeTable.end()) {
+            APASS_LOG_ERROR_F(
+                Elements::Operation,
+                "ViewType Input Tensor OR Output Tensor DataType is not in viewType, Please check it!");
+            return FAILED;
+        }
+        if (inEntry->second < outEntry->second) {
+            if (vecTypeTile.tile[vecTypeTile.tile.size() - 1] % (outEntry->second / inEntry->second) != 0) {
+                APASS_LOG_ERROR_F(Elements::Operation, "vecTypeTile tile dim n is not even.");
+                return FAILED;
+            }
+            vecTypeTile.tile[vecTypeTile.tile.size() - 1] /= (outEntry->second / inEntry->second);
+        } else {
+            vecTypeTile.tile[vecTypeTile.tile.size() - 1] *= (inEntry->second / outEntry->second);
+        }
+        viewTypeTile.SetVecTile(vecTypeTile);
+        outOp->UpdateTileShape(viewTypeTile);
+    }
     return SUCCESS;
 }
 

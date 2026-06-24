@@ -23,6 +23,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "interface/tensor/symbolic_scalar.h"
 #include "interface/function/function.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 
@@ -53,6 +54,8 @@ public:
     static bool IsContinuous(const std::vector<std::shared_ptr<LogicalTensor>>& tensors);
 
     static NodeType GetNodeType(const LogicalTensor& tensor, const Function& function);
+
+    static Status InferOutcastWriteConflict(Function& function);
 };
 
 class CommonUtils {

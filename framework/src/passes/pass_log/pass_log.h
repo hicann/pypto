@@ -33,6 +33,8 @@ std::string GetFormatBacktrace(const Operation* op);
 
 std::string EscapeShellArg(const std::string& arg);
 
+std::string BuildStrategyLogFolderName(const std::string& strategy, size_t strategyIndex);
+
 void LogPassRuntime(
     const std::string& identifier, Program& program, Function& function,
     const std::chrono::time_point<std::chrono::high_resolution_clock>& start);
