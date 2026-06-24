@@ -18,7 +18,6 @@ file(GLOB _Interface_Srcs
         ir/op/*/*.cpp
         ir/reporter/*.cpp
         ir/transforms/*.cpp
-        ir/transforms/utils/*.cpp
         ir/verifier/*.cpp
         # 前端框架
         schema/*.cpp

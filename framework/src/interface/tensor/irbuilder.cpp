@@ -33,47 +33,6 @@ IRContext& IRContext::Get()
     return ctx;
 }
 
-std::vector<ir::VarPtr>& IRContext::GetDependToken(const ir::ExprPtr& val)
-{
-    static std::vector<ir::VarPtr> empty;
-    if (token_map_.find(val) != token_map_.end()) {
-        return token_map_[val];
-    }
-    if (ir::As<ir::ScalarExpr>(val) == nullptr) {
-        return empty;
-    }
-
-    auto getToken = [this](const RawSymbolicScalarPtr& s) -> std::vector<ir::VarPtr> {
-        if (s->IsExpression()) {
-            auto ss = std::static_pointer_cast<RawSymbolicExpression>(s);
-            auto tokens = GetDependToken(ss);
-            return tokens;
-        }
-        return empty;
-    };
-
-    std::set<ir::VarPtr> tokenList;
-    auto s = std::dynamic_pointer_cast<const RawSymbolicExpression>(val);
-    if (s->Opcode() == SymbolicOpcode::T_MOP_CALL) {
-        for (size_t i = 1; i < s->OperandList().size(); i++) {
-            auto tokens = getToken(s->OperandList()[i]);
-            tokenList.insert(tokens.begin(), tokens.end());
-        }
-    } else if (SymbolicOpcode::T_UOP_BEGIN <= s->Opcode() && s->Opcode() < SymbolicOpcode::T_UOP_END) {
-        auto tokens = getToken(s->OperandList()[0]);
-        tokenList.insert(tokens.begin(), tokens.end());
-    } else if (
-        (SymbolicOpcode::T_BOP_BEGIN <= s->Opcode() && s->Opcode() < SymbolicOpcode::T_BOP_END) ||
-        s->Opcode() == SymbolicOpcode::T_MOP_MAX || s->Opcode() == SymbolicOpcode::T_MOP_MIN) {
-        auto tokens0 = getToken(s->OperandList()[0]);
-        tokenList.insert(tokens0.begin(), tokens0.end());
-        auto tokens1 = getToken(s->OperandList()[1]);
-        tokenList.insert(tokens1.begin(), tokens1.end());
-    }
-    token_map_[val] = std::vector<ir::VarPtr>(tokenList.begin(), tokenList.end());
-    return token_map_[val];
-}
-
 Function& DummyFunc()
 {
     static auto func = []() {
@@ -195,11 +154,11 @@ std::shared_ptr<Function> IRBuilder::CreateFunction(
     auto seq = ir::SeqStmts::AsMut(body);
     auto mergedBody = ir::MergeStmtsIntoIfStmt(seq, externalVarNames);
     func->originalBody_ = mergedBody;
-
+  
     auto StmtsWithCall = CreateFunctionByStmt(mergedBody, *func, externalVarNames);
     func->ir::Function::body_ = ir::SeqStmts::Wrap(StmtsWithCall, span);
     func->ComputeHash();
-
+    
     BuildDynFuncSlotScope(func, params);
 
     return func;
@@ -226,14 +185,7 @@ ir::VarPtr IRBuilder::CreateVarLike(std::string name, ir::ExprPtr value)
         return CreateScalarVar(name).AsVar();
     }
     if (auto type = ir::As<ir::UnknownType>(value->GetType())) {
-        return irContext_.MakeVar(name, ir::GetUnknownType(), value->span_);
-    }
-    if (auto tuple = ir::As<ir::MakeTuple>(value)) {
-        std::vector<ir::ExprPtr> elements;
-        for (size_t i = 0; i < tuple->elements_.size(); i++) {
-            elements.push_back(CreateVarLike(name + std::to_string(i), tuple->elements_[i]));
-        }
-        return irContext_.MakeVar(name, ir::GetUnknownType(), value->span_);
+        return irContext_.MakeVar(name, ir::GetUnknownType(), ir::Span::Unknown());
     }
     ASSERT(false) << "CreateVarLike: unknown type" << value->GetType()->TypeName();
     return nullptr;
@@ -325,16 +277,7 @@ void IRBuilder::EmitTensorStmts()
 {
     auto func = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "__entry__");
     for (auto& op : func->Operations(false)) {
-        std::set<ir::VarPtr> tokenSet;
-        for (auto& scalar : op.GetDynamicAttributeList()) {
-            auto token = irContext_.GetDependToken(scalar.get().AsExpr());
-            tokenSet.insert(token.begin(), token.end());
-        }
-        auto stmt = std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this());
-        std::vector<ir::VarPtr> tokenList(tokenSet.begin(), tokenSet.end());
-        std::sort(tokenList.begin(), tokenList.end(), [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; });
-        stmt->tokens_ = tokenList;
-        Emit(stmt);
+        Emit(std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this()));
     }
     func->ResetOperations();
 }
