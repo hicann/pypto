@@ -6,23 +6,23 @@
 
 中级样例分为以下三个主要类别：
 
-### 1. 神经网络组件 ([basic_nn](basic_nn/))
-- **Layer Normalization ([layer_normalization](basic_nn/layer_normalization/))**:
+### 1. 神经网络组件 ([basic_nn](./basic_nn))
+- **Layer Normalization ([layer_normalization](./basic_nn/layer_normalization))**:
     - 展示标准 LayerNorm 和 RMSNorm 的实现。
     - 涉及均值和方差的计算。
-- **FFN Module ([ffn](basic_nn/ffn/))**:
+- **FFN Module ([ffn](./basic_nn/ffn))**:
     - 实现完整的 Feed-Forward Network（前馈网络）。
     - 支持多种激活函数（ReLU, GELU, SwiGLU）。
     - 结合了矩阵乘法、逐元素加法和激活函数。
 
-### 2. 自定义算子 ([operators](operators/))
-- **Custom Activation ([activation](operators/activation/))**:
+### 2. 自定义算子 ([operators](./operators))
+- **Custom Activation ([activation](./operators/activation))**:
     - 展示如何组合基础算子来构建复杂的激活函数，如 SiLU (Swish), GELU, SwiGLU 和 GeGLU。
-- **Softmax ([softmax](operators/softmax/))**:
+- **Softmax ([softmax](./operators/softmax))**:
     - 深入展示 Softmax 算子的手动分步实现。
     - 涉及 `exp` 计算和跨维度的 `sum` 归约。
 
-### 3. 运行时特性 ([controlflow](controlflow/))
+### 3. 运行时特性 ([controlflow](./controlflow))
 - **Dynamic Shapes ([dynamic.py](controlflow/others/dynamic.py))**:
     - 展示如何处理动态 Batch Size 或序列长度。
     - 使用 `dynamic_axis` 参数进行标记。

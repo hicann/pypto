@@ -7,7 +7,7 @@
 建议先阅读以下文档了解切块基础知识：
 
 - [Tiling配置](../development/tiling.md)：TileShape概念、设置方法、通用约束
-- [set_vec_tile_shapes API文档](../../api/config/pypto-set_vec_tile_shapes.md)：接口使用说明
+- [set_vec_tile_shapes API](../../api/config/pypto-set_vec_tile_shapes.md)：接口使用说明
 
 通信算子使用相同的`set_vec_tile_shapes`接口设置切块，但在**切分策略**和**约束条件**上有特殊处理，详见本指南第3节和第5节。
 

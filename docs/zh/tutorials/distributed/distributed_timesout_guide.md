@@ -16,7 +16,7 @@ PyPTO通信算子用于实现多卡间的数据传输与同步，是分布式计
 1. 设置全局日志级别，可参考 [README.md](../../trouble_shooting/README.md)日志环境变量，重点关注ASCEND_MODULE_LOG_LEVEL，开启所需模块日志。
 
 > [!NOTE]说明
-> 通过开启环境变量查看HOST日志是否有打印Kernel Launch，有打印则DEVICE超时，否则HOST超时。在定位前需先基础预检，来排除环境或常见问题，可参考《精度调试指南》../debug/precision.md中基础预检，确保问题确实是通信超时而非环境等问题。本文暂无HOST超时指导，必要时，可提供日志提ISSUE解决。
+> 通过开启环境变量查看HOST日志是否有打印Kernel Launch，有打印则DEVICE超时，否则HOST超时。在定位前需先基础预检，来排除环境或常见问题，可参考[精度调试](../debug/precision.md)中基础预检，确保问题确实是通信超时而非环境等问题。本文暂无HOST超时指导，必要时，可提供日志提ISSUE解决。
 
 ## DEVICE超时
 

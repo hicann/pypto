@@ -61,10 +61,10 @@ Commit:
 
 * The title of commit-msg and PR should follow the rule defined in [Commit Message](#commit-message)
 
-### cla 签署
+### CLA Signing
 
-* CLA 签署请参考 [CLA 使用指南](https://gitcode.com/cann/infrastructure/blob/main/docs/cla/cla使用指南.md)
+* For CLA signing, please refer to the [CLA Usage Guide](https://gitcode.com/cann/infrastructure/blob/main/docs/cla/cla_user_guide.en.md)
 
-### robot 命令使用
+### Robot Command Usage
 
-* `compile` 等相关命令请参考 [robot 使用指南](https://gitcode.com/cann/infrastructure/blob/main/docs/robot/robot使用指南.md)
+* For commands such as `compile`, please refer to the [Robot Usage Guide](https://gitcode.com/cann/infrastructure/blob/main/docs/robot/robot使用指南.md)

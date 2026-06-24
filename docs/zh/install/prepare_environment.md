@@ -32,23 +32,22 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 | 主机安装（自动安装/手动安装） | 在宿主机上自行准备环境，可选择脚本自动安装部分软件包，或完全手动安装。 | 适用于有昇腾设备，希望在本机直接搭建环境的开发者。 |
 | Docker | Docker镜像是一种高效部署方式，已预集成运行所需依赖。<br>当前支持Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品、暂不支持950PR, OS支持Ubuntu和OpenEuler。 | 适用于有昇腾设备，需要快速搭建环境的开发者。 |
 
-### 方式1：WebIDE环境
+### 方式1：使用CANNLab安装
 
-对于无昇腾设备的开发者，可直接使用WebIDE开发平台，即"**算子一站式开发平台**"，该平台为您提供在线可直接运行的昇腾环境，环境中已安装必备的驱动固件、软件包和依赖，无需手动安装。
+对于无昇腾设备的开发者，可直接使用CANNLab云开发环境，即"**一站式开发平台**"，该平台为您提供在线可直接运行的昇腾环境，环境中已安装必备的驱动固件、软件包和依赖，无需手动安装。
 
-> **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[CANN介绍](https://gitcode.com/org/cann/discussions/54)。
+> **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[CANNLab指导](https://gitcode.com/org/cann/discussions/54)。
 
 #### 1-进入开源项目
 
-单击"`云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
+单击"`CANNLab`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
- ![创建云开发环境](../tutorials/figures/webide1.png)
+![创建云开发环境](../tutorials/figures/webide1.png)
 
 #### 2-连接WebIDE
+2. 根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入一站式开发平台。
 
-根据页面提示信息创建并启动云开发环境，单击"`连接 > WebIDE`"进入算子一站式开发平台，开源项目的源码资源默认在`/mnt/workspace`目录下。
-
- ![启动并连接WebIDE](../tutorials/figures/webide2.png)
+![启动并连接WebIDE](../tutorials/figures/webide2.png)
 
 #### 3-安装pto-isa
 
@@ -304,9 +303,9 @@ Docker安装相关内容请参考：
 - **检查CANN版本**
 
     ```bash
-    # 查看CANN toolkit包版本信息（默认路径安装），WebIDE场景下将/usr/local替换为/home/developer
+    # 查看CANN toolkit包版本信息（默认路径安装），CANNLab场景下将/usr/local替换为/home/developer
     cat /usr/local/Ascend/cann/${arch}-linux/ascend_toolkit_install.info
-    # 查看CANN ops包版本信息（默认路径安装），WebIDE场景下将/usr/local替换为/home/developer
+    # 查看CANN ops包版本信息（默认路径安装），CANNLab场景下将/usr/local替换为/home/developer
     cat /usr/
 
 环境准备完成后，请参考[PyPTO安装](./build_and_install.md)文档完成PyPTO的安装。
