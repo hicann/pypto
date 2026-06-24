@@ -17,7 +17,7 @@ pass_verify_save(
     tensor: Tensor,
     fname: Union[str, SymbolicScalar, int],
     cond: Union[int, SymbolicScalar] = 1,
-    **kwargs: Union[int, SymbolicScalar, pypto_impl.SymbolicScalar]
+    **kwargs: Union[int, SymbolicScalar, pypto_impl.SymbolicScalar],
 ) -> None
 ```
 
@@ -27,7 +27,7 @@ pass_verify_save(
 |----------|-----------|----------------------------------------------------------------------|
 | tensor   | 输入      | 含义：pypto kernel function中的pypto.Tensor。 <br> 说明：Tensor的变量名称。 <br> 类型：pypto.Tensor <br> 取值范围：NA |
 | fname    | 输入      | 含义：文件名模板，定义tensor保存的文件名前缀，tensor的内存转储保存至{fname}.data、tensor的元数据（shape,dtype）保存至{fname}.csv。保存路径为：${work_path}/output/output_*/tensor/ <br> 说明：str：简单文件名前缀；包含"$NAME"的待匹配字符串：将$NAME替换为kwargs中NAME对应的值，然后以替换后的字符串作为文件名前缀。 <br> 类型：str <br> 取值范围：NA |
-| cond     | 输入      | 含义：指定打印数据的满足条件 <br> 说明：表达式计算结果为1：打印指定数据；表达式计算结果为0：不打印数据；该参数可省略，省略时使用默认值，不支持显式传入None。 <br> 类型：Union[int,pypto.SymbolicScalar] <br> 取值范围：0,1 <br> 默认值：1 |
+| cond     | 输入      | 含义：指定打印数据的满足条件 <br> 说明：表达式计算结果为1：打印指定数据；表达式计算结果为0：不打印数据。 <br> 类型：Optional[int,pypto.SymbolicScalar] <br> 取值范围：0,1 <br> 默认值：1 |
 | **kwargs | 输入      | 指定fname参数中待匹配字符串的值。 |
 
 ## 返回值说明
@@ -42,7 +42,7 @@ pass_verify_save(
 
 ```python
 verify_options = {
-        "enable_pass_verify": True
+        "enable_pass_verify": True,
       }
 
 @pypto.frontend.jit(verify_options=verify_options)
