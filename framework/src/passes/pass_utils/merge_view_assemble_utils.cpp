@@ -14,92 +14,15 @@
  */
 
 #include "merge_view_assemble_utils.h"
-#include <optional>
 #include "interface/tensor/irbuilder.h"
 #include "interface/operation/attribute.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_utils/infer_shape_utils.h"
-#include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
-#include "tilefwk/tilefwk_op.h"
 
 #define MODULE_NAME "MergeViewAssembleUtils"
 
 namespace npu::tile_fwk {
-namespace {
-struct RmwModeAttrState {
-    bool conflict = false;
-    std::optional<AtomicRMWMode> mode;
-};
-
-RmwModeAttrState MergeRmwModeAttr(const RmwModeAttrState& current, const RmwModeAttrState& next)
-{
-    if (current.conflict || next.conflict) {
-        return {true, std::nullopt};
-    }
-    if (!current.mode.has_value()) {
-        return next;
-    }
-    if (!next.mode.has_value() || current.mode == next.mode) {
-        return current;
-    }
-    return {true, std::nullopt};
-}
-
-RmwModeAttrState GetRmwModeAttr(const Operation& op)
-{
-    RmwModeAttrState rmwModeAttr;
-    if (op.HasAttr(RMW_MODE_ATTR_ADD)) {
-        rmwModeAttr = MergeRmwModeAttr(rmwModeAttr, {false, AtomicRMWMode::ADD});
-    }
-    if (op.HasAttr(RMW_MODE_ATTR_MIN)) {
-        rmwModeAttr = MergeRmwModeAttr(rmwModeAttr, {false, AtomicRMWMode::MIN});
-    }
-    if (op.HasAttr(RMW_MODE_ATTR_MAX)) {
-        rmwModeAttr = MergeRmwModeAttr(rmwModeAttr, {false, AtomicRMWMode::MAX});
-    }
-    return rmwModeAttr;
-}
-
-RmwModeAttrState GetChainRmwModeAttr(const std::vector<Operation*>& chain)
-{
-    RmwModeAttrState chainRmwModeAttr;
-    for (const auto* op : chain) {
-        if (op == nullptr) {
-            return {true, std::nullopt};
-        }
-        chainRmwModeAttr = MergeRmwModeAttr(chainRmwModeAttr, GetRmwModeAttr(*op));
-        if (chainRmwModeAttr.conflict) {
-            return chainRmwModeAttr;
-        }
-    }
-    return chainRmwModeAttr;
-}
-
-bool IsRmwModeAttrCompatible(const std::vector<Operation*>& chain, const Operation& consumer)
-{
-    auto chainRmwModeAttr = GetChainRmwModeAttr(chain);
-    auto consumerRmwModeAttr = GetRmwModeAttr(consumer);
-    return !MergeRmwModeAttr(chainRmwModeAttr, consumerRmwModeAttr).conflict;
-}
-
-std::string GetRmwModeAttrKey(const RmwModeAttrState& rmwModeAttr)
-{
-    if (!rmwModeAttr.mode.has_value() || rmwModeAttr.conflict) {
-        return "";
-    }
-    switch (*rmwModeAttr.mode) {
-        case AtomicRMWMode::ADD:
-            return RMW_MODE_ATTR_ADD;
-        case AtomicRMWMode::MIN:
-            return RMW_MODE_ATTR_MIN;
-        case AtomicRMWMode::MAX:
-            return RMW_MODE_ATTR_MAX;
-        default:
-            return "";
-    }
-}
-} // namespace
 
 Status MergeViewAssembleUtils::MergeViewAssemble(Function& function)
 {
@@ -205,9 +128,6 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
             function, Opcode::OP_ASSEMBLE, {assembleOp.input}, {assembleOp.output}, assembleOp.span);
         mergedAssembleOp.SetScopeInfo(assembleOp.scopeInfo);
         mergedAssembleOp.SetOpAttribute(attr);
-        if (!assembleOp.rmwModeAttr.empty()) {
-            mergedAssembleOp.SetAttribute(assembleOp.rmwModeAttr, 1L);
-        }
     }
     return SUCCESS;
 }
@@ -335,6 +255,7 @@ Status MergeViewAssembleUtils::ProcessConsumerChain(
 
 Status MergeViewAssembleUtils::ProcessChainEnd(Function& function, std::vector<Operation*>& chain)
 {
+    (void)function;
     // 1. 验证链的有效性
     Operation* startOp = chain.front();
     Operation* endOp = chain.back();
@@ -372,7 +293,6 @@ Status MergeViewAssembleUtils::ProcessChainEnd(Function& function, std::vector<O
 
     // 清理链尾
     endOp->oOperand.clear();
-    function.GetTensorMap().Erase(endTensor);
     return SUCCESS;
 }
 
@@ -506,10 +426,6 @@ Status MergeViewAssembleUtils::ProcessAssembleConsumers(
                 chainEnd = true;
                 continue;
             }
-            if (!IsRmwModeAttrCompatible(chain, *op)) {
-                chainEnd = true;
-                continue;
-            }
             hasAssembleConsumer = true;
             Status status = MergeAssembleChain(function, *op, chain, effectiveScopeId);
             if (status != SUCCESS) {
@@ -526,6 +442,7 @@ Status MergeViewAssembleUtils::ProcessAssembleConsumers(
 Status MergeViewAssembleUtils::ProcessAssembleChainEnd(
     Function& function, std::vector<Operation*>& chain, Operation& operation)
 {
+    (void)function;
     // 验证链有效性
     if (chain.front()->iOperand.empty() || chain.back()->oOperand.empty()) {
         APASS_LOG_ERROR_F(Elements::Function, "Invalid chain operations.");
@@ -542,15 +459,8 @@ Status MergeViewAssembleUtils::ProcessAssembleChainEnd(
     // 获取链路上第一个非空的span
     ir::Span firstSpan = GetFirstSpan(chain);
     Operation::ScopeInfo chainScopeInfo = GetChainScopeInfo(chain);
-    RmwModeAttrState rmwModeAttr = GetChainRmwModeAttr(chain);
-    if (rmwModeAttr.conflict) {
-        APASS_LOG_ERROR_F(Elements::Function, "Assemble chain has conflicting rmw mode attributes.");
-        return FAILED;
-    }
     // 4. 记录并清理
-    RecordAssembleOperation(
-        startTensor, endTensor, newOffset, newDynOffset, firstSpan, chainScopeInfo, GetRmwModeAttrKey(rmwModeAttr));
-    function.GetTensorMap().Erase(endTensor);
+    RecordAssembleOperation(startTensor, endTensor, newOffset, newDynOffset, firstSpan, chainScopeInfo);
     operation.SetAsDeleted();
 
     return SUCCESS;
@@ -588,9 +498,9 @@ std::pair<std::vector<int64_t>, std::vector<SymbolicScalar>> MergeViewAssembleUt
 void MergeViewAssembleUtils::RecordAssembleOperation(
     const std::shared_ptr<LogicalTensor>& input, const std::shared_ptr<LogicalTensor>& output,
     const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
-    const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr)
+    const Operation::ScopeInfo& scopeInfo)
 {
-    assembleOpToAppend_.emplace_back(AssembleOp{input, output, offset, dynOffset, span, scopeInfo, rmwModeAttr});
+    assembleOpToAppend_.emplace_back(AssembleOp{input, output, offset, dynOffset, span, scopeInfo});
 }
 
 Status MergeViewAssembleUtils::EraseRedundantAssemble(Function& function) const
