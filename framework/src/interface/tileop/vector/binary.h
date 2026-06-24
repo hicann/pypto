@@ -102,34 +102,6 @@ TILEOP void BinaryBrcDispatch(T0 dst, T1 src0, T2 src1)
 }
 
 template <
-    BrcMode brcmode, typename Src0Tensor, typename Src1Tensor, typename Src0TileInfo, typename Src1TileInfo,
-    int... BrcOperands, typename T1, typename T2>
-TILEOP void A5Expand1DimBrcWSrc(T1 src0, T2 src1, uint64_t src0Addr, uint64_t src1Addr)
-{
-    constexpr bool src0NeedExpand = brcmode == BrcMode::BRC_W &&
-                                    GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_LEFT &&
-                                    Std::tuple_size<typename Src0Tensor::Shape>::value == 1 &&
-                                    Src0TileInfo::tileW != 1;
-    constexpr bool src1NeedExpand = brcmode == BrcMode::BRC_W &&
-                                    GetBrcOperandAt<DIM_5TH, BrcOperands...>() == BRC_RIGHT &&
-                                    Std::tuple_size<typename Src1Tensor::Shape>::value == 1 &&
-                                    Src1TileInfo::tileW != 1;
-    if constexpr (src0NeedExpand) {
-        using FillDst = pto::Tile<pto::TileType::Vec, typename T1::DType, T1::Rows, T1::Cols,
-                                  pto::BLayout::RowMajor, T1::Rows, T1::Cols>;
-        FillDst fillDst;
-        pto::TASSIGN(fillDst, src0Addr);
-        pto::TROWEXPAND(fillDst, src0);
-    } else if constexpr (src1NeedExpand) {
-        using FillDst = pto::Tile<pto::TileType::Vec, typename T2::DType, T2::Rows, T2::Cols,
-                                  pto::BLayout::RowMajor, T2::Rows, T2::Cols>;
-        FillDst fillDst;
-        pto::TASSIGN(fillDst, src1Addr);
-        pto::TROWEXPAND(fillDst, src1);
-    }
-}
-
-template <
     BinaryOp op, auto PrecisionType = 0, typename LastUse, int ...BrcOperands, typename T0, typename T1, typename T2>
 TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
 {
@@ -185,12 +157,6 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
                 dstTile.Assign(dst, dsttileOffsets);
                 src0Tile.Assign(src0, src0tileOffsets);
                 src1Tile.Assign(src1, src1tileOffsets);
-#if defined PTO_NPU_ARCH_A5
-                if constexpr (GetBrcOperandAt<DIM_5TH, BrcOperands...>() != BRC_NONE) {
-                    A5Expand1DimBrcWSrc<brcmode, T1, T2, Src0TileInfo, Src1TileInfo, BrcOperands...>(
-                        src0Tile.Data(), src1Tile.Data(), (uint64_t)src0.GetAddr(), (uint64_t)src1.GetAddr());
-                }
-#endif
                 BinaryBrcDispatch<op, PrecisionType, brcmode, LastUse>(
                     dstTile.Data(), src0Tile.Data(), src1Tile.Data());
             }
