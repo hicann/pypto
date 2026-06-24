@@ -177,11 +177,6 @@ private:
 
     Status ApplyOversizedLocalBufferFallback(Operation& operation);
 
-    bool IsOversizedLocalBuffer(
-        const LogicalTensorPtr& tensor, MemoryType memoryType, bool useAssembleUbLimit, bool allowL1Fallback) const;
-
-    Status DowngradeOversizedViewInputRequirement(Operation& operation);
-
     bool ExceedsMemoryLimit(const LogicalTensorPtr& tensor, size_t threshold) const;
 
     Status ApplyPlatformPathFallbackRules(Function& function);
