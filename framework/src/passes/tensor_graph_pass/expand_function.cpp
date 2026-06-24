@@ -81,8 +81,6 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
     if (op.HasAttribute(OpAttributeKey::rmwMode)) {
         newOp.SetAttribute(OpAttributeKey::rmwMode, op.GetIntAttribute(OpAttributeKey::rmwMode));
     }
-    newOp.result_token_ = op.result_token_;
-    newOp.tokens_ = op.tokens_;
 }
 
 Status ExpandFunction::DefaultEnabledPreCheck(Function& function)

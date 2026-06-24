@@ -21,8 +21,6 @@ __all__ = [
     "Program",
     "LogicalTensor",
 
-    "Pass",
-
     "UnknownType",
     "ScalarType",
     "TensorType",
@@ -189,7 +187,7 @@ from ..pypto_impl.ir import (
 )
 
 # --- Function / Program ---
-from ..pypto_impl.ir import Function, Program, Pass
+from ..pypto_impl.ir import Function, Program
 
 from ..pypto_impl.ir import type_equal
 
