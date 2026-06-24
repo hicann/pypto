@@ -23,7 +23,7 @@
 #include <regex>
 #include <dlfcn.h>
 #include <fstream>
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "cost_model/simulation/pv/PvModel.h"
 #include "cost_model/simulation/common/CommonTools.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
@@ -33,6 +33,7 @@
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
+#include "tilefwk/file.h"
 #include "tilefwk/error_code.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
@@ -207,7 +208,7 @@ public:
     {
         dir_ = npu::tile_fwk::config::LogTopFolder() + "/PvModelOutput";
         if (npu::tile_fwk::IsPathExist(dir_)) {
-            npu::tile_fwk::DeleteDir(dir_, true);
+            npu::tile_fwk::DeleteDir(dir_);
         }
         npu::tile_fwk::CreateDir(dir_);
     }
@@ -320,7 +321,7 @@ public:
         binPath = srcPath.substr(0, srcPath.length() - Len3) + "bin";
         constexpr int cmdLen = 2048;
         char cmd[cmdLen];
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(objPath))
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(objPath))
             << "obj file does not exist. objPath: " << objPath;
         int ret = snprintf_s(
             cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s", objPath.c_str(),
