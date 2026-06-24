@@ -60,10 +60,6 @@ void ValidateKwargs(
             CHECK(std::type_index(value.type()) == std::type_index(typeid(std::vector<int>)))
                 << "Kwarg '" << key << "' for operator '" << op_name
                 << "' expects std::vector<int>, but got incompatible type";
-        } else if (it->second == std::type_index(typeid(std::vector<std::string>))) {
-            CHECK(std::type_index(value.type()) == std::type_index(typeid(std::vector<std::string>)))
-                << "Kwarg '" << key << "' for operator '" << op_name
-                << "' expects std::vector<std::string>, but got incompatible type";
         } else if (std::type_index(value.type()) != it->second) {
             CHECK(false) << "Kwarg '" << key << "' for operator '" << op_name << "' has incompatible type";
         }

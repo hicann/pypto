@@ -47,7 +47,6 @@ REGISTER_OP("block.matmul")
     .add_argument("lhs", "Left matrix tile [M,K] (TileType)")
     .add_argument("rhs", "Right matrix tile [K,N] (TileType)")
     .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
-    .set_attr<std::string>("phase") // AccPhase: "unspecified" / "partial" / "final" — unit_flag for TMATMUL
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul", 3);
@@ -61,7 +60,6 @@ REGISTER_OP("block.matmul_acc")
     .add_argument("lhs", "Left matrix tile [M,K] (TileType)")
     .add_argument("rhs", "Right matrix tile [K,N] (TileType)")
     .add_argument("out", "Pre-allocated output tile [M,N] (TileType)")
-    .set_attr<std::string>("phase") // AccPhase: "unspecified" / "partial" / "final" — unit_flag for TMATMUL_ACC
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         return DeduceBlockOutTileType(args, kwargs, "block.matmul_acc", 4);
