@@ -197,15 +197,6 @@ class Function:
         return self.base.GetOriginIncast()
 
     @property
-    def original_body(self):
-        """Get the original function body statement.
-
-        Returns:
-            The original SeqStmts body of the function.
-        """
-        return self.base.original_body
-
-    @property
     def origin_outcast(self) -> List:
         """Get original output cast tensors.
 
