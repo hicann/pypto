@@ -211,7 +211,7 @@ void BindControllerUtils(py::module_& m)
     m.def("ClearSpan", &ir::Span::ClearCurrent);
 }
 
-std::any ConvertPyList(const std::string& key, const py::list& lst)
+npu::tile_fwk::Any ConvertPyList(const std::string& key, const py::list& lst)
 {
     if (lst.size() == 0) {
         return std::vector<int64_t>();
@@ -296,7 +296,7 @@ static void ClassifyKeys(const py::dict& dict_value, bool& has_int, bool& has_st
 
 static void HandleStrOnlyKeys(
     const std::string& key, const py::dict& dict_value, bool has_func, bool has_label,
-    std::map<std::string, std::any>& cpp_values)
+    std::map<std::string, npu::tile_fwk::Any>& cpp_values)
 {
     cpp_values[key] = std::map<int64_t, int64_t>();
     if (has_func && has_label) {
@@ -320,7 +320,7 @@ static void HandleStrOnlyKeys(
 }
 
 static void HandleMixedKeys(
-    const std::string& key, const py::dict& dict_value, std::map<std::string, std::any>& cpp_values)
+    const std::string& key, const py::dict& dict_value, std::map<std::string, npu::tile_fwk::Any>& cpp_values)
 {
     std::map<int64_t, int64_t> int_map;
     std::map<std::string, int64_t> func_map, label_map;
@@ -347,7 +347,7 @@ static void HandleMixedKeys(
 }
 
 void ConvertPyDict(
-    const std::string& key, const py::object& value, std::map<std::string, std::any>& cpp_values)
+    const std::string& key, const py::object& value, std::map<std::string, npu::tile_fwk::Any>& cpp_values)
 {
     py::dict dict_value = py::cast<py::dict>(value);
     bool has_int = false, has_str = false, has_func = false, has_label = false;
@@ -362,7 +362,7 @@ void ConvertPyDict(
     }
 }
 
-std::any ConvertPyValue(const std::string& key, const py::object& value)
+npu::tile_fwk::Any ConvertPyValue(const std::string& key, const py::object& value)
 {
     if (py::isinstance<py::bool_>(value)) {
         return value.cast<bool>();
@@ -384,9 +384,9 @@ std::any ConvertPyValue(const std::string& key, const py::object& value)
     throw py::type_error("Unsupported value type for key: " + key);
 }
 
-std::map<std::string, std::any> ConvertPyDictToCppMap(const py::dict& values)
+std::map<std::string, npu::tile_fwk::Any> ConvertPyDictToCppMap(const py::dict& values)
 {
-    std::map<std::string, std::any> cpp_values;
+    std::map<std::string, npu::tile_fwk::Any> cpp_values;
     for (auto item : values) {
         std::string key = py::str(item.first);
         py::object value = py::reinterpret_borrow<py::object>(item.second);
@@ -454,31 +454,31 @@ void BindControllerScope(py::module_& m)
     m.def("GetOptionsTree", []() { return ConfigManagerNg::GetInstance().GetOptionsTree(); });
 }
 
-py::object AnyToPyObject(const std::any& val)
+py::object AnyToPyObject(const Any& val)
 {
-    using Fn = std::function<py::object(const std::any&)>;
+    using Fn = std::function<py::object(const Any&)>;
     static const std::unordered_map<std::type_index, Fn> table = {
-        {typeid(bool), [](const std::any& a) { return py::cast(AnyCast<bool>(a)); }},
-        {typeid(int64_t), [](const std::any& a) { return py::cast(AnyCast<int64_t>(a)); }},
-        {typeid(double), [](const std::any& a) { return py::cast(AnyCast<double>(a)); }},
-        {typeid(std::string), [](const std::any& a) { return py::cast(AnyCast<std::string>(a)); }},
-        {typeid(std::vector<int64_t>), [](const std::any& a) { return py::cast(AnyCast<std::vector<int64_t>>(a)); }},
-        {typeid(std::vector<std::string>), [](const std::any& a) { return py::cast(AnyCast<std::vector<std::string>>(a)); }},
-        {typeid(std::vector<double>), [](const std::any& a) { return py::cast(AnyCast<std::vector<double>>(a)); }},
+        {typeid(bool), [](const Any& a) { return py::cast(AnyCast<bool>(a)); }},
+        {typeid(int64_t), [](const Any& a) { return py::cast(AnyCast<int64_t>(a)); }},
+        {typeid(double), [](const Any& a) { return py::cast(AnyCast<double>(a)); }},
+        {typeid(std::string), [](const Any& a) { return py::cast(AnyCast<std::string>(a)); }},
+        {typeid(std::vector<int64_t>), [](const Any& a) { return py::cast(AnyCast<std::vector<int64_t>>(a)); }},
+        {typeid(std::vector<std::string>), [](const Any& a) { return py::cast(AnyCast<std::vector<std::string>>(a)); }},
+        {typeid(std::vector<double>), [](const Any& a) { return py::cast(AnyCast<std::vector<double>>(a)); }},
         {typeid(std::map<int64_t, int64_t>),
-         [](const std::any& a) { return py::cast(AnyCast<std::map<int64_t, int64_t>>(a)); }},
+         [](const Any& a) { return py::cast(AnyCast<std::map<int64_t, int64_t>>(a)); }},
         {typeid(std::map<std::string, int64_t>),
-         [](const std::any& a) { return py::cast(AnyCast<std::map<std::string, int64_t>>(a)); }},
-        {typeid(CubeTile), [](const std::any& a) { return py::cast(AnyCast<CubeTile>(a)); }},
-        {typeid(ConvTile), [](const std::any& a) { return py::cast(AnyCast<ConvTile>(a)); }},
-        {typeid(DistTile), [](const std::any& a) { return py::str(AnyCast<DistTile>(a).ToString()); }},
+         [](const Any& a) { return py::cast(AnyCast<std::map<std::string, int64_t>>(a)); }},
+        {typeid(CubeTile), [](const Any& a) { return py::cast(AnyCast<CubeTile>(a)); }},
+        {typeid(ConvTile), [](const Any& a) { return py::cast(AnyCast<ConvTile>(a)); }},
+        {typeid(DistTile), [](const Any& a) { return py::str(AnyCast<DistTile>(a).ToString()); }},
     };
 
-    auto it = table.find(std::type_index(val.type()));
+    auto it = table.find(std::type_index(val.Type()));
     if (it != table.end())
         return it->second(val);
 
-    throw py::type_error("Unsupported config value type: " + std::string(val.type().name()));
+    throw py::type_error("Unsupported config value type: " + std::string(val.Type().name()));
 }
 
 void BindControllerScopeClasses(py::module_& m)
