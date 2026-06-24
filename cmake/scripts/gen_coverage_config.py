@@ -29,7 +29,7 @@ class GenCoverageConfig:
         def __call__(self, parser, namespace, values, option_string=None):
             # 获取当前已收集的列表(初始为 None)
             cur_values = getattr(namespace, self.dest, None) or []
-            # 处理分号分隔的多个路径（VERBATIM 模式下，生成器表达式展开为分号分隔字符串）
+            # 处理分号分隔的多个路径 (VERBATIM 模式下，生成器表达式展开为分号分隔字符串)
             for path_str in values.split(';'):
                 path_str = path_str.strip()
                 if not path_str:

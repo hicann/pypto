@@ -13,7 +13,7 @@
 本模块提供了集成 CMake 构建系统的 setuptools 配置, 支持:
     - 使用 CMake 进行扩展模块的构建
     - 支持可编辑安装模式 (editable install)
-    - 支持自定义 CMake 生成器、构建类型和选项
+    - 支持自定义 CMake 生成器, 构建类型和选项
     - 支持 CMake 安装文件的自动追踪
 """
 import argparse
@@ -123,7 +123,7 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
     def run(self):
         """执行 editable_wheel 命令
 
-        传递 -e 模式标记给 build_ext 命令, 然后继续执行标准的命令流程. 这会触发 build_ext、egg_info 等子命令.
+        传递 -e 模式标记给 build_ext 命令, 然后继续执行标准的命令流程. 这会触发 build_ext, egg_info 等子命令.
         """
         # 传递 -e 模式标记给 build_ext 命令
         build_ext_cmd = self.distribution.get_command_obj("build_ext")
@@ -459,9 +459,9 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
     继承自 setuptools 的 build_ext 命令, 重写构建流程以使用 CMake.
 
     主要功能:
-        - 调用 CMake 执行 Configure、Build、Install 流程
+        - 调用 CMake 执行 Configure, Build, Install 流程
         - 支持可编辑安装模式 (editable mode)
-        - 支持自定义 CMake 生成器、构建类型和选项
+        - 支持自定义 CMake 生成器, 构建类型和选项
         - 将 CMake 安装的文件列表传递给 editable_wheel 命令
 
     流程:
@@ -658,7 +658,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         """写入 build_dir 标记文件
 
         在 src_root/build_dir.json 中记录当前 CMake 构建目录路径,
-        供生成覆盖率报告时使用。
+        供生成覆盖率报告时使用.
         """
         gcov_config_file = build_dir / "gcov_config.json"
         if not gcov_config_file.exists():
@@ -678,7 +678,7 @@ class SetupCtrl:
     负责配置和启动 setuptools 的构建流程.
 
     主要功能:
-        - 配置自定义的命令类 (editable_wheel、build_ext)
+        - 配置自定义的命令类 (editable_wheel, build_ext)
         - 配置扩展模块 (CMakeExtension)
         - 过滤 setuptools 的警告信息
     """

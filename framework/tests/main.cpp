@@ -79,7 +79,7 @@ public:
         cpu_set_t cpuSet;
         CPU_ZERO(&cpuSet);
 
-        // 调用系统接口获取当前进程亲和性(0表示当前进程PID）
+        // 调用系统接口获取当前进程亲和性(0表示当前进程PID)
         if (sched_getaffinity(0, sizeof(cpu_set_t), &cpuSet) != 0) {
             std::cerr << "Failed to get process affinity: " << std::strerror(errno) << std::endl;
             return;
@@ -174,7 +174,7 @@ private:
         try {
             size_t pos;
             outVal = std::stoi(str, &pos);
-            return pos == str.length(); // 确保整个字符串都是数字（避免"12a"这类非法值）
+            return pos == str.length(); // 确保整个字符串都是数字 (避免"12a"这类非法值)
         } catch (const std::invalid_argument&) {
             return false;
         } catch (const std::out_of_range&) {

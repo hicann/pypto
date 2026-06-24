@@ -36,7 +36,7 @@ class GenCoverage:
         def __call__(self, parser, namespace, values, option_string=None):
             # 获取当前已收集的列表(初始为 None)
             cur_values = getattr(namespace, self.dest, None) or []
-            # 处理分号分隔的多个路径（VERBATIM 模式下，生成器表达式展开为分号分隔字符串）
+            # 处理分号分隔的多个路径 (VERBATIM 模式下，生成器表达式展开为分号分隔字符串)
             for path_str in values.split(';'):
                 path_str = path_str.strip()
                 if not path_str:
@@ -92,7 +92,7 @@ class GenCoverage:
                 version_match = re.search(r'version (\d+\.\d+)', version)
                 if not version_match:
                     raise RuntimeError(f"Can't get version from {version}")
-                # 补全三位版本号(如 2.3 → 2.3.0)
+                # 补全三位版本号(如 2.3 -> 2.3.0)
                 base_version = version_match.group(1)
                 return f"{base_version}.0"
             else:
