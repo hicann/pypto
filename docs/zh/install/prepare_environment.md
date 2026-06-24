@@ -12,7 +12,6 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 **说明:**
 
 - NPU：指昇腾AI处理器，目前仅支持如下产品型号：
-    - Ascend 950PR
     - Atlas A3 训练系列产品/Atlas A3 推理系列产品
     - Atlas A2 训练系列产品/Atlas A2 推理系列产品
 - 支持的系统：PyPTO支持在OpenEuler、Ubuntu等主流Linux发行版上编译和运行
@@ -30,13 +29,13 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 | ----- | ------ | ------ |
 | WebIDE | 一站式开发平台，提供在线直接运行的昇腾环境，无需手动安装。<br>当前可提供单机算力，**默认安装最新商发版CANN包**。 | 适用于没有昇腾设备的开发者。 |
 | 主机安装（自动安装/手动安装） | 在宿主机上自行准备环境，可选择脚本自动安装部分软件包，或完全手动安装。 | 适用于有昇腾设备，希望在本机直接搭建环境的开发者。 |
-| Docker | Docker镜像是一种高效部署方式，已预集成运行所需依赖。<br>当前支持Atlas A2 训练系列产品/Atlas A2 推理系列产品、Atlas A3 训练系列产品/Atlas A3 推理系列产品、暂不支持950PR, OS支持Ubuntu和OpenEuler。 | 适用于有昇腾设备，需要快速搭建环境的开发者。 |
+| Docker | Docker镜像是一种高效部署方式，已预集成运行所需依赖。<br>当前支持Atlas A2/A3系列产品，OS支持Ubuntu和OpenEuler。 | 适用于有昇腾设备，需要快速搭建环境的开发者。 |
 
 ### 方式1：WebIDE环境
 
 对于无昇腾设备的开发者，可直接使用WebIDE开发平台，即"**算子一站式开发平台**"，该平台为您提供在线可直接运行的昇腾环境，环境中已安装必备的驱动固件、软件包和依赖，无需手动安装。
 
-> **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[CANN介绍](https://gitcode.com/org/cann/discussions/54)。
+> **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[LINK](https://gitcode.com/org/cann/discussions/54)。
 
 #### 1-进入开源项目
 
@@ -104,12 +103,11 @@ ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
 
 1. **安装驱动与固件**
 
-    若计划在真实NPU环境中运行PyPTO，必须先完成驱动与固件安装，并确保Ascend HDK版本为25.5.0及以上。详细指导请参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》中"安装NPU驱动和固件"章节。
+    若计划在真实NPU环境中运行PyPTO，必须先完成驱动与固件安装。详细指导请参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》中"安装NPU驱动和固件"章节。
 
-    > **重要**：
+    > **说明**：
     >
-    > - 支持版本：Ascend HDK 25.5.0及以上。
-    > - 低于支持版本的HDK环境不在PyPTO验证和支持范围内，运行异常算子时可能导致NPU状态异常，进而影响后续算子执行，出现AIC超时等问题；严重情况下可能需要重启设备或主机后恢复。
+    > - 支持版本：Ascend HDK 25.5.0
     > - 驱动与固件是运行态依赖，若仅编译PyPTO或仅进行性能仿真，可不安装。
     > - `prepare_env.sh`的`--with-install-driver`参数仅用于下载驱动与固件安装包，不会自动执行安装，驱动与固件仍需您根据官方指导手动安装。
 
@@ -317,7 +315,7 @@ Docker安装相关内容请参考：
 
 如需体验计算图和泳道图的查看能力，请安装PyPTO Toolkit插件：
 
-1. 单击[PyPTO_Toolkit](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/pypto-toolkit-1.1.0.vsix)，下载`.vsix`插件文件。
+1. 单击[Link](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/pypto-toolkit-1.1.0.vsix)，下载`.vsix`插件文件。
 
 2. 打开Visual Studio Code，进入"扩展"选项卡界面，单击右上角的"..."，选择"从VSIX安装..."。
  ![vscode_install](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/images/vscode_install.png)
