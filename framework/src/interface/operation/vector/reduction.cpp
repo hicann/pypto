@@ -434,12 +434,7 @@ static Tensor ProcessResultShape(const Tensor& result, const Tensor& self, int a
 Tensor Amax(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes;
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
-    } else {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
-    }
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMAX");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMAX");
     CheckTensorShapeSize(self.GetStorage(), "AMAX");
@@ -510,12 +505,7 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
 Tensor Amin(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes;
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
-    } else {
-        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
-    }
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMIN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMIN");
     CheckTensorShapeSize(self.GetStorage(), "AMIN");
