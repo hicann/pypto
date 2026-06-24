@@ -41,7 +41,7 @@ remainder(
 1. 当前不支持混合精度类型输入，即输入都是Tensor时数据类型都相同，输入有一个是标量时，Tenosr的数据类型必须是对应的整数类型（DT_INT32或DT_INT16）或浮点数类型（DT_FP32、DT_FP16、DT_BF16）；
 2. 输入Tenosr为整型数据类型时， other不支持0特殊值；
 3. 若输入Tensor的数据类型为DT_INT32，数据范围超过\[-2^24, 2^24\]范围时不保证精度；
-4. 高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式`INTRINSIC`。
+4. 高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
 
 ## 调用示例
 
