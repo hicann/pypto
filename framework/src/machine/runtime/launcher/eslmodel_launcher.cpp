@@ -72,6 +72,7 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStrea
     int launchAiCpuNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
     std::vector<std::thread> aicpuThreads(launchAiCpuNum);
     std::atomic<int> idx{0};
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     auto threadFun = [&](uint32_t runMode) {
         int tidx = idx++;
         cpu_set_t cpuSet;
@@ -120,7 +121,7 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     auto dynAttr = function->GetDyndevAttribute();
     DeviceKernelArgs kArgs;
     DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
-    EslModelMemoryUtils eslMemoryUtil{true, false};
+    EslModelMemoryUtils eslMemoryUtil;
     DeviceLauncher::DeviceInitDistributedContext(eslMemoryUtil, dynAttr->commGroupNames, kArgs);
     DeviceLauncher::DeviceInitTilingData(eslMemoryUtil, kArgs, dynAttr->devProgBinary, nullptr, config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(eslMemoryUtil, kArgs, inputList, outputList, dynAttr->disableL2List);
