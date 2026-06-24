@@ -677,7 +677,7 @@ void EncodeWaitUntilInfo(const Operation& op, std::vector<int32_t>& code)
         code.push_back(dimShape);
     }
     // 编码waitUntil的attr属性，顺序固定
-    auto map = op.GetAllAttribute();
+    std::map<std::string, Any> map = op.GetAllAttribute();
     auto it = map.find(OpAttributeKey::distOpAttr);
     if (it != map.end()) {
         Distributed::ShmemWaitUntilAttr distAttr = AnyCast<Distributed::ShmemWaitUntilAttr>(it->second);

@@ -144,14 +144,4 @@ const T& AnyCastRef(const std::any& value, [[maybe_unused]] const std::string& c
     }
 }
 
-template <typename T>
-T& AnyCastRef(std::any& value, [[maybe_unused]] const std::string& context = "")
-{
-    try {
-        return std::any_cast<T&>(value);
-    } catch (const std::bad_any_cast&) {
-        ThrowAnyCastError(typeid(T).name(), value.type().name(), context);
-    }
-}
-
 } // namespace pypto
