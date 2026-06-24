@@ -184,9 +184,6 @@ void ConstructTileGraph(
 } // namespace Matrix
 
 namespace Conv {
-constexpr const int NCL_N_IDX = 0;
-constexpr const int NCL_C_IDX = 1;
-constexpr const int NCL_L_IDX = 2;
 constexpr const int NCHW_N_IDX = 0;
 constexpr const int NCHW_C_IDX = 1;
 constexpr const int NCHW_H_IDX = 2;
@@ -224,7 +221,7 @@ constexpr uint32_t PAD_TAIL_INDEX = 5;
 constexpr uint32_t PAD_STRIDE_H = 0;
 constexpr uint32_t PAD_STRIDE_W = 1;
 constexpr uint32_t PAD_STRIDE_D = 2;
-constexpr int MAX_LOOP = 1000;
+constexpr int MAX_LOOP = 2000;
 
 const std::string OP_ATTR_PREFIX = "op_attr_";
 const std::string CONV_PADDINGS_ATTR = OP_ATTR_PREFIX + "paddings";
