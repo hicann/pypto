@@ -33,7 +33,7 @@ shmem_get(
 | shape   | 输入      | 需要获取的视图大小。 <br> 参数类型为list[int] 类型。 |
 | offsets   | 输入      | 需要获取的视图偏移量。 <br> 支持int或SymbolicScalar类型的列表。 <br> offsets的维度应与src的维度一致，且每个维度的偏移量值应小于src对应维度的大小。 |
 | valid_shape   | 输入      | 用于指定需要获取的有效数据大小。 <br> 需要保证valid_shape小于shape。 |
-| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空Tensor。 |
+| pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 |
 
 ## 返回值说明
 
