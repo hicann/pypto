@@ -1239,7 +1239,6 @@ void BindIR(py::module_& m)
     ir::BindProgram(ir_module);
     ir::BindHelpers(ir_module);
     ir::BindIRBuilder(m);
-    ir::BindPasses(ir_module);
 }
 
 } // namespace pypto

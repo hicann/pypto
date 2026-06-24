@@ -10,17 +10,10 @@
 
 #include "ir/transforms/passes.h"
 
-#include "ir/kind_traits.h"
-#include "ir/memref.h"
-
-#include "ir/transforms/utils/dead_code_elimination.h"
-#include "ir/transforms/utils/canonicalize.h"
-
 #include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -214,22 +207,6 @@ Pass RunVerifier(const std::vector<std::string>& disabled_rules)
         },
         "IRVerifier");
 }
-
-Pass Canonicalize()
-{
-    return CreateFunctionPass(
-        [](const FunctionPtr& func) -> FunctionPtr {
-            if (!func || !func->body_)
-                return func;
-            auto body = CanonicalizeSeqStmts(func->body_);
-            if (body == func->body_)
-                return func;
-            return std::make_shared<const Function>(
-                func->name_, func->params_, func->returnTypes_, body, func->span_, func->funcType_);
-        },
-        "Canonicalize");
-}
-
 } // namespace pass
 
 // ---------------------------------------------------------------------------
