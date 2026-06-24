@@ -234,11 +234,11 @@ public:
             "[workspaceSize] Metadata=%lu, workspaceSize=%lu, tensor=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, "
             "leafDumpWorkspace=%lu.",
             devProg->memBudget.metadata.Total(), devProg->workspaceSize, devProg->memBudget.tensor.Total(),
-            devProg->memBudget.aicoreSpilled, devProg->memBudget.debug.dumpTensor, devProg->memBudget.debug.leafDump);
+            devProg->memBudget.aicoreSpilled.Total(), devProg->memBudget.debug.dumpTensor, devProg->memBudget.debug.leafDump);
         MACHINE_LOGI(
-            "[workspaceSize] Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
-            devProg->memBudget.tensor.rootInner, devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts,
-            devProg->memBudget.tensor.MaxOutcastMem(), devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
+            "[workspaceSize] Tensor:rootInnerSpilledMem=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
+            devProg->memBudget.tensor.rootInnerSpilledMem, devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts,
+            devProg->memBudget.tensor.MaxOutcastMem(), devProg->memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum);
     }
 
     static void FillSwimLaneEnableInfo(ToSubMachineConfig &toSubMachineConfig) {

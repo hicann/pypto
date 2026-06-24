@@ -252,7 +252,7 @@ private:
         std::vector<DeviceTensorData> evalInputList;
         std::vector<DeviceTensorData> evalOutputList;
         std::tie(evalInputList, evalOutputList) = BuildInputOutputFromHost(memoryHelper, inputs, outputs);
-        Evaluator eval{dynAttr->inputSymbolDict, evalInputList, evalOutputList};
+        Evaluator eval{dynAttr->inputSymbolDict, &evalInputList, &evalOutputList};
         auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
         cellMatchDescPatches_ = PrepareHostDynamicCellMatchForLaunch(*dynAttr.get(), eval, functionDevProg);
         if (syncMemBudgetToCfg) {

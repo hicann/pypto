@@ -27,24 +27,32 @@
 namespace npu::tile_fwk::dynamic {
 using DeviceStream = unsigned long long;
 
-struct Evaluator {
-    const std::map<std::string, int64_t>& symbolDict;
-    const std::vector<DeviceTensorData>& inputs;
-    const std::vector<DeviceTensorData>& outputs;
+struct Evaluator : npu::tile_fwk::SymbolicClosure {
+    const std::vector<DeviceTensorData>* inputs{nullptr};
+    const std::vector<DeviceTensorData>* outputs{nullptr};
 
-    int64_t Evaluate(SymbolicScalar& ss) { return Evaluate(ss.Raw()); }
-
-private:
-    int64_t GetinputShapeDim(int64_t argIdx, int64_t dim)
+    Evaluator(
+        std::unordered_map<std::string, ScalarImmediateType>& symbolDictArg,
+        const std::vector<DeviceTensorData>* inputsArg,
+        const std::vector<DeviceTensorData>* outputsArg)
     {
-        if (argIdx < (int64_t)inputs.size()) {
-            return inputs[argIdx].GetShape()[dim];
-        } else {
-            return outputs[argIdx - inputs.size()].GetShape()[dim];
-        }
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, inputsArg != nullptr && outputsArg != nullptr);
+        inputs = inputsArg;
+        outputs = outputsArg;
+        symbolValueDict = std::shared_ptr<SymbolValueDictType>(&symbolDictArg, [](SymbolValueDictType*){});
     }
 
-    int64_t GetViewValidShapeDim(int64_t validshape, int64_t viewoffset, int64_t viewshape)
+private:
+    ScalarImmediateType GetinputShapeDim(ScalarImmediateType argIdx, ScalarImmediateType dim) const
+    {
+        if (argIdx < static_cast<ScalarImmediateType>(inputs->size())) {
+            return (*inputs)[static_cast<size_t>(argIdx)].GetShape()[static_cast<size_t>(dim)];
+        }
+        size_t outIdx = static_cast<size_t>(argIdx - static_cast<ScalarImmediateType>(inputs->size()));
+        return (*outputs)[outIdx].GetShape()[static_cast<size_t>(dim)];
+    }
+
+    ScalarImmediateType GetViewValidShapeDim(ScalarImmediateType validshape, ScalarImmediateType viewoffset, ScalarImmediateType viewshape) const
     {
         validshape -= viewoffset;
         if (validshape > viewshape)
@@ -54,7 +62,7 @@ private:
         return validshape;
     }
 
-    int64_t EvaluateSymbolicCall(const std::string& name, std::vector<int64_t>& vals)
+    ScalarImmediateType EvaluateSymbolicCall(const std::string& name, std::vector<ScalarImmediateType>& vals) const
     {
         if (name == "RUNTIME_GetInputShapeDim") {
             return GetinputShapeDim(vals[0], vals[1]);
@@ -66,50 +74,16 @@ private:
         }
     }
 
-    int64_t Evaluate(RawSymbolicScalarPtr ss)
+    virtual ScalarImmediateType EvaluateExpressionCall(const RawSymbolicScalarPtr ptr) const
     {
-        switch (ss->Kind()) {
-            case SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE: {
-                auto imm = std::static_pointer_cast<RawSymbolicImmediate>(ss);
-                return imm->Immediate();
-            }
-            case SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL: {
-                auto sym = std::static_pointer_cast<RawSymbolicSymbol>(ss);
-                ASSERT(DevCommonErr::PARAM_CHECK_FAILED, symbolDict.count(sym->Name()))
-                    << "symbol " << sym->Name() << " not found";
-                return symbolDict.find(sym->Name())->second;
-            }
-            case SymbolicScalarKind::T_SCALAR_SYMBOLIC_EXPRESSION: {
-                auto expr = std::static_pointer_cast<RawSymbolicExpression>(ss);
-                auto iops = expr->OperandList();
-                auto opcode = expr->Opcode();
-                if (opcode == SymbolicOpcode::T_MOP_CALL) {
-                    std::vector<int64_t> vals;
-                    for (size_t i = 1; i < iops.size(); i++) {
-                        vals.emplace_back(Evaluate(iops[i]));
-                    }
-                    auto name = std::static_pointer_cast<RawSymbolicSymbol>(iops[0])->Name();
-                    return EvaluateSymbolicCall(name, vals);
-                } else if (SymbolicOpcode::T_UOP_BEGIN <= opcode && opcode < SymbolicOpcode::T_UOP_END) {
-                    return RawSymbolicExpression::GetSymbolicCalcUnary(opcode)(Evaluate(iops[0]));
-                } else if (SymbolicOpcode::T_BOP_BEGIN <= opcode && opcode < SymbolicOpcode::T_BOP_END) {
-                    return RawSymbolicExpression::GetSymbolicCalcBinary(opcode)(Evaluate(iops[0]), Evaluate(iops[1]));
-                } else if (opcode == SymbolicOpcode::T_MOP_MAX || opcode == SymbolicOpcode::T_MOP_MIN) {
-                    std::vector<ScalarImmediateType> immediateList;
-                    for (size_t i = 0; i < iops.size(); i++) {
-                        immediateList.emplace_back(Evaluate(iops[i]));
-                    }
-                    return RawSymbolicExpression::GetSymbolicCalcMultiple(opcode)(immediateList);
-                } else {
-                    ASSERT(DevCommonErr::PARAM_INVALID, false);
-                    return 0;
-                }
-            }
-            default: {
-                ASSERT(DevCommonErr::PARAM_INVALID, false);
-                return 0;
-            }
+        auto expr = std::static_pointer_cast<RawSymbolicExpression>(ptr);
+        auto iops = expr->OperandList();
+        std::vector<ScalarImmediateType> vals;
+        for (size_t i = 1; i < iops.size(); i++) {
+            vals.emplace_back(Evaluate(iops[i]));
         }
+        auto name = std::static_pointer_cast<RawSymbolicSymbol>(iops[0])->Name();
+        return EvaluateSymbolicCall(name, vals);
     }
 };
 
@@ -125,12 +99,13 @@ public:
         auto dynAttr = func_->GetDyndevAttribute();
         std::vector<uint8_t>& devProgData = dynAttr->devProgBinary;
         auto* devProg = reinterpret_cast<DevAscendProgram*>(devProgData.data());
-        Evaluator eval{dynAttr->inputSymbolDict, inputs, outputs};
+        Evaluator eval{dynAttr->inputSymbolDict, &inputs, &outputs};
         if (devProg == nullptr) {
             return 0;
         }
         devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
-        return devProg->memBudget.Total();
+        uint64_t workspaceSize = devProg->memBudget.Total();
+        return workspaceSize;
     }
 
 private:

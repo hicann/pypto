@@ -102,11 +102,11 @@ TEST_F(RuntimeOutcastTensorTest, DeviceWorkspaceAllocatorBasicOps)
     DevAscendProgram devProg{};
     devProg.runtimeOutcastPoolSize = 8;
     // Keep tensor budgets small/zero but valid
-    devProg.memBudget.tensor.rootInner = 0;
+    devProg.memBudget.tensor.rootInnerSpilledMem = 0;
     devProg.memBudget.tensor.devTaskInnerExclusiveOutcasts = 0;
     devProg.memBudget.tensor.maxStaticOutcastMem = 0;
     devProg.memBudget.tensor.maxDynamicAssembleOutcastMem = 0;
-    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 0;
+    devProg.memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum = 0;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);
 
@@ -242,7 +242,7 @@ TEST_F(RuntimeOutcastTensorTest, BoundaryOutcastDelayedRecycle)
     DevAscendProgram devProg{};
     devProg.runtimeOutcastPoolSize = 4;
     // Set boundary outcast budget to allow allocation
-    devProg.memBudget.tensor.devTaskBoundaryOutcastNum = 1;
+    devProg.memBudget.tensor.devTaskBoundaryAndInnerTemporalOutcastNum = 1;
     devProg.memBudget.tensor.maxStaticOutcastMem = 1024;
 
     InitDeviceWorkspaceAllocatorForTest(d, devProg, workspace);

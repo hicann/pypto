@@ -19,6 +19,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <unordered_map>
 #include "error.h"
 
 #include "ir/expr.h"
@@ -26,6 +27,8 @@
 namespace npu::tile_fwk {
 class RawSymbolicScalar;
 using RawSymbolicScalarPtr = std::shared_ptr<RawSymbolicScalar>;
+
+using ScalarImmediateType = long long;
 
 class SymbolicScalar {
 public:
@@ -147,6 +150,22 @@ private:
     bool isLoopBegin_{false};
     bool isLoopEnd_{false};
 };
+
+class SymbolicScalarTracker {
+public:
+    typedef SymbolicScalar ValueType;
+
+    static ValueType Value(uint64_t value, const std::string &name) {
+        std::string symbolName = name + "(" + std::to_string(value) + ")";
+        SymbolicScalar result(symbolName);
+        auto &symbolDict = SymbolicScalarTracker::GetSymbolDict();
+        symbolDict[symbolName] = value;
+        return result;
+    }
+
+    static std::unordered_map<std::string, ScalarImmediateType> &GetSymbolDict();
+};
+
 } // namespace npu::tile_fwk
 
 namespace std {

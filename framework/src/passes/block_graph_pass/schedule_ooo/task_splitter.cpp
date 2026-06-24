@@ -614,7 +614,7 @@ void TaskSplitter::UnionCombineOps(DSUWithOrder& dsu)
             }
             continue;
         }
-        
+
         // CopyOutCombine: 所有 UB MOVE_OUT 操作与其输入绑定
         if (opCoreTypes_[i] != ScheduleCoreType::AIV) {
             continue;

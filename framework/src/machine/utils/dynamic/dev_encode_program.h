@@ -45,14 +45,17 @@ struct DevAscendProgram {
     struct {
         struct {
             // root func inner tensors
-            uint64_t rootInner;
+            uint64_t rootInnerSpilledMem;
+
             // root func outcasts & non-dassemble-dst & DeviceTask inner tensors
             uint64_t devTaskInnerExclusiveOutcasts;
-            // root func outcasts & non-dassemble-dst & DeviceTask boundary outcasts: MaxOutcastMem() *
-            // devTaskBoundaryOutcastNum
-            uint64_t maxStaticOutcastMem;
+
+            // root func outcasts & non-dassemble-dst & DeviceTask boundary outcasts:
+            //      MaxOutcastMem() * devTaskBoundaryOutcastNum
+            uint64_t maxStaticOutcastMem{0};
             uint64_t maxDynamicAssembleOutcastMem{0};
-            uint64_t devTaskBoundaryOutcastNum{0};
+            uint64_t devTaskBoundaryAndInnerTemporalOutcastNum{0};
+
             uint32_t parallelism{1};
 
             uint64_t MaxOutcastMem() const { return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem); }
@@ -60,15 +63,19 @@ struct DevAscendProgram {
             uint64_t Total() const
             {
                 uint64_t total =
-                    rootInner +                     // root func inner tensors
+                    rootInnerSpilledMem +           // root func inner tensors
                     devTaskInnerExclusiveOutcasts + // root func outcasts & non-dassemble-dst & DeviceTask inner tensors
-                    MaxOutcastMem() * devTaskBoundaryOutcastNum; // root func outcasts & non-dassemble-dst & DeviceTask
+                    MaxOutcastMem() * devTaskBoundaryAndInnerTemporalOutcastNum; // root func outcasts & non-dassemble-dst & DeviceTask
                                                                  // boundary outcasts
                 static constexpr uint64_t ALIGNMENT_32K = 32 * 1024;
                 return AlignUp(total, ALIGNMENT_32K) * parallelism;
             }
         } tensor;
-        uint64_t aicoreSpilled;
+        struct AiCoreLeafSpill {
+            uint64_t perCoreSpilledMem;
+            uint64_t aicoreCount;
+            uint64_t Total() const { return perCoreSpilledMem * aicoreCount; }
+        } aicoreSpilled;
         struct {
             uint64_t general;
             uint64_t dynamicCellMatch{0};
@@ -84,9 +91,11 @@ struct DevAscendProgram {
         struct {
             uint64_t dumpTensor;
             uint64_t leafDump;
+
+            uint64_t Total() const { return dumpTensor + leafDump; }
         } debug;
 
-        uint64_t Total() const { return tensor.Total() + aicoreSpilled + debug.dumpTensor + debug.leafDump; }
+        uint64_t Total() const { return tensor.Total() + aicoreSpilled.Total() + debug.Total(); }
     } memBudget;
     DeviceRuntimeOffset deviceRuntimeOffset;
     const void* controlFlowBinaryAddr{nullptr};

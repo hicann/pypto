@@ -66,7 +66,7 @@ Workspace 内存分配由以下阶段组成：
 
 ```
 workspaceSize = memBudget.Total()
-             = tensor.Total() + aicoreSpilled + debug.dumpTensor + debug.leafDump + metadata.Total()
+             = tensor.Total() + aicoreSpilled.Total() + debug.dumpTensor + debug.leafDump + metadata.Total()
 
 tensor.Total() = rootInner                              -- Root Function Inner Tensor 内存
                + devTaskInnerExclusiveOutcasts           -- DeviceTask 内部 Exclusive Outcast 内存
@@ -175,8 +175,8 @@ grep -r "\[workspaceSize\]" <log_path>/debug/ | grep -E "workspaceSize=|Tensor:r
 | TOTAL | workspace 总大小 | `memBudget.Total()` |
 | T | Tensor workspace 总大小 | `memBudget.tensor.Total()` |
 | M | 元数据总大小 | `memBudget.metadata.Total()` |
-| S | AICore 栈溢出内存 | `memBudget.aicoreSpilled` |
-| A | rootInner | `memBudget.tensor.rootInner` |
+| S | AICore 栈溢出内存 | `memBudget.aicoreSpilled.Total()` |
+| A | rootInnerSpilledMem | `memBudget.tensor.rootInnerSpilledMem` |
 | B | devTaskInnerExclusiveOutcasts | `memBudget.tensor.devTaskInnerExclusiveOutcasts` |
 | C | MaxOutcastMem() | 单个 Boundary Outcast 最大大小 |
 | D | devTaskBoundaryOutcastNum | Boundary Outcast slot 数量 |

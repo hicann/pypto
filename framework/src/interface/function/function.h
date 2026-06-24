@@ -420,7 +420,7 @@ struct DyndevFunctionAttribute {
 
     SymbolicSymbolTable symbolTable;
 
-    std::map<std::string, int64_t> inputSymbolDict;
+    std::unordered_map<std::string, ScalarImmediateType> inputSymbolDict;
 
     struct ExpressionTableDictGroup {
         std::unordered_map<Function*, SymbolicExpressionTable> loopBesDict;

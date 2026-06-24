@@ -48,7 +48,6 @@ constexpr int INVALID_SCALAR_IMMEDIATE = -1;
 constexpr const char* const SPECIAL_SYMBOL_NAME_RUNTIME_PREFIX = "RUNTIME_";
 constexpr const char* const SPECIAL_SYMBOL_NAME_RUNTIME_COA_PREFIX = "RUNTIME_COA_";
 constexpr const char* const SPECIAL_SYMBOL_NAME_ARG_PREFIX = "ARG_";
-using ScalarImmediateType = long long;
 
 enum class SymbolicScalarKind {
     T_SCALAR_SYMBOLIC_IMMEDIATE,
@@ -623,9 +622,18 @@ SymbolicScalar LoadSymbolicScalar(const Json& jval);
 namespace npu::tile_fwk {
 class SymbolicClosure {
 public:
-    std::shared_ptr<std::unordered_map<std::string, ScalarImmediateType>> symbolValueDict;
+    typedef std::unordered_map<std::string, ScalarImmediateType> SymbolValueDictType;
+    std::shared_ptr<SymbolValueDictType> symbolValueDict;
 
-    SymbolicClosure() { symbolValueDict = std::make_shared<std::unordered_map<std::string, ScalarImmediateType>>(); }
+    SymbolicClosure() { symbolValueDict = std::make_shared<SymbolValueDictType>(); }
+    SymbolicClosure(const SymbolValueDictType &symbolDict)
+    {
+        symbolValueDict = std::make_shared<SymbolValueDictType>();
+        for (auto &[name, value] : symbolDict) {
+            Insert(name, value);
+        }
+    }
+    virtual ~SymbolicClosure() = default;
     void Insert(const std::string& name, ScalarImmediateType val) { symbolValueDict->insert({name, val}); }
     void Remove(const std::string& name) { symbolValueDict->erase(name); }
     bool Has(const std::string& name) const { return symbolValueDict->count(name) != 0; }
@@ -633,9 +641,19 @@ public:
 
     ScalarImmediateType Evaluate(const SymbolicScalar& scalar) const { return Evaluate(scalar.Raw()); }
 
-private:
+protected:
+    virtual ScalarImmediateType EvaluateExpressionCall(const RawSymbolicScalarPtr ptr) const
+    {
+        (void)(ptr);
+        FE_ASSERT(false) << " expression call is not supported";
+        return 0;
+    }
     ScalarImmediateType EvaluateExpression(const RawSymbolicExpPtr& expr) const
     {
+        if (expr->Opcode() == SymbolicOpcode::T_MOP_CALL) {
+            return EvaluateExpressionCall(std::static_pointer_cast<RawSymbolicScalar>(expr));
+        }
+
         std::vector<ScalarImmediateType> dataList;
         for (auto& operand : expr->OperandList()) {
             dataList.emplace_back(Evaluate(operand));
@@ -650,6 +668,8 @@ private:
             }
         } else if (expr->Opcode() == SymbolicOpcode::T_MOP_MAX || expr->Opcode() == SymbolicOpcode::T_MOP_MIN) {
             return RawSymbolicExpression::GetSymbolicCalcMultiple(expr->Opcode())(dataList);
+        } else {
+            FE_ASSERT(false) << " unknown opcode: " << expr->Dump();
         }
         return result;
     }
@@ -678,57 +698,6 @@ private:
         }
         return result;
     }
-};
-
-struct SymbolicSymbolTableX {
-    std::map<std::string, int> symbolIndexTable;
-
-    std::string Dump() const
-    {
-        std::ostringstream oss;
-        for (auto& [symbol, index] : symbolIndexTable) {
-            oss << "Symbol:" << index << " name:" << symbol << "\n";
-        }
-        return oss.str();
-    }
-
-    int GetSymbolTableSize() const { return symbolIndexTable.size(); }
-
-    std::string BuildSymbolList() const
-    {
-        std::ostringstream oss;
-        for (auto& [name, index] : symbolIndexTable) {
-            oss << "\n"
-                << "#define SYMBOLIC_INDEX_" << name << " " << index << "\n"
-                << "#define VALUE_" << name << " (RUNTIME_GetSymbol(SYMBOLIC_INDEX_" << name << "))\n";
-        }
-        return oss.str();
-    }
-};
-
-struct SymbolicExpressionTableX {
-    std::map<std::string, int> expressionIndexTable;
-    std::vector<std::string> sourceList;
-
-    std::string Dump() const
-    {
-        std::ostringstream oss;
-        for (auto& [expr, index] : expressionIndexTable) {
-            oss << "Expression:" << index << " code:" << expr << "\n";
-        }
-        return oss.str();
-    }
-
-    static std::string BuildExpression(const SymbolicScalar& ss);
-
-    int LookupExpressionIndex(const SymbolicScalar& ss) const
-    {
-        std::string str = BuildExpression(ss);
-        FE_ASSERT(expressionIndexTable.count(str)) << str << " has not been found in expressionIndexTable.";
-        return expressionIndexTable.find(str)->second;
-    }
-
-    void InsertExpressionIndex(const std::string& expr, int index) { expressionIndexTable[expr] = index; }
 };
 
 struct SymbolicSymbolTable {
