@@ -32,13 +32,11 @@ recursive-include framework/src/cann_host_runtime *
 recursive-include framework/src/platform *
 
 # python
+include python/CMakeLists.txt
 recursive-include python/pypto *.py
 recursive-include python/pypto *.pyi
 recursive-include python/pypto *.md
-recursive-include python/src *.cpp
-recursive-include python/src *.h
-include python/CMakeLists.txt
-include python/src/CMakeLists.txt
+recursive-include python/src *
 
 # others
 include build_ci.py
