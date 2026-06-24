@@ -763,7 +763,12 @@ void SetDynValidShapeInfo(const ConvGraphNodes& tensorGraphNodes, const ConvAttr
     ConvTileInfo& convTileInfo)
 {
     convTileInfo.dynValidBatch = tensorGraphNodes.fmapTensorPtr->GetDynValidShape()[0];
-    convTileInfo.dynValidCout = convAttrParam.dynValidResShape[1];
+    if (IsArch32Platform()) {
+        convTileInfo.dynValidCout = tensorGraphNodes.weightTensorPtr->GetDynValidShape()[1] *
+            tensorGraphNodes.weightTensorPtr->GetDynValidShape()[2];
+    } else {
+        convTileInfo.dynValidCout = tensorGraphNodes.weightTensorPtr->GetDynValidShape()[0];
+    }
     convTileInfo.dynValidHout = convAttrParam.isConv3D ? convAttrParam.dynValidResShape[3] :
         convAttrParam.dynValidResShape[2];
     convTileInfo.dynValidWout = convAttrParam.isConv3D ? convAttrParam.dynValidResShape[4] :
