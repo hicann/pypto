@@ -18,8 +18,8 @@
 - **左右矩阵数据类型必须一致**：matmul的左右矩阵数据类型必须相同（如BF16+BF16、FP16+FP16），不支持混合输入（如BF16+FP32），FP8数据类型除外
 - **推荐使用低精度输入**：BF16/FP16输入直接matmul输出FP32，比先cast到FP32再matmul性能更好，且精度相当
 - **避免不必要的cast**：将BF16升级到FP32再进行matmul计算不会有精度提升，反而会产生额外的数据搬移开销
-- **利用随路transpose**：matmul支持`a_trans`和`b_trans`参数，可以在矩阵乘时随路完成转置，避免额外调用transpose操作
-- **必须先设置TileShape**：调用matmul接口前需要通过`set_cube_tile_shapes`设置M、N、K轴上的切分大小
+- **利用随路transpose**：matmul支持 `a_trans` 和 `b_trans` 参数，可以在矩阵乘时随路完成转置，避免额外调用transpose操作
+- **必须先设置TileShape**：调用matmul接口前需要通过 `set_cube_tile_shapes` 设置M、N、K轴上的切分大小
 
 ## 函数原型
 

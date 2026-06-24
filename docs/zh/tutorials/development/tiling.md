@@ -20,7 +20,7 @@ pypto.set_vec_tile_shapes(1, 1, 8, 8)
 print(pypto.get_vec_tile_shapes())  # 输出: [1, 1, 8, 8]
 ```
 
-pypto.set\_vec\_tile\_shapes\(1, 1, 8, 8\)表示该向量有四个维度，每个维度分别按照1, 1, 8, 8的大小进行切分，并按 \(1, 1, 8, 8\)的切分大小将原向量搬移到UB上进行运算。
+pypto.set\_vec\_tile\_shapes\(1, 1, 8, 8\) 表示该向量有四个维度，每个维度分别按照1, 1, 8, 8 的大小进行切分，并按 \(1, 1, 8, 8\) 的切分大小将原向量搬移到UB上进行运算。
 
 实际用例如下：
 
@@ -36,7 +36,7 @@ def compute_with_vec_tile_shapes_kernel(
     out[:] = pypto.add(a, b)
 
 def compute_with_vec_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, set_shapes: tuple, dynamic: bool = False) -> torch.Tensor:
-    # 直接传入torch tensor调用
+    # 直接传入torch tensor 调用
     out = torch.empty_like(a)
     compute_with_vec_tile_shapes_kernel(a, b, out, set_shapes)
     return out
@@ -136,7 +136,7 @@ def compute_with_cube_tile_shapes_kernel(
     out[:] = pypto.matmul(a, b, a.dtype)
 
 def compute_with_cube_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, set_shapes: list, dynamic: bool = False) -> torch.Tensor:
-    # 直接传入torch tensor调用
+    # 直接传入torch tensor 调用
     out = torch.empty((64, 64), dtype=a.dtype, device=a.device)
     compute_with_cube_tile_shapes_kernel(a, b, out, set_shapes)
     return out
