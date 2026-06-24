@@ -47,6 +47,78 @@ def test_parallel_add_single_parallel():
         parallel_add_single_parallel_func(left, right, res)
 
 
+def test_pto_loop_end_only():
+    a, b, c = init_tensors()
+    controller.reset()
+
+    with pypto.function("MAIN", a, b, c):
+        pypto.set_vec_tile_shapes(16, 16)
+
+        for k in pypto.loop(10):
+            b.move(pypto.add(a, a))
+
+            if pypto.cond(k < 2):
+                b.move(pypto.add(b, a))
+            else:
+                b.move(pypto.sub(b, a))
+
+            if pypto.cond(k < 5):
+                b.move(pypto.mul(b, a))
+            else:
+                b.move(pypto.div(b, a))
+            b.move(pypto.sub(b, a))
+
+    assert isinstance(b, pypto.tensor)
+
+
+def test_pto_loop_end_only_with_custom_name():
+    a, b, c = init_tensors()
+    controller.reset()
+
+    with pypto.function("MAIN", a, b, c):
+        pypto.set_vec_tile_shapes(16, 16)
+
+        for k in pypto.loop(10, name="LOOP"):
+            b.move(pypto.add(a, a))
+
+            if pypto.cond(k < 5):
+                b.move(pypto.add(b, a))
+            else:
+                b.move(pypto.sub(b, a))
+
+            if pypto.cond(k < 3):
+                b.move(pypto.mul(b, a))
+            else:
+                b.move(pypto.div(b, a))
+            b.move(pypto.sub(b, a))
+
+    assert isinstance(b, pypto.tensor)
+
+
+def test_pto_loop_start_end():
+    a, b, c = init_tensors()
+    controller.reset()
+
+    with pypto.function("MAIN", a, b, c):
+        pypto.set_vec_tile_shapes(16, 16)
+
+        for k in pypto.loop(1, 10):
+            b.move(pypto.add(a, a))
+
+            if pypto.cond(k < 7):
+                b.move(pypto.add(b, a))
+            else:
+                b.move(pypto.sub(b, a))
+
+            if pypto.cond(k < 8):
+                b.move(pypto.mul(b, a))
+            else:
+                b.move(pypto.div(b, a))
+            b.move(pypto.sub(b, a))
+
+    assert isinstance(b, pypto.tensor)
+
+
 def test_pto_loop_start_end_step():
     a, b, c = init_tensors()
     controller.reset()
@@ -55,17 +127,18 @@ def test_pto_loop_start_end_step():
         pypto.set_vec_tile_shapes(16, 16)
 
         for k in pypto.loop(1, 10, 2):
-            b.move(pypto.add(c, a))
+            b.move(pypto.add(a, a))
 
             if pypto.cond(k < 6):
-                b.move(pypto.add(c, a))
+                b.move(pypto.add(b, a))
             else:
-                b.move(pypto.sub(c, a))
+                b.move(pypto.sub(b, a))
 
             if pypto.cond(k < 2):
-                b.move(pypto.add(c, a))
+                b.move(pypto.add(b, a))
             else:
-                b.move(pypto.div(c, a))
+                b.move(pypto.div(b, a))
+            b.move(pypto.sub(b, a))
 
     assert isinstance(b, pypto.tensor)
 
@@ -105,7 +178,7 @@ def test_pto_loop_start_end_step_and_name():
             b.move(pypto.add(a, a))
 
             if pypto.cond(k < 5):
-                b.move(pypto.mul(c, a))
+                b.move(pypto.mul(b, a))
 
     assert isinstance(b, pypto.tensor)
 
@@ -122,11 +195,11 @@ def test_pto_loop_unroll_n_submit_before_loop():
         ):
 
             if pypto.cond(k < 5):
-                b.move(pypto.sub(c, a))
+                b.move(pypto.sub(b, a))
             if pypto.cond(1):
-                b.move(pypto.add(c, a))
+                b.move(pypto.add(b, a))
             if pypto.cond(pypto.is_loop_end(k)):
-                b.move(pypto.add(c, a))
+                b.move(pypto.add(b, a))
 
             b.move(pypto.sub(a, a))
 
