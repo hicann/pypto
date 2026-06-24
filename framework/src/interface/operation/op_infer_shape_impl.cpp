@@ -638,41 +638,6 @@ REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMINWITHVALUE_SINGLE, Opcode::OP_ROWARGMINWITH
 REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMAXWITHVALUE_LINE, Opcode::OP_ROWARGMAXWITHVALUE_LINE, ReduceInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMINWITHVALUE_LINE, Opcode::OP_ROWARGMINWITHVALUE_LINE, ReduceInferFunc);
 
-void OnlineSoftmaxInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    auto scoresValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    auto columnStatisticValidShape = scoresValidShape;
-    if (!columnStatisticValidShape.empty()) {
-        columnStatisticValidShape[0] = SymbolicScalar(1);
-    }
-    outValidShapes.push_back(scoresValidShape);
-    outValidShapes.push_back(columnStatisticValidShape);
-    outValidShapes.push_back(columnStatisticValidShape);
-    outValidShapes.push_back(scoresValidShape);
-    auto reduceWorkspaceValidShape = op->GetOOperands()[4]->GetDynValidShape();
-    if (reduceWorkspaceValidShape.empty()) {
-        reduceWorkspaceValidShape = SymbolicScalar::FromConcrete(op->GetOOperands()[4]->GetShape());
-    }
-    outValidShapes.push_back(reduceWorkspaceValidShape);
-}
-
-void OnlineSoftmaxUpdateInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
-{
-    auto statisticValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    auto outputValidShape = op->GetIOperands()[2]->GetDynValidShape();
-    outValidShapes.push_back(statisticValidShape);
-    outValidShapes.push_back(statisticValidShape);
-    outValidShapes.push_back(outputValidShape);
-    auto updateWorkspaceValidShape = op->GetOOperands()[3]->GetDynValidShape();
-    if (updateWorkspaceValidShape.empty()) {
-        updateWorkspaceValidShape = SymbolicScalar::FromConcrete(op->GetOOperands()[3]->GetShape());
-    }
-    outValidShapes.push_back(updateWorkspaceValidShape);
-}
-
-REGISTER_INFER_SHAPE_FUNC(OP_ONLINE_SOFTMAX, Opcode::OP_ONLINE_SOFTMAX, OnlineSoftmaxInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_ONLINE_SOFTMAX_UPDATE, Opcode::OP_ONLINE_SOFTMAX_UPDATE, OnlineSoftmaxUpdateInferFunc);
-
 void WhereInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     ElewiseInferFunc(op, outValidShapes);
