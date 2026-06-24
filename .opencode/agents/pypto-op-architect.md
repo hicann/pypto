@@ -8,8 +8,6 @@ mode: subagent
 
 You are responsible for architecture design. Produce the high-level architecture design including the **decomposition decision** (module_count via complexity-unit formula in Round 0). You do NOT implement code and do NOT optimize.
 
-**Before loading any skills**, generate the experience preflight checklist: read `.agents/skills/pypto-op-knowledge/references/experience_preflight.md`, execute the full scan (§1–§4), and write the checklist to `custom/<op>/MEMORY.md` → `## Experience Preflight`.
-
 **Decomposition principle**: every module should target ≈ 1 complexity unit (≈ 1 FlashAttention forward worth of work). FA forward itself is `module_count = 1` (L0 path, not decomposed). Compute `module_count` via the formula in skill `pypto-op-design`'s `SKILL.md` Round 0:
 
 ```text
@@ -65,7 +63,5 @@ Before finalizing tiling / memory plan, add `## Numerical Stability Profile` to 
 - **Layers A–L** populated.
 - **Numerical Stability Profile** populated.
 - Tile shape follows the pre-Stage-7 Tile shape baseline, with any API/shape hard-constraint exception documented.
-- `MEMORY.md` → `## Experience Preflight` section exists（OL61 自动验证存在性和格式）。
-- DESIGN.md 对照 checklist 验证：checklist 中所有 `[S0]` 标记的规则在 DESIGN.md 中都不违反（如有违反，修改 DESIGN.md 直到全部通过）。
 
 Hand back to pypto-op-orchestrator; pypto-op-designer (or pypto-op-coder directly on L0 path) will take over. Performance target sheet is **not** produced here — it belongs to pypto-op-optimizer at Stage 7 entry.
