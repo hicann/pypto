@@ -46,7 +46,7 @@ LogicalTensorPtr BinaryOperationBroadCast(const LogicalTensorPtr& operand, const
 
 void CheckOperandsValid(const LogicalTensorPtr& operand1, const LogicalTensorPtr& operand2)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size())
         << "The shape size of the two input tensors must be equal";
 }
 
@@ -55,7 +55,7 @@ void CheckBinOpOperandsValid(const LogicalTensorPtr& operand1, const LogicalTens
     CheckOperandsValid(operand1, operand2);
     for (size_t i = 0; i < operand1->shape.size(); ++i) {
         if (operand1->shape[i] != operand2->shape[i] && (operand1->shape[i] != 1 && operand2->shape[i] != 1)) {
-            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "shape not support binary operation";
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "shape not support binary operation";
         }
     }
 }
@@ -80,20 +80,20 @@ void BinaryOperationOperandCheck(
 {
     constexpr size_t inOpSize = 2;
     constexpr size_t outOpSize = 1;
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == inOpSize) << "iOperand size should be 2";
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == outOpSize) << "oOperand size should be 1";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == inOpSize) << "iOperand size should be 2";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == outOpSize) << "oOperand size should be 1";
 }
 
 // Identify which operand need brc at a specific axis counting from the first
 // Return value 0 = NONE, 1 = LEFT_OPERAND, 2 = RIGHT_OPERAND
 int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, int64_t axisNum)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
     int64_t shapeSize = operand1->shape.size();
     int operandNum = 0;
 
     int64_t idx = (axisNum < 0) ? (shapeSize + axisNum) : axisNum;
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, idx >= 0 && idx < shapeSize)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, idx >= 0 && idx < shapeSize)
         << "axisNum " << axisNum << " out of range for shapeSize " << shapeSize;
     if ((operand1->shape[idx] != 1) && (operand2->shape[idx] == 1)) {
         operandNum = 2;
@@ -296,9 +296,9 @@ void TiledPReLUOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& input, const LogicalTensorPtr& weight,
     const LogicalTensorPtr& result)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() == input->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() == input->offset.size())
         << "The shape size of input and offset must be equal";
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == weight->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == weight->offset.size())
         << "The shape size of weight and offset must be equal";
 
     TileInfo inputTileInfo(input->shape.size(), input->offset.size());
@@ -317,11 +317,11 @@ void PReLUOperationOperandCheck(const LogicalTensorPtr& selfTensor, const Logica
 
     if (selfTensor->shape.size() == 1) {
         // 1D 输入时，weight 必须为 [1]
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == 1)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == 1)
             << "The weight size should be [1] when input is 1D";
     } else {
         // 2D/3D/4D 输入时，weight 必须与 self 的第二维匹配
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
             << "The weight size should equal to input's second dimension";
     }
 }
@@ -691,7 +691,7 @@ Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType
             CastMode::CAST_NONE);
     }
     if (IsInteger(castSelf->Datatype())) {
-        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, IsInteger(other.GetDataType()))
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, IsInteger(other.GetDataType()))
             << "Scalar dtype incorrect. When self dtype in UINT32/INT16/UINT16/INT8/UINT8, "
             << "Scalar dtype should be int, acture is: " << DataType2String(other.GetDataType());
         auto [res, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::POW>(
@@ -1516,7 +1516,7 @@ LogicalTensorPtr TensorAxpyOperation(Function& function, const Tensor& self, con
     // Validate: if any dimension of y is 1 but x is not 1, it's invalid
     for (size_t i = 0; i < shapeSize; i++) {
         if ((selfTensor->shape[i] == 1) && (otherTensor->shape[i] != 1)) {
-            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false)
                 << "AXPY: self tensor cannot broadcast, self.shape[" << i << "]=" << selfTensor->shape[i]
                 << " but other.shape[" << i << "]=" << otherTensor->shape[i];
         }
@@ -1541,7 +1541,7 @@ Tensor Axpy(const Tensor& self, const Tensor& other, float alpha)
         std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "AXPY");
     } else {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, selfDtype == DT_FP32 && otherDtype == DT_FP16)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, selfDtype == DT_FP32 && otherDtype == DT_FP16)
             << "AXPY: when dtype mismatch, only support dst(y)=fp32 with src(x)=fp16.";
     }
     RETURN_CALL(AxpyOperation, *Program::GetInstance().GetCurrentFunction(), self, other, alpha);
