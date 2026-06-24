@@ -52,7 +52,7 @@ void TestAddBody(std::vector<int64_t> shape, std::string name, bool withBrc = fa
     }
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenBinary, TestCodegenAddDim2) { TestAddBody({64, 64}, "ADD_DIM2", true); }
@@ -72,7 +72,7 @@ void TestAddSBody(std::vector<int64_t> shape, std::vector<int64_t> tile_shape, s
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 TEST_F(TestCodegenBinary, TestCodegenAddSDim2) { TestAddSBody({19, 90}, {8, 128}, "ADD_DIM2"); }
