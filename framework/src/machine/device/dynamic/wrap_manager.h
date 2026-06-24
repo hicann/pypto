@@ -69,8 +69,15 @@ inline bool IsMixTaskFinish(WrapInfo* wrapInfo)
     }
 }
 
-#define RETURN_NULL_IF_NOT(val) do { if (!(val)) return; } while (0)
-#define RETURN_RET_IF_NOT(val, ret) do { if (!(val)) return (ret); } while (0)
+#define RETURN_NULL_IF_NOT(val) \
+    if (!val) {                 \
+        return;                 \
+    }
+
+#define RETURN_RET_IF_NOT(val, ret) \
+    if (!val) {                     \
+        return ret;                 \
+    }
 
 class WrapManager {
 public:
@@ -163,7 +170,9 @@ public:
         uint8_t* runReadyCoreIdxZero, uint8_t* runReadyCoreIdxOne, uint8_t* corePendReadyCnt, uint32_t* pendingIds,
         uint32_t* runningIds, int aicValidNum, uint8_t* coreIdxPosition, bool* wrapCoreAvail, SendTaskToAiCoreFunc func)
     {
-        if (archInfo != ArchInfo::DAV_3510) return;
+        if (archInfo != ArchInfo::DAV_3510) {
+            return;
+        }
         schDevTaskCtx = devTaskctx;
         isOpenMixSche = curDevTask->mixTaskData.wrapIdNum > 0;
         curDevTask_ = curDevTask;
@@ -314,7 +323,9 @@ public:
         uint32_t core1c2vCnt = 0;
         constexpr uint32_t maxTaskCnt = 8u;
         uint32_t wrapCoreCnt = GetAvailableWrapCoreCnt(core1c1vCnt, core1c2vCnt, maxTaskCnt);
-        if (tail - head == 0 || wrapCoreCnt == 0) return;
+        if (tail - head == 0 || wrapCoreCnt == 0) {
+            return;
+        }
 
         WrapInfoQueueLock(readyWrapCoreFunctionQue_);
         head = readyWrapCoreFunctionQue_->head;
@@ -335,7 +346,9 @@ public:
         while (taskHead < taskTail) {
             WrapInfo* info = &readyWrapCoreFunctionQue_->elem[head++];
             if (info->mixResourceType == static_cast<uint32_t>(MixResourceType::MIX_1C2V)) {
-                if (core1c2vCnt == 0) break;
+                if (core1c2vCnt == 0) {
+                    break;
+                }
                 localTasks[taskHead++] = info;
                 core1c2vCnt--;
             } else {
@@ -356,7 +369,9 @@ public:
         uint32_t taskId = wrapInfo->tasklist[wrapAicoreIdx];
         // 此处可能一个Task准备下发，另一个还没初始化。另一个准备下发时，前面一个已经结束
         // AICORE_TASK_SUBMITTED、AICORE_TASK_INIT、taskId == AICORE_TASK_STOP最高位是1，正常taskId的最高位是0
-        if (taskId & AICORE_FIN_MASK) return;
+        if (taskId & AICORE_FIN_MASK) {
+            return;
+        }
         DEV_VERBOSE_DEBUG(
             "try to send wrapId[%u]'s wrapAicoreIdx[%u] taskId[%u]", wrapInfo->wrapId, wrapAicoreIdx, taskId);
         SendTaskToAiCore(schDevTaskCtx, coreType, coreIdx, taskId);
@@ -459,7 +474,9 @@ public:
     {
         RETURN_RET_IF_NOT(isOpenMixSche, false);
         int id = GetWrapId(taskId);
-        if (id == -1) return false;
+        if (id == -1) {
+            return false;
+        }
         wrapId = id;
         return true;
     }
@@ -519,7 +536,9 @@ public:
         RETURN_NULL_IF_NOT(isOpenMixSche);
         (void)coreType;
         int32_t id = GetWrapId(finishId);
-        if (id == -1) return;
+        if (id == -1) {
+            return;
+        }
         uint32_t wrapId = id;
         auto funcId = FuncID(finishId);
         auto opWrapId = GetOpWrapID(wrapId);
