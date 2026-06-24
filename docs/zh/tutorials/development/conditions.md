@@ -8,7 +8,7 @@
 ## 静态条件分支
 
 ```python
-# 使用入参add1_flag=False生成kernel
+# 使用入参add1_flag=False 生成kernel
 @pypto.frontend.jit
 def add_kernel_false(
     input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
@@ -33,7 +33,7 @@ def add_kernel_true(
 
 ```python
 def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int, add1_flag: bool = False):
-    # Tiling配置与循环逻辑
+    # Tiling 配置与循环逻辑
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     #calculate the loop parameters
