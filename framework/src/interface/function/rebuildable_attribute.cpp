@@ -24,7 +24,7 @@ namespace npu::tile_fwk {
 void RebuildableAttributeBase::Rebuild(Function *func)
 {
     (void)func;
-    FE_LOGE(FeError::EINTERNAL, "Reset is not implemented!");
+    FE_LOGE(FeError::EINTERNAL, "Rebuild is not implemented!");
 }
 
 void RebuildableAttributeBase::Reset(void *data)

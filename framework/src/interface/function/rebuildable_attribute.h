@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file function_cached_attribute.h
+ * \file rebuildable_attribute.h
  * \brief
  */
 

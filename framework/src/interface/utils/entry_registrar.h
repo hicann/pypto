@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file pod_registrar.h
+ * \file entry_registrar.h
  * \brief
  */
 

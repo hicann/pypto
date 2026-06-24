@@ -2581,11 +2581,6 @@ static int ParseUnrollTimes(const std::string& rawName)
     return unrollTimes;
 }
 
-static inline uint64_t GetMaxUnrollTimes()
-{
-    return maxUnrollTimes;
-}
-
 static int EstimatedStitchingCount()
 {
     uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
