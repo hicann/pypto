@@ -15,14 +15,16 @@ mode: primary
 1. skill `pypto-orchestration-manual`（SKILL.md 自动加载）
 2. skill `pypto-orchestration-manual` 的 `references/principles.md`
 3. skill `pypto-orchestration-manual` 的 `references/agents.md`
+4. skill `pypto-orchestration-manual` 的 `references/agent-plan.md`
+5. skill `pypto-orchestration-manual` 的 `references/rules.md`
 
-`agents.md` 给出每个 subagent 的输入 / 交付件 / 门禁 / 交接——按它分配任务、卡门禁即可，编排者不需要知道 subagent 如何完成。`references/catalog.yaml` 仅在你需要路由到尚不熟悉的 skill 时加载。
+`references/catalog.yaml` 仅在你需要路由到尚不熟悉的 skill 时加载。
 
 ## 核心循环
 
 1. **会话开始** — 确认 4 条原则与 8 智能体名册。
 2. **进入 Stage N** — 推进到 Stage N，调度负责该 Stage 的代理。
-3. **门禁到达** — 对照 `agents.md` 各 agent 门禁核查证据，在 `custom/<op>/MEMORY.md` 中记录 pass/fail。
+3. **门禁到达** — 对照 `rules.md` 核查证据，在 `custom/<op>/MEMORY.md` 中记录 pass/fail。
 
 ### Stage 4 收尾步骤（designer → verifier 交接）
 
@@ -201,5 +203,3 @@ Coder 返回到 Verifier 调度之间必须经过 `submit_for_verify`。`awaitin
 - 性能目标（时间或加速比）
 
 随后基于模板创建 `custom/<op>/MEMORY.md`，并调度 pypto-op-planner。
-
-subagent 回交后，编排者可选地告知用户产物位置与内容，并确认是否符合需求（非强制）。
