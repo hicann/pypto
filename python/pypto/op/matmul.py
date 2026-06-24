@@ -413,13 +413,6 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
     supported_dims = (2, 3, 4)
     shape_dim_3 = 3
 
-    if (input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E1M2
-        or input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E1M2X2
-        or input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP4_E2M1X2):
-        raise PyptoError(0xF00003, RuntimeError(
-            "scaled_mm fp4 input only supports DT_FP4_E2M1."
-    ))
-
     if input_dim not in supported_dims:
         raise PyptoError(0xF00003, RuntimeError(
             f"Unsupported tensor dimension for MX Matmul: {input_dim}, "
