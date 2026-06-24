@@ -48,7 +48,6 @@ public:
         std::vector<SymbolicScalar> dynOffset;
         ir::Span span; // 链路最早操作的span
         Operation::ScopeInfo scopeInfo;
-        std::string rmwModeAttr;
     };
 
     static Status MergeViewAssemble(Function& function);
@@ -149,7 +148,7 @@ public:
     void RecordAssembleOperation(
         const std::shared_ptr<LogicalTensor>& input, const std::shared_ptr<LogicalTensor>& output,
         const std::vector<int64_t>& offset, const std::vector<SymbolicScalar>& dynOffset, const ir::Span& span,
-        const Operation::ScopeInfo& scopeInfo, const std::string& rmwModeAttr);
+        const Operation::ScopeInfo& scopeInfo);
 
     // Common methods
     Status Initialize();
