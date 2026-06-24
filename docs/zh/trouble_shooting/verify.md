@@ -1,13 +1,13 @@
-# VERIFY组件错误码
+# VERIFY 组件错误码
 
 - **范围**：FBXXXX
-- 本文档说明VERIFY组件的错误码定义、场景说明与排查建议。
+- 本文档说明 VERIFY 组件的错误码定义、场景说明与排查建议。
 
 ---
 
 ## 错误码定义
 
-相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（含VERIFY相关枚举及Calculator层的`CalculatorErrorScene`等）。
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（含 VERIFY 相关枚举及 Calculator 层的 `CalculatorErrorScene` 等）。
 
 ## 排查建议
 
@@ -45,18 +45,18 @@
 精度工具提供`pypto.pass_verify_print`与`pypto.pass_verify_save`支持用户将自己编写的pypto kernel函数中的tensor的计算结果打印或者保存下来。（注意：该tensor既可以是最终的输出，也可以是中间产生的tensor，但是打印出来的结果并不是在npu中的计算结果，而是基于精度工具模拟执行和用户前端表达的模拟结果）。
 再开启精度定位前，可先确认精度工具Dump的最终输出与npu计算结果保持一致。
 详参见[pass_verify_print接口示例](../api/others/pypto-pass_verify_print.md)与
-[pass_verify_save接口示例](../api/others/pypto-pass_verify_save.md)。
+[pass_verify_save接口示例](../api/others/pypto-pass_verify_save.md)  。
 
 ###### 精度工具skill
 
 对于在`tensor graph`阶段的精度问题，借助ai agent进行精度定位。
-当发现算子精度不对但不知道具体问题在哪，可以调用pypto-precision-compare技能，只需要向助手发送明确的指令“算子test_my_op.py精度验证失败了，请帮我使用算子精度问题查找技能定位是哪里有问题”，或者直接指定“使用pypto-precision-compare技能，定位test_my_op.py的精度问题”,就可以自动插入检查点，根据测试生成数据文件用对比脚本分析结果，得出出错的op。
+当发现算子精度不对但不知道具体问题在哪，可以调用pypto-precision-compare技能，只需要向助手发送明确的指令“算子test_my_op.py 精度验证失败了，请帮我使用算子精度问题查找技能定位是哪里有问题”，或者直接指定“使用pypto-precision-compare技能，定位test_my_op.py 的精度问题”, 就可以自动插入检查点，根据测试生成数据文件用对比脚本分析结果，得出出错的op。
 
 ###### 精度工具自动比对脚本
 
 对于发生在pass执行阶段的精度问题，使用自动化脚本进行定位。
 脚本路径：`tools/verifier/pass_compare.py`
-当某个pass精度对比失败的时候，可以利用`pass_compare.py`这个脚本将该对比失败的pass和前面的pass进行精度对比。对比会在精度工具dump数据的目录生成一个类似`verify_pass@OP_ATOMIC_RMW@ExpandFunction@1773821696834386.csv`这样的对比结果文件，里面记录了精度对比失败的pass的每个op节点和前面pass对比的结果，未能匹配上的也会记录在表中标注skip。这样就能定位到匹配上的第一个出错的节点。
+当某个pass精度对比失败的时候，可以利用 `pass_compare.py` 这个脚本将该对比失败的pass和前面的pass进行精度对比。对比会在精度工具dump数据的目录生成一个类似 `verify_pass@OP_ATOMIC_RMW@ExpandFunction@1773821696834386.csv` 这样的对比结果文件，里面记录了精度对比失败的pass的每个op节点和前面pass对比的结果，未能匹配上的也会记录在表中标注skip。这样就能定位到匹配上的第一个出错的节点。
 脚本使用方法：`python3 pass_compare.py --p ExpandFunction RemoveUndrivenView --verify_path=.....`
 `--p`参数后面的是对比的两个pass，空格隔开，前面的是精度对比失败的pass，后面的是作为golden的pass，`--verify_path`参数是精度工具dump数据文件的那个目录的绝对路径。
 
@@ -64,7 +64,7 @@
 
 ##### 日志示例
 
-该场景为传入的`in_out_tensors`（即input+output拼接数组）与`goldens`在同一index上dtype不一致，日志通常类似如下：
+该场景为传入的 `in_out_tensors`（即 input+output 拼接数组）与 `goldens` 在同一 index 上 dtype 不一致，日志通常类似如下：
 
 ```log
 RuntimeError: Errcode: FB4003!
@@ -74,23 +74,23 @@ dtype mismatch at index 1
 
 ##### 触发条件
 
-- `SetVerifyData`中`(inputs.size() + outputs.size()) == goldens.size()`
-- 同一index上`in_out_tensors[i]`和`goldens[i]`都不是`None`
-- 两者dtype不一致
+- `SetVerifyData` 中 `(inputs.size() + outputs.size()) == goldens.size()`
+- 同一 index 上 `in_out_tensors[i]` 和 `goldens[i]` 都不是 `None`
+- 两者 dtype 不一致
 
 ##### 定位指导
 
-1. 先根据日志里的`dtype mismatch at index N`锁定出错index。
-2. 在Python侧按`inputs + outputs`的顺序找到该index对应tensor，再与`goldens[index]`逐项核对`dtype`。
+1. 先根据日志里的 `dtype mismatch at index N` 锁定出错 index。
+2. 在 Python 侧按 `inputs + outputs` 的顺序找到该 index 对应 tensor，再与 `goldens[index]` 逐项核对 `dtype`。
 3. 重点检查以下混用场景：`torch.float16`/`torch.float32`、`bfloat16`/`float16`、`int32`/`int64`。
-4. 若golden来源于`from_torch`或中间转换，确认转换前后的dtype没有被隐式修改。
-5. 修复原则：同一index的`in_out_tensors[i]`与`goldens[i]`必须是同一dtype；若确需不同精度，请先在Python侧显式`to(...)`统一后再传入verify。
+4. 若 golden 来源于 `from_torch` 或中间转换，确认转换前后的 dtype 没有被隐式修改。
+5. 修复原则：同一 index 的 `in_out_tensors[i]` 与 `goldens[i]` 必须是同一 dtype；若确需不同精度，请先在 Python 侧显式 `to(...)` 统一后再传入 verify。
 
 #### 错误码：0xB4002U：VERIFY_RESULT_SHAPE_DIFF
 
 ##### 日志示例
 
-该场景为传入的`in_out_tensors`（即input+output拼接数组）与`goldens`在同一index上shape不一致，日志通常类似如下：
+该场景为传入的 `in_out_tensors`（即 input+output 拼接数组）与 `goldens` 在同一 index 上 shape 不一致，日志通常类似如下：
 
 ```log
 RuntimeError: Errcode: FB4002!
@@ -99,15 +99,15 @@ RuntimeError: Errcode: FB4002!
 
 ##### 触发条件
 
-- `SetVerifyData`中`(inputs.size() + outputs.size()) == goldens.size()`
-- 同一index上`in_out_tensors[i]`和`goldens[i]`都不是`None`
-- rank不一致，或逐轴比较时出现不匹配
+- `SetVerifyData` 中 `(inputs.size() + outputs.size()) == goldens.size()`
+- 同一 index 上 `in_out_tensors[i]` 和 `goldens[i]` 都不是 `None`
+- rank 不一致，或逐轴比较时出现不匹配
 
 ##### 定位指导
 
-1. 先按`inputs + outputs`的顺序确认对齐关系，再看对应index的shape rank是否一致。
+1. 先按 `inputs + outputs` 的顺序确认对齐关系，再看对应 index 的 shape rank 是否一致。
 2. 再逐轴比对：每一轴都必须严格相等。
-3. 若报错发生在构造golden的流程，优先检查`ori_shape`是否和实际tensor语义一致。
+3. 若报错发生在构造 golden 的流程，优先检查 `ori_shape` 是否和实际 tensor 语义一致。
 
 #### 错误码：0xB200FU：RUNTIME_EXCEPTION
 
@@ -136,7 +136,7 @@ out must have shape [topk_count, hidden_dim]
 核心报错为：
 `<16x512xINT8/0x512xINT8> = GATHER_IN_UB <82816x512xINT8/82816x512xINT8>, <1x16xINT32/1x16xINT32>, <1x512xINT32/1x512xINT32>`
   `out must have shape [topk_count, hidden_dim]`
-  第一行为出错`operation`的简要信息，示例中，`<16x512xINT8/0x512xINT8>`为输出的`<shape/validshape>`,等号右边为这个operation的`opcode`及其所有输入的`<shape/validshape>`。
+  第一行为出错`operation`的简要信息， 示例中，`<16x512xINT8/0x512xINT8>`为输出的`<shape/validshape>`,等号右边为这个operation的`opcode`及其所有输入的`<shape/validshape>`。
   示例中，`torch cpp`抛出错误信息`out must have shape [topk_count, hidden_dim]`，同时结合上一行信息，可以初步判断该报错来源为该`operation`的输出的`validshape`为空shape。
   如果需要进一步的信息定位，可参考上方几行更详细的报错，包括该`operation`输入输出`tensor`的信息，以及该`operation`的`IR`。
 
