@@ -211,7 +211,9 @@ std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
     if (!dynOffset.empty()) {
         ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, dynOffset.size() == SHAPE_DIM2 || dynOffset.size() == SHAPE_DIM3)
             << "GenMemL1ToL0 only support 2-dim or 3-dim!";
-        FillParamWithFullInput(l0Offset, dynOffset);
+        for (auto& srcOffset : dynOffset) {
+            l0Offset.push_back(SymbolicExpressionTable::BuildExpression(srcOffset));
+        }
     } else {
         for (size_t i = 0; i < coordSize; ++i) {
             l0Offset.push_back("0");
@@ -572,7 +574,9 @@ void CodeGenOpNPU::AppendGmValidShapeForReshapeCopy(std::vector<std::string>& ti
     if (opCode == Opcode::OP_RESHAPE_COPY_IN || opCode == Opcode::OP_RESHAPE_COPY_OUT) {
         FillVecWithDummyInHead<SymbolicScalar>(dynValidShape, MAX_DIM - dynValidShape.size(), 1);
     }
-    FillParamWithFullInput(tileOpParamList, dynValidShape);
+    for (auto s : dynValidShape) {
+        tileOpParamList.emplace_back(SymbolicExpressionTable::BuildExpression(s));
+    }
 }
 
 std::string CodeGenOpNPU::PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const
@@ -650,7 +654,9 @@ std::string CodeGenOpNPU::PrintL0CCopyOutDynamicUnalign(
     std::string src = "(" + addrTypeHead[1] + " " + dataTypeExpr[1] + "*)" + addrExpr[1];
     paramList.insert(paramList.end(), {dst, src});
     auto dynValidShape = dynamicValidShape[localIdx];
-    FillParamWithInput(paramList, dynValidShape, 0, SHAPE_DIM2);
+    for (int i = 0; i < SHAPE_DIM2; i++) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynValidShape[i]));
+    }
     paramList.emplace_back(gmShapeExpr[0]);
     paramList.emplace_back(gmOffsetExpr[0]);
     int64_t outerValue = 0, innerValue = 0;
@@ -1080,7 +1086,9 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const PrintM
     std::string src = "(" + addrTypeHead[ID1] + " " + dataTypeExpr[localIdx] + "*)" + addrExpr[ID1];
     paramList.emplace_back(dst);
     paramList.emplace_back(src);
-    FillParamWithFullInput(paramList, newDynamicShape);
+    for (auto ts : newDynamicShape) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(ts));
+    }
     paramList.insert(paramList.end(), paramPack.paramList.begin(), paramPack.paramList.end());
     auto startOffset = GetOperandStartOffset(localIdx);
     if (!startOffset.ConcreteValid() || startOffset.Concrete() != 0) {
