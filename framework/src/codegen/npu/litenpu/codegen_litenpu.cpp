@@ -155,6 +155,8 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
     std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
     FloatSpecValMgr floatSpecValMgr;
+    std::string allocSourceRegion;
+    allocSourceRegion.reserve(CODE_RESERVED_SIZE);
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
     auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
@@ -166,7 +168,7 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
             continue;
         }
 
-        GenAllocForLocalBuffer(op, symbolMgr);
+        std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
 
         // kirin only supports static function
@@ -177,15 +179,16 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
         ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find(CG_ERROR) == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();
 
+        allocSourceRegion.append(allocSourceCode);
         tileOpSourceRegion.append(tileOpSourceCode);
 
+        if (!allocSourceCode.empty()) {
+            CODEGEN_LOGI(": extra alloc generated(moved up to alloc region): %s", allocSourceCode.c_str());
+        }
         CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
-
     floatSpecValMgr.PrintFloatSpecVal(oss);
-    symbolMgr->PrintAddrAllocs(oss);
-    symbolMgr->GenUsingList(oss);
-    oss << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
+    oss << allocSourceRegion << symbolMgr->GenUsingList() << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
 }
 
 void CodeGenLiteNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const
