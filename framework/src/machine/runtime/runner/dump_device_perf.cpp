@@ -23,7 +23,7 @@
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "interface/machine/device/tilefwk/aicpu_common.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "interface/configs/config_manager.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/distributed/common.h"
@@ -156,7 +156,7 @@ void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& p
         ConstructTaskInfo(i, rootTaskStatus, perfData, "AI-CPU");
     }
     std::string jsonFilePath = npu::tile_fwk::config::LogTopFolder() + "/tilefwk_L1_prof_data.json";
-    if (!SaveFile(jsonFilePath, rootTaskStatus.dump(DUMP_LEVEL_FOUR))) {
+    if (!DumpFile(rootTaskStatus.dump(DUMP_LEVEL_FOUR), jsonFilePath)) {
         MACHINE_LOGW("Contrust custom op json failed");
         return;
     }
@@ -164,12 +164,12 @@ void DumpAicoreTaskExectInfo(const DeviceArgs& args, const std::vector<void*>& p
     std::string topo_txt_path = npu::tile_fwk::config::LogTopFolder() + "/dyn_topo.txt";
     std::string program_json_path = npu::tile_fwk::config::LogTopFolder() + "/program.json";
     std::string mix_event_path = npu::tile_fwk::config::GetAbsoluteTopFolder() + "/mix_event_info.json";
-    std::string draw_swim_lane_py_path = GetPyptoLibPath() + "/scripts/draw_swim_lane.py";
+    std::string draw_swim_lane_py_path = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
     npu::tile_fwk::config::SetRunDataOption(
         KEY_SWIM_GRAPH_PATH, npu::tile_fwk::config::GetAbsoluteTopFolder() + "/merged_swimlane.json");
     uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ? FREQ_DAV_2201 : FREQ_DAV_3510;
 
-    if (IsPathExist(program_json_path) && IsPathExist(topo_txt_path)) {
+    if (FileExist(program_json_path) && FileExist(topo_txt_path)) {
         MACHINE_LOGI("The files program.json and dyn_topo.txt exist. Start merging the swimlane.");
         std::string command = "python3 " + draw_swim_lane_py_path + " \"" + jsonFilePath + "\" \"" + topo_txt_path +
                               "\" \"" + program_json_path +
@@ -227,17 +227,17 @@ inline void ConstructAicorePerfInfo(json& tasksArr, Metrics* aicoreMetric, const
         AicoreMetric* aicoreMetricPref = &(aicoreMetric->aicoreDevTaskInfo[turnIdx]);
         for (uint64_t cnt = 0; cnt < aicoreMetricPref->cnt; cnt++) {
             AicoreDevTaskPerf perf = aicoreMetricPref->aicoreEveryDevTypeTimeStamp[cnt];
-
+            
             curCycle = perf.aicoreDevTimeStamp;
             if (curCycle == 0) {
                 continue;
             }
-
+            
             uint32_t type = static_cast<uint32_t>(perf.type);
             if (type >= PERF_TRACE_CORE_MAX) {
                 continue;
             }
-
+            
             json aicoreTaskType;
             std::string name = AicorePerfTraceName[type];
             name = name + "_" + std::to_string(turnIdx);
@@ -363,13 +363,13 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
 
     std::string aicpuPerfilePath =
         config::LogTopFolder() + "/machine_trace_perf_data_" + std::to_string(g_last_round_num) + ".json";
-    if (!SaveFile(aicpuPerfilePath, aicpuPrefArray.dump(DUMP_LEVEL_FOUR))) {
+    if (!DumpFile(aicpuPrefArray.dump(DUMP_LEVEL_FOUR), aicpuPerfilePath)) {
         MACHINE_LOGW("Contrust custom op json failed");
         return;
     }
 
     // toolkit drawm aicpu preffto
-    std::string scriptPath = GetPyptoLibPath() + "/scripts/machine_perf_trace.py";
+    std::string scriptPath = GetCurrentSharedLibPath() + "/scripts/machine_perf_trace.py";
     std::string cmd = "python3 " + scriptPath + " gen_perfetto " + aicpuPerfilePath + " " +
                       npu::tile_fwk::config::LogTopFolder() + "/machine_runtime_operator_trace_" +
                       std::to_string(g_last_round_num) + ".json " + npu::tile_fwk::config::LogTopFolder() +
