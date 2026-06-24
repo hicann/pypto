@@ -837,18 +837,6 @@ std::shared_ptr<LogicalTensor> GetTensorDataSubgraphTensor(Operation& refOp)
         case Opcode::OP_VIEW:
             subgraphTensor = refOp.GetOOperands()[0];
             break;
-        case Opcode::OP_L1_RESHAPE_COPY_IN:
-            subgraphTensor = refOp.GetOOperands()[0];
-            break;
-        case Opcode::OP_L0C_RESHAPE_COPY_OUT:
-            subgraphTensor = refOp.GetIOperands()[0];
-            break;
-        case Opcode::OP_RESHAPE_COPY_IN:
-            subgraphTensor = refOp.GetOOperands()[0];
-            break;
-        case Opcode::OP_RESHAPE_COPY_OUT:
-            subgraphTensor = refOp.GetIOperands()[0];
-            break;
         default:
             break;
     }
