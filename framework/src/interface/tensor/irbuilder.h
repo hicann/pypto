@@ -145,7 +145,8 @@ public:
         std::vector<ir::VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span);
 
     /* create function */
-    std::shared_ptr<Function> CreateFunction(std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span);
+    std::shared_ptr<Function> CreateFunction(
+        std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span = ir::Span::Unknown());
 
     /* create symbolic scalar */
     SymbolicScalar CreateConstInt(int64_t value);
@@ -199,5 +200,4 @@ public:
 private:
     IRContext& irContext_;
 };
-
 } // namespace npu::tile_fwk
