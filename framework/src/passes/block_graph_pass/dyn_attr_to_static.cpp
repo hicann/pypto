@@ -243,12 +243,12 @@ std::vector<std::reference_wrapper<SymbolicScalar>> DynAttrToStatic::GetOpDynami
         auto& attrDict = op.GetAllAttr();
         auto it = attrDict.find(OpAttributeKey::dynScalar);
         if (it != attrDict.end()) {
-            auto& value = pypto::AnyCastRef<SymbolicScalar>(it->second);
+            auto& value = *npu::tile_fwk::AnyCast<SymbolicScalar>(&it->second);
             dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
         }
         it = attrDict.find(OpAttributeKey::transDataOffset);
         if (it != attrDict.end()) {
-            auto& values = pypto::AnyCastRef<std::vector<SymbolicScalar>>(it->second);
+            auto& values = *npu::tile_fwk::AnyCast<std::vector<SymbolicScalar>>(&it->second);
             for (auto& value : values) {
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
             }

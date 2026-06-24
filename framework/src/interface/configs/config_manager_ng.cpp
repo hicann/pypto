@@ -26,6 +26,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "interface/inner/any.h"
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/string_utils.h"
@@ -152,7 +153,7 @@ struct TypeInfo {
     std::map<std::string, std::pair<int64_t, int64_t>> rangeInfos;
 };
 
-const std::any& ConfigScope::GetAnyConfig(const std::string& key) const
+const Any& ConfigScope::GetAnyConfig(const std::string& key) const
 {
     if (values_.find(key) == values_.end()) {
         if (parent_) {
@@ -222,10 +223,10 @@ void DumpMap(std::stringstream& os, const std::map<int64_t, int64_t>& map)
     os << '}';
 }
 
-void DumpValue(std::stringstream& os, const std::string& key, const std::any& val, const std::string& prefix)
+void DumpValue(std::stringstream& os, const std::string& key, const Any& val, const std::string& prefix)
 {
     os << prefix << key << ": ";
-    const auto& type = val.type();
+    const auto& type = val.Type();
 
     if (type == typeid(int64_t)) {
         os << (AnyCast<int64_t>(val));
@@ -248,7 +249,7 @@ void DumpValue(std::stringstream& os, const std::string& key, const std::any& va
     }
 }
 
-void DumpValues(std::stringstream& os, const std::map<std::string, std::any>& values, const std::string& prefix)
+void DumpValues(std::stringstream& os, const std::map<std::string, Any>& values, const std::string& prefix)
 {
     for (const auto& [key, val] : values) {
         DumpValue(os, key, val, prefix);
@@ -284,16 +285,16 @@ bool HasRangeConstraint(
     return false;
 }
 
-void ValidateConfigValueType(const std::string& key, const std::any& value)
+void ValidateConfigValueType(const std::string& key, const Any& value)
 {
     const auto& expectedType = ConfigManagerNg::GetInstance().Type(key);
-    if (expectedType == typeid(void) || value.type() == expectedType) {
+    if (expectedType == typeid(void) || value.Type() == expectedType) {
         return;
     }
 
     std::stringstream os;
     os << "Option '" << key << "' has invalid type. Expected " << GetReadableTypeName(expectedType) << ", but got "
-       << GetReadableTypeName(value.type());
+       << GetReadableTypeName(value.Type());
     CHECK(ExternalError::INVALID_TYPE, false) << os.str();
 }
 
@@ -306,9 +307,9 @@ std::string ConfigScope::ToString() const
     return os.str();
 }
 
-const std::map<std::string, std::any> ConfigScope::GetAllConfig() const
+const std::map<std::string, Any> ConfigScope::GetAllConfig() const
 {
-    std::map<std::string, std::any> values;
+    std::map<std::string, Any> values;
     auto scope = this;
     while (scope) {
         for (auto& [key, val] : scope->values_) {
@@ -321,24 +322,24 @@ const std::map<std::string, std::any> ConfigScope::GetAllConfig() const
     return values;
 }
 
-void ConfigScope::AddValue(const std::string& key, std::any value)
+void ConfigScope::AddValue(const std::string& key, Any value)
 {
     std::lock_guard<std::mutex> lock(mtx);
     values_[key] = value;
 }
 
-void ConfigScope::UpdateValueWithAny(const std::string& key, std::any value)
+void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
 {
     ValidateConfigValueType(key, value);
     const auto& rangeInfos = ConfigManagerNg::GetInstance().Range();
-    if (HasRangeConstraint(key, value.type(), rangeInfos) &&
+    if (HasRangeConstraint(key, value.Type(), rangeInfos) &&
         !ConfigManagerNg::GetInstance().IsWithinRange(key, value)) {
         std::stringstream os("Option:");
-        std::map<std::string, std::any> node;
+        std::map<std::string, Any> node;
         node[key] = value;
         DumpValues(os, node, "");
         os << "its value doesn't within the value range. ";
-        DumpRange(os, value.type(), key, rangeInfos);
+        DumpRange(os, value.Type(), key, rangeInfos);
         CHECK(ExternalError::INVALID_VAL, false) << os.str();
     }
     std::stringstream oss;
@@ -396,7 +397,7 @@ struct ConfigManagerImpl {
         return true;
     }
 
-    void BeginScope(const std::string& name, std::map<std::string, std::any>&& values, const char* file, int lino)
+    void BeginScope(const std::string& name, std::map<std::string, Any>&& values, const char* file, int lino)
     {
         auto scope = std::make_shared<ConfigScope>(scopes.top());
         scope->values_ = std::move(values);
@@ -416,7 +417,7 @@ struct ConfigManagerImpl {
         scopes.pop();
     }
 
-    void SetScope(std::map<std::string, std::any>&& values, const char* file, int lino)
+    void SetScope(std::map<std::string, Any>&& values, const char* file, int lino)
     {
         auto scope = scopes.top();
         if (scope.use_count() > 1) { // clone if shared
@@ -433,7 +434,7 @@ struct ConfigManagerImpl {
         }
     }
 
-    void SetGlobalConfig(std::map<std::string, std::any>&& values, const char* file, int lino)
+    void SetGlobalConfig(std::map<std::string, Any>&& values, const char* file, int lino)
     {
         if (values.empty()) {
             FE_LOGW("No values provided to set in global config. Locations: %s:%d", file, lino);
@@ -549,7 +550,7 @@ private:
 };
 
 void ConfigManagerNg::BeginScope(
-    const std::string& name, std::map<std::string, std::any>&& values, const char* file, int lino)
+    const std::string& name, std::map<std::string, Any>&& values, const char* file, int lino)
 {
     impl_->BeginScope(name, std::move(values), file, lino);
 }
@@ -564,19 +565,19 @@ ConfigManagerNg::ScopedRestore::ScopedRestore(std::shared_ptr<ConfigScope> scope
 ConfigManagerNg::ScopedRestore::~ScopedRestore() { ConfigManagerNg::GetInstance().EndScope(); }
 
 ConfigManagerNg::JitScopeGuard::JitScopeGuard(
-    const std::string& name, std::map<std::string, std::any>&& values, const char* file, int lino)
+    const std::string& name, std::map<std::string, Any>&& values, const char* file, int lino)
 {
     ConfigManagerNg::GetInstance().BeginScope(name, std::move(values), file, lino);
 }
 
 ConfigManagerNg::JitScopeGuard::~JitScopeGuard() { ConfigManagerNg::GetInstance().EndScope(); }
 
-void ConfigManagerNg::SetScope(std::map<std::string, std::any>&& values, const char* file, int lino)
+void ConfigManagerNg::SetScope(std::map<std::string, Any>&& values, const char* file, int lino)
 {
     return impl_->SetScope(std::move(values), file, lino);
 }
 
-void ConfigManagerNg::SetGlobalConfig(std::map<std::string, std::any>&& values, const char* file, int lino)
+void ConfigManagerNg::SetGlobalConfig(std::map<std::string, Any>&& values, const char* file, int lino)
 {
     return impl_->SetGlobalConfig(std::move(values), file, lino);
 }
@@ -587,12 +588,12 @@ std::shared_ptr<ConfigScope> ConfigManagerNg::CurrentScope() { return GetInstanc
 
 std::shared_ptr<ConfigScope> ConfigManagerNg::GlobalScope() { return GetInstance().impl_->root; }
 
-bool ConfigManagerNg::IsWithinRange(const std::string& properties, std::any& value) const
+bool ConfigManagerNg::IsWithinRange(const std::string& properties, Any& value) const
 {
     try {
-        if (value.type() == typeid(std::map<int64_t, int64_t>)) {
+        if (value.Type() == typeid(std::map<int64_t, int64_t>)) {
             return impl_->IsWithinRange(properties, AnyCast<std::map<int64_t, int64_t>>(value));
-        } else if (value.type() == typeid(int64_t)) {
+        } else if (value.Type() == typeid(int64_t)) {
             return impl_->IsWithinRange(properties, AnyCast<int64_t>(value));
         }
     } catch (const std::out_of_range& e) {
