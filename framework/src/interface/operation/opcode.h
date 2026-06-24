@@ -25,7 +25,7 @@
 #include "tilefwk/error_code.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error.h"
-
+#include "verifier.h"
 namespace npu::tile_fwk {
 enum class Opcode {
     // Unary Vector
@@ -385,10 +385,6 @@ enum class OpCalcType {
 };
 
 enum class AIVCore;
-class Function;
-class Operation;
-
-using VerifyOperationEntry = std::function<bool(const Function& func, const Operation& op, std::ostream& oss)>;
 
 class TileOpCfg {
 public:
@@ -903,8 +899,8 @@ const std::unordered_set<Opcode> UNSUPPORT_FP16_OPS{
     Opcode::OP_ADDS,
     Opcode::OP_SUBS,
     Opcode::OP_ADD,
-    Opcode::OP_SUB,
-    Opcode::OP_MOD,
+    Opcode::OP_SUB,    
+    Opcode::OP_MOD, 
     Opcode::OP_MODS};
 
 const std::unordered_set<Opcode> UNSUPPORT_FP16_ARCH35_OPS{
@@ -1015,7 +1011,7 @@ const std::unordered_set<Opcode> UNSUPPORT_BF16_ARCH35_OPS{
     Opcode::OP_ADDS,
     Opcode::OP_SUBS,
     Opcode::OP_ADD,
-    Opcode::OP_SUB,
+    Opcode::OP_SUB,    
     Opcode::OP_INDEX_ADD,
     Opcode::OP_EXP,
     Opcode::OP_RSQRT,
