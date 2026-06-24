@@ -127,12 +127,14 @@ std::string CopyOutModeToString(Matrix::CopyOutMode copyMode)
 std::string PaddingModeToString(Matrix::PaddingMode paddingMode)
 {
     switch (paddingMode) {
-        case Matrix::PaddingMode::NORMAL_PADDING_MODE:
-            return "PaddingMode::NORMAL_PADDING_MODE";
-        case Matrix::PaddingMode::MX_PADDING_MODE:
-            return "PaddingMode::MX_PADDING_MODE";
+        case Matrix::PaddingMode::NO_PADDING:
+            return "PaddingMode::NO_PADDING";
+        case Matrix::PaddingMode::PADDING_OUTER:
+            return "PaddingMode::PADDING_OUTER";
+        case Matrix::PaddingMode::PADDING_INNER:
+            return "PaddingMode::PADDING_INNER";
         default:
-            return "PaddingMode::NORMAL_PADDING_MODE";
+            return "PaddingMode::NO_PADDING";
     }
 }
 
