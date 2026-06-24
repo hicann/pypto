@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
+#include "file.h"
 
 namespace npu {
 namespace tile_fwk {

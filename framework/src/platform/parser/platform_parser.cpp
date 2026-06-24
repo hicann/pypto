@@ -12,11 +12,9 @@
  * \file platform_parser.cpp
  * \brief
  */
-#include <fstream>
 
 #include "platform_parser.h"
 #include "tilefwk/error_code.h"
-#include "simulation_platform/simulation_platform.h"
 
 namespace npu {
 namespace tile_fwk {
