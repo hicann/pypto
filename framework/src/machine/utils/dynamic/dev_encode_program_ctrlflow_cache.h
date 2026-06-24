@@ -251,8 +251,7 @@ struct DevControlFlowCache {
 
     void inline CalcUsedCacheSize()
     {
-        usedCacheSize =
-            reinterpret_cast<uintptr_t>(cacheData.Data()) + cacheDataOffset - reinterpret_cast<uintptr_t>(this);
+        usedCacheSize = reinterpret_cast<uintptr_t>(&cacheData[cacheDataOffset]) - reinterpret_cast<uintptr_t>(this);
     }
 
     void Init(
