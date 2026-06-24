@@ -126,7 +126,7 @@ void TiledFillPadOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
     const Element& padValue)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -137,7 +137,7 @@ void TiledFillPadOperation(
 LogicalTensorPtr TensorPadOperation(
     Function& function, const Tensor& self, const std::vector<int64_t>& padding, const std::string& mode, const Element& value)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "Pad: only 'constant' mode is supported.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "Pad: only 'constant' mode is supported.";
     auto operand = self.GetStorage();
     std::vector<int64_t> outputShape = operand->shape;
     size_t ndim = operand->shape.size();
@@ -145,24 +145,24 @@ LogicalTensorPtr TensorPadOperation(
     int64_t padBottom = 0;
 
     if (ndim == 1) {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 2)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 2)
             << "Pad: 1D tensor only support 2 padding values.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only support right pad.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only support right pad.";
         padRight = padding[1];
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
             << "Pad: padding values must be non-negative, got pad_right=" << padRight
             << ". Negative padding (for cropping) is not supported.";
         outputShape[0] += padRight;
     } else {
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 4) << "Pad: only support last 2 axis pad.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0 && padding[2] == 0)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 4) << "Pad: only support last 2 axis pad.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0 && padding[2] == 0)
             << "Pad: only support bottom and right pad.";
         padRight = padding[1];
         padBottom = padding[3];
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
             << "Pad: padding values must be non-negative, got pad_right=" << padRight
             << ". Negative padding (for cropping) is not supported.";
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, padBottom >= 0)
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padBottom >= 0)
             << "Pad: padding values must be non-negative, got pad_bottom=" << padBottom
             << ". Negative padding (for cropping) is not supported.";
         outputShape[ndim - 1] += padRight;
@@ -201,10 +201,10 @@ Tensor Pad(const Tensor& self, const std::vector<int64_t>& padding, std::string 
 
 LogicalTensorPtr TensorFillPadOperation(Function& function, const Tensor& self, const std::string& mode, const Element& value)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "FillPad: only 'constant' mode is supported.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "FillPad: only 'constant' mode is supported.";
     auto operand = self.GetStorage();
     std::vector<int64_t> outputShape = operand->shape;
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, outputShape.size() == 1 || outputShape.size() == 2)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, outputShape.size() == 1 || outputShape.size() == 2)
         << "FillPad: only support 1 dim or 2 dim.";
     auto result = std::make_shared<LogicalTensor>(
         function, operand->Datatype(), outputShape, SymbolicScalar::FromConcrete(outputShape));
