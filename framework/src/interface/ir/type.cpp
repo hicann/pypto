@@ -13,15 +13,12 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <set>
 #include <utility>
 #include <vector>
 
 #include "core/dtype.h"
-#include "ir/identifier.h"
 #include "ir/scalar_expr.h"
 #include "ir/span.h"
-#include "tilefwk/error.h"
 
 namespace pypto {
 namespace ir {
@@ -33,8 +30,5 @@ ShapedType::ShapedType(DataType dtype, const std::vector<int64_t>& shape, std::o
         shape_.push_back(std::make_shared<ConstInt>(dim, DataType::INDEX, Span::Unknown()));
     }
 }
-
-
-TupleType::TupleType(std::vector<TypePtr> types) : types_(std::move(types)) {}
 } // namespace ir
 } // namespace pypto
