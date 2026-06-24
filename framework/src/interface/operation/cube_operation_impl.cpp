@@ -657,9 +657,6 @@ void CheckGmAccumulationParam(
                                                 param.biasTensor.GetStorage() == nullptr &&
                                                 fabs(param.scaleValue - 0) < EPSILON)
         << "Fixpipe and bias cannot be used simultaneously with GM ACC";
-    
-    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, param.reluType == ReLuType::NoReLu)
-        << "ReLU is not supported in split-k scenarios";
 
     ASSERT(MatmulErrorCode::ERR_PARAM_MISMATCH, outType == DataType::DT_FP32 || outType == DataType::DT_INT32)
         << "Output data type only support FP32 and INT32 when using GM accumulated";
