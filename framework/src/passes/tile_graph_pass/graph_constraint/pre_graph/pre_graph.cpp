@@ -25,27 +25,29 @@ void PreGraphProcess::UpdateCopyOpIsCube(Operation& op) const
 {
     /*
     后续考虑移到InsertCopyOp
+    copy_out for producer
+    op(copy_in) --> input --> consumerOp(isCube?)
     */
     if (IsCopyIn(op.GetOpcode())) {
-        if (op.GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-            op.SetAttribute(OpAttributeKey::isCube, false);
-        } else {
-            op.SetAttribute(OpAttributeKey::isCube, true);
+        for (const auto& consumerOps : op.ConsumerOps()) {
+            if ((consumerOps->HasAttr(OpAttributeKey::isCube)) &&
+                (consumerOps->GetSubgraphID() == op.GetSubgraphID())) {
+                op.SetAttribute(OpAttributeKey::isCube, consumerOps->GetBoolAttribute(OpAttributeKey::isCube));
+                break;
+            }
         }
     }
-
+    /*
+    copy_in for consumer
+    producerOp(isCube?) --> input --> op(copy_out)
+    */
     if ((IsCopyOut(op.GetOpcode())) && (!OpcodeManager::Inst().IsSharedMemory(op.GetOpcode()))) {
-        bool hasUbInput = false;
-        for (const auto& ioperand : op.GetIOperands()) {
-            if (ioperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-                hasUbInput = true;
+        for (const auto& producerOps : op.ProducerOps()) {
+            if ((producerOps->HasAttr(OpAttributeKey::isCube)) &&
+                (producerOps->GetSubgraphID() == op.GetSubgraphID())) {
+                op.SetAttribute(OpAttributeKey::isCube, producerOps->GetBoolAttribute(OpAttributeKey::isCube));
                 break;
-            }   
-        }
-        if (hasUbInput) {
-            op.SetAttribute(OpAttributeKey::isCube, false);
-        } else {
-            op.SetAttribute(OpAttributeKey::isCube, true);
+            }
         }
     }
 }
