@@ -37,7 +37,7 @@ std::string GetMachineCompilerPath()
     constexpr const char* kAscendHomeEnv = "ASCEND_HOME_PATH";
     const std::string homePath = npu::tile_fwk::GetEnvVar(kAscendHomeEnv);
     if (homePath.empty()) {
-        MACHINE_LOGW(
+        MACHINE_LOGE(npu::tile_fwk::DevCommonErr::GET_ENV_FAILED,
             "%s is unset, empty after trimming whitespace, or exceeds max env length; device control-flow compiler "
             "path is disabled.",
             kAscendHomeEnv);

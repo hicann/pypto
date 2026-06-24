@@ -230,7 +230,9 @@ public:
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {
-            MACHINE_LOGW("[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
+            MACHINE_LOGE(
+                DevCommonErr::PARAM_CHECK_FAILED, "[Deprecated] User provided dynamic workspace: %" PRId64,
+                config.dynWorkspaceSize);
             devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = std::max(
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
