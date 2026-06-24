@@ -48,5 +48,5 @@ TEST_F(TestSuite_Backend, SimulationBackend_Err1)
 TEST_F(TestSuite_Backend, Execute_NullTask_ReturnsZero)
 {
     FunctionCache cache;
-    EXPECT_THROW(Execute(nullptr, cache), npu::tile_fwk::Error);
+    EXPECT_EQ(Execute(nullptr, cache), 0);
 }
