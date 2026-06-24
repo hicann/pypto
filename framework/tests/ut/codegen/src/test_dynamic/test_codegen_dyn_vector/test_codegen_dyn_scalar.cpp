@@ -123,7 +123,7 @@ TEST_F(TestCodegenDynScalar, TestAddsTileTensor)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif
     std::string res = GenCodeByFunction(*function);
-    std::string expect = R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_0, ubTensor_0, 3);
+    std::string expect = R"!!!(TAddS<LastUse2Dim<0, 1>, float>(ubTensor_0, ubTensor_0, 3);
 )!!!";
     CheckStringExist(expect, res);
 }
