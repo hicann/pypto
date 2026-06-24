@@ -244,8 +244,6 @@ static std::map<std::string, std::function<void(PassConfigs&, const nlohmann::js
      [](PassConfigs& configs, const nlohmann::json& node) { configs.disablePass = node.get<bool>(); }},
     {KEY_HEALTH_CHECK,
      [](PassConfigs& configs, const nlohmann::json& node) { configs.healthCheck = node.get<bool>(); }},
-    {KEY_ADDR_CHECK,
-     [](PassConfigs& configs, const nlohmann::json& node) { configs.addrCheck = node.get<bool>(); }},
     {KEY_RESUME_PARH,
      [](PassConfigs& configs, const nlohmann::json& node) { configs.resumePath = node.get<std::string>(); }},
 };
