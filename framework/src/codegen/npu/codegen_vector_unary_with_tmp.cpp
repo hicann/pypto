@@ -171,7 +171,7 @@ std::string CodeGenOpNPU::PrintArgReduceTileTensor() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MILOIdx::TMP2_IDX)});
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();
@@ -291,7 +291,7 @@ std::string CodeGenOpNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffParam& pa
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
@@ -329,7 +329,7 @@ std::string CodeGenOpNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuf
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
@@ -387,7 +387,7 @@ std::string CodeGenOpNPU::PrintRowSumlineTileTensor() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
