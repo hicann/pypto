@@ -327,7 +327,17 @@
                     "minimum": 0,
                     "maximum": 6
                 },
-                "launch_early_mode": {
+                "launch_sched_same_cluster": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "是否强制同Cluster线程分配, 1:强制同Cluster(默认); 0:允许跨Cluster, 开启同cluster时, launch_sched_aicpu_num配置不生效",
+                        "en": "Force same cluster arbitration. 1: force same cluster (default); 0: allow cross cluster, when enabling the same cluster, the launch_sched_aicpu_num configuration does not take effect"
+                    },
+                    "default": 1,
+                    "minimum": 0,
+                    "maximum": 1
+                    },
+                    "launch_early_mode": {
                     "type": "integer",
                     "label": {
                         "zh": "aicpu提前发射模式, 0:仅capture模式提前发射(默认); 1:所有模式都提前发射; 2:所有模式都不提前发射",
