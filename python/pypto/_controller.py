@@ -22,7 +22,7 @@ from ._utils import to_sym, set_source_location, clear_source_location
 from .symbolic_scalar import SymbolicScalar, SymInt
 from .tensor import Tensor
 from .config import CubeTile, ConvTile, get_current_scope
-from .error import FeError, PyptoError
+from .error import FeError
 from . import pypto_impl
 
 logging.basicConfig(level=logging.DEBUG)
@@ -380,14 +380,6 @@ def is_loop_end(scalar: SymbolicScalar) -> SymbolicScalar:
     return pypto_impl.IsLoopEnd(scalar, getattr(scalar, "_loop_end"))
 
 
-def _raise_if_exception(exc: Optional[Exception]):
-    if exc is None:
-        return
-    if isinstance(exc, PyptoError):
-        raise exc
-    raise FeError(exc)
-
-
 @contextmanager
 def function(name: str, *args) -> Iterator:
     """ defining the function
@@ -429,7 +421,6 @@ def function(name: str, *args) -> Iterator:
         first_exc = e
     finally:
         if func is None:
-            _raise_if_exception(first_exc)
             raise FeError(RuntimeError(f"function {name} recording failed"))
         try:
             func.EndFunction()
@@ -437,7 +428,8 @@ def function(name: str, *args) -> Iterator:
             if first_exc is None:
                 first_exc = e
         Controller.end_function()
-        _raise_if_exception(first_exc)
+        if first_exc is not None:
+            raise FeError(first_exc)
 
 
 def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = None):
