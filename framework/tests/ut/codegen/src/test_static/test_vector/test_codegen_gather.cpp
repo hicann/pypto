@@ -28,7 +28,9 @@ namespace npu::tile_fwk {
 
 class TestCodegenGather : public CodegenTestBase {
 public:
-    TestCodegenGather() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true}) {}
+    TestCodegenGather()
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
+    {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 };
@@ -67,7 +69,7 @@ Function& testGatherEle(bool isSupportTileTensor, string funcName)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
     return *function;
 }
 TEST_F(TestCodegenGather, TestGatherEle) { testGatherEle(false, "GATHER_ELEMET_T"); }
