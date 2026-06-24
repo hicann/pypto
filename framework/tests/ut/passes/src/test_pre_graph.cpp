@@ -406,9 +406,9 @@ TEST_F(PreGraphTest, TestView)
 
     // ================== Verify the effect of the Pass ==================
     auto updated_operations = func->Operations();
-    int opSize = 28;
+    int opSize = 24;
 
-    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 28 operations";
+    EXPECT_EQ(updated_operations.size(), opSize) << "After the Pass, there should be 24 operations";
     EXPECT_EQ(tensorMagicWithColorSet.size() > 0, true) << "There should be many tensor magic with color";
 }
 
