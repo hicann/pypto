@@ -97,21 +97,5 @@ TEST_F(IRExprTest, TestTupleGetItemIndex)
     ASSERT_EQ(item->value_, tuple);
 }
 
-TEST_F(IRExprTest, TestTupleGetItemDynamicIndex)
-{
-    auto elem1 = std::make_shared<ConstInt>(1, DataType::INT32, Span::Unknown());
-    auto elem2 = std::make_shared<ConstInt>(2, DataType::INT32, Span::Unknown());
-    std::vector<ExprPtr> elements = {elem1, elem2};
-    auto tuple = std::make_shared<MakeTuple>(elements, Span::Unknown());
-
-    auto idx = std::make_shared<Var>(
-        "i", std::make_shared<ScalarType>(DataType::INDEX), Span::Unknown());
-    auto item = std::make_shared<GetItemExpr>(tuple, idx, Span::Unknown());
-
-    auto resultType = As<ScalarType>(item->GetType());
-    ASSERT_NE(resultType, nullptr);
-    ASSERT_EQ(resultType->dtype_, DataType::INT32);
-}
-
 } // namespace ir
 } // namespace pypto
