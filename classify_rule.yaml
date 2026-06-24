@@ -51,6 +51,7 @@ operation_vector@pypto:
       - framework/src/interface/operation/operation.h
       - framework/src/interface/operation/tile_shape_verifier.h
       - framework/src/interface/operation/tile_shape.cpp
+      - framework/src/interface/operation/verifier.h
       - framework/src/interface/tileop/arch32/dynamic/mte_dyn.h
       - framework/src/interface/tileop/arch32/dynamic/vector_bin_brc_dyn.h
       - framework/src/interface/tileop/arch32/dynamic/vector_bin_dyn.h
@@ -105,7 +106,7 @@ cost_model@pypto:
 
 frontend@pypto:
   src:
-    release:
+    release:      
       - framework/include/core/any_cast.h
       - framework/include/core/common.h
       - framework/include/core/dtype.h
@@ -162,7 +163,7 @@ frontend@pypto:
 
 block@pypto:
   src:
-    release:
+    release:      
       - framework/include/ir/
       - framework/include/block/
       - framework/src/interface/ir/
@@ -192,7 +193,7 @@ codegen@pypto:
 machine@pypto:
   src:
     release:
-      - framework/include/tilefwk/error_code.h
+      - framework/include/tilefwk/error_code.h      
       - framework/include/tilefwk/error_manager.h
       - framework/include/tilefwk/error.h
       - framework/include/tilefwk/pypto_fwk_log.h
