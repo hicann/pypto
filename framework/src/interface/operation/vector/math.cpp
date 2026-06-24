@@ -691,8 +691,8 @@ LogicalTensorPtr TensorLogicalAndOperation(Function& function, const Tensor& sel
 Tensor LogicalAnd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16, DT_BF16,  DT_INT8, DT_UINT8,
-                                                   DT_BOOL, DT_INT16, DT_INT32, DT_INT64};
+    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16, DT_BF16,  DT_INT8,
+                                                   DT_UINT8, DT_BOOL, DT_INT16, DT_INT32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALAND");
     CheckTensorDataType(other.GetStorage(), supportedTypes, "LOGICALAND");
     CheckBinaryInputTensors(self.GetStorage(), other.GetStorage(), "LOGICALAND");
