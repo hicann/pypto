@@ -261,7 +261,7 @@ void CheckL0TileTiling(
     int64_t batch = inputTensor.GetShape()[NCHW_N_IDX], groups = attrParam.groups;
     int64_t hOut = ConvComputeHo(inputTensor, weightTensor, attrParam);
     int64_t wOut = ConvComputeWo(inputTensor, weightTensor, attrParam);
-    int numTileL0 = batch * groups * CeilDiv(cout / groups, tileN) * CeilDiv(hOut, tileH) * CeilDiv(wOut, tileW);
+    int64_t numTileL0 = batch * groups * CeilDiv(cout / groups, tileN) * CeilDiv(hOut, tileH) * CeilDiv(wOut, tileW);
     if (attrParam.isConv3D) {
         int64_t kd = weightTensor.GetShape()[NCDHW_D_IDX];
         int64_t dout = ConvComputeDo(inputTensor, weightTensor, attrParam);
@@ -270,7 +270,7 @@ void CheckL0TileTiling(
         kBL1 *= kd;
         oriK *= kd;
     }
-    if (numTileL0 > MAX_LOOP || CeilDiv(oriK, tileK) > MAX_LOOP) {
+    if (numTileL0 * CeilDiv(oriK, tileK) > MAX_LOOP) {
         CONV_LOGW("Suggestion: Consider increasing tile size to reduce compilation time.");
     }
     int64_t minKL1 = std::min(kAL1, kBL1);
