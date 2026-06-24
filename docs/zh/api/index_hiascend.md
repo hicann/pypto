@@ -121,8 +121,6 @@
   - [pypto.experimental.gather_in_ub](operation/pypto-experimental-gather_in_ub.md)
   - [pypto.experimental.get_operation_options](operation/pypto-experimental-get_operation_options.md)
   - [pypto.experimental.set_operation_options](operation/pypto-experimental-set_operation_options.md)
-  - [pypto.experimental.online_softmax](operation/pypto-experimental-online_softmax.md)
-  - [pypto.experimental.online_softmax_update](operation/pypto-experimental-online_softmax_update.md)
   - [pypto.experimental.transposed_batchmatmul](operation/pypto-experimental-transposed_batchmatmul.md)
   - [pypto.fillpad](operation/pypto-fillpad.md)
   - [pypto.floor](operation/pypto-floor.md)
