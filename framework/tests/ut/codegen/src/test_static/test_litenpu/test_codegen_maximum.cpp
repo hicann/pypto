@@ -39,7 +39,7 @@ void TestCodeGenMaximum::test_maximum_int16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_002()
@@ -55,7 +55,7 @@ void TestCodeGenMaximum::test_maximum_int16_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_003()
@@ -71,7 +71,7 @@ void TestCodeGenMaximum::test_maximum_int16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_004()
@@ -87,7 +87,7 @@ void TestCodeGenMaximum::test_maximum_int16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_005()
@@ -103,7 +103,7 @@ void TestCodeGenMaximum::test_maximum_int16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_006()
@@ -119,7 +119,7 @@ void TestCodeGenMaximum::test_maximum_int16_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_007()
@@ -135,7 +135,7 @@ void TestCodeGenMaximum::test_maximum_int16_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_008()
@@ -151,7 +151,7 @@ void TestCodeGenMaximum::test_maximum_int16_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_009()
@@ -167,7 +167,7 @@ void TestCodeGenMaximum::test_maximum_int16_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int16_010()
@@ -183,7 +183,7 @@ void TestCodeGenMaximum::test_maximum_int16_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT16_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_001()
@@ -199,7 +199,7 @@ void TestCodeGenMaximum::test_maximum_int32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_002()
@@ -215,7 +215,7 @@ void TestCodeGenMaximum::test_maximum_int32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_003()
@@ -231,7 +231,7 @@ void TestCodeGenMaximum::test_maximum_int32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_004()
@@ -247,7 +247,7 @@ void TestCodeGenMaximum::test_maximum_int32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_005()
@@ -263,7 +263,7 @@ void TestCodeGenMaximum::test_maximum_int32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_006()
@@ -279,7 +279,7 @@ void TestCodeGenMaximum::test_maximum_int32_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_007()
@@ -295,7 +295,7 @@ void TestCodeGenMaximum::test_maximum_int32_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_008()
@@ -311,7 +311,7 @@ void TestCodeGenMaximum::test_maximum_int32_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_009()
@@ -327,7 +327,7 @@ void TestCodeGenMaximum::test_maximum_int32_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_int32_010()
@@ -343,7 +343,7 @@ void TestCodeGenMaximum::test_maximum_int32_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_INT32_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_001()
@@ -359,7 +359,7 @@ void TestCodeGenMaximum::test_maximum_fp16_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_002()
@@ -375,7 +375,7 @@ void TestCodeGenMaximum::test_maximum_fp16_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_003()
@@ -391,7 +391,7 @@ void TestCodeGenMaximum::test_maximum_fp16_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_004()
@@ -407,7 +407,7 @@ void TestCodeGenMaximum::test_maximum_fp16_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_005()
@@ -423,7 +423,7 @@ void TestCodeGenMaximum::test_maximum_fp16_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_006()
@@ -439,7 +439,7 @@ void TestCodeGenMaximum::test_maximum_fp16_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_007()
@@ -455,7 +455,7 @@ void TestCodeGenMaximum::test_maximum_fp16_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_008()
@@ -471,7 +471,7 @@ void TestCodeGenMaximum::test_maximum_fp16_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_009()
@@ -487,7 +487,7 @@ void TestCodeGenMaximum::test_maximum_fp16_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_010()
@@ -503,7 +503,7 @@ void TestCodeGenMaximum::test_maximum_fp16_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_011()
@@ -519,7 +519,7 @@ void TestCodeGenMaximum::test_maximum_fp16_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_012()
@@ -535,7 +535,7 @@ void TestCodeGenMaximum::test_maximum_fp16_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_013()
@@ -551,7 +551,7 @@ void TestCodeGenMaximum::test_maximum_fp16_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_014()
@@ -567,7 +567,7 @@ void TestCodeGenMaximum::test_maximum_fp16_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_015()
@@ -583,7 +583,7 @@ void TestCodeGenMaximum::test_maximum_fp16_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_016()
@@ -599,7 +599,7 @@ void TestCodeGenMaximum::test_maximum_fp16_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_017()
@@ -615,7 +615,7 @@ void TestCodeGenMaximum::test_maximum_fp16_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp16_018()
@@ -631,7 +631,7 @@ void TestCodeGenMaximum::test_maximum_fp16_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP16_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_001()
@@ -647,7 +647,7 @@ void TestCodeGenMaximum::test_maximum_fp32_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_002()
@@ -663,7 +663,7 @@ void TestCodeGenMaximum::test_maximum_fp32_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_003()
@@ -679,7 +679,7 @@ void TestCodeGenMaximum::test_maximum_fp32_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_004()
@@ -695,7 +695,7 @@ void TestCodeGenMaximum::test_maximum_fp32_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_005()
@@ -711,7 +711,7 @@ void TestCodeGenMaximum::test_maximum_fp32_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_006()
@@ -727,7 +727,7 @@ void TestCodeGenMaximum::test_maximum_fp32_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_007()
@@ -743,7 +743,7 @@ void TestCodeGenMaximum::test_maximum_fp32_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_009()
@@ -759,7 +759,7 @@ void TestCodeGenMaximum::test_maximum_fp32_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_010()
@@ -775,7 +775,7 @@ void TestCodeGenMaximum::test_maximum_fp32_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_011()
@@ -791,7 +791,7 @@ void TestCodeGenMaximum::test_maximum_fp32_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_012()
@@ -807,7 +807,7 @@ void TestCodeGenMaximum::test_maximum_fp32_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_013()
@@ -823,7 +823,7 @@ void TestCodeGenMaximum::test_maximum_fp32_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_014()
@@ -839,7 +839,7 @@ void TestCodeGenMaximum::test_maximum_fp32_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_015()
@@ -855,7 +855,7 @@ void TestCodeGenMaximum::test_maximum_fp32_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_016()
@@ -871,7 +871,7 @@ void TestCodeGenMaximum::test_maximum_fp32_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_017()
@@ -887,7 +887,7 @@ void TestCodeGenMaximum::test_maximum_fp32_017()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_017");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
 
 void TestCodeGenMaximum::test_maximum_fp32_018()
@@ -903,5 +903,5 @@ void TestCodeGenMaximum::test_maximum_fp32_018()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "MAXIMUM_FP32_018");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function);
+    codeGen.GenCode(*function, {});
 }
