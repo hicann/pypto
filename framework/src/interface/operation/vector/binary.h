@@ -123,7 +123,7 @@ std::string GetBinaryOpName()
         case BinaryOpType::FLOORDIV:
             return "FLOORDIV";
         default:
-            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
             return "";
     }
 }
@@ -160,7 +160,7 @@ Opcode GetBinaryOpNameCode()
             case BinaryOpType::LRELU:
                 return Opcode::OP_LRELU;
             default:
-                CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+                ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
         }
 #undef CASE
     }
@@ -178,7 +178,7 @@ Opcode GetBinaryOpNameCode()
             CASE(MIN);
             CASE(GCD);
             default:
-                CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+                ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
         }
 #undef CASE
     }
@@ -212,7 +212,7 @@ Opcode GetBinaryOpNameCode()
         CASE(GCD);
         CASE(FLOORDIV);
         default:
-            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
     }
 #undef CASE
 }
