@@ -38,33 +38,33 @@ def assert_option_type_error(setter, pattern):
         ),
         (
             lambda: pypto.set_pass_options(cube_nbuffer_setting=[1, 2]),
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'pass.cube_nbuffer_setting' has invalid type. "
             "Expected dict\\[int64, int64\\], but got list\\[int64\\]",
         ),
         (
             lambda: pypto.set_host_options(compile_monitor_enable="true"),
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'host.compile_monitor_enable' has invalid type. Expected int64, but got string",
         ),
         (
             lambda: pypto.set_host_options(compile_timeout="100"),
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'host.compile_timeout' has invalid type. Expected int64, but got string",
         ),
         (
             lambda: pypto.set_codegen_options(support_dynamic_aligned="true"),
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'codegen.support_dynamic_aligned' has invalid type. Expected bool, but got string",
         ),
         (
             lambda: pypto.set_verify_options(pass_verify_save_tensor_dir=123),
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'verify.pass_verify_save_tensor_dir' has invalid type. Expected string, but got int64",
         ),
         (
             lambda: pypto.set_debug_options(runtime_debug_mode="1"),
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'debug.runtime_debug_mode' has invalid type. Expected int64, but got string",
         )
     ],
@@ -78,27 +78,27 @@ def test_wrapper_option_type_mismatch_error(setter, pattern):
     [
         (
             {"runtime_options": {"stitch_function_max_num": "aa"}},
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'runtime.stitch_function_max_num' has invalid type. Expected int64, but got string",
         ),
         (
             {"runtime_options": {"ready_on_host_tensors": "tensor0"}},
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'runtime.ready_on_host_tensors' has invalid type. Expected list\\[string\\], but got string",
         ),
         (
             {"runtime_options": {"device_sched_parallelism": "aa"}},
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'runtime.device_sched_parallelism' has invalid type. Expected int64, but got string",
         ),
         (
             {"verify_options": {"pass_verify_pass_filter": False}},
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'verify.pass_verify_pass_filter' has invalid type. Expected list\\[string\\], but got bool",
         ),
         (
             {"verify_options": {"pass_verify_error_tol": "0.1,0.1"}},
-            "CHECK FAILED: ErrCode: F00001! Enum: ExternalError::INVALID_TYPE\n"
+            "CHECK FAILED: ErrCode: F21003! Enum: FeError::INVALID_TYPE\n"
             "Option 'verify.pass_verify_error_tol' has invalid type. Expected list\\[double\\], but got string",
         ),
     ],
