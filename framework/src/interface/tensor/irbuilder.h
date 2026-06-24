@@ -36,7 +36,8 @@ public:
     ir::VarPtr MakeTempVar(ir::TypePtr type, ir::Span span)
     {
         auto var_name = GetVarName();
-        return MakeVar(var_name, type, span);
+        type_map_[var_name] = type;
+        return std::make_shared<ir::Var>(var_name, type, span);
     }
 
     ir::IterArgPtr MakeIterArg(std::string name, ir::TypePtr type, ir::ExprPtr initVal, ir::Span span)
@@ -60,7 +61,7 @@ public:
         auto var_name = name;
         if (var_name.empty()) {
             auto idx = temp_counter_++;
-            var_name = "$" + std::to_string(idx);
+            var_name = "%" + std::to_string(idx);
         } else {
             while (all_vars_.count(var_name)) {
                 auto idx = var_counter_[var_name]++;
@@ -77,7 +78,11 @@ public:
         type_map_.clear();
         var_counter_.clear();
         all_vars_.clear();
+        token_map_.clear();
     }
+
+    void AddDependToken(const ir::ExprPtr& val, const ir::VarPtr& token) { token_map_[val].push_back(token); }
+    std::vector<ir::VarPtr>& GetDependToken(const ir::ExprPtr& val);
 
     static IRContext& Get();
 
@@ -87,6 +92,7 @@ private:
     std::map<std::string, ir::TypePtr> type_map_; // type for each variable
     std::map<std::string, int64_t> var_counter_;  // counter for named variable
     std::map<std::string, std::string> all_vars_; // unique var name -> var name
+    std::unordered_map<ir::ExprPtr, std::vector<ir::VarPtr>> token_map_;
 };
 
 class IRBuilder : public ir::IRBuilder {
@@ -145,8 +151,7 @@ public:
         std::vector<ir::VarPtr> tokens, std::vector<std::pair<std::string, std::any>> attrs, ir::Span span);
 
     /* create function */
-    std::shared_ptr<Function> CreateFunction(
-        std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span = ir::Span::Unknown());
+    std::shared_ptr<Function> CreateFunction(std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span);
 
     /* create symbolic scalar */
     SymbolicScalar CreateConstInt(int64_t value);
@@ -193,6 +198,12 @@ public:
 
     ir::VarPtr CreateTokenVar(ir::Span span);
 
+    void AddDependToken(SymbolicScalar scalar, ir::VarPtr token) { irContext_.AddDependToken(scalar.AsExpr(), token); }
+    std::vector<ir::VarPtr> & GetDependToken(SymbolicScalar scalar) { return irContext_.GetDependToken(scalar.AsExpr()); }
+
+    void AddDependToken(ir::ExprPtr expr, ir::VarPtr token) { irContext_.AddDependToken(expr, token); }
+    std::vector<ir::VarPtr> & GetDependToken(ir::ExprPtr expr) { return irContext_.GetDependToken(expr); }
+
     void EmitTensorStmts();
 
     ir::ExprPtr None();
@@ -200,4 +211,5 @@ public:
 private:
     IRContext& irContext_;
 };
+
 } // namespace npu::tile_fwk

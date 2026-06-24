@@ -83,7 +83,7 @@ __aicore__ inline __gm__ DType* GetPackedGmAddr(__gm__ DType* addr, Offset offse
 template <typename T, typename Shape, typename Stride, bool need_mask = false>
 class PtoGlobal {
 public:
-    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;
+    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, __gm__ bool>, __gm__ uint8_t, typename T::Type>;
     using Type = pto::GlobalTensor<Dtype, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
 
     __aicore__ inline PtoGlobal(__gm__ typename T::Type* addr, const Shape& shape, const Stride& stride)
@@ -157,6 +157,13 @@ __aicore__ inline constexpr int GetValidHeight()
 }
 
 template <typename T>
+__aicore__ inline constexpr size_t GetAllAxisProduct()
+{
+    constexpr auto size = Std::tuple_size<typename T::TileShape>::value;
+    return TileOp::GetAllAxisProduct<size, typename T::TileShape>();
+}
+
+template <typename T>
 __aicore__ inline constexpr int GetValidWidth()
 {
     if constexpr (T::IsStaticLayout()) {
@@ -166,15 +173,31 @@ __aicore__ inline constexpr int GetValidWidth()
     }
 }
 
+template <typename T, bool Mergeable>
+struct PtoTileDimConfig {
+    static constexpr auto tileH = TileOp::GetTensorTileShapeDim<T, DIM_4TH, MAX_DIMS>();
+    static constexpr auto tileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
+    static constexpr auto validH = GetValidHeight<T>();
+    static constexpr auto validW = GetValidWidth<T>();
+};
+
+template <typename T>
+struct PtoTileDimConfig<T, true> {
+    static constexpr auto tileH = size_t(1);
+    static constexpr auto tileW = GetAllAxisProduct<T>();
+    static constexpr auto validH = 1;
+    static constexpr auto validW = GetAllAxisProduct<T>();
+};
+
 template <typename T, pto::BLayout Layout = pto::BLayout::RowMajor, bool Mergeable = false,
           typename DtypeOverride = void>
 class PtoTile {
 private:
     static constexpr auto size = Std::tuple_size<typename T::Shape>::value;
-    static constexpr auto tileH = GetMergedAxisIfNeed<T, Mergeable>();
-    static constexpr auto tileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
-    static constexpr auto validH = GetValidHeight<T, Mergeable>();
-    static constexpr auto validW = GetValidWidth<T>();
+    static constexpr auto tileH = PtoTileDimConfig<T, Mergeable>::tileH;
+    static constexpr auto tileW = PtoTileDimConfig<T, Mergeable>::tileW;
+    static constexpr auto validH = PtoTileDimConfig<T, Mergeable>::validH;
+    static constexpr auto validW = PtoTileDimConfig<T, Mergeable>::validW;
 
 public:
     using DefaultDtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;

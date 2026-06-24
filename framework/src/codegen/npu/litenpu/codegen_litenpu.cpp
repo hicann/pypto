@@ -86,8 +86,7 @@ std::unordered_map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
     return symbolMap;
 }
 
-void CodeGenLiteNPU::GenCode(
-    Function& topFunc, [[maybe_unused]] const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset)
+void CodeGenLiteNPU::GenCode(Function& topFunc)
 {
     COMPILER_LOGI(
         "Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),
@@ -155,11 +154,8 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
     std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
     FloatSpecValMgr floatSpecValMgr;
-    std::string allocSourceRegion;
-    allocSourceRegion.reserve(CODE_RESERVED_SIZE);
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
-    auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
     for (const auto& op : operationList) {
         CODEGEN_LOGI(
             "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
@@ -168,27 +164,26 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
             continue;
         }
 
-        std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
+        GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
 
         // kirin only supports static function
         topFunc.SetFunctionType(FunctionType::STATIC);
         topFunc.SetUnderDynamicFunction(false);
-        CodeGenOpLiteNPU cop({symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock, false, forBlkMgr});
+        CodeGenOpLiteNPU cop({symbolMgr, topFunc, subFunc, op, ctx.isMainBlock, false, forBlkMgr});
         std::string tileOpSourceCode = cop.GenOpCode();
         ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find(CG_ERROR) == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();
 
-        allocSourceRegion.append(allocSourceCode);
         tileOpSourceRegion.append(tileOpSourceCode);
 
-        if (!allocSourceCode.empty()) {
-            CODEGEN_LOGI(": extra alloc generated(moved up to alloc region): %s", allocSourceCode.c_str());
-        }
         CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
+
     floatSpecValMgr.PrintFloatSpecVal(oss);
-    oss << allocSourceRegion << symbolMgr->GenUsingList() << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
+    symbolMgr->PrintAddrAllocs(oss);
+    symbolMgr->GenUsingList(oss);
+    oss << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
 }
 
 void CodeGenLiteNPU::BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const
@@ -218,7 +213,8 @@ std::string CodeGenLiteNPU::GetCoreArch([[maybe_unused]] const CompileInfo& comp
     }
 }
 
-void CodeGenLiteNPU::BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const
+void CodeGenLiteNPU::BuildExtraOptions(
+    std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo, const std::string& compileOptions) const
 {
     oss << "-mllvm -cce-aicore-jump-expand=true "
         << "-mllvm -cce-aicore-function-stack-size=16384 "

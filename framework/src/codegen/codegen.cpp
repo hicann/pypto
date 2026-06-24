@@ -18,12 +18,12 @@
 #include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
-void CodeGen::GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset)
+void CodeGen::GenCode(Function& topFunc)
 {
     ASSERT(FwkErr::INVALID_FUNCTION, topFunc.rootFunc_ != nullptr) << "rootFunc can not be nullptr";
 
     auto cg = CodeGenFactory::GetCodeGenCCE(ctx_);
-    cg->GenCode(topFunc, invokeParaOffset);
+    cg->GenCode(topFunc);
 }
 
 } // namespace npu::tile_fwk

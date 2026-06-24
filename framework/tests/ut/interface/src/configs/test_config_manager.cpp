@@ -214,11 +214,11 @@ TEST_F(TestConfigManager, GlobalConfig)
     EXPECT_EQ(res_bool, true);
 
     // // add code for coverage, python pybind interface
-    std::map<std::string, Any> config_values = {{"simulation.timeout_threshold", 10}};
+    std::map<std::string, std::any> config_values = {{"simulation.timeout_threshold", 10}};
     ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(config_values), "default", 1);
     ConfigManagerNg::GetInstance().GlobalScope();
 
-    std::map<std::string, Any> empty_values = {};
+    std::map<std::string, std::any> empty_values = {};
     ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(empty_values), "default", 1);
 
     PrintOptions p = config::GetPrintOptions();
@@ -245,7 +245,7 @@ TEST_F(TestConfigManager, JitScopeGuardBasic)
     auto& cm = ConfigManagerNg::GetInstance();
     auto scopeBefore = cm.CurrentScope();
     {
-        ConfigManagerNg::JitScopeGuard guard("jit_scope", std::map<std::string, Any>{});
+        ConfigManagerNg::JitScopeGuard guard("jit_scope", std::map<std::string, std::any>{});
         auto scopeInGuard = cm.CurrentScope();
         EXPECT_NE(scopeInGuard.get(), scopeBefore.get());
         EXPECT_TRUE(scopeInGuard->HasConfig("pass.pg_lower_bound"));
@@ -258,7 +258,7 @@ TEST_F(TestConfigManager, IsWithinRangeInvalidKey)
 {
     auto& cm = ConfigManagerNg::GetInstance();
     auto scope = cm.CurrentScope();
-    Any value = int64_t(100);
+    std::any value = int64_t(100);
     scope->UpdateValueWithAny("invalid.key.not.in.scope", int64_t(100));
     EXPECT_EQ(cm.IsWithinRange("invalid.key.not.in.schema", value), false);
 }

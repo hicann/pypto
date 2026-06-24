@@ -134,6 +134,7 @@ REGISTER_OP("block.store")
     .set_attr<std::string>("relu_pre_mode")
     .set_attr<int>("pre_quant_scalar")
     .set_attr<std::string>("atomic") // "none" or "add"
+    .set_attr<std::string>("phase") // STPhase: "unspecified" / "partial" / "final" — unit_flag for TSTORE
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
         CHECK(args.size() == 3) << "block.store requires 3 arguments, got " << args.size();
@@ -167,7 +168,7 @@ REGISTER_OP("block.store_fp")
         return out_type;
     });
 
-// block.move: (src_tile, out) -> TileType (out's type)
+// block.move: (src_tile, out, [offset]) -> TileType (out's type)
 REGISTER_OP("block.move")
     .set_op_category("BlockOp")
     .set_description(
@@ -175,14 +176,15 @@ REGISTER_OP("block.move")
         "The TMOV variant is determined by the output tile's memory space.")
     .add_argument("src", "Source tile (TileType)")
     .add_argument("out", "Pre-allocated destination tile (TileType)")
+    .add_argument("offset", "Optional 2D offset [offset_m, offset_k] for sub-tile extraction (TupleType)")
     .set_attr<std::string>("acc_to_vec_mode")
     .set_attr<std::string>("relu_pre_mode")
     .set_attr<int>("pre_quant_scalar")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 2) << "The operator block.move requires 2 arguments, but got " << args.size();
-        auto out_type = As<TileType>(args.back()->GetType());
-        CHECK(out_type) << "block.move: last argument (out) must be TileType";
+        CHECK(args.size() == 2 || args.size() == 3) << "The operator block.move requires 2 or 3 arguments, but got " << args.size();
+        auto out_type = As<TileType>(args[1]->GetType());
+        CHECK(out_type) << "block.move: second argument (out) must be TileType";
         return out_type;
     });
 
@@ -236,29 +238,30 @@ REGISTER_OP("block.ub_copy")
         return DeduceBlockOutTileType(args, kwargs, "block.ub_copy", 2);
     });
 
-// block.ssbuf_store: (offset) -> void
+// block.ssbuf_store: (struct_var, offset) -> void
 // Copies raw bytes of a named C++ struct into SSBUF at byte address offset.
+// args[0] is the named-tuple IR Var bound to the struct value; args[1] is the offset.
 REGISTER_OP("block.ssbuf_store")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output SSBUF store: copy a named struct into SSBUF at a byte address offset.")
+    .add_argument("struct_var", "Named-struct IR Var to copy from")
     .add_argument("offset", "SSBUF byte address offset")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 1) << "The operator block.ssbuf_store requires 1 argument (offset), but got "
-                                << args.size();
+        CHECK(args.size() == 2) << "The operator block.ssbuf_store requires 2 arguments (struct_var, offset)";
         return std::make_shared<ScalarType>(DataType::INDEX);
     });
 
-// block.ssbuf_load: (offset) -> void
+// block.ssbuf_load: (struct_var, offset) -> void
 // Copies raw bytes from SSBUF at byte address offset into a named C++ struct.
 REGISTER_OP("block.ssbuf_load")
     .set_op_category("BlockOp")
     .set_description("Block explicit-output SSBUF load: copy SSBUF bytes at a byte address offset into a named struct.")
+    .add_argument("struct_var", "Named-struct IR Var to copy into")
     .add_argument("offset", "SSBUF byte address offset")
     .f_deduce_type([]([[maybe_unused]] const std::vector<ExprPtr>& args,
                       [[maybe_unused]] const std::vector<std::pair<std::string, std::any>>& kwargs) {
-        CHECK(args.size() == 1) << "The operator block.ssbuf_load requires 1 argument (offset), but got "
-                                << args.size();
+        CHECK(args.size() == 2) << "The operator block.ssbuf_load requires 2 arguments (struct_var, offset)";
         return std::make_shared<ScalarType>(DataType::INDEX);
     });
 

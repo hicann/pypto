@@ -17,7 +17,7 @@
 #include "interface/interpreter/flow_verifier.h"
 #include "interface/interpreter/interpreter_log.h"
 #include "interface/configs/config_manager.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 
 #include <chrono>
 #include <cstdio>
@@ -138,7 +138,7 @@ FunctionInterpreter::FunctionInterpreter()
         dumpPath = config::LogTopFolder();
     }
     dumpPath = dumpPath + "/" + "verify_" + MakeVerifyRunTimestampTag() + "/";
-    CreateMultiLevelDir(dumpPath);
+    CreateDir(dumpPath, true);
     interpreter::SetLogFilePath(dumpPath + "interpreter.log");
     const std::string opResultFilePath = dumpPath + "verify_graph_data_metainfo.csv";
     execOpResultFile = fopen(opResultFilePath.c_str(), "w");
@@ -163,7 +163,7 @@ const std::unordered_set<std::string> copyOpCode = {
     "COPY_IN",         "COPY_OUT",        "L1_TO_L0A", "L1_TO_L0B",        "L1_TO_L0At",        "FIX_COPY_IN_QUANT_PRE",
     "L1_TO_L0Bt",      "L0C_COPY_L1",     "L1_TO_BT",  "TRANSPOSE_MOVEIN", "TRANSPOSE_MOVEOUT", "INDEX_OUTCAST",
     "RESHAPE_COPY_IN", "RESHAPE_COPY_OUT", "INDEX_ADD", "SHMEM_PUT", "SHMEM_LOAD", "SHMEM_SET", "SHMEM_SIGNL",
-    "L1_COPY_IN_A_SCALE", "L1_COPY_IN_B_SCALE", "L1_TO_L0A_SCALE", "L1_TO_L0B_SCALE"};
+    "L1_COPY_IN_A_SCALE", "L1_COPY_IN_B_SCALE", "L1_TO_L0A_SCALE", "L1_TO_L0B_SCALE", "L0C_RESHAPE_COPY_OUT"};
 const std::unordered_set<std::string> convertOpCode = {
     "L0C_COPY_UB", "CONVERT", "UB_COPY_ND2NZ", "UB_COPY_L1_ND", "UB_COPY_L1"};
 
@@ -313,7 +313,7 @@ void FunctionInterpreter::DumpTensorBinary(
 std::shared_ptr<LogicalTensorData> FunctionInterpreter::LoadTensorBinary(
     const std::shared_ptr<LogicalTensor>& tensor, const std::string filepath)
 {
-    if (!FileExist(filepath)) {
+    if (!IsPathExist(filepath)) {
         return nullptr;
     }
     std::vector<int64_t> shape = tensor->GetShape();
@@ -540,7 +540,7 @@ void FunctionInterpreter::DumpBegin()
 {
     frameCount = 0;
     execDumpDir = dumpPath + execDumpFuncKey;
-    CreateMultiLevelDir(execDumpDir);
+    CreateDir(execDumpDir, true);
 
     if (execDumpLevel < EXEC_DUMP_LEVEL_OPERATION)
         return;

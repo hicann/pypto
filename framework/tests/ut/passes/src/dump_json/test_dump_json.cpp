@@ -20,7 +20,7 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/serialization.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include <iostream>
 #include <fstream>
 #include <vector>

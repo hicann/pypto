@@ -28,7 +28,20 @@ inline constexpr std::underlying_type_t<T> ToUnderlying(T value)
 // =============================================================================
 // F0XXXX: external limitation
 // =============================================================================
-enum class ExternalError : uint32_t { COMMON_EXTERNAL_ERROR = 0x0FFFFU };
+enum class ExternalError : uint32_t {
+    COMMON_EXTERNAL_ERROR = 0x0FFFFU,
+    INVALID_TYPE = 0x00001U,
+    INVALID_VAL = 0x00002U,
+    RUNTIME_ERROR = 0x00003U,
+    NAME_ERROR = 0x00004U,
+    NOT_IMPLEMENTED_ERROR = 0x00005U,
+    KEY_ERROR = 0x00006U,
+    INVALID_OPERATION = 0x00007U,
+    OUT_OF_RANGE = 0x00008U,
+    BAD_FD = 0x00009U,
+    DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED = 0x0000AU,
+    UNKNOWN = 0x0FFFFU
+};
 
 // =============================================================================
 // F1XXXX-: internal limitation
@@ -128,6 +141,7 @@ enum class CodeGenErrorCategory {
 enum class FwkErr : uint32_t {
     PLATFORM_NOT_SUPPORTED = static_cast<uint32_t>(CodeGenErrorCategory::FRAMEWORK) + 1U,
     INVALID_FUNCTION,
+    TASK_RUN_FAILED
 };
 
 enum class OperErr : uint32_t {
@@ -318,7 +332,8 @@ enum class ServerKernelErr : uint32_t {
 
 enum class ThreadErr : uint32_t {
     SIGNAL_HANDLER_ABNORMAL = static_cast<uint32_t>(MachineError::THREAD_MACHINE) + 0x01U,
-    THREAD_CPU_ALLOC_FAILED = static_cast<uint32_t>(MachineError::THREAD_MACHINE) + 0x03U,
+    THREAD_CPU_ALLOC_FAILED = static_cast<uint32_t>(MachineError::THREAD_MACHINE),
+    THREAD_CPU_WAIT_FINISH_TIMEOUT = static_cast<uint32_t>(MachineError::THREAD_MACHINE),
 };
 
 enum class RtErr : uint32_t {

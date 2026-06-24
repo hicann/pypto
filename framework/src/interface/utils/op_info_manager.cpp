@@ -36,6 +36,9 @@ uint64_t OpInfoManager::GetNewSubTilingKey()
 {
     std::lock_guard<std::mutex> lock(mtx_);
     subTilingKey_++;
+    if (subTilingKey_ > MAIN_KEY_MASK) {
+        subTilingKey_ = 1;
+    }
     uint64_t cur_key = (subTilingKey_ << SUB_KEY_OFFSET) | opTilingKey_;
     return cur_key;
 }
@@ -54,7 +57,7 @@ void OpInfoManager::SetOpType(const std::string& opType)
 
 const std::string& OpInfoManager::GetOpType() const { return opType_; }
 
-std::vector<char>& OpInfoManager::GetControlBuffer() { return controlBuffer_; }
+void OpInfoManager::SetControlBuffer(std::vector<uint8_t>&& buffer) { controlBuffer_ = std::move(buffer); }
 
 std::vector<char>& OpInfoManager::GetCustomJson() { return customJson_; }
 

@@ -19,7 +19,7 @@
 #include <fstream>
 #include <set>
 
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {

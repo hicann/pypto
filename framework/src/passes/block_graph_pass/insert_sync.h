@@ -302,9 +302,9 @@ private:
         // already issued op this round
         std::unordered_map<PipePairEx, size_t, PipePairExHash> currIssueNum;
         // max cv op can be issued this round
-        std::unordered_map<PipePairEx, size_t, PipePairExHash> maxCvIssueNum;
+        std::unordered_map<CorePair, size_t, CorePairHash> maxCvIssueNum;
         // already issued cv op this round
-        std::unordered_map<PipePairEx, size_t, PipePairExHash> currCvIssueNum;
+        std::unordered_map<CorePair, size_t, CorePairHash> currCvIssueNum;
     };
 
     // HandleEventID 辅助结构：封装处理上下文
@@ -337,9 +337,10 @@ private:
     Status AdjustOpDep(DepOp& op, size_t waitOpIdx, IssueQueue& issueQ, bool& failedFlag);
     Status HandleEventID(DepOp& op, IssueQueue& issueQ, IssueNum& issuenum, bool& deadlock, bool& res, std::vector<IndexOp>& syncedOpLog);
     Status ProcessEventIdElement(EventIdProcessContext& ctx);
-    Status ProcessCrossCoreCase(const PipePairEx& pp, const PipePairEx& setwaitPipeType, EventIdProcessContext& ctx);
+    Status ProcessCrossCoreCase(const PipePairEx& pp, const CorePair& setwaitCoreType,
+                                const CorePair& setwaitReverse, EventIdProcessContext& ctx);
     Status ProcessSameCoreCase(const PipePairEx& pp, EventIdProcessContext& ctx);
-    Status RelaxMultipleEventIds(const PipePairEx& setwaitPipeType, size_t needEvIdNum, std::vector<IndexOp>& syncedOpLog);
+    Status RelaxMultipleEventIds(const CorePair& setwaitCoreType, size_t needEvIdNum, std::vector<IndexOp>& syncedOpLog);
     Status PopFromQueue(IssueQueue& issueQ, std::vector<size_t>& poped, bool& deadlock, std::vector<IndexOp>& syncedOpLog);
     Status InjectWaitFlag(Function& function, size_t idx, std::vector<IndexOp>& syncedOpLog);
     Status InjectSetFlag(Function& function, size_t idx, std::vector<IndexOp>& syncedOpLog);
@@ -359,11 +360,11 @@ private:
     Status GetDepInfo(std::vector<IndexOp>& syncedOpLog, const PipePairEx& pipePairEx, DataDepInfo& depInfo);
     Status RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog);
     Status RelaxCvEventId(std::vector<IndexOp>& syncedOpLog);
-    Status RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const PipePairEx& pipePairEx, bool& failedFlag);
+    Status RelaxCvEventIdMain(std::vector<IndexOp>& syncedOpLog, const CorePair& corePair, bool& failedFlag);
     bool HasCvSyncDstAfter(const std::vector<IndexOp>& syncedOpLog, int srcIdx, const Operation& srcOp) const;
     void FillCvDepInfoEntry(std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap,
                             const std::vector<IndexOp>& syncedOpLog, int idx, int eventId);
-    void FindCvSyncSrcInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<int>& eventIdVec, const PipePairEx& pipePairEx,
+    void FindCvSyncSrcInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<int>& eventIdVec, const CorePair& corePair,
                            std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap);
     bool FindMaxOverlapForCV(PipePair& targetPp, int& maxOverlapIdx,
                              std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap);
@@ -388,8 +389,7 @@ private:
     void FindDep(
         DepOp& op, const std::vector<Operation*>& opLogPtr, size_t idx,
         DataDependencySearcher& dataDependencySearcher);
-    void InitCVEventIdQ(const PipePairEx& pp);
-    bool IsValidCrossCorePipePair(const PipePairEx& pp) const;
+    void InitCVEventIdQ(CorePair corePair);
     std::deque<int>& GetFreeEventIdQueue(const PipePairEx& pp);
     int GetSyncSrcLogIdx(const std::vector<IndexOp>& syncedOpLog, int i);
     int GetMaxEventId(const PipePairEx& pp);
@@ -400,13 +400,13 @@ private:
     // Cube: MTE2, MTE1, M, FIX, Vector: MTE2, V, MTE3
     std::vector<IssueQueue> issueState_;
     std::unordered_map<PipePairEx, std::deque<int>, PipePairExHash> freeEventId_;
-    std::unordered_map<PipePairEx, std::deque<int>, PipePairExHash> crossCoreFreeEventId_;
+    std::unordered_map<CorePair, std::deque<int>, CorePairHash> crossCoreFreeEventId_;
     std::unordered_map<std::pair<size_t, size_t>, int, IndexVecHash> setWaitPairMap_;
     std::map<PipeCoreRealEx, PipeDepInfo, PipeCoreRealExCompare> latestPipeDep_;
     static std::map<PipeCoreRealEx, PipeSeq, PipeCoreRealExCompare> pipe2Seq;
     static std::map<PipeSeq, PipeCoreRealEx> seq2pipe;
     static std::vector<PipePair> dataDepPair;
-    static std::vector<PipePairEx> cvPipePairEx;
+    static std::vector<CorePair> cvCorePair;
 
     static constexpr int EVENT_NUM = 8;
     static constexpr int CROSS_CORE_EVENT_NUM = 16;
@@ -416,7 +416,7 @@ private:
     std::queue<size_t> orderedOpList_;
     std::vector<Operation*> oriOpList_;
     std::unordered_map<int, TileRange> ubTensorRangeMap;
-    std::unordered_map<PipePairEx, size_t, PipePairExHash> coreIssueNumMap;
+    std::unordered_map<CorePair, size_t, CorePairHash> coreIssueNumMap;
     IRBuilder irBuilder_;
 };
 

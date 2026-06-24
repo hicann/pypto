@@ -1,12 +1,12 @@
-# PASS 组件错误码说明文档
+# PASS组件错误码说明文档
 
-- 范围：F40000-F44002
+- 范围：F40000-F4FFFF
 - 本文档说明 PASS 组件的错误码定义、场景说明与排查建议。
 - 补充错误码时，可注明关联 Skill（链接至 .agents/skills 下对应技能）。
 
 ## 错误码定义与使用说明
 
-相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（PASS 侧见 TensorErr、OperationErr、FunctionErr、GraphErr、ConfigErr 等）。
+相关错误码的枚举与码值统一定义在`framework/include/tilefwk/error_code.h`（PASS侧见TensorErr、OperationErr、FunctionErr、GraphErr、ConfigErr等）。
 
 ---
 
@@ -16,26 +16,26 @@
 
 #### 排查步骤
 
-**步骤 1：日志落盘**
+**步骤1：日志落盘**
 
 export ASCEND_PROCESS_LOG_PATH=$(pwd)/logs/$(date +%Y%m%d%H%M%S)\
 export ASCEND_GLOBAL_LOG_LEVEL=0
 
-**步骤 2：识别错误码**
+**步骤2：识别错误码**
 
-根据报错信息中的错误码识别问题类别（如 `F40000`、`F41000`）。
+根据报错信息中的错误码识别问题类别（如`F40000`、`F41000`）。
 
-**步骤 3：对照错误码定义**
+**步骤3：对照错误码定义**
 
 根据错误码前缀定位问题归属：
 
-- `F40***` → Tensor 定义或属性问题
-- `F41***` → Operation 定义或连接问题
-- `F42***` → Function 图结构问题
-- `F43***` → Graph 拓扑问题
+- `F40***` → Tensor定义或属性问题
+- `F41***` → Operation定义或连接问题
+- `F42***` → Function图结构问题
+- `F43***` → Graph拓扑问题
 - `F44***` → 配置问题
 
-**步骤 4：定位用户配置**
+**步骤4：定位用户配置**
 
 根据错误码定义中的"行为"描述，定位对应的前端配置项。
 
@@ -43,13 +43,13 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 | 问题类型 | 修复方法 |
 |---------|---------|
-| Tile Shape 超限 | 减小 tile shape 参数值 |
-| Shape 不匹配 | 调整 Tensor shape 或更换 OP |
-| dtype 不支持 | 更换为 OP 支持的 dtype |
-| 空指针 | 确保 Tensor/OP 正确创建和连接 |
-| 边界标记缺失 | 对跨子图 Tensor 设置 boundary 属性 |
+| Tile Shape超限 | 减小tile shape参数值 |
+| Shape不匹配 | 调整Tensor shape或更换OP |
+| dtype不支持 | 更换为OP支持的dtype |
+| 空指针 | 确保Tensor/OP正确创建和连接 |
+| 边界标记缺失 | 对跨子图Tensor设置boundary属性 |
 | 循环依赖 | 修改计算逻辑，消除数据循环 |
-| memType 不合法 | 使用框架支持的内存类型路径 |
+| memType不合法 | 使用框架支持的内存类型路径 |
 
 ---
 
@@ -72,10 +72,10 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 描述：Tensor的内存类型配置不合法或不匹配\
 行为：
 
-- Tensor 的内存类型为无效 / 未定义值
-- Tensor 的内存类型与所在子图 / 计算单元要求不兼容
-- 动态形状 Tensor 使用了不合法的内存类型配置
-- 边界 Tensor 未使用规定的内存类型
+- Tensor的内存类型为无效 / 未定义值
+- Tensor的内存类型与所在子图 / 计算单元要求不兼容
+- 动态形状Tensor使用了不合法的内存类型配置
+- 边界Tensor未使用规定的内存类型
 
 #### F40002 TENSOR_SUBGRAPH_BOUNDARY
 
@@ -105,11 +105,11 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 描述：Tensor的内存分配配置不合法\
 行为：
 
-- 同一内存区域被多个 Tensor 非法重叠占用
+- 同一内存区域被多个Tensor非法重叠占用
 - 内存段划分不合理导致地址越界
-- Tensor 内存大小为0或超出合法分配范围
+- Tensor内存大小为0或超出合法分配范围
 - 动态内存分配属性缺失或配置非法
-- Tensor 内存对齐方式不符合硬件约束
+- Tensor内存对齐方式不符合硬件约束
 
 #### F40006 TENSOR_DYNAMIC_ATTR
 
@@ -244,7 +244,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 - 存在不符合拓扑规范的特殊节点连接方式
 - 子图嵌套结构不符合框架约束
-- Function 内存在不允许的特殊算子组合结构
+- Function内存在不允许的特殊算子组合结构
 
 ---
 
@@ -346,7 +346,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 - 内存类型不匹配
 
-#### F44003 CONFIG_TENSOR_MEMORY_TYPE
+#### F44003 CONFIG_FILE_FAILED
 
 描述：配置文件读取、解析或加载失败 
  行为： 

@@ -19,6 +19,10 @@ file(GLOB_RECURSE _Compiler_Srcs
         compile/*.cpp
         utils/*.cpp)
 
+list(REMOVE_ITEM _Compiler_Srcs
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils/dynamic/dev_encode_program_ctrlflow_cache.cpp
+)
+
 add_library(tile_fwk_compiler SHARED)
 target_sources(tile_fwk_compiler PRIVATE ${_Compiler_Srcs})
 target_include_directories(tile_fwk_compiler

@@ -72,6 +72,8 @@ const std::string BF16_INF_POS = "0x7F80";
 const std::string BF16_INF_NEG = "0xFF80";
 const std::string BF16_NAN = "0x7FC0";
 
+const int INVALID_TENSOR_MAGIC = -1;
+
 // multi input single output
 enum class MISOIdx : unsigned {
     DST_IDX = 0,

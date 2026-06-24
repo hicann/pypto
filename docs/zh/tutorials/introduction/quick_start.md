@@ -21,7 +21,7 @@ Softmax算子实现的example代码位于：[softmax.py](../../../../examples/02
 
 * 使用的主要接口
 
-  基础计算接口：exp，sum，/ (div)，amax， -（sub）
+  基础计算接口：exp，sum，/ (div)，amax，-（sub）
 
 ## 导入PyPTO模块
 
@@ -83,7 +83,7 @@ from numpy.testing import assert_allclose
 
 ## 测试用例
 
-为了验证Softmax算子的正确性，编写一个测试用例。该测试用例使用PyTorch Tensor作为输入，通过PyPTO kernel进行计算，并与PyTorch的内置Softmax函数的结果进行对比。在开始执行PyPTO和PyTorch相关代码之前， 需要指定对应的Device ID，或者通过torch.npu接口获取当前的Device ID。
+为了验证Softmax算子的正确性，编写一个测试用例。该测试用例使用PyTorch Tensor作为输入，通过PyPTO kernel进行计算，并与PyTorch的内置Softmax函数的结果进行对比。在开始执行PyPTO和PyTorch相关代码之前，需要指定对应的Device ID，或者通过torch.npu接口获取当前的Device ID。
 
 ```python
 def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = True) -> None:
@@ -113,7 +113,7 @@ def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = T
 切换到示例代码所在目录，在已安装PyPTO的环境中运行：
 
 ```bash
-# 配置CANN 环境变量
+# 配置CANN环境变量
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 
 # 设置设备ID

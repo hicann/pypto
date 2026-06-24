@@ -42,19 +42,23 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 - 5维：支持：3轴和4轴，其他不支持
 - 无需实际转置的场景直接支持：当dim0和dim1相同，或dim0和dim1对应的输入shape维度均为1时，transpose结果与输入等价，不受前述4维/5维轴组合约束限制。
 
-4.涉及尾轴转置的场景，需要预留一块临时空间，用来搬运。
+4. TileShape尾轴32字节对齐约束（仅无需实际转置的场景）：当transpose判定为无需实际转置、直接返回输入Tensor时（即dim0==dim1，或两轴shape均为1），TileShape的最后一维的字节数必须对齐到32字节（BLOCK_SIZE）。即：`TileShape最后一维元素数 × sizeof(数据类型) % 32 == 0`。
 
-示例：
+    说明：此场景直接返回输入Tensor（`return self`），但后续流程中的TILE_REGISTER_COPY仍会校验TileShape尾轴的32字节对齐。若未满足此约束，将报错：`CHECK FAILED: lastDimBytes % BLOCK_SIZE == 0`。
 
-input : \[a, b, c, d\]  TileShape为\[t0, t1, t2, t3\] 数据类型为DT\_FP32
+5. 涉及尾轴转置的场景，需要预留一块临时空间，用来搬运。
 
-dim0: 2
+    示例：
 
-dim1: 3
+    input : \[a, b, c, d\]  TileShape为\[t0, t1, t2, t3\] 数据类型为DT\_FP32
 
-预留的临时空间为：t0 \* t1 \* align\(t2, 16\) \* align\(t3, 32 / sizeof\(DT\_FP32\)\)
+    dim0: 2
 
-5. Tensor数据类型说明：
+    dim1: 3
+
+    预留的临时空间为：t0 \* t1 \* align\(t2, 16\) \* align\(t3, 32 / sizeof\(DT\_FP32\)\)
+
+6. Tensor数据类型说明：
 - Ascend 950PR/Ascend 950DT：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32, DT_HF8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0。
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32。
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16, DT_BF16, DT_INT8, DT_UINT8, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32。

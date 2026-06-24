@@ -24,6 +24,19 @@ from pypto.error import ParserError, PyptoError, PyptoGeneralError, _catch_and_w
 import pypto.config
 
 
+def test_python_error_codes_are_bound_from_cpp():
+    """Test that Python wrapper error codes are exported from the C++ binding."""
+    assert int(pypto.pypto_impl.ExternalError.RUNTIME_ERROR) == 0x00003
+    assert int(pypto.pypto_impl.ExternalError.NAME_ERROR) == 0x00004
+    assert int(pypto.pypto_impl.ExternalError.NOT_IMPLEMENTED_ERROR) == 0x00005
+    assert int(pypto.pypto_impl.ExternalError.KEY_ERROR) == 0x00006
+    assert int(pypto.pypto_impl.ExternalError.INVALID_OPERATION) == 0x00007
+    assert int(pypto.pypto_impl.ExternalError.INVALID_TYPE) == 0x00001
+    assert int(pypto.pypto_impl.ExternalError.INVALID_VAL) == 0x00002
+    assert int(pypto.pypto_impl.ExternalError.OUT_OF_RANGE) == 0x00008
+    assert int(pypto.pypto_impl.ExternalError.UNKNOWN) == 0x0FFFF
+
+
 def test_varargs_error():
     """Test that variable-length arguments trigger proper error handling."""
     @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
@@ -163,6 +176,35 @@ def test_error_on_first_input_tensor_reassign():
     with pytest.raises(ParserError, match="Input tensor 'a' cannot be reassigned"):
         error_assign_first_input(a, b, c)
 
+
+def test_error_location_on_reshape_dynamic_shape(capsys):
+    """Test that reshape errors report the exact kernel source location."""
+    @pypto.frontend.jit(
+        runtime_options={"run_mode": pypto.RunMode.SIM},
+        host_options={"compile_stage": pypto.CompStage.TENSOR_GRAPH}
+    )
+    def reshape_dynamic_shape_error(
+        a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
+        b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+        c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16),
+    ):
+        pypto.set_vec_tile_shapes(32, 32)
+        pypto.reshape(a, [a.shape[0] * a.shape[1]])
+    
+    a = torch.rand((32, 32), dtype=torch.float16)
+    b = torch.rand((32, 32), dtype=torch.float16)
+    c = torch.zeros((32, 32), dtype=torch.float16)
+    
+    with pytest.raises(ParserError) as exc_info:
+        reshape_dynamic_shape_error(a, b, c)
+
+    captured = capsys.readouterr()
+    diagnostic = captured.out + captured.err
+    expected_lineno = exc_info.value.node.lineno
+    assert "reshape() requires integer shape" in str(exc_info.value)
+    assert f"test_error.py:{expected_lineno}" in diagnostic
+    assert "pypto.reshape(a, [a.shape[0] * a.shape[1]])" in diagnostic
+    assert "^" in diagnostic
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

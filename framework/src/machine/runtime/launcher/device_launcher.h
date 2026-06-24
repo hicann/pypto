@@ -17,6 +17,7 @@
 #define SRC_MACHINE_DEVICE_LAUNCHER_H
 
 #include <cinttypes>
+#include <unordered_map>
 #include "tilefwk/data_type.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -35,6 +36,11 @@
 #include "machine/runtime/launcher/device_launcher_types.h"
 
 namespace npu::tile_fwk::dynamic {
+// 基于 DAV3510 架构硬件约束：aiCpuNum 与 die0MaxCpuid 的固定映射关系
+constexpr uint32_t DAV3510_AICPU_NUM_6 = 6;       // DAV3510 6 个 AICPU 配置
+constexpr uint32_t DAV3510_AICPU_NUM_7 = 7;       // DAV3510 7 个 AICPU 配置
+constexpr uint32_t DAV3510_DIE0_MAX_CPUID_4 = 4;  // 对应 aiCpuNum=6 的 die0 最大 CPU ID
+constexpr uint32_t DAV3510_DIE0_MAX_CPUID_5 = 5;  // 对应 aiCpuNum=7 的 die0 最大 CPU ID
 class DeviceGuard {
 public:
     DeviceGuard(int32_t devId) : nDevId(devId)
@@ -107,7 +113,7 @@ public:
     {
         auto* devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
         devProg->devArgs.launchSchedAicpuNum = config::GetRuntimeOption<uint32_t>(LAUNCH_SCHED_AICPU_NUM);
-        devProg->devArgs.launchSchedSameCluster = config::GetRuntimeOption<int64_t>(LAUNCH_SCHED_SAME_CLUSTER) == 1;
+        devProg->devArgs.launchSchedSameCluster = GetEnvVar("LAUNCH_SCHED_SAME_CLUSTER") == "true";
     }
 
     template <typename DeviceMemoryTy>
@@ -160,6 +166,19 @@ public:
         }
     }
 
+    static uint32_t GetDav3510DieMaxCpuid(uint32_t aiCpuNum)
+    {
+        // DAV3510 架构约束：aiCpuNum 与 die0MaxCpuid 的固定映射关系
+        if (aiCpuNum == DAV3510_AICPU_NUM_6) {
+            return DAV3510_DIE0_MAX_CPUID_4;
+        } else if (aiCpuNum == DAV3510_AICPU_NUM_7) {
+            return DAV3510_DIE0_MAX_CPUID_5;
+        }
+
+        // 默认返回 0：不启用 die 分离机制
+        return 0;
+    }
+
     static void PrepareDevProgArgsCpuInfo(DevAscendProgram* devProg, DeviceLauncherConfig& config)
     {
         uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
@@ -176,13 +195,10 @@ public:
             }
         }
 
-        const uint32_t needChangeAicpuNum = 6; // 6 : need change
-        if (devProg->devArgs.archInfo != ArchInfo::DAV_3510) {
-            devProg->devArgs.maxAicpuNum = aiCpuNum;
-        } else {
-            // 8 : when aiCpuNum is 6, max cpu id is 8 at new driver
-            devProg->devArgs.maxAicpuNum = aiCpuNum == needChangeAicpuNum ? 8 : aiCpuNum;
+        if (devProg->devArgs.archInfo == ArchInfo::DAV_3510) {
+            devProg->devArgs.die0MaxCpuid = GetDav3510DieMaxCpuid(aiCpuNum);
         }
+
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
         config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo, devProg->devArgs.launchSchedSameCluster);
@@ -214,9 +230,7 @@ public:
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {
-            MACHINE_LOGE(
-                DevCommonErr::PARAM_CHECK_FAILED, "[Deprecated] User provided dynamic workspace: %" PRId64,
-                config.dynWorkspaceSize);
+            MACHINE_LOGW("[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
             devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = std::max(
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
@@ -236,6 +250,19 @@ public:
             "[workspaceSize] Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
             devProg->memBudget.tensor.rootInner, devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts,
             devProg->memBudget.tensor.MaxOutcastMem(), devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
+    }
+
+    static void FillSwimLaneEnableInfo(ToSubMachineConfig &toSubMachineConfig) {
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_FUNC, false)) {
+            toSubMachineConfig.profConfig.Add(ProfConfig::AICPU_FUNC);
+        }
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) ||
+            config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+            toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_TIME);
+        }
+        if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {
+            toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
+        }
     }
 
     // Fill metadata and kArgs (templated because it uses DeviceMemoryTy) (keeps <= 50 lines)
@@ -266,19 +293,21 @@ public:
                 (int64_t*)devMem.CopyToDev(devProgData, CachedOperator::GetCfgDataDevAddrHolder(cachedOperator));
         }
         kArgs.machineConfig = devProg->devArgs.machineConfig;
-        if (!IsCaptureMode()) {
-            if (config::GetPlatformConfig(KEY_ENABLE_PROF_FUNC, false)) {
-                kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICPU_FUNC);
-            }
-            if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_TIME, false) ||
-                config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
-                kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_TIME);
-            }
-            if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {
-                kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
-            }
-        }
-        devProg->devArgs.toSubMachineConfig = kArgs.toSubMachineConfig;
+    }
+
+    template <typename DeviceMemoryTy>
+    static void FillDeviceKernelArgs(
+        DeviceMemoryTy& memUtils, std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs,
+        const std::vector<std::string>& groupNames)
+    {
+        DeviceLauncherConfig config;
+        CachedOperator cache;
+        DeviceLauncherConfigFillDeviceInfo(config);
+        DeviceInitLauncherConfigForUser(devProgData);
+        // KernelBinary init only; workspace is allocated per launch via module.alloc() (torch on NPU).
+        config.workspaceAllocByTorch = true;
+        DeviceInitTilingData(memUtils, kargs, devProgData, nullptr, config, &cache);
+        DeviceInitDistributedContext(memUtils, groupNames, kargs);
     }
 
     template <typename DeviceMemoryTy>
@@ -451,8 +480,6 @@ public:
         DevControlFlowCache* ctrlCache = nullptr, const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
     static int DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStream);
-    static void FillDeviceKernelArgs(
-        std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames);
     static uint8_t* CopyControlFlowCache(DevControlFlowCache* ctrlCache);
     static void FreeControlFlowCache(uint8_t* ctrlCache);
     static bool IsCaptureMode();

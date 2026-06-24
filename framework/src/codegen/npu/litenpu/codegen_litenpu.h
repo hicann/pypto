@@ -44,7 +44,7 @@ public:
     explicit CodeGenLiteNPU(const CodeGenCtx& cgCtx) : CodeGenNPU(cgCtx){};
     ~CodeGenLiteNPU() override = default;
 
-    void GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset) override;
+    void GenCode(Function& topFunc) override;
 
 private:
     void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) override;
@@ -53,7 +53,8 @@ private:
 
     std::string GetCoreArch(const CompileInfo& compileInfo) const override;
 
-    void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const override;
+    void BuildExtraOptions(
+        std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const override;
 
     void BuildIncludes(std::ostringstream& oss) const override;
 

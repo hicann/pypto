@@ -61,33 +61,37 @@ void DynPvModelImpl::RunModel(PvModelCceBin* cce, DynFuncData* funcdata, uint64_
     this->subcoreId_ = binName.find("aiv") != std::string::npos ? static_cast<uint64_t>(1) : static_cast<uint64_t>(0);
     uint32_t binAddr = 0xffffc000;
     pv_launch_sub_core_(binAddr, cce->binPath.c_str(), subcoreId_, coreId_);
-    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PC, reinterpret_cast<uint8_t*>(&binAddr), subcoreId_, coreId_);
-    
-    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata), sizeof(DynFuncData),
-                  reinterpret_cast<uint8_t*>(funcdata), subcoreId_, coreId_);
-    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->opAttrs), funcdata->opAttrSize * sizeof(uint64_t),
-                  reinterpret_cast<uint8_t*>(funcdata->opAttrs), subcoreId_, coreId_);
-    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->exprTbl), funcdata->exprNum * sizeof(uint64_t),
-                  reinterpret_cast<uint8_t*>(funcdata->exprTbl), subcoreId_, coreId_);
-    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->rawTensorDesc),
-                  funcdata->rawTensorDescSize * sizeof(DevRawTensorDesc),
-                  reinterpret_cast<uint8_t*>(funcdata->rawTensorDesc), subcoreId_, coreId_);
-    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->rawTensorAddr),
-                  funcdata->rawTensorAddrSize * sizeof(uint64_t),
-                  reinterpret_cast<uint8_t*>(funcdata->rawTensorAddr), subcoreId_, coreId_);
-    
+    pv_reg_write_(
+        static_cast<uint32_t>(PV_REG_SPR), PV_REG_PC, reinterpret_cast<uint8_t*>(&binAddr), subcoreId_, coreId_);
+
+    pv_mem_write_(
+        PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata), sizeof(DynFuncData), reinterpret_cast<uint8_t*>(funcdata),
+        subcoreId_, coreId_);
+    pv_mem_write_(
+        PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata->opAttrs), funcdata->opAttrSize * sizeof(uint64_t),
+        reinterpret_cast<uint8_t*>(funcdata->opAttrs), subcoreId_, coreId_);
+    pv_mem_write_(
+        PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata->exprTbl), funcdata->exprNum * sizeof(uint64_t),
+        reinterpret_cast<uint8_t*>(funcdata->exprTbl), subcoreId_, coreId_);
+    pv_mem_write_(
+        PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata->rawTensorDesc),
+        funcdata->rawTensorDescSize * sizeof(DevRawTensorDesc), reinterpret_cast<uint8_t*>(funcdata->rawTensorDesc),
+        subcoreId_, coreId_);
+    pv_mem_write_(
+        PV_MEM_GM, reinterpret_cast<uint64_t>(funcdata->rawTensorAddr), funcdata->rawTensorAddrSize * sizeof(uint64_t),
+        reinterpret_cast<uint8_t*>(funcdata->rawTensorAddr), subcoreId_, coreId_);
+
     std::vector<uint64_t> paraArgs;
     paraArgs.push_back(reinterpret_cast<uint64_t>(funcdata));
-    pv_mem_write_(0, reinterpret_cast<uint64_t>(opAttrs), sizeof(uint64_t),
-                  reinterpret_cast<uint8_t*>(opAttrs), subcoreId_, coreId_);
+    pv_mem_write_(
+        PV_MEM_GM, reinterpret_cast<uint64_t>(opAttrs), sizeof(uint64_t), reinterpret_cast<uint8_t*>(opAttrs),
+        subcoreId_, coreId_);
     paraArgs.push_back(reinterpret_cast<uint64_t>(opAttrs));
-    pv_mem_write_(0, HBM_PARA_BASE, paraArgs.size() * sizeof(uint64_t),
-                  reinterpret_cast<uint8_t*>(paraArgs.data()), subcoreId_, coreId_);
-    
-    step_status_t stepStatus = static_cast<step_status_t>(pv_step_(PV_STEP_PIPE_ID, subcoreId_, coreId_, 0));
-    while (stepStatus != step_status_t::END && stepStatus != step_status_t::TIME_OUT) {
-        stepStatus = static_cast<step_status_t>(pv_step_(PV_STEP_PIPE_ID, subcoreId_, coreId_, 0));
-    }
+    pv_mem_write_(
+        PV_MEM_GM, HBM_PARA_BASE, paraArgs.size() * sizeof(uint64_t), reinterpret_cast<uint8_t*>(paraArgs.data()),
+        subcoreId_, coreId_);
+
+    pv_step_(PV_STEP_PIPE_ID, subcoreId_, coreId_, 0);
 }
 
 extern "C" std::shared_ptr<DynPvModel> CreateDynPvModelImpl() { return std::make_shared<DynPvModelImpl>(); }

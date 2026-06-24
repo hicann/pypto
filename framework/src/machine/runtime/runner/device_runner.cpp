@@ -26,7 +26,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "interface/configs/config_manager.h"
 #include "interface/machine/host/host_machine.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "machine/runtime/runner/runtime_agent.h"
 #include "machine/runtime/runner/runtime_utils.h"
 #include "machine/runtime/context/stream_context.h"
@@ -245,12 +245,12 @@ int DeviceRunner::InitDeviceArgs(DeviceArgs& args)
     args.deviceId = GetLogDeviceId();
     args.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
     uint32_t aicpuNum = args.archInfo == ArchInfo::DAV_3510 ? dynamic::DEVICE_MAX_AICPU_NUM : 5;
-    args.maxAicpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
+    uint32_t maxAicpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
     args.nrValidAic = GetCfgBlockdim();
-    args.nrAicpu = std::min(aicpuNum, args.maxAicpuNum);
+    args.nrAicpu = std::min(aicpuNum, maxAicpuNum);
     args.scheCpuNum = dynamic::CalcSchAicpuNumByBlockDim(args.nrValidAic, args.nrAicpu, args.archInfo);
     MACHINE_LOGD("DevArgs: block dim[%u], aicpu num[%u], max aicpu num[%u], sche cpu num[%u].",
-        args.nrValidAic, args.nrAicpu, args.maxAicpuNum, args.scheCpuNum);
+        args.nrValidAic, args.nrAicpu, maxAicpuNum, args.scheCpuNum);
 
     InitAiCpuSoBin(args);
 
@@ -320,9 +320,9 @@ int DeviceRunner::LaunchDynamicAiCpu(RtStream aicpuStream, uint32_t aicpuNum, De
 
 void DeviceRunner::InitAiCpuSoBin(DeviceArgs& devArgs)
 {
-    std::vector<char> buffer;
-    std::string fileName = GetCurrentSharedLibPath() + "/libtilefwk_backend_server.so";
-    if (!ReadBytesFromFile(fileName, buffer)) {
+    std::string fileName = GetPyptoLibPath() + "/libtilefwk_backend_server.so";
+    auto buffer = ReadFile(fileName);
+    if (buffer.empty()) {
         MACHINE_LOGE(
             DevCommonErr::FILE_ERROR, "Read bin form tilefwk_backend_server.so failed, please check the so[%s]",
             fileName.c_str());
@@ -527,7 +527,7 @@ int DeviceRunner::DynamicRun(const KernelLaunchInfo &launchInfo, DeviceKernelArg
 int DeviceRunner::Init()
 {
     std::string builtInOpPath = config::LogTopFolder() + "/built_in";
-    CreateMultiLevelDir(builtInOpPath);
+    CreateDir(builtInOpPath, true);
     LoadAicpuOp::GetInstance().GenBuiltInOpInfo(builtInOpPath);
     if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle() != 0) {
         MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Get builtInOp Funchandle failed\n");
@@ -548,10 +548,9 @@ int DeviceRunner::Init()
     }
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
         LaunchAicpuServerInit(devArgsAddr);
+        devicePerf_.InitAndStartDumpThread(args_);
+        npu::tile_fwk::dynamic::AdumpRegExceptionDump();
     }
-
-    devicePerf_.InitAndStartDumpThread(args_);
-    npu::tile_fwk::dynamic::AdumpRegExceptionDump();
     return 0;
 }
 } // namespace npu::tile_fwk

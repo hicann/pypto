@@ -65,7 +65,7 @@ void TestScatterUpdate(std::vector<int64_t> tileShape)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 TEST_F(TestCodegenScatterUpdate, TestScatterupdateDim2) { TestScatterUpdate({16, 32}); }
@@ -95,7 +95,7 @@ TEST_F(TestCodegenScatterUpdate, TestBatchMatmul)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 TEST_F(TestCodegenScatterUpdate, TestScatterUpdate)
@@ -123,6 +123,6 @@ TEST_F(TestCodegenScatterUpdate, TestScatterUpdate)
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 } // namespace npu::tile_fwk

@@ -12,8 +12,8 @@
 
 该算子执行转置批量矩阵乘法。具体操作为：
 
-1. 将输入张量 `tensor_a` 从形状(M, B, K)转置为(B, M, K)。
-2. 执行批量矩阵乘法，将转置后的 `tensor_a` (B, M, K)与 `tensor_b` (B, K, N)相乘，得到中间结果(B, M, N)。
+1. 将输入张量`tensor_a`从形状(M, B, K)转置为(B, M, K)。
+2. 执行批量矩阵乘法，将转置后的`tensor_a` (B, M, K)与`tensor_b` (B, K, N)相乘，得到中间结果(B, M, N)。
 3. 将中间结果转置回形状(M, B, N)作为最终输出。
 
 ## 函数原型
@@ -32,7 +32,7 @@ transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype: dtype) -> 
 
 ## 返回值说明
 
-返回输出Tensor，Tensor的数据类型由 `out_dtype` 指定，形状为(M, B, N)。
+返回输出Tensor，Tensor的数据类型由`out_dtype`指定，形状为(M, B, N)。
 
 ## 调用示例
 

@@ -17,6 +17,7 @@
 
 #include <array>
 #include <sstream>
+#include <tuple>
 
 #include "tilefwk/tensor.h"
 #include "tilefwk/element.h"
@@ -160,7 +161,9 @@ Tensor Full(
     const SymbolicScalar& src, DataType dtype, const std::vector<int64_t>& dstShape,
     std::vector<SymbolicScalar> validShape = {});
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
-Tensor TransData(const Tensor& self, TileOpFormat transDataType, int group = 1);
+Tensor TransData(
+    const Tensor& self, TileOpFormat transDataType, const std::vector<int64_t>& outputShape,
+    const std::vector<SymbolicScalar>& validShape, int group = 1);
 std::shared_ptr<LogicalTensor> TransData(
     Function& function, const std::shared_ptr<LogicalTensor>& self, const std::shared_ptr<LogicalTensor>& fakeDstTensor, TileOpFormat transDataType, int group = 1);
 Tensor Cast(
@@ -250,6 +253,10 @@ Tensor ArgMax(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor ArgMin(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor Amin(const Tensor& self, int axis = -1, bool keepDim = false);
 Tensor Prod(const Tensor& self, int axis = -1, bool keepDim = false);
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmax(const Tensor& scores, float scale);
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(
+    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
+    const Tensor& currentSum, const Tensor& currentOutput);
 
 Tensor Compact(const Tensor& operand);
 
@@ -602,12 +609,6 @@ Tensor Conv(
     const ConvExtendParam& extendParam, const int64_t groups = 1);
 
 } // namespace Conv
-
-namespace FakeTrans {
-
-Tensor FakeTrans(const Tensor& input, const Tensor& output);
-
-} // namespace FakeTrans
 
 namespace Distributed {
 enum class DistReduceType {

@@ -115,9 +115,7 @@ std::string CodeGenOpNPU::PrintGatherDynamicUnaligned(const PrintGatherParam& pa
     paramList.emplace_back(dst);
     paramList.emplace_back(src0);
     paramList.emplace_back(src1);
-    for (int i = 0; i < SHAPE_DIM4; i++) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynIndexShape[i]));
-    }
+    FillParamWithFullInput(paramList, dynIndexShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -226,9 +224,7 @@ std::string CodeGenOpNPU::PrintGatherElementDynamicUnaligned(const PrintGatherEl
     paramList.insert(paramList.end(), {dst, src0, src1});
     auto dstValidShape = dynamicValidShape[ID0];
     FillVecWithDummyInHead<SymbolicScalar>(dstValidShape, SHAPE_DIM4 - dstValidShape.size(), 1);
-    for (int i = 0; i < SHAPE_DIM4; i++) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstValidShape[i]));
-    }
+    FillParamWithInput(paramList, dstValidShape, 0, SHAPE_DIM4);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "<" << templateParam << ">"
         << "(" << tiloOpCallParam << ");\n";
@@ -269,7 +265,7 @@ std::string CodeGenOpNPU::GenGatherElementOp() const
     const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src0DtypeStr, src1DtypeStr};
     int gatherEleAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "axis");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         gatherEleAxis = AnyCast<int64_t>(axis);
     }
     if (isSupportLayout) {
@@ -371,9 +367,7 @@ std::string CodeGenOpNPU::PrintScatterElementSOpDynamicUnaligned(const PrintScat
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC1_IDX)] + "*)" + src1Var);
     std::string scalarTmpBuffer = FormatFloat(scala.Cast<float>());
     callParams.emplace_back("(" + scalarDtypeBuffer + ")" + scalarTmpBuffer);
-    for (size_t i = 0; i < SHAPE_DIM4; ++i) {
-        callParams.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrc1Shape[i]));
-    }
+    FillParamWithInput(callParams, dynSrc1Shape, 0, SHAPE_DIM4);
     std::string callParamStr = JoinString(callParams, ", ");
 
     std::ostringstream oss;
@@ -470,9 +464,7 @@ std::string CodeGenOpNPU::PrintScatterOpDynamicUnaligned(const PrintScatterParam
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ID0] + "*)" + dstVar);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ID1] + "*)" + src1Var);
     callParams.emplace_back("(__ubuf__ " + dataTypeExpr[ID2] + "*)" + src2Var);
-    for (size_t i = 0; i < SHAPE_DIM4; ++i) {
-        callParams.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrc1Shape[i]));
-    }
+    FillParamWithFullInput(callParams, dynSrc1Shape);
     std::string callParamStr = JoinString(callParams, ", ");
 
     std::ostringstream oss;

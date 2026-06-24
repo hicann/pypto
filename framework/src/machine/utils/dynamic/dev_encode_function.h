@@ -99,7 +99,11 @@ public:
 
     uint32_t GetMaxC() const { return maxC_; }
     uint32_t GetMaxV() const { return maxV_; }
-    void SetMaxCV(uint32_t maxC, uint32_t maxV) { maxC_ = maxC; maxV_ = maxV; }
+    void SetMaxCV(uint32_t maxC, uint32_t maxV)
+    {
+        maxC_ = maxC;
+        maxV_ = maxV;
+    }
 
 private:
     DevLocalVector<int> opWrapList_;
@@ -132,6 +136,7 @@ private:
 #define sharedLastField rawName_
     uint32_t maxC_{0};
     uint32_t maxV_{0};
+
 public:
     uint8_t data[0];
     /*
@@ -299,7 +304,8 @@ public:
     inline size_t GetOperationSize() const { return operationList_.size(); }
     inline bool IsDeadEndHub(uint32_t opIndex) const
     {
-        if (deadEndHubBitmap_.size() == 0) return false;
+        if (deadEndHubBitmap_.size() == 0)
+            return false;
         uint32_t wordIdx = opIndex / 64;
         return (At(deadEndHubBitmap_, wordIdx) & (1ULL << (opIndex % 64))) != 0;
     }
@@ -321,7 +327,8 @@ public:
     }
     inline bool ClearDeadEndHub(uint32_t opIndex)
     {
-        if (deadEndHubBitmap_.size() == 0) return false;
+        if (deadEndHubBitmap_.size() == 0)
+            return false;
         uint32_t wordIdx = opIndex / 64;
         uint64_t bit = 1ULL << (opIndex % 64);
         auto& word = At(deadEndHubBitmap_, wordIdx);
@@ -343,7 +350,8 @@ public:
                 size_t succSize;
                 const int* succList = GetOperationDepGraphSuccAddr(static_cast<int>(op), succSize);
                 for (size_t j = 0; j < succSize; j++) {
-                    if (static_cast<uint32_t>(succList[j]) != target) continue;
+                    if (static_cast<uint32_t>(succList[j]) != target)
+                        continue;
                     ClearTailTask(static_cast<uint32_t>(op));
                     if (ClearDeadEndHub(static_cast<uint32_t>(op)) && stackSize < kMaxStack) {
                         stack[stackSize++] = static_cast<uint32_t>(op);
@@ -484,71 +492,17 @@ public:
     inline const int& GetRedaccAssembleSlotList(int index) const { return At(redaccAssembleSlotList_, index); }
     inline int& GetRedaccAssembleSlotList(int index) { return At(redaccAssembleSlotList_, index); }
 
-    int LookupIncastBySlotIndex(int slotIndex) const
-    {
-        for (size_t incastIndex = 0; incastIndex < GetIncastSize(); incastIndex++) {
-            const DevAscendFunctionIncast& incast = GetIncast(incastIndex);
-            for (size_t fromIndex = 0; fromIndex < incast.fromSlotList.size(); fromIndex++) {
-                int slot = At(incast.fromSlotList, fromIndex);
-                if (slot == slotIndex) {
-                    return static_cast<int>(incastIndex);
-                }
-            }
-        }
-        return INVALID_INDEX;
-    }
-    std::vector<int> LookupIncastBySlotIndexList(const std::vector<int>& slotIndexList) const
-    {
-        std::vector<int> resultList(slotIndexList.size());
-        for (size_t i = 0; i < slotIndexList.size(); i++) {
-            resultList[i] = LookupIncastBySlotIndex(slotIndexList[i]);
-        }
-        return resultList;
-    }
+    int LookupIncastBySlotIndex(int slotIndex) const;
+    std::vector<int> LookupIncastBySlotIndexList(const std::vector<int>& slotIndexList) const;
 
-    int LookupOutcastBySlotIndex(int slotIndex) const
-    {
-        for (size_t outcastIndex = 0; outcastIndex < GetOutcastSize(); outcastIndex++) {
-            const DevAscendFunctionOutcast& outcast = GetOutcast(outcastIndex);
-            for (size_t toIndex = 0; toIndex < outcast.toSlotList.size(); toIndex++) {
-                int slot = At(outcast.toSlotList, toIndex);
-                if (slot == slotIndex) {
-                    return static_cast<int>(outcastIndex);
-                }
-            }
-        }
-        return INVALID_INDEX;
-    }
-    std::vector<int> LookupOutcastBySlotIndexList(const std::vector<int>& slotIndexList) const
-    {
-        std::vector<int> resultList(slotIndexList.size());
-        for (size_t i = 0; i < slotIndexList.size(); i++) {
-            resultList[i] = LookupOutcastBySlotIndex(slotIndexList[i]);
-        }
-        return resultList;
-    }
+    int LookupOutcastBySlotIndex(int slotIndex) const;
+    std::vector<int> LookupOutcastBySlotIndexList(const std::vector<int>& slotIndexList) const;
 
-    std::vector<std::tuple<int, int, int>> LookupConnectionSlotIndexFrom(const DevAscendFunction* func) const
-    {
-        std::vector<std::tuple<int, int, int>> connectionList;
-        for (size_t incastIndex = 0; incastIndex < GetIncastSize(); incastIndex++) {
-            const DevAscendFunctionIncast& incast = GetIncast(incastIndex);
-            for (size_t fromIndex = 0; fromIndex < incast.fromSlotList.size(); fromIndex++) {
-                int fromSlot = At(incast.fromSlotList, fromIndex);
+    std::vector<std::tuple<int, int, int>> LookupConnectionSlotIndexFrom(const DevAscendFunction* func) const;
 
-                for (size_t outcastIndex = 0; outcastIndex < func->GetOutcastSize(); outcastIndex++) {
-                    const DevAscendFunctionOutcast& outcast = func->GetOutcast(outcastIndex);
-                    for (size_t toIndex = 0; toIndex < outcast.toSlotList.size(); toIndex++) {
-                        int toSlot = func->At(outcast.toSlotList, toIndex);
-                        if (fromSlot == toSlot) {
-                            connectionList.push_back(std::tuple(outcastIndex, incastIndex, fromSlot));
-                        }
-                    }
-                }
-            }
-        }
-        return connectionList;
-    }
+    void AppendOutcastConnections(
+        std::vector<std::tuple<int, int, int>>& connectionList, int fromSlot, int incastIndex,
+        const DevAscendFunction* func) const;
 
     inline const DevAscendRawTensor* GetOutcastRawTensor(int index) const
     {
@@ -617,9 +571,8 @@ private:
         const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
         const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& stitchIndexList, const std::vector<int>& noPredOpList,
-        const std::vector<int>& noSuccOpList,
+        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
+        const std::vector<int>& noPredOpList, const std::vector<int>& noSuccOpList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent);
     void InitOperationNoPredNoSuccIndices(
         uintdevptr_t& initOffset, const OrderedSet<Operation*>& callList,
@@ -635,23 +588,20 @@ private:
         const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
         const std::unordered_map<Operation*, uint64_t>& callOpPredDict,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& stitchIndexList,
+        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict, bool fillContent);
     void PopulateOperationEncodedContent(
         const SymbolicExpressionTable* expressionTable, const OrderedSet<Operation*>& callList,
         const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist, const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& stitchIndexList,
+        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList,
         const std::unordered_map<Operation*, std::vector<int>>& copyOutResolveSuccIndexListDict,
         DevAscendFunctionDuppedData* dupData);
     void PopulateOneEncodedOpOperandsAndAttrs(
         size_t index, int& operanSize, int& staticAttributeSize, const SymbolicExpressionTable* expressionTable,
         const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
         const OrderedSet<std::shared_ptr<RawTensor>>& rawList,
-        const std::unordered_map<uint64_t, int>& calleeHashIndexDict,
-        const std::vector<int32_t>& stitchIndexList);
+        const std::unordered_map<uint64_t, int>& calleeHashIndexDict, const std::vector<int32_t>& stitchIndexList);
     void PopulateOneEncodedOpGraphEdges(
         size_t index, int& sucSize, int& copyOutResolveSuccIdxSize, const OrderedSet<Operation*>& callList,
         const std::unordered_map<Operation*, OrderedSet<Operation*>>& callOpSuccDict,
@@ -668,5 +618,15 @@ private:
         const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& incastOpAttrDict,
         const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& outcastOpAttrDict,
         const EncodeDevAscendFunctionParam& param, const std::string& initRawName, bool fillContent);
+
+    void FillIncastUseList(
+        DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
+        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent);
+
+    void FillOutcastUseList(
+        DevLocalVector<DevAscendFunctionCallOperandUse>& useList, uint64_t& useSize,
+        const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+        const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict, bool fillContent);
 };
 } // namespace npu::tile_fwk::dynamic

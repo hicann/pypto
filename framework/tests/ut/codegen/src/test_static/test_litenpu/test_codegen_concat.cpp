@@ -45,7 +45,7 @@ void TestCodeGenConcat::test_concat_001()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_001");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_002()
@@ -67,7 +67,7 @@ void TestCodeGenConcat::test_concat_002()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_002");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_003()
@@ -90,7 +90,7 @@ void TestCodeGenConcat::test_concat_003()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_003");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_004()
@@ -113,7 +113,7 @@ void TestCodeGenConcat::test_concat_004()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_004");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_005()
@@ -135,7 +135,7 @@ void TestCodeGenConcat::test_concat_005()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_005");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_006()
@@ -157,7 +157,7 @@ void TestCodeGenConcat::test_concat_006()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_006");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_007()
@@ -179,7 +179,7 @@ void TestCodeGenConcat::test_concat_007()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_007");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_008()
@@ -202,7 +202,7 @@ void TestCodeGenConcat::test_concat_008()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_008");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_009()
@@ -224,7 +224,7 @@ void TestCodeGenConcat::test_concat_009()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_009");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_010()
@@ -246,7 +246,7 @@ void TestCodeGenConcat::test_concat_010()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_010");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_011()
@@ -268,7 +268,7 @@ void TestCodeGenConcat::test_concat_011()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_011");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_012()
@@ -290,7 +290,7 @@ void TestCodeGenConcat::test_concat_012()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_012");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_013()
@@ -313,7 +313,7 @@ void TestCodeGenConcat::test_concat_013()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_013");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_014()
@@ -336,7 +336,7 @@ void TestCodeGenConcat::test_concat_014()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_014");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_015()
@@ -359,7 +359,7 @@ void TestCodeGenConcat::test_concat_015()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_015");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 void TestCodeGenConcat::test_concat_016()
@@ -383,5 +383,5 @@ void TestCodeGenConcat::test_concat_016()
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "CONCAT_016");
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenLiteNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }

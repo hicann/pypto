@@ -28,7 +28,7 @@
 | `pypto-op-debugger` | Stage 5 失败时的根因调查与补丁建议 | Stage 5 (按需) |
 | `pypto-op-optimizer` | 三阶段性能调优（frontend / swimlane / incore） | Stage 7 |
 
-> **完整操作手册**：参见 [skill `pypto-orchestration-manual` (SKILL.md auto-loads)](.agents/skills/pypto-orchestration-manual/SKILL.md) 及其 `references/` 子目录（principles / agents / agent-plan / rules / catalog）。
+> **完整操作手册**：参见 [skill `pypto-orchestration-manual` (SKILL.md auto-loads)](.agents/skills/pypto-orchestration-manual/SKILL.md) 及其 `references/` 子目录（principles / agents / rules / catalog）。
 
 ### Stage 1–7 工作流概览
 
@@ -65,7 +65,7 @@ for M_k in [M1, M12, M123, …, M123…N]:
 
 ### 编排与共享状态
 
-- `pypto-orchestration-manual`：orchestrator 入口；包含 principles / agents / agent-plan / rules / catalog 五份控制文档（progressive disclosure）
+- `pypto-orchestration-manual`：orchestrator 入口；包含 principles / agents / rules / catalog 四份控制文档（progressive disclosure）
 - `pypto-memory-template`：`custom/<op>/MEMORY.md` 模板（共享叙事日志）
 
 ### Stage 1–4：规划与设计
@@ -93,6 +93,7 @@ for M_k in [M1, M12, M123, …, M123…N]:
 
 ### 调试与精度定位
 
+- `pypto-op-knowledge`：知识库查询（经验表 + 问题查找表）；包含 `experience_classified/` 8 类历史反模式、`experience_preflight.md` 预检指南
 - `pypto-general-debug`：debug router；包含 `DEBUG_GUIDEBOOK.md` §1–§9 故障排查 playbook；tile shape / L0/L1 / alignment / `set_cube_tile_shapes` 问题由 `DEBUG_GUIDEBOOK.md` 路由到 `references/tile-shapes.md`
 - `pypto-precision-debug`：精度问题定位与修复
 - `pypto-precision-compare`：精度对比与二分定位
@@ -200,7 +201,7 @@ for M_k in [M1, M12, M123, …, M123…N]:
 |---|---|
 | 开始一个新算子 | `pypto-op-orchestrator`（自动从 Stage 1 引导） |
 | 了解整体编排逻辑 | skill `pypto-orchestration-manual` (SKILL.md auto-loads) |
-| 查看某个 Stage 的步骤 | skill `pypto-orchestration-manual`'s `references/agent-plan.md` |
+| 查看某个 Stage 的产出/门禁/交接 | skill `pypto-orchestration-manual`'s `references/agents.md` |
 | 查看 lint 规则 | `.agents/hooks/pypto-op-lint/rules.json` |
 | 查看 kernel 编码规范 | skill `pypto-op-develop`'s `references/pypto-kernel-design-format.md` |
 | 查看 MEMORY.md / state.json 字段 | skill `pypto-memory-template`'s `templates/MEMORY.template.md` 与 `.opencode/plugins/lib/state-transition-core.ts` |

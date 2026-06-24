@@ -380,11 +380,10 @@ def test_conv2d_dynamic_hout():
     def conv2d_dynamic_hout_kernel(
         input_a: pypto.Tensor([1, 16, pypto.DYNAMIC, 34]),
         input_b: pypto.Tensor([64, 16, 3, 3]),
-        output_c: pypto.Tensor([1, 64, pypto.DYNAMIC, 32]),
-        params):
-        hin = params["hin"]
-        ho = params["ho"]
-        tile_hout = pypto.symbolic_scalar(8)
+        output_c: pypto.Tensor([1, 64, pypto.DYNAMIC, 32])):
+        hin = input_a.shape[2]
+        ho = output_c.shape[2]
+        tile_hout = 8
         hout_loop = (ho + tile_hout - 1) // tile_hout
         tile_hin = tile_hout + 2  # stride=1, kernel=3
 
@@ -413,15 +412,90 @@ def test_conv2d_dynamic_hout():
             hin_offset = hout_idx * tile_hout
             hin_current = (hin - hin_offset).min(tile_hin)
             input_a_view = pypto.view(input_a, [1, 16, tile_hin, 34], [0, 0, hin_offset, 0],
-                                       valid_shape=[1, 16, hin_current, 32])
+                                       valid_shape=[1, 16, hin_current, 34])
             out = pypto.conv(
                 input_a_view, input_b, dtype, [stride, stride],
                 [pad, pad, pad, pad], [dilation, dilation], extend_params={}, groups=1
             )
             pypto.assemble(out, [0, 0, hout_offset, 0], output_c)
 
-    params = {"hin": 34, "ho": 32}
-    conv2d_dynamic_hout_kernel(a, b, c_out, params)
+    conv2d_dynamic_hout_kernel(a, b, c_out)
+
+    golden = torch.nn.functional.conv2d(
+        a, b, stride=(stride, stride), padding=(pad, pad),
+        dilation=(dilation, dilation), groups=1
+    )
+    assert torch.allclose(c_out.cpu().to(dtype_torch), golden.cpu().to(dtype_torch), atol=1e-3, rtol=1e-3)
+
+
+@pytest.mark.soc("950")
+def test_conv2d_dynamic_tail():
+    """Conv2D dynamic hout axis with pad=0 (constraint), stride=1, dilation=1, dtype=FP32, with tail tensor"""
+    dtype = pypto.DT_FP32
+    dtype_torch = torch.float32
+    fmap_shape = (1, 16, 34, 18)
+    weight_shape = (64, 16, 3, 3)
+    out_shape = (1, 64, 32, 16)
+    stride = 1
+    dilation = 1
+    pad = 0  # dhw 动态轴切分不支持 pad 非 0
+
+    a = torch.rand(fmap_shape, dtype=dtype_torch, device='npu')
+    b = torch.rand(weight_shape, dtype=dtype_torch, device='npu')
+    c_out = torch.zeros(out_shape, dtype=dtype_torch, device='npu')
+
+    @pypto.frontend.jit()
+    def conv2d_dynamic_tail_kernel(
+        input_a: pypto.Tensor([1, 16, pypto.DYNAMIC, 18]),
+        input_b: pypto.Tensor([pypto.DYNAMIC, 16, 3, 3]),
+        output_c: pypto.Tensor([1, pypto.DYNAMIC, pypto.DYNAMIC, 16])):
+        hin = input_a.shape[2]
+        ho = output_c.shape[2]
+        cout = output_c.shape[1]
+        tile_hout = 24
+        tile_cout = 48
+        hout_loop = (ho + tile_hout - 1) // tile_hout
+        tile_hin = tile_hout + 2  # stride=1, kernel=3
+        cout_loop = (cout + tile_cout - 1) // tile_cout
+
+        pypto.set_conv_tile_shapes(
+            pypto.pypto_impl.TileL1Info(
+                tileHin=8,
+                tileHout=8,
+                tileWin=16,
+                tileWout=16,
+                tileCinFmap=16,
+                tileCinWeight=16,
+                tileN=48,
+                tileBatch=1
+            ),
+            pypto.pypto_impl.TileL0Info(
+                tileH=8,
+                tileW=16,
+                tileK=48,
+                tileN=48
+            )
+        )
+        pypto.set_vec_tile_shapes(1, 48, 8, 16)
+
+        for cout_idx in pypto.loop(0, cout_loop, 1, name="LOOP_cout"):
+            for hout_idx in pypto.loop(0, hout_loop, 1, name="LOOP_hout"):
+                hout_offset = hout_idx * tile_hout
+                cout_offset = cout_idx * tile_cout
+                hin_offset = hout_idx * tile_hout
+                hin_current = (hin - hin_offset).min(tile_hin)
+                cout_current = (cout - cout_offset).min(tile_cout)
+                input_a_view = pypto.view(input_a, [1, 16, tile_hin, 18], [0, 0, hin_offset, 0],
+                                        valid_shape=[1, 16, hin_current, 18])
+                input_b_view = pypto.view(input_b, [tile_cout, 16, 3, 3], [cout_offset, 0, 0, 0],
+                                        valid_shape=[cout_current, 16, 3, 3])
+                out = pypto.conv(
+                    input_a_view, input_b_view, dtype, [stride, stride],
+                    [pad, pad, pad, pad], [dilation, dilation], extend_params={}, groups=1
+                )
+                pypto.assemble(out, [0, cout_offset, hout_offset, 0], output_c)
+
+    conv2d_dynamic_tail_kernel(a, b, c_out)
 
     golden = torch.nn.functional.conv2d(
         a, b, stride=(stride, stride), padding=(pad, pad),

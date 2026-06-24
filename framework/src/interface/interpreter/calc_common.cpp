@@ -368,8 +368,7 @@ void ExecutePrint(ExecuteOperationContext* ctx)
         return;
     }
 
-    std::vector<SymbolicScalar>* scalars = nullptr;
-    scalars = ctx->op->GetAttr<std::vector<SymbolicScalar> >(OP_ATTR_PREFIX + "scalars");
+    auto scalars = ctx->op->GetAttr<std::vector<SymbolicScalar>>(OP_ATTR_PREFIX + "scalars");
     if (ctx->op->HasAttribute(OP_ATTR_PREFIX + "fname")) {
         auto fname = ctx->op->GetStringAttribute(OP_ATTR_PREFIX + "fname");
         uint64_t ts = 0;
@@ -452,5 +451,6 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
 }
 REGISTER_CALC_OP(OP_RESHAPE, Opcode::OP_RESHAPE, ExecuteOpReshape);
 REGISTER_CALC_OP(OP_RESHAPE_COPY_OUT, Opcode::OP_RESHAPE_COPY_OUT, ExecuteOpCopyOut);
+REGISTER_CALC_OP(OP_L0C_RESHAPE_COPY_OUT, Opcode::OP_L0C_RESHAPE_COPY_OUT, ExecuteOpCopyOut);
 REGISTER_CALC_OP(OP_RESHAPE_COPY_IN, Opcode::OP_RESHAPE_COPY_IN, ExecuteOpCopyIn);
 } // namespace npu::tile_fwk

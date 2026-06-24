@@ -17,13 +17,17 @@
 #include "codegen_op_cloudnpu.h"
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
+#include "interface/configs/config_manager_ng.h"
 
 namespace npu::tile_fwk {
 const int PMU_ID_FROM_FUNC_HASH_LEN = 3;
 
 bool CodeGenCloudNPU::IsEnablePMUTrace() const
 {
-    return platform_ == NPUArch::DAV_3510 && ConfigManager::Instance().GetCodeGenConfig(KEY_ENABLE_PMU_TRACE, false);
+    if (platform_ != NPUArch::DAV_3510) {
+        return false;
+    }
+    return config::GetCodeGenOption<bool>(ENABLE_PMU_TRACE);
 }
 
 std::string CodeGenCloudNPU::GenPMUId(const Function& subFunc) const
@@ -38,7 +42,11 @@ std::string CodeGenCloudNPU::GenPMUId(const Function& subFunc) const
     funcHash = funcHash.substr(funcHash.size() - PMU_ID_FROM_FUNC_HASH_LEN);
     id += funcHash; // the max value supported by bisheng is 4096
 
-    return id;
+    // Emit canonical decimal to avoid C++ octal literal parsing (e.g. 058, 095).
+    constexpr unsigned kMaxPmuId = 4096;
+    unsigned idVal = std::stoul(id);
+    idVal %= kMaxPmuId;
+    return std::to_string(idVal);
 }
 
 void CodeGenCloudNPU::PrintPMUTraceAhead(const Function& subFunc, std::ostringstream& oss)
@@ -95,11 +103,8 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
     std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
     FloatSpecValMgr floatSpecValMgr;
-    std::string allocSourceRegion;
-    allocSourceRegion.reserve(CODE_RESERVED_SIZE);
     std::string tileOpSourceRegion;
     tileOpSourceRegion.reserve(CODE_RESERVED_SIZE);
-    auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
     for (const auto& op : operationList) {
         CODEGEN_LOGI(
             "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
@@ -108,26 +113,24 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
             continue;
         }
 
-        std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
+        GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
 
-        CodeGenOpCloudNPU cop(
-            {symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
+        CodeGenOpCloudNPU cop({symbolMgr, topFunc, subFunc, op, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
         std::string tileOpSourceCode = cop.GenOpCode();
         ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find(CG_ERROR) == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();
 
-        allocSourceRegion.append(allocSourceCode);
         tileOpSourceRegion.append(symbolMgr->GenNewTileTensorDefs());
         tileOpSourceRegion.append(tileOpSourceCode);
-
-        if (!allocSourceCode.empty()) {
-            CODEGEN_LOGI(": extra alloc generated(moved up to alloc region): %s", allocSourceCode.c_str());
-        }
         CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
+
     floatSpecValMgr.PrintFloatSpecVal(oss);
-    oss << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList() << tileOpSourceRegion;
+    symbolMgr->PrintAddrAllocs(oss);
+    GenDynParamForExpr(oss, subFunc);
+    symbolMgr->GenUsingList(oss);
+    oss << tileOpSourceRegion;
 
     PrintPMUTraceAfter(oss);
 }

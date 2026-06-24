@@ -84,7 +84,7 @@ std::string GenCodeByFunction(Function& function)
 {
     CodeGenCtx ctx;
     CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(function, {});
+    codeGen.GenCode(function);
     return GetResultFromCpp(function);
 }
 
@@ -167,8 +167,7 @@ std::string GenOpCodeFromOp(Function& function, const Operation& op, const GenOp
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpNPUCtx opCtx(
-        symbolManager, function, *function.rootFunc_->programs_[0], op, options.lto, options.isMainBlk);
+    CodeGenOpNPUCtx opCtx(symbolManager, function, *function.rootFunc_->programs_[0], op, options.isMainBlk);
     CodeGenOpCloudNPU cop(opCtx);
     return cop.GenOpCode();
 }
@@ -181,8 +180,7 @@ CodeGenOpCloudNPU GenOpCloudNPUFromOp(
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, outSymbolManager);
-    CodeGenOpNPUCtx opCtx(
-        outSymbolManager, function, *function.rootFunc_->programs_[0], op, options.lto, options.isMainBlk);
+    CodeGenOpNPUCtx opCtx(outSymbolManager, function, *function.rootFunc_->programs_[0], op, options.isMainBlk);
     return CodeGenOpCloudNPU(opCtx);
 }
 

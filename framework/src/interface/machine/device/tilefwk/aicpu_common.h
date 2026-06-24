@@ -163,12 +163,13 @@ struct DeviceArgs {
     uint64_t aicpuPerfAddr{0};             // aicpuPer Gm addr
     uint64_t devDfxArgAddr{0};             // devDfx
     uint64_t GetBlockNum() const { return nrValidAic * (nrAiv / nrAic + 1); }
-    uint32_t maxAicpuNum{0};
+    uint32_t die0MaxCpuid{0};
     uint32_t launchSchedAicpuNum{7};    // user configures the number of launch schedules for aicpu
     bool launchSchedSameCluster = true; // user configures whether enables binding aicpu within the same cluster
     bool enableVFFusion = false;
     bool enableEslModel = false;
     bool hasAicpuTask = false;
+    bool all1c2vMixTask = false;
     ArchInfo archInfo{ArchInfo::DAV_2201};
     ToSubMachineConfig toSubMachineConfig;
 };

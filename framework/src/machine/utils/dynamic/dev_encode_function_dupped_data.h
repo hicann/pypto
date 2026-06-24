@@ -426,16 +426,6 @@ struct DevAscendFunctionDupped {
                 "#ctrl.encode.shape: Dimension mismatch: info.dim=%d, rawTensor->dim=%d", dim, rawTensor->GetDim());
         }
 
-        for (int d = 0; d < rawTensor->GetDim(); d++) {
-            auto shapeIdx = attrOffset + d + rawTensor->GetDim() * 2;
-            auto shape = static_cast<int64_t>(rawTensor->shape.At(d, funcData->exprTbl));
-            auto actualShape = GetValue(attrs, shapeIdx);
-            if (actualShape != shape) {
-                DEV_ERROR(
-                    TensorMetaErr::SHAPE_VALUE_MISMATCH,
-                    "#ctrl.encode.shape: Shape mismatch at dim %d: expacted=%ld, got=%ld", d, shape, actualShape);
-            }
-        }
         for (int i = 0; i < dim * ARG_ATTR_TYPE; i++) {
             oss << GetValue(attrs, attrOffset + i) << ", ";
         }

@@ -560,7 +560,7 @@ def ifa_func_kernel_for_910_high_performance(
                                 [block_size, dn], [block_idx_vaild * block_size, n2_idx * dn])
                         kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0],
                                                 valid_shape=[s2_tile, dn])
-                        
+
                         pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
                         sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False, b_trans=True)
                         sij = pypto.view(sij, [g_tile, s2_tile], [0, 0],
@@ -1158,7 +1158,6 @@ def test_ifa_for_950():
 
 
 @pytest.mark.soc("950")
-@pytest.mark.skip(reason="codegen bug")
 def test_ifa_for_950_high_through():
     case_names = [
         "ifa_950_b64_s1_2_s2_8k_high_through",

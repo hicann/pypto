@@ -39,7 +39,7 @@
 
 - HostMachine：运行在Host侧，负责实际的硬件任务执行，包括资源准备、任务组装等。
 - DeviceMachine：运行在AI CPU侧，基于Execute Graph等执行态数据，负责AI Core执行子任务的分发和调度。具体流程为：Control-AICPU通过Stitch（字面意为“缝合”）将多个无依赖关系的Loop内的CallTask整合到一个DeviceTask中，以打破循环边界并最大化CallTask的并行度；Schedule-AICPU基于DeviceTask完成AI Core-CallTask的分发和管理。每个DeviceTask在3个Schedule-AICPU之间共享，各Schedule-AICPU根据所管理的AIC/AIV核的空闲状态，从DeviceTask中提取就绪的CallTask下发执行。
-- CoreMachine：运行在AI Core侧，负责接收来自AI CPU分发的CallTask并完成执行。CallTask是在AIC/AIV 上运行的最小单元，由一系列CCE指令组成，用于在AI Core上执行具体的搬运和计算任务。
+- CoreMachine：运行在AI Core侧，负责接收来自AI CPU分发的CallTask并完成执行。CallTask是在AIC/AIV上运行的最小单元，由一系列CCE指令组成，用于在AI Core上执行具体的搬运和计算任务。
 - DeviceProgram：DeviceProgram是每个PyPTO算子在Device侧运行的核心数据，由Execute Graph中描述的信息结合硬件资源管理生成。
 
 **图3**  执行态运行示意图
@@ -65,18 +65,19 @@
     python3 examples/02_intermediate/operators/softmax/softmax.py
     ```
 
-3. 执行成功，在$\{work\_path\}/output/output\_\*/目录（\*代表时间戳）下生成不同阶段的计算图文件（.json 格式）。
+3. 执行成功，在$\{work\_path\}/output/output\_\*/目录（\*代表时间戳）下生成不同阶段的计算图文件（.json格式）。
 
     ```txt
-    ├── Pass_xx_xx
-    │   ├── After_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化后的计算图文件
-    │   ├── After_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
-    │   ├── Before_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化前的计算图文件
-    │   ├── Before_004_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
+    ├── Pass_<NNN>_ExpandFunction
+    │   ├── After_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化后的计算图文件
+    │   ├── After_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
+    │   ├── Before_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.json # pass优化前的计算图文件
+    │   ├── Before_<NNN>_ExpandFunction_TENSOR_s0_Unroll1_PATH0_4.tifwkgr # 用户暂不需要关注
     │   └── ExpandFunctionTENSOR_s0_Unroll1_PATH0_4.log
     ├── program.json # 记录function name, semantic label等静态信息
     ├── ...
     ```
+    其中 `<NNN>` 表示 Pass 执行序号，不同版本下可能变化（例如 004、005 等），实际以生成结果为准。
 
 ### 查看计算图
 

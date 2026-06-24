@@ -41,18 +41,16 @@ struct CodeGenOpCtx {
     Function& topFunc;
     Function& subFunc;
     const Operation& operation;
-    const std::map<int, int>& locToOffset = {};
     bool isMainBlock{false};
     bool isDynamicAligned{false};
 
     CodeGenOpCtx(
-        std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op,
-        const std::map<int, int>& lto = {}, bool isMainBlk = false, bool isDynAligned = false)
+        std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op, bool isMainBlk = false,
+        bool isDynAligned = false)
         : symbolManager(std::move(sm)),
           topFunc(tf),
           subFunc(sf),
           operation(op),
-          locToOffset(lto),
           isMainBlock(isMainBlk),
           isDynamicAligned(isDynAligned)
     {}
@@ -63,13 +61,17 @@ public:
     explicit CodeGenOp(const CodeGenOpCtx& ctx)
         : originalOp(ctx.operation),
           functionType(ctx.topFunc.GetFunctionType()),
-          paramLocToParamListOffset(ctx.locToOffset),
           isMainBlock(ctx.isMainBlock),
           isDynamicAligned(ctx.isDynamicAligned)
     {
+        operandWithMagic.reserve(MAX_OPERANDS);
         for (size_t i = 0; i < MAX_OPERANDS; i++) {
             operand[i] = NULL_OPERAND;
+            operandWithMagic[i] = INVALID_TENSOR_MAGIC;
             operandType[i] = BUF_UNKNOWN;
+            operandDtype[i] = DataType::DT_BOTTOM;
+            // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.
+            paramLocation[i] = 1;
         }
         sm = ctx.symbolManager;
     }
@@ -89,10 +91,9 @@ protected:
     std::string aliasOp;            // alias op name
 
     int operand[MAX_OPERANDS] = {}; // buffer id
-    int operandWithMagic[MAX_OPERANDS] = {};
-    OperandType operandType[MAX_OPERANDS] = {BUF_UNKNOWN, BUF_UNKNOWN, BUF_UNKNOWN, BUF_UNKNOWN};
-    DataType operandDtype[MAX_OPERANDS] = {
-        DataType::DT_BOTTOM, DataType::DT_BOTTOM, DataType::DT_BOTTOM, DataType::DT_BOTTOM};
+    std::vector<int> operandWithMagic;
+    OperandType operandType[MAX_OPERANDS] = {};
+    DataType operandDtype[MAX_OPERANDS] = {};
     Element extOperandVal;
     SymbolicScalar extSymbolicScalar;
     std::vector<Element> extScalarVec;
@@ -109,8 +110,7 @@ protected:
     std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {};    // for spilling to GM scene
     std::vector<SymbolicScalar> dynValidShapeFromOpAttr[MAX_OPERANDS] = {};
     // if operand is an variable, record its related argument location
-    // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.
-    int paramLocation[MAX_OPERANDS] = {1, 1, 1, 1, 1, 1};
+    int paramLocation[MAX_OPERANDS] = {};
     int GmTensorParamIdxInCallFunc{0};
     OpSyncQueue syncQueue;
 
@@ -119,11 +119,10 @@ protected:
     std::vector<long> convParams;
     std::vector<int> poolParams;
 
-    std::map<std::string, Any> opAttrs;
-    std::map<std::string, Any> tensorAttrs[MAX_OPERANDS];
+    std::map<std::string, std::any> opAttrs;
+    std::map<std::string, std::any> tensorAttrs[MAX_OPERANDS];
 
     std::shared_ptr<SymbolManager> sm{nullptr};
-    const std::map<int, int>& paramLocToParamListOffset{};
 
     std::string tileOpName;
     bool isInputForceCombineAxis{false};
@@ -157,6 +156,7 @@ private:
     void CombineAxisOffset(const Operation& oper, int operandIdx);
     void UpdateDynValidShapeFromAttr(const Operation& oper, const LogicalTensor& logicalTensor, int operandIdx);
     void SetDynValidShapeFromAttr(const std::vector<OpImmediate>& toValidShape, int operandIdx);
+    bool IsNeedUseNormalAddrAlloc(const Operation& ops) const;
 };
 } // namespace npu::tile_fwk
 

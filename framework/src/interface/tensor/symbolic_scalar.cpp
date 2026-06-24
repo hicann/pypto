@@ -19,7 +19,7 @@
 #include <sstream>
 #include <numeric>
 #include <functional>
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "symbolic_scalar_simplify.h"
@@ -77,7 +77,7 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
 {
     std::string assembleFilePath = sourceFilePath + ".s";
     std::string objectFilePath = sourceFilePath + "_t.o";
-    std::string includePath = GetCurrentSharedLibPath() + "/../include/tile_fwk";
+    std::string includePath = GetPyptoLibPath() + "/../include/tile_fwk";
     std::string macro = extraCflag.empty() ? "-D__DEVICE__" : "";
 
     std::vector<std::string> argsGcc = {gcc, "-fPIC", "-fno-stack-protector", "-O2"};
@@ -86,7 +86,7 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
     if (!macro.empty()) {
         argsGcc.push_back(macro);
     }
-    argsGcc.insert(argsGcc.end(), {"-I" + includePath, "-I" + GetCurrentSharedLibPath() + "/include/",
+    argsGcc.insert(argsGcc.end(), {"-I" + includePath, "-I" + GetPyptoLibPath() + "/include/",
                         "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
 
     FE_LOGI("[RunCmd] %s", std::accumulate(argsGcc.begin(), argsGcc.end(), std::string(),

@@ -26,14 +26,13 @@ namespace ir {
 
 MakeTuple::MakeTuple(std::vector<ExprPtr> elements, Span span) : Expr(std::move(span)), elements_(std::move(elements))
 {
-    // Collect types from all element expressions
     std::vector<TypePtr> elementTypes;
     elementTypes.reserve(elements_.size());
     for (const auto& elem : elements_) {
         elementTypes.push_back(elem->GetType());
     }
-
-    // Set result type to TupleType
+    // Positional TupleType. Field names of named tuples / structs are carried by the
+    // parser-populated IRDebugInfo side table, not on the expression or the type.
     type_ = std::make_shared<TupleType>(std::move(elementTypes));
 }
 

@@ -72,6 +72,8 @@ private:
     void HandleNoCopyInConsumer(Function& function, Operation& op, LogicalTensorPtr output, std::vector<Operation*>& copyInOps, bool& checkOverUbSize);
     bool CheckUnaligned(Operation& op);
     bool CheckAllCopyOutInputsNonUb(const std::vector<Operation*>& copyOutOps);
+    void CollectSiblingCopyInConsumersOfDDRReshapeInput(
+        LogicalTensorPtr reshapeInput, Operation& reshapeOp, std::vector<Operation*>& copyInOps);
     LogicalTensorPtr InsertIOTensor(
         Function& function, Operation& op, std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>>& rawIO,
         LogicalTensorPtr& ioTensor);

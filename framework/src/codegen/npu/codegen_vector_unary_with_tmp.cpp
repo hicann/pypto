@@ -85,9 +85,7 @@ std::string CodeGenOpNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuffPara
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     std::string tmp = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
     paramList.insert(paramList.end(), {dst, src, tmp});
-    for (auto dynShape : newDynSrcValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, newDynSrcValidShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -171,7 +169,7 @@ std::string CodeGenOpNPU::PrintArgReduceTileTensor() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MILOIdx::TMP2_IDX)});
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();
@@ -219,9 +217,7 @@ std::string CodeGenOpNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpB
     std::string srcName = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     std::string tmpName = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
     paramList.insert(paramList.end(), {dstName, srcName, tmpName});
-    for (auto dynShape : newDynSrcValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, newDynSrcValidShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "_<" << templateParam << ">"
@@ -291,7 +287,7 @@ std::string CodeGenOpNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffParam& pa
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
@@ -329,7 +325,7 @@ std::string CodeGenOpNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuf
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
@@ -372,9 +368,7 @@ std::string CodeGenOpNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuf
     paramList.emplace_back(dst);
     paramList.emplace_back(src);
     paramList.emplace_back(tmp);
-    for (auto dynShape : dynSrcShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -387,7 +381,7 @@ std::string CodeGenOpNPU::PrintRowSumlineTileTensor() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)});
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(OperErr::ATTRIBUTE_INVALID, ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
@@ -470,9 +464,25 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
     return CG_ERROR;
 }
 
-std::string CodeGenOpNPU::GenArgReduceWithValue() const
+std::string CodeGenOpNPU::GenArgReduceWithValue() const { return PrintArgReduceTileTensor(); }
+
+std::string CodeGenOpNPU::GenOnlineSoftmaxOp() const
 {
-    return PrintArgReduceTileTensor();
+    std::vector<std::string> params = GetTileOpParamsWithTmpBuf({ID3, ID4});
+    auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
+    ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAttr.has_value()) && (scalarAttr.type() == typeid(Element)))
+        << "ONLINE_SOFTMAX requires scalar scale attribute.";
+    auto scalar = AnyCast<Element>(scalarAttr);
+    params.emplace_back("(" + std::string(DataType2CCEStr(scalar.GetDataType())) + ")" +
+        FormatFloat(scalar.Cast<float>(), scalar.GetDataType()));
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByParentheses(params) << STMT_END;
+    return oss.str();
+}
+
+std::string CodeGenOpNPU::GenOnlineSoftmaxUpdateOp() const
+{
+    return PrintTileOpWithFullParamsTmpBuf({ID3});
 }
 
 } // namespace npu::tile_fwk

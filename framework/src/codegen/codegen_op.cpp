@@ -329,12 +329,23 @@ void CodeGenOp::Init(const Operation& ops)
     UpdateOpAttribute(ops);
 }
 
+bool CodeGenOp::IsNeedUseNormalAddrAlloc(const Operation& ops) const
+{
+    std::string opcKey = OP_EMUOP_PREFIX + "opc";
+    bool isTensorExtract = ops.HasAttr(opcKey) && (ops.GetIntAttribute(opcKey) == EMUOP_TENSOR_EXTRACT);
+    bool res = !isSupportLayout || OpcodeManager::Inst().IsSharedMemory(opCode) || isTensorExtract;
+    return res;
+}
+
 void CodeGenOp::UpdateCodegenOpInfoByTensor(
     const Operation& ops, bool isInput, const std::shared_ptr<LogicalTensor>& tensor, int& operandIdx, size_t ioIdx)
 {
     operand[operandIdx] = tensor->GetMemoryTypeOriginal() == MEM_DEVICE_DDR ? tensor->tensor->GetRawMagic() :
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
+    if (IsNeedUseNormalAddrAlloc(ops)) {
+        sm->AddTensorUseNormalAlloc(tensor);
+    }
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
     operandDtype[operandIdx] = tensor->tensor->datatype;
     UpdateShapeAndOffset(ops, *tensor, isInput, operandIdx, ioIdx);
@@ -366,11 +377,11 @@ std::string CodeGenOp::GenOpAttr(bool hasExistingParam) const
         if (kv.first.substr(0, OP_ATTR_PREFIX.size()) != OP_ATTR_PREFIX) {
             continue;
         }
-        if (kv.second.Type() == typeid(int64_t)) {
+        if (kv.second.type() == typeid(int64_t)) {
             attrList.push_back(std::to_string(AnyCast<int64_t>(kv.second)));
-        } else if (kv.second.Type() == typeid(bool)) {
+        } else if (kv.second.type() == typeid(bool)) {
             attrList.push_back(std::to_string(AnyCast<bool>(kv.second)));
-        } else if (kv.second.Type() == typeid(std::vector<int64_t>)) {
+        } else if (kv.second.type() == typeid(std::vector<int64_t>)) {
             auto vec = AnyCast<std::vector<int64_t>>(kv.second);
             for (auto v : vec) {
                 attrList.push_back(std::to_string(v));

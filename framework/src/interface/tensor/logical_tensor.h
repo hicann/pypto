@@ -83,7 +83,10 @@ public:
     LogicalTensor& operator=(LogicalTensor&&) = delete;
     LogicalTensor& operator=(const LogicalTensor&) = delete;
 
-    std::shared_ptr<LogicalTensor> Clone(Function& dstFunc, bool create = false) const;
+    LogicalTensorPtr Clone(Function& dstFunc, bool create = false) const;
+    LogicalTensorPtr NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const;
+
+    ir::VarPtr Clone() const override;
 
     Function& BelongFunction() { return *function_; }
     const Function& BelongFunction() const { return *function_; }
@@ -209,7 +212,7 @@ private:
     std::set<Operation*, CompareOp> dependOps_;
 };
 
-enum EmuOpcode {
+enum EmuOpcode : int64_t {
     EMUOP_TENSOR_EXTRACT,
     EMUOP_TENSOR_INSERT,
     EMUOP_TENSOR_GETDATA_DEPEND,

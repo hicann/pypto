@@ -45,6 +45,7 @@
       "id": "OL01",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -57,6 +58,7 @@
       "id": "OL02",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -69,6 +71,7 @@
       "id": "OL03",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -81,6 +84,7 @@
       "id": "OL04",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -93,6 +97,7 @@
       "id": "OL05",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -105,6 +110,7 @@
       "id": "OL06",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -117,6 +123,7 @@
       "id": "OL07",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -129,6 +136,7 @@
       "id": "OL08",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -141,6 +149,7 @@
       "id": "OL23",
       "severity": "S2",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -153,6 +162,7 @@
       "id": "OL09",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E2",
       "stages": [
         1
       ],
@@ -164,6 +174,7 @@
       "id": "OL10",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E2",
       "stages": [
         1
       ],
@@ -175,6 +186,7 @@
       "id": "OL11",
       "severity": "S2",
       "dimension": "D2",
+      "fix_effort": "E2",
       "stages": [
         2
       ],
@@ -186,6 +198,7 @@
       "id": "OL12",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E2",
       "stages": [
         3,
         4
@@ -198,6 +211,7 @@
       "id": "OL13",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E2",
       "stages": [
         5
       ],
@@ -209,6 +223,7 @@
       "id": "OL14",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         6
       ],
@@ -220,6 +235,7 @@
       "id": "OL15",
       "severity": "S1",
       "dimension": "D3",
+      "fix_effort": "E1",
       "stages": [
         2,
         3,
@@ -235,6 +251,7 @@
       "id": "OL16",
       "severity": "S1",
       "dimension": "D3",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -247,6 +264,7 @@
       "id": "OL17",
       "severity": "S1",
       "dimension": "D3",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -259,6 +277,7 @@
       "id": "OL18",
       "severity": "S1",
       "dimension": "D3",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -271,6 +290,7 @@
       "id": "OL19",
       "severity": "S1",
       "dimension": "D4",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -283,6 +303,7 @@
       "id": "OL20",
       "severity": "S1",
       "dimension": "D4",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -295,6 +316,7 @@
       "id": "OL21",
       "severity": "S2",
       "dimension": "D4",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -307,6 +329,7 @@
       "id": "OL22",
       "severity": "S2",
       "dimension": "D4",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -319,6 +342,7 @@
       "id": "OL24",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         1,
         2,
@@ -336,6 +360,7 @@
       "id": "OL25",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -348,6 +373,7 @@
       "id": "OL26",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -360,6 +386,7 @@
       "id": "OL28",
       "severity": "S2",
       "dimension": "D1",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -372,6 +399,7 @@
       "id": "OL29",
       "severity": "S2",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -384,6 +412,7 @@
       "id": "OL30",
       "severity": "S2",
       "dimension": "D5",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -396,6 +425,7 @@
       "id": "OL31",
       "severity": "S1",
       "dimension": "D5",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -408,6 +438,7 @@
       "id": "OL32",
       "severity": "S2",
       "dimension": "D5",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -420,6 +451,7 @@
       "id": "OL33",
       "severity": "S2",
       "dimension": "D5",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -432,6 +464,7 @@
       "id": "OL34",
       "severity": "S1",
       "dimension": "D5",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -444,6 +477,7 @@
       "id": "OL37",
       "severity": "S3",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -456,6 +490,7 @@
       "id": "OL39",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -468,6 +503,7 @@
       "id": "OL40",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -480,6 +516,7 @@
       "id": "OL41",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -492,6 +529,7 @@
       "id": "OL42",
       "severity": "S1",
       "dimension": "D4",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -504,6 +542,7 @@
       "id": "OL43",
       "severity": "S1",
       "dimension": "D5",
+      "fix_effort": "E3",
       "stages": [
         5,
         6
@@ -516,6 +555,7 @@
       "id": "OL44",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E2",
       "stages": [
         5
       ],
@@ -527,6 +567,7 @@
       "id": "OL45",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E3",
       "stages": [
         5,
         6
@@ -539,6 +580,7 @@
       "id": "OL46",
       "severity": "S2",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -551,6 +593,7 @@
       "id": "OL47",
       "severity": "S3",
       "dimension": "D1",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -563,6 +606,7 @@
       "id": "OL48",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -575,6 +619,7 @@
       "id": "OL49",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -587,6 +632,7 @@
       "id": "OL56",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         4,
         5,
@@ -600,6 +646,7 @@
       "id": "OL57",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E3",
       "stages": [
         5,
         6
@@ -612,6 +659,7 @@
       "id": "OL58",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -624,6 +672,7 @@
       "id": "OL52",
       "severity": "S1",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -636,6 +685,7 @@
       "id": "OL50",
       "severity": "S1",
       "dimension": "D5",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -648,6 +698,7 @@
       "id": "OL51",
       "severity": "S1",
       "dimension": "D5",
+      "fix_effort": "E2",
       "stages": [
         5,
         6
@@ -660,6 +711,7 @@
       "id": "OL53",
       "severity": "S2",
       "dimension": "D5",
+      "fix_effort": "E1",
       "stages": [
         5,
         6
@@ -672,6 +724,7 @@
       "id": "OL54",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         5
       ],
@@ -683,6 +736,7 @@
       "id": "OL55",
       "severity": "S0",
       "dimension": "D1",
+      "fix_effort": "E1",
       "stages": [
         4,
         5,
@@ -696,12 +750,22 @@
       "id": "OL59",
       "severity": "S1",
       "dimension": "D2",
+      "fix_effort": "E1",
       "stages": [
         2
       ],
       "target": "gate",
       "rule": "Stage 2 完成时 GOLDEN_PERF_REPORT.md 必须存在且包含 Op Performance section（由 pypto-golden-generate/scripts/profile_golden.py §15 生成）",
       "check_function": "check_ol59"
+    },
+    {
+      "id": "OL61",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [3, 5, 6],
+      "target": "gate",
+      "rule": "Experience Preflight 门禁: (1) Design 阶段: 必须执行 preflight scan，checklist 写入 MEMORY.md 且格式合规（markdown checklist，非表格，≤20 条，[-] 项须有 ⚠️ 待验证注释）; (2) Impl 阶段: 所有 [-] 待验证项必须消除（改为 [x] 或标注 ✅ 已知风险），同时对 impl.py 做 AST 代码扫描检测 4 类反模式（F4 非法 cast 路径/F2 Element 双重包装/F1 scalar 首参/F8 zeros dtype 位置错误）",
+      "check_function": "check_ol61"
     }
   ]
 }

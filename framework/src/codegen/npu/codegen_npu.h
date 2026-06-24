@@ -21,6 +21,7 @@
 #include <mutex>
 #include <vector>
 #include <chrono>
+#include <stack>
 #include <thread>
 
 #include "tilefwk/platform.h"
@@ -124,17 +125,16 @@ public:
     };
     ~CodeGenNPU() override = default;
 
-    void GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset) override;
+    void GenCode(Function& topFunc) override;
     std::string PrepareCmd(const CompileInfo& compileInfo, const std::string& compileOptions) const;
     // only used to compile code directly when running under simulation mode.
     void CompileCode(const std::string& compileCmd) const;
-    std::optional<std::string> GenExtraAlloc(
-        const std::shared_ptr<SymbolManager>& sm, const std::shared_ptr<LogicalTensor>& tensor) const;
-    std::string GenAllocForLocalBuffer(const Operation& op, const std::shared_ptr<SymbolManager>& sm) const;
+    void GenAllocForLocalBuffer(const Operation& op, const std::shared_ptr<SymbolManager>& sm);
     virtual std::string GetCoreArch(const CompileInfo& compileInfo) const;
-    static void AppendVFOptions(NPUArch platform, std::ostringstream& oss);
+    static void AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool isCube);
 
 protected:
+    void GenExtraAlloc(const std::shared_ptr<SymbolManager>& sm, const std::shared_ptr<LogicalTensor>& tensor);
     void GenFuncBodyBefore(
         const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc, CompileInfo& compileInfo,
         std::ostringstream& oss) const;
@@ -155,13 +155,13 @@ protected:
     void Prepare(const Function& topFunc);
 
     virtual void BuildIncludes(std::ostringstream& oss) const;
-    virtual void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const;
+    virtual void BuildExtraOptions(
+        std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const;
 
-    std::string GenAlloc(
-        const std::shared_ptr<SymbolManager>& manager, BufferType bufferType, DataType dataType,
-        const TileRange& range) const;
+    void GenAlloc(
+        const std::shared_ptr<SymbolManager>& sm, BufferType bufferType, const std::shared_ptr<LogicalTensor>& tensor);
 
-    std::string GenDynParamForExpr(const Function& func) const;
+    void GenDynParamForExpr(std::ostringstream& oss, const Function& func) const;
 
     bool HandleForAICpuSubFunc(Function& subFunc);
 

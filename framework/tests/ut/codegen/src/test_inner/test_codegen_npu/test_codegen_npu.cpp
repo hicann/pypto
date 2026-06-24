@@ -18,6 +18,7 @@
 #include <sstream>
 #include "codegen/npu/codegen_npu.h"
 #include "interface/configs/config_manager.h"
+#include "test_codegen_utils.h"
 
 namespace npu::tile_fwk {
 
@@ -29,28 +30,34 @@ TEST_F(TestCodeGenNPU, TestAppendVFOptions)
 
     // Case 1: platform != DAV_3510, should output nothing
     oss.str("");
-    CodeGenNPU::AppendVFOptions(NPUArch::DAV_2201, oss);
+    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_2201, false);
     EXPECT_EQ(oss.str(), "");
 
     // Case 2: platform == DAV_3510, KEY_ENABLE_VF=false, output --cce-simd-vf-fusion=false
     oss.str("");
     config::SetPassGlobalConfig(KEY_ENABLE_VF, false);
-    CodeGenNPU::AppendVFOptions(NPUArch::DAV_3510, oss);
-    EXPECT_NE(oss.str().find("--cce-simd-vf-fusion=false"), std::string::npos);
+    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
+    CheckStringExist("--cce-simd-vf-fusion=false", oss.str());
 
     // Case 3: platform == DAV_3510, KEY_ENABLE_VF=true, KEY_ENABLE_VF_UNROLL=false
     oss.str("");
     config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
     config::SetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, false);
-    CodeGenNPU::AppendVFOptions(NPUArch::DAV_3510, oss);
-    EXPECT_NE(oss.str().find("--enable-pto-tile-fusion"), std::string::npos);
+    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
+    CheckStringExist("--enable-pto-tile-fusion", oss.str());
     EXPECT_EQ(oss.str().find("-enable-unroll-after-fused=true"), std::string::npos);
 
     // Case 4: platform == DAV_3510, KEY_ENABLE_VF=true, KEY_ENABLE_VF_UNROLL=true
     oss.str("");
     config::SetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, true);
-    CodeGenNPU::AppendVFOptions(NPUArch::DAV_3510, oss);
-    EXPECT_NE(oss.str().find("-enable-unroll-after-fused=true"), std::string::npos);
+    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
+    CheckStringExist("-enable-unroll-after-fused=true", oss.str());
+
+    // Case 5: platform == DAV_3510, isCube=true, output --cce-simd-vf-fusion=false
+    oss.str("");
+    config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
+    CodeGenNPU::AppendVFOptions(oss, NPUArch::DAV_3510, true);
+    CheckStringExist("--cce-simd-vf-fusion=false", oss.str());
 }
 
 } // namespace npu::tile_fwk

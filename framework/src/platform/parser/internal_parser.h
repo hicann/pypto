@@ -20,7 +20,7 @@
 #include <limits>
 #include <fstream>
 #include <sys/stat.h>
-#include "tilefwk/file.h"
+#include "utils/file_utils.h"
 #include "tilefwk/data_type.h"
 
 namespace npu {

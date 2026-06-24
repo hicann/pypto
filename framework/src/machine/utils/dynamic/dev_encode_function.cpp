@@ -14,6 +14,7 @@
  */
 
 #include "machine/utils/dynamic/dev_encode_function.h"
+#include "machine/utils/dynamic/dev_cell_match_mem_layout.h"
 
 namespace npu::tile_fwk::dynamic {
 namespace {
@@ -172,7 +173,8 @@ std::string DevAscendFunction::DumpOutcast(
             int offsetAttrIdx = producer.offsetAttrIdx;
             int shapeAttrIdx = producer.shapeAttrIdx;
             oss << indent;
-            oss << " | #producerIdx:!" << producerIdx;
+            oss << " | #opIdx:!" << producerIdx;
+            oss << " | #opType:" << (producer.opType == CellMatchOpType::READ ? "consumer" : "producer");
             oss << " | #offsetAttrIdx:" << offsetAttrIdx;
             oss << " | #shapeAttrIdx:" << shapeAttrIdx;
             oss << " | #offsetAttr:"
@@ -191,8 +193,7 @@ std::string DevAscendFunction::DumpOutcast(
             oss << AddressDescriptor::DumpAddress(slotAddrList[slot]);
         }
     }
-    oss << "\n";
-    oss << indent;
+    oss << "\n" << indent;
     oss << " | #cellMatchTableDesc:" << DumpCellMatchTableDesc(outcast.cellMatchTableDesc);
     oss << " | #cellMatchFullUpdateTable:" << outcast.cellMatchRuntimeFullUpdateTable.size();
     oss << "\n";
@@ -206,12 +207,13 @@ std::string DevAscendFunction::DumpOutcast(
 
     oss << indent << " | #stitchPolicyFullCoverProducerHubOpIdx:" << outcast.stitchPolicyFullCoverProducerHubOpIdx
         << "\n";
-    oss << indent << " | #stitchPolicyFullCoverProducerAllOpIdxList:[";
-    for (size_t j = 0; j < outcast.stitchPolicyFullCoverProducerAllOpIdxList.size(); j++) {
-        oss << Delim(j != 0, ",") << At(outcast.stitchPolicyFullCoverProducerAllOpIdxList, j);
+    oss << indent << " | #stitchPolicyFullCoverAllOpIdxList:[";
+    for (size_t j = 0; j < outcast.stitchPolicyFullCoverAllOpIdxList.size(); j++) {
+        oss << Delim(j != 0, ",") << At(outcast.stitchPolicyFullCoverAllOpIdxList, j);
     }
     oss << "]\n";
-    dumpProducer(outcast.producerList);
+    dumpProducer(outcast.producerConsumerList);
+
     return oss.str();
 }
 
@@ -253,5 +255,80 @@ std::string DevAscendFunction::Dump(int indent) const
     }
     oss << INDENT << "}";
     return oss.str();
+}
+
+int DevAscendFunction::LookupIncastBySlotIndex(int slotIndex) const
+{
+    for (size_t incastIndex = 0; incastIndex < GetIncastSize(); incastIndex++) {
+        const DevAscendFunctionIncast& incast = GetIncast(incastIndex);
+        for (size_t fromIndex = 0; fromIndex < incast.fromSlotList.size(); fromIndex++) {
+            int slot = At(incast.fromSlotList, fromIndex);
+            if (slot == slotIndex) {
+                return static_cast<int>(incastIndex);
+            }
+        }
+    }
+    return INVALID_INDEX;
+}
+
+std::vector<int> DevAscendFunction::LookupIncastBySlotIndexList(const std::vector<int>& slotIndexList) const
+{
+    std::vector<int> resultList(slotIndexList.size());
+    for (size_t i = 0; i < slotIndexList.size(); i++) {
+        resultList[i] = LookupIncastBySlotIndex(slotIndexList[i]);
+    }
+    return resultList;
+}
+
+int DevAscendFunction::LookupOutcastBySlotIndex(int slotIndex) const
+{
+    for (size_t outcastIndex = 0; outcastIndex < GetOutcastSize(); outcastIndex++) {
+        const DevAscendFunctionOutcast& outcast = GetOutcast(outcastIndex);
+        for (size_t toIndex = 0; toIndex < outcast.toSlotList.size(); toIndex++) {
+            int slot = At(outcast.toSlotList, toIndex);
+            if (slot == slotIndex) {
+                return static_cast<int>(outcastIndex);
+            }
+        }
+    }
+    return INVALID_INDEX;
+}
+
+std::vector<int> DevAscendFunction::LookupOutcastBySlotIndexList(const std::vector<int>& slotIndexList) const
+{
+    std::vector<int> resultList(slotIndexList.size());
+    for (size_t i = 0; i < slotIndexList.size(); i++) {
+        resultList[i] = LookupOutcastBySlotIndex(slotIndexList[i]);
+    }
+    return resultList;
+}
+
+void DevAscendFunction::AppendOutcastConnections(
+    std::vector<std::tuple<int, int, int>>& connectionList, int fromSlot, int incastIndex,
+    const DevAscendFunction* func) const
+{
+    for (size_t outcastIndex = 0; outcastIndex < func->GetOutcastSize(); outcastIndex++) {
+        const DevAscendFunctionOutcast& outcast = func->GetOutcast(outcastIndex);
+        for (size_t toIndex = 0; toIndex < outcast.toSlotList.size(); toIndex++) {
+            int toSlot = func->At(outcast.toSlotList, toIndex);
+            if (fromSlot == toSlot) {
+                connectionList.push_back(std::tuple(outcastIndex, incastIndex, fromSlot));
+            }
+        }
+    }
+}
+
+std::vector<std::tuple<int, int, int>> DevAscendFunction::LookupConnectionSlotIndexFrom(
+    const DevAscendFunction* func) const
+{
+    std::vector<std::tuple<int, int, int>> connectionList;
+    for (size_t incastIndex = 0; incastIndex < GetIncastSize(); incastIndex++) {
+        const DevAscendFunctionIncast& incast = GetIncast(incastIndex);
+        for (size_t fromIndex = 0; fromIndex < incast.fromSlotList.size(); fromIndex++) {
+            int fromSlot = At(incast.fromSlotList, fromIndex);
+            AppendOutcastConnections(connectionList, fromSlot, incastIndex, func);
+        }
+    }
+    return connectionList;
 }
 } // namespace npu::tile_fwk::dynamic

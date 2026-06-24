@@ -46,7 +46,7 @@ LogicalTensorPtr BinaryOperationBroadCast(const LogicalTensorPtr& operand, const
 
 void CheckOperandsValid(const LogicalTensorPtr& operand1, const LogicalTensorPtr& operand2)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size())
         << "The shape size of the two input tensors must be equal";
 }
 
@@ -55,7 +55,7 @@ void CheckBinOpOperandsValid(const LogicalTensorPtr& operand1, const LogicalTens
     CheckOperandsValid(operand1, operand2);
     for (size_t i = 0; i < operand1->shape.size(); ++i) {
         if (operand1->shape[i] != operand2->shape[i] && (operand1->shape[i] != 1 && operand2->shape[i] != 1)) {
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "shape not support binary operation";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "shape not support binary operation";
         }
     }
 }
@@ -80,20 +80,20 @@ void BinaryOperationOperandCheck(
 {
     constexpr size_t inOpSize = 2;
     constexpr size_t outOpSize = 1;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == inOpSize) << "iOperand size should be 2";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == outOpSize) << "oOperand size should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == inOpSize) << "iOperand size should be 2";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == outOpSize) << "oOperand size should be 1";
 }
 
 // Identify which operand need brc at a specific axis counting from the first
 // Return value 0 = NONE, 1 = LEFT_OPERAND, 2 = RIGHT_OPERAND
 int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, int64_t axisNum)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
     int64_t shapeSize = operand1->shape.size();
     int operandNum = 0;
 
     int64_t idx = (axisNum < 0) ? (shapeSize + axisNum) : axisNum;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, idx >= 0 && idx < shapeSize)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, idx >= 0 && idx < shapeSize)
         << "axisNum " << axisNum << " out of range for shapeSize " << shapeSize;
     if ((operand1->shape[idx] != 1) && (operand2->shape[idx] == 1)) {
         operandNum = 2;
@@ -296,9 +296,9 @@ void TiledPReLUOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& input, const LogicalTensorPtr& weight,
     const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() == input->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() == input->offset.size())
         << "The shape size of input and offset must be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == weight->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == weight->offset.size())
         << "The shape size of weight and offset must be equal";
 
     TileInfo inputTileInfo(input->shape.size(), input->offset.size());
@@ -317,11 +317,11 @@ void PReLUOperationOperandCheck(const LogicalTensorPtr& selfTensor, const Logica
 
     if (selfTensor->shape.size() == 1) {
         // 1D 输入时，weight 必须为 [1]
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == 1)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == 1)
             << "The weight size should be [1] when input is 1D";
     } else {
         // 2D/3D/4D 输入时，weight 必须与 self 的第二维匹配
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
             << "The weight size should equal to input's second dimension";
     }
 }
@@ -362,8 +362,8 @@ Tensor Add(const Tensor& self, const Tensor& other)
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "ADD");
 
     static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16,
+                                                               DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(ADD_A2A3_TYPES, ADD_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ADD");
     RETURN_CALL(BinaryOperation<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(), self, other);
@@ -375,8 +375,8 @@ Tensor Sub(const Tensor& self, const Tensor& other)
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "SUB");
 
     static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16,
+                                                               DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(SUB_A2A3_TYPES, SUB_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUB");
     RETURN_CALL(BinaryOperation<BinaryOpType::SUB>, *Program::GetInstance().GetCurrentFunction(), self, other);
@@ -388,8 +388,7 @@ Tensor Mul(const Tensor& self, const Tensor& other)
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MUL");
 
     static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
-                                                              DT_FP16,  DT_BF16};
+    static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(MUL_A2A3_TYPES, MUL_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "MUL");
     RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, other);
@@ -440,12 +439,12 @@ Tensor Remainder(const Tensor& self, const Tensor& other, PrecisionType precisio
     auto selfDtype = self.GetDataType();
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if ((!isA5Architecture && selfDtype == DT_INT16) || selfDtype == DT_FP16) {
-        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
-        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE);
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
+        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
         auto [result, op] = TensorBinaryOperationWithOp<BinaryOpType::REM>(
             *Program::GetInstance().GetCurrentFunction(), castSelf, castOther);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
-        Tensor castedResult = Cast(Tensor(result), selfDtype);
+        Tensor castedResult = Cast(Tensor(result), selfDtype, CastMode::CAST_NONE, SaturationMode::ON);
         return castedResult;
     }
     auto [result, op] =
@@ -691,7 +690,7 @@ Tensor Pow(const Tensor& self, const Element& other, PrecisionType precisionType
             CastMode::CAST_NONE);
     }
     if (IsInteger(castSelf->Datatype())) {
-        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, IsInteger(other.GetDataType()))
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, IsInteger(other.GetDataType()))
             << "Scalar dtype incorrect. When self dtype in UINT32/INT16/UINT16/INT8/UINT8, "
             << "Scalar dtype should be int, acture is: " << DataType2String(other.GetDataType());
         auto [res, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::POW>(
@@ -842,8 +841,8 @@ Tensor Add(const Tensor& self, const Element& other)
     DECLARE_TRACER();
 
     static const std::unordered_set<DataType> ADD_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> ADD_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16,
+                                                               DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(ADD_A2A3_TYPES, ADD_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ADD");
     RETURN_CALL(
@@ -856,8 +855,8 @@ Tensor Sub(const Tensor& self, const Element& other)
     DECLARE_TRACER();
 
     static const std::unordered_set<DataType> SUB_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
-                                                              DT_FP16,  DT_BF16,   DT_UINT8, DT_INT8};
+    static const std::unordered_set<DataType> SUB_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16,
+                                                               DT_UINT8, DT_INT8};
     const auto& supportedTypes = GetSupportedDataTypesByArch(SUB_A2A3_TYPES, SUB_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUB");
     RETURN_CALL(
@@ -870,8 +869,7 @@ Tensor Mul(const Tensor& self, const Element& other)
     DECLARE_TRACER();
 
     static const std::unordered_set<DataType> MUL_A2A3_TYPES = {DT_INT32, DT_INT16, DT_FP16, DT_FP32, DT_BF16};
-    static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_UINT32, DT_FP32,  DT_INT16, DT_UINT16,
-                                                              DT_FP16,  DT_BF16};
+    static const std::unordered_set<DataType> MUL_A5_TYPES = {DT_INT32, DT_FP32, DT_INT16, DT_FP16, DT_BF16};
     const auto& supportedTypes = GetSupportedDataTypesByArch(MUL_A2A3_TYPES, MUL_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "MUL");
     RETURN_CALL(
@@ -913,11 +911,11 @@ Tensor Remainder(const Tensor& self, const Element& other, PrecisionType precisi
     Element castOther = Element(selfDtype, other.Cast<float>());
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if ((!isA5Architecture && selfDtype == DT_INT16) || selfDtype == DT_FP16) {
-        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
         auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REM>(
             *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), castOther);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
-        Tensor castedResult = Cast(Tensor(result), selfDtype);
+        Tensor castedResult = Cast(Tensor(result), selfDtype, CastMode::CAST_NONE, SaturationMode::ON);
         return castedResult;
     }
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REM>(
@@ -935,12 +933,12 @@ Tensor Remainder(const Element& self, const Tensor& other, PrecisionType precisi
     Element castSelf = Element(otherDtype, self.Cast<float>());
     bool isA5Architecture = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
     if ((!isA5Architecture && otherDtype == DT_INT16) || otherDtype == DT_FP16) {
-        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE);
+        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE, SaturationMode::ON);
         auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REMR>(
             *Program::GetInstance().GetCurrentFunction(), castOther.GetStorage(), castSelf);
         op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
         op->SetAttribute(OP_ATTR_PREFIX + "reverseOperand", true);
-        Tensor castedResult = Cast(Tensor(result), otherDtype);
+        Tensor castedResult = Cast(Tensor(result), otherDtype, CastMode::CAST_NONE, SaturationMode::ON);
         return castedResult;
     }
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::REMR>(
@@ -1516,7 +1514,7 @@ LogicalTensorPtr TensorAxpyOperation(Function& function, const Tensor& self, con
     // Validate: if any dimension of y is 1 but x is not 1, it's invalid
     for (size_t i = 0; i < shapeSize; i++) {
         if ((selfTensor->shape[i] == 1) && (otherTensor->shape[i] != 1)) {
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false)
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false)
                 << "AXPY: self tensor cannot broadcast, self.shape[" << i << "]=" << selfTensor->shape[i]
                 << " but other.shape[" << i << "]=" << otherTensor->shape[i];
         }
@@ -1541,7 +1539,7 @@ Tensor Axpy(const Tensor& self, const Tensor& other, float alpha)
         std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "AXPY");
     } else {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, selfDtype == DT_FP32 && otherDtype == DT_FP16)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, selfDtype == DT_FP32 && otherDtype == DT_FP16)
             << "AXPY: when dtype mismatch, only support dst(y)=fp32 with src(x)=fp16.";
     }
     RETURN_CALL(AxpyOperation, *Program::GetInstance().GetCurrentFunction(), self, other, alpha);

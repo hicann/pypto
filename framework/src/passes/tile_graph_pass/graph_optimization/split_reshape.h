@@ -200,6 +200,9 @@ private:
     Status CheckDynStatus(
         std::vector<int64_t> alignedShape, std::vector<int64_t> input, std::vector<int64_t> output,
         std::vector<SymbolicScalar> dynOutput);
+    Status CheckDynOutputAlignment(
+        const std::vector<int64_t>& alignedShape, const std::vector<int64_t>& output,
+        const std::vector<SymbolicScalar>& dynOutput, const std::vector<bool>& changingAxis);
     Status UpdateShapeOffset(UpdatePara& para, bool& flag, int& currentShape, int& currentOffset);
     Status ShapeAlign(std::vector<int64_t> shape1, std::vector<int64_t> shape2, std::vector<int64_t>& alignedShape);
     Status RawToAlign(

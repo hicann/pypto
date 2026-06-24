@@ -8,15 +8,20 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "irbuilder.h"
+#include "ir_func_builder.h"
 
 #include "logical_tensor.h"
 #include "raw_tensor.h"
 #include "interface/function/function.h"
+#include "interface/operation/opcode.h"
 #include "interface/program/program.h"
 #include "interface/utils/id_gen.h"
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/transforms/printer.h" // for test
+#include "ir/transforms/merge_stmts_pass.h"
+#include "ir/transforms/infer_token_pass.h"
 
 using namespace pypto;
 
@@ -26,6 +31,47 @@ IRContext& IRContext::Get()
 {
     static IRContext ctx;
     return ctx;
+}
+
+std::vector<ir::VarPtr>& IRContext::GetDependToken(const ir::ExprPtr& val)
+{
+    static std::vector<ir::VarPtr> empty;
+    if (token_map_.find(val) != token_map_.end()) {
+        return token_map_[val];
+    }
+    if (ir::As<ir::ScalarExpr>(val) == nullptr) {
+        return empty;
+    }
+
+    auto getToken = [this](const RawSymbolicScalarPtr& s) -> std::vector<ir::VarPtr> {
+        if (s->IsExpression()) {
+            auto ss = std::static_pointer_cast<RawSymbolicExpression>(s);
+            auto tokens = GetDependToken(ss);
+            return tokens;
+        }
+        return empty;
+    };
+
+    std::set<ir::VarPtr> tokenList;
+    auto s = std::dynamic_pointer_cast<const RawSymbolicExpression>(val);
+    if (s->Opcode() == SymbolicOpcode::T_MOP_CALL) {
+        for (size_t i = 1; i < s->OperandList().size(); i++) {
+            auto tokens = getToken(s->OperandList()[i]);
+            tokenList.insert(tokens.begin(), tokens.end());
+        }
+    } else if (SymbolicOpcode::T_UOP_BEGIN <= s->Opcode() && s->Opcode() < SymbolicOpcode::T_UOP_END) {
+        auto tokens = getToken(s->OperandList()[0]);
+        tokenList.insert(tokens.begin(), tokens.end());
+    } else if (
+        (SymbolicOpcode::T_BOP_BEGIN <= s->Opcode() && s->Opcode() < SymbolicOpcode::T_BOP_END) ||
+        s->Opcode() == SymbolicOpcode::T_MOP_MAX || s->Opcode() == SymbolicOpcode::T_MOP_MIN) {
+        auto tokens0 = getToken(s->OperandList()[0]);
+        tokenList.insert(tokens0.begin(), tokens0.end());
+        auto tokens1 = getToken(s->OperandList()[1]);
+        tokenList.insert(tokens1.begin(), tokens1.end());
+    }
+    token_map_[val] = std::vector<ir::VarPtr>(tokenList.begin(), tokenList.end());
+    return token_map_[val];
 }
 
 Function& DummyFunc()
@@ -121,8 +167,43 @@ ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(
 }
 
 /* create function */
-std::shared_ptr<Function> CreateFunction(
-    std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span = ir::Span::Unknown());
+
+std::shared_ptr<Function> IRBuilder::CreateFunction(
+    std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span)
+{
+    auto& program = Program::GetInstance();
+    auto funcMagicName = name + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
+    auto parentFunc = program.GetCurrentFunction();
+
+    auto func = std::make_shared<Function>(program, funcMagicName, name, parentFunc);
+    func->SetFunctionType(FunctionType::DYNAMIC);
+    func->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    for (auto& param : params) {
+        func->AddOriginIncast(param);
+        func->inCasts_.push_back(param);
+        func->GetTensorMap().Insert(param);
+    }
+
+    std::vector<std::string> externalVarNames;
+    for (auto& param : params) {
+        if (param) {
+            externalVarNames.push_back(param->name_);
+        }
+    }
+
+    auto seq = ir::SeqStmts::AsMut(body);
+    auto mergedBody = ir::MergeStmtsIntoIfStmt(seq, externalVarNames);
+    func->originalBody_ = mergedBody;
+
+    auto StmtsWithCall = CreateFunctionByStmt(mergedBody, *func, externalVarNames);
+    func->ir::Function::body_ = ir::SeqStmts::Wrap(StmtsWithCall, span);
+    func->ComputeHash();
+
+    BuildDynFuncSlotScope(func, params);
+
+    return func;
+}
 
 /* create symbolic scalar */
 SymbolicScalar IRBuilder::CreateConstInt(int64_t value) { return SymbolicScalar(value); }
@@ -145,7 +226,14 @@ ir::VarPtr IRBuilder::CreateVarLike(std::string name, ir::ExprPtr value)
         return CreateScalarVar(name).AsVar();
     }
     if (auto type = ir::As<ir::UnknownType>(value->GetType())) {
-        return irContext_.MakeVar(name, ir::GetUnknownType(), ir::Span::Unknown());
+        return irContext_.MakeVar(name, ir::GetUnknownType(), value->span_);
+    }
+    if (auto tuple = ir::As<ir::MakeTuple>(value)) {
+        std::vector<ir::ExprPtr> elements;
+        for (size_t i = 0; i < tuple->elements_.size(); i++) {
+            elements.push_back(CreateVarLike(name + std::to_string(i), tuple->elements_[i]));
+        }
+        return irContext_.MakeVar(name, ir::GetUnknownType(), value->span_);
     }
     ASSERT(false) << "CreateVarLike: unknown type" << value->GetType()->TypeName();
     return nullptr;
@@ -236,8 +324,17 @@ ir::IterArgPtr IRBuilder::CreateIterArg(ir::VarPtr var, ir::ExprPtr initValue)
 void IRBuilder::EmitTensorStmts()
 {
     auto func = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "__entry__");
-    for (auto &op : func->Operations(false)) {
-        Emit(std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this()));
+    for (auto& op : func->Operations(false)) {
+        std::set<ir::VarPtr> tokenSet;
+        for (auto& scalar : op.GetDynamicAttributeList()) {
+            auto token = irContext_.GetDependToken(scalar.get().AsExpr());
+            tokenSet.insert(token.begin(), token.end());
+        }
+        auto stmt = std::dynamic_pointer_cast<ir::TensorOpStmt>(op.shared_from_this());
+        std::vector<ir::VarPtr> tokenList(tokenSet.begin(), tokenSet.end());
+        std::sort(tokenList.begin(), tokenList.end(), [](ir::VarPtr a, ir::VarPtr b) { return a->name_ < b->name_; });
+        stmt->tokens_ = tokenList;
+        Emit(stmt);
     }
     func->ResetOperations();
 }

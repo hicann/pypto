@@ -184,6 +184,9 @@ void ConstructTileGraph(
 } // namespace Matrix
 
 namespace Conv {
+constexpr const int NCL_N_IDX = 0;
+constexpr const int NCL_C_IDX = 1;
+constexpr const int NCL_L_IDX = 2;
 constexpr const int NCHW_N_IDX = 0;
 constexpr const int NCHW_C_IDX = 1;
 constexpr const int NCHW_H_IDX = 2;
@@ -221,7 +224,7 @@ constexpr uint32_t PAD_TAIL_INDEX = 5;
 constexpr uint32_t PAD_STRIDE_H = 0;
 constexpr uint32_t PAD_STRIDE_W = 1;
 constexpr uint32_t PAD_STRIDE_D = 2;
-constexpr int MAX_LOOP = 2000;
+constexpr int MAX_LOOP = 1000;
 
 const std::string OP_ATTR_PREFIX = "op_attr_";
 const std::string CONV_PADDINGS_ATTR = OP_ATTR_PREFIX + "paddings";
@@ -249,6 +252,7 @@ public:
     static const std::string isFmap;
     static const std::string isConv3D;
     static const std::string cutW; // L0C M方向(hw合轴)的w大小
+    static const std::string realCutW; // L0C M方向(hw合轴)的w的validshape
 };
 
 enum class CopyInMode : int {
@@ -274,6 +278,7 @@ struct ConvAttrParam {
     std::vector<int64_t> oriFmapShape = {0, 0, 0, 0};
     std::vector<int64_t> oriWeightShape = {0, 0, 0, 0};
     std::vector<int64_t> oriResShape = {0, 0, 0, 0};
+    std::vector<SymbolicScalar> dynValidResShape;
     int64_t groups = 0;
     int64_t offsetX = 0;
     bool isConv1D = false;
@@ -330,6 +335,14 @@ struct ConvTileInfo {
     int64_t wL0 = 0;
     int64_t nL0 = 0;
     int64_t cin0 = 0;
+    SymbolicScalar dynValidBatch = SymbolicScalar(0);
+    SymbolicScalar dynValidCout = SymbolicScalar(0);
+    SymbolicScalar dynValidHout = SymbolicScalar(0);
+    SymbolicScalar dynValidWout = SymbolicScalar(0);
+    SymbolicScalar dynValidHoutL0 = SymbolicScalar(0);
+    SymbolicScalar dynValidWoutL0 = SymbolicScalar(0);
+    SymbolicScalar dynValidCoutL0 = SymbolicScalar(0);
+    SymbolicScalar dynValidBatchL0 = SymbolicScalar(0);
 };
 
 struct ConvIterInfo {
@@ -377,12 +390,4 @@ void ConstructTileGraph(
     const LogicalTensorPtr& cTensorPtr, const Operation& op);
 
 } // namespace Conv
-
-namespace FakeTrans {
-
-void ConstructTileGraph(
-    Function& function, const std::vector<LogicalTensorPtr>& operandVec, const LogicalTensorPtr& cTensorPtr);
-
-} // namespace FakeTrans
-
 } // namespace npu::tile_fwk

@@ -27,7 +27,7 @@ namespace npu::tile_fwk::dynamic {
 
 class SchemaDumpUtil {
 public:
-    static inline void DumpSchemaOperationInfo(SchDeviceTaskContext* devTaskCtx, int coreIdx, uint64_t taskId) {
+    static inline void DumpSchemaOperationInfo(SchDeviceTaskContext* devTaskCtx, uint64_t taskId) {
         auto dyntask = reinterpret_cast<DynDeviceTask*>(devTaskCtx->GetDeviceTask());
         auto deviceTaskId = devTaskCtx->GetDeviceTaskCtrl()->taskId;
         uint32_t funcId = FuncID(taskId);

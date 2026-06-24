@@ -16,17 +16,30 @@
 #ifndef TILE_FWK_MEMORY_PATH_UTILS_H
 #define TILE_FWK_MEMORY_PATH_UTILS_H
 
+#include <functional>
+
+#include "interface/operation/operation.h"
+#include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 
 namespace npu::tile_fwk {
 
 class MemoryPathUtils {
 public:
+    using OutputRequirementResolver = std::function<MemoryType(const LogicalTensorPtr&)>;
+
     static bool IsSpecialDirectMemoryPath(MemoryType from, MemoryType to);
 
     static bool IsDifferentKnownRequirement(MemoryType requirement, MemoryType targetType);
 
     static bool ShouldUseDdrForSpecialPath(bool hasParallelDifferentRequirement, MemoryType from, MemoryType to);
+
+    // 在判断直接搬运路径冲突前，解析 OP_VIEW 背后的有效消费者需求。
+    // resolver 的语义与阶段相关：AssignMemoryType 阶段可递归穿透 view 消费者，
+    // ConvertInserter 阶段应基于 tensorTobeMap 中已经规划好的直接需求判断。
+    static MemoryType ResolveEffectiveConsumerRequirement(
+        Operation* consumerOp, MemoryType directRequirement, MemoryType targetType,
+        const OutputRequirementResolver& resolveOutputRequirement);
 };
 
 } // namespace npu::tile_fwk

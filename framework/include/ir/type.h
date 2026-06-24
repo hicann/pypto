@@ -476,11 +476,15 @@ public:
     std::vector<TypePtr> types_; // Types in the tuple
 
     /**
-     * \brief Create a tuple type
+     * \brief Create a (positional) tuple type
+     *
+     * Field names of named tuples / structs are NOT part of the tuple type. They are
+     * carried by the parser-populated IRDebugInfo side table (see ir/debug_info.h),
+     * keyed by the TupleType pointer, so they do not affect structural identity.
      *
      * \param types List of types in the tuple
      */
-    explicit TupleType(std::vector<TypePtr> types) : types_(std::move(types)) {}
+    explicit TupleType(std::vector<TypePtr> types);
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::TupleType; }
     [[nodiscard]] std::string TypeName() const override { return "TupleType"; }

@@ -19,7 +19,7 @@
 
 #include <string>
 #include <cstdint>
-#include "tilefwk/file.h"
+#include "utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu {
@@ -32,7 +32,6 @@ public:
     bool GetCostModelPlatformRealPath(const std::string& socVersion, std::string& realPath);
 
 private:
-    static std::string GetCurrentSharedLibPath();
     static std::string GetDevicePlatform();
 };
 } // namespace tile_fwk

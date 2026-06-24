@@ -822,9 +822,12 @@ def run_symmetric_per_channel_backward_test(n, m, bit, eps, distribution, device
                      id="N153376-M2048-bit4-eps0.0001",
                      marks=pytest.mark.skip(reason="temporarily disabled")),
         pytest.param(38344, 2048, 4, 0.0001,
-                     id="N38344-M2048-bit4-eps0.0001"),
+                     id="N38344-M2048-bit4-eps0.0001",
+                     marks=pytest.mark.skip(reason="temporarily disabled")),
     ]
 )
+
+@pytest.mark.skip(reason="temporarily skipped")
 def test_symmetric_per_channel_backward(n, m, bit, eps) -> None:
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

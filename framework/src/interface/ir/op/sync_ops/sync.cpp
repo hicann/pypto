@@ -15,6 +15,7 @@
 
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
+#include "ir/memref.h"
 #include "ir/op_registry.h"
 #include "ir/type.h"
 
@@ -33,15 +34,15 @@ TypePtr DeduceUnknownType(
     return GetUnknownType();
 }
 
-bool IsDcciScalarOffset(const ExprPtr& offset)
+bool IsIntScalar(const ExprPtr& expr)
 {
-    auto scalar_type = As<ScalarType>(offset->GetType());
+    auto scalar_type = As<ScalarType>(expr->GetType());
     return scalar_type && (scalar_type->dtype_.IsInt() || scalar_type->dtype_ == DataType::INDEX);
 }
 
 bool IsDcciTensorOffset(const ExprPtr& offset)
 {
-    if (IsDcciScalarOffset(offset)) {
+    if (IsIntScalar(offset)) {
         return true;
     }
     auto tuple = As<MakeTuple>(offset);
@@ -49,11 +50,87 @@ bool IsDcciTensorOffset(const ExprPtr& offset)
         return false;
     }
     for (const auto& element : tuple->elements_) {
-        if (!IsDcciScalarOffset(element)) {
+        if (!IsIntScalar(element)) {
             return false;
         }
     }
     return true;
+}
+
+TypePtr DeduceSyncAllType(
+    const std::vector<ExprPtr>& args,
+    const std::vector<std::pair<std::string, std::any>>& kwargs)
+{
+    std::string mode = "hard";
+    std::string core_type = "mix";
+    for (const auto& [key, value] : kwargs) {
+        if (key == "mode") mode = std::any_cast<std::string>(value);
+        if (key == "core_type") core_type = std::any_cast<std::string>(value);
+    }
+
+    if (mode == "hard") {
+        // args[0] is an empty MakeTuple for hard mode
+        if (!args.empty()) {
+            auto tuple = As<MakeTuple>(args[0]);
+            CHECK(!tuple || tuple->elements_.empty())
+                << "system.sync_all hard mode does not accept workspace arguments";
+        }
+    } else if (mode == "soft") {
+        CHECK(core_type == "aiv_only" || core_type == "aic_only" || core_type == "mix")
+            << "system.sync_all soft mode core_type must be aiv_only, aic_only, or mix, got '" << core_type << "'";
+        CHECK(args.size() == 1) << "system.sync_all soft mode requires exactly 1 argument (workspaces list), got "
+                                << args.size();
+
+        // Unpack MakeTuple elements and classify by type
+        auto tuple = As<MakeTuple>(args[0]);
+        CHECK(tuple) << "system.sync_all soft mode: workspaces argument must be a list/tuple";
+
+        bool has_gm = false, has_ub = false, has_l1 = false, has_used_cores = false;
+        for (const auto& elem : tuple->elements_) {
+            auto elem_type = elem->GetType();
+            if (As<TensorType>(elem_type)) {
+                CHECK(!has_gm) << "system.sync_all: duplicate gm_workspace (TensorType) in workspaces list";
+                has_gm = true;
+            } else if (auto tile_type = As<TileType>(elem_type)) {
+                CHECK(tile_type->memref_.has_value())
+                    << "system.sync_all: workspace tile must have memref";
+                auto space = tile_type->memref_.value()->memorySpace_;
+                if (space == MemorySpace::Vec) {
+                    CHECK(!has_ub) << "system.sync_all: duplicate ub_workspace (Vec TileType) in workspaces list";
+                    has_ub = true;
+                } else if (space == MemorySpace::Mat) {
+                    CHECK(!has_l1) << "system.sync_all: duplicate l1_workspace (Mat TileType) in workspaces list";
+                    has_l1 = true;
+                } else {
+                    CHECK(false) << "system.sync_all: workspace tile must be Vec or Mat, got "
+                                 << static_cast<int>(space);
+                }
+            } else if (IsIntScalar(elem)) {
+                CHECK(!has_used_cores) << "system.sync_all: duplicate used_cores (int scalar) in workspaces list";
+                has_used_cores = true;
+            } else {
+                CHECK(false) << "system.sync_all: unrecognized element type in workspaces list: "
+                             << elem_type->TypeName();
+            }
+        }
+
+        // Validate required workspaces per core_type
+        CHECK(has_gm) << "system.sync_all soft mode: workspaces list must contain a gm_workspace (TensorType)";
+        if (core_type == "aiv_only") {
+            CHECK(has_ub) << "system.sync_all soft aiv_only: workspaces list must contain ub_workspace (Vec TileType)";
+            CHECK(!has_l1) << "system.sync_all soft aiv_only: l1_workspace (Mat TileType) is not allowed";
+        } else if (core_type == "aic_only") {
+            CHECK(has_l1) << "system.sync_all soft aic_only: workspaces list must contain l1_workspace (Mat TileType)";
+            CHECK(!has_ub) << "system.sync_all soft aic_only: ub_workspace (Vec TileType) is not allowed";
+        } else { // mix
+            CHECK(has_ub) << "system.sync_all soft mix: workspaces list must contain ub_workspace (Vec TileType)";
+            CHECK(has_l1) << "system.sync_all soft mix: workspaces list must contain l1_workspace (Mat TileType)";
+        }
+    } else {
+        CHECK(false) << "system.sync_all: mode must be 'hard' or 'soft', got '" << mode << "'";
+    }
+
+    return GetUnknownType();
 }
 
 } // namespace
@@ -168,15 +245,17 @@ REGISTER_OP("system.wait_cross_core_dyn")
     .f_deduce_type(DeduceUnknownType);
 
 // Register system.sync_all (Global Core Synchronization)
-// Attributes: set_pipe, wait_pipe
+// Delegates to pto-isa SYNCALL<SyncAllMode, SyncCoreType>() / pto.syncall MLIR op.
+// Hard mode (default): no arguments.
+// Soft mode: workspaces list passed as a single MakeTuple arg.
+//   Backend codegen dispatches by type: TensorType→gm, Vec TileType→ub, Mat TileType→l1, ScalarType→used_cores.
 REGISTER_OP("system.sync_all")
-    .set_description("Global core synchronization")
+    .set_description("Global core synchronization (hard or soft mode)")
     .set_op_category("SyncOp")
-    .no_argument()
-    .set_attr<bool>("aiv_only")
-    .set_attr<int>("trigger_pipe")
-    .set_attr<int>("wait_pipe")
-    .f_deduce_type(DeduceUnknownType);
+    .add_argument("workspaces", "Soft mode workspace list as MakeTuple (Tensor gm + Tile ub/l1 + optional int used_cores)")
+    .set_attr<std::string>("mode")       // "hard" or "soft"
+    .set_attr<std::string>("core_type")  // "aiv_only", "aic_only", "mix"
+    .f_deduce_type(DeduceSyncAllType);
 
 // Register system.dcci (Data Cache Clean and Invalid)
 // Arguments:
@@ -205,7 +284,7 @@ REGISTER_OP("system.dcci")
                 << "or a scalar integer element offset";
         }
         if (As<TileType>(target_type) && args.size() == 2) {
-            CHECK(IsDcciScalarOffset(args[1]))
+            CHECK(IsIntScalar(args[1]))
                 << "system.dcci: tile target offset must be a scalar integer element offset (int or index Expr).\n"
                 << "  Example: dcci(tile, 0) - cache invalidation starting at element offset 0\n"
                 << "  Note: Use list/tuple offset only for tensor targets";
@@ -257,7 +336,7 @@ REGISTER_OP("system.mutex_lock_dyn")
     .set_attr<int>("pipe")
     .set_attr<int>("mode")
     .set_attr<int>("max_mutex_id")
-    .set_attr<std::vector<int>>("buf_id_values")
+    .set_attr<std::vector<int>>("mutex_ids")
     .f_deduce_type(DeduceUnknownType);
 
 // Register system.mutex_unlock_dyn (Mutex::Unlock with dynamic mutex_id, A5)
@@ -268,7 +347,7 @@ REGISTER_OP("system.mutex_unlock_dyn")
     .set_attr<int>("pipe")
     .set_attr<int>("mode")
     .set_attr<int>("max_mutex_id")
-    .set_attr<std::vector<int>>("buf_id_values")
+    .set_attr<std::vector<int>>("mutex_ids")
     .f_deduce_type(DeduceUnknownType);
 
 // ============================================================================
@@ -305,6 +384,23 @@ REGISTER_OP("system.reset_mask")
     .set_description("Reset vector mask register to all-ones")
     .set_op_category("SyncOp")
     .no_argument()
+    .f_deduce_type(DeduceUnknownType);
+
+// ============================================================================
+// Matmul Layout Transform Op — CCE-mode only (A5)
+// ----------------------------------------------------------------------------
+// Controls the fixpipe L0C drain direction. When enabled, fixpipe drains L0C
+// in N-direction (column-first) instead of M-direction (row-first), allowing
+// cube and fixpipe to access L0C along orthogonal axes within the same slot.
+// This eliminates RAW hazards and enables single-buffer L0C with K-accumulation.
+// Maps to AscendC SDK: SetMMLayoutTransform(bool).
+// ============================================================================
+
+REGISTER_OP("system.set_mm_layout_transform")
+    .set_description("Set matmul layout transform for fixpipe N-direction drain (A5)")
+    .set_op_category("SyncOp")
+    .no_argument()
+    .set_attr<int>("enabled")
     .f_deduce_type(DeduceUnknownType);
 
 } // namespace ir

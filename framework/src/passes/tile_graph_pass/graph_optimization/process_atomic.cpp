@@ -18,7 +18,9 @@
 #include "interface/operation/attribute.h"
 #include "tilefwk/tilefwk_op.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/pass_utils/merge_view_assemble_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include <set>
 
 #define MODULE_NAME "ProcessAtomic"
 
@@ -44,6 +46,11 @@ Status ProcessAtomic::RunOnFunction(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Unsupported AtomicRMW mode detected.");
         return FAILED;
     }
+    bool hasReduceAccCascade = false;
+    if (EliminateVecDupBranch(function, hasReduceAccCascade) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Eliminate VecDup branch failed.");
+        return FAILED;
+    }
     if (EliminateReduceAcc(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate ReduceAcc failed.");
         return FAILED;
@@ -51,6 +58,13 @@ Status ProcessAtomic::RunOnFunction(Function& function)
     if (EliminateAtomicRMW(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Eliminate AtomicRMW failed.");
         return FAILED;
+    }
+    if (hasReduceAccCascade) {
+        Status status = MergeViewAssembleUtils::MergeViewAssemble(function);
+        if (status != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
+            return status;
+        }
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End ProcessAtomic.");
     return SUCCESS;
@@ -105,11 +119,21 @@ Status ProcessAtomic::EliminateReduceAcc(Function& function)
 
 Status ProcessAtomic::EliminateAtomicRMW(Function& function)
 {
+    std::vector<Operation*> atomicRmwOps;
     for (auto& op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
-            if (ProcessSingleAtomicRMW(op) != SUCCESS) {
-                return FAILED;
-            }
+            atomicRmwOps.emplace_back(&op);
+        }
+    }
+    if (PrepareAtomicRMWSharedInputs(function, atomicRmwOps) != SUCCESS) {
+        return FAILED;
+    }
+    for (auto* op : atomicRmwOps) {
+        if (op == nullptr || op->IsDeleted()) {
+            continue;
+        }
+        if (ProcessSingleAtomicRMW(*op) != SUCCESS) {
+            return FAILED;
         }
     }
     function.EraseOperations(true);
@@ -157,6 +181,88 @@ Status ProcessAtomic::ProcessSingleAtomicRMW(Operation& op)
     op.SetAsDeleted();
     APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
     return SUCCESS;
+}
+
+bool ProcessAtomic::HasAssembleProducer(const std::shared_ptr<LogicalTensor>& input) const
+{
+    if (input == nullptr) {
+        return false;
+    }
+    for (auto* producerOp : input->GetProducers()) {
+        if (producerOp == nullptr) {
+            continue;
+        }
+        if (producerOp->GetOpcode() == Opcode::OP_ASSEMBLE || producerOp->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ProcessAtomic::HasConsumerExcept(const std::shared_ptr<LogicalTensor>& input, const Operation& op) const
+{
+    if (input == nullptr) {
+        return false;
+    }
+    for (auto* consumerOp : input->GetConsumers()) {
+        if (consumerOp != nullptr && consumerOp->GetOpMagic() != op.GetOpMagic()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Status ProcessAtomic::PrepareAtomicRMWSharedInputs(Function& function, const std::vector<Operation*>& atomicRmwOps) const
+{
+    for (auto* op : atomicRmwOps) {
+        if (op == nullptr || op->IsDeleted()) {
+            continue;
+        }
+        auto inputsBackup = op->GetIOperands();
+        for (const auto& input : inputsBackup) {
+            if (PrepareExclusiveAtomicInput(function, *op, input) == nullptr) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Prepare shared input failed for AtomicRMW op[%d].", op->GetOpMagic());
+                return FAILED;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+std::shared_ptr<LogicalTensor> ProcessAtomic::PrepareExclusiveAtomicInput(
+    Function& function, Operation& atomicOp, const std::shared_ptr<LogicalTensor>& input) const
+{
+    if (input == nullptr || !HasConsumerExcept(input, atomicOp) || !HasAssembleProducer(input)) {
+        return input;
+    }
+
+    auto producersBackup = input->GetProducers();
+    auto clonedInput = input->Clone(function, true);
+    if (clonedInput == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "Clone atomic input tensor[%d] failed.", input->GetMagic());
+        return nullptr;
+    }
+    atomicOp.ReplaceInput(clonedInput, input);
+
+    for (auto* producerOp : producersBackup) {
+        if (producerOp == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Null producer detected for atomic input tensor[%d].", input->GetMagic());
+            return nullptr;
+        }
+        if (producerOp->GetOpcode() != Opcode::OP_ASSEMBLE && producerOp->GetOpcode() != Opcode::OP_ASSEMBLE_SSA) {
+            continue;
+        }
+        auto& clonedProducer = producerOp->CloneOperation(function, producerOp->GetIOperands(), producerOp->GetOOperands());
+        clonedProducer.UpdateSubgraphID(producerOp->GetSubgraphID());
+        clonedProducer.SetCoreType(producerOp->GetCoreType());
+        clonedProducer.SetSpan(producerOp->GetSpan());
+        clonedProducer.SetScopeInfo(producerOp->GetScopeInfo());
+        if (producerOp->GetOpAttribute() != nullptr) {
+            clonedProducer.SetOpAttribute(producerOp->GetOpAttribute()->Clone());
+        }
+        clonedProducer.ReplaceOutput(clonedInput, input);
+    }
+    return clonedInput;
 }
 
 std::string ProcessAtomic::GetRmwAttrKey(AtomicRMWMode mode)
@@ -245,6 +351,132 @@ void ProcessAtomic::AccumulateAssembleOffset(
             producerDynOffset[i] = producerDynOffset[i] + rmwDynOffset[i];
         }
     }
+}
+
+void ProcessAtomic::CollectReduceAccUpstream(
+    Operation& op, std::set<int>& visited, std::vector<Operation*>& result) const
+{
+    if (visited.count(op.GetOpMagic()) > 0 || op.IsDeleted()) {
+        return;
+    }
+    visited.insert(op.GetOpMagic());
+    if (op.GetOpcode() == Opcode::OP_REDUCE_ACC) {
+        result.push_back(&op);
+        return;
+    }
+    for (const auto& input : op.GetIOperands()) {
+        if (input == nullptr) {
+            continue;
+        }
+        for (auto* producer : input->GetProducers()) {
+            if (producer == nullptr || producer->IsDeleted() ||
+                producer->GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+                continue;
+            }
+            CollectReduceAccUpstream(*producer, visited, result);
+        }
+    }
+}
+
+Status ProcessAtomic::TraceBackAndRemoveVecDup(
+    Function& function, Operation& op, std::set<int>& visited, bool& anyRemoved)
+{
+    if (visited.count(op.GetOpMagic()) > 0 || op.IsDeleted()) {
+        return SUCCESS;
+    }
+    if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+        return SUCCESS;
+    }
+    visited.insert(op.GetOpMagic());
+
+    if (op.GetOpcode() == Opcode::OP_A_MUL_B || op.GetOpcode() == Opcode::OP_A_MULACC_B) {
+        if (RemoveVecDupBranchFromCubeOp(op, anyRemoved) != SUCCESS) {
+            return FAILED;
+        }
+    }
+
+    for (const auto& input : op.GetIOperands()) {
+        if (input == nullptr) {
+            continue;
+        }
+        for (auto* producer : input->GetProducers()) {
+            if (producer == nullptr || producer->IsDeleted()) {
+                continue;
+            }
+            if (TraceBackAndRemoveVecDup(function, *producer, visited, anyRemoved) != SUCCESS) {
+                return FAILED;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+Status ProcessAtomic::RemoveVecDupBranchFromCubeOp(Operation& cubeOp, bool& anyRemoved)
+{
+    auto inputsBackup = cubeOp.GetIOperands();
+    for (const auto& input : inputsBackup) {
+        auto producersBackup = input->GetProducers();
+        for (auto* producer : producersBackup) {
+            if (producer == nullptr || producer->IsDeleted()) {
+                continue;
+            }
+            if ((producer->GetOpcode() == Opcode::OP_ASSEMBLE ||
+                 producer->GetOpcode() == Opcode::OP_ASSEMBLE_SSA) &&
+                IsVecDupAssembleInput(*producer)) {
+                input->RemoveConsumer(&cubeOp);
+                cubeOp.EraseInput(input);
+                anyRemoved = true;
+                break;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+bool ProcessAtomic::IsVecDupAssembleInput(const Operation& assembleOp) const
+{
+    for (const auto& input : assembleOp.GetIOperands()) {
+        for (auto* producer : input->GetProducers()) {
+            if (producer != nullptr && producer->GetOpcode() == Opcode::OP_VEC_DUP) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+Status ProcessAtomic::EliminateVecDupBranch(Function& function, bool& hasReduceAccCascade)
+{
+    std::vector<Operation*> reduceAccOps;
+    std::set<int> collectVisited;
+    for (auto& op : function.Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ATOMIC_RMW) {
+            CollectReduceAccUpstream(op, collectVisited, reduceAccOps);
+        }
+    }
+    hasReduceAccCascade = !reduceAccOps.empty();
+    if (reduceAccOps.empty()) {
+        return SUCCESS;
+    }
+
+    bool anyRemoved = false;
+    std::set<int> traceVisited;
+    for (auto* reduceAccOp : reduceAccOps) {
+        if (TraceBackAndRemoveVecDup(function, *reduceAccOp, traceVisited, anyRemoved) != SUCCESS) {
+            return FAILED;
+        }
+    }
+
+    if (!anyRemoved) {
+        return SUCCESS;
+    }
+    APASS_LOG_INFO_F(Elements::Function, "EliminateVecDupBranch removed VecDup assemble input branch.");
+    function.EraseOperations(true);
+    if (DeadOperationEliminator::EliminateDeadOperation(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Eliminate dead operation failed for VecDup branch.");
+        return FAILED;
+    }
+    return SUCCESS;
 }
 
 } // namespace tile_fwk

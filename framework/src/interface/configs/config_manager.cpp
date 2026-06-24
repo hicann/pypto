@@ -24,7 +24,7 @@
 
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "tilefwk/comm_group_recorder.h"
 #include <unistd.h>
 namespace npu::tile_fwk {
@@ -69,16 +69,19 @@ Status ConfigManager::Initialize()
     /* 环境变量优先生效 */
     std::string jsonFilePath = GetEnvVar(tilefwkConfigEnvName);
     if (jsonFilePath.empty()) {
-        jsonFilePath = RealPath(GetCurrentSharedLibPath() + "/configs/tile_fwk_config.json");
+        jsonFilePath = RealPath(GetPyptoLibPath() + "/configs/tile_fwk_config.json");
     }
 
     config::SetRunDataOption(KEY_PTO_CONFIG_FILE, jsonFilePath);
     config::SetRunDataOption(KEY_RUNTYPE, "npu");
     FE_LOGI("Start to parse op_json_file %s", jsonFilePath.c_str());
-    if (!ReadJsonFile(jsonFilePath, json_)) {
-        FE_LOGE(FeError::INVALID_FILE, "ReadJsonFile failed.");
+    std::ifstream ifs(jsonFilePath);
+    if (!ifs.is_open()) {
+        FE_LOGE(FeError::INVALID_FILE, "Open file %s failed.", jsonFilePath.c_str());
         return FAILED;
     }
+    ifs >> json_;
+    ifs.close();
 
 #ifdef SRCPATH
     constexpr const char* SRC_PATH = SRCPATH;
@@ -145,7 +148,7 @@ static std::string CreateLogTopFolder()
     bool ret = CreateDir(folderPath);
     CHECK(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
-    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid()) + "_" + GetHostName(); 
+    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid()) + "_" + GetHostName();
     ret = CreateDir(folderPath);
     FE_ASSERT(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
     config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, RealPath(folderPath));
@@ -244,6 +247,8 @@ static std::map<std::string, std::function<void(PassConfigs&, const nlohmann::js
      [](PassConfigs& configs, const nlohmann::json& node) { configs.disablePass = node.get<bool>(); }},
     {KEY_HEALTH_CHECK,
      [](PassConfigs& configs, const nlohmann::json& node) { configs.healthCheck = node.get<bool>(); }},
+    {KEY_ADDR_CHECK,
+     [](PassConfigs& configs, const nlohmann::json& node) { configs.addrCheck = node.get<bool>(); }},
     {KEY_RESUME_PARH,
      [](PassConfigs& configs, const nlohmann::json& node) { configs.resumePath = node.get<std::string>(); }},
 };
@@ -368,12 +373,12 @@ void CreateRunDataDir()
     std::string envStr = GetEnvVar(ENV_VAR_PYPTO_HOME);
     std::string dir = envStr.empty() ? (GetEnvVar(ENV_VAR_HOME) + "/.pypto") : envStr;
     g_config.rundataDir.path = dir + "/run";
-    RemoveOldestDirs(g_config.rundataDir.path, PREFIX_RUNDATA, LIMIT_DIR_NUM_BEFORE_CREATE);
+    RemoveOldDirectories(g_config.rundataDir.path, PREFIX_RUNDATA, LIMIT_DIR_NUM_BEFORE_CREATE);
     auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::stringstream timestamp;
     timestamp << std::put_time(std::localtime(&time), "%Y%m%d%H%M%S");
     g_config.rundataDir.dName = PREFIX_RUNDATA + timestamp.str();
-    bool res = CreateMultiLevelDir(g_config.rundataDir.montage());
+    bool res = CreateDir(g_config.rundataDir.montage(), true);
     FE_ASSERT(FeError::BAD_FD, res) << "Failed to create directory: " << g_config.rundataDir.montage();
 }
 
@@ -387,7 +392,7 @@ void SetRunDataOption(const std::string& key, const std::string& value)
         CreateRunDataDir();
     }
     auto filename = g_config.rundataDir.montage() + "/rundata.json";
-    SaveFileSafe(filename, reinterpret_cast<uint8_t*>(dumpValue.data()), dumpValue.size());
+    SaveFileSafe(filename, dumpValue);
 }
 
 void SetPrintOptions(int edgeItems, int precision, int threshold, int linewidth)

@@ -52,6 +52,7 @@ REGISTER_INFER_SHAPE_FUNC(OP_DIV, Opcode::OP_DIV, BinaryBrcinlineInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_MAXIMUM, Opcode::OP_MAXIMUM, BinaryBrcinlineInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_MINIMUM, Opcode::OP_MINIMUM, BinaryBrcinlineInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_AXPY, Opcode::OP_AXPY, BinaryBrcinlineInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_EXPANDEXPDIF, Opcode::OP_EXPANDEXPDIF, BinaryBrcinlineInferFunc);
 
 void ElewiseInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -199,7 +200,6 @@ REGISTER_INFER_SHAPE_FUNC(OP_SBITWISELEFTSHIFT, Opcode::OP_SBITWISELEFTSHIFT, El
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISEAND, Opcode::OP_BITWISEAND, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISEOR, Opcode::OP_BITWISEOR, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, ElewiseInferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_EXPANDEXPDIF, Opcode::OP_EXPANDEXPDIF, ElewiseInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, ElewiseInferFunc);
 
 void RemInferShapeFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
@@ -537,30 +537,39 @@ void QuantizeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     std::vector<SymbolicScalar> dstValidShape(op->GetIOperands()[0]->GetDynValidShape());
     outValidShapes.push_back(dstValidShape);
 
-    // Second output (tmpbuf): calculate size based on input rows
-    // tmpbuf size = rows * sizeof(half), where rows is from input's second last dimension
+    // Second output (tmpbuf): same size as src, with int32_t type (4 bytes per element)
     auto inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
     if (!inputValidShape.empty()) {
-        // tmpbuf shape: one 32B block per row -> [rows, 1] in terms of half elements
-        // But for valid shape, we can represent it as a 1D size
-        // rows = inputValidShape[inputValidShape.size() - 2]
-        // tmpBufBytes = rows * 32
-        // tmpBufHalfElements = rows * 2 (since 32B = 16 half elements)
-        std::vector<SymbolicScalar> tmpValidShape;
-        if (inputValidShape.size() >= 2) {
-            // tmpbuf size in bytes: rows * 32 (one 32B block per row)
-            SymbolicScalar rows = inputValidShape[inputValidShape.size() - 2];
-            SymbolicScalar tmpBufSize = rows * 32;
-            tmpValidShape.push_back(tmpBufSize);
-        } else {
-            // Fallback: use a constant size
-            tmpValidShape.push_back(SymbolicScalar(256));  // 8 rows * 32B
+        // tmpbuf has same shape as input src
+        std::vector<SymbolicScalar> tmpValidShape = inputValidShape;
+
+        // For axis=-2, align the second-to-last dimension to 32 bytes (8 int32 elements)
+        int64_t axis = 0;
+        if (op->GetAttr(OP_ATTR_PREFIX + "axis", axis) && axis == -2 && tmpValidShape.size() >= 2) {
+            constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+            size_t lastDimIndex = tmpValidShape.size() - 2;
+            tmpValidShape[lastDimIndex] =
+                (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements * alignElements;
         }
+
         outValidShapes.push_back(tmpValidShape);
     } else {
-        // No dynamic shape info, use default size
+        // No dynamic shape info, use input's static shape
         std::vector<SymbolicScalar> tmpValidShape;
-        tmpValidShape.push_back(SymbolicScalar(256));  // Default size
+        auto inputShape = op->GetIOperands()[0]->GetShape();
+        for (auto dim : inputShape) {
+            tmpValidShape.push_back(SymbolicScalar(dim));
+        }
+
+        // For axis=-2, align the second-to-last dimension to 32 bytes (8 int32 elements)
+        int64_t axis = 0;
+        if (op->GetAttr(OP_ATTR_PREFIX + "axis", axis) && axis == -2 && tmpValidShape.size() >= 2) {
+            constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+            size_t lastDimIndex = tmpValidShape.size() - 2;
+            tmpValidShape[lastDimIndex] =
+                (tmpValidShape[lastDimIndex] + alignElements - 1) / alignElements * alignElements;
+        }
+
         outValidShapes.push_back(tmpValidShape);
     }
 }
@@ -628,6 +637,41 @@ REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMAXWITHVALUE_SINGLE, Opcode::OP_ROWARGMAXWITH
 REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMINWITHVALUE_SINGLE, Opcode::OP_ROWARGMINWITHVALUE_SINGLE, ReduceInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMAXWITHVALUE_LINE, Opcode::OP_ROWARGMAXWITHVALUE_LINE, ReduceInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_ROWARGMINWITHVALUE_LINE, Opcode::OP_ROWARGMINWITHVALUE_LINE, ReduceInferFunc);
+
+void OnlineSoftmaxInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto scoresValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    auto columnStatisticValidShape = scoresValidShape;
+    if (!columnStatisticValidShape.empty()) {
+        columnStatisticValidShape[0] = SymbolicScalar(1);
+    }
+    outValidShapes.push_back(scoresValidShape);
+    outValidShapes.push_back(columnStatisticValidShape);
+    outValidShapes.push_back(columnStatisticValidShape);
+    outValidShapes.push_back(scoresValidShape);
+    auto reduceWorkspaceValidShape = op->GetOOperands()[4]->GetDynValidShape();
+    if (reduceWorkspaceValidShape.empty()) {
+        reduceWorkspaceValidShape = SymbolicScalar::FromConcrete(op->GetOOperands()[4]->GetShape());
+    }
+    outValidShapes.push_back(reduceWorkspaceValidShape);
+}
+
+void OnlineSoftmaxUpdateInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto statisticValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    auto outputValidShape = op->GetIOperands()[2]->GetDynValidShape();
+    outValidShapes.push_back(statisticValidShape);
+    outValidShapes.push_back(statisticValidShape);
+    outValidShapes.push_back(outputValidShape);
+    auto updateWorkspaceValidShape = op->GetOOperands()[3]->GetDynValidShape();
+    if (updateWorkspaceValidShape.empty()) {
+        updateWorkspaceValidShape = SymbolicScalar::FromConcrete(op->GetOOperands()[3]->GetShape());
+    }
+    outValidShapes.push_back(updateWorkspaceValidShape);
+}
+
+REGISTER_INFER_SHAPE_FUNC(OP_ONLINE_SOFTMAX, Opcode::OP_ONLINE_SOFTMAX, OnlineSoftmaxInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_ONLINE_SOFTMAX_UPDATE, Opcode::OP_ONLINE_SOFTMAX_UPDATE, OnlineSoftmaxUpdateInferFunc);
 
 void WhereInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -1008,31 +1052,17 @@ void TransDataNCDHW2NDC1HWC0InferFunc(Operation* op, std::vector<std::vector<Sym
 
 void TransDataNC1HWC02NCHWInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeN = inputValidShape[0];
-    SymbolicScalar validShapeC1 = inputValidShape[1];
-    SymbolicScalar validShapeH = inputValidShape[2];
-    SymbolicScalar validShapeW = inputValidShape[3];
-    SymbolicScalar validShapeC0 = inputValidShape[4];
-
-    std::vector<SymbolicScalar> outputValidShape = {validShapeN, validShapeC1 * validShapeC0, validShapeH, validShapeW};
-    outValidShapes.push_back(outputValidShape);
+    std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
+    outValidShapes.push_back(validShape);
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
     outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
 }
 
 void TransDataNDC1HWC02NCDHWInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
-    std::vector<SymbolicScalar> inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
-    SymbolicScalar validShapeD = inputValidShape[0];
-    SymbolicScalar validShapeC1 = inputValidShape[1];
-    SymbolicScalar validShapeH = inputValidShape[2];
-    SymbolicScalar validShapeW = inputValidShape[3];
-    SymbolicScalar validShapeC0 = inputValidShape[4];
-
-    std::vector<SymbolicScalar> outputValidShape = {
-        1, validShapeD, validShapeC1 * validShapeC0, validShapeH, validShapeW};
-    outValidShapes.push_back(outputValidShape);
+    std::vector<SymbolicScalar> validShape = op->GetOOperands()[0]->GetDynValidShape();
+    validShape.insert(validShape.begin(), SymbolicScalar(1));
+    outValidShapes.push_back(validShape);
     std::vector<int64_t> tmpValidShape = op->GetOOperands()[1]->GetShape();
     outValidShapes.push_back(SymbolicScalar::FromConcrete(tmpValidShape));
 }

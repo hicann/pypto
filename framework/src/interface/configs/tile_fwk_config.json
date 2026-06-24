@@ -26,7 +26,6 @@
         "ready_on_host_tensors": [],
         "device_sched_parallelism": 1,
         "launch_sched_aicpu_num": 7,
-        "launch_sched_same_cluster": 1,
         "launch_early_mode": 0
     },
     "host": {
@@ -38,7 +37,8 @@
     },
     "codegen": {
         "support_dynamic_aligned": false,
-        "soc_version": ""
+        "soc_version": "",
+        "enable_pmu_trace": false
     },
     "verify": {
         "enable_pass_verify": false,
@@ -96,8 +96,7 @@
             "soc_version": "",
             "fixed_output_path": false,
             "force_overwrite": true,
-            "codegen_support_tile_tensor": true,
-            "enable_pmu_trace" : false
+            "codegen_support_tile_tensor": true
         },
         "tensor_print": {
             "edgeitems": 3,
@@ -123,7 +122,8 @@
                 "expected_value_check": false,
                 "disable_pass": false,
                 "health_check": false,
-                "use_max_freq_label": false
+                "use_max_freq_label": false,
+                "addr_check": false
             }
         },
         "pass_strategies": {

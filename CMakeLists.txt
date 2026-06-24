@@ -38,7 +38,7 @@ option(ENABLE_COMPILE_DEPENDENCY_CHECK "Enable compile dependency relation check
 
 # 公开编译开关(Feature 特性级开关)
 option(ENABLE_FEATURE_PYTHON_FRONT_END "Enable Python Front-end" ON)
-option(ENABLE_FEATURE_INSTALL_EXPERIMENT "Enable experiment header or binary file install" OFF)
+option(ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE "Enable Pybind11 impl compile online" OFF)
 
 # 公开编译开关(tests)
 option(ENABLE_TESTS_EXECUTE "Enable auto execute tests executable" OFF)
@@ -145,16 +145,10 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             DESTINATION ${PyPTO_WhlName}/lib/scripts
     )
 
-    # 安装 头文件
-    if (ENABLE_FEATURE_INSTALL_EXPERIMENT)
-        install(DIRECTORY framework/include/
-                DESTINATION ${PyPTO_WhlName}/include
-                PATTERN "*.h"
-                PATTERN "*.hpp"
-                PATTERN ".svn" EXCLUDE
-                PATTERN ".git" EXCLUDE
-        )
-    endif ()
+    # 安装 头文件(运行时)
+    # 1. tileop 目录下为 tileop 实现, 整目录安装打包;
+    # 2. tilefwk 目录下为 machine 所需, 整目录安装打包;
+    # 上述目录均为运行时编译 aicpu/aicore 所需二进制依赖
     install(DIRECTORY framework/src/interface/tileop/
             DESTINATION ${PyPTO_WhlName}/lib/include/tileop
             PATTERN "*.h"
@@ -170,42 +164,263 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             PATTERN ".git" EXCLUDE
     )
 
-    # 生成和安装配置文件
-    if (ENABLE_FEATURE_INSTALL_EXPERIMENT)
-        PTO_Fwk_InstallCMakeConfig(
-                EXPORT              ${InstallExport}
-                WHL_NAME            ${PyPTO_WhlName}
-                CMAKE_PARENT_DIR    ${PyPTO_WhlName}/lib
-                TARGETS             ${InstallTargets}
+    # 安装 在线编译二进制必需文件
+
+    # 1. cmake 配置文件
+    #    在线编译 pypto_impl 场景 / 在线编译 calculator 场景 均需要
+    install(FILES
+                cmake/intf.cmake
+            DESTINATION ${PyPTO_WhlName}/lib/framework/cmake
+    )
+
+    # 2. 头文件
+    # 2.1 hwSecureC 头文件 在线编译 calculator 场景 / 在线编译 pypto_impl 场景 均需要;
+    # 2.2 json 头文件 在线编译 pypto_impl 场景需要;
+    # 2.3 framework/include/ 路径
+    #     1) 在线编译 pypto_impl 场景, 安装全量头文件;
+    #     2) 在线编译 calculator 场景, 仅安装必需的头文件;
+    # 2.4 framework/src/ 路径
+    #     1) 仅在线编译 pypto_impl 场景需要
+    get_target_property(_cSecIncludeDir c_sec_include INTERFACE_INCLUDE_DIRECTORIES)
+    install(FILES
+                ${_cSecIncludeDir}/securec.h
+                ${_cSecIncludeDir}/securectype.h
+            DESTINATION ${PyPTO_WhlName}/lib/framework/3rd/include
+    )
+    if (ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE)
+        get_target_property(_JsonIncludeDir json INTERFACE_INCLUDE_DIRECTORIES)
+        install(DIRECTORY ${_JsonIncludeDir}/nlohmann/
+                DESTINATION ${PyPTO_WhlName}/lib/framework/3rd/include/nlohmann
+                PATTERN "*.h"
+                PATTERN "*.hpp"
+                PATTERN ".svn" EXCLUDE
+                PATTERN ".git" EXCLUDE
+        )
+        install(DIRECTORY framework/include/
+                DESTINATION ${PyPTO_WhlName}/lib/framework/include
+                PATTERN "*.h"
+                PATTERN "*.hpp"
+                PATTERN ".svn" EXCLUDE
+                PATTERN ".git" EXCLUDE
+        )
+    else ()
+        # 头文件(在线编译, framework/include/ 路径)
+        #
+        install(FILES
+                    framework/include/tilefwk/data_type.h
+                    framework/include/tilefwk/error.h
+                    framework/include/tilefwk/error_code.h
+                    framework/include/tilefwk/lazy.h
+                    framework/include/tilefwk/element.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/include/tilefwk
+        )
+    endif ()
+    if (ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE)
+        install(FILES
+                    framework/src/adapter/api/acl_api.h
+                    framework/src/adapter/api/acl_define.h
+                    framework/src/adapter/api/msprof_define.h
+                    framework/src/adapter/api/runtime_api.h
+                    framework/src/adapter/api/runtime_capture_context.h
+                    framework/src/adapter/api/runtime_define.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/adapter/api
+        )
+        install(DIRECTORY framework/src/cost_model/simulation/
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/cost_model/simulation
+                PATTERN "*.h"
+                PATTERN "*.hpp"
+                PATTERN ".svn" EXCLUDE
+                PATTERN ".git" EXCLUDE
+        )
+        install(FILES
+                    framework/src/interface/cache/function_cache.h
+                    framework/src/interface/cache/hash.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/cache
+        )
+        install(FILES
+                    framework/src/interface/compiler_monitor/monitor_manager.h
+                    framework/src/interface/compiler_monitor/monitor_stage_scope.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/compiler_monitor
+        )
+        install(FILES
+                    framework/src/interface/configs/config_manager_ng.h
+                    framework/src/interface/configs/config_manager.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/configs
+        )
+        install(FILES
+                    framework/src/interface/function/function.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/function
+        )
+        install(FILES
+                    framework/src/interface/inner/element.h
+                    framework/src/interface/inner/function.h
+                    framework/src/interface/inner/hash_buffer.h
+                    framework/src/interface/inner/pre_def.h
+                    framework/src/interface/inner/tilefwk.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/inner
+        )
+        install(FILES
+                    framework/src/interface/interpreter/calc.h
+                    framework/src/interface/interpreter/interpreter_log.h
+                    framework/src/interface/interpreter/raw_tensor_data.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/interpreter
+        )
+        install(FILES
+                    framework/src/interface/interpreter/calculator/calc_api.h
+                    framework/src/interface/interpreter/calculator/dtype_utils.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/interpreter/calculator
+        )
+        install(FILES
+                    framework/src/interface/machine/device/tilefwk/aicpu_common.h
+                    framework/src/interface/machine/device/tilefwk/aicpu_perf.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_data.h
+                    framework/src/interface/machine/device/tilefwk/aikernel_define.h
+                    framework/src/interface/machine/device/tilefwk/core_func_data.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/machine/device/tilefwk
+        )
+        install(FILES
+                    framework/src/interface/machine/host/perf_analysis.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/machine/host
+        )
+        install(FILES
+                    framework/src/interface/operation/attr_holder.h
+                    framework/src/interface/operation/attribute.h
+                    framework/src/interface/operation/opcode.h
+                    framework/src/interface/operation/operation_common.h
+                    framework/src/interface/operation/operation.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/operation
+        )
+        install(FILES
+                    framework/src/interface/program/program.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/program
+        )
+        install(FILES
+                    framework/src/interface/schema/schema_base.h
+                    framework/src/interface/schema/schema_def_attr.h
+                    framework/src/interface/schema/schema_def_common.h
+                    framework/src/interface/schema/schema_def_trace.h
+                    framework/src/interface/schema/schema_parser.h
+                    framework/src/interface/schema/schema.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/schema
+        )
+        install(FILES
+                    framework/src/interface/tensor/float.h
+                    framework/src/interface/tensor/hypercube_overlap_checker.h
+                    framework/src/interface/tensor/irbuilder.h
+                    framework/src/interface/tensor/logical_tensor.h
+                    framework/src/interface/tensor/raw_tensor.h
+                    framework/src/interface/tensor/runtime_slot.h
+                    framework/src/interface/tensor/storage.h
+                    framework/src/interface/tensor/symbol_handler.h
+                    framework/src/interface/tensor/symbolic_scalar.h
+                    framework/src/interface/tensor/tensor_offset.h
+                    framework/src/interface/tensor/tensor_slot.h
+                    framework/src/interface/tensor/tensormap.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/tensor
+        )
+        install(FILES
+                    framework/src/interface/tileop/distributed/comm_context.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/tileop/distributed
+        )
+        install(FILES
+                    framework/src/interface/utils/common.h
+                    framework/src/interface/utils/error.h
+                    framework/src/interface/utils/file_utils.h
+                    framework/src/interface/utils/op_info_manager.h
+                    framework/src/interface/utils/string_utils.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/utils
+        )
+
+        install(FILES
+                    framework/src/machine/device/distributed/common.h
+                    framework/src/machine/device/distributed/shmem_wait_until.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/device/distributed
+        )
+        install(FILES
+                    framework/src/machine/device/dynamic/aicore_constants.h
+                    framework/src/machine/device/dynamic/aicpu_instrumentation.h
+                    framework/src/machine/device/dynamic/costmodel_utils.h
+                    framework/src/machine/device/dynamic/device_common.h
+                    framework/src/machine/device/dynamic/device_perf.h
+                    framework/src/machine/device/dynamic/device_trace.h
+                    framework/src/machine/device/dynamic/device_utils.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/device/dynamic
+        )
+        install(FILES
+                    framework/src/machine/runtime/context/stream_context.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/context
+        )
+        install(FILES
+                    framework/src/machine/runtime/distributed/distributed_context.h
+                    framework/src/machine/runtime/distributed/hccl_context.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/distributed
+        )
+        install(FILES
+                    framework/src/machine/runtime/launcher/aicore_model_launcher.h
+                    framework/src/machine/runtime/launcher/cell_match_dynamic.h
+                    framework/src/machine/runtime/launcher/device_launcher_binding.h
+                    framework/src/machine/runtime/launcher/device_launcher_types.h
+                    framework/src/machine/runtime/launcher/device_launcher.h
+                    framework/src/machine/runtime/launcher/emulation_launcher.h
+                    framework/src/machine/runtime/launcher/eslmodel_launcher.h
+                    framework/src/machine/runtime/launcher/launcher_router.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/launcher
+        )
+        install(FILES
+                    framework/src/machine/runtime/memory_utils/device_memory_utils.h
+                    framework/src/machine/runtime/memory_utils/emulation_memory_utils.h
+                    framework/src/machine/runtime/memory_utils/eslmodel_memory_utils.h
+                    framework/src/machine/runtime/memory_utils/memory_pool.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/memory_utils
+        )
+        install(FILES
+                    framework/src/machine/runtime/runner/device_perf.h
+                    framework/src/machine/runtime/runner/device_runner.h
+                    framework/src/machine/runtime/runner/host_prof.h
+                    framework/src/machine/runtime/runner/runtime_agent.h
+                    framework/src/machine/runtime/runner/runtime_utils.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/runtime/runner
+        )
+        install(FILES
+                    framework/src/machine/utils/device_log.h
+                    framework/src/machine/utils/device_switch.h
+                    framework/src/machine/utils/machine_ws_intf.h
+                    framework/src/machine/utils/queues.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/utils
+        )
+        install(DIRECTORY framework/src/machine/utils/dynamic/
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/machine/utils/dynamic
+                PATTERN "*.h"
+                PATTERN "*.in"
+                PATTERN ".svn" EXCLUDE
+                PATTERN ".git" EXCLUDE
+        )
+        install(FILES
+                    framework/src/passes/pass_utils/subfunc_utils.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/passes/pass_utils
         )
     endif ()
 
-    # 安装 在线编译 calculator 二进制必需文件
-    get_target_property(cSecIncludeDir c_sec_include INTERFACE_INCLUDE_DIRECTORIES)
-    install(FILES
-                ${cSecIncludeDir}/securec.h
-                ${cSecIncludeDir}/securectype.h
-            DESTINATION ${PyPTO_WhlName}/lib/calculator/include
-    )
-    install(FILES
-                framework/include/tilefwk/data_type.h
-                framework/include/tilefwk/error.h
-                framework/include/tilefwk/error_code.h
-                framework/include/tilefwk/lazy.h
-                framework/include/tilefwk/element.h
-            DESTINATION ${PyPTO_WhlName}/lib/calculator/include/tilefwk
-    )
+    # 3. 源文件
+    # 3.1 在线编译 calculator 二进制必需源文件, CMakeLists.txt 文件;
+    # 3.2 在线编译 pypto_impl 二进制必需源文件, CMakeLists.txt 文件;
     install(DIRECTORY framework/src/interface/interpreter/calculator/
-            DESTINATION ${PyPTO_WhlName}/lib/calculator/src
+            DESTINATION ${PyPTO_WhlName}/lib/framework/src/calculator
             PATTERN "*.h"
             PATTERN "*.cpp"
+            PATTERN "CMakeLists.txt"
             PATTERN ".svn" EXCLUDE
             PATTERN ".git" EXCLUDE
-            PATTERN "CMakeLists.txt" EXCLUDE
     )
-    install(FILES
-                cmake/intf.cmake
-                framework/src/interface/interpreter/calculator/CMakeLists.txt
-            DESTINATION ${PyPTO_WhlName}/lib/calculator
-    )
+
+    if (ENABLE_FEATURE_PYBIND11_IMPL_COMPILE_ONLINE)
+        install(DIRECTORY python/src/
+                DESTINATION ${PyPTO_WhlName}/lib/pypto_impl/src
+                PATTERN "*.h"
+                PATTERN "*.cpp"
+                PATTERN "CMakeLists.txt"
+                PATTERN ".svn" EXCLUDE
+                PATTERN ".git" EXCLUDE
+        )
+    endif ()
 endif ()

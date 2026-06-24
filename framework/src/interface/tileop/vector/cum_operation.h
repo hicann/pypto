@@ -30,9 +30,11 @@ TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tmpStride)
     pto::TMOV(tmpDstTile, tmpSrcTile);
 
 #pragma clang loop unroll(disable)
-    for (LoopVar i = 1; i < tileH;) {
+    for (LoopVar i = 1; i < tileH; i *= 2) {
 #ifdef __DAV_V220
         pipe_barrier(PIPE_V);
+#else
+        pipe_barrier(PIPE_ALL);
 #endif
         using TileDefine =
             pto::Tile<pto::TileType::Vec, typename T0::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
@@ -47,10 +49,10 @@ TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tmpStride)
         }
 #ifdef __DAV_V220
         pipe_barrier(PIPE_V);
+#else
+        pipe_barrier(PIPE_ALL);
 #endif
         pto::TADDS(src1Tile, dstTile, 0);
-
-        i = i * 2;
     }
 }
 

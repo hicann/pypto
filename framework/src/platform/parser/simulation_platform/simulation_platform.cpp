@@ -24,7 +24,7 @@
 namespace npu {
 namespace tile_fwk {
 const std::string PLATFORM_INFO_RELATIVE_PATH = "/configs/";
-const std::string FWK_CONFIG_RELATIVE_PATH = "/tile_fwk_config.json";
+const std::string FWK_CONFIG_RELATIVE_PATH = "tile_fwk_config.json";
 const std::string DEFAULT_SOC_VERSION = "A2A3";
 const std::string INI_EXTENSION = ".ini";
 const uint32_t PLATFORM_FAILED = 0xFFFFFFFF;
@@ -52,25 +52,11 @@ std::string DPlatformToSocVersion(DPlatform platform)
 }
 }
 
-std::string SimulationPlatform::GetCurrentSharedLibPath()
-{
-    std::string currentLibPath;
-    Dl_info info;
-    if (dladdr(reinterpret_cast<void*>(&GetCurrentSharedLibPath), &info)) {
-        currentLibPath = std::string(info.dli_fname);
-        int32_t pos = currentLibPath.rfind('/');
-        if (pos >= 0) {
-            currentLibPath = currentLibPath.substr(0, pos);
-        }
-    }
-    return currentLibPath;
-}
-
 std::string SimulationPlatform::GetDevicePlatform()
 {
-    const std::string configPath = RealPath(GetCurrentSharedLibPath() + FWK_CONFIG_RELATIVE_PATH);
+    const std::string configPath = RealPath(GetPyptoLibPath() + PLATFORM_INFO_RELATIVE_PATH + FWK_CONFIG_RELATIVE_PATH);
     if (configPath.empty()) {
-        PLATFORM_LOGW("Failed to open config file: %s, use default platform.", configPath.c_str());
+        PLATFORM_LOGW("Failed to open tile_fwk_config.json, use default platform.");
         return DEFAULT_SOC_VERSION;
     }
     std::ifstream jsonFile(configPath);
@@ -82,6 +68,8 @@ std::string SimulationPlatform::GetDevicePlatform()
         jsonData["global"]["platform"].contains("device_platform") &&
         jsonData["global"]["platform"]["device_platform"].is_string()) {
         platformStr = jsonData["global"]["platform"]["device_platform"].get<std::string>();
+        PLATFORM_LOGD("Key 'global.platform.device_platform' specified SoC version:%s.",
+            platformStr.c_str());
     } else {
         PLATFORM_LOGW("Key 'global.platform.device_platform' not found in %s, use default platform.",
             configPath.c_str());
@@ -98,7 +86,7 @@ bool SimulationPlatform::GetCostModelPlatformRealPath(const std::string& socVers
         platformSocVersion = GetDevicePlatform();
         PLATFORM_LOGD("Config specified SoC version:%s.", platformSocVersion.c_str());
     }
-    realPath = RealPath(GetCurrentSharedLibPath() + PLATFORM_INFO_RELATIVE_PATH + platformSocVersion + INI_EXTENSION);
+    realPath = RealPath(GetPyptoLibPath() + PLATFORM_INFO_RELATIVE_PATH + platformSocVersion + INI_EXTENSION);
     if (realPath.empty()) {
         return false;
     }

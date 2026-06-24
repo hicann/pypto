@@ -26,6 +26,10 @@
 
 namespace npu::tile_fwk {
 
+static const std::string RMW_MODE_ATTR_ADD = OP_ATTR_PREFIX + "atomic_add";
+static const std::string RMW_MODE_ATTR_MIN = OP_ATTR_PREFIX + "atomic_min";
+static const std::string RMW_MODE_ATTR_MAX = OP_ATTR_PREFIX + "atomic_max";
+
 inline std::map<std::string, std::set<int>> BuildLabelToColorsMap(const OperationsViewer& opOriList)
 {
     std::map<std::string, std::set<int>> labelToColors;

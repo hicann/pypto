@@ -445,6 +445,7 @@ void RemoveUnalignedReshape::InsertReshapeCopy(Function& function, Operation& op
         if (needToCopy) {
             copyOutOp = CopyBranchBetweenCopyOut2Reshape(function, toCopyProducerTensor, index);
         }
+        CollectSiblingCopyInConsumersOfDDRReshapeInput(input, op, copyInOps);
         if (copyOutOp != nullptr) {
             ProcessCopyOutOfDDRReshape(copyOutOp);
         }
@@ -554,6 +555,28 @@ bool RemoveUnalignedReshape::CheckAllCopyOutInputsNonUb(const std::vector<Operat
         }
     }
     return true;
+}
+
+void RemoveUnalignedReshape::CollectSiblingCopyInConsumersOfDDRReshapeInput(
+    LogicalTensorPtr reshapeInput, Operation& reshapeOp, std::vector<Operation*>& copyInOps)
+{
+    auto consumers = reshapeInput->GetConsumers();
+    for (auto* consumerOp : consumers) {
+        if (consumerOp == nullptr || consumerOp->GetOpMagic() == reshapeOp.GetOpMagic() ||
+            consumerOp->GetOpcode() != Opcode::OP_COPY_IN || consumerOp->GetIOperands().empty() ||
+            consumerOp->GetOOperands().empty()) {
+            continue;
+        }
+        auto copyInOutput = consumerOp->GetOOperands().front();
+        if (reshapeInput == nullptr || copyInOutput == nullptr ||
+            reshapeInput->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+            continue;
+        }
+        if (copyInOutput->GetMemoryTypeOriginal() == MemoryType::MEM_UB ||
+            copyInOutput->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+            copyInOps.push_back(consumerOp);
+        }
+    }
 }
 
 bool RemoveUnalignedReshape::ProcessMultipleCopyOuts(std::vector<Operation*>& copyOutOps)

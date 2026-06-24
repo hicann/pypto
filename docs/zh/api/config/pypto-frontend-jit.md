@@ -8,14 +8,14 @@
 
 ## 功能说明
 
-`pypto.frontend.jit` 是前端架构中的核心装饰器，用于将Python函数即时编译（JIT）为高效的计算图并在NPU上执行。前端不支持返回值，仅支持in-place修改；支持传入torch张量及其他类型的变量。
+`pypto.frontend.jit`是前端架构中的核心装饰器，用于将Python函数即时编译（JIT）为高效的计算图并在NPU上执行。前端不支持返回值，仅支持in-place修改；支持传入torch张量及其他类型的变量。
 
 主要特性：
 
 - **In-place修改**: 内核函数通过in-place修改输出张量传递计算结果，不支持返回值
 - **类型注解**: 在函数签名中明确指定张量的形状和数据类型
 - **直接调用**: 测试时可直接传入torch张量及其他类型的变量，无需显式转换
-- **动态形状支持**: 配合 `pypto.DYNAMIC` 支持运行时变化的维度
+- **动态形状支持**: 配合`pypto.DYNAMIC`支持运行时变化的维度
 - **多运行模式**: 支持NPU和SIM（模拟器）两种运行模式
 
 ## 函数原型
@@ -36,12 +36,12 @@ def kernel_function(...):
 | 参数名 | 输入/输出 | 说明 |
 |--------|----------|------|
 | func | 输入 | frontend.jit修饰的函数，kernel入口，描述计算过程，用于构建计算图。 |
-| host_options | 输入 | 类型为 `dict[str, any]`，用于设置host配置项，配置项参数见[参数说明](./pypto-set_host_options.md) |
-| runtime_options | 输入 | 类型为 `dict[str, any]`，用于设置runtime配置项，配置项参数见[runtime_options参数说明](#runtime_options_detail) |
-| codegen_options | 输入 | 类型为 `dict[str, any]`，用于设置codegen配置项，配置项参数见[参数说明](./pypto-set_codegen_options.md)  |
-| pass_options | 输入 | 类型为 `dict[str, any]`，用于设置Pass配置项，配置项参数见[参数说明](./pypto-set_pass_options.md)  |
-| verify_options | 输入 | 类型为 `dict[str, any]`，用于设置Verify配置项，配置项参数见[参数说明](./pypto-set_verify_options.md) |
-| debug_options | 输入 | 类型为 `dict[str, any]`，用于设置debug配置项，配置项参数见[参数说明](./pypto-set_debug_options.md) |
+| host_options | 输入 | 类型为`dict[str, any]`，用于设置host配置项，配置项参数见[参数说明](./pypto-set_host_options.md) |
+| runtime_options | 输入 | 类型为`dict[str, any]`，用于设置runtime配置项，配置项参数见[runtime_options参数说明](#runtime_options_detail) |
+| codegen_options | 输入 | 类型为`dict[str, any]`，用于设置codegen配置项，配置项参数见[参数说明](./pypto-set_codegen_options.md)  |
+| pass_options | 输入 | 类型为`dict[str, any]`，用于设置Pass配置项，配置项参数见[参数说明](./pypto-set_pass_options.md)  |
+| verify_options | 输入 | 类型为`dict[str, any]`，用于设置Verify配置项，配置项参数见[参数说明](./pypto-set_verify_options.md) |
+| debug_options | 输入 | 类型为`dict[str, any]`，用于设置debug配置项，配置项参数见[参数说明](./pypto-set_debug_options.md) |
 
 ### runtime_options参数说明 <a id="runtime_options_detail"></a>
 
@@ -53,8 +53,7 @@ def kernel_function(...):
 | valid_shape_optimize            | 含义：动态shape场景，validshape编译优化选项，打开该选项后，动态轴的Loop循环中，主块（shape与validshape相等）采用静态shape编译，尾块采用动态shape编译 <br> 说明：<br> 0：默认值，表示关闭validshape编译优化选项，所有Loop循环均采用动态shape进行编译 <br> 1：表示打开validshape编译优化选项 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：0 <br> 影响pass范围：NA |
 | ready_on_host_tensors           | 含义：标记在Host端准备好的Kernel入口函数的输入tensor名称列表，格式为["tensor1", "tensor2", ...]。<br> 说明：如果算子的计算逻辑对某输入tensor有值依赖(即获取了tensor的值)，且此tensor的device数据在Host端已提前准备好，那么cpu的控制流可以提前发射以提升性能。<br> 类型：list of string <br> 默认值：空列表 <br> 影响pass范围：NA |
 | device_sched_parallelism        | 含义：当算子中pypto.loop设置了可并行标记(parallel=True)时,此配置项用于指定pypto.loop在调度执行时的并行度 <br> 说明：使用此配置项前，请确保标记为可并行的pypto.loop的各个迭代之间不存在任何依赖关系，满足并行调度的条件。当并行度大于1时，该pypto.loop的多个迭代任务将被并发调度执行。需要注意的是，并行度数值越大，所需的workspace内存使用量也越大，通常与设置的并行度成倍数关系。<br> 类型：int <br> 取值范围:1 ~ 8 <br> 默认值： 1 <br> 影响pass范围：NA |
-| launch_sched_aicpu_num        | 含义：指定启动的Schedule AICPU线程数量 <br> 说明：当指定的数量大于硬件最大可用aicpu数量或者小于等于0时,将启用硬件自动计算值，当前硬件类型为DAV2201时，最大可用aicpu数量为5，硬件类型为DAV3510时，最大可用aicpu数量为6（多款DAV3510芯片的最大值，具体最大数量取决于具体的型号）。<br> 类型：int <br> 取值范围:1 ~ 6 <br> 默认值： 6 <br> 影响pass范围：NA |
-| launch_sched_same_cluster        | 含义：是否强制同Cluster线程分配 <br> 说明：0：允许跨Cluster，此时不需要多launch aicpu，可以减少aicpu使用开销，避免可能因为aicpu资源不够导致功能问题，但是性能会受影响，整体性能不及同Cluster线程分配场景； <br> 1：强制同Cluster，此时需要更多的aicpu资源来保证线程同Cluster分配，可能会导致aicpu资源不够，但是此模式下会提升调度性能，此外，当开启同cluster时, launch_sched_aicpu_num配置不生效； <br> 类型：int <br> 取值范围：0或1 <br> 默认值：1 <br> 影响pass范围：NA |
+| launch_sched_aicpu_num        | 含义：指定启动的Schedule AICPU线程数量 <br> 说明：当指定的数量大于硬件最大可用aicpu数量或者小于等于0时,将启用硬件自动计算值，当前硬件类型为DAV2201时，最大可用aicpu数量为5，硬件类型为DAV3510时，最大可用aicpu数量为7（多款DAV3510芯片的最大值，具体最大数量取决于具体的型号）。<br> 类型：int <br> 取值范围:1 ~ 7 <br> 默认值： 7 <br> 影响pass范围：NA |
 | launch_early_mode        | 含义：aicpu提前发射模式，支持aicpu不等待aicore启动后再启动 <br> 说明：当开启提前发射后，可以减少aicpu启动头开销，提升性能，但是aicpu提前发射会提前占用aicpu资源，在接入整网或者hccl用aicpu做通信域展开时会存在aicpu由于竞争而资源不够的情况，可能会导致功能问题。0：仅capture模式提前发射； <br> 1：所有模式都提前发射； <br> 2：所有模式都不提前发射 <br> 类型：int <br> 取值范围:0 ~ 2 <br> 默认值： 0 <br> 影响pass范围：NA |
 
 ## 返回值说明
@@ -63,18 +62,18 @@ def kernel_function(...):
 
 ## 约束说明
 
-1. 张量参数，必须使用类型注解指定为 `pypto.Tensor` 类型
-2. 动态维度必须使用 `pypto.DYNAMIC` 或 `pypto.DYN` 在参数注解中标记，未标记时，默认按静态维度处理
+1. 张量参数，必须使用类型注解指定为`pypto.Tensor`类型
+2. 动态维度必须使用`pypto.DYNAMIC`或`pypto.DYN`在参数注解中标记，未标记时，默认按静态维度处理
 3. tensor format用format标记，format支持非显式标记(参考示例1中的a),默认为pypto.TileOpFormat.TILEOP_ND;
    format显式标记时,性能更优,要求传入的torch tensor与pypto.Tensor声明的format一致，能获得更优的性能;
-4. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后
+4. 张量参数在前，非张量参数（如`scalar`、`tiling`）在后
 5. 非张量参数支持keyword传参、位置参数、使用默认值
 
 **pypto.Tensor[...]说明**：
 
-- kernel函数里申明推荐使用 `pypto.Tensor[[shape], dtype]` 方括号语法，符合Python类型注解规范
-- 也兼容旧的小括号语法 `pypto.Tensor([shape], dtype)`
-- 方括号内不支持 `key=value` 形式的关键字参数（Python语法限制），只能按位置传递或使用字典
+- kernel函数里申明推荐使用`pypto.Tensor[[shape], dtype]`方括号语法，符合Python类型注解规范
+- 也兼容旧的小括号语法`pypto.Tensor([shape], dtype)`
+- 方括号内不支持`key=value`形式的关键字参数（Python语法限制），只能按位置传递或使用字典
 - `pypto.Tensor[]`（空参数）不支持
 
 ## 调用示例

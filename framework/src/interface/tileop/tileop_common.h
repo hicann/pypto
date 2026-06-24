@@ -73,7 +73,7 @@ enum class DualDstMode : int64_t { DUAL_DST_DISABLE = 0, DUAL_DST_SPLIT_M = 1, D
 
 enum class TransMode : int64_t { CAST_NONE = 0, CAST_RINT = 1, CAST_ROUND = 2 };
 
-enum class PaddingMode : int64_t { NO_PADDING = 0, PADDING_OUTER = 1, PADDING_INNER = 2 };
+enum class PaddingMode : int64_t { NORMAL_PADDING_MODE = 0, MX_PADDING_MODE = 1 };
 
 enum class ReLuType : int64_t { NoReLu = 0, ReLu = 1 };
 

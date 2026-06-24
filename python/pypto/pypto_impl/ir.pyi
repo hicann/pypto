@@ -2152,6 +2152,25 @@ class IRBuilder:
             The created continue statement
         """
 
+    @overload
+    def create_function(
+        self,
+        name: str,
+        params: list[Var],
+        body: Stmt,
+    ) -> Function:
+        """Create a function with variable parameters.
+
+        Args:
+            name: Function name
+            params: Parameter variables
+            body: Function body statement
+
+        Returns:
+            The created function
+        """     
+
+    @overload
     def create_function(
         self,
         name: str,
@@ -2279,3 +2298,44 @@ def type_equal(a: Expr, b: Expr) -> bool:
     Returns:
         True if the types are equal, False otherwise
     """
+
+class Pass:
+
+    def __call__(self, program: Program):
+        """Execute the pass on the program.
+
+        Args:
+            program: Program to apply the pass on
+        """
+
+    @staticmethod
+    def convert_to_ssa() -> Pass:
+        """Convert the program to SSA form.
+
+        Returns:
+            None
+        """
+
+    @staticmethod
+    def init_mem_ref() -> Pass:
+        """Initialize memory references.
+
+        Returns:
+            None
+        """
+
+    @staticmethod
+    def aggressive_dce() -> Pass:
+        """Eliminate dead code.
+
+        Returns:
+            None
+        """
+
+    @staticmethod
+    def canonicalize() -> Pass:
+        """Canonicalize the IR.
+
+        Returns:
+            None
+        """

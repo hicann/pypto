@@ -26,11 +26,10 @@
 #include "tilefwk/aicore_print.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "device_trace.h"
+#include "device_sche_alloc_thread.h"
 
 constexpr uint32_t LAUNCH_AICPU_NUM = 5;
 constexpr int MAX_RETRIES = 100;
-//  same-cluster CPU ID bounds in Dav2201
-//  (dev0,dev1) and (dev2,dev3) each form a dual-die pair
 constexpr int CLUSTER_ID_LOW_BOUND_DIE0 = 4;
 constexpr int CLUSTER_ID_HIGH_BOUND_DIE0 = 7;
 constexpr int CLUSTER_ID_LOW_BOUND_DIE1 = 12;
@@ -132,98 +131,14 @@ struct DynMachineManager {
         int (*kernelCtrlServer)(void* targ);
     };
 
-    void SetCurThreadIdxForDav3510(int dieMaxCpuNum, int startIdx, int& curThreadIdx, std::atomic<int>& dieThreadIdx)
-    {
-        int expected = 0;
-        while (expected < dieMaxCpuNum) { // ensure thread security
-            int desired = expected + 1;
-            if (dieThreadIdx.compare_exchange_weak(
-                    expected, desired, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                int curDieThreadIdx = expected + startIdx;
-                curThreadIdx = curDieThreadIdx;
-                break;
-            }
-        }
-    }
-
-    // Common helper function for waiting CPU mask readiness with timeout check
-    int WaitForCpuMaskReady(DeviceArgs* devArgs, int cpu, int curThreadIdx)
-    {
-        TIMEOUT_CHECK_INIT(devArgs->archInfo, TIMEOUT_20MIN);
-        while (__builtin_popcount(cpumask_.load(std::memory_order_acquire)) != static_cast<int>(devArgs->nrAicpu)) {
-            __PYPTO_TIMEOUT_CHECK(ThreadErr::THREAD_CPU_ALLOC_FAILED,
-                return DEVICE_MACHINE_ERROR,
-                "#sche.thread.init: Thread alloc, threadIdx=%d, physicalCpu=%d.",
-                curThreadIdx, cpu);
-        }
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
-    }
-
-    int WaitForThreadIdxReady(DeviceArgs* devArgs, int &expected, int &curThreadIdx, std::atomic<int>& dieMaxThreadIdx)
-    {
-        TIMEOUT_CHECK_INIT(devArgs->archInfo, TIMEOUT_20MIN);
-        while (curThreadIdx > expected &&
-            !dieMaxThreadIdx.compare_exchange_strong(expected, curThreadIdx,
-            std::memory_order_release, std::memory_order_relaxed)) {
-            __PYPTO_TIMEOUT_CHECK(ThreadErr::THREAD_CPU_ALLOC_FAILED, return DEVICE_MACHINE_ERROR,
-            "#thread idx update timeout: expected=%d, desired=%d.", expected, curThreadIdx);
-        }
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
-    }
-
     int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
-        int die0MaxCpuid = static_cast<int>(devArgs->maxAicpuNum >> 1);
-        int die0MaxCpuNum = static_cast<int>(devArgs->scheCpuNum >> 1);
-        int die1MaxCpuNum = static_cast<int>(devArgs->scheCpuNum) - die0MaxCpuNum;
-
-        if (cpu <= die0MaxCpuid) {
-            SetCurThreadIdxForDav3510(die0MaxCpuNum, SCHE_THREAD_START_IDX, curThreadIdx, die0ThreadIdx_);
-            int expected = die0MaxThreadIdx_.load(std::memory_order_relaxed);
-            WaitForThreadIdxReady(devArgs, expected, curThreadIdx, die0MaxThreadIdx_);
-        } else {
-            SetCurThreadIdxForDav3510(
-                die1MaxCpuNum, die0MaxCpuNum + SCHE_THREAD_START_IDX, curThreadIdx, die1ThreadIdx_);
-            int expected = die1MaxThreadIdx_.load(std::memory_order_relaxed);
-            WaitForThreadIdxReady(devArgs, expected, curThreadIdx, die1MaxThreadIdx_);
-        }
-
-        cpumask_.fetch_or(1 << cpu, std::memory_order_release);
-        
-        int ret = WaitForCpuMaskReady(devArgs, cpu, curThreadIdx);
-        if (ret != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-            return ret;
-        }
-
-        int expected = threadIdx.load(std::memory_order_relaxed);
-        int desired;
-        int maxRetries = MAX_RETRIES;
-        while (maxRetries-- > 0) {  // 下次循环会重新读取 die0/die1，基于新 expected 计算 desired
-            int die0MaxThreadIdx = die0MaxThreadIdx_.load(std::memory_order_acquire);
-            int die1MaxThreadIdx = die1MaxThreadIdx_.load(std::memory_order_acquire);
-
-            if (die0MaxThreadIdx != die0MaxCpuNum ||
-                die1MaxThreadIdx != static_cast<int>(devArgs->scheCpuNum)) {
-                desired = expected + 1;
-            } else {
-                desired = curThreadIdx;
-            }
-
-            if (desired == expected ||  // CAS 失败后，expected 已更新为最新值
-                threadIdx.compare_exchange_strong(expected, desired,
-                    std::memory_order_release, std::memory_order_relaxed)) {
-                curThreadIdx = desired;
-                break;
-            }
-        }
-
-        DEV_INFO("Thread alloc success: physicalCpu=%d, threadIdx=%d.", cpu, curThreadIdx);
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask_);
     }
 
-    int AllocThreadIdxForDav2201(int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
+    int AllocThreadIdxForDav2201(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
-        if (IsDeviceMode()) {
+        if (IsDeviceMode() && devArgs->launchSchedSameCluster) {
             if ((cpu >= CLUSTER_ID_LOW_BOUND_DIE0 && cpu <= CLUSTER_ID_HIGH_BOUND_DIE0) ||
                 (cpu >= CLUSTER_ID_LOW_BOUND_DIE1 && cpu <= CLUSTER_ID_HIGH_BOUND_DIE1)) {
                 curThreadIdx = ++threadIdx;
@@ -231,7 +146,7 @@ struct DynMachineManager {
                 curThreadIdx = -1;
             }
         } else {
-            (void) cpu;
+            (void)cpu;
             curThreadIdx = ++threadIdx;
         }
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
@@ -253,7 +168,7 @@ struct DynMachineManager {
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
             ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx);
         } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
-            ret = AllocThreadIdxForDav2201(cpu, curThreadIdx, threadIdx);
+            ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx);
         } else {
             curThreadIdx = ++threadIdx;
         }
@@ -294,8 +209,7 @@ struct DynMachineManager {
         UNUSED(entry);
 
         DeviceArgs* devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
-        DEV_INFO("DeviceMode=%s, isDeviceMode=%d, stage=%s, threadIdx=%d", IsDeviceMode() ? "device" : "sim", IsDeviceMode(),
-            "RunSche.before", threadIdx);
+        DEV_INFO("DeviceMode=%s, isDeviceMode=%d, stage=%s, threadIdx=%d", IsDeviceMode() ? "device" : "sim", IsDeviceMode(), "RunSche.before", threadIdx);
         DEV_INFO("ThreadScheEnter idx=%d", threadIdx);
 
         DEV_INFO(
@@ -327,14 +241,14 @@ struct DynMachineManager {
         }
         schMachine_.init(args->scheCpuNum);
         initSch_.store(true);
+        scheFinished_.store(false);
+        scheThreadSelected_.store(0);
     }
 
     void RunSchDeInit()
     {
         cpumask_ = 0;
         schExitNum_ = 0;
-        die0ThreadIdx_ = 0;
-        die1ThreadIdx_ = 0;
         initSch_.store(false);
 #ifndef __DEVICE__
         simCpuId_ = 0;
@@ -345,6 +259,29 @@ struct DynMachineManager {
     {
         ReleaseRuntimeDataRingBuffer(devProg);
         DEV_INFO("All schedule exited, destroy the machine.");
+    }
+
+    int SyncSchExit(DevAscendProgram* devProg, const DeviceArgs& devArgs, int threadIdx, int ret)
+    {
+        if (++schExitNum_ == devArgs.nrAicpu) {
+            RunSchPost(devProg);
+            RunSchDeInit();
+            scheFinished_.store(true);
+            PerfEvtMgr::Instance().AddScheduleTurn();
+            DEV_INFO("All sche cpu exited.");
+            return ret;
+        }
+        TIMEOUT_CHECK_INIT(devArgs.archInfo, TIMEOUT_20MIN);
+        while (!scheFinished_.load(std::memory_order_acquire)) {
+            if (scheThreadSelected_.load(std::memory_order_acquire) >= static_cast<int>(devArgs.scheCpuNum)) {
+                break;
+            }
+            RuntimeYield(0);
+            __PYPTO_TIMEOUT_CHECK(
+                ThreadErr::THREAD_CPU_WAIT_FINISH_TIMEOUT, return DEVICE_MACHINE_OK,
+                "#sche.thread.wait.finish: Thread deInit, threadIdx=%d.", threadIdx);
+        }
+        return ret;
     }
 
     int RunCtrlInitNoLock(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
@@ -459,15 +396,18 @@ struct DynMachineManager {
             DeviceTrace::GetInstance().ReportTraceMsg();
             return scheWaitRet;
         }
-        auto beginTime = GetCycles();   // After wait, the devStartArgs should be ready.
+        auto beginTime = GetCycles(); // After wait, the devStartArgs should be ready.
         DevStartArgs* runtimeDataCurrent =
             reinterpret_cast<DevStartArgs*>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         ReCalcDevArgsAicoreNum(kargs, devProg);
         auto devArgs = devProg->devArgs;
         int threadIdx = -1;
         RunSchInit(&devArgs);
-        if (AllocThreadIdx(&devArgs, threadIdx, runtimeDataCurrent->devScheState.threadIdx) != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-                DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.", sched_getcpu());
+        if (AllocThreadIdx(&devArgs, threadIdx, runtimeDataCurrent->devScheState.threadIdx) !=
+            npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
+            DEV_ERROR(
+                ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
+                sched_getcpu());
             DEV_ATRACE("Schedule Current cpu[%d] alloc thread failed", sched_getcpu());
             DeviceTrace::GetInstance().ReportTraceMsg();
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
@@ -476,6 +416,7 @@ struct DynMachineManager {
         PerfMtTrace(PERF_TRACE_BEGIN, threadIdx, beginTime);
         int ret = DEVICE_MACHINE_OK;
         if (threadIdx != -1 && threadIdx <= static_cast<int>(devArgs.scheCpuNum)) {
+            scheThreadSelected_++;
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
             ret = RunSche(kargs, entry, threadIdx);
             DEV_INFO("SchedThreadLeave idx=%d ret=%d", threadIdx, ret);
@@ -488,13 +429,7 @@ struct DynMachineManager {
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         }
-        if (++schExitNum_ == devArgs.nrAicpu) {
-            RunSchPost(devProg);
-            RunSchDeInit();
-            PerfEvtMgr::Instance().AddScheduleTurn();
-            DEV_INFO("All sche cpu exited.");
-        }
-        return ret;
+        return SyncSchExit(devProg, devArgs, threadIdx, ret);
     }
 
     int Entry(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
@@ -521,11 +456,6 @@ struct DynMachineManager {
 #ifndef __DEVICE__
     std::atomic<int> simCpuId_{0};
 #endif
-    std::atomic<int> ctrlcpuIdx_{0};
-    std::atomic<int> die0ThreadIdx_{0};
-    std::atomic<int> die1ThreadIdx_{0};
-    std::atomic<int> die0MaxThreadIdx_{-1};
-    std::atomic<int> die1MaxThreadIdx_{-1};
     DeviceSchedMachine schMachine_;
     struct sigaction oriFPEAct_;
     struct sigaction oriBUSAct_;
@@ -535,8 +465,10 @@ struct DynMachineManager {
     struct sigaction oriBordAct_;
     std::atomic<bool> reset_{false};
     std::atomic<bool> initCtrl_{false};
-	std::atomic<bool> initSch_{false};
+    std::atomic<bool> initSch_{false};
     std::atomic<bool> schRunFailed_{false};
+    std::atomic<int> scheThreadSelected_{0};
+    std::atomic<bool> scheFinished_{false};
 
     struct SplittedInfo {
         std::atomic<uint64_t> currentRound{0};
@@ -544,20 +476,20 @@ struct DynMachineManager {
         int ScheWait(DevAscendProgram* devProg)
         {
             TIMEOUT_CHECK_INIT(devProg->devArgs.archInfo, TIMEOUT_1MIN);
-            
+
             while (unlikely(!devProg->runtimeDataRingBufferInited)) {
                 RuntimeYield(0);
-                
+
                 __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT,
                     return DEVICE_MACHINE_ERROR,
                     "#sche.wait: RingBuffer init.");
             }
             RuntimeDataRingBufferHead* ringBufferHead = devProg->GetRuntimeDataList();
             start = GetCycles();
-            
+
             while (unlikely(ringBufferHead->Empty())) {
                 RuntimeYield(0);
-                
+
                 __PYPTO_TIMEOUT_CHECK(SchedErr::RINGBUFFER_WAIT_TIMEOUT,
                     return DEVICE_MACHINE_ERROR,
                     "#sche.wait: RingBuffer data.");

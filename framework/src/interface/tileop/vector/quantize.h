@@ -89,6 +89,7 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr int paddedRow_src = PTO_CEIL(srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));  // vbrcb processes in groups of 8 rows
 
     constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
@@ -101,7 +102,7 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
     using DstDtype = typename T0::Type;
     using SrcDtype = typename T1::Type;
     using ScaleDtype = typename T2::Type;
-    using TmpDtype = float;
+    using TmpDtype = int32_t;
 
     // 定义 Tile 类型
     using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, paddedCol_dst,
@@ -110,8 +111,8 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
                                     pto::BLayout::RowMajor, -1, -1>;
     using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
                                     pto::BLayout::ColMajor, -1, -1>;
-    // tmpbuf: [rows, 8] with float type, one 32B block per row (8 float = 32B)
-    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, dstTileH, 8,
+    // tmpbuf: aligned size with int32_t type
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src,
                                     pto::BLayout::RowMajor, -1, -1>;
 
     // 遍历所有 Tile
@@ -121,7 +122,7 @@ TILEOP void TQuantInt8Sym(T0 dst, T1 src, T2 scale, T3 tmp) {
                 DstTileDefine dstTile(dstShape3, dstShape4);
                 SrcTileDefine srcTile(srcShape3, srcShape4);
                 ParaTileDefine scaleTile(srcShape3, 1);
-                TmpTileDefine tmpTile(dstShape3, 8);
+                TmpTileDefine tmpTile(srcShape3, srcShape4);
 
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
@@ -201,6 +202,7 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr int paddedCol_src = PTO_CEIL(srcTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
+    constexpr int paddedRow_src = PTO_CEIL(srcTileH, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));  // vbrcb processes in groups of 8 rows
 
     constexpr auto scaleTileW = TileOp::GetTensorTileShapeDim<T2, 4, expectSize>();
     constexpr int paddedRow_scale = PTO_CEIL(scaleTileW, static_cast<int>(TILE_ALIGNMENT_BYTES / sizeof(float)));
@@ -216,7 +218,7 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
     using SrcDtype = typename T1::Type;
     using ScaleDtype = typename T2::Type;
     using OffsetDtype = typename T3::Type;
-    using TmpDtype = float;
+    using TmpDtype = int32_t;
 
     // 定义 Tile 类型
     using DstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW,
@@ -225,8 +227,8 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
                                     pto::BLayout::RowMajor, -1, -1>;
     using ParaTileDefine = pto::Tile<pto::TileType::Vec, ScaleDtype, paddedRow_scale, 1,
                                     pto::BLayout::ColMajor, -1, -1>;
-    // tmpbuf: [rows, 8] with float type, one 32B block per row (8 float = 32B)
-    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, dstTileH, 8,
+    // tmpbuf: aligned size with int32_t type
+    using TmpTileDefine = pto::Tile<pto::TileType::Vec, TmpDtype, paddedRow_src, paddedCol_src,
                                     pto::BLayout::RowMajor, -1, -1>;
 
     // 遍历所有 Tile
@@ -237,7 +239,7 @@ TILEOP void TQuantInt8Asym(T0 dst, T1 src, T2 scale, T3 offset, T4 tmp) {
                 SrcTileDefine srcTile(srcShape3, srcShape4);
                 ParaTileDefine scaleTile(srcShape3, 1);
                 ParaTileDefine offsetTile(srcShape3, 1);
-                TmpTileDefine tmpTile(dstShape3, 8);
+                TmpTileDefine tmpTile(srcShape3, srcShape4);
 
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;

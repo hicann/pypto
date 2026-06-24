@@ -42,7 +42,7 @@ std::string GetBitwiseShiftOpName()
         case BitwiseShiftOpType::SBITWISELEFTSHIFT:
             return "SBITWISELEFTSHIFT";
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
             return "";
     }
 }
@@ -58,7 +58,7 @@ Opcode GetBitwiseShiftOpNameCode()
             CASE(BITWISERIGHTSHIFT);
             CASE(BITWISELEFTSHIFT);
             default:
-                ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+                CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
         }
 #undef CASE
     }
@@ -72,7 +72,7 @@ Opcode GetBitwiseShiftOpNameCode()
         CASE(SBITWISERIGHTSHIFT);
         CASE(SBITWISELEFTSHIFT);
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
     }
 #undef CASE
 }

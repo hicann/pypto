@@ -427,8 +427,13 @@ bool AssignMemoryType::HasParallelDifferentConsumerRequirement(
         return false;
     }
     auto requirements = inserter.GetConsumerRequirements(tensor);
-    return std::any_of(requirements.begin(), requirements.end(), [targetType](const auto& item) {
-        return MemoryPathUtils::IsDifferentKnownRequirement(item.second, targetType);
+    return std::any_of(requirements.begin(), requirements.end(), [this, targetType](const auto& item) {
+        auto resolveOutputRequirement = [this](const LogicalTensorPtr& output) {
+            return InferUniqueRequirementThroughViewConsumers(output);
+        };
+        MemoryType requirement = MemoryPathUtils::ResolveEffectiveConsumerRequirement(
+            item.first, item.second, targetType, resolveOutputRequirement);
+        return MemoryPathUtils::IsDifferentKnownRequirement(requirement, targetType);
     });
 }
 
@@ -1213,16 +1218,9 @@ Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Operation& operation)
             operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
         return FAILED;
     }
-    MemoryType memType = output->GetMemoryTypeOriginal();
-    const size_t ubThreshold = static_cast<size_t>(
-        Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) *
-        (operation.GetOpcode() == Opcode::OP_ASSEMBLE ? UB_THRESHOLD_ASSEMBLE : UB_THRESHOLD_NORMAL));
-    const size_t l1Threshold =
-        static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
-    bool oversizedUb = memType == MemoryType::MEM_UB && ExceedsMemoryLimit(output, ubThreshold);
-    bool oversizedL1 = operation.GetOpcode() == Opcode::OP_ASSEMBLE && memType == MemoryType::MEM_L1 &&
-                       ExceedsMemoryLimit(output, l1Threshold);
-    if (!oversizedUb && !oversizedL1) {
+    bool isAssemble = operation.GetOpcode() == Opcode::OP_ASSEMBLE;
+    // op_view的输出不做L1内存类型回退，避免tile_shape设置异常场景下，回退到DDR导致出现非预期的view
+    if (!IsOversizedLocalBuffer(output, output->GetMemoryTypeOriginal(), isAssemble, isAssemble)) {
         return SUCCESS;
     }
     ForceSetOriginal(output, MemoryType::MEM_DEVICE_DDR, "ApplyOversizedLocalBufferFallback");
@@ -1230,11 +1228,49 @@ Status AssignMemoryType::ApplyOversizedLocalBufferFallback(Operation& operation)
         Elements::Operation, "Force %s[%d] output tensor[%d] to DDR by size limit.", operation.GetOpcodeStr().c_str(),
         operation.GetOpMagic(), output->GetMagic());
     if (operation.GetOpcode() == Opcode::OP_VIEW) {
+        RETURN_IF_NOT_SUCCESS(DowngradeOversizedViewInputRequirement(operation));
         auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
         if (viewAttr != nullptr) {
             viewAttr->SetToType(MemoryType::MEM_DEVICE_DDR);
         }
     }
+    return SUCCESS;
+}
+
+bool AssignMemoryType::IsOversizedLocalBuffer(
+    const LogicalTensorPtr& tensor, MemoryType memoryType, bool useAssembleUbLimit, bool allowL1Fallback) const
+{
+    if (memoryType == MemoryType::MEM_UB) {
+        double ubLimitRatio = useAssembleUbLimit ? UB_THRESHOLD_ASSEMBLE : UB_THRESHOLD_NORMAL;
+        size_t threshold =
+            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * ubLimitRatio);
+        return ExceedsMemoryLimit(tensor, threshold);
+    }
+    if (memoryType == MemoryType::MEM_L1 && allowL1Fallback) {
+        size_t threshold =
+            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
+        return ExceedsMemoryLimit(tensor, threshold);
+    }
+    return false;
+}
+
+Status AssignMemoryType::DowngradeOversizedViewInputRequirement(Operation& operation)
+{
+    if (operation.iOperand.empty() || operation.iOperand.front() == nullptr) {
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "Apply oversized fallback for OP_VIEW[%d] failed because of invalid input operand.",
+            operation.GetOpMagic());
+        return FAILED;
+    }
+    auto input = operation.iOperand.front();
+    MemoryType inputType = inserter.GetRequirementOrUnknown(input, operation);
+    if (!IsOversizedLocalBuffer(input, inputType, false, true)) {
+        return SUCCESS;
+    }
+    ForceSetRequirement(input, operation, MemoryType::MEM_DEVICE_DDR, "ApplyOversizedViewInputFallback");
+    APASS_LOG_DEBUG_F(
+        Elements::Operation, "Force OP_VIEW[%d] input tensor[%d] requirement to DDR by size limit.",
+        operation.GetOpMagic(), input->GetMagic());
     return SUCCESS;
 }
 

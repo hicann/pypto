@@ -23,7 +23,7 @@
 #include <regex>
 #include <dlfcn.h>
 #include <fstream>
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "cost_model/simulation/pv/PvModel.h"
 #include "cost_model/simulation/common/CommonTools.h"
 #include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
@@ -33,7 +33,6 @@
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
-#include "tilefwk/file.h"
 #include "tilefwk/error_code.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
@@ -44,9 +43,12 @@ const uint32_t PV_REG_PC = 0;
 const uint32_t PV_REG_PARA_BASE = 4;
 const uint32_t PV_REG_BLOCK_DIM = 9;
 const uint32_t PV_REG_TASK_CFG = 163;
-const uint32_t PV_STEP_PIPE_ID = 2;
+const uint32_t PV_STEP_PIPE_ID = 0;
 const uint32_t PV_SYS_VA_BASE = 67;
 const uint32_t PV_SYS_PHY_BASE = 68;
+constexpr uint32_t PV_MEM_GM = 0;
+constexpr uint32_t PV_REG_SPR = 1;
+constexpr uint32_t PV_MODE_NORMAL = 0;
 uint32_t HBM_PARA_BASE = 0xffff8000;
 
 class PvModelCodegen {
@@ -205,7 +207,7 @@ public:
     {
         dir_ = npu::tile_fwk::config::LogTopFolder() + "/PvModelOutput";
         if (npu::tile_fwk::IsPathExist(dir_)) {
-            npu::tile_fwk::DeleteDir(dir_);
+            npu::tile_fwk::DeleteDir(dir_, true);
         }
         npu::tile_fwk::CreateDir(dir_);
     }
@@ -235,20 +237,20 @@ public:
 
         CostModel::OutputSilencer silencer;
         silencer.silence();
-        uint8_t* value_0_ptr = new uint8_t(0);
-        uint8_t* value_1_ptr = new uint8_t(1);
+        uint8_t* value_0_ptr = reinterpret_cast<uint8_t*>(new uint64_t(0));
+        uint8_t* value_1_ptr = reinterpret_cast<uint8_t*>(new uint64_t(1));
         uint8_t* value_34603008_ptr = reinterpret_cast<uint8_t*>(new uint64_t(34603008));
-        pv_init_(0, 0, 1, (dir_ + std::string("/pvlog/")).c_str(), coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t*)&HBM_PARA_BASE, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t*)&HBM_PARA_BASE, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_BLOCK_DIM, value_1_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_BLOCK_DIM, value_1_ptr, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_TASK_CFG, value_1_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_TASK_CFG, value_1_ptr, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_SYS_VA_BASE, value_0_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_SYS_VA_BASE, value_0_ptr, 1, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_SYS_PHY_BASE, value_34603008_ptr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_SYS_PHY_BASE, value_34603008_ptr, 1, coreId_);
+        pv_init_(PV_MODE_NORMAL, 0, 1, (dir_ + std::string("/pvlog/")).c_str(), coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_PARA_BASE, (uint8_t*)&HBM_PARA_BASE, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_PARA_BASE, (uint8_t*)&HBM_PARA_BASE, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_BLOCK_DIM, value_1_ptr, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_BLOCK_DIM, value_1_ptr, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_TASK_CFG, value_1_ptr, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_REG_TASK_CFG, value_1_ptr, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_VA_BASE, value_0_ptr, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_VA_BASE, value_0_ptr, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_PHY_BASE, value_34603008_ptr, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(PV_REG_SPR), PV_SYS_PHY_BASE, value_34603008_ptr, 1, coreId_);
         silencer.restore();
         SIMULATION_LOGI("pvlog path: %s", (dir_ + std::string("/pvlog/")).c_str());
     }
@@ -318,7 +320,7 @@ public:
         binPath = srcPath.substr(0, srcPath.length() - Len3) + "bin";
         constexpr int cmdLen = 2048;
         char cmd[cmdLen];
-        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(objPath))
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::IsPathExist(objPath))
             << "obj file does not exist. objPath: " << objPath;
         int ret = snprintf_s(
             cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s", objPath.c_str(),
@@ -348,7 +350,7 @@ public:
     {
         std::vector<uint8_t> s(data, data + size);
         uint8_t* devPtr = s.data();
-        pv_mem_write_(0, reinterpret_cast<uint64_t>(devPtr), size, devPtr, 0, 0);
+        pv_mem_write_(PV_MEM_GM, reinterpret_cast<uint64_t>(devPtr), size, devPtr, 0, 0);
         storage_.emplace_back(std::move(s));
         DataMap m = {data, reinterpret_cast<uint64_t>(devPtr), size};
         data_.emplace_back(m);
@@ -366,7 +368,7 @@ public:
     void CopyTensorFromDev()
     {
         for (auto& d : data_) {
-            pv_mem_read_(0, d.devPtr, d.size, d.data, 0, 0);
+            pv_mem_read_(PV_MEM_GM, d.devPtr, d.size, d.data, 0, 0);
         }
     }
 

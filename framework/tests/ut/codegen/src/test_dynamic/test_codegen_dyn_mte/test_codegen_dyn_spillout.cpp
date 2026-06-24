@@ -108,7 +108,7 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor)
     CheckStringExist(expect, res);
 
     expect =
-        R"!!!(TLoad<CopyInMode::ND2ND, PaddingMode::NO_PADDING>(l1Tensor_10, gmTensor_9, Coord2Dim(0, 0), Coord2Dim(0, 0), 64, 64);)!!!";
+        R"!!!(TLoad<CopyInMode::ND2ND, PaddingMode::NORMAL_PADDING_MODE>(l1Tensor_10, gmTensor_9, Coord2Dim(0, 0), Coord2Dim(0, 0), 64, 64);)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

@@ -716,16 +716,15 @@ void* DeviceExecuteContext::DeviceExecuteRuntimeCallShmemAllocator(void* ctx_, u
     DEV_ASSERT(DevCommonErr::PARAM_CHECK_FAILED, groupIndex < ctx->args->commGroupNum);
     auto hcclOpParam = reinterpret_cast<TileOp::CommContext*>(ctx->args->commContexts[groupIndex]);
     uint64_t winSize = memType == 0 ? hcclOpParam->winDataSize : hcclOpParam->winStatusSize;
-    uint64_t shmemAddrEndOffset = ctx->shmemAddrOffset[groupIndex][memType] + size;
+    static uint64_t staticShmemAddrEndOffset[MAX_SHMEM_GROUP_NUM][SHMEM_MEM_TYPE_NUM] = {0};
+    uint64_t shmemAddrEndOffset = staticShmemAddrEndOffset[groupIndex][memType] + size;
     if (shmemAddrEndOffset > winSize) {
-        ctx->shmemAddrOffset[groupIndex][memType] = 0UL;
-        DEV_ERROR(
-            DevCommonErr::PARAM_CHECK_FAILED, "#ctrl.unknown: Exceeds winSize limit. Maximum allowed: %lu, got: %lu",
-            winSize, shmemAddrEndOffset);
+        staticShmemAddrEndOffset[groupIndex][memType] = 0UL;
     }
     uint64_t vaddr =
-        TileOp::Distributed::EncodeShmemAddr(ctx->shmemAddrOffset[groupIndex][memType], maxTileNum, groupIndex, memType);
-    ctx->shmemAddrOffset[groupIndex][memType] += size;
+        TileOp::Distributed::EncodeShmemAddr(
+            staticShmemAddrEndOffset[groupIndex][memType], maxTileNum, groupIndex, memType);
+    staticShmemAddrEndOffset[groupIndex][memType] += size;
     return reinterpret_cast<void*>(vaddr);
 }
 

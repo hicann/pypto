@@ -30,7 +30,8 @@ from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
 from pypto.runtime import _pto_verify_datas
-from pypto._utils import BuildOnlineManager, get_torch_npu, get_npu_tensor_format
+from pypto._build_online import BuildOnlineCalculatorManager
+from pypto._utils import get_torch_npu, get_npu_tensor_format
 from pypto.error import FeError, _catch_and_wrap_error
 
 
@@ -171,8 +172,6 @@ class JitCallableWrapper:
         Options for debugging (including runtime_debug_mode).
     _captured_locals : Optional[dict[str, Any]]
         Captured local variables from the original function's scope (copied to avoid reference issues).
-    _infer_controlflow_shape : Optional[type]
-        Class type for inferring control flow shape during compilation (None to use default logic).
     _kernel_module_cache : dict[tuple, Any]
         Class-level global cache for KernelModule instances, keyed by compilation cache key.
     kmodule : Any
@@ -237,7 +236,6 @@ class JitCallableWrapper:
         verify_options: Optional[dict[str, Any]] = None,
         debug_options: Optional[dict[str, Any]] = None,
         captured_locals: Optional[dict[str, Any]] = None,
-        infer_controlflow_shape: Optional[type] = None,
     ):
         """Initialize the JIT callable wrapper with compilation and runtime configurations.
 
@@ -264,9 +262,6 @@ class JitCallableWrapper:
         captured_locals : Optional[dict[str, Any]], optional
             Local variables captured from the original function's scope (copied to a new dict
             to prevent external modification). Defaults to None.
-        infer_controlflow_shape : Optional[type], optional
-            Class type used for inferring control flow shape during compilation (None uses default inference logic).
-            Defaults to None.
         """
         self._pto_function = pto_function
         self._original_func = original_func
@@ -286,7 +281,6 @@ class JitCallableWrapper:
         self._pass_options = None if pass_options is None else dict(pass_options)
         self._verify_options = None if verify_options is None else dict(verify_options)
         self._debug_options = None if debug_options is None else dict(debug_options)
-        self._infer_controlflow_shape = infer_controlflow_shape
 
         self._set_run_mode()
         self.kwargs = None
@@ -511,8 +505,7 @@ class JitCallableWrapper:
             return
 
         # Compile and load calculator
-        mgr = BuildOnlineManager()
-        mgr.build_and_load_calculator()
+        BuildOnlineCalculatorManager().build_and_load_calculator()
 
         # Fallback (e.g. SIM compile with PTO tensors only, source torch tensors unavailable/mismatched,
         # non-ND PTO formats, or NPU NZ source tensors): explicit staging + CopyToHost.
@@ -658,12 +651,10 @@ class JitCallableWrapper:
                 self, _current_stream(), torch_tensors, tensor_defs
             )
         else:
-            # Run kernel on esl
             cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
-            if (pypto.get_global_config("simulation.accuracy_level") == 2 and cann_is_configed):
+            if (os.environ.get("ENABLE_ESLMODEL") == "TRUE" and cann_is_configed):
                 with pypto.options("jit_scope"):
                     self._set_config_option()
-                    get_torch_npu()
                     pypto_impl.LaunchKernelTorch(
                         self, _current_stream(), torch_tensors, tensor_defs
                 )
@@ -1153,7 +1144,6 @@ def jit(
     runtime_options: Optional[dict[str, Any]] = None,
     verify_options: Optional[dict[str, Any]] = None,
     debug_options: Optional[dict[str, Any]] = None,
-    infer_controlflow_shape: Optional[Any] = None,
 ) -> Union[Callable, Callable[[Callable], JitCallableWrapper]]:
     """JIT decorator for compiling Python functions to PTO IR.
 
@@ -1236,7 +1226,6 @@ def jit(
             verify_options=verify_options,
             debug_options=debug_options,
             captured_locals=captured_locals,
-            infer_controlflow_shape=infer_controlflow_shape,
         )
         return wrapper
 

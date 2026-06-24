@@ -83,14 +83,14 @@ struct DevAscendFunctionOutcast {
     int dim;
     RuntimeSlotDesc desc;
 
-    DevLocalVector<DevAscendFunctionCallOperandUse> producerList;
+    DevLocalVector<DevAscendFunctionCallOperandUse> producerConsumerList;
 
     DevCellMatchTableDesc cellMatchTableDesc;
     DevLocalVector<uint32_t> cellMatchRuntimeFullUpdateTable;
 
     int stitchPolicyFullCoverProducerHubOpIdx;
     DevLocalVector<DevAscendFunctionCallOperandUse> stitchPolicyFullCoverProducerList;
-    DevLocalVector<uint32_t> stitchPolicyFullCoverProducerAllOpIdxList;
+    DevLocalVector<uint32_t> stitchPolicyFullCoverAllOpIdxList;
     int exprListIndex;
 };
 

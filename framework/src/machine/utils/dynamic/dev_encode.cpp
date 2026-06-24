@@ -56,7 +56,6 @@ constexpr int64_t MAX_SHAPE_WARN_THRESHOLE = 512 * 512;
 constexpr int64_t DEFAULT_CACHE_DEVICE_TASK_NUM = 10000;
 static constexpr uint64_t GENERAL_METADATA_SIZE_MIN = 2 * MEBI;
 constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
-static uint32_t MAX_UNROLL_TIMES = 1;                 // the max num of unroll_list
 constexpr size_t CALC_STITCH_NUM =
     ToUnderlying(WsAicpuSlabMemType::DUPPED_STITCH) - ToUnderlying(WsAicpuSlabMemType::READY_QUE);
 void DevAscendFunction::InitIncastOutcastAttr(
@@ -316,7 +315,7 @@ static bool ShouldDropBudget(
     }
 
     for (int slotIdx : slotInfo->outcastSlot[encoded.ioIndex]) {
-        if (runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::ADDRESS_EXPRESSION)) {
+        if (runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::ADDRESS_EXPRESSION)) {
             return true;
         }
     }
@@ -327,9 +326,9 @@ static bool HasInputOutputOrAssembleDst(
     const std::vector<int>& outcastSlots, const std::vector<npu::tile_fwk::RuntimeSlotKindSet>& runtimeSlotKindSetList)
 {
     for (int slotIdx : outcastSlots) {
-        if (runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::INPUT) ||
-            runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::OUTPUT) ||
-            runtimeSlotKindSetList[slotIdx].Count(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+        if (runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::INPUT) ||
+            runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::OUTPUT) ||
+            runtimeSlotKindSetList[slotIdx].Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
             return true;
         }
     }
@@ -806,6 +805,46 @@ void DevAscendFunction::InitWrapInfo(uintdevptr_t& initOffset, const OrderedSet<
     }
 }
 
+void DevAscendFunction::FillIncastUseList(
+    DevLocalVector<DevAscendFunctionCallOperandUse>& fillUseList, uint64_t& useSize,
+    const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+    const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
+    bool fillContent)
+{
+    for (size_t index = 0; index < tensorList.size(); index++) {
+        auto& attr = attrDict.at(tensorList[index]);
+        auto& incast = At(incastList, index);
+        ONFILLCONTENT
+        {
+            incast.consumerList.AssignRangeOffsetSize(fillUseList, useSize, attr.useList.size());
+            for (size_t k = 0; k < attr.useList.size(); k++) {
+                At(incast.consumerList, k) = attr.useList[k];
+            }
+        }
+        useSize += attr.useList.size();
+    }
+}
+
+void DevAscendFunction::FillOutcastUseList(
+    DevLocalVector<DevAscendFunctionCallOperandUse>& fillUseList, uint64_t& useSize,
+    const std::vector<std::shared_ptr<LogicalTensor>>& tensorList,
+    const std::unordered_map<std::shared_ptr<LogicalTensor>, InoutOperationAttr>& attrDict,
+    bool fillContent)
+{
+    for (size_t index = 0; index < tensorList.size(); index++) {
+        auto& attr = attrDict.at(tensorList[index]);
+        auto& outcast = At(outcastList, index);
+        ONFILLCONTENT
+        {
+            outcast.producerConsumerList.AssignRangeOffsetSize(fillUseList, useSize, attr.useList.size());
+            for (size_t k = 0; k < attr.useList.size(); k++) {
+                At(outcast.producerConsumerList, k) = attr.useList[k];
+            }
+        }
+        useSize += attr.useList.size();
+    }
+}
+
 void DevAscendFunction::InitIncastOutcast(
     uintdevptr_t& initOffset, const std::vector<std::shared_ptr<LogicalTensor>>& incastTensorList,
     const std::vector<std::shared_ptr<LogicalTensor>>& outcastTensorList,
@@ -883,30 +922,8 @@ void DevAscendFunction::InitIncastOutcast(
         // Fill use list
         useList.HostInitDataSizeOffset(initOffset, 0);
         uint64_t useSize = 0;
-        for (size_t index = 0; index < incastTensorList.size(); index++) {
-            auto& inAttr = incastOpAttrDict.at(incastTensorList[index]);
-            auto& incast = At(incastList, index);
-            ONFILLCONTENT
-            {
-                incast.consumerList.AssignRangeOffsetSize(useList, useSize, inAttr.useList.size());
-                for (size_t k = 0; k < inAttr.useList.size(); k++) {
-                    At(incast.consumerList, k) = inAttr.useList[k];
-                }
-            }
-            useSize += inAttr.useList.size();
-        }
-        for (size_t index = 0; index < outcastTensorList.size(); index++) {
-            auto& outAttr = outcastOpAttrDict.at(outcastTensorList[index]);
-            auto& outcast = At(outcastList, index);
-            ONFILLCONTENT
-            {
-                outcast.producerList.AssignRangeOffsetSize(useList, useSize, outAttr.useList.size());
-                for (size_t k = 0; k < outAttr.useList.size(); k++) {
-                    At(outcast.producerList, k) = outAttr.useList[k];
-                }
-            }
-            useSize += outAttr.useList.size();
-        }
+        FillIncastUseList(useList, useSize, incastTensorList, incastOpAttrDict, fillContent);
+        FillOutcastUseList(useList, useSize, outcastTensorList, outcastOpAttrDict, fillContent);
         useList.HostInitDataSizeOffset(initOffset, useSize);
     }
     {
@@ -971,10 +988,10 @@ void DevAscendFunction::InitIncastOutcast(
             auto& outcast = At(outcastList, index);
             ONFILLCONTENT
             {
-                outcast.stitchPolicyFullCoverProducerAllOpIdxList.AssignRangeOffsetSize(
+                outcast.stitchPolicyFullCoverAllOpIdxList.AssignRangeOffsetSize(
                     stitchPolicyFullCoverOpList_, fullCoverOpTotal, outAttr.useOpList.size());
                 for (size_t k = 0; k < outAttr.useOpList.size(); k++) {
-                    At(outcast.stitchPolicyFullCoverProducerAllOpIdxList, k) = outAttr.useOpList[k];
+                    At(outcast.stitchPolicyFullCoverAllOpIdxList, k) = outAttr.useOpList[k];
                 }
             }
             fullCoverOpTotal += outAttr.useOpList.size();
@@ -1162,6 +1179,50 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+    void EncodeAnalysisOutCastConsumerByProducer(
+         const std::shared_ptr<LogicalTensor>& o, std::vector<DevAscendFunctionCallOperandUse>& useList,
+         InoutOperationAttr& outcastOpAttr, std::set<uint32_t>& outcastUseOpSet, int producerIdx)
+    {
+        MACHINE_LOGD("Enter EncodeAnalysisOutCastConsumerByProducer: outcast magic=%d rawmagic=%d producerIdx=%d.",
+                     o->magic, o->GetRawMagic(), producerIdx);
+        auto* producerOp = callList[static_cast<size_t>(producerIdx)];
+        if (!callOpSuccDict.count(producerOp)) {
+            MACHINE_LOGD("No succ ops for producerIdx=%d, early return.", producerIdx);
+            return;
+        }
+        auto& succOps = callOpSuccDict.at(producerOp);
+        MACHINE_LOGD("producerIdx=%d has %zu successor ops.", producerIdx, succOps.size());
+        for (auto* succOp : succOps) {
+            if (!callList.HasData(succOp)) {
+                MACHINE_LOGD("succOp not in callList, skip.");
+                continue;
+            }
+            int succOpIdx = callList.GetIndex(succOp);
+            if (!outcastUseOpSet.insert(succOpIdx).second) {
+                MACHINE_LOGD("MATCH! succOpIdx %d duplicate, ignore.", succOpIdx);
+                continue;
+            }
+            auto callAttrSucc = dynamic_cast<CallOpAttribute*>(succOp->GetOpAttribute().get());
+            for (size_t k = 0; k < succOp->GetIOperands().size(); ++k) {
+                auto& iOperand = succOp->GetIOperands()[k];
+                if (o->tensor->rawmagic != iOperand->tensor->rawmagic) {
+                    continue;
+                }
+                auto coaIndex = succOp->GetIOpAttrOffset(k) + COA_INDEX_DIM_BASE;
+                useList.emplace_back(succOpIdx, coaIndex, coaIndex + outcastOpAttr.dim, CellMatchOpType::READ);
+                MACHINE_LOGD("MATCH! consumerList.emplace_back succOpIdx=%d coaIndex=%d dim=%d iOprandIdx=%zu.",
+                    succOpIdx, coaIndex, outcastOpAttr.dim, k);
+
+                auto shape = callAttrSucc->GetLinearImmediateArgList(coaIndex + outcastOpAttr.dim, coaIndex + outcastOpAttr.dim * 0x2, false);
+                UpdateCellMatchShape(outcastOpAttr.cellMatchTableDesc, shape);
+                MACHINE_LOGD(
+                    "Minimal shape for outcast %d rawtensor magic %d consumer op %d %d is %s.\n", o->magic,
+                    o->GetRawMagic(), succOpIdx, succOp->GetOpMagic(),
+                    IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
+            }
+        }
+    }
+
     void EncodeAnalysisOpUseOutCasts(
          const std::shared_ptr<LogicalTensor>& o, std::set<uint32_t>& allOutcastUseOpSet,
          InoutOperationAttr& outcastOpAttr)
@@ -1182,15 +1243,13 @@ struct EncodeDevAscendFunctionInfo {
                 auto coaIndex = op.GetOOpAttrOffset(j) + COA_INDEX_DIM_BASE;
                 CellMatchOpType producerOpType = op.GetOOpAttr(j).isAtomic() ? CellMatchOpType::ATOMIC_WRITE : CellMatchOpType::NORMAL_WRITE;
                 std::vector<int64_t> offset = callAttr->GetLinearImmediateArgList(coaIndex, coaIndex + dimSize, true);
-                std::vector<int64_t> shape =
-                    callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
+                std::vector<int64_t> shape = callAttr->GetLinearImmediateArgList(coaIndex + dimSize, coaIndex + dimSize * 0x2, false);
                 if (offset == std::vector<int64_t>(dimSize, 0) && shape == oOperand->GetShape()) {
                     stitchPolicyFullCoverProducer = DevAscendFunctionCallOperandUse(i, coaIndex, coaIndex + dimSize, producerOpType);
                 } else {
                     useList.emplace_back(i, coaIndex, coaIndex + dimSize, producerOpType);
                 }
-                MACHINE_LOGD(
-                    "Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(), j);
+                MACHINE_LOGD("Outcast oOperandIdx for outcast %d rawtensor maigic %d is %zu.", o->magic, o->GetRawMagic(), j);
                 outcastUseOpSet.insert(i);
                 auto expr = callAttr->GetOutcastSymbolicExpr(j);
                 outcastOpAttr.bindTensorExprIndex = -1;
@@ -1201,23 +1260,25 @@ struct EncodeDevAscendFunctionInfo {
 
             if (stitchPolicyFullCoverProducer.operationIdx != -1) {
                 outcastOpAttr.stitchPolicyFullCoverProducerList.push_back(stitchPolicyFullCoverProducer);
-            } else {
+                EncodeAnalysisOutCastConsumerByProducer(
+                    o, outcastOpAttr.stitchPolicyFullCoverProducerList,  outcastOpAttr, outcastUseOpSet, i);
+            } else if (useList.size() > 0){
                 outcastOpAttr.useList.insert(outcastOpAttr.useList.end(), useList.begin(), useList.end());
                 for (auto& use : useList) {
                     UNUSED(use.operationIdx);
                     UNUSED(use.opType);
                     auto shape = callAttr->GetLinearImmediateArgList(use.shapeAttrIdx, use.shapeAttrIdx + dimSize, false);
                     UpdateCellMatchShape(outcastOpAttr.cellMatchTableDesc, shape);
-                    MACHINE_LOGD(
-                        "Minimal shape for outcast %d rawtensor magic %d op %zu %d is %s.\n", o->magic,
-                        o->GetRawMagic(), i, op.GetOpMagic(),
-                        IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
+                    MACHINE_LOGD("Minimal shape for outcast %d rawtensor magic %d op %zu %d is %s.\n", o->magic,
+                        o->GetRawMagic(), i, op.GetOpMagic(), IntVecToStr(ShapeToVector(outcastOpAttr.cellMatchTableDesc.cellShape)).c_str());
                 }
+                EncodeAnalysisOutCastConsumerByProducer(
+                    o, outcastOpAttr.useList, outcastOpAttr, outcastUseOpSet, i);
             }
         }
-        UpdateCellMatchStrideAndSize(outcastOpAttr.cellMatchSize, outcastOpAttr.cellMatchTableDesc, o, dimSize);
         outcastOpAttr.useOpList.insert(outcastOpAttr.useOpList.end(), outcastUseOpSet.begin(), outcastUseOpSet.end());
         allOutcastUseOpSet.insert(outcastUseOpSet.begin(), outcastUseOpSet.end());
+        UpdateCellMatchStrideAndSize(outcastOpAttr.cellMatchSize, outcastOpAttr.cellMatchTableDesc, o, dimSize);
         outcastOpAttrDict.insert({o, outcastOpAttr});
     }
 
@@ -1238,12 +1299,19 @@ struct EncodeDevAscendFunctionInfo {
         size_t hubEntryLeast = 2;
         for (auto& i : outcastList) {
             auto& outcastOpAttr = outcastOpAttrDict[i];
-            if (outcastOpAttr.stitchPolicyFullCoverProducerList.size() > hubEntryLeast) {
+            std::vector<DevAscendFunctionCallOperandUse> producers;
+            for (auto& entry : outcastOpAttr.stitchPolicyFullCoverProducerList) {
+                if (entry.opType == CellMatchOpType::READ) {
+                    continue;
+                }
+                producers.push_back(entry);
+            }
+            if (producers.size() > hubEntryLeast) {
                 outcastOpAttr.stitchPolicyFullCoverProducerHubOpIdx = callList.size();
                 auto dummyOp = MakeDummyCall();
                 callList.Insert(dummyOp);
-                callOpPredDict[dummyOp] = outcastOpAttr.stitchPolicyFullCoverProducerList.size();
-                for (auto& producer : outcastOpAttr.stitchPolicyFullCoverProducerList) {
+                callOpPredDict[dummyOp] = producers.size();
+                for (auto& producer : producers) {
                     auto callOp = callList[producer.operationIdx];
                     callOpSuccDict[callOp].Insert(dummyOp);
                 }
@@ -2282,24 +2350,53 @@ static void FillPartialUpdateSlotContent(
     }
 }
 
+static bool HasReadConsumerInOutcast(DevAscendFunction* devFunc, const DevAscendFunctionOutcast& outcast)
+{
+    auto* producerConsumerList = &devFunc->At(outcast.producerConsumerList, 0);
+    for (size_t i = 0; i < outcast.producerConsumerList.size(); i++) {
+        if (producerConsumerList[i].opType == CellMatchOpType::READ)
+            return true;
+    }
+    auto* fullCoverProducerList = &devFunc->At(outcast.stitchPolicyFullCoverProducerList, 0);
+    for (size_t i = 0; i < outcast.stitchPolicyFullCoverProducerList.size(); i++) {
+        if (fullCoverProducerList[i].opType == CellMatchOpType::READ)
+            return true;
+    }
+    return false;
+}
+
 static uint32_t CalculateSlotMaxReadCount(
     int slotIndex,
-    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict)
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+    const std::unordered_map<Function*, int>& rootFuncKeyDict,
+    const std::vector<std::vector<uint8_t>>& devEncodeListInput)
 {
     uint32_t incastCount = 0;
-    
     if (slotRootIncastDict.count(slotIndex) != 0) {
         incastCount = static_cast<uint32_t>(slotRootIncastDict.at(slotIndex).size());
     }
     
-    return std::min(incastCount, static_cast<uint32_t>(CELL_MATCH_MAX_READ_COUNT));
+    uint32_t outcastConsumerCount = 0;
+    for (auto& [root, outcastIndex] : slotRootOutcastDict.find(slotIndex)->second) {
+        int funcKey = rootFuncKeyDict.find(root)->second;
+        DevAscendFunction* devFunc =
+            reinterpret_cast<DevAscendFunction*>(const_cast<uint8_t*>(devEncodeListInput[funcKey].data()));
+        auto& outcast = devFunc->GetOutcast(outcastIndex); 
+        if (HasReadConsumerInOutcast(devFunc, outcast)) {
+            MACHINE_LOGD("slot %d outcast %d have read consumer op.", slotIndex, outcastIndex);
+            outcastConsumerCount++;
+        }
+    }
+
+    return std::min(incastCount + outcastConsumerCount, static_cast<uint32_t>(CELL_MATCH_MAX_READ_COUNT));
 }
 
 static bool HasAtomicWriteInOutcast(DevAscendFunction* devFunc, const DevAscendFunctionOutcast& outcast)
 {
-    auto* producerList = &devFunc->At(outcast.producerList, 0);
-    for (size_t i = 0; i < outcast.producerList.size(); i++) {
-        if (producerList[i].opType == CellMatchOpType::ATOMIC_WRITE)
+    auto* producerConsumerList = &devFunc->At(outcast.producerConsumerList, 0);
+    for (size_t i = 0; i < outcast.producerConsumerList.size(); i++) {
+        if (producerConsumerList[i].opType == CellMatchOpType::ATOMIC_WRITE)
             return true;
     }
     auto* fullCoverProducerList = &devFunc->At(outcast.stitchPolicyFullCoverProducerList, 0);
@@ -2337,7 +2434,7 @@ static int InitSinglePartialUpdateSlot(
     }
 
     bool hasProducer = std::any_of(outcastList.begin(), outcastList.end(), [](const DevAscendFunctionOutcast* outcast) {
-        return outcast->producerList.size() != 0 || outcast->stitchPolicyFullCoverProducerList.size() != 0;
+        return outcast->producerConsumerList.size() != 0 || outcast->stitchPolicyFullCoverProducerList.size() != 0;
     });
     if (!hasProducer) {
         if (fillContent) {
@@ -2354,7 +2451,8 @@ static int InitSinglePartialUpdateSlot(
     
     partialUpdateCellMatchTableDesc.SetCacheOpMaxCount(
         {CELL_MATCH_MAX_NORMAL_WRITE_COUNT, hasAtomicWrite ? CELL_MATCH_MAX_ATOMIC_WRITE_COUNT : 0U,
-         outcastList.size() > 1 ? CalculateSlotMaxReadCount(slotIndex, slotRootIncastDict) : 0u});
+         outcastList.size() > 1 ? CalculateSlotMaxReadCount(
+            slotIndex, slotRootIncastDict, slotRootOutcastDict, rootFuncKeyDict, devEncodeListInput) : 0u});
     
     size_t cellNum = partialUpdateCellMatchTableDesc.GetStride(0);
     bool hasDynamicShape = HasDynamicShape(partialUpdateCellMatchTableDesc);
@@ -2370,14 +2468,62 @@ static int InitSinglePartialUpdateSlot(
     return static_cast<int>(actualTableSize);
 }
 
+static void MarkOutputTensorStitchSlotsInPartialUpdateList(
+    DevAscendProgram* prog, const std::vector<int>& tInputSlotIndexList,
+    const std::vector<int>& tAssembleSlotIndexList, const std::unordered_map<Function*, int>& rootFuncKeyDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
+    const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict)
+{
+    std::unordered_set<int> assembleSlots(tAssembleSlotIndexList.begin(), tAssembleSlotIndexList.end());
+    for (int slotIndex : tInputSlotIndexList) {
+        if (assembleSlots.count(slotIndex) == 0) {
+            continue;
+        }
+        std::unordered_set<int> funcKeys;
+        auto slotIncastIt = slotRootIncastDict.find(slotIndex);
+        if (slotIncastIt != slotRootIncastDict.end()) {
+            for (const auto& rootEntry : slotIncastIt->second) {
+                Function* root = rootEntry.first;
+                auto rootIt = rootFuncKeyDict.find(root);
+                if (rootIt != rootFuncKeyDict.end()) {
+                    funcKeys.insert(rootIt->second);
+                }
+            }
+        }
+        auto slotOutcastIt = slotRootOutcastDict.find(slotIndex);
+        if (slotOutcastIt != slotRootOutcastDict.end()) {
+            for (const auto& rootEntry : slotOutcastIt->second) {
+                Function* root = rootEntry.first;
+                auto rootIt = rootFuncKeyDict.find(root);
+                if (rootIt != rootFuncKeyDict.end()) {
+                    funcKeys.insert(rootIt->second);
+                }
+            }
+        }
+        if (funcKeys.size() < 2) {
+            continue;
+        }
+        auto& partialUpdate = prog->At(prog->partialUpdateList, slotIndex);
+        partialUpdate.isOutputTensorStitchSlot = true;
+    }
+}
+
 void DevAscendProgram::InitPartialUpdateSlot(
     uintdevptr_t& initOffset, const std::vector<std::vector<uint8_t>>& devEncodeListInput,
     const std::unordered_map<Function*, int>& rootFuncKeyDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
     const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+    const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
     const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent)
 {
     this->partialUpdateList.HostInitDataSizeOffset(initOffset, slotSize);
+
+    ONFILLCONTENT
+    {
+        MarkOutputTensorStitchSlotsInPartialUpdateList(
+            this, tInputSlotIndexList, tAssembleSlotIndexList, rootFuncKeyDict, slotRootIncastDict,
+            slotRootOutcastDict);
+    }
 
     this->cellMatchRuntimePartialUpdateTableList.HostInitDataSizeOffset(initOffset, 0);
     int totalCellMatchSize = 0;
@@ -2409,6 +2555,8 @@ struct ControlFlowCacheFactor {
     {}
 };
 
+static uint32_t maxUnrollTimes = 1;
+
 static int ParseUnrollTimes(const std::string& rawName)
 {
     const static std::string UNROLL_MARKS[2] = {"_LoopUnroll", "_Unroll"};
@@ -2435,13 +2583,13 @@ static int ParseUnrollTimes(const std::string& rawName)
 static int EstimatedStitchingCount()
 {
     uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
-    return stitchNum * MAX_UNROLL_TIMES;
+    return stitchNum * maxUnrollTimes;
 }
 
 static int WorkspaceRecyclePeriod()
 {
     uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
-    return stitchNum * MAX_UNROLL_TIMES;
+    return stitchNum * maxUnrollTimes;
 }
 
 static uint32_t ExpectedMaxCachedNum()
@@ -2469,11 +2617,12 @@ struct EncodeDevAscendProgramInfo {
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, func->GetDyndevAttribute() != nullptr)
             << "DyndevAttribute is null for function: " << func;
         dyndevAttr = func->GetDyndevAttribute();
+        maxUnrollTimes = 1;
         for (auto& devRoot : dyndevAttr->funcGroup.devRootList) {
             int unroll = ParseUnrollTimes(devRoot->GetRawName());
-            MAX_UNROLL_TIMES = std::max(MAX_UNROLL_TIMES, (uint32_t)unroll);
+            maxUnrollTimes = std::max(maxUnrollTimes, (uint32_t)unroll);
         }
-        MACHINE_LOGD("MAX_UNROLL_TIMES user set is %u.", MAX_UNROLL_TIMES);
+        MACHINE_LOGD("maxUnrollTimes user set is %u.", maxUnrollTimes);
     }
 
     bool GetEnableVFFusion()
@@ -2492,12 +2641,14 @@ struct EncodeDevAscendProgramInfo {
         return false;
     }
 
+
     void Init(DevAscendProgram* devProg, bool fillContent)
     {
         uintdevptr_t initOffset = reinterpret_cast<uintdevptr_t>(devProg->data);
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.enableVFFusion = GetEnableVFFusion();
         devProg->devArgs.hasAicpuTask = HasAicpuTask();
+        devProg->devArgs.all1c2vMixTask = CheckAll1c2vMixTask(dyndevAttr->cceCodeInfo);
         devProg->slotSize = dyndevAttr->inoutLink.totalSlot;
         devProg->runtimeOutcastPoolSize =
             dyndevAttr->inoutLink.totalSlot * (ExpectedMaxCachedNum() + 1) * devProg->GetParallelism();
@@ -2520,7 +2671,9 @@ struct EncodeDevAscendProgramInfo {
             dyndevAttr->inoutLink.inplaceSlotIndexList, fillContent);
         devProg->InitPartialUpdateSlot(
             initOffset, dyndevAttr->devEncodeList, dyndevAttr->rootFuncKeyDict, dyndevAttr->slotRootIncastDict,
-            dyndevAttr->slotRootOutcastDict, dyndevAttr->inoutLink.partialUpdateSlotIdexList, fillContent);
+            dyndevAttr->slotRootOutcastDict, dyndevAttr->inoutLink.inputSlotIndexList,
+            dyndevAttr->inoutLink.assembleSlotIndexList, dyndevAttr->inoutLink.partialUpdateSlotIdexList,
+            fillContent);
         devProg->InitPrefetchInfoList(initOffset, dyndevAttr->l2InfoList, fillContent);
         devProg->InitDisableL2List(initOffset, dyndevAttr->disableL2List, fillContent);
 
@@ -2582,9 +2735,9 @@ static std::vector<SlotInfo> MarkInputOutputAssembleSlots(DevAscendProgram& devP
             bool isAssembleOutcastSlot = false;
             for (size_t j = 0; j < toSlotList.size(); j++) {
                 SlotInfo& slotInfo = slotInfoList[devFunc->At(toSlotList, j)];
-                if (slotInfo.kindSet.Count(RuntimeSlotKind::INPUT) || slotInfo.kindSet.Count(RuntimeSlotKind::OUTPUT)) {
+                if (slotInfo.kindSet.Contains(RuntimeSlotKind::INPUT) || slotInfo.kindSet.Contains(RuntimeSlotKind::OUTPUT)) {
                     isInputOutputSlot = true;
-                } else if (slotInfo.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+                } else if (slotInfo.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
                     isAssembleOutcastSlot = true;
                 }
             }
@@ -2616,8 +2769,8 @@ static bool IsInputOutputSlot(const std::vector<SlotInfo>& slotInfoList, DevAsce
     auto& toSlotList = func->GetOutcast(idx).toSlotList;
     for (size_t j = 0; j < toSlotList.size(); j++) {
         int slotIdx = func->At(toSlotList, j);
-        if (slotInfoList[slotIdx].kindSet.Count(RuntimeSlotKind::INPUT) ||
-            slotInfoList[slotIdx].kindSet.Count(RuntimeSlotKind::OUTPUT)) {
+        if (slotInfoList[slotIdx].kindSet.Contains(RuntimeSlotKind::INPUT) ||
+            slotInfoList[slotIdx].kindSet.Contains(RuntimeSlotKind::OUTPUT)) {
             return true;
         }
     }
@@ -2630,7 +2783,7 @@ static bool IsAssembleSlot(std::vector<SlotInfo>& slots, DevAscendFunction* func
     bool isAssemble = false;
     for (size_t j = 0; j < toSlotList.size(); j++) {
         int slotIdx = func->At(toSlotList, j);
-        if (slots[slotIdx].kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
+        if (slots[slotIdx].kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST)) {
             isAssemble = true;
             break;
         }
@@ -2645,7 +2798,7 @@ static uint64_t CalcUnrolledRootBudget(uint64_t budget, int unrollTimes, int con
     if (unrollTimes >= configMultiplier) {
         return budget;
     }
-    uint32_t expectedConfigMultiplier = ExpectedMaxCachedNum() * MAX_UNROLL_TIMES;
+    uint32_t expectedConfigMultiplier = ExpectedMaxCachedNum() * maxUnrollTimes;
     if (static_cast<uint32_t>(configMultiplier) > expectedConfigMultiplier) {
         configMultiplier = expectedConfigMultiplier;
     }
@@ -2757,7 +2910,7 @@ static std::pair<uint64_t, SymbolicScalar> ComputeAssembleOutcastMem(const std::
     uint64_t maxStaticAssembleOutcastMem =
         std::accumulate(slots.begin(), slots.end(), UINT64_C(0), [](uint64_t acc, const SlotInfo& slot) {
             return std::max(
-                acc, (slot.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
+                acc, (slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST) ? slot.maxAssembleDstMemReq : 0));
         });
 
     SymbolicScalar maxDynamicAssembleOutcastMem =
@@ -2805,7 +2958,7 @@ static bool IsRuntimeDynamicPartialNeedAlloc(
     const std::unordered_set<int>& constructAssembleNeedAllocSlots)
 {
     return IsRuntimeDynamicPartialWithSlotRoot(partial, dynAttr) &&
-           constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0;
+           (constructAssembleNeedAllocSlots.count(partial.slotIndex) > 0 || partial.isOutputTensorStitchSlot);
 }
 
 static SymbolicScalar ComputeMaxDynamicCellMatchTableMemPerSlot(
@@ -2899,10 +3052,10 @@ static TensorWorkspaceResult CalcTensorWorkspace(
     res.maxDynamicAssembleOutcastMem = maxDynamicAssembleOutcastMem;
 
     res.totalExclusiveOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const SlotInfo& slot) {
-        return slot.kindSet.Count(RuntimeSlotKind::EXCLUSIVE_OUTCAST);
+        return slot.kindSet.Contains(RuntimeSlotKind::EXCLUSIVE_OUTCAST);
     });
     res.totalAssembleOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const SlotInfo& slot) {
-        return slot.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST);
+        return slot.kindSet.Contains(RuntimeSlotKind::ASSEMBLE_OUTCAST);
     });
     uint64_t dynamicCellMatchSlotNum = 0;
     for (size_t i = 0; i < devProg.partialUpdateList.size(); ++i) {

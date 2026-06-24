@@ -391,8 +391,11 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(
     auto* nextSrc = nextDup.GetSource();
     auto expressionList = &nextDup.GetExpression(0);
     auto& cellMatchTableDesc = outcast.cellMatchTableDesc;
-    auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
     size_t tableSize = outcast.cellMatchRuntimeFullUpdateTable.size();
+    if(tableSize == 0) {
+        return 0;
+    }
+    auto fullUpdateTableData = &prevSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
 
     DEV_VERBOSE_DEBUG(
         "[FullCoverDefaultStitch] enter slotIdx=%d devTaskId=%lu devNextIdx=%lu producerFuncKey=%d "
@@ -429,7 +432,7 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(
     auto* nextSrc = nextDup.GetSource();
     DEV_VERBOSE_DEBUG("outcast %lu fullcover update stitch\n", (unsigned long)slot.stitchOutcastIdx);
     DEV_VERBOSE_DEBUG(
-        "=================FullCoverUpdateStitch %zu %zu===========================\n", outcast.producerList.size(),
+        "=================FullCoverUpdateStitch %zu %zu===========================\n", outcast.producerConsumerList.size(),
         incast.consumerList.size());
 
     // stitchPolicyFullCover hub
@@ -455,6 +458,9 @@ uint64_t DeviceStitchContext::FullCoverUpdateStitch(
              prodIndex++) {
             auto& producer = producerList[prodIndex];
             auto producerOperationIdx = producer.operationIdx;
+            if (producer.opType == CellMatchOpType::READ) {
+                continue;
+            }
 
             for (size_t conIndex = 0, conSize = incast.stitchPolicyFullCoverConsumerAllOpIdxList.size();
                  conIndex < conSize; conIndex++) {
@@ -491,6 +497,9 @@ uint64_t DeviceStitchContext::PartialUpdateStitchProducer(
         auto* producerList = &nextSrc->At(producerListRef, 0);
         for (size_t i = 0; i < producerListRef.size(); i++) {
             auto& producer = producerList[i];
+            if (producer.opType == CellMatchOpType::READ) {
+                continue;
+            }
             uint64_t producerOffset[DEV_SHAPE_DIM_MAX];
             uint64_t producerValidShape[DEV_SHAPE_DIM_MAX];
             GetTensorOffsetAndValidShape<false>(
@@ -517,7 +526,7 @@ uint64_t DeviceStitchContext::PartialUpdateStitchProducer(
     };
 
     DEV_VERBOSE_DEBUG("Begin PartialUpdateStitchProducer producer list.");
-    processProducerList(outcast.producerList);
+    processProducerList(outcast.producerConsumerList);
 
     DEV_VERBOSE_DEBUG("Begin PartialUpdateStitchProducer stitchPolicyFullCoverProducerList list.");
     processProducerList(outcast.stitchPolicyFullCoverProducerList);

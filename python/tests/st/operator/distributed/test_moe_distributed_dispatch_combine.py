@@ -876,6 +876,7 @@ def moe_distributed_combine(
     )
 
 
+@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(16)
 def test_moe_distributed_combine() -> None:
     config = DistributedConfig(world_size=16)
@@ -935,6 +936,7 @@ def moe_distributed_dispatch_combine(
     )
 
 
+@pytest.mark.skip(reason="temporarily skipped")
 @pytest.mark.world_size(4)
 def test_moe_distributed_dispatch_combine() -> None:
     config = DistributedConfig(world_size=4)

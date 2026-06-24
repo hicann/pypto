@@ -6,6 +6,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 import pypto
+import pytest
 from pypto import pil, ir, logging
 
 # ---------- Ops compile tests ----------
@@ -60,6 +61,31 @@ def test_tensor_matmul_op():
     ts = _tensor_ops_of(func.body)
     opcodes = {s.opcode for s in ts}
     assert 'A_MUL_B' in opcodes
+
+
+@pytest.mark.skip()
+def test_create_func():
+    def f(a, b, out):
+        pypto.set_vec_tile_shapes(16, 16)
+        c = a + b
+        c1 = a - b
+        for i in pypto.loop(2):
+            d = c * c1
+            if i > 1:
+                e = d * 2
+            else:
+                e = d + b
+            out = e
+
+    shape = [32, 32]
+    a = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="a")
+    b = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="b")
+    out = pypto.Tensor(shape=shape, dtype=pypto.DT_FP32, name="out")
+
+    func = pil.compile(f, a, b, out)
+    ts = _tensor_ops_of(func.body)
+    opcodes = {s.opcode for s in ts}
+    assert 'CALL' in opcodes
 
 
 def test_tensor_unary_ops():
@@ -427,14 +453,16 @@ def test_tensor_add_dyn():
         for i in pypto.loop(x.shape[0] // 32):
             pypto.set_vec_tile_shapes(32, 32)
             ta = x[i:i + 32, :]
-            if i % 2 == 0:
-                y[i:, :] = ta + 1
-            else:
-                y[i:, :] = ta - 1
+            y[i:, :] = ta + 1
 
     x = pypto.Tensor((-1, 32), pypto.DT_FP32, 'x')
     y = pypto.Tensor((-1, 32), pypto.DT_FP32, 'y')
-    pil.compile(foo, x, y)
+    func = pil.compile(foo, x, y)
+    b = ir.IRBuilder()
+    prog = b.create_program([func], "main", ir.Span.unknown())
+    logging.log_info(f"\norigin: {prog}")
+    prog = ir.Pass.canonicalize()(prog)
+    logging.log_info(f"\ncanonical: {prog}")
 
 
 def test_fstring():

@@ -143,12 +143,8 @@ std::string CodeGenOpNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& pa
     paramList.emplace_back(dst);
     paramList.emplace_back(src0);
     paramList.emplace_back(src1);
-    for (auto dynShape : dynSrcShape0) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
-    for (auto dynShape : dynSrcShape1) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape0);
+    FillParamWithFullInput(paramList, dynSrcShape1);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
        << "(" << tiloOpCallParam << ");\n";
@@ -465,9 +461,7 @@ std::string CodeGenOpNPU::PrintBinaryBrcDynamicUnaligned(const PrintBinaryBrcPar
     std::string src1 = "(__ubuf__ " + src1DtypeStr + "*)" + s1Var;
     std::string tmp = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
     paramList.insert(paramList.end(), {dst, src0, src1, tmp});
-    for (auto dynShape : dynSrcShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -598,9 +592,7 @@ std::string CodeGenOpNPU::PrintBinaryScalarDynamicUnaligned(const PrintBinarySca
     paramList.emplace_back(dst);
     paramList.emplace_back(src0);
     paramList.emplace_back(scalarTmpBuffer);
-    for (int i = SHAPE_DIM3 - dimScalar; i < SHAPE_DIM3; i++) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynSrcShape[i]));
-    }
+    FillParamWithInput(paramList, dynSrcShape, SHAPE_DIM3 - dimScalar, SHAPE_DIM3);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
 
     os << tileOpName.c_str() << "<" << templateParam << ">"
@@ -673,9 +665,7 @@ std::string CodeGenOpNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnaryPara
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     std::string tmp = "(" + dstDtypeStr + ")" + scalarTmp;
     paramList.insert(paramList.end(), {dst, src, tmp});
-    for (auto dynShape : newDynSrcValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, newDynSrcValidShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "_<" << templateParam << ">"
@@ -704,16 +694,15 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
         return PrintBinaryScalar({s0Var, dVar, dstDtypeStr, dstDtypeStr, rawShape[0].size()});
     }
 
-    if (opAttrs.count(OP_EMUOP_PREFIX + "opc")) {
-        // Hack: should be optimized to memory copy in pass
-        int emuopc = AnyCast<int64_t>(opAttrs.find(OP_EMUOP_PREFIX + "opc")->second);
-        if (emuopc == EMUOP_TENSOR_EXTRACT) {
-            int ret = sprintf_s(
-                buffer, sizeof(buffer), "RUNTIME_TensorExtract(/*type=*/%s, /*mem=*/__ubuf__, /*dst*/%s, /*src*/%s);\n",
-                dstDtypeStr.c_str(), dVar.c_str(), s0Var.c_str());
-            ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "Gen " << opCodeStr << ":EMUOP_TENSOR_EXTRACT failed " << ret;
-            return buffer;
-        }
+    // Hack: should be optimized to memory copy in pass
+    int64_t emuopc = -1;
+    GetOpAttr(OP_EMUOP_PREFIX + "opc", emuopc);
+    if (emuopc == EMUOP_TENSOR_EXTRACT) {
+        int ret = sprintf_s(
+            buffer, sizeof(buffer), "RUNTIME_TensorExtract(/*type=*/%s, /*mem=*/__ubuf__, /*dst*/%s, /*src*/%s);\n",
+            dstDtypeStr.c_str(), dVar.c_str(), s0Var.c_str());
+        ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0) << "Gen " << opCodeStr << ":EMUOP_TENSOR_EXTRACT failed " << ret;
+        return buffer;
     }
 
     if (isSupportLayout) {

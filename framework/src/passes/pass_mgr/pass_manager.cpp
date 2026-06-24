@@ -32,6 +32,7 @@
 #include "passes/tensor_graph_pass/infer_memory_conflict.h"
 #include "passes/tensor_graph_pass/remove_undriven_view.h"
 #include "passes/tensor_graph_pass/expand_function.h"
+#include "passes/tensor_graph_pass/infer_write_conflict.h"
 #include "passes/tensor_graph_pass/loop_unroll.h"
 //  tile graph pass
 #include "passes/tile_graph_pass/graph_partition/common_operation_eliminate.h"
@@ -78,6 +79,7 @@ std::vector<PassEntry> BuildPvc2OooPassEntries()
 {
     return BuildPassEntries({
         PassName::INFER_TENSOR_FORMAT,
+        PassName::INFER_WRITE_CONFLICT,
         PassName::REMOVE_REDUNDANT_RESHAPE,
         PassName::AUTO_CAST,
         PassName::INFER_MEMORY_CONFLICT,
@@ -132,6 +134,7 @@ PassManager& PassManager::Instance()
 void RegPass()
 {
     REG_PASS(InferTensorFormat);
+    REG_PASS(InferWriteConflict);
     REG_PASS(GlobalMemoryReuse);
     REG_PASS(SubgraphToFunction);
     REG_PASS(GraphPartition);
@@ -297,11 +300,12 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
             APASS_LOG_ERROR_F(Elements::Function, "Pass [%s] does not exist.", PassNameStr(passName));
             return FAILED;
         }
-        PassLogUtil logUtil(*pass, function, i);
+        PassLogUtil logUtil(*pass, function, strategy, i);
         auto passDfxCfg = ConfigManager::Instance().GetPassConfigs(strategy, identifier);
         if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL) {
             passDfxCfg.printGraph = true;
             passDfxCfg.dumpGraph = true;
+            passDfxCfg.printProgram = true;
         }
         pass->SetPassConfigs(passDfxCfg);
         APASS_LOG_INFO_F(
@@ -330,7 +334,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         }
     }
     if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL && pass != nullptr) {
-        ExtractPassLogByFunction(function);
+        ExtractPassLogByFunction(function, strategy);
     }
     return SUCCESS;
 }
@@ -344,31 +348,31 @@ void PassManager::ResetAllPasses()
     for (auto& strategyPair : strategies_) {
         const auto& strategyName = strategyPair.first;
         const auto& passEntries = strategyPair.second;
-        
+
         APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: processing strategy: %s", strategyName.c_str());
-        
+
         // 遍历策略中的所有 Pass
         for (const auto& passEntry : passEntries) {
             PassName passName = passEntry.passName;
-            
+
             // 避免重复 reset 同一个 Pass
             if (resetPasses.find(passName) != resetPasses.end()) {
                 continue;
             }
-            
+
             auto pass = PassRegistry::GetInstance().CreatePass(PassNameStr(passName));
             if (pass == nullptr) {
-                APASS_LOG_WARN_F(Elements::Function, "ResetAllPasses: Pass [%s] does not exist.", 
+                APASS_LOG_WARN_F(Elements::Function, "ResetAllPasses: Pass [%s] does not exist.",
                                  PassNameStr(passName));
                 continue;
             }
-            
-            APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: resetting pass: %s", 
+
+            APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: resetting pass: %s",
                               PassNameStr(passName));
-            
+
             // 调用 Pass 的 Reset 方法
             pass->Reset();
-            
+
             // 记录已 reset 的 Pass
             resetPasses.insert(passName);
         }

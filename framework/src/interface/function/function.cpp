@@ -39,6 +39,7 @@
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/tensor/irbuilder.h"
 
 using namespace npu::tile_fwk;
 
@@ -1780,6 +1781,7 @@ Operation& Function::AddOperation(const std::string& opName, LogicalTensors iOpe
 
 Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands)
 {
+    IRBuilder builder;
     CheckTensorDynamicShape(iOperands, opCode);
 
     auto ClearOffset = [](LogicalTensorPtr t) {
@@ -1788,6 +1790,10 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
         t->dynOffset_ = std::vector<SymbolicScalar>(dim, SymbolicScalar(0));
     };
 
+    auto cmp = [](ir::VarPtr a, ir::VarPtr b) {
+        return a->name_ < b->name_;
+    };
+    std::set<ir::VarPtr, decltype(cmp)> tokenSets(cmp);
     for (auto& iOp : iOperands) {
         LogicalTensorPtr parent = nullptr;
         if (iOp->GetAttr("SLICE_PARENT", parent)) {
@@ -1797,11 +1803,14 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
             ClearOffset(iOp);
             iOp->RemoveAttr("SLICE_PARENT");
             iOp->tensor = newRaw;
+            auto tokens = builder.GetDependToken(parent);
+            tokenSets.insert(tokens.begin(), tokens.end());
         }
     }
 
     auto& ret = AddRawOperation(opCode, iOperands, oOperands);
 
+    std::vector<ir::VarPtr> tokenList(tokenSets.begin(), tokenSets.end());
     for (auto& oOp : oOperands) {
         LogicalTensorPtr parent = nullptr;
         if (oOp->GetAttr("SLICE_PARENT", parent)) {
@@ -1811,6 +1820,11 @@ Operation& Function::AddOperation(const Opcode opCode, LogicalTensors iOperands,
             ClearOffset(oOp);
             oOp->RemoveAttr("SLICE_PARENT");
             oOp->tensor = newRaw;
+            auto deps = builder.GetDependToken(parent);
+            if (!deps.empty()) {
+                op.result_token_ = deps[0];
+            }
+            op.tokens_ = tokenList;
         }
     }
     return ret;
@@ -1871,6 +1885,26 @@ Operation& Function::AddRawOperation(
         operations_.back()->SetSpan(span);
     }
     return *operations_.back();
+}
+
+void Function::AddOriginIncast(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    for (auto& ele : originInCasts_) {
+        if (ele == tensor) {
+            return;
+        }
+    }
+    originInCasts_.push_back(tensor);
+}
+
+void Function::AddOriginOutcast(const std::shared_ptr<LogicalTensor>& tensor)
+{
+    for (auto& ele : originOutCasts_) {
+        if (ele == tensor) {
+            return;
+        }
+    }
+    originOutCasts_.push_back(tensor);
 }
 
 void Function::SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst)
@@ -2279,7 +2313,7 @@ void Function::DumpJsonFile(std::string fileName)
         filePath = fileName;
     }
     std::ofstream file(filePath);
-    CHECK(FeError::BAD_FD, file.is_open()) << "Failed to open file: " << filePath;
+    CHECK(ExternalError::BAD_FD, file.is_open()) << "Failed to open file: " << filePath;
     Json progDump;
     progDump["version"] = T_VERSION;
     progDump["functions"].push_back(DumpJson());
@@ -2805,9 +2839,9 @@ static void NormalizeReshapeCopyDynValidShape(
     Operation* op, std::vector<std::vector<SymbolicScalar>>& coaLists, int& coaIndex, bool valueToIndex)
 {
     Opcode opcode = op->GetOpcode();
-    if (opcode != Opcode::OP_RESHAPE_COPY_OUT && 
-        opcode != Opcode::OP_RESHAPE_COPY_IN && 
-        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT && 
+    if (opcode != Opcode::OP_RESHAPE_COPY_OUT &&
+        opcode != Opcode::OP_RESHAPE_COPY_IN &&
+        opcode != Opcode::OP_L0C_RESHAPE_COPY_OUT &&
         opcode != Opcode::OP_L1_RESHAPE_COPY_IN) {
         return;
     }
@@ -3008,8 +3042,6 @@ void Function::GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel)
     }
 }
 
-static bool isAtomicOp(Operation* op) { return op->HasAttr("op_attr_atomic_add"); }
-
 std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(
     std::vector<OperandAttribute>& iOpAttr, std::vector<OperandAttribute>& oOpAttr)
 {
@@ -3034,7 +3066,7 @@ std::vector<std::vector<SymbolicScalar>> Function::NormalizeCoa(
 
 static bool IsInplaceIncast(Operation* op, std::vector<Operation*>& copyInList)
 {
-    if (op->GetOpcode() != Opcode::OP_VIEW) {
+    if (op->GetOpcode() != Opcode::OP_VIEW && op->GetOpcode() != Opcode::OP_RESHAPE) {
         return false;
     }
     LogicalTensorPtr data = op->GetOOperands()[0];
@@ -3073,9 +3105,19 @@ void Function::NormalizeCoaForInCasts(
             auto& consOp = *(op->GetOOperands()[0])->GetConsumers().begin();
             if (!this->IsFromOutCast(op->GetOOperands().front()) && IsCopyIn(consOp->GetOpcode()) &&
                 IsInplaceIncast(op, copyInList)) {
+                bool isReshape = op->GetOpcode() == Opcode::OP_RESHAPE;
                 for (auto copyIn : copyInList) {
                     operandCoaList = NormalizeCopyIn(copyIn, coaIndex, valueToIndex);
-                    copyIn->SetIOpAtt(k, coaIndex);
+                    copyIn->SetIOpAtt(isReshape ? 0 : k, coaIndex);
+                    if (!isReshape) {
+                        iOpAttr.emplace_back(coaIndex);
+                    }
+                    coaIndex += operandCoaList.size();
+                    coaLists.emplace_back(std::move(operandCoaList));
+                }
+                if (isReshape) {
+                    operandCoaList = NormalizeTensor(op->GetInputOperand(k), coaIndex, false);
+                    op->SetIOpAtt(k, coaIndex);
                     iOpAttr.emplace_back(coaIndex);
                     coaIndex += operandCoaList.size();
                     coaLists.emplace_back(std::move(operandCoaList));
@@ -3111,7 +3153,7 @@ void Function::NormalizeCoaForOutCasts(
         if (op->GetOOpAttrOffset(k) != -1) {
             continue;
         }
-        bool isAtomic = isAtomicOp(op);
+        bool isAtomic = op->GetOOperands()[0]->HasAttr(OpAttributeKey::writeConflict);
         std::vector<SymbolicScalar> operandCoaList;
         if (IsCopyOut(op->GetOpcode()) && k == 0) {
             operandCoaList = NormalizeCopyOut(op, coaIndex, valueToIndex);
@@ -3174,13 +3216,13 @@ void Function::NormalizeCoaForNormalOperands(
             }
             auto it = processedOperands.find(oOperand);
             if (it != processedOperands.end()) {
-                op->SetOOpAtt(i, it->second, isAtomicOp(op.get()));
+                op->SetOOpAtt(i, it->second, false);
                 continue;
             }
             if (!oOperand->GetDynOffset().empty() || !oOperand->GetDynValidShape().empty()) {
                 auto operandCoaList = NormalizeTensor(oOperand, coaIndex, valueToIndex);
                 processedOperands.emplace(oOperand, coaIndex);
-                op->SetOOpAtt(i, coaIndex, isAtomicOp(op.get()));
+                op->SetOOpAtt(i, coaIndex, false);
                 coaIndex += operandCoaList.size();
                 coaLists.emplace_back(std::move(operandCoaList));
             }
@@ -3395,7 +3437,7 @@ std::string Function::Dump() const { return DumpSSA(); }
 void Function::DumpFile(const std::string& filePath) const
 {
     std::ofstream fout(filePath);
-    CHECK(FeError::BAD_FD, fout.is_open()) << "Failed to open file: " << filePath;
+    CHECK(ExternalError::BAD_FD, fout.is_open()) << "Failed to open file: " << filePath;
     fout << Dump();
     fout.close();
 }

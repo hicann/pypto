@@ -33,6 +33,7 @@ namespace tile_fwk {
 static const size_t kSizeZero = 0UL;
 static const size_t kSizeOne = 1UL;
 static const size_t kSizeThirteen = 13UL;
+static const size_t kSizeFourteen = 14UL;
 static const size_t kSizeFifteen = 15UL;
 static const uint16_t kNumZero = 0u;
 static const uint16_t kNumOne = 1u;
@@ -199,7 +200,7 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest3)
             EXPECT_EQ(exp.GetInputOperand(kSizeZero), inCast);
         }
     }
-    EXPECT_EQ(reshape_num, kNumZero);
+    EXPECT_EQ(reshape_num, kNumOne);
 }
 
 /*

@@ -22,6 +22,7 @@ target_link_libraries(tile_fwk_cann_host_runtime
             dl
             c_sec
             tile_fwk_utils
+            json
 )
 target_compile_definitions(tile_fwk_cann_host_runtime
         PRIVATE

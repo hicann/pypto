@@ -39,13 +39,13 @@ const std::vector<NPUArch> QUANT_MX_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510
 
 int64_t CeilDiv(int64_t dividend, int64_t divisor)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, divisor != 0) << "CeilDiv divisor must not be zero.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, divisor != 0) << "CeilDiv divisor must not be zero.";
     return (dividend + divisor - 1) / divisor;
 }
 
 void CheckQuantMXDtype(DataType quantDtype)
 {
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
         QUANT_MX_SUPPORTED_OUTPUT_TYPES.find(quantDtype) != QUANT_MX_SUPPORTED_OUTPUT_TYPES.end())
         << "QuantMX currently only supports DT_FP8E4M3 and DT_FP4_E2M1X2 output. Current quant dtype: "
@@ -55,14 +55,14 @@ void CheckQuantMXDtype(DataType quantDtype)
 void CheckQuantMXDtypeCombination(DataType inputDtype, DataType quantDtype)
 {
     if (quantDtype == DataType::DT_FP8E4M3) {
-        ASSERT(
+        CHECK(
             VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
             inputDtype == DataType::DT_FP32 || inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
             << "QuantMX DT_FP8E4M3 output only supports DT_FP32, DT_FP16, and DT_BF16 input.";
         return;
     }
     if (quantDtype == DataType::DT_FP4_E2M1X2) {
-        ASSERT(
+        CHECK(
             VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
             inputDtype == DataType::DT_FP16 || inputDtype == DataType::DT_BF16)
             << "QuantMX DT_FP4_E2M1X2 output only supports DT_FP16 and DT_BF16 input.";
@@ -71,21 +71,21 @@ void CheckQuantMXDtypeCombination(DataType inputDtype, DataType quantDtype)
 
 void CheckQuantMXMode(DequantScaleRoundingMode mode)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID,
         mode == DequantScaleRoundingMode::ROUND_DOWN || mode == DequantScaleRoundingMode::ROUND_UP)
         << "QuantMX currently only supports ROUND_DOWN (OCP) and ROUND_UP (NV) modes.";
 }
 
 void CheckQuantMXPerformanceMode(int64_t performanceMode)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, performanceMode != 0)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, performanceMode != 0)
         << "QuantMX currently only supports performance mode.";
 }
 
 DequantScaleRoundingMode GetQuantMXMode(const Operation& op)
 {
     int64_t modeValue = 0;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op.GetAttr(OpAttributeKey::mxQuantMode, modeValue))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, op.GetAttr(OpAttributeKey::mxQuantMode, modeValue))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantMode;
     return static_cast<DequantScaleRoundingMode>(modeValue);
 }
@@ -93,7 +93,7 @@ DequantScaleRoundingMode GetQuantMXMode(const Operation& op)
 int64_t GetQuantMXAxis(const Operation& op)
 {
     int64_t axis = 0;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op.GetAttr(OpAttributeKey::mxQuantAxis, axis))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, op.GetAttr(OpAttributeKey::mxQuantAxis, axis))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantAxis;
     return axis;
 }
@@ -101,7 +101,7 @@ int64_t GetQuantMXAxis(const Operation& op)
 int64_t GetQuantMXPerformanceMode(const Operation& op)
 {
     int64_t performanceMode = 0;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op.GetAttr(OpAttributeKey::mxQuantPerformanceMode, performanceMode))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, op.GetAttr(OpAttributeKey::mxQuantPerformanceMode, performanceMode))
         << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantPerformanceMode;
     return performanceMode;
 }
@@ -111,7 +111,7 @@ int64_t NormalizeQuantMXAxis(int64_t axis, size_t rank)
     if (axis < 0) {
         axis += static_cast<int64_t>(rank);
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis >= 0 && axis < static_cast<int64_t>(rank))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, axis >= 0 && axis < static_cast<int64_t>(rank))
         << "QuantMX axis is out of range. Current axis: " << axis << ", input rank: " << rank;
     return axis;
 }
@@ -119,29 +119,29 @@ int64_t NormalizeQuantMXAxis(int64_t axis, size_t rank)
 void CheckQuantMXAxis(int64_t axis, size_t rank)
 {
     const int64_t normalizedAxis = NormalizeQuantMXAxis(axis, rank);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == static_cast<int64_t>(rank) - 1)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == static_cast<int64_t>(rank) - 1)
         << "QuantMX currently only supports the last axis. Current axis: " << axis << ", input rank: " << rank;
 }
 
 void CheckQuantMXInput(const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis)
 {
     const auto inputDtype = input.GetDataType();
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
         QUANT_MX_SUPPORTED_INPUT_TYPES.find(inputDtype) != QUANT_MX_SUPPORTED_INPUT_TYPES.end())
         << "QuantMX currently only supports DT_FP16, DT_BF16, and DT_FP32 input.";
     CheckQuantMXDtype(quantDtype);
     CheckQuantMXDtypeCombination(inputDtype, quantDtype);
     CheckQuantMXMode(mode);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input.Format() == TileOpFormat::TILEOP_ND)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, input.Format() == TileOpFormat::TILEOP_ND)
         << "QuantMX only supports TILEOP_ND input.";
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
         QUANT_MX_MIN_RANK <= input.GetShape().size() && input.GetShape().size() <= QUANT_MX_MAX_RANK)
         << "QuantMX only supports 1D to 4D input.";
     CheckQuantMXAxis(axis, input.GetShape().size());
     const int64_t lastDimBytes = input.GetShape().back() * BytesOf(inputDtype);
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
         << "QuantMX view shape's last dim must be 256-byte aligned. Current last dim bytes: " << lastDimBytes;
 }
 
@@ -150,10 +150,10 @@ void CheckQuantMXPerformanceTileShape(const LogicalTensorPtr& input, const VecTi
     if (performanceMode == 0) {
         return;
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, vecTile.size() == input->GetShape().size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile.size() == input->GetShape().size())
         << "QuantMX performance mode tile shape rank must match input rank.";
     const int64_t lastTileDim = vecTile[vecTile.size() - 1];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, lastTileDim == input->GetShape().back())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastTileDim == input->GetShape().back())
         << "QuantMX performance mode requires tile shape last dim to be the same as input last dim. Current tile "
            "last dim: "
         << lastTileDim << ", input last dim: " << input->GetShape().back();
@@ -287,13 +287,13 @@ std::vector<SymbolicScalar> BuildQuantMXScaleValidShape(const std::vector<Symbol
 
 void CheckQuantMXTileShape(const LogicalTensorPtr& input, const VecTile& vecTile)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, vecTile.size() == input->GetShape().size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile.size() == input->GetShape().size())
         << "QuantMX tile shape rank must match input rank.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, vecTile[vecTile.size() - 1] > 0)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[vecTile.size() - 1] > 0)
         << "QuantMX tile shape last dim must be positive.";
 
     const int64_t lastDimBytes = vecTile[vecTile.size() - 1] * BytesOf(input->Datatype());
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
         << "QuantMX tile shape's last dim must be 256-byte aligned. Current last dim bytes: " << lastDimBytes;
 }
 
@@ -304,7 +304,7 @@ void TiledQuantMXOperation(
 {
     if (cur == input.tensor.GetShape().size()) {
         const int64_t lastDimBytes = input.tileInfo.shape.back() * BytesOf(input.tensor.GetDataType());
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
             << "QuantMX tile width must be 256-byte aligned. Current last dim bytes: " << lastDimBytes;
 
         auto addQuantMXTile = [&](const std::vector<int64_t>& quantTileShape, const std::vector<int64_t>& tileOffset,
@@ -359,8 +359,8 @@ void QuantMXTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "QuantMX expects 1 input tensor.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 4) << "QuantMX expects 4 output tensors.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "QuantMX expects 1 input tensor.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 4) << "QuantMX expects 4 output tensors.";
 
     const auto& src = iOperand[0];
     const auto& dst = oOperand[0];
@@ -399,7 +399,7 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size
             op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile});
         } else {
             LogicalTensorPtr workspace =
-                std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
+                std::make_shared<LogicalTensor>(function, DT_INT32, std::vector<int64_t>{workspaceSize});
             op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile, workspace});
         }
         op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
@@ -434,9 +434,9 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size
 void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape,
     const LogicalTensorPtr &src, const LogicalTensorPtr &scale,
     const LogicalTensorPtr &dst, int64_t axis, uint32_t workspaceSize) {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
         << "Source shape size and offset size should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
         << "Destination shape size and offset size should be equal";
 
     TileInfo srcTileInfo(src->shape.size(), src->offset.size());
@@ -467,7 +467,7 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, siz
             op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile});
         } else {
             LogicalTensorPtr workspace =
-                std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
+                std::make_shared<LogicalTensor>(function, DT_INT32, std::vector<int64_t>{workspaceSize});
             op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile, workspace});
         }
         op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
@@ -507,9 +507,9 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, siz
 void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape,
     const LogicalTensorPtr &src, const LogicalTensorPtr &scale, const LogicalTensorPtr &offset,
     const LogicalTensorPtr &dst, int64_t axis, uint32_t workspaceSize) {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, src->shape.size() == src->offset.size())
         << "Source shape size and offset size should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dst->shape.size() == dst->offset.size())
         << "Destination shape size and offset size should be equal";
 
     TileInfo srcTileInfo(src->shape.size(), src->offset.size());
@@ -557,7 +557,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     DECLARE_TRACER();
 
     // Validate input dimensions
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
+    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
         << "The shape.size() only support 1~5";
 
     // Handle 1D input: reshape to [1, n] and process as 2D
@@ -565,7 +565,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     bool is1DInput = (input.GetShape().size() == 1);
 
     // Validate: 1D input only supports axis=-1
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, !(is1DInput && axis == -2))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, !(is1DInput && axis == -2))
         << "1D input only supports axis=-1, axis=-2 is not supported";
 
     Tensor processedInput = input;
@@ -600,7 +600,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
 
     // Validate data types
     std::vector<DataType> SUPPORT_INPUT_DATATYPES = {DataType::DT_FP32};
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, std::find(
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, std::find(
         SUPPORT_INPUT_DATATYPES.begin(), SUPPORT_INPUT_DATATYPES.end(), input.GetDataType()) != SUPPORT_INPUT_DATATYPES.end())
         << "The input datatype is not supported";
 
@@ -610,7 +610,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     if (axis >= 0) {
         normalizedAxis = axis - ndim;
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
         << "Only axis=-1 (per-row) and axis=-2 (per-column) are supported";
 
     // Determine quantization type based on zeroPoints presence
@@ -640,7 +640,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
 
         if (isAsymmetric) {
             // Asymmetric quantization with axis=-1
-            ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
+            CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
                 << "Asymmetric quantization output type should be UINT8";
             quantizedResult = CALL(QuantizeAsymmetricOperation,
                 *Program::GetInstance().GetCurrentFunction(),
@@ -648,7 +648,7 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
                 zeroPoints.GetStorage(), -1);
         } else {
             // Symmetric quantization with axis=-1
-            ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
+            CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
                 << "Symmetric quantization output type should be INT8";
             quantizedResult = CALL(QuantizeSymmetricOperation,
                 *Program::GetInstance().GetCurrentFunction(),
@@ -684,13 +684,13 @@ Tensor Quantize(const Tensor &input, const Tensor &scale, DataType dtype, int ax
     Tensor result;
     if (isAsymmetric) {
         // Asymmetric quantization: FP32 -> UINT8
-        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_UINT8)
             << "Asymmetric quantization output type should be UINT8";
         result = CALL(QuantizeAsymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
             processedInput.GetStorage(), scale.GetStorage(), zeroPoints.GetStorage(), normalizedAxis);
     } else {
         // Symmetric quantization: FP32 -> INT8
-        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
+        CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, dtype == DataType::DT_INT8)
             << "Symmetric quantization output type should be INT8";
         result = CALL(QuantizeSymmetricOperation, *Program::GetInstance().GetCurrentFunction(),
             processedInput.GetStorage(), scale.GetStorage(), normalizedAxis);
@@ -719,12 +719,20 @@ void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &til
     const Operation &op) {
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
 
-    // Calculate workspace size: one 32B block per row
+    // Calculate workspace size: same size as src (with int32_t type)
     auto shape = tileShape.GetVecTile();
     int dim = shape.size();
-    // tmpbuf: [rows, 8] with float type, 8 float = 32B per row
+    // tmpbuf: same size as src, with int32_t type
     int64_t tmpRows = (dim >= 2) ? shape.tile[dim - 2] : 1;
-    uint32_t workspaceSize = tmpRows * 32;  // one 32B block per row
+    int64_t tmpCols = (dim >= 1) ? shape.tile[dim - 1] : 1;
+
+    // tmpbuf need 32-byte alignment
+    constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+    tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
+    tmpRows = (tmpRows + alignElements - 1) / alignElements * alignElements;
+
+    // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
+    uint32_t workspaceSize = tmpRows * tmpCols;
 
     TiledQuantizeSymmetric(function, tileShape, iOperand[0], iOperand[1], oOperand[0], axis, workspaceSize);
 }
@@ -734,12 +742,20 @@ void QuantizeAsymmetricOperationTileFunc(Function &function, const TileShape &ti
     const Operation &op) {
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
 
-    // Calculate workspace size: one 32B block per row
+    // Calculate workspace size: same size as src (with int32_t type)
     auto shape = tileShape.GetVecTile();
     int dim = shape.size();
-    // tmpbuf: [rows, 8] with float type, 8 float = 32B per row
+    // tmpbuf: same size as src, with int32_t type
     int64_t tmpRows = (dim >= 2) ? shape.tile[dim - 2] : 1;
-    uint32_t workspaceSize = tmpRows * 32;  // one 32B block per row
+    int64_t tmpCols = (dim >= 1) ? shape.tile[dim - 1] : 1;
+
+    // tmpbuf need 32-byte alignment
+    constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
+    tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
+    tmpRows = (tmpRows + alignElements - 1) / alignElements * alignElements;
+
+    // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
+    uint32_t workspaceSize = tmpRows * tmpCols;
 
     TiledQuantizeAsymmetric(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis, workspaceSize);
 }
@@ -831,7 +847,7 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     DECLARE_TRACER();
 
     // Validate input dimensions
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
+    CHECK(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input.GetShape().size() >= SHAPE_DIM1 && input.GetShape().size() <= SHAPE_DIM5)
         << "The shape.size() only support 1~5";
 
     // Handle 1D input: reshape to [1, n] and process as 2D
@@ -839,7 +855,7 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     bool is1DInput = (input.GetShape().size() == 1);
 
     // Validate: 1D input only supports axis=-1
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, !(is1DInput && axis == -2))
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, !(is1DInput && axis == -2))
         << "1D input only supports axis=-1, axis=-2 is not supported";
 
     Tensor processedInput = input;
@@ -873,13 +889,13 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     }
 
     // Validate input data type: INT8 or INT16
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
         input.GetDataType() == DataType::DT_INT8 || input.GetDataType() == DataType::DT_INT16)
         << "Dequantize input dtype must be INT8 or INT16, but got dtype="
         << static_cast<int>(input.GetDataType());
 
     // Validate output type
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, otype == DataType::DT_FP32)
+    CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, otype == DataType::DT_FP32)
         << "Dequantize output type must be FP32, but got dtype=" << static_cast<int>(otype);
 
     // Normalize axis to negative indexing and validate
@@ -888,7 +904,7 @@ Tensor Dequantize(const Tensor &input, const Tensor &scale, DataType otype, int 
     if (axis >= 0) {
         normalizedAxis = axis - ndim;
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, normalizedAxis == -1 || normalizedAxis == -2)
         << "Dequantize axis must be -1 (per-row) or -2 (per-column), but got axis="
         << axis << " (normalized=" << normalizedAxis << ")";
 

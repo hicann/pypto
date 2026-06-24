@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <any>
 #include <iomanip>
 #include <ios>
 #include <optional>
@@ -20,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/any_cast.h"
 #include "core/dtype.h"
 #include "core/logging.h"
 #include "ir/core.h"
@@ -27,6 +29,7 @@
 #include "ir/expr.h"
 #include "ir/function.h"
 #include "ir/memref.h"
+#include "ir/pipe.h"
 #include "ir/stmt.h"
 #include "ir/kind_traits.h"
 #include "ir/scalar_expr.h"
@@ -208,6 +211,68 @@ std::string FormatFloatLiteral(double value)
     }
 }
 
+const char* TileLayoutToPythonName(TileLayout layout)
+{
+    switch (layout) {
+        case TileLayout::none_box:
+            return "none_box";
+        case TileLayout::row_major:
+            return "row_major";
+        case TileLayout::col_major:
+            return "col_major";
+        default:
+            INTERNAL_CHECK(false) << "Unknown TileLayout in PrintTileView";
+            return "";
+    }
+}
+
+const char* TilePadToPythonName(TilePad pad)
+{
+    switch (pad) {
+        case TilePad::null:
+            return "null";
+        case TilePad::zero:
+            return "zero";
+        case TilePad::max:
+            return "max";
+        case TilePad::min:
+            return "min";
+        default:
+            INTERNAL_CHECK(false) << "Unknown TilePad in PrintTileView";
+            return "";
+    }
+}
+
+const char* CompactModeToPythonName(CompactMode compact)
+{
+    switch (compact) {
+        case CompactMode::null:
+            return "null";
+        case CompactMode::normal:
+            return "normal";
+        case CompactMode::row_plus_one:
+            return "row_plus_one";
+        default:
+            INTERNAL_CHECK(false) << "Unknown CompactMode in PrintTileView";
+            return "";
+    }
+}
+
+const char* TensorLayoutToPythonName(TensorLayout layout)
+{
+    switch (layout) {
+        case TensorLayout::ND:
+            return "ND";
+        case TensorLayout::DN:
+            return "DN";
+        case TensorLayout::NZ:
+            return "NZ";
+        default:
+            INTERNAL_CHECK(false) << "Unknown TensorLayout in PrintTensorView";
+            return "";
+    }
+}
+
 void PrintIterArgNames(std::ostringstream& stream, const std::vector<IterArgPtr>& iter_args)
 {
     stream << "(";
@@ -309,6 +374,7 @@ protected:
     void VisitExpr_(const ScalarExprPtr& op) override;
     void VisitStmt_(const TensorOpStmtPtr& op) override;
     void VisitStmt_(const ScalarOpStmtPtr& op) override;
+    void VisitStmt_(const SectionStmtPtr& op) override;
 
 private:
     std::ostringstream stream_;
@@ -330,15 +396,21 @@ private:
     void PrintBinaryOp(const BinaryExprPtr& op, const char* op_symbol);
     void PrintFunctionBinaryOp(const BinaryExprPtr& op, const char* func_name);
     void PrintChild(const ExprPtr& parent, const ExprPtr& child, bool is_left);
+    void PrintCallKwargs(const CallPtr& op, bool need_comma);
+    void PrintKwargValue(const std::string& key, const std::any& value);
 
     // Shape printing helper
     void PrintShapeDims(std::ostringstream& oss, const std::vector<ExprPtr>& shape);
+    void PrintExprList(std::ostringstream& oss, const std::vector<ExprPtr>& exprs);
 
     // Print an expression for use in type annotations (shapes, views).
     std::string PrintExprForType(const ExprPtr& expr);
 
     // MemRef and TileView printing helpers
     std::string PrintMemRef(const MemRef& memref);
+    std::string PrintTileView(const TileView& tile_view);
+    std::string PrintHardwareInfo(const HardwareInfo& hw_info);
+    std::string PrintTensorView(const TensorView& tensor_view);
 };
 
 // DataTypeToPythonString removed — now uses DTypeToString from dtype.h
@@ -367,6 +439,10 @@ std::string IRPrinter::Print(const TypePtr& type)
         PrintShapeDims(oss, tensor_type->shape_);
         oss << "], " << prefix_ << "." << DTypeToString(tensor_type->dtype_);
 
+        if (tensor_type->tensor_view_.has_value()) {
+            oss << ", tensor_view=" << PrintTensorView(tensor_type->tensor_view_.value());
+        }
+
         // Add optional memref as positional arg
         if (tensor_type->memref_.has_value()) {
             oss << ", " << PrintMemRef(*tensor_type->memref_.value());
@@ -382,6 +458,14 @@ std::string IRPrinter::Print(const TypePtr& type)
         oss << prefix_ << ".Tile[[";
         PrintShapeDims(oss, tile_type->shape_);
         oss << "], " << prefix_ << "." << DTypeToString(tile_type->dtype_);
+
+        if (tile_type->tileView_.has_value()) {
+            oss << ", tile_view=" << PrintTileView(tile_type->tileView_.value());
+        }
+
+        if (tile_type->hardwareInfo_.has_value()) {
+            oss << ", hardware_info=" << PrintHardwareInfo(tile_type->hardwareInfo_.value());
+        }
 
         // Add optional memref as positional arg
         if (tile_type->memref_.has_value()) {
@@ -454,6 +538,7 @@ void IRPrinter::VisitExpr_(const CallPtr& op)
             stream_ << ", ";
         VisitExpr(op->args_[i]);
     }
+    PrintCallKwargs(op, !op->args_.empty());
     stream_ << ")";
 }
 
@@ -503,6 +588,75 @@ void IRPrinter::PrintFunctionBinaryOp(const BinaryExprPtr& op, const char* func_
     stream_ << ", ";
     VisitExpr(op->right_);
     stream_ << ")";
+}
+
+void IRPrinter::PrintKwargValue(const std::string& key, const std::any& value)
+{
+    if (value.type() == typeid(int)) {
+        int int_val = AnyCast<int>(value, "printing kwarg: " + key);
+        if (key == "set_pipe" || key == "wait_pipe") {
+            stream_ << prefix_ << ".PipeType." << PipeTypeToString(static_cast<PipeType>(int_val));
+        } else {
+            stream_ << int_val;
+        }
+    } else if (value.type() == typeid(bool)) {
+        stream_ << (AnyCast<bool>(value, "printing kwarg: " + key) ? "True" : "False");
+    } else if (value.type() == typeid(std::string)) {
+        stream_ << std::quoted(AnyCast<std::string>(value, "printing kwarg: " + key));
+    } else if (value.type() == typeid(double)) {
+        stream_ << FormatFloatLiteral(AnyCast<double>(value, "printing kwarg: " + key));
+    } else if (value.type() == typeid(float)) {
+        stream_ << FormatFloatLiteral(static_cast<double>(AnyCast<float>(value, "printing kwarg: " + key)));
+    } else if (value.type() == typeid(DataType)) {
+        stream_ << prefix_ << "." << DTypeToString(AnyCast<DataType>(value, "printing kwarg: " + key));
+    } else if (value.type() == typeid(MemorySpace)) {
+        stream_ << prefix_ << ".MemorySpace."
+                << MemorySpaceToString(AnyCast<MemorySpace>(value, "printing kwarg: " + key));
+    } else if (value.type() == typeid(std::vector<int>)) {
+        const auto& values = AnyCast<std::vector<int>>(value, "printing kwarg: " + key);
+        stream_ << "[";
+        for (size_t i = 0; i < values.size(); ++i) {
+            if (i > 0)
+                stream_ << ", ";
+            stream_ << values[i];
+        }
+        stream_ << "]";
+    } else if (value.type() == typeid(std::vector<std::string>)) {
+        const auto& values = AnyCast<std::vector<std::string>>(value, "printing kwarg: " + key);
+        stream_ << "[";
+        for (size_t i = 0; i < values.size(); ++i) {
+            if (i > 0)
+                stream_ << ", ";
+            stream_ << std::quoted(values[i]);
+        }
+        stream_ << "]";
+    } else if (value.type() == typeid(SymbolicScalar)) {
+        stream_ << AnyCast<SymbolicScalar>(value, "printing kwarg: " + key).Dump();
+    } else if (value.type() == typeid(std::vector<SymbolicScalar>)) {
+        const auto& values = AnyCast<std::vector<SymbolicScalar>>(value, "printing kwarg: " + key);
+        stream_ << "[";
+        for (size_t i = 0; i < values.size(); ++i) {
+            if (i > 0)
+                stream_ << ", ";
+            stream_ << values[i].Dump();
+        }
+        stream_ << "]";
+    } else {
+        INTERNAL_CHECK(false) << "Unsupported kwarg value type for key '" << key << "': "
+                              << DemangleTypeName(value.type().name());
+    }
+}
+
+void IRPrinter::PrintCallKwargs(const CallPtr& op, bool need_comma)
+{
+    for (const auto& [key, value] : op->kwargs_) {
+        if (need_comma) {
+            stream_ << ", ";
+        }
+        need_comma = true;
+        stream_ << key << "=";
+        PrintKwargValue(key, value);
+    }
 }
 
 // Arithmetic binary operators
@@ -793,6 +947,8 @@ void IRPrinter::VisitStmt_(const TensorOpStmtPtr& op)
                 stream_ << values[i].Dump();
             }
             stream_ << "]";
+        } else if (value.type() == typeid(uint64_t)) {
+            stream_ << AnyCast<uint64_t>(value);
         } else {
             INTERNAL_CHECK(false) << "Unsupported function attrs value type: " << DemangleTypeName(value.type().name());
         }
@@ -824,6 +980,24 @@ void IRPrinter::VisitStmt_(const ScalarOpStmtPtr& op)
         VisitExpr(op->args_[i]);
     }
     stream_ << ")";
+}
+
+void IRPrinter::VisitStmt_(const SectionStmtPtr& op)
+{
+    static const std::unordered_map<SectionKind, std::string> section_kind_to_name = {
+        {SectionKind::Vector, "section_vector"},
+        {SectionKind::Cube, "section_cube"},
+        {SectionKind::VF, "section_vf"},
+    };
+
+    auto it = section_kind_to_name.find(op->sectionKind_);
+    INTERNAL_CHECK(it != section_kind_to_name.end())
+        << "Internal error: Unknown SectionKind in printer: " << SectionKindToString(op->sectionKind_);
+
+    stream_ << "with " << prefix_ << "." << it->second << "():\n";
+    indent_++;
+    PrintStmtBlock(op->body_);
+    indent_--;
 }
 
 void IRPrinter::VisitStmt_(const StmtPtr& op) { stream_ << op->TypeName(); }
@@ -950,6 +1124,9 @@ void IRPrinter::VisitFunction(const FunctionPtr& func)
 {
     // Print decorator
     stream_ << GetIndent() << "@" << prefix_ << ".function";
+    if (func->funcType_ != FunctionType::OPAQUE) {
+        stream_ << "(type=" << prefix_ << ".FunctionType." << FunctionTypeToString(func->funcType_) << ")";
+    }
     stream_ << "\n";
 
     // Print function signature
@@ -1012,6 +1189,16 @@ void IRPrinter::PrintShapeDims(std::ostringstream& oss, const std::vector<ExprPt
     }
 }
 
+void IRPrinter::PrintExprList(std::ostringstream& oss, const std::vector<ExprPtr>& exprs)
+{
+    for (size_t i = 0; i < exprs.size(); ++i) {
+        if (i > 0)
+            oss << ", ";
+        IRPrinter temp_printer(prefix_);
+        oss << temp_printer.Print(exprs[i]);
+    }
+}
+
 std::string IRPrinter::PrintMemRef(const MemRef& memref)
 {
     std::ostringstream oss;
@@ -1022,6 +1209,49 @@ std::string IRPrinter::PrintMemRef(const MemRef& memref)
     oss << temp_printer.Print(memref.addr_);
     // Print size
     oss << ", " << memref.size_ << ")";
+    return oss.str();
+}
+
+std::string IRPrinter::PrintTileView(const TileView& tile_view)
+{
+    std::ostringstream oss;
+    oss << prefix_ << ".TileView(valid_shape=[";
+    PrintExprList(oss, tile_view.validShape);
+    oss << "], stride=[";
+    PrintExprList(oss, tile_view.stride);
+    oss << "], start_offset=";
+    IRPrinter temp_printer(prefix_);
+    oss << temp_printer.Print(tile_view.startOffset);
+    oss << ")";
+    return oss.str();
+}
+
+std::string IRPrinter::PrintHardwareInfo(const HardwareInfo& hw_info)
+{
+    std::ostringstream oss;
+    oss << prefix_ << ".HardwareInfo(";
+    oss << "blayout=" << prefix_ << ".TileLayout." << TileLayoutToPythonName(hw_info.blayout);
+    oss << ", slayout=" << prefix_ << ".TileLayout." << TileLayoutToPythonName(hw_info.slayout);
+    oss << ", fractal=" << hw_info.fractal;
+    oss << ", pad=" << prefix_ << ".TilePad." << TilePadToPythonName(hw_info.pad);
+    oss << ", compact=" << prefix_ << ".CompactMode." << CompactModeToPythonName(hw_info.compact);
+    oss << ")";
+    return oss.str();
+}
+
+std::string IRPrinter::PrintTensorView(const TensorView& tensor_view)
+{
+    std::ostringstream oss;
+    oss << prefix_ << ".TensorView(";
+    if (!tensor_view.validShape.empty()) {
+        oss << "valid_shape=[";
+        PrintExprList(oss, tensor_view.validShape);
+        oss << "], ";
+    }
+    oss << "stride=[";
+    PrintExprList(oss, tensor_view.stride);
+    oss << "], layout=" << prefix_ << ".TensorLayout." << TensorLayoutToPythonName(tensor_view.layout);
+    oss << ")";
     return oss.str();
 }
 

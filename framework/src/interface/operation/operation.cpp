@@ -136,6 +136,7 @@ const std::string OpAttributeKey::l0cValidMN = "L0C_VALID_MN";
 const std::string OpAttributeKey::rmwMode = "op_attr_rmw_mode";
 const std::string OpAttributeKey::transDataOffset = "TRANSDATA_OFFSET";
 const std::string OpAttributeKey::isConv = "isConv";
+const std::string OpAttributeKey::writeConflict = "write_conflict";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";
@@ -285,7 +286,7 @@ void Operation::InitLatency(Opcode opcode)
         latency_ = GetLatencyByOperands(latencyOperands, GetOpcodeStr());
     }
 }
- 
+
 std::string Operation::GetStringAttribute(const std::string& key) const
 {
     FE_ASSERT(FeError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
@@ -382,7 +383,7 @@ void Operation::SetAttribute(const std::string& key, const std::vector<Element>&
 
 void Operation::SetAttribute(const std::string& key, Element value) { SetAttr(key, value); }
 
-std::map<std::string, npu::tile_fwk::Any> Operation::GetAllAttribute() const { return GetAllAttr(); }
+std::map<std::string, std::any> Operation::GetAllAttribute() const { return GetAllAttr(); }
 
 void DebugJson(const Json& j)
 {
@@ -708,17 +709,30 @@ std::string Operation::DumpSSA(const std::string& prefix) const
         }
     }
 
+    bool hasResult = false;
     oss << prefix;
     for (size_t i = 0; i < oOperand.size(); i++) {
         oss << ((i != 0) ? ", " : "");
         oss << oOperand[i]->DumpSSA(false, true, true);
-        oss << ((i == oOperand.size() - 1) ? " = " : "");
+        hasResult = true;
     }
+    if (result_token_ != nullptr) {
+        oss << ((hasResult) ? ", " : "") << "Token(" << result_token_->name_ << ")";
+        hasResult = true;
+    }
+    oss << ((hasResult) ? " = " : "");
     oss << "!" << GetOpMagic() << " " << GetOpcodeStr(true);
     oss << "(g:" << GetSubgraphID() << ", s:" << GetScopeId() << ")";
     for (size_t i = 0; i < iOperand.size(); i++) {
         oss << ((i == 0) ? " " : ", ");
         oss << iOperand[i]->DumpSSA(false, true, false);
+    }
+    if (!tokens_.empty()) {
+        oss << " #tokens{";
+        for (size_t i = 0; i < tokens_.size(); i++) {
+            oss << ((i == 0) ? "" : ", ") << tokens_[i]->name_;
+        }
+        oss << "}";
     }
     if (opAttribute_ != nullptr) {
         oss << " " << opAttribute_->Dump();
@@ -1114,6 +1128,26 @@ bool Operation::IsNeedStackGM() const
            (OpcodeManager::Inst().IsCopyOut(opcode_) && std::any_of(oOperand.cbegin(), oOperand.cend(), isStack));
 }
 
+static void AppendFromDynValidShapeRefs(CopyOpAttribute& copyAttr,
+    std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
+{
+    for (auto& shape : copyAttr.GetFromDynValidShape()) {
+        if (shape.IsSpecified()) {
+            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+        }
+    }
+}
+
+static void AppendToDynValidShapeRefs(CopyOpAttribute& copyAttr,
+    std::vector<std::reference_wrapper<SymbolicScalar>>& dynamicAttributeList)
+{
+    for (auto& shape : copyAttr.GetToDynValidShape()) {
+        if (shape.IsSpecified()) {
+            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+        }
+    }
+}
+
 std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttributeList()
 {
     std::vector<std::reference_wrapper<SymbolicScalar>> dynamicAttributeList;
@@ -1163,12 +1197,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                             std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
                     }
                 }
-                for (auto& shape : copyAttr->GetToDynValidShape()) {
-                    if (shape.IsSpecified()) {
-                        dynamicAttributeList.push_back(
-                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                    }
-                }
+                AppendToDynValidShapeRefs(*copyAttr, dynamicAttributeList);
             }
         } break;
         case Opcode::OP_COPY_OUT:
@@ -1182,12 +1211,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                             std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
                     }
                 }
-                for (auto& shape : copyAttr->GetFromDynValidShape()) {
-                    if (shape.IsSpecified()) {
-                        dynamicAttributeList.push_back(
-                            std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                    }
-                }
+                AppendFromDynValidShapeRefs(*copyAttr, dynamicAttributeList);
             }
         } break;
         case Opcode::OP_VEC_DUP: {
@@ -1212,7 +1236,7 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
             auto& attrDict = GetAllAttr();
             auto it = attrDict.find(OpAttributeKey::bindTensor);
             if (it != attrDict.end()) {
-                auto& value = *npu::tile_fwk::AnyCast<SymbolicScalar>(&it->second);
+                auto& value = pypto::AnyCastRef<SymbolicScalar>(it->second);
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
             }
         } break;
@@ -1255,6 +1279,19 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                     continue;
                 }
                 dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
+            }
+        } break;
+        case Opcode::OP_L1_RESHAPE_COPY_IN: 
+            [[fallthrough]];
+        case Opcode::OP_L0C_RESHAPE_COPY_OUT: 
+            [[fallthrough]];
+        case Opcode::OP_RESHAPE_COPY_OUT: 
+            [[fallthrough]];
+        case Opcode::OP_RESHAPE_COPY_IN: {
+            auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
+            if (copyAttr) {
+                AppendFromDynValidShapeRefs(*copyAttr, dynamicAttributeList);
+                AppendToDynValidShapeRefs(*copyAttr, dynamicAttributeList);
             }
         } break;
         default:

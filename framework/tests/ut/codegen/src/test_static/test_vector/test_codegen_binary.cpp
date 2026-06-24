@@ -52,7 +52,7 @@ void TestAddBody(std::vector<int64_t> shape, std::string name, bool withBrc = fa
     }
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 TEST_F(TestCodegenBinary, TestCodegenAddDim2) { TestAddBody({64, 64}, "ADD_DIM2", true); }
@@ -72,7 +72,7 @@ void TestAddSBody(std::vector<int64_t> shape, std::vector<int64_t> tile_shape, s
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
+    codeGen.GenCode(*function);
 }
 
 TEST_F(TestCodegenBinary, TestCodegenAddSDim2) { TestAddSBody({19, 90}, {8, 128}, "ADD_DIM2"); }
@@ -101,16 +101,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor)
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
     std::string res = GenCodeByFunction(*function);
-    std::string expectHeader = R"!!!(#include "TileOpImpl.h"
-#include "tilefwk/aicpu_common.h"
-
-// funcHash: 7529788009116668590
-)!!!";
-    CheckStringExist(expectHeader, res);
-
-    std::string expectBody = R"!!!(float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400
-float *UB_S0_E1024_T = (float *)get_imm(0x0); // size: 0x400
-float __ubuf__ *UB_S1024_E2048 = (float __ubuf__ *)get_imm(0x400); // size: 0x400
+    std::string expectBody = R"!!!(float *UB_S0_E1024_T = (float *)get_imm(0x0); // size: 0x400
 float *UB_S1024_E2048_T = (float *)get_imm(0x400); // size: 0x400
 using GMTileTensorFP32Dim4_1 = TileTensor<__gm__ float, DynLayout4Dim, Hardware::GM>;
 using UBTileTensorFP32Dim4_0 = TileTensor<float, StaticLayout4Dim<1, 1, 16, 16, 1, 1, 16, 16>, Hardware::UB>;
@@ -124,9 +115,9 @@ TLoad(ubTensor_2, gmTensor_3, Coord4Dim(0, 0, 0, 0));
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TAdd<LastUse3Dim<0, 0, 1>>(ubTensor_2, ubTensor_0, ubTensor_2);
+TAdd<LastUse3Dim<0, 0, 0>>(ubTensor_2, ubTensor_0, ubTensor_2);
 pipe_barrier(PIPE_V);
-TMul<LastUse3Dim<0, 1, 1>>(ubTensor_2, ubTensor_0, ubTensor_2);
+TMul<LastUse3Dim<0, 1, 0>>(ubTensor_2, ubTensor_0, ubTensor_2);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 GMTileTensorFP32Dim4_1 gmTensor_10((__gm__ float*)GET_PARAM_ADDR(param, 0, 35), DynLayout4Dim(Shape4Dim(1, 1, 16, 16), Stride4Dim(256, 256, 16, 1)));

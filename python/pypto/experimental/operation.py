@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
-from typing import List, Union, Dict, Optional
+from typing import List, Union, Dict, Optional, Tuple
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
@@ -82,6 +82,26 @@ def get_operation_options() -> Dict[str, Union[str, int, List[int], Dict[int, in
 
     scope = get_current_scope()
     return scope.get_operation_options()
+
+
+@op_wrapper
+def online_softmax(scores: Tensor, scale: float) -> Tuple[Tensor, Tensor, Tensor]:
+    """Returns axis-0 online softmax local statistics."""
+    return pypto_impl.OnlineSoftmax(scores, scale)
+
+
+@op_wrapper
+def online_softmax_update(
+    previous_max: Tensor,
+    previous_sum: Tensor,
+    previous_output: Tensor,
+    current_max: Tensor,
+    current_sum: Tensor,
+    current_output: Tensor,
+) -> Tuple[Tensor, Tensor, Tensor]:
+    """Updates online softmax state for a new block."""
+    return pypto_impl.OnlineSoftmaxUpdate(
+        previous_max, previous_sum, previous_output, current_max, current_sum, current_output)
 
 
 @op_wrapper

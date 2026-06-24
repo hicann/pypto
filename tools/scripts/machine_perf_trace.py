@@ -17,7 +17,7 @@ import os
 import shutil
 import unicodedata
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Set, Tuple, Union
 
 
 def parse_log_file(log_file_path):
@@ -349,46 +349,6 @@ def collect_round_ids(aicpu_dev_pref: List[Dict[str, Any]]) -> List[Optional[int
     return sorted(round_ids)
 
 
-def get_task_cycle(
-    tasks: List[Dict[str, Any]],
-    task_name: str,
-    idx: Optional[int] = None,
-    round_id: Optional[int] = None,
-    sorted_tasks: Optional[List[Dict[str, Any]]] = None,
-) -> Optional[float]:
-    tasks_by_end = sorted_tasks if sorted_tasks is not None else sort_tasks_by_end(tasks)
-    for task in tasks_by_end:
-        base, task_round, num = parse_task_name(task.get("name", ""))
-        if base != task_name:
-            continue
-        if round_id is not None and task_round != round_id:
-            continue
-        if idx is not None and num != idx:
-            continue
-        return float(task.get("end", 0))
-    return None
-
-
-def get_task_cycle_map(
-    tasks: List[Dict[str, Any]],
-    task_name: str,
-    round_id: Optional[int] = None,
-    sorted_tasks: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[int, float]:
-    cycle_map: Dict[int, float] = {}
-    tasks_by_end = sorted_tasks if sorted_tasks is not None else sort_tasks_by_end(tasks)
-    for task in tasks_by_end:
-        base, task_round, num = parse_task_name(task.get("name", ""))
-        if base != task_name:
-            continue
-        if round_id is not None and task_round != round_id:
-            continue
-        if num is None:
-            continue
-        cycle_map[num] = float(task.get("end", 0))
-    return cycle_map
-
-
 def calc_duration_from_ends(start_end: Optional[float], end_end: Optional[float]) -> Optional[float]:
     if start_end is None or end_end is None:
         return None
@@ -406,158 +366,124 @@ def normalize_cores_tasks_by_end(aicpu_dev_pref: List[Dict[str, Any]]) -> None:
             core["tasks"] = sort_tasks_by_end(tasks)
 
 
-def get_event_duration(
-    tasks: List[Dict[str, Any]],
-    event_name: str,
-    round_id: Optional[int] = None,
-    idx: Optional[int] = None,
-) -> Optional[float]:
-    prev_end: Optional[float] = None
-    for task in sort_tasks_by_end(tasks):
-        base, task_round, task_idx = parse_task_name(task.get("name", ""))
-        if round_id is not None and task_round != round_id:
-            continue
+class CoreRoundStats:
+    """Single-pass index for one core's tasks under a round filter."""
 
-        task_end = float(task.get("end", 0))
-        event_dur = None if prev_end is None else (task_end - prev_end)
-
-        if base == event_name and (idx is None or task_idx == idx):
-            return event_dur
-
-        prev_end = task_end
-    return None
-
-
-def calc_event_duration_sum(
-    tasks: List[Dict[str, Any]],
-    event_name: str,
-    round_id: Optional[int] = None,
-) -> Optional[float]:
-    total = 0.0
-    found = False
-    prev_end: Optional[float] = None
-    for task in sort_tasks_by_end(tasks):
-        base, task_round, _ = parse_task_name(task.get("name", ""))
-        if round_id is not None and task_round != round_id:
-            continue
-
-        task_end = float(task.get("end", 0))
-        event_dur = None if prev_end is None else (task_end - prev_end)
-
-        if base == event_name and event_dur is not None:
-            found = True
-            total += max(event_dur, 0.0)
-
-        prev_end = task_end
-    return total if found else None
-
-
-def calc_sched_post_process_sum(
-    tasks: List[Dict[str, Any]],
-    round_id: Optional[int],
-) -> Optional[float]:
-    post_events = [
+    _SCHED_POST_EVENTS: Tuple[Tuple[str, Optional[int]], ...] = (
         ("DEV_TASK_SYNC_CORE_STOP", 0),
         ("DEV_TASK_RSP", 0),
         ("WAIT_ALL_DEV_TASK_FINISH", None),
         ("WAIT_CORE_EXIT", None),
         ("EXIT", None),
-    ]
+    )
 
-    total = 0.0
-    found = False
-    for event_name, idx in post_events:
-        dur = get_event_duration(tasks, event_name, round_id, idx)
-        if dur is None:
-            continue
-        found = True
-        total += max(dur, 0.0)
-    return total if found else None
+    def __init__(self, sorted_tasks: List[Dict[str, Any]], round_id: Optional[int]) -> None:
+        self._first_duration_by_base: Dict[str, float] = {}
+        self._durations: Dict[Tuple[str, Optional[int]], float] = {}
+        self._duration_sums: Dict[str, float] = {}
+        self._duration_sum_bases: Set[str] = set()
+        self._first_end_by_base: Dict[str, float] = {}
+        self._end_cycles_first: Dict[Tuple[str, Optional[int]], float] = {}
+        self._end_cycle_maps: Dict[str, Dict[int, float]] = {}
+        self._ordered_events: List[Tuple[str, float]] = []
+        self.total_runtime: Optional[float] = None
+        self.min_end: Optional[float] = None
+        self.max_end: Optional[float] = None
+        self._scan(sorted_tasks, round_id)
 
+    def get_event_duration(self, event_name: str, idx: Optional[int] = None) -> Optional[float]:
+        if idx is not None:
+            return self._durations.get((event_name, idx))
+        return self._first_duration_by_base.get(event_name)
 
-def calc_total_runtime_sum(
-    tasks: List[Dict[str, Any]],
-    round_id: Optional[int] = None,
-) -> Optional[float]:
-    prev_end: Optional[float] = None
-    total = 0.0
-    found = False
-    for task in sort_tasks_by_end(tasks):
-        _, task_round, _ = parse_task_name(task.get("name", ""))
-        if round_id is not None and task_round != round_id:
-            continue
-        task_end = float(task.get("end", 0))
-        if prev_end is not None:
-            total += max(task_end - prev_end, 0.0)
-        prev_end = task_end
-        found = True
-    return total if found else None
+    def get_event_duration_sum(self, event_name: str) -> Optional[float]:
+        if event_name not in self._duration_sum_bases:
+            return None
+        return self._duration_sums[event_name]
 
+    def get_end_cycle(self, event_name: str, idx: Optional[int] = None) -> Optional[float]:
+        if idx is not None:
+            return self._end_cycles_first.get((event_name, idx))
+        return self._first_end_by_base.get(event_name)
 
-def calc_runtime_in_window(
-    tasks: List[Dict[str, Any]],
-    round_id: Optional[int],
-    start_event: str,
-    end_events: List[str],
-) -> Optional[float]:
-    sorted_tasks = sort_tasks_by_end(tasks)
-    start_cycle = get_task_cycle(tasks, start_event, None, round_id, sorted_tasks)
-    if start_cycle is None:
-        return None
+    def get_end_cycle_map(self, event_name: str) -> Dict[int, float]:
+        return dict(self._end_cycle_maps.get(event_name, {}))
 
-    end_candidates: List[float] = []
-    for end_event in end_events:
-        for task in sorted_tasks:
-            base, task_round, _ = parse_task_name(task.get("name", ""))
-            if base != end_event:
+    def calc_sched_post_process_sum(self) -> Optional[float]:
+        total = 0.0
+        found = False
+        for event_name, idx in self._SCHED_POST_EVENTS:
+            dur = self.get_event_duration(event_name, idx)
+            if dur is None:
                 continue
+            found = True
+            total += max(dur, 0.0)
+        return total if found else None
+
+    def calc_runtime_in_window(self, start_event: str, end_events: List[str]) -> Optional[float]:
+        start_cycle = self.get_end_cycle(start_event)
+        if start_cycle is None:
+            return None
+
+        end_candidates: List[float] = []
+        for end_event in end_events:
+            for base, task_end in self._ordered_events:
+                if base != end_event:
+                    continue
+                if task_end >= float(start_cycle):
+                    end_candidates.append(task_end)
+                    break
+        if not end_candidates:
+            return None
+        return max(max(end_candidates) - float(start_cycle), 0.0)
+
+    def _scan(self, sorted_tasks: List[Dict[str, Any]], round_id: Optional[int]) -> None:
+        prev_end: Optional[float] = None
+        total = 0.0
+        found = False
+        for task in sorted_tasks:
+            base, task_round, idx = parse_task_name(task.get("name", ""))
             if round_id is not None and task_round != round_id:
                 continue
+
             task_end = float(task.get("end", 0))
-            if task_end >= float(start_cycle):
-                end_candidates.append(task_end)
-                break
-    if not end_candidates:
-        return None
-    return max(max(end_candidates) - float(start_cycle), 0.0)
+            event_dur = None if prev_end is None else (task_end - prev_end)
+            self._ordered_events.append((base, task_end))
+
+            if event_dur is not None:
+                if base not in self._first_duration_by_base:
+                    self._first_duration_by_base[base] = event_dur
+                key = (base, idx)
+                if key not in self._durations:
+                    self._durations[key] = event_dur
+                self._duration_sums[base] = self._duration_sums.get(base, 0.0) + max(event_dur, 0.0)
+                self._duration_sum_bases.add(base)
+                total += max(event_dur, 0.0)
+
+            if base not in self._first_end_by_base:
+                self._first_end_by_base[base] = task_end
+            key = (base, idx)
+            if key not in self._end_cycles_first:
+                self._end_cycles_first[key] = task_end
+            if idx is not None:
+                self._end_cycle_maps.setdefault(base, {})[idx] = task_end
+
+            if self.min_end is None:
+                self.min_end = task_end
+            self.max_end = task_end
+            prev_end = task_end
+            found = True
+        self.total_runtime = total if found else None
 
 
-def get_end_bounds(
-    tasks: List[Dict[str, Any]],
-    round_id: Optional[int] = None,
-    sorted_tasks: Optional[List[Dict[str, Any]]] = None,
-) -> Tuple[Optional[float], Optional[float]]:
-    tasks_by_end = sorted_tasks if sorted_tasks is not None else sort_tasks_by_end(tasks)
-    min_end: Optional[float] = None
-    max_end: Optional[float] = None
-    for task in tasks_by_end:
-        _, task_round, _ = parse_task_name(task.get("name", ""))
-        if round_id is not None and task_round != round_id:
-            continue
-        task_end = float(task.get("end", 0))
-        if min_end is None:
-            min_end = task_end
-        max_end = task_end
-    return min_end, max_end
+def build_core_round_stats(sorted_tasks: List[Dict[str, Any]], round_id: Optional[int]) -> CoreRoundStats:
+    return CoreRoundStats(sorted_tasks, round_id)
 
 
 def format_us(v: Optional[float], freq: float) -> str:
     if v is None:
         return "-"
     return f"{to_us(v, freq):.2f}"
-
-
-def calc_avg_aicore_exit_wait_us(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> Optional[float]:
-    aicore_exec_rows = collect_aicore_exec_rows(aicpu_dev_pref, round_id)
-    wait_us_values: List[float] = []
-    for row in aicore_exec_rows:
-        exit_wait = row.get("exit_wait")
-        freq = float(row.get("freq", 0)) or 1.0
-        if exit_wait is not None and exit_wait > 0:
-            wait_us_values.append(to_us(float(exit_wait), freq))
-    if not wait_us_values:
-        return None
-    return sum(wait_us_values) / len(wait_us_values)
 
 
 def calc_aicore_init_preprocess_us(aicore_exec_rows: List[Dict[str, Any]]) -> Optional[float]:
@@ -597,72 +523,206 @@ def is_aicore_sched(core_type: str) -> bool:
     return core_type.startswith("SCHED") and ("-AIC" in core_type or "-AIV" in core_type)
 
 
-def collect_aicore_core_bounds(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    for core in aicpu_dev_pref:
-        core_type = str(core.get("coreType", ""))
-        if not is_aicore_sched(core_type):
-            continue
-        sorted_tasks = sort_tasks_by_end(core.get("tasks", []))
-        min_end, max_end = get_end_bounds(sorted_tasks, round_id, sorted_tasks)
-        if min_end is None or max_end is None:
-            continue
-        rows.append(
-            {
-                "core_type": core_type,
-                "block_idx": int(core.get("blockIdx", -1)),
-                "freq": float(core.get("freq", 0)) or 1.0,
-                "min_end": min_end,
-                "max_end": max_end,
-            }
-        )
-    rows.sort(key=lambda x: x["block_idx"])
-    return rows
+def _collect_aicore_from_sched_core(
+    core: Dict[str, Any], stats: CoreRoundStats
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Return (exec_row, core_bound) for one SCHED-AIC/AIV core; (None, None) if skipped."""
+    core_type = str(core.get("coreType", ""))
+    if not is_aicore_sched(core_type):
+        return None, None
+
+    block_idx = int(core.get("blockIdx", -1))
+    freq = float(core.get("freq", 0)) or 1.0
+
+    core_bound = None
+    if stats.min_end is not None and stats.max_end is not None:
+        core_bound = {
+            "core_type": core_type,
+            "block_idx": block_idx,
+            "freq": freq,
+            "min_end": stats.min_end,
+            "max_end": stats.max_end,
+        }
+
+    wait_first_map = stats.get_end_cycle_map("DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK")
+    all_exec_map = stats.get_end_cycle_map("DEV_TASK_ALL_LEAF_TASK_EXEC")
+    if not all_exec_map:
+        return None, core_bound
+
+    wait_first_cycle = min(wait_first_map.values()) if wait_first_map else None
+    all_exec_cycle = max(all_exec_map.values()) if all_exec_map else None
+    first_wait_first_idx = min(wait_first_map, key=wait_first_map.get) if wait_first_map else None
+    wait_exit_notify = stats.get_end_cycle("WAIT_EXIT_NOTIFY")
+    exit_wait = calc_duration_from_ends(all_exec_cycle, wait_exit_notify)
+    exec_row = {
+        "core_type": core_type,
+        "block_idx": block_idx,
+        "freq": freq,
+        "wait_first_map": wait_first_map,
+        "all_exec_map": all_exec_map,
+        "exit_wait": exit_wait,
+        "wait_first_cycle": wait_first_cycle,
+        "all_exec_cycle": all_exec_cycle,
+        "init_dur": stats.get_event_duration("INIT"),
+        "rcv_model_dur": stats.get_event_duration("DEV_TASK_RCV_MODEL"),
+        "wait_first_dur": stats.get_event_duration(
+            "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", first_wait_first_idx
+        ),
+        "min_end": stats.min_end,
+        "max_end": stats.max_end,
+    }
+    return exec_row, core_bound
 
 
-def collect_aicore_exec_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    for core in aicpu_dev_pref:
-        core_type = str(core.get("coreType", ""))
-        if not is_aicore_sched(core_type):
-            continue
-        tasks = core.get("tasks", [])
-        sorted_tasks = sort_tasks_by_end(tasks)
-        wait_first_map = get_task_cycle_map(tasks, "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", round_id, sorted_tasks)
-        all_exec_map = get_task_cycle_map(tasks, "DEV_TASK_ALL_LEAF_TASK_EXEC", round_id, sorted_tasks)
-        wait_exit_notify = get_task_cycle(tasks, "WAIT_EXIT_NOTIFY", None, round_id, sorted_tasks)
-        if not all_exec_map:
-            continue
+ANALYZE_TABLE_HEADERS: Tuple[str, ...] = (
+    "Compute Units",
+    "DEV_TASK_BUILD(us)",
+    "ALLOC_THREAD_ID(us)",
+    "INIT(us)",
+    "CORE_HAND_SHAKE(us)",
+    "DEV_TASK_RCV(us)",
+    "Post-process(us)",
+    "End-to-End time(us)",
+    "Total run time(us)",
+)
 
-        wait_first_cycle = min(wait_first_map.values()) if wait_first_map else None
-        all_exec_cycle = max(all_exec_map.values()) if all_exec_map else None
-        init_dur = get_event_duration(tasks, "INIT", round_id)
-        rcv_model_dur = get_event_duration(tasks, "DEV_TASK_RCV_MODEL", round_id)
-        first_wait_first_idx = min(wait_first_map, key=wait_first_map.get) if wait_first_map else None
-        wait_first_dur = get_event_duration(
-            tasks, "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", round_id, first_wait_first_idx
-        )
-        exit_wait = calc_duration_from_ends(all_exec_cycle, wait_exit_notify)
-        min_end, max_end = get_end_bounds(tasks, round_id, sorted_tasks)
-        rows.append(
-            {
-                "core_type": core_type,
-                "block_idx": int(core.get("blockIdx", -1)),
-                "freq": float(core.get("freq", 0)) or 1.0,
-                "wait_first_map": wait_first_map,
-                "all_exec_map": all_exec_map,
-                "exit_wait": exit_wait,
-                "wait_first_cycle": wait_first_cycle,
-                "all_exec_cycle": all_exec_cycle,
-                "init_dur": init_dur,
-                "rcv_model_dur": rcv_model_dur,
-                "wait_first_dur": wait_first_dur,
-                "min_end": min_end,
-                "max_end": max_end,
-            }
-        )
-    rows.sort(key=lambda x: x["block_idx"])
-    return rows
+
+def _format_ctrl_row(ctrl: Dict[str, Any], stats: CoreRoundStats) -> List[str]:
+    freq = float(ctrl.get("freq", 0)) or 1.0
+    block_idx = int(ctrl.get("blockIdx", 0))
+    return [
+        f"AICPU-CTRL-{block_idx}",
+        format_us(stats.get_event_duration_sum("DEV_TASK_BUILD"), freq),
+        "-",
+        "-",
+        "-",
+        "-",
+        format_us(stats.get_event_duration("EXIT"), freq),
+        "-",
+        format_us(stats.total_runtime, freq),
+    ]
+
+
+def _format_sched_row(sched: Dict[str, Any], stats: CoreRoundStats) -> List[str]:
+    block_idx = int(sched.get("blockIdx", -1))
+    freq = float(sched.get("freq", 0)) or 1.0
+    sched_total_dur = stats.calc_runtime_in_window("BEGIN", ["WAIT_CORE_EXIT", "EXIT"])
+    if sched_total_dur is None:
+        sched_total_dur = stats.total_runtime
+    return [
+        f"AICPU-SCHED-{block_idx}",
+        "-",
+        format_us(stats.get_event_duration("ALLOC_THREAD_ID"), freq),
+        format_us(stats.get_event_duration("INIT"), freq),
+        format_us(stats.get_event_duration("CORE_HAND_SHAKE"), freq),
+        format_us(stats.get_event_duration("DEV_TASK_RCV", 0), freq),
+        format_sched_post_process(stats.calc_sched_post_process_sum(), freq),
+        "-",
+        format_us(sched_total_dur, freq),
+    ]
+
+
+def _format_aicore_summary_row(
+    aicore_exec_rows: List[Dict[str, Any]],
+    aicore_core_bounds: List[Dict[str, Any]],
+) -> List[str]:
+    aicore_post_process_us = calc_aicore_last_core_exit_wait_us(aicore_exec_rows, aicore_core_bounds)
+    aicore_init_us = calc_aicore_init_preprocess_us(aicore_exec_rows)
+    if not aicore_exec_rows:
+        return ["AICore", "-", "-", "-", "-", "-", "-", "-", "-"]
+    e2e_time, total_runtime_e2e = calc_aicore_timing_summary(aicore_exec_rows, aicore_core_bounds)
+    return [
+        "AICore",
+        "-",
+        "-",
+        "-" if aicore_init_us is None else f"{aicore_init_us:.2f}",
+        "-",
+        "-",
+        "-" if aicore_post_process_us is None else f"{aicore_post_process_us:.2f}",
+        e2e_time,
+        total_runtime_e2e,
+    ]
+
+
+class PerfTraceAnalyzer:
+    """Read trace once; cache CoreRoundStats per (coreType, blockIdx, round_id)."""
+
+    def __init__(self, cores: List[Dict[str, Any]]) -> None:
+        if not isinstance(cores, list):
+            raise TypeError("perf trace data must be a list of core dicts")
+        self.cores = cores
+        normalize_cores_tasks_by_end(self.cores)
+        self.round_ids = collect_round_ids(self.cores)
+        self._stats_cache: Dict[Tuple[str, int, Optional[int]], CoreRoundStats] = {}
+        self._build_stats_cache()
+
+    @staticmethod
+    def _core_key(core: Dict[str, Any]) -> Tuple[str, int]:
+        return (str(core.get("coreType", "")), int(core.get("blockIdx", -1)))
+
+    @classmethod
+    def from_file(cls, file_path: Union[str, Path]) -> "PerfTraceAnalyzer":
+        return cls(load_json(Path(file_path)))
+
+    def stats_for_core(self, core: Dict[str, Any], round_id: Optional[int]) -> CoreRoundStats:
+        core_type, block_idx = self._core_key(core)
+        return self._stats_cache[(core_type, block_idx, round_id)]
+
+    def collect_aicore_rows(
+        self, round_id: Optional[int]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        exec_rows: List[Dict[str, Any]] = []
+        core_bounds: List[Dict[str, Any]] = []
+        for core in self.cores:
+            exec_row, core_bound = _collect_aicore_from_sched_core(
+                core, self.stats_for_core(core, round_id),
+            )
+            if core_bound is not None:
+                core_bounds.append(core_bound)
+            if exec_row is not None:
+                exec_rows.append(exec_row)
+        exec_rows.sort(key=lambda x: x["block_idx"])
+        core_bounds.sort(key=lambda x: x["block_idx"])
+        return exec_rows, core_bounds
+
+    def build_ctrl_row(self, round_id: Optional[int]) -> Optional[List[str]]:
+        ctrl = next((x for x in self.cores if str(x.get("coreType")) == "AICPU-CTRL"), None)
+        if ctrl is None:
+            return None
+        return _format_ctrl_row(ctrl, self.stats_for_core(ctrl, round_id))
+
+    def build_sched_rows(self, round_id: Optional[int]) -> List[List[str]]:
+        scheds = [x for x in self.cores if str(x.get("coreType")) == "AICPU-SCHED"]
+        return [
+            _format_sched_row(sched, self.stats_for_core(sched, round_id))
+            for sched in sorted(scheds, key=lambda x: int(x.get("blockIdx", 0)))
+        ]
+
+    def build_aicore_row(self, round_id: Optional[int]) -> List[str]:
+        exec_rows, core_bounds = self.collect_aicore_rows(round_id)
+        return _format_aicore_summary_row(exec_rows, core_bounds)
+
+    def build_round_combined_rows(self, round_id: Optional[int]) -> List[List[str]]:
+        rows: List[List[str]] = []
+        ctrl_row = self.build_ctrl_row(round_id)
+        if ctrl_row is not None:
+            rows.append(ctrl_row)
+        rows.extend(self.build_sched_rows(round_id))
+        rows.append(self.build_aicore_row(round_id))
+        return rows
+
+    def _build_stats_cache(self) -> None:
+        for core in self.cores:
+            core_type, block_idx = self._core_key(core)
+            tasks = core.get("tasks", [])
+            for round_id in self.round_ids:
+                self._stats_cache[(core_type, block_idx, round_id)] = CoreRoundStats(tasks, round_id)
+
+
+def collect_aicore_rows(
+    aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    return PerfTraceAnalyzer(aicpu_dev_pref).collect_aicore_rows(round_id)
 
 
 def _min_optional(current: Optional[float], value: float) -> float:
@@ -750,133 +810,38 @@ def calc_aicore_timing_summary(
 
 
 def build_ctrl_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> Optional[List[str]]:
-    ctrl = next((x for x in aicpu_dev_pref if str(x.get("coreType")) == "AICPU-CTRL"), None)
-    if ctrl is None:
-        return None
-    tasks = ctrl.get("tasks", [])
-    freq = float(ctrl.get("freq", 0)) or 1.0
-    block_idx = int(ctrl.get("blockIdx", 0))
-    build_dur = calc_event_duration_sum(tasks, "DEV_TASK_BUILD", round_id)
-    ctrl_post_dur = get_event_duration(tasks, "EXIT", round_id)
-    ctrl_total_dur = calc_total_runtime_sum(tasks, round_id)
-    return [
-        f"AICPU-CTRL-{block_idx}",
-        format_us(build_dur, freq),
-        "-",
-        "-",
-        "-",
-        "-",
-        format_us(ctrl_post_dur, freq),
-        "-",
-        format_us(ctrl_total_dur, freq),
-    ]
+    return PerfTraceAnalyzer(aicpu_dev_pref).build_ctrl_row(round_id)
 
 
 def build_sched_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[List[str]]:
-    rows: List[List[str]] = []
-    scheds = [x for x in aicpu_dev_pref if str(x.get("coreType")) == "AICPU-SCHED"]
-    for s in sorted(scheds, key=lambda x: int(x.get("blockIdx", 0))):
-        block_idx = int(s.get("blockIdx", -1))
-        tasks = s.get("tasks", [])
-        freq = float(s.get("freq", 0)) or 1.0
-        alloc_dur = get_event_duration(tasks, "ALLOC_THREAD_ID", round_id)
-        init_dur = get_event_duration(tasks, "INIT", round_id)
-        handshake_dur = get_event_duration(tasks, "CORE_HAND_SHAKE", round_id)
-        dev_task_rcv = get_event_duration(tasks, "DEV_TASK_RCV", round_id, 0)
-        post_dur = calc_sched_post_process_sum(tasks, round_id)
-        sched_total_dur = calc_runtime_in_window(
-            tasks, round_id, "BEGIN", ["WAIT_CORE_EXIT", "EXIT"]
-        )
-        if sched_total_dur is None:
-            sched_total_dur = calc_total_runtime_sum(tasks, round_id)
-        rows.append(
-            [
-                f"AICPU-SCHED-{block_idx}",
-                "-",
-                format_us(alloc_dur, freq),
-                format_us(init_dur, freq),
-                format_us(handshake_dur, freq),
-                format_us(dev_task_rcv, freq),
-                format_sched_post_process(post_dur, freq),
-                "-",
-                format_us(sched_total_dur, freq),
-            ]
-        )
-    return rows
+    return PerfTraceAnalyzer(aicpu_dev_pref).build_sched_rows(round_id)
 
 
 def build_aicore_row(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[str]:
-    aicore_exec_rows = collect_aicore_exec_rows(aicpu_dev_pref, round_id)
-    aicore_core_bounds = collect_aicore_core_bounds(aicpu_dev_pref, round_id)
-    aicore_post_process_us = calc_aicore_last_core_exit_wait_us(aicore_exec_rows, aicore_core_bounds)
-    aicore_init_us = calc_aicore_init_preprocess_us(aicore_exec_rows)
-    if not aicore_exec_rows:
-        return ["AICore", "-", "-", "-", "-", "-", "-", "-", "-"]
-    e2e_time, total_runtime_e2e = calc_aicore_timing_summary(aicore_exec_rows, aicore_core_bounds)
-    return [
-        "AICore",
-        "-",
-        "-",
-        "-" if aicore_init_us is None else f"{aicore_init_us:.2f}",
-        "-",
-        "-",
-        "-" if aicore_post_process_us is None else f"{aicore_post_process_us:.2f}",
-        e2e_time,
-        total_runtime_e2e,
-    ]
+    return PerfTraceAnalyzer(aicpu_dev_pref).build_aicore_row(round_id)
 
 
 def build_round_combined_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Optional[int]) -> List[List[str]]:
-    rows: List[List[str]] = []
-    ctrl_row = build_ctrl_row(aicpu_dev_pref, round_id)
-    if ctrl_row is not None:
-        rows.append(ctrl_row)
-    rows.extend(build_sched_rows(aicpu_dev_pref, round_id))
-    rows.append(build_aicore_row(aicpu_dev_pref, round_id))
-    return rows
+    return PerfTraceAnalyzer(aicpu_dev_pref).build_round_combined_rows(round_id)
 
 
 def analyze_output_command(output_dir_arg: Optional[str]) -> None:
-    if output_dir_arg:
-        input_path = Path(output_dir_arg)
-    else:
+    if not output_dir_arg:
         print("Error: analyze requires an input json path")
         return
 
+    input_path = Path(output_dir_arg)
     if not input_path.exists():
         print(f"Error: path does not exist: {input_path}")
         return
 
-    aicpu_pref_file = input_path
-    analyze_target = str(input_path)
-
-    if not aicpu_pref_file.exists():
-        print(f"Error: {aicpu_pref_file} does not exist")
-        return
-
-    print(f"Analyzing input: {analyze_target}")
-    aicpu_dev_pref = load_json(aicpu_pref_file)
-    if not isinstance(aicpu_dev_pref, list):
-        print("Error: invalid aicpu_dev_pref.json format, expected list")
-        return
-    normalize_cores_tasks_by_end(aicpu_dev_pref)
-
-    rounds = collect_round_ids(aicpu_dev_pref)
-    for round_id in rounds:
+    print(f"Analyzing input: {input_path}")
+    analyzer = PerfTraceAnalyzer.from_file(input_path)
+    headers = list(ANALYZE_TABLE_HEADERS)
+    for round_id in analyzer.round_ids:
         display_round = 1 if round_id is None else (round_id + 1)
         round_name = f"round{display_round}"
-        headers = [
-            "Compute Units",
-            "DEV_TASK_BUILD(us)",
-            "ALLOC_THREAD_ID(us)",
-            "INIT(us)",
-            "CORE_HAND_SHAKE(us)",
-            "DEV_TASK_RCV(us)",
-            "Post-process(us)",
-            "End-to-End time(us)",
-            "Total run time(us)",
-        ]
-        rows = build_round_combined_rows(aicpu_dev_pref, round_id)
+        rows = analyzer.build_round_combined_rows(round_id)
         table_lines = render_table_lines(headers, rows)
         table_width = max(display_width(line) for line in table_lines) if table_lines else None
         print_section(round_name, table_width)

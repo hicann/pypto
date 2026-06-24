@@ -55,14 +55,14 @@ INLINE void Trap()
 #ifdef __DAV_V310
 #define AICORE_DEVICE_TASK_WAIT_TIME_OUT 250000000LL * 20
 #define AICORE_LEAF_TASK_RUN_TIMEOUT 3000000000LL * 20
-#define AICORE_LEAF_TASK_WAIT_TIMEOUT 300000000LL * 20
+#define AICORE_LEAF_TASK_WAIT_TIMEOUT 3000000000LL * 20
 #define AICORE_GM_DCCI_TIMEOUT 50000000LL * 10
 #define AICORE_WAVEFLAG_WAIT_TIMEOUT 350000000LL * 20
 #define AICORE_GET_LEAF_HIGHREG_TIMEOUT 400000000LL * 20
 #else
 #define AICORE_DEVICE_TASK_WAIT_TIME_OUT 250000000
 #define AICORE_LEAF_TASK_RUN_TIMEOUT 3000000000
-#define AICORE_LEAF_TASK_WAIT_TIMEOUT 300000000
+#define AICORE_LEAF_TASK_WAIT_TIMEOUT 3000000000
 #define AICORE_GM_DCCI_TIMEOUT 50000000
 #define AICORE_WAVEFLAG_WAIT_TIMEOUT 350000000
 #define AICORE_GET_LEAF_HIGHREG_TIMEOUT 400000000
@@ -179,6 +179,32 @@ INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegVal
     return highRegVal;
 }
 
+constexpr uint16_t SYNC_MODE_SHIFT_VALUE = 4;
+constexpr uint16_t SYNC_FLAG_SHIFT_VALUE = 8;
+enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };
+
+__aicore__ inline uint16_t GetffstMsg(uint16_t mode, uint16_t flagId)
+{
+  return (0x1 + ((mode & 0x3) << SYNC_MODE_SHIFT_VALUE) + ((flagId & 0xf) << SYNC_FLAG_SHIFT_VALUE));
+}
+
+#ifdef __ENABLE_MIX_PENDING
+INLINE void PipeSyncPre(uint8_t mixResourceType, uint8_t lastMixResourceType)
+{
+    // only lastTask is mix should insert sync
+    if (lastMixResourceType == static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN) || mixResourceType != static_cast<uint8_t>(MixResourceType::MIX_1C2V)) {
+        return;
+    }
+#if defined(__AIV__)
+    wait_flag_dev(PIPE_S, EVENT_ID7);
+    ffts_cross_core_sync(PIPE_MTE3, GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
+#else
+    ffts_cross_core_sync(PIPE_FIX, GetffstMsg(2, EVENT_ID7)); // 模式2:Block内CV之间的同步，插在callop开始，这里pipe不重要，前面流水必然已执行完
+    wait_flag_dev(PIPE_S, EVENT_ID7);
+#endif
+}
+#endif
+
 INLINE void PipeSync()
 {
 #if defined(__AIV__)
@@ -229,72 +255,7 @@ INLINE void SendRegFinish(uint32_t curTaskIdx) { set_cond(curTaskIdx | AICORE_FI
 
 INLINE void SendRegAck(uint32_t taskIdx) { set_cond(taskIdx); }
 
-INLINE void PerfTraceRecord(
-    uint32_t devTaskId, __gm__ AicoreMetric* metric, AicorePerfTrace type, uint64_t cycle = 0)
-{
-    if (metric != nullptr) {
-        uint64_t cnt = metric->cnt;
-        if (cnt < PERF_TRACE_CORE_MAX * PERF_TRACE_INST_MAX_NUM_EVERY_TYPE) {
-            __gm__ AicoreDevTaskPerf* perf = &(metric->aicoreEveryDevTypeTimeStamp[cnt]);
-            perf->type = static_cast<uint64_t>(type);
-            perf->aicoreDevTimeStamp = (cycle == 0) ? get_sys_cnt() : cycle;
-            perf->devTaskIdx = static_cast<uint64_t>(devTaskId);
-            
-            metric->cnt = cnt + 1;
-        }
-    }
-}
-
-INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t taskId, int32_t subGraphId, int64_t t1)
-{
-    auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
-    if (m && m->taskCount < MAX_DFX_TASK_NUM_PER_CORE) {
-        m->tasks[m->taskCount].subGraphId = subGraphId;
-        m->tasks[m->taskCount].seqNo = seqNo;
-        m->tasks[m->taskCount].taskId = taskId & TASKID_FROM_CTRL_TOPO_MASK;
-        m->tasks[m->taskCount].execStart = t1;
-        ctx->lastTaskFinishCycle = get_sys_cnt();
-        m->tasks[m->taskCount].execEnd = ctx->lastTaskFinishCycle;
-        m->taskCount++;
-    }
-}
-
-INLINE void FlushMetricStatistic(__gm__ volatile KernelArgs* args)
-{
-    __gm__ volatile Metrics* m = (__gm__ volatile Metrics*)(args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
-    if (m == nullptr) {
-        return;
-    }
-
-    for (uint32_t i = 0; i < m->taskCount; i++) {
-        dcci(&m->tasks[i], SINGLE_CACHE_LINE, CACHELINE_OUT);
-    }
-
-    m->isMetricStop = 1;
-    dcci(m, SINGLE_CACHE_LINE, CACHELINE_OUT);
-    dcci((__gm__ void*)0, ENTIRE_DATA_CACHE, CACHELINE_OUT);
-}
-
-INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __gm__ Metrics* metric)
-{
-    PerfTraceRecord(INVALID_DEV_TASK_ID, ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY);
-    if (unlikely(
-            args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||
-            ctx->aicoreDevTaskMetric.devTaskMetricEnable)) {
-        metric->turnNum++;
-        FlushMetricStatistic(args);
-    }
-}
-
-INLINE void DfxProcWhenDevTaskStop(ExecuteContext *ctx, __gm__ KernelArgs *args, __gm__ Metrics* metric)
-{
-    if (ctx->lastTaskFinishCycle > 0) {
-        PerfTraceRecord(
-            ctx->SeqNo(), ctx->aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC, ctx->lastTaskFinishCycle);
-    }
-    (void)metric;
-    (void)args;
-}
+#include "tilefwk/aicore_entry_dfx.h"
 
 INLINE void UpdateCacheDevTask(ExecuteContext *ctx, uint32_t parallelIdx, int64_t devTaskPtr)
 {
@@ -398,7 +359,7 @@ INLINE __gm__ TaskStat* InitTaskStat(ExecuteContext* ctx)
 #define FuncNum(id) TaskID(id)
 
 #ifdef __HAS_SUB_FUNC__
-INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
+INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId, uint8_t& lastMixResourceType)
 {
     uint64_t t1 = get_sys_cnt();
     SetStatus(ctx->args, ((uint64_t)taskId << 32) | STAGE_PRE_EXEC_COREFUNC_KERNEL); // high 32 bits used for taskId
@@ -419,7 +380,8 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
 #ifdef __DAV_V310
    // for mix coretasks, use cube's stackworkspace
     int index = __MAIN_BLOCK ? (opAttrs[0] + 1) / 2 :opAttrs[0];
-    int64_t blockIndex = (ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[index].mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
+    uint8_t mixResourceType = ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].cceBinary[index].mixResourceType;
+    int64_t blockIndex = (mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
     int64_t gmStackAddr = funcData->stackWorkSpaceAddr + blockIndex * funcData->stackWorkSpaceSize;
 #else
     int64_t gmStackAddr = funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize;
@@ -428,6 +390,12 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
     __gm__ TaskStat* taskStat = nullptr;
     taskStat = InitTaskStat(ctx);
 
+#ifdef __ENABLE_MIX_PENDING
+    PipeSyncPre(mixResourceType, lastMixResourceType);
+    lastMixResourceType = mixResourceType;
+#else
+    (void)lastMixResourceType;
+#endif
     CallSubFuncTask(
         opAttrs[0] + funcData->exprTbl[0], &param,
         gmStackAddr,
@@ -462,12 +430,13 @@ INLINE void InitCtx(ExecuteContext *ctx, __gm__ Metrics* metric, volatile __gm__
     return;
 }
 
-INLINE void ExecCoreFunctionKernel(ExecuteContext* ctx, uint32_t curTaskIdx)
+INLINE void ExecCoreFunctionKernel(ExecuteContext* ctx, uint32_t curTaskIdx, uint8_t& lastMixResourceType)
 {
     UNUSED(ctx);
     UNUSED(curTaskIdx);
+    UNUSED(lastMixResourceType);
 #ifdef __HAS_SUB_FUNC__
-    ExecDynCoreFunctionKernel(ctx, curTaskIdx);
+    ExecDynCoreFunctionKernel(ctx, curTaskIdx, lastMixResourceType);
     return;
 #endif
 }
@@ -590,6 +559,7 @@ INLINE void KernelEntry(
     uint32_t curTaskIdx;
     uint32_t lastTaskIdx = AICORE_TASK_INIT;
     uint32_t lastRegHighVal = 0;
+    uint8_t lastMixResourceType = static_cast<uint8_t>(MixResourceType::MIX_UNKNOWN);
 
     PerfTraceRecord(INVALID_DEV_TASK_ID, ctx.aicoreDevTaskMetric.devTaskMetric, PERF_TRACE_CORE_INIT);
 
@@ -640,7 +610,7 @@ INLINE void KernelEntry(
 
         SendRegAck(curTaskIdx);
         PmuTestBegin(args);
-        ExecCoreFunctionKernel(&ctx, curTaskIdx);
+        ExecCoreFunctionKernel(&ctx, curTaskIdx, lastMixResourceType);
         PmuTestEnd(args);
         SendRegFinish(curTaskIdx);
         lastTaskIdx = curTaskIdx;

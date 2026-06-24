@@ -324,20 +324,11 @@
                         "zh": "指定启动的Schdule线程AICPU数量, 当指定的数量大于硬件最大可用aicpu数量或者小于等于0时, 将启用硬件自动计算值",
                         "en": "Specifies the number of AICPUs for the scheduled startup thread, if the specified number is greater than the maximum available AICPUs in the hardware or less than or equal to 0, the hardware's automatic calculation value will be used"
                     },
-                    "minimum": 0,
-                    "maximum": 6
+                    "default": 7,
+                    "minimum": 1,
+                    "maximum": 7
                 },
-                "launch_sched_same_cluster": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "是否强制同Cluster线程分配, 1:强制同Cluster(默认); 0:允许跨Cluster, 开启同cluster时, launch_sched_aicpu_num配置不生效",
-                        "en": "Force same cluster arbitration. 1: force same cluster (default); 0: allow cross cluster, when enabling the same cluster, the launch_sched_aicpu_num configuration does not take effect"
-                    },
-                    "default": 1,
-                    "minimum": 0,
-                    "maximum": 1
-                    },
-                    "launch_early_mode": {
+                "launch_early_mode": {
                     "type": "integer",
                     "label": {
                         "zh": "aicpu提前发射模式, 0:仅capture模式提前发射(默认); 1:所有模式都提前发射; 2:所有模式都不提前发射",
@@ -426,6 +417,13 @@
                     "label": {
                         "zh": "用于指定芯片版本，用于编译和推理",
                         "en": "Used to specify specific soc_version for kernel compile and runtime"
+                    }
+                },
+                "enable_pmu_trace": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "是否开启PMU trace",
+                        "en": "Whether to enable PMU tracing"
                     }
                 }
             }
@@ -875,13 +873,6 @@
                             "label": {
                                 "zh": "生成的设备侧代码是否支持PTO-ISA指令",
                                 "en": "Whether the generated device-side code supports PTO-ISA instruction"
-                            }
-                        },
-                        "enable_pmu_trace": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "是否开启PMU数据采集",
-                                "en": "Whether to enable PMU tracing"
                             }
                         }
                     }

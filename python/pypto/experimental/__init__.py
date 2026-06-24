@@ -10,6 +10,13 @@
 # -----------------------------------------------------------------------------------------------------------
 """ """
 
-from .operation import transposed_batchmatmul, set_operation_options, get_operation_options, nop
+from .operation import (
+    transposed_batchmatmul,
+    set_operation_options,
+    get_operation_options,
+    online_softmax,
+    online_softmax_update,
+    nop,
+)
 from .gather import gather_in_l1, gather_in_ub
 from .shmem import shmem_store, shmem_load

@@ -433,6 +433,37 @@ std::vector<int> TensorSlotManager::LookupSlotIndexConst(
     return indexList;
 }
 
+int TensorSlotManager::LookupSlotIndexByRawMagic(int rawMagic)
+{
+    for (auto& [slot, index] : slotIndexDict) {
+        const Tensor* tensor_ptr = reinterpret_cast<const Tensor*>(slot.GetSlot());
+        if (Program::GetInstance().GetAliveTensors().count(const_cast<Tensor*>(tensor_ptr)) == 0) {
+            continue;
+        }
+        auto value = slot.GetSlotValue();
+        if (value && value->tensor && value->tensor->GetRawMagic() == rawMagic) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+const Tensor* TensorSlotManager::LookupTensorByRawMagic(int rawMagic)
+{
+    for (auto& [slot, index] : slotIndexDict) {
+        (void)index;
+        const Tensor* tensor_ptr = reinterpret_cast<const Tensor*>(slot.GetSlot());
+        if (Program::GetInstance().GetAliveTensors().count(const_cast<Tensor*>(tensor_ptr)) == 0) {
+            continue;
+        }
+        auto value = slot.GetSlotValue();
+        if (value && value->tensor && value->tensor->GetRawMagic() == rawMagic) {
+            return reinterpret_cast<const Tensor*>(slot.GetSlot());
+        }
+    }
+    return nullptr;
+}
+
 std::vector<int> TensorSlotManager::LookupSlotIndexBySymbol(const std::vector<std::string>& symbolNameList)
 {
     std::vector<int> indexList;

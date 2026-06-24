@@ -36,6 +36,7 @@ This skill contains the memory template that agents copy to `custom/<operator_na
 | Staged module files table | Module design (create), Per-Phase (update) | Yes |
 | Per-module verification log | Each Phase M_k pass | Yes |
 | API map | On dispatch start | Yes |
+| Experience Preflight | Before DESIGN.md (architect preflight creates) | Yes |
 | Golden function inventory | Golden authoring (create), Per-Phase (cross-check) | Yes |
 | Module contracts | Module design | Yes |
 | Design format compliance | Module design | Yes |

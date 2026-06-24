@@ -404,7 +404,7 @@ Status OoOScheduler::SpillMultiProducerBufferFor3510(int spillMemid, Operation* 
         {copyinOp, {l1Tensor->memoryrange.memId}}
     };
 
-    if (!HasUnexecutedProducer(spillTensor)) {
+    if (!HasUnexecutedProducer(spillOp)) {
         if (UpdateScheduleStatus(opMemidMap, spillMemid, spillAllocOp, l1Tensor, spillOp) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "UpdateScheduleStatus failed.");
             return FAILED;
@@ -656,6 +656,45 @@ Status OoOScheduler::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp
     if (InsertOps({{allocOp, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid) != SUCCESS) {
         return FAILED;
     }
+    Operation* wholeCopyinOp = nullptr;
+    if (FillSpillAssembleBuffer(spillMemid, spillTensor, assembleTensor, copyoutOp, gmTensor, spillAllocOp,
+            wholeCopyinOp) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "FillSpillAssembleBuffer failed.");
+        return FAILED;
+    }
+
+    if (UpdateRemainMemid(spillMemid, assembleTensor->memoryrange.memId) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainMemid failed.");
+        return FAILED;
+    }
+    depManager_.InitDependencies(orderedOps, false);
+    ctx.newCopyoutOps.push_back(copyoutOp);
+    ctx.newAllocOps.push_back(allocOp);
+    created.Record(copyoutOp, allocOp, wholeCopyinOp, gmTensor);
+    return SUCCESS;
+}
+
+// 全生产者已 retired：整块 CopyIn 回填；否则逐个 copyIn+Assemble。
+Status OoOScheduler::FillSpillAssembleBuffer(int spillMemid, LogicalTensorPtr spillTensor,
+    LogicalTensorPtr assembleTensor, Operation* copyoutOp, LogicalTensorPtr gmTensor, Operation* spillAllocOp,
+    Operation*& wholeCopyinOut)
+{
+    wholeCopyinOut = nullptr;
+    bool allRetired = true;
+    for (auto &op : spillTensor->GetProducers()) {
+        if (opIsAllocMap[op]) {
+            continue;
+        }
+        if (!opIsRetiredMap[op]) {
+            allRetired = false;
+            break;
+        }
+    }
+    if (allRetired) {
+        wholeCopyinOut = CreateCopyinOp(gmTensor, assembleTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+        UpdateOpScheduleInfo(wholeCopyinOut, {assembleTensor->memoryrange.memId}, spillAllocOp);
+        return InsertOps({{wholeCopyinOut, {assembleTensor->memoryrange.memId}}}, spillAllocOp, spillMemid);
+    }
     std::vector<Operation*> replaceOps;
     for (auto &op : spillTensor->GetProducers()) {
         if (opIsAllocMap[op]) {
@@ -670,15 +709,6 @@ Status OoOScheduler::SpillMultiProducerBuffer(int spillMemid, Operation* spillOp
     for (auto &op : replaceOps) {
         op->ReplaceOutput(assembleTensor, spillTensor);
     }
-
-    if (UpdateRemainMemid(spillMemid, assembleTensor->memoryrange.memId) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainMemid failed.");
-        return FAILED;
-    }
-    depManager_.InitDependencies(orderedOps, false);
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    ctx.newAllocOps.push_back(allocOp);
-    created.Record(copyoutOp, allocOp, nullptr, gmTensor);
     return SUCCESS;
 }
 
@@ -706,6 +736,8 @@ Status OoOScheduler::CopyoutParticalBuffer(LogicalTensorPtr spillTensor, Logical
             return FAILED;
         }
         if (!opIsRetiredMap[op]) {
+            // 新插入的 copyout 读 actualTensor(源 UB)，退休会 DelBufRefCount，此处补回 +1，否则该 UB 计数下溢/提前释放。
+            bufRefCount_[actualTensor->memoryrange.memId]++;
             ctx.newNotRetiredCopyOutSize++;
         } else {
             ctx.newCopyoutOps.push_back(copyoutOp);
@@ -727,7 +759,7 @@ Status OoOScheduler::CreateParticalBuffer(int spillMemid, Operation* producerOp,
  	    return FAILED;
  	}
 
-    LogicalTensorPtr copyinTensor = CreateParticalTensor(gmTensor, assembleTensor, producerOp->GetInputOperand(0), toOffset);
+    LogicalTensorPtr copyinTensor = CreateParticalTensor(producerOp->GetInputOperand(0), assembleTensor, producerOp->GetInputOperand(0), toOffset);
     Operation* copyinOp = CreateCopyinOp(gmTensor, copyinTensor, OpImmediate::Specified(toOffset));
     Operation* assembleOp = CreateAssembleOp(copyinTensor, assembleTensor, toOffset, toDynOffset, fromDynValidShape);
 
@@ -1100,18 +1132,24 @@ Status OoOScheduler::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operat
         UpdateOpScheduleInfo(op, memid, spillAllocOp);
     }
 
-    // 生成的op插入排序队列
-    if (InsertOps(opMemidMap, spillAllocOp, memId) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "InsertOps failed.");
-        return FAILED;
-    }
-
     if (UpdateSmallShapeDependAndBuf(opMemidMap, memId, spillOp) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateSmallShapeDependAndBuf failed");
         return FAILED;
     }
     if (RemoveSmallShapeSpillResources(memId, spillTensor, ctx) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "RemoveSmallShapeSpillResources failed");
+        return FAILED;
+    }
+
+    int newMemid = -1;
+    for (auto &op : opMemidMap) {
+        if (opIsAllocMap[op.first]) {
+            newMemid = op.first->GetOutputOperand(0)->memoryrange.memId;
+        }
+    }
+    // 生成的op插入排序队列
+    if (InsertOps(opMemidMap, spillAllocOp, newMemid) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "InsertOps failed.");
         return FAILED;
     }
     // 更新依赖关系
@@ -1122,6 +1160,10 @@ Status OoOScheduler::UpdateNeedDeleteScheduleStatus(std::vector<std::pair<Operat
 Status OoOScheduler::InsertOps(std::vector<std::pair<Operation*, std::vector<int>>> opMemidMap,
     Operation* spillAllocOp, int memId)
 {
+    if (memId == -1) {
+        APASS_LOG_ERROR_F(Elements::Tensor, "MemId: %d illegal.", memId);
+        return FAILED;
+    }
     int bufNextUseTime = GetBufNextUseTime(memId);
     if (bufNextUseTime == -1) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Get Tensor[%d] next use time failed.", memId);
@@ -1388,17 +1430,17 @@ Status OoOScheduler::GetPartialWriteReplayAttr(Operation* producerOp, std::vecto
     return FAILED;
 }
 
-bool OoOScheduler::HasUnexecutedProducer(LogicalTensorPtr spillTensor)
+bool OoOScheduler::HasUnexecutedProducer(Operation* spillOp)
 {
-    if (spillTensor == nullptr) {
+    if (spillOp == nullptr) {
         return false;
     }
-    for (auto& producerOp : spillTensor->GetProducers()) {
-        if (!opIsRetiredMap[producerOp]) {
-            return true;
+    for (auto& succOp : depManager_.GetSuccessors(spillOp)) {
+        if (opIsRetiredMap[succOp]) {
+            return false;
         }
     }
-    return false;
+    return true;
 }
 
 // 辅助函数：更新 successor 的依赖关系
@@ -1517,8 +1559,33 @@ void OoOScheduler::CollectProducerChainForDeletion(
     }
 }
 
+// 删除未退休 op 时，其在 InitBufRefCount 加的引用不会因退休而 -1（op 已删），对存活 buffer 补 -1 防幽灵计数泄漏。
+void OoOScheduler::ReleaseDeletedOpBufRefs(Operation* op, const std::vector<LogicalTensorPtr>& tensorsToDelete)
+{
+    if (opIsRetiredMap[op]) {
+        return;
+    }
+    for (int memId : GetOpMemIds(op)) {
+        bool willErase = false;
+        for (const auto& tensor : tensorsToDelete) {
+            if (tensor->memoryrange.memId == memId) {
+                willErase = true;
+                break;
+            }
+        }
+        if (willErase) {
+            continue;
+        }
+        auto refIt = bufRefCount_.find(memId);
+        if (refIt != bufRefCount_.end() && refIt->second > 0) {
+            refIt->second--;
+        }
+    }
+}
+
 // 清理收集到的所有 op
-size_t OoOScheduler::CleanupCollectedOperations(const std::vector<Operation*>& opsToDelete)
+size_t OoOScheduler::CleanupCollectedOperations(
+    const std::vector<Operation*>& opsToDelete, const std::vector<LogicalTensorPtr>& tensorsToDelete)
 {
     size_t deleteNum = 0;
     for (auto* op : opsToDelete) {
@@ -1549,6 +1616,7 @@ size_t OoOScheduler::CleanupCollectedOperations(const std::vector<Operation*>& o
                 Elements::Operation, "Deleted op %s at index %zu (order %d).", GetOpInfo(op).c_str(), opIndex,
                 deletedOrder);
         }
+        ReleaseDeletedOpBufRefs(op, tensorsToDelete);
         EraseSchedulerSideMaps(op);
 
         auto predecessors = depManager_.GetPredecessors(op);
@@ -1625,7 +1693,7 @@ Status OoOScheduler::RemoveSmallShapeSpillResources(int spillMemId, LogicalTenso
         }
     }
     // 2. 清理 ops, 并记录其中已执行 op 的数量
-    auto deleteNum = CleanupCollectedOperations(opsToDelete);
+    auto deleteNum = CleanupCollectedOperations(opsToDelete, tensorsToDelete);
     if (deleteNum > opsToDelete.size()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Delete number greater than totalDeleteNumber");
         return FAILED;

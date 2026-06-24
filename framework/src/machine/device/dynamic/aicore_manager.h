@@ -43,6 +43,7 @@
 #include "machine/device/dynamic/wrap_manager.h"
 #include "machine/device/dynamic/eslmodel_manager.h"
 #include "machine/device/dump/aicore_dump.h"
+#include "machine/device/debug/schema_trace_utils.h"
 #include "device_trace.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -104,13 +105,7 @@ public:
                 FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
             });
         } else {
-            if (enableEslModel_) {
-                ForEachManageAicore([&](int coreIdx) {
-                    auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
-                    aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
-                    FillKernelArgsParallexDevTaskPreGathered(parallelCtx, coreIdx, localFuncData, localDevTaskIds);
-                });
-            } else if (aicoreHal_.IsHostSimMode()) {
+            if (aicoreHal_.IsHostSimMode()) {
                 ForEachManageAicore([&](int coreIdx) {
                     auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
                     aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
@@ -174,7 +169,7 @@ public:
             deviceTaskCtx, deviceTaskCtx->GetDeviceTask(), context_->coreRunReadyCnt_,
             context_->runReadyCoreIdx_[CORE_IDX_AIV], context_->runReadyCoreIdx_[CORE_IDX_AIC],
             context_->corePendReadyCnt_, pendingIds_.data(), runningIds_.data(), aicValidNum_,
-            context_->coreIdxPosition_, context_->wrapCoreAvail_,
+            context_->coreIdxPosition_, context_->wrapCoreAvail_, aicStart_, adjAicEnd_,
             [&](SchDeviceTaskContext* devTaskCtx, CoreType coreType, int arg1, uint64_t arg2)
             { SendTaskToAiCore(devTaskCtx, coreType, arg1, arg2); });
 
@@ -1009,7 +1004,7 @@ private:
     }
 
     /*
-     |--------16bit-------------|----16bit----|----1bit----|-----1bit------|------1bit-----|-----3bit--------|---10bit---|---16bit--|
+     |--------8bit--------------|----24bit----|----1bit----|-----1bit------|------1bit-----|-----3bit--------|---10bit---|---16bit--|
      |-parallel ctx modifyflag--|--devtaskid--|----rspflag-|--pingpongflag-|---dcci flag---|--prallel index--|--func id--|--opindex-|
     */
     [[gnu::hot]] uint64_t EncodeTaskId(SchDeviceTaskContext* devTaskCtx, int coreIdx, uint64_t newTask) {
@@ -1065,7 +1060,7 @@ private:
             LUid(devTaskCtx->TaskId(), FuncID(newTask), GetRootIndex(devTaskCtx, newTask),
             TaskID(newTask), GetLeafIndex(devTaskCtx, newTask)), LActStart(coreIdx)));
 #if ENABLE_DUMP_OPERATION
-        SchemaDumpUtil::DumpSchemaOperationInfo(devTaskCtx, coreIdx, newTask);
+        SchemaDumpUtil::DumpSchemaOperationInfo(devTaskCtx, newTask);
 #endif
 
 #if ENABLE_TENSOR_DUMP
@@ -1146,7 +1141,7 @@ private:
         int32_t ret = DEVICE_MACHINE_OK;
         uint32_t resloveParallelIdx = 0;
         PerfMtBegin(static_cast<int>(PERF_EVT_RESOLVE_DEPENDENCE), aicpuIdx_);
-        ResolveTaskContext resolveCtx[MAX_MANAGER_AIV_NUM];
+        ResolveTaskContext resolveCtx[MAX_RESOLVE_TASK_NUM];
         uint32_t finishCnt = 0;
         for (int i = coreIdxStart; i < coreIdxEnd; i++) {
             if (pendingIds_[i] != AICORE_TASK_INIT || runningIds_[i] != AICORE_TASK_INIT) {
@@ -1310,6 +1305,14 @@ private:
     inline void RecordResolveTask(
         ResolveTaskContext* ctx, uint32_t& finishCnt, int coreIdx, uint32_t taskId, int indexBase)
     {
+        if (unlikely(finishCnt >= MAX_RESOLVE_TASK_NUM)) {
+            DEV_ERROR(SchedErr::CORE_INFO_INVALID,
+                "#sche.resolve.overflow: resolveCtx overflow guarded: aicpu[%d] schedIdx=%d aicpuNum=%d "
+                "finishCnt=%u cap=%u coreIdx=%d taskId=%#x aic[%d,%d) aiv[%d,%d). DROPPED.",
+                aicpuIdx_, schedIdx_, aicpuNum_, finishCnt, static_cast<uint32_t>(MAX_RESOLVE_TASK_NUM),
+                coreIdx, taskId, aicStart_, aicEnd_, aivStart_, aivEnd_);
+            return;
+        }
         ctx[finishCnt].finishIds = taskId;
         ctx[finishCnt].resolveIndexBase = indexBase;
         ctx[finishCnt].finishCoreIdx = coreIdx;
@@ -1350,6 +1353,10 @@ private:
             context_->corePendReadyCnt_[static_cast<int>(type)]++;
             if (runningIdValue != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
+                if (isMixPending_) { // only mix pending can in this way
+                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValue));
+                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValue, type, coreIdx);
+                }
             }
             RecordResolveTask(ctx, finishCnt, coreIdx, pendingIdValue, pendingResolveIndexBaseValue);
             SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(finTaskId));
@@ -1368,11 +1375,15 @@ private:
             runningResolveIndexBaseRef = copyOutResolveCounter + 1;
             pendingIdRef = AICORE_TASK_INIT; // ResolveDepWithDfx depend this line
             pendingResolveIndexBaseRef = 0;
-            if (context_->wrapCoreAvail_[coreIdx]) {
+            if (context_->wrapCoreAvail_[coreIdx] || isMixPending_) {
                 context_->corePendReadyCnt_[static_cast<int>(type)]++;
             }
             if (runningIdValueCopyout != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValueCopyout, runningResolveIndexBaseValueCopyout);
+                if (isMixPending_) { // only mix pending can in this way
+                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValueCopyout));
+                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValueCopyout, type, coreIdx);
+                }
             }
             ret = ResolveCopyOutDepDyn(copyOutResolveCounter, pendingIdValue, pendingResolveIndexBaseValue, resloveParallelIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -1386,7 +1397,7 @@ private:
             DEV_IF_VERBOSE_DEBUG { recvAckTask_[coreIdx].push_back(TaskInfo(coreIdx, finTaskId, 0xFFFFFFFF)); }
             uint32_t runningIdValueAck = runningIdRef;
             int runningResolveIndexBaseValueAck = runningResolveIndexBaseRef;
-            if (context_->wrapCoreAvail_[coreIdx]) {
+            if (context_->wrapCoreAvail_[coreIdx] || isMixPending_) {
                 runningIdRef = finTaskId;
                 runningResolveIndexBaseRef = pendingResolveIndexBaseRef;
                 pendingIdRef = AICORE_TASK_INIT; // ResolveDepWithDfx depend this line
@@ -1395,6 +1406,10 @@ private:
             }
             if (runningIdValueAck != AICORE_TASK_INIT) {
                 RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValueAck, runningResolveIndexBaseValueAck);
+                if (isMixPending_) { // only mix pending can in this way
+                    SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValueAck));
+                    deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValueAck, type, coreIdx);
+                }
             }
         } else if (finTaskId == runningIdRef && finTaskState == TASK_FIN_STATE) {
             // running task is finished, resolve running task. Pending task is unmodified
@@ -1409,6 +1424,10 @@ private:
                 AddReadyCoreIdx(coreIdx, static_cast<int>(type));
             }
             RecordResolveTask(ctx, finishCnt, coreIdx, runningIdValue, runningResolveIndexBaseValue);
+            if (isMixPending_) { // only mix pending can in this way
+                SchDeviceTaskContext* deviceTaskCtx = context_->ParallelDeviceTaskCtx(ParallelIndex(runningIdValue));
+                deviceTaskCtx->GetWrapManager().UpdateFinishIdForMixCore(runningIdValue, type, coreIdx);
+            }
         } else if (unlikely(finTaskId == runningIdRef && aicpuCallCode != 0)) {
             // running task is copyout, resolve running task. Pending task is unmodified
             DEV_VERBOSE_DEBUG(
@@ -1783,8 +1802,9 @@ private:
         schedIdx_ = schedIdx;
         aicValidNum_ = deviceArgs->nrValidAic;
         hasAicpuTask_ = deviceArgs->hasAicpuTask;
+        isMixPending_ = deviceArgs->all1c2vMixTask;
         enableEslModel_ = deviceArgs->enableEslModel;
-        disableControlCore_ = (startArgs->devProg->GetParallelism() > 1);
+        disableControlCore_ = true;
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
         validGetPgMask_ = deviceArgs->validGetPgMask;
         runningIds_.fill(AICORE_STATUS_INIT);
@@ -2103,7 +2123,7 @@ private:
         DEV_IF_DEVICE {
             return true;
         }
-        return enableEslModel_ || aicoreHal_.IsHostSimMode();
+        return aicoreHal_.IsHostSimMode();
     }
 
     void BatchStopAllManagedCores()
@@ -2269,6 +2289,7 @@ private:
     inline void CalcAdjAicoreEnd(SchDeviceTaskContext* devTaskCtx, bool isNeedUpdateCoreNum = true)
     {
         if constexpr (!IsDeviceMode()) {
+            if (!enableEslModel_)
             return;
         }
 
@@ -2416,5 +2437,6 @@ private:
     bool enableEslModel_;
     bool disableControlCore_{false};
     bool hasAicpuTask_{false};
+    bool isMixPending_{false};
 };
 } // namespace npu::tile_fwk::dynamic

@@ -386,6 +386,7 @@ def batch_matmul_kernel_3d(
     n = config.get_n()
     batch_a = config.input_shape_a[0]
     batch_b = config.input_shape_b[0]
+    batch = config.output_shape[0]
     
     pypto.set_cube_tile_shapes(*config.tile_shape)
     pypto.set_vec_tile_shapes(config.tile_shape[0][0], config.tile_shape[2][0])
@@ -395,7 +396,7 @@ def batch_matmul_kernel_3d(
     
     m_loop = (m + tile_m - 1) // tile_m
     n_loop = (n + tile_n - 1) // tile_n
-    b_loop = (batch_a + tile_b - 1) // tile_b
+    b_loop = (batch + tile_b - 1) // tile_b
     pypto.set_matrix_size([m, k, n])
     
     ctx = MatmulKernelContext(a_tensor, b_tensor, bias_tensor, scale_tensor, out_tensor, config)

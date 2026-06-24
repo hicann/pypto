@@ -140,6 +140,7 @@ static_assert(sizeof(DevAscendFunctionDuppedStitchList) == sizeof(void*));
 
 struct DevAscendProgramPartialUpdate {
     int slotIndex;
+    bool isOutputTensorStitchSlot{false};
 
     DevCellMatchTableDesc cellMatchTableDesc;
     DevRelocVector<uint64_t> cellMatchRuntimePartialUpdateTable;
@@ -429,9 +430,10 @@ static uint32_t CellMatchFillIncastOutcast(
         {
             for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
                 DEV_VERBOSE_DEBUG(
-                    "CellMatchFillIncastOutcast, op[%d] -> dimension[%d] = (offset:%lu "
+                    "CellMatchFillIncastOutcast, op[%d] -> opType:%u -> dimension[%d] = (offset:%lu "
                     ", validShape:%lu, cellshape:%d)",
-                    use.operationIdx, j, offset[j], validShape[j], cellMatchTableDesc.cellShape.dim[j]);
+                    use.operationIdx, static_cast<uint32_t>(use.opType), j,
+                    offset[j], validShape[j], cellMatchTableDesc.cellShape.dim[j]);
             }
         }
 

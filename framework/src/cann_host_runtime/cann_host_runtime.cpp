@@ -14,9 +14,11 @@
  */
 
 #include "tilefwk/cann_host_runtime.h"
+#include "utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include <cstdlib>
 #include <cstring>
+#include <dlfcn.h>
 
 namespace npu {
 namespace tile_fwk {

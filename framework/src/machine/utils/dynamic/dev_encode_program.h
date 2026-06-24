@@ -340,13 +340,14 @@ struct DevAscendProgram {
         uint32_t nrAicpu;
         uint32_t nrValidAic;
         uint32_t scheCpuNum;
-        uint32_t maxAicpuNum;
+        uint32_t die0MaxCpuid;
         uint32_t launchSchedAicpuNum;
         ArchInfo archInfo;
         uint64_t dynamicCellMatchAddr;
         uint64_t dynamicCellMatchCapacity;
         bool hasAicpuTask;
         bool launchSchedSameCluster;
+        bool all1c2vMixTask;
     };
 
     DevArgsPreservedParams BackupDevArgsParams(const DeviceArgs& src)
@@ -357,12 +358,13 @@ struct DevAscendProgram {
         params.nrAicpu = src.nrAicpu;
         params.nrValidAic = src.nrValidAic;
         params.scheCpuNum = src.scheCpuNum;
-        params.maxAicpuNum = src.maxAicpuNum;
+        params.die0MaxCpuid = src.die0MaxCpuid;
         params.launchSchedAicpuNum = src.launchSchedAicpuNum;
         params.archInfo = src.archInfo;
         params.dynamicCellMatchAddr = src.dynamicCellMatchAddr;
         params.dynamicCellMatchCapacity = src.dynamicCellMatchCapacity;
         params.hasAicpuTask = src.hasAicpuTask;
+        params.all1c2vMixTask = src.all1c2vMixTask;
         params.launchSchedSameCluster = src.launchSchedSameCluster;
         return params;
     }
@@ -374,12 +376,13 @@ struct DevAscendProgram {
         dst.nrAicpu = params.nrAicpu;
         dst.nrValidAic = params.nrValidAic;
         dst.scheCpuNum = params.scheCpuNum;
-        dst.maxAicpuNum = params.maxAicpuNum;
+        dst.die0MaxCpuid = params.die0MaxCpuid;
         dst.launchSchedAicpuNum = params.launchSchedAicpuNum;
         dst.archInfo = params.archInfo;
         dst.dynamicCellMatchAddr = params.dynamicCellMatchAddr;
         dst.dynamicCellMatchCapacity = params.dynamicCellMatchCapacity;
         dst.hasAicpuTask = params.hasAicpuTask;
+        dst.all1c2vMixTask = params.all1c2vMixTask;
         dst.launchSchedSameCluster = params.launchSchedSameCluster;
     }
 
@@ -529,6 +532,7 @@ private:
         const std::unordered_map<Function*, int>& rootFuncKeyDict,
         const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootIncastDict,
         const std::unordered_map<int, std::unordered_map<Function*, int>>& slotRootOutcastDict,
+        const std::vector<int>& tInputSlotIndexList, const std::vector<int>& tAssembleSlotIndexList,
         const std::vector<int>& tPartialUpdateSlotIndexList, bool fillContent);
     void InitControlFlowCache(
         uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent);

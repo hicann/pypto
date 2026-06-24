@@ -26,6 +26,14 @@ from ..symbolic_scalar import SymbolicScalar, SymInt
 
 _FLOAT_DTYPES = {DataType.DT_FP32, DataType.DT_FP16, DataType.DT_BF16}
 
+_INT_DTYPE_MAP = {
+    DataType.DT_INT8: np.int8,
+    DataType.DT_INT16: np.int16,
+    DataType.DT_INT32: np.int32,
+    DataType.DT_UINT8: np.uint8,
+    DataType.DT_UINT16: np.uint16,
+}
+
 
 def _check_scalar_type(op_name, tensor_dtype, other):
     if not isinstance(other, (int, float)):
@@ -34,6 +42,12 @@ def _check_scalar_type(op_name, tensor_dtype, other):
         raise PyptoError(0xF00001, TypeError(
             f"{op_name}(): float scalar incompatible with integer tensor dtype {tensor_dtype.name}. "
             "Use an integer scalar or cast the tensor to float type."))
+
+
+def _clip_scalar_to_dtype(tensor_dtype, value):
+    if isinstance(value, int) and tensor_dtype in _INT_DTYPE_MAP:
+        return int(_INT_DTYPE_MAP[tensor_dtype](value))
+    return value
 
 
 @op_wrapper
@@ -81,6 +95,7 @@ def add(
         return pypto_impl.Add(input_tensor, other)
     else:
         _check_scalar_type("add", input_tensor.dtype, other)
+        other = _clip_scalar_to_dtype(input_tensor.dtype, other)
         return pypto_impl.Add(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
@@ -186,6 +201,7 @@ def sub(
         return pypto_impl.Sub(input_tensor, other)
     else:
         _check_scalar_type("sub", input_tensor.dtype, other)
+        other = _clip_scalar_to_dtype(input_tensor.dtype, other)
         return pypto_impl.Sub(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
@@ -230,6 +246,7 @@ def mul(input_tensor: Tensor, other: Union[Tensor, float, int]) -> Tensor:
         return pypto_impl.Mul(input_tensor, other)	 
     else:
         _check_scalar_type("mul", input_tensor.dtype, other)
+        other = _clip_scalar_to_dtype(input_tensor.dtype, other)
         return pypto_impl.Mul(input_tensor, pypto_impl.Element(input_tensor.dtype, other))
 
 
@@ -535,6 +552,7 @@ def bitwise_and(self: Tensor, other: Union[Tensor, int]) -> Tensor:
             raise PyptoError(0xF00001, TypeError(
                 f"Scalar operand for bitwise_and must be an integer, but got {type(other)}."
                 ))
+        other = _clip_scalar_to_dtype(self.dtype, other)
         return pypto_impl.BitwiseAnd(self, pypto_impl.Element(self.dtype, other))
 
 
@@ -579,6 +597,7 @@ def bitwise_or(input1: Tensor, input2: Union[Tensor, int]) -> Tensor:
             raise PyptoError(0xF00001, TypeError(
                 f"Scalar operand for bitwise_or must be an integer, but got {type(input2)}."
                 ))
+        input2 = _clip_scalar_to_dtype(input1.dtype, input2)
         return pypto_impl.BitwiseOr(input1, pypto_impl.Element(input1.dtype, input2))
 
 
@@ -623,6 +642,7 @@ def bitwise_xor(first: Tensor, second: Union[Tensor, int]) -> Tensor:
             raise PyptoError(0xF00001, TypeError(
                 f"Scalar operand for bitwise_xor must be an integer, but got {type(second)}."
                 ))
+        second = _clip_scalar_to_dtype(first.dtype, second)
         return pypto_impl.BitwiseXor(first, pypto_impl.Element(first.dtype, second))
 
 
@@ -745,7 +765,10 @@ def exp2(input: Tensor) -> Tensor:
     Output y:[1.0000 2.0000 4.0000]
     """
     valid_shape = input.GetValidShape()
-    if input.dtype == pypto.DT_INT16 or input.dtype == pypto.DT_INT32:
+    if input.dtype in (pypto.DT_INT8, pypto.DT_UINT8):
+        input = pypto.cast(input, pypto.DT_FP16)
+        input = pypto.cast(input, pypto.DT_FP32)
+    elif input.dtype in (pypto.DT_INT16, pypto.DT_INT32):
         input = pypto.cast(input, pypto.DT_FP32)
 
     two_element = pypto_impl.Element(input.dtype, 2)

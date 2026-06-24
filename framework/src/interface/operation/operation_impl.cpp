@@ -30,6 +30,8 @@
 #include "interface/utils/common.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/tensor/irbuilder.h"
+
 
 using namespace npu::tile_fwk;
 
@@ -127,6 +129,7 @@ constexpr int BIAS_DIM_NUM = 1;
 constexpr int SMALL_CHANNEL_4 = 4;
 constexpr int SMALL_CHANNEL_8 = 8;
 constexpr int SMALL_CHANNEL_16 = 16;
+static const std::vector<NPUArch> ONLINE_SOFTMAX_SUPPORTED_ARCHITECTURES = {NPUArch::DAV_3510};
 
 void TiledMaxpool(
     Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& input,
@@ -256,6 +259,259 @@ Tensor Maxpool(
 
     return result;
 }
+
+static std::vector<int64_t> GetLineReduceWorkspaceShape(const std::vector<int64_t>& sourceShape, int axis)
+{
+    return {(sourceShape[axis] + 1) / NUM_VALUE_2,
+        (sourceShape[sourceShape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM};
+}
+
+static int64_t GetOnlineSoftmaxFp32AlignedColumns(int64_t columns)
+{
+    return AlignUp(columns, BLOCK_SIZE / BytesOf(DT_FP32));
+}
+
+static std::vector<int64_t> GetOnlineSoftmaxUpdateWorkspaceShape(const std::vector<int64_t>& outputShape)
+{
+    return {outputShape[0] + NUM_VALUE_3, GetOnlineSoftmaxFp32AlignedColumns(outputShape[1])};
+}
+
+static void CheckOnlineSoftmaxScores(const Tensor& scores)
+{
+    CheckTensorDataType(scores.GetStorage(), {DT_FP32}, "ONLINE_SOFTMAX");
+    CheckTensorDimRange(scores.GetStorage(), NUM_VALUE_2, NUM_VALUE_2, "ONLINE_SOFTMAX");
+    CheckTensorShapeSize(scores.GetStorage(), "ONLINE_SOFTMAX");
+}
+
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmax(const Tensor& scores, float scale)
+{
+    DECLARE_TRACER();
+    CheckSupportedNPUArch(ONLINE_SOFTMAX_SUPPORTED_ARCHITECTURES, "OnlineSoftmax");
+    CheckOnlineSoftmaxScores(scores);
+
+    auto columnStatisticShape = scores.GetShape();
+    columnStatisticShape[0] = 1;
+    Tensor expScoresBf16(DataType::DT_BF16, scores.GetShape());
+    Tensor columnMax(DataType::DT_FP32, columnStatisticShape);
+    Tensor columnSum(DataType::DT_FP32, columnStatisticShape);
+    Tensor scaledScores(DataType::DT_FP32, scores.GetShape());
+    Tensor reduceWorkspace(DataType::DT_FP32, GetLineReduceWorkspaceShape(scores.GetShape(), 0));
+
+    auto scoresValidShape = scores.GetStorage()->GetDynValidShape();
+    if (!scoresValidShape.empty()) {
+        auto columnStatisticValidShape = scoresValidShape;
+        columnStatisticValidShape[0] = SymbolicScalar(1);
+        expScoresBf16.GetStorage()->UpdateDynValidShape(scoresValidShape);
+        columnMax.GetStorage()->UpdateDynValidShape(columnStatisticValidShape);
+        columnSum.GetStorage()->UpdateDynValidShape(columnStatisticValidShape);
+        scaledScores.GetStorage()->UpdateDynValidShape(scoresValidShape);
+        reduceWorkspace.GetStorage()->UpdateDynValidShape(
+            SymbolicScalar::FromConcrete(reduceWorkspace.GetShape()));
+    }
+
+    auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(
+        Opcode::OP_ONLINE_SOFTMAX, {scores.GetStorage()},
+        {expScoresBf16.GetStorage(), columnMax.GetStorage(), columnSum.GetStorage(), scaledScores.GetStorage(),
+            reduceWorkspace.GetStorage()});
+    op.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, scale));
+    op.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
+    return {expScoresBf16, columnMax, columnSum};
+}
+
+static void CheckOnlineSoftmaxUpdateStats(
+    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
+    const Tensor& currentSum, const Tensor& currentOutput)
+{
+    const std::vector<Tensor> inputTensors = {previousMax, previousSum, previousOutput, currentMax, currentSum,
+        currentOutput};
+    for (const auto& tensor : inputTensors) {
+        CheckTensorDataType(tensor.GetStorage(), {DT_FP32}, "ONLINE_SOFTMAX_UPDATE");
+        CheckTensorDimRange(tensor.GetStorage(), NUM_VALUE_2, NUM_VALUE_2, "ONLINE_SOFTMAX_UPDATE");
+        CheckTensorShapeSize(tensor.GetStorage(), "ONLINE_SOFTMAX_UPDATE");
+    }
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, previousOutput.GetShape() == currentOutput.GetShape())
+        << "ONLINE_SOFTMAX_UPDATE requires previousOutput and currentOutput to have the same shape.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        previousMax.GetShape() == previousSum.GetShape() && previousMax.GetShape() == currentMax.GetShape() &&
+            previousMax.GetShape() == currentSum.GetShape())
+        << "ONLINE_SOFTMAX_UPDATE requires previous/current max and sum tensors to have the same shape.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        previousMax.GetShape()[0] == 1 && previousMax.GetShape()[1] == previousOutput.GetShape()[1])
+        << "ONLINE_SOFTMAX_UPDATE requires max/sum tensors with shape [1, q_len].";
+}
+
+std::tuple<Tensor, Tensor, Tensor> OnlineSoftmaxUpdate(
+    const Tensor& previousMax, const Tensor& previousSum, const Tensor& previousOutput, const Tensor& currentMax,
+    const Tensor& currentSum, const Tensor& currentOutput)
+{
+    DECLARE_TRACER();
+    CheckSupportedNPUArch(ONLINE_SOFTMAX_SUPPORTED_ARCHITECTURES, "OnlineSoftmaxUpdate");
+    CheckOnlineSoftmaxUpdateStats(
+        previousMax, previousSum, previousOutput, currentMax, currentSum, currentOutput);
+
+    Tensor updatedMax(DataType::DT_FP32, previousMax.GetShape());
+    Tensor updatedSum(DataType::DT_FP32, previousSum.GetShape());
+    Tensor updatedOutput(DataType::DT_FP32, previousOutput.GetShape());
+    Tensor updateWorkspace(DataType::DT_FP32, GetOnlineSoftmaxUpdateWorkspaceShape(previousOutput.GetShape()));
+    updatedMax.GetStorage()->UpdateDynValidShape(previousMax.GetStorage()->GetDynValidShape());
+    updatedSum.GetStorage()->UpdateDynValidShape(previousSum.GetStorage()->GetDynValidShape());
+    updatedOutput.GetStorage()->UpdateDynValidShape(previousOutput.GetStorage()->GetDynValidShape());
+    updateWorkspace.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(updateWorkspace.GetShape()));
+
+    auto& op = Program::GetInstance().GetCurrentFunction()->AddOperation(
+        Opcode::OP_ONLINE_SOFTMAX_UPDATE, {previousMax.GetStorage(), previousSum.GetStorage(),
+            previousOutput.GetStorage(), currentMax.GetStorage(), currentSum.GetStorage(), currentOutput.GetStorage()},
+        {updatedMax.GetStorage(), updatedSum.GetStorage(), updatedOutput.GetStorage(), updateWorkspace.GetStorage()});
+    op.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
+    return {updatedMax, updatedSum, updatedOutput};
+}
+
+static void CheckOnlineSoftmaxTileShape(const std::vector<int64_t>& viewShape, const VecTile& vecTile,
+    const std::string& opName)
+{
+    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, vecTile.size() >= viewShape.size())
+        << opName << " expects vec tile rank >= tensor rank.";
+    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, viewShape[0] <= vecTile[0])
+        << opName << " v1 does not split reduce/head axis; shape[0] (" << viewShape[0] << ") must be <= vec tile[0] ("
+        << vecTile[0] << ").";
+}
+
+void OnlineSoftmaxOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1 && oOperand.size() == NUM_VALUE_5)
+        << "ONLINE_SOFTMAX expects 1 input and 5 outputs including workspace tensors.";
+    auto& vecTile = tileShape.GetVecTile();
+    auto scores = iOperand[0];
+    auto expScoresBf16 = oOperand[0];
+    auto columnMax = oOperand[1];
+    auto columnSum = oOperand[2];
+    auto scaledScores = oOperand[NUM_VALUE_3];
+    auto reduceWorkspace = oOperand[NUM_VALUE_4];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, scores->shape.size() == NUM_VALUE_2)
+        << "ONLINE_SOFTMAX only supports 2D tensor in v1.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        expScoresBf16->shape == scores->shape && scaledScores->shape == scores->shape)
+        << "ONLINE_SOFTMAX requires expScoresBf16/scaledScores shape to match scores shape.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        columnMax->shape == columnSum->shape && columnMax->shape[0] == 1 &&
+            columnMax->shape[1] == scores->shape[1])
+        << "ONLINE_SOFTMAX requires columnMax/columnSum shape [1, q_len].";
+    CheckOnlineSoftmaxTileShape(scores->shape, vecTile, "ONLINE_SOFTMAX");
+
+    TileInfo scoreTileInfo(scores->shape, std::vector<int64_t>(scores->shape.size(), 0));
+    TileInfo statisticTileInfo(columnMax->shape, std::vector<int64_t>(columnMax->shape.size(), 0));
+    for (int64_t col = 0; col < scores->shape[1]; col += vecTile[1]) {
+        scoreTileInfo.offset = {0, col};
+        scoreTileInfo.shape = {scores->shape[0], std::min<int64_t>(vecTile[1], scores->shape[1] - col)};
+        statisticTileInfo.offset = {0, col};
+        statisticTileInfo.shape = {1, scoreTileInfo.shape[1]};
+        auto reduceWorkspaceShape = GetLineReduceWorkspaceShape(scoreTileInfo.shape, 0);
+        auto reduceWorkspaceOffset = std::vector<int64_t>{0, col};
+        auto scoreTile = scores->View(function, scoreTileInfo.shape, scoreTileInfo.offset);
+        auto expScoresTile = expScoresBf16->View(function, scoreTileInfo.shape, scoreTileInfo.offset);
+        auto columnMaxTile = columnMax->View(function, statisticTileInfo.shape, statisticTileInfo.offset);
+        auto columnSumTile = columnSum->View(function, statisticTileInfo.shape, statisticTileInfo.offset);
+        auto scaledScoresTile = scaledScores->View(function, scoreTileInfo.shape, scoreTileInfo.offset);
+        auto reduceWorkspaceTile =
+            reduceWorkspace->View(function, reduceWorkspaceShape, reduceWorkspaceOffset);
+        auto& tileOp = function.AddOperation(Opcode::OP_ONLINE_SOFTMAX, {scoreTile},
+            {expScoresTile, columnMaxTile, columnSumTile, scaledScoresTile, reduceWorkspaceTile});
+        tileOp.SetAttribute(OpAttributeKey::scalar, op.GetElementAttribute(OpAttributeKey::scalar));
+        tileOp.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
+    }
+}
+
+struct OnlineSoftmaxUpdateTileOperands {
+    LogicalTensorPtr previousMax;
+    LogicalTensorPtr previousSum;
+    LogicalTensorPtr previousOutput;
+    LogicalTensorPtr currentMax;
+    LogicalTensorPtr currentSum;
+    LogicalTensorPtr currentOutput;
+    LogicalTensorPtr updatedMax;
+    LogicalTensorPtr updatedSum;
+    LogicalTensorPtr updatedOutput;
+    LogicalTensorPtr updateWorkspace;
+};
+
+static OnlineSoftmaxUpdateTileOperands GetOnlineSoftmaxUpdateTileOperands(
+    const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
+{
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == NUM_VALUE_6 && oOperand.size() == NUM_VALUE_4)
+        << "ONLINE_SOFTMAX_UPDATE expects 6 inputs and 4 outputs including workspace tensor.";
+    return {iOperand[0], iOperand[1], iOperand[NUM_VALUE_2], iOperand[NUM_VALUE_3], iOperand[NUM_VALUE_4],
+        iOperand[NUM_VALUE_5], oOperand[0], oOperand[1], oOperand[NUM_VALUE_2], oOperand[NUM_VALUE_3]};
+}
+
+static void CheckOnlineSoftmaxUpdateTileOperands(const OnlineSoftmaxUpdateTileOperands& tensors, const VecTile& vecTile)
+{
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tensors.previousOutput->shape.size() == NUM_VALUE_2)
+        << "ONLINE_SOFTMAX_UPDATE only supports 2D O tensor in v1.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        tensors.currentOutput->shape == tensors.previousOutput->shape &&
+            tensors.updatedOutput->shape == tensors.previousOutput->shape)
+        << "ONLINE_SOFTMAX_UPDATE requires previous/current/updated output tensors to have the same shape.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        tensors.previousMax->shape == tensors.previousSum->shape &&
+            tensors.previousMax->shape == tensors.currentMax->shape &&
+            tensors.previousMax->shape == tensors.currentSum->shape &&
+            tensors.previousMax->shape == tensors.updatedMax->shape &&
+            tensors.previousMax->shape == tensors.updatedSum->shape && tensors.previousMax->shape[0] == 1 &&
+            tensors.previousMax->shape[1] == tensors.previousOutput->shape[1])
+        << "ONLINE_SOFTMAX_UPDATE requires all statistic tensors with shape [1, q_len].";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        tensors.updateWorkspace->shape.size() == NUM_VALUE_2 &&
+            tensors.updateWorkspace->shape[0] == tensors.previousOutput->shape[0] + NUM_VALUE_3 &&
+            tensors.updateWorkspace->shape[1] == GetOnlineSoftmaxFp32AlignedColumns(tensors.previousOutput->shape[1]))
+        << "ONLINE_SOFTMAX_UPDATE requires workspace tensor with shape [head_dim + 3, aligned_q_len].";
+    CheckOnlineSoftmaxTileShape(tensors.previousOutput->shape, vecTile, "ONLINE_SOFTMAX_UPDATE");
+    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, vecTile[1] % (BLOCK_SIZE / BytesOf(DT_FP32)) == 0)
+        << "ONLINE_SOFTMAX_UPDATE requires vec tile last dim to be FP32 32-byte aligned.";
+}
+
+static void AddOnlineSoftmaxUpdateTileOp(
+    Function& function, const OnlineSoftmaxUpdateTileOperands& tensors, int64_t col, int64_t tileColumns)
+{
+    const std::vector<int64_t> outputTileShape = {tensors.previousOutput->shape[0], tileColumns};
+    const std::vector<int64_t> outputTileOffset = {0, col};
+    const std::vector<int64_t> statisticTileShape = {1, tileColumns};
+    const std::vector<int64_t> statisticTileOffset = {0, col};
+    auto previousMaxTile = tensors.previousMax->View(function, statisticTileShape, statisticTileOffset);
+    auto previousSumTile = tensors.previousSum->View(function, statisticTileShape, statisticTileOffset);
+    auto previousOutputTile = tensors.previousOutput->View(function, outputTileShape, outputTileOffset);
+    auto currentMaxTile = tensors.currentMax->View(function, statisticTileShape, statisticTileOffset);
+    auto currentSumTile = tensors.currentSum->View(function, statisticTileShape, statisticTileOffset);
+    auto currentOutputTile = tensors.currentOutput->View(function, outputTileShape, outputTileOffset);
+    auto updatedMaxTile = tensors.updatedMax->View(function, statisticTileShape, statisticTileOffset);
+    auto updatedSumTile = tensors.updatedSum->View(function, statisticTileShape, statisticTileOffset);
+    auto updatedOutputTile = tensors.updatedOutput->View(function, outputTileShape, outputTileOffset);
+    auto alignedTileColumns = GetOnlineSoftmaxFp32AlignedColumns(tileColumns);
+    auto updateWorkspaceTile =
+        tensors.updateWorkspace->View(function, {outputTileShape[0] + NUM_VALUE_3, alignedTileColumns}, {0, col});
+    auto& tileOp = function.AddOperation(Opcode::OP_ONLINE_SOFTMAX_UPDATE,
+        {previousMaxTile, previousSumTile, previousOutputTile, currentMaxTile, currentSumTile, currentOutputTile},
+        {updatedMaxTile, updatedSumTile, updatedOutputTile, updateWorkspaceTile});
+    tileOp.SetAttribute(OpAttributeKey::excludeBufferReuse, true);
+}
+
+void OnlineSoftmaxUpdateOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    const auto& vecTile = tileShape.GetVecTile();
+    auto tensors = GetOnlineSoftmaxUpdateTileOperands(iOperand, oOperand);
+    CheckOnlineSoftmaxUpdateTileOperands(tensors, vecTile);
+    for (int64_t col = 0; col < tensors.previousOutput->shape[1]; col += vecTile[1]) {
+        auto tileColumns = std::min<int64_t>(vecTile[1], tensors.previousOutput->shape[1] - col);
+        AddOnlineSoftmaxUpdateTileOp(function, tensors, col, tileColumns);
+    }
+}
+
+REGISTER_OPERATION_TILED_FUNC(OP_ONLINE_SOFTMAX, Opcode::OP_ONLINE_SOFTMAX, OnlineSoftmaxOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(
+    OP_ONLINE_SOFTMAX_UPDATE, Opcode::OP_ONLINE_SOFTMAX_UPDATE, OnlineSoftmaxUpdateOperationTileFunc);
 
 Tensor Compact(const Tensor& operand)
 {
@@ -1109,7 +1365,7 @@ Tensor Assemble(const std::vector<std::pair<Tensor, std::vector<int64_t>>>& tens
     return result;
 }
 
-void TensorDInnerAssemble(
+Operation& TensorDInnerAssemble(
     Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
     const std::vector<SymbolicScalar>& dynOffset)
 {
@@ -1118,13 +1374,7 @@ void TensorDInnerAssemble(
     op.SetAssembleOpAttribute(offset, dynOffset);
     op.SetAttribute("dassemble", true);
     function.UpdateTensorDataUsage(op);
-}
-
-void DInnerAssemble(
-    Function& function, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    const std::vector<SymbolicScalar>& dynOffset)
-{
-    CALL(DInnerAssemble, function, operand, result, dynOffset);
+    return op;
 }
 
 void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset, Tensor& dest)
@@ -1136,8 +1386,9 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
     CHECK_OP(dest.GetShape().size() == tensor.GetShape().size()) << "Assemble: src and dest requires same shape";
     CHECK_OP(dest.GetShape().size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
-    DInnerAssemble(*Program::GetInstance().GetCurrentFunction(), tensor.GetStorage(), dest.GetStorage(), dynOffset);
 
+    auto &func = *Program::GetInstance().GetCurrentFunction();
+    TensorDInnerAssemble(func, tensor.GetStorage(), dest.GetStorage(), dynOffset);
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(dest, SlotProperty::ASSEMBLE_DST);
 }
 
@@ -1398,6 +1649,22 @@ static std::vector<int64_t> CheckAndInferShape(
     return newShape;
 }
 
+bool MatchInputTailProductOutputLastDim(const std::vector<int64_t>& inputShape, const std::vector<int64_t>& outputShape)
+{
+    if (outputShape.empty() || inputShape.size() != outputShape.size() + 1 || outputShape.back() <= 0) {
+        return false;
+    }
+
+    int64_t tailProduct = 1;
+    for (size_t i = 1; i < inputShape.size(); ++i) {
+        if (inputShape[i] <= 0 || tailProduct > LLONG_MAX / inputShape[i]) {
+            return false;
+        }
+        tailProduct *= inputShape[i];
+    }
+    return tailProduct == outputShape.back();
+}
+
 // batch MatMul优化pattern，不插入register copy
 bool MatchBatchMatMulPattern(const std::vector<int64_t>& inputShape, const std::vector<int64_t>& outputShape)
 {
@@ -1444,7 +1711,7 @@ bool MatchBatchMatMulPattern(const std::vector<int64_t>& inputShape, const std::
         }
     }
 
-    return false;
+    return MatchInputTailProductOutputLastDim(inputShape, outputShape);
 }
 
 static bool ReshapeNeedCopy(const Tensor& operand)
@@ -1656,7 +1923,7 @@ void ExpandOperationInto(
             break;
         }
         case Opcode::OP_FAKE_TRANS: {
-            FakeTrans::ConstructTileGraph(function, iOperand, oOperand[0]);
+            function.AddOperation(Opcode::OP_FAKE_TRANS, iOperand, oOperand);
             break;
         }
         case Opcode::OP_TOPK_SORT: {

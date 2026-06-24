@@ -1,6 +1,6 @@
 ---
 name: pypto-orchestration-manual
-description: pypto-op-orchestrator entry point. Bundles the 4 control documents (principles, stage plan, team roster, mandatory rules) as one skill with progressive-disclosure references. Read this file first, then load the references on demand.
+description: pypto-op-orchestrator entry point. Bundles the 3 control documents (principles, team roster, mandatory rules) as one skill with progressive-disclosure references. Read this file first, then load the references on demand.
 ---
 
 # pypto-op-orchestrator — PyPTO Kernel Development
@@ -11,8 +11,8 @@ the team as a set of progressive-disclosure references.
 
 ## Audience & scope (intentional exception)
 
-> **⚠️ Orchestrator-only.** This skill — including all four referenced
-> documents (`principles.md`, `agents.md`, `agent-plan.md`, `rules.md`)
+> **⚠️ Orchestrator-only.** This skill — including all three referenced
+> documents (`principles.md`, `agents.md`, `rules.md`)
 > — is loaded **only by `pypto-op-orchestrator`**. No
 > sub-agent (planner / mathematician / architect / designer / coder /
 > verifier / debugger / optimizer) reads this skill, and no sub-agent
@@ -28,9 +28,11 @@ the team as a set of progressive-disclosure references.
 > If you are a sub-agent and find yourself loading this skill, **stop**:
 > you have been mis-dispatched. Hand control back to pypto-op-orchestrator.
 >
-> **Reading order:** Read this SKILL.md first. Then load references in the
-> order `principles.md` → `agents.md` → `agent-plan.md` → `rules.md`.
-> Load each reference only when the current stage or dispatch directs you to.
+> **Reading order:** Read this SKILL.md first, then `principles.md` →
+> `agents.md` before the first dispatch. `agents.md` carries every
+> sub-agent's inputs / deliverables / gate / handoff — enough to dispatch
+> and gate without knowing how a sub-agent works. `rules.md` holds
+> execution detail; load it only on demand, not to dispatch.
 
 ---
 
@@ -40,10 +42,9 @@ the team as a set of progressive-disclosure references.
 |--:|-----------|---------|-----------|
 | 1 | `references/principles.md` | 4 behavioral guidelines (Think, Simplify, Surgical, Goal-Driven) | Always load before the first dispatch of any session |
 | 2 | `references/agents.md` | Sub-agent dispatch contract: roster (stage column), per-agent deliverables / gates / handoff, verifier modes, `failure_category` enum, debugger iteration cap, optimizer regression loop. Sub-agent-internal skill loading lives in each `.opencode/agents/<name>.md` Mandatory reads. | Load before the first sub-agent dispatch; keep it at hand across the whole session |
-| 3 | `references/agent-plan.md` | Stage 1–7 checklist with gates (⛔) and the debug escalation protocol | Load before starting Stage 1 and keep it loaded through Stage 6; unloadable during Stage 7 optimization regressions |
-| 4 | `references/rules.md` | 23 mandatory rules, module-at-a-time enforcement, 3 prohibitions. Every sub-agent output must pass these | Load before the first gate check; consult on every Stage completion review |
+| 3 | `references/rules.md` | mandatory rules, module-at-a-time enforcement, 3 prohibitions. Every sub-agent output must pass these | On demand — sub-agents enforce these via their own skills + lint |
 
-All four references were previously top-level files under `.agents/`. They
+These references were previously top-level files under `.agents/`. They
 have been relocated here to enforce the skill-library structure: the pypto-op-orchestrator
 Agent loads SKILL.md, then pulls in references only as needed.
 

@@ -37,7 +37,7 @@ void LogPassRuntime(
     const std::string& identifier, Program& program, Function& function,
     const std::chrono::time_point<std::chrono::high_resolution_clock>& start);
 
-void ExtractPassLogByFunction(const Function& function);
+void ExtractPassLogByFunction(const Function& function, const std::string& strategy);
 
 enum class Elements { Operation, Tensor, Function, Graph, Config, Manager };
 
@@ -103,6 +103,7 @@ private:
 class PassLogUtil {
 public:
     PassLogUtil(Pass& pass, Function& function, size_t passIndex);
+    PassLogUtil(Pass& pass, Function& function, const std::string& strategy, size_t passIndex);
     ~PassLogUtil();
 
     PassLogUtil(const PassLogUtil&) = delete;
@@ -112,6 +113,8 @@ private:
     std::string originLogOutPath_;
     std::string logFilePath_;
     std::string logFolder_;
+    std::string strategyFolder_;
+    std::string computationGraphFolder_;
 };
 } // namespace npu::tile_fwk
 

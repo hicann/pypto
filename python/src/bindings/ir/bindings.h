@@ -23,6 +23,7 @@ void BindLogging(py::module_& m);
 
 namespace ir {
 void BindIRBuilder(py::module_& m);
+void BindPasses(py::module_& m);
 std::vector<std::pair<std::string, std::any>> ConvertAttrDict(const py::dict& attrs);
 } // namespace ir
 } // namespace pypto

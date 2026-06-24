@@ -36,12 +36,14 @@ Operand = Union[Value, Any]
 
 
 class Formatter:
-    def __init__(self):
+    def __init__(self, show_blocks):
         self.blocks = []
+        self.show_blocks = show_blocks
 
     def format(self, x: Operand) -> str:
         if isinstance(x, Block):
-            self.blocks.append(x)
+            if self.show_blocks:
+                self.blocks.append(x)
             return f"^{x.id}"
         elif isinstance(x, list):
             return f"[{', '.join(self.format(x) for x in x)}]"
@@ -74,7 +76,10 @@ class Call:
     span: ir.Span
 
     def __str__(self) -> str:
-        fmt = Formatter()
+        return self.dump(show_blocks=True)
+
+    def dump(self, show_blocks: bool = False):
+        fmt = Formatter(show_blocks)
         result_str = f"{self.result} = " if self.result else ""
         line_info = f"  # Line {self.span.begin_line}"
         args_all = [fmt.format(x) for x in self.args] + [

@@ -30,7 +30,7 @@
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/tensor/raw_tensor.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/tensor/hypercube_overlap_checker.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
@@ -281,7 +281,7 @@ Status CalRedundantCopy(Function& function, json& report)
 
 void WriteHealthReport(const json& report, const std::string& reportPath, const std::string& filename)
 {
-    if (!CreateMultiLevelDir(reportPath)) {
+    if (!CreateDir(reportPath, true)) {
         APASS_LOG_ERROR_F(Elements::Operation, "Failed to create directory for health report");
     }
     std::ofstream out(reportPath + "/" + filename);

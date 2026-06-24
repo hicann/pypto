@@ -41,9 +41,9 @@ void
 
     | 约束项 | 要求 |
     |:-------|:-----|
-    | mL0与mL1 | `mL0 > 0` 且 `mL0 ≤ mL1` 且 `mL1 % mL0 == 0` |
-    | kL0与kL1 | `kL0 > 0` 且 `kL0 ≤ kL1` 且 `kL1 % kL0 == 0` |
-    | nL0与nL1 | `nL0 > 0` 且 `nL0 ≤ nL1` 且 `nL1 % nL0 == 0` |
+    | mL0与mL1 | `mL0 > 0`且`mL0 ≤ mL1`且`mL1 % mL0 == 0` |
+    | kL0与kL1 | `kL0 > 0`且`kL0 ≤ kL1`且`kL1 % kL0 == 0` |
+    | nL0与nL1 | `nL0 > 0`且`nL0 ≤ nL1`且`nL1 % nL0 == 0` |
 
     - ND格式特有约束
 
@@ -52,6 +52,10 @@ void
     - NZ格式特有约束
 
     A、B矩阵在format为NZ场景时，要求外轴切分大小满足16元素对齐，内轴切分大小满足32字节对齐。例如，在A矩阵非转置场景，外轴为M、内轴为K，要求mL0、mL1满足16元素对齐，kL0、kL1满足32字节对齐。
+
+    - scaled_mm特有约束
+
+    当调用`pypto.scaled_mm`时，要求满足 `kL0 % 64 == 0`。
 
 - 空间约束
 
@@ -92,13 +96,13 @@ void
     其中：
     - aDtype、bDtype为输入矩阵数据类型
     - cDtype为输出矩阵数据类型，当输入为DT_INT8时cDtype为DT_INT32，其余场景cDtype为DT_FP32
-    - `CeilAlign(value, align)` 元素对齐实现为：`(value + align - 1) / align * align`
+    - `CeilAlign(value, align)`元素对齐实现为：`(value + align - 1) / align * align`
 
 - 多核切K约束
 
     - 仅支持2维/3维/4维矩阵多核切K。
     - 多核切K场景只支持out\_dtype数据类型为DT\_FP32或DT\_INT32。
-    - Bias、FixPipe反量化场景不支持叠加多核切K功能。
+    - Bias/FixPipe(包含ReLU)场景不支持叠加多核切K功能。
 
 ## 调用示例
 

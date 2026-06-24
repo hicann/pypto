@@ -20,7 +20,7 @@
 #include <sstream>
 
 #include "machine/compile/aicore_compiler.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/platform.h"
@@ -39,7 +39,7 @@ const std::string TEST_TMP_DIR = "/tmp/test_aicore_compiler";
 class TestAicoreCompiler : public testing::Test {
 public:
     void SetUp() override {}
-    static void SetUpTestCase() { CreateMultiLevelDir(TEST_TMP_DIR); }
+    static void SetUpTestCase() { CreateDir(TEST_TMP_DIR); }
 
     void TearDown() override {}
     static void TearDownTestCase()
@@ -55,8 +55,7 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_EmptyCcePath)
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
 
-    int ret = CompileAICoreKernel(leafDict, param, "", "test_hash", kernelPath);
-    EXPECT_EQ(ret, -1);
+    EXPECT_THROW(CompileAICoreKernel(leafDict, param, "", "test_hash", kernelPath), npu::tile_fwk::Error);
 }
 
 TEST_F(TestAicoreCompiler, CompileAICoreKernel_GenSrcFileFails)
@@ -64,8 +63,9 @@ TEST_F(TestAicoreCompiler, CompileAICoreKernel_GenSrcFileFails)
     std::map<uint64_t, Function*> leafDict;
     dynamic::EncodeDevAscendFunctionParam param = {};
     std::string kernelPath;
-    int ret = CompileAICoreKernel(leafDict, param, "/nonexistent_dir/cce_path/", "test_hash", kernelPath);
-    EXPECT_EQ(ret, -1);
+    EXPECT_THROW(
+        CompileAICoreKernel(leafDict, param, "/nonexistent_dir/cce_path/", "test_hash", kernelPath),
+        npu::tile_fwk::Error);
 }
 
 TEST_F(TestAicoreCompiler, GenSubFuncCall_EmptyLeafDict)

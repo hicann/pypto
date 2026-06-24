@@ -15,6 +15,7 @@
 
 #include "pybind_common.h"
 #include "pybind11/native_enum.h"
+#include "tilefwk/error_code.h"
 
 using namespace npu::tile_fwk;
 
@@ -36,6 +37,21 @@ void BindEnum(py::module_& m)
         .value("LOCAL", NodeType::LOCAL)
         .value("INCAST", NodeType::INCAST)
         .value("OUTCAST", NodeType::OUTCAST)
+        .finalize();
+
+    py::native_enum<ExternalError>(m, "ExternalError", "enum.IntEnum")
+        .value("COMMON_EXTERNAL_ERROR", ExternalError::COMMON_EXTERNAL_ERROR)
+        .value("RUNTIME_ERROR", ExternalError::RUNTIME_ERROR)
+        .value("NAME_ERROR", ExternalError::NAME_ERROR)
+        .value("NOT_IMPLEMENTED_ERROR", ExternalError::NOT_IMPLEMENTED_ERROR)
+        .value("KEY_ERROR", ExternalError::KEY_ERROR)
+        .value("INVALID_OPERATION", ExternalError::INVALID_OPERATION)
+        .value("INVALID_TYPE", ExternalError::INVALID_TYPE)
+        .value("INVALID_VAL", ExternalError::INVALID_VAL)
+        .value("OUT_OF_RANGE", ExternalError::OUT_OF_RANGE)
+        .value("BAD_FD", ExternalError::BAD_FD)
+        .value("DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED", ExternalError::DYNAMIC_SHAPE_COMPUTE_UNSUPPORTED)
+        .value("UNKNOWN", ExternalError::UNKNOWN)
         .finalize();
 
     py::native_enum<TileOpFormat>(m, "TileOpFormat", "enum.IntEnum")

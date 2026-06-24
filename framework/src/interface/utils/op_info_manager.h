@@ -21,9 +21,9 @@
 #include "tilefwk/tensor.h"
 
 namespace npu::tile_fwk {
-constexpr uint64_t MAIN_KEY_MASK = 0xFFFFFFFFFFFFF;
-constexpr uint64_t SUB_KEY_OFFSET = 52UL;
-constexpr uint64_t SUB_KEY_MASK = 0xFFF0000000000000;
+constexpr uint64_t MAIN_KEY_MASK = 0xFFFFFFFF;
+constexpr uint64_t SUB_KEY_OFFSET = 32UL;
+constexpr uint64_t SUB_KEY_MASK = 0xFFFFFFFF00000000;
 
 class OpInfoManager {
 public:
@@ -37,7 +37,7 @@ public:
     void SetOpType(const std::string& opType);
     const std::string& GetOpType() const;
     bool IsNotFabinCompile();
-    std::vector<char>& GetControlBuffer();
+    void SetControlBuffer(std::vector<uint8_t>&& buffer);
     std::vector<char>& GetCustomJson();
     std::string& GetCustomOpJsonPath();
     std::string& GetOpFuncName();
@@ -49,7 +49,7 @@ private:
     std::string opType_ = "tilefwk";
     uint64_t opTilingKey_{0};
     uint64_t subTilingKey_{0};
-    std::vector<char> controlBuffer_ = {'0'};
+    std::vector<uint8_t> controlBuffer_ = {'0'};
     std::vector<char> customJson_ = {'0'};
     std::string controlFlowSoPath_;
     std::string funcName_;

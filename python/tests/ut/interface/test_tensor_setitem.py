@@ -31,15 +31,14 @@ def test_tensor_setitem_inside_loop():
             b[:] = pypto.add(a, a)
 
             if pypto.cond(k < 2):
-                b[:] = pypto.add(b, a)
+                b[:] = pypto.add(c, a)
             else:
-                b[:] = pypto.sub(b, a)
+                b[:] = pypto.sub(c, a)
 
             if pypto.cond(k < 5):
-                b[:] = pypto.mul(b, a)
+                b[:] = pypto.mul(c, a)
             else:
-                b[:] = pypto.div(b, a)
-            c[:] = pypto.sub(b, a)
+                b[:] = pypto.div(c, a)
 
     assert isinstance(b, pypto.tensor)
 

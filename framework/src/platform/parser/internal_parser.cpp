@@ -13,6 +13,9 @@
  * \brief
  */
 
+#include <dlfcn.h>
+
+#include "tilefwk/pypto_fwk_log.h"
 #include "internal_parser.h"
 
 namespace npu {
@@ -22,23 +25,12 @@ const std::string paths = "PATHS";
 const std::string comma = ",";
 const std::string direction = "->";
 
-// Thread-safe in C++11: static local initialization is guaranteed to be thread-safe
-std::string GetCurSharedLibPath()
+// Trim leading/trailing whitespace (space, tab, CR, LF). Returns a new string.
+std::string TrimLine(std::string_view s)
 {
-    static std::string curLibPath;
-    if (!curLibPath.empty()) {
-        return curLibPath;
-    }
-
-    Dl_info info;
-    if (dladdr(reinterpret_cast<void*>(GetCurSharedLibPath), &info)) {
-        curLibPath = std::string(info.dli_fname);
-        auto pos = curLibPath.rfind('/');
-        if (pos != std::string::npos) {
-            curLibPath = curLibPath.substr(0, pos);
-        }
-    }
-    return curLibPath;
+    size_t start = s.find_first_not_of(" \t\n\r");
+    size_t end = s.find_last_not_of(" \t\n\r");
+    return (start == std::string_view::npos) ? std::string{} : std::string(s.substr(start, end - start + 1));
 }
 
 std::vector<std::string> SplitByDelimiter(const std::string& str, const std::string& delimiter)
@@ -78,47 +70,47 @@ MemoryType StringToMemoryType(const std::string& memType)
 }
 
 bool InternalParser::LoadInternalInfo()
-{
-    std::string internalFile = RealPath(GetCurSharedLibPath() + iniFile);
-    PLATFORM_LOGD("Try to obtain internal info from [%s].", internalFile.c_str());
-    if (!IsPathExist(internalFile)) {
-        return false;
-    }
-    std::ifstream file(internalFile);
-    if (!file.is_open()) {
-        return false;
-    }
-    std::string line;
-    std::string trimLine;
-    std::string section;
-    std::string info;
-    bool currentSoc = true;
-    while (std::getline(file, line)) {
-        trimLine = TrimLine(line);
-        if (trimLine[0] == '#') {
-            continue;
+    {
+        std::string internalFile = RealPath(GetPyptoLibPath() + iniFile);
+        PLATFORM_LOGD("Try to obtain internal info from [%s].", internalFile.c_str());
+        if (!IsPathExist(internalFile)) {
+            return false;
         }
-        if (trimLine.find("}") != std::string::npos) {
-            currentSoc = true;
-        } else if (trimLine.empty() || !currentSoc) {
-            continue;
+        std::ifstream file(internalFile);
+        if (!file.is_open()) {
+            return false;
         }
-        if (trimLine.find("]") != std::string::npos) {
-            data_[section] = info;
-            info.clear();
-        } else if (trimLine.find("{") != std::string::npos) {
-            if (TrimLine(trimLine.substr(0, trimLine.find(':'))) != archType_) {
-                currentSoc = false;
+        std::string line;
+        std::string trimLine;
+        std::string section;
+        std::string info;
+        bool currentSoc = true;
+        while (std::getline(file, line)) {
+            trimLine = TrimLine(line);
+            if (trimLine[0] == '#') {
+                continue;
             }
-        } else if (trimLine.find("[") != std::string::npos) {
-            section = TrimLine(trimLine.substr(0, trimLine.find(':')));
-        } else if (trimLine.find("}") == std::string::npos) {
-            info += trimLine;
+            if (trimLine.find("}") != std::string::npos) {
+                currentSoc = true;
+            } else if (trimLine.empty() || !currentSoc) {
+                continue;
+            }
+            if (trimLine.find("]") != std::string::npos) {
+                data_[section] = info;
+                info.clear();
+            } else if (trimLine.find("{") != std::string::npos) {
+                if (TrimLine(trimLine.substr(0, trimLine.find(':'))) != archType_) {
+                    currentSoc = false;
+                }
+            } else if (trimLine.find("[") != std::string::npos) {
+                section = TrimLine(trimLine.substr(0, trimLine.find(':')));
+            } else if (trimLine.find("}") == std::string::npos) {
+                info += trimLine;
+            }
         }
-    }
-    file.close();
-    PLATFORM_LOGD("Obtained internal info successfully.");
-    return true;
+        file.close();
+        PLATFORM_LOGD("Obtained internal info successfully.");
+        return true;
 }
 
 bool InternalParser::GetDataPath(std::vector<std::pair<MemoryType, MemoryType>>& dataPath)

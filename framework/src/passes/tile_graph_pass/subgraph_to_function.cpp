@@ -156,6 +156,20 @@ bool isFromCast(LogicalTensorPtr& operand)
     return true;
 }
 
+bool IsMiddleInCast(LogicalTensorPtr& operand, Operation& op)
+{
+    if (operand->GetProducers().size() == 0 || Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+        return false;
+    }
+    int src = op.GetSubgraphID();
+    for (auto& inOp : operand->GetProducers()) {
+        if (inOp->GetSubgraphID() != src) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void SubgraphToFunction::RecordIncastInfo(Function& function, RecordInfo recordInfo, SubfuncInvokeInfoTy& iter)
 {
     size_t i = recordInfo.i;
@@ -165,7 +179,7 @@ void SubgraphToFunction::RecordIncastInfo(Function& function, RecordInfo recordI
     Offset offset = recordInfo.offset;
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
-    if (!isFromCast(iOperand)) {
+    if (!isFromCast(iOperand) || IsMiddleInCast(iOperand, op)) {
         APASS_LOG_INFO_F(
             Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be incast.", iOperand->GetMagic());
         return;
@@ -822,6 +836,18 @@ std::shared_ptr<LogicalTensor> GetTensorDataSubgraphTensor(Operation& refOp)
             break;
         case Opcode::OP_VIEW:
             subgraphTensor = refOp.GetOOperands()[0];
+            break;
+        case Opcode::OP_L1_RESHAPE_COPY_IN:
+            subgraphTensor = refOp.GetOOperands()[0];
+            break;
+        case Opcode::OP_L0C_RESHAPE_COPY_OUT:
+            subgraphTensor = refOp.GetIOperands()[0];
+            break;
+        case Opcode::OP_RESHAPE_COPY_IN:
+            subgraphTensor = refOp.GetOOperands()[0];
+            break;
+        case Opcode::OP_RESHAPE_COPY_OUT:
+            subgraphTensor = refOp.GetIOperands()[0];
             break;
         default:
             break;

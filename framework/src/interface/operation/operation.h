@@ -22,7 +22,6 @@
 #include <unordered_set>
 #include <variant>
 #include <nlohmann/json.hpp>
-#include "interface/inner/any.h"
 #include "interface/inner/pre_def.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/configs/config_manager.h"
@@ -154,6 +153,7 @@ public:
     static const std::string rmwMode;
     static const std::string transDataOffset;
     static const std::string isConv;
+    static const std::string writeConflict;
 };
 
 const std::string CONV_GROUPS_ATTR = "op_attr_groups";
@@ -373,7 +373,7 @@ public:
 
     [[nodiscard]] bool HasAttribute(const std::string& key) const { return HasAttr(key); }
 
-    [[nodiscard]] std::map<std::string, npu::tile_fwk::Any> GetAllAttribute() const;
+    [[nodiscard]] std::map<std::string, std::any> GetAllAttribute() const;
 
     Json DumpJson(bool dumpTensor = true) const;
     static std::shared_ptr<Operation> LoadJson(

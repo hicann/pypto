@@ -24,8 +24,8 @@ namespace npu::tile_fwk {
 void UnaryOperationOperandCheck(
     const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "The input operand size should be 1";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 1) << "The input operand size should be 1";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
 }
 
 template <UnaryOpType T>
@@ -67,7 +67,7 @@ void TiledUnaryOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
     int32_t workspaceSize = 0, int64_t precisionType = 0)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -276,7 +276,9 @@ Tensor Reciprocal(const Tensor& operand, PrecisionType precisionType)
 Tensor Abs(const Tensor& self)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    static const std::unordered_set<DataType> ABS_A2A3_TYPES = {DT_FP16, DT_BF16, DT_FP32};
+    static const std::unordered_set<DataType> ABS_A5_TYPES = {DT_FP16, DT_BF16, DT_FP32, DT_INT8, DT_INT16, DT_INT32};
+    const auto& supportedTypes = GetSupportedDataTypesByArch(ABS_A2A3_TYPES, ABS_A5_TYPES);
     CheckTensorDataType(self.GetStorage(), supportedTypes, "Abs");
     RETURN_CALL(UnaryOperation<UnaryOpType::ABS>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }

@@ -1559,6 +1559,7 @@ TEST_F(OperationImplTest, Test_Conv1d_FP16_Bias)
     Conv::TileL1Info l1TileShape(1, 1, 64, 64, 16, 16, 16, 1);
     Conv::TileL0Info l0TileShape(1, 64, 16, 16);
     TileShape::Current().SetConvTile(l1TileShape, l0TileShape, true);
+    TileShape::Current().SetVecTile({1, 16, 16});
     Tensor fmap(DT_FP16, {1, 32, 64}, "fmap");
     Tensor weight(DT_FP16, {32, 32, 3}, "weight");
     Tensor bias(

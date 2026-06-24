@@ -28,17 +28,15 @@ except ImportError:
         "Or use the pypto-environment-setup skill to set up the full NPU environment."
     )
 
-def _get_device(device_id: int | None = None) -> torch.device:
+def _get_device() -> torch.device:
     global _DEVICE
     if _DEVICE is None:
         if not _HAS_NPU:
             _DEVICE = torch.device("cpu")
         else:
-            if device_id is None:
-                env_id = os.environ.get("ASCEND_DEVICE_ID")
-                if env_id is not None:
-                    device_id = int(env_id)
-            _DEVICE = torch.device(f"npu:{device_id}") if device_id is not None else torch.device("npu")
+            device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", "0"))
+            torch.npu.set_device(device_id)
+            _DEVICE = torch.device(f"npu:{device_id}")
     return _DEVICE
 
 

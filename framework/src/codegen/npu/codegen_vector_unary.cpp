@@ -51,9 +51,7 @@ std::string CodeGenOpNPU::PrintCastDynamicUnaligned(const PrintUnaryParam& param
     std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     paramList.insert(paramList.end(), {dst, src});
-    for (auto dynShape : newDynDstShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, newDynDstShape);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "_<" << templateParam << ">"
         << "(" << tiloOpCallParam << ");\n";
@@ -67,7 +65,7 @@ std::string CodeGenOpNPU::PrintCastTileTensor() const
         hasTmpBuffer ? GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)}) : GetTileOpParamsByOrder();
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "mode");
     int64_t modeEnum{0};
-    if (mode.HasValue()) {
+    if (mode.has_value()) {
         modeEnum = AnyCast<int64_t>(mode);
     }
     int64_t satModeEnum = 0;
@@ -93,7 +91,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineStatic(const PrintUnaryParam& param) co
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
@@ -128,7 +126,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineDynamicUnaligned(const PrintUnaryParam&
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
@@ -163,9 +161,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineDynamicUnaligned(const PrintUnaryParam&
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     paramList.emplace_back(dst);
     paramList.emplace_back(src);
-    for (auto dynShape : dynSrcShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -178,7 +174,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineTileTensor() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.HasValue()) {
+    if (axis.has_value()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
 
@@ -328,12 +324,8 @@ std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& par
     std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
     paramList.insert(paramList.end(), {dst, src});
-    for (int i = ID0; i < SHAPE_DIM4; i++) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(newDynDstShape[i]));
-    }
-    for (int i = ID0; i < SHAPE_DIM4; i++) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(newDynSrcShape[i]));
-    }
+    FillParamWithInput(paramList, newDynDstShape, ID0, SHAPE_DIM4);
+    FillParamWithInput(paramList, newDynSrcShape, ID0, SHAPE_DIM4);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
 
@@ -371,7 +363,7 @@ std::string CodeGenOpNPU::PrintExpand(
     std::vector<int64_t> ss = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
     auto axesAttr = opAttrs.at(OpAttributeKey::expandDims);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, axesAttr.HasValue()) << "expandDims attribute not found";
+    ASSERT(OperErr::ATTRIBUTE_INVALID, axesAttr.has_value()) << "expandDims attribute not found";
     auto expandAxes = AnyCast<std::vector<int64_t>>(axesAttr);
     ASSERT(OperErr::ATTRIBUTE_INVALID, !expandAxes.empty()) << "expandDims is empty";
 
@@ -420,7 +412,7 @@ std::string CodeGenOpNPU::PrintOneHot(const PrintUnaryParam& param) const
     paramList.emplace_back(std::to_string(ds[SHAPE_DIM2]));
     int numClasses{-1};
     auto num = opAttrs.at(OP_ATTR_PREFIX + "numClasses");
-    if (num.HasValue()) {
+    if (num.has_value()) {
         numClasses = AnyCast<int64_t>(num);
     }
     constexpr int align = BLOCK_SIZE / sizeof(int64_t);
@@ -435,9 +427,7 @@ std::string CodeGenOpNPU::PrintOneHot(const PrintUnaryParam& param) const
 
     auto dynSrcShape = dynamicValidShape[1];
     FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM3 - dynSrcShape.size(), 1);
-    for (auto dynShape : dynSrcShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape);
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
@@ -477,9 +467,7 @@ std::string CodeGenOpNPU::PrintUnaryDynamicUnaligned(const PrintUnaryParam& para
 
     auto dynSrcShape = dynamicValidShape[1];
     FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[1].size(), 1);
-    for (auto dynShape : dynSrcShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
-    }
+    FillParamWithFullInput(paramList, dynSrcShape);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
        << "(" << tiloOpCallParam << ");\n";

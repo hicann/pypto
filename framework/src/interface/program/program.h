@@ -123,10 +123,10 @@ private:
     Function* currentFunctionPtr_;
     Function* lastFunc_{nullptr};
     Function* currentDynamicFunctionPtr_{nullptr};
+    std::shared_ptr<TensorSlotManager> tensorSlotManager_;
     FunctionCache functionCache_;
     std::unordered_set<Tensor*> aliveTensors_;
     std::map<std::string, std::shared_ptr<npu::tile_fwk::Function>> functionmap_;
-    std::shared_ptr<TensorSlotManager> tensorSlotManager_;
 
     void CreateInitFunction();
     Operation* FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>& scope, bool generateCall);

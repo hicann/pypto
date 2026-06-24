@@ -328,12 +328,12 @@ void TiledReduceSingle(
     Function& function, const TileShape& tileShape, const std::string& op, const LogicalTensorPtr& operand,
     const LogicalTensorPtr& result, int axis)
 {
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "MIN" || op == "SUM" || op == "PROD" ||
                                                 op == "ARGMAX" || op == "ARGMIN" || op == "MAX_COMBINE_AXIS" ||
                                                 op == "SUM_COMBINE_AXIS")
         << "Not support op:" << op;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset should be equal";
 
     if (axis < 0) {
@@ -354,12 +354,12 @@ void TiledReduceSingle(
 [[maybe_unused]] void TensorReduceSingle(
     Function& function, const std::string& op, const Tensor& operand, Tensor& result, int axis)
 {
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "MIN" || op == "SUM" || op == "PROD" ||
                                                 op == "ARGMAX" || op == "ARGMIN" || op == "MAX_COMBINE_AXIS" ||
                                                 op == "SUM_COMBINE_AXIS")
         << "Not support op:" << op;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand.GetShape().size() == operand.GetStorage()->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand.GetShape().size() == operand.GetStorage()->offset.size())
         << "The shape size of operand and offset should be equal";
     auto opCode = Opcode::OP_ROWMAX_SINGLE;
     if (op == "MAX") {
@@ -404,9 +404,10 @@ static void ValidateReductionAxis(const Tensor& self, int axis)
     const int lastDim = self.GetShape().size() - 1;
     const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
     auto vecTile = TileShape::Current().GetVecTile();
-
+    CHECK(VectorErrorCode::ERR_CONFIG_TILE, vecTile.valid())
+            << "TileShape is no set for reduce op";
     if (axis == lastDim) {
-        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, vecTile[lastDim] % alignNum == 0)
+        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, vecTile[lastDim] % alignNum == 0)
             << "Reduce op: the tileShape of last axis need to 32Byte align!";
     }
 }
@@ -433,7 +434,12 @@ static Tensor ProcessResultShape(const Tensor& result, const Tensor& self, int a
 Tensor Amax(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    std::unordered_set<DataType> supportedTypes;
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
+    } else {
+        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    }
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMAX");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMAX");
     CheckTensorShapeSize(self.GetStorage(), "AMAX");
@@ -504,7 +510,12 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
 Tensor Amin(const Tensor& self, int axis, bool keepDim)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    std::unordered_set<DataType> supportedTypes;
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8, DT_UINT8};
+    } else {
+        supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    }
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMIN");
     CheckTensorDimRange(self.GetStorage(), 1, 4, "AMIN");
     CheckTensorShapeSize(self.GetStorage(), "AMIN");
@@ -563,13 +574,13 @@ void TiledReduceExpand(
     Function& function, const TileShape& tileShape, const std::string& op, const LogicalTensorPtr& operand,
     const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "SUM") << "Not support op:" << op;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "SUM") << "Not support op:" << op;
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset should be equal";
 
     // 目前只支持2维操作
     if (operand->shape.size() != 2) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unsupported dimension";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unsupported dimension";
     }
 
     auto& vecTile = tileShape.GetVecTile();
@@ -591,8 +602,8 @@ void TiledReduceExpand(
 
 void TensorReduceExpand(Function& function, const std::string& op, const Tensor& operand, const Tensor& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "SUM") << "Not support op:" << op;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand.GetShape().size() == operand.GetStorage()->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "SUM") << "Not support op:" << op;
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand.GetShape().size() == operand.GetStorage()->offset.size())
         << "The shape size of operand and offset must be equal";
     function.AddOperation(
         op == "MAX" ? Opcode::OP_ROWEXPMAX : Opcode::OP_ROWEXPSUM, {operand.GetStorage()}, {result.GetStorage()});
@@ -612,7 +623,7 @@ void TiledReduceExpandNew(
 {
     // 目前只支持2维操作
     if (operand->shape.size() != 2) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unsupported dimension";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unsupported dimension";
     }
     auto& vecTile = tileShape.GetVecTile();
     TileInfo tileInfo({vecTile[0], operand->shape[1]}, std::vector<int64_t>(operand->offset.size()));

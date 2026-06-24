@@ -118,7 +118,7 @@ std::string GetUnaryOpName()
         case UnaryOpType::ERF:
             return "ERF";
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
             return "";
     }
 }
@@ -160,7 +160,7 @@ Opcode GetUnaryOpNameCode()
         CASE(ASIN);
         CASE(ACOS);
         default:
-            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
+            CHECK(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
     }
 #undef CASE
 }

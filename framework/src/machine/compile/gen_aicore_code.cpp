@@ -14,7 +14,7 @@
  */
 
 #include "machine/compile/gen_aicore_code.h"
-#include "interface/utils/file_utils.h"
+#include "utils/file_utils.h"
 
 namespace npu::tile_fwk {
 namespace {
@@ -39,7 +39,7 @@ bool GenAicoreSrcFile(const std::string& codeSrcPath, const std::string& funcHas
         pos = newSrcCode.find(kKernelEntryStr, pos + kKernelEntryStrSize + 1);
     }
     if (RealPath(codeSrcPath).empty()) {
-        DumpFile(kAicoreSrcCode, codeSrcPath);
+        SaveFile(codeSrcPath, kAicoreSrcCode);
     }
     return !RealPath(codeSrcPath).empty();
 }

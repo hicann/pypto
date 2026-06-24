@@ -41,7 +41,8 @@
 #include "machine/runtime/launcher/aicore_model_launcher.h"
 #include "machine/runtime/launcher/device_launcher.h"
 #include "machine/runtime/runner/runtime_utils.h"
-#include "machine/runtime/memory_utils/memory_pool.h"
+#include "machine/runtime/memory_utils/device_memory_utils.h"
+#include "machine/runtime/memory_utils/eslmodel_memory_utils.h"
 #include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/runtime/launcher/launcher_router.h"
 #include "machine/host/perf_analysis.h"
@@ -468,11 +469,22 @@ public:
         workspaceSize = devProg->memBudget.Total();
         InitCachedArgs();
         auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
-        DeviceLauncher::FillDeviceKernelArgs(dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        DeviceLauncher::FillSwimLaneEnableInfo(toSubMachineConfig_);
+        if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
+            EslModelMemoryUtils eslMemoryUtils;
+            DeviceLauncher::FillDeviceKernelArgs(eslMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        } else {
+            DeviceMemoryUtils deviceMemoryUtils;
+            DeviceLauncher::FillDeviceKernelArgs(deviceMemoryUtils, dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
+        }
         runtimeDynamicCellMatchAddr_ = devProg->devArgs.dynamicCellMatchAddr;
         runtimeDynamicCellMatchCapacity_ = devProg->devArgs.dynamicCellMatchCapacity;
         lastPreparedDynamicCellMatchBytes_ = runtimeDynamicCellMatchCapacity_;
         kernelName_ = "PyPTO_" + dynFunc->GetOriginalRawName();
+    }
+
+    ToSubMachineConfig& GetMachineConfig() {
+        return toSubMachineConfig_;
     }
 
     uint8_t* FindCtrlFlowCache(std::vector<std::vector<int64_t>>& inputs, bool isOriginShape)
@@ -745,6 +757,7 @@ private:
     bool runtimeDynamicCellMatchOwned_{false};
     bool runtimeDynamicCellMatchHostOwned_{false};
     std::string kernelName_;
+    ToSubMachineConfig toSubMachineConfig_;
 
     void RefreshRuntimeDynamicCellMatchMeta(uint64_t needBytes)
     {
@@ -822,7 +835,7 @@ public:
         return nullptr;
     }
 
-    uint8_t* FindCtrlFlowCache(KernelBinary* kernel, py::object& module, std::vector<DeviceTensorData>& tensors)
+    uint8_t* FindCtrlFlowCache(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
     {
         if (kernel->DisableHostCtrlFlowCacheBuild()) {
             COMPILER_LOGI("Skip host control flow cache build due to RUNTIME_FUNCKEY_CACHESTOP.");
@@ -834,8 +847,6 @@ public:
             if (DeviceLauncher::IsCaptureMode()) { // KernelModule
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
                 devCache = kernel->BuildControlFlowCache(tensors, true);
-            } else if (InferCacheShape(module, tensors, shape)) {
-                devCache = kernel->FindCtrlFlowCache(shape, false);
             } else {
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
                 devCache = kernel->BuildControlFlowCache(tensors, true);
@@ -862,10 +873,10 @@ public:
             compileMonitorEnable, intervalSec, timeoutSec, totalTimeoutSec, compileMonitorPassDetailEnable);
         auto compile = py::getattr(module, "compile");
         compile(torch_tensors, tensor_defs);
-        return RegisterLastCompiledKernel(module);
+        return RegisterLastCompiledKernel();
     }
 
-    KernelBinary* RegisterLastCompiledKernel(py::object& module)
+    KernelBinary* RegisterLastCompiledKernel()
     {
         auto func = Program::GetInstance().GetLastFunction();
         auto attr = func->GetDyndevAttribute();
@@ -874,12 +885,6 @@ public:
         }
         auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func));
         kernels.push_back(kernel);
-        if (inferCacheShape) {
-#if ENABLE_VERBOSE_LOG
-            COMPILER_LOGI("build default cache");
-#endif
-            BuildDefaultCache(kernel, module);
-        }
         return kernel;
     }
 
@@ -939,6 +944,9 @@ public:
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
 
         DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
+        if (!isCaptureMode) {
+           args->kArgs.toSubMachineConfig = kernel->GetMachineConfig();
+        }
         ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction(), tensors);
         MACHINE_ASSERT(ret == RT_SUCCESS) << "launch aicpu failed: " << ret;
 
@@ -1051,9 +1059,6 @@ private:
                 isDebugMode = (debugMode == CFG_DEBUG_ALL);
             }
         }
-        if (!module.attr("_infer_controlflow_shape").is_none()) {
-            inferCacheShape = true;
-        }
 
         if (!module.attr("_host_options").is_none()) {
             auto host_options = module.attr("_host_options").cast<py::dict>();
@@ -1078,51 +1083,6 @@ private:
                 totalTimeoutSec = host_options["compile_timeout"].cast<int>();
             }
         }
-#if ENABLE_VERBOSE_LOG
-        COMPILER_LOGI("infer_cache_shape: %d", inferCacheShape);
-#endif
-    }
-
-    void BuildDefaultCache(KernelBinary* kernel, py::object& module)
-    {
-        auto infershape = py::getattr(module, "_infer_controlflow_shape");
-        auto cfshapes = infershape().cast<py::list>();
-        auto tensors = kernel->GetArgTypes();
-        for (auto& pyshape : cfshapes) {
-            auto inputShapes = pyshape.cast<std::vector<std::vector<int64_t>>>();
-            if (inputShapes.size() != tensors.size()) {
-                COMPILER_LOGI("Invalid input size, expect: %zu, get: %zu.", tensors.size(), inputShapes.size());
-                continue;
-            }
-            std::vector<DeviceTensorData> inputs;
-            for (size_t i = 0; i < tensors.size(); i++) {
-                inputs.emplace_back(tensors[i].GetDataType(), nullptr, inputShapes[i]);
-            }
-            if (kernel->CheckArgs(inputs)) {
-                kernel->BuildControlFlowCache(inputs, false);
-            } else {
-                COMPILER_LOGI("Invalid cache shape, skip it");
-            }
-        }
-    }
-
-    bool InferCacheShape(
-        py::object& module, std::vector<DeviceTensorData>& tensors, std::vector<std::vector<int64_t>>& shapes)
-    {
-        auto infershape = py::getattr(module, "_infer_controlflow_shape", py::none());
-        if (infershape.is_none()) {
-            return false;
-        }
-        py::list oriShapes;
-        for (auto& t : tensors) {
-            oriShapes.append(py::cast(t.GetShape()));
-        }
-        auto cfshape = infershape(*oriShapes);
-        if (cfshape.is_none()) {
-            return false;
-        }
-        shapes = cfshape.cast<std::vector<std::vector<int64_t>>>();
-        return true;
     }
 
     DevControlFlowCache* FindHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>& hostCache)
@@ -1154,7 +1114,6 @@ private:
         }
     };
 
-    bool inferCacheShape{false};
     bool isDebugMode{false};
     bool compileStageAllComplete{true};
     LaunchMode launchMode_{LaunchMode::DEVICE_RT};
@@ -1233,7 +1192,7 @@ private:
         if (kbinary)
             return kbinary;
 
-        jitScopeGuard.emplace("jit_scope", std::map<std::string, Any>{});
+        jitScopeGuard.emplace("jit_scope", std::map<std::string, std::any>{});
         Program::GetInstance().Reset();
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
 #if ENABLE_VERBOSE_LOG
@@ -1270,7 +1229,7 @@ private:
         DeviceLauncher::AddAicpuStream(DeviceLauncher::IsCaptureMode(), rtModel);
         HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
 
-        uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, tensors);
+        uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, tensors);
         HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
 
         kmodule->EmulationLaunch(kbinary, tensors, ctrlFlowCache);

@@ -29,6 +29,7 @@
             "Skill(pypto-pass-perf-optimizer)",
             "Skill(pypto-pass-ut-generate)",
             "Skill(pypto-pass-workflow-analyzer)",
+            "Skill(pypto-op-knowledge)",
             "Task(subagent_type=Explore)",
             "Task(subagent_type=Plan)",
             "WebSearch",

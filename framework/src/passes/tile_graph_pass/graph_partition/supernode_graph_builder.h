@@ -141,6 +141,9 @@ protected:
     std::vector<std::pair<int32_t, int32_t>> GetReduceNodeMergePair() const;
     Status BuildReduceNodeHash(std::shared_ptr<NodeGraphInfo> reduceNodeInfo);
     Status BuildBalanceOpHash(std::vector<uint64_t>& opHashList);
+    void ComputeDirectionalNodeHash(std::shared_ptr<NodeGraphInfo> reduceNodeInfo,
+        const std::vector<uint64_t>& reduceNodeHashList, std::vector<uint64_t>& hashList,
+        bool reverse);
 
     // Parameters
     bool useReduceBalanceHash_ = true;

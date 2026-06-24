@@ -65,7 +65,7 @@ void TiledLogicalNotOperation(
 void TiledLogicalNotOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
         << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -129,7 +129,7 @@ void TiledSignOperation(
 void TiledSignOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
         << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -162,7 +162,7 @@ void TiledSignbitOperation(
 void TiledSignbitOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
         << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -244,8 +244,9 @@ void TiledTanhOperation(
 }
 
 void TiledTanhOperation(
-    Function &function, const TileShape &tileShape, const LogicalTensorPtr &self, const LogicalTensorPtr &result) {
-    ASSERT(self->shape.size() == self->offset.size()) << "Shape size and offset size should be equal";
+    Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result) {
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{self, tileInfo};
@@ -289,7 +290,7 @@ Tensor Neg(const Tensor &self) {
 Tensor Log(const Tensor& self, LogBaseType base, PrecisionType precisionType)
 {
     DECLARE_TRACER();
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_INVALID,
         base == LogBaseType::LOG_E || base == LogBaseType::LOG_2 || base == LogBaseType::LOG_10)
         << "base is incorrect";
@@ -397,7 +398,7 @@ void TiledTanOperation(
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
 
-        int64_t tmpSize = 7 * MultiplyLastTwoDims<float>(input.tileInfo.shape);
+        int64_t tmpSize = 9 * MultiplyLastTwoDims<float>(input.tileInfo.shape);
         std::vector<int64_t> tmpShape({tmpSize});
         auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
         function.AddOperation(Opcode::OP_TAN, {tile}, {resultTile, tmpTensor});
@@ -416,7 +417,7 @@ void TiledTanOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result,
     DataType srcDtype)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
         << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -444,7 +445,7 @@ Tensor Tan(const Tensor& operand)
 {
     DECLARE_TRACER();
     auto dType = operand.GetStorage()->Datatype();
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
         dType == DataType::DT_FP32 || dType == DataType::DT_FP16 || dType == DataType::DT_BF16)
         << "The datatype is not supported";
@@ -567,9 +568,9 @@ void TiledOneHot(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& self, const LogicalTensorPtr& result,
     int numClasses)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
         << "Shape size and offset size should be equal";
-    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, numClasses == tileShape.GetVecTile()[result->shape.size() - 1])
+    CHECK(VectorErrorCode::ERR_CONFIG_TILE, numClasses == tileShape.GetVecTile()[result->shape.size() - 1])
         << "The numClasses and last axis of tileshape should be equal";
 
     TileInfo inputTileInfo(self->shape.size(), self->offset.size());
@@ -599,7 +600,7 @@ Tensor OneHot(const Tensor& self, int numClasses)
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ONEHOT");
     CheckTensorDimRange(self.GetStorage(), 1, 3, "ONEHOT");
     CheckTensorShapeSize(self.GetStorage(), "ONEHOT");
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, numClasses > 0) << "numClasses must be greater than 0";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, numClasses > 0) << "numClasses must be greater than 0";
     auto res = CALL(OneHot, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), numClasses);
     CheckTensorShapeSize(res.GetStorage(), "ONEHOT");
     return res;
@@ -690,8 +691,8 @@ LogicalTensorPtr TensorLogicalAndOperation(Function& function, const Tensor& sel
 Tensor LogicalAnd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16, DT_BF16,  DT_INT8,
-                                                   DT_UINT8, DT_BOOL, DT_INT16, DT_INT32};
+    std::unordered_set<DataType> supportedTypes = {DT_FP32,  DT_FP16, DT_BF16,  DT_INT8, DT_UINT8,
+                                                   DT_BOOL, DT_INT16, DT_INT32, DT_INT64};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALAND");
     CheckTensorDataType(other.GetStorage(), supportedTypes, "LOGICALAND");
     CheckBinaryInputTensors(self.GetStorage(), other.GetStorage(), "LOGICALAND");
@@ -798,7 +799,7 @@ void EmitCumAxisTile(
     }
 
     if (tileInfo.dstTileInfo.offset[axis] > 0) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, lastCarry != nullptr)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastCarry != nullptr)
             << "carry must be set when cum axis tile offset > 0";
         LogicalTensorPtr lastTile = std::make_shared<LogicalTensor>(
             function, srcTile->Datatype(), srcTile->GetShape(), srcTile->GetDynValidShape());
@@ -868,13 +869,13 @@ void InnerTiledCumNonAxisDims(
 
 void TiledCumOperation(Function& function, const TileShape& tileShape, const CumOperationPara& cumOperationPara)
 {
-    ASSERT(
+    CHECK(
         VectorErrorCode::ERR_PARAM_INVALID,
         cumOperationPara.input->GetShape().size() == cumOperationPara.input->GetOffset().size())
         << "Shape size and offset size should be equal";
 
     const int rank = static_cast<int>(cumOperationPara.input->GetShape().size());
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, rank >= static_cast<int>(MIN_TENSOR_DIM) &&
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, rank >= static_cast<int>(MIN_TENSOR_DIM) &&
         rank <= static_cast<int>(MAX_TENSOR_DIM))
         << "CumSum/CumProd tiling supports rank 1-4";
 
@@ -966,10 +967,10 @@ void CheckCumOperation(const Tensor& input, const int& axis, const bool& is_sum)
     int tmpAxis0 = axis;
     CheckAxisRange(input, tmpAxis0);
     if (input.GetShape().size() == 1) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0)
             << "when input.GetShape().size() is 1, axis must be 0";
     }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < input.GetShape().size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < input.GetShape().size())
         << "The tmpAxis0 should be 0 and less than shape size";
 }
 
@@ -1172,12 +1173,12 @@ Tensor Clip(const Tensor& self, const Element& min, const Element& max)
 
     Tensor result = self;
     if (min_.GetDataType() != DT_BOTTOM) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, min_.GetDataType() == self.GetDataType())
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, min_.GetDataType() == self.GetDataType())
             << "The datatype of inputs should be same";
         result = Maximum(result, min_);
     }
     if (max_.GetDataType() != DT_BOTTOM) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, max_.GetDataType() == self.GetDataType())
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, max_.GetDataType() == self.GetDataType())
             << "The datatype of inputs should be same";
         result = Minimum(result, max_);
     }
@@ -1197,7 +1198,7 @@ Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
         CheckTensorShapeSize(min.GetStorage(), "CLIP");
         CheckTensorsFormatConsistency(self.GetStorage(), min.GetStorage(), "CLIP");
         std::vector minBroadcastAxes = GetBroadcastAxes(min.GetShape(), self.GetShape());
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, minBroadcastAxes.size() <= 1)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, minBroadcastAxes.size() <= 1)
             << "minBroadcastAxes size should be <= 1";
         result = Maximum(result, min);
     }
@@ -1205,7 +1206,7 @@ Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
         CheckTensorShapeSize(max.GetStorage(), "CLIP");
         CheckTensorsFormatConsistency(self.GetStorage(), max.GetStorage(), "CLIP");
         std::vector maxBroadcastAxes = GetBroadcastAxes(max.GetShape(), self.GetShape());
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, maxBroadcastAxes.size() <= 1)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, maxBroadcastAxes.size() <= 1)
             << "maxBroadcastAxes size should be <= 1";
         result = Minimum(result, max);
     }
@@ -1231,9 +1232,9 @@ static void VarParamVaildCheck(const Tensor& input, std::vector<int>& dim)
     Shape shape = input.GetShape();
     uint64_t shapeSize = shape.size();
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dim.size() <= shapeSize) << "The dim.size() should <= input.size()";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dim.size() <= shapeSize) << "The dim.size() should <= input.size()";
     for (uint64_t i = 0; i < shapeSize; i++) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape[i] > 0) << "The input shape should > 0";
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, shape[i] > 0) << "The input shape should > 0";
     }
 
     if (dim.empty()) {
@@ -1243,9 +1244,9 @@ static void VarParamVaildCheck(const Tensor& input, std::vector<int>& dim)
     }
     std::set<int> dupDimSet(dim.begin(), dim.end());
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dupDimSet.size() == dim.size()) << "There is duplicates elements in dim";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, dupDimSet.size() == dim.size()) << "There is duplicates elements in dim";
     for (size_t i = 0; i < dim.size(); i++) {
-        ASSERT(
+        CHECK(
             VectorErrorCode::ERR_PARAM_INVALID,
             dim[i] < static_cast<int>(shapeSize) && dim[i] >= -(static_cast<int>(shapeSize)))
             << "The value in dim is out of range";
@@ -1357,7 +1358,7 @@ void TiledExp2(Function& function, const TileShape& tileShape, size_t cur, Input
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
             << "Length of tile shape only support 1~4";
         std::vector<int64_t> tmpShape;
         std::vector<int64_t> tmpShape2;
@@ -1396,7 +1397,7 @@ void TiledExp2(Function& function, const TileShape& tileShape, size_t cur, Input
 void TiledExp2(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -1442,7 +1443,7 @@ void TiledRound(
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
             << "Length of tile shape only support 1~4";
         std::vector<int64_t> tmpShape;
         if (result->Datatype() == DT_FP32) {
@@ -1479,7 +1480,7 @@ void TiledRound(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
     const int& decimals = 0)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
@@ -1527,7 +1528,7 @@ void TiledExpm1(
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
             << "Length of tile shape only support 1~4";
         std::vector<int64_t> tmpShape;
         if (input.tensor.GetDataType() == DT_FP32) {
@@ -1556,7 +1557,7 @@ void TiledExpm1(
 void TiledExpm1(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
