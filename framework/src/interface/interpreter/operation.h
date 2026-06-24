@@ -23,7 +23,7 @@
 
 #include "interface/operation/attribute.h"
 #include "interface/configs/config_manager.h"
-#include "utils/file_utils.h"
+#include "interface/utils/file_utils.h"
 #include "interface/tensor/symbolic_scalar_evaluate.h"
 #include "interface/inner/pre_def.h"
 #include "tilefwk/data_type.h"
