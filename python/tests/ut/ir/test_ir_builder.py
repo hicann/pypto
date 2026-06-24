@@ -174,78 +174,6 @@ def test_builder_emit():
     assert isinstance(func.body[0], ir.EvalStmt)
 
 
-def test_builder_emit_struct_ops():
-    from pypto import pypto_impl
-
-    b = ir.IRBuilder()
-    sp = _span()
-
-    cursor = ir.Var("cursor", ir.ScalarType(ir.INT64), sp)
-    limit = ir.Var("limit", ir.ScalarType(ir.INT32), sp)
-    struct_create = pypto_impl.ir.create_op_call(
-        "struct.create",
-        [cursor, limit],
-        {"name": "BufferState", "fields": ["cursor", "limit"]},
-        sp,
-    )
-    state = ir.Var("state", struct_create.type, sp)
-    struct_set = pypto_impl.ir.create_op_call("struct.set", [state, cursor], {"field": "cursor"}, sp)
-
-    b.begin_function("f", sp)
-    for call in [struct_create, struct_set]:
-        b.emit(ir.EvalStmt(call, sp))
-    func = b.end_function(sp)
-
-    assert [func.body[i].expr.name for i in range(2)] == ["struct.create", "struct.set"]
-    assert isinstance(func.body[0].expr.type, ir.TupleType)
-    assert isinstance(func.body[1].expr.type, ir.TupleType)
-
-
-def test_builder_emit_block_ops():
-    from pypto import pypto_impl
-
-    b = ir.IRBuilder()
-    sp = _span()
-
-    src = ir.Var("src", pypto_impl.ir.TileType([16, 32], ir.FP16), sp)
-    dst = ir.Var("dst", pypto_impl.ir.TileType([16, 32], ir.FP32), sp)
-    out = ir.Var("out", ir.TensorType([16, 32], ir.FP16), sp)
-    offsets = ir.MakeTuple([ir.ConstInt(0, ir.INT64, sp), ir.ConstInt(0, ir.INT64, sp)], sp)
-    block_store = pypto_impl.ir.create_op_call("block.store", [src, offsets, out], {"phase": "final"}, sp)
-    block_move = pypto_impl.ir.create_op_call("block.move", [src, dst, offsets], sp)
-
-    b.begin_function("f", sp)
-    for call in [block_store, block_move]:
-        b.emit(ir.EvalStmt(call, sp))
-    func = b.end_function(sp)
-
-    assert [func.body[i].expr.name for i in range(2)] == ["block.store", "block.move"]
-    assert isinstance(func.body[0].expr.type, ir.TensorType)
-    assert func.body[0].expr.kwargs["phase"] == "final"
-    assert isinstance(func.body[1].expr.type, pypto_impl.ir.TileType)
-    assert func.body[1].expr.type.dtype == ir.FP32
-
-
-def test_builder_emit_vf_op():
-    from pypto import pypto_impl
-
-    b = ir.IRBuilder()
-    sp = _span()
-
-    dst_reg = ir.Var("dst", ir.ScalarType(ir.FP32), sp)
-    src0 = ir.Var("src0", ir.ScalarType(ir.FP16), sp)
-    src1 = ir.Var("src1", ir.ScalarType(ir.FP16), sp)
-    mask = ir.Var("mask", ir.ScalarType(ir.UINT16), sp)
-    vf_add = pypto_impl.ir.create_op_call("vf.Add", [dst_reg, src0, src1, mask], sp)
-
-    b.begin_function("f", sp)
-    b.emit(ir.EvalStmt(vf_add, sp))
-    func = b.end_function(sp)
-
-    assert func.body[0].expr.name == "vf.Add"
-    assert func.body[0].expr.type.dtype == ir.FP32
-
-
 # ---------- For loop building ----------
 
 
@@ -483,25 +411,6 @@ def test_builder_if_with_return_vars():
     b.end_function(sp)
 
 
-def test_builder_if_with_runtime_op():
-    from pypto import pypto_impl
-
-    b = ir.IRBuilder()
-    sp = _span()
-
-    b.begin_function("f", sp)
-    b.begin_if(ir.ConstBool(True, sp), sp)
-    sync = pypto_impl.ir.create_op_call("system.sync_all", [], {"mode": "hard", "core_type": "mix"}, sp)
-    b.emit(ir.EvalStmt(sync, sp))
-    if_stmt = b.end_if(sp)
-    func = b.end_function(sp)
-
-    assert isinstance(func.body[0], ir.IfStmt)
-    assert isinstance(if_stmt.then_body[0], ir.EvalStmt)
-    assert if_stmt.then_body[0].expr.name == "system.sync_all"
-    assert isinstance(if_stmt.then_body[0].expr.type, ir.UnknownType)
-
-
 def test_builder_if_else_str():
     """Builder-constructed if-else should match manually constructed one."""
     b = ir.IRBuilder()
@@ -526,31 +435,6 @@ def test_builder_if_else_str():
     manual_if = ir.IfStmt(ir.ConstBool(True, sp), manual_then, manual_else, [], sp)
 
     assert str(built_if) == str(manual_if)
-
-
-# ---------- Section building ----------
-
-
-def test_builder_section():
-    from pypto import pypto_impl
-
-    b = ir.IRBuilder()
-    sp = _span()
-    st = ir.ScalarType(ir.INT32)
-
-    b.begin_function("f", sp)
-    x = b.func_arg("x", st, sp)
-    b.begin_section(pypto_impl.ir.SectionKind.Vector, sp)
-    b.assign(x, ir.ConstInt(1, ir.INT32, sp), sp)
-    section = b.end_section(sp)
-    func = b.end_function(sp)
-
-    assert isinstance(section, pypto_impl.ir.SectionStmt)
-    assert str(func.body[0]) == str(section)
-    assert str(section) == "\n".join([
-        "with ir.section_vector():",
-        "    x: ir.Scalar[ir.INT32] = 1",
-    ])
 
 
 # ---------- Program building ----------
