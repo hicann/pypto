@@ -47,11 +47,10 @@ public:
         (void)function;
         return FAILED;
     }
-    Status CreateLogFolder(const std::string& topFolder, const std::string& strategy, size_t i) const override
+    Status CreateLogFolder(const std::string& topFolder, size_t i) const override
     {
         (void)topFolder;
         (void)i;
-        (void)strategy;
         return FAILED;
     }
     Status PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction) override
@@ -184,25 +183,25 @@ TEST_F(PassManagerTest, TestPassDFX)
     auto rootPath = config::LogTopFolder();
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
     auto afterJsonPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+        rootPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
     auto beforeJsonPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
+        rootPath + "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.json";
     auto beforeIRPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+        rootPath + "/Pass_00_RemoveRedundantReshape/Before_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
     auto afterIRPath =
-        rootPath + "/computation_graph/TestPassDFX/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
+        rootPath + "/Pass_00_RemoveRedundantReshape/After_000_RemoveRedundantReshape_PROGRAM_ENTRY.tifwkgr";
     EXPECT_FALSE(IsPathExist(afterJsonPath));
     EXPECT_FALSE(IsPathExist(beforeJsonPath));
-    EXPECT_FALSE(IsPathExist(beforeIRPath));
-    EXPECT_FALSE(IsPathExist(afterIRPath));
+    EXPECT_FALSE(IsPathExist(beforeJsonPath));
+    EXPECT_FALSE(IsPathExist(afterJsonPath));
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "print_graph", true);
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "dump_graph", true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
     EXPECT_TRUE(IsPathExist(afterJsonPath));
     EXPECT_TRUE(IsPathExist(beforeJsonPath));
-    EXPECT_TRUE(IsPathExist(beforeIRPath));
-    EXPECT_TRUE(IsPathExist(afterIRPath));
+    EXPECT_TRUE(IsPathExist(beforeJsonPath));
+    EXPECT_TRUE(IsPathExist(afterJsonPath));
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", KEY_DISABLE_PASS, true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
 }
