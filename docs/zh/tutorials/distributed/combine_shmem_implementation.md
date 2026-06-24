@@ -1,15 +1,15 @@
-# 使用Shmem API实现Combine Kernel
+# 使用Shmem API 实现Combine Kernel
 
-## Combine功能概述
+## Combine 功能概述
 
-Combine是MoE（Mixture of Experts）分布式训练中的关键算子，与Dispatch算子形成逆操作关系：
+Combine 是MoE（Mixture of Experts）分布式训练中的关键算子，与Dispatch 算子形成逆操作关系：
 
-- **Dispatch阶段**：将输入token根据expert_ids分路由到各个专家所在的rank
-- **Combine阶段**：将专家处理后的token收集回原始rank，并按照expert_scales进行加权合并
+- **Dispatch 阶段**：将输入token 根据expert_ids 分路由到各个专家所在的rank
+- **Combine 阶段**：将专家处理后的token 收集回原始rank，并按照expert_scales 进行加权合并
 
-Combine的核心任务是实现token的逆向路由和加权聚合。
+Combine 的核心任务是实现token 的逆向路由和加权聚合。
 
-## Combine Kernel原型
+## Combine Kernel 原型
 
 ```python
 def moe_distributed_combine_kernel(
@@ -29,7 +29,7 @@ def moe_distributed_combine_kernel(
         x_active_mask: pypto.Tensor([batch_size], pypto.DT_INT32, format=pypto.TileOpFormat.TILEOP_ND),
         out: pypto.Tensor([batch_size, hidden_size], data_type, format=pypto.TileOpFormat.TILEOP_ND),
     ):
-        # kernel实现
+        # kernel 实现
         pass
     return kernel
 ```
@@ -40,28 +40,28 @@ def moe_distributed_combine_kernel(
 
 | 参数名 | 类型 | 说明 |
 |--------|------|------|
-| `batch_size` | int | 批大小，支持1、8或256 |
+| `batch_size` | int | 批大小，支持1、8 或256 |
 | `hidden_size` | int | 隐藏层维度，固定为5120 |
 | `moe_expert_num` | int | 专家总数，固定为160 |
-| `topk` | int | 每个token选择的专家数，固定为8 |
-| `ep_world_size` | int | Expert parallel的rank数，支持2、4、8或16 |
+| `topk` | int | 每个token 选择的专家数，固定为8 |
+| `ep_world_size` | int | Expert parallel 的rank 数，支持2、4、8 或16 |
 | `group_name` | str | 通信域名称，长度1-128 |
 
 ### 输入Tensor
 
 | 参数名 | Shape | Dtype | 说明 |
 |--------|-------|-------|------|
-| `expand_x` | `[row, hidden_size]` | DT_BF16 | 专家处理后的token，`row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)`，有效token数为`recv_counts[0]` |
-| `assist_info_for_combine` | `[row, 3]` | DT_INT32 | 辅助信息，每行包含 [rank_id, token_id, k_offset]，用于标识token的原始位置 |
-| `recv_counts` | `[1]` | DT_INT32 | 当前rank接收到的token总数，也就是`expand_x`里的有效token数 |
-| `expert_scales` | `[batch_size, topk]` | DT_FP32 | 每个token对应topk个专家的权重，用于加权合并 |
-| `x_active_mask` | `[batch_size]` | DT_INT32 | 标识哪些token为活跃状态，值为1表示活跃，0表示不活跃，注意：1必须排在0之前，即活跃token必须连续排列在前部，例如`{1, 1, 0}`为合法输入，而`{1, 0, 1}`为非法输入 |
+| `expand_x` | `[row, hidden_size]` | DT_BF16 | 专家处理后的token，`row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)`，有效token 数为 `recv_counts[0]` |
+| `assist_info_for_combine` | `[row, 3]` | DT_INT32 | 辅助信息，每行包含 [rank_id, token_id, k_offset]，用于标识token 的原始位置 |
+| `recv_counts` | `[1]` | DT_INT32 | 当前rank 接收到的token 总数，也就是 `expand_x` 里的有效token 数 |
+| `expert_scales` | `[batch_size, topk]` | DT_FP32 | 每个token 对应topk 个专家的权重，用于加权合并 |
+| `x_active_mask` | `[batch_size]` | DT_INT32 | 标识哪些token 为活跃状态，值为1 表示活跃，0 表示不活跃，注意：1 必须排在0 之前，即活跃token 必须连续排列在前部，例如 `{1, 1, 0}` 为合法输入，而 `{1, 0, 1}` 为非法输入 |
 
 ### 输出Tensor
 
 | 参数名 | Shape | Dtype | 说明 |
 |--------|-------|-------|------|
-| `out` | `[batch_size, hidden_size]` | DT_BF16 | 合并后的输出，每个token是其topk个专家输出的加权和 |
+| `out` | `[batch_size, hidden_size]` | DT_BF16 | 合并后的输出，每个token 是其topk 个专家输出的加权和 |
 
 ## 计算逻辑伪代码
 
@@ -71,22 +71,22 @@ def combine_logic(expand_x, assist_info_for_combine, recv_counts, expert_scales,
     hidden_size = expand_x.shape[1]
     out = zeros([batch_size, hidden_size])
 
-    # 临时存储每个token的topk个专家输出
+    # 临时存储每个token 的topk 个专家输出
     moe_expert_tokens = zeros([batch_size, topk, hidden_size])
 
-    # 阶段1：发送token回原始rank
+    # 阶段1：发送token 回原始rank
     for row_index in range(recv_counts[0]):
         rank_id = assist_info_for_combine[row_index, 0]
         token_id = assist_info_for_combine[row_index, 1]
         k_offset = assist_info_for_combine[row_index, 2]
 
-        # 将token发送到原始rank
+        # 将token 发送到原始rank
         send_to_rank(rank_id, token_id, k_offset, expand_x[row_index])
 
-    # 阶段2：接收所有发送给当前rank的token（仅处理活跃token）
+    # 阶段2：接收所有发送给当前rank 的token（仅处理活跃token）
     for token_id in range(batch_size):
         if x_active_mask[token_id] == 1:
-            # 等待所有topk个专家的token都到达
+            # 等待所有topk 个专家的token 都到达
             for k_offset in range(topk):
                 moe_expert_tokens[token_id, k_offset] = receive_token(token_id, k_offset)
 
@@ -105,7 +105,7 @@ def combine_logic(expand_x, assist_info_for_combine, recv_counts, expert_scales,
 
 ### 发送阶段（Send Phase）
 
-每个rank将自己接收到的token发送回原始rank：
+每个rank 将自己接收到的token 发送回原始rank：
 
 ```python
 recv_counts_scalar = recv_counts[0]
@@ -114,7 +114,7 @@ for row_index in range(recv_counts_scalar):
     token_id = assist_info_for_combine[row_index, 1]
     k_offset = assist_info_for_combine[row_index, 2]
 
-    # 步骤1：发送数据到目标rank的Shmem
+    # 步骤1：发送数据到目标rank 的Shmem
     pypto.set_vec_tile_shapes(1, hidden_size)
     expand_x_tile = expand_x[row_index:row_index + 1, ...]
     shmem_put_out = pypto.distributed.shmem_put(
@@ -139,20 +139,20 @@ for row_index in range(recv_counts_scalar):
 
 **关键点**：
 
-- 使用`shmem_put`将token数据写入目标rank的共享内存
-- 使用`shmem_signal`发送信号，信号值累加（ADD操作）
-- 信号位置`[token_id, 0]`对应每个token的信号计数器
+- 使用 `shmem_put` 将token 数据写入目标rank 的共享内存
+- 使用 `shmem_signal` 发送信号，信号值累加（ADD 操作）
+- 信号位置 `[token_id, 0]` 对应每个token 的信号计数器
 
 ### 接收阶段（Receive Phase）
 
-每个rank等待并接收所有发送给它的活跃token：
+每个rank 等待并接收所有发送给它的活跃token：
 
 ```python
 my_pe = pypto.distributed.my_symbolic_pe(group_name)
 for token_id in pypto.loop(batch_size, name='MOE_DISTRIBUTED_RECEIVE', idx_name='token_id'):
     # 仅处理活跃token
     if x_active_mask[token_id] == 1:
-        # 步骤1：等待所有topk个专家的信号
+        # 步骤1：等待所有topk 个专家的信号
         pypto.set_vec_tile_shapes(1, hidden_size)
         wait_until_out = pypto.distributed.shmem_wait_until(
             shmem_data,
@@ -165,7 +165,7 @@ for token_id in pypto.loop(batch_size, name='MOE_DISTRIBUTED_RECEIVE', idx_name=
             pred=[expand_x],
         )
 
-        # 步骤2：从Shmem读取所有topk个专家的输出
+        # 步骤2：从Shmem 读取所有topk 个专家的输出
         pypto.set_vec_tile_shapes(topk, hidden_size)
         shmem_load_out = pypto.experimental.shmem_load(
             shmem_data,
@@ -178,30 +178,30 @@ for token_id in pypto.loop(batch_size, name='MOE_DISTRIBUTED_RECEIVE', idx_name=
 
 **关键点**：
 
-- 使用`if x_active_mask[token_id] == 1:`条件，仅对活跃token执行接收操作
-- 使用`shmem_wait_until`等待信号值达到topk
-- `clear_signal=True`确保信号被清除，避免影响后续操作
-- 使用`pypto.experimental.shmem_load`一次性读取所有topk个专家的输出，减少任务下发次数
-- `shmem_load`返回的Tensor形状为`[topk, hidden_size]`
+- 使用 `if x_active_mask[token_id] == 1:` 条件，仅对活跃token 执行接收操作
+- 使用 `shmem_wait_until` 等待信号值达到topk
+- `clear_signal=True` 确保信号被清除，避免影响后续操作
+- 使用 `pypto.experimental.shmem_load` 一次性读取所有topk 个专家的输出，减少任务下发次数
+- `shmem_load` 返回的Tensor 形状为 `[topk, hidden_size]`
 
 ### 合并阶段（Combine Phase）
 
-使用expert_scales进行加权合并（仅对活跃token）：
+使用expert_scales 进行加权合并（仅对活跃token）：
 
 ```python
 if x_active_mask[token_id] == 1:
-    # 转换为FP32进行计算
+    # 转换为FP32 进行计算
     pypto.set_vec_tile_shapes(topk, hidden_size // 2)
     shmem_load_out_fp32 = pypto.cast(shmem_load_out, pypto.DT_FP32)
 
-    # 将expert_scales reshape为 [topk, 1] 以便逐元素乘法
+    # 将expert_scales reshape 为 [topk, 1] 以便逐元素乘法
     expert_scales_tile = expert_scales[token_id:(token_id + 1), :]
     expert_scales_tile_reshaped = pypto.reshape(expert_scales_tile, [topk, 1])
 
     # 加权：每个专家输出乘以对应权重
     mul_out = pypto.mul(shmem_load_out_fp32, expert_scales_tile_reshaped)
 
-    # 沿topk维度求和
+    # 沿topk 维度求和
     sum_out_fp32 = pypto.sum(mul_out, dim=0, keepdim=True)
 
     # 转换回BF16
@@ -212,12 +212,12 @@ if x_active_mask[token_id] == 1:
 
 **关键点**：
 
-- 使用`mul` + `sum`实现加权求和：先逐元素乘法，再沿topk维度求和
-- `expert_scales` reshape为`[topk, 1]`，与`shmem_load_out_fp32` `[topk, hidden_size]`做逐元素乘法
-- `mul`结果shape: `[topk, hidden_size]`，`sum`后shape: `[1, hidden_size]`
-- 仅对`x_active_mask == 1`的活跃token执行合并计算
+- 使用 `mul` + `sum` 实现加权求和：先逐元素乘法，再沿topk 维度求和
+- `expert_scales` reshape 为 `[topk, 1]`，与 `shmem_load_out_fp32` `[topk, hidden_size]` 做逐元素乘法
+- `mul` 结果shape: `[topk, hidden_size]`，`sum` 后shape: `[1, hidden_size]`
+- 仅对 `x_active_mask == 1` 的活跃token 执行合并计算
 
-## 完整Kernel代码
+## 完整Kernel 代码
 
 ```python
 def moe_distributed_combine_kernel(
@@ -318,10 +318,10 @@ def moe_distributed_combine_kernel(
 
 ## 总结
 
-Combine kernel通过Shmem API实现了高效的跨rank token收集和合并：
+Combine kernel 通过Shmem API 实现了高效的跨rank token 收集和合并：
 
-1. **发送阶段**：使用`shmem_put`发送数据，`shmem_signal`发送通知
-2. **接收阶段**：使用`shmem_wait_until`等待所有信号，`pypto.experimental.shmem_load`批量读取数据，仅处理活跃token
-3. **合并阶段**：使用`mul` + `sum`进行加权求和，仅对活跃token合并
+1. **发送阶段**：使用 `shmem_put` 发送数据，`shmem_signal` 发送通知
+2. **接收阶段**：使用 `shmem_wait_until` 等待所有信号，`pypto.experimental.shmem_load` 批量读取数据，仅处理活跃token
+3. **合并阶段**：使用 `mul` + `sum` 进行加权求和，仅对活跃token 合并
 
-这种设计充分利用了Shmem的信号机制和批量传输能力，实现了高性能的分布式MoE combine操作。
+这种设计充分利用了Shmem 的信号机制和批量传输能力，实现了高性能的分布式MoE combine 操作。
