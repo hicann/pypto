@@ -347,7 +347,6 @@ struct DevAscendProgram {
         uint64_t dynamicCellMatchCapacity;
         bool hasAicpuTask;
         bool launchSchedSameCluster;
-        bool all1c2vMixTask;
     };
 
     DevArgsPreservedParams BackupDevArgsParams(const DeviceArgs& src)
@@ -364,7 +363,6 @@ struct DevAscendProgram {
         params.dynamicCellMatchAddr = src.dynamicCellMatchAddr;
         params.dynamicCellMatchCapacity = src.dynamicCellMatchCapacity;
         params.hasAicpuTask = src.hasAicpuTask;
-        params.all1c2vMixTask = src.all1c2vMixTask;
         params.launchSchedSameCluster = src.launchSchedSameCluster;
         return params;
     }
@@ -382,7 +380,6 @@ struct DevAscendProgram {
         dst.dynamicCellMatchAddr = params.dynamicCellMatchAddr;
         dst.dynamicCellMatchCapacity = params.dynamicCellMatchCapacity;
         dst.hasAicpuTask = params.hasAicpuTask;
-        dst.all1c2vMixTask = params.all1c2vMixTask;
         dst.launchSchedSameCluster = params.launchSchedSameCluster;
     }
 
