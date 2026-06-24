@@ -30,7 +30,7 @@ def _run_hook(hook: str, payload: dict, env_extra: dict | None = None) -> tuple[
 # ── post-edit: 非算子文件 → 无输出 ──
 
 def test_post_edit_non_operator_file_silent():
-    rc, out = _run_hook("post-edit", {"tool_input": {"file_path": "readme.md"}})
+    rc, out = _run_hook("post-edit", {"tool_input": {"file_path": "/tmp/readme.md"}})
     assert rc == 0
     assert not out
 
@@ -187,7 +187,7 @@ def test_post_bash_test_command_returns_verdict():
 # ── pre-edit-backup: 非 impl 文件 → 无输出 ──
 
 def test_pre_edit_backup_non_impl_silent():
-    rc, out = _run_hook("pre-edit-backup", {"tool_input": {"file_path": "readme.md"}})
+    rc, out = _run_hook("pre-edit-backup", {"tool_input": {"file_path": "/tmp/readme.md"}})
     assert rc == 0
     assert not out
 
@@ -195,7 +195,7 @@ def test_pre_edit_backup_non_impl_silent():
 # ── stop: 非算子目录 → 无输出 ──
 
 def test_stop_non_operator_dir_silent():
-    rc, out = _run_hook("stop", {"cwd": "."})
+    rc, out = _run_hook("stop", {"cwd": "/tmp"})
     assert rc == 0
     assert not out
 
