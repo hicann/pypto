@@ -179,6 +179,8 @@ def pypto_chunk_gated_delta_rule_dyn(dims, inputs: dict, outputs: dict):
         output_data = [outputs["core_attn_out"], outputs["final_state"]]
         chunk_gated_delta_rule(b, nqk, nv, d, l)(*input_data, *output_data)
 
+    torch_npu.npu.synchronize()
+
 
 def do_test_chunk_gated_delta_rule(case_name):
     """Execute test case for chunk gated delta rule."""
