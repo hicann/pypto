@@ -95,6 +95,8 @@ struct DeviceExecuteContext {
     uint64_t duppedRootCount{0};
     bool controlFlowCacheActivated{false};
 
+    uint64_t shmemAddrOffset[MAX_SHMEM_GROUP_NUM][SHMEM_MEM_TYPE_NUM] = {0};
+
     int8_t loopDieId_ = -1;
 
     bool DuppedRootCached();
