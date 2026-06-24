@@ -30,7 +30,7 @@ namespace ir {
 class IRVisitor;
 class IRMutator;
 
-enum class SectionKind : uint8_t { Vector = 0, Cube = 1, VF = 2 };
+enum class SectionKind : uint8_t { Vector = 0, Cube = 1 };
 
 inline std::string SectionKindToString(SectionKind kind)
 {
@@ -39,8 +39,6 @@ inline std::string SectionKindToString(SectionKind kind)
             return "Vector";
         case SectionKind::Cube:
             return "Cube";
-        case SectionKind::VF:
-            return "VF";
         default:
             break;
     }
@@ -54,8 +52,6 @@ inline SectionKind StringToSectionKind(const std::string& str)
         return SectionKind::Vector;
     if (str == "Cube")
         return SectionKind::Cube;
-    if (str == "VF")
-        return SectionKind::VF;
     CHECK(false) << "Unknown SectionKind: " << str;
     return SectionKind::Vector;
 }
