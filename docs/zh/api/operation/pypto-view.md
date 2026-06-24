@@ -12,7 +12,7 @@
 
 ## 注意事项
 
-- **需要valid_shape时必须用pypto.view**：当需要指定`valid_shape`（动态有效数据大小）时，不能使用`[]`切片语法，必须使用显式的`pypto.view`接口
+- **需要valid_shape时必须用pypto.view**：当需要指定 `valid_shape`（动态有效数据大小）时，不能使用 `[]` 切片语法，必须使用显式的 `pypto.view` 接口
 - 输入张量input和输入shape的维度数量需要一致。
 
 ## 函数原型
