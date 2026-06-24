@@ -366,11 +366,11 @@ std::string CodeGenOp::GenOpAttr(bool hasExistingParam) const
         if (kv.first.substr(0, OP_ATTR_PREFIX.size()) != OP_ATTR_PREFIX) {
             continue;
         }
-        if (kv.second.type() == typeid(int64_t)) {
+        if (kv.second.Type() == typeid(int64_t)) {
             attrList.push_back(std::to_string(AnyCast<int64_t>(kv.second)));
-        } else if (kv.second.type() == typeid(bool)) {
+        } else if (kv.second.Type() == typeid(bool)) {
             attrList.push_back(std::to_string(AnyCast<bool>(kv.second)));
-        } else if (kv.second.type() == typeid(std::vector<int64_t>)) {
+        } else if (kv.second.Type() == typeid(std::vector<int64_t>)) {
             auto vec = AnyCast<std::vector<int64_t>>(kv.second);
             for (auto v : vec) {
                 attrList.push_back(std::to_string(v));
