@@ -80,6 +80,7 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
 {
     auto kernelArgAddr = aicoreExceptionInfo.exceptionArgs.argAddr;
     auto argsSize = aicoreExceptionInfo.exceptionArgs.argsize;
+    MACHINE_LOGD("GetDeviceExceptionDumpInfo: kernelArgAddr=%p, argsSize=%u", kernelArgAddr, argsSize);
 
     if (kernelArgAddr == nullptr) {
         MACHINE_LOGW("GetDeviceExceptionDumpInfo failed: kernelArgAddr is nullptr");
@@ -101,25 +102,22 @@ int32_t GetDeviceExceptionDumpInfo(RtAicoreExDetailInfo& aicoreExceptionInfo, Ad
         return rc;
     }
     // kernel launch kernalArg 0: kernelName; 4 inputSize; 6 tensorData
+    char* kernelName = static_cast<char*>(kernelArg[0]);
+    // only support handle pto exception info
+    if (kernelName != nullptr && strncmp(kernelName, "PyPTO", 5) != 0) {
+        MACHINE_LOGI("Current exception info not PyPTO, which kernelName is[%s]", kernelName);
+        return 0;
+    }
     exceptionDumpInfo->argAddr = kernelArgAddr;
     exceptionDumpInfo->argssize = argsSize;
-
-    auto& exceptionKernelInfo = aicoreExceptionInfo.exceptionArgs.exceptionKernelInfo;
-    exceptionDumpInfo->bin = exceptionKernelInfo.bin;
-
-    if (exceptionKernelInfo.kernelName != nullptr) {
-        auto ret = strcpy_s(exceptionDumpInfo->kernelName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
-        if (ret != 0) {
-            MACHINE_LOGW("Mem cpy KernelName from exceptionKernelInfo failed");
-        }
-        ret = strcpy_s(exceptionDumpInfo->kernelDisplayName, MAX_KERNEL_BUF_LEN, exceptionKernelInfo.kernelName);
-        if (ret != 0) {
-            MACHINE_LOGW("Mem cpy kernelDisplayName from exceptionKernelInfo failed");
-        }
+    auto ret = strcpy_s(exceptionDumpInfo->kernelName, MAX_KERNEL_BUF_LEN, kernelName);
+    if (ret != 0) {
+        MACHINE_LOGW("Mem cpy KernelName failed");
     }
-    MACHINE_LOGD("GetDeviceExceptionDumpInfo: kernelArgAddr=%p, argsSize=%u, binSize=%u, kernelName=%s",
-        kernelArgAddr, argsSize, exceptionKernelInfo.binSize,
-        exceptionKernelInfo.kernelName ? exceptionKernelInfo.kernelName : "(null)");
+    ret = strcpy_s(exceptionDumpInfo->kernelDisplayName, MAX_KERNEL_BUF_LEN, kernelName);
+    if (ret != 0) {
+        MACHINE_LOGW("Mem cpy kernelDisplayName failed");
+    }
     return GetAicoreExceptionDumpInfo(kernelArg, exceptionDumpInfo);
 }
 
