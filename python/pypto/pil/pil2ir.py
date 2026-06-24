@@ -39,7 +39,7 @@ def pil2ir(func: Function, args: dict):
             except ReturnSignal:
                 pass
 
-    return ctx.create_function(func.name, func_args, [], body, func.span)
+    return ctx.create_function(func.name, func_args, body, func.span)
 
 
 def compile(pyfunc, *args, **kwargs):
@@ -50,13 +50,10 @@ def compile(pyfunc, *args, **kwargs):
     # c++ addOperation still depends on function
     func = ast2pil(pyfunc)
 
-    all_args = {}
-    tensor_args = []
+    args = {}
     for key, val in bound.arguments.items():
-        all_args[key] = val
-        if isinstance(val, pypto.Tensor):
-            tensor_args.append(val)
+        args[key] = val
 
     pypto.pypto_impl.Reset()
-    with pypto.function("__entry__", *tensor_args):
-        return pil2ir(func, all_args)
+    with pypto.function("__entry__"):
+        return pil2ir(func, args)
