@@ -2002,19 +2002,7 @@ void Function::Substitute(std::shared_ptr<LogicalTensor> oldTensor, std::shared_
 
 void Function::RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor>& originIncast) const
 {
-    // 因为originIncast不输出本function，因此originIncast的producer的oOperand在本function外，需要移除对function内的消费者
     for (const auto& producer : originIncast->GetProducers()) {
-        auto targetFunc = this;
-        while (targetFunc != producer->BelongTo()) {
-            if (!targetFunc->HasParent()) {
-                targetFunc = nullptr;
-                break;
-            }
-            targetFunc = &targetFunc->Parent();
-        }
-        FE_ASSERT(FeError::INVALID_PTR, targetFunc != nullptr) << "Failed to find the target function for producer:\n"
-                                                               << "Producer: " << producer->Dump();
-
         for (auto& oOperandForProducerOp : producer->oOperand) {
             auto& consumers = oOperandForProducerOp->GetConsumers();
             for (auto it = consumers.begin(); it != consumers.end();) {

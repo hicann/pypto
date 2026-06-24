@@ -27,17 +27,19 @@ using LogicalTensors = std::vector<LogicalTensorPtr>;
 bool IsPureTensorOpSeq(const pypto::ir::SeqStmtsPtr& seq);
 
 std::shared_ptr<Function> CreatePathFuncFromSeq(
-    const pypto::ir::SeqStmtsPtr& seq, Function& dynFunc,
-    const std::unordered_set<std::shared_ptr<LogicalTensor>>& downstreamIncastPtrs,
-    const std::unordered_set<std::string>& paramNames);
+    const pypto::ir::SeqStmtsPtr& seq, Function& dynFunc, const std::string& loopVarName);
 
 pypto::ir::StmtPtr TransformAndBuildStmts(
     pypto::ir::StmtPtr stmt, Function& dynFunc,
-    std::unordered_set<std::shared_ptr<LogicalTensor>>& downstreamIncastPtrs,
-    const std::unordered_set<std::string>& paramNames);
+    const std::string& loopVarName,
+    std::unordered_set<int>& consumedRawMagics);
 
-pypto::ir::StmtPtr CreateFunctionByStmt(
-    pypto::ir::StmtPtr stmt, Function& dynFunc, const std::vector<std::string>& externalVarNames);
+void ReplacePlaceholderWithCallOps(
+    pypto::ir::StmtPtr stmt, Function& dynFunc,
+    const std::unordered_set<int>& consumedRawMagics,
+    const std::unordered_set<int>& paramRawMagics);
+
+pypto::ir::StmtPtr CreateFunctionByStmt(pypto::ir::StmtPtr stmt, Function& dynFunc);
 
 void BuildDynFuncSlotScope(std::shared_ptr<Function> dynFunc, const LogicalTensors& params);
 

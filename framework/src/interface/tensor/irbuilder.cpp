@@ -8,7 +8,6 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "irbuilder.h"
-#include "ir_func_builder.h"
 
 #include "logical_tensor.h"
 #include "raw_tensor.h"
@@ -20,7 +19,6 @@
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 #include "ir/transforms/printer.h" // for test
-#include "ir/transforms/merge_stmts_pass.h"
 #include "ir/transforms/infer_token_pass.h"
 
 using namespace pypto;
@@ -171,6 +169,7 @@ ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(
 std::shared_ptr<Function> IRBuilder::CreateFunction(
     std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span)
 {
+    (void)span;
     auto& program = Program::GetInstance();
     auto funcMagicName = name + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
     auto parentFunc = program.GetCurrentFunction();
@@ -185,23 +184,8 @@ std::shared_ptr<Function> IRBuilder::CreateFunction(
         func->GetTensorMap().Insert(param);
     }
 
-    std::vector<std::string> externalVarNames;
-    for (auto& param : params) {
-        if (param) {
-            externalVarNames.push_back(param->name_);
-        }
-    }
-
     auto seq = ir::SeqStmts::AsMut(body);
-    auto mergedBody = ir::MergeStmtsIntoIfStmt(seq, externalVarNames);
-    func->originalBody_ = mergedBody;
-
-    auto StmtsWithCall = CreateFunctionByStmt(mergedBody, *func, externalVarNames);
-    func->body_ = ir::SeqStmts::Wrap(StmtsWithCall, span);
-    func->name_ = name;
-    func->ComputeHash();
-
-    BuildDynFuncSlotScope(func, params);
+    func->ir::Function::body_ = seq;
 
     return func;
 }

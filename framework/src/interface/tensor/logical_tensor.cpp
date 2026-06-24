@@ -133,10 +133,30 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool crea
 
 ir::VarPtr LogicalTensor::Clone() const
 {
-    static thread_local int cloneCounter = 0;
     auto cloned = Clone(*function_, true);
-    cloned->name_ = name_ + "_" + std::to_string(++cloneCounter);
+    cloned->name_ = IRContext::Get().GetVarName(name_);
     return std::static_pointer_cast<const ir::Var>(cloned);
+}
+
+ir::VarPtr LogicalTensor::Clone(bool shareRawTensor) const
+{
+    if (!shareRawTensor) {
+        return Clone();
+    }
+
+    auto newTensor = std::make_shared<LogicalTensor>(
+        *function_, tensor, offset, shape, dynValidShape_);
+    newTensor->magic = IdGen<IdType::LOGICAL_TENSOR>::Inst().NewId();
+    newTensor->name_ = IRContext::Get().GetVarName(name_);
+    newTensor->oriShape = oriShape;
+    newTensor->memoryrange = memoryrange;
+    newTensor->memoryTypeOriginal_ = memoryTypeOriginal_;
+    newTensor->memoryTypeToBe_ = memoryTypeToBe_;
+    newTensor->readyTime_ = readyTime_;
+    newTensor->remainingTime_ = remainingTime_;
+    newTensor->dynOffset_ = dynOffset_;
+
+    return std::static_pointer_cast<const ir::Var>(newTensor);
 }
 
 LogicalTensorPtr LogicalTensor::NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const

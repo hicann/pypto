@@ -13,9 +13,14 @@
 #include "ir/transforms/passes.h"
 #include "ir/transforms/utils/dead_code_elimination.h"
 
+#include "interface/program/program.h"
+#include "interface/function/function.h"
+#include "interface/utils/id_gen.h"
+
 #include "symbolic_scalar.h"
 #include "logical_tensor.h"
 #include "token_pass.h"
+#include "ir_func_builder.h"
 
 using npu::tile_fwk::LogicalTensor;
 using npu::tile_fwk::RawSymbolicExpression;
@@ -96,4 +101,48 @@ Pass pass::TokenPass()
         },
         "TokenPass");
 }
+
+Pass pass::CreatePathFuncs()
+{
+    return pass::CreateFunctionPass(
+        [](const FunctionPtr& irFunc) -> FunctionPtr {
+            auto& programInst = npu::tile_fwk::Program::GetInstance();
+            auto parentFunc = programInst.GetLastFunction();
+
+            npu::tile_fwk::LogicalTensors logicalParams;
+            for (const auto& param : irFunc->params_) {
+                auto constLT = std::dynamic_pointer_cast<const LogicalTensor>(param);
+                ASSERT(constLT) << "CreatePathFuncs: param is not a LogicalTensor: " << param->name_;
+                auto lt = std::const_pointer_cast<LogicalTensor>(constLT);
+                logicalParams.push_back(lt);
+            }
+
+            auto funcMagicName = irFunc->name_ + "_" +
+                                 std::to_string(npu::tile_fwk::IdGen<npu::tile_fwk::IdType::FUNCTION>::Inst().NewId());
+            auto dynFunc =
+                std::make_shared<npu::tile_fwk::Function>(programInst, funcMagicName, irFunc->name_, parentFunc);
+            dynFunc->SetFunctionType(npu::tile_fwk::FunctionType::DYNAMIC);
+            dynFunc->SetGraphType(npu::tile_fwk::GraphType::TENSOR_GRAPH);
+
+            for (auto& param : logicalParams) {
+                dynFunc->AddOriginIncast(param);
+                dynFunc->inCasts_.push_back(param);
+                dynFunc->GetTensorMap().Insert(param);
+            }
+
+            auto seq = ir::SeqStmts::AsMut(irFunc->body_);
+            dynFunc->originalBody_ = seq;
+
+            auto StmtsWithCall = npu::tile_fwk::CreateFunctionByStmt(irFunc->body_, *dynFunc);
+            dynFunc->ir::Function::body_ = ir::SeqStmts::Wrap(StmtsWithCall, irFunc->span_);
+            dynFunc->name_ = irFunc->name_;
+            dynFunc->ComputeHash();
+
+            npu::tile_fwk::BuildDynFuncSlotScope(dynFunc, logicalParams);
+
+            return std::static_pointer_cast<const ir::Function>(dynFunc);
+        },
+        "CreatePathFuncs");
+}
+
 } // namespace pypto::ir

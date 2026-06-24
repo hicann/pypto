@@ -268,6 +268,10 @@ Pass NormalizeStmtStructure();
  * \brief Create a pass that recursively flattens single-statement blocks
  */
 Pass FlattenSingleStmt();
+
+Pass MergeStmtsIntoIf();
+
+Pass CreatePathFuncs();
 } // namespace pass
 
 /**
