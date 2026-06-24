@@ -236,52 +236,26 @@ TILEOP void TExtract(
 }
 
 // Copy data from L1 to L0A/L0B
-template <bool isTrans, bool isMX, typename Coord, typename DstTileData, typename SrcTileData>
-TILEOP void TExtractL1ToL0(DstTileData& dst, SrcTileData& src, const Coord& coord)
-{
-    if (!CheckShapeValid(dst, src)) {
-        return;
-    }
-    constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
-    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2,
-        "[TExtractL1ToL0 Error]: Shape Size should be 2 Dim");
-    int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM2, 0>(coord);
-    int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM2, 0>(coord);
-    static_assert(SrcTileData::FORMAT == Hardware::L1 &&
-        (DstTileData::FORMAT == Hardware::L0A || DstTileData::FORMAT == Hardware::L0B));
-    TExtractL1ToL0Impl<isTrans, isMX>(dst, src, offset0, offset1);
-}
-
-// Copy data from L1 to BT
 template <bool isTrans, typename Coord, typename DstTileData, typename SrcTileData>
-TILEOP void TExtractL1ToBT(DstTileData& dst, SrcTileData& src, const Coord& coord)
+TILEOP void TExtract(DstTileData& dst, SrcTileData& src, const Coord& coord)
 {
     if (!CheckShapeValid(dst, src)) {
         return;
     }
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
-    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2,
-        "[TExtractL1ToBT Error]: Shape Size should be 2 Dim");
+    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM2, 0>(coord);
     int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM2, 0>(coord);
-    static_assert(SrcTileData::FORMAT == Hardware::L1 && DstTileData::FORMAT == Hardware::BIAS);
-    TExtractL1ToBTOrFBImpl<isTrans>(dst, src);
-}
-
-// Copy data from L1 to FB
-template <bool isTrans, typename Coord, typename DstTileData, typename SrcTileData>
-TILEOP void TExtractL1ToFB(DstTileData& dst, SrcTileData& src, const Coord& coord)
-{
-    if (!CheckShapeValid(dst, src)) {
-        return;
+    if constexpr (
+        (DstTileData::FORMAT == Hardware::L0A || DstTileData::FORMAT == Hardware::L0B) &&
+        SrcTileData::FORMAT == Hardware::L1) {
+        TExtractL1ToL0Impl<isTrans>(dst, src, offset0, offset1);
     }
-    constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
-    static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2,
-        "[TExtractL1ToFB Error]: Shape Size should be 2 Dim");
-    int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM2, 0>(coord);
-    int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM2, 0>(coord);
-    static_assert(SrcTileData::FORMAT == Hardware::L1 && DstTileData::FORMAT == Hardware::FIXBUF);
-    TExtractL1ToBTOrFBImpl<isTrans>(dst, src);
+    if constexpr (
+        (DstTileData::FORMAT == Hardware::BIAS || DstTileData::FORMAT == Hardware::FIXBUF) &&
+        SrcTileData::FORMAT == Hardware::L1) {
+        TExtractL1ToBTOrFBImpl<isTrans>(dst, src);
+    }
 }
 
 template <bool isZeroC, TransMode transMode, bool kAlignFlag, typename TileAcc, typename TileLeft, typename TileRight>

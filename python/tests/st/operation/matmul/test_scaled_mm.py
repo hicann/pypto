@@ -19,9 +19,8 @@ import pytest
 import pypto
 import torch
 import torch_npu
-import torch.nn.functional as F
 
-from testcase.scaled_mm_mxfp8_test_case import SCALED_MM_TESTS, ScaledMMConfig
+from testcase.scaled_mm_test_case import SCALED_MM_TESTS, ScaledMMConfig
 
 K_BLOCK_SIZE_64 = 64
 K_BLOCK_SIZE_32 = 32
@@ -52,7 +51,7 @@ def scaled_mm_kernel_no_bias(
     vm, vn = config.view_shape
     m_loop = (m + vm - 1) // vm
     n_loop = (n + vn - 1) // vn
-    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+    scale_k = k // K_BLOCK_SIZE_64
 
     pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0])
     for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_LO_mIdx", idx_name="m_idx"):
@@ -111,7 +110,7 @@ def scaled_mm_kernel_with_bias(
     vm, vn = config.view_shape
     n_loop = (n + vn - 1) // vn
     m_loop = (m + vm - 1) // vm
-    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+    scale_k = k // K_BLOCK_SIZE_64
 
     pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0])
     for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_LO_mIdx", idx_name="m_idx"):
@@ -160,37 +159,36 @@ def scaled_mm_kernel_with_bias(
 
 def _process_scale_tensors(scale_a_cpu, scale_b_cpu, config):
     m, k, n = config.ori_shape
-    scale_k_32 = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64 * SHAPE_DIM_2
+    scale_k_32 = k // K_BLOCK_SIZE_32
 
     if config.scale_a_trans:
         scale_a_tmp = torch.transpose(scale_a_cpu, -2, -1).reshape(scale_k_32, m).T
     else:
         scale_a_tmp = scale_a_cpu.view(m, scale_k_32)
-
+    
     if config.scale_b_trans:
         scale_b_tmp = scale_b_cpu.view(n, scale_k_32).T
     else:
         scale_b_tmp = torch.transpose(scale_b_cpu, -2, -1).reshape(scale_k_32, n)
-
+    
     scale_a_tmp = scale_a_tmp.to(torch.float32).repeat_interleave(32, dim=1)
     scale_b_tmp = scale_b_tmp.to(torch.float32).repeat_interleave(32, dim=0)
-
+    
     return scale_a_tmp, scale_b_tmp
 
 
 def prepare_inputs(config: ScaledMMConfig, device_id: int):
     m, k, n = config.ori_shape
-
+    
     a_shape = [k, m] if config.a_trans else [m, k]
     b_shape = [n, k] if config.b_trans else [k, n]
-
-    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
-    padding_k = scale_k * K_BLOCK_SIZE_64 - k
+    
+    scale_k = k // K_BLOCK_SIZE_64
     scale_a_shape = ([scale_k, m, SHAPE_DIM_2] if config.scale_a_trans
                      else [m, scale_k, SHAPE_DIM_2])
     scale_b_shape = ([n, scale_k, SHAPE_DIM_2] if config.scale_b_trans
                      else [scale_k, n, SHAPE_DIM_2])
-
+    
     torch_in_dtype = ScaledMMConfig.pto_to_torch(config.in_dtype)
     mat_a_cpu = torch.rand(a_shape, dtype=torch.float32).uniform_(-3, 3).to(torch_in_dtype)
     mat_b_cpu = torch.rand(b_shape, dtype=torch.float32).uniform_(-3, 3).to(torch_in_dtype)
@@ -201,33 +199,31 @@ def prepare_inputs(config: ScaledMMConfig, device_id: int):
     scale_a_tmp, scale_b_tmp = _process_scale_tensors(scale_a_cpu, scale_b_cpu, config)
 
     mat_b_tmp = mat_b_cpu.to(torch.float32).T if config.b_trans else mat_b_cpu.to(torch.float32)
-    mat_b_tmp = F.pad(mat_b_tmp, ((0, 0, 0, padding_k)), "constant")
     mat_b_tmp = scale_b_tmp * mat_b_tmp
-
+    
     mat_a_tmp = mat_a_cpu.to(torch.float32).T if config.a_trans else mat_a_cpu.to(torch.float32)
-    mat_a_tmp = F.pad(mat_a_tmp, ((0, padding_k, 0, 0)), "constant")
     mat_a_tmp = mat_a_tmp * scale_a_tmp
-
+    
     golden = torch.matmul(mat_a_tmp, mat_b_tmp)
     if config.has_bias:
         golden = golden + bias_cpu.to(golden.dtype).repeat_interleave(m, dim=0)
-
+    
     out_torch_dtype = ScaledMMConfig.pto_to_torch(config.out_dtype)
     golden = golden.to(out_torch_dtype)
-
+    
     device = f"npu:{device_id}"
     a_npu = mat_a_cpu.to(device)
     b_npu = mat_b_cpu.to(device)
-
+    
     if config.a_format == "NZ":
         a_npu = torch_npu.npu_format_cast(a_npu, 29)
     if config.b_format == "NZ":
         b_npu = torch_npu.npu_format_cast(b_npu, 29)
-
+    
     scale_a_npu = scale_a_cpu.to(device)
     scale_b_npu = scale_b_cpu.to(device)
     bias_npu = bias_cpu.to(device) if bias_cpu is not None else None
-
+    
     return ScaledMMInputs(a_npu, b_npu, scale_a_npu, scale_b_npu, bias_npu, golden)
 
 

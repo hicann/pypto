@@ -291,7 +291,7 @@ def scaled_mm(
                 **__convert_matmul_extend_params(extend_params)
             )
             return pypto_impl.BatchMatmulMX(
-                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz,
+                out_dtype, mat_a, scale_a, mat_b, scale_b, a_trans, scale_a_trans, b_trans, scale_b_trans, c_matrix_nz, 
                 extend_params
             )
         else:
@@ -435,7 +435,7 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
             "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to 3, "
             f"got scale_a_dim: {scale_a_dim}, scale_b_dim: {scale_b_dim}."
         ))
-
+    
     if extend_params is not None:
         __validate_bias_dimension(input_dim, extend_params.get('bias_tensor'))
 
@@ -500,11 +500,15 @@ def __validate_scale_n_dimensions(n_dim, n_scale_dim):
 
 
 def __validate_scale_k_alignment(ka_dim, k_a_scale0_dim, align_64):
-    if (k_a_scale0_dim.is_concrete() and ka_dim.is_concrete() and \
-    k_a_scale0_dim != (ka_dim + align_64 - 1) // align_64):
+    if ka_dim.is_concrete() and ka_dim % align_64 != 0:
         raise PyptoError(0xF00003, RuntimeError(
-            "Input tensor K-dimension does not match expect scale K-dimension size. Scale K != ceil(input K, 64)."
-            f"input tensor K: {ka_dim}, scale K: {k_a_scale0_dim}"
+            "Matrix K dimension mismatch. Expect k_size be aligned to 64 element, "
+            f"k_size: {ka_dim}."
+        ))
+    if (k_a_scale0_dim.is_concrete() and ka_dim.is_concrete() and k_a_scale0_dim != ka_dim // align_64):
+        raise PyptoError(0xF00003, RuntimeError(
+            "Matrix K dimension is not a multiple of 64 of the Scale Matrix K0 dimension. "
+            f"k_size: {ka_dim}, k_scale_size0: {k_a_scale0_dim}"
         ))
 
 
