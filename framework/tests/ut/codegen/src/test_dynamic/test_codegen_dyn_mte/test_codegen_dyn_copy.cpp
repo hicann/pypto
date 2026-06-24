@@ -162,7 +162,7 @@ TEST_F(TestCodegenDynCopy, L1CopyInTileTensor)
 {
     std::string res = TestL1CopyInBody("L1CopyInTileTensor", false, 0, 0, true);
     std::string expect =
-        R"!!!(TLoad<CopyInMode::NZ2NZ, PaddingMode::NORMAL_PADDING_MODE>(l1Tensor_0, gmTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), 64, 64);
+        R"!!!(TLoad<CopyInMode::NZ2NZ, PaddingMode::NO_PADDING>(l1Tensor_0, gmTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), 64, 64);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -318,7 +318,7 @@ TEST_F(TestCodegenDynCopy, L1CopyInTensor)
     std::string res =
         TestMatmulMteBody("L1CopyInTensor", Opcode::OP_L1_COPY_IN, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1);
     std::string expect =
-        R"!!!(TLoad<CopyInMode::ND2NZ, PaddingMode::NORMAL_PADDING_MODE>(l1Tensor_0, gmTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1));
+        R"!!!(TLoad<CopyInMode::ND2NZ, PaddingMode::NO_PADDING>(l1Tensor_0, gmTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1));
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -328,7 +328,7 @@ TEST_F(TestCodegenDynCopy, L1ReshapeCopyInTensor)
     std::string res = TestMatmulMteBody(
         "L1ReshapeCopyInTensor", Opcode::OP_L1_RESHAPE_COPY_IN, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1);
     std::string expect =
-        R"!!!(TReshapeLoad<CopyInMode::ND2NZ, PaddingMode::NORMAL_PADDING_MODE>(l1Tensor_0, gmTensor_1, Coord2Dim(0, 0), 0, 0);
+        R"!!!(TReshapeLoad<CopyInMode::ND2NZ, PaddingMode::NO_PADDING>(l1Tensor_0, gmTensor_1, Coord2Dim(0, 0), 0, 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -337,7 +337,7 @@ TEST_F(TestCodegenDynCopy, L1CopyL0Tensor)
 {
     std::string res =
         TestMatmulMteBody("L1CopyL0Tensor", Opcode::OP_L1_TO_L0A, MemoryType::MEM_L1, MemoryType::MEM_L0A);
-    std::string expect = R"!!!(TExtractL1ToL0<0, 0>(l0aTensor_0, l1Tensor_1, Coord2Dim(0, 0));
+    std::string expect = R"!!!(TExtract<0>(l0aTensor_0, l1Tensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -346,7 +346,7 @@ TEST_F(TestCodegenDynCopy, L1CopyFBTensor)
 {
     std::string res =
         TestMatmulMteBody("L1CopyFBTensor", Opcode::OP_L1_TO_FIX_QUANT_PRE, MemoryType::MEM_L1, MemoryType::MEM_FIX);
-    std::string expect = R"!!!(TExtractL1ToFB<0>(fbufTensor_0, l1Tensor_1, Coord2Dim(0, 0));
+    std::string expect = R"!!!(TExtract<0>(fbufTensor_0, l1Tensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -354,7 +354,7 @@ TEST_F(TestCodegenDynCopy, L1CopyFBTensor)
 TEST_F(TestCodegenDynCopy, L1CopyBTTensor)
 {
     std::string res = TestMatmulMteBody("L1CopyBTTensor", Opcode::OP_L1_TO_BT, MemoryType::MEM_L1, MemoryType::MEM_BT);
-    std::string expect = R"!!!(TExtractL1ToBT<0>(btTensor_0, l1Tensor_1, Coord2Dim(0, 0));
+    std::string expect = R"!!!(TExtract<0>(btTensor_0, l1Tensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }
