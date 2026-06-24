@@ -24,7 +24,7 @@ namespace pypto {
 void BindFunction(py::module_& m)
 {
     // Bind the Function class
-    py::class_<Function, ir::Function, std::shared_ptr<Function>>(m, "Function")
+    py::class_<Function, std::shared_ptr<Function>>(m, "Function")
         .def("GetMagicName", &Function::GetMagicName, "Get the magic name of the function")
         .def("GetRawName", &Function::GetRawName, "Get the raw name of the function")
         .def("GetFuncMagic", &Function::GetFuncMagic, "Get the function magic number")
@@ -76,14 +76,9 @@ void BindFunction(py::module_& m)
         .def(
             "DumpJsonFile", [](Function& self, const std::string& fileName) { self.DumpJsonFile(fileName); },
             py::arg("file_name") = "", "Dump the function to a JSON file")
-        .def(
-            "__repr__",
-            [](const Function& self) {
-                return "<Function '" + self.GetRawName() + "' (magic: " + std::to_string(self.GetFuncMagic()) + ")>";
-            })
-        .def_property_readonly(
-            "original_body", [](const Function& self) -> ir::SeqStmtsPtr { return self.originalBody_; },
-            "Original function body statement");
+        .def("__repr__", [](const Function& self) {
+            return "<Function '" + self.GetRawName() + "' (magic: " + std::to_string(self.GetFuncMagic()) + ")>";
+        });
 
     // Add a function to get the last function from the Program
     m.def(
