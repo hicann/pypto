@@ -287,15 +287,6 @@ pypto.set_vec_tile_shapes(64, 512)
 
 需要特别说明的是，上述Tiling配置并非一成不变，需要用户根据计算场景（考虑输入Shape、Dtype、Format等）以及硬件平台进行综合考虑。
 
-### 设置在同一Cluster 分配调度线程
-在同一Cluster分配调度线程能够获得更好的性能，但是在整网场景，强制在同一个Cluster分配线程可能因为aicpu资源不够导致功能问题。目前可以通过在设置环境变量的形式配置是否强制在同一Cluster中分配调度线程。环境变量设置为true的时候，框架会强制在同一Cluster内分配调度线程；设置为false，框架则随机分配调度线程。
-
-```bashe
-export LAUNCH_SCHED_SAME_CLUSTER=true
-```
-
-需要特别说明的是，当开启同Cluster分配时, launch_sched_aicpu_num 配置会不生效。
-
 ### 其他注意事项
 
 - 检查输入矩阵、尤其是Shape较大的权重矩阵是否可以提前以NZ格式存储。NZ格式的数据搬运到L1的带宽更高。
