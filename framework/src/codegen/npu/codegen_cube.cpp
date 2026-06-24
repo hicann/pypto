@@ -141,11 +141,7 @@ std::string CodeGenOpNPU::GenCubeOpMatmulAcc() const { return GenCubeOp(false); 
 std::string CodeGenOpNPU::GenParamsStr(const std::unordered_set<int32_t>& skipOperands) const
 {
     std::vector<std::string> params;
-    for (int i = 0; i < MAX_OPERANDS; i++) {
-        if (operand[i] == NULL_OPERAND) {
-            continue;
-        }
-
+    for (int i = 0; i < operandCnt; i++) {
         std::string dtypeStr = DataType2CCEStr(operandDtype[i]);
         std::string prefix = GetAddrTypeByOperandType(operandType[i]);
 
