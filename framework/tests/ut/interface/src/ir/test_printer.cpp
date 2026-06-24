@@ -401,7 +401,7 @@ TEST_F(IRPrinterTest, TestPrintFunction)
     auto funcStr = Print(std::make_shared<Function>(
         "f", std::vector<VarPtr>{x}, std::vector<TypePtr>{Scalar(DataType::INT32)}, body, Sp()));
     EXPECT_NE(funcStr.find("def f"), std::string::npos);
-    EXPECT_NE(funcStr.find("@ir.function"), std::string::npos);
+    EXPECT_NE(funcStr.find("@pl.function"), std::string::npos);
 
     // Multi params
     auto yield = std::make_shared<YieldStmt>(std::vector<ExprPtr>{}, Sp());
