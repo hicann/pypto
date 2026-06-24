@@ -89,7 +89,7 @@ TEST_F(TestConfigRunmode, COMPILE_VF)
 {
     config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
     std::ostringstream oss;
-    CodeGenCloudNPU::AppendVFOptions(oss, NPUArch::DAV_3510, false);
+    CodeGenCloudNPU::AppendVFOptions(NPUArch::DAV_3510, oss);
     EXPECT_EQ(oss.str().size() > 0, true);
     const std::vector<int64_t> shape = {4, 4};
     TileShape::Current().SetVecTile(shape);
