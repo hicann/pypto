@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 import torch_npu
 
-from testcase.scaled_mm_mxfp4_test_case import MXFP4_TESTS, MXFP4Config
+from testcase.matmul_fp4_test_case import MXFP4_TESTS, MXFP4Config
 
 
 K_BLOCK_SIZE_64 = 64
@@ -112,7 +112,7 @@ def unpack_fp4_to_float32(packed_uint8_tensor, tensor_shape):
 def scaledmm_pypto_basic(input_dtype):
     pypto_a_dtype = input_dtype
     pypto_b_dtype = input_dtype
-
+    
     @pypto.frontend.jit(debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0})
     def scaledmm_basic_kernel(
         input_a_tensor: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], dtype=pypto_a_dtype),
@@ -135,7 +135,7 @@ def scaledmm_pypto_basic(input_dtype):
         vm, vn = view_shape
         m_loop = (m + vm - 1) // vm
         n_loop = (n + vn - 1) // vn
-        scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+        scale_k = k // 64
         pypto.set_vec_tile_shapes(tile_shape[0][0], tile_shape[2][0])
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_LO_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L1_nIdx", idx_name="n_idx"):
@@ -173,7 +173,7 @@ def scaledmm_pypto_basic(input_dtype):
                 else:
                     view_shape_scale_b = [scale_k, vn, 2]
                     scale_b_view = pypto.view(scale_b_tensor, view_shape_scale_b, [0, n_offset, 0],
-                                            valid_shape=[scale_k, (n - n_offset).min(vn), 2])
+                                            valid_shape=[scale_k, (n - n_offset).min(vn), 2])   
                 pypto.set_cube_tile_shapes(*tile_shape, enable_k_split)
                 output_view = pypto.scaled_mm(input_a_view, input_b_view, output_dtype, scale_a_view, scale_b_view,
                 a_trans=input_a_trans, b_trans=input_b_trans, scale_a_trans=scale_a_trans, scale_b_trans=scale_b_trans,
@@ -226,7 +226,7 @@ def scaledmm_pypto_bias(input_dtype):
         m, n = output_c_tensor.shape
         n_loop = (n + vn - 1) // vn
         m_loop = (m + vm - 1) // vm
-        scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
+        scale_k = k // 64
 
         pypto.set_vec_tile_shapes(tile_shape[0][0], tile_shape[2][0])
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_LO_mIdx", idx_name="m_idx"):
@@ -279,16 +279,15 @@ def scaledmm_pypto_bias(input_dtype):
 def compute_shapes(config: MXFP4Config) -> FP4TensorShapes:
     m, k = config.a_shape
     n = config.b_shape[1]
-    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
     a_shape = [k, m // 2] if config.a_trans else [m, k // 2]
     a_shape_ori = [k, m] if config.a_trans else [m, k]
     b_shape = [n, k // 2] if config.b_trans else [k, n // 2]
     b_shape_ori = [n, k] if config.b_trans else [k, n]
-    scale_a_shape = [scale_k, m, SHAPE_DIM_2] if config.scale_a_trans else \
-                    [m, scale_k, SHAPE_DIM_2]
-    scale_b_shape = [n, scale_k, SHAPE_DIM_2] if config.scale_b_trans else \
-                    [scale_k, n, SHAPE_DIM_2]
-
+    scale_a_shape = [k // K_BLOCK_SIZE_64, m, SHAPE_DIM_2] if config.scale_a_trans else \
+                    [m, k // K_BLOCK_SIZE_64, SHAPE_DIM_2]
+    scale_b_shape = [n, k // K_BLOCK_SIZE_64, SHAPE_DIM_2] if config.scale_b_trans else \
+                    [k // K_BLOCK_SIZE_64, n, SHAPE_DIM_2]
+    
     return FP4TensorShapes(
         a_shape=a_shape,
         a_shape_ori=a_shape_ori,
@@ -315,32 +314,28 @@ def compute_golden(params: FP4GoldenComputeParams) -> torch.Tensor:
     m = params.m
     n = params.n
     k = params.k
-    scale_k = (k + K_BLOCK_SIZE_64 - 1) // K_BLOCK_SIZE_64
-    padding_k = scale_k * K_BLOCK_SIZE_64 - k
     a_shape_ori = params.a_shape_ori
     b_shape_ori = params.b_shape_ori
 
     if not config.scale_a_trans:
-        scale_a_tmp = scale_a.view(m, scale_k * SHAPE_DIM_2)
+        scale_a_tmp = scale_a.view(m, k // K_BLOCK_SIZE_32)
     else:
-        scale_a_tmp = torch.transpose(scale_a, -2, -1).reshape(scale_k * SHAPE_DIM_2, m).T
+        scale_a_tmp = torch.transpose(scale_a, -2, -1).reshape(k // K_BLOCK_SIZE_32, m).T
 
     if not config.scale_b_trans:
-        scale_b_tmp = torch.transpose(scale_b, -2, -1).reshape(scale_k * SHAPE_DIM_2, n)
+        scale_b_tmp = torch.transpose(scale_b, -2, -1).reshape(k // K_BLOCK_SIZE_32, n)
     else:
-        scale_b_tmp = scale_b.view(n, scale_k * SHAPE_DIM_2).T
+        scale_b_tmp = scale_b.view(n, k // K_BLOCK_SIZE_32).T
 
     scale_a_tmp = np.repeat(scale_a_tmp.to(torch.float32), 32, axis=1)   # (m, k)
     scale_b_tmp = np.repeat(scale_b_tmp.to(torch.float32), 32, axis=0)   # (k, n)
 
     mat_a_fp4 = unpack_fp4_to_float32(mat_a, a_shape_ori)
     mat_a_tmp = mat_a_fp4.to(torch.float32).T if config.a_trans else mat_a_fp4.to(torch.float32)
-    mat_a_tmp = F.pad(mat_a_tmp, ((0, padding_k, 0, 0)), "constant")
     mat_a_tmp = mat_a_tmp * scale_a_tmp.to(torch.float32)
 
     mat_b_fp4 = unpack_fp4_to_float32(mat_b, b_shape_ori)
     mat_b_tmp = mat_b_fp4.to(torch.float32).T if config.b_trans else mat_b_fp4.to(torch.float32)
-    mat_b_tmp = F.pad(mat_b_tmp, ((0, 0, 0, padding_k)), "constant")
     mat_b_tmp = scale_b_tmp.to(torch.float32) * mat_b_tmp
 
     golden = torch.matmul(mat_a_tmp.to(torch.float32), mat_b_tmp.to(torch.float32))
