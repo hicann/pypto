@@ -8,10 +8,9 @@
 
 ## 功能说明
 
-计算输入 Tensor 中每个元素的互补误差函数值, 逐元素运算, 计算公式如下：
-$$
-\text{erfc}(x) = \frac{2}{\sqrt{\pi}} \int_{x}^{\infty} e^{-t^2} dt
-$$
+计算输入Tensor中每个元素的互补误差函数值，逐元素运算。
+
+互补误差函数定义：$$\text{erfc}(x) = \frac{2}{\sqrt{\pi}} \int_{x}^{\infty} e^{-t^2} dt$$
 
 ## 函数原型
 
