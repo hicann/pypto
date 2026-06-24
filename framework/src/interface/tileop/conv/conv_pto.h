@@ -292,7 +292,7 @@ INLINE void TStoreConvNZ2NZ(
 template <CopyOutMode mode, bool isConv3D, typename T, typename U>
 TILEOP void TStoreConv(
     T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& offset2, const int64_t& offset3,
-    const int64_t& offset4, const int64_t& realM, const int64_t& realN, const int64_t& realCutW, const int64_t& cutW)
+    const int64_t& offset4, const int64_t& realM, const int64_t& realN, const int64_t& cutW)
 {
     constexpr auto srcShapeSize = Std::tuple_size<typename U::Shape>::value;
     static_assert(srcShapeSize == SHAPE_DIM2, "L0C shape size should be 2 Dim");
@@ -302,7 +302,7 @@ TILEOP void TStoreConv(
     OffsetInfo offsetInfo = {offset0, offset1, offset2, offset3, offset4};
     if constexpr (mode == CopyOutMode::NZ2ND) {
     } else if constexpr (mode == CopyOutMode::NZ2DN) {
-        TStoreConvNZ2DN<isConv3D>(dst, src, offsetInfo, realM, realN, realCutW, cutW);
+        TStoreConvNZ2DN<isConv3D>(dst, src, offsetInfo, realM, realN, cutW);
     } else if constexpr (mode == CopyOutMode::NZ2NZ) {
         TStoreConvNZ2NZ<isConv3D>(dst, src, offsetInfo, realM, realN, cutW);
     }
