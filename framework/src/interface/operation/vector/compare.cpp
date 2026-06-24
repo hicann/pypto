@@ -32,7 +32,7 @@ void TiledCompareOperationImpl(
 
         const int64_t COUNT_MODE_SIZE = 4096;
         size_t element_size = BytesOf(input1.tensor.GetDataType());
-        CHECK(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
+        ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
         int64_t vcmp_bits_size = (elements_per_chunk + 7) / 8;
 
@@ -148,7 +148,7 @@ LogicalTensorPtr TensorCompareOperation(
     auto resultType = DT_BOOL;
     if (mode == OutType::BIT) {
         resultType = DT_UINT8;
-        CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, resultShape.empty() || resultShape.back() % NUM_VALUE_8 == 0)
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, resultShape.empty() || resultShape.back() % NUM_VALUE_8 == 0)
             << "Last dimension must be divisible by 8 in BIT mode";
         if (!resultShape.empty()) {
             resultShape.back() /= NUM_VALUE_8;
@@ -178,7 +178,7 @@ LogicalTensorPtr TensorCompareOperationScalar(
         resultType = DT_UINT8;
         if (!resultShape.empty()) {
             int64_t lastDim = resultShape.back();
-            CHECK(VectorErrorCode::ERR_CONFIG_ALIGNMENT, lastDim % NUM_VALUE_8 == 0)
+            ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, lastDim % NUM_VALUE_8 == 0)
                 << "Last dimension must be divisible by 8 in BIT mode";
             resultShape.back() = lastDim / NUM_VALUE_8;
             if (!resultValidShape.empty()) {
@@ -232,7 +232,7 @@ void TiledCmpsOperationImpl(
 
         const int64_t COUNT_MODE_SIZE = 4096;
         size_t element_size = BytesOf(input.tensor.GetDataType());
-        CHECK(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
+        ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
         int64_t vcmp_bits_size = (elements_per_chunk + 8 - 1) / 8;
 
