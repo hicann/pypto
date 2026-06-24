@@ -10,11 +10,7 @@
 
 /*!
  * \file tan.h
- * \brief tan operator: rational approximation aligned to CANN TBE tan_compute_v2
- *
- * Algorithm: tan(x) = x * P(x^2) / ((x^2 + R3) * (x + pi/2) * (x - pi/2))
- * Range reduction: 4-part Cody-Waite with pi decomposition
- * Polynomial: P(x^2) = (x^2 * R0 + R1) * x^2 + R2
+ * \brief tan operator: compute tangent function using polynomial approximation
  */
 
 #ifndef TILEOP_TILE_OPERATOR_TAN__H
@@ -23,29 +19,27 @@
 #include "utils/tile_tensor.h"
 #include <type_traits>
 
-template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile, typename Tmp7Tile, typename Tmp8Tile>
-TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile, Tmp7Tile tmp7Tile, Tmp8Tile tmp8Tile)
+template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile>
+TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
 
-    // Constants matching CANN TBE tan_compute_v2 exactly
     constexpr float INV_PI = 0.3183098733425140380859375f;
-    constexpr float PI_V2 = 3.140625f;
-    constexpr float KPI_1 = 0.0009670257568359375f;
-    constexpr float KPI_2 = 6.2771141529083251953125e-7f;
-    constexpr float KPI_3 = 1.21644916362129151821136474609375e-10f;
-    constexpr float KPI_4 = -1.0291767438275201129727065563201904296875e-13f;
-    constexpr float PI_DOWN = 1.57079637050628662109375f;
-    constexpr float PI_DOWN_NEG = -1.57079637050628662109375f;
+    constexpr float PI_HIGH = 3.140625f;
+    constexpr float PI_CORR_1 = 0.0009670257568359375f;
+    constexpr float PI_CORR_2 = 6.2771141529083251953125e-7f;
+    constexpr float PI_CORR_3 = 1.21644916362129151821136474609375e-10f;
+    constexpr float PI_CORR_4 = -1.0291767438275201129727065563201904296875e-13f;
+    constexpr float HALF_PI = 1.57079637050628662109375f;
+    constexpr float HALF_PI_NEG = -1.57079637050628662109375f;
     constexpr float EPS = 0.00000004371139000189375f;
     constexpr float EPS_NEG = -0.00000004371139000189375f;
-    constexpr float R0 = 0.0698520831551998762793f;
-    constexpr float R1 = -6.8711573651634203789f;
-    constexpr float R2 = 61.20362572811089435388f;
-    constexpr float R3 = -24.8048928861126769186219f;
+    constexpr float POLY_R0 = 0.0698520831551998762793f;
+    constexpr float POLY_R1 = -6.8711573651634203789f;
+    constexpr float POLY_R2 = 61.20362572811089435388f;
+    constexpr float POLY_R3 = -24.8048928861126769186219f;
 
-    // k = round(x / pi)
     pto::TMULS(tmpTile, srcTile, INV_PI);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
@@ -58,9 +52,7 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-
-    // KPI_0: input_x = x - k * PI_V2
-    pto::TMULS(tmp3Tile, tmpTile, PI_V2);
+    pto::TMULS(tmp3Tile, tmpTile, PI_HIGH);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -68,9 +60,7 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-
-    // KPI_1: input_x -= k * KPI_1
-    pto::TMULS(tmp3Tile, tmpTile, KPI_1);
+    pto::TMULS(tmp3Tile, tmpTile, PI_CORR_1);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -78,24 +68,59 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-
-    // res_down1 = input_x + PI_DOWN (first factor: x + pi/2)
-    pto::TADDS(tmp4Tile, tmp2Tile, PI_DOWN);
+    pto::TADDS(tmp4Tile, tmp2Tile, HALF_PI);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    // res_down2 = input_x + PI_DOWN_NEG (second factor: x - pi/2)
-    pto::TADDS(tmp5Tile, tmp2Tile, PI_DOWN_NEG);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-
-    // KPI_2: input_x -= k*KPI_2, res_down1 -= k*KPI_2, res_down2 -= k*KPI_2
-    pto::TMULS(tmp3Tile, tmpTile, KPI_2);
+    pto::TMULS(tmp3Tile, tmpTile, PI_CORR_2);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
     pto::TSUB(tmp2Tile, tmp2Tile, tmp3Tile);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TMULS(tmp5Tile, tmpTile, PI_CORR_3);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TSUB(tmp2Tile, tmp2Tile, tmp5Tile);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TMULS(tmp6Tile, tmpTile, PI_CORR_4);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TSUB(tmp2Tile, tmp2Tile, tmp6Tile);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TMUL(dstTile, tmp2Tile, tmp2Tile);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TMULS(tmpTile, dstTile, POLY_R0);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TADDS(tmpTile, tmpTile, POLY_R1);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TMUL(tmpTile, tmpTile, dstTile);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TADDS(tmpTile, tmpTile, POLY_R2);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TMUL(tmpTile, tmpTile, tmp2Tile);
+#ifdef __DAV_V220
+    pipe_barrier(PIPE_V);
+#endif
+    pto::TADDS(dstTile, dstTile, POLY_R3);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -103,40 +128,23 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TSUB(tmp5Tile, tmp5Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    // res_down1 += EPS_NEG, res_down2 += EPS
     pto::TADDS(tmp4Tile, tmp4Tile, EPS_NEG);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TADDS(tmp5Tile, tmp5Tile, EPS);
+    pto::TSUB(tmp4Tile, tmp4Tile, tmp5Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-
-    // KPI_3: input_x -= k*KPI_3, res_down1 -= k*KPI_3, res_down2 -= k*KPI_3
-    pto::TMULS(tmp3Tile, tmpTile, KPI_3);
+    pto::TSUB(tmp4Tile, tmp4Tile, tmp6Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TSUB(tmp2Tile, tmp2Tile, tmp3Tile);
+    pto::TMUL(dstTile, dstTile, tmp4Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TSUB(tmp4Tile, tmp4Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TSUB(tmp5Tile, tmp5Tile, tmp3Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-
-    // KPI_4: input_x -= k*KPI_4, res_down1 -= k*KPI_4, res_down2 -= k*KPI_4
-    pto::TMULS(tmp3Tile, tmpTile, KPI_4);
+    pto::TADDS(tmp2Tile, tmp2Tile, HALF_PI_NEG);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -144,67 +152,30 @@ TILEOP void TanImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpInt32T
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TSUB(tmp4Tile, tmp4Tile, tmp3Tile);
+    pto::TADDS(tmp2Tile, tmp2Tile, EPS);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TSUB(tmp5Tile, tmp5Tile, tmp3Tile);
+    pto::TSUB(tmp2Tile, tmp2Tile, tmp5Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-
-    // Polynomial evaluation
-    // x2 = input_x * input_x
-    pto::TMUL(tmp6Tile, tmp2Tile, tmp2Tile);
+    pto::TSUB(tmp2Tile, tmp2Tile, tmp6Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-
-    // Numerator: res_up = ((x2 * R0 + R1) * x2 + R2) * input_x
-    pto::TMULS(tmp7Tile, tmp6Tile, R0);
+    pto::TMUL(dstTile, dstTile, tmp2Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TADDS(tmp7Tile, tmp7Tile, R1);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMUL(tmp7Tile, tmp7Tile, tmp6Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TADDS(tmp7Tile, tmp7Tile, R2);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMUL(tmp7Tile, tmp7Tile, tmp2Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-
-    // Denominator: res_down = (x2 + R3) * res_down1 * res_down2
-    pto::TADDS(tmp8Tile, tmp6Tile, R3);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMUL(tmp8Tile, tmp8Tile, tmp4Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-    pto::TMUL(tmp8Tile, tmp8Tile, tmp5Tile);
-#ifdef __DAV_V220
-    pipe_barrier(PIPE_V);
-#endif
-
-    // Result: tan(x) = numerator / denominator
-    pto::TDIV(dstTile, tmp7Tile, tmp8Tile);
+    pto::TDIV(dstTile, tmpTile, dstTile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
 }
 
-template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpFp32Tile, typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile, typename Tmp7Tile, typename Tmp8Tile>
-TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp32Tile tmpFp32Tile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile, Tmp7Tile tmp7Tile, Tmp8Tile tmp8Tile)
+template <typename LastUse, typename DstTile, typename SrcTile, typename TmpTile, typename TmpFp32Tile, typename TmpInt32Tile, typename Tmp2Tile, typename Tmp3Tile, typename Tmp4Tile, typename Tmp5Tile, typename Tmp6Tile>
+TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp32Tile tmpFp32Tile, TmpInt32Tile tmpInt32Tile, Tmp2Tile tmp2Tile, Tmp3Tile tmp3Tile, Tmp4Tile tmp4Tile, Tmp5Tile tmp5Tile, Tmp6Tile tmp6Tile)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
@@ -213,7 +184,7 @@ TILEOP void TanHalfImpl(DstTile dstTile, SrcTile srcTile, TmpTile tmpTile, TmpFp
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    TanImpl<LastUse, TmpFp32Tile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(tmpFp32Tile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
+    TanImpl<LastUse, TmpFp32Tile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile>(tmpFp32Tile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -282,10 +253,6 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
         pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
     using Tmp6Tile =
         pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp7Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
-    using Tmp8Tile =
-        pto::Tile<pto::TileType::Vec, float, srcTileH, tmpTileW32Bit, pto::BLayout::RowMajor, -1, -1>;
 
     DstTile dstTile(dstShape3, dstShape4);
     SrcTile srcTile(srcShape3, srcShape4);
@@ -296,8 +263,6 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     Tmp4Tile tmp4Tile(srcShape3, srcShape4);
     Tmp5Tile tmp5Tile(srcShape3, srcShape4);
     Tmp6Tile tmp6Tile(srcShape3, srcShape4);
-    Tmp7Tile tmp7Tile(srcShape3, srcShape4);
-    Tmp8Tile tmp8Tile(srcShape3, srcShape4);
 
     constexpr auto tmpFp32TileSize = srcTileH * tmpTileW32Bit * sizeof(float);
     pto::TASSIGN(tmpFp32Tile, (uint64_t)(tmp.GetAddr()));
@@ -307,8 +272,6 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
     pto::TASSIGN(tmp4Tile, (uint64_t)(tmp.GetAddr() + 4 * tmpFp32TileSize));
     pto::TASSIGN(tmp5Tile, (uint64_t)(tmp.GetAddr() + 5 * tmpFp32TileSize));
     pto::TASSIGN(tmp6Tile, (uint64_t)(tmp.GetAddr() + 6 * tmpFp32TileSize));
-    pto::TASSIGN(tmp7Tile, (uint64_t)(tmp.GetAddr() + 7 * tmpFp32TileSize));
-    pto::TASSIGN(tmp8Tile, (uint64_t)(tmp.GetAddr() + 8 * tmpFp32TileSize));
 
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
@@ -319,10 +282,10 @@ TILEOP void Ttan(T0 dst, T1 src, T2 tmp)
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
 
                 if constexpr (std::is_same<typename T1::Type, float>::value) {
-                    TanImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(dstTile, srcTile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
+                    TanImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile>(dstTile, srcTile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile);
                 } else if constexpr (std::is_same<typename T1::Type, half>::value ||
                                      std::is_same<typename T1::Type, bfloat16_t>::value) {
-                    TanHalfImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile, Tmp7Tile, Tmp8Tile>(dstTile, srcTile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile, tmp7Tile, tmp8Tile);
+                    TanHalfImpl<LastUse, DstTile, SrcTile, TmpFp32Tile, TmpFp32Tile, TmpInt32Tile, Tmp2Tile, Tmp3Tile, Tmp4Tile, Tmp5Tile, Tmp6Tile>(dstTile, srcTile, tmpFp32Tile, tmpFp32Tile, tmpInt32Tile, tmp2Tile, tmp3Tile, tmp4Tile, tmp5Tile, tmp6Tile);
                 }
             }
         }
