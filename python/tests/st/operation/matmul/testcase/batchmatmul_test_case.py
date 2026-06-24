@@ -66,7 +66,7 @@ class BatchMatmulConfig:
     def get_tolerance(cls, dtype_str: str) -> tuple[float, float]:
         info = cls.DTYPE_CONFIG[dtype_str]
         return info["atol"], info["rtol"]
-
+    
     def get_logical_dims_3d(self):
         """获取3D矩阵乘的逻辑维度 (b, m, k, n)"""
         b = max(self.a_shape[0], self.b_shape[0])
@@ -74,7 +74,7 @@ class BatchMatmulConfig:
         k = self.a_shape[1] if self.a_trans else self.a_shape[2]
         n = self.b_shape[1] if self.b_trans else self.b_shape[2]
         return b, m, k, n
-
+    
     def get_logical_dims_4d(self):
         """获取4D矩阵乘的逻辑维度 (b0, b1, m, k, n)"""
         b0 = max(self.a_shape[0], self.b_shape[0])
@@ -86,6 +86,44 @@ class BatchMatmulConfig:
 
 
 BASIC_3D_TESTS = [
+    {
+        "id": "3DTEST1",
+        "name": "fp16_3d_nd_out_fp32",
+        "desc": "FP16 3D NZ输入FP32输出",
+        "a_shape": [5, 128, 256],
+        "b_shape": [5, 256, 512],
+        "dim": 3,
+        "a_dtype": "DT_FP16",
+        "b_dtype": "DT_FP16",
+        "c_dtype": "DT_FP32",
+        "a_format": "NZ",
+        "b_format": "NZ",
+        "a_trans": False,
+        "b_trans": False,
+        "is_acc": False,
+        "viewshape": [3, 128, 320],
+        "tileshape": [[64, 64], [32, 288], [224, 224]],
+        "products": ["950"],
+    },
+    {
+        "id": "3DTEST2",
+        "name": "fp16_3d_nd_out_fp16_trans_a",
+        "desc": "FP16 3D ND输入FP16输出+A转置",
+        "a_shape": [1, 255, 127],
+        "b_shape": [4, 255, 511],
+        "dim": 3,
+        "a_dtype": "DT_FP16",
+        "b_dtype": "DT_FP16",
+        "c_dtype": "DT_FP16",
+        "a_format": "ND",
+        "b_format": "ND",
+        "a_trans": True,
+        "b_trans": False,
+        "is_acc": False,
+        "viewshape": [2, 64, 128],
+        "tileshape": [[64, 64], [64, 128], [128, 128]],
+        "products": ["950", "910"],
+    },
     {
         "id": "3DACCTEST1",
         "name": "fp16_3d_nz_out_fp32_gcc",
@@ -129,6 +167,44 @@ BASIC_3D_TESTS = [
 
 BASIC_4D_TESTS = [
     {
+        "id": "4DTEST1",
+        "name": "fp16_4d_nd_out_fp32",
+        "desc": "FP16 4D ND输入FP32输出",
+        "a_shape": [5, 4, 129, 257],
+        "b_shape": [5, 4, 374, 257],
+        "dim": 4,
+        "a_dtype": "DT_FP16",
+        "b_dtype": "DT_FP16",
+        "c_dtype": "DT_FP32",
+        "a_format": "ND",
+        "b_format": "ND",
+        "a_trans": False,
+        "b_trans": True,
+        "is_acc": False,
+        "viewshape": [3, 3, 256, 246],
+        "tileshape": [[64, 64], [64, 128], [128, 128]],
+        "products": ["950", "910"],
+    },
+    {
+        "id": "4DTEST2",
+        "name": "fp16_4d_nd_out_fp16_trans_a",
+        "desc": "FP16 4D ND输入FP16输出+A转置",
+        "a_shape": [4, 1, 64, 127],
+        "b_shape": [1, 3, 64, 320],
+        "dim": 4,
+        "a_dtype": "DT_BF16",
+        "b_dtype": "DT_BF16",
+        "c_dtype": "DT_FP32",
+        "a_format": "ND",
+        "b_format": "NZ",
+        "a_trans": True,
+        "b_trans": False,
+        "is_acc": False,
+        "viewshape": [4, 3, 64, 128],
+        "tileshape": [[64, 64], [64, 128], [128, 128]],
+        "products": ["950"],
+    },
+    {
         "id": "4DACCTEST1",
         "name": "fp16_4d_nz_out_fp32",
         "desc": "FP16 4D NZ输入FP32输出",
@@ -166,4 +242,23 @@ BASIC_4D_TESTS = [
         "tileshape": [[64, 192], [128, 256], [128, 128]],
         "products": ["950", "910"],
     },
+    {
+        "id": "4DACCTEST3",
+        "name": "int8_4d_nz_out_fp16_trans_a",
+        "desc": "INT8 4D NZ输入INT8输出+B转置",
+        "a_shape": [2, 3, 128, 320],
+        "b_shape": [2, 3, 256, 320],
+        "dim": 4,
+        "a_dtype": "DT_INT8",
+        "b_dtype": "DT_INT8",
+        "c_dtype": "DT_INT32",
+        "a_format": "NZ",
+        "b_format": "NZ",
+        "a_trans": False,
+        "b_trans": True,
+        "is_acc": True,
+        "viewshape": [2, 1, 128, 192],
+        "tileshape": [[64, 128], [64, 192], [64, 128]],
+        "products": ["950"],
+    }
 ]
