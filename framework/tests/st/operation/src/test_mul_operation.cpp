@@ -68,44 +68,6 @@ void UpdateOffset(
     }
 }
 
-static void MulOperationExeFunc1Dims(
-    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
-{
-    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
-    {
-        std::vector<SymbolicScalar> firstInputsShape = {inputs[0].GetShape()[0]};
-        std::vector<SymbolicScalar> secondInputsShape = {inputs[1].GetShape()[0]};
-        std::vector<SymbolicScalar> outputsShape = {outputs[0].GetShape()[0]};
-        auto args = static_cast<const MulOpFuncArgs*>(opArgs);
-        std::vector<int64_t> viewShape = {args->viewShape_[0]};
-        std::vector<int64_t> firstInputViewShape = viewShape;
-        std::vector<int64_t> secondInputViewShape = viewShape;
-        UpdateInputBrcViewShape(firstInputViewShape, firstInputsShape, outputsShape);
-        UpdateInputBrcViewShape(secondInputViewShape, secondInputsShape, outputsShape);
-
-        const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
-        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
-        {
-            std::vector<SymbolicScalar> firstInputValidShape = {
-                std::min(firstInputsShape[0] - bIdx * firstInputViewShape[0], firstInputViewShape[0])};
-            std::vector<SymbolicScalar> secondInputValidShape = {
-                std::min(secondInputsShape[0] - bIdx * secondInputViewShape[0], secondInputViewShape[0])};
-            std::vector<SymbolicScalar> firstOffset = {bIdx * firstInputViewShape[0]};
-            std::vector<SymbolicScalar> secondOffset = {bIdx * secondInputViewShape[0]};
-
-            UpdateInputBrcVaildShape(firstInputValidShape, firstInputsShape, outputsShape);
-            UpdateInputBrcVaildShape(secondInputValidShape, secondInputsShape, outputsShape);
-            UpdateOffset(firstOffset, firstInputsShape, outputsShape);
-            UpdateOffset(secondOffset, secondInputsShape, outputsShape);
-            Tensor tileTensor0 = View(inputs[0], firstInputViewShape, firstInputValidShape, firstOffset);
-            Tensor tileTensor1 = View(inputs[1], secondInputViewShape, secondInputValidShape, secondOffset);
-            TileShape::Current().SetVecTile(args->tileShape_);
-            auto res = Mul(tileTensor0, tileTensor1);
-            Assemble(res, {bIdx * viewShape[0]}, outputs[0]);
-        }
-    }
-}
-
 static void MulOperationExeFunc2Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -363,9 +325,8 @@ class MulOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_
 
 INSTANTIATE_TEST_SUITE_P(
     TestMul, MulOperationTest,
-    ::testing::ValuesIn(GetOpMetaData<MulOpMetaData, 1>(
-        {MulOperationExeFunc1Dims, MulOperationExeFunc2Dims, MulOperationExeFunc3Dims, MulOperationExeFunc4Dims,
-         MulOperationExeFunc5Dims},
+    ::testing::ValuesIn(GetOpMetaData<MulOpMetaData>(
+        {MulOperationExeFunc2Dims, MulOperationExeFunc3Dims, MulOperationExeFunc4Dims, MulOperationExeFunc5Dims},
         "Mul")));
 
 TEST_P(MulOperationTest, TestMul)
