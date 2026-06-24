@@ -67,7 +67,7 @@ std::string CodeGenOpNPU::PrintCastTileTensor() const
         hasTmpBuffer ? GetTileOpParamsWithTmpBuf({ToUnderlying(MIMOIdx::TMP_IDX)}) : GetTileOpParamsByOrder();
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "mode");
     int64_t modeEnum{0};
-    if (mode.has_value()) {
+    if (mode.HasValue()) {
         modeEnum = AnyCast<int64_t>(mode);
     }
     int64_t satModeEnum = 0;
@@ -93,7 +93,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineStatic(const PrintUnaryParam& param) co
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
@@ -128,7 +128,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineDynamicUnaligned(const PrintUnaryParam&
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
     bool isValidAxis = ((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)));
@@ -178,7 +178,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineTileTensor() const
     std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
-    if (axis.has_value()) {
+    if (axis.HasValue()) {
         reduceAxis = AnyCast<int64_t>(axis);
     }
 
@@ -371,7 +371,7 @@ std::string CodeGenOpNPU::PrintExpand(
     std::vector<int64_t> ss = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
     auto axesAttr = opAttrs.at(OpAttributeKey::expandDims);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, axesAttr.has_value()) << "expandDims attribute not found";
+    ASSERT(OperErr::ATTRIBUTE_INVALID, axesAttr.HasValue()) << "expandDims attribute not found";
     auto expandAxes = AnyCast<std::vector<int64_t>>(axesAttr);
     ASSERT(OperErr::ATTRIBUTE_INVALID, !expandAxes.empty()) << "expandDims is empty";
 
@@ -420,7 +420,7 @@ std::string CodeGenOpNPU::PrintOneHot(const PrintUnaryParam& param) const
     paramList.emplace_back(std::to_string(ds[SHAPE_DIM2]));
     int numClasses{-1};
     auto num = opAttrs.at(OP_ATTR_PREFIX + "numClasses");
-    if (num.has_value()) {
+    if (num.HasValue()) {
         numClasses = AnyCast<int64_t>(num);
     }
     constexpr int align = BLOCK_SIZE / sizeof(int64_t);
