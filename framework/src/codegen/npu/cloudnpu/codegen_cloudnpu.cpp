@@ -17,17 +17,13 @@
 #include "codegen_op_cloudnpu.h"
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/utils/parallel_execute.h"
-#include "interface/configs/config_manager_ng.h"
 
 namespace npu::tile_fwk {
 const int PMU_ID_FROM_FUNC_HASH_LEN = 3;
 
 bool CodeGenCloudNPU::IsEnablePMUTrace() const
 {
-    if (platform_ != NPUArch::DAV_3510) {
-        return false;
-    }
-    return config::GetCodeGenOption<bool>(ENABLE_PMU_TRACE);
+    return platform_ == NPUArch::DAV_3510 && ConfigManager::Instance().GetCodeGenConfig(KEY_ENABLE_PMU_TRACE, false);
 }
 
 std::string CodeGenCloudNPU::GenPMUId(const Function& subFunc) const
@@ -42,11 +38,7 @@ std::string CodeGenCloudNPU::GenPMUId(const Function& subFunc) const
     funcHash = funcHash.substr(funcHash.size() - PMU_ID_FROM_FUNC_HASH_LEN);
     id += funcHash; // the max value supported by bisheng is 4096
 
-    // Emit canonical decimal to avoid C++ octal literal parsing (e.g. 058, 095).
-    constexpr unsigned kMaxPmuId = 4096;
-    unsigned idVal = std::stoul(id);
-    idVal %= kMaxPmuId;
-    return std::to_string(idVal);
+    return id;
 }
 
 void CodeGenCloudNPU::PrintPMUTraceAhead(const Function& subFunc, std::ostringstream& oss)
