@@ -291,6 +291,11 @@ private:
             return;
         }
         
+        auto archType = npu::tile_fwk::Platform::Instance().GetSoc().GetNPUArch();
+        if (archType != NPUArch::DAV_2201) {
+            return;
+        }
+        
         try {
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
