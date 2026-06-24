@@ -466,23 +466,4 @@ std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
 
 std::string CodeGenOpNPU::GenArgReduceWithValue() const { return PrintArgReduceTileTensor(); }
 
-std::string CodeGenOpNPU::GenOnlineSoftmaxOp() const
-{
-    std::vector<std::string> params = GetTileOpParamsWithTmpBuf({ID3, ID4});
-    auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
-    ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAttr.has_value()) && (scalarAttr.type() == typeid(Element)))
-        << "ONLINE_SOFTMAX requires scalar scale attribute.";
-    auto scalar = AnyCast<Element>(scalarAttr);
-    params.emplace_back("(" + std::string(DataType2CCEStr(scalar.GetDataType())) + ")" +
-        FormatFloat(scalar.Cast<float>(), scalar.GetDataType()));
-    std::ostringstream oss;
-    oss << tileOpName << WrapParamByParentheses(params) << STMT_END;
-    return oss.str();
-}
-
-std::string CodeGenOpNPU::GenOnlineSoftmaxUpdateOp() const
-{
-    return PrintTileOpWithFullParamsTmpBuf({ID3});
-}
-
 } // namespace npu::tile_fwk
