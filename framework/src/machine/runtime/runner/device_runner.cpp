@@ -245,12 +245,12 @@ int DeviceRunner::InitDeviceArgs(DeviceArgs& args)
     args.deviceId = GetLogDeviceId();
     args.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
     uint32_t aicpuNum = args.archInfo == ArchInfo::DAV_3510 ? dynamic::DEVICE_MAX_AICPU_NUM : 5;
-    uint32_t maxAicpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
+    args.maxAicpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
     args.nrValidAic = GetCfgBlockdim();
-    args.nrAicpu = std::min(aicpuNum, maxAicpuNum);
+    args.nrAicpu = std::min(aicpuNum, args.maxAicpuNum);
     args.scheCpuNum = dynamic::CalcSchAicpuNumByBlockDim(args.nrValidAic, args.nrAicpu, args.archInfo);
     MACHINE_LOGD("DevArgs: block dim[%u], aicpu num[%u], max aicpu num[%u], sche cpu num[%u].",
-        args.nrValidAic, args.nrAicpu, maxAicpuNum, args.scheCpuNum);
+        args.nrValidAic, args.nrAicpu, args.maxAicpuNum, args.scheCpuNum);
 
     InitAiCpuSoBin(args);
 
