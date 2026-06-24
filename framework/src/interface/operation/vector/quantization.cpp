@@ -399,7 +399,7 @@ void TiledQuantizeSymmetric(Function &function, const TileShape &tileShape, size
             op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile});
         } else {
             LogicalTensorPtr workspace =
-                std::make_shared<LogicalTensor>(function, DT_INT32, std::vector<int64_t>{workspaceSize});
+                std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
             op = &function.AddOperation(Opcode::OP_QUANTIZE_SYM, {srcTile, scaleTile}, {dstTile, workspace});
         }
         op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
@@ -467,7 +467,7 @@ void TiledQuantizeAsymmetric(Function &function, const TileShape &tileShape, siz
             op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile});
         } else {
             LogicalTensorPtr workspace =
-                std::make_shared<LogicalTensor>(function, DT_INT32, std::vector<int64_t>{workspaceSize});
+                std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
             op = &function.AddOperation(Opcode::OP_QUANTIZE_ASYM, {srcTile, scaleTile, offsetTile}, {dstTile, workspace});
         }
         op->SetAttribute(OP_ATTR_PREFIX + "axis", axis);
@@ -719,19 +719,12 @@ void QuantizeSymmetricOperationTileFunc(Function &function, const TileShape &til
     const Operation &op) {
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
 
-    // Calculate workspace size: same size as src (with int32_t type)
+    // Calculate workspace size: one 32B block per row
     auto shape = tileShape.GetVecTile();
     int dim = shape.size();
-    // tmpbuf: same size as src, with int32_t type
+    // tmpbuf: [rows, 8] with float type, 8 float = 32B per row
     int64_t tmpRows = (dim >= 2) ? shape.tile[dim - 2] : 1;
-    int64_t tmpCols = (dim >= 1) ? shape.tile[dim - 1] : 1;
-
-    // tmpbuf need 32-byte alignment
-    constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
-    tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
-
-    // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
-    uint32_t workspaceSize = tmpRows * tmpCols;
+    uint32_t workspaceSize = tmpRows * 32;  // one 32B block per row
 
     TiledQuantizeSymmetric(function, tileShape, iOperand[0], iOperand[1], oOperand[0], axis, workspaceSize);
 }
@@ -741,19 +734,12 @@ void QuantizeAsymmetricOperationTileFunc(Function &function, const TileShape &ti
     const Operation &op) {
     int64_t axis = op.GetIntAttribute(OP_ATTR_PREFIX + "axis");
 
-    // Calculate workspace size: same size as src (with int32_t type)
+    // Calculate workspace size: one 32B block per row
     auto shape = tileShape.GetVecTile();
     int dim = shape.size();
-    // tmpbuf: same size as src, with int32_t type
+    // tmpbuf: [rows, 8] with float type, 8 float = 32B per row
     int64_t tmpRows = (dim >= 2) ? shape.tile[dim - 2] : 1;
-    int64_t tmpCols = (dim >= 1) ? shape.tile[dim - 1] : 1;
-
-    // tmpbuf need 32-byte alignment
-    constexpr int64_t alignElements = 8;  // 8 * 4 = 32 bytes
-    tmpCols = (tmpCols + alignElements - 1) / alignElements * alignElements;
-
-    // workspaceSize is element count, not bytes (LogicalTensor constructor takes shape)
-    uint32_t workspaceSize = tmpRows * tmpCols;
+    uint32_t workspaceSize = tmpRows * 32;  // one 32B block per row
 
     TiledQuantizeAsymmetric(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], axis, workspaceSize);
 }
