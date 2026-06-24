@@ -466,7 +466,9 @@ bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> o
     bool isMergeable =
         !(node2Op_[nodeIdx].size() == 1 &&
           operationGraphInfo->opList_[node2Op_[nodeIdx][0]]->GetOpcode() == Opcode::OP_RESHAPE &&
-          (nodeInGraph_[nodeIdx].size() > 1 || nodeOutGraph_[nodeIdx].size() > 1));
+          ((nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].size() > 1) ||
+           (nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].empty()) ||
+           (nodeInGraph_[nodeIdx].empty() && nodeOutGraph_[nodeIdx].size() > 1)));
 
     for (auto opIdx : node2Op_[nodeIdx]) {
         auto& op = operationGraphInfo->opList_[opIdx];
