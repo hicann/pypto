@@ -324,7 +324,7 @@ std::string CodeGenNPU::PrepareCmd(const CompileInfo& compileInfo, const std::st
     oss << "bisheng -c -O3 -g -x cce -std=c++17 ";
     BuildArchOptions(oss, compileInfo);
     BuildIncludes(oss);
-    BuildExtraOptions(oss, compileInfo, compileOptions);
+    BuildExtraOptions(oss, compileOptions);
 
     const std::string srcFile = compileInfo.GetCCEAbsPath();
     const std::string objFile = compileInfo.GetBinAbsPath();
@@ -577,13 +577,13 @@ void CodeGenNPU::BuildIncludes(std::ostringstream& oss) const
         << "-I" << includePath << " ";
 }
 
-void CodeGenNPU::AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool isCube)
+void CodeGenNPU::AppendVFOptions(NPUArch platform, std::ostringstream& oss)
 {
     if (platform != NPUArch::DAV_3510) {
         return;
     }
 
-    if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, true) || isCube) {
+    if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, true)) {
         oss << "--cce-simd-vf-fusion=false ";
         return;
     }
@@ -598,15 +598,14 @@ void CodeGenNPU::AppendVFOptions(std::ostringstream& oss, NPUArch platform, bool
     }
 }
 
-void CodeGenNPU::BuildExtraOptions(
-    std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const
+void CodeGenNPU::BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const
 {
     oss << "-mllvm -cce-aicore-stack-size=0x8000 "
         << "-mllvm -cce-aicore-function-stack-size=0x8000 "
         << "-mllvm -cce-aicore-record-overflow=false "
         << "-mllvm -cce-aicore-addr-transform "
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false ";
-    AppendVFOptions(oss, platform_, compileInfo.IsCube());
+    AppendVFOptions(platform_, oss);
     oss << compileOptions << " ";
 }
 
