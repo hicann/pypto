@@ -164,32 +164,6 @@ ir::TensorOpStmtPtr IRBuilder::CreateTensorOpStmt(
     return std::make_shared<ir::TensorOpStmt>(result, result_token, opcode, args, tokens, attrs, span);
 }
 
-/* create function */
-
-std::shared_ptr<Function> IRBuilder::CreateFunction(
-    std::string name, LogicalTensors params, ir::StmtPtr body, ir::Span span)
-{
-    (void)span;
-    auto& program = Program::GetInstance();
-    auto funcMagicName = name + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().NewId());
-    auto parentFunc = program.GetCurrentFunction();
-
-    auto func = std::make_shared<Function>(program, funcMagicName, name, parentFunc);
-    func->SetFunctionType(FunctionType::DYNAMIC);
-    func->SetGraphType(GraphType::TENSOR_GRAPH);
-
-    for (auto& param : params) {
-        func->AddOriginIncast(param);
-        func->inCasts_.push_back(param);
-        func->GetTensorMap().Insert(param);
-    }
-
-    auto seq = ir::SeqStmts::AsMut(body);
-    func->ir::Function::body_ = seq;
-
-    return func;
-}
-
 /* create symbolic scalar */
 SymbolicScalar IRBuilder::CreateConstInt(int64_t value) { return SymbolicScalar(value); }
 

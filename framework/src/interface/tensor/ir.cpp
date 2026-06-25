@@ -102,47 +102,31 @@ Pass pass::TokenPass()
         "TokenPass");
 }
 
-Pass pass::CreatePathFuncs()
+Pass pass::CreateRootFunctions()
 {
-    return pass::CreateFunctionPass(
-        [](const FunctionPtr& irFunc) -> FunctionPtr {
+    return pass::CreateProgramPass(
+        [](const ProgramPtr& irProgram) -> ProgramPtr {
             auto& programInst = npu::tile_fwk::Program::GetInstance();
             auto parentFunc = programInst.GetLastFunction();
 
-            npu::tile_fwk::LogicalTensors logicalParams;
-            for (const auto& param : irFunc->params_) {
-                auto constLT = std::dynamic_pointer_cast<const LogicalTensor>(param);
-                ASSERT(constLT) << "CreatePathFuncs: param is not a LogicalTensor: " << param->name_;
-                auto lt = std::const_pointer_cast<LogicalTensor>(constLT);
-                logicalParams.push_back(lt);
+            std::map<std::string, FunctionPtr> newFunctions;
+
+            for (const auto& [funcName, irFunc] : irProgram->functions_) {
+                (void)funcName;
+                npu::tile_fwk::RootFunctionBuilder builder(parentFunc);
+                auto dynFunc = builder.Build(irFunc);
+                newFunctions[dynFunc->name_] = std::static_pointer_cast<const ir::Function>(dynFunc);
             }
 
-            auto funcMagicName = irFunc->name_ + "_" +
-                                 std::to_string(npu::tile_fwk::IdGen<npu::tile_fwk::IdType::FUNCTION>::Inst().NewId());
-            auto dynFunc =
-                std::make_shared<npu::tile_fwk::Function>(programInst, funcMagicName, irFunc->name_, parentFunc);
-            dynFunc->SetFunctionType(npu::tile_fwk::FunctionType::DYNAMIC);
-            dynFunc->SetGraphType(npu::tile_fwk::GraphType::TENSOR_GRAPH);
-
-            for (auto& param : logicalParams) {
-                dynFunc->AddOriginIncast(param);
-                dynFunc->inCasts_.push_back(param);
-                dynFunc->GetTensorMap().Insert(param);
+            const auto& funcMap = programInst.GetFunctionMap();
+            for (const auto& [k, v] : funcMap) {
+                newFunctions[k] = std::static_pointer_cast<const ir::Function>(v);
             }
 
-            auto seq = ir::SeqStmts::AsMut(irFunc->body_);
-            dynFunc->originalBody_ = seq;
-
-            auto StmtsWithCall = npu::tile_fwk::CreateFunctionByStmt(irFunc->body_, *dynFunc);
-            dynFunc->ir::Function::body_ = ir::SeqStmts::Wrap(StmtsWithCall, irFunc->span_);
-            dynFunc->name_ = irFunc->name_;
-            dynFunc->ComputeHash();
-
-            npu::tile_fwk::BuildDynFuncSlotScope(dynFunc, logicalParams);
-
-            return std::static_pointer_cast<const ir::Function>(dynFunc);
+            return std::make_shared<const ir::Program>(
+                std::move(newFunctions), irProgram->name_, irProgram->span_);
         },
-        "CreatePathFuncs");
+        "CreateRootFunctions");
 }
 
 } // namespace pypto::ir

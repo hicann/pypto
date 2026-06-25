@@ -157,7 +157,7 @@ def _run_dce(func, *args):
     dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
     merge = ir.Pass.merge_stmts_into_if()
-    create_pf = ir.Pass.create_path_funcs()
+    create_pf = ir.Pass.create_root_functions()
     prog = dce(canonical(prog))
     prog = dce(canonical(prog))
     prog = canonical(merge(prog))

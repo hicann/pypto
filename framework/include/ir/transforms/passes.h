@@ -271,7 +271,7 @@ Pass FlattenSingleStmt();
 
 Pass MergeStmtsIntoIf();
 
-Pass CreatePathFuncs();
+Pass CreateRootFunctions();
 } // namespace pass
 
 /**
