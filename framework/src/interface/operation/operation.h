@@ -291,8 +291,7 @@ public:
 
     Operation(Function& cur, Opcode opcode) : Operation(cur, opcode, {}, {}) {}
 
-    Operation(
-        Function& cur, const std::string& op, const LogicalTensors& input, const LogicalTensors& output)
+    Operation(Function& cur, const std::string& op, const LogicalTensors& input, const LogicalTensors& output)
         : Operation(cur, FindOpcode(op), input, output)
     {
         if (op.substr(0, TILE_STR_PREFIX_LEN) == "TILE_") {
@@ -468,6 +467,9 @@ public:
     bool GetAllowParallelMerge() const { return scopeInfo_.allowParallelMerge; };
     bool GetAllowCrossScopeMerge() const { return scopeInfo_.allowCrossScopeMerge; };
     int GetCvFuseId() const { return scopeInfo_.cvFuseId; };
+
+    int GetOooScopeId() const { return oooScopeId_; }
+    void SetOooScopeId(int id) { oooScopeId_ = id; }
 
     void AddInCtrlOperation(Operation& operation);
 
@@ -734,6 +736,8 @@ public:
     std::vector<std::string>& GetCommentList() { return commentList_; }
 
 private:
+    int oooScopeId_{-1};
+
     void InitCoreTypeAndTileShape(Opcode opcode);
     void InitTensorGraphMetadata();
     void InitLatency(Opcode opcode);

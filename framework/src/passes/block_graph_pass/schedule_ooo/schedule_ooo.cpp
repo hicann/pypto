@@ -248,7 +248,7 @@ Status OoOSchedule::MixSchedule(
     APASS_LOG_INFO_F(Elements::Operation, "=============== START MixSchedule ===============");
     TaskSplitter splitter;
     // 对 taskNode.opList_ 进行排序，并返回预估 latency，随后完成 core schedule 与子图合并。
-    if (EstimateTaskLatencyAndSchedule(splitter, opList) != SUCCESS) {
+    if (EstimateTaskLatencyAndSchedule(splitter, opList, program.second->paramConfigs_.oooSchedMode) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "EstimateTaskLatencyAndSchedule failed.");
         return FAILED;
     }
@@ -298,7 +298,8 @@ Status OoOSchedule::MixSchedule(
     return SUCCESS;
 }
 
-Status OoOSchedule::EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList)
+Status OoOSchedule::EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList,
+    const std::string& schedMode)
 {
     static const std::unordered_map<TargetCoreType, std::string> targetToString{
         {TargetCoreType::AIC, "AIC"},
@@ -314,7 +315,7 @@ Status OoOSchedule::EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::
         }
     }
     CoreScheduler coreScheduler;
-    coreScheduler.Schedule(splitter.GetTaskGraph());
+    coreScheduler.Schedule(splitter.GetTaskGraph(), schedMode);
     APASS_LOG_DEBUG_F(Elements::Operation, "============>after schedule");
     for (size_t i = 0; i < splitter.GetTaskGraph().tasks.size(); i++) {
         auto& t = splitter.GetTaskGraph().tasks[i];

@@ -189,6 +189,23 @@
                         "zh": "手动控制合图参数。将operation赋予特定的scopeId，若相邻的operation具有相同的非-1的scopeId，则会被强制合并在一个子图之中，并且这个子图不会与其他子图合并。",
                         "en": "Parameter for manual control of graph merging. Assign a specific scopeId to an operation; if adjacent operations have the same non-1 scopeId, they will be forcibly merged into one subgraph, and this subgraph will not be merged with any other subgraphs."
                     }
+                },
+                "sg_set_ooo_scope": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "label": {
+                        "zh": "OoO调度手动控制切图参数。相同ooo_scope的连通op会被合并到同一个task中。",
+                        "en": "OoO schedule manual task grouping. Connected ops with the same ooo_scope will be merged into one task."
+                    }
+                },
+                "ooo_sched_mode": {
+                    "type": "string",
+                    "label": {
+                        "zh": "OoO调度模式。取值为空字符串时使用基于拓扑序遍历与局部搜索的调度；取值为HLF时使用最高层级优先调度，按任务到汇点的最长路径降序排列后做EFT插入调度。",
+                        "en": "OoO schedule mode. Empty string uses topology-order traversal with local search; HLF uses Highest Level First scheduling: tasks are ordered by descending longest path to sink, then scheduled via EFT insertion."
+                    }
                 }
             }
         },

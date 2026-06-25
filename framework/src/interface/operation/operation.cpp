@@ -972,6 +972,7 @@ Operation& Operation::CloneOperation(
 {
     Operation& op = func.AddRawOperation(opcode_, iOperandList, oOperandList);
     op.SetScopeInfo(scopeInfo_);
+    op.SetOooScopeId(oooScopeId_);
     if (opAttribute_) {
         op.opAttribute_ = opAttribute_->Clone();
     }

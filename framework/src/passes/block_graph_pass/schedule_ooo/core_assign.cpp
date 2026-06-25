@@ -23,6 +23,8 @@
 #include <cstdlib>
 #include <cmath>
 #include <array>
+#include <numeric>
+#include <algorithm>
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "CoreAssign"
@@ -586,6 +588,7 @@ static bool RunLocalSearch(TaskGraph& taskGraph, double baselineTotalCost)
     return solver.Solve(taskGraph, baselineTotalCost);
 }
 
+// Normalize single-AIV branches — if no task is assigned to AIV0, reassign all AIV1 tasks to AIV0
 void CoreScheduler::NormalizeSingleAIVBranches(TaskGraph& taskGraph)
 {
     bool hasAIV0 = false;
@@ -629,16 +632,96 @@ void CoreScheduler::OptimalScheduleWithSearch(TaskGraph& taskGraph)
 
     // Step 2: in-process local-search refinement (deterministic, no external solver)
     RunLocalSearch(taskGraph, baselineTotalCost);
+}
 
-    // Step 3: normalize single-AIV branches — if no task is assigned to AIV0, reassign all AIV1 tasks to AIV0
-    NormalizeSingleAIVBranches(taskGraph);
+bool CoreScheduler::HasOooScopeTasks(const TaskGraph& taskGraph)
+{
+    for (auto& task : taskGraph.tasks) {
+        for (auto* op : task.opList_) {
+            if (op->GetOooScopeId() > 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void CoreScheduler::HLFSchedule(TaskGraph& taskGraph)
+{
+    taskGraph.ClearSchedule();
+    int n = static_cast<int>(taskGraph.tasks.size());
+    if (n == 0) {
+        return;
+    }
+    APASS_LOG_INFO_F(Elements::Operation, "Start HLF schedule with %d tasks.", n);
+
+    // 计算反向 cycle 深度（从 sink 回推，累加每个 task 的 latency）
+    std::vector<int> revDepth(n, 0);
+    std::vector<int> revTopoOrder;
+    revTopoOrder.reserve(n);
+    std::vector<int> outDeg(n, 0);
+    for (int i = 0; i < n; i++) {
+        outDeg[i] = static_cast<int>(taskGraph.tasks[i].outTasks.size());
+    }
+    std::queue<int> q;
+    for (int i = 0; i < n; i++) {
+        if (outDeg[i] == 0) {
+            revDepth[i] = std::max(1, taskGraph.tasks[i].latency);
+            q.push(i);
+        }
+    }
+    while (!q.empty()) {
+        int u = q.front();
+        q.pop();
+        revTopoOrder.push_back(u);
+        for (int pred : taskGraph.tasks[u].inTasks) {
+            int newDepth = revDepth[u] + std::max(1, taskGraph.tasks[pred].latency);
+            if (newDepth > revDepth[pred]) {
+                revDepth[pred] = newDepth;
+            }
+            outDeg[pred]--;
+            if (outDeg[pred] == 0) {
+                q.push(pred);
+            }
+        }
+    }
+
+    // 按反向深度降序排列，同深度内 AIC 优先于 AIV
+    std::vector<int> order(n);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&](int a, int b) {
+        if (revDepth[a] != revDepth[b]) {
+            return revDepth[a] > revDepth[b];
+        }
+        bool aIsAIC = (taskGraph.tasks[a].coreType == ScheduleCoreType::AIC);
+        bool bIsAIC = (taskGraph.tasks[b].coreType == ScheduleCoreType::AIC);
+        if (aIsAIC != bIsAIC) {
+            return aIsAIC > bIsAIC;
+        }
+        return a < b;
+    });
+
+    for (int i = 0; i < n; i++) {
+        APASS_LOG_INFO_F(
+            Elements::Operation, "HLF order[%d] = task %d, revDepth=%d, coreType=%s.",
+            i, order[i], revDepth[order[i]],
+            taskGraph.tasks[order[i]].coreType == ScheduleCoreType::AIC ? "AIC" : "AIV");
+    }
+
+    EFTWithInsertSchedule(taskGraph, order);
+    APASS_LOG_INFO_F(Elements::Operation, "HLF schedule done, makespan=%d.", taskGraph.makespan);
 }
 
 // 根据节点数量，判断是否遍历所有拓扑序进行任务排布
-void CoreScheduler::Schedule(TaskGraph& taskGraph)
+void CoreScheduler::Schedule(TaskGraph& taskGraph, const std::string& schedMode)
 {
-    APASS_LOG_INFO_F(Elements::Operation, "Start schedule.");
-    OptimalScheduleWithSearch(taskGraph);
+    APASS_LOG_INFO_F(Elements::Operation, "Start schedule, mode=%s.", schedMode.c_str());
+    if (schedMode == "HLF") {
+        HLFSchedule(taskGraph);
+    } else {
+        OptimalScheduleWithSearch(taskGraph);
+    }
+    NormalizeSingleAIVBranches(taskGraph);
 }
 
 } // namespace npu::tile_fwk

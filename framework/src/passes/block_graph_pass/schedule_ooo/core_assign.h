@@ -117,7 +117,7 @@ public:
     void EFTSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
     void BruteForceScheduleRecursiveStep(
         std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph, std::vector<int>& topoList);
-    void Schedule(TaskGraph& taskGraph);
+    void Schedule(TaskGraph& taskGraph, const std::string& schedMode = "");
     void OptimalScheduleWithSearch(TaskGraph& taskGraph);
     double CalcBaselineCost(const TaskGraph& taskGraph, int n);
 
@@ -142,6 +142,8 @@ public:
         std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, std::set<int>& scheduledTasks,
         std::function<bool(TargetCoreType)> isAicCore,
         std::unordered_map<int, TargetCoreType>& vecBranchToCore);
+    void HLFSchedule(TaskGraph& taskGraph);
+    static bool HasOooScopeTasks(const TaskGraph& taskGraph);
     void NormalizeSingleAIVBranches(TaskGraph& taskGraph);
 };
 

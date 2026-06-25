@@ -188,6 +188,7 @@ void SetParamConfig(Function* currentFuncPtr)
     currentFuncPtr->paramConfigs_.vecNBufferSetting =
         currentScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);
     currentFuncPtr->paramConfigs_.autoMixPartition = currentScope->GetPassConfig<int>(AUTO_MIX_PARTITION);
+    currentFuncPtr->paramConfigs_.oooSchedMode = currentScope->GetPassConfig<std::string>(OOO_SCHED_MODE);
     // Function-granularity setting
     if (currentScope->HasConfig("pass.cube_l1_reuse_setting_by_func")) {
         currentFuncPtr->paramConfigs_.cubeL1ReuseSettingByFunc =

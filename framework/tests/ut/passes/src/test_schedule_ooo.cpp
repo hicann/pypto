@@ -1771,6 +1771,58 @@ TEST_F(ScheduleOoOTest, TestCoreAssign)
     EXPECT_EQ(splitter.GetMergedOperations().size(), opList.size());
 }
 
+TEST_F(ScheduleOoOTest, TestOooScopeMerge)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t0", "t1", "t2", "t3", "t4"};
+    std::vector<Opcode> opCodes{Opcode::OP_A_MUL_B, Opcode::OP_ADDS, Opcode::OP_ADDS, Opcode::OP_EXP};
+    std::vector<std::vector<std::string>> ioperands{{"t0", "t0"}, {"t1"}, {"t2"}, {"t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"op1", "op2", "op3", "op4"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {256, 256}, tensorNames), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+
+    auto op2 = subGraph.GetOp("op2");
+    auto op3 = subGraph.GetOp("op3");
+    auto op4 = subGraph.GetOp("op4");
+    ASSERT_NE(op2, nullptr);
+    ASSERT_NE(op3, nullptr);
+    ASSERT_NE(op4, nullptr);
+    op2->SetOooScopeId(1);
+    op4->SetOooScopeId(1);
+    int magic2 = op2->GetOpMagic();
+    int magic3 = op3->GetOpMagic();
+    int magic4 = op4->GetOpMagic();
+
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    auto opList = function->Operations(false).DuplicatedOpList();
+    EXPECT_EQ(opList.size(), 4U);
+
+    TaskSplitter splitter;
+    splitter.SplitGraph(opList);
+    auto& tasks = splitter.GetTaskGraph().tasks;
+
+    bool foundMerged23 = false;
+    bool foundMerged24 = false;
+    for (auto& task : tasks) {
+        bool hasOp2 = false, hasOp3 = false, hasOp4 = false;
+        for (auto* op : task.opList_) {
+            if (op->GetOpMagic() == magic2) hasOp2 = true;
+            if (op->GetOpMagic() == magic3) hasOp3 = true;
+            if (op->GetOpMagic() == magic4) hasOp4 = true;
+        }
+        if (hasOp2 && hasOp3) {
+            foundMerged23 = true;
+        }
+        if (hasOp2 && hasOp4) {
+            foundMerged24 = true;
+        }
+    }
+    EXPECT_TRUE(!foundMerged23) << "op2 and op3 should not be merged into one task by ooo_scope";
+    EXPECT_TRUE(foundMerged24) << "op2 and op4 should be merged into one task by ooo_scope";
+}
+
 TEST_F(ScheduleOoOTest, TestLatencyEstimatorMainLoop)
 {
     // 创建测试数据
