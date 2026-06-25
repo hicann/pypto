@@ -1381,10 +1381,17 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
 {
     DECLARE_TRACER();
 
+    const auto& srcShape = tensor.GetShape();
+    const auto& dstShape = dest.GetShape();
+    CHECK_OP(dstShape.size() == srcShape.size()) << "Assemble: src and dest requires same shape";
+    CHECK_OP(dstShape.size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
+
+    for (size_t dimIdx = 0; dimIdx < srcShape.size(); ++dimIdx) {
+        CHECK_OP(srcShape[dimIdx] > 0) << "Assemble: shape of src tensor requires interger";
+    }
+
     CHECK_OP(dest.GetStorage(false)->Format() == tensor.GetStorage(false)->Format())
         << "Assemble: src and dest requires same format";
-    CHECK_OP(dest.GetShape().size() == tensor.GetShape().size()) << "Assemble: src and dest requires same shape";
-    CHECK_OP(dest.GetShape().size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
 
     auto &func = *Program::GetInstance().GetCurrentFunction();

@@ -41,6 +41,7 @@ constexpr uint32_t DAV3510_AICPU_NUM_6 = 6;       // DAV3510 6 个 AICPU 配置
 constexpr uint32_t DAV3510_AICPU_NUM_7 = 7;       // DAV3510 7 个 AICPU 配置
 constexpr uint32_t DAV3510_DIE0_MAX_CPUID_4 = 4;  // 对应 aiCpuNum=6 的 die0 最大 CPU ID
 constexpr uint32_t DAV3510_DIE0_MAX_CPUID_5 = 5;  // 对应 aiCpuNum=7 的 die0 最大 CPU ID
+
 inline void ValidateRuntimeDevice(int32_t targetDevId)
 {
     int32_t currentDevId = 0;
