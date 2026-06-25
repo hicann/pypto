@@ -966,7 +966,7 @@ int PipeSync::GetMaxEventId(const PipePairEx& pp)
     auto it1 = doublePipeOp.find(pp);
     auto it2 = doublePipeOp.find(ppReverse);
     if (it1 == doublePipeOp.end() && it2 == doublePipeOp.end()) {
-        return EVENT_NUM;
+        return EVENT_ID7;
     }
     return EVENT_ID7;
 }
