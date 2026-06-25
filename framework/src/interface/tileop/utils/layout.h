@@ -351,7 +351,7 @@ __aicore__ inline constexpr bool JudgeValidShapeEqualTileShape()
 {
     if constexpr (T0::IsStaticLayout()) {
         constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
-        if constexpr (shapeSize == 1 || shapeSize == 2) {
+        if constexpr (shapeSize == 1) {
             return true;
         }
         constexpr auto outterStride = GetOuterStride<typename T0::Stride>();
