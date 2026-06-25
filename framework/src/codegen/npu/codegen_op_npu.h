@@ -163,7 +163,6 @@ public:
     std::string GenDistOp() const;
     std::string GetTemplateDType() const;
     std::string GenTemplateParams() const;
-    std::string GenExtraTemplateParamsForMoeDistributedCombine(int32_t operandIndex) const;
     std::string GenOffsets(int32_t operandIndex) const;
     std::string GenShapes(int32_t operandIndex) const;
     std::string GenRawShapes(int32_t operandIndex) const;
@@ -220,8 +219,6 @@ protected:
     std::string GenTemplateParamsForLoad() const;
     std::string GenTemplateParamsForStore() const;
     std::string GenTemplateParamsForSignal() const;
-    std::string GenTemplateParamsForMoeDistributedCombineSend() const;
-    std::string GenTemplateParamsForMoeDistributedCombineReceive() const;
     std::string GenTemplateParamsForSet() const;
     std::string GenTemplateParamsDefault() const;
 
@@ -230,14 +227,6 @@ protected:
     std::string GenOffsetsAndRawShapesForShmemStore() const;
     std::string GenOffsetsAndRawShapesForShmemLoad() const;
     std::string GenOffsetsAndRawShapesForShmemSignal() const;
-    std::string GenOffsetsAndRawShapesForMoeDistributedCombineSend() const;
-    std::string GenOffsetsAndRawShapesForMoeDistributedCombineReceive() const;
-    std::string GenOffsetsAndRawShapesForSendToRoutingExpert() const;
-    std::string GenOffsetsAndRawShapesForSendToSharedExpert() const;
-    std::string GenOffsetsAndRawShapesForCopyToLocalExpert() const;
-    std::string GenOffsetsAndRawShapesForDispatchSetFlag() const;
-    std::string GenOffsetsAndRawShapesForFfnOperations() const;
-    std::string GenOffsetsAndRawShapesForFfnCombineInfo() const;
     std::string GenOffsetsAndRawShapesForShmemSet() const;
     std::string GenOffsetsAndRawShapesDefault() const;
     std::string GenTargetRankStr() const;

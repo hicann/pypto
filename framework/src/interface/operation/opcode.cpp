@@ -1241,19 +1241,6 @@ void OpcodeManager::RegisterDistribute()
         Opcode::OP_BIND_TENSOR, OpCoreType::ANY, "BIND_TENSOR", {}, {MemoryType::MEM_DEVICE_DDR},
         {"TileOp::Distributed::ShmemGet", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
         {OP_ATTR_PREFIX + "BindTensor"});
-    RegisterInfo(
-        Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, OpCoreType::ANY, "MOE_DISTRIBUTED_COMBINE_SEND",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR,
-         MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {"TileOp::Distributed::MoeDistributedCombineSend", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, OpCoreType::ANY, "MOE_DISTRIBUTED_COMBINE_RECEIVE",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {"TileOp::Distributed::MoeDistributedCombineReceive", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
 }
 
 void OpcodeManager::RegisterCommon()
@@ -1342,50 +1329,6 @@ void OpcodeManager::RegisterCommon()
     RegisterInfo(
         Opcode::OP_BAR_ALL, OpCoreType::ANY, "BAR.ALL", {}, {}, {"BAR.ALL", PIPE_S, PIPE_S, CoreType::AIC},
         OpCalcType::SYNC);
-    RegisterInfo(
-        Opcode::OP_SEND_TO_ROUTING_EXPERT, OpCoreType::ANY, "SEND_TO_ROUTING_EXPERT",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {"TileOp::Distributed::SendToRoutingExpert", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OP_ATTR_PREFIX + "distributed"});
-    RegisterInfo(
-        Opcode::OP_SEND_TO_SHARED_EXPERT, OpCoreType::ANY, "SEND_TO_SHARED_EXPERT",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-        {"TileOp::Distributed::SendToSharedExpert", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_COPY_TO_LOCAL_EXPERT, OpCoreType::ANY, "COPY_TO_LOCAL_EXPERT", {MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-        {"TileOp::Distributed::CopyToLocalExpert", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_DISPATCH_SET_FLAG, OpCoreType::ANY, "DISPATCH_SET_FLAG",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {"TileOp::Distributed::DispatchSetFlag", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_FFN_SCHED, OpCoreType::ANY, "FFN_SCHED", {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-        {"TileOp::Distributed::FFNSched", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_FFN_BATCHING, OpCoreType::ANY, "FFN_BATCHING",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-        {"TileOp::Distributed::FFNBatching", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_FFN_COMBINEINFO, OpCoreType::ANY, "FFN_COMBINEINFO",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-        {"TileOp::Distributed::FFNCombineInfo", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
-    RegisterInfo(
-        Opcode::OP_FFN_VALIDCNT, OpCoreType::ANY, "FFN_VALIDCNT",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
-        {"TileOp::Distributed::FFNValidCnt", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED,
-        {OpAttributeKey::requiresBoundaryCopy});
     RegisterInfo(
         Opcode::OP_AICPU_CALL_AIC, OpCoreType::ANY, "AICPU_CALL_AIC", {}, {},
         {"TileOp::AicpuCall", PIPE_S, PIPE_S, CoreType::AIC}, OpCalcType::SYS);
