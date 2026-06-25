@@ -35,16 +35,13 @@ TILEOP void TOnlineSoftmaxSyncV()
 #endif
 }
 
-template <typename TileDataOut, typename TileDataIn>
-__tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& srcTile)
+template <typename TileDataOut, typename TileDataIn, typename Scalar>
+__tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& srcTile, Scalar scale)
 {
     __ubuf__ typename TileDataIn::DType* dst = (__ubuf__ typename TileDataIn::DType*)__cce_get_tile_ptr(dstTile.data());
     __ubuf__ typename TileDataIn::DType* src = (__ubuf__ typename TileDataIn::DType*)__cce_get_tile_ptr(srcTile.data());
 
     __ubuf__ float* src0_ub = (__ubuf__ float*)src;
-    __ubuf__ float* src0_ub1 = src0_ub + 128;
-    __ubuf__ float* src0_ub2 = src0_ub + 256;
-    __ubuf__ float* src0_ub3 = src0_ub + 384;
     __ubuf__ float* p0 = src0_ub + 4 * 64;
     __ubuf__ float* p1 = src0_ub + 5 * 64;
     __ubuf__ float* p2 = src0_ub + 6 * 64;
@@ -52,16 +49,11 @@ __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& src
     __VEC_SCOPE__
     {
         vector_f32 max_0a, max_1a, max_2a, max_3a;
-        vector_f32 max_0b, max_1b, max_2b, max_3b;
 
         vbr(max_0a, 0);
-        vbr(max_0b, 0);
         vbr(max_1a, 0);
-        vbr(max_1b, 0);
         vbr(max_2a, 0);
-        vbr(max_2b, 0);
         vbr(max_3a, 0);
-        vbr(max_3b, 0);
 
         vector_bool preg_108 = pset_b16(PAT_ALL);
 
@@ -85,6 +77,7 @@ __tf__ PTO_INTERNAL void TCOLMAX_HIGH_PERF(TileDataOut& dstTile, TileDataIn& src
         vmax(max_0a, max_0a, max_1a, preg_108, MODE_ZEROING);
         vmax(max_2a, max_2a, max_3a, preg_108, MODE_ZEROING);
         vmax(max_0a, max_0a, max_2a, preg_108, MODE_ZEROING);
+        vmuls(max_0a, max_0a, scale, preg_108, MODE_ZEROING);
         vsts(max_0a, (__ubuf__ float*)dst, 0, NORM_B16, preg_108);
     }
 }
@@ -107,19 +100,26 @@ TILEOP void TOnlineSoftmax(
     scaledScoresTile.Assign(scaledScores);
     reduceWorkspaceTile.Assign(reduceWorkspace);
 
-    pto::TMULS(scaledScoresTile.Data(), scoresTile.Data(), scale);
+    auto &expScoresData = expScoresTile.Data();
+    auto &columnMaxData = columnMaxTile.Data();
+    auto &columnSumData = columnSumTile.Data();
+    auto &scoresData = scoresTile.Data();
+    auto &scaledScoresData = scaledScoresTile.Data();
+    auto &reduceWorkspaceData = reduceWorkspaceTile.Data();
+
+    TCOLMAX_HIGH_PERF(columnMaxData, scoresData, scale);
+
+    TOnlineSoftmaxSyncV();
+    [[pto::last_use(0, 1)]] pto::TMULS(scaledScoresData, scoresData, scale);
     TOnlineSoftmaxSyncV();
 
-    TCOLMAX_HIGH_PERF(columnMaxTile.Data(), scaledScoresTile.Data());
-
+    pto::TCOLEXPANDSUB(scaledScoresData, scaledScoresData, columnMaxData);
     TOnlineSoftmaxSyncV();
-    pto::TCOLEXPANDSUB(scaledScoresTile.Data(), scaledScoresTile.Data(), columnMaxTile.Data());
+    pto::TEXP(scaledScoresData, scaledScoresData);
     TOnlineSoftmaxSyncV();
-    pto::TEXP(scaledScoresTile.Data(), scaledScoresTile.Data());
+    pto::TCVT<false>(expScoresData, scaledScoresData, pto::RoundMode::CAST_ROUND, pto::SaturationMode::OFF);
     TOnlineSoftmaxSyncV();
-    pto::TCVT(expScoresTile.Data(), scaledScoresTile.Data(), pto::RoundMode::CAST_ROUND, pto::SaturationMode::OFF);
-    TOnlineSoftmaxSyncV();
-    pto::TCOLSUM(columnSumTile.Data(), scaledScoresTile.Data(), reduceWorkspaceTile.Data(), true);
+    [[pto::last_use(0, 1, 1)]]pto::TCOLSUM(columnSumData, scaledScoresData, reduceWorkspaceData, false);
 }
 
 #define OP_TILE_OP_ONLINESOFTMAXUPDATE TOnlineSoftmaxUpdate
@@ -168,36 +168,51 @@ TILEOP void TOnlineSoftmaxUpdate(
     currentMaxTile.Assign(currentMax);
     currentSumTile.Assign(currentSum);
     currentOutputTile.Assign(currentOutput);
+    auto &updatedMaxData = updatedMaxTile.Data();
+    auto &updatedSumData = updatedSumTile.Data();
+    auto &updatedOutputData = updatedOutputTile.Data();
+    auto &previousMaxData = previousMaxTile.Data();
+    auto &previousSumData = previousSumTile.Data();
+    auto &previousOutputData = previousOutputTile.Data();
+    auto &currentMaxData = currentMaxTile.Data();
+    auto &currentSumData = currentSumTile.Data();
+    auto &currentOutputData = currentOutputTile.Data();
+
     pto::TASSIGN(previousScaleTile, (uint64_t)(updateWorkspace.GetAddr()));
     pto::TASSIGN(currentScaleTile, (uint64_t)(updateWorkspace.GetAddr() + statisticStrideBytes));
     pto::TASSIGN(scaledCurrentSumTile, (uint64_t)(updateWorkspace.GetAddr() + 2U * statisticStrideBytes));
     pto::TASSIGN(scaledCurrentOutputTile, (uint64_t)(updateWorkspace.GetAddr() + 3U * statisticStrideBytes));
 
-    pto::TMAX(updatedMaxTile.Data(), previousMaxTile.Data(), currentMaxTile.Data());
+    pto::TMAX(updatedMaxData, previousMaxData, currentMaxData);
     TOnlineSoftmaxSyncV();
 
-    pto::TSUB(previousScaleTile, previousMaxTile.Data(), updatedMaxTile.Data());
+    [[pto::last_use(0, 1, 0)]]pto::TSUB(previousScaleTile, previousMaxData, updatedMaxData);
     TOnlineSoftmaxSyncV();
+
     pto::TEXP(previousScaleTile, previousScaleTile);
     TOnlineSoftmaxSyncV();
 
-    pto::TSUB(currentScaleTile, currentMaxTile.Data(), updatedMaxTile.Data());
+    [[pto::last_use(0, 1, 0)]]pto::TSUB(currentScaleTile, currentMaxData, updatedMaxData);
     TOnlineSoftmaxSyncV();
+
     pto::TEXP(currentScaleTile, currentScaleTile);
     TOnlineSoftmaxSyncV();
 
-    pto::TMUL(updatedSumTile.Data(), previousScaleTile, previousSumTile.Data());
-    TOnlineSoftmaxSyncV();
-    pto::TMUL(scaledCurrentSumTile, currentScaleTile, currentSumTile.Data());
-    TOnlineSoftmaxSyncV();
-    pto::TADD(updatedSumTile.Data(), updatedSumTile.Data(), scaledCurrentSumTile);
+    [[pto::last_use(0, 0, 1)]]pto::TMUL(updatedSumData, previousScaleTile, previousSumData);
     TOnlineSoftmaxSyncV();
 
-    pto::TCOLEXPANDMUL(updatedOutputTile.Data(), previousOutputTile.Data(), previousScaleTile);
+    [[pto::last_use(0, 0, 1)]]pto::TMUL(scaledCurrentSumTile, currentScaleTile, currentSumData);
     TOnlineSoftmaxSyncV();
-    pto::TCOLEXPANDMUL(scaledCurrentOutputTile, currentOutputTile.Data(), currentScaleTile);
+    [[pto::last_use(0, 0, 1)]]pto::TADD(updatedSumData, updatedSumData, scaledCurrentSumTile);
     TOnlineSoftmaxSyncV();
-    pto::TADD(updatedOutputTile.Data(), updatedOutputTile.Data(), scaledCurrentOutputTile);
+
+    [[pto::last_use(0, 1, 1)]]pto::TCOLEXPANDMUL(updatedOutputData, previousOutputData, previousScaleTile);
+    TOnlineSoftmaxSyncV();
+
+    [[pto::last_use(0, 1, 1)]]pto::TCOLEXPANDMUL(scaledCurrentOutputTile, currentOutputData, currentScaleTile);
+    TOnlineSoftmaxSyncV();
+
+    [[pto::last_use(0, 0, 1)]]pto::TADD(updatedOutputData, updatedOutputData, scaledCurrentOutputTile);
     TOnlineSoftmaxSyncV();
 }
 
