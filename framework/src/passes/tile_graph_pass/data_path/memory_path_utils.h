@@ -34,7 +34,10 @@ public:
 
     static bool ShouldUseDdrForSpecialPath(bool hasParallelDifferentRequirement, MemoryType from, MemoryType to);
 
-    // 在判断直接搬运路径冲突前，解析 OP_VIEW 背后的有效消费者需求。
+    // 在判断直接搬运路径冲突前，解析 OP_VIEW/OP_ASSEMBLE 背后的有效消费者需求。
+    // OP_VIEW: 通过 ViewOpAttribute.GetTo() 获取目的地类型。
+    // OP_ASSEMBLE: 若处于特殊直连路径且 output 有下游消费者，推断 targetType；
+    //              无下游消费者（如 outcast）则保留 output MemoryTypeOriginal。
     // resolver 的语义与阶段相关：AssignMemoryType 阶段可递归穿透 view 消费者，
     // ConvertInserter 阶段应基于 tensorTobeMap 中已经规划好的直接需求判断。
     static MemoryType ResolveEffectiveConsumerRequirement(

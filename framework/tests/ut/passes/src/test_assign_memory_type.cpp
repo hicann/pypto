@@ -1089,7 +1089,7 @@ struct L0C2UBTestShapes {
     std::vector<int64_t> shapeC = {NUM_64, NUM_64};
 };
 
-L0C2UBTestShapes PrepareL0C2UBTest()
+L0C2UBTestShapes PrepareA5Platform()
 {
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     Platform::Instance().ReloadMemoryPaths("3510");
@@ -1853,7 +1853,7 @@ TEST_F(AssignMemoryTypeTest, OversizedViewInputRequirementFallback)
 
 TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
 {
-    auto shapes = PrepareL0C2UBTest();
+    auto shapes = PrepareA5Platform();
     PROGRAM("AssignMemoryTest")
     {
         Tensor inputA(DataType::DT_FP16, shapes.shapeA, "A");
@@ -1904,7 +1904,7 @@ TEST_F(AssignMemoryTypeTest, TestL0C2UBSmallToLarge)
 
 TEST_F(AssignMemoryTypeTest, TestL0C2UBParallelDdrFallback)
 {
-    auto shapes = PrepareL0C2UBTest();
+    auto shapes = PrepareA5Platform();
     PROGRAM("AssignMemoryTest")
     {
         Tensor inputA(DataType::DT_FP16, shapes.shapeA, "A");
@@ -2277,4 +2277,78 @@ TEST_F(AssignMemoryTypeTest, DdrViewMatmulNoAssemble)
     EXPECT_EQ(inputA->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
     EXPECT_EQ(viewOutput->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR);
 }
+
+TEST_F(AssignMemoryTypeTest, TestL0C2UBAssembleDirectPathNotDdrFallback)
+{
+    auto shapes = PrepareA5Platform();
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA(DataType::DT_FP16, shapes.shapeA, "A");
+        Tensor inputB(DataType::DT_FP16, shapes.shapeB, "B");
+        Tensor inputC(DataType::DT_FP32, shapes.shapeC, "C");
+        Tensor ubAssembleOut(DataType::DT_FP32, shapes.shapeC, "ubAssembleOut");
+        Tensor out(DataType::DT_FP32, shapes.shapeC, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestL0C2UBAssembleDirectPathNotDdrFallback", {inputA, inputB, inputC, ubAssembleOut, out})
+        {
+            TileShape::Current().SetCubeTile({NUM_32, NUM_32}, {NUM_64, NUM_64}, {NUM_64, NUM_64});
+            Tensor ab = Matrix::Matmul(out.GetDataType(), inputA, inputB);
+            Assemble(ab, {0, 0}, ubAssembleOut);
+            TileShape::Current().SetVecTile(NUM_64, NUM_64);
+            ubAssembleOut = Exp(ubAssembleOut);
+            out = Add(ab, inputC);
+        }
+
+        originFunction =
+            Program::GetInstance().GetFunctionByRawName("TENSOR_TestL0C2UBAssembleDirectPathNotDdrFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_L0C, MemoryType::MEM_UB), 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
+TEST_F(AssignMemoryTypeTest, TestUB2L1AssembleDirectPathNotDdrFallback)
+{
+    PrepareA5Platform();
+    std::vector<int64_t> ub2l1ShapeA = {32, 64};
+    std::vector<int64_t> ub2l1ShapeB = {64, 64};
+    std::vector<int64_t> ub2l1ShapeC = {32, 64};
+    PROGRAM("AssignMemoryTest")
+    {
+        Tensor inputA1(DataType::DT_FP32, ub2l1ShapeA, "A1");
+        Tensor inputA2(DataType::DT_FP32, ub2l1ShapeA, "A2");
+        Tensor inputB1(DataType::DT_FP32, ub2l1ShapeB, "B1");
+        Tensor inputB2(DataType::DT_FP32, ub2l1ShapeB, "B2");
+        Tensor l1AssembleOut(DataType::DT_FP32, ub2l1ShapeC, "l1AssembleOut");
+        Tensor out(DataType::DT_FP32, ub2l1ShapeC, "output");
+        SetFullTestStrategy();
+        Function* originFunction = nullptr;
+
+        config::SetBuildStatic(true);
+        FUNCTION("TestUB2L1AssembleDirectPathNotDdrFallback", {inputA1, inputA2, inputB1, inputB2, l1AssembleOut, out})
+        {
+            TileShape::Current().SetVecTile(16, 32);
+            Tensor add1 = Add(inputA1, inputA2);
+            Assemble(add1, {0, 0}, l1AssembleOut);
+            Tensor add2 = Add(inputB1, inputB2);
+            TileShape::Current().SetCubeTile({32, 32}, {64, 64}, {64, 64});
+            l1AssembleOut = Matrix::Matmul(out.GetDataType(), l1AssembleOut, add2);
+            out = Matrix::Matmul(out.GetDataType(), add1, add2);
+        }
+
+        originFunction =
+            Program::GetInstance().GetFunctionByRawName("TENSOR_TestUB2L1AssembleDirectPathNotDdrFallback");
+        ASSERT_NE(originFunction, nullptr) << "Function pointer is null";
+        EXPECT_EQ(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR), 0);
+        EXPECT_GE(CountMemoryPath(originFunction, MemoryType::MEM_UB, MemoryType::MEM_L1), 1);
+    }
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    Platform::Instance().ReloadMemoryPaths("2201");
+}
+
 } // namespace npu::tile_fwk

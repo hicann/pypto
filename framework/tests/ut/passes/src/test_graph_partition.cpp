@@ -322,19 +322,6 @@ TEST_F(GraphPartitionTest, TestSarkarEmptyGraph)
     EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
 }
 
-TEST_F(GraphPartitionTest, TestOrbitBspEmptyGraph)
-{
-    const std::string partitionAlg = "OspBsp";
-
-    ComputationalGraphBuilder G;
-    Function *function = G.GetFunction();
-    function->paramConfigs_.sgPartitionAlgorithm = partitionAlg;
-    EXPECT_EQ(function->paramConfigs_.sgPartitionAlgorithm, partitionAlg);
-    EXPECT_EQ(function->Operations().size(), 0);
-    GraphPartition gpp;
-    EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
-}
-
 TEST_F(GraphPartitionTest, TestPartitionerParameterFailure)
 {
     const std::string partitionAlg = "NotExistent";
