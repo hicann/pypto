@@ -82,6 +82,21 @@ std::unordered_map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
 
     CODEGEN_LOGI("---  start tensorInvokeArgs paramLoc map ---- ");
     f(0, tensorInvokeArgs);
+
+    if ((Program::GetInstance().GetLastFunction() != nullptr) &&
+        (Program::GetInstance().GetLastFunction()->GetDyndevAttribute() != nullptr)) {
+        std::map<std::string, int32_t> startArgsOrder;
+        int32_t order = 0;
+        for (auto t : Program::GetInstance().GetLastFunction()->GetDyndevAttribute()->startArgsInputTensorList) {
+            CODEGEN_LOGI("Tensor[%s] already exists in inputTensorList", t.get().GetName().c_str());
+            startArgsOrder[t.get().GetName()] = order++;
+        }
+        startArgsOrder.insert(std::make_pair("workspace", startArgsOrder.size()));
+        std::sort(paramsInOrder.begin(), paramsInOrder.end(), [&startArgsOrder](std::string& a, std::string& b) {
+            return startArgsOrder.at(a) < startArgsOrder.at(b);
+        });
+    }
+
     params = paramsInOrder;
     return symbolMap;
 }
@@ -118,7 +133,7 @@ void CodeGenLiteNPU::GenCode(Function& topFunc)
                 // kirin json codegen
                 std::vector<std::string> inOutParams = GetInOutParams(subFuncPair);
                 int blockDim = 1;          // NEXTNEXT: currently only support one block dim
-                int jsonWorkspaceSize = 0; // NEXTNEXT: currently do not support workspace size in json
+                int jsonWorkspaceSize = subFunc->GetStackWorkespaceSize();
                 GenConfigJson(
                     compileInfo.GetJsonAbsPath(), compileInfo.GetCCEAbsPath(), compileInfo.GetBinAbsPath(),
                     topFunc.GetMagicName(), jsonWorkspaceSize, inOutParams, blockDim);
@@ -213,6 +228,21 @@ std::string CodeGenLiteNPU::GetCoreArch([[maybe_unused]] const CompileInfo& comp
     }
 }
 
+void CodeGenLiteNPU::AppendLiteNPUVFOptions(std::ostringstream& oss) const
+    {
+        if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, true)) {
+            oss << "--cce-simd-vf-fusion=false ";
+            return;
+        }
+    
+        oss << "--enable-pto-tile-fusion "
+            << "-mllvm --tile-fusion-skip-shape-inference=true "
+            << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
+            << "-mllvm --tile-fusion-skip-legality-check=false "
+            << "-Rpass=tile-fusion "
+            << "-Rpass-missed=tile-fusion ";
+    }
+
 void CodeGenLiteNPU::BuildExtraOptions(
     std::ostringstream& oss, [[maybe_unused]] const CompileInfo& compileInfo, const std::string& compileOptions) const
 {
@@ -222,6 +252,7 @@ void CodeGenLiteNPU::BuildExtraOptions(
         << "-mllvm -cce-aicore-addr-transform "
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false "
         << "--cce-aicore-input-parameter-size=4096 ";
+    AppendLiteNPUVFOptions(oss);
     oss << compileOptions << " ";
 }
 
