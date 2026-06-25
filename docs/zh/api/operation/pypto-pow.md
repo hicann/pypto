@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -36,7 +36,7 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionTy
 
 ## 约束说明
 
-1. 高精度模式当前仅在Ascend 950PR/Ascend 950DT上有效，其他产品底层默认使用指令模式`INTRINSIC`。
+1. 高精度模式当前仅在Ascend 950PR上有效，其他产品底层默认使用指令模式 `INTRINSIC`。
 2. 两个输入均为Tensor且输入类型为int8/uint8/int16时，两个输入参数数据类型需相同。
 
 ## 数据类型提升说明
@@ -62,7 +62,7 @@ pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PrecisionTy
 
 TileShape维度应和输出一致。
 
-示例1：输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

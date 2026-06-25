@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -45,6 +45,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 3. input.shape的dim轴不可切，要求viewshape\[dim\] \>= max\( input.shape\[dim\], index.shape\[dim\] \)，其余维度的Shape大小不做限制；
 
 4. TileShape的维度与index相同，用于切分input和index，input的dim轴不可切，且所有输入和输出的TileShape大小总和不能超过UB内存的大小。
+
 
 ## 调用示例
 

@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -53,6 +53,7 @@ $$
 1. min / max的类型必须一致，同时为Element或同时为Tensor。
 2. min / max为Tensor类型时，其Shape大小必须满足可以广播到输入的Shape。
 3. min和max支持同时缺省，返回原值。
+
 
 ## 调用示例
 

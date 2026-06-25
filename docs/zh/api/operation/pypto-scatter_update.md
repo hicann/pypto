@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -49,6 +49,7 @@ TileShape约束：2维场景下TileShape为\[tileS, d\]，4维场景下TileShape
 
 二维示例：
 input：[15, 8]，index：[5, 2]，src:[10, 8], viewShape: [viewB \* s, 8], viewB需要是整数，即第0维是s的倍数，tileShape:[tileS, 8], tileS需要是s的约数即1或者2。
+
 
 ## 调用示例
 

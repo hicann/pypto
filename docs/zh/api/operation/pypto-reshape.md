@@ -37,12 +37,11 @@ reshape(input: Tensor,shape: List[int],*,valid_shape: Optional[List[Union[int, S
 
 ## 约束说明
 
-约束说明
-
 1. view生成的张量执行reshape，仅允许inplace为False。
 2. inplace为True时，reshape通常需单独置于loop (1)中，无其他类型的operation并列时，可省略loop (1)，框架自动补齐，见示例2。
 3. inplace为True的输出，不可作为函数最终输出。
 4. inplace=False仅适配静态shape；inplace=True兼容静态shape和动态shape。
+
 
 ## 调用示例
 

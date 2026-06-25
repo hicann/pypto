@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -23,11 +23,6 @@ get_operation_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
 ## 返回值说明
 
 返回dict，包含operation的所有配置项信息。
-
-## 约束说明
-
-无。
-
 ## 调用示例
 
 ```python

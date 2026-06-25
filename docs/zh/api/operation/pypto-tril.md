@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -26,10 +26,6 @@ tril(input: Tensor, diagonal: SymInt = 0) -> Tensor:
 ## 返回值说明
 
 输出Shape、数据类型与输入input一致的Tensor。
-
-## 约束说明
-
-详见参数说明。
 
 ## 调用示例
 

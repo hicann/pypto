@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -34,6 +34,7 @@ relu(input: Tensor) -> Tensor
 
 1. input不支持nan、inf等特殊值。
 
+
 ## 调用示例
 
 ### TileShape设置示例
@@ -45,19 +46,19 @@ TileShape维度应和输出一致。
 示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1],则m1, n1分别用于切分m, n轴。
 
 ```python
-pypto.set_vec_tile_shapes(4, 16)
+pypto.set_vec_tile_shapes(m1, n1)
 ```
 
 ### 接口调用示例
 
 ```python
-input_tensor = pypto.tensor([-2.0, 0.0, 3.0], pypto.DT_FP32)
+input_tensor = pypto.tensor([[-2.0, 0.0, 3.0]], pypto.DT_FP32)
 out = pypto.relu(input_tensor)
 ```
 
 结果示例如下：
 
 ```python
-输入数据input: [[-2.0 0.0 3.0]]
-输出数据out:   [[ 0.0 0.0 3.0]]
+输入数据input：[[-2.0 0.0 3.0]]
+输出数据out：  [[ 0.0 0.0 3.0]]
 ```

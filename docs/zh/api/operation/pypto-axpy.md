@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -53,6 +53,7 @@ y_backup = pypto.clone(y)  # 备份原始y值
 y.axpy_(x, alpha=2.0)      # y被原地更新
 # 此时y_backup仍保留原始值，可用于后续计算
 ```
+
 
 ## 调用示例
 

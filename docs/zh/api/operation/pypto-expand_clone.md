@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -52,6 +52,7 @@ expand_clone(
 
 4. tileshape的维度与result维度相同，用于切分result。
 5. tileshape的大小形状无额外约束，只需保证不超过ub size。
+
 
 ## 调用示例
 

@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -30,6 +30,7 @@ one_hot(input: Tensor, num_classes: int) -> Tensor
 ## 约束说明
 
 TileShape对输出切分，TileShape的维度与输出一致，TileShape的尾轴需等于num\_classes 。
+
 
 ## 调用示例
 

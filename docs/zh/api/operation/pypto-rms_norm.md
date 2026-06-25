@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -27,6 +27,7 @@ rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tensor
 ## 返回值说明
 
 归一化后的Tensor，Shape与输入Tensor input相同，输出Tensor将被转换回输入Tensor的原始数据类型。
+
 
 ## 调用示例
 

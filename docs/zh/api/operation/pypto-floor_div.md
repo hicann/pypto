@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -35,6 +35,7 @@ def floor_div(input: Tensor, other: Union[Tensor, int]) -> Tensor
 
 1. input和other数据类型应该相同。
 2. 只支持单轴广播。
+
 
 ## 调用示例
 

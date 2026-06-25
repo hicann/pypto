@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -30,6 +30,7 @@ softmax(input: Tensor, dim: int) -> Tensor
 ## 返回值说明
 
 返回Tensor类型。其Shape、数据类型与输入Tensor一致，dim指定维度上的元素之和为1。
+
 
 ## 调用示例
 

@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -37,7 +37,7 @@ permute(input: Tensor, perm: list[int]) -> Tensor
    说明：此场景直接返回输入Tensor（`return self`），但后续流程中的TILE_REGISTER_COPY仍会校验TileShape尾轴的32字节对齐。若未满足此约束，将报错：`CHECK FAILED: lastDimBytes % BLOCK_SIZE == 0`。
 
 5. Tensor数据类型说明：
-   - Ascend 950PR/Ascend 950DT：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP8E8M0。
+   - Ascend 950PR：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL，DT_FP8E4M3，DT_FP8E5M2，DT_HF8，DT_FP8E8M0。
    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL。
    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：DT_FP16，DT_BF16，DT_FP32，DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BOOL。
 

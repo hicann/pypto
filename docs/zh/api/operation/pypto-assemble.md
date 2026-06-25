@@ -37,6 +37,7 @@ assemble(inputs: List[Tuple[Tensor, List[Union[int, SymbolicScalar]]]], out: Ten
 1. 输出Tensor out的valid shape需由用户在调用assemble前确保正确，该接口不会自动推导。
 2. 输入张量input和输出张量out的维度数量需要一致。
 
+
 ## 调用示例
 
 ```python

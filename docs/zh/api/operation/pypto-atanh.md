@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -33,6 +33,7 @@ atanh(input: Tensor) -> Tensor
 ## 约束说明
 
 输入超出±1时输出为NaN，输入为±1时输出为±inf。
+
 
 ## 调用示例
 
