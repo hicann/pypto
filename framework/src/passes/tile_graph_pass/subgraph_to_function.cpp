@@ -15,6 +15,8 @@
 
 #include "passes/tile_graph_pass/subgraph_to_function.h"
 #include <fstream>
+#include <unordered_map>
+#include <unordered_set>
 #include "interface/function/function.h"
 #include "interface/tensor/irbuilder.h"
 #include "passes/pass_utils/pass_operation_utils.h"
@@ -49,6 +51,7 @@ void SubgraphToFunction::Init()
 {
     subFuncInvokeInfos.clear();
     viewToCopyInMapping_.clear();
+    mixSubgraphIds_.clear();
 }
 
 Status SubgraphToFunction::RunOnFunction(Function& function)
@@ -156,9 +159,80 @@ bool isFromCast(LogicalTensorPtr& operand)
     return true;
 }
 
-bool IsMiddleInCast(LogicalTensorPtr& operand, Operation& op)
+uint32_t GetTensorCoreFlag(const LogicalTensorPtr& tensor)
 {
-    if (operand->GetProducers().size() == 0 || Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+    constexpr uint32_t aicFlag = 1U;
+    constexpr uint32_t aivFlag = 2U;
+    if (tensor == nullptr) {
+        return 0;
+    }
+    MemoryType memoryType = tensor->GetMemoryTypeOriginal();
+    if (memoryType == MemoryType::MEM_L1 || memoryType == MemoryType::MEM_L0A ||
+        memoryType == MemoryType::MEM_L0B || memoryType == MemoryType::MEM_L0C) {
+        return aicFlag;
+    }
+    if (memoryType == MemoryType::MEM_UB) {
+        return aivFlag;
+    }
+    return 0;
+}
+
+bool IsInternalTensorOfSubgraph(const LogicalTensorPtr& tensor, int subgraphId)
+{
+    bool hasProducer = false;
+    bool hasConsumer = false;
+    for (auto& producer : tensor->GetProducers()) {
+        hasProducer = hasProducer || (producer != nullptr && producer->GetSubgraphID() == subgraphId);
+    }
+    for (auto& consumer : tensor->GetConsumers()) {
+        hasConsumer = hasConsumer || (consumer != nullptr && consumer->GetSubgraphID() == subgraphId);
+    }
+    return hasProducer && hasConsumer;
+}
+
+std::unordered_set<int> GetMixSubgraphIds(Function& function)
+{
+    constexpr uint32_t aicFlag = 1U;
+    constexpr uint32_t aivFlag = 2U;
+    std::unordered_map<int, uint32_t> subgraphCoreFlags;
+    std::unordered_set<int> visitedTensors;
+    auto allOps = function.Operations(true).DuplicatedOpList();
+    for (const auto& op : allOps) {
+        if (op == nullptr) {
+            continue;
+        }
+        for (const auto& tensor : op->GetOOperands()) {
+            if (tensor == nullptr || visitedTensors.count(tensor->GetMagic()) != 0) {
+                continue;
+            }
+            visitedTensors.insert(tensor->GetMagic());
+            uint32_t tensorFlag = GetTensorCoreFlag(tensor);
+            if (tensorFlag == 0) {
+                continue;
+            }
+            for (auto& producer : tensor->GetProducers()) {
+                if (producer == nullptr || producer->GetSubgraphID() < 0 ||
+                    !IsInternalTensorOfSubgraph(tensor, producer->GetSubgraphID())) {
+                    continue;
+                }
+                subgraphCoreFlags[producer->GetSubgraphID()] |= tensorFlag;
+            }
+        }
+    }
+
+    std::unordered_set<int> mixSubgraphIds;
+    for (const auto& subgraphCoreFlag : subgraphCoreFlags) {
+        uint32_t flags = subgraphCoreFlag.second;
+        if ((flags & aicFlag) != 0 && (flags & aivFlag) != 0) {
+            mixSubgraphIds.insert(subgraphCoreFlag.first);
+        }
+    }
+    return mixSubgraphIds;
+}
+
+bool IsMiddleInCast(LogicalTensorPtr& operand, Operation& op, const std::unordered_set<int>& mixSubgraphIds)
+{
+    if (operand->GetProducers().size() == 0 || mixSubgraphIds.count(op.GetSubgraphID()) == 0) {
         return false;
     }
     int src = op.GetSubgraphID();
@@ -179,7 +253,7 @@ void SubgraphToFunction::RecordIncastInfo(Function& function, RecordInfo recordI
     Offset offset = recordInfo.offset;
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
-    if (!isFromCast(iOperand) || IsMiddleInCast(iOperand, op)) {
+    if (!isFromCast(iOperand) || IsMiddleInCast(iOperand, op, mixSubgraphIds_)) {
         APASS_LOG_INFO_F(
             Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be incast.", iOperand->GetMagic());
         return;
@@ -335,6 +409,7 @@ void SubgraphToFunction::RecordIncastOutcast(Function& function)
 {
     // 1. Get function->operations_, construct 2-dimension nLIST（subgraphID, operations)
     ConstructnList(function);
+    mixSubgraphIds_ = GetMixSubgraphIds(function);
     // 2. Init InvokeInfo, {ESGID, SubfuncInvokeInfo}, which contains all the invoke info of each subgrahs
     for (size_t i = 0; i < nLIST.size(); i++) {
         subFuncInvokeInfos.push_back(SubfuncInvokeInfoTy());
