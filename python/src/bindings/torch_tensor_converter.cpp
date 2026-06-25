@@ -38,13 +38,37 @@ uintptr_t ReadTensorDataPtr(const py::object& torchTensor)
     return static_cast<uintptr_t>(py::cast<int64_t>(torchTensor.attr("data_ptr")()));
 }
 
-std::vector<int64_t> ReadTensorShape(const py::object& torchTensor, DataType dtype)
+void SetNZTensorShapeAlign(std::vector<int64_t>& shape, DataType dtype) {
+    if (shape.size() <= 1) return;
+    int64_t dtypeBytes = static_cast<int64_t>(BytesOf(dtype));
+    // Ensure dtypeBytes is positive to avoid division by zero
+    if (dtypeBytes <= 0) return;
+    // Calculate inner axis alignment size: 32 bytes / data type byte size
+    int64_t blockAlignBytes = 32;
+    int64_t c0Size = blockAlignBytes / dtypeBytes;
+    // Additional safety check to prevent division by zero in later calculations
+    if (c0Size <= 0) return;
+    int64_t blockAlignSize = 16;
+    int64_t inner_index = shape.size() - 1;
+    int64_t outer_index = shape.size() - 2;
+    int64_t inner_shape = shape[inner_index];
+    int64_t outer_shape = shape[outer_index];
+    // Align inner axis to 32-byte boundary using ceiling division
+    shape[inner_index] = (inner_shape + c0Size - 1) / c0Size * c0Size;
+    // Align outer axis to 16 elements using ceiling division
+    shape[outer_index] = (outer_shape + blockAlignSize - 1) / blockAlignSize * blockAlignSize;
+}
+
+std::vector<int64_t> ReadTensorShape(const py::object& torchTensor, DataType dtype, TileOpFormat format)
 {
     py::object tensorShape = torchTensor.attr("shape");
     std::vector<int64_t> shape;
     shape.reserve(static_cast<size_t>(py::len(tensorShape)));
     for (auto dim : tensorShape) {
         shape.push_back(py::cast<int64_t>(dim));
+    }
+    if (format == TileOpFormat::TILEOP_NZ) {
+        SetNZTensorShapeAlign(shape, dtype);
     }
     if (dtype == DataType::DT_FP4_E1M2 || dtype == DataType::DT_FP4_E2M1) {
         shape.back() *= 0x2;
@@ -152,9 +176,8 @@ TensorDeviceInfo ConvertSingleTensor(
     const DataType dtype = ReadTensorDataType(tensorDef, torchTensor, baseTensor);
 
     const uintptr_t dataPtr = ReadTensorDataPtr(torchTensor);
-    std::vector<int64_t> shape = ReadTensorShape(torchTensor, dtype);
     const TileOpFormat format = ReadTensorFormat(tensorDef, torchTensor, baseTensor, deviceInfo, torch_npu);
-
+    std::vector<int64_t> shape = ReadTensorShape(torchTensor, dtype, format);
     out = npu::tile_fwk::dynamic::DeviceTensorData(dtype, dataPtr, shape, format);
     return deviceInfo;
 }

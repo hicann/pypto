@@ -22,6 +22,7 @@ import torch
 @dataclass
 class ScaledMMConfig:
     ori_shape: Tuple[int, int, int]
+    output_shape: Tuple[int, int]
     m_tile_shape: Tuple[int, int]
     k_tile_shape: Tuple[int, int]
     n_tile_shape: Tuple[int, int]
@@ -58,6 +59,7 @@ class ScaledMMConfig:
     def from_test_case(cls, case: dict) -> "ScaledMMConfig":
         return cls(
             ori_shape=tuple(case["ori_shape"]),
+            output_shape=tuple(case["output_shape"]),
             m_tile_shape=tuple(case["m_tile_shape"]),
             k_tile_shape=tuple(case["k_tile_shape"]),
             n_tile_shape=tuple(case["n_tile_shape"]),
@@ -100,6 +102,7 @@ SCALED_MM_TESTS = [
         "name": "scaled_mm_basic_no_bias",
         "desc": "2D scaled_mm 无bias场景",
         "ori_shape": [243, 193, 169],
+        "output_shape": [243, 169],
         "m_tile_shape": [64, 128],
         "k_tile_shape": [128, 256],
         "n_tile_shape": [64, 256],
@@ -121,7 +124,8 @@ SCALED_MM_TESTS = [
         "id": "SCALEDMM_BIAS",
         "name": "scaled_mm_with_bias",
         "desc": "2D scaled_mm 带bias场景",
-        "ori_shape": [384, 192, 128],
+        "ori_shape": [383, 192, 129],
+        "output_shape": [384, 144],
         "m_tile_shape": [64, 64],
         "k_tile_shape": [64, 256],
         "n_tile_shape": [256, 256],

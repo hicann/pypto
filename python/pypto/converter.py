@@ -35,20 +35,37 @@ def _count_calls(func):
     return wrapper
 
 
-def _check_inner_shape(tensor, dtype, is_nz):
-    if tensor.dim() <= 0:
-        return
-    fp4_types = [DataType.DT_FP4_E2M1X2, DataType.DT_FP4_E1M2X2, DataType.DT_FP4_E2M1, DataType.DT_FP4_E1M2]
-    is_b4 = dtype in fp4_types
-    shape_back = tensor.shape[-1]
-    if shape_back == -1:
-        return
-    if is_nz:
-        block_align_bytes = 32
-        total_bytes = shape_back if is_b4 else shape_back * tensor.element_size()
-        if total_bytes % block_align_bytes != 0:
-            raise FeError(
-                RuntimeError("NZ format inner axis must be aligned to 32B."))
+def _set_shape_nz_aligned(tensor, ori_shape):
+    """
+    Set shape alignment requirements for NZ format tensors.
+
+    NZ format is a data layout format specific to Ascend AI processors,
+    requiring specific alignment:
+    - Inner axis: aligned to 32-byte boundary
+    - Outer axis: aligned to 16 elements
+
+    Args:
+        tensor: The tensor object (used to get element size)
+        ori_shape: Original tensor shape as a list/tuple
+
+    Returns:
+        list: Aligned shape for NZ format
+    """
+    if len(ori_shape) <= 1:
+        return ori_shape
+    block_align_bytes = 32
+    block_align_size = 16
+    dtype_bytes = tensor.element_size()
+    if dtype_bytes <= 0:
+        return ori_shape
+    c0size = block_align_bytes // dtype_bytes
+    if c0size <= 0:
+        return ori_shape
+    dyn_shape = ori_shape.copy()
+    dyn_shape[-1] = (ori_shape[-1] + c0size - 1) // c0size * c0size
+    dyn_shape[-2] = (ori_shape[-2] + block_align_size - 1) // block_align_size * block_align_size
+
+    return dyn_shape
 
 
 @_count_calls
@@ -115,9 +132,6 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
 
             if torch_npu is not None and torch_npu.get_npu_format(tensor) == 29:
                 tensor_format = TileOpFormat.TILEOP_NZ
-                _check_inner_shape(tensor, dtype, is_nz=True)
-            else:
-                _check_inner_shape(tensor, dtype, is_nz=False)
 
     if tensor.dim() == 0:
         return Tensor(
@@ -129,6 +143,8 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
             device=tensor.device,
         )
     dyn_shape = list(tensor.shape)
+    if tensor_format == TileOpFormat.TILEOP_NZ:
+        dyn_shape = _set_shape_nz_aligned(tensor, dyn_shape)
     if dtype == DataType.DT_FP4_E1M2 or dtype == DataType.DT_FP4_E2M1:
         dyn_shape[-1] *= 2
     if dynamic_axis is not None:

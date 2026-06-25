@@ -23,6 +23,7 @@ import torch
 class BaseScaledConfig:
     a_shape: Tuple[int, ...]
     b_shape: Tuple[int, ...]
+    out_shape: Tuple[int, ...]
     m_tile_shape: Tuple[int, int]
     k_tile_shape: Tuple[int, int]
     n_tile_shape: Tuple[int, int]
@@ -65,6 +66,7 @@ class BaseScaledConfig:
         return cls(
             a_shape=tuple(case["a_shape"]),
             b_shape=tuple(case["b_shape"]),
+            out_shape=tuple(case["out_shape"]),
             m_tile_shape=tuple(case["m_tile_shape"]),
             k_tile_shape=tuple(case["k_tile_shape"]),
             n_tile_shape=tuple(case["n_tile_shape"]),
@@ -139,8 +141,9 @@ SCALED_BMM_TESTS = [
     {
         "id": "BMM3D_BIAS_B1N_UNALIGN_QUANT_PERTENSOR",
         "name": "scaled_bmm_3d_bias_b1n_quant_pertensor",
-        "a_shape": [4, 256, 192],
+        "a_shape": [4, 255, 192],
         "b_shape": [1, 224, 192],
+        "out_shape": [4, 256, 224],
         "m_tile_shape": [64, 64],
         "k_tile_shape": [128, 256],
         "n_tile_shape": [256, 256],
@@ -167,6 +170,7 @@ SCALED_BMM_TESTS = [
         "name": "scaled_bmm_3d_bias_1n",
         "a_shape": [5, 135, 192],
         "b_shape": [1, 192, 351],
+        "out_shape": [5, 135, 351],
         "m_tile_shape": [64, 128],
         "k_tile_shape": [64, 256],
         "n_tile_shape": [256, 256],
@@ -189,8 +193,9 @@ SCALED_BMM_TESTS = [
     {
         "id": "BMM4D_BIAS_UNALIGN_QUANT_PERCHENNEL",
         "name": "scaled_bmm_4d_bias_quant_perchennel",
-        "a_shape": [2, 3, 384, 320],
+        "a_shape": [2, 3, 383, 320],
         "b_shape": [1, 3, 178, 320],
+        "out_shape": [2, 3, 384, 178],
         "m_tile_shape": [128, 256],
         "k_tile_shape": [64, 256],
         "n_tile_shape": [64, 192],
