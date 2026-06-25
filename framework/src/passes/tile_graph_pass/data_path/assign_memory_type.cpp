@@ -1728,6 +1728,7 @@ static bool AreAllConsumerRequirementsTowardsUb(ConvertInserter& inserter, const
 
 void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
 {
+    constexpr size_t kMatrixShapeDimCount = 2; // 矩阵形状维度数 (M, N)
     for (auto& op : function.Operations()) {
         auto opcode = op.GetOpcode();
         if (opcode != Opcode::OP_ASSEMBLE) {
@@ -1738,7 +1739,7 @@ void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function& function)
         if (iOperand->GetMemoryTypeOriginal() != MEM_L0C) {
             continue;
         }
-        if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
+        if (iOperand->GetShape().size() != kMatrixShapeDimCount || oOperand->GetShape().size() != kMatrixShapeDimCount) {
             continue;
         }
         bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
@@ -1793,6 +1794,7 @@ void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function& function)
 
 void AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
 {
+    constexpr size_t kMatrixShapeDimCount = 2; // 矩阵形状维度数 (M, N)
     for (auto& op : function.Operations()) {
         auto opcode = op.GetOpcode();
         if (opcode != Opcode::OP_ASSEMBLE) {
@@ -1803,7 +1805,7 @@ void AssignMemoryType::ProcessUB2L1SmallToLarge(Function& function)
         if (iOperand->GetMemoryTypeOriginal() != MEM_UB || oOperand->GetMemoryTypeOriginal() != MEM_L1) {
             continue;
         }
-        if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
+        if (iOperand->GetShape().size() != kMatrixShapeDimCount || oOperand->GetShape().size() != kMatrixShapeDimCount) {
             continue;
         }
         if (ShouldSkipUB2L1SmallToLarge(iOperand, oOperand)) {
@@ -1842,6 +1844,7 @@ bool AssignMemoryType::ShouldSkipUB2L1SmallToLarge(
 
 void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
 {
+    constexpr size_t kMatrixShapeDimCount = 2; // 矩阵形状维度数 (M, N)
     for (auto& op : function.Operations()) {
         auto opcode = op.GetOpcode();
         if (opcode != Opcode::OP_VIEW) {
@@ -1861,7 +1864,7 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
-        if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
+        if (iOperand->GetShape().size() != kMatrixShapeDimCount || oOperand->GetShape().size() != kMatrixShapeDimCount) {
             inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
             continue;
         }
@@ -1890,6 +1893,7 @@ void AssignMemoryType::ProcessUB2L1LargeToSmall(Function& function)
 
 bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr& input, const LogicalTensorPtr& output) const
 {
+    constexpr int64_t kC0AlignBytes = 32;
     size_t inputInnerAxis = input->GetShape().back();
     size_t outputInnerAxis = output->GetShape().back();
     // 如果输入内轴大小等于输出内轴大小，说明内轴未被切分
@@ -1900,8 +1904,8 @@ bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr& input, const
     int64_t inputDtypeBytes = BytesOf(input->Datatype());
     int64_t outputDtypeBytes = BytesOf(output->Datatype());
     // 检查数据类型字节数是否有效（避免除零）
-    int64_t inputC0Size = (inputDtypeBytes > 0) ? (32 / inputDtypeBytes) : 0;
-    int64_t outputC0Size = (outputDtypeBytes > 0) ? (32 / outputDtypeBytes) : 0;
+    int64_t inputC0Size = (inputDtypeBytes > 0) ? (kC0AlignBytes / inputDtypeBytes) : 0;
+    int64_t outputC0Size = (outputDtypeBytes > 0) ? (kC0AlignBytes / outputDtypeBytes) : 0;
     if (inputC0Size <= 0 || outputC0Size <= 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
             "CheckInnerAxisC0Size: invalid C0 size, inputC0Size=%ld, outputC0Size=%ld",
@@ -1939,6 +1943,8 @@ bool AssignMemoryType::IsDimMultiple(const Shape& shape1, const Shape& shape2)
 
 size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr& tensor) const
 {
+    constexpr int64_t kAlignBytes = 4;
+    constexpr int64_t kC0AlignBytes = 32;
     DataType dtype = tensor->Datatype();
     int64_t bytes = BytesOf(dtype);
     size_t outer = tensor->GetShape()[0];
@@ -1948,13 +1954,13 @@ size_t AssignMemoryType::CalcNZTensorSize(const LogicalTensorPtr& tensor) const
     // 内轴对齐：C0 size = 32 / 元素字节数
     size_t c0 = 0;
     if (bytes > 0) {
-        c0 = static_cast<size_t>(32 / bytes);
+        c0 = static_cast<size_t>(kC0AlignBytes / bytes);
     }
     if (c0 <= 0) {
         APASS_LOG_DEBUG_F(Elements::Operation,
             "CalcNZTensorSize: invalid C0 size, c0=%zu", c0);
         // 返回原始 ND 格式大小作为 fallback
-        return outer * inner * static_cast<size_t>(bytes > 0 ? bytes : 4);
+        return outer * inner * static_cast<size_t>(bytes > 0 ? bytes : kAlignBytes);
     }
     size_t alignedOuter = (outer + outerAlign - 1) / outerAlign * outerAlign + 1;
     size_t alignedInner = (inner + c0 - 1) / c0 * c0;

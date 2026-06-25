@@ -100,7 +100,6 @@ private:
     std::map<std::string, int64_t> vecNBufferSettingByLabel_;
     std::map<uint64_t, int> hashOrder_;  // Deterministic ordered map for compilation repeatability
     enum ModeType { noMerge = 0, autoMerge = 1, manualMerge = 2, autoMulityInOutMerge = 3, manualMulityInOutMerge = 4 };
-
 };
 } // namespace npu::tile_fwk
 #endif // PASS_N_BUFFER_MERGE_H_

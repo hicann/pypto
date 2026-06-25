@@ -23,9 +23,6 @@
 
 namespace npu::tile_fwk {
 
-// TODO(dualdst-switch): 临时开关。后续接入 PassConfigs.enable_dual_dst (需要修改
-// framework/src/interface/configs/* 下的文件)再删掉这一行,改读 passDfxconfigs_。
-// 当前调试时手动改成 true 即可启用 dualdst 融合;Mix 路径才生效。
 static constexpr bool kTempEnableDualDst = false;
 
 bool OoOSchedule::IsAicpuProgram(std::vector<Operation*> opList)

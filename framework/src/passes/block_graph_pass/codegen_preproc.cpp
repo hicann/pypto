@@ -62,9 +62,10 @@ void ComputeGmCheckValues(
     const std::vector<SymbolicScalar>& rawShape, const std::vector<SymbolicScalar>& dynOffset,
     const std::vector<SymbolicScalar>& dynValidShape, GmOutOfRangeCheckInfo& info)
 {
+    constexpr size_t kMinDimsForStrideCalc = 2;
     std::vector<SymbolicScalar> strides(rawShape.size());
     strides[rawShape.size() - 1] = SymbolicScalar(1);
-    if (rawShape.size() >= 2) {
+    if (rawShape.size() >= kMinDimsForStrideCalc) {
         for (size_t i = rawShape.size() - 1; i > 0; --i) {
             strides[i - 1] = strides[i] * rawShape[i];
         }
@@ -266,6 +267,7 @@ inline bool IsUBCopy(Operation& op)
 
 bool ReduceNeedCombineAxis(const Operation& op)
 {
+    constexpr int64_t kSecondLastAxisOffset = 2;
     if (OpcodeManager::Inst().GetOpCalcType(op.GetOpcode()) != OpCalcType::REDUCE) {
         return true;
     }
@@ -276,7 +278,7 @@ bool ReduceNeedCombineAxis(const Operation& op)
         }
         auto axis = op.GetIntAttribute(REDUCE_AXIS);
         int64_t shapeSize = static_cast<int64_t>(inputs.front()->shape.size());
-        return shapeSize != 1 && axis != (shapeSize - 2);
+        return shapeSize != 1 && axis != (shapeSize - kSecondLastAxisOffset);
     }
     return false;
 }

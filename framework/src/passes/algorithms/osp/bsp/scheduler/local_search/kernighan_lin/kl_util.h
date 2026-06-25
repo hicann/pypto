@@ -41,7 +41,8 @@ struct RewardPenaltyStrategy {
 
     void InitRewardPenalty(double multiplier = 1.0)
     {
-        multiplier = std::min(multiplier, 10.0);
+        constexpr double kMaxMultiplier = 10.0;
+        multiplier = std::min(multiplier, kMaxMultiplier);
         penalty_ = static_cast<CostT>(initialPenalty_ * multiplier);
         reward_ = static_cast<CostT>(maxWeight_ * multiplier);
     }
@@ -293,14 +294,18 @@ struct VertexSelectionStrategy {
 
     inline void SelectActiveNodes(ContainerT &nodeSelection, const unsigned startStep, const unsigned endStep)
     {
-        if (strategyCounter_ < 3) {
+        constexpr unsigned kPermutationStrategyCount = 3;
+        constexpr unsigned kMaxWorkStrategyIndex = 4;
+        constexpr unsigned kStrategyCycleLength = 5;
+
+        if (strategyCounter_ < kPermutationStrategyCount) {
             SelectNodesPermutationThreshold(selectionThreshold_, nodeSelection);
-        } else if (strategyCounter_ == 4) {
+        } else if (strategyCounter_ == kMaxWorkStrategyIndex) {
             SelectNodesMaxWorkProc(selectionThreshold_, nodeSelection, startStep, endStep);
         }
 
         strategyCounter_++;
-        strategyCounter_ %= 5;
+        strategyCounter_ %= kStrategyCycleLength;
     }
 
     void SelectNodesViolations(ContainerT &nodeSelection,

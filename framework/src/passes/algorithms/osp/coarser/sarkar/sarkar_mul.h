@@ -88,6 +88,7 @@ void SarkarMul<GraphT, GraphTCoarse>::SetSeed()
 template <typename GraphT, typename GraphTCoarse>
 void SarkarMul<GraphT, GraphTCoarse>::InitParams()
 {
+    constexpr int kSyncCostDivisor = 2;
     firstCoarsen_ = true;
 
     params_.geomDecay_ = mlParams_.geomDecay_;
@@ -101,7 +102,7 @@ void SarkarMul<GraphT, GraphTCoarse>::InitParams()
 
         while (syncCosts >= static_cast<VWorkwT<GraphT>>(1)) {
             mlParams_.commCostVec_.emplace_back(syncCosts);
-            syncCosts /= 2;
+            syncCosts /= kSyncCostDivisor;
         }
     }
 

@@ -142,7 +142,6 @@ void UpdateExpandStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
                 hasTailExpand = true;
                 break;
             }
-            
         }
         
         if (!hasTailExpand) {
@@ -166,6 +165,7 @@ void UpdateExpandStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
 
 void UpdateReduceStatus(Operation* op, std::unordered_map<LogicalTensorPtr, AxisReorderStatus>& tensorStatus)
 {
+    constexpr int kDimOffset = 2;
     // 最后两根轴不发生reduce，并且尾轴为1。那么支持交换轴，如果倒数第二根轴发生reduce，不支持。尾轴reduce，需不需要交换轴要看后继节点
     auto inputTensor = op->GetIOperands()[0];
     auto dimSize = static_cast<int>(inputTensor->GetShape().size());
@@ -175,11 +175,11 @@ void UpdateReduceStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
             tensorStatus[outputTensor] = AxisReorderStatus::UNKNOWN;
             continue;
         }
-        if (dimSize > 1 && axis < dimSize - 2) {
+        if (dimSize > 1 && axis < dimSize - kDimOffset) {
             tensorStatus[outputTensor] = tensorStatus[inputTensor];
             continue;
         }
-        if (axis == dimSize - 2) {
+        if (axis == dimSize - kDimOffset) {
             // reduce倒数第二轴，当前不支持合轴优化
             tensorStatus[inputTensor] = AxisReorderStatus::DISABLE;
             tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;

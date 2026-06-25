@@ -25,7 +25,8 @@ inline const char* FUNC_HASH_ORDER_DEFAULT_KEY = "DEFAULT";
 
 inline bool ParseFuncHashOrder(const std::string& key, int& funcMagic, int& localOrder)
 {
-    if (key.substr(0, 4) != "func") {
+    constexpr size_t kPrefixShift = 4;
+    if (key.substr(0, kPrefixShift) != "func") {
         return false;
     }
     size_t pos = key.find('_');
@@ -33,7 +34,7 @@ inline bool ParseFuncHashOrder(const std::string& key, int& funcMagic, int& loca
         return false;
     }
     try {
-        funcMagic = std::stoi(key.substr(4, pos - 4));
+        funcMagic = std::stoi(key.substr(kPrefixShift, pos - kPrefixShift));
         localOrder = std::stoi(key.substr(pos + 1));
         return true;
     } catch (const std::invalid_argument&) {

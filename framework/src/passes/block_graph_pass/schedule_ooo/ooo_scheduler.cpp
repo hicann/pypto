@@ -531,27 +531,6 @@ Status OoOScheduler::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt)
             // 路由到 succOp 自己所在 core 的队列 (而非前驱的 core)。
             // 对单核前驱场景行为不变;对 dualdst (跨核前驱) 的场景避免 succOp 同时进入多个核的队列。
             auto& q = issueQueues[opCoreLocationMap[succOp]][opPipeTypeMap[succOp]];
-            // 三层去重防止 dualdst 跨核前驱 / 跨阶段 wake 导致重复 launch:
-            //   (1) 已 issue 过 (在 newOperations_ 里);(2) 已在队列;(3) 正在某 pipe 执行 (curIssue)。
-            //
-            // TODO(dualdst-wake-root-cause): 三层去重是 dualdst 跨核 wake 的 workaround,
-            // 根因是 dualdst fused op 的两个 ub output 各自有 consumer 落在 AIV0 与 AIV1,
-            // RetireOpAndAwakeSucc 遍历到任一 output 的 successor 都会触发同一 succOp 的
-            // wake; 当前用线性 std::find 兜底, 在 newOperations_ / q.queue 较长时是 O(N)
-            // 性能退化点, 同时同核 chain 内部 wake 也走这条路径, 在 cycle 时序敏感场景下
-            // (如 currentlyRunning 检查) 可能误杀同核二级 vec op 的 wake (chained_ops 偶发
-            // out0 全零的实测现象与此一致)。
-            //
-            // 根因修复方向 (任选一条, 不另外开 issue 跟踪, 由本 TODO 关联):
-            //   1) 让 dualdst fused op 在 RewireEdgesForFusedOp 阶段就把两个 output 的
-            //      consumer 集合并到同一逻辑 succ 集合, RetireOpAndAwakeSucc 遍历时
-            //      自然只触发一次 wake (彻底消除"跨核重复 wake"的可能);
-            //   2) 引入 succOp 的 inQueue 位标记 (放在 opIsRetiredMap / opIsAllocMap 同
-            //      层的 unordered_map<Operation*, bool>), O(1) 替换三处 std::find;
-            //   3) 把 dedup 收窄到"opCoreLocationMap[op] != opCoreLocationMap[succOp]"
-            //      的跨核 wake 路径, 同核 chain 内部 wake 直接 Insert (test_dual_dst_chained_ops
-            //      flaky 在此分支下应稳定通过)。
-            // 修复任一条后, 本三层 dedup 可整段删除。
             bool alreadyIssued =
                 std::find(newOperations_.begin(), newOperations_.end(), succOp) != newOperations_.end();
             bool alreadyInQueue = std::find(q.queue.begin(), q.queue.end(), succOp) != q.queue.end();
@@ -1065,13 +1044,15 @@ Status OoOScheduler::Schedule(
         return FAILED;
     }
     UpdateL0MXMap(opList);
+    constexpr int kL0mxAddrShiftBits = 4; // L0→L0MX 地址右移位数 (16 字节粒度)
     for (auto& entry : l02L0MXMap_) {
         auto l0Tensor = entry.first;
         auto l0MXTensor = entry.second;
         int l0MemID = l0Tensor->memoryrange.memId;
         int l0MemMXID = l0MXTensor->memoryrange.memId;
         l0MXTensor->memoryrange =
-            TileRange(localBufferMap_[l0MemID]->start >> 4, localBufferMap_[l0MemID]->end >> 4, l0MemMXID);
+            TileRange(localBufferMap_[l0MemID]->start >> kL0mxAddrShiftBits,
+                      localBufferMap_[l0MemID]->end >> kL0mxAddrShiftBits, l0MemMXID);
     }
     PrintOpList(newOperations_);
     function_.SetStackWorkespaceSize(workspaceOffset);

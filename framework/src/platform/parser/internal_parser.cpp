@@ -115,6 +115,7 @@ bool InternalParser::LoadInternalInfo()
 
 bool InternalParser::GetDataPath(std::vector<std::pair<MemoryType, MemoryType>>& dataPath)
 {
+    constexpr size_t kSplitSize = 2;
     auto it = data_.find(paths);
     if (it == data_.end() || it->second.empty()) {
         return false;
@@ -127,7 +128,7 @@ bool InternalParser::GetDataPath(std::vector<std::pair<MemoryType, MemoryType>>&
     auto firstSplit = SplitByDelimiter(currentPath, comma);
     for (const auto& subStr : firstSplit) {
         auto secondSplit = SplitByDelimiter(subStr, "->");
-        if (secondSplit.size() != 2) {
+        if (secondSplit.size() != kSplitSize) {
             continue;
         }
         dataPath.emplace_back(std::make_pair(StringToMemoryType(secondSplit[0]), StringToMemoryType(secondSplit[1])));

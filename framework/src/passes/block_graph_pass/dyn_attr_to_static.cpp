@@ -157,10 +157,14 @@ struct CoaInfo {
 };
 
 struct IsConstMetric {
-    int isConst = 1;    // not const = 2; const = 1; const but not static = 3;
-    int attrValue = -2; // static >= 0; else -1.
+    static constexpr int kAttrValueUninit_ = -2;
+    static constexpr int kNotConst_ = 2;
+    static constexpr int kConstButNotStatic_ = 3;
 
-    void MarkNotConst() { isConst = 2; }
+    int isConst = 1;    // not const = 2; const = 1; const but not static = 3;
+    int attrValue = kAttrValueUninit_; // static >= 0; else -1.
+
+    void MarkNotConst() { isConst = kNotConst_; }
     int GetIsConst() { return isConst; }
     int GetAttrValue() { return attrValue; }
     bool TryInitAndCheckEqual(int newValue)
@@ -171,12 +175,12 @@ struct IsConstMetric {
             attrValue = -1;
             return false;
         }
-        if (attrValue == -2) {
+        if (attrValue == kAttrValueUninit_) {
             attrValue = newValue;
             return true;
         }
         if (newValue != attrValue) {
-            isConst = 3;
+            isConst = kConstButNotStatic_;
             attrValue = -1;
             return true;
         }
@@ -329,6 +333,7 @@ Status DynAttrToStatic::BuildLeafToCaller(Function* func)
 Status DynAttrToStatic::BuildNewCoa(
     std::reference_wrapper<SymbolicScalar>& dynScalar, std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim)
 {
+    constexpr int kNonImmediateSentinel = -2; // sentinel for non-immediate callop attr
     // 1. 拆解dynScalar到对应的COA表达式
     std::string dynParamExpr = SymbolicExpressionTable::BuildExpression(dynScalar);
     if (dynParamExpr.find(COA_PREFIX) != 1) { // dynParamExpr格式是"(RUNTIME_GET_COA_XXX"
@@ -348,25 +353,25 @@ Status DynAttrToStatic::BuildNewCoa(
     for (auto& argList : callopArglistOneDim) {
         auto& callopAttr = argList[coaIndex];
         if (!callopAttr.IsImmediate()) {
-            scalarValue.insert(-2);
+            scalarValue.insert(kNonImmediateSentinel);
         } else {
             scalarValue.insert(callopAttr.Concrete());
         }
-        if (scalarValue.size() > 1 && scalarValue.count(-2) > 0) {
+        if (scalarValue.size() > 1 && scalarValue.count(kNonImmediateSentinel) > 0) {
             break;
         }
     }
     int branchMode = static_cast<int>(BranchMode::DEFAULT_BRANCH_MODE);
-    int attrValue = -2;
+    int attrValue = kNonImmediateSentinel;
     if (scalarValue.size() == 1) {
-        if (scalarValue.count(-2) > 0) {
+        if (scalarValue.count(kNonImmediateSentinel) > 0) {
             branchMode = static_cast<int>(BranchMode::VARIABLE_BRANCH_MODE);
         } else {
             branchMode = static_cast<int>(BranchMode::STATIC_CONST_BRANCH_MODE);
             attrValue = *scalarValue.begin();
         }
     } else if (scalarValue.size() > 1) {
-        if (scalarValue.count(-2) == 0) {
+        if (scalarValue.count(kNonImmediateSentinel) == 0) {
             branchMode = static_cast<int>(BranchMode::CONST_BRANCH_MODE);
         }
     }

@@ -92,7 +92,10 @@ void MultilevelCoarser<GraphT, GraphTCoarse>::ClearComputationData()
 template <typename GraphT, typename GraphTCoarse>
 void MultilevelCoarser<GraphT, GraphTCoarse>::CompactifyDagHistory()
 {
-    if (dagHistory_.size() < 3) {
+    constexpr size_t kMinHistorySizeForCompactify = 3;
+    constexpr double kCompactifyRatioThreshold = 1.25;
+
+    if (dagHistory_.size() < kMinHistorySizeForCompactify) {
         return;
     }
 
@@ -104,7 +107,7 @@ void MultilevelCoarser<GraphT, GraphTCoarse>::CompactifyDagHistory()
 
     if ((static_cast<double>(dagHistory_[dagIndxFirst - 1]->NumVertices())
          / static_cast<double>(dagHistory_[dagIndxSecond - 1]->NumVertices()))
-        > 1.25) {
+        > kCompactifyRatioThreshold) {
         return;
     }
 
@@ -135,8 +138,7 @@ ReturnStatus MultilevelCoarser<GraphT, GraphTCoarse>::AddContraction(
 {
     std::unique_ptr<GraphTCoarse> newGraph = std::make_unique<GraphTCoarse>();
 
-    std::unique_ptr<std::vector<VertexIdxT<GraphTCoarse>>> contrMapPtr(
-        new std::vector<VertexIdxT<GraphTCoarse>>(std::forward<std::vector<VertexIdxT<GraphTCoarse>>>(contractionMap)));
+    auto contrMapPtr = std::make_unique<std::vector<VertexIdxT<GraphTCoarse>>>(std::forward<std::vector<VertexIdxT<GraphTCoarse>>>(contractionMap));
     contractionMaps_.emplace_back(std::move(contrMapPtr));
 
     bool success = false;
@@ -164,11 +166,10 @@ ReturnStatus MultilevelCoarser<GraphT, GraphTCoarse>::AddContraction(
     std::vector<VertexIdxT<GraphTCoarse>> &&contractionMap,
     GraphTCoarse &&contractedGraph)
 {
-    std::unique_ptr<GraphTCoarse> graphPtr(new GraphTCoarse(std::forward<GraphTCoarse>(contractedGraph)));
+    std::unique_ptr<GraphTCoarse> graphPtr = std::make_unique<GraphTCoarse>(std::forward<GraphTCoarse>(contractedGraph));
     dagHistory_.emplace_back(std::move(graphPtr));
 
-    std::unique_ptr<std::vector<VertexIdxT<GraphTCoarse>>> contrMapPtr(
-        new std::vector<VertexIdxT<GraphTCoarse>>(std::forward<std::vector<VertexIdxT<GraphTCoarse>>>(contractionMap)));
+    auto contrMapPtr = std::make_unique<std::vector<VertexIdxT<GraphTCoarse>>>(std::forward<std::vector<VertexIdxT<GraphTCoarse>>>(contractionMap));
     contractionMaps_.emplace_back(std::move(contrMapPtr));
 
     CompactifyDagHistory();

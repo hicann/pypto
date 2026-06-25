@@ -52,12 +52,13 @@ TileOpFormat InferTensorFormat::GetRequiredInputFormat(Opcode opcode, const std:
 
 TileOpFormat InferTensorFormat::GetOutputFormat(Opcode opcode, const std::string& arch, size_t outputPos)
 {
+    constexpr size_t kOutputFormatListIndex = 1; // formatList[0]=输入格式, [1]=输出格式
     const auto& formatList = OpcodeManager::Inst().GetSupportOpFormatList(opcode);
     auto archIt = formatList.find(arch);
-    if (archIt == formatList.end() || archIt->second.size() < 2) {
+    if (archIt == formatList.end() || archIt->second.size() <= kOutputFormatListIndex) {
         return TileOpFormat::TILEOP_ND;
     }
-    const auto& outputFormats = archIt->second[1];
+    const auto& outputFormats = archIt->second[kOutputFormatListIndex];
     if (outputPos >= outputFormats.size()) {
         return TileOpFormat::TILEOP_ND;
     }
@@ -147,7 +148,6 @@ int InferTensorFormat::FindInputPosition(const Operation& op, const std::shared_
     return -1;
 }
 
-// TODO(tile-shape-config): Support user-configured TileShape or performance-adaptive selection.
 void InferTensorFormat::ApplyTransDataVecTile(const std::shared_ptr<LogicalTensor>& srcTensor, TileOpFormat targetFormat)
 {
     int64_t c0 = srcTensor->Datatype() == DataType::DT_FP32 ? 8 : 16;

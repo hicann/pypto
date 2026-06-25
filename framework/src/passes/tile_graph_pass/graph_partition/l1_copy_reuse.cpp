@@ -19,6 +19,10 @@
 
 namespace npu::tile_fwk {
 
+// L1 reuse 矩阵侧编码: 0=auto, 1=left(L0A), 2=right(L0B)
+constexpr int64_t kL1ReuseSideLeft = 1;
+constexpr int64_t kL1ReuseSideRight = 2;
+
 // cubeL1ReuseSetting packs (count, side) into one int as side * L1_REUSE_SIDE_BASE + count
 // (side 0=auto/1=left/2=right). Split a raw config map into a pure merge-count map (consumed
 // by the existing logic) and a matrix-side map (only 1/2 are kept). side=0 / count-only
@@ -33,7 +37,7 @@ static void DecodeL1ReuseSide(
         int64_t side = value / L1_REUSE_SIDE_BASE;
         int64_t count = value % L1_REUSE_SIDE_BASE;
         countMap[key] = count;
-        if (side == 1 || side == 2) {
+        if (side == kL1ReuseSideLeft || side == kL1ReuseSideRight) {
             sideMap[key] = side;
         }
     }
@@ -512,8 +516,8 @@ Status L1CopyInReuseRunner::L1MergeProcess(
         // Side is a hard restriction: a side-tagged subgraph only advertises its own side's
         // copy-ins into l1InputList, so it can never become a cross-side anchor that a
         // different-side (or auto) subgraph merges onto. side==0 (auto) advertises all.
-        if ((side == 1 && !IsLeftMatrixCopy(opOriList[opIdx])) ||
-            (side == 2 && !IsRightMatrixCopy(opOriList[opIdx]))) {
+        if ((side == kL1ReuseSideLeft && !IsLeftMatrixCopy(opOriList[opIdx])) ||
+            (side == kL1ReuseSideRight && !IsRightMatrixCopy(opOriList[opIdx]))) {
             continue;
         }
         auto vec = GetGMInputFeature(opOriList[opIdx]);
@@ -653,8 +657,8 @@ Status L1CopyInReuseRunner::BuildMatrixSideList(
     int leftCnt = 0;
     int rightCnt = 0;
     for (int i = 0; i < color; i++) {
-        leftCnt += (numLRSideList[i] == 1);
-        rightCnt += (numLRSideList[i] == 2);
+        leftCnt += (numLRSideList[i] == kL1ReuseSideLeft);
+        rightCnt += (numLRSideList[i] == kL1ReuseSideRight);
     }
     if (leftCnt != 0 || rightCnt != 0) {
         APASS_LOG_INFO_F(
@@ -693,10 +697,10 @@ Status L1CopyInReuseRunner::BuildMergeCountList(
 
 void L1CopyInReuseRunner::RecordSideMergeOutcome(int subgraphIdx, int side, int tmpColor)
 {
-    if (side != 1 && side != 2) {
+    if (side != kL1ReuseSideLeft && side != kL1ReuseSideRight) {
         return;  // no side preference -> went through the default(unfiltered) merge, nothing to log here
     }
-    const char* sideStr = (side == 1) ? "LEFT(L0A)" : "RIGHT(L0B)";
+    const char* sideStr = (side == kL1ReuseSideLeft) ? "LEFT(L0A)" : "RIGHT(L0B)";
     // Side is a hard restriction (no fall-back). tmpColor != subgraphIdx means it merged onto a
     // same-side partner; otherwise it is a group anchor (a later subgraph may still merge into
     // it) or a lonely singleton -- which of the two is reported by the post-loop summary.
@@ -740,9 +744,9 @@ Status L1CopyInReuseRunner::Phase1(
         // Side is a HARD restriction: a side-tagged subgraph only searches copy-ins on that
         // matrix (no fall-back to the other side). side==0 (auto) keeps the original unfiltered
         // merge.
-        if (side == 1 || side == 2) {
+        if (side == kL1ReuseSideLeft || side == kL1ReuseSideRight) {
             auto sideFilter = [side](const Operation& op) {
-                return side == 1 ? IsLeftMatrixCopy(op) : IsRightMatrixCopy(op);
+                return side == kL1ReuseSideLeft ? IsLeftMatrixCopy(op) : IsRightMatrixCopy(op);
             };
             if (FindMergeCandidate(
                     opOriList, i, maxInColor, mergedNum, numLRList, tmpColor, colorNode, l1InputList, colorCopyIn,
@@ -771,7 +775,7 @@ Status L1CopyInReuseRunner::Phase1(
     int groupCnt = 0;     // resulting groups (anchors with >=1 follower)
     int singletonCnt = 0; // side-tagged but no same-side partner at all
     for (int c = 0; c < color; c++) {
-        if (numLRSideList[c] != 1 && numLRSideList[c] != 2) {
+        if (numLRSideList[c] != kL1ReuseSideLeft && numLRSideList[c] != kL1ReuseSideRight) {
             continue;
         }
         if (mergedNum[c] == 0) {

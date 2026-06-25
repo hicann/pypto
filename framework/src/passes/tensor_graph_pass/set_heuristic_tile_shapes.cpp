@@ -1134,6 +1134,7 @@ void SetHeuristicVectorTiles(Function& function, std::unordered_set<Operation*> 
 
 void GenerateJsonForPython(Function& function)
 {
+    constexpr int kJsonDumpIndent = 4; // JSON 输出缩进空格数
     json pythonJson;
     std::ofstream python_tiles(config::LogTopFolder() + "/python_tiles.json");
     int operationIdx = 0;
@@ -1142,7 +1143,6 @@ void GenerateJsonForPython(Function& function)
         for (auto& op : function.Operations()) {
             std::string opIdName = "operation_" + std::to_string(operationIdx);
             auto full_dump = op.DumpJson();
-
             if (full_dump["file"].is_null()) {
                 continue;
             }
@@ -1167,12 +1167,13 @@ void GenerateJsonForPython(Function& function)
 
             operationIdx += 1;
         }
-        python_tiles << pythonJson.dump(4) << std::endl;
+        python_tiles << pythonJson.dump(kJsonDumpIndent) << std::endl;
     }
 }
 
 void GenerateJsonForSemanticLabels(Function& function)
 {
+    constexpr int kJsonDumpIndent = 4; // JSON 输出缩进空格数
     json semanticJson;
     std::ofstream graph_tiles(config::LogTopFolder() + "/semantic_labels_tiles.json");
 
@@ -1200,7 +1201,7 @@ void GenerateJsonForSemanticLabels(Function& function)
                 semanticJson[sem_label]["operation"] = op.GetOpcodeStr();
             }
         }
-        graph_tiles << semanticJson.dump(4) << std::endl;
+        graph_tiles << semanticJson.dump(kJsonDumpIndent) << std::endl;
     }
 }
 

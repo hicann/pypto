@@ -125,11 +125,27 @@ Status OspPartitioner::RunOspPartition(Function &function)
 Status OspPartitioner::RunSarkar(const GraphType &graph, CoarseGraphType &coarseGraph,
                                  std::vector<VertType> &vertexContractionMap)
 {
+    constexpr uint32_t kSarkarSeed = 1729U;            // Sarkar 算法随机种子
+    constexpr double kSarkarGeomDecay = 0.875;         // 几何衰减系数
+    constexpr double kSarkarLeniency = 0.005;          // 容忍度
+    // 通信代价梯度: 逐级递增, 用于 Sarkar 算法在不同聚合层级权衡通信代价
+    const WorkType kCommCostLevel1 = 1;
+    const WorkType kCommCostLevel2 = 2;
+    const WorkType kCommCostLevel5 = 5;
+    const WorkType kCommCostLevel10 = 10;
+    const WorkType kCommCostLevel20 = 20;
+    const WorkType kCommCostLevel50 = 50;
+    const WorkType kCommCostLevel100 = 100;
+    const WorkType kCommCostLevel200 = 200;
+    const WorkType kCommCostLevel500 = 500;
+    const WorkType kCommCostLevel1000 = 1000;
     osp::sarkar_params::MulParameters<WorkType> params;
-    params.seed_ = 1729U;
-    params.geomDecay_ = 0.875;
-    params.leniency_ = 0.005;
-    params.commCostVec_ = std::vector<WorkType>({1, 2, 5, 10, 20, 50, 100, 200, 500, 1000});
+    params.seed_ = kSarkarSeed;
+    params.geomDecay_ = kSarkarGeomDecay;
+    params.leniency_ = kSarkarLeniency;
+    params.commCostVec_ = std::vector<WorkType>({kCommCostLevel1, kCommCostLevel2, kCommCostLevel5,
+        kCommCostLevel10, kCommCostLevel20, kCommCostLevel50, kCommCostLevel100, kCommCostLevel200,
+        kCommCostLevel500, kCommCostLevel1000});
     params.smallWeightThreshold_ = archParameters_.partitionWorkLowerBound_;
     params.maxNumIterationWithoutChanges_ = 3U;
     params.bufferMergeMode_ = osp::sarkar_params::BufferMergeMode::FULL;
@@ -149,6 +165,9 @@ Status OspPartitioner::RunSarkar(const GraphType &graph, CoarseGraphType &coarse
 Status OspPartitioner::RunMerkleBsp(const osp::BspInstance<GraphType> &bspInst,
                                     std::vector<VertType> &vertexContractionMap)
 {
+    constexpr int kIsoSchedulerWorkThreshold = 200;
+    constexpr int kIsoSchedulerCriticalPathThreshold = 500;
+    
     osp::GrowLocalAutoCores<ConstrGraphType> growlocal;
     osp::GreedyChildren<ConstrGraphType> children;
 
@@ -172,8 +191,8 @@ Status OspPartitioner::RunMerkleBsp(const osp::BspInstance<GraphType> &bspInst,
                      this->superNodeInfo_->nodeHashList_);
     osp::IsomorphicSubgraphScheduler<GraphType, ConstrGraphType> isoScheduler(scheduler, hashComputer);
     isoScheduler.SetMergeDifferentTypes(useCVMixPartition_);
-    isoScheduler.SetWorkThreshold(200);
-    isoScheduler.SetCriticalPathThreshold(500);
+    isoScheduler.SetWorkThreshold(kIsoSchedulerWorkThreshold);
+    isoScheduler.SetCriticalPathThreshold(kIsoSchedulerCriticalPathThreshold);
     vertexContractionMap = isoScheduler.ComputePartition(bspInst);
     return SUCCESS;
 }

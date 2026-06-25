@@ -120,31 +120,32 @@ bool AreReshapeShapesValid(const Shape& inputShape, const Shape& outputShape)
 
 bool MatchReshapeDimensionPair(const Shape& inputShape, const Shape& outputShape)
 {
+    constexpr int kDimPairShiftBits = 4; // inputDims 占高 4 位, outputDims 占低 4 位
     const size_t inputDims = inputShape.size();
     const size_t outputDims = outputShape.size();
-    const uint32_t dimensionPair = (inputDims << 4) | outputDims;
+    const uint32_t dimensionPair = (inputDims << kDimPairShiftBits) | outputDims;
 
     switch (dimensionPair) {
-        case (DIMENSIONS_4D << 4) | DIMENSIONS_2D:
+        case (DIMENSIONS_4D << kDimPairShiftBits) | DIMENSIONS_2D:
             return inputShape[0] == 1 && inputShape[1] == 1 && inputShape[2] == outputShape[0] &&
                    inputShape[3] == outputShape[1];
-        case (DIMENSIONS_2D << 4) | DIMENSIONS_4D:
+        case (DIMENSIONS_2D << kDimPairShiftBits) | DIMENSIONS_4D:
             return outputShape[0] == 1 && outputShape[1] == 1 && inputShape[0] == outputShape[2] &&
                    inputShape[1] == outputShape[3];
-        case (DIMENSIONS_3D << 4) | DIMENSIONS_2D:
+        case (DIMENSIONS_3D << kDimPairShiftBits) | DIMENSIONS_2D:
             return inputShape[0] == 1 && inputShape[1] == outputShape[0] && inputShape[2] == outputShape[1];
-        case (DIMENSIONS_2D << 4) | DIMENSIONS_3D:
+        case (DIMENSIONS_2D << kDimPairShiftBits) | DIMENSIONS_3D:
             return outputShape[0] == 1 && inputShape[0] == outputShape[1] && inputShape[1] == outputShape[2];
-        case (DIMENSIONS_4D << 4) | DIMENSIONS_3D:
+        case (DIMENSIONS_4D << kDimPairShiftBits) | DIMENSIONS_3D:
             return inputShape[0] == 1 && inputShape[1] == outputShape[0] && inputShape[2] == outputShape[1] &&
                    inputShape[3] == outputShape[2];
-        case (DIMENSIONS_3D << 4) | DIMENSIONS_4D:
+        case (DIMENSIONS_3D << kDimPairShiftBits) | DIMENSIONS_4D:
             return outputShape[0] == 1 && inputShape[0] == outputShape[1] && inputShape[1] == outputShape[2] &&
                    inputShape[2] == outputShape[3];
-        case (DIMENSIONS_5D << 4) | DIMENSIONS_3D:
+        case (DIMENSIONS_5D << kDimPairShiftBits) | DIMENSIONS_3D:
             return inputShape[0] == 1 && inputShape[1] == 1 && inputShape[2] == outputShape[0] &&
                    inputShape[3] == outputShape[1] && inputShape[4] == outputShape[2];
-        case (DIMENSIONS_3D << 4) | DIMENSIONS_5D:
+        case (DIMENSIONS_3D << kDimPairShiftBits) | DIMENSIONS_5D:
             return outputShape[0] == 1 && outputShape[1] == 1 && inputShape[0] == outputShape[2] &&
                    inputShape[1] == outputShape[3] && inputShape[2] == outputShape[4];
         default:

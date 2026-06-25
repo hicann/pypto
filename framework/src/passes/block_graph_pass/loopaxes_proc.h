@@ -44,9 +44,9 @@ private:
     void IsOverLap(std::vector<size_t>& addrRange, bool& isAdd, int& conflictIdx,
                    std::map<int, std::vector<std::vector<size_t>>> &addrRecordMap,
                    std::set<std::pair<int, int>>& addrConflictIdx, int& idx);
-    void CheckAddrOverLap(bool isStaticLoop, std::vector<Operation * > & sameLoopOpGroup,
-                          std::set<std::pair<int,int>> & addrConflictIdx,
-                          std::map<int,std::vector<std::vector<size_t>>> & addrRecordMap);
+    void CheckAddrOverLap(bool isStaticLoop, std::vector<Operation*>& sameLoopOpGroup,
+                          std::set<std::pair<int, int>>& addrConflictIdx,
+                          std::map<int, std::vector<std::vector<size_t>>>& addrRecordMap);
     void ProcessCutStaticGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup);
     void ProcessCutDynGroup(std::vector<int>& cutResult, std::vector<Operation*>& sameLoopOpGroup);
 
