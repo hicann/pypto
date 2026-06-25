@@ -768,6 +768,7 @@ void SetDynValidShapeInfo(const ConvGraphNodes& tensorGraphNodes, const ConvAttr
         convAttrParam.dynValidResShape[2];
     convTileInfo.dynValidWout = convAttrParam.isConv3D ? convAttrParam.dynValidResShape[4] :
         convAttrParam.dynValidResShape[3];
+    convTileInfo.dynValidDout = convAttrParam.isConv3D ? convAttrParam.dynValidResShape[NCDHW_D_IDX] : SymbolicScalar(1);
 }
 
 void SetConvShapeInfo(
@@ -1178,8 +1179,8 @@ LogicalTensorPtr DoMmad(
     ConvGraphNodes& tileGraphNodes, const ConvTileInfo& convTileInfo, const ConvIterInfo& iterInfo)
 {
     std::vector<SymbolicScalar> dstCL0DynValidShape = std::vector<SymbolicScalar>{
-        convTileInfo.dynValidBatchL0 * convTileInfo.dynValidHoutL0 * convTileInfo.dynValidWoutL0,
-        convTileInfo.dynValidCoutL0};
+        convTileInfo.dynValidBatchL0 * convTileInfo.dynValidDoutL0 * convTileInfo.dynValidHoutL0 *
+        convTileInfo.dynValidWoutL0, convTileInfo.dynValidCoutL0};
     ASSERT(
         ConvExpandFuncError::EXPANDFUNC_TILE_OP_NULLPTR, tileGraphNodes.fmapTensorPtr != nullptr &&
                                                              tileGraphNodes.weightTensorPtr != nullptr &&
@@ -1250,8 +1251,8 @@ void ConstrucCopyOutTile(
     const ConvTileInfo& convTileInfo, const ConvIterInfo& iterInfo, const LogicalTensorPtr& resCl0TensorPtr)
 {
     std::vector<SymbolicScalar> dstCL0DynValidShape = std::vector<SymbolicScalar>{
-        convTileInfo.dynValidBatchL0 * convTileInfo.dynValidHoutL0 * convTileInfo.dynValidWoutL0,
-        convTileInfo.dynValidCoutL0};
+        convTileInfo.dynValidBatchL0 * convTileInfo.dynValidDoutL0 * convTileInfo.dynValidHoutL0 *
+        convTileInfo.dynValidWoutL0, convTileInfo.dynValidCoutL0};
     auto& fixpipeOpRes =
         function.AddOperation(Opcode::OP_L0C_COPY_OUT_CONV, {resCl0TensorPtr}, {tensorGraphNodes.resTensorPtr});
     fixpipeOpRes.SetAttribute(OpAttributeKey::isConv, true);
@@ -1373,6 +1374,7 @@ void CalL0DynValidShape(ConvTileInfo& convTileInfo, ConvIterInfo& iterInfo, cons
     // cal l0 dyn valid shape
     // when batch validshape = 0，set m to 0, make sure no tstore
     convTileInfo.dynValidBatchL0 = std::min(1, std::max(convTileInfo.dynValidBatch - iterInfo.batchOffset, 0));
+    convTileInfo.dynValidDoutL0 = std::min(1, std::max(convTileInfo.dynValidDout - iterInfo.doL1Offset, 0));
     convTileInfo.dynValidHoutL0 = std::min(convTileInfo.hL0, std::max(std::min(std::max(convTileInfo.dynValidHout
         - iterInfo.hL1OutOffset, 0), convTileInfo.hAL1Out) - iterInfo.hL0Offset, 0));
     convTileInfo.dynValidWoutL0 = std::min(convTileInfo.wL0, std::max(std::min(std::max(convTileInfo.dynValidWout
@@ -1416,8 +1418,8 @@ void IterL0ExpandFunc(
                     ConvAlignB(iterInfo.mL0Size, MKN_M_VALUE), ConvAlignB(iterInfo.nL0Size, MKN_N_VALUE)};
                 CalL0DynValidShape(convTileInfo, iterInfo, convAttrParam);
                 std::vector<SymbolicScalar> dstCL0DynValidShape = std::vector<SymbolicScalar>{
-                    convTileInfo.dynValidBatchL0 * convTileInfo.dynValidHoutL0 * convTileInfo.dynValidWoutL0,
-                    convTileInfo.dynValidCoutL0};
+                    convTileInfo.dynValidBatchL0 * convTileInfo.dynValidDoutL0 * convTileInfo.dynValidHoutL0 *
+                    convTileInfo.dynValidWoutL0, convTileInfo.dynValidCoutL0};
                 tileGraphNodes.resTensorPtr = std::make_shared<LogicalTensor>(
                     function, tensorGraphNodes.fmapTensorPtr->Datatype(), dstCL0Shape,
                     dstCL0DynValidShape, tensorGraphNodes.fmapTensorPtr->Format(), "cL0Tensor");
