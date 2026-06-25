@@ -24,7 +24,7 @@ loop(start: SymInt, stop: SymInt, step: Optional[SymInt] = 1, /, **kwargs) -> It
 | start             | 输入      | 循环的起始值。 |
 | stop              | 输入      | 循环的终止值。 |
 | step              | 输入      | 每次循环的步长。 |
-| **kwargs          | 输入      | - name(str)：循环标识名称，默认生成f"loop_{loop_idx}"。<br> - idx_name(str):  循环索引变量的名称，默认生成f"loop_idx_{loop_idx}"。<br> - submit_before_loop(bool):  是否在循环开始前提交计算，默认为False。开启后会在循环开启前强制提交当前累积的计算任务到AICore执行。 |
+| **kwargs          | 输入      | - name(str)：循环标识名称，默认生成f"loop_{loop_idx}"。<br> - idx_name(str):  循环索引变量的名称，默认生成f"loop_idx_{loop_idx}"。<br> - submit_before_loop(bool):  是否在循环开始前提交计算，默认为False。开启后会在循环开启前强制提交当前累积的计算任务到AICore执行。<br> - parallel(bool): 是否将循环标记为可并行调度，默认为False。设置为True时，表示该循环的各个迭代之间不存在任何依赖关系，可以被并行调度执行。需配合 device_sched_parallelism 配置项一起使用。|
 
 ## 返回值说明
 
