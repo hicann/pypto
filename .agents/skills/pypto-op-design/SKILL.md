@@ -23,7 +23,7 @@ description: 当需要设计 PyPTO 算子实现方案时使用。通过迭代式
 | API 探索报告 | 否 | API 可用性（缺失时在第 1 轮自行查 `docs/`） |
 | Golden 参考实现 | 否 | 辅助理解计算逻辑 |
 
-**输出**：`DESIGN.md`，基于模板 [templates/design-template.md](templates/design-template.md)
+**输出**：`DESIGN.md`，以 [templates/design-template.md](templates/design-template.md) 为结构参考，**直接 Write 到新路径一次成文**；禁止 `cp` 模板再编辑——`cp` 在工具层外预先建文件，会触发 Read-before-Write 拒绝并导致整篇文档重复生成。
 
 ---
 
@@ -46,40 +46,16 @@ description: 当需要设计 PyPTO 算子实现方案时使用。通过迭代式
 - ~1 组 loop-carry state
 - 可独立产生一个语义清晰、可命名、可验证的输出张量
 
-#### 0.2 总复杂度估算（信号采集）
+#### 0.2-0.3 总复杂度与 module_count（脚本计算）
 
-从 golden 文件抽 3 个信号：
-
-| 信号 | 符号 | 计算 | 采集方式 |
-|------|------|------|---------|
-| 行数维度 | L | `effective_lines / 30` | `python .agents/skills/pypto-op-design/scripts/count_golden_lines.py custom/<op>/<op>_golden.py` |
-| 状态维度 | S | `loop_carried_state_groups` | 人工统计：golden 中"上一步结果参与下一步"的独立递归状态有几组（FlashAttention 的 m/l/o 算 1 组，gated_delta_rule 的 state + decay 算 2 组） |
-| 操作维度 | O | `(matmul_count + cross_tile_reduce_count) / 3` | 人工统计：`torch.matmul` 出现次数 + 跨 tile reduce（softmax 整套 / `sum`、`max` 跨 reduce 轴超过单 tile 大小的）次数 |
-
-**总复杂度**：
+只需人工统计两个信号：S（loop-carry 状态组数，FA 的 m/l/o 算 1 组，gated_delta_rule 的 state + decay 算 2 组）与跨 tile reduce 次数（softmax 整套算 1 次）。其余信号（L、matmul 数）、`total_complexity = max(L,S,O)`、1.3 阈值与行数封顶公式全部由脚本计算：
 
 ```
-total_complexity = max(L, S, O)
+python .agents/skills/pypto-op-design/scripts/derive_design_params.py \
+    custom/<op>/<op>_golden.py --state-groups <S> --cross-tile-reduce <R> --json
 ```
 
-用 `max` 而非加权平均——保守原则：任何一维度爆表都应反映到总复杂度。
-
-#### 0.3 module_count 决策（公式）
-
-```
-if total_complexity < 1.3:
-    module_count = 1               # L0：不拆，跳过 Stage 4 的 decomposition
-else:
-    module_count = min(
-        round(total_complexity),                 # 按复杂度
-        ceil(effective_lines / 12)               # 按行数封顶（防止短 golden 切太多）
-    )
-```
-
-**为什么 1.3 是阈值**：
-- FlashAttention forward 的 total_complexity = 1.0（不拆）
-- FA forward × 1.3 = 1.3，给一点超出余量但不到 1.5（不触发 round 进位）
-- 高于 1.3 才开始拆，每多 1 复杂度单位多 1 module
+直接采用输出 JSON 的 `total_complexity` / `module_count` / `path`；公式与参考算子验算表内置于脚本（`--self-test` 复核）。
 
 #### 0.4 Heavy / Light op 分类（按跨 tile 通信）
 
@@ -107,23 +83,13 @@ else:
 
 不给定固定清单——根据数据流的自然 stage 划分。每个 module 内含若干 heavy ops + 相关 light ops + view/assemble（首尾 module）。
 
-#### 0.6 算子分类参考表（验算公式）
+#### 0.6 算子分类参考表（已内置脚本）
 
-| 算子 | lines | S | matmul+reduce | L | O | total | module_count |
-|------|-------|---|---|---|---|---|---|
-| GELU | 4 | 0 | 0 | 0.13 | 0 | 0.13 | **1** |
-| Softmax | 6 | 0 | 0+2 | 0.20 | 0.67 | 0.67 | **1** |
-| Layernorm | 7 | 0 | 0+2 | 0.23 | 0.67 | 0.67 | **1** |
-| 标准 attention_fwd | 5 | 0 | 2+2 | 0.17 | 1.33 | 1.33 | **1**（边界）|
-| Attention bwd（非 flash）| 17 | 0 | 6+4 | 0.57 | 3.33 | 3.33 → cap | **2** |
-| **FlashAttention fwd** | **28** | **1** | **2+1** | **0.93** | **1.00** | **1.00** | **1** ✓ |
-| FA backward | 45 | 1-2 | 4+2 | 1.50 | 2.00 | 2.00 | **2** |
-| gated_delta_rule | 40 | ≥2 | ~6 | 1.33 | 2.00 | 2.00 | **2** |
-| mamba_ssm | 55 | ≥2 | ~8 | 1.83 | 2.67 | 2.67 | **3** |
+参考算子（GELU/Softmax/FA fwd/bwd/gated_delta_rule/mamba_ssm 等）的验算表内置于 `derive_design_params.py --self-test`，不再手算。
 
 **产出**：DESIGN.md §0（Decomposition Decision）—— 包含 §0.1-§0.5 全部字段。**Stage 4 (designer / pypto-op-construct skill) 必须先读 §0.3 的 `module_count`，决定走 L0 单 module 路径或 L1 多 module 路径**。
 
-**收敛标志**：`total_complexity`、`module_count`、（若 ≥2）数据流断点列表全部填写完毕，且数值匹配 §0.6 表的预期分类带（如背离需在 §0.5 注明原因——但不增加 architect override 字段，按公式走）。
+**收敛标志**：`total_complexity`、`module_count`、（若 ≥2）数据流断点列表全部填写完毕（如人为偏离脚本结果需在 §0.5 注明原因——但不增加 architect override 字段，按公式走）。
 
 ---
 
@@ -166,49 +132,22 @@ else:
      → 若有 2 个以上 shape class 则需要 **per-stage `set_vec_tile_shapes`** (与 cube OL47 对称)
    - **列举所有 matmul 的 operand shape** (用于 cube OL47 per-matmul rule 判定)
 
-1.6. **Tile design (mandatory)**：
-   - **Cube / matmul**：Stage 7 前统一使用 128 基线，不按训练、decode、核利用率等性能目标做分支：
-     `pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])`
-   - **Vec tile 首选规则**：每个 axis 取值在 `[16, 64]` 范围内（首选偏小值，如 16 或 32）
-     - 下限 16：FP32 满足 32B 对齐（multiple of 8），BF16/FP16 恰好 32B 对齐（16 elements）
-     - 上限 64：单 op UB 占用较小，subgraph 自然 fit UB
-     - 小张量例外：若 tensor 在每个轴的 shape < 16，仍按 16 取（pad）
-     - UB 超出例外：若 [16, 64] 范围内仍撑爆 UB（高 rank + 大 dtype + 多 tensor），降低部分轴至 < 16，在 §3.2.2 rationale 中说明
-     - 禁止 > 64：上限交由 Stage 7 optimizer 基于 profiling 上调
-   - 混合算子仍需在对应 stage 前显式切换 vec/cube tile；Stage 7 前切换的是作用域，不是性能化 tile 值。
-   - 只有 API/shape 硬约束不允许 Tile shape 基线时，才使用最近的合法稳定值，并在 DESIGN.md §3.2.2 rationale 中说明原因。
-   - 若 SPEC.md 或 prompt 中有 user-specified tile，采用前先确认它不违反 Tile shape 基线；若确需例外，rationale 中明确标注「user-specified exception」。
+1.6. **Tile design (mandatory，基线由脚本给出)**：
+   - 运行 `derive_design_params.py`（§0.2 同一命令）即得 Stage 7 前基线：cube `[128,128]`、vec 每轴 ∈ `[16,64]`（首选偏小值）、尾轴 alignment、UB 估算。
+   - 偏离基线只允许两种情况，且都写入 §3.2.2 rationale：API/shape 硬约束（取最近合法值）、UB 超出（轴值降至 <16）。
+   - 混合算子仍需 per-stage 显式切换 vec/cube tile（切换作用域，不动基线值）；user-specified tile 须先验基线，例外标注「user-specified exception」。
 
 1.7. **Alternatives considered** (optional)：
    - 推荐但不强制：列举 1-3 个备选方案 + 否决理由
    - 性能权衡是 Stage 7 的工作，architect 阶段不需要穷举
 
 2. **列出同时驻留的 tensor**（输入、输出、所有中间结果）及其 dtype
-3. **尾轴对齐**：bf16/fp16 → 16 元素，fp32 → 8 元素（vec tile [16, 64] 默认范围自动满足；cube tile 128 也满足）
-4. **UB 容量估算（per operation）**：`tile_size × dtype_bytes × tensor_count ≤ UB 容量`
-   - tensor_count 按 op 类型取：unary = 2（1 输入 + 1 输出），binary = 3（2 输入 + 1 输出），reduce / expand 保守取 4
-   - 对算子内最重的 op（即 tile_size × tensor_count 最大的那个）验证即可
-   - 原理：pass 阶段框架按 tile shape 把每个 op 拆成多条 tile operation，再尝试把多条组合成 subgraph（满足总 UB 占用 ≤ UB 容量）。**写 kernel 时无法预知一个 subgraph 含多少 op**，所以只能按 per-op 估算，让 tile 足够小，框架自然能把多条组进一个 subgraph。tile shape 决定 subgraph 的组合空间，不是反过来。
-
-5. **展开检查**：`(shape / tile) × tensor_count < 18000`
+3-5. **尾轴对齐 / UB 估算 / 展开检查**：由 `derive_design_params.py` 输出（`tail_alignment`、`ub_fits_worst_op`、`expansion_limit`）。原理备忘：per-op 估算（unary=2 / binary=3 / reduce·expand=4 个 tensor），tile 足够小则框架自然组 subgraph。
 
 6. **混合算子**：不同计算阶段可能需要不同的 tiling 配置（per-stage tile，与 OL47 对应）
 
 7. **PyPTO syntax compliance check** (machine-verifiable, mandatory):
-   填齐 DESIGN.md §3.2.4 的 syntax checklist 所有 checkbox。
-   - ☑ 尾轴 alignment OK (FP32: 8 倍数, BF16/FP16: 16 倍数)
-   - ☑ tile 维数 == tensor 维数
-   - ☑ UB 内
-   - ☑ 展开 < 18000
-   - ☑ cube tile dim 关系 OK (mL0 ≤ mL1, etc.)
-   - ☑ cube tile 16 元素 alignment (BF16/FP16 场合)
-   - ☑ broadcast 1 轴 rule
-   - ☑ vec tile per-stage 设置 (多 shape class 场合)
-   - ☑ Stage 7 前 Tile shape 基线已应用，或已说明 API/shape 硬约束例外
-   - ☑ vec tile axis ∈ [16, 64]（超 UB 已下调并 rationale 说明；cube tile 不在此约束内）
-   - ☑ tile 参数全部编译期静态（**OL48**，无 kernel 入参 / tensor.shape[i] / SymbolicScalar）
-
-   全部 ☑ 后才能进入第 3 轮。
+   填齐 DESIGN.md §3.2.4 的 syntax checklist 所有 checkbox（清单正本在 design-template §3.2.4）。机器可判项（alignment / UB / 展开 / 基线 / OL48 静态性）直接采用脚本 `checks` 输出；其余（tile 维数、cube dim 关系、broadcast 1 轴、per-stage 设置）人工勾选。全部 ☑ 后才能进入第 3 轮。
 
 **回溯条件**：
 - 基线 tile 算出来过大（UB/L1 放不下）→ 回第 1 轮减少中间 tensor、调整精度路由，或记录 API/shape 硬约束例外
@@ -540,20 +479,9 @@ def softmax_kernel(
 - [ ] 每个 API 的 dtype 在 docs 中有记录
 
 **Tiling 层（→ 第 2 轮）**
-- [ ] TileShape 维度数 = tensor 维度数
-- [ ] Stage 7 前 Tile shape 基线已应用，或已说明 API/shape 硬约束例外
-- [ ] 尾轴 alignment OK (FP32: 8 倍数, BF16/FP16: 16 倍数) — DESIGN.md §3.2.4 中 YES
-- [ ] cube tile dim 关系 OK (mL0 ≤ mL1, etc.) — §3.2.4 中 YES
-- [ ] cube tile 16 元素 alignment (BF16/FP16 场合) — §3.2.4 中 YES
-- [ ] broadcast 1 轴 rule — §3.2.4 中 YES
-- [ ] 同阶段驻留 buffer ≤ UB 容量
-- [ ] tile_size × dtype_bytes 在 16 KB ~ 64 KB 范围内 (recurrent op 可豁免)
-- [ ] tile dims ≠ tensor.shape (避免零并行 anti-pattern)
-- [ ] vec tile per-stage 已设置 (多 shape class 场合)
-- [ ] 表达式展开 < 18000
-- [ ] DESIGN.md §3.2.2 中有 1-3 句的 rationale
-- [ ] DESIGN.md §3.2.3 中列举了 1-3 个 alternatives
-- [ ] DESIGN.md §3.2.4 全部 ☑
+- [ ] `derive_design_params.py` 的 `checks` 全 PASS（基线 / alignment / UB / 展开 / OL48 静态性）
+- [ ] 人工项：tile 维数 = tensor 维数；cube dim 关系 (mL0 ≤ mL1)；broadcast 1 轴 rule；per-stage vec tile（多 shape class 场合）；tile dims ≠ tensor.shape；tile_size × dtype_bytes ∈ 16–64 KB（recurrent 可豁免）
+- [ ] DESIGN.md §3.2.2 rationale（1-3 句）、§3.2.3 alternatives（1-3 个）、§3.2.4 全部 ☑
 
 **Loop 层（→ 第 3 轮）**
 - [ ] 输出写回用 `[:]` / `.move()` / `assemble()`
