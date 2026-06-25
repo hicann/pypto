@@ -144,7 +144,7 @@ void RecordFunc::EndFunction()
 
     if (IsVerifyEnable()) {
         FE_LOGI("FlowVerify has been enable.");
-        config::SetRunDataOption(KEY_FLOW_VERIFY_PATH, config::GetAbsoluteTopFolder() + "/verify");
+        config::SetRunDataOption(KEY_VERIFY_PATH, config::GetAbsoluteTopFolder() + "/verify");
     }
 
     // might raise exception in EndFunction, force isEnd_ is always set
