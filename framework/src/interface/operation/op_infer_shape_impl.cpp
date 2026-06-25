@@ -1607,30 +1607,28 @@ void QuantMXInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
         return;
     }
     std::vector<SymbolicScalar> groupedValidShape;
-    std::vector<SymbolicScalar> scalingValidShape;
-    if (op->GetIntAttribute(OpAttributeKey::mxQuantPerformanceMode) != 0) {
-        if (inputValidShapes[0].size() == 1) {
-            groupedValidShape = {(inputValidShapes[0][0] + kQuantMXGroupSize - 1) / kQuantMXGroupSize};
-        } else {
-            groupedValidShape.reserve(inputValidShapes[0].size() - 1);
-            for (size_t i = 0; i + 2 < inputValidShapes[0].size(); ++i) {
-                groupedValidShape.push_back(inputValidShapes[0][i]);
-            }
-            groupedValidShape.push_back(
-                inputValidShapes[0][inputValidShapes[0].size() - 2] *
-                ((inputValidShapes[0].back() + kQuantMXGroupSize - 1) / kQuantMXGroupSize));
-        }
-        scalingValidShape = groupedValidShape;
-        if (op->GetIOperands()[0]->Datatype() == DataType::DT_FP32) {
-            scalingValidShape.back() = scalingValidShape.back() * kQuantMXFp32ScalingFactor;
-        }
+    if (inputValidShapes[0].size() == 1) {
+        groupedValidShape = {(inputValidShapes[0][0] + kQuantMXGroupSize - 1) / kQuantMXGroupSize};
     } else {
-        groupedValidShape = inputValidShapes[0];
-        groupedValidShape.back() = (groupedValidShape.back() + kQuantMXGroupSize - 1) / kQuantMXGroupSize;
-        scalingValidShape = inputValidShapes[0];
+        groupedValidShape.reserve(inputValidShapes[0].size() - 1);
+        for (size_t i = 0; i + 2 < inputValidShapes[0].size(); ++i) {
+            groupedValidShape.push_back(inputValidShapes[0][i]);
+        }
+        groupedValidShape.push_back(
+            inputValidShapes[0][inputValidShapes[0].size() - 2] *
+            ((inputValidShapes[0].back() + kQuantMXGroupSize - 1) / kQuantMXGroupSize));
+    }
+    std::vector<SymbolicScalar> expValidShape = groupedValidShape;
+    if (op->GetIntAttribute(OpAttributeKey::mxQuantPerformanceMode) == 0) {
+        expValidShape = inputValidShapes[0];
+        expValidShape.back() = (expValidShape.back() + kQuantMXGroupSize - 1) / kQuantMXGroupSize;
+    }
+    std::vector<SymbolicScalar> scalingValidShape = groupedValidShape;
+    if (op->GetIOperands()[0]->Datatype() == DataType::DT_FP32) {
+        scalingValidShape.back() = scalingValidShape.back() * kQuantMXFp32ScalingFactor;
     }
     outValidShapes.push_back(inputValidShapes[0]);
-    outValidShapes.push_back(groupedValidShape);
+    outValidShapes.push_back(expValidShape);
     outValidShapes.push_back(groupedValidShape);
     outValidShapes.push_back(scalingValidShape);
 }

@@ -2191,22 +2191,22 @@ TEST_F(TorchAdaptorTest, QuantizeDequantizeRoundTrip)
 
 TEST_F(TorchAdaptorTest, QuantMXFp32)
 {
-    constexpr int64_t cols = 32;
+    constexpr int64_t cols = 64;
     std::vector<float> inputData(cols, 1.0f);
     std::vector<uint8_t> quantData(cols, 0x78);
-    std::vector<uint8_t> expData = {119};
-    std::vector<float> maxData = {1.0f};
-    std::vector<float> scalingData(cols, 256.0f);
+    std::vector<uint8_t> expData = {119, 119};
+    std::vector<float> maxData = {1.0f, 1.0f};
+    std::vector<float> scalingData = {256.0f, 256.0f, 256.0f, 256.0f};
 
     auto input = makeTensorData(DT_FP32, {1, cols}, inputData);
     auto out = makeTensorData(DT_FP8E4M3, {1, cols}, static_cast<uint8_t>(0));
-    auto exp = makeTensorData(DT_FP8E8M0, {1, 1}, static_cast<uint8_t>(0));
-    auto max = makeTensorData(DT_FP32, {1, 1}, 0.0f);
-    auto scaling = makeTensorData(DT_FP32, {1, cols}, 0.0f);
+    auto exp = makeTensorData(DT_FP8E8M0, {1, 2}, static_cast<uint8_t>(0));
+    auto max = makeTensorData(DT_FP32, {1, 2}, 0.0f);
+    auto scaling = makeTensorData(DT_FP32, {1, 4}, 0.0f);
     auto quantGolden = makeTensorData(DT_FP8E4M3, {1, cols}, quantData);
-    auto expGolden = makeTensorData(DT_FP8E8M0, {1, 1}, expData);
-    auto maxGolden = makeTensorData(DT_FP32, {1, 1}, maxData);
-    auto scalingGolden = makeTensorData(DT_FP32, {1, cols}, scalingData);
+    auto expGolden = makeTensorData(DT_FP8E8M0, {1, 2}, expData);
+    auto maxGolden = makeTensorData(DT_FP32, {1, 2}, maxData);
+    auto scalingGolden = makeTensorData(DT_FP32, {1, 4}, scalingData);
 
     calc::QuantMX(out, exp, max, scaling, input, false);
     ASSERT_ALLCLOSE(out, quantGolden);

@@ -3069,16 +3069,10 @@ static std::pair<uint8_t, float> ComputeQuantMXExponentAndScaling(float maxAbsVa
 static void StoreQuantMXScaling(float* scalingPtr, int64_t row, int64_t groupCols, int64_t group, float scaling,
     const QuantMXContext& ctx)
 {
-    if (ctx.performanceMode) {
-        const int64_t offset = row * groupCols * ctx.scalingFactor + group * ctx.scalingFactor;
-        scalingPtr[offset] = scaling;
-        if (ctx.scalingFactor == 0x2) {
-            scalingPtr[offset + 1] = scaling;
-        }
-        return;
-    }
-    if (ctx.isFp4E2M1) {
-        scalingPtr[row * groupCols + group] = scaling;
+    const int64_t offset = row * groupCols * ctx.scalingFactor + group * ctx.scalingFactor;
+    scalingPtr[offset] = scaling;
+    if (ctx.scalingFactor == 2) {
+        scalingPtr[offset + 1] = scaling;
     }
 }
 
@@ -3097,8 +3091,8 @@ static float ScaleQuantMXValue(float srcValue, float groupScaling, const QuantMX
 }
 
 static void StoreQuantMXValue(
-    uint8_t* quantPtr, float* scalingPtr, int64_t row, int64_t cols, int64_t quantCols, int64_t col, float srcValue,
-    float groupScaling, const QuantMXContext& ctx)
+    uint8_t* quantPtr, int64_t row, int64_t cols, int64_t quantCols, int64_t col, float srcValue, float groupScaling,
+    const QuantMXContext& ctx)
 {
     const float scaled = ScaleQuantMXValue(srcValue, groupScaling, ctx);
     if (ctx.isFp4E2M1) {
@@ -3108,40 +3102,37 @@ static void StoreQuantMXValue(
                                   static_cast<uint8_t>((packed & 0x0Fu) | (encoded << 0x4));
         return;
     }
-    if (!ctx.performanceMode) {
-        scalingPtr[row * cols + col] = groupScaling;
-    }
     quantPtr[row * cols + col] = EncodeE4M3Fn(scaled);
 }
 
 static void FillQuantMXGroup(
     const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr, int64_t row,
-    int64_t group, int64_t cols, int64_t groupCols, int64_t quantCols, const QuantMXContext& ctx)
+    int64_t group, int64_t cols, int64_t expCols, int64_t groupCols, int64_t quantCols, const QuantMXContext& ctx)
 {
     const float maxAbsValue = ComputeQuantMXGroupMax(inputPtr, row, cols, group, ctx);
     const auto exponentAndScaling = ComputeQuantMXExponentAndScaling(maxAbsValue, ctx);
-    expPtr[row * groupCols + group] = exponentAndScaling.first;
+    expPtr[row * expCols + group] = exponentAndScaling.first;
     maxPtr[row * groupCols + group] = maxAbsValue;
     StoreQuantMXScaling(scalingPtr, row, groupCols, group, exponentAndScaling.second, ctx);
     for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
         const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
         if (col < cols) {
-            StoreQuantMXValue(quantPtr, scalingPtr, row, cols, quantCols, col, inputPtr[row * cols + col],
-                exponentAndScaling.second, ctx);
+            StoreQuantMXValue(
+                quantPtr, row, cols, quantCols, col, inputPtr[row * cols + col], exponentAndScaling.second, ctx);
         }
     }
 }
 
 static void FillQuantMXRows(
     const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr, int64_t rows,
-    int64_t cols, int64_t groupCols, int64_t quantCols, DataType srcDtype, DataType quantDtype, bool performanceMode,
-    int64_t mode)
+    int64_t cols, int64_t expCols, int64_t groupCols, int64_t quantCols, DataType srcDtype, DataType quantDtype,
+    bool performanceMode, int64_t mode)
 {
     const QuantMXContext ctx = MakeQuantMXContext(srcDtype, quantDtype, performanceMode, mode);
     for (int64_t row = 0; row < rows; ++row) {
         for (int64_t group = 0; group < groupCols; ++group) {
-            FillQuantMXGroup(inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, row, group, cols, groupCols, quantCols,
-                ctx);
+            FillQuantMXGroup(
+                inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, row, group, cols, expCols, groupCols, quantCols, ctx);
         }
     }
 }
@@ -3149,12 +3140,14 @@ static void FillQuantMXRows(
 struct QuantMXShapes {
     std::vector<int64_t> quantShape;
     std::vector<int64_t> groupedShape;
+    std::vector<int64_t> expShape;
     std::vector<int64_t> performanceGroupedShape;
     std::vector<int64_t> performanceScalingShape;
     std::vector<int64_t> scalingShape;
     int64_t rows;
     int64_t cols;
     int64_t groupCols;
+    int64_t expCols;
     int64_t quantCols;
 };
 
@@ -3180,18 +3173,29 @@ static QuantMXShapes BuildQuantMXShapes(
     shapes.cols = shapes.groupedShape.back();
     ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols != 0)
         << "QuantMX input last dimension must not be zero.";
+    if (!performanceMode) {
+        ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, shapes.cols % 64 == 0)
+            << "QuantMX non-performance mode requires input last dimension to be a multiple of 64. Current last dim: "
+            << shapes.cols;
+    }
     if (quantDtype == DT_FP4_E2M1X2) {
         shapes.quantShape.back() = LastDimPackedCount(shapes.cols, quantDtype);
     }
     shapes.groupedShape.back() = (shapes.cols + MX_QUANT_TILE_BLOCK - 1) / MX_QUANT_TILE_BLOCK;
-    shapes.performanceGroupedShape = BuildQuantMXPerformanceGroupedShape(shapes.quantShape, shapes.groupedShape.back());
+    shapes.performanceGroupedShape =
+        BuildQuantMXPerformanceGroupedShape(shapes.quantShape, shapes.groupedShape.back());
     shapes.performanceScalingShape = shapes.performanceGroupedShape;
     if (srcDtype == DT_FP32) {
         shapes.performanceScalingShape.back() *= 0x2;
     }
-    shapes.scalingShape = performanceMode ? shapes.performanceScalingShape : input.sizes().vec();
+    shapes.expShape = performanceMode ? shapes.performanceGroupedShape : input.sizes().vec();
+    if (!performanceMode) {
+        shapes.expShape.back() = shapes.groupedShape.back();
+    }
+    shapes.scalingShape = shapes.performanceScalingShape;
     shapes.rows = input.numel() / shapes.cols;
     shapes.groupCols = shapes.groupedShape.back();
+    shapes.expCols = shapes.expShape.back();
     shapes.quantCols = shapes.quantShape.back();
     return shapes;
 }
@@ -3215,7 +3219,7 @@ static void CopyQuantMXOutputs(const std::pair<torch::Tensor, torch::Tensor>& to
 {
     tout.first.copy_(quantRaw);
     texp.first.copy_(performanceMode ? expRaw.reshape(shapes.performanceGroupedShape) : expRaw);
-    tmax.second.copy_(performanceMode ? maxTemp.reshape(shapes.performanceGroupedShape) : maxTemp);
+    tmax.second.copy_(maxTemp.reshape(shapes.performanceGroupedShape));
     tscaling.second.copy_(scalingTemp);
 }
 
@@ -3235,15 +3239,13 @@ static void QuantMX(
 
     const QuantMXShapes shapes = BuildQuantMXShapes(input, self.dtype, out.dtype, performanceMode);
     auto quantRaw = CreateQuantMXQuantRaw(shapes.quantShape, out.dtype);
-    auto expRaw = torch::empty(shapes.groupedShape, torch::TensorOptions().dtype(torch::kUInt8));
+    auto expRaw = torch::zeros(shapes.expShape, torch::TensorOptions().dtype(torch::kUInt8));
     auto scalingTemp = CreateQuantMXScalingTemp(shapes.scalingShape, out.dtype);
     auto maxTemp = torch::zeros(shapes.groupedShape, torch::TensorOptions().dtype(torch::kFloat32));
     auto inputFlat = input.view({shapes.rows, shapes.cols});
     auto quantFlat = quantRaw.view({shapes.rows, shapes.quantCols});
-    auto expFlat = expRaw.view({shapes.rows, shapes.groupCols});
-    auto scalingFlat = performanceMode ?
-        scalingTemp.view({shapes.rows, shapes.groupCols * (self.dtype == DT_FP32 ? 0x2 : 1)}) :
-        scalingTemp.view({shapes.rows, shapes.cols});
+    auto expFlat = expRaw.view({shapes.rows, shapes.expCols});
+    auto scalingFlat = scalingTemp.view({shapes.rows, shapes.groupCols * (self.dtype == DT_FP32 ? 2 : 1)});
     auto maxFlat = maxTemp.view({shapes.rows, shapes.groupCols});
 
     const auto* inputPtr = inputFlat.data_ptr<float>();
@@ -3253,8 +3255,8 @@ static void QuantMX(
     auto* maxPtr = maxFlat.data_ptr<float>();
 
     FillQuantMXRows(
-        inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, shapes.rows, shapes.cols, shapes.groupCols, shapes.quantCols,
-        self.dtype, out.dtype, performanceMode, mode);
+        inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, shapes.rows, shapes.cols, shapes.expCols, shapes.groupCols,
+        shapes.quantCols, self.dtype, out.dtype, performanceMode, mode);
     CopyQuantMXOutputs(tout, texp, tmax, tscaling, quantRaw, expRaw, maxTemp, scalingTemp, shapes, performanceMode);
 }
 

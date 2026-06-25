@@ -370,7 +370,6 @@ template <
 TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4 src)
 {
     (void)AXIS;
-    constexpr int kMxQuantGroupSize = 32;
     const auto dstLayout = dst.GetLayout();
     const auto expLayout = exp.GetLayout();
     const auto maxLayout = maxScratch.GetLayout();
@@ -391,40 +390,26 @@ TILEOP void TQuantMXGeneral(T0 dst, T1 exp, T2 maxScratch, T3 scalingScratch, T4
     auto maxTile = PtoTile<T2>(maxScratch);
     auto scalingTile = PtoTile<T3>(scalingScratch);
     auto srcTile = PtoTile<T4>(src);
-    using SrcTileType = typename decltype(srcTile)::Type;
-    using SrcPadTileType = pto::Tile<
-        SrcTileType::Loc, typename SrcTileType::DType, SrcTileType::Rows, SrcTileType::Cols, SrcTileType::BFractal,
-        SrcTileType::ValidRow, SrcTileType::ValidCol, SrcTileType::SFractal, SrcTileType::SFractalSize,
-        pto::PadValue::Zero, SrcTileType::Compact>;
     ExpByteTile expByteTile(
         expLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>(), expLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>());
 
-    (void)maxLayout;
-    (void)scalingLayout;
     (void)srcLayout;
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto expTileOffset = n0Index * expStride0 + n1Index * expStride1 + n2Index * expStride2;
+                auto maxTileOffset = GetQuantMXPerformanceGroupedOffset<T4>(maxLayout, n0Index, n1Index, n2Index);
+                auto scalingTileOffset =
+                    GetQuantMXPerformanceGroupedOffset<T4>(scalingLayout, n0Index, n1Index, n2Index);
                 auto srcTileAddr =
                     (uint64_t)(src.GetAddr() + GenTileOffset(src, tileOffsets) * sizeof(typename T4::Type));
                 dstTile.Assign(dst, tileOffsets);
-                maxTile.Assign(maxScratch, tileOffsets);
-                scalingTile.Assign(scalingScratch, tileOffsets);
+                maxTile.Assign((uint64_t)(maxScratch.GetAddr() + maxTileOffset * sizeof(typename T2::Type)));
+                scalingTile.Assign(
+                    (uint64_t)(scalingScratch.GetAddr() + scalingTileOffset * sizeof(typename T3::Type)));
                 srcTile.Assign(srcTileAddr);
                 pto::TASSIGN(expByteTile, (uint64_t)(exp.GetAddr() + expTileOffset * sizeof(typename T1::Type)));
-                if (srcTile.Data().GetValidCol() % kMxQuantGroupSize != 0) {
-                    if constexpr (T4::IsStaticLayout()) {
-                        SrcPadTileType srcPadTile;
-                        pto::TASSIGN(srcPadTile, srcTileAddr);
-                        pto::TFILLPAD_INPLACE(srcPadTile, srcTile.Data());
-                    } else {
-                        SrcPadTileType srcPadTile(srcTile.Data().GetValidRow(), srcTile.Data().GetValidCol());
-                        pto::TASSIGN(srcPadTile, srcTileAddr);
-                        pto::TFILLPAD_INPLACE(srcPadTile, srcTile.Data());
-                    }
-                }
                 if constexpr (
                     DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundDown ||
                     DEQUANT_SCALE_ROUNDING_MODE == kDequantScaleRoundingModeRoundUp) {
