@@ -23,7 +23,7 @@
 namespace npu::tile_fwk {
 std::string CodeGenOpNPU::GenCastOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintCastTileTensor();
     }
 
@@ -145,7 +145,7 @@ std::string CodeGenOpNPU::PrintDupTileTensor(const PrintDupOpParam& param) const
 
 std::string CodeGenOpNPU::PrintDupOp(const PrintDupOpParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintDupTileTensor(param);
     }
 
@@ -161,31 +161,31 @@ std::string CodeGenOpNPU::GenDupOp() const
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
     std::string dupV;
-    if (opAttrs.count(OpAttributeKey::dynScalar)) {
-        auto scalar = opAttrs.at(OpAttributeKey::dynScalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(SymbolicScalar)))
-            << "SCALAR attribute has to be symbolic value: " << AnyCast<SymbolicScalar>(scalar).IsValid();
-        auto scalarExpr = AnyCast<SymbolicScalar>(scalar);
-        dupV = SymbolicExpressionTable::BuildExpression(scalarExpr);
-    } else if (dstDtypeStr == "float" || dstDtypeStr == "half" || dstDtypeStr == "bfloat16_t") {
-        auto scalar = opAttrs.at(OpAttributeKey::scalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(Element)))
-            << "SCALAR attribute must be float value: " << AnyCast<Element>(scalar).IsFloat();
-        dupV = FormatFloat(AnyCast<Element>(scalar).Cast<float>(), operandDtype[ToUnderlying(MISOIdx::DST_IDX)]);
+    if (extSymbolicScalar.IsValid()) {
+        dupV = SymbolicExpressionTable::BuildExpression(extSymbolicScalar);
+        return PrintDupOp({dVar, dstDtypeStr, dupV});
+    }
+
+    ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::scalar))
+        << "OpAttributeKey::scalar is invalid, dstDtypeStr: " << dstDtypeStr;
+
+    if (dstDtypeStr == "float" || dstDtypeStr == "half" || dstDtypeStr == "bfloat16_t") {
+        ASSERT(OperErr::ATTRIBUTE_INVALID, extOperandVal.IsFloat())
+            << "SCALAR attribute must be float value, data type: " << DataType2String(extOperandVal.GetDataType());
+        dupV = FormatFloat(extOperandVal.Cast<float>(), operandDtype[ToUnderlying(MISOIdx::DST_IDX)]);
     } else if (
         dstDtypeStr == "bool" || dstDtypeStr == "int8_t" || dstDtypeStr == "int16_t" || dstDtypeStr == "int32_t") {
-        auto scalar = opAttrs.at(OpAttributeKey::scalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(Element)))
-            << "SCALAR attribute has to be int value: " << AnyCast<Element>(scalar).IsSigned();
-        dupV = std::to_string(AnyCast<Element>(scalar).Cast<int64_t>());
+        ASSERT(OperErr::ATTRIBUTE_INVALID, extOperandVal.IsSigned())
+            << "SCALAR attribute has to be int value, data type: " << DataType2String(extOperandVal.GetDataType());
+        dupV = std::to_string(extOperandVal.Cast<int64_t>());
     } else if (dstDtypeStr == "uint8_t" || dstDtypeStr == "uint16_t" || dstDtypeStr == "uint32_t") {
-        auto scalar = opAttrs.at(OpAttributeKey::scalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(Element)))
-            << "SCALAR attribute has to be uint value: " << AnyCast<Element>(scalar).IsUnsigned();
-        dupV = std::to_string(AnyCast<Element>(scalar).Cast<uint64_t>());
+        ASSERT(OperErr::ATTRIBUTE_INVALID, extOperandVal.IsUnsigned())
+            << "SCALAR attribute has to be uint value, data type: " << DataType2String(extOperandVal.GetDataType());
+        dupV = std::to_string(extOperandVal.Cast<uint64_t>());
     } else {
         ASSERT(OperErr::ATTRIBUTE_INVALID, false) << "unsupported type, dstDtypeStr: " << dstDtypeStr;
     }
+
     return PrintDupOp({dVar, dstDtypeStr, dupV});
 }
 
@@ -270,7 +270,7 @@ std::string CodeGenOpNPU::GenTransposeDataMove() const
 
 std::string CodeGenOpNPU::PrintTransposeDataMove(const PrintTransposeDataMoveParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintTransposeDataMoveLayout(param);
     }
     if (isSupportDynamicAligned) {
@@ -526,7 +526,7 @@ std::string CodeGenOpNPU::GenIndexPutOp() const
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::indicesSize)) << "cannot get indicesSize attr";
     bool accumulate = AnyCast<bool>(opAttrs.at(OpAttributeKey::accumulate));
     int64_t indicesSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::indicesSize));
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintIndexPutLayout(indicesSize, accumulate);
     }
     // dst:gm, s0/self:gm, s1/values:ub, s2/indices:ub
@@ -632,7 +632,7 @@ std::string CodeGenOpNPU::GenRangeOp() const
         auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
         tileIdxExpr = "((int64_t)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + "))";
     }
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintRangeTileTensor(startVal, stepVal, tileIdxExpr);
     }
     // only support 1 dim
@@ -741,7 +741,7 @@ std::string CodeGenOpNPU::GenIndexAddUBOp() const
 
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
     int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintIndexAddUBTileTensor({axis, dstVar, srcVar, indicesVar, dstRawShape, srcRawShape, dataTypeExpr});
     }
     return PrintIndexAddUBDynamicUnaligned({axis, dstVar, srcVar, indicesVar, dstRawShape, srcRawShape, dataTypeExpr});
@@ -750,7 +750,7 @@ std::string CodeGenOpNPU::GenIndexAddUBOp() const
 std::string CodeGenOpNPU::GenIndexAddOp() const
 {
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "IndexAdd operation only support TileTensor mode";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "IndexAdd operation only support TileTensor mode";
     int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
     axis += SHAPE_DIM5 - rawShape[ID0].size();
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID0);
@@ -838,7 +838,7 @@ std::string CodeGenOpNPU::GenCumOperationOp() const
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "flag")) << "cannot get flag attr";
     bool is_sum = AnyCast<bool>(opAttrs.at(OP_ATTR_PREFIX + "flag"));
 
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintCumOperationTileTensor(axis, is_sum);
     } else {
         return PrintCumSumDynamicUnaligned({axis, is_sum, dstVar, inputVar, inputRawShape, dataTypeExpr});
@@ -867,7 +867,7 @@ std::string CodeGenOpNPU::GenTriULOp() const
     std::string diagonal = "(int)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + ")";
     bool isUpper = AnyCast<bool>(opAttrs.at(OpAttributeKey::isUpper));
 
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "TriU or TriL only support TileTensor mode";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "TriU or TriL only support TileTensor mode";
     return PrintTriULTileTensor(diagonal, isUpper);
 }
 
@@ -1062,7 +1062,7 @@ std::string CodeGenOpNPU::PrintWhereOpTileTensor(const WhereParam& param) const
 std::string CodeGenOpNPU::GenWhereOp() const
 {
     WhereParam param = PrepareWhereParam();
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintWhereOpTileTensor(param);
     }
     return PrintWhereOp(param);
@@ -1070,7 +1070,7 @@ std::string CodeGenOpNPU::GenWhereOp() const
 
 std::string CodeGenOpNPU::GenLogicalNotOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintLogicalNotTileTensor();
     }
     // Support 2 dim
@@ -1152,7 +1152,7 @@ std::string CodeGenOpNPU::PrintCmpTileTensor() const
 
 std::string CodeGenOpNPU::GenCmpOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintCmpTileTensor();
     }
     enum class TensorIdx : int { dstIdx = 0, tmpIdx, src0Idx, src1Idx };
@@ -1248,7 +1248,7 @@ std::string CodeGenOpNPU::PrintHypotTileTensor() const
 
 std::string CodeGenOpNPU::GenHypotOp() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Hypot only support tile tensor";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "Hypot only support tile tensor";
     return PrintHypotTileTensor();
 }
 
@@ -1303,7 +1303,7 @@ std::string CodeGenOpNPU::GenPadOp() const { return PrintPadTileTensor(); }
 
 std::string CodeGenOpNPU::GenPreluOp() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "PReLU only support tile tensor";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "PReLU only support tile tensor";
     return PrintPreluTileTensor();
 }
 
@@ -1319,7 +1319,7 @@ std::string CodeGenOpNPU::PrintLogicalNotTileTensor() const
 
 std::string CodeGenOpNPU::GenLogicalAndOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintLogicalAndTileTensor();
     }
     // Support 2 dim
@@ -1379,7 +1379,7 @@ std::string CodeGenOpNPU::GenLogicalAndOp() const
 
 std::string CodeGenOpNPU::GenQuantizeOp() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Quantize only support TileTensor mode";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "Quantize only support TileTensor mode";
     return PrintQuantizeTileTensor();
 }
 
@@ -1413,7 +1413,7 @@ std::string CodeGenOpNPU::PrintQuantizeTileTensor() const
 
 std::string CodeGenOpNPU::GenDequantizeOp() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Dequantize only support TileTensor mode";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "Dequantize only support TileTensor mode";
     return PrintDequantizeTileTensor();
 }
 
@@ -1453,7 +1453,7 @@ std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
 
 std::string CodeGenOpNPU::GenQuantMXOp() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "QuantMX only supports tile tensor codegen.";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "QuantMX only supports tile tensor codegen.";
 
     int64_t mode = 0;
     ASSERT(OperErr::ATTRIBUTE_INVALID, GetOpAttr(OpAttributeKey::mxQuantMode, mode))

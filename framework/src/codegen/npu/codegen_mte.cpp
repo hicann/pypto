@@ -237,7 +237,7 @@ std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
 
 std::string CodeGenOpNPU::GenMemL1ToL0() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintMemL1ToL0TileTensor();
     }
 
@@ -303,7 +303,7 @@ std::string CodeGenOpNPU::PrintTmove() const
 
 std::string CodeGenOpNPU::GenMemL1ToBt() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintTmove();
     }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
@@ -388,7 +388,7 @@ std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
 
 std::string CodeGenOpNPU::GenMemL0CToL1() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintL0CToL1TileTensor();
     }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
@@ -432,7 +432,7 @@ std::string CodeGenOpNPU::GenMemL0CToL1() const
 
 std::string CodeGenOpNPU::GenUBToL1TileTensor() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "UB to L1 only support tile tensor";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "UB to L1 only support tile tensor";
     auto [coordDst, coordSrc] = PrintDstSrcCoordFromAttr();
     std::vector<std::string> tileOpParamList = GetTileOpParamsByOrder();
     tileOpParamList.insert(tileOpParamList.end(), {coordDst, coordSrc});
@@ -453,7 +453,7 @@ std::string CodeGenOpNPU::GenUBToL1TileTensor() const
 
 std::string CodeGenOpNPU::GenUBToUBND2NZTileTensor() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "UB to UB ND2NZ only support tile tensor";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "UB to UB ND2NZ only support tile tensor";
 
     std::ostringstream oss;
     oss << tileOpName << WrapParamByParentheses(GetTileOpParamsByOrder()) << STMT_END;
@@ -577,7 +577,7 @@ void CodeGenOpNPU::AppendGmValidShapeForReshapeCopy(std::vector<std::string>& ti
 
 std::string CodeGenOpNPU::PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintMemCopyWithL0CTileTensor(param);
     }
     if (isDynamicFunction) {
@@ -807,7 +807,7 @@ std::string CodeGenOpNPU::PrintMemCopyOutWithL1TileTensor(const PrintMemCopyWith
 
 std::string CodeGenOpNPU::PrintMemCopyWithL1(const PrintMemCopyWithL1Param& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintMemCopyWithL1TileTensor(param);
     }
 
@@ -957,7 +957,7 @@ std::string CodeGenOpNPU::PrintMemCopyWithUB(PrintMemCopyWithUBParam& param) con
 {
     unsigned localIdx = param.localIdx;
     std::vector<std::string>& addrExpr = param.addrExpr;
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintMemCopyWithUBTileTensor(param);
     }
     if (isSupportDynamicAligned) {
@@ -1129,7 +1129,7 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBP
 
 std::string CodeGenOpNPU::GenMemL1ToFB() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintTmove();
     }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);

@@ -666,7 +666,7 @@ TileTensor CodeGenOpNPU::BuildTileTensor(
 
 void CodeGenOpNPU::UpdateTileTensorInfo()
 {
-    if (!isSupportLayout) {
+    if (!isSupportTileTensor) {
         return;
     }
 

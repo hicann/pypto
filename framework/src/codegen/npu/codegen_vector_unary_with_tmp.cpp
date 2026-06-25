@@ -100,7 +100,7 @@ std::string CodeGenOpNPU::PrintUnaryWithTmpTileTensor() const
 
 std::string CodeGenOpNPU::PrintVnchwconv(const PrintUnaryTmpBuffParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintUnaryWithTmpTileTensor();
     }
     if (isDynamicFunction) {
@@ -128,7 +128,7 @@ std::string CodeGenOpNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam& para
     std::vector<int64_t> tmpRawShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
     CODEGEN_LOGI("rawShape[2] is %s", IntVecToStr(rawShape[ID2]).c_str());
 
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintReduceLastAxisTileTensor();
     }
 
@@ -277,7 +277,7 @@ std::string CodeGenOpNPU::PrintRoundLayout() const
 
 std::string CodeGenOpNPU::PrintRound() const
 {
-    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Round only support tile tensor";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportTileTensor) << "Round only support tile tensor";
     return PrintRoundLayout();
 }
 
@@ -397,7 +397,7 @@ std::string CodeGenOpNPU::PrintRowSumlineTileTensor() const
 
 std::string CodeGenOpNPU::PrintRowSumline(const PrintUnaryTmpBuffParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintRowSumlineTileTensor();
     }
     if (isDynamicFunction) {
@@ -473,16 +473,14 @@ std::string CodeGenOpNPU::GenOnlineSoftmaxOp() const
     ASSERT(OperErr::ATTRIBUTE_INVALID, (scalarAttr.has_value()) && (scalarAttr.type() == typeid(Element)))
         << "ONLINE_SOFTMAX requires scalar scale attribute.";
     auto scalar = AnyCast<Element>(scalarAttr);
-    params.emplace_back("(" + std::string(DataType2CCEStr(scalar.GetDataType())) + ")" +
+    params.emplace_back(
+        "(" + std::string(DataType2CCEStr(scalar.GetDataType())) + ")" +
         FormatFloat(scalar.Cast<float>(), scalar.GetDataType()));
     std::ostringstream oss;
     oss << tileOpName << WrapParamByParentheses(params) << STMT_END;
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenOnlineSoftmaxUpdateOp() const
-{
-    return PrintTileOpWithFullParamsTmpBuf({ID3});
-}
+std::string CodeGenOpNPU::GenOnlineSoftmaxUpdateOp() const { return PrintTileOpWithFullParamsTmpBuf({ID3}); }
 
 } // namespace npu::tile_fwk

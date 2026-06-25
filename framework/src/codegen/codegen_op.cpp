@@ -290,11 +290,11 @@ void CodeGenOp::Init(const Operation& ops)
     UpdateTileOpInfo(ops);
     ASSERT(OperErr::OPERATION_INIT_FAILED, !tileOpName.empty()) << "empty tileOpName for ops: " << ops.Dump();
 
-    isSupportLayout = ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true) &&
-                      SUPPORT_TILETENSOR_OPS.find(opCode) != SUPPORT_TILETENSOR_OPS.end();
+    isSupportTileTensor = ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true) &&
+                          SUPPORT_TILETENSOR_OPS.find(opCode) != SUPPORT_TILETENSOR_OPS.end();
     CODEGEN_LOGI(
-        "Init CodeGenOp from Operation, isDynamicFunction: %d, isSupportDynamicAligned: %d, isSupportLayout: %d",
-        isDynamicFunction, isSupportDynamicAligned, isSupportLayout);
+        "Init CodeGenOp from Operation, isDynamicFunction: %d, isSupportDynamicAligned: %d, isSupportTileTensor: %d",
+        isDynamicFunction, isSupportDynamicAligned, isSupportTileTensor);
 
     opCodeStr = OpcodeManager::Inst().GetOpcodeStr(opCode);
 
@@ -333,7 +333,7 @@ bool CodeGenOp::IsNeedUseNormalAddrAlloc(const Operation& ops) const
 {
     std::string opcKey = OP_EMUOP_PREFIX + "opc";
     bool isTensorExtract = ops.HasAttr(opcKey) && (ops.GetIntAttribute(opcKey) == EMUOP_TENSOR_EXTRACT);
-    bool res = !isSupportLayout || OpcodeManager::Inst().IsSharedMemory(opCode) || isTensorExtract;
+    bool res = !isSupportTileTensor || OpcodeManager::Inst().IsSharedMemory(opCode) || isTensorExtract;
     return res;
 }
 
