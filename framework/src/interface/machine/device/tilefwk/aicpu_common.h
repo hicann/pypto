@@ -174,17 +174,17 @@ struct DeviceArgs {
     ToSubMachineConfig toSubMachineConfig;
 };
 
-#define TO_ENTRY_IMPL(name, line, key, type) (name##line##key##type)
-#define TO_ENTRY(name, key, type) TO_ENTRY_IMPL(name, _, key, type)
+#define TO_ENTRY_IMPL(name, sep1, key1, sep2, key2, type) (name##sep1##key1##sep2##key2##type)
+#define TO_ENTRY(name, key1, key2, type) TO_ENTRY_IMPL(name, _, key1, _, key2, type)
 
 #ifdef __MIX__
 #ifdef __AIV__
-#define KERNEL_ENTRY(x, y) TO_ENTRY(x, y, _mix_aiv)
+#define KERNEL_ENTRY(x, y, z) TO_ENTRY(x, y, z, _mix_aiv)
 #else
-#define KERNEL_ENTRY(x, y) TO_ENTRY(x, y, _mix_aic)
+#define KERNEL_ENTRY(x, y, z) TO_ENTRY(x, y, z, _mix_aic)
 #endif
 #else
-#define KERNEL_ENTRY(x, y) x
+#define KERNEL_ENTRY(x, y, z) x
 #endif
 
 const uint64_t AICORE_REG_SAY_HELLO = 0xF000000080000000;

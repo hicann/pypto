@@ -48,6 +48,7 @@ INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args);
 INLINE void Trap()
 {
 #if IS_AICORE
+    pipe_barrier(PIPE_ALL);
     trap();
 #endif
 }
@@ -158,7 +159,6 @@ INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx)
         nextLowIdx = GetLeafTaskId();
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_LEAF_TASK_WAIT_TIMEOUT)) {
-            Trap();
             return AICORE_TASK_ABNORMAL_STOP;
         }
     } while (nextLowIdx == lastTaskIdx);
@@ -583,6 +583,7 @@ INLINE void KernelEntry(
         }
         if (curTaskIdx == AICORE_TASK_ABNORMAL_STOP) {
             SetLastWordStatus(args, STAGE_GET_NEXT_TASK_TIMEOUT);
+            Trap();
             return;
         }
 

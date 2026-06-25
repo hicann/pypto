@@ -1169,7 +1169,7 @@ static bool RunCompileAicoreKernelStage(
         return true;
     }
     int ret = CompileAICoreKernel(
-        leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), kernelPath);
+        leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), function->GetOriginalRawName(), kernelPath);
     if (ret != 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile dynamic aicore.o failed.");
         return false;

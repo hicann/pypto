@@ -73,8 +73,8 @@ TEST_F(TestOpInfoManager, SetAndGetOpType)
     auto& mgr = OpInfoManager::GetInstance();
     mgr.SetOpType("custom_op");
     EXPECT_EQ(mgr.GetOpType(), "custom_op");
-    mgr.SetOpType("tilefwk");
-    EXPECT_EQ(mgr.GetOpType(), "tilefwk");
+    mgr.SetOpType("PyPTO");
+    EXPECT_EQ(mgr.GetOpType(), "PyPTO");
 }
 
 TEST_F(TestOpInfoManager, GetCustomJsonDefault)
