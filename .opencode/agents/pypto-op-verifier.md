@@ -404,9 +404,17 @@ Implementation: random-restart search over scale knobs is sufficient. Generator 
 
 **Goal:** Produce the single file `custom/<op>/modules/test_<op>_module<suffix_k>.py` corresponding to the Phase M_k passed in your dispatch prompt. After writing this file, **run it** and report the precision PASS/FAIL. The test pairs the just-Coded impl (`<op>_module<suffix_k>_impl.py`) with the golden you produced in Step A immediately above.
 
-### Step C.1 — Test file structure
+### Step C.1 — Test file structure (generated)
 
-Each test file imports the cumulative impl and the cumulative golden and compares every leaf output. The file **MUST start with the `detailed_tensor_compare` path-bootstrap preamble** so the user (and CI) can run `python custom/<op>/modules/test_<op>_module<suffix_k>.py` directly without setting `PYTHONPATH`. The preamble walks up from the test file location to find `.agents/skills/pypto-op-verify/scripts/` and prepends it to `sys.path`. See `skill pypto-op-verify`'s `templates/test_template.py` for the canonical preamble; reuse it verbatim.
+**Do not hand-write the test file** — generate it (the bootstrap preamble, naming-convention imports, and the mandatory `_l0` / `_l1` functions are deterministic):
+
+```
+python .agents/skills/pypto-op-verify/scripts/gen_module_test.py \
+    --op <op> --suffix <suffix_k> --spec custom/<op>/SPEC.md --golden custom/<op>/modules/<op>_module<suffix_k>_golden.py \
+    > custom/<op>/modules/test_<op>_module<suffix_k>.py
+```
+
+(For the integrated E2E test pass `--e2e` and `--golden custom/<op>/<op>_golden.py`, output to `custom/<op>/test_<op>.py`.) Then **run it** and report PASS/FAIL. The generator builds inputs from SPEC `p0_shapes` (l1) and a small shape (l0); only adjust the generated `make_case_inputs` body if the op needs heterogeneous per-input shapes. The canonical template (`templates/test_template.py`) remains the reference for the structure the generator emits. The structure below documents what it produces:
 
 ```python
 """Test for cumulative module M1..M_k. Imports module<suffix_k>_impl and module<suffix_k>_golden."""

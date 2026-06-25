@@ -63,7 +63,13 @@ complete_phase(MN) 之后：
          PASS → 第 9 步。
          FAIL → 在 MEMORY.md 追加 "## Composition Rejection — <ts>"，并
          state_transition(rollback_to_stage, target_stage=3 或 4, reason=...)。
-    9. 调度一次 @pypto-op-coder 做清理（合成的 <op>_impl.py + README.md）。
+    9. 清理（不再调度 coder）：运行脚本生成合成的 <op>_impl.py + README.md ——
+       `python .agents/skills/pypto-op-verify/scripts/gen_cleanup.py --op <op>
+       --final-impl custom/<op>/modules/<op>_module<suffix_N>_impl.py
+       --final-suffix <suffix_N> --spec custom/<op>/SPEC.md
+       --golden custom/<op>/<op>_golden.py --out-dir custom/<op>`。
+       （整合是机械的 rename/strip；正确性由 Stage 6 E2E 门禁兜底。若脚本因需要
+       层级合并判断而不适用，再回退到调度一次 @pypto-op-coder 做清理。）
        之后 state_transition(complete_stage, stage=5)。
 ```
 

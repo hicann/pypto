@@ -66,6 +66,13 @@ When MEMORY.md says `module_count == 1`, the orchestrator dispatches you **once*
 
 > This section applies only when `module_count ≥ 2`. On L0 path the integration is the original `<op>_impl.py` from the single-shot dispatch above.
 
+> **Cleanup is now scripted by default.** The orchestrator runs
+> `.agents/skills/pypto-op-verify/scripts/gen_cleanup.py` (mechanical
+> rename/strip of the final module → `<op>_impl.py`, plus README from SPEC)
+> instead of dispatching you. You are dispatched for cleanup **only** as a
+> fallback when that script does not apply (e.g. the integration needs genuine
+> layer-consolidation judgment). When dispatched, produce the two files below.
+
 After every Phase M_k is verified, pypto-op-orchestrator dispatches you ONCE more for cleanup to produce two files:
 
 1. `custom/<op>/<op>_impl.py` — integrated kernel. Take the final cumulative `<op>_module<suffix_N>_impl.py` and rename / clean its imports / consolidate its layers so that it reads as a standalone production kernel. **Same kernel logic, same function bodies** — only rename / clean / consolidate. No test code, no debug scaffolding.
