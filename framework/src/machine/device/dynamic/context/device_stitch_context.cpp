@@ -257,6 +257,72 @@ int DeviceStitchContext::MoveTo(DynDeviceTask* dynTask)
     return DEVICE_MACHINE_OK;
 }
 
+static void AddMixWrapDepsForStitch(
+    DevAscendFunctionDupped& consumerDup, size_t consumerIdx, size_t consumerOperationIdx,
+    DevAscendFunctionDuppedStitchList& producerStitchList, DeviceWorkspaceAllocator* workspace,
+    uint32_t producerFuncIndex, size_t producerOperationIdx, uint64_t devTaskId)
+{
+    auto* consumerSrc = consumerDup.GetSource();
+    if (consumerSrc == nullptr || consumerSrc->wrapIdNum_ == 0) {
+        return;
+    }
+    auto* opWrapList = consumerSrc->GetOpWrapListAddr();
+    size_t opCount = consumerSrc->GetOperationSize();
+    if (consumerOperationIdx >= opCount) {
+        return;
+    }
+    int consumerWrapId = opWrapList[consumerOperationIdx];
+    if (consumerWrapId == -1) {
+        return;
+    }
+    for (size_t i = 0; i < opCount; i++) {
+        if (i != consumerOperationIdx && opWrapList[i] == consumerWrapId) {
+            if (CheckStitchCacheDuplicate(
+                    workspace->StitchCacheAddr(), workspace->RootFuncMaxCallOpsize(),
+                    producerFuncIndex, static_cast<uint32_t>(producerOperationIdx),
+                    static_cast<uint32_t>(consumerIdx), i, devTaskId)) {
+                continue;
+            }
+            DeviceStitchContext::PushBackTask(producerStitchList, MakeTaskID(consumerIdx, i), workspace);
+            consumerDup.GetOperationCurrPredCount(i)++;
+        }
+    }
+}
+
+static void ValidateAndDumpStitchEdge(
+    const DevAscendFunctionDupped& producerDup, const DevAscendFunctionDupped& consumerDup,
+    size_t producerOperationIdx, size_t consumerIdx, size_t consumerOperationIdx,
+    DeviceStitchContext::StitchKind debugStitchKind, int debugSlotIdx)
+{
+    if (producerOperationIdx >= producerDup.GetSource()->GetOperationSize()) {
+        DEV_ERROR(
+            ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
+            "#ctrl.task.pre.stitch.handle: producerOperationIdx %zu exceeds the size of GetOperation %zu",
+            producerOperationIdx, producerDup.GetSource()->GetOperationSize());
+    }
+    if (consumerOperationIdx >= consumerDup.GetSource()->GetOperationSize()) {
+        DEV_ERROR(
+            ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
+            "#ctrl.task.pre.stitch.handle: consumerOperationIdx %zu exceeds the size of GetOperation %zu",
+            consumerOperationIdx, consumerDup.GetSource()->GetOperationSize());
+    }
+    DEV_ASSERT(
+        ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
+        producerOperationIdx < producerDup.GetSource()->GetOperationSize());
+    DEV_ASSERT(
+        ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
+        consumerOperationIdx < consumerDup.GetSource()->GetOperationSize());
+    DEV_VERBOSE_DEBUG(
+        "[Stitch] slot:%d kind:%s dupIdx:%d funcKey:%d,op:%d -> funcKey:%d,op:%d\n", debugSlotIdx,
+        DeviceStitchContext::GetStitchKindName(debugStitchKind).c_str(), (int)consumerIdx,
+        producerDup.GetSource()->GetFuncKey(), (int)producerOperationIdx,
+        consumerDup.GetSource()->GetFuncKey(), (int)consumerOperationIdx);
+
+    topo_dump::DumpStitchEdge(
+        producerDup, consumerDup, producerOperationIdx, consumerIdx, consumerOperationIdx, debugStitchKind,
+        debugSlotIdx);
+}
+
 void DeviceStitchContext::HandleOneStitch(
     DevAscendFunctionDupped& producerDup, DevAscendFunctionDupped& consumerDup,
     DevAscendFunctionDuppedStitchList& producerStitchList, uint32_t producerFuncIndex,
@@ -280,6 +346,8 @@ void DeviceStitchContext::HandleOneStitch(
 
     PushBackTask(producerStitchList, MakeTaskID(consumerIdx, consumerOperationIdx), workspace);
     consumerDup.GetOperationCurrPredCount(consumerOperationIdx)++;
+    AddMixWrapDepsForStitch(consumerDup, consumerIdx, consumerOperationIdx, producerStitchList, workspace,
+                            producerFuncIndex, producerOperationIdx, devTaskId);
 
     auto* producerFunc = producerDup.GetSource();
     auto producerIdx = static_cast<uint32_t>(producerOperationIdx);
@@ -290,32 +358,9 @@ void DeviceStitchContext::HandleOneStitch(
 
     DEV_IF_NONDEVICE
     {
-        if (producerOperationIdx >= producerDup.GetSource()->GetOperationSize()) {
-            DEV_ERROR(
-                ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                "#ctrl.task.pre.stitch.handle: producerOperationIdx %zu exceeds the size of GetOperation %zu",
-                producerOperationIdx, producerDup.GetSource()->GetOperationSize());
-        }
-        if (consumerOperationIdx >= consumerDup.GetSource()->GetOperationSize()) {
-            DEV_ERROR(
-                ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-                "#ctrl.task.pre.stitch.handle: consumerOperationIdx %zu exceeds the size of GetOperation %zu",
-                consumerOperationIdx, consumerDup.GetSource()->GetOperationSize());
-        }
-        DEV_ASSERT(
-            ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-            producerOperationIdx < producerDup.GetSource()->GetOperationSize());
-        DEV_ASSERT(
-            ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE,
-            consumerOperationIdx < consumerDup.GetSource()->GetOperationSize());
-        DEV_VERBOSE_DEBUG(
-            "[Stitch] slot:%d kind:%s dupIdx:%d funcKey:%d,op:%d -> funcKey:%d,op:%d\n", debugSlotIdx,
-            GetStitchKindName(debugStitchKind).c_str(), (int)consumerIdx, producerDup.GetSource()->GetFuncKey(),
-            (int)producerOperationIdx, consumerDup.GetSource()->GetFuncKey(), (int)consumerOperationIdx);
-
-        topo_dump::DumpStitchEdge(
-            producerDup, consumerDup, producerOperationIdx, consumerIdx, consumerOperationIdx, debugStitchKind,
-            debugSlotIdx);
+        ValidateAndDumpStitchEdge(
+            producerDup, consumerDup, producerOperationIdx, consumerIdx, consumerOperationIdx,
+            debugStitchKind, debugSlotIdx);
     }
 }
 
