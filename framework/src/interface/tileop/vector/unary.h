@@ -1197,8 +1197,8 @@ TILEOP void TrigErfCompute(T0 dst, T1 tmp, T2 src)
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
     auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
-    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
 
     using TmpFP32Tile = pto::Tile<pto::TileType::Vec, typename T2::Type, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
     using TmpINT32Tile = pto::Tile<pto::TileType::Vec, int32_t, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
