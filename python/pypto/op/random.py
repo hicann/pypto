@@ -156,7 +156,7 @@ def uniform(shape, key, counter, alg, dtype) -> Tensor:
     for dim_num in shape:
         shape_one_dim *= dim_num
 
-    counter0, counter1 = counter
+    counter0, counter1 = 0, counter[1]
     uniform_res = uniform_impl(key[0], counter0, counter1, [shape_one_dim], rounds=10, dtype=dtype)
     pypto.set_vec_tile_shapes(*tile_shapes)
     return pypto.reshape(uniform_res, shape)

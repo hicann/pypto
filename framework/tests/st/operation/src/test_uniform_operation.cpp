@@ -111,7 +111,7 @@ TEST_P(UniformOperationTest, TestUniform) {
     
     uint64_t key = GetValueByName<uint64_t>(test_data, "key");
     
-    uint64_t counter0 = GetValueByName<uint64_t>(test_data, "counter_0");
+    uint64_t counter0 = 0;
     uint64_t counter1 = GetValueByName<uint64_t>(test_data, "counter_1");
     
     DataType dtype = GetOutputDtype(test_data);

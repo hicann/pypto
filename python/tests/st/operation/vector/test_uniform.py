@@ -46,8 +46,9 @@ def uniform_numpy_golden(shape, key, counter, alg, dtype):
         return arr.view(np.uint32).copy()
 
     key_arr = uint64_to_uint32_pair(np.uint64(key[0]))
+    # Hardcode counter[0] to 0 to match pypto.uniform behavior (aligned with CANN ACLNN)
     counter_arr = np.concatenate([
-        uint64_to_uint32_pair(np.uint64(counter[0])),
+        uint64_to_uint32_pair(np.uint64(0)),
         uint64_to_uint32_pair(np.uint64(counter[1]))
     ])
 
