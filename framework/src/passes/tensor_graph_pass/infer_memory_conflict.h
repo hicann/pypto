@@ -58,6 +58,13 @@ private:
     bool CheckConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
     bool CheckRawShapeConflict(const LogicalTensorPtr& inTensor, const LogicalTensorPtr& outTensor);
     bool IsValidTileShape(const Operation& op) const;
+    bool ShouldSkipOutcastInput(const LogicalTensorPtr& inputTensor, Function& function);
+    Status HandleReshapeBackward(
+        Function& function, const LogicalTensorPtr& curTensor, const LogicalTensorPtr& inputTensor, Operation* producer,
+        const LogicalTensorPtr& reshapeOutput, bool& needSkip);
+    Status HandleConflictBackward(
+        Function& function, const LogicalTensorPtr& curTensor, const LogicalTensorPtr& inputTensor, Operation* producer,
+        const LogicalTensorPtr& reshapeOutput);
     Status MatchReshapePattern(
         Function& function, const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut, bool& matched);
     bool CheckReshapeContext(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOut);
@@ -65,10 +72,8 @@ private:
     std::set<Operation*> preregcopys;
     std::set<Operation*> postregcopys;
     std::unordered_map<LogicalTensorPtr, LogicalTensorPtr> memoryInfo;
-    std::unordered_map<DataType, int> viewTypeTable = {
-        {DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4},
-        {DT_FP8E4M3, 1}, {DT_FP8E5M2, 1}, {DT_FP8E8M0, 1}
-    };
+    std::unordered_map<DataType, int> viewTypeTable = {{DT_INT8, 1},    {DT_BF16, 2},    {DT_FP16, 2},   {DT_FP32, 4},
+                                                       {DT_FP8E4M3, 1}, {DT_FP8E5M2, 1}, {DT_FP8E8M0, 1}};
     IRBuilder irBuilder_;
 };
 } // namespace tile_fwk

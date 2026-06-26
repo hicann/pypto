@@ -1360,6 +1360,64 @@ TEST_F(TestRemoveRedundantOpPass, DynamicOutcast)
     EXPECT_EQ(view_num, kNumOne);
 }
 
+/*
+TestOutcastToOutcastViewAssembleSkip
+inCast{8,16}->exp->startOutCast{8,16}->view->ubTensor{4,16}->assemble->endOutCast{8,16}
+startOutCast and endOutCast are both outcasts, cannot delete view/assemble.
+*/
+TEST_F(TestRemoveRedundantOpPass, TestOutcastToOutcastViewAssembleSkip)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> viewShape = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    auto inCast = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto startOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "startOutCast");
+    startOutCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, viewShape, CreateTestConstIntVector(viewShape));
+    ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto endOutCast = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        DT_FP32, shape, CreateTestConstIntVector(shape), TileOpFormat::TILEOP_ND, "endOutCast");
+    endOutCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(startOutCast);
+    currFunctionPtr->outCasts_.push_back(endOutCast);
+
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {inCast}, {startOutCast});
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_VIEW, {startOutCast}, {ubTensor},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+        });
+    PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_ASSEMBLE, {ubTensor}, {endOutCast},
+        [&offset](Operation& op) {
+            op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+        });
+
+    RemoveRedundantOp removeredundantpass;
+    EXPECT_EQ(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
+
+    uint32_t assembleNum = kNumZero;
+    uint32_t viewNum = kNumZero;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+    }
+    EXPECT_EQ(assembleNum, kNumOne);
+    EXPECT_EQ(viewNum, kNumOne);
+}
+
 TEST_F(TestRemoveRedundantOpPass, AssembleDDR)
 {
     auto func = std::make_shared<Function>(Program::GetInstance(),
