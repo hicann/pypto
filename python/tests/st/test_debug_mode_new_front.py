@@ -43,7 +43,7 @@ def check_output():
             latest_dir = max(subdirs, key=os.path.getctime)
     assert os.path.exists(latest_dir)
 
-    check_list = ["program.json", "dyn_topo.txt", "topo.json", "merged_swimlane.json",
+    check_list = ["program.json", "dyn_topo.txt", "merged_swimlane.json",
          "tilefwk_L1_prof_data.json"]
     file_list = [os.path.join(latest_dir, d) for d in check_list]
     lost_file = None

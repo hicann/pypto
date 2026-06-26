@@ -505,7 +505,7 @@ void TestUBCopyInBody(const std::string funcName, const std::string& expect)
 
 TEST_F(TestCodegenDynCopy, UBCopyIn)
 {
-    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, CFG_DEBUG_GM_OUT_OF_BOUNDS);
+    config::SetDebugOption(CFG_RUNTIME_DBEUG_MODE, CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS);
     std::string expect =
         R"!!!(TileOp::DynUBCopyIn<float, 1, 1, 64, 64>((__ubuf__ float*)UB_S0_E0, (__gm__ float*)GET_PARAM_ADDR(param, 0, 0), 1, 1, 1, 64, 64, 1, 1, 1, GET_PARAM_RAWSHAPE_2(param, 0, 0), 0, 0, 0, 0, 0);
 )!!!";

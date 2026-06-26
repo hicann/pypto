@@ -15,6 +15,9 @@
 
 #include "machine/device/dynamic/context/device_task_context.h"
 #include "machine/device/dynamic/eslmodel_aicore_hal.h"
+#ifndef __DEVICE__
+#include "interface/configs/config_manager.h"
+#endif
 
 namespace npu::tile_fwk::dynamic {
 namespace {
@@ -577,9 +580,15 @@ int DeviceTaskContext::BuildDeviceTaskDataAndReadyQueue(
     PerfEnd(PERF_EVT_CORE_FUNCDATA);
     DEV_DEBUG("Finish build a new device task");
 
-    DEV_IF_NONDEVICE { dyntask->DumpTopo(devProg->devArgs.enableVFFusion); }
-
 #ifndef __DEVICE__
+    DEV_IF_NONDEVICE {
+        if (devProg->devArgs.enableEslModel ||
+            config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_NONE ||
+            config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
+            dyntask->DumpTopo(devProg->devArgs.enableVFFusion);
+        }
+    }
+
     HandleEslModelTransmission(devProg, dyntask, dynFuncDataSize);
 #endif
 

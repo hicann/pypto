@@ -472,6 +472,11 @@ def set_debug_options(*,
 
     runtime_debug_mode : int
         Whether to enable debug mode during execution stage.
+        0: disabled;
+        1: enabled, one-click to enable execution-related configs (e.g. swimlane graph);
+        2: enable AICORE_MODEL simulation;
+        3: enable runtime dependency-verification data dump;
+        4: enable runtime GM memory out-of-bounds check.
     """
     options_dict = {k: v for k, v in locals().items() if v is not None}
     set_options(debug_options=options_dict)

@@ -37,7 +37,7 @@ public:
     int GetBuiltInOpBinHandle();
     int LaunchCustomOp(RtStream stream, DeviceKernelArgs* kArgs, std::string& OpType) const;
     void CustomAiCpuSoLoad();
-    void GenBuiltInOpInfo(const std::string& jsonPath);
+    void GenBuiltInOpInfo();
     static LoadAicpuOp& GetInstance()
     {
         static LoadAicpuOp loadCustomAicpuOp;

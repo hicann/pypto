@@ -526,9 +526,7 @@ int DeviceRunner::DynamicRun(const KernelLaunchInfo &launchInfo, DeviceKernelArg
 
 int DeviceRunner::Init()
 {
-    std::string builtInOpPath = config::LogTopFolder() + "/built_in";
-    CreateDir(builtInOpPath, true);
-    LoadAicpuOp::GetInstance().GenBuiltInOpInfo(builtInOpPath);
+    LoadAicpuOp::GetInstance().GenBuiltInOpInfo();
     if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle() != 0) {
         MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Get builtInOp Funchandle failed\n");
         return -1;

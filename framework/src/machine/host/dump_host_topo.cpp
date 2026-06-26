@@ -48,7 +48,7 @@ const std::string& DepVerifyDumpDir()
 inline bool DumpEnabled()
 {
     static const bool cached =
-        (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_VERIFY);
+        (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_RUNTIME_DEBUG_VERIFY);
     return cached;
 }
 

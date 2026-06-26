@@ -404,7 +404,7 @@ void TensorSlotManager::TensorSymbol(const Tensor& tensor, const std::string& sy
     TensorSlot slot = TensorSlot::CreateTensor(tensor);
     symbolNameDict[symbolName] = slot;
     slotNameDict[slot] = symbolName;
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_VERIFY) {
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_RUNTIME_DEBUG_VERIFY) {
         return;
     }
     Function* currFunc = Program::GetInstance().GetCurrentFunction();
