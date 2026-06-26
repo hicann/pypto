@@ -25,6 +25,7 @@
 
 #include "tilefwk/symbolic_scalar.h"
 #include "interface/utils/entry_registrar.h"
+#include "tilefwk/workspace_desc.h"
 
 namespace npu::tile_fwk {
 namespace dynamic {
@@ -95,54 +96,6 @@ struct RebuildableAttrInitContext {
         ctx->manager->InitAttr(ctx->func, name, base); \
     } \
     static EntryRegistrarNode node(RebuildableAttributeManager::GetRegistrarGroup(), Entry##TyAttr, #TyAttr);
-
-struct WorkspaceDesc {
-    struct WorkspaceConfig {
-        uint64_t innerSpilledRecyclePeriod;
-        uint64_t unrollStitchCount;
-        uint64_t actualStitchCount;
-        uint64_t parallelism;
-    } config;
-
-    struct WorkspacePlatform {
-        uint64_t aicoreCount;
-    } platform;
-
-    struct WorkspacePerRootFunctionDesc {
-        Function *func{nullptr};
-        std::string devFuncName;
-        uint64_t unroll{0};
-
-        uint64_t rootInnerSpilledRawMem{0};
-        uint64_t leafPerCoreSpilledMem{0};
-        uint64_t rootTotalExclusiveOutcastRawMem{0};
-
-        uint64_t rootInnerSpilledMem{0};
-        uint64_t rootTotalExclusiveOutcastMem{0};
-
-        uint64_t rootMaxExclusiveOutcastMem{0};
-        int64_t rootMaxExclusiveOutcastIdx{0};
-    };
-
-    std::vector<WorkspacePerRootFunctionDesc> rootFuncDescList;
-
-    uint64_t maxRootInnerSpilledMem{0};
-    uint64_t maxLeafPerCoreSpilledMem{0};
-    uint64_t maxRootTotalExclusiveOutcastMem{0};
-
-    uint64_t maxStaticOutcastMem{0};
-    SymbolicScalar maxDynamicAssembleOutcastMem;
-
-    uint64_t totalExclusiveOutcastSlot{0};
-    uint64_t totalAssembleOutcastSlot{0};
-    uint64_t devTaskBoundaryOutcastNum{0};
-    uint64_t devTaskInnerTemporalOutcastNum{0};
-
-    struct WorkspaceCellMatch {
-        uint64_t dynamicCellMatchSlotNum{0};
-        SymbolicScalar maxDynamicCellMatchTableMem;
-    } cellMatch;
-};
 
 struct RebuildableWorkspaceDesc : RebuildableAttributeBase {
     void Reset(void *data) override

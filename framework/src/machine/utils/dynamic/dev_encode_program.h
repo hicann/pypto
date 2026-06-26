@@ -20,9 +20,14 @@
 
 namespace npu::tile_fwk {
 class DyndevFunctionAttribute;
+class Function;
 }
 
 namespace npu::tile_fwk::dynamic {
+
+inline constexpr uint64_t ALIGNMENT_32K = 32 * 1024;
+
+struct EncodeDevAscendProgramInfo;
 
 struct DevAscendProgramSymbol {
     DevRelocVector<char> name;
@@ -67,7 +72,6 @@ struct DevAscendProgram {
                     devTaskInnerExclusiveOutcasts + // root func outcasts & non-dassemble-dst & DeviceTask inner tensors
                     MaxOutcastMem() * devTaskBoundaryAndInnerTemporalOutcastNum; // root func outcasts & non-dassemble-dst & DeviceTask
                                                                  // boundary outcasts
-                static constexpr uint64_t ALIGNMENT_32K = 32 * 1024;
                 return AlignUp(total, ALIGNMENT_32K) * parallelism;
             }
         } tensor;
@@ -518,6 +522,10 @@ struct DevAscendProgram {
 
 private:
     friend struct EncodeDevAscendProgramInfo;
+    friend void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* base);
+    friend void EncodeDevAscendProgramSizeOnly(uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo);
+    friend void EncodeDevAscendProgramFull(
+        Function* func, DevAscendProgram* base, uint64_t& offset, EncodeDevAscendProgramInfo& encodeInfo);
 
     void InitSymbolTable(uintdevptr_t& initOffset, SymbolicSymbolTable* symbolTableInput, bool fillContent);
     void InitExpressionTableBinary(
