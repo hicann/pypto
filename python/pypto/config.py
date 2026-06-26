@@ -193,6 +193,8 @@ def set_pass_options(*,
                          Dict[Union[int, str], Union[int, Tuple[int, str]]]] = None,
                      cube_nbuffer_setting: Optional[Dict[Union[int, str], int]] = None,
                      sg_set_scope: Optional[Union[int, tuple[int, bool, bool]]] = None,
+                     sg_set_ooo_scope: Optional[int] = None,
+                     ooo_sched_mode: Optional[str] = None,
                      auto_mix_partition: Optional[int] = None,
                      ) -> None:
     """
@@ -262,6 +264,18 @@ def set_pass_options(*,
         pass_options['cube_nbuffer_setting'] = cube_nbuffer_setting
     if auto_mix_partition is not None:
         pass_options['auto_mix_partition'] = auto_mix_partition
+    if sg_set_ooo_scope is not None:
+        if sg_set_ooo_scope > 0:
+            from pypto._controller import Controller
+            encoded = sg_set_ooo_scope * 10000 + Controller.get_ooo_scope_iter()
+            pass_options['sg_set_ooo_scope'] = [encoded]
+        else:
+            pass_options['sg_set_ooo_scope'] = [-1]
+    if ooo_sched_mode is not None:
+        if ooo_sched_mode not in ("", "HLF"):
+            raise ValueError(f"Invalid ooo_sched_mode: '{ooo_sched_mode}'. "
+                            f"Expected '' or 'HLF'.") 
+        pass_options['ooo_sched_mode'] = ooo_sched_mode
 
     if pass_options:
         set_options(pass_options=pass_options)
@@ -303,6 +317,9 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int], D
     val = rst.get("sg_set_scope", (-1, False, False))
     result['sg_set_scope'] = (int(val[0]), bool(val[1]), bool(val[2]))
     result['auto_mix_partition'] = rst.get('auto_mix_partition', 0)
+    ooo_val = rst.get('sg_set_ooo_scope', [0])
+    result['sg_set_ooo_scope'] = ooo_val[0] // 10000 if ooo_val and ooo_val[0] > 0 else (ooo_val[0] if ooo_val else 0)
+    result['ooo_sched_mode'] = rst.get('ooo_sched_mode', '')
     return result
 
 
@@ -455,6 +472,11 @@ def set_debug_options(*,
 
     runtime_debug_mode : int
         Whether to enable debug mode during execution stage.
+        0: disabled;
+        1: enabled, one-click to enable execution-related configs (e.g. swimlane graph);
+        2: enable AICORE_MODEL simulation;
+        3: enable runtime dependency-verification data dump;
+        4: enable runtime GM memory out-of-bounds check.
     """
     options_dict = {k: v for k, v in locals().items() if v is not None}
     set_options(debug_options=options_dict)

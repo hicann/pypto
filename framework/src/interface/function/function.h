@@ -529,6 +529,7 @@ struct ParamConfigs {
     bool combineAxis{false};
     int autoMixPartition{0};
     bool enableMemoryAwareSort{false};
+    std::string oooSchedMode;
 };
 
 struct FunctionParamInfo {

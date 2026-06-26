@@ -29,7 +29,17 @@ Cap active skills at 4.
 
 ### In `custom/<op>/eval/module_interfaces.yaml` (machine-readable, single source of truth)
 
-This YAML is consumed downstream to build the modular torch golden and the prefix-evaluation runner. Its schema is fixed and it must pass wiring validation. Required top-level keys:
+**Start from the generated skeleton** — do not hand-transcribe the deterministic parts:
+
+```
+python .agents/skills/pypto-op-verify/scripts/gen_module_interfaces.py \
+    custom/<op>/<op>_golden.py --spec custom/<op>/SPEC.md --op <op> \
+    > custom/<op>/eval/module_interfaces.yaml
+```
+
+It auto-fills `schema_version`, `op`, `primary_inputs` (names from the golden signature, shapes/dtype from SPEC), and `composition_verification` (atol/rtol/shapes from SPEC front matter). You then fill the **judgement** parts marked `TODO`: the `modules[]` boundaries (per DESIGN.md §0.5 breakpoints) and `final_outputs` wiring.
+
+This YAML is consumed by @pypto-op-verifier to build the modular torch golden and the prefix-evaluation runner. Its schema is fixed and it must pass wiring validation. Required top-level keys:
 
 - `schema_version: 1`
 - `op: <op_name>`
@@ -79,6 +89,12 @@ for not-yet-built modules.
 
 ## Exit criterion (designer's portion)
 
-All three memory sections present + `custom/<op>/eval/module_interfaces.yaml` exists and passes the wiring rules above + any revision-induced `numerical_notes` are populated.
+All three memory sections present + `custom/<op>/eval/module_interfaces.yaml` exists and any revision-induced `numerical_notes` are populated. **Before handing back, self-validate the wiring** (don't check rules 1-5 by eye):
+
+```
+python .agents/skills/pypto-op-verify/scripts/validate_yaml.py custom/<op>/eval/module_interfaces.yaml --json
+```
+
+Fix every reported violation until it returns `"status": "PASS"`, then hand back to pypto-op-orchestrator. This catches malformed wiring before @pypto-op-verifier rejects it, avoiding a re-dispatch round-trip.
 
 If your `module_interfaces.yaml` is later found invalid, a `## Verification Rejection — <ts>` note is appended to `custom/<op>/MEMORY.md` and you are re-invoked to revise it.

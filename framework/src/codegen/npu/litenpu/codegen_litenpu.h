@@ -53,6 +53,7 @@ private:
 
     std::string GetCoreArch(const CompileInfo& compileInfo) const override;
 
+    void AppendLiteNPUVFOptions(std::ostringstream& oss) const;
     void BuildExtraOptions(
         std::ostringstream& oss, const CompileInfo& compileInfo, const std::string& compileOptions) const override;
 

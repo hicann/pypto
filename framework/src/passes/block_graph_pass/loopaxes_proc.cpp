@@ -140,7 +140,6 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation& op, Function& subFunc)
     auto output = op.GetOOperands().front();
     auto shape = output->GetShape();
     auto dynShape = output->GetDynValidShape();
-
     if (shape.size() != dynShape.size()) {
         APASS_LOG_ERROR_F(
             Elements::Operation, "Op Code %s, Op[%d] output dynShape size != shape size.", op.GetOpcodeStr().c_str(),
@@ -492,7 +491,6 @@ bool LoopaxesProc::SameDynLoopAxes(const std::vector<SymbolicScalar>& curLoopAxe
     for (size_t i = 0; i < curLoopAxes.size(); ++i) {
         auto curExpr = SymbolicExpressionTable::BuildExpression(curLoopAxes[i]);
         auto prevExpr = SymbolicExpressionTable::BuildExpression(dynPreviousLoopAxes[i]);
-
         if (dynParamTable.find(curExpr) != dynParamTable.end() && dynParamTable.find(prevExpr) != dynParamTable.end()) {
             auto curParamInfo = dynParamTable[curExpr];
             auto preParamInfo = dynParamTable[prevExpr];

@@ -1381,10 +1381,17 @@ void Assemble(const Tensor& tensor, const std::vector<SymbolicScalar>& dynOffset
 {
     DECLARE_TRACER();
 
+    const auto& srcShape = tensor.GetShape();
+    const auto& dstShape = dest.GetShape();
+    CHECK_OP(dstShape.size() == srcShape.size()) << "Assemble: src and dest requires same shape";
+    CHECK_OP(dstShape.size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
+
+    for (size_t dimIdx = 0; dimIdx < srcShape.size(); ++dimIdx) {
+        CHECK_OP(srcShape[dimIdx] > 0) << "Assemble: shape of src tensor requires interger";
+    }
+
     CHECK_OP(dest.GetStorage(false)->Format() == tensor.GetStorage(false)->Format())
         << "Assemble: src and dest requires same format";
-    CHECK_OP(dest.GetShape().size() == tensor.GetShape().size()) << "Assemble: src and dest requires same shape";
-    CHECK_OP(dest.GetShape().size() == dynOffset.size()) << "Assemble: dynOffset and dest requires same shape";
     CHECK_OP(dest.GetDataType() == tensor.GetDataType()) << "Assemble: src and dest requires same dtype";
 
     auto &func = *Program::GetInstance().GetCurrentFunction();
@@ -1988,38 +1995,6 @@ void ExpandOperationInto(
             TiledMaxpool(function, tileShape, iOperand[0], oOperand[0], op);
             break;
         }
-        case Opcode::OP_SEND_TO_ROUTING_EXPERT: {
-            npu::tile_fwk::Distributed::TiledSendToRoutingExpert(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_SEND_TO_SHARED_EXPERT: {
-            npu::tile_fwk::Distributed::TiledSendToSharedExpert(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_COPY_TO_LOCAL_EXPERT: {
-            npu::tile_fwk::Distributed::TiledCopyToLocalExpert(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_DISPATCH_SET_FLAG: {
-            npu::tile_fwk::Distributed::TiledDispatchSetFlag(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_FFN_SCHED: {
-            npu::tile_fwk::Distributed::TiledDispatchFFNSched(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_FFN_BATCHING: {
-            npu::tile_fwk::Distributed::TiledDispatchFFNBatching(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_FFN_COMBINEINFO: {
-            npu::tile_fwk::Distributed::TiledDispatchFFNCombineInfo(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_FFN_VALIDCNT: {
-            npu::tile_fwk::Distributed::TiledDispatchFFNValidCnt(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
         case Opcode::OP_SHMEM_PUT: {
             npu::tile_fwk::Distributed::TiledShmemPut(function, tileShape, iOperand, oOperand, op);
             break;
@@ -2050,14 +2025,6 @@ void ExpandOperationInto(
         }
         case Opcode::OP_SHMEM_SET: {
             npu::tile_fwk::Distributed::TiledShmemSet(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND: {
-            npu::tile_fwk::Distributed::TiledMoeDistributedCombineSend(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
-        case Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE: {
-            npu::tile_fwk::Distributed::TiledMoeDistributedCombineReceive(function, tileShape, iOperand, oOperand, op);
             break;
         }
         case Opcode::OP_VIEW_TYPE: {

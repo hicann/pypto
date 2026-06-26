@@ -135,7 +135,7 @@ std::string CodeGenNPU::GenFuncHeader(uint64_t programId, Function& topFunc, Com
 
 void CodeGenNPU::GenDDRChecker(std::ostringstream& oss) const
 {
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_GM_OUT_OF_BOUNDS) {
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS) {
         return;
     }
 

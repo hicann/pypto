@@ -126,7 +126,7 @@ protected:
     bool isInputForceCombineAxis{false};
     bool isSupportDynamicAligned{false}; // NEXTNEXT delete after all TileOp is changed to TileTensor Mode
     bool isDynamicFunction{false};
-    bool isSupportLayout{false};
+    bool isSupportTileTensor{false};
     int operandCnt{0};
     bool isMainBlock{false};
     bool isDynamicAligned{false};

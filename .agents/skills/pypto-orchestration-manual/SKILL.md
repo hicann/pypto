@@ -18,10 +18,8 @@ the team as a set of progressive-disclosure references.
 > verifier / debugger) reads this skill, and no sub-agent
 > Mandatory-reads list references any file under this directory.
 >
-> **Stage vocabulary is intentional here.** Every other skill in the
-> repository has been neutralized of `Stage 1–7` references so that
-> sub-agents stay focused on their input/output contracts. This skill is
-> the **single canonical source of stage-management knowledge** —
+> **Stage vocabulary is intentional here.** This skill is the
+> **single canonical source of stage-management knowledge** —
 > agent roster, dispatch decisions, gate criteria. Removing Stage
 > vocabulary here would erase the orchestrator's operating manual.
 >

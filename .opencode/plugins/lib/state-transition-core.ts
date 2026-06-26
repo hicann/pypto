@@ -74,11 +74,6 @@ export type OrchestratorState = {
   stage5_phases?: Stage5Phases;
   artifact_hashes?: ArtifactHashes;
   rollback_history?: RollbackEntry[];
-  stage8_iteration?: {
-    count: number;
-    last_improvement: number;
-    consecutive_no_improvement: number;
-  };
   last_updated?: string;
   [key: string]: unknown;
 };

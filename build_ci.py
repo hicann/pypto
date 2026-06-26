@@ -179,6 +179,7 @@ class FeatureParam(CMakeParam):
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
     whl_break_system_packages: bool = False
     multi_py3_cfg: Optional[List[Py3Desc]] = None  # 额外 Python3 executable 属性列表, 用于多版本 pypto_impl.so 编译
+    whl_into_run: bool = False  # 将 whl 包打进 run 包
 
     def __init__(self, args):
         """初始化 FeatureParam 实例
@@ -201,6 +202,7 @@ class FeatureParam(CMakeParam):
         self.multi_py3_cfg = None
         if args.multi_py3_exe:
             self._init_multi_py3_cfg(multi_py3_exe=args.multi_py3_exe)
+        self.whl_into_run = args.whl_into_run
 
     def __str__(self) -> str:
         """返回特性参数的字符串表示
@@ -212,6 +214,7 @@ class FeatureParam(CMakeParam):
         desc += f"\nFeature"
         desc += f"\n    Frontend                : {self.frontend_type}"
         if self.frontend_type_python3:
+            desc += f"\n    PackingWhlIntoRun       : {self.whl_into_run}"
             if self.whl_py3_abi_tag:
                 desc += f"\n    Py3ABI                  : {self.whl_py3_abi_tag}"
             if self.whl_plat_name:
@@ -287,6 +290,8 @@ class FeatureParam(CMakeParam):
         parser.add_argument("--multi_py3_exe", nargs="+", type=str, default=None,
                             help="Extra Python3 executables for multi-version pypto_impl.so, "
                                  "e.g. --multi_py3_exe /usr/bin/python3.9 /usr/bin/python3.10")
+        parser.add_argument("--whl_into_run", action="store_true", default=False, dest="whl_into_run",
+                            help="Packing whl into run.")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         """生成 CMake Configure 命令
@@ -1067,29 +1072,6 @@ class BuildCtrl(CMakeParam):
         return None
 
     @staticmethod
-    def find_match_whl(name: str, path: Path) -> Optional[Path]:
-        """
-        在指定路径下, 查找对应匹配的 whl 包文件
-
-        :param name: 包名
-        :type name: str
-        :param path: 指定路径
-        :type path: Path
-        :return: 指定路径
-        :rtype: Path | None
-        """
-        cpp_desc = f"cp{sys.version_info.major}{sys.version_info.minor}"
-        pattern = f"{name}-*-{cpp_desc}-{cpp_desc}-*.whl"
-        whl_glob = path.glob(pattern=pattern)
-        whl_files = [Path(f) for f in whl_glob]
-        whl_file = whl_files[0] if whl_files else None
-        if whl_file:
-            logging.info("Success find match %s from %s", whl_file, path)
-        else:
-            logging.error("Failed to find match %s whl from %s, pattern=%s", name, path, pattern)
-        return whl_file
-
-    @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
         parser.add_argument("-c", "--clean", action="store_true", default=False,
                             help="clean, clean Build-Tree and Install-Tree before build.")
@@ -1172,6 +1154,7 @@ class BuildCtrl(CMakeParam):
             logging.info("Front-end(python3), start process")
             ctrl.py_clean()
             ctrl.py_build()
+            ctrl.py_build_run()
             ctrl.py_tests()
         else:
             logging.info("Front-end(cpp), start process with CMake")
@@ -1466,6 +1449,43 @@ class BuildCtrl(CMakeParam):
             _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="build")
             logging.info("Build whl success, %s", duration)
 
+    def py_build_run(self):
+        """whl打包入run处理
+
+        流程:
+            1. 查找 py_build() 已产出的 whl 文件
+            2. cmake configure: 在独立 binary 目录 (build_run) 中, 启用 ENABLE_FEATURE_PACKING_WHL_INTO_RUN
+            3. cpack: 生成 .run 自解压安装包
+        """
+        # 条件过滤
+        if not self.feature.whl_into_run:
+            return
+        if self._use_pip_install_mode() or self.feature.whl_editable:
+            logging.warning("Packing whl into run is not supported in pip-install or editable mode, skip.")
+            return
+        whl_file = self._find_match_whl(name=self.feature.whl_name, path=self.install_root)
+        if not whl_file:
+            raise RuntimeError(f"Can't find {self.feature.whl_name} whl file from {self.install_root}, "
+                               f"please run py_build first.")
+        # 打包 run
+        run_build_root = Path(self.build_root, "run")
+        run_build_root.mkdir(parents=True, exist_ok=True)
+        cmd = f"{self.cmake} -S {self.src_root} -B {run_build_root}"
+        cmd += f" -DENABLE_FEATURE_PACKING_WHL_INTO_RUN=ON"
+        cmd += f" -DWHL_FILE_PATH={whl_file}"
+        cmd += f" -DRUN_OUTPUT_DIR={self.install_root}"
+        cmd += f" -DPYPTO_THIRD_PARTY_PATH={self.third_party_path}" if self.third_party_path else ""
+        update_env = self.get_cfg_update_env()
+        logging.info("CMake Configure(run), Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-configure-run")
+        logging.info("CMake Configure(run) success, %s", duration)
+
+        cmd = f"{self.cmake} --build {run_build_root} --target package"
+        cmd += f" --verbose" if self.verbose else ""
+        logging.info("CMake Build(run) package, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="cmake-build-package")
+        logging.info("CMake Build(run) package success, %s", duration)
+
     def py_tests(self):
         """执行 Python 前端测试
 
@@ -1479,7 +1499,7 @@ class BuildCtrl(CMakeParam):
         if not self._use_pip_install_mode():
             # 此时需查找重装对应 whl 包
             self.pip_uninstall(name=self.feature.whl_name, path=dist)  # 卸载 whl 包
-            whl = self.find_match_whl(name=self.feature.whl_name, path=dist)  # 查找 whl 包
+            whl = self._find_match_whl(name=self.feature.whl_name, path=dist)  # 查找 whl 包
             if not whl:
                 raise RuntimeError(f"Can't find {self.feature.whl_name} whl file from {dist}")
             self.pip_install(whl=whl, dest=dist, opt="--no-compile --no-deps")  # 安装 whl 包
@@ -1520,7 +1540,7 @@ class BuildCtrl(CMakeParam):
                              def_filter=str(Path(self.src_root, "examples")),
                              dev_ext_comma=dev_ext_comma, n_workers=n_workers)
 
-        # 生成覆盖率报告（如果启用 gcov）
+        # 生成覆盖率报告 (如果启用 gcov)
         if self.build.gcov:
             self._py_generate_coverage()
 
@@ -1594,6 +1614,34 @@ class BuildCtrl(CMakeParam):
             ret.check_returncode()
             logging.info("examples --run_mode sim, Cmd: %s, Duration %s sec", cmd, duration)
 
+    def _find_match_whl(self, name: str, path: Path) -> Optional[Path]:
+        """
+        在指定路径下, 查找对应匹配的 whl 包文件
+
+        :param name: 包名
+        :type name: str
+        :param path: 指定路径
+        :type path: Path
+        :return: 指定路径
+        :rtype: Path | None
+        """
+        pytag = f"cp{sys.version_info.major}{sys.version_info.minor}"
+        abitag = pytag
+        if self.feature.whl_py3_abi_tag:
+            pytag = f"cp{self.feature.whl_py3_abi_tag}"
+            abitag = "abi3"
+        tags = f"{pytag}-{abitag}"
+
+        pattern = f"{name}-*-{tags}-*.whl"
+        whl_glob = path.glob(pattern=pattern)
+        whl_files = [Path(f) for f in whl_glob]
+        whl_file = whl_files[0] if whl_files else None
+        if whl_file:
+            logging.info("Success find match %s from %s", whl_file, path)
+        else:
+            logging.error("Failed to find match %s whl from %s, pattern=%s", name, path, pattern)
+        return whl_file
+
     def _py_tests_run_pytest(self, dist: Optional[Path], filter_str: str, ext: str = ""):
         if not self.tests.exec.auto_execute:
             return
@@ -1651,16 +1699,16 @@ class BuildCtrl(CMakeParam):
         """生成 Python 场景覆盖率报告
 
         该函数读取 setup.py 生成的 build_dir 标记文件和 CMake 生成的 gcov_config.json，
-        然后调用 gen_coverage.py 生成覆盖率报告。
+        然后调用 gen_coverage.py 生成覆盖率报告.
 
         流程:
-            1. 读取 .pypto_build_dir.json → 获取 CMake 构建目录
-            2. 读取 gcov_config.json → 获取覆盖率参数（sys_root, filter_dirs 等）
-            3. 调用 gen_coverage.py → 生成覆盖率报告
+            1. 读取 .pypto_build_dir.json -> 获取 CMake 构建目录
+            2. 读取 gcov_config.json -> 获取覆盖率参数 (sys_root, filter_dirs 等)
+            3. 调用 gen_coverage.py -> 生成覆盖率报告
 
         注意:
-            - 需要在 pytest 执行完成后调用（此时 .gcda 文件已生成）
-            - 仅在 ENABLE_GCOV=ON 时生效（通过 build.gcov 参数判断）
+            - 需要在 pytest 执行完成后调用 (此时 .gcda 文件已生成)
+            - 仅在 ENABLE_GCOV=ON 时生效 (通过 build.gcov 参数判断)
         """
         # 1. 读取 build_dir 标记文件
         if not self.build_dir_file.exists():

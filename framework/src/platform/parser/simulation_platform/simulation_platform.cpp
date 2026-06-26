@@ -43,6 +43,7 @@ std::string DPlatformToSocVersion(DPlatform platform)
         {DPlatform::ASCEND_950PR_9582, "950PR_958x"},
         {DPlatform::ASCEND_950DT_9579, "950DT_957x"},
         {DPlatform::KIRIN_9030, "Kirin9030"},
+        {DPlatform::KIRIN_X90, "KirinX90"},
     };
     auto it = mappings.find(platform);
     if (it != mappings.end()) {

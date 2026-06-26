@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -35,6 +35,7 @@ argsort(input: Tensor, dim: Optional[int]=None, descending: bool=True) -> Tensor
 3. 当Shape较大场景 $(\frac{TileShape\ Size}{TileShape[dim]} * CeilAlign(ViewShape[dim], 32) >= 6KB)$ 时,排序轴的Tile切分数量小于128。
 4. 对于四维输入，暂不支持在第0轴上进行排序。
 5. 排序时遇到相同值时，采用稳定排序返回对应的索引。
+
 
 ## 调用示例
 

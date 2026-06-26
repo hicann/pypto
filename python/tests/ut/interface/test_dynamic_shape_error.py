@@ -19,6 +19,7 @@ import pypto
 logging.basicConfig(level=logging.INFO, format="", force=True)
 SIM_RUNTIME_OPTIONS = {"run_mode": pypto.RunMode.SIM}
 DYNAMIC_SHAPE_ERROR = "Dynamic shape tensors are not allowed as operation operands"
+ASSEMBLE_DYNAMIC_SHAPE_ERROR = "Assemble: shape of src tensor requires interger"
 
 
 @pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
@@ -76,6 +77,23 @@ def test_one_hot_dynamic_shape_error():
 
     with pytest.raises(Exception, match=DYNAMIC_SHAPE_ERROR):
         one_hot_kernel(x, out)
+
+
+@pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
+def assemble_kernel_with_dynamic_input(
+    a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
+    out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
+):
+    pypto.assemble(a, [0, 0], out)
+
+
+def test_assemble_dynamic_shape_error():
+    """Test that Assemble rejects a dynamic-shape source tensor at its interface."""
+    a = torch.ones(1, 8, dtype=torch.float32)
+    out = torch.zeros(1, 8, dtype=torch.float32)
+
+    with pytest.raises(Exception, match=ASSEMBLE_DYNAMIC_SHAPE_ERROR):
+        assemble_kernel_with_dynamic_input(a, out)
 
 
 @pypto.frontend.jit(runtime_options=SIM_RUNTIME_OPTIONS)
@@ -140,6 +158,7 @@ if __name__ == "__main__":
     test_kernel_dynamic_shape_error()
     test_matmul_dynamic_shape_error()
     test_one_hot_dynamic_shape_error()
+    test_assemble_dynamic_shape_error()
     test_dynamic_reshape_error()
     test_view_valid_shape_reshape_inplace_error()
 

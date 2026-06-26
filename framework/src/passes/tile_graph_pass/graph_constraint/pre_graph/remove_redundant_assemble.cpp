@@ -306,9 +306,10 @@ std::vector<int64_t> removeAllOnes(const std::vector<int64_t>& vec)
 
 bool MatchReshapePattern(const LogicalTensorPtr& reshapeInput, const LogicalTensorPtr& reshapeOutput)
 {
+    constexpr size_t kShapeSizeThreshold = 3;
     auto inputShape = reshapeInput->GetShape();
     auto outputShape = reshapeOutput->GetShape();
-    if (std::max(inputShape.size(), outputShape.size()) < 3) {
+    if (std::max(inputShape.size(), outputShape.size()) < kShapeSizeThreshold) {
         return false;
     }
     return removeAllOnes(inputShape) == removeAllOnes(outputShape);
@@ -491,7 +492,6 @@ bool RemoveViewMultiReshapePattern(const LogicalTensorPtr& reshapeInput, const L
 {
     auto longerRawShape = reshapeInput->GetRawTensor()->GetRawShape();
     auto shorterRawShape = reshapeOutput->GetRawTensor()->GetRawShape();
-
     // 确保longerRawShape是维度数更大的一个
     if (longerRawShape.size() < shorterRawShape.size()) {
         std::swap(longerRawShape, shorterRawShape);

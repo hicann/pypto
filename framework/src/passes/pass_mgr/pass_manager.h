@@ -15,6 +15,7 @@
 
 #ifndef PASSES_PASS_MGR_H_
 #define PASSES_PASS_MGR_H_
+#include <mutex>
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -52,8 +53,11 @@ private:
     void RegDefaultStrategy();
 
     std::vector<PassEntry> GetStrategyPasses(const std::string& strategy) const;
+    std::string GetStrategyLogFolderName(const std::string& strategy) const;
 
     std::unordered_map<std::string, std::vector<PassEntry>> strategies_;
+    mutable std::mutex strategyLogMutex_;
+    mutable std::unordered_map<std::string, size_t> strategyLogIndices_;
 
     size_t startIdx{0};
 };

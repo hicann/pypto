@@ -43,7 +43,11 @@ MemoryType MemoryPathUtils::ResolveEffectiveConsumerRequirement(
     Operation* consumerOp, MemoryType directRequirement, MemoryType targetType,
     const OutputRequirementResolver& resolveOutputRequirement)
 {
-    if (consumerOp == nullptr || consumerOp->GetOpcode() != Opcode::OP_VIEW) {
+    if (consumerOp == nullptr) {
+        return directRequirement;
+    }
+    auto opcode = consumerOp->GetOpcode();
+    if (opcode != Opcode::OP_VIEW && opcode != Opcode::OP_ASSEMBLE) {
         return directRequirement;
     }
     std::set<MemoryType> branchRequirements;
@@ -52,15 +56,28 @@ MemoryType MemoryPathUtils::ResolveEffectiveConsumerRequirement(
             branchRequirements.insert(requirement);
         }
     };
-    auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
-    if (viewOpAttribute != nullptr) {
-        addRequirement(viewOpAttribute->GetTo());
+    if (opcode == Opcode::OP_VIEW) {
+        auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
+        if (viewOpAttribute != nullptr) {
+            addRequirement(viewOpAttribute->GetTo());
+        }
+    }
+    if (opcode == Opcode::OP_ASSEMBLE) {
+        auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(consumerOp->GetOpAttribute());
+        if (assembleOpAttribute != nullptr) {
+            MemoryType fromType = assembleOpAttribute->GetFrom();
+            if (IsSpecialDirectMemoryPath(fromType, targetType) &&
+                !consumerOp->oOperand.empty() && consumerOp->oOperand.front() != nullptr &&
+                !consumerOp->oOperand.front()->GetConsumers().empty()) {
+                addRequirement(targetType);
+            }
+        }
     }
     if (!consumerOp->oOperand.empty() && consumerOp->oOperand.front() != nullptr) {
-        auto viewOutput = consumerOp->oOperand.front();
-        addRequirement(viewOutput->GetMemoryTypeOriginal());
+        auto output = consumerOp->oOperand.front();
+        addRequirement(output->GetMemoryTypeOriginal());
         if (resolveOutputRequirement) {
-            addRequirement(resolveOutputRequirement(viewOutput));
+            addRequirement(resolveOutputRequirement(output));
         }
     }
     if (branchRequirements.count(targetType) > 0) {

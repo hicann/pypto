@@ -223,7 +223,6 @@ struct PromoteCmp {
     {
         int ca = cls.at(a);
         int cb = cls.at(b);
-
         if (ca != cb)
             return ca > cb;
 

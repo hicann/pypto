@@ -646,7 +646,6 @@ class JitCallableWrapper:
     ) -> None:
         """Run kernel on NPU or CPU (SIM)."""
         if self._runtime_options.get("run_mode", None) == RunMode.NPU:
-            self._set_config_option()
             pypto_impl.LaunchKernelTorch(
                 self, _current_stream(), torch_tensors, tensor_defs
             )
@@ -655,6 +654,7 @@ class JitCallableWrapper:
             if (os.environ.get("ENABLE_ESLMODEL") == "TRUE" and cann_is_configed):
                 with pypto.options("jit_scope"):
                     self._set_config_option()
+                    get_torch_npu()
                     pypto_impl.LaunchKernelTorch(
                         self, _current_stream(), torch_tensors, tensor_defs
                 )

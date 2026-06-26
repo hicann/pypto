@@ -157,10 +157,17 @@ __aicore__ inline constexpr int GetValidHeight()
 }
 
 template <typename T>
-__aicore__ inline constexpr size_t GetAllAxisProduct()
+__aicore__ inline constexpr size_t GetAllAxisTileProduct()
 {
     constexpr auto size = Std::tuple_size<typename T::TileShape>::value;
     return TileOp::GetAllAxisProduct<size, typename T::TileShape>();
+}
+
+template <typename T>
+__aicore__ inline constexpr size_t GetAllAxisValidProduct()
+{
+    constexpr auto size = Std::tuple_size<typename T::Shape>::value;
+    return TileOp::GetAllAxisProduct<size, typename T::Shape>();
 }
 
 template <typename T>
@@ -184,9 +191,9 @@ struct PtoTileDimConfig {
 template <typename T>
 struct PtoTileDimConfig<T, true, true> {
     static constexpr auto tileH = size_t(1);
-    static constexpr auto tileW = GetAllAxisProduct<T>();
+    static constexpr auto tileW = GetAllAxisTileProduct<T>();
     static constexpr auto validH = 1;
-    static constexpr auto validW = GetAllAxisProduct<T>();
+    static constexpr auto validW = GetAllAxisValidProduct<T>();
 };
 
 template <typename T>

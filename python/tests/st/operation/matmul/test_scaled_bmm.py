@@ -19,6 +19,7 @@ import pytest
 import pypto
 import torch
 import torch_npu
+import torch.nn.functional as F
 
 from testcase.scaled_bmm_test_case import SCALED_BMM_TESTS, ScaledBmmConfig
 
@@ -259,17 +260,18 @@ def d3_kernel_common(params: ScaledBmmKernelParams, config):
     scale_a_tensor, scale_b_tensor = params.scale_a_tensor, params.scale_b_tensor
     bias_tensor = params.bias_tensor
     scale_tensor = params.scale_tensor
-
+    output_m = config.out_shape[-2]
+    output_n = config.out_shape[-1]
     batch = max(config.a_shape[0], config.b_shape[0])
     batch_a, batch_b = config.a_shape[0], config.b_shape[0]
     _, m, k, n = config.get_logical_dims_3d()
     tile_b, vm, vn = config.view_shape
-    m_loop, n_loop = (m + vm - 1) // vm, (n + vn - 1) // vn
+    m_loop, n_loop = (output_m + vm - 1) // vm, (output_n + vn - 1) // vn
     batch_loop = (batch + tile_b - 1) // tile_b
     scale_k = k // K_BLOCK_SIZE_64
 
     pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0])
-    pypto.set_matrix_size([m, k, n])
+    pypto.set_matrix_size([output_m, k, output_n])
 
     inner_params = Kernel3dInnerParams(
         a_tensor=a_tensor, b_tensor=b_tensor, out_tensor=out_tensor,
@@ -387,16 +389,17 @@ def d4_kernel_common(params: ScaledBmmKernelParams, config):
     scale_b_tensor = params.scale_b_tensor
     bias_tensor = params.bias_tensor
     scale_tensor = params.scale_tensor
-
+    output_m = config.out_shape[-2]
+    output_n = config.out_shape[-1]
     b0, b1, m, k, n = config.get_logical_dims_4d()
     tile_b0, tile_b1, vm, vn = config.view_shape
-    m_loop, n_loop = (m + vm - 1) // vm, (n + vn - 1) // vn
+    m_loop, n_loop = (output_m + vm - 1) // vm, (output_n + vn - 1) // vn
     batch_outer_loop = (b0 + tile_b0 - 1) // tile_b0
     batch_inner_loop = (b1 + tile_b1 - 1) // tile_b1
     scale_k = k // K_BLOCK_SIZE_64
 
     pypto.set_vec_tile_shapes(config.m_tile_shape[0], config.n_tile_shape[0])
-    pypto.set_matrix_size([m, k, n])
+    pypto.set_matrix_size([output_m, k, output_n])
 
     for batch_outer_idx in pypto.loop(0, batch_outer_loop, 1, name="LO_batchOuterIdx", idx_name="batch_outer_idx"):
         for batch_inner_idx in pypto.loop(0, batch_inner_loop, 1, name="L1_batchInnerIdx", idx_name="batch_inner_idx"):
@@ -538,7 +541,10 @@ def _compute_golden(params: GoldenComputeParams):
     config = params.config
     k = config.get_logical_dims_3d()[2] if len(config.a_shape) == 3 else config.get_logical_dims_4d()[3]
     scale_k_32 = k // K_BLOCK_SIZE_32
-
+    output_m = config.out_shape[-2]
+    output_n = config.out_shape[-1]
+    padding_m = abs(output_m - params.m)
+    padding_n = abs(output_n - params.n)
     if config.scale_b_trans:
         scale_b_tmp = params.scale_b_cpu.view(params.n, scale_k_32).T
     else:
@@ -563,12 +569,12 @@ def _compute_golden(params: GoldenComputeParams):
     )
     mat_b_tmp = scale_b_tmp * mat_b_tmp
     golden = torch.matmul(mat_a_tmp, mat_b_tmp)
-
+    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     if params.bias_cpu is not None:
         if len(config.a_shape) == 3 and config.bias_shape_type == "b_1_n":
             golden += params.bias_cpu
         else:
-            golden += params.bias_cpu.repeat_interleave(params.m, dim=0)
+            golden += params.bias_cpu.repeat_interleave(output_m, dim=0)
 
     if config.relu_type == pypto.ReLuType.RELU:
         golden = torch.relu(golden)
@@ -587,12 +593,13 @@ def _compute_golden(params: GoldenComputeParams):
 def prepare_inputs(config: ScaledBmmConfig, device_id: int):
     if len(config.a_shape) == 3:
         b, m, k, n = config.get_logical_dims_3d()
-        out_shape = [b, m, n]
+        out_shape = config.out_shape
     else:
         b0, b1, m, k, n = config.get_logical_dims_4d()
-        out_shape = [b0, b1, m, n]
+        out_shape = config.out_shape
         b = max(b0, b1)
 
+    output_n = out_shape[-1]
     scale_k = k // K_BLOCK_SIZE_64
     scale_a_shape = ([scale_k, m, SHAPE_DIM_2] if config.scale_a_trans
                      else [m, scale_k, SHAPE_DIM_2])
@@ -607,12 +614,13 @@ def prepare_inputs(config: ScaledBmmConfig, device_id: int):
 
     bias_cpu = None
     if config.has_bias:
-        bias_shape = [b, 1, n] if (len(config.a_shape) == 3 and config.bias_shape_type == "b_1_n") else [1, n]
+        bias_shape = [b, 1, output_n] if (len(config.a_shape) == 3 and config.bias_shape_type == "b_1_n") \
+            else [1, output_n]
         bias_cpu = torch.rand(bias_shape, dtype=torch.float32).uniform_(-3, 3)
 
     scale_tensor_cpu = None
     if config.has_scale_tensor:
-        scale_tensor_cpu = torch.rand([1, n], dtype=torch.float32).uniform_(0.01, 0.15)
+        scale_tensor_cpu = torch.rand([1, output_n], dtype=torch.float32).uniform_(0.01, 0.15)
 
     golden_params = GoldenComputeParams(config=config, mat_a_cpu=mat_a_cpu, mat_b_cpu=mat_b_cpu,
         scale_a_cpu=scale_a_cpu, scale_b_cpu=scale_b_cpu, bias_cpu=bias_cpu,

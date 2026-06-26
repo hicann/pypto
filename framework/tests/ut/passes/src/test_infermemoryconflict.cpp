@@ -186,6 +186,57 @@ TEST_F(InferMemoryConflictTest, TestInit)
 }
 
 /*
+Case:
+outCast->exp->T
+Backward inference skips outcast input and does not insert register copy.
+*/
+TEST_F(InferMemoryConflictTest, TestSkipOutcastInputBackward)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestSkipOutcast", "TestSkipOutcast", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {NUM_2, NUM_4};
+    std::vector<int64_t> offset = {NUM_ZERO, NUM_ZERO};
+    std::shared_ptr<RawTensor> outcastRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> curRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    outcastRawTensor->SetSymbol("outcast");
+    curRawTensor->SetSymbol("cur");
+    outcastRawTensor->memoryId = NUM_ZERO;
+    curRawTensor->memoryId = NUM_ONE;
+
+    auto outcastInput = npu::tile_fwk::IRBuilder().CreateTensorVar(
+        outcastRawTensor, offset, shape, CreateTestConstIntVector(shape));
+    auto curTensor =
+        npu::tile_fwk::IRBuilder().CreateTensorVar(curRawTensor, offset, shape, CreateTestConstIntVector(shape));
+    auto normalTensor = npu::tile_fwk::IRBuilder().CreateTensorVar(DT_FP32, shape, CreateTestConstIntVector(shape));
+    currFunctionPtr->outCasts_.push_back(outcastInput);
+
+    auto& producer = PassOperationUtils::AddOperation(*currFunctionPtr, Opcode::OP_EXP, {outcastInput}, {curTensor});
+
+    InferMemoryConflict pass;
+    EXPECT_TRUE(pass.ShouldSkipOutcastInput(outcastInput, *currFunctionPtr));
+    EXPECT_FALSE(pass.ShouldSkipOutcastInput(normalTensor, *currFunctionPtr));
+
+    pass.memoryInfo[curTensor] = curTensor;
+    pass.memoryInfo[outcastInput] = outcastInput;
+    auto status = pass.HandleConflictBackward(*currFunctionPtr, curTensor, outcastInput, &producer, curTensor);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(pass.preregcopys.size(), NUM_ZERO);
+    EXPECT_EQ(pass.postregcopys.size(), NUM_ZERO);
+
+    InferMemoryConflict updatePass;
+    updatePass.memoryInfo[curTensor] = curTensor;
+    std::queue<LogicalTensorPtr> curTensors;
+    status = updatePass.UpdateBackwardTensor(*currFunctionPtr, curTensor, &producer, curTensors);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_TRUE(curTensors.empty());
+    EXPECT_EQ(updatePass.memoryInfo.find(outcastInput), updatePass.memoryInfo.end());
+    EXPECT_EQ(updatePass.preregcopys.size(), NUM_ZERO);
+    EXPECT_EQ(updatePass.postregcopys.size(), NUM_ZERO);
+}
+
+/*
 Case 1:
 input->view->T1->reshape->T2->assemble->output
 */

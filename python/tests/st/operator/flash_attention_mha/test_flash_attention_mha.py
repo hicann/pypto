@@ -271,10 +271,7 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
     Returns:
         passed: 是否通过精度校验
     """
-    device_id = get_device_id()
-    if device_id is None:
-        return None
-
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     device = f'npu:{device_id}'
 
@@ -354,15 +351,8 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
         golden_np = golden_tensor.float().numpy()
         max_diff = np.abs(npu_np - golden_np).max()
 
-        try:
-            from models.deepseek_v32_exp.utils.compare import compare
-            compare(npu_tensor.cpu(), golden_tensor, name, atol=atol, rtol=rtol, max_error_count=10)
-
-            logging.info(f"  {name}: PASSED (max_diff={max_diff:.6f}, rtol={rtol}, atol={atol})")
-        except AssertionError as e:
-            logging.info(f"  {name}: FAILED (max_diff={max_diff:.6f})")
-            logging.info(f"    {e}")
-            passed = False
+        from models.deepseek_v32_exp.utils.compare import compare
+        compare(npu_tensor.cpu(), golden_tensor, name, atol=atol, rtol=rtol, max_error_count=10)
 
     logging.info(f"  {'PASSED' if passed else 'FAILED'}")
     logging.info("")

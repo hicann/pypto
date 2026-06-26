@@ -966,7 +966,7 @@ int PipeSync::GetMaxEventId(const PipePairEx& pp)
     auto it1 = doublePipeOp.find(pp);
     auto it2 = doublePipeOp.find(ppReverse);
     if (it1 == doublePipeOp.end() && it2 == doublePipeOp.end()) {
-        return EVENT_NUM;
+        return EVENT_ID7;
     }
     return EVENT_ID7;
 }
@@ -1391,12 +1391,13 @@ void PipeSync::FindCvSyncSrcInfo(
 bool PipeSync::FindMaxOverlapForCV(
     PipePair& targetPp, int& maxOverlapIdx, std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap)
 {
+    constexpr int kMinDepListSizeForOverlap = 2; // 至少2个依赖才能形成重叠区间
     int maxOverlap = -1;
     for (auto& [pp, depinfo] : cvDepInfoMap) {
         std::reverse(depinfo.opDepList.begin(), depinfo.opDepList.end());
         std::reverse(depinfo.setOpIdList.begin(), depinfo.setOpIdList.end());
         std::reverse(depinfo.setOpEventIdList.begin(), depinfo.setOpEventIdList.end());
-        if (depinfo.opDepList.size() < 2) {
+        if (depinfo.opDepList.size() < kMinDepListSizeForOverlap) {
             continue;
         }
         for (int i = 0; i < static_cast<int>(depinfo.opDepList.size() - 1); i++) {
@@ -1832,6 +1833,7 @@ void PipeSync::FindDep(
 
 void PipeSync::InitCVEventIdQ(CorePair corePair)
 {
+    constexpr int kCrossCoreEventRangeCount = 2; // event id 空间划分为两段
     CorePair corePairReverse = {corePair.second, corePair.first};
     if (corePair.first.second == AIVCore::AIV0 || corePair.second.second == AIVCore::AIV0) {
         for (int i = 0; i < CROSS_CORE_EVENT_NUM; i++) {
@@ -1839,7 +1841,7 @@ void PipeSync::InitCVEventIdQ(CorePair corePair)
             crossCoreFreeEventId_[corePairReverse].push_back(i);
         }
     } else {
-        for (int i = CROSS_CORE_EVENT_NUM; i < CROSS_CORE_EVENT_NUM * 2; i++) {
+        for (int i = CROSS_CORE_EVENT_NUM; i < CROSS_CORE_EVENT_NUM * kCrossCoreEventRangeCount; i++) {
             crossCoreFreeEventId_[corePair].push_back(i);
             crossCoreFreeEventId_[corePairReverse].push_back(i);
         }

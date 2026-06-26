@@ -174,7 +174,7 @@ std::string CodeGenOpNPU::PrintSortTileTensor() const
 std::string CodeGenOpNPU::GenBitSortOp() const
 {
     SortParam sortParm = PrepareSortParam();
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintSortTileTensor();
     }
     if (isDynamicFunction) {
@@ -231,7 +231,7 @@ SortParam CodeGenOpNPU::PrepareSortParam() const
 std::string CodeGenOpNPU::GenMrgSortOp() const
 {
     SortParam sortParm = PrepareSortParam();
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintSortTileTensor();
     }
     if (isDynamicFunction) {
@@ -328,7 +328,7 @@ std::string CodeGenOpNPU::PrintExtractTileTensor() const
 
 std::string CodeGenOpNPU::GenExtractOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintExtractTileTensor();
     }
     if (isDynamicFunction) {
@@ -384,7 +384,7 @@ std::string CodeGenOpNPU::PrintTileSortTileTensor() const
 std::string CodeGenOpNPU::GenTiledMrgSortOp() const
 {
     TiledSortParam tiledSortParm = PrepareTiledSortParam();
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintTileSortTileTensor();
     }
     return PrintTiledMrgSortDynamicUnaligned(tiledSortParm);
@@ -464,12 +464,8 @@ std::string CodeGenOpNPU::GenTopKSortOp() const
     AppendLocalBufVarOffsetInOrder(yVar, tmpVar, xVar);
 
     std::string startIdx;
-    if (opAttrs.count(OpAttributeKey::dynScalar)) {
-        auto scalar = opAttrs.at(OpAttributeKey::dynScalar);
-        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.has_value()) && (scalar.type() == typeid(SymbolicScalar)))
-            << AnyCast<SymbolicScalar>(scalar).IsValid() << "SCALAR attribute has to have symbolic value.";
-        auto scalarExpr = AnyCast<SymbolicScalar>(scalar);
-        startIdx = SymbolicExpressionTable::BuildExpression(scalarExpr);
+    if (extSymbolicScalar.IsValid()) {
+        startIdx = SymbolicExpressionTable::BuildExpression(extSymbolicScalar);
     }
 
     auto xShape = rawShape[ID2];
@@ -568,7 +564,7 @@ std::string CodeGenOpNPU::GenTopKExtractOp() const
 
 std::string CodeGenOpNPU::GenTwoTileMrgSort() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintExtractTileTensor();
     }
     return PrintSortUBDynamicUnaligned(false);
@@ -617,7 +613,7 @@ std::string CodeGenOpNPU::PrintSortUBDynamicUnaligned(bool containDstType) const
 
 std::string CodeGenOpNPU::GenExtractSingleOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintExtractTileTensor();
     }
     return PrintSortUBDynamicUnaligned(true);

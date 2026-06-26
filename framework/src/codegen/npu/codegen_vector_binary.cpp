@@ -217,7 +217,7 @@ std::string CodeGenOpNPU::PrintBinaryTileTensor() const
 
 std::string CodeGenOpNPU::PrintBinary(const PrintBinaryParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintBinaryTileTensor();
     }
     if (isDynamicFunction) {
@@ -705,7 +705,7 @@ std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
         return buffer;
     }
 
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintVectorScalarTileTensor({s0Var, dVar, dstDtypeStr, dstDtypeStr});
     }
 

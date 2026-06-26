@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -37,8 +37,8 @@ keepdim为True时，对应dim的shape规约为1，其他轴的shape不变；keep
 ## 约束说明
 
 1. input.shape的dim轴不可切，viewshape的维度与input维度相同，要求viewshape\[dim\] \== input.shape\[dim\]，其余维度的Shape大小不做限制
-2. input不支持空Tensor
-3. dim中不支持重复值，且len(dim) <= input.dim
+2. dim中不支持重复值，且len(dim) <= input.dim
+
 
 ## 调用示例
 

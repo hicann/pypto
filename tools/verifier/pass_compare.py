@@ -205,6 +205,7 @@ class PassComparator:
         record["B>:format"] = a[":format"]
         record["B>:shape"] = a[":shape"]
         record["B>EVAL:dynvalidshape"] = a["EVAL:dynvalidshape"]
+        record["B>ROOT_FUNC:hash"] = a["ROOT_FUNC:hash"]
         
         if b:
             record["A>PHASE_NAME"] = b["PHASE_NAME"]
@@ -222,6 +223,7 @@ class PassComparator:
             record["A>:format"] = b[":format"]
             record["A>:shape"] = b[":shape"]
             record["A>EVAL:dynvalidshape"] = b["EVAL:dynvalidshape"]
+            record["A>ROOT_FUNC:hash"] = b["ROOT_FUNC:hash"]
         
         if compare_result is None:
             record["AB>RESULT"] = "SKIP"

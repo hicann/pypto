@@ -46,7 +46,7 @@ public:
 
 private:
     std::mutex mtx_;
-    std::string opType_ = "tilefwk";
+    std::string opType_ = "PyPTO";
     uint64_t opTilingKey_{0};
     uint64_t subTilingKey_{0};
     std::vector<uint8_t> controlBuffer_ = {'0'};

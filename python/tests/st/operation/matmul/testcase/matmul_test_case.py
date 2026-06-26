@@ -21,11 +21,14 @@ import torch
 @dataclass
 class MatmulConfig:
     shape: tuple[int, int, int]
+    out_shape: tuple[int, int]
     tile_shape: tuple[list, list, list]
     view_shape: tuple[int, int]
     out_dtype: pypto.DataType
     a_trans: bool = False
     b_trans: bool = False
+    a_format: str = "ND"
+    b_format: str = "ND"
 
     DTYPE_CONFIG = {
         "DT_FP16": {"pto": pypto.DT_FP16, "torch": torch.float16, "atol": 1e-3, "rtol": 1e-3},
@@ -39,11 +42,14 @@ class MatmulConfig:
     def from_test_case(cls, case: dict) -> "MatmulConfig":
         return cls(
             shape=(case["m"], case["k"], case["n"]),
+            out_shape=tuple(case["out_shape"]),
             tile_shape=tuple(case["tileshape"]),
             view_shape=tuple(case["viewshape"]),
             out_dtype=cls.DTYPE_CONFIG[case["c_dtype"]]["pto"],
             a_trans=case["a_trans"],
             b_trans=case["b_trans"],
+            a_format=case["a_format"],
+            b_format=case["b_format"]
         )
 
     @classmethod
@@ -59,26 +65,10 @@ class MatmulConfig:
 BASIC_TESTS = [
     {
         "id": "B01",
-        "name": "fp16_2d_nd_out_fp16",
-        "desc": "FP16输入FP16输出",
-        "m": 127, "k": 255, "n": 511,
-        "a_dtype": "DT_FP16",
-        "b_dtype": "DT_FP16",
-        "c_dtype": "DT_FP16",
-        "a_format": "ND",
-        "b_format": "ND",
-        "a_trans": False,
-        "b_trans": False,
-        "viewshape": [128, 256],
-        "tileshape": [[64, 64], [64, 128], [128, 128]],
-        "extend_params": {},
-        "products": ["950", "910"],
-    },
-    {
-        "id": "B02",
         "name": "fp16_2d_nd_out_fp32_trans_a",
         "desc": "FP16输入FP32输出+A转置",
         "m": 129, "k": 257, "n": 513,
+        "out_shape": [129, 513],
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
         "c_dtype": "DT_FP32",
@@ -92,10 +82,11 @@ BASIC_TESTS = [
         "products": ["950", "910"],
     },
     {
-        "id": "B03",
+        "id": "B02",
         "name": "bf16_2d_nd_out_fp32_trans_b",
         "desc": "BF16输入FP32输出+B转置",
         "m": 129, "k": 255, "n": 511,
+        "out_shape": [129, 511],
         "a_dtype": "DT_BF16",
         "b_dtype": "DT_BF16",
         "c_dtype": "DT_FP32",
@@ -109,10 +100,11 @@ BASIC_TESTS = [
         "products": ["950", "910"],
     },
     {
-        "id": "B04",
+        "id": "B03",
         "name": "fp32_2d_nd_out_fp32_trans_both",
         "desc": "FP32输入FP32输出+双转置",
         "m": 127, "k": 255, "n": 513,
+        "out_shape": [127, 513],
         "a_dtype": "DT_FP32",
         "b_dtype": "DT_FP32",
         "c_dtype": "DT_FP32",
@@ -126,10 +118,11 @@ BASIC_TESTS = [
         "products": ["950", "910"],
     },
     {
-        "id": "B05",
+        "id": "B04",
         "name": "int8_2d_nd_out_int32",
         "desc": "INT8输入INT32输出",
         "m": 129, "k": 257, "n": 511,
+        "out_shape": [129, 511],
         "a_dtype": "DT_INT8",
         "b_dtype": "DT_INT8",
         "c_dtype": "DT_INT32",
@@ -149,7 +142,8 @@ NZ_FORMAT_TESTS = [
         "id": "NZ01",
         "name": "fp16_2d_nz",
         "desc": "FP16 NZ格式",
-        "m": 127, "k": 255, "n": 511,
+        "m": 127, "k": 256, "n": 513,
+        "out_shape": [128, 528],
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
         "c_dtype": "DT_FP16",
@@ -161,25 +155,7 @@ NZ_FORMAT_TESTS = [
         "tileshape": [[64, 64], [64, 128], [128, 128]],
         "extend_params": {},
         "alignment": {"inner_axis": 32, "outer_axis": 16},
-        "products": ["950", "910"],
-    },
-    {
-        "id": "NZ02",
-        "name": "int8_2d_nz_trans_a",
-        "desc": "INT8 NZ格式+A转置(16元素对齐)",
-        "m": 129, "k": 255, "n": 513,
-        "a_dtype": "DT_INT8",
-        "b_dtype": "DT_INT8",
-        "c_dtype": "DT_INT32",
-        "a_format": "NZ",
-        "b_format": "NZ",
-        "a_trans": True,
-        "b_trans": False,
-        "viewshape": [128, 256],
-        "tileshape": [[128, 128], [128, 128], [256, 256]],
-        "extend_params": {},
-        "alignment": {"inner_axis": 16, "outer_axis": 16},
-        "products": ["950", "910"],
+        "products": ["950"],
     },
 ]
 

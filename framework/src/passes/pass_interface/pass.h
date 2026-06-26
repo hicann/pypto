@@ -28,7 +28,13 @@ class Pass {
 public:
     explicit Pass(std::string name);
     virtual ~Pass() = default;
-    Status Run(Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx = 0);
+    Status Run(
+        Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx,
+        const std::string& logStrategy);
+    Status Run(
+        Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx);
+    Status Run(
+        Function& function, const std::string& strategy, const std::string& identifier);
     virtual Status PreCheck(Function& function);
     virtual Status PostCheck(Function& function);
     virtual Status DefaultEnabledPreCheck(Function& function);
@@ -58,6 +64,7 @@ protected:
     virtual Status DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction);
     virtual Status DumpGraphJson(Function& function, const std::string& fileName);
     virtual Status CreateGraphFolder(Function& function);
+    virtual void DeleteGraphFolderIfEmpty();
     virtual void handlePreRunDumpGraph(Function& function);
     virtual Status PreRun(Function& function);
     virtual Status PostRun(Function& function);
@@ -72,6 +79,7 @@ protected:
 private:
     mutable std::string identifier_;
     mutable std::string strategy_;
+    mutable std::string logStrategy_;
     size_t passRuntimeIndex_;
     mutable std::string passFolder_{"."};
     std::string name_;

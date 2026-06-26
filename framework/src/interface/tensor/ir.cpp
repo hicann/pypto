@@ -13,9 +13,14 @@
 #include "ir/transforms/passes.h"
 #include "ir/transforms/utils/dead_code_elimination.h"
 
+#include "interface/program/program.h"
+#include "interface/function/function.h"
+#include "interface/utils/id_gen.h"
+
 #include "symbolic_scalar.h"
 #include "logical_tensor.h"
 #include "token_pass.h"
+#include "ir_func_builder.h"
 
 using npu::tile_fwk::LogicalTensor;
 using npu::tile_fwk::RawSymbolicExpression;
@@ -96,4 +101,32 @@ Pass pass::TokenPass()
         },
         "TokenPass");
 }
+
+Pass pass::CreateRootFunctions()
+{
+    return pass::CreateProgramPass(
+        [](const ProgramPtr& irProgram) -> ProgramPtr {
+            auto& programInst = npu::tile_fwk::Program::GetInstance();
+            auto parentFunc = programInst.GetLastFunction();
+
+            std::map<std::string, FunctionPtr> newFunctions;
+
+            for (const auto& [funcName, irFunc] : irProgram->functions_) {
+                (void)funcName;
+                npu::tile_fwk::RootFunctionBuilder builder(parentFunc);
+                auto dynFunc = builder.Build(irFunc);
+                newFunctions[dynFunc->name_] = std::static_pointer_cast<const ir::Function>(dynFunc);
+            }
+
+            const auto& funcMap = programInst.GetFunctionMap();
+            for (const auto& [k, v] : funcMap) {
+                newFunctions[k] = std::static_pointer_cast<const ir::Function>(v);
+            }
+
+            return std::make_shared<const ir::Program>(
+                std::move(newFunctions), irProgram->name_, irProgram->span_);
+        },
+        "CreateRootFunctions");
+}
+
 } // namespace pypto::ir

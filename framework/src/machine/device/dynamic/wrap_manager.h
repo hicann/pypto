@@ -334,6 +334,25 @@ public:
     }
 
 
+    inline void SwapWrapAndSyncOffset(uint32_t i, uint32_t j)
+    {
+        auto& a = readyWrapCoreFunctionQue_->elem[i];
+        auto& b = readyWrapCoreFunctionQue_->elem[j];
+        if (&a == &b) return;
+        uint32_t wA = b.wrapId;
+        uint32_t wB = a.wrapId;
+        std::swap(a, b);
+        auto dyntask = reinterpret_cast<DynDeviceTask*>(curDevTask_);
+        if (dyntask == nullptr) return;
+        uint32_t fA = FuncID(wA), fB = FuncID(wB);
+        uint32_t oA = GetOpWrapID(wA), oB = GetOpWrapID(wB);
+        auto& offA = dyntask->devTask.mixTaskData.opWrapOffsetList[fA];
+        auto& offB = dyntask->devTask.mixTaskData.opWrapOffsetList[fB];
+        if (offA != nullptr && offB != nullptr) {
+            std::swap(offA[oA], offB[oB]);
+        }
+    }
+
     inline uint32_t CalculateTaskCountInSync()
     {
         uint32_t taskCount = 0;
@@ -348,7 +367,7 @@ public:
                  info->tasklist[0] != AICORE_TASK_INIT && info->tasklist[1] != AICORE_TASK_INIT &&
                  info->tasklist[2] != AICORE_TASK_INIT); // 2:v1 index
             if (isC1V1Ready || isC1V2Ready) {
-                std::swap(readyWrapCoreFunctionQue_->elem[i], readyWrapCoreFunctionQue_->elem[head + taskCount]);
+                SwapWrapAndSyncOffset(i, head + taskCount);
                 taskCount++;
             }
         }

@@ -419,6 +419,14 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
     ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
     auto& oop = ctx->ooperandInplaceDataViewList->at(0);
     auto& iop = ctx->ioperandDataViewList->at(0);
+    int64_t iopSize = std::accumulate(
+        iop->GetValidShape().begin(), iop->GetValidShape().end(), (int64_t)1, std::multiplies<int64_t>());
+    int64_t oopSize = std::accumulate(
+        oop->GetValidShape().begin(), oop->GetValidShape().end(), (int64_t)1, std::multiplies<int64_t>());
+    if (ctx->op->GetOOperands()[0]->GetRawMagic() == ctx->op->GetIOperands()[0]->GetRawMagic() &&
+        iopSize != oopSize) {
+        return;
+    }
     auto iopDataView = iop->View(iop->GetValidShape(), iop->GetOffset());
     auto oopDataView = oop->View(oop->GetValidShape(), oop->GetOffset());
     if (oop->GetData()->GetSize() > iop->GetData()->GetSize()) {

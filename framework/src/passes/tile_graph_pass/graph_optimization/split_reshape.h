@@ -164,6 +164,8 @@ private:
     Status CalcTileInfo(
         const CalcOverlapPara& para, std::vector<int64_t>& newShape, std::vector<int64_t>& newOffset,
         std::vector<int64_t>& reshapeTileShape, std::vector<int64_t>& reshapeTileOffset);
+    Status CheckReshapeSkip(
+        const LogicalTensorPtr& input, const LogicalTensorPtr& output, CheckOutputParam& checkOutputParam);
     Status CheckValidOp(const CheckParam& para, CheckOutputParam& checkOutputParam);
     Status CheckOp(Function& function, Operation& op);
     Status UpdateReshapeOp(

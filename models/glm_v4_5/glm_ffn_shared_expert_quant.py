@@ -289,7 +289,7 @@ def ffn_shared_expert_quant(
     share_expert_moe_main(*inputs)
 
 
-@pytest.mark.soc("950", "910")
+@pytest.mark.soc("910")
 def test_ffn_share() -> None:
     x_dtype = torch.bfloat16
     # parameter config

@@ -20,9 +20,9 @@ LaunchMode LauncherRouter::ResolveByDebugMode(int64_t debugMode)
 {
     switch (debugMode) {
         case CFG_DEBUG_ALL:
-        case CFG_DEBUG_VERIFY:
+        case CFG_RUNTIME_DEBUG_VERIFY:
             return LaunchMode::EMULATION;
-        case CFG_DEBUG_AICORE_MODEL:
+        case CFG_RUINTIME_DEBUG_AICORE_MODEL:
             return LaunchMode::AICORE_MODEL;
         default:
             return LaunchMode::DEVICE_RT;

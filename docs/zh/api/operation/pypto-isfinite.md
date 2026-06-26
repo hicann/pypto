@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -34,6 +34,7 @@ isfinite(self: Tensor) -> Tensor
 
 1. 仅支持DT_FP16，DT_BF16，DT_FP32，DT_UINT8，DT_INT8，DT_UINT16，DT_INT16，DT_UINT32，DT_INT32，DT_UINT64，DT_INT64等数据类型。
 2. TileShape以及ViewShape的尾轴必须按照输出张量的类型32B对齐，由于输出张量为布尔类型，因此TileShape以及ViewShape的尾轴必须是32的倍数。
+
 
 ## 调用示例
 

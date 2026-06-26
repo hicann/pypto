@@ -51,7 +51,7 @@ Status Pass::CreateLogFolder(const std::string& topFolder, const std::string& st
         passFolder_ = topFolder;
     }
     if (!strategy.empty()) {
-        passFolder_ = passFolder_ + "/" + kComputationGraphFolder + "/" + strategy;
+        passFolder_ = passFolder_ + "/" + kComputationGraphFolder + "/" + BuildStrategyLogFolderName(strategy, 0);
         if (!CreateDir(passFolder_, true)) {
             APASS_LOG_ERROR_F(Elements::Function, "Failed to create strategy directory: [%s].", passFolder_.c_str());
             return FAILED;
@@ -82,29 +82,50 @@ void Pass::DoHealthCheckAfter(Function& function, const std::string& folderPath)
     return;
 }
 
-Status Pass::Run(Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx)
+Status Pass::Run(
+    Function& function, const std::string& strategy, const std::string& identifier)
+{
+    return Run(function, strategy, identifier, 0);
+}
+
+Status Pass::Run(
+    Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx)
+{
+    return Run(function, strategy, identifier, runtimeIdx, BuildStrategyLogFolderName(strategy, 0));
+}
+
+Status Pass::Run(
+    Function& function, const std::string& strategy, const std::string& identifier, size_t runtimeIdx,
+    const std::string& logStrategy)
 {
     identifier_ = identifier;
     strategy_ = strategy;
+    logStrategy_ = logStrategy;
     passRuntimeIndex_ = runtimeIdx;
     if (passDfxconfigs_.disablePass) {
         APASS_LOG_WARN_F(Elements::Function, "Pass [%s] is skipped.", identifier_.c_str());
+        DeleteGraphFolderIfEmpty();
         return SUCCESS;
     }
     if (PreRun(function) == FAILED) {
         APASS_LOG_ERROR_F(Elements::Function, "PreRun pass [%s] failed.", identifier_.c_str());
+        DeleteGraphFolderIfEmpty();
         return FAILED;
     }
     if (RunOnFunction(function) == FAILED) {
         APASS_LOG_ERROR_F(Elements::Function, "Run pass [%s] failed.", identifier_.c_str());
+        DeleteGraphFolderIfEmpty();
         return FAILED;
     }
     if (PostRun(function) == FAILED) {
         APASS_LOG_ERROR_F(Elements::Function, "PostRun pass [%s] failed.", identifier_.c_str());
+        DeleteGraphFolderIfEmpty();
         return FAILED;
     }
+    DeleteGraphFolderIfEmpty();
     identifier_.clear();
     strategy_.clear();
+    logStrategy_.clear();
     return SUCCESS;
 }
 
@@ -200,8 +221,8 @@ Status Pass::CreateGraphFolder(Function& function)
 {
     if (passDfxconfigs_.dumpGraph) {
         graphFolder_ = config::LogTopFolder();
-        if (!strategy_.empty()) {
-            graphFolder_ = graphFolder_ + '/' + kComputationGraphFolder + '/' + strategy_;
+        if (!logStrategy_.empty()) {
+            graphFolder_ = graphFolder_ + '/' + kComputationGraphFolder + '/' + logStrategy_;
         }
         graphFolder_ = graphFolder_ + '/' + function.GetMagicName();
         bool res = CreateDir(graphFolder_, true);
@@ -211,6 +232,17 @@ Status Pass::CreateGraphFolder(Function& function)
         }
     }
     return SUCCESS;
+}
+
+void Pass::DeleteGraphFolderIfEmpty()
+{
+    if (graphFolder_.empty() || !IsPathExist(graphFolder_)) {
+        return;
+    }
+    auto files = GetFiles(graphFolder_, "");
+    if (files.empty()) {
+        (void)DeleteDir(graphFolder_);
+    }
 }
 
 void Pass::handlePreRunDumpGraph(Function& function)

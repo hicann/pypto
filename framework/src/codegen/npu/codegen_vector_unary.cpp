@@ -191,7 +191,7 @@ std::string CodeGenOpNPU::PrintRowMaxlineTileTensor() const
 
 std::string CodeGenOpNPU::PrintRowMaxline(const PrintUnaryParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintRowMaxlineTileTensor();
     }
     if (isDynamicFunction) {
@@ -369,7 +369,7 @@ std::string CodeGenOpNPU::PrintExpand(
 
     int originDimSize = static_cast<int>(rawShape[1].size());
 
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         std::vector<int> normalized5DAxes = NormalizeExpandAxes(expandAxes, originDimSize, SHAPE_DIM5);
         return PrintExpandLayout(normalized5DAxes);
     }
@@ -395,7 +395,7 @@ std::string CodeGenOpNPU::PrintOneHotLayout() const { return PrintTileOpWithFull
 
 std::string CodeGenOpNPU::PrintOneHot(const PrintUnaryParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintOneHotLayout();
     }
 
@@ -565,7 +565,7 @@ std::string CodeGenOpNPU::PrintUnaryTileTensor() const
 
 std::string CodeGenOpNPU::PrintUnary(const PrintUnaryParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintUnaryTileTensor();
     }
     if (isDynamicFunction) {

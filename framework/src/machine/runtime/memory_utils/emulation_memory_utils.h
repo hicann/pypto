@@ -31,7 +31,7 @@ struct EmulationMemoryUtils {
     uint8_t* AllocDev(size_t size, uint8_t** cachedDevAddrHolder)
     {
         (void)cachedDevAddrHolder;
-        if (size == 0 || size > 0x500000000) {
+        if (size == 0 || size >= 0xFFFFFFFFF) {
             MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "AllocDev failed: size=%zu", size);
             return nullptr;
         }

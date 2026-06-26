@@ -133,7 +133,7 @@ struct DynMachineManager {
 
     int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
-        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask_);
+        return AllocThreadIdxForDav3510Impl(devArgs, cpu, curThreadIdx, threadIdx, cpumask_, arbitrationLevel_);
     }
 
     int AllocThreadIdxForDav2201(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
@@ -249,6 +249,7 @@ struct DynMachineManager {
     {
         cpumask_ = 0;
         schExitNum_ = 0;
+        arbitrationLevel_.store(LEVEL_UNSET, std::memory_order_release);
         initSch_.store(false);
 #ifndef __DEVICE__
         simCpuId_ = 0;
@@ -453,6 +454,7 @@ struct DynMachineManager {
     int LastFinishThreadIdx_{0};
     std::atomic<uint64_t> cpumask_{0};
     std::atomic<uint32_t> schExitNum_{0};
+    std::atomic<int> arbitrationLevel_{LEVEL_UNSET};
 #ifndef __DEVICE__
     std::atomic<int> simCpuId_{0};
 #endif

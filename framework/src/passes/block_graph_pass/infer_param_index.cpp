@@ -64,7 +64,6 @@ static bool IsOutGMSpill(Operation& op)
 
 Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function& function)
 {
-    
     if (ResetGmCopyDynValidShape(op, function)) {
         return SUCCESS;
     }

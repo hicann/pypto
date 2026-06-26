@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -38,6 +38,7 @@ sign(input: Tensor) -> Tensor
 
 1. TileShape与input维度保持一致；
 2. 由于存在临时内存使用，当输入数据类型为DT\_INT8，TileShape大小有额外约束，假设TileShape为\[a,b,c,d\]，那么a\*b\*c\*d\*sizeof\(self\) + c\*d\*sizeof\(INT8\) <UB。
+
 
 ## 调用示例
 

@@ -542,24 +542,6 @@ void BindIRBuilder(py::module_& m)
 
         .def(
             "create_function",
-            [](IRBuilder& self, const std::string& name, py::list params, ir::StmtPtr body, ir::Span span) {
-                LogicalTensors logicalParams;
-                for (auto& item : params) {
-                    logicalParams.push_back(item.cast<LogicalTensorPtr>());
-                }
-                return self.CreateFunction(name, logicalParams, body, span);
-            },
-            py::arg("name"), py::arg("params"), py::arg("body"), py::arg("span") = ir::Span(),
-            "Create a dynamic function with LogicalTensor parameters.\n\n"
-            "Args:\n"
-            "    name: Name of the function\n"
-            "    params: List of LogicalTensor parameters\n"
-            "    body: Body statement of the function\n\n"
-            "Returns:\n"
-            "    Function: The created dynamic function")
-
-        .def(
-            "create_function",
             [](IRBuilder& self, std::string name, std::vector<ir::VarPtr> params, std::vector<ir::TypePtr> returnTypes,
                ir::StmtPtr body, ir::Span span) { return self.CreateFunction(name, params, returnTypes, body, span); },
             py::arg("name"), py::arg("params"), py::arg("returnTypes"), py::arg("body"), py::arg("span"),

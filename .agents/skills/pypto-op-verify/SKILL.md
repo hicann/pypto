@@ -36,20 +36,9 @@ The same `detailed_tensor_compare` helper is used in both paths — only the **g
 
 **Purpose:** End-to-end correctness is golden vs PyPTO in one process. Do **not** use `pytest` as the default driver. Use a normal Python script that the user runs explicitly.
 
-### SIM / NPU — what each mode proves (do not skip any)
+### NPU execution (the runner verifies on the NPU)
 
-PyPTO kernels are verified across **two** execution modes (`pypto.RunMode` only defines `SIM` and `NPU`); each catches a different class of bug, and the difference between their verdicts is a debugging signal (encoded as `divergence_fingerprint` in `evaluation_report.json`, see Harness upgrades §1 below).
-
-| Mode | What it proves | Typical failure caught |
-|------|----------------|------------------------|
-| **sim** | The PyPTO IR generated from the impl is correct: lowering, layout, IR-level transforms. Same Python code path as NPU but no hardware. | IR-generation bugs, lowering errors, framework regressions independent of hardware. |
-| **npu** | The compiled kernel runs correctly on the actual NPU device. The final correctness signal. | NPU codegen bugs, alignment / tile / hardware-specific issues that SIM does not exercise. |
-
-The runner `adversarial_runner.py --modes sim,npu` (default) executes both and emits per-mode status. The PASS verdict requires:
-- **sim**: matches golden within tolerance
-- **npu**: matches golden within tolerance (if `TILE_FWK_DEVICE_ID` is reachable; lint OL42 forbids hard-coding `run_mode='sim'` when NPU is available)
-
-When per-mode results diverge, the resulting `divergence_fingerprint` (`kernel_ok_npu_only` / `ir_divergence` / `all_fail`) routes the debugger to the right sub-skill — see Harness upgrades §1 for the full mapping.
+`adversarial_runner.py` executes the impl on the **NPU** and compares against the golden within tolerance (`TILE_FWK_DEVICE_ID` must be reachable). The NPU result is the authoritative correctness signal.
 
 ### Runner file and command
 
@@ -151,15 +140,13 @@ At the end, the agent must be able to report:
 
 ---
 
-## Harness upgrades — 2-way dispatcher, inspection tensors
+## Harness upgrades — inspection tensors
 
-The adversarial runner contract has been extended to give @pypto-op-debugger better narrowing signal on complex kernels (gated delta rule backward, kimi delta attention, etc.) where the bug may lie in NPU codegen or in IR generation. Two related features, both specified in the **pypto-op-verifier** agent definition (`agents/pypto-op-verifier.md`):
+The adversarial runner contract has been extended to give @pypto-op-debugger better narrowing signal on complex kernels (gated delta rule backward, kimi delta attention, etc.). Features specified in the **pypto-op-verifier** agent definition (`agents/pypto-op-verifier.md`):
 
-### 1. SIM/NPU 2-way dispatcher (pypto-op-verifier §B.3.1)
+### 1. NPU execution
 
-`adversarial_runner.py --modes sim,npu` (default) runs the impl in both modes and emits `per_mode_status` + `divergence_fingerprint` in `evaluation_report.json`. The fingerprint (`kernel_ok_npu_only` / `ir_divergence` / `all_fail`) tells @pypto-op-debugger which sub-skill to load.
-
-**Required function (do NOT rename):** `run_modes(impl_module, case, modes: list[str]) -> dict[str, dict]`.
+`adversarial_runner.py` runs the impl on the NPU and emits `status` + `first_failure` (with `failure_category`) in `evaluation_report.json`. The NPU result is the authoritative correctness signal.
 
 ### 2. Inspection tensor protocol (pypto-op-verifier §B.5)
 
@@ -176,11 +163,11 @@ See `references/intermediate-snapshot-automation.md` for the full usage doc. Rep
 1. Author adds `# <<< SNAPSHOT:<point>` / `# >>> SNAPSHOT:<point>` marker pairs around the probe regions in `<op>_module<suffix>.py`.
 2. @pypto-op-debugger writes `custom/<op>/_debug/snapshot_manifest.yaml` listing the intermediates to probe.
 3. `python .agents/skills/pypto-op-verify/scripts/snapshot_generator.py custom/<op>/_debug/snapshot_manifest.yaml` produces the snapshot impl + golden-augmentation + bisect shell.
-4. `bash custom/<op>/_debug/run_snapshot_bisect.sh` runs both modes (sim/npu) and prints per-iteration drift-onset per intermediate, plus JSON to `custom/<op>/_debug/snapshot_report.json`.
+4. `bash custom/<op>/_debug/run_snapshot_bisect.sh` runs the bisection and prints per-iteration drift-onset per intermediate, plus JSON to `custom/<op>/_debug/snapshot_report.json`.
 
-The generator/runner bind to the inspection-tensor protocol (§B.5) and the 2-way dispatcher (§B.3.1) — both must be in effect.
+The snapshot-bisection tool binds to the inspection-tensor protocol (§B.5). It is a standalone deep-debug tool (`snapshot_bisect.py`), independent of the default per-case runner.
 
-**When @pypto-op-debugger invokes this path:** after a prefix-eval failure where the divergence_fingerprint is `kernel_ok_npu_only` and the module contains `pypto.loop(NT)` or a reverse scan, AND the module's single-shot output diff alone does not localize the bug to one expression.
+**When @pypto-op-debugger invokes this path:** after a prefix-eval failure on the NPU where the module contains `pypto.loop(NT)` or a reverse scan, AND the module's single-shot output diff alone does not localize the bug to one expression.
 
 **Files:**
 - `scripts/snapshot_manifest_schema.py` — validator

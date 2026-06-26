@@ -336,6 +336,7 @@ struct ConvTileInfo {
     int64_t nL0 = 0;
     int64_t cin0 = 0;
     SymbolicScalar dynValidBatch = SymbolicScalar(0);
+    SymbolicScalar dynValidDout = SymbolicScalar(0);
     SymbolicScalar dynValidCout = SymbolicScalar(0);
     SymbolicScalar dynValidHout = SymbolicScalar(0);
     SymbolicScalar dynValidWout = SymbolicScalar(0);
@@ -343,6 +344,7 @@ struct ConvTileInfo {
     SymbolicScalar dynValidWoutL0 = SymbolicScalar(0);
     SymbolicScalar dynValidCoutL0 = SymbolicScalar(0);
     SymbolicScalar dynValidBatchL0 = SymbolicScalar(0);
+    SymbolicScalar dynValidDoutL0 = SymbolicScalar(0);
 };
 
 struct ConvIterInfo {

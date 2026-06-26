@@ -10,10 +10,30 @@
 
 cmake_minimum_required(VERSION 3.16.3)
 
+# 必须在 project() 命令之前执行
+option(ENABLE_FEATURE_PACKING_WHL_INTO_RUN "Pack whl into run package" OFF)
+include(cmake/prepare.cmake)
+include(cmake/fetch_cann_cmake.cmake)
+
 project(PTO_Framework
         LANGUAGES C CXX
         VERSION 1.0.0
 )
+
+if (ENABLE_FEATURE_PACKING_WHL_INTO_RUN)
+    init_cann_project()
+    # run 包 名称
+    #    统一用于 COMPONENT / share/info 路径 / scripts/package 路径
+    #    最终 run 包名 "cann-pypto-9.1.0-Linux.run" 由 XML product_name=cann + func_name=pypto 组合, 不由此变量决定
+    set(PyPTO_PkgName "pypto")
+    # run 包 版本
+    include(version.cmake)
+    add_cann_version_info_targets()
+    # run 包 打包流程
+    include(cmake/package.cmake)
+    set_cann_cpack_config(${PyPTO_PkgName} OUTPUT "${RUN_OUTPUT_DIR}")
+    return()
+endif()
 
 
 ########################################################################################################################
@@ -325,7 +345,6 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
         install(FILES
                     framework/src/interface/utils/common.h
                     framework/src/interface/utils/error.h
-                    framework/src/interface/utils/file_utils.h
                     framework/src/interface/utils/op_info_manager.h
                     framework/src/interface/utils/string_utils.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/utils

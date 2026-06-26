@@ -94,6 +94,7 @@ public:
 
     virtual ReturnStatus ComputeSchedule(BspSchedule<GraphT> &schedule) override
     {
+        constexpr unsigned kLimitGrowthDivisor = 2;
         const auto &instance = schedule.GetInstance();
         const auto &g = instance.GetComputationalDag();
         const auto n = instance.NumberOfVertices();
@@ -119,9 +120,8 @@ public:
                     state.allReady, state.ready, p);
 
                 VertexIdx newTotalAssigned = 0;
-                VWorkwT<GraphT> weightLimit = ScheduleProcessorZero(g, limit, state.allReady,
-                    state.procReady[0], state.newAssignments[0], nodeToProc, state.predec,
-                    state.newReady, newTotalAssigned, p);
+                VWorkwT<GraphT> weightLimit = ScheduleProcessorZero(g, limit, state.allReady, state.procReady[0], 
+                    state.newAssignments[0], nodeToProc, state.predec, state.newReady, newTotalAssigned, p);
                 VWorkwT<GraphT> totalWeightAssigned = ScheduleRemainingProcessors(g, p, weightLimit,
                     state.allReady, state.procReady, state.newAssignments, nodeToProc, state.predec,
                     state.newReady, newTotalAssigned);
@@ -141,13 +141,13 @@ public:
 
                 continueSuperstepAttempts = result.continueAttempts;
                 limit++;
-                limit += (limit / 2);
+                limit += (limit / kLimitGrowthDivisor);
             }
 
             CommitBestAssignments(state.bestNewReady, state.bestNewAssignments, state.ready,
                 nodeToProc, nodeToSupstep, state.predec, g, supstep, totalAssigned, p);
-            state.desiredParallelism = (0.3 * state.desiredParallelism) + (0.6 * bestParallelism)
-                + (0.1 * static_cast<double>(p));
+            state.desiredParallelism = (desiredParallelismHistoryWeight_ * state.desiredParallelism) + (desiredParallelismCurrentWeight_ * bestParallelism)
+                + (desiredParallelismProcessorWeight_  * static_cast<double>(p));
             ++supstep;
         }
 
@@ -156,6 +156,13 @@ public:
     }
 
 private:
+    static constexpr double desiredParallelismHistoryWeight_ = 0.3;
+    static constexpr double desiredParallelismCurrentWeight_ = 0.6;
+    static constexpr double desiredParallelismProcessorWeight_ = 0.1;
+    static constexpr double scoreAcceptanceRatio_ = 0.97;
+    static constexpr double minAbsoluteParallelism_ = 2.0;
+    static constexpr double desiredParallelismFactor_ = 0.8;
+
     GrowLocalAutoCoresParams<VWorkwT<GraphT>> params_;
 
     void InitializeReadyQueue(const GraphT &g, std::unordered_set<VertexIdx> &ready,
@@ -315,7 +322,7 @@ private:
             parallelism = static_cast<double>(totalWeightAssigned) / static_cast<double>(weightLimit);
         }
 
-        if (score > 0.97 * currentBestScore) {
+        if (score > scoreAcceptanceRatio_ * currentBestScore) {
             result.bestScore = std::max(currentBestScore, score);
             result.bestParallelism = parallelism;
             result.acceptStep = true;
@@ -324,7 +331,7 @@ private:
         }
 
         if (weightLimit >= minWeightParallelCheck) {
-            if (parallelism < std::max(2.0, 0.8 * desiredParallelism)) {
+            if (parallelism < std::max(minAbsoluteParallelism_, desiredParallelismFactor_ * desiredParallelism)) {
                 result.continueAttempts = false;
             }
         }

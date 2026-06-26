@@ -154,10 +154,14 @@ def _run_dce(func, *args):
     b = ir.IRBuilder()
     func = pil.compile(func, *args)
     prog = b.create_program([func], "main", ir.Span.unknown())
-    dce = ir.Pass.aggressive_dce();
+    dce = ir.Pass.aggressive_dce()
     canonical = ir.Pass.canonicalize()
+    merge = ir.Pass.merge_stmts_into_if()
+    create_pf = ir.Pass.create_root_functions()
     prog = dce(canonical(prog))
     prog = dce(canonical(prog))
+    prog = canonical(merge(prog))
+    prog = create_pf(prog)
     return prog.functions[func.name]
 
 

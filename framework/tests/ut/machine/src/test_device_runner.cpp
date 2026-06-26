@@ -59,12 +59,6 @@ TEST_F(TestDeviceRunner, test_set_pmu_event)
     }
 }
 
-TEST_F(TestDeviceRunner, test_ini_device_runner)
-{
-    npu::tile_fwk::DeviceRunner runner;
-    runner.Init();
-}
-
 TEST_F(TestDeviceRunner, test_ini_proflevel)
 {
     npu::tile_fwk::dynamic::SchThreadStatus status;

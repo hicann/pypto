@@ -77,7 +77,7 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
         if (rc < 0) {
             return rc;
         }
-        DeviceRunner::Get().SyncProfData();
+        DeviceRunner::Get().SyncProfData(true);
         DeviceRunner::Get().ResetPerData();
     }
     return 0;
@@ -455,7 +455,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             MACHINE_LOGE(HostLauncherErr::SYNC_FAILED, "sync failed");
             return rc;
         }
-        devRunner.SyncProfData();
+        devRunner.SyncProfData(debugEnable);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, DevMemoryPool::Instance().CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {

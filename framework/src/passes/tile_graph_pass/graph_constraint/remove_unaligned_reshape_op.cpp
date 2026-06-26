@@ -597,7 +597,6 @@ bool RemoveUnalignedReshape::ProcessMultipleCopyOuts(std::vector<Operation*>& co
 
 bool RemoveUnalignedReshape::ProcessCopyOutOfDDRReshape(Operation* copyOutOp)
 {
-
     // 当copyout的输入是ub输出为ddr可以直接转化为reshapecopyop
     // 否则需要插copy
     auto copyOutInput = copyOutOp->GetIOperands().front();

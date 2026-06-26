@@ -32,7 +32,6 @@
 #include "passes/tensor_graph_pass/infer_memory_conflict.h"
 #include "passes/tensor_graph_pass/remove_undriven_view.h"
 #include "passes/tensor_graph_pass/expand_function.h"
-#include "passes/tensor_graph_pass/infer_write_conflict.h"
 #include "passes/tensor_graph_pass/loop_unroll.h"
 //  tile graph pass
 #include "passes/tile_graph_pass/graph_partition/common_operation_eliminate.h"
@@ -79,7 +78,6 @@ std::vector<PassEntry> BuildPvc2OooPassEntries()
 {
     return BuildPassEntries({
         PassName::INFER_TENSOR_FORMAT,
-        PassName::INFER_WRITE_CONFLICT,
         PassName::REMOVE_REDUNDANT_RESHAPE,
         PassName::AUTO_CAST,
         PassName::INFER_MEMORY_CONFLICT,
@@ -134,7 +132,6 @@ PassManager& PassManager::Instance()
 void RegPass()
 {
     REG_PASS(InferTensorFormat);
-    REG_PASS(InferWriteConflict);
     REG_PASS(GlobalMemoryReuse);
     REG_PASS(SubgraphToFunction);
     REG_PASS(GraphPartition);
@@ -249,6 +246,19 @@ std::vector<PassManager::PassEntry> PassManager::GetStrategyPasses(const std::st
     return selectedPass;
 }
 
+std::string PassManager::GetStrategyLogFolderName(const std::string& strategy) const
+{
+    if (strategy.empty()) {
+        return "";
+    }
+    std::lock_guard<std::mutex> lock(strategyLogMutex_);
+    auto it = strategyLogIndices_.find(strategy);
+    if (it == strategyLogIndices_.end()) {
+        it = strategyLogIndices_.emplace(strategy, strategyLogIndices_.size()).first;
+    }
+    return BuildStrategyLogFolderName(strategy, it->second);
+}
+
 std::string PassManager::GetResumePath(const std::string& strategy)
 {
     auto strategyPasses = GetStrategyPasses(strategy);
@@ -283,6 +293,7 @@ static bool ShouldTerminateAtStage(const std::string& identifier)
 Status PassManager::RunPass(Program& program, Function& function, const std::string& strategy) const
 {
     auto strategyPasses = GetStrategyPasses(strategy);
+    const std::string strategyLogFolder = GetStrategyLogFolderName(strategy);
     std::unique_ptr<Pass> pass = nullptr;
     std::vector<std::string> identifiers;
     std::transform(
@@ -300,7 +311,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
             APASS_LOG_ERROR_F(Elements::Function, "Pass [%s] does not exist.", PassNameStr(passName));
             return FAILED;
         }
-        PassLogUtil logUtil(*pass, function, strategy, i);
+        PassLogUtil logUtil(*pass, function, strategyLogFolder, i);
         auto passDfxCfg = ConfigManager::Instance().GetPassConfigs(strategy, identifier);
         if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL) {
             passDfxCfg.printGraph = true;
@@ -314,7 +325,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         MonitorPassCompileScope passCompileScope(
             strategy, identifier, i, function.GetMagicName(), MonitorManager::Instance().GetCurrentFunctionIndex(),
             MonitorManager::Instance().GetCurrentFuncOpSize());
-        Status status = pass->Run(function, strategy, identifier, i);
+        Status status = pass->Run(function, strategy, identifier, i, strategyLogFolder);
         auto passEnd = std::chrono::high_resolution_clock::now();
         passCompileScope.FinishAt(status == SUCCESS, passEnd);
         if (status != SUCCESS) {
@@ -334,7 +345,7 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
         }
     }
     if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL && pass != nullptr) {
-        ExtractPassLogByFunction(function, strategy);
+        ExtractPassLogByFunction(function, strategyLogFolder);
     }
     return SUCCESS;
 }

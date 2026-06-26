@@ -719,8 +719,9 @@ Status CheckDumpEntryArgs(
 
 std::vector<int64_t> BuildEntryParam(CoreType coreType, int esgId, int readyState, const setType& outGraph)
 {
+    constexpr int kCoreTypeShiftBits = 32; // coreType 在高 32 位, esgId 在低 32 位
     std::vector<int64_t> entryParam;
-    entryParam.emplace_back((static_cast<uint64_t>(coreType) << 32) | static_cast<int64_t>(esgId));
+    entryParam.emplace_back((static_cast<uint64_t>(coreType) << kCoreTypeShiftBits) | static_cast<int64_t>(esgId));
     entryParam.emplace_back(static_cast<int64_t>(readyState));
     entryParam.emplace_back(static_cast<int64_t>(outGraph.size()));
     for (auto& num : outGraph) {

@@ -185,9 +185,6 @@ void HostMachine::CompileFunction(Function* func) const
         Program::GetInstance().DumpJsonFile(path);
         config::SetRunDataOption(KEY_PROGRAM_PATH, path);
     }
-    if (func->rootFunc_ != nullptr) {
-        func->rootFunc_->DumpTopoFile(config::LogTopFolder() + "/topo.json");
-    }
 }
 
 void HostMachine::ResetAllPasses()

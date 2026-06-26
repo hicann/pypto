@@ -307,14 +307,6 @@ enum class Opcode {
     OP_BAR_ALL,
 
     // Distributed
-    OP_SEND_TO_ROUTING_EXPERT,
-    OP_SEND_TO_SHARED_EXPERT,
-    OP_COPY_TO_LOCAL_EXPERT,
-    OP_DISPATCH_SET_FLAG,
-    OP_FFN_SCHED,
-    OP_FFN_BATCHING,
-    OP_FFN_COMBINEINFO,
-    OP_FFN_VALIDCNT,
     OP_SHMEM_SET,
     OP_SHMEM_PUT,
     OP_SHMEM_STORE,
@@ -323,8 +315,6 @@ enum class Opcode {
     OP_SHMEM_GET,
     OP_SHMEM_LOAD,
     OP_BIND_TENSOR,
-    OP_MOE_DISTRIBUTED_COMBINE_SEND,
-    OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
 
     // Quantization
     OP_QUANTIZE_SYM,  // Symmetric quantization: FP32 -> INT8
@@ -551,19 +541,16 @@ public:
 
     inline bool IsCopyOut(Opcode opCode) const
     {
-        return opCode == Opcode::OP_COPY_OUT || opCode == Opcode::OP_UB_COPY_OUT || opCode == Opcode::OP_L0C_COPY_OUT ||
-               opCode == Opcode::OP_L1_COPY_OUT || opCode == Opcode::OP_TRANSPOSE_MOVEOUT ||
-               opCode == Opcode::OP_INDEX_OUTCAST || opCode == Opcode::OP_INDEX_PUT || opCode == Opcode::OP_FFN_SCHED ||
-               opCode == Opcode::OP_FFN_BATCHING || opCode == Opcode::OP_FFN_COMBINEINFO ||
-               opCode == Opcode::OP_INDEX_ADD || opCode == Opcode::OP_FFN_VALIDCNT ||
+        return opCode == Opcode::OP_COPY_OUT || opCode == Opcode::OP_UB_COPY_OUT ||
+               opCode == Opcode::OP_L0C_COPY_OUT || opCode == Opcode::OP_L1_COPY_OUT ||
+               opCode == Opcode::OP_TRANSPOSE_MOVEOUT || opCode == Opcode::OP_INDEX_OUTCAST ||
+               opCode == Opcode::OP_INDEX_PUT || opCode == Opcode::OP_INDEX_ADD ||
                opCode == Opcode::OP_NCHW2NC1HWC0 || opCode == Opcode::OP_NCHW2Fractal_Z ||
                opCode == Opcode::OP_NC1HWC02NCHW || opCode == Opcode::OP_NCDHW2NDC1HWC0 ||
                opCode == Opcode::OP_NCDHW2FRACTAL_Z_3D || opCode == Opcode::OP_NDC1HWC02NCDHW ||
-               opCode == Opcode::OP_COPY_TO_LOCAL_EXPERT || opCode == Opcode::OP_SHMEM_PUT ||
-               opCode == Opcode::OP_SHMEM_SIGNAL || opCode == Opcode::OP_SHMEM_GET ||
-               opCode == Opcode::OP_SHMEM_STORE || opCode == Opcode::OP_RESHAPE_COPY_OUT ||
-               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND ||
-               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_L0C_COPY_OUT_CONV ||
+               opCode == Opcode::OP_SHMEM_PUT || opCode == Opcode::OP_SHMEM_SIGNAL ||
+               opCode == Opcode::OP_SHMEM_GET || opCode == Opcode::OP_SHMEM_STORE ||
+               opCode == Opcode::OP_RESHAPE_COPY_OUT || opCode == Opcode::OP_L0C_COPY_OUT_CONV ||
                opCode == Opcode::OP_L0C_RESHAPE_COPY_OUT;
     }
 
@@ -575,13 +562,8 @@ public:
     {
         return opCode == Opcode::OP_SHMEM_WAIT_UNTIL || opCode == Opcode::OP_SHMEM_PUT ||
                opCode == Opcode::OP_SHMEM_SIGNAL || opCode == Opcode::OP_SHMEM_GET ||
-               opCode == Opcode::OP_FFN_VALIDCNT || opCode == Opcode::OP_SHMEM_SET ||
-               opCode == Opcode::OP_SHMEM_STORE || opCode == Opcode::OP_SHMEM_LOAD ||
-               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND ||
-               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_FFN_BATCHING ||
-               opCode == Opcode::OP_SEND_TO_ROUTING_EXPERT || opCode == Opcode::OP_COPY_TO_LOCAL_EXPERT ||
-               opCode == Opcode::OP_DISPATCH_SET_FLAG || opCode == Opcode::OP_FFN_SCHED ||
-               opCode == Opcode::OP_FFN_COMBINEINFO;
+               opCode == Opcode::OP_SHMEM_SET || opCode == Opcode::OP_SHMEM_STORE ||
+               opCode == Opcode::OP_SHMEM_LOAD;
     }
 
 private:
@@ -1055,23 +1037,13 @@ const std::unordered_set<Opcode> LOGICALNOT_OPS{Opcode::OP_LOGICALNOT};
 const std::unordered_set<Opcode> LOGICALAND_OPS{Opcode::OP_LOGICALAND};
 
 const std::unordered_set<Opcode> DISTRIBUTED_OPS{
-    Opcode::OP_SEND_TO_ROUTING_EXPERT,
-    Opcode::OP_SEND_TO_SHARED_EXPERT,
-    Opcode::OP_COPY_TO_LOCAL_EXPERT,
-    Opcode::OP_DISPATCH_SET_FLAG,
-    Opcode::OP_FFN_SCHED,
-    Opcode::OP_FFN_BATCHING,
-    Opcode::OP_FFN_COMBINEINFO,
-    Opcode::OP_FFN_VALIDCNT,
     Opcode::OP_SHMEM_PUT,
     Opcode::OP_SHMEM_SIGNAL,
     Opcode::OP_SHMEM_GET,
-    Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
     Opcode::OP_BIND_TENSOR,
     Opcode::OP_SHMEM_STORE,
     Opcode::OP_SHMEM_LOAD,
-    Opcode::OP_SHMEM_SET,
-    Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND};
+    Opcode::OP_SHMEM_SET};
 
 const std::unordered_set<Opcode> LASTUSE_OPS{
     Opcode::OP_ADD,           Opcode::OP_SUB,           Opcode::OP_MUL,        Opcode::OP_DIV,
@@ -1101,14 +1073,11 @@ inline bool IsCopyOut(const Opcode& op)
 {
     return (
         op == Opcode::OP_COPY_OUT || op == Opcode::OP_L0C_COPY_OUT || op == Opcode::OP_TRANSPOSE_MOVEOUT ||
-        op == Opcode::OP_INDEX_OUTCAST || op == Opcode::OP_FFN_SCHED || op == Opcode::OP_FFN_BATCHING ||
-        op == Opcode::OP_INDEX_PUT || op == Opcode::OP_FFN_COMBINEINFO || op == Opcode::OP_FFN_VALIDCNT ||
-        op == Opcode::OP_COPY_TO_LOCAL_EXPERT || op == Opcode::OP_SHMEM_PUT || op == Opcode::OP_SHMEM_SIGNAL ||
-        op == Opcode::OP_SHMEM_GET || op == Opcode::OP_SHMEM_SET || op == Opcode::OP_RESHAPE_COPY_OUT ||
-        op == Opcode::OP_SHMEM_STORE || op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE ||
-        op == Opcode::OP_NCHW2NC1HWC0 || op == Opcode::OP_NCHW2Fractal_Z || op == Opcode::OP_NC1HWC02NCHW ||
-        op == Opcode::OP_NDC1HWC02NCDHW || op == Opcode::OP_NCDHW2NDC1HWC0 || op == Opcode::OP_NCDHW2FRACTAL_Z_3D ||
-        op == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND || op == Opcode::OP_INDEX_ADD ||
+        op == Opcode::OP_INDEX_OUTCAST || op == Opcode::OP_INDEX_PUT || op == Opcode::OP_SHMEM_PUT ||
+        op == Opcode::OP_SHMEM_SIGNAL || op == Opcode::OP_SHMEM_GET || op == Opcode::OP_SHMEM_SET ||
+        op == Opcode::OP_RESHAPE_COPY_OUT || op == Opcode::OP_SHMEM_STORE || op == Opcode::OP_NCHW2NC1HWC0 ||
+        op == Opcode::OP_NCHW2Fractal_Z || op == Opcode::OP_NC1HWC02NCHW || op == Opcode::OP_NDC1HWC02NCDHW ||
+        op == Opcode::OP_NCDHW2NDC1HWC0 || op == Opcode::OP_NCDHW2FRACTAL_Z_3D || op == Opcode::OP_INDEX_ADD ||
         op == Opcode::OP_L0C_COPY_OUT_CONV || op == Opcode::OP_L0C_RESHAPE_COPY_OUT);
 }
 

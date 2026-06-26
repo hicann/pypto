@@ -76,7 +76,7 @@ TEST_F(TestDynamicDeviceRunner, TestInitArgs)
     args.nrAic = 2;
     args.nrAiv = 2;
     args.nrValidAic = args.nrAic;
-    runner.SyncProfData();
+    runner.SyncProfData(false);
 }
 
 TEST_F(TestDynamicDeviceRunner, TestDynamicRun)

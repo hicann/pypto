@@ -133,6 +133,12 @@ static std::string GetHostName() {
     return "unknown-host";
 }
 
+constexpr int LIMIT_DIR_NUM_BEFORE_CREATE = 127;
+constexpr const char* PREFIX_RUNDATA = "rundata_";
+constexpr const char* PREFIX_OUTPUT = "output_";
+constexpr const char* ENV_VAR_PYPTO_HOME = "PYPTO_HOME";
+constexpr const char* ENV_VAR_HOME = "HOME";
+
 static std::string CreateLogTopFolder()
 {
     auto now = std::chrono::high_resolution_clock::now();
@@ -362,11 +368,6 @@ void SetSemanticLabel(const std::string& label, const char* filename, int lineno
 void SetSemanticLabel(std::shared_ptr<SemanticLabel> label) { g_config.semanticLabel = label; }
 
 std::shared_ptr<SemanticLabel> GetSemanticLabel() { return g_config.semanticLabel; }
-
-constexpr int LIMIT_DIR_NUM_BEFORE_CREATE = 127;
-constexpr const char* PREFIX_RUNDATA = "rundata_";
-constexpr const char* ENV_VAR_PYPTO_HOME = "PYPTO_HOME";
-constexpr const char* ENV_VAR_HOME = "HOME";
 
 void CreateRunDataDir()
 {

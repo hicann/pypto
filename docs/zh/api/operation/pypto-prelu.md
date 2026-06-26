@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -45,6 +45,7 @@ prelu(input: Tensor, weight: Tensor) -> Tensor
 2. weight的Shape必须为一维，当input为1维时长度为1；当input为2-4维时长度等于input的第二维大小。
 3. input和weight不支持nan、inf等特殊值。
 4. 由于存在临时内存使用，输入维度为二维时，TileShape大小有额外约束，假设TileShape为\[a,b\]，那么a*b*sizeof(self) + b/8 + 8KB < UB。
+
 
 ## 调用示例
 

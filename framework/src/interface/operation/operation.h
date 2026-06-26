@@ -291,8 +291,7 @@ public:
 
     Operation(Function& cur, Opcode opcode) : Operation(cur, opcode, {}, {}) {}
 
-    Operation(
-        Function& cur, const std::string& op, const LogicalTensors& input, const LogicalTensors& output)
+    Operation(Function& cur, const std::string& op, const LogicalTensors& input, const LogicalTensors& output)
         : Operation(cur, FindOpcode(op), input, output)
     {
         if (op.substr(0, TILE_STR_PREFIX_LEN) == "TILE_") {
@@ -469,6 +468,9 @@ public:
     bool GetAllowCrossScopeMerge() const { return scopeInfo_.allowCrossScopeMerge; };
     int GetCvFuseId() const { return scopeInfo_.cvFuseId; };
 
+    int GetOooScopeId() const { return oooScopeId_; }
+    void SetOooScopeId(int id) { oooScopeId_ = id; }
+
     void AddInCtrlOperation(Operation& operation);
 
     void RemoveInCtrlOperation(Operation& operation);
@@ -528,20 +530,13 @@ public:
             Opcode::OP_NCDHW2NDC1HWC0,
             Opcode::OP_NCDHW2FRACTAL_Z_3D,
             Opcode::OP_NDC1HWC02NCDHW,
-            Opcode::OP_FFN_SCHED,
-            Opcode::OP_FFN_BATCHING,
-            Opcode::OP_FFN_COMBINEINFO,
-            Opcode::OP_FFN_VALIDCNT,
             Opcode::OP_SHMEM_PUT,
             Opcode::OP_SHMEM_STORE,
             Opcode::OP_SHMEM_SIGNAL,
             Opcode::OP_SHMEM_GET,
             Opcode::OP_SHMEM_LOAD,
             Opcode::OP_SHMEM_SET,
-            Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND,
-            Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
             Opcode::OP_GATHER_IN_UB,
-            Opcode::OP_COPY_TO_LOCAL_EXPERT,
             Opcode::OP_L1_COPY_IN_A_SCALE,
             Opcode::OP_L1_COPY_IN_B_SCALE,
             Opcode::OP_L1_TO_L0A_SCALE,
@@ -741,6 +736,8 @@ public:
     std::vector<std::string>& GetCommentList() { return commentList_; }
 
 private:
+    int oooScopeId_{-1};
+
     void InitCoreTypeAndTileShape(Opcode opcode);
     void InitTensorGraphMetadata();
     void InitLatency(Opcode opcode);

@@ -321,9 +321,11 @@ bool PadLocalBuffer::ShouldSkipVectorPad(Operation& op, LogicalTensorPtr& in)
 // 针对OP_CMP OP_CMPS OP_PRELU特殊OP做倒数第二轴的256B扩充
 void PadLocalBuffer::PadVector256(Operation& op, LogicalTensorPtr& in, bool needRowPad)
 {
+    constexpr size_t kAlignBytes = 32;
+    constexpr size_t kShapeSizeThres = 2;
     size_t lastDimBytes = AlignmentUtils::GetLastDimBytes(in);
-    if (needRowPad && lastDimBytes != 0 && (lastDimBytes % 32 == 0)) {
-        if (in->shape.size() < 2 || in->tensor->rawshape.size() < 2) {
+    if (needRowPad && lastDimBytes != 0 && (lastDimBytes % kAlignBytes == 0)) {
+        if (in->shape.size() < kShapeSizeThres || in->tensor->rawshape.size() < kShapeSizeThres) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor %d shape or rawshape less than 2D\n", in->GetMagic());
             return;
         }

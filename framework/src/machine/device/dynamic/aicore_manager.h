@@ -405,9 +405,9 @@ public:
         if (ret) {
             DEV_ERROR(
                 SchedErr::ABNOMAL_LAST_WORD, "#sche.dtask.leave.post: execute error=%d, skip rest tasks, "
-                "runreadyAiv=%u runreadyaic=%u, %u, %u",
+                "runreadyAiv=%u runreadyaic=%u, %u, %u, cycle:%lu",
                 ret, context_->coreRunReadyCnt_[0], context_->coreRunReadyCnt_[1],
-                context_->corePendReadyCnt_[0], context_->corePendReadyCnt_[1]);
+                context_->corePendReadyCnt_[0], context_->corePendReadyCnt_[1], GetCycles());
             if constexpr (IsDeviceMode()) {
                 ForEachManageAicore([&](int coreIdx) { DumpLastWord(coreIdx); });
             }
@@ -416,7 +416,9 @@ public:
             auto& parallelDevTaskCtx = context_->schParallelDevTaskCtx;
             for (uint32_t i = parallelDevTaskCtx.front; i != parallelDevTaskCtx.rear; ++i) {
                 auto &taskCtx = parallelDevTaskCtx.elements[i % SCH_DEVTASK_MAX_PARALLELISM];
-                taskCtx.GetDeviceTaskCtrl()->Finish(true);
+                if (!taskCtx.IsFree()) {
+                    taskCtx.GetDeviceTaskCtrl()->Finish(true);
+                }
                 DEV_ERROR(
                     SchedErr::ABNOMAL_LAST_WORD, "Force finish parallel ctx  parallelidx:%u.",
                     i % SCH_DEVTASK_MAX_PARALLELISM);

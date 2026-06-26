@@ -42,54 +42,49 @@ inline RtError NormalizedRtMemcpy(
 }
 }
 
-MemoryBlock::MemoryBlock(void* addr, size_t size, bool is_huge)
-    : base_addr(addr), block_size(size), used_size(0), is_huge_1g(is_huge)
+MemoryBlock::MemoryBlock(void* addr, size_t size, bool isHuge)
+    : baseAddr(addr), blockSize(size), usedSize(0), isHuge1G(isHuge)
 {
     Init();
 }
 
 void MemoryBlock::Init()
 {
-    if (is_huge_1g) {
-        free_map[reinterpret_cast<uintptr_t>(base_addr)] = block_size;
+    if (isHuge1G) {
+        freeMap[reinterpret_cast<uintptr_t>(baseAddr)] = blockSize;
     } else {
-        free_map.clear();
+        freeMap.clear();
     }
 }
 
 void* MemoryBlock::Allocate(uint64_t alignSize)
 {
-    if (!is_huge_1g) {
-        if (used_size == 0 && block_size >= alignSize) {
-            used_size = block_size;
-            return base_addr;
-        } else {
-            MACHINE_LOGE(
-                DevCommonErr::ALLOC_FAILED,
-                "Logic Error: 2MB block allocation failed. (used_size=%zu, block_size=%zu, req=%lu)", used_size,
-                block_size, alignSize);
-            return nullptr;
+    if (!isHuge1G) {
+        if (usedSize == 0 && blockSize >= alignSize) {
+            usedSize = blockSize;
+            return baseAddr;
         }
+        return nullptr;
     }
 
-    for (auto it = free_map.begin(); it != free_map.end(); ++it) {
-        uintptr_t chunk_addr = it->first;
-        size_t chunk_size = it->second;
+    for (auto it = freeMap.begin(); it != freeMap.end(); ++it) {
+        uintptr_t chunkAddr = it->first;
+        size_t chunkSize = it->second;
 
-        if (chunk_size >= alignSize) {
-            void* use_ptr = reinterpret_cast<void*>(chunk_addr);
-            size_t remaining = chunk_size - alignSize;
+        if (chunkSize >= alignSize) {
+            void* usePtr = reinterpret_cast<void*>(chunkAddr);
+            size_t remaining = chunkSize - alignSize;
 
-            free_map.erase(it);
+            freeMap.erase(it);
 
             if (remaining > 0) {
-                free_map[chunk_addr + alignSize] = remaining;
+                freeMap[chunkAddr + alignSize] = remaining;
             }
 
-            used_size += alignSize;
+            usedSize += alignSize;
             MACHINE_LOGI(
-                "Allocate in 1GB block: ptr=%p, chunkSize=%zu, alignSize=%lu.", use_ptr, chunk_size, alignSize);
-            return use_ptr;
+                "Allocate in 1GB block: ptr=%p, chunkSize=%zu, alignSize=%lu.", usePtr, chunkSize, alignSize);
+            return usePtr;
         }
     }
     return nullptr;
@@ -97,33 +92,33 @@ void* MemoryBlock::Allocate(uint64_t alignSize)
 
 void MemoryBlock::Free(void* ptr, size_t size)
 {
-    if (!is_huge_1g) {
+    if (!isHuge1G) {
         MACHINE_LOGE(DevCommonErr::FREE_FAILED, "Logic Error: 2MB block should not call Free()");
         return;
     }
 
     uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
 
-    free_map[addr] = size;
-    used_size -= size;
+    freeMap[addr] = size;
+    usedSize -= size;
 
-    auto it = free_map.find(addr);
-    if (it == free_map.end())
+    auto it = freeMap.find(addr);
+    if (it == freeMap.end())
         return;
 
-    auto next_it = std::next(it);
-    if (next_it != free_map.end()) {
-        if (it->first + it->second == next_it->first) {
-            it->second += next_it->second;
-            free_map.erase(next_it);
+    auto nextIt = std::next(it);
+    if (nextIt != freeMap.end()) {
+        if (it->first + it->second == nextIt->first) {
+            it->second += nextIt->second;
+            freeMap.erase(nextIt);
         }
     }
 
-    if (it != free_map.begin()) {
-        auto prev_it = std::prev(it);
-        if (prev_it->first + prev_it->second == it->first) {
-            prev_it->second += it->second;
-            free_map.erase(it);
+    if (it != freeMap.begin()) {
+        auto prevIt = std::prev(it);
+        if (prevIt->first + prevIt->second == it->first) {
+            prevIt->second += it->second;
+            freeMap.erase(it);
         }
     }
 }
@@ -210,14 +205,14 @@ void DevMemoryPool::FreeDevAddr(void* ptr)
     MemoryBlock* block = it->second;
     size_t size = allocSizes_[ptr];
 
-    if (block->is_huge_1g) {
+    if (block->isHuge1G) {
         block->Free(ptr, size);
     } else {
-        MACHINE_LOGI("Directly freeing 2MB block: addr=%p.", block->base_addr);
+        MACHINE_LOGI("Directly freeing 2MB block: addr=%p.", block->baseAddr);
         FreeMemBlock(block);
-        for (auto vec_it = memoryBlocks_.begin(); vec_it != memoryBlocks_.end(); ++vec_it) {
-            if (*vec_it == block) {
-                memoryBlocks_.erase(vec_it);
+        for (auto vecIt = memoryBlocks_.begin(); vecIt != memoryBlocks_.end(); ++vecIt) {
+            if (*vecIt == block) {
+                memoryBlocks_.erase(vecIt);
                 break;
             }
         }
@@ -262,12 +257,12 @@ bool DevMemoryPool::CheckAllSentinels()
 void DevMemoryPool::PrintSentinelVal(std::vector<uint64_t>& sentinelVal, uint8_t* sentinelAddr)
 {
     std::ostringstream oss;
-    uint8_t* byte_ptr = reinterpret_cast<uint8_t*>(sentinelVal.data());
+    uint8_t* bytePtr = reinterpret_cast<uint8_t*>(sentinelVal.data());
     oss << "Print Sentinel val in hex with ori val[" << std::hex << "0x" << SENTINEL_VALUE << "]" << std::endl;
     MACHINE_LOGW("%s", oss.str().c_str());
     oss.str("");
     for (uint32_t i = 0; i < SENTINEL_MEM_SIZE; ++i) {
-        oss << std::hex << std::setw(2) << std::setfill('0') << (int)byte_ptr[i];
+        oss << std::hex << std::setw(2) << std::setfill('0') << (int)bytePtr[i];
         if ((i + 1) % 16 == 0) {
             oss << std::endl;
         } else {
@@ -323,8 +318,8 @@ void DevMemoryPool::DynamicRecycle()
 {
     auto it = memoryBlocks_.begin();
     while (it != memoryBlocks_.end()) {
-        if ((*it)->used_size == 0) {
-            MACHINE_LOGI("Recycling empty block: addr=%p", (*it)->base_addr);
+        if ((*it)->usedSize == 0) {
+            MACHINE_LOGI("Recycling empty block: addr=%p", (*it)->baseAddr);
             FreeMemBlock(*it);
             it = memoryBlocks_.erase(it);
         } else {
@@ -348,26 +343,26 @@ void DevMemoryPool::DestroyPool()
 
 void DevMemoryPool::PrintPoolStatus() const
 {
-    size_t cnt_1g = 0;
-    size_t cnt_2m = 0;
+    size_t cnt1G = 0;
+    size_t cnt2M = 0;
     size_t total = 0;
     size_t used = 0;
     MACHINE_LOGI("========== [Memory Pool Status] ==========");
     for (size_t i = 0; i < memoryBlocks_.size(); ++i) {
         auto* blk = memoryBlocks_[i];
-        if (blk->is_huge_1g)
-            cnt_1g++;
+        if (blk->isHuge1G)
+            cnt1G++;
         else
-            cnt_2m++;
-        total += blk->block_size;
-        used += blk->used_size;
+            cnt2M++;
+        total += blk->blockSize;
+        used += blk->usedSize;
 
-        double rate = blk->block_size ? (double)blk->used_size * 100.0 / blk->block_size : 0;
+        double rate = blk->blockSize ? (double)blk->usedSize * 100.0 / blk->blockSize : 0;
         MACHINE_LOGI(
-            "Block[%lu] %s | Addr: %p | Used: %.1f%% | Fragments: %lu", i, blk->is_huge_1g ? "1G" : "2M",
-            blk->base_addr, rate, blk->free_map.size());
+            "Block[%lu] %s | Addr: %p | Used: %.1f%% | Fragments: %lu", i, blk->isHuge1G ? "1G" : "2M",
+            blk->baseAddr, rate, blk->freeMap.size());
     }
-    MACHINE_LOGI("Summary: 1G x %lu, 2M x %lu | Used/Total: %lu/%lu MB", cnt_1g, cnt_2m, used >> 20, total >> 20);
+    MACHINE_LOGI("Summary: 1G x %lu, 2M x %lu | Used/Total: %lu/%lu MB", cnt1G, cnt2M, used >> 20, total >> 20);
 }
 
 void DevMemoryPool::FreeMemBlock(MemoryBlock* block)
@@ -376,10 +371,10 @@ void DevMemoryPool::FreeMemBlock(MemoryBlock* block)
         return;
     }
 
-    if (block->base_addr != nullptr) {
-        MACHINE_LOGI("Releasing physical memory: addr=%p, size=%lu", block->base_addr, block->block_size);
-        RuntimeFree(block->base_addr);
-        block->base_addr = nullptr;
+    if (block->baseAddr != nullptr) {
+        MACHINE_LOGI("Releasing physical memory: addr=%p, size=%lu", block->baseAddr, block->blockSize);
+        RuntimeFree(block->baseAddr);
+        block->baseAddr = nullptr;
     }
     delete block;
     block = nullptr;

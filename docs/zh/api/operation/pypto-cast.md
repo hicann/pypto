@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -68,9 +68,9 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE,
 
 ---
 
-### Ascend 950PR/Ascend 950DT支持的转换
+### Ascend 950PR支持的转换
 
-Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于`RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType`等模板参数，用户接口层面仍使用统一的CastMode enum。
+Ascend 950PR使用不同的CastMode体系，内部实现基于 `RoundRType`/`RoundAType`/`RoundFType`/`RoundCType`/`RoundZType`/`RoundOType` 等模板参数，用户接口层面仍使用统一的CastMode enum。
 
 | 源类型 | 目标类型 | 支持的CastMode | 默认CastMode | 特殊说明 |
 |--------|----------|----------------|--------------|----------|
@@ -137,7 +137,7 @@ Ascend 950PR/Ascend 950DT使用不同的CastMode体系，内部实现基于`Roun
 2. **DT_INT4（S4）特殊说明**：打包类型，每字节包含2个元素，仅支持与DT_FP16的相互转换。
 
 3. **DT_HF8 (hifloat8)特殊说明**：
-    - 仅Ascend 950PR/Ascend 950DT支持
+    - 仅Ascend 950PR支持
     - 必须使用CAST_ROUND舍入模式（对应硬件的ROUND_A）
     - 如果指定其他CastMode，会自动回退到CAST_ROUND
 

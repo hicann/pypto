@@ -78,8 +78,8 @@ void CheckQuantMXMode(DequantScaleRoundingMode mode)
 
 void CheckQuantMXPerformanceMode(int64_t performanceMode)
 {
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, performanceMode != 0)
-        << "QuantMX currently only supports performance mode.";
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, performanceMode == 0 || performanceMode == 1)
+        << "QuantMX performance mode must be 0 or 1. Current performance mode: " << performanceMode;
 }
 
 DequantScaleRoundingMode GetQuantMXMode(const Operation& op)
@@ -123,7 +123,8 @@ void CheckQuantMXAxis(int64_t axis, size_t rank)
         << "QuantMX currently only supports the last axis. Current axis: " << axis << ", input rank: " << rank;
 }
 
-void CheckQuantMXInput(const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis)
+void CheckQuantMXInput(
+    const Tensor& input, DataType quantDtype, DequantScaleRoundingMode mode, int64_t axis, bool performanceMode)
 {
     const auto inputDtype = input.GetDataType();
     CHECK(
@@ -140,9 +141,17 @@ void CheckQuantMXInput(const Tensor& input, DataType quantDtype, DequantScaleRou
         QUANT_MX_MIN_RANK <= input.GetShape().size() && input.GetShape().size() <= QUANT_MX_MAX_RANK)
         << "QuantMX only supports 1D to 4D input.";
     CheckQuantMXAxis(axis, input.GetShape().size());
-    const int64_t lastDimBytes = input.GetShape().back() * BytesOf(inputDtype);
-    CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
-        << "QuantMX view shape's last dim must be 256-byte aligned. Current last dim bytes: " << lastDimBytes;
+    if (!performanceMode) {
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, input.GetShape().back() % QUANT_MX_SCALE_GROUP_COLS == 0)
+            << "QuantMX non-performance mode requires input last dim to be a multiple of 64. Current last dim: "
+            << input.GetShape().back();
+    }
+    if (performanceMode) {
+        const int64_t lastDimBytes = input.GetShape().back() * BytesOf(inputDtype);
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
+            << "QuantMX performance mode requires view shape's last dim to be 256-byte aligned. Current last dim bytes: "
+            << lastDimBytes;
+    }
 }
 
 void CheckQuantMXPerformanceTileShape(const LogicalTensorPtr& input, const VecTile& vecTile, int64_t performanceMode)
@@ -157,13 +166,6 @@ void CheckQuantMXPerformanceTileShape(const LogicalTensorPtr& input, const VecTi
         << "QuantMX performance mode requires tile shape last dim to be the same as input last dim. Current tile "
            "last dim: "
         << lastTileDim << ", input last dim: " << input->GetShape().back();
-}
-
-std::vector<int64_t> BuildQuantMXGroupedShape(const std::vector<int64_t>& inputShape)
-{
-    auto groupedShape = inputShape;
-    groupedShape.back() = CeilDiv(groupedShape.back(), QUANT_MX_GROUP_COLS);
-    return groupedShape;
 }
 
 std::vector<int64_t> BuildQuantMXPerformanceGroupedShape(const std::vector<int64_t>& inputShape)
@@ -188,6 +190,13 @@ std::vector<int64_t> BuildQuantMXScalingShape(const std::vector<int64_t>& groupe
         scalingShape.back() *= QUANT_MX_SCALE_PAIR_SIZE;
     }
     return scalingShape;
+}
+
+std::vector<int64_t> BuildQuantMXExpStorageShape(const std::vector<int64_t>& inputShape)
+{
+    auto expStorageShape = inputShape;
+    expStorageShape.back() = CeilDiv(inputShape.back(), QUANT_MX_GROUP_COLS);
+    return expStorageShape;
 }
 
 std::vector<int64_t> BuildQuantMXPerformanceVecTile(const std::vector<int64_t>& inputVecTile)
@@ -235,13 +244,6 @@ std::vector<int64_t> BuildQuantMXScalingOffset(const std::vector<int64_t>& group
     return scalingOffset;
 }
 
-std::vector<SymbolicScalar> BuildQuantMXGroupedValidShape(const std::vector<SymbolicScalar>& inputValidShape)
-{
-    auto groupedValidShape = inputValidShape;
-    groupedValidShape.back() = (groupedValidShape.back() + QUANT_MX_GROUP_COLS - 1) / QUANT_MX_GROUP_COLS;
-    return groupedValidShape;
-}
-
 std::vector<SymbolicScalar> BuildQuantMXPerformanceGroupedValidShape(const std::vector<SymbolicScalar>& inputValidShape)
 {
     if (inputValidShape.size() == 1) {
@@ -269,6 +271,13 @@ std::vector<SymbolicScalar> BuildQuantMXScalingValidShape(
     return scalingValidShape;
 }
 
+std::vector<SymbolicScalar> BuildQuantMXExpStorageValidShape(const std::vector<SymbolicScalar>& inputValidShape)
+{
+    auto expStorageValidShape = inputValidShape;
+    expStorageValidShape.back() = (expStorageValidShape.back() + QUANT_MX_GROUP_COLS - 1) / QUANT_MX_GROUP_COLS;
+    return expStorageValidShape;
+}
+
 std::vector<int64_t> BuildQuantMXScaleShape(const std::vector<int64_t>& inputShape)
 {
     auto scaleShape = inputShape;
@@ -285,74 +294,112 @@ std::vector<SymbolicScalar> BuildQuantMXScaleValidShape(const std::vector<Symbol
     return scaleValidShape;
 }
 
-void CheckQuantMXTileShape(const LogicalTensorPtr& input, const VecTile& vecTile)
+void CheckQuantMXTileShape(const LogicalTensorPtr& input, const VecTile& vecTile, int64_t performanceMode)
 {
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile.size() == input->GetShape().size())
         << "QuantMX tile shape rank must match input rank.";
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, vecTile[vecTile.size() - 1] > 0)
         << "QuantMX tile shape last dim must be positive.";
 
+    if (performanceMode == 0) {
+        return;
+    }
     const int64_t lastDimBytes = vecTile[vecTile.size() - 1] * BytesOf(input->Datatype());
     CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
-        << "QuantMX tile shape's last dim must be 256-byte aligned. Current last dim bytes: " << lastDimBytes;
+        << "QuantMX performance mode requires tile shape's last dim to be 256-byte aligned. Current last dim bytes: "
+        << lastDimBytes;
 }
 
-void TiledQuantMXOperation(
-    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& dst,
-    const LogicalTensorPtr& exp, const LogicalTensorPtr& maxScratch, const LogicalTensorPtr& scalingScratch,
-    DequantScaleRoundingMode mode, int64_t axis, int64_t performanceMode)
+struct QuantMXTileContext {
+    Function& function;
+    Input& input;
+    const LogicalTensorPtr& dst;
+    const LogicalTensorPtr& exp;
+    const LogicalTensorPtr& maxScratch;
+    const LogicalTensorPtr& scalingScratch;
+    DequantScaleRoundingMode mode;
+    int64_t axis;
+    int64_t performanceMode;
+};
+
+struct QuantMXTileParams {
+    std::vector<int64_t> expShape;
+    std::vector<int64_t> expOffset;
+    std::vector<int64_t> groupedShape;
+    std::vector<int64_t> groupedOffset;
+    std::vector<int64_t> scalingShape;
+    std::vector<int64_t> scalingOffset;
+};
+
+void CheckQuantMXTileAlignment(const QuantMXTileContext& ctx)
 {
-    if (cur == input.tensor.GetShape().size()) {
-        const int64_t lastDimBytes = input.tileInfo.shape.back() * BytesOf(input.tensor.GetDataType());
-        CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
-            << "QuantMX tile width must be 256-byte aligned. Current last dim bytes: " << lastDimBytes;
+    if (ctx.performanceMode == 0) {
+        return;
+    }
+    const int64_t lastDimBytes = ctx.input.tileInfo.shape.back() * BytesOf(ctx.input.tensor.GetDataType());
+    CHECK(VectorErrorCode::ERR_PARAM_INVALID, lastDimBytes % QUANT_MX_TILE_ALIGN_BYTES == 0)
+        << "QuantMX performance mode requires tile width to be 256-byte aligned. Current last dim bytes: "
+        << lastDimBytes;
+}
 
-        auto addQuantMXTile = [&](const std::vector<int64_t>& quantTileShape, const std::vector<int64_t>& tileOffset,
-                                  const std::vector<int64_t>& groupedTileShape,
-                                  const std::vector<int64_t>& groupedTileOffset,
-                                  const std::vector<int64_t>& scalingTileShape,
-                                  const std::vector<int64_t>& scalingTileOffset) {
-            auto srcTile = input.tensor.GetStorage()->View(function, quantTileShape, tileOffset);
-            auto dstTile = dst->View(function, quantTileShape, tileOffset);
-            auto expTile = exp->View(function, groupedTileShape, groupedTileOffset);
-            auto maxTile = maxScratch->View(function, groupedTileShape, groupedTileOffset);
-            auto scalingTile = scalingScratch->View(function, scalingTileShape, scalingTileOffset);
-            auto& tiledOp =
-                function.AddOperation(Opcode::OP_QUANT_MX, {srcTile}, {dstTile, expTile, maxTile, scalingTile});
-            tiledOp.SetAttribute(OpAttributeKey::mxQuantMode, static_cast<int64_t>(mode));
-            tiledOp.SetAttribute(OpAttributeKey::mxQuantAxis, axis);
-            tiledOp.SetAttribute(OpAttributeKey::mxQuantPerformanceMode, performanceMode);
-        };
+QuantMXTileParams BuildQuantMXTileParams(const Input& input, int64_t performanceMode)
+{
+    QuantMXTileParams params;
+    params.groupedShape = BuildQuantMXPerformanceGroupedShape(input.tileInfo.shape);
+    params.groupedOffset =
+        BuildQuantMXPerformanceGroupedOffset(input.tileInfo.offset, input.tensor.GetShape(), input.tileInfo.shape);
+    params.scalingShape = BuildQuantMXScalingShape(params.groupedShape, input.tensor.GetDataType());
+    params.scalingOffset = BuildQuantMXScalingOffset(params.groupedOffset, input.tensor.GetDataType());
+    if (performanceMode == 0) {
+        params.expShape = input.tileInfo.shape;
+        params.expShape.back() = CeilDiv(params.expShape.back(), QUANT_MX_GROUP_COLS);
+        params.expOffset = input.tileInfo.offset;
+        params.expOffset.back() /= QUANT_MX_GROUP_COLS;
+        return params;
+    }
+    params.expShape = params.groupedShape;
+    params.expOffset = params.groupedOffset;
+    return params;
+}
 
-        if (performanceMode == 0) {
-            auto groupedTileShape = input.tileInfo.shape;
-            groupedTileShape.back() = CeilDiv(groupedTileShape.back(), QUANT_MX_GROUP_COLS);
-            auto groupedTileOffset = input.tileInfo.offset;
-            groupedTileOffset.back() /= QUANT_MX_GROUP_COLS;
-            addQuantMXTile(input.tileInfo.shape, input.tileInfo.offset, groupedTileShape, groupedTileOffset,
-                input.tileInfo.shape, input.tileInfo.offset);
-            return;
-        }
+void EmitQuantMXTile(const QuantMXTileContext& ctx, const QuantMXTileParams& params)
+{
+    auto storage = ctx.input.tensor.GetStorage();
+    auto srcTile = storage->View(ctx.function, ctx.input.tileInfo.shape, ctx.input.tileInfo.offset);
+    auto dstTile = ctx.dst->View(ctx.function, ctx.input.tileInfo.shape, ctx.input.tileInfo.offset);
+    auto expTile = ctx.exp->View(ctx.function, params.expShape, params.expOffset);
+    auto maxTile = ctx.maxScratch->View(ctx.function, params.groupedShape, params.groupedOffset);
+    auto scalingTile = ctx.scalingScratch->View(ctx.function, params.scalingShape, params.scalingOffset);
+    auto& tiledOp = ctx.function.AddOperation(Opcode::OP_QUANT_MX, {srcTile}, {dstTile, expTile, maxTile, scalingTile});
+    tiledOp.SetAttribute(OpAttributeKey::mxQuantMode, static_cast<int64_t>(ctx.mode));
+    tiledOp.SetAttribute(OpAttributeKey::mxQuantAxis, ctx.axis);
+    tiledOp.SetAttribute(OpAttributeKey::mxQuantPerformanceMode, ctx.performanceMode);
+}
 
-        const auto groupedTileShape = BuildQuantMXPerformanceGroupedShape(input.tileInfo.shape);
-        const auto groupedTileOffset =
-            BuildQuantMXPerformanceGroupedOffset(input.tileInfo.offset, input.tensor.GetShape(), input.tileInfo.shape);
-        const auto scalingTileShape = BuildQuantMXScalingShape(groupedTileShape, input.tensor.GetDataType());
-        const auto scalingTileOffset = BuildQuantMXScalingOffset(groupedTileOffset, input.tensor.GetDataType());
-        addQuantMXTile(input.tileInfo.shape, input.tileInfo.offset, groupedTileShape, groupedTileOffset,
-            scalingTileShape, scalingTileOffset);
+void TiledQuantMXOperationImpl(const QuantMXTileContext& ctx, const TileShape& tileShape, size_t cur)
+{
+    if (cur == ctx.input.tensor.GetShape().size()) {
+        CheckQuantMXTileAlignment(ctx);
+        EmitQuantMXTile(ctx, BuildQuantMXTileParams(ctx.input, ctx.performanceMode));
         return;
     }
 
     const auto& vecTile = tileShape.GetVecTile();
-    int64_t step = std::max<int64_t>(1, std::min<int64_t>(vecTile[cur], input.tensor.GetShape()[cur]));
-
-    for (int64_t i = 0; i < input.tensor.GetShape()[cur]; i += step) {
-        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, step);
-        input.tileInfo.offset[cur] = i;
-        TiledQuantMXOperation(
-            function, tileShape, cur + 1, input, dst, exp, maxScratch, scalingScratch, mode, axis, performanceMode);
+    int64_t step = std::max<int64_t>(1, std::min<int64_t>(vecTile[cur], ctx.input.tensor.GetShape()[cur]));
+    for (int64_t i = 0; i < ctx.input.tensor.GetShape()[cur]; i += step) {
+        ctx.input.tileInfo.shape[cur] = std::min(ctx.input.tensor.GetShape()[cur] - i, step);
+        ctx.input.tileInfo.offset[cur] = i;
+        TiledQuantMXOperationImpl(ctx, tileShape, cur + 1);
     }
+}
+
+void TiledQuantMXOperation(Function& function, const TileShape& tileShape, size_t cur, Input& input,
+    const LogicalTensorPtr& dst, const LogicalTensorPtr& exp, const LogicalTensorPtr& maxScratch,
+    const LogicalTensorPtr& scalingScratch,
+    DequantScaleRoundingMode mode, int64_t axis, int64_t performanceMode)
+{
+    QuantMXTileContext ctx{function, input, dst, exp, maxScratch, scalingScratch, mode, axis, performanceMode};
+    TiledQuantMXOperationImpl(ctx, tileShape, cur);
 }
 
 void QuantMXTileFunc(
@@ -374,7 +421,7 @@ void QuantMXTileFunc(
     CheckQuantMXMode(mode);
     CheckQuantMXPerformanceMode(performanceMode);
     CheckQuantMXAxis(axis, src->GetShape().size());
-    CheckQuantMXTileShape(src, tileShape.GetVecTile());
+    CheckQuantMXTileShape(src, tileShape.GetVecTile(), performanceMode);
     CheckQuantMXPerformanceTileShape(src, tileShape.GetVecTile(), performanceMode);
     TileInfo inputTileInfo(src->shape.size(), src->offset.size());
     auto input = Input{Tensor(src), inputTileInfo};
@@ -1013,7 +1060,7 @@ std::tuple<Tensor, Tensor> QuantMX(
     DECLARE_TRACER();
     CheckSupportedNPUArch(QUANT_MX_SUPPORTED_ARCHITECTURES, "QuantMX");
     CheckQuantMXPerformanceMode(static_cast<int64_t>(performanceMode));
-    CheckQuantMXInput(input, quantDtype, mode, axis);
+    CheckQuantMXInput(input, quantDtype, mode, axis, performanceMode);
     const auto oldVecTile = TileShape::Current().GetVecTile();
     if (performanceMode && !oldVecTile.tile.empty()) {
         CheckQuantMXPerformanceTileShape(input.GetStorage(), oldVecTile, static_cast<int64_t>(performanceMode));
@@ -1021,27 +1068,28 @@ std::tuple<Tensor, Tensor> QuantMX(
 
     const auto& inputShape = input.GetShape();
     const int64_t normalizedAxis = NormalizeQuantMXAxis(axis, inputShape.size());
-    const std::vector<int64_t> groupedShape = performanceMode ? BuildQuantMXPerformanceGroupedShape(inputShape) :
-                                                                BuildQuantMXGroupedShape(inputShape);
+    const std::vector<int64_t> groupedShape = BuildQuantMXPerformanceGroupedShape(inputShape);
+    const std::vector<int64_t> expShape = performanceMode ? groupedShape : BuildQuantMXExpStorageShape(inputShape);
     const std::vector<int64_t> scaleShape = BuildQuantMXScaleShape(inputShape);
 
     const auto scratchDtype = input.GetDataType();
-    const auto scalingShape = performanceMode ? BuildQuantMXScalingShape(groupedShape, scratchDtype) : inputShape;
+    const auto maxScratchShape = groupedShape;
+    const auto scalingShape = BuildQuantMXScalingShape(groupedShape, scratchDtype);
     auto quantized = Tensor(quantDtype, inputShape, "", TileOpFormat::TILEOP_ND);
-    auto exp = Tensor(DataType::DT_FP8E8M0, groupedShape, "", TileOpFormat::TILEOP_ND);
-    auto maxScratch = Tensor(scratchDtype, groupedShape, "", TileOpFormat::TILEOP_ND);
+    auto exp = Tensor(DataType::DT_FP8E8M0, expShape, "", TileOpFormat::TILEOP_ND);
+    auto maxScratch = Tensor(scratchDtype, maxScratchShape, "", TileOpFormat::TILEOP_ND);
     auto scalingScratch = Tensor(scratchDtype, scalingShape, "", TileOpFormat::TILEOP_ND);
 
     std::vector<SymbolicScalar> scaleValidShape;
     const auto& inputValidShape = input.GetStorage()->GetDynValidShape();
     if (!inputValidShape.empty()) {
         quantized.GetStorage()->UpdateDynValidShape(inputValidShape);
-        const auto groupedValidShape = performanceMode ? BuildQuantMXPerformanceGroupedValidShape(inputValidShape) :
-                                                         BuildQuantMXGroupedValidShape(inputValidShape);
-        exp.GetStorage()->UpdateDynValidShape(groupedValidShape);
+        const auto groupedValidShape = BuildQuantMXPerformanceGroupedValidShape(inputValidShape);
+        const auto expValidShape = performanceMode ? groupedValidShape :
+                                                     BuildQuantMXExpStorageValidShape(inputValidShape);
+        exp.GetStorage()->UpdateDynValidShape(expValidShape);
         maxScratch.GetStorage()->UpdateDynValidShape(groupedValidShape);
-        const auto scalingValidShape = performanceMode ? BuildQuantMXScalingValidShape(groupedValidShape, scratchDtype) :
-                                                         inputValidShape;
+        const auto scalingValidShape = BuildQuantMXScalingValidShape(groupedValidShape, scratchDtype);
         scalingScratch.GetStorage()->UpdateDynValidShape(scalingValidShape);
         scaleValidShape = BuildQuantMXScaleValidShape(inputValidShape);
     }

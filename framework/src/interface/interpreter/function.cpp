@@ -19,25 +19,11 @@
 #include "interface/configs/config_manager.h"
 #include "utils/file_utils.h"
 
-#include <chrono>
 #include <cstdio>
-#include <ctime>
-#include <iomanip>
-#include <sstream>
 #include <vector>
 
 namespace npu::tile_fwk {
 namespace {
-std::string MakeVerifyRunTimestampTag()
-{
-    const auto now = std::chrono::high_resolution_clock::now();
-    const std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    const auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
-    std::stringstream timestamp;
-    timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
-    timestamp << "_" << std::setw(0x6) << std::setfill('0') << us;
-    return timestamp.str();
-}
 
 std::vector<std::string> MakeOpInfoCsvHeader()
 {
@@ -137,7 +123,7 @@ FunctionInterpreter::FunctionInterpreter()
     if (dumpPath.empty()) {
         dumpPath = config::LogTopFolder();
     }
-    dumpPath = dumpPath + "/" + "verify_" + MakeVerifyRunTimestampTag() + "/";
+    dumpPath = dumpPath + "/verify/";
     CreateDir(dumpPath, true);
     interpreter::SetLogFilePath(dumpPath + "interpreter.log");
     const std::string opResultFilePath = dumpPath + "verify_graph_data_metainfo.csv";

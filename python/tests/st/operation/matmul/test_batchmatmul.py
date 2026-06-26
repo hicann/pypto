@@ -20,6 +20,7 @@ import pytest
 import pypto
 import torch
 import torch_npu
+import torch.nn.functional as F
 
 from testcase.batchmatmul_test_case import BASIC_3D_TESTS, BASIC_4D_TESTS, BatchMatmulConfig
 
@@ -151,7 +152,8 @@ def batch_matmul_kernel_3d(
     config: BatchMatmulConfig,
 ):
     b, m, k, n = config.get_logical_dims_3d()
-
+    output_m = config.out_shape[-2]
+    output_n = config.out_shape[-1]
     pypto.set_cube_tile_shapes(*config.tile_shape, config.is_acc)
     pypto.set_vec_tile_shapes(128, 128)
     tile_b = config.view_shape[0]
@@ -161,10 +163,10 @@ def batch_matmul_kernel_3d(
     batch_a = config.a_shape[0]
     batch_b = config.b_shape[0]
 
-    m_loop = (m + tile_m - 1) // tile_m
-    n_loop = (n + tile_n - 1) // tile_n
+    m_loop = (output_m + tile_m - 1) // tile_m
+    n_loop = (output_n + tile_n - 1) // tile_n
     b_loop = (b + tile_b - 1) // tile_b
-    pypto.set_matrix_size([m, k, n])
+    pypto.set_matrix_size([output_m, k, output_n])
 
     for b_idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="b_idx"):
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
@@ -202,7 +204,8 @@ def batch_matmul_kernel_4d(
     b1_a = config.a_shape[1]
     b0_b = config.b_shape[0]
     b1_b = config.b_shape[1]
-
+    output_m = config.out_shape[-2]
+    output_n = config.out_shape[-1]
     pypto.set_cube_tile_shapes(*config.tile_shape, config.is_acc)
     pypto.set_vec_tile_shapes(1, 128, 128)
     tile_b0 = config.view_shape[0]
@@ -210,11 +213,11 @@ def batch_matmul_kernel_4d(
     tile_m = config.view_shape[2]
     tile_n = config.view_shape[3]
 
-    m_loop = (m + tile_m - 1) // tile_m
-    n_loop = (n + tile_n - 1) // tile_n
+    m_loop = (output_m + tile_m - 1) // tile_m
+    n_loop = (output_n + tile_n - 1) // tile_n
     b0_loop = (b0 + tile_b0 - 1) // tile_b0
     b1_loop = (b1 + tile_b1 - 1) // tile_b1
-    pypto.set_matrix_size([m, k, n])
+    pypto.set_matrix_size([output_m, k, output_n])
 
     for b0_idx in pypto.loop(0, b0_loop, 1, name="LOOP_L0_b0Idx", idx_name="b0_idx"):
         for b1_idx in pypto.loop(0, b1_loop, 1, name="LOOP_L0_b1Idx", idx_name="b1_idx"):
@@ -230,9 +233,14 @@ def batch_matmul_kernel_4d(
 
 def prepare_tensors_3d(config, a_dtype, b_dtype, c_dtype, device_id):
     b, m, k, n = config.get_logical_dims_3d()
+    output_shape = config.out_shape
+    output_m = output_shape[-2]
+    output_n = output_shape[-1]
+    padding_m = abs(output_m - m)
+    padding_n = abs(output_n - n)
     a_shape = config.a_shape
     b_shape = config.b_shape
-    c_shape = [b, m, n]
+    c_shape = output_shape
 
     if a_dtype == torch.int8:
         a_tensor_cpu = torch.randint(-2, 3, a_shape, dtype=a_dtype)
@@ -245,7 +253,7 @@ def prepare_tensors_3d(config, a_dtype, b_dtype, c_dtype, device_id):
     b_cpu = b_tensor_cpu.transpose(1, 2) if config.b_trans else b_tensor_cpu
     accum_dtype = torch.int32 if a_dtype == torch.int8 else torch.float32
     golden = torch.matmul(a_cpu.to(accum_dtype), b_cpu.to(accum_dtype)).to(c_dtype)
-
+    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     a_tensor = a_tensor_cpu.to(f"npu:{device_id}")
     b_tensor = b_tensor_cpu.to(f"npu:{device_id}")
     if config.a_format == "NZ":
@@ -259,9 +267,14 @@ def prepare_tensors_3d(config, a_dtype, b_dtype, c_dtype, device_id):
 
 def prepare_tensors_4d(config, a_dtype, b_dtype, c_dtype, device_id):
     b0, b1, m, k, n = config.get_logical_dims_4d()
+    output_shape = config.out_shape
+    output_m = output_shape[-2]
+    output_n = output_shape[-1]
+    padding_m = abs(m - output_m)
+    padding_n = abs(n - output_n)
     a_shape = config.a_shape
     b_shape = config.b_shape
-    c_shape = [b0, b1, m, n]
+    c_shape = output_shape
 
     if a_dtype == torch.int8:
         a_tensor_cpu = torch.randint(-2, 3, a_shape, dtype=a_dtype)
@@ -274,7 +287,7 @@ def prepare_tensors_4d(config, a_dtype, b_dtype, c_dtype, device_id):
     b_cpu = b_tensor_cpu.transpose(2, 3) if config.b_trans else b_tensor_cpu
     accum_dtype = torch.int32 if a_dtype == torch.int8 else torch.float32
     golden = torch.matmul(a_cpu.to(accum_dtype), b_cpu.to(accum_dtype)).to(c_dtype)
-
+    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     a_tensor = a_tensor_cpu.to(f"npu:{device_id}")
     b_tensor = b_tensor_cpu.to(f"npu:{device_id}")
     c_tensor = torch.zeros(c_shape, dtype=c_dtype, device=f"npu:{device_id}")

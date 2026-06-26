@@ -15,6 +15,7 @@
 
 #include "ir/transforms/utils/dead_code_elimination.h"
 #include "ir/transforms/utils/canonicalize.h"
+#include "ir/transforms/merge_stmts_pass.h"
 
 #include <algorithm>
 #include <functional>
@@ -228,6 +229,29 @@ Pass Canonicalize()
                 func->name_, func->params_, func->returnTypes_, body, func->span_, func->funcType_);
         },
         "Canonicalize");
+}
+
+Pass MergeStmtsIntoIf()
+{
+    return CreateFunctionPass(
+        [](const FunctionPtr& func) -> FunctionPtr {
+            if (!func || !func->body_)
+                return func;
+            std::vector<std::string> externalVarNames;
+            for (const auto& param : func->params_) {
+                if (param) {
+                    externalVarNames.push_back(param->name_);
+                }
+            }
+            auto seq = SeqStmts::AsMut(func->body_);
+            auto mergedBody = MergeStmtsIntoIfStmt(seq, externalVarNames);
+            if (mergedBody == func->body_)
+                return func;
+            return std::make_shared<const Function>(
+                func->name_, func->params_, func->returnTypes_, mergedBody,
+                func->span_, func->funcType_);
+        },
+        "MergeStmtsIntoIf");
 }
 
 } // namespace pass

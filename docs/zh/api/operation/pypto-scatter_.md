@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -57,6 +57,7 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 4. input.shape和index.shape的非dim轴切分，需满足viewshape[non dim]切分后，input和index的非dim轴切分块数相同。tileshape切分时，也需要保证input和index的非dim轴切分块数相同。
 
 5. src为Tensor，reduce为None，且当index中存在指向相同位置的不唯一索引时，行为是不确定的，将从src中任意选择一个值写入。
+
 
 ## 调用示例
 

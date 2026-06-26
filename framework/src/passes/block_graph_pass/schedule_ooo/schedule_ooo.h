@@ -63,7 +63,8 @@ private:
     Status MixSchedule(
         std::vector<Operation*>& opList, Function& function, std::pair<uint64_t, Function*>& program,
         int64_t& maxWorkeSpaceSize);
-    Status EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList);
+    Status EstimateTaskLatencyAndSchedule(TaskSplitter& splitter, std::vector<Operation*>& opList,
+        const std::string& schedMode = "");
     Status BuildMixedScheduleOps(
         TaskSplitter& splitter, std::vector<Operation*>& opList,
         std::unordered_map<Operation*, CoreLocationType>& opCoreMap);

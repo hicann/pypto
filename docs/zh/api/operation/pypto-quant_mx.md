@@ -2,7 +2,9 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：不支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：不支持
 
 ## 功能说明
 
@@ -12,6 +14,7 @@
 - 输出量化Tensor支持DT_FP8E4M3、DT_FP4_E2M1X2。其中DT_FP4_E2M1X2仅支持DT_FP16、DT_BF16输入。
 - scale Tensor的数据类型固定为DT_FP8E8M0。
 - 当前仅支持对尾轴进行量化，支持ROUND_DOWN（OCP）和ROUND_UP（NV）模式。
+- 支持性能模式和非性能模式。性能模式要求view shape尾轴能整切实际shape尾轴，且TileShape尾轴与view shape尾轴相同；非性能模式支持更灵活的 viewshape 和 Tileshape 设置，进行更好的算子融合，单算子性能有些下降。
 
 若输入shape记为 $[d_0, d_1, ..., d_{n-1}]$，则：
 
@@ -38,7 +41,7 @@ quant_mx(
 | quant_dtype | 输入 | 量化后输出Tensor的数据类型。<br>支持：DT_FP8E4M3、DT_FP4_E2M1X2。DT_FP4_E2M1X2仅支持DT_FP16、DT_BF16输入。 |
 | mode | 输入 | 量化时共享指数的舍入模式。<br>支持：ROUND_DOWN（OCP）、ROUND_UP（NV）。 |
 | axis | 输入 | 指定量化轴。<br>当前仅支持最后一维，即`-1`或`input.shape.size() - 1`。 |
-| performance_mode | 输入 | 是否启用性能模式。<br>默认值为`True`。启用后可获得更好的性能，但仅改变内部TQuant的中间布局，不改变返回的公共`scale` shape。<br>启用该模式时，不支持尾块场景，即运行时实际shape需要整除view shape。除此之外，view shape与TileShape的尾轴长度必须相同，且该尾轴长度需要与输入最后一维保持一致。<br> 当前只支持性能模式|
+| performance_mode | 输入 | 是否启用性能模式。<br>默认值为`True`。<br>启用该模式时，实际shape尾轴长度必须能被view shape尾轴长度整切，即无尾块；若已设置TileShape，则TileShape维度数必须与输入一致，且TileShape最后一维必须等于view shape最后一维；同时view shape最后一维需要满足256字节对齐。<br>关闭该模式时，不要求TileShape最后一维等于view shape最后一维，也不要求TileShape最后一维满足256字节对齐，但输入最后一维仍必须是64的倍数。 |
 
 ## 返回值说明
 
@@ -53,12 +56,18 @@ quant_mx(
 
 说明：调用该operation接口前，应通过`set_vec_tile_shapes`设置TileShape。
 
-TileShape维度应和输入一致，且最后一维需要满足256字节对齐。若`performance_mode=True`，则不支持尾块场景，运行时实际shape需要整除view shape；同时view shape与TileShape的尾轴形状必须相同，且TileShape的最后一维应与输入最后一维相同。
+TileShape维度应和输入一致。若`performance_mode=True`，则view shape尾轴需要整切实际shape尾轴，TileShape最后一维应与view shape最后一维相同；同时view shape最后一维需要满足256字节对齐。若`performance_mode=False`，则TileShape最后一维只要求为正数，输入最后一维仍必须是64的倍数。
 
-示例1：输入`input` shape为`[m, n]`，输出`quantized` shape为`[m, n]`，`scale` shape为`[m, ceil(n / 64), 2]`，TileShape可设置为`[m1, n1]`，其中`n1`需满足对齐约束。
+示例1：性能模式下，输入view shape为`[m, n]`，输出`quantized` shape为`[m, n]`，`scale` shape为`[m, ceil(n / 64), 2]`；实际shape尾轴需能被`n`整切，TileShape可设置为`[m1, n]`，其中`n`需满足256字节对齐。
 
 ```python
 pypto.set_vec_tile_shapes(4, 64)
+```
+
+示例2：非性能模式下，输入`input` shape为`[m, n]`，`n`需为64的倍数；TileShape可设置为`[m1, n1]`，其中`n1`为正数。
+
+```python
+pypto.set_vec_tile_shapes(2, 128)
 ```
 
 ### 接口调用示例
@@ -85,6 +94,16 @@ quantized_nv, scale_nv = pypto.quant_mx(
     pypto.ROUND_UP,
     -1,
     True,
+)
+
+# 关闭性能模式
+x_non_perf = pypto.tensor([2, 512], pypto.DT_FP32)
+quantized_general, scale_general = pypto.quant_mx(
+    x_non_perf,
+    pypto.DT_FP8E4M3,
+    pypto.ROUND_UP,
+    -1,
+    False,
 )
 ```
 

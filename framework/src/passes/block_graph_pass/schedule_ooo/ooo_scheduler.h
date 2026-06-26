@@ -464,7 +464,7 @@ private:
     // (GenBufferSpill 内的 SpillBuffer 循环) 共用同一执行段。详见 spill_buffer.cpp。
     // 不再有 SpillDualDstAllocBuffer / SpillOneSideWithCoreSwap 两个独立函数。
     // 新增：Tensor输入更新辅助函数
-    void UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr tensor);
+    void UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr tensor, int spillMemId);
     void UpdateTensorInputForView(Operation& op, Operation* spillSrcOp, LogicalTensorPtr tensor);
 
     void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);

@@ -31,6 +31,8 @@ constexpr const char* SG_PARALLEL_NUM = "pg_parallel_lower_bound";
 constexpr const char* SG_PG_LOWER_BOUND = "pg_lower_bound";
 constexpr const char* SG_PARTITION_ALGORITHM = "pg_partition_algorithm";
 constexpr const char* SG_SET_SCOPE = "sg_set_scope";
+constexpr const char* SG_SET_OOO_SCOPE = "sg_set_ooo_scope";
+constexpr const char* OOO_SCHED_MODE = "ooo_sched_mode";
 constexpr const char* CUBE_L1_REUSE_SETTING = "cube_l1_reuse_setting";
 constexpr const char* CUBE_NBUFFER_SETTING = "cube_nbuffer_setting";
 constexpr const char* MG_COPYIN_UPPER_BOUND = "mg_copyin_upper_bound";
@@ -86,9 +88,9 @@ constexpr const char* CFG_COMPILE_DBEUG_MODE = "compile_debug_mode";
 constexpr const char* CFG_RUNTIME_DBEUG_MODE = "runtime_debug_mode";
 constexpr int64_t CFG_DEBUG_NONE = 0;
 constexpr int64_t CFG_DEBUG_ALL = 1;
-constexpr int64_t CFG_DEBUG_AICORE_MODEL = 2;
-constexpr int64_t CFG_DEBUG_VERIFY = 3;
-constexpr int64_t CFG_DEBUG_GM_OUT_OF_BOUNDS = 4;
+constexpr int64_t CFG_RUINTIME_DEBUG_AICORE_MODEL = 2;
+constexpr int64_t CFG_RUNTIME_DEBUG_VERIFY = 3;
+constexpr int64_t CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS = 4;
 
 // operation
 const std::string KEY_COMBINE_AXIS = "combine_axis";

@@ -26,8 +26,6 @@
 #include "dynamic/cube_dyn.h"
 #include "fixpipe.h"
 #include "distributed/common.h"
-#include "distributed/moe_dispatch.h"
-#include "distributed/moe_combine.h"
 #include "dynamic/aicpu_call.h"
 #endif
 

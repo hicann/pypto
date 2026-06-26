@@ -19,6 +19,8 @@ set_pass_options(*,
                      cube_nbuffer_setting: Optional[Dict[str, int]] = None,
                      sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
                      auto_mix_partition: Optional[int] = None,
+                     sg_set_ooo_scope: Optional[int] = None,
+                     ooo_sched_mode: Optional[str] = None,
                      )
 ```
 
@@ -31,6 +33,9 @@ set_pass_options(*,
 | cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构AIC子图的合并数量。 <br> 说明：该参数适用于结构相同的AIC子图合并，与cube_l1_reuse_setting同时配置时，先进行cube_l1_reuse_setting相关合并，再进行此项合并。<br><br>类型：dict[str, int]。支持两种key格式：<br> ① **函数粒度key**：字符串`"func{magic}_{order}"`或`"DEFAULT"`，可实现不同root function间的精细化配置。合图信息会直接展示在泳道图的hashOrder-hint字段中（含subGraphCount，代表合并前的子图数量，可根据核心数匹配合并力度）。详情参见下方"函数粒度配置说明"。<br> ② **语义标签key**：按语义标签控制（详见下方语义标签key配置说明）。<br> 取值：<br>{"DEFAULT": 1}：跳过AIC子图合并 <br> {}（空字典）：显式开启自动合并<br> {"DEFAULT": N, "func8_0": N2}：手动合并，默认粒度为N<br>默认值：{"DEFAULT": 1}，即默认跳过AIC子图合并 <br> 影响Pass范围：L1CopyInReuseMerge |
 | sg_set_scope            | 输入      | 含义：手动控制子图切分参数。<br> 说明：通过为Operation分配scope，使得相同scope_id（非-1）的相邻Operation强制合并归入同一子图，从而覆盖切分算法的自动划分结果。 <br> 类型：`Tuple[int, bool, bool]`或`int` <br> **tuple格式**：`(scope_id, allow_parallel_merge, allow_cross_scope_merge)`，各字段含义如下： <br> - `scope_id`（int）：scope标识，取值范围 -1~2147483647。相同scope_id的相邻Operation归入同一子图；-1表示不参与scope合并，由切分算法决定子图划分。 <br> - `allow_parallel_merge`（bool）：控制同一scope_id下Operation的合并方式。取值True/False。<br>&emsp;&emsp;False（默认）：仅允许存在上下游连接通路的Operation合并，即Operation A的输出作为Operation B的输入时才可合并到同一子图。<br>&emsp;&emsp;True：允许位于并行分支（无数据依赖）的相同scope_id的Operation也合并到同一子图。 <br> - `allow_cross_scope_merge`（bool）：控制带有scope的子图是否可与无scope（scope_id=-1）的子图合并，扩大scope子图。取值True/False。<br>&emsp;&emsp;False（默认）：带有scope的子图保持独立，不与其他子图合并。<br>&emsp;&emsp;True：允许带有scope的子图与scope_id=-1的子图合并。不同scope_id的子图之间不可合并。 <br> **int格式**：传入单个int时等价于`(scope_id, False, False)`，即仅设置scope_id，不允许并行分支合并和跨scope合并。 <br> 默认值：(-1, False, False) <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的scope_id。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
 | auto_mix_partition      | 输入      | 含义：控制ReduceCopyMerge Pass中的自动混合子图切分行为。<br> 说明：该参数用于控制CV混合场景下子图的自动合并策略，值为1时编译器会评估相邻子图，若合并预估能带来性能收益且不会形成环，则会合并成MIX子图，否则不会进行合并。<br> 类型：int <br> 取值：0：不进行自动CV Mix合图；1：进行自动CV Mix合图。<br> 默认值：0 <br> 影响Pass范围：ReduceCopyMerge |
+| sg_set_ooo_scope            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：通过为 Operation分配ooo_scope，使得相同ooo_scope_id（非-1）的相邻 Operation 强制合并归入同一ooo_task，从而让相同ooo_scope_id（非-1）的相邻Operation在OoO调度生成的流水上尽可能相邻。不允许并行分支合并和跨ooo_scope合并, 不允许不同loop循环次数下的Operation的合并。 <br> 类型：`int`，即设置ooo_scope_id <br> 默认值：-1 <br> 取值范围：-1或1~100000 <br> `ooo_scope_id`：ooo_scope标识。相同ooo_scope_id的相邻Operation归入同一ooo_task；-1表示不参与ooo_scope合并，由切分算法决定ooo_task划分。 <br> 影响Pass范围：OoOSchedule <br> 配置要求：该功能仅对MIX子图生效。同时使用该功能和loop unroll时，unroll设置不得大于10000。|
+| ooo_sched_mode            | 输入      | 含义：控制MIX子图内的OoO调度。<br> 说明：设置MIX子图内ooo_task的流水调度模式。 <br> 类型：`str` <br> 默认值："" <br> 取值范围：{"", "HLF"} <br> 影响Pass范围：OoOSchedule <br> 配置说明：取值为""（默认）时使用基于拓扑序遍历和局部搜索的调度；取值为"HLF"时使用Highest Level First调度（按任务到汇点最长路径降序排列后做EFT插入调度）。|
+
 
 ## 返回值说明
 
@@ -222,5 +227,37 @@ pypto.set_pass_options(sg_set_scope=-1)
 
 # 后续Vec操作（scope_id=-1），可与上方scope子图合并为更大子图
 result = other_vec_op(add_result)
+```
+
+### sg_set_ooo_scope 配置说明
+
+#### 配置示例
+
+```python
+# 设置 ooo_scope_id
+pypto.set_pass_options(sg_set_ooo_scope=10)
+
+# 恢复默认（不参与 ooo_scope 合并，由切分算法自动决定）
+pypto.set_pass_options(sg_set_ooo_scope=-1)
+```
+
+#### 典型场景：控制 Operation 的执行顺序
+
+如下面示例，通过将 mul 和 exp 包在相同的 ooo_scope，可以使得 OoO 的调度结果中 exp 在 add 之前执行
+```python
+# 因为需要在 MIX 子图内使能 ooo_scope，所以使用 sg_set_scope 构造 MIX 子图
+pypto.set_pass_options(sg_set_scope=1)
+# Cube 操作
+matmul_result = pypto.matmul(a, b)
+pypto.set_pass_options(sg_set_ooo_scope=1)
+# Vec 操作（ooo_scope_id=1）
+c = pypto.mul(matmul_result, scale)
+pypto.set_pass_options(sg_set_ooo_scope=-1)
+d = pypto.add(c, bias)
+pypto.set_pass_options(sg_set_ooo_scope=1)
+# Vec 操作（ooo_scope_id=1）
+e = pypto.exp(c)
+pypto.set_pass_options(sg_set_ooo_scope=-1)
+pypto.set_pass_options(sg_set_scope=-1)
 ```
 

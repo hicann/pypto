@@ -207,6 +207,9 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
             if (function.IsFromInCast(startTensor) && function.IsFromOutCast(endTensor)) {
                 continue;
             }
+            if (function.IsFromOutCast(startTensor) && function.IsFromOutCast(endTensor)) {
+                continue;
+            }
             auto outputMemtype = endTensor->GetMemoryTypeOriginal();
             if (inputMemtype != outputMemtype) {
                 // 跳过view输入和 assemble输出 mem类型不同的场景

@@ -15,9 +15,13 @@
 #include "ir/expr.h"
 #include "ir/kind_traits.h"
 
+#include "interface/tensor/logical_tensor.h"
+
 namespace pypto::ir {
 
 namespace {
+
+using npu::tile_fwk::LogicalTensor;
 
 struct IfStmtResult {
     IfStmtPtr ifStmt;
@@ -341,10 +345,24 @@ std::pair<SeqStmtsPtr, std::optional<SeqStmtsPtr>> ResolveBranchConflicts(
     auto thenDefs = CollectDefinedVarsFromBody(processedThen);
     auto elseDefs = CollectDefinedVarsFromBody(processedElse ? processedElse.value() : nullptr);
 
+    std::unordered_set<int> elseRawMagics;
+    for (auto& elseVar : elseDefs) {
+        auto lt = std::dynamic_pointer_cast<const LogicalTensor>(elseVar);
+        if (lt) {
+            elseRawMagics.insert(lt->GetRawMagic());
+        }
+    }
+
     VarExprMap cloneMap;
     for (auto& v : thenDefs) {
         if (elseDefs.count(v) && !IsExternalVar(v->name_, externalVarNames)) {
-            cloneMap[v] = v->Clone();
+            auto lt = std::dynamic_pointer_cast<const LogicalTensor>(v);
+            bool sharesRawTensor = lt && elseRawMagics.count(lt->GetRawMagic()) > 0;
+            if (lt) {
+                cloneMap[v] = lt->Clone(sharesRawTensor);
+            } else {
+                cloneMap[v] = v->Clone();
+            }
         }
     }
 

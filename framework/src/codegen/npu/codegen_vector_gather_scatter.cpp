@@ -268,7 +268,7 @@ std::string CodeGenOpNPU::GenGatherElementOp() const
     if (axis.has_value()) {
         gatherEleAxis = AnyCast<int64_t>(axis);
     }
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintGatherElementTileTensor({gatherEleAxis, dVar, s0Var, s1Var, dos, ds, s0s, s1s, dataTypeExpr});
     }
     if (isDynamicFunction) {
@@ -418,7 +418,7 @@ std::string CodeGenOpNPU::GenScatterElementSOp() const
     AppendLocalBufVarOffsetInOrder(dstVar, src0Var, src1Var);
 
     const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src0DtypeStr, src1DtypeStr};
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintScatterElementSTileTensor(
             {axis, scatterMode, dstVar, src0Var, src1Var, dstRawShape, src1RawShape, dataTypeExpr});
     }
@@ -514,7 +514,7 @@ std::string CodeGenOpNPU::GenScatterOp() const
     AppendLocalBufVarOffsetInOrder(dstVar, src1Var, src2Var);
 
     const std::vector<std::string> dataTypeExpr = {dstDtypeStr, src1DtypeStr, src2DtypeStr};
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintScatterTileTensor(
             {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
     }

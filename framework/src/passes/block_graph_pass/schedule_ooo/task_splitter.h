@@ -53,6 +53,10 @@ public:
     void UnionVecClustersByDep(DSUWithOrder& dsu);
     void MergeSmallVecClusters(DSUWithOrder& dsu);
     void UnionCubeClustersByDep(DSUWithOrder& dsu);
+    void UnionByOooScope(DSUWithOrder& dsu);
+    void PropagateOooScopeToReshape();
+    std::unordered_set<int> CollectOooScopeProtectedClusters(DSUWithOrder& dsu);
+    std::unordered_set<int> CollectProtectedClusterIds(const std::vector<int>& opCluster) const;
     void BuildVecConnectedComponents(DSUWithOrder& vecDsu);
     int BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes);
     void ReverseDFSFindByOutputMemType(
@@ -108,7 +112,8 @@ public:
         std::vector<std::set<int>>& clOut) const;
     void RunSmallClusterMerge(
         DSUWithOrder& dsu, const std::vector<int>& topoOrder, std::vector<ScheduleCoreType>& coreTypes,
-        std::vector<int>& cycle, std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut, int clusterNum);
+        std::vector<int>& cycle, std::vector<std::set<int>>& clIn, std::vector<std::set<int>>& clOut, int clusterNum,
+        const std::unordered_set<int>& protectedClusterIds = {});
 
     // 基于 task 间 AIV 连通性计算分支 ID
     void ComputeTaskLevelBranches();
@@ -126,6 +131,7 @@ public:
     std::unordered_map<int, int> opMagicToIdx_;
     std::vector<int> vecBranchId_;
     TaskGraph taskGraph_;
+    std::unordered_set<int> oooScopeProtectedClusters_;
     std::vector<std::vector<int>> cycledSCCClusters_;
     std::vector<std::pair<int, int>> cycledTaskNodePairs_;
     void RecordCycledClusters(

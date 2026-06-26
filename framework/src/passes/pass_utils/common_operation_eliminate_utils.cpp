@@ -131,6 +131,7 @@ Status CommonOperationEliminateUtils::Process(Function& function)
 {
     std::vector<LogicalTensorPtr> sequence;
     auto tensorProducerMap = GetTensorProducers(function, sequence);
+    mixSubgraphIds_ = GetMixSubgraphIds(function);
     std::unordered_set<Operation*> cacheProducers;
     for (auto& orderedTensor : sequence) {
         auto& producerGroup = tensorProducerMap[orderedTensor];
@@ -282,6 +283,134 @@ void CommonOperationEliminateUtils::UpdateConnection(LogicalTensorPtr oldTensor,
     }
 }
 
+uint32_t CommonOperationEliminateUtils::GetTensorCoreFlag(const LogicalTensorPtr& tensor) const
+{
+    if (tensor == nullptr) {
+        return 0;
+    }
+    constexpr uint32_t kAicTensorFlag = 1U;
+    constexpr uint32_t kAivTensorFlag = 2U;
+    switch (tensor->GetMemoryTypeOriginal()) {
+        case MemoryType::MEM_L1:
+        case MemoryType::MEM_L0A:
+        case MemoryType::MEM_L0B:
+        case MemoryType::MEM_L0C:
+            return kAicTensorFlag;
+        case MemoryType::MEM_UB:
+            return kAivTensorFlag;
+        default:
+            return 0;
+    }
+}
+
+void CommonOperationEliminateUtils::CollectSubgraphIds(
+    const std::set<Operation*, LogicalTensor::CompareOp>& ops, std::unordered_set<int>& subgraphIds) const
+{
+    for (const auto& op : ops) {
+        if (op == nullptr) {
+            continue;
+        }
+        if (op->GetSubgraphID() >= 0) {
+            subgraphIds.insert(op->GetSubgraphID());
+        }
+    }
+}
+
+void CommonOperationEliminateUtils::UpdateInternalTensorCoreFlag(
+    const LogicalTensorPtr& tensor, std::unordered_map<int, uint32_t>& subgraphCoreFlags) const
+{
+    uint32_t tensorFlag = GetTensorCoreFlag(tensor);
+    if (tensorFlag == 0) {
+        return;
+    }
+
+    std::unordered_set<int> producerSubgraphIds;
+    std::unordered_set<int> consumerSubgraphIds;
+    CollectSubgraphIds(tensor->GetProducers(), producerSubgraphIds);
+    CollectSubgraphIds(tensor->GetConsumers(), consumerSubgraphIds);
+    for (const auto producerSubgraphId : producerSubgraphIds) {
+        if (consumerSubgraphIds.count(producerSubgraphId) != 0) {
+            subgraphCoreFlags[producerSubgraphId] |= tensorFlag;
+        }
+    }
+}
+
+std::unordered_set<int> CommonOperationEliminateUtils::GetMixSubgraphIds(Function& function) const
+{
+    constexpr uint32_t kAicTensorFlag = 1U;
+    constexpr uint32_t kAivTensorFlag = 2U;
+    std::unordered_map<int, uint32_t> internalTensorFlagsBySubgraph;
+    std::unordered_set<int> handledTensorMagics;
+    for (const auto& opPtr : function.Operations(true).DuplicatedOpList()) {
+        if (opPtr == nullptr) {
+            continue;
+        }
+        for (const auto& outputTensor : opPtr->GetOOperands()) {
+            if (outputTensor == nullptr) {
+                continue;
+            }
+            if (!handledTensorMagics.insert(outputTensor->GetMagic()).second) {
+                continue;
+            }
+            UpdateInternalTensorCoreFlag(outputTensor, internalTensorFlagsBySubgraph);
+        }
+    }
+
+    std::unordered_set<int> result;
+    for (const auto& entry : internalTensorFlagsBySubgraph) {
+        if ((entry.second & kAicTensorFlag) == 0 || (entry.second & kAivTensorFlag) == 0) {
+            continue;
+        }
+        result.insert(entry.first);
+    }
+    return result;
+}
+
+bool CommonOperationEliminateUtils::WouldExposeMixInternalTensorAfterMerge(
+    const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
+    const std::unordered_set<int>& mixSubgraphIds) const
+{
+    if (oldTensor == nullptr || newTensor == nullptr || mixSubgraphIds.empty()) {
+        return false;
+    }
+
+    std::unordered_set<int> producerMixSubgraphIds;
+    for (const auto& producer : newTensor->GetProducers()) {
+        if (producer != nullptr && mixSubgraphIds.count(producer->GetSubgraphID()) != 0) {
+            producerMixSubgraphIds.insert(producer->GetSubgraphID());
+        }
+    }
+    for (const auto mixSubgraphId : producerMixSubgraphIds) {
+        bool hasConsumerInMix = false;
+        bool hasOtherSubgraphOp = false;
+        auto updateConsumerSubgraphUse = [&](Operation* op) {
+            if (op == nullptr) {
+                return;
+            }
+            if (op->GetSubgraphID() == mixSubgraphId) {
+                hasConsumerInMix = true;
+            } else {
+                hasOtherSubgraphOp = true;
+            }
+        };
+        for (const auto& producer : newTensor->GetProducers()) {
+            if (producer != nullptr && producer->GetSubgraphID() != mixSubgraphId) {
+                hasOtherSubgraphOp = true;
+            }
+        }
+        for (const auto& consumer : newTensor->GetConsumers()) {
+            updateConsumerSubgraphUse(consumer);
+        }
+        for (const auto& consumer : oldTensor->GetConsumers()) {
+            updateConsumerSubgraphUse(consumer);
+        }
+        if (hasConsumerInMix && hasOtherSubgraphOp) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool CommonOperationEliminateUtils::TensorProducersMerge(
     Function& function, const LogicalTensorPtr orderedTensor, std::unordered_set<Operation*>& cacheProducers,
     const std::unordered_map<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerMap)
@@ -315,6 +444,12 @@ bool CommonOperationEliminateUtils::TensorProducersMerge(
         }
     }
     if (newTensor->GetConsumers().size() == 0 || oldTensor->GetConsumers().size() == 0) {
+        return false;
+    }
+    if (WouldExposeMixInternalTensorAfterMerge(oldTensor, newTensor, mixSubgraphIds_)) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+            "Skip eliminating Tensor[%d] to avoid exposing mix subgraph internal Tensor[%d] to other subgraphs.",
+            oldTensor->GetMagic(), newTensor->GetMagic());
         return false;
     }
     UpdateConnection(oldTensor, newTensor);

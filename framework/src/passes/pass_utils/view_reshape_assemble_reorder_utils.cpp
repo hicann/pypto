@@ -93,6 +93,89 @@ bool HasTargetMatmulOp(Function& function)
     return false;
 }
 
+bool CanReorderFunction(Function& function)
+{
+    for (const auto& incast : function.GetIncast()) {
+        const auto& shape = incast->GetShape();
+        if (!HasConcreteShape(shape) && !HasOnlyFirstUnknownDim(shape)) {
+            return false;
+        }
+    }
+    for (const auto& outcast : function.GetOutcast()) {
+        const auto& shape = outcast->GetShape();
+        if (!HasConcreteShape(shape) && !HasOnlyFirstUnknownDim(shape)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool HasCascadedViewsBeforeReshape(Function& function)
+{
+    for (const auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        if (op.GetIOperands().size() != 1) {
+            continue;
+        }
+        auto input = op.GetIOperands().front();
+        if (input == nullptr || input->GetProducers().size() != 1) {
+            continue;
+        }
+        Operation* firstView = *input->GetProducers().begin();
+        if (firstView == nullptr || firstView->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        if (firstView->GetIOperands().size() != 1) {
+            continue;
+        }
+        auto firstViewInput = firstView->GetIOperands().front();
+        if (firstViewInput == nullptr || firstViewInput->GetProducers().size() != 1) {
+            continue;
+        }
+        Operation* secondView = *firstViewInput->GetProducers().begin();
+        if (secondView != nullptr && secondView->GetOpcode() == Opcode::OP_VIEW) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HasCascadedAssemblesAfterReshape(Function& function)
+{
+    for (const auto& op : function.Operations()) {
+        if (op.GetOpcode() != Opcode::OP_RESHAPE) {
+            continue;
+        }
+        if (op.GetOOperands().size() != 1) {
+            continue;
+        }
+        auto output = op.GetOOperands().front();
+        if (output == nullptr) {
+            continue;
+        }
+        for (Operation* consumer : output->GetConsumers()) {
+            if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+                continue;
+            }
+            if (consumer->GetOOperands().size() != 1) {
+                continue;
+            }
+            auto assembleOutput = consumer->GetOOperands().front();
+            if (assembleOutput == nullptr) {
+                continue;
+            }
+            for (Operation* nextConsumer : assembleOutput->GetConsumers()) {
+                if (nextConsumer != nullptr && nextConsumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 bool IsRegionWithinShape(
     const std::vector<int64_t>& offset, const std::vector<int64_t>& regionShape,
     const std::vector<int64_t>& baseShape)
@@ -190,6 +273,9 @@ Status ViewReshapeAssembleReorderUtils::Process(Function& function)
     if (!HasTargetMatmulOp(function)) {
         return SUCCESS;
     }
+    if (!CanReorderFunction(function)) {
+        return SUCCESS;
+    }
 
     ClearRecords();
     Status status = ProcessOperations(function);
@@ -198,6 +284,9 @@ Status ViewReshapeAssembleReorderUtils::Process(Function& function)
         return status;
     }
     if (!HasRecords()) {
+        return SUCCESS;
+    }
+    if (!HasCascadedPattern(function)) {
         return SUCCESS;
     }
 
@@ -249,8 +338,16 @@ Status ViewReshapeAssembleReorderUtils::ProcessOperations(Function& function)
             continue;
         }
         Operation* precedingViewOp = GetPrecedingViewOp(op);
-        Status status = precedingViewOp != nullptr ? TryRecordViewReshape(function, *precedingViewOp) :
-                                                     TryRecordReshapeAssemble(function, op);
+        Status status;
+        if (precedingViewOp != nullptr) {
+            status = TryRecordViewReshape(function, *precedingViewOp);
+        } else {
+            Operation* followingAssembleOp = GetFollowingAssembleOp(op);
+            if (followingAssembleOp == nullptr) {
+                continue;
+            }
+            status = TryRecordReshapeAssemble(function, op);
+        }
         if (status != SUCCESS) {
             return status;
         }
@@ -292,6 +389,22 @@ Operation* ViewReshapeAssembleReorderUtils::GetPrecedingViewOp(Operation& reshap
         return nullptr;
     }
     return producer;
+}
+
+Operation* ViewReshapeAssembleReorderUtils::GetFollowingAssembleOp(Operation& reshapeOp)
+{
+    if (reshapeOp.GetOOperands().size() != 1) {
+        return nullptr;
+    }
+    auto output = reshapeOp.GetOOperands().front();
+    if (output == nullptr || output->GetConsumers().size() != 1) {
+        return nullptr;
+    }
+    Operation* consumer = *output->GetConsumers().begin();
+    if (consumer == nullptr || consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+        return nullptr;
+    }
+    return consumer;
 }
 
 bool ViewReshapeAssembleReorderUtils::ValidateChainShapes(const ChainMatch& match)
@@ -886,9 +999,12 @@ bool ViewReshapeAssembleReorderUtils::RemapOffset(
         newShape.size() != newDynShape.size()) {
         return false;
     }
+    result.staticOffset = SymbolicToStaticOffset(
+        DelinearizeOffset(
+            LinearizeOffset(ShapeToSymbolic(oldOffset), ShapeToSymbolic(oldShape)),
+            ShapeToSymbolic(newShape)));
     auto dynOffset = NormalizeDynOffset(oldOffset, oldDynOffset);
     result.dynOffset = DelinearizeOffset(LinearizeOffset(dynOffset, oldDynShape), newDynShape);
-    result.staticOffset = SymbolicToStaticOffset(result.dynOffset);
     return true;
 }
 
@@ -907,13 +1023,21 @@ bool ViewReshapeAssembleReorderUtils::RemapFanoutViewOffset(
         return false;
     }
 
+    auto staticFanoutDynOffset = ShapeToSymbolic(fanoutOffset);
+    auto staticMiddleOffset = DelinearizeOffset(
+        LinearizeOffset(staticFanoutDynOffset, ShapeToSymbolic(compactShape)), ShapeToSymbolic(middleShape));
+    auto staticBaseDynOffset = ShapeToSymbolic(baseViewOffset);
+    result.staticOffset = SymbolicToStaticOffset(
+        DelinearizeOffset(
+            LinearizeOffset(AddOffsets(staticBaseDynOffset, staticMiddleOffset), ShapeToSymbolic(inputShape)),
+            ShapeToSymbolic(newShape)));
+
     auto normalizedFanoutDynOffset = NormalizeDynOffset(fanoutOffset, fanoutDynOffset);
     auto middleOffset = DelinearizeOffset(LinearizeOffset(normalizedFanoutDynOffset, compactDynShape), middleDynShape);
 
     auto baseDynOffset = NormalizeDynOffset(baseViewOffset, baseViewDynOffset);
     result.dynOffset = DelinearizeOffset(
         LinearizeOffset(AddOffsets(baseDynOffset, middleOffset), inputDynShape), newDynShape);
-    result.staticOffset = SymbolicToStaticOffset(result.dynOffset);
     return true;
 }
 
@@ -934,13 +1058,21 @@ bool ViewReshapeAssembleReorderUtils::RemapFaninAssembleOffset(
         return false;
     }
 
+    auto staticInputOffset = ShapeToSymbolic(inputAssembleOffset);
+    auto staticMiddleOffset = DelinearizeOffset(
+        LinearizeOffset(staticInputOffset, ShapeToSymbolic(compactShape)), ShapeToSymbolic(middleShape));
+    auto staticOutputAssembleOffset = ShapeToSymbolic(outputAssembleOffset);
+    result.staticOffset = SymbolicToStaticOffset(
+        DelinearizeOffset(
+            LinearizeOffset(AddOffsets(staticOutputAssembleOffset, staticMiddleOffset), ShapeToSymbolic(outputShape)),
+            ShapeToSymbolic(newShape)));
+
     auto normalizedInputDynOffset = NormalizeDynOffset(inputAssembleOffset, inputAssembleDynOffset);
     auto middleOffset = DelinearizeOffset(LinearizeOffset(normalizedInputDynOffset, compactDynShape), middleDynShape);
 
     auto normalizedOutputAssembleDynOffset = NormalizeDynOffset(outputAssembleOffset, outputAssembleDynOffset);
     result.dynOffset = DelinearizeOffset(
         LinearizeOffset(AddOffsets(normalizedOutputAssembleDynOffset, middleOffset), outputDynShape), newDynShape);
-    result.staticOffset = SymbolicToStaticOffset(result.dynOffset);
     return true;
 }
 
@@ -1142,5 +1274,10 @@ Operation::ScopeInfo ViewReshapeAssembleReorderUtils::GetChainScopeInfo(Operatio
 bool ViewReshapeAssembleReorderUtils::IsScopeCompatible(Operation& first, Operation& second)
 {
     return first.GetScopeId() == -1 || second.GetScopeId() == -1 || first.GetScopeId() == second.GetScopeId();
+}
+
+bool ViewReshapeAssembleReorderUtils::HasCascadedPattern(Function& function)
+{
+    return HasCascadedViewsBeforeReshape(function) || HasCascadedAssemblesAfterReshape(function);
 }
 } // namespace npu::tile_fwk

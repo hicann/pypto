@@ -127,10 +127,10 @@ impl is written. No upfront per-module file generation.
 
 | Mode | Triggered by | Deliverable | EXPLICITLY EXCLUDED |
 |---|---|---|---|
-| **Scaffolding** | once the contract (DESIGN.md + module_interfaces.yaml) is ready | `eval/test_inputs.py` + `eval/adversarial_suite.json` + `eval/adversarial_runner.py` (i.e., **Step B only**) | • per-module goldens (`modules/<op>_module*_golden.py`) — wait for Phase scaffolding<br/>• per-module tests (`modules/test_<op>_module*.py`) — wait for Phase scaffolding<br/>• impl stubs of any kind — `*_impl.py` is not yours to create |
-| **Phase scaffolding (M_k)** | after the module impl for Phase M_k passes lint | (a) `modules/<op>_module<suffix_k>_golden.py` (Step A, scoped to this M_k only), (b) `modules/test_<op>_module<suffix_k>.py` (Step C, scoped to this M_k only), (c) run the test, report precision PASS/FAIL | • files for any phase other than the dispatched M_k<br/>• impl files (do not modify or replace) |
-| **Composition verification** | after the last phase, before cleanup | Verify the cumulative `<op>_module<suffix_N>_golden` reproduces `<op>_golden` | impl / golden / test creation — read-only verification |
-| **Per-module verification** | after a module impl is produced or patched | Run `<op>_module<suffix_k>_impl.py` vs `<op>_module<suffix_k>_golden.py`, report PASS/FAIL | new file creation — read-only verification |
+| **Stage 4 scaffolding** (**L1 only** — `module_count ≥ 2`; the orchestrator does **not** dispatch this on L0) | Orchestrator at end of Stage 4 design close | `eval/test_inputs.py` + `eval/adversarial_suite.json` + `eval/adversarial_runner.py` (i.e., **Step B only**) | • per-module goldens (`modules/<op>_module*_golden.py`) — wait for Phase scaffolding<br/>• per-module tests (`modules/test_<op>_module*.py`) — wait for Phase scaffolding<br/>• impl stubs of any kind — `*_impl.py` is Coder's property |
+| **Phase scaffolding (M_k)** | Orchestrator after `@pypto-op-coder` for Phase M_k passes lint | (a) `modules/<op>_module<suffix_k>_golden.py` (Step A, scoped to this M_k only), (b) `modules/test_<op>_module<suffix_k>.py` (Step C, scoped to this M_k only), (c) run the test, report precision PASS/FAIL | • files for any phase other than the dispatched M_k<br/>• impl files (already written by Coder; do not modify or replace) |
+| **Composition verification** | Orchestrator after `complete_phase(MN)` succeeds, before Stage 5 cleanup | Verify the cumulative `<op>_module<suffix_N>_golden` reproduces `<op>_golden` | impl / golden / test creation — read-only verification |
+| **Per-module verification** | Orchestrator after Coder produces or patches a module impl | Run `<op>_module<suffix_k>_impl.py` vs `<op>_module<suffix_k>_golden.py`, report PASS/FAIL | new file creation — read-only verification |
 
 The active phase `M_k` is passed in the dispatch prompt for
 phase-scoped modes. Scaffolding and Composition verification do
@@ -171,16 +171,13 @@ The cumulative wrapper for module<suffix_N> (the full composition) must numerica
 
 ### Step A.5.1 — Load and validate the module graph
 
-Parse `custom/<op>/eval/module_interfaces.yaml`. Reject (stop and report; the contract must be revised) if any wiring rule is violated:
+Validate the module graph with the bundled script (the six wiring/shape/dtype rules are codified there):
 
-1. Every `inputs[*].source: primary` name exists in `primary_inputs`.
-2. Every `inputs[*].source: module_j` has `j < current module id`, and the referenced name exists in `module_j.outputs`.
-3. Every `final_outputs[*].source: module_j` has `j ≤ N`, and the referenced name exists in `module_j.outputs`.
-4. No two outputs share the same `(module_id, name)` key.
-5. Shape expressions parse (only `+`, `-`, `*`, `//`, and symbolic names from `primary_inputs`).
-6. Dtype strings are from the allowed vocabulary: `float32`, `float16`, `bfloat16`, `int32`, `int64`, `bool`, `int`.
+```
+python .agents/skills/pypto-op-verify/scripts/validate_yaml.py custom/<op>/eval/module_interfaces.yaml --json
+```
 
-On rejection, append a `## Architecture/Design Rejection — <timestamp>` block to `custom/<op>/MEMORY.md` with the specific wiring/shape/dtype problem and stop.
+On any reported violation, append a `## Architecture/Design Rejection — <timestamp>` block to `custom/<op>/MEMORY.md` with the script's violation list, stop, and report to pypto-op-orchestrator (it will re-dispatch @pypto-op-architect / @pypto-op-designer). The rules: (1) `inputs[*].source: primary` exists in `primary_inputs`; (2) `inputs[*].source: module_j` has `j < current id` and the name exists in `module_j.outputs`; (3) `final_outputs[*].source: module_j` has `j ≤ N` and the name exists; (4) no duplicate `(module_id, name)`; (5) shape exprs use only `+ - * //` and name/int tokens; (6) dtype in `{float32, float16, bfloat16, int32, int64, bool, int}`.
 
 ### Step A.5.2 — Emit `<op>_module<suffix_k>_golden.py` for the dispatched M_k
 
@@ -216,30 +213,14 @@ This step runs only in **Scaffolding mode**. The framework it
 produces is shared by all phases; it is independent of per-module
 goldens and tests (those are created lazily in Phase scaffolding mode).
 
-**Goal:** Produce `eval/test_inputs.py`, `eval/adversarial_suite.json`, `eval/adversarial_runner.py`. The runner must support **direct per-phase comparison** via `--up-to-module k`: load the cumulative impl wrapper and the cumulative golden for the selected phase k, compare directly, with NO cross-phase golden imports.
+**Goal:** Produce `eval/test_inputs.py`, `eval/adversarial_suite.json`, `eval/adversarial_runner.py`. The runner supports **direct per-phase comparison** via `--up-to-module k` (cumulative impl wrapper vs cumulative golden, NO cross-phase golden imports). **Verification runs on the NPU only** (the impl wrapper pins the NPU device at import).
 
-### Step B.1 — `test_inputs.py`
+The runner and the `test_inputs.py` scaffold are **pre-built templates** — copy them verbatim, do not regenerate:
 
-- Define `PRIMARY_INPUT_ORDER` (mirror `module_interfaces.yaml`).
-- Define `make_inputs(case: dict) -> dict[str, torch.Tensor | int]` that resolves each primary input's shape (support symbolic expressions like `"S/BT+1"` via a small `_resolve_shape` helper), dtype (via a `_dtype_from_str` helper), and any op-specific knob (`gate_mode`, `h0_mode`, boundary flags, etc.) from the case dict.
-- **All returned tensors MUST be created on the same NPU device** via the explicit `device=` argument at construction time. Do NOT create tensors on CPU first and then call `.npu()` / `.to(...)` — that leaves a window where some inputs are still on CPU. Do NOT rely on `torch.npu.set_device(...)` alone — that only sets the default for newly-created NPU tensors, it does not move existing CPU tensors. Canonical pattern:
+- `eval/adversarial_runner.py` ← `skill pypto-op-verify`'s `templates/adversarial_runner_template.py` (set `OP_NAME`). Generic; contains the CLI, comparison semantics, report schema, and `--self-test`.
+- `eval/test_inputs.py` ← `templates/test_inputs_template.py`. The **only** op-specific file: fill the two `AGENT FILLS` blocks (`PRIMARY_INPUT_ORDER` mirroring `module_interfaces.yaml`, and the `make_inputs` body). The template already encodes the device-at-construction rule (every tensor `device=DEVICE`), the `_resolve_shape` / `_dtype_from_str` helpers, and the `cancellation_stress` hook.
 
-  ```python
-  DEVICE = torch.device(f"npu:{int(os.environ.get('TILE_FWK_DEVICE_ID', '0'))}")
-
-  def make_inputs(case: dict) -> dict[str, torch.Tensor]:
-      shape = _resolve_shape(case["shape"])
-      dtype = _dtype_from_str(case["dtype"])
-      torch.manual_seed(case.get("seed", 42))
-      return {
-          "x": torch.randn(shape["x"], dtype=dtype, device=DEVICE),
-          "y": torch.randn(shape["y"], dtype=dtype, device=DEVICE),
-          # ... every tensor carries device=DEVICE at creation
-      }
-  ```
-
-  This is the root-cause fix for "inputs on mixed devices" failures sometimes observed in implementation / debug iterations: they originate here in `make_inputs` (tensors created on CPU by default). Catching the issue inside the wrapper is too late — we eliminate the possibility at the source.
-- Keys returned by `make_inputs` MUST match the golden's parameter names. The runner uses `PRIMARY_INPUT_ORDER` to map them to positional args.
+Then author only `adversarial_suite.json` (Step B.2). The runner's CLI, report schema, and self-test are defined by the template — see B.5/B.6 for inspection-tensor and cancellation-stress modes that may require op-specific additions.
 
 ### Step B.2 — `adversarial_suite.json`
 
@@ -255,120 +236,15 @@ Populate **≥ 2 cases per level L1–L5**:
 
 Each case is a dict with at minimum: `id`, `level`, `shape: dict`, `dtype: dict` (or `dtype_mode`), `precision: bool`, `atol`, `rtol`, plus op-specific knobs consumed by `make_inputs`.
 
-### Step B.3 — `adversarial_runner.py` (CLI)
+### Step B.3 / B.4 — runner CLI, NPU execution, report schema (templated)
 
-Required flags (do NOT rename):
+Both are fixed by the template copied above — do not re-specify or hand-write them:
 
-```
---impl <path>              # path to the staged impl file, e.g. custom/<op>/modules/<op>_module1_impl.py
---up-to-module <k>         # integer in [1..N]; selects the impl's cumulative module-k wrapper and the matching cumulative golden
---suite <path>             # path to adversarial_suite.json (default: ./adversarial_suite.json)
---case <id>                # optional: run a single case
---levels L1,L2,…           # optional: filter by level
---self-test                # run modular golden vs user-provided golden only; no impl needed
---report <path>            # output path for evaluation_report.json (default: ./evaluation_report.json)
---modes <csv>              # comma-separated subset of {sim,npu}; default: "sim,npu"
---inspect <name>           # if set, compare inspection_<name> tensors instead of primary outputs (see B.5)
-```
+- **CLI flags** (`adversarial_runner_template.py`, do NOT rename): `--impl --up-to-module --suite --case --levels --self-test --report --inspect`.
+- **Comparison (DIRECT MODE, NPU only)**: for `--up-to-module k`, suffix `1,12,123,…`; runs `impl.<op>_module<suffix>_wrapper(*primary_inputs)` on the NPU and compares against the single cumulative golden `<op>_module<suffix>_golden`. NO cross-phase golden imports, no hybrid composition (`_compare` / `_sanitize` / `_load_truth_golden` are defined in the template and MUST NOT be rewritten).
+- **`evaluation_report.json`**: schema, `first_failure` (with `failing_module_boundary`, `failure_category`, summary), and the information barrier (no raw golden/input tensors or golden source — enforced by `_sanitize`) are produced by the template.
 
-**Comparison semantics (DIRECT MODE — no cross-phase imports).** For `--up-to-module k`:
-
-```
-suffix       = "".join(str(i) for i in range(1, k + 1))    # cumulative: 1, 12, 123, ...
-candidate_fn = impl.<op>_module<suffix>_wrapper             # from --impl module
-truth_fn     = <op>_module<suffix>_golden                    # from modules/<op>_module<suffix>_golden.py
-candidate    = candidate_fn(*primary_inputs)                 # M_k boundary output
-truth        = truth_fn(*primary_inputs)                     # cumulative golden for M_k
-_compare(candidate, truth, atol, rtol)
-```
-
-**Both the impl wrapper and the truth golden produce the same M_k boundary output** (same shape, dtype, semantics — guaranteed by `module_interfaces.yaml`'s `inputs/outputs` contract). The runner therefore does NOT need any per-module hybrid composition: it imports exactly **one** golden file (the cumulative golden for the selected phase) and compares against the impl's cumulative wrapper.
-
-**Forbidden in the runner**:
-
-- ❌ `from <op>_module<other_suffix>_golden import ...` — the runner MUST NOT import goldens for phases other than the one selected by `--up-to-module k`. Cross-phase golden imports force `you` to fabricate downstream goldens during Phase M_k scaffolding, breaking lazy scaffolding.
-- ❌ A `GOLDEN_MODULES` dict mapping module ids to functions across phases.
-- ❌ A `build_hybrid()` helper that splices impl[1..k] with golden[k+1..N].
-
-If a user explicitly asks for end-to-end verification (impl at every module against the top-level user golden), they should call the runner with `--up-to-module N` AND additionally invoke **Composition verification mode** (which compares `<op>_module<suffix_N>_golden` against `<op>_golden.py` separately — see the Composition verification mode entry in the dispatch modes table).
-
-### Step B.3.1 — SIM/NPU 2-way dispatcher
-
-The runner must execute the impl under **every mode in `--modes`** (default: both — `sim`, `npu`) and record a **per-mode verdict** in the report. The cross-mode pattern is the primary narrowing signal: a kernel that passes `sim` but fails `npu` points to device-specific issues (tiling, pipe crossings, memory); a kernel that fails on both `sim` and `npu` points to IR-generation or algorithmic issues.
-
-`pypto.RunMode` only defines `NPU` and `SIM` (see `python/pypto/runtime.py`); there is no `RunMode.Torch` and no `pypto.torch_backend` module. Algorithmic / FP32 stability issues are detected via the separate CPU FP32 reproducer documented in a separate reproducer step, not via a third runner mode.
-
-**Dispatcher behavior (mandatory):**
-
-1. For each mode `m ∈ --modes`, set `runtime_options={"run_mode": pypto.RunMode.<M>}` on the JIT entry before invoking. `RunMode.SIM` runs the PyPTO simulator; `RunMode.NPU` runs on the NPU device.
-2. Each mode produces its own `candidate_tuple`. Call `_compare(candidate_tuple, truth_tuple, atol, rtol)` once per mode per case.
-3. The runner must never short-circuit across modes — if `sim` fails, still run `npu`. The cross-mode divergence pattern is the diagnostic.
-4. If the NPU is unavailable (no `ASCEND_HOME_PATH`, `torch.npu.is_available() is False`), record `per_mode_status.npu = "SKIPPED"` and continue with the remaining mode.
-5. A mode is `PASS` for a case iff `_compare` returns `all_close=True`. A mode's overall status is `PASS` iff all cases PASS; `FAIL` iff any case fails precision; `ERROR` iff the mode's dispatch itself crashed; `SKIPPED` if the mode was unavailable.
-
-**Required dispatcher function (do NOT rename):**
-
-- `run_modes(impl_module, case, modes: list[str]) -> dict[str, dict]` — returns `{mode: {status, per_tensor: [...], max_abs_diff, max_rel_diff, stdout, stderr, runtime_s}}` for each requested mode.
-
-**Required internal functions (debug lookups bind to these — do NOT rename):**
-
-- `_phase_suffix(up_to_module: int) -> str` — returns the cumulative module suffix for `up_to_module=k`: `1, 12, 123, …, 12345678910, …`. The same convention used by the lint helper `_phase_to_module_suffix` and by `<op>_module<suffix>_impl.py` / `<op>_module<suffix>_golden.py` file naming.
-- `_load_truth_golden(op_dir: str, op_name: str, suffix: str) -> Callable` — imports `<op>_module<suffix>_golden` from `<op_dir>/modules/` and returns the function with the same name. This is the ONLY golden import the runner performs; it MUST NOT import any other module-suffix golden.
-- `_resolve_impl_wrapper(impl_module, op_name: str, suffix: str) -> Callable` — returns `impl_module.<op>_module<suffix>_wrapper`. Fails fast with a clear naming-contract error if absent (instead of falling back across alternate names).
-- `_compare(candidate_tuple, truth_tuple, atol, rtol) -> dict` — returns `{all_close: bool, per_tensor: [{name, max_abs_diff, max_rel_diff, all_close}]}`.
-- `_sanitize(report: dict) -> dict` — strips any key in `_FORBIDDEN_REPORT_KEYS` (raw golden tensors, golden source excerpts, raw input contents). Runs automatically before the report is written to disk.
-
-**Do NOT** rewrite `_compare`, `_sanitize`, or the CLI signature. They encode the information-barrier and the per-phase comparison semantics.
-
-### Step B.4 — `evaluation_report.json` schema
-
-The runner produces `eval/evaluation_report.json` with required keys:
-
-```
-op_name                      str
-impl_file                    str   # submitted impl path
-up_to_module                 int
-total_modules                int
-status                       "PASS" | "FAIL" | "ERROR"
-checks                       list of per-case results (id, level, precision_checked, all_close, max_abs_diff, max_rel_diff, per_mode_status)
-cases_total                  int
-cases_passed                 int
-per_mode_status              dict   # aggregate across cases — see below
-  ├─ sim                     "PASS" | "FAIL" | "ERROR" | "SKIPPED"
-  └─ npu                     "PASS" | "FAIL" | "ERROR" | "SKIPPED"
-first_failure                dict or null
-  ├─ case_id                 str
-  ├─ failing_module_boundary int    # the phase k at which the per-phase comparison failed (equals the --up-to-module value); narrows the fix domain
-  ├─ failure_category        str    # precision / structural / runtime / infra / other
-  ├─ divergence_fingerprint  str    # see below — classifies cross-mode divergence routing
-  └─ summary                 str    # one-sentence human-readable signal (no golden values)
-stdout                       str    # full unfiltered log from the impl's execution (primary diagnostic signal)
-```
-
-**`per_mode_status` aggregation rule:** For each mode, the aggregate value is the worst-case status across all cases — `ERROR` > `FAIL` > `PASS` > `SKIPPED`.
-
-**`divergence_fingerprint` values** (computed from the cross-mode verdict pattern for the failing case):
-- `"kernel_ok_npu_only"` — `sim=PASS`, `npu=FAIL`. Strong signal of an NPU-specific defect (tile shape, pipe crossing, memory layout, AICore codegen). Points to a device-side fix; SHOULD NOT touch algorithmic code.
-- `"ir_divergence"` — `sim=FAIL`, `npu=PASS`. The simulator diverges from NPU; the issue is in the PyPTO IR generation path or simulator approximation, not in the NPU codegen.
-- `"all_fail"` — both modes fail. The kernel is wrong at the algorithmic level, or there is a structural / runtime issue. Inspect stdout first; if numerical, load `pypto-precision-debug`.
-
-**`failure_category` values:**
-- `precision` — at least one mode produces wrong numerical output.
-- `structural` — shape/dtype/name contract mismatch; fixable in the impl without touching math.
-- `runtime` — dispatch itself crashed (import error, type error in JIT bind).
-- `infra` — host-side issue (SSH, rsync, ASCEND env).
-- `other` — none of the above; forces a stdout re-read and reclassify.
-
-Status values (overall):
-- `"PASS"` — every requested mode passes every case (`per_mode_status` has no `FAIL`/`ERROR` entries; `SKIPPED` is allowed).
-- `"FAIL"` — precision fails on ≥ 1 case for at least one non-SKIPPED mode.
-- `"ERROR"` — workspace problem before any mode could run cases.
-
-**CRITICAL — what the report MUST NOT contain** (enforced by `_sanitize`):
-- Golden output tensor values (raw numbers).
-- Golden source code or any excerpt of it (including `golden_module_*` bodies).
-- Raw input tensor contents.
-
+`failure_category` enum: `precision` / `structural` / `runtime` / `infra` / `other`.
 ### Step B.5 — Inspection tensor protocol (per-iteration probes inside a module)
 
 When a module contains an internal loop (e.g. the reverse-scan in gated delta rule backward's M2, or the NT-chunk loop in any delta-rule variant), a single per-phase verdict is too coarse: the module's final output may mask the exact iteration where drift begins. Inspection tensors let the runner compare **per-iteration intermediate state** between impl and golden without requiring new framework APIs.
@@ -404,9 +280,17 @@ Implementation: random-restart search over scale knobs is sufficient. Generator 
 
 **Goal:** Produce the single file `custom/<op>/modules/test_<op>_module<suffix_k>.py` corresponding to the Phase M_k passed in your dispatch prompt. After writing this file, **run it** and report the precision PASS/FAIL. The test pairs the just-Coded impl (`<op>_module<suffix_k>_impl.py`) with the golden you produced in Step A immediately above.
 
-### Step C.1 — Test file structure
+### Step C.1 — Test file structure (generated)
 
-Each test file imports the cumulative impl and the cumulative golden and compares every leaf output. The file **MUST start with the `detailed_tensor_compare` path-bootstrap preamble** so the user (and CI) can run `python custom/<op>/modules/test_<op>_module<suffix_k>.py` directly without setting `PYTHONPATH`. The preamble walks up from the test file location to find `.agents/skills/pypto-op-verify/scripts/` and prepends it to `sys.path`. See `skill pypto-op-verify`'s `templates/test_template.py` for the canonical preamble; reuse it verbatim.
+**Do not hand-write the test file** — generate it (the bootstrap preamble, naming-convention imports, and the mandatory `_l0` / `_l1` functions are deterministic):
+
+```
+python .agents/skills/pypto-op-verify/scripts/gen_module_test.py \
+    --op <op> --suffix <suffix_k> --spec custom/<op>/SPEC.md --golden custom/<op>/modules/<op>_module<suffix_k>_golden.py \
+    > custom/<op>/modules/test_<op>_module<suffix_k>.py
+```
+
+(For the integrated E2E test pass `--e2e` and `--golden custom/<op>/<op>_golden.py`, output to `custom/<op>/test_<op>.py`.) Then **run it** and report PASS/FAIL. The generator builds inputs from SPEC `p0_shapes` (l1) and a small shape (l0); only adjust the generated `make_case_inputs` body if the op needs heterogeneous per-input shapes. The canonical template (`templates/test_template.py`) remains the reference for the structure the generator emits. The structure below documents what it produces:
 
 ```python
 """Test for cumulative module M1..M_k. Imports module<suffix_k>_impl and module<suffix_k>_golden."""
@@ -514,7 +398,7 @@ verification (see "Verdict format" below):
 When MEMORY.md says `module_count == 1`, you run the E2E gate **once** on `<op>_impl.py` — there are no per-Phase gates, no prefix evaluation, no module boundaries.
 
 1. Golden function inventory — every op marked ✅
-2. Write `custom/<op>/test_<op>.py` (imports `<op>_impl` and `<op>_golden`; compares all leaf outputs via `detailed_tensor_compare` in both SIM and NPU modes)
+2. Write `custom/<op>/test_<op>.py` (imports `<op>_impl` and `<op>_golden`; compares all leaf outputs via `detailed_tensor_compare`, run on the NPU)
 3. Run `PYTHONPATH=.agents/skills/pypto-op-verify python custom/<op>/test_<op>.py` — `all_close: true` on every output leaf
 4. Layout / structure rules (OL44 module trio, OL45/OL57 loops, OL48 cube-tile, OL52 view rank, OL19 compare helper) are enforced automatically by the pypto-op-lint hooks on file write and at the gate — confirm no lint FAIL remains
 5. Append one row to MEMORY.md → Per-module verification log (single row for the L0 E2E run; `Module = M1`, `Staged file = <op>_impl.py`).
@@ -541,21 +425,19 @@ Safe to advance active_module to M_{k+1}.
 Evidence: <memory row pointer>.
 ```
 
-**Fail — include a failure_category AND a divergence_fingerprint:**
+**Fail — include a failure_category for @pypto-op-debugger:**
 
-| Observed failure | `failure_category` | Typical `divergence_fingerprint` |
-|---|---|---|
-| `detailed_tensor_compare` `all_close: false` on NPU only, `sim=PASS` | `precision` | `kernel_ok_npu_only` |
-| `all_close: false` on `sim` only, `npu=PASS` | `precision` | `ir_divergence` |
-| `all_close: false` on both `sim` and `npu` | `precision` | `all_fail` |
-| `aicore error` in logs / CCE file referenced | `aicore` | `kernel_ok_npu_only` or `all_fail` |
-| Host segfault / stack trace | `host_crash` | `all_fail` |
-| Workspace overlap suspected (output corruption w/o all-zeros) | `workspace_overlap` | `kernel_ok_npu_only` |
-| OOM / `rtMalloc failed` | `oom` | `kernel_ok_npu_only` |
-| `L0A/L0B/L0C/L1 size exceeded`, `tile align`, `tile shape not set`, `enable_split_k` error, or lint OL48 flagged `pypto.set_cube_tile_shapes` misuse | `tile_shape` | `kernel_ok_npu_only` |
-| Runner `status: "ERROR"` (missing module symbol in impl, malformed YAML, missing `<op>_module<suffix_k>_golden`) | `structure` | `all_fail` |
-| Layout check exit 1 (non-tile-shape) | `layout` | `all_fail` |
-| Anything else | `other` | `all_fail` |
+| Observed failure | `failure_category` |
+|---|---|
+| `detailed_tensor_compare` `all_close: false` on the NPU | `precision` |
+| `aicore error` in logs / CCE file referenced | `aicore` |
+| Host segfault / stack trace | `host_crash` |
+| Workspace overlap suspected (output corruption w/o all-zeros) | `workspace_overlap` |
+| OOM / `rtMalloc failed` | `oom` |
+| `L0A/L0B/L0C/L1 size exceeded`, `tile align`, `tile shape not set`, `enable_split_k` error, or lint OL48 flagged `pypto.set_cube_tile_shapes` misuse | `tile_shape` |
+| Runner `status: "ERROR"` (missing module symbol in impl, malformed YAML, missing `<op>_module<suffix_k>_golden`) | `structure` |
+| Layout check exit 1 (non-tile-shape) | `layout` |
+| Anything else | `other` |
 
 ```
 Phase M_k FAILED for M_k. failure_category: <category>.

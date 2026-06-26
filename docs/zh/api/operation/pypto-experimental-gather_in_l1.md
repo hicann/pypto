@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -34,6 +34,7 @@ gather_in_l1(src: Tensor, indices: Tensor, block_table: Tensor, block_size: int,
 ## 返回值说明
 
 返回输出Tensor
+
 
 ## 调用示例
 

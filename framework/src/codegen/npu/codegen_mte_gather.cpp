@@ -54,7 +54,7 @@ std::string CodeGenOpNPU::PrintGatherInL1TileTensor() const
 
 std::string CodeGenOpNPU::GenGatherInL1() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintGatherInL1TileTensor();
     }
     const DataType dstDtype = operandDtype[ID0];
@@ -283,7 +283,7 @@ std::string CodeGenOpNPU::PrintGatherLayout() const
 
 std::string CodeGenOpNPU::GenGatherOp() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintGatherLayout();
     }
     if (isDynamicFunction) {
@@ -403,7 +403,7 @@ std::string CodeGenOpNPU::PrintGatherInUBDynamicUnaligned() const
 
 std::string CodeGenOpNPU::GenGatherInUB() const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintGatherInUBLayout();
     }
     if (isDynamicFunction) {

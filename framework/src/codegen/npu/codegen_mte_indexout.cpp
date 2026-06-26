@@ -99,7 +99,7 @@ std::string CodeGenOpNPU::GenIndexOutCastOp() const
 
 std::string CodeGenOpNPU::PrintIndexOutCast(const PrintIndexOutCastParam& param) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintIndexOutCastTileTensor();
     }
     if (isSupportDynamicAligned) {

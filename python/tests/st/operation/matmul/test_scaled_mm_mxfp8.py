@@ -180,7 +180,7 @@ def _process_scale_tensors(scale_a_cpu, scale_b_cpu, config):
 
 def prepare_inputs(config: ScaledMMConfig, device_id: int):
     m, k, n = config.ori_shape
-
+    output_m, output_n = config.output_shape
     a_shape = [k, m] if config.a_trans else [m, k]
     b_shape = [n, k] if config.b_trans else [k, n]
 
@@ -197,7 +197,7 @@ def prepare_inputs(config: ScaledMMConfig, device_id: int):
     scale_a_cpu = torch.rand(scale_a_shape, dtype=torch.float32).uniform_(0, 1).to(torch.float8_e8m0fnu)
     scale_b_cpu = torch.rand(scale_b_shape, dtype=torch.float32).uniform_(0, 1).to(torch.float8_e8m0fnu)
 
-    bias_cpu = torch.rand([1, n], dtype=torch.float32).uniform_(-3, 3) if config.has_bias else None
+    bias_cpu = torch.rand([1, output_n], dtype=torch.float32).uniform_(-3, 3) if config.has_bias else None
     scale_a_tmp, scale_b_tmp = _process_scale_tensors(scale_a_cpu, scale_b_cpu, config)
 
     mat_b_tmp = mat_b_cpu.to(torch.float32).T if config.b_trans else mat_b_cpu.to(torch.float32)
@@ -209,8 +209,11 @@ def prepare_inputs(config: ScaledMMConfig, device_id: int):
     mat_a_tmp = mat_a_tmp * scale_a_tmp
 
     golden = torch.matmul(mat_a_tmp, mat_b_tmp)
+    padding_m = abs(output_m - m)
+    padding_n = abs(output_n - n)
+    golden = F.pad(golden, ((0, padding_n, 0, padding_m)), "constant")
     if config.has_bias:
-        golden = golden + bias_cpu.to(golden.dtype).repeat_interleave(m, dim=0)
+        golden = golden + bias_cpu.to(golden.dtype).repeat_interleave(output_m, dim=0)
 
     out_torch_dtype = ScaledMMConfig.pto_to_torch(config.out_dtype)
     golden = golden.to(out_torch_dtype)
@@ -239,8 +242,9 @@ def run_scaled_mm_test(case: dict):
     inputs = prepare_inputs(config, device_id)
 
     m, n = config.ori_shape[0], config.ori_shape[2]
+    output_m, output_n = config.output_shape
     out_torch_dtype = ScaledMMConfig.pto_to_torch(config.out_dtype)
-    out_npu = torch.zeros([m, n], dtype=out_torch_dtype, device=f"npu:{device_id}")
+    out_npu = torch.zeros([output_m, output_n], dtype=out_torch_dtype, device=f"npu:{device_id}")
 
     if config.has_bias:
         scaled_mm_kernel_with_bias(inputs.a_npu, inputs.b_npu, out_npu,

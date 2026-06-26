@@ -27,7 +27,9 @@ constexpr int DAV3510_START_CPU_ID = 3;
 constexpr int MAX_CPU_MASK_NUM = 16;
 
 enum ArbitrationLevel : int {
+    LEVEL_ARBITRATING = -2, // 仲裁线程已选出，仲裁结果尚未发布
     LEVEL_FAILED = -1,     // 资源完全不足，分配失败
+    LEVEL_UNSET = 0,       // 仲裁尚未发布
     LEVEL_CROSS_DIE = 1,   // 跨 die 分配
     LEVEL_SAME_DIE = 2,    // 同 die 分配
     LEVEL_OPTIMAL = 3      // 同 die 同 cluster
@@ -57,17 +59,23 @@ struct DieMaskInfo {
     }
 };
 
-inline int WaitForCpuMaskReadyForArbitration(DeviceArgs* devArgs, int targetVal, std::atomic<uint64_t>& mask)
+inline uint64_t GetArbitTimeOutVal()
 {
-    uint64_t arbit_timeout = TIMEOUT_A5_50US;
+    uint64_t arbitTimeout = TIMEOUT_A5_50US;
     DEV_IF_DEBUG {
-        arbit_timeout = TIMEOUT_A5_20MIN;
+        arbitTimeout = TIMEOUT_A5_20MIN;
     }
     DEV_IF_INFO {
-        arbit_timeout = TIMEOUT_A5_20MIN;
+        arbitTimeout = TIMEOUT_A5_20MIN;
     }
 
-    TIMEOUT_CHECK_INIT(devArgs->archInfo, arbit_timeout);
+    return arbitTimeout;
+}
+
+inline int WaitForCpuMaskReadyForArbitration(DeviceArgs* devArgs, int targetVal, std::atomic<uint64_t>& mask)
+{
+    uint64_t arbitTimeout = GetArbitTimeOutVal();
+    TIMEOUT_CHECK_INIT(devArgs->archInfo, arbitTimeout);
     (void) timeout_map;
 
     while (__builtin_popcount(static_cast<uint32_t>(mask.load(std::memory_order_acquire))) < targetVal) {
@@ -77,7 +85,7 @@ inline int WaitForCpuMaskReadyForArbitration(DeviceArgs* devArgs, int targetVal,
     return DEVICE_MACHINE_OK;
 }
 
-inline int PerformArbitrationDav3510(DeviceArgs* devArgs, std::atomic<uint64_t>& cpumask)
+inline int ComputeArbitrationLevel(DeviceArgs* devArgs, std::atomic<uint64_t>& cpumask)
 {
     int die0CpuNum = static_cast<int>(devArgs->die0MaxCpuid) - DAV3510_START_CPU_ID + 1;
     int die0MaxCpuNum = ((die0CpuNum + DAV3510_CPUS_PER_CLUSTER - 1) /
@@ -102,6 +110,39 @@ inline int PerformArbitrationDav3510(DeviceArgs* devArgs, std::atomic<uint64_t>&
     }
 
     return LEVEL_FAILED;
+}
+
+inline int WaitForArbitrationLevel(DeviceArgs* devArgs, std::atomic<int>& globalArbitrationLevel)
+{
+    uint64_t arbitTimeout = GetArbitTimeOutVal();
+    TIMEOUT_CHECK_INIT(devArgs->archInfo, arbitTimeout);
+    (void) timeout_map;
+
+    int level = globalArbitrationLevel.load(std::memory_order_acquire);
+    while (level == LEVEL_UNSET || level == LEVEL_ARBITRATING) {
+        __PYPTO_TIMEOUT_CHECK_WARN_EXIT(return LEVEL_FAILED, "#cur alloc cpu arbitration wait failed.");
+        level = globalArbitrationLevel.load(std::memory_order_acquire);
+    }
+
+    return level;
+}
+
+/**
+ * 单线程仲裁：第一个到达的线程执行一次三级递进判定并发布全局级别，
+ * 其余线程轻量等待后读取同一结果。
+ */
+inline int PerformArbitrationDav3510(DeviceArgs* devArgs, std::atomic<uint64_t>& cpumask,
+    std::atomic<int>& globalArbitrationLevel)
+{
+    int expected = LEVEL_UNSET;
+    if (globalArbitrationLevel.compare_exchange_strong(
+        expected, LEVEL_ARBITRATING, std::memory_order_acq_rel, std::memory_order_acquire)) {
+        int level = ComputeArbitrationLevel(devArgs, cpumask);
+        globalArbitrationLevel.store(level, std::memory_order_release);
+        return level;
+    }
+
+    return WaitForArbitrationLevel(devArgs, globalArbitrationLevel);
 }
 
 inline uint64_t SelectCpusForCluster(uint64_t dieMask, int needNum)
@@ -199,7 +240,7 @@ inline int CalculateThreadIdx(int cpu, int die0ScheNum, uint64_t die0Selected, u
  * 流程步骤：
  * 1. 非设备模式或 die0MaxCpuid=0：直接递增 threadIdx（无仲裁）
  * 2. 更新 cpumask：标记当前 CPU 就绪
- * 3. 执行三级仲裁：确定分配级别
+ * 3. 单线程仲裁：第一个到达的线程计算全局级别，其余线程等待并读取
  * 4. LEVEL_FAILED：报错
  * 5. LEVEL_CROSS_DIE：退化策略，直接递增 threadIdx
  * 6. LEVEL_OPTIMAL/SAME_DIE：
@@ -210,7 +251,7 @@ inline int CalculateThreadIdx(int cpu, int die0ScheNum, uint64_t die0Selected, u
  * 
  */
 inline int AllocThreadIdxForDav3510Impl(DeviceArgs* devArgs, int cpu, int& curThreadIdx,
-    std::atomic<int>& threadIdx, std::atomic<uint64_t>& cpumask)
+    std::atomic<int>& threadIdx, std::atomic<uint64_t>& cpumask, std::atomic<int>& globalArbitrationLevel)
 {
 #ifndef __DEVICE__
     curThreadIdx = ++threadIdx;
@@ -223,7 +264,7 @@ inline int AllocThreadIdxForDav3510Impl(DeviceArgs* devArgs, int cpu, int& curTh
 
     cpumask.fetch_or(1ULL << cpu, std::memory_order_release);
     // 执行三级仲裁，确定分配级别
-    int level = PerformArbitrationDav3510(devArgs, cpumask);
+    int level = PerformArbitrationDav3510(devArgs, cpumask, globalArbitrationLevel);
     
     // 处理仲裁失败
     if (level == LEVEL_FAILED) {

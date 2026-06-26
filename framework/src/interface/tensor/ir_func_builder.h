@@ -15,30 +15,77 @@
 #include <vector>
 
 #include "ir/expr.h"
+#include "ir/function.h"
 #include "ir/stmt.h"
 
 namespace npu::tile_fwk {
 
 class Function;
 class LogicalTensor;
+class Program;
+class TensorSlotManager;
+class TensorSlotScope;
+class Tensor;
+class Operation;
 using LogicalTensorPtr = std::shared_ptr<LogicalTensor>;
 using LogicalTensors = std::vector<LogicalTensorPtr>;
 
-bool IsPureTensorOpSeq(const pypto::ir::SeqStmtsPtr& seq);
+class RootFunctionBuilder {
+public:
+    explicit RootFunctionBuilder(Function* parentFunc);
+    std::shared_ptr<Function> Build(const pypto::ir::FunctionPtr& irFunc);
 
-std::shared_ptr<Function> CreatePathFuncFromSeq(
-    const pypto::ir::SeqStmtsPtr& seq, Function& dynFunc,
-    const std::unordered_set<std::shared_ptr<LogicalTensor>>& downstreamIncastPtrs,
-    const std::unordered_set<std::string>& paramNames);
+private:
+    Program& program_;
+    Function* parentFunc_;
+    std::shared_ptr<Function> dynFunc_;
+    LogicalTensors logicalParams_;
+    std::unordered_set<int> consumedRawMagics_;
+    std::unordered_set<int> paramRawMagics_;
 
-pypto::ir::StmtPtr TransformAndBuildStmts(
-    pypto::ir::StmtPtr stmt, Function& dynFunc,
-    std::unordered_set<std::shared_ptr<LogicalTensor>>& downstreamIncastPtrs,
-    const std::unordered_set<std::string>& paramNames);
+    void InitDynFunc(const pypto::ir::FunctionPtr& irFunc);
+    void FinalizeDynFunc(const pypto::ir::FunctionPtr& irFunc);
 
-pypto::ir::StmtPtr CreateFunctionByStmt(
-    pypto::ir::StmtPtr stmt, Function& dynFunc, const std::vector<std::string>& externalVarNames);
+    pypto::ir::StmtPtr TransformBody(pypto::ir::StmtPtr stmt);
+    pypto::ir::StmtPtr TransformStmts(pypto::ir::StmtPtr stmt, const std::string& loopVarName);
+    void ReplacePlaceholders(pypto::ir::StmtPtr stmt);
 
-void BuildDynFuncSlotScope(std::shared_ptr<Function> dynFunc, const LogicalTensors& params);
+    pypto::ir::StmtPtr CreatePathFuncAndPlaceholder(
+        const pypto::ir::SeqStmtsPtr& seq, const std::string& loopVarName);
+    pypto::ir::StmtPtr FinalizePathFunc(const pypto::ir::StmtPtr& placeholder);
+
+    std::shared_ptr<Function> CreatePathFunc(
+        const pypto::ir::SeqStmtsPtr& seq, const std::string& loopVarName);
+    void ProcessTensorOp(
+        std::shared_ptr<Function> pathFunc, const pypto::ir::StmtPtr& stmt,
+        std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
+        std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs,
+        std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
+    void ComputeIncast(
+        Function& pathFunc,
+        const std::unordered_set<std::shared_ptr<LogicalTensor>>& allInputs,
+        const std::unordered_set<std::shared_ptr<LogicalTensor>>& definedOutputs);
+    void ComputeOutcast(
+        Function& pathFunc,
+        const std::unordered_set<std::shared_ptr<LogicalTensor>>& allOutputs);
+
+    void BuildDynSlotScope();
+    void BuildPathFuncSlotScope(
+        Function* pathFunc, const std::shared_ptr<TensorSlotScope>& scope,
+        const LogicalTensors& inArgumentList, const LogicalTensors& outArgumentList);
+    int FindOrCreateSlot(
+        const std::shared_ptr<LogicalTensor>& lt,
+        const std::shared_ptr<TensorSlotManager>& slotManager,
+        Function* func, bool isInput);
+
+    bool IsPureTensorOpSeq(const pypto::ir::SeqStmtsPtr& seq);
+    std::vector<std::vector<pypto::ir::StmtPtr>> SplitIntoTensorOpSegments(
+        const pypto::ir::SeqStmtsPtr& seq);
+    void CopyOpAttributes(
+        Operation& operation, const std::vector<std::pair<std::string, std::any>>& attrs);
+    bool IsPlaceholderCallStmt(const pypto::ir::StmtPtr& stmt);
+    std::string GetPlaceholderFuncname(const pypto::ir::StmtPtr& stmt);
+    std::unordered_set<std::shared_ptr<LogicalTensor>> CollectAllOutputs(Function& pathFunc);
+};
 
 } // namespace npu::tile_fwk

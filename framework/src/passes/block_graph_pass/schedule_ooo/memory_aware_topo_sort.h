@@ -59,6 +59,18 @@ struct SchedulingContext {
 };
 
 struct ScoringParams {
+    // 默认参数 (命名规范: 开头小写, 每个单词首字母大写, 以_结尾)
+    static constexpr double alpha_ = 0.7;                // 评分权重 alpha
+    static constexpr double beta_ = 0.4;                 // 评分权重 beta
+    static constexpr double criticalThreshold_ = 0.9;    // Critical 状态占用阈值
+    static constexpr double tightThreshold_ = 0.7;       // Tight 状态占用阈值
+    static constexpr double abundantThreshold_ = 0.3;    // Abundant 状态占用阈值
+    static constexpr double criticalFactor_ = 1.5;       // Critical 状态因子
+    static constexpr double tightFactor_ = 1.2;          // Tight 状态因子
+    static constexpr double normalFactor_ = 1.0;         // Normal 状态因子
+    static constexpr double abundantFactor_ = 0.5;       // Abundant 状态因子
+    static constexpr double spillFactor_ = 1.3;          // Spill 状态因子
+
     double alpha;
     double beta;
     double critical_threshold;
@@ -71,16 +83,16 @@ struct ScoringParams {
     double spill_factor;
 
     ScoringParams()
-        : alpha(0.7),
-          beta(0.4),
-          critical_threshold(0.9),
-          tight_threshold(0.7),
-          abundant_threshold(0.3),
-          critical_factor(1.5),
-          tight_factor(1.2),
-          normal_factor(1.0),
-          abundant_factor(0.5),
-          spill_factor(1.3) {}
+        : alpha(alpha_),
+          beta(beta_),
+          critical_threshold(criticalThreshold_),
+          tight_threshold(tightThreshold_),
+          abundant_threshold(abundantThreshold_),
+          critical_factor(criticalFactor_),
+          tight_factor(tightFactor_),
+          normal_factor(normalFactor_),
+          abundant_factor(abundantFactor_),
+          spill_factor(spillFactor_) {}
 };
 
 MemoryState GetMemoryState(double usage_ratio);

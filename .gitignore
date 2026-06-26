@@ -49,3 +49,11 @@ trace_*
 
 # gcov
 build_dir.json
+
+# agent
+.claude/
+.opencode/
+
+# 二进制
+*.run
+*.whl

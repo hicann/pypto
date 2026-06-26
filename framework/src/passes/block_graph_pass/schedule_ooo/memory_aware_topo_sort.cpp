@@ -23,6 +23,18 @@
 
 namespace npu::tile_fwk {
 
+// 内存状态阈值与调度权重常量
+constexpr double kLargeConstraintBaseWeight = 2.0;
+constexpr double kMediumConstraintBaseWeight = 1.0;
+constexpr double kSmallConstraintBaseWeight = 0.5;         
+constexpr double kCriticalUsageRatio = 0.9;
+constexpr double kTightUsageRatio = 0.7;
+constexpr double kNormalUsageRatio = 0.3;
+constexpr double kCriticalAdjustFactor = 1.5;       // Critical 状态调整因子
+constexpr double kTightAdjustFactor = 1.2;          // Tight 状态调整因子
+constexpr double kNormalAdjustFactor = 1.0;        // Normal/默认状态调整因子
+constexpr double kAbundantAdjustFactor = 0.5;       // Abundant 状态调整因子
+
 static ConstraintType GetConstraintType(MemoryType mem_type)
 {
     if (mem_type == MemoryType::MEM_BT) {
@@ -53,23 +65,23 @@ static double GetBaseWeight(ConstraintType constraint_type)
 {
     switch (constraint_type) {
         case ConstraintType::HardConstraint:
-            return 2.0;
+            return kLargeConstraintBaseWeight;
         case ConstraintType::SoftConstraint:
-            return 1.0;
+            return kMediumConstraintBaseWeight;
         case ConstraintType::Optional:
-            return 0.5;
+            return kSmallConstraintBaseWeight;
         default:
-            return 1.0;
+            return kMediumConstraintBaseWeight;
     }
 }
 
 MemoryState GetMemoryState(double usage_ratio)
 {
-    if (usage_ratio >= 0.9) {
+    if (usage_ratio >= kCriticalUsageRatio) {
         return MemoryState::Critical;
-    } else if (usage_ratio >= 0.7) {
+    } else if (usage_ratio >= kTightUsageRatio) {
         return MemoryState::Tight;
-    } else if (usage_ratio >= 0.3) {
+    } else if (usage_ratio >= kNormalUsageRatio) {
         return MemoryState::Normal;
     } else {
         return MemoryState::Abundant;
@@ -80,13 +92,13 @@ double CalcStateAdjustFactor(MemoryType mem_type, const SchedulingContext& conte
 {
     auto it = context.memory_pools.find(mem_type);
     if (it == context.memory_pools.end()) {
-        return 1.0;
+        return kNormalAdjustFactor;
     }
 
     const MemoryPoolContext& pool_ctx = it->second;
 
     if (pool_ctx.limit == 0) {
-        return 1.0;
+        return kNormalAdjustFactor;
     }
 
     double usage_ratio = static_cast<double>(pool_ctx.usage) / static_cast<double>(pool_ctx.limit);
@@ -94,15 +106,15 @@ double CalcStateAdjustFactor(MemoryType mem_type, const SchedulingContext& conte
 
     switch (state) {
         case MemoryState::Critical:
-            return 1.5;
+            return kCriticalAdjustFactor;
         case MemoryState::Tight:
-            return 1.2;
+            return kTightAdjustFactor;
         case MemoryState::Normal:
-            return 1.0;
+            return kNormalAdjustFactor;
         case MemoryState::Abundant:
-            return 0.5;
+            return kAbundantAdjustFactor;
         default:
-            return 1.0;
+            return kNormalAdjustFactor;
     }
 }
 

@@ -215,7 +215,7 @@ def _is_case_match_soc(item, target_soc):
     if soc_marker is None:
         supported_socs = ["910"]
     else:
-        # 解析标记中的支持版本（兼容单个/多个版本写法）
+        # 解析标记中的支持版本 (兼容单个/多个版本写法)
         supported_socs = soc_marker.args
         if isinstance(supported_socs[0], str):
             supported_socs = [soc.strip() for soc in supported_socs]

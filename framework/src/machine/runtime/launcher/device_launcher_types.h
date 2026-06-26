@@ -158,10 +158,6 @@ public:
     {
         return cachedOperator == nullptr ? nullptr : &cachedOperator->metaDataDevAddr_;
     }
-    static uint8_t** GetDynamicCellMatchDevAddrHolder(CachedOperator* cachedOperator)
-    {
-        return cachedOperator == nullptr ? nullptr : &cachedOperator->dynamicCellMatchDevAddr_;
-    }
     static void* GetBinHandleHolder(CachedOperator* cachedOperator)
     {
         return cachedOperator == nullptr ? nullptr : &cachedOperator->binHandle_;
@@ -202,7 +198,6 @@ private:
     uint8_t* workspaceDevAddr_{nullptr};
     uint8_t* cfgDataDevAddr_{nullptr};
     uint8_t* metaDataDevAddr_{nullptr};
-    uint8_t* dynamicCellMatchDevAddr_{nullptr};
     void* binHandle_{nullptr};
     std::unordered_map<OperatorTensorPara, uint8_t*, OperatorTensorParaHash> devCtrlFlowCacheMap_;
 };

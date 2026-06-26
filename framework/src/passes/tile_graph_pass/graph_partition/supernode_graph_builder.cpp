@@ -367,7 +367,6 @@ bool NodeGraphInfo::CheckUbToUbWithDynOffset(Operation& op)
 
     auto input = op.GetIOperands().empty() ? nullptr : op.GetIOperands()[0];
     auto output = op.GetOOperands().empty() ? nullptr : op.GetOOperands()[0];
-
     if (!input || !output) {
         return false;
     }
@@ -1116,10 +1115,11 @@ Status SuperNodeGraphBuilder::ProcessScopeMerge()
 uint64_t SuperNodeGraphBuilder::CombineHash(const uint64_t h1, const uint64_t h2) const
 {
     const uint64_t kMul = 0x9ddfea08eb382d69ULL;
+    constexpr int kHashShiftBits = 47; // CityHash 风格 hash mixing 的位移位数
     uint64_t a = (h1 ^ h2) * kMul;
-    a ^= (a >> 47);
+    a ^= (a >> kHashShiftBits);
     uint64_t b = (h2 ^ a) * kMul;
-    b ^= (b >> 47);
+    b ^= (b >> kHashShiftBits);
     b *= kMul;
     return b;
 }

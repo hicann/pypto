@@ -1,5 +1,11 @@
 # pypto.reciprocal
 
+## 产品支持情况
+
+- Ascend 950PR：支持
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
+
 ## 功能说明
 
 计算输入张量的元素级倒数，即`out = 1 / input`。
@@ -22,7 +28,6 @@ pypto.reciprocal(input, precision_type=pypto.PrecisionType.HIGH_PRECISION) -> Te
 | 类型 | 说明 |
 |:-----|:-----|
 | Tensor | 包含输入张量元素级倒数的新张量。 |
-
 ## 代码示例
 
 ### 示例1：基本使用

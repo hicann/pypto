@@ -76,7 +76,8 @@ public:
 
     virtual ReturnStatus ImproveSchedule(BspSchedule<GraphT> &schedule) override
     {
-        if (schedule.GetInstance().NumberOfProcessors() < 2) {
+        constexpr unsigned kMinProcessors = 2;
+        if (schedule.GetInstance().NumberOfProcessors() < kMinProcessors) {
             return ReturnStatus::OSP_BEST_FOUND;
         }
 
@@ -214,16 +215,19 @@ protected:
 
     void SetStartStep(const unsigned step, ThreadSearchContext &threadData)
     {
+        constexpr unsigned kNoImprovementIterationsIncreaseInnerIter = 10;
+        constexpr unsigned kReducePenaltyDivisor = 5;
+
         threadData.startStep_ = step;
         threadData.stepToRemove_ = step;
         threadData.stepSelectionCounter_ = step;
 
         threadData.averageGain_ = 0.0;
         threadData.maxInnerIterations_ = parameters_.maxInnerIterationsReset_;
-        threadData.noImprovementIterationsReducePenalty_ = parameters_.maxNoImprovementIterations_ / 5;
+        threadData.noImprovementIterationsReducePenalty_ = parameters_.maxNoImprovementIterations_ / kReducePenaltyDivisor;
         threadData.minInnerIter_ = parameters_.minInnerIterReset_;
         threadData.stepSelectionEpochCounter_ = 0;
-        threadData.noImprovementIterationsIncreaseInnerIter_ = 10;
+        threadData.noImprovementIterationsIncreaseInnerIter_ = kNoImprovementIterationsIncreaseInnerIter;
         threadData.unlockEdgeBacktrackCounterReset_ = 0;
         threadData.unlockEdgeBacktrackCounter_ = threadData.unlockEdgeBacktrackCounterReset_;
         threadData.maxNoVioaltionsRemovedBacktrack_ = parameters_.maxNoVioaltionsRemovedBacktrackReset_;

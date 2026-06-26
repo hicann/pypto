@@ -2,7 +2,7 @@
 
 ## 产品支持情况
 
-- Ascend 950PR/Ascend 950DT：支持
+- Ascend 950PR：支持
 - Atlas A3 训练系列产品/Atlas A3 推理系列产品：支持
 - Atlas A2 训练系列产品/Atlas A2 推理系列产品：支持
 
@@ -35,6 +35,7 @@ hypot(input: Tensor, other: Tensor) -> Tensor
 
 1. input和other都为Tensor时，数据类型应该相同。
 2. 对于BF16和FP16类型，内部计算可能会提升精度以避免中间溢出。
+
 
 ## 调用示例
 

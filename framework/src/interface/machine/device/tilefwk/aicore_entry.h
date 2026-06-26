@@ -48,6 +48,7 @@ INLINE uint32_t WaitWaveSignal(__gm__ KernelArgs* args);
 INLINE void Trap()
 {
 #if IS_AICORE
+    pipe_barrier(PIPE_ALL);
     trap();
 #endif
 }
@@ -158,7 +159,6 @@ INLINE uint32_t GetNextLeafTask(uint32_t lastTaskIdx)
         nextLowIdx = GetLeafTaskId();
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_LEAF_TASK_WAIT_TIMEOUT)) {
-            Trap();
             return AICORE_TASK_ABNORMAL_STOP;
         }
     } while (nextLowIdx == lastTaskIdx);
@@ -174,7 +174,7 @@ INLINE uint32_t GetRegHighValue(__gm__ KernelArgs* args, uint32_t lastHighRegVal
     do{
         regValue = GetDataMainBase();
         highRegVal = (uint32_t)(regValue >> REG_HIGH_DTASKID_SHIFT);
-        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GET_LEAF_HIGHREG_TIMEOUT, STAGE_GET_HIGH_REG_TIMEOUT, AICORE_TASK_ABNORMAL_STOP);
+        AICORE_TIMEOUT_CHECK_RETURN(t0, loop_count, AICORE_GET_LEAF_HIGHREG_TIMEOUT, STAGE_GET_HIGH_REG_TIMEOUT, 0);
     } while (highRegVal == 0 || lastHighRegValue == highRegVal);
     return highRegVal;
 }
@@ -503,7 +503,7 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(__gm__ KernelArgs *args, Exec
 INLINE uint32_t RefreshParallelDevTask(__gm__ KernelArgs *args, ExecuteContext *ctx, __gm__ Metrics* metric, uint32_t &lastRegHighVal)
 {
     uint32_t newRegHighVal = GetRegHighValue(args, lastRegHighVal);
-    if (newRegHighVal == AICORE_TASK_ABNORMAL_STOP) {
+    if (newRegHighVal == 0) {
         return AICORE_TASK_ABNORMAL_STOP;
     }
 
@@ -583,6 +583,7 @@ INLINE void KernelEntry(
         }
         if (curTaskIdx == AICORE_TASK_ABNORMAL_STOP) {
             SetLastWordStatus(args, STAGE_GET_NEXT_TASK_TIMEOUT);
+            Trap();
             return;
         }
 

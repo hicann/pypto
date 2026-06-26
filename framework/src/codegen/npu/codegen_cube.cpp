@@ -80,7 +80,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(bool isAcc) const
 
 std::string CodeGenOpNPU::GenCubeOp(bool zeroC) const
 {
-    if (isSupportLayout) {
+    if (isSupportTileTensor) {
         return PrintMatmulTileTensor(!zeroC);
     }
 

@@ -21,6 +21,7 @@
 #include "interface/function/function.h"
 #include "machine/utils/dynamic/dev_encode_program.h"
 #include "machine/utils/dynamic/dev_encode_tensor.h"
+#include "machine/utils/machine_ws_intf.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -43,5 +44,28 @@ void RefillDynamicMemBudgets(
 
 std::vector<DevDynamicCellMatchStridePatch> PrepareHostDynamicCellMatchForLaunch(
     DyndevFunctionAttribute& dynAttr, Evaluator& eval, DevAscendProgram* hostDevProg);
+
+template <typename MemoryHelperTy>
+inline void PatchRuntimeDynamicCellMatchMeta(
+    MemoryHelperTy& memoryHelper, DevAscendProgram* hostProg, DeviceKernelArgs& kArgs)
+{
+    if (hostProg == nullptr) {
+        return;
+    }
+    uint64_t dynamicCellMatchBytes = hostProg->memBudget.metadata.dynamicCellMatch;
+    if (dynamicCellMatchBytes == 0) {
+        hostProg->devArgs.dynamicCellMatchAddr = 0;
+        hostProg->devArgs.dynamicCellMatchCapacity = 0;
+        kArgs.runtimeDynamicCellMatchAddr = 0;
+        kArgs.runtimeDynamicCellMatchCapacity = 0;
+        return;
+    }
+    uint8_t* dynamicCellMatchAddr = memoryHelper.AllocDev(dynamicCellMatchBytes, nullptr);
+    uint64_t dynamicCellMatchAddrU64 = reinterpret_cast<uint64_t>(dynamicCellMatchAddr);
+    hostProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
+    hostProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
+    kArgs.runtimeDynamicCellMatchAddr = dynamicCellMatchAddrU64;
+    kArgs.runtimeDynamicCellMatchCapacity = dynamicCellMatchBytes;
+}
 
 } // namespace npu::tile_fwk::dynamic

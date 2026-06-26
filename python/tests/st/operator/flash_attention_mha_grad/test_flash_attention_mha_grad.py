@@ -71,7 +71,7 @@ def get_device_id():
 
 @pytest.fixture(scope="module")
 def device():
-    device_id = get_device_id()
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     if device_id is None:
         pytest.skip("TILE_FWK_DEVICE_ID not set")
     torch.npu.set_device(device_id)
@@ -169,11 +169,9 @@ def _default_tile_config():
 
 
 def _setup_device():
-    device_id = get_device_id()
-    if device_id is None:
-        return None, None
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
-    return f'npu:{device_id}', device_id
+    return f'npu:{device_id}'
 
 
 def _log_case(batch_size, num_heads, s1_size, s2_size, dim, hidden_dim, scale,
@@ -256,14 +254,10 @@ def _verify_precision(dq_out, dk_out, dv_out, dq_golden, dk_golden, dv_golden):
         npu_np = npu_tensor.float().cpu().numpy()
         golden_np = golden_tensor.float().cpu().numpy()
         max_diff = np.abs(npu_np - golden_np).max()
-        try:
-            assert_allclose(npu_np, golden_np, rtol=rtol, atol=atol)
-            logging.info(f"  {name}: PASSED (max_diff={max_diff:.6f}, rtol={rtol}, atol={atol})")
-        except AssertionError as e:
-            logging.info(f"  {name}: FAILED (max_diff={max_diff:.6f}, rtol={rtol}, atol={atol})")
-            logging.info(f"    {e}")
-            passed = False
-    logging.info(f"  {'PASSED' if passed else 'FAILED'}")
+        
+        assert_allclose(npu_np, golden_np, rtol=rtol, atol=atol)
+        logging.info(f"  {name}: PASSED (max_diff={max_diff:.6f}, rtol={rtol}, atol={atol})")
+
     return passed
 
 
@@ -271,9 +265,7 @@ def run_test(batch_size=None, num_heads=None, s1_size=None,
              s2_size=None, dim=None, tile_config=None,
              q_seqlens=None, kv_seqlens=None):
     """运行单个测试用例: 构造输入 → 调用 kernel → 与 golden 对比。"""
-    device, device_id = _setup_device()
-    if device is None:
-        return None
+    device = _setup_device()
 
     batch_size, num_heads, s1_size, s2_size, dim, q_seqlens, kv_seqlens = \
         _resolve_params(batch_size, num_heads, s1_size, s2_size, dim, q_seqlens, kv_seqlens)

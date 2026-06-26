@@ -16,6 +16,8 @@
 #ifndef PASS_SUGGRAPH_TO_FUNCTION_H_
 #define PASS_SUGGRAPH_TO_FUNCTION_H_
 
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "passes/pass_interface/pass.h"
 #include "interface/operation/opcode.h"
@@ -107,6 +109,7 @@ private:
     std::vector<Function*> mergedFuncList;
     std::multimap<int, int> psgToESgMap;
     std::vector<SubfuncInvokeInfoTy> subFuncInvokeInfos;
+    std::unordered_set<int> mixSubgraphIds_;
     std::unordered_map<const Operation*, std::shared_ptr<OpAttribute>> viewToCopyInMapping_;
     static constexpr int kShapePlaceholderForParameterized = -2;
 };

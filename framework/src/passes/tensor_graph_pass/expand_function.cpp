@@ -74,6 +74,7 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
     auto& newOp = PassOperationUtils::AddOperation(function, op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), nullptr, ir::Span::Unknown(), false);
     newOp.SetOpAttribute(op.GetOpAttribute());
     newOp.SetScopeInfo(op.GetScopeInfo());
+    newOp.SetOooScopeId(op.GetOooScopeId());
     newOp.CopyAttrFrom(op, OP_EMUOP_PREFIX);
     if (op.HasAttribute(OpAttributeKey::inplaceIdx)) {
         newOp.SetAttribute(OpAttributeKey::inplaceIdx, op.GetIntAttribute(OpAttributeKey::inplaceIdx));
@@ -233,8 +234,10 @@ Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const
         static_cast<int64_t>(info.scopeId), static_cast<int64_t>(info.allowParallelMerge),
         static_cast<int64_t>(info.allowCrossScopeMerge)};
     config::SetPassOption(SG_SET_SCOPE, scopeVec);
+    config::SetPassOption(SG_SET_OOO_SCOPE, std::vector<int64_t>{static_cast<int64_t>(op.GetOooScopeId())});
     ExpandOperationInto(function, op.GetTileShape(), op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), op);
     config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});
+    config::SetPassOption(SG_SET_OOO_SCOPE, std::vector<int64_t>{-1});
     return SUCCESS;
 }
 

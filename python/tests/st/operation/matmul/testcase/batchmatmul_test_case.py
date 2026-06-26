@@ -22,6 +22,7 @@ import torch
 class BatchMatmulConfig:
     a_shape: list
     b_shape: list
+    out_shape: list
     tile_shape: tuple[list, list, list]
     view_shape: list
     out_dtype: pypto.DataType
@@ -30,8 +31,8 @@ class BatchMatmulConfig:
     b_trans: bool = False
     is_acc: bool = False
     dim: int = 3
-    a_format: str = "ND"
     b_format: str = "ND"
+    a_format: str = "ND"
 
     DTYPE_CONFIG = {
         "DT_FP16": {"pto": pypto.DT_FP16, "torch": torch.float16, "atol": 1e-3, "rtol": 1e-3},
@@ -46,6 +47,7 @@ class BatchMatmulConfig:
         return cls(
             a_shape=case["a_shape"],
             b_shape=case["b_shape"],
+            out_shape=case["out_shape"],
             tile_shape=tuple(case["tileshape"]),
             view_shape=case["viewshape"],
             out_dtype=cls.DTYPE_CONFIG[case["c_dtype"]]["pto"],
@@ -92,6 +94,7 @@ BASIC_3D_TESTS = [
         "desc": "FP16 3D NZ输入FP32输出",
         "a_shape": [5, 215, 251],
         "b_shape": [5, 251, 451],
+        "out_shape": [5, 215, 451],
         "dim": 3,
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
@@ -109,8 +112,9 @@ BASIC_3D_TESTS = [
         "id": "3DACCTEST2",
         "name": "int8_3d_nd_out_fp16_trans_a",
         "desc": "INT8 3D NZ ND 输入INT8输出+A转置",
-        "a_shape": [4, 256, 128],
+        "a_shape": [4, 256, 129],
         "b_shape": [4, 256, 399],
+        "out_shape": [4, 160, 399],
         "dim": 3,
         "a_dtype": "DT_INT8",
         "b_dtype": "DT_INT8",
@@ -132,8 +136,9 @@ BASIC_4D_TESTS = [
         "id": "4DACCTEST1",
         "name": "fp16_4d_nz_out_fp32",
         "desc": "FP16 4D NZ输入FP32输出",
-        "a_shape": [5, 4, 128, 192],
-        "b_shape": [5, 4, 192, 288],
+        "a_shape": [5, 4, 127, 192],
+        "b_shape": [5, 4, 192, 289],
+        "out_shape": [5, 4, 128, 304],
         "dim": 4,
         "a_dtype": "DT_FP16",
         "b_dtype": "DT_FP16",
@@ -153,6 +158,7 @@ BASIC_4D_TESTS = [
         "desc": "INT8 4D ND输入INT8输出+A转置",
         "a_shape": [4, 3, 312, 165],
         "b_shape": [4, 3, 312, 145],
+        "out_shape": [4, 3, 165, 145],
         "dim": 4,
         "a_dtype": "DT_INT8",
         "b_dtype": "DT_INT8",

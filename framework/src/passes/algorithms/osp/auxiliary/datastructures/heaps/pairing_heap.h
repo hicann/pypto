@@ -428,13 +428,14 @@ private:
             return heapList.empty() ? nullptr : heapList[0];
         }
 
+        constexpr size_t kPairSize = 2; // Number of sibling heaps to merge in each pair
         // Merge pairs from left to right
         std::vector<Node *> mergedHeaps;
-        mergedHeaps.reserve((heapList.size() + 1) / 2);
-        for (size_t i = 0; i + 1 < heapList.size(); i += 2) {
+        mergedHeaps.reserve((heapList.size() + 1) / kPairSize);
+        for (size_t i = 0; i + 1 < heapList.size(); i += kPairSize) {
             mergedHeaps.push_back(Meld(heapList[i], heapList[i + 1]));
         }
-        if (heapList.size() % 2 == 1) {
+        if (heapList.size() % kPairSize == 1) {
             mergedHeaps.push_back(heapList.back());
         }
 

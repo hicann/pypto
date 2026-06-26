@@ -87,6 +87,7 @@ public:
     LogicalTensorPtr NextVersion(Function& func, std::vector<ir::VarPtr>& tokens) const;
 
     ir::VarPtr Clone() const override;
+    ir::VarPtr Clone(bool shareRawTensor) const;
 
     Function& BelongFunction() { return *function_; }
     const Function& BelongFunction() const { return *function_; }

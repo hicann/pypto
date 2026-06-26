@@ -38,6 +38,8 @@ namespace {
 // ===== 工具: OpImmediate / 形状抽取 =====
 
 constexpr int64_t kInvalidCoord = INT64_MIN;
+constexpr int kCopyUbGeometryDimCount = 2;   // CopyUb 几何始终为 2D (M, N)
+constexpr int kMinDualDstPairCount = 2;      // DualDst 融合至少需要 2 个可配对的 copyUb
 
 int64_t SpecifiedInt(const OpImmediate& imm)
 {
@@ -96,13 +98,13 @@ bool ReadGeometry(Operation* op, CopyUbGeometry& g)
     if (attr == nullptr) return false;
 
     const auto& fromOff = attr->GetFromOffset();
-    if (fromOff.size() != 2) return false;
+    if (fromOff.size() != kCopyUbGeometryDimCount) return false;
     g.fromM = SpecifiedInt(fromOff[0]);
     g.fromN = SpecifiedInt(fromOff[1]);
     if (g.fromM == kInvalidCoord || g.fromN == kInvalidCoord) return false;
 
     const auto& shape = attr->GetShape();
-    if (shape.size() != 2) return false;
+    if (shape.size() != kCopyUbGeometryDimCount) return false;
     g.tileM = SpecifiedInt(shape[0]);
     g.tileN = SpecifiedInt(shape[1]);
     if (g.tileM <= 0 || g.tileN <= 0) return false;
@@ -133,8 +135,8 @@ bool OoOScheduler::IsDualDstAlloc(Operation* allocOp)
     // switch off 时 RunDualDstFuse 直接 return, 不会生成任何 OP_L0C_COPY_UB_DUAL_DST,
     // 此函数恒返回 false。提前 short-circuit, 避免走 GetSuccessors -> succ->GetOpcode()
     // 这条路径 —— 主线 spill 调用 Function::EraseOperations(false, false) 之后,
-    // depManager_ 内部 outGraph_ 仍保留指向已释放 Operation 的悬挂指针 (见本文件下方
-    // TODO dualdst-dep-cleanup), 解引用就是 heap-use-after-free。
+    // depManager_ 内部 outGraph_ 仍保留指向已释放 Operation 的悬挂指针
+    // 解引用就是 heap-use-after-free。
     if (!enableDualDst_) return false;
     if (allocOp == nullptr) return false;
     auto it = opIsAllocMap.find(allocOp);
@@ -189,7 +191,7 @@ void OoOScheduler::EraseFromOrderedOps(Operation* op)
     opCoreLocationMap.erase(op);
     opReqMemIdsMap.erase(op);
     inOutOperandsCache_.erase(op);
-    // TODO(dualdst-dep-cleanup): 还有两处 DepManager 内部 map 的残留无法在此清理:
+    // 还有两处 DepManager 内部 map 的残留无法在此清理:
     //   1) inGraph_ / outGraph_ 的 key 条目: RemoveDependency 只 erase set 内元素,
     //      不删 outer map 的 KEY。fuse 后死 op 的 key 留空 set,等 EraseOperations
     //      物理析构 Operation 后,key 变悬挂指针 (不被解引用所以暂安全)。
@@ -223,7 +225,7 @@ constexpr int kMaxConsumerSearchDepth = 16;
 // 导致 DualDstProcess 不能把"第一个" consumer 标到 AIV0/AIV1。沿 consumer 链下行
 // 寻找第一个被 DualDstProcess 标到 AIV0/AIV1 的下游 op (通常是 chain 末端 COPY_OUT
 // 或被 core_assign 拆分到的末端 task), 让长 vec chain 也能被 dualdst 识别。
-//
+
 // 限制: 单链 (每个中间 op 只 1 个 consumer) + 最多向下走 kMaxConsumerSearchDepth 步,
 // 避免环 / 分叉。
 CoreLocationType ConsumerCore(Operation* copyUbOp,
@@ -294,7 +296,7 @@ bool LoadGeometries(const std::vector<Operation*>& copyUbs, std::vector<CopyUbGe
     for (size_t i = 0; i < copyUbs.size(); i++) {
         if (ReadGeometry(copyUbs[i], geos[i])) okCnt++;
     }
-    return okCnt >= 2;
+    return okCnt >= kMinDualDstPairCount;
 }
 
 // O(n²) 两两判定:per-pair 校验 (ubShape / ubValidShape / tile 尺寸一致) + M/N 相邻 + consumer 核校验。
@@ -348,8 +350,8 @@ void OoOScheduler::IdentifyPairsForOneL0C(LogicalTensorPtr l0cTensor,
     APASS_LOG_INFO_F(Elements::Operation,
         "DualDst l0cTensor->GetShape().size: %zu, copyUbs.size: %zu) for L0C tensor[%d]",
         l0cTensor->GetShape().size(), copyUbs.size(), l0cTensor->GetMagic());
-    if (l0cTensor->GetShape().size() != 2) return;
-    if (copyUbs.size() < 2) return;
+    if (l0cTensor->GetShape().size() != kCopyUbGeometryDimCount) return;
+    if (copyUbs.size() < kMinDualDstPairCount) return;
 
     std::vector<CopyUbGeometry> geos;
     if (!LoadGeometries(copyUbs, geos)) return;
@@ -487,7 +489,7 @@ void OoOScheduler::SetDualDstCopyAttr(Operation* C, LogicalTensorPtr l0cIn,
     // 其余字段沿用 attrE,dstValidShape 由 realShape 派生。
     auto eShapeImms = attrE->GetShape();
     auto lShapeImms = attrL->GetShape();
-    if (eShapeImms.size() != 2 || lShapeImms.size() != 2) {
+    if (eShapeImms.size() != kCopyUbGeometryDimCount || lShapeImms.size() != kCopyUbGeometryDimCount) {
         APASS_LOG_WARN_F(Elements::Operation,
             "DualDst SetCopyAttr: expect 2D shape, got E=%zu L=%zu",
             eShapeImms.size(), lShapeImms.size());
@@ -551,7 +553,7 @@ void OoOScheduler::RewireEdgesForFusedOp(Operation* opEarly, Operation* opLate,
     rewireInOut(opEarly);
     rewireInOut(opLate);
 
-    // TODO(dualdst-dep-cleanup): 当前 B 是 ALLOC,pred 恒空,succ 仅含 opLate
+    // 当前 B 是 ALLOC,pred 恒空,succ 仅含 opLate
     // 已在 rewireInOut(opLate) 的 pred 循环里被摘;下面两个循环实际不动任何边。
     // 保留为防御性代码,避免未来 dep 拓扑变化导致 B 有别的边时漏清理。
     // 评估稳定后可直接删除这 4 行。

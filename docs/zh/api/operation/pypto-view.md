@@ -36,6 +36,7 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为参数shape指定大小，若指定了valid\_shape，则真实大小为valid\_shape。若指定dtype，则会将输入按照dtype进行读取。
 
+
 ## 调用示例
 
 - 基本使用方法

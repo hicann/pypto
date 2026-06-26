@@ -134,6 +134,7 @@ private:
 
     void ClearRecords();
     bool HasRecords() const;
+    static bool HasCascadedPattern(Function& function);
     Status ProcessOperations(Function& function);
     Status TryRecordViewReshape(Function& function, Operation& viewOp);
     Status TryRecordReshapeAssemble(Function& function, Operation& reshapeOp);
@@ -186,6 +187,7 @@ private:
 
     static bool GetChainMatch(Operation& firstOp, Opcode secondOpcode, ChainMatch& match);
     static Operation* GetPrecedingViewOp(Operation& reshapeOp);
+    static Operation* GetFollowingAssembleOp(Operation& reshapeOp);
     static bool ValidateChainShapes(const ChainMatch& match);
     static bool BuildAxisPlan(
         const std::vector<int64_t>& srcShape, const std::vector<int64_t>& dstShape, std::vector<AxisGroup>& axisPlan);

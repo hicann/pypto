@@ -196,21 +196,6 @@ struct ShmemSetAttr {
     SymbolicScalar ownerRank;
 };
 
-struct MoeDispatchAttr {
-    std::string extraTemplateParam{};
-    int64_t topK = 0;
-    SymbolicScalar ownerRank;
-};
-
-struct MoeCombineAttr {
-    int64_t setType = 0;
-    int64_t topK = 0;
-    int64_t paddedColShape{0};
-    int64_t rowOffset{-1};
-    int64_t rowShape{-1};
-    SymbolicScalar ownerRank;
-};
-
 inline int GetTotalTileNum(const std::array<int, MAX_DIST_DIM_SIZE>& tile)
 {
     return tile[static_cast<size_t>(TileIndex::HEAD_NUM)] +

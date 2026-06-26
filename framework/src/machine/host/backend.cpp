@@ -1169,7 +1169,7 @@ static bool RunCompileAicoreKernelStage(
         return true;
     }
     int ret = CompileAICoreKernel(
-        leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), kernelPath);
+        leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), function->GetOriginalRawName(), kernelPath);
     if (ret != 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile dynamic aicore.o failed.");
         return false;
@@ -1220,7 +1220,7 @@ static void RunEncodeStage(
         funcBin->Reloc(-reinterpret_cast<int64_t>(funcBin), true);
         uint32_t CallOpmaxSize = MAX_STITCH_LEAFFUNC_NUM;
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, CallOpmaxSize <= STITCH_FUNCTION_MAX_SIZE)
-            << " CallOpmaxSize set: " << CallOpmaxSize << "exceeds the maximum allowed value of 65535.";
+            << " CallOpmaxSize : " << CallOpmaxSize << "exceeds the maximum allowed value of 65535.";
         if (funcBin->GetOperationSize() > CallOpmaxSize) {
             OverCallOpMaxNum(devRoot, funcBin);
         }

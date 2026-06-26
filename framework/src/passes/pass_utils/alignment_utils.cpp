@@ -46,6 +46,7 @@ int64_t AlignmentUtils::GetLastDimAlignBase(const LogicalTensorPtr& tensor)
 
 bool AlignmentUtils::IsLastDim32BAligned(const LogicalTensorPtr& tensor)
 {
+    constexpr int64_t k32BAlignmentBytes = 32; // 32B 对齐粒度
     if (!IsValidForLastDimCheck(tensor)) {
         return false;
     }
@@ -57,7 +58,7 @@ bool AlignmentUtils::IsLastDim32BAligned(const LogicalTensorPtr& tensor)
     if (lastDim <= 0) {
         return false;
     }
-    return ((lastDim * bytes) % 32) == 0;
+    return ((lastDim * bytes) % k32BAlignmentBytes) == 0;
 }
 
 int64_t AlignmentUtils::Pad(int64_t dim, int64_t padValue)

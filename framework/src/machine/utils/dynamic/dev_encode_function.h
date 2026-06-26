@@ -96,6 +96,7 @@ public:
     // total memory requirement of non-root-incast/outcast raw tensors
     uint64_t rootInnerTensorWsMemoryRequirement{0};
     uint64_t exclusiveOutcastWsMemoryRequirement{0};
+    uint32_t unrollTimes{1};
 
     uint32_t GetMaxC() const { return maxC_; }
     uint32_t GetMaxV() const { return maxV_; }

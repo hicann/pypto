@@ -354,6 +354,8 @@ VertexIdxT<GraphTIn> Sarkar<GraphTIn, GraphTOut>::AllChildrenContraction(
     std::vector<std::vector<VertexIdxT<GraphTIn>>> &expansionMapOutput) const
 {
     using VertexType = VertexIdxT<GraphTIn>;
+    constexpr int kMinOutDegreeForContraction = 2;
+        
     expansionMapOutput.clear();
 
     const std::vector<VertexIdxT<GraphTIn>> vertexPoset = GetTopNodeDistance<GraphTIn, VertexIdxT<GraphTIn>>(graph);
@@ -366,7 +368,7 @@ VertexIdxT<GraphTIn> Sarkar<GraphTIn, GraphTOut>::AllChildrenContraction(
     std::set<std::pair<long, VertexType>, decltype(cmp)> vertPriority(cmp);
 
     for (const VertexType &groupHead : graph.Vertices()) {
-        if (graph.OutDegree(groupHead) < 2) {
+        if (graph.OutDegree(groupHead) < kMinOutDegreeForContraction) {
             continue;
         }
 

@@ -302,7 +302,6 @@ Status ProcessAtomic::CheckAndSetRmwAttr(Operation& producerOp, AtomicRMWMode rm
     bool hasAdd = producerOp.HasAttr(RMW_MODE_ATTR_ADD);
     bool hasMax = producerOp.HasAttr(RMW_MODE_ATTR_MAX);
     bool hasMin = producerOp.HasAttr(RMW_MODE_ATTR_MIN);
-
     if (!hasAdd && !hasMax && !hasMin) {
         producerOp.SetAttribute(rmwAttrKey, 1L);
         return SUCCESS;

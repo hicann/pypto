@@ -1185,15 +1185,20 @@ Status OoOScheduler::UpdateSpillOpDepend(Operation* spillOp, LogicalTensorPtr ne
         if (!opIsRetiredMap[succOp]) {
             auto& reqMemIds = opReqMemIdsMap[succOp];
             if (std::count(reqMemIds.begin(), reqMemIds.end(), spillMemId) > 0) {
-                UpdateOperationInput(succOp, spillOp, newTensor);
+                UpdateOperationInput(succOp, spillOp, newTensor, spillMemId);
             }
         }
     }
     return SUCCESS;
 }
 
-void OoOScheduler::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr newTensor) {
+void OoOScheduler::UpdateOperationInput(Operation* targetOp, Operation* spillOp, LogicalTensorPtr newTensor,
+    int spillMemId) {
     for (size_t index = 0; index < targetOp->GetIOperands().size(); index++) {
+        // 按 memId 锁定被 spill 的输入：多输出 op 各输出共用生产者，只按生产者匹配会误顶其它输出致断图。
+        if (targetOp->GetIOperands()[index]->memoryrange.memId != spillMemId) {
+            continue;
+        }
         for (auto &inOp : targetOp->GetIOperands()[index]->GetProducers()) {
             if (IsViewOp(*inOp)) {
                 Operation* op = SkipViewChain(inOp, true);
@@ -1460,7 +1465,7 @@ void OoOScheduler::UpdateSuccessorDependencies(
         }
         depManager_.RemovePredecessor(succOp, spillOp);
         depManager_.InsertPredecessor(succOp, reloadCopyin);
-        UpdateOperationInput(succOp, spillOp, reloadCopyin->GetOutputOperand(0));
+        UpdateOperationInput(succOp, spillOp, reloadCopyin->GetOutputOperand(0), spillMemId);
     }
 }
 

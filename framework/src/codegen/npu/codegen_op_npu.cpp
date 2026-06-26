@@ -311,22 +311,12 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
       }),
       distributeOps_({
           // distribute op
-          {Opcode::OP_FFN_SCHED, [this]() { return GenDistOp(); }},
-          {Opcode::OP_FFN_BATCHING, [this]() { return GenDistOp(); }},
-          {Opcode::OP_FFN_COMBINEINFO, [this]() { return GenDistOp(); }},
-          {Opcode::OP_FFN_VALIDCNT, [this]() { return GenDistOp(); }},
-          {Opcode::OP_SEND_TO_ROUTING_EXPERT, [this]() { return GenDistOp(); }},
-          {Opcode::OP_SEND_TO_SHARED_EXPERT, [this]() { return GenDistOp(); }},
-          {Opcode::OP_DISPATCH_SET_FLAG, [this]() { return GenDistOp(); }},
-          {Opcode::OP_COPY_TO_LOCAL_EXPERT, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_SET, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_PUT, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_STORE, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_SIGNAL, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_GET, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_LOAD, [this]() { return GenDistOp(); }},
-          {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, [this]() { return GenDistOp(); }},
-          {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, [this]() { return GenDistOp(); }},
       }),
       gatherScatterOps_({
           // gather/scatter op
@@ -676,7 +666,7 @@ TileTensor CodeGenOpNPU::BuildTileTensor(
 
 void CodeGenOpNPU::UpdateTileTensorInfo()
 {
-    if (!isSupportLayout) {
+    if (!isSupportTileTensor) {
         return;
     }
 
@@ -873,7 +863,7 @@ std::string CodeGenOpNPU::QueryTileTensorTypeByIdx(int paramIdx) const
 
 std::string CodeGenOpNPU::GenGmCheck() const
 {
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_DEBUG_GM_OUT_OF_BOUNDS) {
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) != CFG_RUNTIME_DEBUG_GM_OUT_OF_BOUNDS) {
         return "";
     }
 

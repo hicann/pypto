@@ -2993,13 +2993,10 @@ def uniform_golden_func(inputs: list, config: dict):
     if isinstance(key, str):
         key = int(key)
 
-    counter_0 = params.get("counter_0", 0)
-    if isinstance(counter_0, str):
-        counter_0 = int(counter_0)
     counter_1 = params.get("counter_1", 0)
     if isinstance(counter_1, str):
         counter_1 = int(counter_1)
-    counter = [counter_0, counter_1]
+    counter = [0, counter_1]
 
     def uint32(x):
         return x & 0xFFFFFFFF

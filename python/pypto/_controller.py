@@ -51,8 +51,20 @@ class Controller:
     in_function = False
 
     @classmethod
+    def init_ooo_scope_iter(cls):
+        cls._ooo_scope_iter_id = 0
+
+    @classmethod
     def next_loop_idx(cls) -> int:
         return next(cls._loop_idx_generator)
+
+    @classmethod
+    def bump_ooo_scope_iter(cls):
+        cls._ooo_scope_iter_id += 1
+
+    @classmethod
+    def get_ooo_scope_iter(cls) -> int:
+        return cls._ooo_scope_iter_id
 
     @classmethod
     def begin_function(cls):
@@ -487,11 +499,13 @@ class _LoopFunction:
             self._iter = iter
             self._begin = begin
             self._end = end
+            Controller.init_ooo_scope_iter()
 
         def __next__(self):
             scalar = self._iter.__next__()
             setattr(scalar, "_loop_begin", self._begin)
             setattr(scalar, "_loop_end", self._end)
+            Controller.bump_ooo_scope_iter()
             return scalar
 
     def __init__(self, name, loop_name, loop_range, unroll_list, submit_before_loop, parallel):

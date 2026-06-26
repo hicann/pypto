@@ -37,6 +37,9 @@ namespace npu::tile_fwk {
 // 工具函数
 // ============================================================
 
+constexpr int kMoveAdjacentSwap = 2;    
+constexpr int kMoveInsertionShift = 3;
+
 void LocalSearchSolver::TakeSnapshot(const TaskGraph& taskGraph, Snapshot& snap)
 {
     int n = static_cast<int>(taskGraph.tasks.size());
@@ -321,11 +324,13 @@ void LocalSearchSolver::InitSearchState(TaskGraph& taskGraph, double baselineCos
 
     // 预算
     // 预算：每轮 decode 次数 ≈ |B| (OP1) + n (OP2) + n*2*LS_SHIFT_RADIUS (OP3)
+    constexpr int kPatienceFloor = 4;       // 最小耐心(迭代数)下限
+    constexpr int kPatienceDivisor = 4;     // patience = maxIters / 该除数
     long long decodesPerIter = static_cast<long long>(ss.branches.size()) + static_cast<long long>(ss.n) +
                                static_cast<long long>(ss.n) * LS_SHIFT_RADIUS * 2;
     long long opsPerIter = std::max(1LL, decodesPerIter * ss.n);
     ss.maxIters = static_cast<int>(std::min(256LL, std::max(1LL, LS_BUDGET_OPS / opsPerIter)));
-    ss.patience = std::max(4, ss.maxIters / 4);
+    ss.patience = std::max(kPatienceFloor, ss.maxIters / kPatienceDivisor);
     ss.noImprove = 0;
 
     APASS_LOG_INFO_F(
@@ -380,9 +385,9 @@ bool LocalSearchSolver::RunAdjacentSwaps(TaskGraph& taskGraph, SearchState& ss, 
             ss.curPin = outPin;
             TakeSnapshot(taskGraph, ss.bestSnap);
             improved = true;
-        } else if (!IsTabu(ss, 2, i) && cost < fb.cost - LS_EPS) {
+        } else if (!IsTabu(ss, kMoveAdjacentSwap, i) && cost < fb.cost - LS_EPS) {
             fb.cost = cost;
-            fb.op = 2;
+            fb.op = kMoveAdjacentSwap;
             fb.arg = i;
             fb.pin = outPin;
             fb.topo = candTopo;
@@ -396,9 +401,10 @@ bool LocalSearchSolver::RunAdjacentSwaps(TaskGraph& taskGraph, SearchState& ss, 
 // For n > 1000 InsertionShifts is skipped to avoid excessive overhead.
 bool LocalSearchSolver::RunInsertionShifts(TaskGraph& taskGraph, SearchState& ss, Fallback& fb, bool& improved)
 {
+    constexpr int kInsertionShiftMaxTasks = 1000; // 超过该规模跳过 InsertionShifts 以约束求解耗时
     int n = ss.n;
     // Skip InsertionShifts for large graphs to bound overall solver time.
-    if (n > 1000) {
+    if (n > kInsertionShiftMaxTasks) {
         return improved;
     }
     std::vector<int> posOf(n, 0);
@@ -455,9 +461,9 @@ bool LocalSearchSolver::RunInsertionShifts(TaskGraph& taskGraph, SearchState& ss
                 posOf[ss.curTopo[pp]] = pp;
         } else {
             int arg = i * n + bestJ;
-            if (!IsTabu(ss, 3, arg) && bestJCost < fb.cost - LS_EPS) {
+            if (!IsTabu(ss, kMoveInsertionShift, arg) && bestJCost < fb.cost - LS_EPS) {
                 fb.cost = bestJCost;
-                fb.op = 3;
+                fb.op = kMoveInsertionShift;
                 fb.arg = arg;
                 fb.pin = bestJPin;
                 fb.topo = bestJTopo;
