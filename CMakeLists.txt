@@ -269,6 +269,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
         )
         install(FILES
                     framework/src/interface/function/function.h
+                    framework/src/interface/function/rebuildable_attribute.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/function
         )
         install(FILES
@@ -347,6 +348,8 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                     framework/src/interface/utils/error.h
                     framework/src/interface/utils/op_info_manager.h
                     framework/src/interface/utils/string_utils.h
+                    framework/src/interface/utils/enum_flags.h
+                    framework/src/interface/utils/entry_registrar.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/interface/utils
         )
 
@@ -417,6 +420,10 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
         install(FILES
                     framework/src/passes/pass_utils/subfunc_utils.h
                 DESTINATION ${PyPTO_WhlName}/lib/framework/src/passes/pass_utils
+        )
+        install(FILES
+                    framework/src/utils/file_utils.h
+                DESTINATION ${PyPTO_WhlName}/lib/framework/src/utils
         )
     endif ()
 
