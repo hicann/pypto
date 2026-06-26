@@ -9,9 +9,9 @@
 # Layer H (pypto_* sub-kernels), Layer I (kernel impl with pypto.loop),
 # Layer J (@pypto.frontend.jit entry), and Layer K (host wrapper).
 #
-# The torch reference (Layer A..F) lives in
-# `golden_template.py` and is owned by pypto-op-verifier
-# (scaffolding step A). The test driver (Layer L) lives in
+# The torch reference (golden) lives in `golden-template.py`,
+# the canonical golden skeleton owned by skill pypto-golden-generate
+# (used at scaffolding step A). The test driver (Layer L) lives in
 # `test_template.py` and is also owned by pypto-op-verifier
 # (scaffolding step C and cleanup E2E).
 # =============================================================================

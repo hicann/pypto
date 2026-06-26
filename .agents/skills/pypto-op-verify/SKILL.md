@@ -9,11 +9,10 @@ description: Validation runner requirements, detailed_tensor_compare usage, succ
 
 | File | Used at | Purpose |
 |------|---------|---------|
-| [`templates/golden_template.py`](templates/golden_template.py) | Golden authoring (mathematician), per-module scaffolding step A (verifier) | Layer A–F skeleton for `<op>_golden.py` (mathematician) and per-module `<op>_module<k>_golden.py` (verifier scaffolding). Pure torch — no `import pypto`. |
 | [`templates/test_template.py`](templates/test_template.py) | Scaffolding step C, cleanup E2E | Layer L test skeleton with `test_*_l0` / `test_*_l1` functions, `_set_device()` helper, and `_compare_all_leaves` calling `detailed_tensor_compare`. Reads test fields from `test_cases.json`. |
 | [`templates/test_cases_template.json`](templates/test_cases_template.json) | Scaffolding step B | Test-case spec consumed by `test_template.py` via `make_inputs`. Each entry has `id` / `level` / `seed` / `shape` / `dtype` / `atol` / `rtol`. Copy to `custom/<op>/eval/test_cases.json` and fill from SPEC.md. |
 
-The impl-side template (`impl_template.py` covering Layers G–K) lives in `pypto-op-develop/templates/`. The Layer A–L design format reference is at `pypto-op-develop/references/pypto-kernel-design-format.md`.
+The golden skeleton (for both `<op>_golden.py` and per-module `<op>_module<k>_golden.py` scaffolding step A) is the canonical `templates/golden-template.py` in skill `pypto-golden-generate` — pure torch, no `import pypto`. The impl-side template (`impl_template.py` covering Layers G–K) lives in `pypto-op-develop/templates/`. The Layer A–L design format reference is at `pypto-op-develop/references/pypto-kernel-design-format.md`.
 
 ---
 

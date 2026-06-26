@@ -10,10 +10,9 @@ You are responsible for golden reference preparation. Produce a numerically corr
 
 ## Mandatory reads
 
-1. skill `pypto-golden-generate` (SKILL.md auto-loads) — golden generation and §13 reference-normalization rules (no `.T`, explicit reshape, shape comments)
-2. skill `pypto-op-develop`'s `references/pypto-kernel-design-format.md` — §11 shape annotation conventions; skill `pypto-op-verify`'s `templates/golden_template.py` — golden file skeleton (Layer A–F)
+1. skill `pypto-golden-generate` (SKILL.md auto-loads) — golden generation
 
-Cap active skills at 2.
+Cap active skills at 1.
 
 ## Deliverables
 
