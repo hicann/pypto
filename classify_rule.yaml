@@ -161,11 +161,11 @@ block@pypto:
   src:
     release:
       - framework/include/ir/
-      - framework/include/block/
+      - framework/include/pypto_pro/
       - framework/src/interface/ir/
-      - framework/src/interface/block/
+      - framework/src/interface/pypto_pro/
       - python/src/bindings/ir/
-      - python/src/bindings/block/
+      - python/src/bindings/pypto_pro/
     unrelease: null
 
 passes@pypto:

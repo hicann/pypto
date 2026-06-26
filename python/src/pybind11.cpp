@@ -15,6 +15,7 @@
 
 #include "pybind_common.h"
 #include "bindings/bindings.h"
+#include "bindings/pypto_pro/bindings.h"
 #include "bindings/ir/bindings.h"
 
 using namespace npu::tile_fwk;
@@ -41,5 +42,8 @@ PYBIND11_MODULE(pypto_impl, m)
     BindDistributed(m);
     BindPlatform(m);
     BindUtils(m);
+
+    pypto::ir::BindCodegen(m);
+    pypto::ir::BindBackend(m);
 }
 } // namespace pypto

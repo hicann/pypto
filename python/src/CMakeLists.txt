@@ -52,6 +52,10 @@ if (NOT DEFINED PTO_FWK_SRC_ROOT)  # 在线编译
 
     option(BUILD_WITH_CANN "Build with CANN." ON)  # 在线编译场景仅会出现在内置 CANN 包场景
 endif ()
+file(GLOB_RECURSE PYPTO_PRO_COMPAT_SOURCES CONFIGURE_DEPENDS
+        ${PTO_FWK_SRC_ROOT}/framework/src/interface/pypto_pro/backend/*.cpp
+        ${PTO_FWK_SRC_ROOT}/framework/src/interface/pypto_pro/codegen/*.cpp
+)
 
 pybind11_add_module(pypto_impl
         MODULE
@@ -74,6 +78,9 @@ pybind11_add_module(pypto_impl
             bindings/ir/builder.cpp
             bindings/ir/logging.cpp
             bindings/ir/pass.cpp
+            bindings/pypto_pro/codegen.cpp
+            bindings/pypto_pro/backend.cpp
+            ${PYPTO_PRO_COMPAT_SOURCES}
 )
 target_include_directories(pypto_impl
         PRIVATE
@@ -82,6 +89,7 @@ target_include_directories(pypto_impl
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src>
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src/interface>
             $<$<NOT:$<BOOL:${PTO_FWK_SRC_ROOT}>>:${_WhlLibFwkDir}/src/interface/machine/device>
+            ${PTO_FWK_SRC_ROOT}/framework/include/pypto_pro
             ${CMAKE_CURRENT_LIST_DIR}
 )
 target_compile_definitions(pypto_impl
@@ -96,6 +104,8 @@ target_link_libraries(pypto_impl
             c_sec
             intf_pub_cxx17
             tile_fwk_intf_pub
+            dl
+            Threads::Threads
 )
 target_link_directories(pypto_impl
         PRIVATE
