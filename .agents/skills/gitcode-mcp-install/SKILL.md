@@ -136,4 +136,4 @@ curl -s "https://api.gitcode.com/api/v5/user/repos?access_token=<YOUR_TOKEN>&per
 
 - 源码: https://gitcode.com/gitcode-ai/gitcode_mcp_server
 - MCP 协议: https://modelcontextprotocol.io
-- GitCode API: https://api.gitcode.com/api/v5
+- GitCode API 文档: https://docs.gitcode.com/docs/apis/
