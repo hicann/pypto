@@ -451,17 +451,94 @@ def gen_onehot_op_golden(case_name: str, output: Path, case_index: int = None) -
     return gen_op_golden("OneHot", golden_func, output, case_index)
 
 
+_FP4_E2M1_DECODE = np.array([0., 0.5, 1., 1.5, 2., 3., 4., 6.], dtype=np.float32)
+
+
+def _pack_fp4_e1m2x2_low_first(codes: np.ndarray) -> np.ndarray:
+    return _pack_fp4_e2m1x2_low_first(codes)
+
+
+def _encode_e1m2_cast(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=np.float32)
+    abs_val = np.abs(values)
+    sign = np.where(values < 0, np.uint8(8), np.uint8(0))
+    nan_mask = np.isnan(values)
+    inf_mask = np.isinf(values)
+    normal = ~(nan_mask | inf_mask)
+
+    clipped = np.clip(abs_val, 0.0, 1.75)
+    code = np.round(clipped * np.float32(4.0)).astype(np.uint8)
+    code = np.clip(code, np.uint8(0), np.uint8(7))
+
+    result = code | sign
+    result[nan_mask | inf_mask] = np.uint8(7) | sign[nan_mask | inf_mask]
+    return result
+
+
+def _decode_fp4_e2m1x2(packed: np.ndarray) -> np.ndarray:
+    packed = np.asarray(packed, dtype=np.uint8)
+    shape = list(packed.shape)
+    shape[-1] *= 2
+    unpacked = np.zeros(shape, dtype=np.float32)
+    lo = packed & np.uint8(0x0F)
+    hi = packed >> np.uint8(4)
+    lo_sign = np.where((lo & np.uint8(8)) != 0, -1.0, 1.0).astype(np.float32)
+    hi_sign = np.where((hi & np.uint8(8)) != 0, -1.0, 1.0).astype(np.float32)
+    unpacked[..., 0::2] = lo_sign * _FP4_E2M1_DECODE[lo & np.uint8(0x07)]
+    unpacked[..., 1::2] = hi_sign * _FP4_E2M1_DECODE[hi & np.uint8(0x07)]
+    return unpacked
+
+
+def _decode_fp4_e1m2x2(packed: np.ndarray) -> np.ndarray:
+    packed = np.asarray(packed, dtype=np.uint8)
+    shape = list(packed.shape)
+    shape[-1] *= 2
+    mag = np.zeros(shape, dtype=np.uint8)
+    mag[..., 0::2] = packed & np.uint8(0x0F)
+    mag[..., 1::2] = (packed >> np.uint8(4)) & np.uint8(0x0F)
+    sign = np.where((mag & np.uint8(8)) != 0, -1.0, 1.0).astype(np.float32)
+    code = (mag & np.uint8(7)).astype(np.int32)
+    mant = (code & np.int32(3)).astype(np.float32)
+    exp = (code >> np.int32(2)).astype(np.float32)
+    normal = exp > 0
+    val = np.where(normal, (1.0 + mant * np.float32(0.25)) * (np.float32(2.0) ** (exp - np.float32(1.0))),
+                   mant * np.float32(0.25))
+    return sign * val
+
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestCast/CastOperationTest.TestCast",
     ]
 )
 def gen_cast_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def _cast_fp4_e2m1x2_encode(inputs_bf16: np.ndarray) -> np.ndarray:
+        src = inputs_bf16.astype(np.float32)
+        codes = _encode_e2m1_vectorized(src)
+        return _pack_fp4_e2m1x2_low_first(codes)
+
+    def _cast_fp4_e1m2x2_encode(inputs_bf16: np.ndarray) -> np.ndarray:
+        src = inputs_bf16.astype(np.float32)
+        codes = _encode_e1m2_cast(src)
+        return _pack_fp4_e1m2x2_low_first(codes)
+
     def golden_func(inputs: list, config: dict):
         params = config.get("params")
         output_dtype = config.get("output_tensors")[0].get("dtype")
         dst_dtype = params.get("dst_dtype", output_dtype)
+        src_dtype = config.get("input_tensors")[0].get("dtype")
+
+        if dst_dtype == "fp4_e2m1x2":
+            return [_cast_fp4_e2m1x2_encode(inputs[0])]
+        if dst_dtype == "fp4_e1m2x2":
+            return [_cast_fp4_e1m2x2_encode(inputs[0])]
+        if src_dtype == "fp4_e2m1x2":
+            x = _decode_fp4_e2m1x2(inputs[0])
+            return [x.astype(get_dtype_by_name(dst_dtype))]
+        if src_dtype == "fp4_e1m2x2":
+            x = _decode_fp4_e1m2x2(inputs[0])
+            return [x.astype(get_dtype_by_name(dst_dtype))]
+
         if inputs[0].dtype == bfloat16:
             dtype_out = get_dtype_by_name(dst_dtype)
             x = inputs[0].astype(dtype_out)

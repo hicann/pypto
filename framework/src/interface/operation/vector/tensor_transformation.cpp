@@ -1581,7 +1581,7 @@ void CheckCastTypeSupport(DataType srcType, DataType dstType, const std::string&
         std::unordered_map<DataType, std::unordered_set<DataType>> a5SupportedConversions = {
             {DT_FP32, {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT64, DT_FP8E4M3, DT_FP8E5M2, DT_HF8}},
             {DT_FP16, {DT_FP32, DT_INT32, DT_INT16, DT_INT8, DT_UINT8, DT_HF8}},
-            {DT_BF16, {DT_FP32, DT_INT32, DT_FP16}},
+            {DT_BF16, {DT_FP32, DT_INT32, DT_FP16, DT_FP4_E1M2X2, DT_FP4_E2M1X2}},
             {DT_UINT8, {DT_FP16, DT_UINT16}},
             {DT_INT8, {DT_FP16, DT_INT16, DT_INT32}},
             {DT_INT16, {DT_UINT8, DT_FP16, DT_FP32, DT_UINT32, DT_INT32}},
@@ -1590,7 +1590,10 @@ void CheckCastTypeSupport(DataType srcType, DataType dstType, const std::string&
             {DT_INT64, {DT_FP32, DT_INT32}},
             {DT_FP8E4M3, {DT_FP32}},
             {DT_FP8E5M2, {DT_FP32}},
-            {DT_HF8, {DT_FP32}}};
+            {DT_HF8, {DT_FP32}},
+            {DT_FP4_E1M2X2, {DT_BF16}},
+            {DT_FP4_E2M1X2, {DT_BF16}}
+        };
 
         if (a5SupportedConversions.count(srcType) == 0 || a5SupportedConversions[srcType].count(dstType) == 0) {
             CHECK(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false)
