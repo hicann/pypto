@@ -25,14 +25,14 @@ inline constexpr uint32_t ONG_GB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POL
 inline constexpr uint32_t TWO_MB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POLICY_HUGE_PAGE_FIRST;
 
 struct MemoryBlock {
-    void* base_addr;
-    size_t block_size;
-    size_t used_size;
-    bool is_huge_1g;
+    void* baseAddr;
+    size_t blockSize;
+    size_t usedSize;
+    bool isHuge1G;
 
-    std::map<uintptr_t, size_t> free_map;
+    std::map<uintptr_t, size_t> freeMap;
 
-    MemoryBlock(void* addr, size_t size, bool is_huge);
+    MemoryBlock(void* addr, size_t size, bool isHuge);
     void Init();
     void* Allocate(uint64_t alignSize);
     void Free(void* ptr, size_t size);
