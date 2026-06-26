@@ -309,6 +309,13 @@ struct FunctionFrame {
         std::shared_ptr<RawTensorData> rawData;
         if (rawTensorDataDict.count(raw->GetRawMagic())) {
             auto existingRawData = rawTensorDataDict[raw->GetRawMagic()];
+            // Validate size consistency when sharing RawTensor
+            size_t requiredSize = RawTensorData::CalcRequiredSize(dtype, rawShape);
+            ASSERT(ControlFlowScene::FUNC_RAW_TENSOR_SIZE_MISMATCH, 
+                   existingRawData->size() >= requiredSize)
+                << "RawTensor size mismatch when sharing: rawMagic=" << raw->GetRawMagic()
+                << ", existing size=" << existingRawData->size()
+                << ", required size=" << requiredSize;
             rawData = std::make_shared<RawTensorData>(existingRawData, dtype, rawShape);
         } else {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
@@ -842,6 +849,8 @@ struct FunctionInterpreter {
         std::vector<int64_t> offset = EvaluateOffset(tensor->GetOffset(), tensor->GetDynOffset(), linearArgList);
         auto validShape = EvaluateValidShape(tensor->GetDynValidShape(), linearArgList);
         auto rawShape = EvaluateValidShape(tensor->GetRawTensor()->GetDynRawShape());
+        ASSERT(ControlFlowScene::INVALID_TENSOR_SHAPE, std::all_of(rawShape.begin(), rawShape.end(), [](int64_t dim)
+            { return dim >= 0; })) << "ShapeToStride: shape dimension must be non-negative" <<rawShape;
         auto ret = frame.AllocateDataView(tensor, offset, validShape, rawShape, dtype, inplaceTensor);
         return ret;
     }
@@ -1074,6 +1083,18 @@ struct FunctionInterpreter {
         return false;
     }
 
+    bool isOutCast(const std::vector<std::shared_ptr<LogicalTensor>>& outCasts,
+        const std::shared_ptr<LogicalTensor>& oop)
+    {
+        auto it = std::find(outCasts.begin(), outCasts.end(), oop);
+        if (it == outCasts.end()) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
     /// Mix-split leaf output: reuse mixGlobalTensorDict entry for (oop, wrapId) if present; else allocate under
     /// mixGlobalTensorMutex_ and publish. Caller must only use this after input views are ready (AllocateDataView
     /// must not recurse into WaitAndGetMixGlobalTensorDataView while the mutex is held).
@@ -1141,7 +1162,7 @@ struct FunctionInterpreter {
                         dtype = DataType::DT_FP32;
                     }
                     oOpDataList.push_back(AllocateDataView(frame, oop, dtype));
-                } else if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0) {
+                } else if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0 && !isOutCast(frame.func->GetOutcast(), oop)) {
                     auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
                     oOpDataList.push_back(
                         AllocateOrReuseMixGlobalOutputDataView(frame, oop, callopAttr->wrapId));

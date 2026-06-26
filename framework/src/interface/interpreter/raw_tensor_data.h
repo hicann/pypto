@@ -103,8 +103,24 @@ struct RawTensorData {
         return static_cast<int>(bits / 0x8);
     }
 
-    static std::vector<int64_t> ShapeToStride(const std::vector<int64_t>& shape)
+    static size_t CalcRequiredSize(DataType dataType, const std::vector<int64_t>& shape)
     {
+        int64_t n = Numel(shape);
+        int elemSize = GetDataSize(dataType);
+        if (elemSize > 0) {
+            return static_cast<size_t>(n) * static_cast<size_t>(elemSize);
+        }
+        if (IsFp4PackedDtype(dataType)) {
+            auto packedShape = PackedShapeFromLogical(shape, dataType);
+            return static_cast<size_t>(Numel(packedShape));
+        }
+        return static_cast<size_t>((n + 1) / 0x2);
+    }
+
+    static std::vector<int64_t> ShapeToStride(const std::vector<int64_t>& shape)
+    {   
+        ASSERT(ControlFlowScene::INVALID_TENSOR_SHAPE, !shape.empty())
+            << "ShapeToStride: empty shape is not allowed" << shape;
         std::vector<int64_t> stride;
         stride.resize(shape.size());
         stride[shape.size() - 1] = 1;
