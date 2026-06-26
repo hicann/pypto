@@ -29,10 +29,115 @@
 #include "interface/utils/serialization.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "symbol_handler.h"
 
 #include "irbuilder.h"
 
 using namespace npu::tile_fwk;
+
+namespace {
+
+// View 后 dynValidShape 推导辅助函数（GVS = RUNTIME_GetViewValidShapeDim）。
+//
+// 单维语义（viewShape >= 0）：
+//   GVS(valid, offset, viewShape) = min(max(valid - offset, 0), viewShape)
+// viewShape == -1 表示不设上限：max(valid - offset, 0)。
+// runtime GVS 不支持 viewShape=-1，故含符号时展开为 Max(valid-offset, 0)，不生成 GVS(..., -1)。
+//
+// 连续 View 合并为单层 GVS，不嵌套：
+//   GVS(base, o1, s1) 再 view(o2, s2) -> GVS(base, o1+o2, min(s2, s1-o2))
+
+std::string GetViewValidShapeDimRuntimeName()
+{
+    return AddRuntimePrefix(SymbolHandler::GetNameByHandlerId(SymbolHandlerId::GetViewValidShapeDim));
+}
+
+// 构造单层 RUNTIME_GetViewValidShapeDim 符号调用。
+SymbolicScalar MakeViewValidShapeDimCall(
+    const SymbolicScalar& validShapeDim, const SymbolicScalar& viewOffsetDim, const SymbolicScalar& viewShapeDim)
+{
+    SymbolicScalar getViewValidShape(GetViewValidShapeDimRuntimeName());
+    return getViewValidShape(validShapeDim, viewOffsetDim, viewShapeDim);
+}
+
+// 若 validShapeDim 已是 GVS(base, innerOffset, innerViewShape)，解包三个实参；否则返回 false。
+// 操作数布局：[callee, baseValid, innerOffset, innerViewShape]。
+bool TryParseViewValidShapeDimCall(
+    const SymbolicScalar& validShapeDim, SymbolicScalar* baseValidDim, SymbolicScalar* innerOffsetDim,
+    SymbolicScalar* innerViewShapeDim)
+{
+    const auto& raw = validShapeDim.Raw();
+    if (!raw->IsExpressionCall(GetViewValidShapeDimRuntimeName())) {
+        return false;
+    }
+    const auto& operands = raw->GetExpressionOperandList();
+    if (operands.size() != 0x4) {
+        return false;
+    }
+    *baseValidDim = SymbolicScalar(operands[1]);
+    *innerOffsetDim = SymbolicScalar(operands[2]);
+    *innerViewShapeDim = SymbolicScalar(operands[3]);
+    return true;
+}
+
+// 单维 GVS 常量折叠求值。
+int64_t EvalViewValidShapeDim(int64_t validShape, int64_t viewOffset, int64_t viewShape)
+{
+    if (viewShape == -1) {
+        return std::max(validShape - viewOffset, 0L);
+    }
+    validShape -= viewOffset;
+    if (validShape > viewShape) {
+        validShape = viewShape;
+    } else if (validShape < 0) {
+        validShape = 0;
+    }
+    return validShape;
+}
+
+// 合并后 view 窗口上限的符号表达：min(outerViewShape, innerViewShape - outerOffset)。
+// viewShape == -1 表示无上界：外层 -1 时透传 -1；内层 -1 且外层有界时取外层 cap。
+SymbolicScalar MergeViewShapeCap(
+    const SymbolicScalar& innerViewShapeDim, const SymbolicScalar& viewOffsetDim,
+    const SymbolicScalar& viewShapeDim)
+{
+    // 连续的view一般不走这个分支
+    if (viewShapeDim.ConcreteValid() && viewShapeDim.Concrete() == -1) {
+        return viewShapeDim;
+    }
+    if (innerViewShapeDim.ConcreteValid() && innerViewShapeDim.Concrete() == -1) {
+        return viewShapeDim;
+    }
+    return std::min(viewShapeDim, innerViewShapeDim - viewOffsetDim);
+}
+
+// 全常量则 Eval 折叠；viewShape=-1 且含符号则 Max(valid-offset, 0)；否则构造单层 GVS。
+SymbolicScalar EmitViewValidShapeDim(
+    const SymbolicScalar& validShapeDim, const SymbolicScalar& viewOffsetDim, const SymbolicScalar& viewShapeDim)
+{
+    if (validShapeDim.ConcreteValid() && viewOffsetDim.ConcreteValid() && viewShapeDim.ConcreteValid()) {
+        return SymbolicScalar(
+            EvalViewValidShapeDim(validShapeDim.Concrete(), viewOffsetDim.Concrete(), viewShapeDim.Concrete()));
+    }
+    if (viewShapeDim.ConcreteValid() && viewShapeDim.Concrete() == -1) {
+        return (validShapeDim - viewOffsetDim).Max(SymbolicScalar(0));
+    }
+    return MakeViewValidShapeDimCall(validShapeDim, viewOffsetDim, viewShapeDim);
+}
+
+// 合并多层 View 为单层 GVS。能进入此路径时 validShapeDim 已是 GVS，其 base 必含符号
+// （全常量第一次 View 已在 EmitViewValidShapeDim 折叠，不会生成 GVS）。merged 结果交给 EmitViewValidShapeDim。
+SymbolicScalar EmitMergedViewValidShapeDim(
+    const SymbolicScalar& baseValidDim, const SymbolicScalar& innerOffsetDim, const SymbolicScalar& innerViewShapeDim,
+    const SymbolicScalar& viewOffsetDim, const SymbolicScalar& viewShapeDim)
+{
+    const SymbolicScalar mergedOffset = innerOffsetDim + viewOffsetDim;
+    const SymbolicScalar mergedViewShape =
+        MergeViewShapeCap(innerViewShapeDim, viewOffsetDim, viewShapeDim);
+    return EmitViewValidShapeDim(baseValidDim, mergedOffset, mergedViewShape);
+}
+
+} // namespace
 
 LogicalTensor::LogicalTensor(Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname)
     : ir::Var(IRContext::Get().GetVarName(tname), ir::GetLogicalTensorType(), ir::Span::Unknown()),
@@ -529,26 +634,20 @@ bool LogicalTensor::IsGetTensorDataOutcast()
     return false;
 }
 
+// 计算 View 后某一维的 dynValidShape。
+// merge / emit 后统一 Simplify：全常量路径为 no-op；符号路径化简 offset 等子表达式（如 (x-y)+y => x）。
 SymbolicScalar npu::tile_fwk::GetViewValidShapeDim(
     const SymbolicScalar& validShapeDim, const SymbolicScalar& viewOffsetDim, const SymbolicScalar& viewShapeDim)
 {
     SymbolicScalar result;
-    if (validShapeDim.ConcreteValid() && viewOffsetDim.ConcreteValid() && viewShapeDim.ConcreteValid()) {
-        auto validShapeData = validShapeDim.Concrete();
-        auto viewOffsetData = viewOffsetDim.Concrete();
-        auto viewShapeData = viewShapeDim.Concrete();
-        if (viewShapeData == -1) {
-            result = std::max(validShapeData - viewOffsetData, 0L);
-        } else {
-            result = std::max(std::min(validShapeData - viewOffsetData, viewShapeData), 0L);
-        }
-    } else if (viewShapeDim.ConcreteValid() && viewShapeDim.Concrete() == -1) {
-        return std::max(validShapeDim - viewOffsetDim, 0L);
+    SymbolicScalar baseValidDim;
+    SymbolicScalar innerOffsetDim;
+    SymbolicScalar innerViewShapeDim;
+    if (TryParseViewValidShapeDimCall(validShapeDim, &baseValidDim, &innerOffsetDim, &innerViewShapeDim)) {
+        result = EmitMergedViewValidShapeDim(
+            baseValidDim, innerOffsetDim, innerViewShapeDim, viewOffsetDim, viewShapeDim);
     } else {
-        std::string getViewValidShapeName = SymbolHandler::GetNameByHandlerId(SymbolHandlerId::GetViewValidShapeDim);
-        getViewValidShapeName = AddRuntimePrefix(getViewValidShapeName);
-        SymbolicScalar getViewValidShape(getViewValidShapeName);
-        result = getViewValidShape(validShapeDim, viewOffsetDim, viewShapeDim);
+        result = EmitViewValidShapeDim(validShapeDim, viewOffsetDim, viewShapeDim);
     }
     return result.Simplify();
 }
