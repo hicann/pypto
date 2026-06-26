@@ -113,7 +113,7 @@ python3 -m pip install -e . --verbose
 
 PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改，可以直接使用`pip`命令安装。
 
-安装前请先确认当前环境中的CANN版本，并根据下表选择匹配的PyPTO版本：
+使用PyPI安装时，`pto-isa`版本已与CANN包版本匹配，并在安装CANN包时完成安装，无需再单独安装。安装前请先确认当前环境中的CANN版本，并根据下表选择匹配的PyPTO版本：
 
 | CANN版本 | PyPTO版本 |
 |:---|:---|
