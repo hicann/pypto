@@ -546,7 +546,6 @@ public:
 
     int64_t GetWorkspaceSize(const std::vector<DeviceTensorData>& tensors)
     {
-        auto aicpuArgs = (AiCpuArgs*)aicpuArgBuf.data();
         static const std::vector<DeviceTensorData> kEmptyOutputs;
         Evaluator eval{dynAttr->inputSymbolDict, &tensors, &kEmptyOutputs};
         dynamicCellMatchDescPatches_ = PrepareDynamicCellMatchDescPatches(*dynAttr, eval);
@@ -568,7 +567,7 @@ public:
                 RefreshRuntimeDynamicCellMatchMeta(devProg->memBudget.metadata.dynamicCellMatch);
                 lastPreparedDynamicCellMatchBytes_ = devProg->memBudget.metadata.dynamicCellMatch;
             }
-            PatchRuntimeDynamicCellMatchAddrToCfgData(reinterpret_cast<int64_t*>(devProg), aicpuArgs->kArgs.cfgdata);
+            PatchHostDynamicCellMatchAddr(devProg);
             workspaceSize = devProg->memBudget.Total();
 
             // check and pretty print total workspace consumption
@@ -652,54 +651,16 @@ public:
     }
     uint64_t GetMaxDynamicAssembleOutcastMem() const { return devProg->memBudget.tensor.maxDynamicAssembleOutcastMem; }
     uint64_t GetMaxDynamicCellMatchTableMem() const { return devProg->memBudget.metadata.maxDynamicCellMatchTableMem; }
+    uint64_t GetRuntimeDynamicCellMatchAddr() const { return runtimeDynamicCellMatchAddr_; }
+    uint64_t GetRuntimeDynamicCellMatchCapacity() const { return runtimeDynamicCellMatchCapacity_; }
 
-    void PatchRuntimeDynamicCellMatchAddrToCfgData(int64_t* hostCfgdata, int64_t* devCfgdata)
+    void PatchHostDynamicCellMatchAddr(DevAscendProgram* hostProg)
     {
-        auto patchOneCfg = [&](int64_t* cfgdata) {
-            if (cfgdata == nullptr) {
-                return;
-            }
-            auto* cfgBytes = reinterpret_cast<uint8_t*>(cfgdata);
-            bool isHostCfg = IsHostCfgData(cfgBytes);
-            const uint64_t devAddrOffset =
-                offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchAddr);
-            const uint64_t devCapacityOffset =
-                offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchCapacity);
-
-            std::optional<AclModeGuard> captureRelaxGuard;
-            if (!isHostCfg && DeviceLauncher::IsCaptureMode()) { // KernelBinary
-                captureRelaxGuard.emplace(AclMdlRICaptureMode::RELAXED);
-            }
-
-            if (isHostCfg) {
-                auto* addrSlot = reinterpret_cast<uint64_t*>(cfgBytes + devAddrOffset);
-                auto* capSlot = reinterpret_cast<uint64_t*>(cfgBytes + devCapacityOffset);
-                *addrSlot = runtimeDynamicCellMatchHostAddr_;
-                *capSlot = runtimeDynamicCellMatchCapacity_;
-            } else {
-                RuntimeMemcpy(
-                    cfgBytes + devAddrOffset, sizeof(uint64_t), &runtimeDynamicCellMatchAddr_, sizeof(uint64_t),
-                    RtMemcpyKind::HOST_TO_DEVICE);
-                RuntimeMemcpy(
-                    cfgBytes + devCapacityOffset, sizeof(uint64_t), &runtimeDynamicCellMatchCapacity_, sizeof(uint64_t),
-                    RtMemcpyKind::HOST_TO_DEVICE);
-            }
-        };
-        patchOneCfg(hostCfgdata);
-        if (devCfgdata != hostCfgdata) {
-            patchOneCfg(devCfgdata);
+        if (hostProg == nullptr) {
+            return;
         }
-    }
-
-    bool IsHostCfgData(const uint8_t* cfgBytes) const
-    {
-        auto* hostBytes = reinterpret_cast<const uint8_t*>(devProg);
-        auto* hostProgBinaryBegin = dynAttr->devProgBinary.empty() ? nullptr : dynAttr->devProgBinary.data();
-        auto* hostProgBinaryEnd =
-            hostProgBinaryBegin == nullptr ? nullptr : (hostProgBinaryBegin + dynAttr->devProgBinary.size());
-        bool cfgInHostProgBinary =
-            hostProgBinaryBegin != nullptr && cfgBytes >= hostProgBinaryBegin && cfgBytes < hostProgBinaryEnd;
-        return (cfgBytes == hostBytes) || cfgInHostProgBinary;
+        hostProg->devArgs.dynamicCellMatchAddr = runtimeDynamicCellMatchHostAddr_;
+        hostProg->devArgs.dynamicCellMatchCapacity = runtimeDynamicCellMatchCapacity_;
     }
 
     ~KernelBinary()
@@ -947,6 +908,8 @@ public:
         args->kArgs.parameter.globalRound = ++sequence;
         args->kArgs.maxDynamicAssembleOutcastMem = kernel->GetMaxDynamicAssembleOutcastMem();
         args->kArgs.maxDynamicCellMatchTableMem = kernel->GetMaxDynamicCellMatchTableMem();
+        args->kArgs.runtimeDynamicCellMatchAddr = kernel->GetRuntimeDynamicCellMatchAddr();
+        args->kArgs.runtimeDynamicCellMatchCapacity = kernel->GetRuntimeDynamicCellMatchCapacity();
         auto isCaptureMode = DeviceLauncher::IsCaptureMode();  // KernelModule
         bool debugEnable = !isCaptureMode && isDebugMode;
 

@@ -259,6 +259,10 @@ public:
             metadataBudget.maxDynamicCellMatchTableMem = kargs->maxDynamicCellMatchTableMem;
             uint64_t totalDynamicCellMatchSlotNum = metadataBudget.dynamicCellMatchSlotNum;
             metadataBudget.dynamicCellMatch = totalDynamicCellMatchSlotNum * metadataBudget.maxDynamicCellMatchTableMem;
+            if (kargs->runtimeDynamicCellMatchCapacity != 0) {
+                devProg->devArgs.dynamicCellMatchAddr = kargs->runtimeDynamicCellMatchAddr;
+                devProg->devArgs.dynamicCellMatchCapacity = kargs->runtimeDynamicCellMatchCapacity;
+            }
         }
         PerfBegin(PERF_EVT_INIT);
         bool firstInit = InitDevProgram(devProg);

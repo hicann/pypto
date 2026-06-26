@@ -185,28 +185,6 @@ public:
     }
 
 private:
-    static void PatchRuntimeDynamicCellMatchMeta(
-        MemoryHelper& memoryHelper, DevAscendProgram* hostProg, DevAscendProgram* cfgProg)
-    {
-        if (hostProg == nullptr || cfgProg == nullptr) {
-            return;
-        }
-        uint64_t dynamicCellMatchBytes = hostProg->memBudget.metadata.dynamicCellMatch;
-        if (dynamicCellMatchBytes == 0) {
-            hostProg->devArgs.dynamicCellMatchAddr = 0;
-            hostProg->devArgs.dynamicCellMatchCapacity = 0;
-            cfgProg->devArgs.dynamicCellMatchAddr = 0;
-            cfgProg->devArgs.dynamicCellMatchCapacity = 0;
-            return;
-        }
-        uint8_t* dynamicCellMatchAddr = memoryHelper.AllocZero(dynamicCellMatchBytes, nullptr);
-        uint64_t dynamicCellMatchAddrU64 = reinterpret_cast<uint64_t>(dynamicCellMatchAddr);
-        hostProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
-        hostProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
-        cfgProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
-        cfgProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
-    }
-
     CostModelLauncher(Function* function, const DeviceLauncherConfig& config) : function_(function), config_(config) {}
 
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
@@ -330,7 +308,7 @@ private:
         devProg->devArgs.nrValidAic = 1;
         devProg->devArgs.scheCpuNum = 1;
         AssignMetaAddr(devMem, kArgs, devProg, nullptr);
-        PatchRuntimeDynamicCellMatchMeta(devMem, devProg, devProg);
+        PatchRuntimeDynamicCellMatchMeta(devMem, devProg, kArgs);
         const uint64_t maxPatchCount = function_->GetDyndevAttribute()->dynamicCellMatchLaunchMetaList.size();
         size_t patchTailSize = sizeof(uint64_t) + maxPatchCount * sizeof(DevDynamicCellMatchStridePatch);
         size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t) + patchTailSize;
@@ -415,7 +393,7 @@ private:
         auto* cfgProg = reinterpret_cast<DevAscendProgram*>(kArgs.cfgdata);
         cellMatchDescPatches_ = PrepareHostDynamicCellMatchForLaunch(*dynAttr.get(), eval, functionDevProg);
         cfgProg->memBudget = functionDevProg->memBudget;
-        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, cfgProg);
+        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, kArgs);
     }
 
 private:

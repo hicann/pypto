@@ -96,6 +96,8 @@ struct DeviceKernelArgs {
     uint64_t taskWastTime{0};
     uint64_t maxDynamicAssembleOutcastMem{0};
     uint64_t maxDynamicCellMatchTableMem{0};
+    uint64_t runtimeDynamicCellMatchAddr{0};
+    uint64_t runtimeDynamicCellMatchCapacity{0};
     uint8_t machineConfig;
     ToSubMachineConfig toSubMachineConfig;
     DeviceKernelArgsParameter parameter;

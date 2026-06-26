@@ -149,51 +149,6 @@ public:
     }
 
 private:
-    static void PatchRuntimeDynamicCellMatchMeta(
-        MemoryHelper& memoryHelper, DevAscendProgram* hostProg, DevAscendProgram* cfgProg)
-    {
-        if (hostProg == nullptr || cfgProg == nullptr) {
-            return;
-        }
-        const uint64_t devAddrOffset =
-            offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchAddr);
-        const uint64_t devCapacityOffset =
-            offsetof(DevAscendProgram, devArgs) + offsetof(DeviceArgs, dynamicCellMatchCapacity);
-        uint64_t dynamicCellMatchBytes = hostProg->memBudget.metadata.dynamicCellMatch;
-        if (dynamicCellMatchBytes == 0) {
-            hostProg->devArgs.dynamicCellMatchAddr = 0;
-            hostProg->devArgs.dynamicCellMatchCapacity = 0;
-            if (memoryHelper.IsDevice()) {
-                uint64_t zero = 0;
-                RuntimeMemcpy(
-                    reinterpret_cast<uint8_t*>(cfgProg) + devAddrOffset, sizeof(uint64_t), &zero, sizeof(uint64_t),
-                    RtMemcpyKind::HOST_TO_DEVICE);
-                RuntimeMemcpy(
-                    reinterpret_cast<uint8_t*>(cfgProg) + devCapacityOffset, sizeof(uint64_t), &zero, sizeof(uint64_t),
-                    RtMemcpyKind::HOST_TO_DEVICE);
-            } else {
-                cfgProg->devArgs.dynamicCellMatchAddr = 0;
-                cfgProg->devArgs.dynamicCellMatchCapacity = 0;
-            }
-            return;
-        }
-        uint8_t* dynamicCellMatchAddr = memoryHelper.AllocZero(dynamicCellMatchBytes, nullptr);
-        uint64_t dynamicCellMatchAddrU64 = reinterpret_cast<uint64_t>(dynamicCellMatchAddr);
-        hostProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
-        hostProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
-        if (memoryHelper.IsDevice()) {
-            RuntimeMemcpy(
-                reinterpret_cast<uint8_t*>(cfgProg) + devAddrOffset, sizeof(uint64_t), &dynamicCellMatchAddrU64,
-                sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
-            RuntimeMemcpy(
-                reinterpret_cast<uint8_t*>(cfgProg) + devCapacityOffset, sizeof(uint64_t), &dynamicCellMatchBytes,
-                sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
-        } else {
-            cfgProg->devArgs.dynamicCellMatchAddr = dynamicCellMatchAddrU64;
-            cfgProg->devArgs.dynamicCellMatchCapacity = dynamicCellMatchBytes;
-        }
-    }
-
     DevFuncRunner(Function* function, const DeviceLauncherConfig& config) : function_(function), config_(config) {}
     void RunDynamic(const std::vector<RawTensorDataPtr>& inputs, const std::vector<RawTensorDataPtr>& outputs)
     {
@@ -260,7 +215,7 @@ private:
         }
         kArgs.maxDynamicAssembleOutcastMem = functionDevProg->memBudget.tensor.maxDynamicAssembleOutcastMem;
         kArgs.maxDynamicCellMatchTableMem = functionDevProg->memBudget.metadata.maxDynamicCellMatchTableMem;
-        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, cfgProg);
+        PatchRuntimeDynamicCellMatchMeta(memoryHelper, functionDevProg, kArgs);
     }
 
     bool IsDumpTensorEnable() const { return GetDevProg(function_)->memBudget.debug.dumpTensor != 0; }
