@@ -174,9 +174,10 @@ TEST_F(RemoveRedundantReshapeTest, TestReplaceInput)
 }
 
 /*
- * View->Reshape reorder with MatMul present but no cascaded view pattern.
+ * View->Reshape with MatMul present but no cascaded view pattern.
  * Before: input{32,64} -> view -> middle{16,64} -> reshape -> output{1024}
- * The pass skips non-cascaded View->Reshape reorder; original graph should remain unchanged.
+ * After:  unchanged — reorder requires cascaded pattern (VIEW->VIEW->RESHAPE),
+ *         so the pass skips reorder and preserves original ops.
  */
 TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
 {
@@ -216,9 +217,9 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
 
     auto ops = currFunctionPtr->Operations();
     EXPECT_FALSE(IsOpRemoved(ops, viewMagic))
-        << "Without cascaded pattern, original view should not be deleted";
+        << "View should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic))
-        << "Without cascaded pattern, original reshape should not be deleted";
+        << "Reshape should be kept (no cascaded pattern, reorder skipped)";
 
     int viewCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
@@ -232,9 +233,10 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeReorderWithMatmul)
 }
 
 /*
- * Reshape->Assemble reorder with MatMul present but no cascaded assemble pattern.
+ * Reshape->Assemble with MatMul present but no cascaded assemble pattern.
  * Before: input{2048} -> reshape -> middle{32,64} -> assemble -> output{32,64}
- * The pass skips non-cascaded Reshape->Assemble reorder; original graph should remain unchanged.
+ * After:  unchanged — reorder requires cascaded pattern (RESHAPE->ASSEMBLE->ASSEMBLE),
+ *         so the pass skips reorder and preserves original ops.
  */
 TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
 {
@@ -274,9 +276,9 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
 
     auto ops = currFunctionPtr->Operations();
     EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic))
-        << "Without cascaded pattern, original reshape should not be deleted";
+        << "Reshape should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, assembleMagic))
-        << "Without cascaded pattern, original assemble should not be deleted";
+        << "Assemble should be kept (no cascaded pattern, reorder skipped)";
 
     int assembleCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
@@ -287,6 +289,56 @@ TEST_F(RemoveRedundantReshapeTest, TestReshapeAssembleReorderWithMatmul)
     EXPECT_EQ(assembleCount, 1) << "Original Assemble should be preserved";
     EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
     EXPECT_EQ(matmulCount, 1) << "MatMul should be preserved";
+}
+
+/*
+ * sub->reshape->assemble with MatMul present.
+ * After: unchanged — reorder skipped when reshape input is produced by SUB op.
+ */
+TEST_F(RemoveRedundantReshapeTest, TestSubReshapeAssembleSkipReorderWithMatmul)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestSubReshapeAssemble", "TestSubReshapeAssemble", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+    std::vector<int64_t> subShape = {32, 64};
+    std::vector<int64_t> middleShape = {2048};
+    std::vector<int64_t> matmulShape = {16, 16};
+    auto subIn1 = IRBuilder().CreateTensorVar(DT_FP32, subShape, CreateTestConstIntVector(subShape));
+    auto subIn2 = IRBuilder().CreateTensorVar(DT_FP32, subShape, CreateTestConstIntVector(subShape));
+    auto subOut = IRBuilder().CreateTensorVar(DT_FP32, subShape, CreateTestConstIntVector(subShape));
+    auto middle = IRBuilder().CreateTensorVar(DT_FP32, middleShape, CreateTestConstIntVector(middleShape));
+    auto output = IRBuilder().CreateTensorVar(DT_FP32, subShape, CreateTestConstIntVector(subShape));
+    auto matmulA = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
+    auto matmulB = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
+    auto matmulC = IRBuilder().CreateTensorVar(DT_FP32, matmulShape, CreateTestConstIntVector(matmulShape));
+    int subMagic = IRBuilder().CreateTensorOpStmt(
+        *currFunctionPtr, Opcode::OP_SUB, {subIn1, subIn2}, {subOut}).GetOpMagic();
+    int reshapeMagic = IRBuilder().CreateTensorOpStmt(
+        *currFunctionPtr, Opcode::OP_RESHAPE, {subOut}, {middle}).GetOpMagic();
+    auto& assembleOp = IRBuilder().CreateTensorOpStmt(
+        *currFunctionPtr, Opcode::OP_ASSEMBLE, {middle}, {output});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    int assembleMagic = assembleOp.GetOpMagic();
+    IRBuilder().CreateTensorOpStmt(*currFunctionPtr, Opcode::OP_A_MUL_B, {matmulA, matmulB}, {matmulC});
+    currFunctionPtr->inCasts_ = {subIn1, subIn2, matmulA, matmulB};
+    currFunctionPtr->outCasts_ = {output, matmulC};
+    RemoveRedundantReshape pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    auto ops = currFunctionPtr->Operations();
+    EXPECT_FALSE(IsOpRemoved(ops, subMagic)) << "Sub should be kept";
+    EXPECT_FALSE(IsOpRemoved(ops, reshapeMagic)) << "Reshape should be kept";
+    EXPECT_FALSE(IsOpRemoved(ops, assembleMagic)) << "Assemble should be kept";
+    int subCount = 0, reshapeCount = 0, assembleCount = 0, matmulCount = 0;
+    for (auto& op : ops) {
+        if (op.GetOpcode() == Opcode::OP_SUB) { subCount++; }
+        else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
+        else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) { assembleCount++; }
+        else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
+    }
+    EXPECT_EQ(subCount, 1);
+    EXPECT_EQ(reshapeCount, 1);
+    EXPECT_EQ(assembleCount, 1);
+    EXPECT_EQ(matmulCount, 1);
 }
 
 struct FanoutGraphInfo {
@@ -351,7 +403,8 @@ static FanoutGraphInfo BuildViewReshapeFanoutGraph()
  * Before: input{4,32} -> view(offset={0,8}) -> middle{4,16} -> reshape -> reshapeOut{64}
  *         reshapeOut -> fanoutView1(offset={0})  -> fanout1{32}
  *         reshapeOut -> fanoutView2(offset={32}) -> fanout2{32}
- * The pass skips non-cascaded View->Reshape reorder; original graph should remain unchanged.
+ * After:  unchanged — reorder requires cascaded pattern (VIEW->VIEW->RESHAPE),
+ *         so the pass skips reorder and preserves original ops.
  */
 TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
 {
@@ -363,13 +416,13 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
 
     auto ops = info.func->Operations();
     EXPECT_FALSE(IsOpRemoved(ops, info.viewMagic))
-        << "Without cascaded pattern, original view should not be deleted";
+        << "View should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, info.reshapeMagic))
-        << "Without cascaded pattern, original reshape should not be deleted";
+        << "Reshape should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, info.fanoutView1Magic))
-        << "Without cascaded pattern, original fanout view1 should not be deleted";
+        << "Fanout view1 should be kept (no cascaded pattern, reorder skipped)";
     EXPECT_FALSE(IsOpRemoved(ops, info.fanoutView2Magic))
-        << "Without cascaded pattern, original fanout view2 should not be deleted";
+        << "Fanout view2 should be kept (no cascaded pattern, reorder skipped)";
 
     int viewCount = 0, reshapeCount = 0, matmulCount = 0;
     for (auto& op : ops) {
@@ -377,7 +430,7 @@ TEST_F(RemoveRedundantReshapeTest, TestViewReshapeFanoutWithMatmul)
         else if (op.GetOpcode() == Opcode::OP_RESHAPE) { reshapeCount++; }
         else if (op.GetOpcode() == Opcode::OP_A_MUL_B) { matmulCount++; }
     }
-    EXPECT_EQ(viewCount, 3) << "Three original Views should be preserved";
+    EXPECT_EQ(viewCount, 3) << "Original 3 Views (1 main + 2 fanout) should be preserved";
     EXPECT_EQ(reshapeCount, 1) << "Original Reshape should be preserved";
     EXPECT_EQ(matmulCount, 1) << "MatMul should be preserved";
 }
