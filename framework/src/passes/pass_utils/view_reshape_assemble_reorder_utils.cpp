@@ -566,6 +566,14 @@ Status ViewReshapeAssembleReorderUtils::TryRecordReshapeAssemble(Function& funct
     if (!ValidateChainShapes(match)) {
         return SUCCESS;
     }
+    // Skip reorder when reshape input is produced by SUB op (sub->reshape->assemble),
+    // reordering such chains breaks the read-modify-write dependency on state tensors.
+    if (match.input != nullptr && match.input->GetProducers().size() == 1) {
+        Operation* producer = *match.input->GetProducers().begin();
+        if (producer != nullptr && producer->GetOpcode() == Opcode::OP_SUB) {
+            return SUCCESS;
+        }
+    }
     std::vector<SymbolicScalar> inputDynShape;
     std::vector<SymbolicScalar> middleDynShape;
     std::vector<AxisGroup> axisPlan;
