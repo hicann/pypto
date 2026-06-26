@@ -488,12 +488,7 @@ void TiledTopKRadixSelect(
         input.tileInfo.shape[cur] = valueResult->shape[cur];
         auto valueTile = valueResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto indexTile = indexResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        std::vector<int64_t> tmpShape = {
-            static_cast<int64_t>(NUM_VALUE_2 * lastDim * BytesOf(input.tensor.GetDataType())) +
-            static_cast<int64_t>(NUM_VALUE_6 * lastDim) +
-            static_cast<int64_t>(NUM_VALUE_1024) +
-            static_cast<int64_t>(NUM_VALUE_1024 > NUM_VALUE_8 * lastDim ? NUM_VALUE_1024 : NUM_VALUE_8 * lastDim)
-        };
+        std::vector<int64_t> tmpShape = {static_cast<int64_t>(AlignUp(lastDim, NUM_VALUE_128) * NUM_VALUE_26)};
         auto tempTensor = std::make_shared<LogicalTensor>(function, DataType::DT_UINT8, tmpShape);
         auto& newOp = function.AddOperation(Opcode::OP_RADIX_SELECT, {inputTile}, {valueTile, indexTile, tempTensor});
         newOp.SetAttribute(TOPK_AXIS, axis);
@@ -520,6 +515,10 @@ void TiledTopK(
         TileInfo resultTileInfo(valueResult->shape, valueResult->offset);
         TiledTopK(function, tileShape, 0, input, valueResult, indexResult, resultTileInfo, axis, k, isLargest);
     } else if (algo == TopKAlgo::RADIX_SELECT) {
+        auto size = operand->shape.size();
+        CHECK(VectorErrorCode::ERR_PARAM_INVALID, operand->shape[size - 1] <= tileShape.GetVecTile()[size - 1])
+            << "The tile_shape[-1] should greater than or equal to input.shape[-1]. "
+            << "tile_shape[-1] = " << tileShape.GetVecTile()[size - 1] << ", input.shape[-1] = " << operand->shape[size - 1];
         int64_t ubSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
         TiledTopKRadixSelect(function, tileShape, 0, input, valueResult, indexResult, axis, k, isLargest, ubSize);
     }
@@ -593,7 +592,8 @@ std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLarg
         std::unordered_set<DataType> supportedTypes = {DT_FP32};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Merge Sort)");
     } else if (algo == TopKAlgo::RADIX_SELECT) {
-        std::unordered_set<DataType> supportedTypes = {DT_BF16, DT_FP16, DT_FP32};
+        std::unordered_set<DataType> supportedTypes = {DT_BF16, DT_FP16, DT_FP32, DT_UINT8, DT_INT8,
+            DT_UINT16, DT_INT16, DT_UINT32, DT_INT32};
         CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Radix Select)");
     }
     CheckTensorDimRange(self.GetStorage(), 1, 4, "TOPK");
@@ -609,23 +609,11 @@ std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLarg
     auto topkOutShape = self.GetShape();
     topkOutShape[axis] = k;
     auto indexResult = Tensor(DataType::DT_INT32, topkOutShape);
-    if (algo == TopKAlgo::RADIX_SELECT && self.GetDataType() == DT_BF16) {
-        auto valueResultTmp = Tensor(DT_FP32, topkOutShape);
-        auto castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
-        CALL(
-            TopK, *Program::GetInstance().GetCurrentFunction(), castSelf, valueResultTmp.GetStorage(),
-            indexResult.GetStorage(), k, axis, isLargest, algo);
-        auto valueResult = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            valueResultTmp.GetStorage(), DT_BF16, CastMode::CAST_NONE);
-        return std::tie(valueResult, indexResult);
-    } else {
-        auto valueResult = Tensor(self.GetStorage()->tensor->datatype, topkOutShape);
-        CALL(
-            TopK, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), valueResult.GetStorage(),
-            indexResult.GetStorage(), k, axis, isLargest, algo);
-        return std::tie(valueResult, indexResult);
-    }
+    auto valueResult = Tensor(self.GetStorage()->tensor->datatype, topkOutShape);
+    CALL(
+        TopK, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), valueResult.GetStorage(),
+        indexResult.GetStorage(), k, axis, isLargest, algo);
+    return std::tie(valueResult, indexResult);
 }
 
 bool checkIsExceedUB(

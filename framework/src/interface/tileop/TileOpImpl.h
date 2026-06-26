@@ -66,6 +66,7 @@
 #include "vector/fillpad.h"
 #ifndef __LITE_NPU
 #include "vector/sort.h"
+#include "vector/radix_select/radix_select.h"
 #include "vector/quantize.h"
 #include "vector/dequantize.h"
 #endif

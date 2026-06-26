@@ -24,7 +24,7 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：<br> - MERGE_SORT: DT_FP32。<br> - RADIX_SELECT: DT_BF16，DT_FP16，DT_FP32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：<br> - MERGE_SORT: DT_FP32。<br> - RADIX_SELECT: DT_BF16，DT_FP16，DT_FP32，DT_INT32，DT_UINT32，DT_INT16，DT_UINT16，DT_INT8，DT_UINT8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | k       | 输入      | 返回元素的数量。<br> k的大小应该满足：1 <= k <= input.shape[dim]。 |
 | dim     | 输入      | 指定排序的维度。<br> 目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
 | largest | 输入      | 如果为True，返回最大元素。如果为False，返回最小元素。 |
@@ -37,11 +37,12 @@ topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, alg
 ## 约束说明
 
 1. 只支持对尾轴进行topk操作；
-2. TileShape尾轴32bytes对齐\(TileShape\[-1\]\*4 % 32 == 0\)；
+2. TileShape尾轴32bytes对齐\(TileShape\[-1\]\*sizeof\(srcType\) % 32 == 0\)；
 3. 选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
-4. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，则需要临时空间2\*tile\*sizeof\(srcType\)+6\*tile+1024+max\(1024, 8\*tile\)，临时空间加上输入输出的tile块不能超过UB大小；
-5. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
-6. RADIX_SELECT算法仅支持Ascend 950PR；
+4. 选用RADIX_SELECT算法时，记TileShape尾轴为tile，tile对齐到128记为tileAlign，则需要临时空间：26\*tileAlign，临时空间加上输入输出的tile块不能超过UB大小；
+5. 选用RADIX_SELECT算法时，尾轴不可切分，TileShape\[-1\]必须大于等于input.shape\[-1\]；
+6. k <= TileShape\[-1\] && k <= input.shape\[-1\]；
+7. RADIX_SELECT算法仅支持Ascend 950PR；
 
 ## 调用示例
 

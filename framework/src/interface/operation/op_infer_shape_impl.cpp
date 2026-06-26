@@ -1642,14 +1642,15 @@ void RadixSelectFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& ou
     res.back() = op->GetIntAttribute(TOPK_KVALUE);
     outValidShapes.push_back(res);
     outValidShapes.push_back(res);
-    std::vector<SymbolicScalar> tmpValidShape;
-    std::vector<int64_t> srcShape = input->GetShape();
-    auto lastDim = srcShape[srcShape.size() - 1];
-    tmpValidShape.emplace_back(
-        static_cast<int64_t>(NUM_VALUE_2 * lastDim * BytesOf(input->Datatype())) +
-        static_cast<int64_t>(NUM_VALUE_6 * lastDim) + static_cast<int64_t>(NUM_VALUE_1024) +
-        static_cast<int64_t>(NUM_VALUE_1024 > NUM_VALUE_8 * lastDim ? NUM_VALUE_1024 : NUM_VALUE_8 * lastDim));
-    outValidShapes.push_back(tmpValidShape);
+    auto output = op->GetOOperands()[2];
+    if (output->GetDynValidShape().empty()) {
+        auto immShape = OpImmediate::Specified(output->GetShape());
+        std::vector<SymbolicScalar> validShape;
+        validShape.push_back(immShape[0].GetSpecifiedValue());
+        outValidShapes.push_back(validShape);
+    } else {
+        outValidShapes.push_back(output->GetDynValidShape());
+    }
 }
 
 REGISTER_INFER_SHAPE_FUNC(OP_RADIX_SELECT, Opcode::OP_RADIX_SELECT, RadixSelectFunc);
