@@ -244,7 +244,7 @@
         6
       ],
       "target": "golden",
-      "rule": "golden 文件禁止 import pypto",
+      "rule": "golden 文件须为纯 torch 规范化实现：禁止 import pypto，禁止 `.T` / `.t()`（须用 torch.transpose）",
       "check_function": "check_ol15"
     },
     {

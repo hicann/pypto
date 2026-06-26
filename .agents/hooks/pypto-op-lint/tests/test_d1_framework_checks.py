@@ -217,6 +217,30 @@ def test_ol15_pass_when_golden_clean(tmp_path: Path):
     assert finding.status == "PASS"
 
 
+def test_ol15_fail_when_golden_uses_dot_t_attribute(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    golden = """import torch
+def demo_golden(x, y):
+    return x @ y.T
+"""
+    write_file(op_dir / "demo_golden.py", golden)
+    finding = run_rule(mod, op_dir, "OL15", stage=2)
+    assert finding.status == "FAIL"
+
+
+def test_ol15_fail_when_golden_uses_dot_t_call(tmp_path: Path):
+    mod = load_lint_module()
+    op_dir = build_stateless_op_dir(tmp_path, "demo")
+    golden = """import torch
+def demo_golden(x, y):
+    return x @ y.t()
+"""
+    write_file(op_dir / "demo_golden.py", golden)
+    finding = run_rule(mod, op_dir, "OL15", stage=2)
+    assert finding.status == "FAIL"
+
+
 # ── OL48: tile 参数必须编译期静态可知 ─────────────────────────────────────────
 
 

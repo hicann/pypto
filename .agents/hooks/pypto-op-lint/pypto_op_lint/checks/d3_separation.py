@@ -10,9 +10,16 @@ from ..core import CheckContext, Finding, register
 from ..utils import _impl_files_to_scan
 
 
+def _is_dot_t_call(node: ast.AST) -> bool:
+    """判定无参数的 `.t()` 调用（拆分布尔条件以满足 G.CTL.03）。"""
+    if not isinstance(node, ast.Call) or node.args:
+        return False
+    return isinstance(node.func, ast.Attribute) and node.func.attr == "t"
+
+
 @register("OL15")
 def check_ol15(ctx: CheckContext) -> Finding:
-    """golden 文件禁止 import pypto"""
+    """golden 文件须为纯 torch 规范化实现：禁止 import pypto，禁止 `.T` / `.t()`（须用 torch.transpose）。"""
     golden_file = f"{ctx.op_name}_golden.py"
     tree = ctx.parse_file(golden_file)
     if tree is None:
@@ -29,8 +36,17 @@ def check_ol15(ctx: CheckContext) -> Finding:
             return ctx.make_finding("OL15", "FAIL",
                 "golden 文件禁止 from pypto import ...",
                 file=golden_file, line=node.lineno)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "T":
+            return ctx.make_finding("OL15", "FAIL",
+                "golden 文件禁止 `.T`，请用 torch.transpose(t, d0, d1) 并注记 `# pypto: b_trans=True`",
+                file=golden_file, line=node.lineno)
+        if _is_dot_t_call(node):
+            return ctx.make_finding("OL15", "FAIL",
+                "golden 文件禁止 `.t()`，请用 torch.transpose(t, d0, d1)",
+                file=golden_file, line=node.lineno)
     return ctx.make_finding("OL15", "PASS",
-        "golden 文件未导入 pypto", file=golden_file)
+        "golden 文件未导入 pypto 且无 `.T` / `.t()`", file=golden_file)
 
 
 @register("OL16")
