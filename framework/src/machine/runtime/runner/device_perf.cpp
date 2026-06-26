@@ -90,9 +90,9 @@ void DevicePerf::ResetMetrics(const uint32_t coreId)
     }
 }
 
-void DevicePerf::SyncProfData()
+void DevicePerf::SyncProfData(bool debugEnable)
 {
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+    if (debugEnable) {
         // 多轮控核，nrValidAic和scheCpuNum需实时刷新，否则泳道图会出错
         args_.nrValidAic = GetCfgBlockdim();
         args_.scheCpuNum = dynamic::CalcSchAicpuNumByBlockDim(args_.nrValidAic, args_.nrAicpu, args_.archInfo);

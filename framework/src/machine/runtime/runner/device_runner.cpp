@@ -257,7 +257,7 @@ int DeviceRunner::InitDeviceArgs(DeviceArgs& args)
     return InitDeviceArgsCore(args);
 }
 
-void DeviceRunner::SyncProfData() { devicePerf_.SyncProfData(); }
+void DeviceRunner::SyncProfData(bool debugEnable) { devicePerf_.SyncProfData(debugEnable); }
 
 /**************************** DynamicFunction *****************************/
 int DeviceRunner::DynamicLaunchSynchronize(RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream)

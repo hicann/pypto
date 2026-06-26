@@ -316,7 +316,8 @@ private:
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
             rc = DeviceRunner::Get().DynamicRun(launchInfo, &kArgs);
             EXPECT_EQ(rc, 0);
-            DeviceRunner::Get().SyncProfData();
+            bool debugEnable = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL;
+            DeviceRunner::Get().SyncProfData(debugEnable);
         }
         CopyBackInOut(memoryHelper, inputs, outputs);
         if (IsDumpTensorEnable()) {
