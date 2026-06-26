@@ -466,7 +466,7 @@ Status OoOScheduler::SpillGeneralL1BufferFor3510(int memId, Operation* spillOp, 
         return FAILED;
     }
     // workspaceOffset 在 gmtensor 创建时被更新，copyout 属性需要使用当前的 workspaceOffset
-    LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, memId);
+    LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, memId, spillTensor->Datatype());
     LogicalTensorPtr localTensor = CreateLocalTensor(spillTensor);
 
     Operation *copyoutOp = 
@@ -545,7 +545,8 @@ Status OoOScheduler::SpillReshapeL1BufferFor3510(int spillMemId, Operation* actu
         APASS_LOG_ERROR_F(Elements::Operation, "GetActualSpill failed.");
         return FAILED;
     }
-    LogicalTensorPtr gmTensor = CreateGMTensor(actualSpillTensor, actualSpillTensor, spillMemId);
+    LogicalTensorPtr gmTensor =
+        CreateGMTensor(actualSpillTensor, actualSpillTensor, spillMemId, preSpillTensor->Datatype());
     LogicalTensorPtr reshapeTensor = CreateLocalTensor(spillTensor);
     LogicalTensorPtr l1Tensor = CreateParticalTensor(preSpillTensor, reshapeTensor, preSpillTensor, preSpillTensor->GetOffset());
 
@@ -590,39 +591,51 @@ Status OoOScheduler::SpillL0CBuffer(int spillMemId, Operation* spillOp, LogicalT
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillL0CBuffer begin.");
     std::vector<Operation*> consumers;
     CollectL0CConsumers(spillTensor, consumers);
-    LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId);
 
-    Operation *copyoutOp = 
-        CreateCopyoutOp(spillOp, spillTensor, gmTensor, OpImmediate::Specified(gmTensor->GetOffset()));
-    if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemId, spillOp) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed.");
-        return FAILED;
-    }
-
-    for (auto *consumer : consumers) {
-        auto consumerOOperand = consumer->GetOutputOperand(0);
-        if (consumerOOperand == nullptr) {
+    std::map<DataType, std::vector<Operation*>> dtypeGroups;
+    for (auto* consumer : consumers) {
+        auto oOperand = consumer->GetOutputOperand(0);
+        if (oOperand == nullptr) {
             APASS_LOG_ERROR_F(Elements::Operation, "L0C spill: consumer %s has no output operand.",
                 GetOpInfo(consumer).c_str());
             return FAILED;
         }
-        Operation *copyinOp = 
-            CreateCopyinOp(gmTensor, consumerOOperand, OpImmediate::Specified(gmTensor->GetOffset()), true);
-        // 更新op的调度信息
-        UpdateOpScheduleInfo(copyinOp, {consumerOOperand->memoryrange.memId}, spillAllocOp);
-        // 生成的op插入排序队列
-        std::replace(orderedOps.begin(), orderedOps.end(), consumer, copyinOp);
-        APASS_LOG_DEBUG_F(Elements::Operation, "L0C spill: replace %s with %s.",
-            GetOpInfo(consumer).c_str(), GetOpInfo(copyinOp).c_str());
-        consumer->SetAsDeleted();
-        EraseSchedulerSideMaps(consumer);
+        dtypeGroups[oOperand->Datatype()].push_back(consumer);
+    }
+
+    auto emitGroup = [&](DataType dtype, const std::vector<Operation*>& groupConsumers) -> Status {
+        LogicalTensorPtr gmTensor = CreateGMTensor(spillTensor, spillTensor, spillMemId, dtype);
+        Operation* copyoutOp =
+            CreateCopyoutOp(spillOp, spillTensor, gmTensor, OpImmediate::Specified(gmTensor->GetOffset()));
+        if (UpdateCopyoutScheduleInfo(copyoutOp, spillTensor, spillMemId, spillOp) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "UpdateCopyoutScheduleInfo failed for dtype group.");
+            return FAILED;
+        }
+        for (auto* consumer : groupConsumers) {
+            auto oOperand = consumer->GetOutputOperand(0);
+            Operation* copyinOp =
+                CreateCopyinOp(gmTensor, oOperand, OpImmediate::Specified(gmTensor->GetOffset()), true);
+            UpdateOpScheduleInfo(copyinOp, {oOperand->memoryrange.memId}, spillAllocOp);
+            std::replace(orderedOps.begin(), orderedOps.end(), consumer, copyinOp);
+            APASS_LOG_DEBUG_F(Elements::Operation, "L0C spill: replace %s with %s.",
+                GetOpInfo(consumer).c_str(), GetOpInfo(copyinOp).c_str());
+            consumer->SetAsDeleted();
+            EraseSchedulerSideMaps(consumer);
+        }
+        ctx.newCopyoutOps.push_back(copyoutOp);
+        created.Record(copyoutOp, nullptr, nullptr, gmTensor);
+        return SUCCESS;
+    };
+
+    for (auto& [dtype, groupConsumers] : dtypeGroups) {
+        if (emitGroup(dtype, groupConsumers) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "SpillL0CBuffer: emit dtype group failed.");
+            return FAILED;
+        }
     }
     depManager_.InitDependencies(orderedOps, false);
     bufRefCount_[spillMemId] = 0;
     function_.EraseOperations(false, false);
-    ctx.newCopyoutOps.push_back(copyoutOp);
-    // L0C spill: consumers get their own copyin (no new alloc/copyin op recorded here).
-    created.Record(copyoutOp, nullptr, nullptr, gmTensor);
     APASS_LOG_DEBUG_F(Elements::Operation, "---- SpillL0CBuffer end.");
     return SUCCESS;
 }
@@ -804,9 +817,11 @@ const std::vector<int64_t>& OoOScheduler::GetLargerShape(const std::vector<int64
     return shape2;
 }
 
-LogicalTensorPtr OoOScheduler::CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor, int spillMemId) {
+LogicalTensorPtr OoOScheduler::CreateGMTensor(LogicalTensorPtr spillTensor, LogicalTensorPtr actualSpillTensor,
+    int spillMemId, DataType gmDtype) {
+    DataType dtype = (gmDtype == DT_BOTTOM) ? spillTensor->Datatype() : gmDtype;
     std::shared_ptr<RawTensor> gmRawTensor =
-        std::make_shared<RawTensor>(spillTensor->Datatype(),
+        std::make_shared<RawTensor>(dtype,
         GetLargerShape(spillTensor->tensor->rawshape, actualSpillTensor->tensor->rawshape),
         TileOpFormat::TILEOP_ND, "WorkspaceGm");
     LogicalTensorPtr gmTensor = irBuilder_.CreateTensorVar(
